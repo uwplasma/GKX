@@ -201,6 +201,13 @@ def main() -> int:
             state=np.asarray(result.state),
             saturated=report["saturated"],
             t_end=times[-1],
+            # The step the trajectory was actually produced with. Without it the
+            # consumer has to be told by hand, and a mismatched --dt silently
+            # rescales its time axis: every t/tau_ac it reports would be wrong
+            # while every number still looked plausible.
+            adaptive_dt=float(np.nanmedian(steps_dt)),
+            method=str(time_cfg.method),
+            tau_ac=float(report.get("tau_ac", float("nan"))),
         )
         print(f"state written: {args.state_out}", flush=True)
 

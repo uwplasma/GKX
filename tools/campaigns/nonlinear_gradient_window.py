@@ -136,13 +136,14 @@ def build_nonlinear_case(
     }
 
 
-def heat_flux_proxy(state):
-    """Fluctuation energy: a positive, state-only scalar that tracks transport.
+def fluctuation_energy(state):
+    """Mean square state amplitude: the objective this tool differentiates.
 
-    The production heat flux needs the field solve output; for a
-    gradient-divergence curve any smooth positive functional of the saturated
-    state has the same Lyapunov behaviour, and this one avoids threading the
-    field state through the differentiated window.
+    Deliberately NOT called a heat flux. The production heat flux needs the
+    field-solve output; this is a state-only functional that shares the
+    trajectory's Lyapunov behaviour, which is all a divergence curve needs. Any
+    claim about dQ/dp requires the real flux, and naming this one dQ would smuggle
+    that claim in.
     """
 
     import jax.numpy as jnp
@@ -183,7 +184,7 @@ def windowed_gradient(case, saturated, drive: float, dt: float, window: int):
 
     def objective(value):
         final = integrate(case["rhs"], detached, value, dt, window, checkpoint=True)
-        return heat_flux_proxy(final)
+        return fluctuation_energy(final)
 
     value, gradient = jax.value_and_grad(objective)(drive)
     return float(value), float(gradient)
@@ -201,7 +202,14 @@ def main() -> int:
     parser.add_argument("--nx", type=int, default=None)
     parser.add_argument("--ny", type=int, default=None)
     parser.add_argument("--nz", type=int, default=None)
-    parser.add_argument("--dt", type=float, default=1.0e-2)
+    parser.add_argument(
+        "--dt",
+        type=float,
+        default=None,
+        help="step for the differentiated window. Defaults to the adaptive step "
+        "recorded in the state file, which is the step that trajectory was "
+        "produced with; overriding it rescales every t/tau_ac this tool reports",
+    )
     parser.add_argument(
         "--saturated-state",
         type=Path,
@@ -245,6 +253,25 @@ def main() -> int:
     archive = np.load(args.saturated_state)
     saturated = jnp.asarray(archive["state"])
     state_saturated = bool(archive["saturated"])
+    recorded_dt = float(archive["adaptive_dt"]) if "adaptive_dt" in archive else None
+    state_tau_ac = float(archive["tau_ac"]) if "tau_ac" in archive else float("nan")
+    if args.dt is None:
+        if recorded_dt is None:
+            raise SystemExit(
+                "state file records no adaptive_dt and --dt was not given. "
+                "Regenerate it with a current nonlinear_saturated_state.py, or "
+                "pass the step that trajectory was produced with."
+            )
+        dt = recorded_dt
+    else:
+        dt = args.dt
+        if recorded_dt is not None and abs(dt - recorded_dt) > 1e-12:
+            print(
+                f"  WARNING: --dt {dt:g} differs from the state's recorded "
+                f"{recorded_dt:g}; the window is being integrated on a different "
+                "step from the trajectory it starts on",
+                flush=True,
+            )
     print(
         f"loaded state from {args.saturated_state.name}: shape={saturated.shape} "
         f"t_end={float(archive['t_end']):.1f} "
@@ -280,16 +307,14 @@ def main() -> int:
         saturated = saturated.astype(probe_dtype)
 
     saturated_ok = state_saturated
-    energy = float(heat_flux_proxy(saturated))
+    energy = float(fluctuation_energy(saturated))
     print(f"  fluctuation energy at the start of the window: {energy:.6e}", flush=True)
 
     windows = [2**k for k in range(int(np.log2(args.max_window)) + 1)]
     rows = []
     for window in windows:
         started = time.time()
-        value, gradient = windowed_gradient(
-            case, saturated, case["drive"], args.dt, window
-        )
+        value, gradient = windowed_gradient(case, saturated, case["drive"], dt, window)
         rows.append(
             {
                 "window": window,
@@ -300,7 +325,7 @@ def main() -> int:
             }
         )
         print(
-            f"  N={window:>4d}  |dQ/d(drive scale)| = {abs(gradient):.6e}"
+            f"  N={window:>4d}  |dE/d(drive scale)| = {abs(gradient):.6e}"
             f"   [{rows[-1]['seconds']:.1f}s]",
             flush=True,
         )
@@ -312,17 +337,33 @@ def main() -> int:
         r for r in rows if np.isfinite(r["abs_gradient"]) and r["abs_gradient"] > 0
     ]
     growth = None
+    power = None
     if len(finite) >= 3:
-        # Exponential tail fit over the largest half of the ladder.
+        # Two models, both reported. A windowed adjoint below its knee grows as a
+        # POWER of N while the perturbation still propagates coherently; beyond
+        # the knee it grows EXPONENTIALLY in t. Fitting only the exponential
+        # returns a confident rate for data that is a straight line on log-log,
+        # which is what this ladder turned out to be -- so the fit would have
+        # announced a divergence that is not there.
         tail = finite[len(finite) // 2 :]
-        slope, _ = np.polyfit(
-            [r["window"] * args.dt for r in tail],
-            np.log([r["abs_gradient"] for r in tail]),
-            1,
-        )
-        growth = float(slope)
-        print(f"\ntail growth rate of |gradient|: {growth:+.4f} per code time unit")
-        print("(compare against the leading Lyapunov exponent of this case)")
+        times = np.array([r["window"] * dt for r in tail])
+        values = np.log(np.array([r["abs_gradient"] for r in tail]))
+        exp_fit = np.polyfit(times, values, 1)
+        pow_fit = np.polyfit(np.log(times), values, 1)
+        growth = float(exp_fit[0])
+        power = float(pow_fit[0])
+        exp_res = float(np.std(values - np.polyval(exp_fit, times)))
+        pow_res = float(np.std(values - np.polyval(pow_fit, np.log(times))))
+        better = "power law" if pow_res < exp_res else "exponential"
+        print("\ntail of the ladder, both models fitted:")
+        print(f"  power law    |grad| ~ N^{power:.3f}   residual {pow_res:.3e}")
+        print(f"  exponential  rate {growth:+.4f}/time  residual {exp_res:.3e}")
+        print(f"  -> {better} fits better")
+        if better == "power law":
+            print(
+                "  Power law means the adjoint has NOT diverged over this range:"
+                " no knee, and the usable window extends at least this far."
+            )
 
     summary = {
         "kind": "nonlinear_gradient_window",
@@ -330,13 +371,16 @@ def main() -> int:
         "case": case["case"],
         "grid_override": override,
         "dissipation": case["dissipation"],
-        "dt": args.dt,
+        "dt": dt,
+        "dt_source": "state file" if args.dt is None else "command line",
+        "tau_ac_from_state": state_tau_ac,
         "saturated_energy": energy,
         "saturated_state": str(args.saturated_state),
         "saturated": saturated_ok,
         "interpretable": saturated_ok,
         "window_dtype": str(probe_dtype),
-        "tail_growth_per_time": growth,
+        "tail_exponential_rate_per_time": growth,
+        "tail_power_law_exponent": power,
         "rows": rows,
     }
     if args.output is not None:
