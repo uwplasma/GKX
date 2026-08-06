@@ -294,18 +294,13 @@ def nonlinear_heat_flux_convergence_gate_report(
     coefficient of variation, show limited normalized drift across the window,
     and contain enough samples to be more than a reduced-window proxy.
 
-    The added gate is on the **correlation-corrected relative standard error**,
-    :math:`\sigma/(\bar q \sqrt{n_{\rm eff}})`, not on ``n_eff`` alone.
-    Turbulence outputs are correlated -- across the tracked traces ``n_eff`` is
-    2.6 to 11.8 where ``nsamples`` is 31 to 92 -- so a floor on ``nsamples``
-    passes windows whose mean rests on a handful of independent events.
-
-    But a floor on ``n_eff`` alone is also wrong, and a unit test caught it: a
-    very smooth trace is maximally autocorrelated and so has small ``n_eff``,
-    while its mean is extremely well determined precisely because it barely
-    varies. Gating ``n_eff`` would fail exactly the converged windows the gate
-    exists to accept. The relative standard error combines both effects and is
-    the quantity a reader actually needs.
+    The added gate is on ``sigma / (mean * sqrt(n_eff))``, not on ``n_eff``
+    alone. Turbulence outputs are correlated, so a floor on ``nsamples`` passes
+    windows whose mean rests on a handful of independent events. But a floor on
+    ``n_eff`` alone is also wrong -- a very smooth trace is maximally
+    autocorrelated and so has small ``n_eff`` while its mean is extremely well
+    determined -- and would fail exactly the converged windows this gate exists
+    to accept. The relative standard error combines both effects correctly.
     """
 
     mean_limit = float(max_mean_rel_delta)
@@ -314,9 +309,10 @@ def nonlinear_heat_flux_convergence_gate_report(
     sample_floor = int(min_samples)
     stderr_limit = float(max_corrected_rel_stderr)
     n_eff = float(getattr(metrics, "n_eff", 0.0))
+    mean = abs(float(metrics.heat_flux_mean))
     corrected_rel_stderr = (
-        float(metrics.heat_flux_std) / (abs(float(metrics.heat_flux_mean)) * np.sqrt(n_eff))
-        if n_eff > 0.0 and metrics.heat_flux_mean
+        float(metrics.heat_flux_std) / (mean * np.sqrt(n_eff))
+        if n_eff > 0.0 and mean
         else float("inf")
     )
     if mean_limit < 0.0 or cv_limit < 0.0 or trend_limit < 0.0:
@@ -354,9 +350,8 @@ def nonlinear_heat_flux_convergence_gate_report(
             corrected_rel_stderr,
             stderr_limit,
             notes=(
-                "Passes when sigma / (mean * sqrt(n_eff)) <= "
-                f"{stderr_limit:.6g}. Divides by the INDEPENDENT sample count, "
-                "so a long window of correlated outputs does not read as precise."
+                f"Passes when sigma / (mean * sqrt(n_eff)) <= {stderr_limit:.6g}: "
+                "a long window of correlated outputs must not read as precise."
             ),
         ),
     )

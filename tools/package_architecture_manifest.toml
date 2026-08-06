@@ -135,7 +135,14 @@ name = "installable_source_python_lines"
 path = "src/gkx"
 pattern = "*.py"
 recursive = true
-baseline = 88602
+# 88602 -> 88640: the correlation statistics that make a nonlinear window's
+# uncertainty honest. Turbulence outputs are correlated, so std/sqrt(n)
+# understated the error of the mean by 2.0x to 3.7x across the tracked traces;
+# these 38 lines are the autocorrelation estimator, one shared helper, six
+# metric fields and the gate that uses them. Raised deliberately rather than
+# trimming further: the remaining lines carry the estimator itself. The target
+# below is unchanged.
+baseline = 88640
 target = 45000
 
 [[line_budget_policy.counts]]
