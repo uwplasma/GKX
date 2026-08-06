@@ -197,6 +197,11 @@ def test_validation_gate_family_helpers_cover_physics_observables() -> None:
         tmin=10.0,
         tmax=20.0,
         nsamples=12,
+        # Explicit: the convergence gate divides the standard error by the
+        # INDEPENDENT sample count, and a metrics object built by hand defaults
+        # it to zero so it cannot pass a statistical gate by omission.
+        n_eff=12.0,
+        tau_ac=0.0,
         heat_flux_mean=1.0,
         heat_flux_std=0.02,
         heat_flux_cv=0.02,

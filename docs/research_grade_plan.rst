@@ -146,11 +146,21 @@ averages 2.6. This is the one nonlinear finding in this program that has grown
 rather than shrunk under scrutiny -- the recycling win, the movie blow-up and the
 precision defect all became smaller when measured; this became larger.
 
-**P5.3 -- remaining.** Have the window promotion gate assert a minimum
-:math:`n_{\rm eff}`, and state window lengths in :math:`\tau_{\rm ac}` rather
-than code time. This will fail windows that currently pass, which is the point;
-it should land with the re-scored numbers so the failures are legible rather than
-surprising.
+**P5.3 -- done, with the design corrected by a test.** The plan said to gate a
+minimum :math:`n_{\rm eff}`. That is **wrong**, and the existing convergence
+test caught it: a very smooth trace is maximally autocorrelated and so has small
+:math:`n_{\rm eff}`, while its mean is extremely well determined precisely
+because it barely varies. Gating :math:`n_{\rm eff}` would fail exactly the
+converged windows the gate exists to accept.
+
+The gate is therefore on the **correlation-corrected relative standard error**,
+:math:`\sigma/(\bar q\sqrt{n_{\rm eff}})`, which combines variance and
+independence correctly. :math:`n_{\rm eff}` is an input to it, not a criterion.
+
+``NonlinearHeatFluxConvergenceMetrics`` carries ``tau_ac`` and ``n_eff``, both
+defaulting to the fail-closed values so a hand-constructed metrics object cannot
+pass a statistical gate by omission -- two test fixtures had to state their
+independent-sample count explicitly, which is the intended consequence.
 
 P6 -- Precision. MEASURED, and it is a controllability bug, not an accuracy one
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

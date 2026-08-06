@@ -1122,6 +1122,11 @@ def test_nonlinear_window_convergence_metrics_pass_stable_post_transient_average
         "heat_flux_window_cv",
         "heat_flux_window_abs_trend",
         "heat_flux_window_sample_deficit",
+        # Correlation-corrected relative standard error. A floor on n_eff alone
+        # would fail exactly the smooth, well-converged windows this gate exists
+        # to accept, because a smooth trace is maximally autocorrelated; the
+        # relative standard error combines variance and independence correctly.
+        "heat_flux_corrected_rel_stderr",
     ]
 
 

@@ -60,17 +60,21 @@ class NonlinearWindowMetrics:
     phi_mode_envelope_mean: float | None
     phi_mode_envelope_std: float | None
     phi_mode_envelope_max: float | None
+    # These default to the fail-closed values so a hand-constructed metrics
+    # object cannot pass a statistical gate by omission: n_eff = 0 fails any
+    # positive floor. The production path in windowed_nonlinear_metrics always
+    # sets them.
     #: Integrated autocorrelation time of the windowed heat flux, in code time.
-    heat_flux_tau_ac: float
+    heat_flux_tau_ac: float = 0.0
     #: Window length in correlation times. Below a few, the mean is an average
     #: over a handful of independent events whatever ``nsamples`` says.
-    window_in_tau_ac: float
+    window_in_tau_ac: float = 0.0
     #: Independent samples, ``n / (1 + 2 tau_ac / dt)``. This -- not
     #: ``nsamples`` -- is what the standard error of the mean should divide by.
-    heat_flux_n_eff: float
+    heat_flux_n_eff: float = 0.0
     #: ``heat_flux_std / sqrt(n_eff)``: the correlation-corrected standard error.
     #: ``heat_flux_std / sqrt(nsamples)`` understates it by ``sqrt(n/n_eff)``.
-    heat_flux_stderr: float
+    heat_flux_stderr: float = float("inf")
 
 @dataclass(frozen=True)
 class NonlinearHeatFluxConvergenceMetrics:
@@ -92,6 +96,12 @@ class NonlinearHeatFluxConvergenceMetrics:
     abs_trend: float
     start_fraction: float
     terminal_fraction: float
+    #: Integrated autocorrelation time of the post-transient heat flux.
+    tau_ac: float = 0.0
+    #: Independent samples in the window. The sample floor belongs on this, not
+    #: on ``nsamples``: turbulence outputs are correlated, and across the tracked
+    #: traces ``n_eff`` is 2.6 to 11.8 where ``nsamples`` is 31 to 92.
+    n_eff: float = 0.0
 
 @dataclass(frozen=True)
 class ObservedOrderMetrics:
@@ -507,6 +517,16 @@ def nonlinear_heat_flux_convergence_metrics(
         mean_floor=mean_floor,
     )
 
+    window_dt = (
+        float(np.median(np.diff(window.t))) if window.t.size > 1 else 0.0
+    )
+    window_tau = integrated_autocorrelation_time(window.q, window_dt)
+    window_n_eff = (
+        window.q.size / (1.0 + 2.0 * window_tau / window_dt)
+        if window_tau > 0.0 and window_dt > 0.0
+        else float(window.q.size)
+    )
+
     return NonlinearHeatFluxConvergenceMetrics(
         tmin=float(window.tmin if window.tmin is not None else window.t[0]),
         tmax=float(window.tmax if window.tmax is not None else window.t[-1]),
@@ -522,6 +542,8 @@ def nonlinear_heat_flux_convergence_metrics(
         mean_rel_delta=summary.mean_rel_delta,
         trend=summary.trend,
         abs_trend=float(abs(summary.trend)),
+        tau_ac=float(window_tau),
+        n_eff=float(window_n_eff),
         start_fraction=start,
         terminal_fraction=terminal_fraction,
     )
