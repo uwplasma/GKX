@@ -274,11 +274,25 @@ def integrated_autocorrelation_time(signal: np.ndarray, dt: float) -> float:
 
 
 def _correlated_sample_stats(t: np.ndarray, q: np.ndarray) -> tuple[float, float, float]:
-    """Return ``(tau_ac, n_eff, span)`` for a windowed series."""
+    """Return ``(tau_ac, n_eff, span)`` for a windowed series.
+
+    ``n_eff = n dt / (2 tau)``, capped at ``n``. The estimator integrates the
+    normalized autocorrelation from zero lag, so ``tau -> dt/2`` for an
+    uncorrelated series; this form then returns ``n_eff = n``, as it must.
+    Using ``n / (1 + 2 tau / dt)`` instead double-counts the zero-lag term and
+    reports ``n/2`` for independent samples -- validated against the empirical
+    scatter of independent realizations, that overestimated the standard error
+    by 22% at zero correlation
+    (``tools/artifacts/build_window_statistics_validation.py``).
+    """
 
     dt = float(np.median(np.diff(t))) if t.size > 1 else 0.0
     tau = integrated_autocorrelation_time(q, dt)
-    n_eff = q.size / (1.0 + 2.0 * tau / dt) if tau > 0.0 and dt > 0.0 else float(q.size)
+    n_eff = (
+        min(float(q.size), q.size * dt / (2.0 * tau))
+        if tau > 0.0 and dt > 0.0
+        else float(q.size)
+    )
     span = float(t[-1] - t[0]) if t.size > 1 else 0.0
     return tau, float(n_eff), span
 
