@@ -1,4 +1,30 @@
-"""Reduced QA stellarator ITG model, residuals, and sensitivity gates."""
+"""Reduced QA stellarator ITG model, residuals, and sensitivity gates.
+
+.. deprecated::
+   **This module is a reduced analytic model, not gyrokinetics, and is slated
+   for removal.**
+
+   Its observables come from a fitted feature map in the boundary parameters,
+   and its ``nonlinear_heat_flux_trace`` is an ODE envelope,
+   ``dE/dt = 2 gamma E - alpha E^2``, not a nonlinear gyrokinetic simulation. It
+   exists because the differentiable solver path was not ready when the
+   stellarator optimization examples were written; that path is ready now.
+   ``objectives.core.solver_objective_vector_from_geometry`` evaluates the
+   production linear RHS on a solver-ready flux tube and returns growth,
+   frequency, mode scale and quasilinear transport differentiably, with dense and
+   matrix-free agreeing to 6.4e-11 across all six observables.
+
+   Migration: use ``solver_objective_vector_from_geometry`` for anything that
+   should reflect GKX's physics. Nothing in this module should back a published
+   number.
+
+   Two helpers here are **not** reduced physics and will be relocated rather than
+   deleted: ``smooth_positive`` is a generic softplus used to keep objectives
+   differentiable near marginality, and the sampling contracts in
+   ``stellarator_contracts`` describe a portfolio shape. The real VMEC path in
+   ``objectives.vmec_transport`` imports only those two, so the production
+   dependency on this module is shallow.
+"""
 
 from __future__ import annotations
 

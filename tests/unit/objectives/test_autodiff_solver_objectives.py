@@ -3488,3 +3488,40 @@ def test_zonal_flow_objective_artifact_missing_damping_policy_and_shape_guards()
                 },
             ],
         )
+
+
+def test_reduced_stellarator_model_stays_deprecated_and_shallowly_depended_on() -> None:
+    """The reduced model must stay marked, and must not grow production consumers.
+
+    ``objectives.stellarator_reduced`` is a fitted feature map whose "nonlinear"
+    trace is an ODE envelope, not gyrokinetics. It is slated for removal now that
+    ``solver_objective_vector_from_geometry`` evaluates the production linear RHS
+    differentiably. Two things can silently undo that: the deprecation notice
+    being dropped in a refactor, and the real VMEC path acquiring a deeper
+    dependency on the reduced physics than the two generic helpers it uses today.
+
+    This asserts both. It fails if someone removes the marker, and it fails if
+    ``vmec_transport`` starts importing reduced *physics* rather than
+    ``smooth_positive`` and the sampling contract.
+    """
+
+    import ast
+    import gkx.objectives.stellarator_reduced as reduced
+
+    assert "deprecated" in (reduced.__doc__ or "").lower(), (
+        "the reduced-model deprecation notice was removed; it is a fitted "
+        "feature map, not gyrokinetics, and must stay marked until deleted"
+    )
+
+    source = (REPO_ROOT / "src" / "gkx" / "objectives" / "vmec_transport.py").read_text()
+    imported: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.ImportFrom) and node.module and "stellarator" in node.module:
+            imported.update(alias.name for alias in node.names)
+
+    # Generic helpers only: a softplus and a portfolio-shape contract. Anything
+    # else means the production VMEC path has taken a dependency on reduced
+    # physics, which is what removal has to avoid.
+    assert imported <= {"StellaratorITGSampleSet", "smooth_positive"}, (
+        f"vmec_transport imports reduced-model physics: {sorted(imported)}"
+    )
