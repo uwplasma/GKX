@@ -51,6 +51,7 @@ the same order they appear in the code.
    geometry
    algorithms
    solvers
+   research_grade_program
    nonlinear_gradient_plan
    architecture
    benchmarks
