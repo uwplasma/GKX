@@ -1,10 +1,4 @@
-"""Public Krylov solver facade for linear gyrokinetic eigenmodes.
-
-The compiled kernels live in focused eigenmode modules so that branch selection,
-operator application, preconditioning, and Arnoldi iterations can be tested and
-optimized independently.  This facade keeps the documented script import path
-and the monkeypatch seams used by benchmark/runtime tests.
-"""
+"""Public facade preserving the API above independently tested eigenmode kernels."""
 
 from __future__ import annotations
 
@@ -19,6 +13,10 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     linear_terms_to_term_config,
+)
+from gkx.solvers.linear.adaptive_propagator import (
+    AdaptivePropagatorSolution as AdaptivePropagatorSolution,
+    adaptive_propagator_eigenpair,
 )
 from gkx.solvers.linear.krylov_algorithms import (
     _advance_imex2,
@@ -55,15 +53,16 @@ class KrylovConfig:
     method: str = "propagator"
     power_iters: int = 200
     power_dt: float = 0.01
+    propagator_steps: int = 1
     shift: complex | None = None
     shift_source: str = "propagator"
     shift_tol: float = 1.0e-4
     shift_maxiter: int = 50
     shift_restart: int = 20
     shift_solve_method: str = "batched"
-    shift_preconditioner: str | None = "damping"
+    shift_preconditioner: str | None = "auto"
     shift_selection: str = "targeted"
-    shift_outer_residual_tol: float = 0.1
+    shift_outer_residual_tol: float = 1.0e-6
     mode_family: str = "auto"
     fallback_method: str = "propagator"
     fallback_real_floor: float = -1.0e-6
@@ -79,54 +78,36 @@ def _status(status_callback: _StatusCallback, message: str) -> None:
         status_callback(message)
 
 
-def _normalized_config(
-    *,
-    method: str,
-    krylov_dim: int,
-    restarts: int,
-    omega_min_factor: float,
-    omega_target_factor: float,
-    omega_cap_factor: float,
-    omega_sign: int,
-    mode_family: str,
-    power_iters: int,
-    power_dt: float,
-    shift: complex | None,
-    shift_source: str,
-    shift_tol: float,
-    shift_maxiter: int,
-    shift_restart: int,
-    shift_solve_method: str,
-    shift_preconditioner: str | None,
-    shift_selection: str,
-    shift_outer_residual_tol: float,
-    fallback_method: str,
-    fallback_real_floor: float,
-) -> KrylovConfig:
+def _normalized_config(options: Mapping[str, Any]) -> KrylovConfig:
+    """Normalize public options once at the dispatch boundary."""
+    value = options.__getitem__
+    mode_family = str(value("mode_family"))
+    omega_sign = int(value("omega_sign"))
     mode_family_sign = _mode_family_sign(mode_family)
-    omega_sign_eff = int(omega_sign) if int(omega_sign) != 0 else mode_family_sign
+    omega_sign_eff = omega_sign if omega_sign != 0 else mode_family_sign
     return KrylovConfig(
-        method=method.strip().lower(),
-        krylov_dim=max(int(krylov_dim), 1),
-        restarts=max(int(restarts), 1),
-        omega_min_factor=float(omega_min_factor),
-        omega_target_factor=float(omega_target_factor),
-        omega_cap_factor=float(omega_cap_factor),
+        method=str(value("method")).strip().lower(),
+        krylov_dim=max(int(value("krylov_dim")), 1),
+        restarts=max(int(value("restarts")), 1),
+        omega_min_factor=float(value("omega_min_factor")),
+        omega_target_factor=float(value("omega_target_factor")),
+        omega_cap_factor=float(value("omega_cap_factor")),
         omega_sign=omega_sign_eff,
-        power_iters=max(int(power_iters), 1),
-        power_dt=float(power_dt),
-        shift=shift,
-        shift_source=shift_source,
-        shift_tol=float(shift_tol),
-        shift_maxiter=max(int(shift_maxiter), 1),
-        shift_restart=max(int(shift_restart), 1),
-        shift_solve_method=shift_solve_method,
-        shift_preconditioner=shift_preconditioner,
-        shift_selection=shift_selection,
-        shift_outer_residual_tol=float(shift_outer_residual_tol),
+        power_iters=max(int(value("power_iters")), 1),
+        power_dt=float(value("power_dt")),
+        propagator_steps=max(int(value("propagator_steps")), 1),
+        shift=value("shift"),
+        shift_source=str(value("shift_source")),
+        shift_tol=float(value("shift_tol")),
+        shift_maxiter=max(int(value("shift_maxiter")), 1),
+        shift_restart=max(int(value("shift_restart")), 1),
+        shift_solve_method=str(value("shift_solve_method")),
+        shift_preconditioner=value("shift_preconditioner"),
+        shift_selection=str(value("shift_selection")),
+        shift_outer_residual_tol=float(value("shift_outer_residual_tol")),
         mode_family=mode_family,
-        fallback_method=fallback_method,
-        fallback_real_floor=float(fallback_real_floor),
+        fallback_method=str(value("fallback_method")),
+        fallback_real_floor=float(value("fallback_real_floor")),
     )
 
 
@@ -164,7 +145,9 @@ def _propagator_branch(
     _status(
         status_callback,
         "running propagator Arnoldi with "
-        f"dt={cfg.power_dt:.6g} dim={cfg.krylov_dim} restarts={restarts_use}",
+        f"dt={cfg.power_dt:.6g} steps={cfg.propagator_steps} "
+        f"horizon={cfg.power_dt * cfg.propagator_steps:.6g} "
+        f"dim={cfg.krylov_dim} restarts={restarts_use}",
     )
     return dominant_eigenpair_propagator_cached(
         v0,
@@ -175,6 +158,7 @@ def _propagator_branch(
         krylov_dim=cfg.krylov_dim,
         restarts=restarts_use,
         dt=cfg.power_dt,
+        propagator_steps=cfg.propagator_steps,
         omega_min_factor=cfg.omega_min_factor,
         omega_target_factor=cfg.omega_target_factor,
         omega_cap_factor=cfg.omega_cap_factor,
@@ -290,6 +274,17 @@ def _shift_selection_flags(shift_selection: str) -> tuple[bool, bool]:
     return select_targeted, select_growth
 
 
+def _automatic_shift_preconditioner(params: LinearParams, term_cfg: Any) -> str:
+    """Use the cheap streaming inverse unless electromagnetic fields require more."""
+
+    apar = bool(np.asarray(term_cfg.apar) != 0.0)
+    bpar = bool(np.asarray(term_cfg.bpar) != 0.0)
+    beta = bool(np.asarray(getattr(params, "beta", 0.0)) != 0.0)
+    fapar = bool(np.any(np.asarray(getattr(params, "fapar", 0.0)) != 0.0))
+    electromagnetic = beta and (bpar or (apar and fapar))
+    return "field-corrected" if electromagnetic else "hermite-line"
+
+
 def _eigenpair_relative_residual(
     eigenvalue: jnp.ndarray,
     eigenvector: jnp.ndarray,
@@ -387,42 +382,63 @@ def _shift_invert_branch(
         f"shift-invert sigma={sigma_host.real:.6g}{sigma_host.imag:+.6g}j",
     )
     select_targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
-    _status(status_callback, "running shift-invert Arnoldi")
-    eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
-        v_init,
-        v_ref,
-        cache,
-        params,
-        term_cfg,
-        krylov_dim=cfg.krylov_dim,
-        restarts=cfg.restarts,
-        sigma=sigma,
-        omega_min_factor=cfg.omega_min_factor,
-        omega_target_factor=cfg.omega_target_factor,
-        omega_cap_factor=cfg.omega_cap_factor,
-        omega_sign=cfg.omega_sign,
-        gmres_tol=cfg.shift_tol,
-        gmres_maxiter=cfg.shift_maxiter,
-        gmres_restart=cfg.shift_restart,
-        gmres_solve_method=cfg.shift_solve_method,
-        shift_preconditioner=cfg.shift_preconditioner,
-        select_targeted=select_targeted,
-        select_growth=select_growth,
-        select_overlap=bool(select_overlap),
+    requested = str(cfg.shift_preconditioner).strip().lower()
+    automatic = requested in {"auto", "physics-auto", "physics_auto"}
+    preconditioner = (
+        _automatic_shift_preconditioner(params, term_cfg)
+        if automatic
+        else cfg.shift_preconditioner
     )
-    eig_host = complex(np.asarray(eig_si))
-    residual = _eigenpair_relative_residual(eig_si, vec_si, cache, params, term_cfg)
-    _status(
-        status_callback,
-        "shift-invert solve finished with "
-        f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g}",
+    preconditioners = (
+        (preconditioner, "field-corrected")
+        if automatic and preconditioner == "hermite-line"
+        else (preconditioner,)
     )
-    nonfinite_pair = not np.isfinite(eig_host.real) or not np.isfinite(eig_host.imag)
-    growth_floor_failed = select_growth and eig_host.real < cfg.fallback_real_floor
-    residual_failed = (
-        not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
-    )
-    need_fallback = nonfinite_pair or growth_floor_failed or residual_failed
+    for attempt, mode in enumerate(preconditioners):
+        _status(status_callback, f"running shift-invert Arnoldi ({mode})")
+        eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
+            v_init,
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            krylov_dim=cfg.krylov_dim,
+            restarts=cfg.restarts,
+            sigma=sigma,
+            omega_min_factor=cfg.omega_min_factor,
+            omega_target_factor=cfg.omega_target_factor,
+            omega_cap_factor=cfg.omega_cap_factor,
+            omega_sign=cfg.omega_sign,
+            gmres_tol=cfg.shift_tol,
+            gmres_maxiter=cfg.shift_maxiter,
+            gmres_restart=cfg.shift_restart,
+            gmres_solve_method=cfg.shift_solve_method,
+            shift_preconditioner=mode,
+            select_targeted=select_targeted,
+            select_growth=select_growth,
+            select_overlap=bool(select_overlap),
+        )
+        eig_host = complex(np.asarray(eig_si))
+        residual = _eigenpair_relative_residual(eig_si, vec_si, cache, params, term_cfg)
+        _status(
+            status_callback,
+            "shift-invert solve finished with "
+            f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g}",
+        )
+        nonfinite_pair = not np.isfinite(eig_host.real) or not np.isfinite(
+            eig_host.imag
+        )
+        growth_floor_failed = select_growth and eig_host.real < cfg.fallback_real_floor
+        residual_failed = (
+            not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
+        )
+        need_fallback = nonfinite_pair or growth_floor_failed or residual_failed
+        if not need_fallback or attempt + 1 == len(preconditioners):
+            break
+        _status(
+            status_callback,
+            "line solve rejected; retrying with exact low-moment field correction",
+        )
     if need_fallback and cfg.fallback_method.strip().lower() != "none":
         fallback = _shift_invert_fallback(
             v0,
@@ -454,32 +470,84 @@ def _shift_invert_branch(
     return eig_si, vec_si
 
 
-def _dominant_eigenpair_config_from_options(
-    options: Mapping[str, Any],
-) -> KrylovConfig:
-    return _normalized_config(
-        method=options["method"],
-        krylov_dim=options["krylov_dim"],
-        restarts=options["restarts"],
-        omega_min_factor=options["omega_min_factor"],
-        omega_target_factor=options["omega_target_factor"],
-        omega_cap_factor=options["omega_cap_factor"],
-        omega_sign=options["omega_sign"],
-        mode_family=options["mode_family"],
-        power_iters=options["power_iters"],
-        power_dt=options["power_dt"],
-        shift=options["shift"],
-        shift_source=options["shift_source"],
-        shift_tol=options["shift_tol"],
-        shift_maxiter=options["shift_maxiter"],
-        shift_restart=options["shift_restart"],
-        shift_solve_method=options["shift_solve_method"],
-        shift_preconditioner=options["shift_preconditioner"],
-        shift_selection=options["shift_selection"],
-        shift_outer_residual_tol=options["shift_outer_residual_tol"],
-        fallback_method=options["fallback_method"],
-        fallback_real_floor=options["fallback_real_floor"],
+def _sparse_shift_invert_branch(
+    v0: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg,
+    cfg: KrylovConfig,
+    status_callback: _StatusCallback,
+    *,
+    select_overlap: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Factor the exact sparse shifted operator when matrix-free cold solves stall."""
+
+    if int(v0.size) < 3:
+        raise ValueError("sparse shift-invert requires an operator of size at least three")
+    if cfg.shift is None:
+        raise ValueError("sparse shift-invert requires a supplied or coarse-grid shift")
+    from scipy.sparse import eye
+    from solvax import SpluFactorization
+    from solvax import (  # type: ignore[attr-defined]
+        sparse_eigenpairs,
+        sparse_operator_matrix,
     )
+
+    def apply(state):
+        return _apply_operator(state, cache, params, term_cfg)
+
+    _status(status_callback, "assembling sparse operator in bounded column batches")
+    matrix = sparse_operator_matrix(
+        apply, v0, batch_size=64, drop_tolerance=1.0e-14
+    )
+    shift = complex(cfg.shift)
+    _status(
+        status_callback,
+        f"factoring coupled sparse operator n={matrix.shape[0]} nnz={matrix.nnz}",
+    )
+    factor = SpluFactorization(
+        matrix - shift * eye(matrix.shape[0], format="csr", dtype=matrix.dtype)
+    )
+    modes = sparse_eigenpairs(
+        matrix,
+        candidates=min(6, int(v0.size) - 2),
+        shift=shift,
+        initial=v0,
+        tolerance=min(cfg.shift_tol, 1.0e-10),
+        maxiter=max(cfg.shift_maxiter, 20_000),
+        residual_tolerance=cfg.shift_outer_residual_tol,
+        factorization=factor,
+    )
+    vectors = modes.eigenvectors.reshape((modes.eigenvectors.shape[0], *v0.shape))
+    residuals = np.asarray(
+        [
+            _eigenpair_relative_residual(value, vector, cache, params, term_cfg)
+            for value, vector in zip(modes.eigenvalues, vectors, strict=True)
+        ]
+    )
+    certified = np.asarray(modes.converged) & np.isfinite(residuals)
+    certified &= residuals <= cfg.shift_outer_residual_tol
+    _targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
+    if select_overlap:
+        scores = np.abs(
+            np.asarray(vectors).reshape((vectors.shape[0], -1))
+            @ np.asarray(v_ref).reshape(-1).conj()
+        )
+    elif select_growth:
+        scores = np.asarray(modes.eigenvalues).real
+    else:
+        scores = -np.abs(np.asarray(modes.eigenvalues) - shift)
+    if not np.any(certified):
+        raise RuntimeError(
+            "sparse shift-invert returned no original-operator-certified eigenpair"
+        )
+    selected = int(np.argmax(np.where(certified, scores, -np.inf)))
+    _status(
+        status_callback,
+        f"sparse shift-invert residual={residuals[selected]:.3g}",
+    )
+    return modes.eigenvalues[selected], vectors[selected]
 
 
 def _dispatch_dominant_eigenpair(
@@ -517,9 +585,21 @@ def _dispatch_dominant_eigenpair(
             status_callback,
             select_overlap=select_overlap,
         )
+    if cfg.method == "sparse_shift_invert":
+        return _sparse_shift_invert_branch(
+            v0,
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            cfg,
+            status_callback,
+            select_overlap=select_overlap,
+        )
     if cfg.method != "arnoldi":
         raise ValueError(
-            "Krylov method must be 'power', 'propagator', 'shift_invert', or 'arnoldi'"
+            "Krylov method must be power, propagator, shift_invert, "
+            "sparse_shift_invert, or arnoldi"
         )
     return _arnoldi_branch(
         v0,
@@ -550,22 +630,23 @@ def dominant_eigenpair(
     method: str = "power",
     power_iters: int = 40,
     power_dt: float = 0.01,
+    propagator_steps: int = 1,
     shift: complex | None = None,
     shift_source: str = "propagator",
     shift_tol: float = 1.0e-4,
     shift_maxiter: int = 50,
     shift_restart: int = 20,
     shift_solve_method: str = "batched",
-    shift_preconditioner: str | None = "damping",
+    shift_preconditioner: str | None = "auto",
     shift_selection: str = "targeted",
-    shift_outer_residual_tol: float = 0.1,
+    shift_outer_residual_tol: float = 1.0e-6,
     mode_family: str = "auto",
     fallback_method: str = "propagator",
     fallback_real_floor: float = -1.0e-6,
     status_callback: Callable[[str], None] | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Python wrapper for the cached Krylov solver."""
-    cfg = _dominant_eigenpair_config_from_options(locals())
+    """Python wrapper for cached matrix-free and sparse eigen solvers."""
+    cfg = _normalized_config(locals())
     term_cfg = linear_terms_to_term_config(terms)
     v_ref_use = v0 if v_ref is None else v_ref
     _status(
@@ -618,6 +699,7 @@ __all__ = [
     "_physical_omega",
     "_select_by_overlap",
     "_select_by_target",
+    "adaptive_propagator_eigenpair",
     "dominant_eigenpair",
     "dominant_eigenpair_cached",
     "dominant_eigenpair_power",

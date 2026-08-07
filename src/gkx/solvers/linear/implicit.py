@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax.scipy.linalg import lu_factor, lu_solve
 from solvax import gmres, tridiagonal_solve
 
-from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_arrays import (
     collision_damping,
     hypercollision_damping,
 )
+from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
@@ -22,10 +23,19 @@ from gkx.operators.linear.params import (
     _as_species_array,
     _resolve_implicit_preconditioner,
     _x64_enabled,
+    linear_terms_to_term_config,
+    term_config_to_linear_terms,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.terms.assembly import assemble_rhs_cached_with_fields, compute_fields_cached
+from gkx.terms.config import FieldState, TermConfig
 
-__all__ = ["_build_implicit_operator", "_integrate_linear_implicit_cached"]
+__all__ = [
+    "_build_field_corrected_shifted_preconditioner",
+    "_build_implicit_operator",
+    "_build_shifted_hermite_preconditioner",
+    "_integrate_linear_implicit_cached",
+]
 
 
 @dataclass(frozen=True)
@@ -72,7 +82,12 @@ _IMPLICIT_PRECONDITIONER_ALIASES = {
         {"hermite-line", "hermite_line", "hermite", "streaming-line", "streaming_line"}
     ),
     "hermite_line_coarse": frozenset(
-        {"hermite-line-coarse", "hermite_line_coarse", "hermite_coarse", "streaming-line-coarse"}
+        {
+            "hermite-line-coarse",
+            "hermite_line_coarse",
+            "hermite_coarse",
+            "streaming-line-coarse",
+        }
     ),
     "identity": frozenset({"identity", "none", "off"}),
 }
@@ -80,15 +95,22 @@ _IMPLICIT_PRECONDITIONER_ALIASES = {
 
 def _prepare_implicit_state(
     G0: jnp.ndarray,
-    dt: float,
-    terms: LinearTerms | None,
+    dt: complex | jax.Array,
+    terms: LinearTerms | TermConfig | None,
 ) -> _ImplicitState:
-    terms = LinearTerms() if terms is None else terms
+    terms = (
+        term_config_to_linear_terms(terms)
+        if isinstance(terms, TermConfig)
+        else LinearTerms()
+        if terms is None
+        else terms
+    )
     base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
     state_dtype = jnp.result_type(G0, base_dtype)
     G = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    dt_dtype = jnp.result_type(real_dtype, jnp.asarray(dt).dtype)
+    dt_val = jnp.asarray(dt, dtype=dt_dtype)
 
     squeeze_species = False
     if G.ndim == 5:
@@ -122,8 +144,6 @@ def _build_implicit_preconditioner_data(
     m = cache.m.astype(real_dtype)
     cv_d = cache.cv_d.astype(real_dtype)
     gb_d = cache.gb_d.astype(real_dtype)
-    bgrad = cache.bgrad.astype(real_dtype)
-    w_mirror = jnp.asarray(state.terms.mirror, dtype=real_dtype)
     w_curv = jnp.asarray(state.terms.curvature, dtype=real_dtype)
     w_gradb = jnp.asarray(state.terms.gradb, dtype=real_dtype)
     diag = jnp.zeros_like(damping, dtype=state.state_dtype)
@@ -138,11 +158,6 @@ def _build_implicit_preconditioner_data(
         w_curv * cv_d[None, None, None, ...] * (2.0 * m + 1.0)
         + w_gradb * gb_d[None, None, None, ...] * (2.0 * ell + 1.0)
     )
-    bgrad = bgrad[None, None, None, None, None, :]
-    mirror_diag = vth_b * (2.0 * ell + 1.0) * (2.0 * m + 1.0)
-    mirror_weight = 0.2
-    diag = diag - w_mirror * mirror_weight * bgrad * mirror_diag
-
     precond_full = 1.0 / (1.0 + state.dt_val * damping - state.dt_val * diag)
     precond_full = precond_full.astype(state.G.dtype)
     precond_damp = (1.0 / (1.0 + state.dt_val * damping)).astype(state.G.dtype)
@@ -227,7 +242,7 @@ def _solve_hermite_lines_fft(
     state: _ImplicitState,
     data: _ImplicitPreconditionerData,
 ) -> jnp.ndarray:
-    """Invert ``I - dt L_stream`` approximately via FFT(z) + tridiagonal(m)."""
+    """Invert the averaged diagonal plus Hermite streaming line."""
 
     x_hat = jnp.fft.fft(x, axis=-1)
     x_hat_mlast = jnp.moveaxis(x_hat, 2, -1)
@@ -244,14 +259,20 @@ def _solve_hermite_lines_fft(
     dl = coeff * data.sqrt_m_line
     du = coeff * data.sqrt_p_line
     du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
-    d = jnp.ones_like(du)
+    # Drifts vary along z and therefore couple Fourier modes.  Their mean
+    # keeps the separable principal symbol D(l,m,kx,ky) + S(kz,m).
+    d = jnp.moveaxis(
+        jnp.mean(jnp.reciprocal(data.precond_full), axis=-1, keepdims=True),
+        2,
+        -1,
+    )
     batch_shape = x_hat_mlast.shape
     dl = jnp.broadcast_to(dl, batch_shape)
     d = jnp.broadcast_to(d, batch_shape)
     du = jnp.broadcast_to(du, batch_shape)
     y_hat_mlast = _solve_tridiagonal_last_axis(dl, d, du, x_hat_mlast)
     y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
-    return jnp.fft.ifft(y_hat, axis=-1)
+    return jnp.fft.ifft(y_hat, axis=-1).astype(x.dtype)
 
 
 def _solve_hermite_lines_linked(
@@ -280,6 +301,7 @@ def _solve_hermite_lines_linked(
     lead_shape = x.shape[:-3]
     x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
     y_flat = jnp.zeros_like(x_flat)
+    diagonal_flat = jnp.reciprocal(data.precond_full).reshape(*lead_shape, Ny * Nx, Nz)
 
     for idx_map, kz_link in zip(cache.linked_indices, cache.linked_kz):
         nChains, nLinks = idx_map.shape
@@ -301,14 +323,20 @@ def _solve_hermite_lines_linked(
         dl = coeff * data.sqrt_m_line
         du = coeff * data.sqrt_p_line
         du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
-        d = jnp.ones_like(du)
+        diagonal_link = jnp.take(diagonal_flat, idx_flat, axis=-2)
+        diagonal_link = diagonal_link.reshape(
+            *lead_shape,
+            nChains,
+            nLinks * Nz,
+        )
+        d = jnp.moveaxis(jnp.mean(diagonal_link, axis=-1), 2, -1)[..., None, :]
         batch_shape = x_hat_mlast.shape
         dl = jnp.broadcast_to(dl, batch_shape)
         d = jnp.broadcast_to(d, batch_shape)
         du = jnp.broadcast_to(du, batch_shape)
         y_hat_mlast = _solve_tridiagonal_last_axis(dl, d, du, x_hat_mlast)
         y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
-        y_link = jnp.fft.ifft(y_hat, axis=-1)
+        y_link = jnp.fft.ifft(y_hat, axis=-1).astype(x.dtype)
         y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
         y_flat = _scatter_unique_spectral_modes(y_flat, idx_flat, y_link)
 
@@ -387,9 +415,11 @@ def _apply_hermite_line_preconditioner(
     state: _ImplicitState,
     data: _ImplicitPreconditionerData,
 ) -> jnp.ndarray:
-    x = x_flat.reshape(state.shape) * data.precond_full
-    x = (
-        _solve_hermite_lines_linked(x, cache=cache, params=params, state=state, data=data)
+    x = x_flat.reshape(state.shape)
+    hermite = (
+        _solve_hermite_lines_linked(
+            x, cache=cache, params=params, state=state, data=data
+        )
         if cache.use_twist_shift
         else _solve_hermite_lines_fft(
             x,
@@ -400,7 +430,7 @@ def _apply_hermite_line_preconditioner(
             data=data,
         )
     )
-    return x.reshape(state.size)
+    return hermite.reshape(state.size)
 
 
 def _apply_hermite_line_coarse_preconditioner(
@@ -462,6 +492,188 @@ def _build_implicit_preconditioner_callable(
     if canonical == "identity":
         return lambda x_flat: x_flat
     raise ValueError(f"Unknown canonical implicit_preconditioner '{canonical}'")
+
+
+def _build_shifted_hermite_preconditioner(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | TermConfig,
+    sigma: jnp.ndarray,
+    *,
+    coarse: bool = False,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Approximate ``(A - sigma I)^-1`` with the FFT/Hermite line solver.
+
+    The implicit preconditioner approximates ``(I - dt A)^-1``.  Setting
+    ``dt = 1 / sigma`` and multiplying by ``-1 / sigma`` gives the corresponding
+    inverse for ``A - sigma I`` while reusing exactly the same physics-aware
+    streaming, drift, and damping factors.
+    """
+
+    sigma_value = jnp.asarray(sigma, dtype=G0.dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=G0.dtype)).dtype
+    shift_floor = jnp.sqrt(jnp.finfo(real_dtype).eps)
+    safe_sigma = jnp.where(
+        jnp.abs(sigma_value) > shift_floor,
+        sigma_value,
+        jnp.asarray(1.0 + 0.0j, dtype=G0.dtype),
+    )
+    state = _prepare_implicit_state(G0, 1.0 / safe_sigma, terms)
+    data = _build_implicit_preconditioner_data(cache, params, state)
+    canonical = "hermite_line_coarse" if coarse else "hermite_line"
+    line_inverse = _build_implicit_preconditioner_callable(
+        canonical,
+        cache=cache,
+        params=params,
+        state=state,
+        data=data,
+    )
+
+    def apply_shifted_preconditioner(x_flat: jnp.ndarray) -> jnp.ndarray:
+        result = (-1.0 / safe_sigma) * line_inverse(x_flat)
+        return result.astype(x_flat.dtype)
+
+    return apply_shifted_preconditioner
+
+
+def _pack_field_state(fields: FieldState) -> jnp.ndarray:
+    """Pack only active linear field arrays into one low-moment vector."""
+
+    arrays = [fields.phi]
+    if fields.apar is not None:
+        arrays.append(fields.apar)
+    if fields.bpar is not None:
+        arrays.append(fields.bpar)
+    return jnp.concatenate(tuple(jnp.ravel(array) for array in arrays))
+
+
+def _unpack_field_state(vector: jnp.ndarray, template: FieldState) -> FieldState:
+    """Inverse of :func:`_pack_field_state` with static template shapes."""
+
+    phi_size = template.phi.size
+    offset = phi_size
+    phi = vector[:phi_size].reshape(template.phi.shape)
+    if template.apar is None:
+        apar = None
+    else:
+        apar_size = template.apar.size
+        apar = vector[offset : offset + apar_size].reshape(template.apar.shape)
+        offset += apar_size
+    if template.bpar is None:
+        bpar = None
+    else:
+        bpar = vector[offset:].reshape(template.bpar.shape)
+    return FieldState(phi=phi, apar=apar, bpar=bpar)
+
+
+def _build_field_corrected_shifted_preconditioner(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | TermConfig,
+    sigma: jnp.ndarray,
+    *,
+    coarse: bool = False,
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    r"""Add the exact low-moment field coupling to the Hermite-line inverse.
+
+    For fixed geometry the field solve is a linear moment map ``F: G -> f``.
+    Linear gyrokinetic forcing by those fields is another map ``R: f -> dG``,
+    so the shifted operator separates as
+
+    ``A - sigma I = (A_0 - sigma I) + R F``.
+
+    ``F`` has at most three active fields per spatial spectral point,
+    independent of velocity resolution. Sequentially probing ``R`` and
+    applying ``F`` avoids materializing either the kinetic operator or its
+    transpose. The Hermite-line inverse approximates ``A_0 - sigma I`` while
+    a velocity-independent capacitance solve represents the field coupling.
+    """
+
+    term_cfg = (
+        terms if isinstance(terms, TermConfig) else linear_terms_to_term_config(terms)
+    )
+    base_flat = _build_shifted_hermite_preconditioner(
+        G0,
+        cache,
+        params,
+        term_cfg,
+        sigma,
+        coarse=coarse,
+    )
+    zero_state = jnp.zeros_like(G0)
+    field_template = compute_fields_cached(
+        zero_state,
+        cache,
+        params,
+        terms=term_cfg,
+        use_custom_vjp=False,
+    )
+    zero_fields = _unpack_field_state(
+        jnp.zeros_like(_pack_field_state(field_template)),
+        field_template,
+    )
+    zero_rhs = assemble_rhs_cached_with_fields(
+        zero_state,
+        cache,
+        params,
+        zero_fields,
+        terms=term_cfg,
+    )
+
+    def field_map(state: jnp.ndarray) -> jnp.ndarray:
+        fields = compute_fields_cached(
+            state,
+            cache,
+            params,
+            terms=term_cfg,
+            use_custom_vjp=False,
+        )
+        return _pack_field_state(fields).astype(G0.dtype)
+
+    def field_response(field_vector: jnp.ndarray) -> jnp.ndarray:
+        fields = _unpack_field_state(field_vector, field_template)
+        response = assemble_rhs_cached_with_fields(
+            zero_state,
+            cache,
+            params,
+            fields,
+            terms=term_cfg,
+        )
+        return (response - zero_rhs).astype(G0.dtype)
+
+    field_size = _pack_field_state(field_template).size
+
+    def base_state_preconditioner(state: jnp.ndarray) -> jnp.ndarray:
+        return base_flat(jnp.ravel(state)).reshape(G0.shape)
+
+    solved_columns = jnp.moveaxis(
+        jax.lax.map(
+            lambda index: base_state_preconditioner(
+                field_response(jax.nn.one_hot(index, field_size, dtype=G0.dtype))
+            ),
+            jnp.arange(field_size),
+        ),
+        0,
+        -1,
+    )
+    capacitance = jnp.eye(field_size, dtype=G0.dtype) + jnp.moveaxis(
+        jax.lax.map(field_map, jnp.moveaxis(solved_columns, -1, 0)),
+        0,
+        -1,
+    )
+    capacitance_lu = lu_factor(capacitance)
+
+    def corrected(state: jnp.ndarray) -> jnp.ndarray:
+        base = base_state_preconditioner(state)
+        weights = lu_solve(capacitance_lu, field_map(base))
+        return base - jnp.tensordot(solved_columns, weights, axes=(-1, 0))
+
+    def apply_corrected(vector: jnp.ndarray) -> jnp.ndarray:
+        return jnp.ravel(corrected(vector.reshape(G0.shape))).astype(vector.dtype)
+
+    return apply_corrected
 
 
 def _select_implicit_preconditioner(

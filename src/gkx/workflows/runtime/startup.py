@@ -135,7 +135,7 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
             shift_maxiter=40,
             shift_restart=12,
             shift_solve_method="batched",
-            shift_preconditioner="damping",
+            shift_preconditioner="auto",
             shift_selection="targeted",
             mode_family="etg",
             fallback_method="arnoldi",

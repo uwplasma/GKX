@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from functools import partial
 from typing import Callable
 
 import jax
 import jax.numpy as jnp
-from jax.scipy.sparse.linalg import gmres
+from solvax import gmres
 
 from gkx.operators.linear.cache_arrays import (
     collision_damping,
@@ -175,7 +176,6 @@ def _build_shift_invert_precond(
 ) -> tuple[jnp.ndarray | None, Callable[[jnp.ndarray], jnp.ndarray] | None]:
     """Build the preconditioner used inside shift-invert Krylov GMRES solves."""
 
-    del term_cfg
     if mode is None or mode.lower() == "none":
         return None, None
     mode_key = mode.lower()
@@ -203,23 +203,69 @@ def _build_shift_invert_precond(
         "hermite_line_coarse",
         "hermite_coarse",
         "streaming-line-coarse",
+        "field-corrected",
+        "field_corrected",
+        "field-schur",
+        "field_schur",
+        "field-corrected-coarse",
+        "field_corrected_coarse",
     }:
         return None, None
 
+    # Import lazily to keep the core operator module independent of the
+    # implicit integration policy at import time.
+    from gkx.solvers.linear.implicit import (
+        _build_field_corrected_shifted_preconditioner,
+        _build_shifted_hermite_preconditioner,
+    )
+
+    coarse = mode_key in {
+        "hermite-line-coarse",
+        "hermite_line_coarse",
+        "hermite_coarse",
+        "streaming-line-coarse",
+        "field-corrected-coarse",
+        "field_corrected_coarse",
+    }
+    field_corrected = mode_key in {
+        "field-corrected",
+        "field_corrected",
+        "field-schur",
+        "field_schur",
+        "field-corrected-coarse",
+        "field_corrected_coarse",
+    }
+    if field_corrected:
+        apply_preconditioner = _build_field_corrected_shifted_preconditioner(
+            v,
+            cache,
+            params,
+            term_cfg,
+            sigma,
+            coarse=coarse,
+        )
+    else:
+        apply_preconditioner = _build_shifted_hermite_preconditioner(
+            v,
+            cache,
+            params,
+            term_cfg,
+            sigma,
+            coarse=coarse,
+        )
     damping = _compute_damping(v, cache, params)
-    diag = -damping.astype(v.dtype) - sigma
-    safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
-    precond = 1.0 / safe
-    shape = v.shape
-    size = v.size
+    diagonal = -damping.astype(v.dtype) - sigma
+    safe_diagonal = jnp.where(jnp.abs(diagonal) > 0.0, diagonal, 1.0 + 0.0j)
+    damping_inverse = 1.0 / safe_diagonal
+    shift_floor = jnp.sqrt(jnp.finfo(jnp.real(v).dtype).eps)
+    use_line = jnp.abs(sigma) > shift_floor
 
-    # A direct complex streaming-line factorization was tested here, but both
-    # ETG and KBM require field-coupled low moments for useful preconditioning.
-    def apply_precond_fallback(x_flat: jnp.ndarray) -> jnp.ndarray:
-        x = x_flat.reshape(shape)
-        return (x * precond).reshape(size)
+    def apply_with_zero_shift_fallback(x_flat: jnp.ndarray) -> jnp.ndarray:
+        line_result = apply_preconditioner(x_flat)
+        damping_result = (x_flat.reshape(v.shape) * damping_inverse).reshape(v.size)
+        return jnp.where(use_line, line_result, damping_result)
 
-    return precond, apply_precond_fallback
+    return None, apply_with_zero_shift_fallback
 
 
 @partial(jax.jit, static_argnames=("iterations",))
@@ -314,6 +360,10 @@ def _shift_invert_apply_factory(
     gmres_solve_method: str,
     shift_preconditioner: str | None,
 ):
+    if gmres_solve_method not in {"batched", "incremental", "flexible"}:
+        raise ValueError(
+            "shift_solve_method must be 'batched', 'incremental', or 'flexible'"
+        )
     shape = v0.shape
     size = v0.size
     _precond, precond_op = _build_shift_invert_precond(
@@ -328,38 +378,24 @@ def _shift_invert_apply_factory(
 
     def apply_shift_invert(x: jnp.ndarray, _cache, _params, _term_cfg) -> jnp.ndarray:
         b = x.reshape(size)
-
-        def solve(preconditioner, initial_guess=None):
-            if initial_guess is not None:
-                x0 = initial_guess
-            elif preconditioner is not None:
-                x0 = preconditioner(b)
-            else:
-                x0 = b
-            solution, _info = gmres(
-                matvec,
-                b,
-                x0=x0,
-                tol=gmres_tol,
-                maxiter=gmres_maxiter,
-                restart=gmres_restart,
-                M=preconditioner,
-                solve_method=gmres_solve_method,
-            )
-            return solution
-
-        sol = solve(precond_op)
-        if precond_op is not None:
-            real_dtype = jnp.real(jnp.empty((), dtype=b.dtype)).dtype
-            relative_floor = jnp.maximum(
-                10.0 * gmres_tol,
-                100.0 * jnp.finfo(real_dtype).eps,
-            )
-            true_residual = jnp.linalg.norm(matvec(sol) - b)
-            true_tolerance = relative_floor * jnp.linalg.norm(b)
-            retry = ~jnp.isfinite(true_residual) | (true_residual > true_tolerance)
-            sol = jax.lax.cond(retry, lambda: solve(None, sol), lambda: sol)
-        return sol.reshape(shape)
+        # SOLVAX FGMRES applies the structured inverse on the right, so its
+        # least-squares norm is the physical residual ||b - (A-sigma I)x||.
+        # A left-preconditioned solve can report convergence in a transformed
+        # norm while this residual remains O(1), which previously forced an
+        # expensive unpreconditioned retry for nearly every right-hand side.
+        restart = min(max(gmres_restart, 1), gmres_maxiter, size)
+        max_restarts = max(1, math.ceil(gmres_maxiter / restart))
+        initial_guess = precond_op(b) if precond_op is not None else b
+        solution = gmres(
+            matvec,
+            b,
+            x0=initial_guess,
+            precond=precond_op,
+            rtol=gmres_tol,
+            restart=restart,
+            max_restarts=max_restarts,
+        )
+        return solution.x.reshape(shape)
 
     return apply_shift_invert
 
@@ -550,6 +586,22 @@ def _rayleigh_quotient(
     return jnp.vdot(vector, operator_vector) / safe_denominator
 
 
+def _advance_rk4(
+    state: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    dt: jnp.ndarray,
+) -> jnp.ndarray:
+    """Advance with a full-operator polynomial that preserves eigenvectors."""
+
+    k1 = _apply_operator(state, cache, params, term_cfg)
+    k2 = _apply_operator(state + 0.5 * dt * k1, cache, params, term_cfg)
+    k3 = _apply_operator(state + 0.5 * dt * k2, cache, params, term_cfg)
+    k4 = _apply_operator(state + dt * k3, cache, params, term_cfg)
+    return state + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+
 def _operator_arnoldi_restart_step(
     v: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -606,7 +658,8 @@ def _propagator_arnoldi_restart_step(
     term_cfg: TermConfig,
     *,
     krylov_dim: int,
-    dt_val: jnp.ndarray,
+    horizon: jnp.ndarray,
+    growth_only: bool,
     omega_min_factor: float,
     omega_target_factor: float,
     omega_cap_factor: float,
@@ -616,7 +669,28 @@ def _propagator_arnoldi_restart_step(
     V, H = _arnoldi(v, apply_prop, cache, params, term_cfg, krylov_dim)
     Hk = H[:krylov_dim, :krylov_dim]
     eigvals, eigvecs = jnp.linalg.eig(Hk)
-    lam = jnp.log(eigvals) / dt_val
+    lam = jnp.log(eigvals) / horizon
+    if growth_only:
+        if select_overlap:
+            lifted = jnp.tensordot(
+                eigvecs.T,
+                V[:krylov_dim],
+                axes=1,
+            ).reshape(krylov_dim, -1)
+            norms = jnp.linalg.norm(lifted, axis=1)
+            safe_norms = jnp.where(norms > 0.0, norms, 1.0)
+            lifted = lifted / safe_norms[:, None]
+            reference = _normalize(v_ref).reshape(-1)
+            idx = jnp.argmax(jnp.abs(lifted.conj() @ reference))
+        else:
+            # For P ~= exp(T A), |mu| = exp(T Re(lambda)). The phase may wrap
+            # many times without changing the ordering by physical growth.
+            idx = jnp.argmax(jnp.abs(eigvals))
+        return (
+            _ritz_vector_from_index(V, eigvecs, idx, krylov_dim=krylov_dim),
+            lam[idx],
+        )
+
     real_part = jnp.real(lam)
     imag_part = jnp.imag(lam)
     mask0, mask, omega_scale = _frequency_masks_from_imaginary_part(
@@ -829,7 +903,15 @@ def dominant_eigenpair_cached(
     return eig, v
 
 
-@partial(jax.jit, static_argnames=("krylov_dim", "restarts", "select_overlap"))
+@partial(
+    jax.jit,
+    static_argnames=(
+        "krylov_dim",
+        "restarts",
+        "propagator_steps",
+        "select_overlap",
+    ),
+)
 def dominant_eigenpair_propagator_cached(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -840,19 +922,34 @@ def dominant_eigenpair_propagator_cached(
     krylov_dim: int,
     restarts: int,
     dt: float,
+    propagator_steps: int,
     omega_min_factor: float,
     omega_target_factor: float,
     omega_cap_factor: float,
     omega_sign: int,
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Arnoldi on a stable IMEX2 propagator; eigenvalue from Rayleigh quotient."""
+    """Filter by finite-horizon growth and return a physical Rayleigh pair."""
 
     v = v0
     dt_val = jnp.asarray(dt, dtype=jnp.real(v0).dtype)
+    horizon = dt_val * propagator_steps
 
     def apply_prop(x, cache, params, term_cfg):
-        return _advance_imex2(x, cache, params, term_cfg, dt_val)
+        if propagator_steps == 1:
+            return _advance_imex2(x, cache, params, term_cfg, dt_val)
+        return jax.lax.fori_loop(
+            0,
+            propagator_steps,
+            lambda _index, state: _advance_rk4(
+                state,
+                cache,
+                params,
+                term_cfg,
+                dt_val,
+            ),
+            x,
+        )
 
     def restart_body(i, state):
         del i
@@ -865,7 +962,8 @@ def dominant_eigenpair_propagator_cached(
             params,
             term_cfg,
             krylov_dim=krylov_dim,
-            dt_val=dt_val,
+            horizon=horizon,
+            growth_only=propagator_steps > 1,
             omega_min_factor=omega_min_factor,
             omega_target_factor=omega_target_factor,
             omega_cap_factor=omega_cap_factor,
@@ -873,23 +971,15 @@ def dominant_eigenpair_propagator_cached(
             select_overlap=select_overlap,
         )
 
-    v, eig_sel = jax.lax.fori_loop(
+    v, _eig_sel = jax.lax.fori_loop(
         0, restarts, restart_body, (v, jnp.asarray(0.0, dtype=v0.dtype))
     )
-    Lv = _apply_operator(v, cache, params, term_cfg)
-    num = jnp.vdot(v, Lv)
-    den = jnp.vdot(v, v)
-    eig_rayleigh = jnp.where(den == 0.0, 0.0, num / den)
-    sel_finite = jnp.isfinite(jnp.real(eig_sel)) & jnp.isfinite(jnp.imag(eig_sel))
-    prefer_rayleigh = (~sel_finite) | (
-        (jnp.real(eig_sel) <= 0.0) & (jnp.real(eig_rayleigh) > jnp.real(eig_sel))
-    )
-    eig = jnp.where(prefer_rayleigh, eig_rayleigh, eig_sel)
-    return eig, v
+    return _rayleigh_quotient(v, cache, params, term_cfg), v
 
 
 __all__ = [
     "_advance_imex2",
+    "_advance_rk4",
     "_apply_operator",
     "_arnoldi",
     "_assemble_rhs_cached_novjp",

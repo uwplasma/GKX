@@ -17,12 +17,23 @@ or from Python.
 pip install gkx && gkx
 ```
 
+[![Saturated ITG turbulence on a Cyclone flux tube](docs/_static/turbulence_poster.jpg)](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)
+
+**Saturated ITG turbulence on a Cyclone flux tube** (32×32×24, `t ≈ 300–376`),
+shown as the perpendicular cut a gyrokineticist reads and as the field-aligned
+tube in real space — the same data twice, because a flux-tube movie that only
+shows the perpendicular plane hides the parallel elongation that defines the
+turbulence. Amplitude is steady across all 120 frames, not growing.
+**[▶ Play the movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)** (1.8 MB), or regenerate it with
+[`build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py).
+
 ## Why GKX
 
 | | |
 | --- | --- |
 | **Collisions other codes don't have** | Five operators, from Lenard-Bernstein up to the **full gyrokinetic Coulomb** with finite-Larmor-radius effects — selected with one TOML key |
 | **Differentiable end to end** | JAX autodiff through geometry, solver and diagnostics, including implicit eigenvalue derivatives — real gradients for stellarator shape optimization |
+| **Resolutions a dense solver can't hold** | Matrix-free eigenmodes at `n = 494,592`, where the dense operator alone would be **3.6 TiB** — with the eigenpair still differentiable |
 | **Verified against exact physics** | Landau roots to 0.004%, conservation to machine precision, published Appendix-C coefficients to 1e-12 |
 | **Fast where it matters** | GPU execution, restartable NetCDF output, publication figures from `gkx --plot` |
 
@@ -74,6 +85,49 @@ Full documentation is hosted at **[gkx.readthedocs.io](https://gkx.readthedocs.i
 Start with the [quickstart](https://gkx.readthedocs.io/en/latest/quickstart.html) and
 [input reference](https://gkx.readthedocs.io/en/latest/inputs.html) for linear,
 nonlinear, Miller, VMEC, restart, quasilinear, and plotting workflows.
+
+## Differentiable matrix-free eigenmodes
+
+Design studies need a few physical modes and their derivatives, not a dense
+spectrum. GKX applies the full gyrokinetic RHS inside a restarted eigensolver, so
+storage is `O(n m)` rather than `O(n²)`.
+
+![Matrix-free reach](docs/_static/eigensolver_reach.png)
+
+The dense path is bounded by **memory, not speed** — at the largest tested
+truncation (`n = 494,592`) its operator alone would be 3.6 TiB, so it cannot
+represent the problem at any speed.
+
+```python
+settings = gkx.AdaptiveLinearEigensolverConfig(tolerance=1e-9, candidate_count=2)
+
+def objective(boundary):
+    values = gkx.solver_objective_vector_from_geometry(
+        build_solver_geometry(boundary),
+        n_laguerre=16, n_hermite=24,
+        eigensolver="adaptive-propagator", adaptive_config=settings,
+    )
+    return values[-1]          # quasilinear transport objective
+
+value, gradient = jax.value_and_grad(objective)(initial_shape)
+```
+
+Reverse mode uses `dλ/dp = wᴴ(dA/dp)v / (wᴴv)` plus a bordered solve for
+eigenvector observables — no differentiation through the iteration. Residual,
+overlap, spectral-gap and conditioning gates reject ambiguous modes.
+
+| | Memory | Branch handling | Derivative |
+| --- | ---: | --- | --- |
+| Dense eigensolve | `O(n²)` | all modes at small `n` | dense eigenvector AD |
+| Initial-value fit | `O(n)` | can switch at crossings | long-trajectory AD |
+| **GKX** | **`O(n m)`** | **certified candidates + continuation** | **implicit JAX VJP** |
+
+Opt-in: the default stays dense so established results are unchanged. Measured
+boundaries, the sparse fallback, the physics-aware shift inverse and what is
+*not* claimed are in the [eigensolver documentation](docs/differentiable_eigensolver.rst);
+the inner-solver choice behind it is in [numerical defaults](docs/solvax_defaults.rst).
+
+
 
 ## Validation
 
@@ -161,10 +215,8 @@ also be a better physical answer than an unconverged Coulomb one; see
 
 ### How the operators are verified
 
-Every shipped matrix is checked against the published closed forms rather than
-only against itself. All twelve Appendix-C coefficients reproduce exactly, and
-the structural properties a linearized collision operator must satisfy are
-gated numerically:
+Every shipped matrix is checked against the published closed forms, not only
+against itself:
 
 | Property | Result |
 | --- | --- |
@@ -173,39 +225,17 @@ gated numerically:
 | Onsager self-adjointness | exact (≤ 3.4e-17) |
 | Published Appendix-C coefficients | reproduce to 1e-12 |
 | Finite-Larmor `b -> 0` limit | reduces to the drift-kinetic operator exactly |
-| Finite-Larmor conservation defect | scales as `B^1.96`-`B^1.99`, i.e. first order in `b` |
-
-The finite-Larmor operator acts on gyrocenter moments, whose conservation is
-modified by gyroaveraging, so the *ordering* is the test: the defect must vanish
-at `b = 0` and enter at first order in `b`. Tables ship at 8 and 18
-Hermite-Laguerre moments, generated in 60-digit arithmetic and stored as
-checksummed float64.
-
-The Coulomb tables are generated for like-species collisions; a multispecies
-request is refused rather than silently extrapolated. Equations, thresholds,
-machine-readable results, literature links, and the reproduction recipe are in
-the [collision-operator documentation](docs/operators.rst).
+| Finite-Larmor conservation defect | scales as `B^1.96`-`B^1.99`, first order in `b` |
 
 ![Coulomb collision operator verification](docs/_static/collision_operator_verification.png)
 
-At `(P,J)=(24,10)` the drift-kinetic traces approach the Xiao residual and the
-finite-wavelength tails reproduce the published `original < improved < Coulomb`
-ordering at both `kx rho_i = 0.1` and `0.2`. Paper-resolution zonal-response
-panels, velocity-space convergence and the Figure 12–14 gate:
-[operators](docs/operators.rst).
+The finite-Larmor operator acts on gyrocenter moments, whose conservation is
+modified by gyroaveraging, so the *ordering* is the test: the defect must vanish
+at `b = 0` and enter at first order. Coulomb tables are generated for
+like-species collisions; a multispecies request is refused rather than silently
+extrapolated. Equations, thresholds, convergence panels and the reproduction
+recipe: [operators](docs/operators.rst).
 
-## Full feature list
-
-- Electrostatic and electromagnetic gyrokinetics with kinetic or Boltzmann species.
-- Linear initial-value, dominant-eigenmode, and nonlinear turbulence solvers.
-- Analytic s-alpha, Miller, imported VMEC, and differentiable VMEC/Boozer geometry.
-- JAX JIT, forward/reverse autodiff, implicit eigenvalue derivatives, and UQ tools.
-- Quasilinear transport diagnostics with explicit saturation-rule metadata.
-- CPU/GPU execution and production parallelization for independent scans and ensembles.
-- Restartable NetCDF output and `gkx --plot` publication-style figures.
-- Five selectable collision operators, from a conserving Lenard-Bernstein model
-  to the full linearized Coulomb (Landau) operator with finite-Larmor-radius
-  effects.
 
 ## What GKX Solves
 
@@ -418,25 +448,25 @@ analytic Jacobian. Regenerate with
 evidence the objective now drives the design it is supposed to drive; it is not
 evidence of nonlinear flux reduction, which requires the audits below.
 
-### Long-window audits
+### Nonlinear flux reduction is not demonstrated
 
-![VMEX QA max-mode-5 optimizer sweep](docs/_static/vmex_qa_full_sweep_panel.png)
+The weight scan above fixes the *objective*, not the physics claim. Matched
+long post-transient nonlinear audits of the reweighted designs have not been
+run. The earlier audits, which used converged post-transient heat-flux windows,
+predate the reweighting and showed no statistically significant transport
+reduction against the strict QA baseline.
 
-**These rows are not promoted turbulent-flux designs.** Their matched long
-post-transient nonlinear audits use converged post-transient heat-flux windows
-and show no statistically significant transport reduction against the strict QA
-baseline — useful negative evidence for objective conditioning and optimizer
-choice. Those audits predate the reweighting above and are the next thing to
-repeat.
-
-The RBC(1,1) scan below is a landscape and noise diagnostic, not a source of
-admitted candidates.
-
-![QA RBC(1,1) transport landscape](docs/_static/vmec_boundary_transport_landscape_rbc11_full.png)
+Two measurements say why that evidence is not close. The production gradient
+gate is blocked at `gradient_uncertainty_rel = 1.806` against a 0.5 maximum,
+and the heat-flux windows behind it hold only 2.6-11.8 statistically
+independent samples, so their error bars are understated 2.0-3.7x. Closing that
+by longer averaging alone costs more than 13x the sampling. See the
+[nonlinear gradient plan](docs/nonlinear_gradient_plan.rst).
 
 Scripts: [examples/optimization](examples/optimization). Objective equations,
-optimizer policies and long-window audits:
+optimizer policies and the audit record:
 [optimization docs](docs/stellarator_optimization.rst).
+
 
 ## Parallelization
 
@@ -474,6 +504,21 @@ Validated release claims are bounded by the [release scope](docs/release_scope.r
 - Production nonlinear domain decomposition and equilibrium ExB flow shear
   remain open.
 
+## Full feature list
+
+- Electrostatic and electromagnetic gyrokinetics with kinetic or Boltzmann species.
+- Linear initial-value, dominant-eigenmode, and nonlinear turbulence solvers.
+- Matrix-free eigenmodes with certified residuals, branch continuation, and
+  implicit derivatives — `O(n m)` storage instead of `O(n²)`.
+- Analytic s-alpha, Miller, imported VMEC, and differentiable VMEC/Boozer geometry.
+- JAX JIT, forward/reverse autodiff, implicit eigenvalue derivatives, and UQ tools.
+- Quasilinear transport diagnostics with explicit saturation-rule metadata.
+- CPU/GPU execution and production parallelization for independent scans and ensembles.
+- Restartable NetCDF output and `gkx --plot` publication-style figures.
+- Five selectable collision operators, from a conserving Lenard-Bernstein model
+  to the full linearized Coulomb (Landau) operator with finite-Larmor-radius
+  effects.
+
 ## Examples and Documentation
 
 The repository keeps small runnable examples under:
@@ -489,6 +534,8 @@ Detailed user and developer documentation:
 - [Physics and equations](docs/theory.rst)
 - [Operators and models](docs/operators.rst)
 - [Numerics and solvers](docs/numerics.rst)
+- [Matrix-free eigenmodes](docs/differentiable_eigensolver.rst) and the
+  [numerical defaults](docs/solvax_defaults.rst) behind them
 - [Geometry](docs/geometry.rst)
 - [Outputs and plotting](docs/outputs.rst)
 - [Testing and validation](docs/testing.rst)
