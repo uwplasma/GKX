@@ -88,7 +88,21 @@ def linear_growth_scan(
                 params_linear=params,
             )
             per_ky.append((float(values[0]), float(values[1]), int(index)))
-        gamma, omega, best = max(per_ky, key=lambda item: item[0])
+        # Track the ITG branch by frequency sign rather than taking whatever is
+        # most unstable. Measured on the first full scan: omega < 0 (the ion
+        # diamagnetic direction) at high drive, but omega > 0 through the
+        # low-drive band -- a different branch. Maximising gamma across branches
+        # made the fit extrapolate across that change, which is why a correct
+        # square-root law still gave a relative residual of 0.42.
+        itg = [item for item in per_ky if item[1] < 0.0]
+        if itg:
+            gamma, omega, best = max(itg, key=lambda item: item[0])
+            branch = "itg"
+        else:
+            # No ion-direction mode at this drive. Report the most unstable one
+            # so the row is inspectable, flagged so the fit can exclude it.
+            gamma, omega, best = max(per_ky, key=lambda item: item[0])
+            branch = "other"
         rows.append(
             {
                 "multiplier": float(multiplier),
@@ -96,13 +110,14 @@ def linear_growth_scan(
                 "gamma": gamma,
                 "omega": omega,
                 "ky_index": best,
+                "branch": branch,
                 "gamma_by_ky": [g for g, _, _ in per_ky],
                 "seconds": time.time() - started,
             }
         )
         print(
             f"  x{multiplier:5.3f}  gamma={gamma:+.6e}  omega={omega:+.6e}  "
-            f"ky#{best}  [{rows[-1]['seconds']:.1f}s]",
+            f"ky#{best}  {branch}  [{rows[-1]['seconds']:.1f}s]",
             flush=True,
         )
     return rows
@@ -125,8 +140,15 @@ def threshold_from_scan(rows: list[dict], *, near_fraction: float = 0.5) -> dict
     describe the saturated regime.
     """
 
-    x = np.array([r["multiplier"] for r in rows])
-    g = np.array([r["gamma"] for r in rows])
+    itg_rows = [r for r in rows if r.get("branch", "itg") == "itg"]
+    if len(itg_rows) < 3:
+        return {
+            "resolved": False,
+            "reason": f"only {len(itg_rows)} rows on the ion-direction branch; "
+            "the scan is dominated by another mode",
+        }
+    x = np.array([r["multiplier"] for r in itg_rows])
+    g = np.array([r["gamma"] for r in itg_rows])
     peak = float(np.nanmax(g)) if g.size else 0.0
     if peak <= 0.0:
         return {"resolved": False, "reason": "no unstable point in the scan"}
@@ -151,6 +173,8 @@ def threshold_from_scan(rows: list[dict], *, near_fraction: float = 0.5) -> dict
         "fit_model": "gamma^2 linear in drive (square-root threshold law)",
         "relative_fit_residual": residual,
         "points_used": int(near.sum()),
+        "itg_branch_rows": len(itg_rows),
+        "total_rows": len(rows),
     }
 
 
