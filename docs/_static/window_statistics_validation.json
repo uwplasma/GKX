@@ -1,0 +1,82 @@
+{
+  "kind": "window_statistics_validation",
+  "claim_level": "validated_against_empirical_scatter_of_independent_realizations",
+  "process": "AR(1), analytic tau_ac = dt (1+rho) / (2 (1-rho))",
+  "steps": 200,
+  "realizations": 4000,
+  "worst_naive_ratio": 0.15024631206164873,
+  "worst_corrected_ratio": 0.7304397984500131,
+  "max_corrected_deviation": 0.26956020154998694,
+  "rows": [
+    {
+      "rho": 0.0,
+      "tau_analytic": 0.5,
+      "tau_measured": 0.2725885627968957,
+      "empirical_stderr": 0.07072985519649677,
+      "naive_stderr": 0.07065813876596787,
+      "corrected_stderr": 0.07306418621679035,
+      "naive_ratio": 0.9989860515007465,
+      "corrected_ratio": 1.0330034751776107
+    },
+    {
+      "rho": 0.3,
+      "tau_analytic": 0.9285714285714287,
+      "tau_measured": 0.939359487106872,
+      "empirical_stderr": 0.09626701106653938,
+      "naive_stderr": 0.07047110026994755,
+      "corrected_stderr": 0.09586203487605455,
+      "naive_ratio": 0.7320378963593063,
+      "corrected_ratio": 0.9957931986669356
+    },
+    {
+      "rho": 0.5,
+      "tau_analytic": 1.5,
+      "tau_measured": 1.5314642320486043,
+      "empirical_stderr": 0.12220039578999896,
+      "naive_stderr": 0.0702090350792441,
+      "corrected_stderr": 0.12181713340224525,
+      "naive_ratio": 0.5745401610637836,
+      "corrected_ratio": 0.9968636567396038
+    },
+    {
+      "rho": 0.7,
+      "tau_analytic": 2.833333333333333,
+      "tau_measured": 2.8345522502964213,
+      "empirical_stderr": 0.1673908769506936,
+      "naive_stderr": 0.06960373068597109,
+      "corrected_stderr": 0.1640374880795504,
+      "naive_ratio": 0.4158155567012977,
+      "corrected_ratio": 0.9799667166321677
+    },
+    {
+      "rho": 0.8,
+      "tau_analytic": 4.500000000000001,
+      "tau_measured": 4.279086427545586,
+      "empirical_stderr": 0.20997408737781786,
+      "naive_stderr": 0.068879129857375,
+      "corrected_stderr": 0.1995665327412661,
+      "naive_ratio": 0.3280363339950468,
+      "corrected_ratio": 0.9504340999095527
+    },
+    {
+      "rho": 0.9,
+      "tau_analytic": 9.500000000000002,
+      "tau_measured": 7.592503633747927,
+      "empirical_stderr": 0.3008082061087634,
+      "naive_stderr": 0.06682346609123675,
+      "corrected_stderr": 0.25941074909357137,
+      "naive_ratio": 0.22214641999186469,
+      "corrected_ratio": 0.8623792297733263
+    },
+    {
+      "rho": 0.95,
+      "tau_analytic": 19.499999999999982,
+      "tau_measured": 11.670799623242328,
+      "empirical_stderr": 0.4193966168595102,
+      "naive_stderr": 0.0630127949742737,
+      "corrected_stderr": 0.30634398028947796,
+      "naive_ratio": 0.15024631206164873,
+      "corrected_ratio": 0.7304397984500131
+    }
+  ]
+}

@@ -60,6 +60,14 @@ class NonlinearWindowMetrics:
     phi_mode_envelope_mean: float | None
     phi_mode_envelope_std: float | None
     phi_mode_envelope_max: float | None
+    # Correlation statistics. heat_flux_stderr divides by n_eff, not nsamples,
+    # because turbulence outputs are not independent draws. Defaults are
+    # fail-closed so a hand-built object cannot pass a statistical gate by
+    # omission; windowed_nonlinear_metrics always sets them.
+    heat_flux_tau_ac: float = 0.0
+    window_in_tau_ac: float = 0.0
+    heat_flux_n_eff: float = 0.0
+    heat_flux_stderr: float = float("inf")
 
 @dataclass(frozen=True)
 class NonlinearHeatFluxConvergenceMetrics:
@@ -81,6 +89,9 @@ class NonlinearHeatFluxConvergenceMetrics:
     abs_trend: float
     start_fraction: float
     terminal_fraction: float
+    # n_eff is 2.6 to 11.8 across the tracked traces where nsamples is 31 to 92.
+    tau_ac: float = 0.0
+    n_eff: float = 0.0
 
 @dataclass(frozen=True)
 class ObservedOrderMetrics:
@@ -237,6 +248,55 @@ def late_time_linear_metrics(
     )
 
 
+def integrated_autocorrelation_time(signal: np.ndarray, dt: float) -> float:
+    """Integrated autocorrelation time, truncated at the first zero crossing.
+
+    Turbulence outputs are correlated, so ``std / sqrt(n)`` understates the
+    uncertainty of their mean by ``sqrt(n / n_eff)`` -- 2.0x to 3.7x across the
+    tracked traces. This converts an output count into an independent one.
+    Truncation at the first zero crossing is the standard initial-positive-
+    sequence estimator; summing past it accumulates noise, not signal.
+    """
+
+    x = np.asarray(signal, dtype=float)
+    x = x - x.mean()
+    if x.size < 4 or not np.any(x) or dt <= 0.0:
+        return 0.0
+    size = int(2 ** np.ceil(np.log2(2 * x.size)))
+    spectrum = np.fft.rfft(x, n=size)
+    correlation = np.fft.irfft(spectrum * np.conj(spectrum), n=size)[: x.size]
+    if correlation[0] <= 0.0:
+        return 0.0
+    rho = correlation / correlation[0]
+    negative = np.nonzero(rho < 0.0)[0]
+    cut = int(negative[0]) if negative.size else rho.size
+    return float(np.trapezoid(rho[:cut], dx=dt)) if cut > 1 else 0.0
+
+
+def _correlated_sample_stats(t: np.ndarray, q: np.ndarray) -> tuple[float, float, float]:
+    """Return ``(tau_ac, n_eff, span)`` for a windowed series.
+
+    ``n_eff = n dt / (2 tau)``, capped at ``n``. The estimator integrates the
+    normalized autocorrelation from zero lag, so ``tau -> dt/2`` for an
+    uncorrelated series; this form then returns ``n_eff = n``, as it must.
+    Using ``n / (1 + 2 tau / dt)`` instead double-counts the zero-lag term and
+    reports ``n/2`` for independent samples -- validated against the empirical
+    scatter of independent realizations, that overestimated the standard error
+    by 22% at zero correlation
+    (``tools/artifacts/build_window_statistics_validation.py``).
+    """
+
+    dt = float(np.median(np.diff(t))) if t.size > 1 else 0.0
+    tau = integrated_autocorrelation_time(q, dt)
+    n_eff = (
+        min(float(q.size), q.size * dt / (2.0 * tau))
+        if tau > 0.0 and dt > 0.0
+        else float(q.size)
+    )
+    span = float(t[-1] - t[0]) if t.size > 1 else 0.0
+    return tau, float(n_eff), span
+
+
 def windowed_nonlinear_metrics(
     result: object,
     *,
@@ -277,6 +337,9 @@ def windowed_nonlinear_metrics(
             envelope_std = float(np.std(envelope))
             envelope_max = float(np.max(envelope))
 
+    tau_ac, n_eff, span = _correlated_sample_stats(t[mask], heat_flux)
+    heat_flux_std = float(np.std(heat_flux))
+
     return NonlinearWindowMetrics(
         tmin=float(tmin if tmin is not None else t[0]),
         tmax=float(tmax if tmax is not None else t[-1]),
@@ -291,6 +354,10 @@ def windowed_nonlinear_metrics(
         phi_mode_envelope_mean=envelope_mean,
         phi_mode_envelope_std=envelope_std,
         phi_mode_envelope_max=envelope_max,
+        heat_flux_tau_ac=tau_ac,
+        window_in_tau_ac=(span / tau_ac if tau_ac > 0.0 else float("inf")),
+        heat_flux_n_eff=float(n_eff),
+        heat_flux_stderr=float(heat_flux_std / np.sqrt(max(n_eff, 1.0))),
     )
 
 
@@ -451,6 +518,8 @@ def nonlinear_heat_flux_convergence_metrics(
         mean_floor=mean_floor,
     )
 
+    window_tau, window_n_eff, _ = _correlated_sample_stats(window.t, window.q)
+
     return NonlinearHeatFluxConvergenceMetrics(
         tmin=float(window.tmin if window.tmin is not None else window.t[0]),
         tmax=float(window.tmax if window.tmax is not None else window.t[-1]),
@@ -466,6 +535,8 @@ def nonlinear_heat_flux_convergence_metrics(
         mean_rel_delta=summary.mean_rel_delta,
         trend=summary.trend,
         abs_trend=float(abs(summary.trend)),
+        tau_ac=float(window_tau),
+        n_eff=float(window_n_eff),
         start_fraction=start,
         terminal_fraction=terminal_fraction,
     )
