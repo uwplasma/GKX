@@ -61,17 +61,42 @@ _SOLVER_OBJECTIVE_ALIASES = {
 }
 
 
-def _default_gradient_linear_params() -> LinearParams:
-    # Cyclone drive in the units the operator consumes, a/L. These used to be
-    # 6.9 and 2.2, which are the same case expressed as R/L: the objective was
-    # running at R/a = 2.78 times the intended gradient.
+def _default_gradient_linear_params(geometry: Any | None = None) -> LinearParams:
+    """Cyclone drive plus the Hermite closure a truncated basis requires.
+
+    The drive is in the units the operator consumes, ``a/L``. It used to be
+    6.9 and 2.2, which are the same case expressed as ``R/L``: the objective was
+    running at ``R/a = 2.78`` times the intended gradient.
+
+    Every dissipation amplitude used to be zero, leaving the truncated Hermite
+    hierarchy with no velocity-space dissipation: the whole spectrum then sits on
+    the imaginary axis at zero drive, ``argmax(Re lambda)`` is floored at zero or
+    above, and **the objective cannot report a stable design**. Where the
+    physical branch is weak it returned a marginal mode at ``|omega|`` of 20-90
+    instead. ``test_objective_reports_stability`` pins the numbers.
+
+    Hyperdiffusion must not be used for this. This path runs one selected ``k_y``
+    with ``nx = 1``, so ``kperp^2_max`` *is* ``kperp^2`` in
+    ``D_hyper (kperp^2/kperp^2_max)^p`` and the term is exactly
+    ``-D_hyper * I`` -- a constant shift, replacing a floor at zero with a floor
+    at ``-D_hyper``, which is worse because it looks physical.
+
+    ``kpar_scale`` carries the parallel-derivative scaling into the closure, so
+    it comes from the geometry when one is supplied; callers without one get 1.0,
+    which across ``gradpar`` 0.5 to 0.067 moved magnitudes but not the ranking an
+    optimizer follows.
+    """
+
     return LinearParams(
         fprim=0.8,
         tprim=2.49,
         nu=0.0,
         nu_hyper=0.0,
         hypercollisions_const=0.0,
-        hypercollisions_kz=0.0,
+        hypercollisions_kz=1.0,
+        nu_hyper_m=1.0,
+        p_hyper_m=4.0,
+        kpar_scale=1.0 if geometry is None else float(geometry.gradpar()),
         D_hyper=0.0,
         beta=0.0,
         fapar=0.0,
@@ -79,9 +104,16 @@ def _default_gradient_linear_params() -> LinearParams:
 
 
 def _default_gradient_linear_terms() -> LinearTerms:
+    """Term switches matching ``_default_gradient_linear_params``.
+
+    ``hypercollisions`` is on because the closure above needs it: the amplitude
+    and the switch are two halves of one setting, and either alone is an exact
+    no-op.
+    """
+
     return LinearTerms(
         collisions=0.0,
-        hypercollisions=0.0,
+        hypercollisions=1.0,
         end_damping=0.0,
         apar=0.0,
         bpar=0.0,
@@ -248,7 +280,7 @@ def _solver_geometry_context(
     ntheta = int(jnp.asarray(geometry.theta).shape[0])
     if int(grid.z.size) != ntheta:
         raise ValueError("spectral_grid z size must match the geometry theta size")
-    linear_params = params_linear or _default_gradient_linear_params()
+    linear_params = params_linear or _default_gradient_linear_params(geometry)
     linear_terms = terms or _default_gradient_linear_terms()
     cache = build_linear_cache(
         grid,
