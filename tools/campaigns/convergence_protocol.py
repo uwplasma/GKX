@@ -205,8 +205,8 @@ def growth_evaluator(
     *,
     s_index: int,
     ky_index: int,
-    r_over_lt: float,
-    r_over_ln: float,
+    tprim: float,
+    fprim: float,
     eigensolver: str = "dense",
     adaptive_config: Any | None = None,
 ) -> Callable[..., float]:
@@ -234,8 +234,8 @@ def growth_evaluator(
 
     params_linear = dataclasses.replace(
         _default_gradient_linear_params(),
-        R_over_LTi=float(r_over_lt),
-        R_over_Ln=float(r_over_ln),
+        tprim=float(tprim),
+        fprim=float(fprim),
     )
 
     def growth(
@@ -277,8 +277,8 @@ def linear_convergence(
     ),
     ntheta_ladder: Sequence[int] = (32, 48, 64, 96),
     ky_index: int = 1,
-    r_over_lt: float = 6.9,
-    r_over_ln: float = 2.2,
+    tprim: float = 2.49,
+    fprim: float = 0.8,
     eigensolver: str = "dense",
     adaptive_config: Any | None = None,
     verbose: bool = True,
@@ -290,8 +290,8 @@ def linear_convergence(
         equilibrium,
         s_index=s_index,
         ky_index=ky_index,
-        r_over_lt=r_over_lt,
-        r_over_ln=r_over_ln,
+        tprim=tprim,
+        fprim=fprim,
         eigensolver=eigensolver,
         adaptive_config=adaptive_config,
     )
@@ -332,8 +332,8 @@ def linear_convergence(
         "eigensolver": eigensolver,
         "s_index": s_index,
         "ky_index": ky_index,
-        "r_over_lt": r_over_lt,
-        "r_over_ln": r_over_ln,
+        "tprim": tprim,
+        "fprim": fprim,
         "ladders": {
             "velocity_space": velocity.to_dict(),
             "ntheta": theta.to_dict(),

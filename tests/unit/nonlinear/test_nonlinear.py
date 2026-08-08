@@ -184,7 +184,7 @@ def test_nonlinear_imex_parameter_gradient_rebuilds_operator() -> None:
     terms = TermConfig(nonlinear=0.0)
 
     def final_energy(rlt: jnp.ndarray) -> jnp.ndarray:
-        params = replace(base_params, R_over_LTi=rlt)
+        params = replace(base_params, tprim=rlt)
         cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
         operator = build_nonlinear_imex_operator(
             initial_state,
@@ -239,7 +239,7 @@ def test_nonlinear_imex_heat_flux_gradient_matches_finite_difference() -> None:
     _volume_factor, flux_factor = fieldline_quadrature_weights(geom, grid)
 
     def endpoint_heat_flux(rlt: jnp.ndarray, tolerance: float) -> jnp.ndarray:
-        params = replace(base_params, R_over_LTi=rlt)
+        params = replace(base_params, tprim=rlt)
         cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
         operator = build_nonlinear_imex_operator(
             initial_state,
@@ -464,7 +464,7 @@ def test_prepared_nonlinear_arrays_accept_matched_dynamic_cache_and_params():
     )
 
     def final_energy(rlt: jnp.ndarray) -> jnp.ndarray:
-        params = replace(base_params, R_over_LTi=rlt)
+        params = replace(base_params, tprim=rlt)
         cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
         final_state, _diagnostics, _fields = prepared.run_arrays(
             cache=cache, params=params
@@ -698,7 +698,7 @@ def test_nonlinear_adaptive_dt_includes_linear_frequency_cap():
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
-    params = LinearParams(R_over_LTi=3.0, R_over_Ln=1.0)
+    params = LinearParams(tprim=3.0, fprim=1.0)
     G = jnp.zeros((2, 4, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     terms = TermConfig(nonlinear=0.0)
 

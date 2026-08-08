@@ -722,9 +722,9 @@ def _cyclone_reference_scan(
         ky_val = float(ky)
         Nl, Nm, tmax = _gx_balanced_policy(ky_val)
         params = LinearParams(
-            R_over_Ln=cfg.model.R_over_Ln,
-            R_over_LTi=cfg.model.R_over_LTi,
-            R_over_LTe=cfg.model.R_over_LTe,
+            fprim=cfg.model.fprim,
+            tprim=cfg.model.tprim_i,
+            tprim_e=cfg.model.tprim_e,
             omega_d_scale=CYCLONE_OMEGA_D_SCALE,
             omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
             rho_star=CYCLONE_RHO_STAR,
@@ -981,12 +981,12 @@ def _etg_runtime_case():
 def _run_etg_tables(*, outdir: Path, verbose: bool, progress: bool) -> None:
     base_cfg = _etg_runtime_case()
     etg_R = np.array([4.0, 6.0, 8.0, 10.0])
-    etg_rows = ["R_over_LTe,gamma,omega"]
+    etg_rows = ["tprim_e,gamma,omega"]
     for R in etg_R:
         electron = replace(base_cfg.species[0], tprim=float(R))
         cfg = replace(base_cfg, species=(electron,))
         _log(
-            f"\n=== ETG trend R/LTe={float(R):.2f} ===",
+            f"\n=== ETG trend a/LTe={float(R):.2f} ===",
             verbose=verbose,
             use_tqdm=progress,
         )

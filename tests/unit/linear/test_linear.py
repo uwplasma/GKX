@@ -225,8 +225,8 @@ def test_slab_itg_matrix_matches_published_gyro_moment_hierarchy() -> None:
         rho=jnp.asarray([1.0]),
         tz=jnp.asarray([1.0]),
         kpar_scale=0.1,
-        R_over_Ln=jnp.asarray([1.0]),
-        R_over_LTi=jnp.asarray([3.0]),
+        fprim=jnp.asarray([1.0]),
+        tprim=jnp.asarray([3.0]),
     )
     cache = build_linear_cache(
         grid, SlabGeometry(s_hat=0.0, z0=10.0), params, Nl=nl, Nm=nm
@@ -1576,8 +1576,8 @@ def test_linear_rhs_multispecies_shapes():
         vth=jnp.array([1.0, 1.0]),
         rho=jnp.array([1.0, 0.5]),
         tz=jnp.array([1.0, -1.0]),
-        R_over_Ln=jnp.array([0.0, 0.0]),
-        R_over_LTi=jnp.array([0.0, 0.0]),
+        fprim=jnp.array([0.0, 0.0]),
+        tprim=jnp.array([0.0, 0.0]),
     )
     G = jnp.zeros((2, 2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     cache = build_linear_cache(grid, geom, params, Nl=G.shape[1], Nm=G.shape[2])
@@ -1594,8 +1594,8 @@ def test_implicit_preconditioner_hermite_line_shape_and_finite():
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(
-        R_over_Ln=cfg.model.R_over_Ln,
-        R_over_LTi=cfg.model.R_over_LTi,
+        fprim=cfg.model.fprim,
+        tprim=cfg.model.tprim_i,
         omega_d_scale=0.2,
         omega_star_scale=0.55,
         rho_star=0.9,

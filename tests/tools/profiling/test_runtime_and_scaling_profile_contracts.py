@@ -670,8 +670,8 @@ def test_quasilinear_uq_ensemble_scaling_identity_metrics_detect_equal_members()
     None
 ):
     members = [
-        {"R_over_LTi": 2.4, "heat_flux_proxy": 1.5, "gamma": [0.1, 0.2]},
-        {"R_over_LTi": 2.7, "heat_flux_proxy": 2.5, "gamma": [0.3, 0.4]},
+        {"tprim": 2.4, "heat_flux_proxy": 1.5, "gamma": [0.1, 0.2]},
+        {"tprim": 2.7, "heat_flux_proxy": 2.5, "gamma": [0.3, 0.4]},
     ]
 
     metrics = quasilinear_uq._quasilinear_identity_metrics(

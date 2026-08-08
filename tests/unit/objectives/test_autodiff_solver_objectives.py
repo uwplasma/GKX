@@ -63,8 +63,8 @@ def _actual_linear_rhs_objective_functions():
     geom = SAlphaGeometry.from_config(cfg.geometry)
     state_shape = (2, 1, grid.ky.size, grid.kx.size, grid.z.size)
     base_params = LinearParams(
-        R_over_Ln=2.2,
-        R_over_LTi=6.9,
+        fprim=2.2,
+        tprim=6.9,
         nu=0.0,
         nu_hyper=0.0,
         hypercollisions_const=0.0,
@@ -90,8 +90,8 @@ def _actual_linear_rhs_objective_functions():
 
     def params_from_features(x):
         return LinearParams(
-            R_over_Ln=x[0],
-            R_over_LTi=x[1],
+            fprim=x[0],
+            tprim=x[1],
             nu=0.0,
             nu_hyper=0.0,
             hypercollisions_const=0.0,
@@ -411,8 +411,8 @@ def test_actual_linear_rhs_eigenvalue_derivative_gate() -> None:
     n_hermite = 1
     state_shape = (n_laguerre, n_hermite, grid.ky.size, grid.kx.size, grid.z.size)
     base_params = LinearParams(
-        R_over_Ln=2.2,
-        R_over_LTi=6.9,
+        fprim=2.2,
+        tprim=6.9,
         nu=0.0,
         nu_hyper=0.0,
         hypercollisions_const=0.0,
@@ -437,8 +437,8 @@ def test_actual_linear_rhs_eigenvalue_derivative_gate() -> None:
 
     def matrix_fn(x):
         params = LinearParams(
-            R_over_Ln=x[0],
-            R_over_LTi=x[1],
+            fprim=x[0],
+            tprim=x[1],
             nu=0.0,
             nu_hyper=0.0,
             hypercollisions_const=0.0,

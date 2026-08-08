@@ -229,8 +229,8 @@ def _species_frequency_scales(
     nl: int,
     nm: int,
 ) -> _SpeciesFrequencyScales:
-    tprim = np.atleast_1d(np.asarray(params.R_over_LTi, dtype=float))
-    fprim = np.atleast_1d(np.asarray(params.R_over_Ln, dtype=float))
+    tprim = np.atleast_1d(np.asarray(params.tprim, dtype=float))
+    fprim = np.atleast_1d(np.asarray(params.fprim, dtype=float))
     tz = np.atleast_1d(np.asarray(params.tz, dtype=float))
     vth = np.atleast_1d(np.asarray(params.vth, dtype=float))
     temp = np.atleast_1d(np.asarray(params.temp, dtype=float))

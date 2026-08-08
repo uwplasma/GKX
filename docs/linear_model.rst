@@ -34,7 +34,7 @@ where:
 - :math:`\mathcal{S}` is parallel streaming (Hermite ladder)
 - :math:`\mathcal{M}` is mirror coupling (:math:`b'(z)` geometry factor)
 - :math:`\mathcal{C}` and :math:`\mathcal{G}` are curvature and grad-:math:`B` drifts
-- :math:`\mathcal{D}` is diamagnetic drive from :math:`R/L_n, R/L_T`
+- :math:`\mathcal{D}` is diamagnetic drive from :math:`a/L_n, a/L_T`
 - :math:`\mathcal{K}` contains collisions/hypercollisions/end damping
 
 The field-coupled variable is

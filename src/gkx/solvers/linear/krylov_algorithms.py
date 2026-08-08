@@ -82,16 +82,16 @@ def _omega_scale(cache: LinearCache, params: LinearParams) -> jnp.ndarray:
     """Return the frequency scale used for branch and target selection."""
 
     ky_scale = jnp.max(jnp.abs(cache.ky))
-    rlt_i = jnp.abs(params.R_over_LTi)
-    rlt_e = jnp.abs(params.R_over_LTe)
-    rln = jnp.abs(params.R_over_Ln)
+    tprim = jnp.abs(params.tprim)
+    tprim_e = jnp.abs(params.tprim_e)
+    fprim = jnp.abs(params.fprim)
 
     def _max_scalar(arr: jnp.ndarray) -> jnp.ndarray:
         return arr if arr.ndim == 0 else jnp.max(arr)
 
-    drive_i = _max_scalar(rlt_i)
-    drive_e = _max_scalar(rlt_e)
-    drive_n = _max_scalar(rln)
+    drive_i = _max_scalar(tprim)
+    drive_e = _max_scalar(tprim_e)
+    drive_n = _max_scalar(fprim)
     drive = jnp.maximum(drive_i, jnp.maximum(drive_e, drive_n))
     return ky_scale * jnp.maximum(drive, 1.0e-8)
 

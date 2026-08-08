@@ -196,9 +196,9 @@ def _build_problem(case: str, ky: float, beta: float | None, Nl: int, Nm: int):
         grid_full = build_spectral_grid(cfg.grid)
         geom = SAlphaGeometry.from_config(cfg.geometry)
         params = LinearParams(
-            R_over_Ln=cfg.model.R_over_Ln,
-            R_over_LTi=cfg.model.R_over_LTi,
-            R_over_LTe=cfg.model.R_over_LTe,
+            fprim=cfg.model.fprim,
+            tprim=cfg.model.tprim_i,
+            tprim_e=cfg.model.tprim_e,
             omega_d_scale=CYCLONE_OMEGA_D_SCALE,
             omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
             rho_star=CYCLONE_RHO_STAR,

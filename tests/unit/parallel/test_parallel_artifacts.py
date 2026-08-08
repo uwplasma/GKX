@@ -857,10 +857,10 @@ def test_quasilinear_uq_scaling_artifact_preserves_member_order_and_identity_sco
             key=lambda row: row["requested_devices"],
         )
         assert rows
-        reference_gradients = [member["R_over_LTi"] for member in rows[0]["members"]]
+        reference_gradients = [member["tprim"] for member in rows[0]["members"]]
         reference_flux = [member["heat_flux_proxy"] for member in rows[0]["members"]]
         for row in rows:
-            gradients = [member["R_over_LTi"] for member in row["members"]]
+            gradients = [member["tprim"] for member in row["members"]]
             flux = [member["heat_flux_proxy"] for member in row["members"]]
             assert row["identity_gate_pass"] is True
             assert row["actual_workers"] <= row["requested_devices"]
@@ -899,10 +899,10 @@ def test_quasilinear_uq_split_artifacts_are_large_solver_backed_identity_profile
         rows = sorted(payload["rows"], key=lambda row: row["requested_devices"])
         assert rows[0]["requested_devices"] == 1
         assert rows[-1]["requested_devices"] > 1
-        reference_gradients = [member["R_over_LTi"] for member in rows[0]["members"]]
+        reference_gradients = [member["tprim"] for member in rows[0]["members"]]
         reference_flux = [member["heat_flux_proxy"] for member in rows[0]["members"]]
         for row in rows:
-            gradients = [member["R_over_LTi"] for member in row["members"]]
+            gradients = [member["tprim"] for member in row["members"]]
             flux = [member["heat_flux_proxy"] for member in row["members"]]
             assert row["identity_gate_pass"] is True
             assert row["actual_workers"] <= row["requested_devices"]

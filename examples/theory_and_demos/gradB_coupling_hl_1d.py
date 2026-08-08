@@ -15,7 +15,7 @@ def main() -> None:
     grid_cfg = GridConfig(Nx=1, Ny=1, Nz=128, Lx=6.28, Ly=6.28)
     grid = build_spectral_grid(grid_cfg)
     geom = SAlphaGeometry.from_config(GeometryConfig())
-    params = LinearParams(R_over_LTi=0.0, R_over_Ln=0.0)
+    params = LinearParams(tprim=0.0, fprim=0.0)
     terms = LinearTerms(streaming=1.0, mirror=0.0, curvature=0.0, gradb=1.0, diamagnetic=0.0)
 
     G0 = jnp.zeros((2, 2, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)

@@ -281,8 +281,8 @@ def main() -> None:
 
     tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
     vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
-    tprim = _as_species_array(params.R_over_LTi, ns, "R_over_LTi").astype(real_dtype)
-    fprim = _as_species_array(params.R_over_Ln, ns, "R_over_Ln").astype(real_dtype)
+    tprim = _as_species_array(params.tprim, ns, "tprim").astype(real_dtype)
+    fprim = _as_species_array(params.fprim, ns, "fprim").astype(real_dtype)
     nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
 
     field_fn = jax.jit(

@@ -197,8 +197,8 @@ def _manual_linear_contributions_from_fields(
     ns = int(G_arr.shape[0]) if G_arr.ndim == 6 else 1
     tz = _as_species_array(params.tz, ns, "tz").astype(real_dtype)
     vth = _as_species_array(params.vth, ns, "vth").astype(real_dtype)
-    tprim = _as_species_array(params.R_over_LTi, ns, "R_over_LTi").astype(real_dtype)
-    fprim = _as_species_array(params.R_over_Ln, ns, "R_over_Ln").astype(real_dtype)
+    tprim = _as_species_array(params.tprim, ns, "tprim").astype(real_dtype)
+    fprim = _as_species_array(params.fprim, ns, "fprim").astype(real_dtype)
     nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
     nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
     nu_hyper_l = jnp.asarray(params.nu_hyper_l, dtype=real_dtype)
@@ -597,9 +597,9 @@ def run_compare(argv: list[str] | None = None) -> None:
         )
         geom = SAlphaGeometry.from_config(cfg.geometry)
         params = LinearParams(
-            R_over_Ln=cfg.model.R_over_Ln,
-            R_over_LTi=cfg.model.R_over_LTi,
-            R_over_LTe=cfg.model.R_over_LTe,
+            fprim=cfg.model.fprim,
+            tprim=cfg.model.tprim_i,
+            tprim_e=cfg.model.tprim_e,
             omega_d_scale=CYCLONE_OMEGA_D_SCALE,
             omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
             rho_star=CYCLONE_RHO_STAR,
@@ -736,9 +736,9 @@ def _case_config(name: str, args) -> tuple[object, object, int, float, float, fl
             replace(cfg.geometry, drift_scale=args.drift_scale)
         )
         params = LinearParams(
-            R_over_Ln=cfg.model.R_over_Ln,
-            R_over_LTi=cfg.model.R_over_LTi,
-            R_over_LTe=cfg.model.R_over_LTe,
+            fprim=cfg.model.fprim,
+            tprim=cfg.model.tprim_i,
+            tprim_e=cfg.model.tprim_e,
             omega_d_scale=CYCLONE_OMEGA_D_SCALE,
             omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
             rho_star=CYCLONE_RHO_STAR,
@@ -774,7 +774,7 @@ def _case_config(name: str, args) -> tuple[object, object, int, float, float, fl
                 ntheta=args.ntheta,
                 nperiod=args.nperiod,
             ),
-            species=(replace(cfg.species[0], tprim=float(args.R_over_LTe)),),
+            species=(replace(cfg.species[0], tprim=float(args.tprim_e)),),
         )
         geom = SAlphaGeometry.from_config(
             replace(cfg.geometry, drift_scale=args.drift_scale)
@@ -927,7 +927,7 @@ def run_write(argv: list[str] | None = None) -> None:
     parser.add_argument("--Nl", type=int, default=48)
     parser.add_argument("--Nm", type=int, default=16)
     parser.add_argument("--drift-scale", type=float, default=1.0)
-    parser.add_argument("--R_over_LTe", type=float, default=6.0)
+    parser.add_argument("--tprim_e", type=float, default=6.0)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 

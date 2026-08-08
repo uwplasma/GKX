@@ -116,8 +116,8 @@ def _growth_from_params(
         vth=jnp.asarray([1.0]),
         rho=jnp.asarray([1.0]),
         tz=jnp.asarray([1.0]),
-        R_over_LTi=jnp.asarray([tprim]),
-        R_over_Ln=jnp.asarray([fprim]),
+        tprim=jnp.asarray([tprim]),
+        fprim=jnp.asarray([fprim]),
         tau_e=1.0,
     )
     _, phi_t = integrate_linear(G0, grid, geom, params, dt=dt, steps=steps, cache=cache)
@@ -247,7 +247,7 @@ def run_demo(
             data_path,
             np.column_stack([sweep_tprim, sweep_tprim_vals]),
             delimiter=",",
-            header="R_over_LTi,gamma,omega",
+            header="tprim,gamma,omega",
             comments="",
         )
         data_path_f = outdir / "autodiff_inverse_growth_fprim_sweep.csv"
@@ -255,7 +255,7 @@ def run_demo(
             data_path_f,
             np.column_stack([sweep_fprim, sweep_fprim_vals]),
             delimiter=",",
-            header="R_over_Ln,gamma,omega",
+            header="fprim,gamma,omega",
             comments="",
         )
         summary_path = outdir / "autodiff_inverse_growth_summary.json"
@@ -270,9 +270,9 @@ def run_demo(
         ax0.plot(sweep_tprim, sweep_tprim_vals[:, 1], marker="s", color="#ff7f0e", label=r"$\omega$")
         ax0.axhline(target[0], color="#1f77b4", linestyle="--", alpha=0.6, label="target γ")
         ax0.axhline(target[1], color="#ff7f0e", linestyle="--", alpha=0.6, label="target ω")
-        ax0.set_xlabel(r"$R/L_{Ti}$")
+        ax0.set_xlabel(r"$a/L_{Ti}$")
         ax0.set_ylabel("observable")
-        ax0.set_title("Sensitivity vs $R/L_{Ti}$")
+        ax0.set_title("Sensitivity vs $a/L_{Ti}$")
         ax0.legend(loc="best", ncol=2, fontsize=9)
 
         ax1 = axes[0, 1]
@@ -280,9 +280,9 @@ def run_demo(
         ax1.plot(sweep_fprim, sweep_fprim_vals[:, 1], marker="s", color="#ff7f0e", label=r"$\omega$")
         ax1.axhline(target[0], color="#1f77b4", linestyle="--", alpha=0.6, label="target γ")
         ax1.axhline(target[1], color="#ff7f0e", linestyle="--", alpha=0.6, label="target ω")
-        ax1.set_xlabel(r"$R/L_{n}$")
+        ax1.set_xlabel(r"$a/L_{n}$")
         ax1.set_ylabel("observable")
-        ax1.set_title("Sensitivity vs $R/L_{n}$")
+        ax1.set_title("Sensitivity vs $a/L_{n}$")
         ax1.legend(loc="best", ncol=2, fontsize=9)
 
         ax2 = axes[1, 0]
@@ -304,8 +304,8 @@ def run_demo(
         width, height = 2.0 * np.sqrt(np.maximum(vals, 0.0))
         ellipse = Ellipse((params_final[0], params_final[1]), width, height, angle=angle, fill=False, color="#9467bd")
         ax2.add_patch(ellipse)
-        ax2.set_xlabel(r"$R/L_{Ti}$")
-        ax2.set_ylabel(r"$R/L_{n}$")
+        ax2.set_xlabel(r"$a/L_{Ti}$")
+        ax2.set_ylabel(r"$a/L_{n}$")
         ax2.set_title("Inverse solve + loss contours")
         ax2.text(
             0.03,
@@ -320,7 +320,7 @@ def run_demo(
         ax2.legend(loc="best", fontsize=8)
 
         ax3 = axes[1, 1]
-        ax3.bar(["$R/L_{Ti}$", "$R/L_{n}$"], rel_err_cols, color=["#9467bd", "#8c564b"])
+        ax3.bar(["$a/L_{Ti}$", "$a/L_{n}$"], rel_err_cols, color=["#9467bd", "#8c564b"])
         ax3.set_ylabel("Jacobian rel. error")
         ax3.set_title("Autodiff vs finite diff")
         ax3.text(

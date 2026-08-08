@@ -557,7 +557,7 @@ observable is
 
 where ``Q_i^(ML)`` is the uncalibrated mixing-length heat-flux proxy computed
 from the linear heat-flux weight. The parameter vector is
-``[R/L_n, R/L_Ti]``. The goal is not to claim nonlinear-flux prediction from
+``[a/L_n, a/L_Ti]``. The goal is not to claim nonlinear-flux prediction from
 this tiny fixture; the goal is to verify that a phase-invariant quasilinear
 observable can be differentiated through an isolated non-Hermitian eigenbranch
 without relying on unsupported JAX eigenvector derivatives.

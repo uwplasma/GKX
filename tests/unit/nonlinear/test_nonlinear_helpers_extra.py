@@ -871,8 +871,8 @@ def _small_sheared_transport_case():
         rho_star=1.0,
         nu_hyper=0.0,
         nu_hyper_m=0.0,
-        R_over_LTi=2.0,
-        R_over_Ln=0.5,
+        tprim=2.0,
+        fprim=0.5,
     )
     cache = build_linear_cache(grid, geom, params, Nl=1, Nm=4)
     state = jnp.zeros((1, 4, 4, 4, 4), dtype=jnp.complex64)
@@ -1230,8 +1230,8 @@ def test_sheared_runge_kutta_recovers_observed_order_on_physical_rhs(
         rho_star=1.0,
         nu_hyper=0.0,
         nu_hyper_m=0.0,
-        R_over_LTi=2.0,
-        R_over_Ln=0.5,
+        tprim=2.0,
+        fprim=0.5,
     )
     cache = build_linear_cache(grid, geom, params, Nl=1, Nm=2)
     initial = np.zeros((1, 2, 4, 4, 4), dtype=np.complex64)
@@ -1299,8 +1299,8 @@ def test_strong_flow_shear_suppresses_linear_itg_amplitude_after_dt_refinement()
         rho_star=1.0,
         nu_hyper=0.0,
         nu_hyper_m=0.0,
-        R_over_LTi=6.9,
-        R_over_Ln=2.2,
+        tprim=6.9,
+        fprim=2.2,
         damp_ends_amp=0.0,
     )
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)

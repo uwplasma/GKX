@@ -520,7 +520,7 @@ def _run_ensemble_chunk(args: argparse.Namespace) -> dict[str, Any]:
             ql = _quasilinear_reduced_observables(result.ky, result.gamma, result.omega)
             members.append(
                 {
-                    "R_over_LTi": float(gradient),
+                    "tprim": float(gradient),
                     "ky": np.asarray(result.ky, dtype=float).tolist(),
                     "gamma": np.asarray(result.gamma, dtype=float).tolist(),
                     "omega": np.asarray(result.omega, dtype=float).tolist(),
@@ -649,7 +649,7 @@ def _run_quasilinear_device_count(
         }
 
     members = [member for payload in payloads for member in payload["members"]]
-    members = sorted(members, key=lambda item: float(item["R_over_LTi"]))
+    members = sorted(members, key=lambda item: float(item["tprim"]))
     heat = np.asarray([member["heat_flux_proxy"] for member in members], dtype=float)
     timed_wall_s = max(float(payload["stats_s"]["median"]) for payload in payloads)
     return _json_clean(
@@ -682,9 +682,9 @@ def _quasilinear_identity_metrics(
             "identity_gate_pass": False,
         }
     ref_members = {
-        float(member["R_over_LTi"]): member for member in reference["members"]
+        float(member["tprim"]): member for member in reference["members"]
     }
-    row_members = {float(member["R_over_LTi"]): member for member in row["members"]}
+    row_members = {float(member["tprim"]): member for member in row["members"]}
     if set(ref_members) != set(row_members):
         return {
             "max_heat_flux_proxy_rel_error": math.nan,

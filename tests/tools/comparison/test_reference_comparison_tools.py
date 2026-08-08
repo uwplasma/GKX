@@ -2180,8 +2180,8 @@ def test_compare_gx_kbm_runtime_conversion_preserves_physical_case() -> None:
     assert runtime.geometry == case.geometry
     assert runtime.init == case.init
     assert runtime.physics.beta == pytest.approx(case.model.beta)
-    assert runtime.species[0].tprim == pytest.approx(case.model.R_over_LTi)
-    assert runtime.species[1].tprim == pytest.approx(case.model.R_over_LTe)
+    assert runtime.species[0].tprim == pytest.approx(case.model.tprim_i)
+    assert runtime.species[1].tprim == pytest.approx(case.model.tprim_e)
     assert runtime.species[1].mass == pytest.approx(1.0 / case.model.mass_ratio)
 
 
@@ -3116,7 +3116,7 @@ def test_rhs_term_diagnostics_etg_uses_canonical_runtime_contract() -> None:
             "nperiod": 1,
             "Nm": 4,
             "drift_scale": 1.0,
-            "R_over_LTe": 6.0,
+            "tprim_e": 6.0,
         },
     )()
     cfg, params, species_index, drift_scale, drive_scale, rho_scale = mod._case_config(

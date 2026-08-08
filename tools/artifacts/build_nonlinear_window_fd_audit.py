@@ -2,7 +2,7 @@
 """Build a bounded nonlinear startup-response finite-difference audit.
 
 This tool intentionally audits a narrow plumbing path: a real GKX
-nonlinear Cyclone runtime is run at ``R/LTi = base +/- step`` plus a repeated
+nonlinear Cyclone runtime is run at ``a/LTi = base +/- step`` plus a repeated
 base point, but only for a compact startup window.  The output checks that this
 startup-window heat-flux response is finite, repeatable, conditioned, and has a
 resolved central finite-difference response.  It is not a transport-average,
@@ -431,7 +431,7 @@ def audit_figure(payload: dict[str, Any]) -> plt.Figure:
     gates = payload["gates"]
     text = "\n".join(
         [
-            f"central dQ/d(R/LTi): {float(metrics['central_fd_dq_dtprim']):.3e}",
+            f"central dQ/d(a/LTi): {float(metrics['central_fd_dq_dtprim']):.3e}",
             f"response/base: {float(metrics['response_fraction']):.3f}",
             f"repeat rel. err.: {float(metrics['repeatability_relative_error']):.1e}",
             f"max CV/trend: {float(metrics['max_window_cv']):.3f}/{float(metrics['max_window_trend']):.3f}",

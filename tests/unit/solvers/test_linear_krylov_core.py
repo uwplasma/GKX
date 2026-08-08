@@ -476,8 +476,8 @@ def test_field_corrected_shifted_preconditioner_removes_low_moment_coupling() ->
         params,
         omega_star_scale=1.0,
         omega_d_scale=1.0,
-        R_over_LTi=6.9,
-        R_over_Ln=2.2,
+        tprim=6.9,
+        fprim=2.2,
     )
     term_cfg = linear_terms_to_term_config(
         LinearTerms(

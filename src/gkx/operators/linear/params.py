@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Iterable
 
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "COLLISION_OPERATOR_NAMES",
+    "DEPRECATED_LINEAR_PARAM_ALIASES",
     "collision_operator_from_config",
     "linear_params_for_geometry",
     "LinearParams",
@@ -37,7 +39,12 @@ __all__ = [
 
 @dataclass(frozen=True)
 class Species:
-    """Dimensionless kinetic-species inputs used to build solver parameters."""
+    r"""Dimensionless kinetic-species inputs used to build solver parameters.
+
+    ``tprim`` and ``fprim`` are :math:`a/L_T` and :math:`a/L_n`, copied through
+    to :class:`LinearParams` unchanged; see its docstring for the conversion to
+    :math:`R/L`.
+    """
 
     charge: float
     mass: float
@@ -48,10 +55,75 @@ class Species:
     nu: float = 0.0
 
 
+#: Retired :class:`LinearParams` field names, mapped to what replaced them. The
+#: old names said ``R/L``; the values they held were always ``a/L``. Kept
+#: working -- as constructor keywords and as attributes, both warning -- because
+#: ``LinearParams`` is public API.
+DEPRECATED_LINEAR_PARAM_ALIASES: dict[str, str] = {
+    "R_over_LTi": "tprim",
+    "R_over_Ln": "fprim",
+    "R_over_LTe": "tprim_e",
+}
+
+
+def _warn_alias(old: str, new: str) -> None:
+    warnings.warn(
+        f"LinearParams.{old} is deprecated; use {new}. The operator consumes "
+        f"a/L gradients (the TOML 'tprim'/'fprim'), never R/L, so the old name "
+        f"asserted a normalization that was never applied -- a value passed as "
+        f"R/L needs dividing by R/a.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
+def _with_deprecated_aliases(aliases: dict[str, str]):
+    """Keep retired field names working as constructor keywords and attributes."""
+
+    def decorate(cls):
+        base_init = cls.__init__
+
+        def __init__(self, *args, **kwargs):
+            for old, new in aliases.items():
+                if old in kwargs:
+                    _warn_alias(old, new)
+                    kwargs[new] = kwargs.pop(old)
+            base_init(self, *args, **kwargs)
+
+        cls.__init__ = __init__
+        for old, new in aliases.items():
+
+            def read(self, _old=old, _new=new):
+                _warn_alias(_old, _new)
+                return getattr(self, _new)
+
+            setattr(cls, old, property(read))
+        return cls
+
+    return decorate
+
+
 @jax.tree_util.register_pytree_node_class
+@_with_deprecated_aliases(DEPRECATED_LINEAR_PARAM_ALIASES)
 @dataclass(frozen=True)
 class LinearParams:
-    """Parameters for the linear gyrokinetic operator (supports multi-species arrays)."""
+    r"""Parameters for the linear gyrokinetic operator (supports multi-species arrays).
+
+    ``tprim`` and ``fprim`` are the gradient drives, in the units the operator
+    actually consumes: :math:`a/L_T` and :math:`a/L_n` with :math:`L_{ref}=a`,
+    which is what the TOML ``tprim``/``fprim`` keys carry and what
+    :func:`build_linear_params` copies across unchanged. They are *not*
+    :math:`R/L_T` and :math:`R/L_n`; multiply by :math:`R/a` to quote a result
+    in those. The defaults are the Cyclone base case, matching
+    ``examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_t400.toml``
+    and :class:`gkx.config.ModelConfig`, so
+    :math:`R/L_T = 2.49 \times 2.77778 = 6.92`.
+
+    ``tprim`` is the per-species array the RHS diamagnetic drive reads.
+    ``tprim_e`` does not enter the RHS at all -- it only widens the frequency
+    scale used for eigenvalue branch selection, so a kinetic-electron case must
+    put the electron drive in ``tprim``, not here.
+    """
 
     charge_sign: float | jnp.ndarray = 1.0
     density: float | jnp.ndarray = 1.0
@@ -61,9 +133,9 @@ class LinearParams:
     vth: float | jnp.ndarray = 1.0
     rho: float | jnp.ndarray = 1.0
     kpar_scale: float = 1.0
-    R_over_Ln: float | jnp.ndarray = 2.2
-    R_over_LTi: float | jnp.ndarray = 6.9
-    R_over_LTe: float | jnp.ndarray = 0.0
+    fprim: float | jnp.ndarray = 0.8
+    tprim: float | jnp.ndarray = 2.49
+    tprim_e: float | jnp.ndarray = 0.0
     omega_d_scale: float = 1.0
     omega_star_scale: float = 1.0
     energy_const: float = 0.0
@@ -104,9 +176,9 @@ class LinearParams:
             self.vth,
             self.rho,
             self.kpar_scale,
-            self.R_over_Ln,
-            self.R_over_LTi,
-            self.R_over_LTe,
+            self.fprim,
+            self.tprim,
+            self.tprim_e,
             self.omega_d_scale,
             self.omega_star_scale,
             self.energy_const,
@@ -192,8 +264,8 @@ def build_linear_params(
         vth=jnp.sqrt(temperature / mass),
         rho=jnp.sqrt(temperature * mass) / jnp.abs(charge),
         tz=temperature / charge,
-        R_over_LTi=array("tprim"),
-        R_over_Ln=array("fprim"),
+        tprim=array("tprim"),
+        fprim=array("fprim"),
         nu=array("nu"),
         **overrides,
     )

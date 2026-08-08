@@ -26,9 +26,9 @@ def test_assemble_rhs_terms_sum_matches_total() -> None:
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.8,
-        R_over_LTi=2.49,
-        R_over_LTe=0.0,
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -73,9 +73,9 @@ def test_assemble_rhs_accepts_sampled_geometry_contract() -> None:
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     sampled = sample_flux_tube_geometry(geom, grid.z)
     params = LinearParams(
-        R_over_Ln=0.8,
-        R_over_LTi=2.49,
-        R_over_LTe=0.0,
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -104,9 +104,9 @@ def test_assemble_rhs_cached_validates_state_shape_and_species_match() -> None:
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.8,
-        R_over_LTi=2.49,
-        R_over_LTe=0.0,
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -130,9 +130,9 @@ def test_compute_fields_cached_matches_rhs_fields_and_validation() -> None:
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.8,
-        R_over_LTi=2.49,
-        R_over_LTe=0.0,
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -169,9 +169,9 @@ def test_disabled_em_fields_skip_hamiltonian_branches(monkeypatch) -> None:
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.8,
-        R_over_LTi=2.49,
-        R_over_LTe=0.0,
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -211,9 +211,9 @@ def test_assemble_rhs_cached_jit_accepts_term_config() -> None:
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.8,
-        R_over_LTi=2.49,
-        R_over_LTe=0.0,
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -235,9 +235,9 @@ def test_electrostatic_rhs_jit_matches_generic_zero_em_fields() -> None:
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.8,
-        R_over_LTi=2.49,
-        R_over_LTe=0.0,
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -274,9 +274,9 @@ def test_external_phi_source_shifts_fields_and_rhs() -> None:
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.0,
-        R_over_LTi=0.0,
-        R_over_LTe=0.0,
+        fprim=0.0,
+        tprim=0.0,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -306,9 +306,9 @@ def test_collision_zero_guard_uses_current_nu_not_cache_build_nu() -> None:
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.0,
-        R_over_LTi=0.0,
-        R_over_LTe=0.0,
+        fprim=0.0,
+        tprim=0.0,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -361,9 +361,9 @@ def test_collision_zero_guard_preserves_preexpanded_collision_operator() -> None
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.0,
-        R_over_LTi=0.0,
-        R_over_LTe=0.0,
+        fprim=0.0,
+        tprim=0.0,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,
@@ -410,9 +410,9 @@ def test_collision_zero_weight_skips_invalid_preexpanded_operator_shape() -> Non
     grid = select_ky_grid(grid_full, 1)
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
     params = LinearParams(
-        R_over_Ln=0.0,
-        R_over_LTi=0.0,
-        R_over_LTe=0.0,
+        fprim=0.0,
+        tprim=0.0,
+        tprim_e=0.0,
         omega_d_scale=1.0,
         omega_star_scale=1.0,
         rho_star=1.0,

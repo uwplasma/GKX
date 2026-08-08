@@ -31,7 +31,9 @@ from gkx.diagnostics.quasilinear_transport import effective_kperp2, phi_norm2, s
 
 
 OBSERVABLE_LABELS = (r"$\gamma$", r"$\omega$", r"$k_{\perp,\mathrm{eff}}^2$", r"$\hat Q_i$", r"$Q_i^{ML}$")
-PARAMETER_LABELS = (r"$R/L_n$", r"$R/L_{Ti}$")
+# The differentiated parameters are LinearParams.fprim/tprim, which are
+# a/L_n and a/L_T -- not R/L. Label them as what is on the axis.
+PARAMETER_LABELS = (r"$a/L_n$", r"$a/L_{Ti}$")
 
 
 def _build_tiny_fixture():
@@ -42,8 +44,8 @@ def _build_tiny_fixture():
     n_hermite = 3
     state_shape = (n_laguerre, n_hermite, grid.ky.size, grid.kx.size, grid.z.size)
     base_params = LinearParams(
-        R_over_Ln=2.2,
-        R_over_LTi=6.9,
+        fprim=2.2,
+        tprim=6.9,
         nu=0.0,
         nu_hyper=0.0,
         hypercollisions_const=0.0,
@@ -71,8 +73,8 @@ def _build_tiny_fixture():
 
 def _params_from_features(x: jnp.ndarray) -> LinearParams:
     return LinearParams(
-        R_over_Ln=x[0],
-        R_over_LTi=x[1],
+        fprim=x[0],
+        tprim=x[1],
         nu=0.0,
         nu_hyper=0.0,
         hypercollisions_const=0.0,
@@ -152,7 +154,7 @@ def build_report(
         {
             "kind": "quasilinear_implicit_sensitivity_demo",
             "case": "tiny_cyclone_linear_rhs",
-            "parameters": {"R_over_Ln": float(r_over_ln), "R_over_LTi": float(r_over_lti)},
+            "parameters": {"fprim": float(r_over_ln), "tprim": float(r_over_lti)},
             "observable_labels": list(OBSERVABLE_LABELS),
             "parameter_labels": list(PARAMETER_LABELS),
             "observables": observables.tolist(),

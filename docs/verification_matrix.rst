@@ -453,7 +453,7 @@ Autodiff Validation
      - Closed for fixed-step equation-level observables; open for converged
        long-window turbulent transport
    * - Nonlinear IMEX implicit VJP
-     - electrostatic endpoint ion heat flux versus ``R/L_Ti``
+     - electrostatic endpoint ion heat flux versus ``a/L_Ti``
      - centered finite difference + Krylov-tolerance stability
      - Closed as a bounded derivative gate; not a saturated-transport claim
    * - Two-mode inverse problem
