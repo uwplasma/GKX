@@ -6151,8 +6151,8 @@ def finite_wavelength_itg_growth_curve(
         rho=jnp.asarray([1.0]),
         tz=jnp.asarray([1.0]),
         kpar_scale=0.1,
-        R_over_Ln=jnp.asarray([1.0]),
-        R_over_LTi=jnp.asarray([3.0]),
+        fprim=jnp.asarray([1.0]),
+        tprim=jnp.asarray([3.0]),
     )
     cache = build_linear_cache(
         grid,
@@ -6254,8 +6254,8 @@ def collisionless_slab_itg_hierarchy(
         rho=jnp.asarray([1.0]),
         tz=jnp.asarray([1.0]),
         kpar_scale=0.1,
-        R_over_Ln=jnp.asarray([1.0]),
-        R_over_LTi=jnp.asarray([3.0]),
+        fprim=jnp.asarray([1.0]),
+        tprim=jnp.asarray([3.0]),
     )
     terms = LinearTerms(
         streaming=1.0,

@@ -77,14 +77,14 @@ def _runtime_config_from_kbm_case(cfg: KBMBaseCase):
         physics=replace(runtime_cfg.physics, beta=float(model.beta)),
         species=(
             replace(
-                ion, tprim=float(model.R_over_LTi), fprim=float(model.R_over_Ln)
+                ion, tprim=float(model.tprim_i), fprim=float(model.fprim)
             ),
             replace(
                 electron,
                 mass=1.0 / float(model.mass_ratio),
                 temperature=float(model.Te_over_Ti),
-                tprim=float(model.R_over_LTe),
-                fprim=float(model.R_over_Ln),
+                tprim=float(model.tprim_e),
+                fprim=float(model.fprim),
             ),
         ),
     )
@@ -480,9 +480,9 @@ def _build_cfg(
         R0=rmaj,
     )
     model = KineticElectronModelConfig(
-        R_over_LTi=ion_tprim,
-        R_over_LTe=ele_tprim,
-        R_over_Ln=ele_fprim,
+        tprim_i=ion_tprim,
+        tprim_e=ele_tprim,
+        fprim=ele_fprim,
         Te_over_Ti=te_over_ti,
         mass_ratio=mass_ratio,
         nu_i=0.0,

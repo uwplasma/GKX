@@ -110,9 +110,9 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
         ROOT / "examples" / "linear" / "axisymmetric" / "runtime_tem.toml"
     )
     legacy_model = SimpleNamespace(
-        R_over_LTi=20.0,
-        R_over_LTe=20.0,
-        R_over_Ln=20.0,
+        tprim_i=20.0,
+        tprim_e=20.0,
+        fprim=20.0,
         Te_over_Ti=1.0,
         mass_ratio=370.0,
         nu_i=0.0,
@@ -206,9 +206,9 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
         / "runtime_kinetic_electron.toml"
     )
     model = SimpleNamespace(
-        R_over_LTi=2.49,
-        R_over_LTe=2.49,
-        R_over_Ln=0.8,
+        tprim_i=2.49,
+        tprim_e=2.49,
+        fprim=0.8,
         Te_over_Ti=1.0,
         mass_ratio=1.0 / 0.00027,
         nu_i=0.0,
@@ -302,7 +302,7 @@ def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
         ROOT / "examples" / "linear" / "axisymmetric" / "runtime_kbm.toml"
     )
     model = SimpleNamespace(
-        R_over_LTi=2.49, R_over_LTe=2.49, R_over_Ln=0.8,
+        tprim_i=2.49, tprim_e=2.49, fprim=0.8,
         Te_over_Ti=1.0, mass_ratio=1.0 / 0.00027,
         nu_i=0.0, nu_e=0.0, beta=runtime_cfg.physics.beta,
     )

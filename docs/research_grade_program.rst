@@ -160,6 +160,44 @@ linear quantities. Rename so no public name asserts nonlinear gyrokinetics for a
 linear-solve quantity. Gate: a test asserts the public surface contains no such
 name.
 
+*Done: the gradient fields.* ``LinearParams`` carried ``R_over_LTi`` /
+``R_over_Ln`` / ``R_over_LTe``, but the operator consumes :math:`a/L_T` and
+:math:`a/L_n`: ``build_linear_params`` copies the TOML ``tprim``/``fprim``
+across unscaled, and every consumer names its local variable ``tprim``. The
+names are now ``tprim`` / ``fprim`` / ``tprim_e``, with the old ones accepted
+as constructor keywords and readable as attributes under a
+``DeprecationWarning``.
+
+A name that lies about units puts a wrong default underneath it. ``LinearParams``
+defaulted to ``6.9`` and ``2.2`` -- the Cyclone case in :math:`R/L` -- while
+:class:`gkx.config.ModelConfig` defaulted to ``2.49`` and ``0.8``, the same case
+in :math:`a/L`. Both fed the same field, so a hand-built ``LinearParams()`` ran
+at :math:`R/a = 2.78` times the shipped drive, as did the stellarator
+objectives' ``_default_gradient_linear_params`` and, through it,
+``tools/campaigns/convergence_protocol.py``. The defaults are now the
+:math:`a/L` values everywhere. Still open, in ``vmex``: its
+``turbulence_objective_vector`` takes ``r_over_lt``/``r_over_ln`` keywords that
+override the same fields, so the old name survives one repo over --
+``tools/artifacts/build_qa_transport_weight_scan.py`` passes ``6.9``/``2.2``
+through it.
+
+Gate: ``tests/unit/linear/test_linear_param_units.py`` pins the whole chain on
+the shipped Cyclone TOML -- the built drive equals the TOML ``tprim``, ``R/a``
+is the TOML's own ``R0`` under the cyclone contract, and the product is the
+literature :math:`R/L_T = 6.9`. It fails if any runtime path rescales the drive,
+if a default drifts off the shipped case, or if an ``R_over_L*`` name returns to
+the public surface.
+
+Fixed alongside: the ETG trend axis, the two autodiff-inverse demos, the
+quasilinear sensitivity parameter labels, and the nonlinear window audit's
+finite-difference readout all printed :math:`R/L` over a ``tprim`` axis. Live
+``.csv``/``.json`` companions were renamed in place, since only the column names
+changed; the dated ``docs/_static/baselines/`` snapshots keep their original
+headers, because their ``MANIFEST.md`` pins their checksums and a snapshot
+should read as what that run emitted. Committed ``.png``/``.pdf`` figures --
+``etg_trend.png`` most visibly -- still carry the old axis text until they are
+next regenerated on the reference machine.
+
 **A7 -- Performance, measured not adopted.** *Benchmark.* GKX already uses
 ``jax.jit`` (12 files), ``lax.scan`` (13), ``shard_map`` (12), ``NamedSharding``
 (7), ``jax.vmap`` (6), ``jax.checkpoint`` (5) and ``donate_argnums`` (4). The

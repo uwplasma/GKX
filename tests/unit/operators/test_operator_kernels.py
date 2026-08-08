@@ -1661,7 +1661,7 @@ def test_multispecies_sugama_operator_runs_through_linear_rhs() -> None:
 def test_drift_kinetic_collision_model_is_blocked_for_short_wave_itg() -> None:
     grid = build_spectral_grid(GridConfig(Nx=2, Ny=8, Nz=16, Lx=10.0, Ly=20.0))
     geometry = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18)
-    params = LinearParams(R_over_Ln=2.2, R_over_LTi=6.9, damp_ends_amp=0.0)
+    params = LinearParams(fprim=2.2, tprim=6.9, damp_ends_amp=0.0)
     random = np.random.default_rng(7)
     state = jnp.asarray(
         1.0e-5

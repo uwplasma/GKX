@@ -544,7 +544,7 @@ surface/field-line artifacts and matched baseline/optimized long
 post-transient nonlinear windows, not startup traces or reduced-window
 estimators.
 
-The autodiff demos write summary JSON plus `R/L_Ti` and `R/L_n` sweep CSVs in
+The autodiff demos write summary JSON plus `a/L_Ti` and `a/L_n` sweep CSVs in
 the chosen output directory alongside the publication-ready plots. The
 single-mode figure is a local inverse/sensitivity example; the two-mode figure
 is the release-grade parameter-recovery validation.
@@ -557,7 +557,7 @@ is the release-grade parameter-recovery validation.
    Jacobian and show what one measured mode constrains locally; the expected
    outcome is small observable and derivative error, not unique recovery of
    both gradients. The shipped result matches that expectation: `(gamma, omega)`
-   are reproduced closely while the recovered `(R/L_Ti, R/L_n)` remains offset
+   are reproduced closely while the recovered `(a/L_Ti, a/L_n)` remains offset
    because the one-mode inverse is not globally identifiable.
 
 .. figure:: _static/autodiff_inverse_twomode.png

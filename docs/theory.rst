@@ -122,7 +122,7 @@ are encoded in :math:`\mathcal{C}_m` and :math:`\mathcal{G}_\ell`. Explicitly,
    +\sqrt{m}\,(\ell+1) H_{\ell+1, m-1}.
 
 The diamagnetic drive term :math:`\mathcal{D}_{\ell m}` follows a Laguerre
-formulation with explicit :math:`R/L_n` and :math:`R/L_T` dependence,
+formulation with explicit :math:`a/L_n` and :math:`a/L_T` dependence,
 including a separate coupling in :math:`m=2` for temperature-gradient drive.
 
 Field-aligned streaming representation

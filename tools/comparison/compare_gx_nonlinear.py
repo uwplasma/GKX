@@ -548,9 +548,9 @@ def _slice_species_params(
         "vth",
         "rho",
         "tz",
-        "R_over_Ln",
-        "R_over_LTi",
-        "R_over_LTe",
+        "fprim",
+        "tprim",
+        "tprim_e",
         "nu",
     )
     updates: dict[str, object] = {}
@@ -1387,9 +1387,9 @@ def run_terms(argv: list[str] | None = None) -> None:
             grid = build_spectral_grid(cfg.grid)
             ky_index = int(np.argmin(np.abs(np.asarray(grid.ky) - float(args.ky))))
             params = LinearParams(
-                R_over_Ln=cfg.model.R_over_Ln,
-                R_over_LTi=cfg.model.R_over_LTi,
-                R_over_LTe=cfg.model.R_over_LTe,
+                fprim=cfg.model.fprim,
+                tprim=cfg.model.tprim_i,
+                tprim_e=cfg.model.tprim_e,
                 omega_d_scale=CYCLONE_OMEGA_D_SCALE,
                 omega_star_scale=CYCLONE_OMEGA_STAR_SCALE,
                 rho_star=CYCLONE_RHO_STAR,

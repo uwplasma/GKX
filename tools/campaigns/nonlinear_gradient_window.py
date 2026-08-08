@@ -109,18 +109,18 @@ def build_nonlinear_case(
 
     cache = build_linear_cache(grid, geometry, params, Nl=n_laguerre, Nm=n_hermite)
     shape = (1, n_laguerre, n_hermite, grid.ky.size, grid.kx.size, grid.z.size)
-    base_drive = jnp.asarray(params.R_over_LTi)
+    base_drive = jnp.asarray(params.tprim)
 
     def rhs(state, scale):
-        """RHS differentiable in a scalar multiplier on the R/L_T drive.
+        """RHS differentiable in a scalar multiplier on the a/L_T drive.
 
-        R_over_LTi is per-species, so the differentiable design parameter is a
+        tprim is per-species, so the differentiable design parameter is a
         uniform scale on it rather than the array itself -- a scalar an
         optimizer would actually perturb, and one whose gradient is a single
         number the divergence ladder can plot.
         """
 
-        scaled = dataclasses.replace(params, R_over_LTi=base_drive * scale)
+        scaled = dataclasses.replace(params, tprim=base_drive * scale)
         out, _fields = nonlinear_rhs_cached(state, cache, scaled, term_cfg)
         return out
 

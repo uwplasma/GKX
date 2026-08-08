@@ -549,9 +549,9 @@ def _integrate_species_sharded_explicit(
         "temp",
         "vth",
         "rho",
-        "R_over_Ln",
-        "R_over_LTi",
-        "R_over_LTe",
+        "fprim",
+        "tprim",
+        "tprim_e",
         "nu",
         "tz",
     )
