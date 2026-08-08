@@ -116,6 +116,39 @@ saturated rather than merely long. This is the only test in the program that
 exercises zonal drive, Landau damping and saturation simultaneously, which is
 why it is worth more than its cost.
 
+*Linear end: done.* ``tools/campaigns/dimits_shift.py`` puts the Cyclone linear
+ITG threshold at :math:`0.5613\times` the shipped drive, set by
+:math:`k_y` index 3, with the sign change bracketed to
+:math:`[0.5583, 0.5656]` and the fitted root inside it at relative residual
+0.053; four of five wavenumbers pass both checks. That is
+:math:`R/L_T = 3.88` against the Cyclone linear value of about 4.0. Artifact:
+``docs/_static/dimits_linear_threshold.json``. The nonlinear scan should span
+roughly :math:`0.8` to :math:`1.6\times` that multiplier.
+
+Three findings came out of getting there, and the first two are not local to
+this tool:
+
+- **A default term set is a different physics model.** Passing ``terms=None``
+  to the linear objectives takes ``LinearTerms`` defaults, which switch
+  hyperdiffusion off while every shipped TOML switches it on. Without it the
+  Cyclone operator is *unstable* far below threshold, and worse with resolution:
+  :math:`\gamma = 1.2\times10^{-3}` at :math:`N_m=8`,
+  :math:`3.9\times10^{-3}` at 16, :math:`2.2\times10^{-2}` at 32, at
+  :math:`|\omega|` up to 23 and with no dependence on the drive at all. Since
+  the branch selector takes :math:`\mathrm{argmax}\,\mathrm{Re}\,\lambda`, those
+  artifacts are what a growth-rate objective returns wherever the physical mode
+  is stable -- which includes the stellarator optimization objectives, since they
+  pass ``terms=None`` too.
+- **The threshold law here is linear, not square-root.** The square-root law
+  describes a bifurcation where two roots merge; a simple eigenvalue crossing
+  the imaginary axis moves analytically in the parameter. Measured: the linear
+  root lands inside the sign-change bracket for every wavenumber (residuals 0.03
+  to 0.13), the square-root root outside every one (0.13 to 0.21).
+- **A tracked branch supplies its own control.** Following the eigenvalue down
+  from high drive produces the damped side of the curve, so the sign change
+  brackets the root with no model at all, and the fit can be checked against it.
+  Refinement tightens both together.
+
 **A5 -- Nonlinear autodiff.** *Algorithmic.* As previously scoped: production
 heat flux inside the differentiated window, find the divergence knee, measure the
 bias against finite differences, then choose windowed adjoint or NILSS on
