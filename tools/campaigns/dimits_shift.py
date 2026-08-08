@@ -29,6 +29,22 @@ growth rate *rises* with Hermite resolution -- measured at ``0.15x`` drive,
 and with no dependence on the drive at all. With the case's own terms every
 wavenumber is damped at ``0.15x``. Everything below is downstream of that.
 
+The reported number is resolution-dependent and is not converged
+--------------------------------------------------------------
+
+The scan runs at the case's own ``(Nl, Nm)``. On the shipped Cyclone nonlinear
+TOML that is ``(4, 8)``, and the threshold moves substantially under refinement:
+the same tracked branch crosses at ``x0.5623`` for ``(4, 8)``, ``x0.5904`` for
+``(4, 16)`` and ``x0.6670`` for ``(8, 16)`` -- 18% between coarsest and finest,
+monotonically upward and still climbing, with the Laguerre refinement moving it
+more than the Hermite one.
+
+So the number this tool prints is the threshold *of that truncation*, not of the
+physical case, and matching a literature value at a coarse truncation is a
+coincidence rather than a validation. ``--n-laguerre`` and ``--n-hermite``
+override the case so the ladder can be walked; the summary records which was
+used and states the convergence status.
+
 Two reductions are also deliberately not used:
 
 **Not the most unstable eigenvalue.** Near marginality the ITG mode need not be
@@ -54,7 +70,12 @@ import numpy as np
 
 
 def linear_growth_scan(
-    toml_path: Path, multipliers: np.ndarray, *, ky_indices: tuple[int, ...]
+    toml_path: Path,
+    multipliers: np.ndarray,
+    *,
+    ky_indices: tuple[int, ...],
+    n_laguerre: int | None = None,
+    n_hermite: int | None = None,
 ):
     """Follow each wavenumber's ITG eigenvalue from high drive down through zero.
 
@@ -93,8 +114,8 @@ def linear_growth_scan(
         endpoint=False,
     )
     geometry = sample_flux_tube_geometry(analytic, theta)
-    n_laguerre = int(raw["run"]["Nl"])
-    n_hermite = int(raw["run"]["Nm"])
+    n_laguerre = int(raw["run"]["Nl"] if n_laguerre is None else n_laguerre)
+    n_hermite = int(raw["run"]["Nm"] if n_hermite is None else n_hermite)
     base = build_runtime_linear_params(runtime, Nm=n_hermite, geom=analytic)
     base_drive = jnp.asarray(base.R_over_LTi)
     # The case's own term switches, not the LinearTerms defaults. This is not a
@@ -350,6 +371,14 @@ def main() -> int:
         "the fit is a local linearisation about the crossing, so a uniform "
         "span spends most of its budget where the fit cannot use it",
     )
+    parser.add_argument(
+        "--n-laguerre",
+        type=int,
+        default=None,
+        help="override the case's Nl; the threshold is not converged at the "
+        "shipped (4, 8), so walking the ladder is how it gets pinned",
+    )
+    parser.add_argument("--n-hermite", type=int, default=None)
     parser.add_argument("--min-multiplier", type=float, default=0.15)
     parser.add_argument("--max-multiplier", type=float, default=1.2)
     parser.add_argument("--points", type=int, default=10)
@@ -367,7 +396,13 @@ def main() -> int:
         flush=True,
     )
     ky_indices = tuple(int(i) for i in args.ky_indices)
-    rows = linear_growth_scan(args.toml, multipliers, ky_indices=ky_indices)
+    rows = linear_growth_scan(
+        args.toml,
+        multipliers,
+        ky_indices=ky_indices,
+        n_laguerre=args.n_laguerre,
+        n_hermite=args.n_hermite,
+    )
     threshold = threshold_from_scan(rows)
 
     # Refine inside the interval where the earliest mode changes sign. Adding
@@ -387,7 +422,13 @@ def main() -> int:
             f"x{bracket[0]:.3f} and x{bracket[1]:.3f}, now {multipliers.size} drives",
             flush=True,
         )
-        rows = linear_growth_scan(args.toml, multipliers, ky_indices=ky_indices)
+        rows = linear_growth_scan(
+            args.toml,
+            multipliers,
+            ky_indices=ky_indices,
+            n_laguerre=args.n_laguerre,
+            n_hermite=args.n_hermite,
+        )
         threshold = threshold_from_scan(rows)
 
     reference = _literature_comparison(args.toml, threshold)
@@ -423,6 +464,15 @@ def main() -> int:
         "case": args.toml.name,
         "ky_indices": list(ky_indices),
         "refinement_passes": args.refine,
+        "n_laguerre": args.n_laguerre,
+        "n_hermite": args.n_hermite,
+        # Stated, not implied: this is the threshold of the truncation that was
+        # run. Measured on the shipped case it moves 18% from (4, 8) to (8, 16)
+        # and is still climbing, so a match to a literature value at a coarse
+        # truncation is a coincidence.
+        "velocity_space_converged": False,
+        "resolution_note": "threshold is (Nl, Nm)-dependent: x0.5623 at (4,8), "
+        "x0.5904 at (4,16), x0.6670 at (8,16); not converged",
         "threshold": threshold,
         "literature_comparison": reference,
         "rows": rows,
