@@ -124,6 +124,7 @@ jobs:
           - name: linear-core
             files: >-
               tests/unit/linear/test_linear.py
+              tests/unit/linear/test_dimits_threshold_extraction.py
               tests/unit/operators/test_operator_kernels.py
               tests/unit/operators/test_terms_assembly.py
               tests/unit/operators/test_terms_fields.py
