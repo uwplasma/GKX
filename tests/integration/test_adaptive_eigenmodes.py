@@ -268,7 +268,11 @@ def test_biorthogonal_continuation_crosses_real_growth_ordering() -> None:
 
     for parameter in scan:
         params = LinearParams(
-            R_over_LTi=parameter,
+            tprim=parameter,
+            # Pinned, not defaulted: the rank sequence asserted below is a
+            # property of this drive pair, and it used to ride on the field's
+            # old default. Ordering is [0, 1, 1, 1] at the current default 0.8.
+            fprim=2.2,
             nu=0.0,
             nu_hyper=0.0,
             hypercollisions_const=0.0,

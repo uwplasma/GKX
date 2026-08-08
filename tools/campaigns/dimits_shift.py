@@ -13,7 +13,7 @@ uninterpretable and no GPU time should be spent on it.
 Convention: the shipped Cyclone TOML carries ``tprim = a/L_T = 2.49``. This tool
 scans the drive as a multiple of the shipped value so the reported threshold is
 independent of whether a reader thinks in ``a/L_T`` or ``R/L_T``; both the
-multiplier and the resulting ``R_over_LTi`` are recorded.
+multiplier and the resulting ``tprim`` are recorded.
 
 Build the case's operator, not a default one
 --------------------------------------------
@@ -96,7 +96,7 @@ def linear_growth_scan(
     n_laguerre = int(raw["run"]["Nl"])
     n_hermite = int(raw["run"]["Nm"])
     base = build_runtime_linear_params(runtime, Nm=n_hermite, geom=analytic)
-    base_drive = jnp.asarray(base.R_over_LTi)
+    base_drive = jnp.asarray(base.tprim)
     # The case's own term switches, not the LinearTerms defaults. This is not a
     # detail: the shipped Cyclone TOML sets hyperdiffusion = 1.0 and the
     # dataclass defaults it to 0.0, and without it the operator has unstable
@@ -114,7 +114,7 @@ def linear_growth_scan(
         previous = None
         for multiplier in descending:
             params = dataclasses.replace(
-                base, R_over_LTi=base_drive * float(multiplier)
+                base, tprim=base_drive * float(multiplier)
             )
             matrix = np.asarray(
                 solver_linear_operator_matrix_from_geometry(
@@ -157,7 +157,7 @@ def linear_growth_scan(
     return [
         {
             "multiplier": multiplier,
-            "R_over_LTi": float(np.asarray(base_drive).ravel()[0] * multiplier),
+            "tprim": float(np.asarray(base_drive).ravel()[0] * multiplier),
             "by_ky": by_ky,
         }
         for multiplier, by_ky in sorted(tracked.items())
@@ -295,11 +295,13 @@ def _literature_comparison(toml_path: Path, threshold: dict) -> dict | None:
     """Put the threshold in the units the Cyclone literature quotes it in.
 
     Two conversions, both stated rather than folded in. The drive that the
-    operator consumes is ``tprim = a/L_T`` -- the field carrying it is *named*
-    ``R_over_LTi`` but every consumer treats it as ``tprim``, and the shipped
-    value 2.49 is the Cyclone ``a/L_T``. Turning that into the quoted
-    :math:`R/L_T` needs ``R/a``, which the cyclone normalization contract fixes
-    by setting ``a = 1``, so ``R/a`` is the TOML's own ``R0``.
+    operator consumes is ``LinearParams.tprim = a/L_T``, and the shipped value
+    2.49 is the Cyclone ``a/L_T``. (That field used to be called
+    ``R_over_LTi``, which is how this comparison came to be written out at
+    length: nothing in the chain rescaled the value, so the name was the only
+    thing claiming :math:`R/L`.) Turning it into the quoted :math:`R/L_T` needs
+    ``R/a``, which the cyclone normalization contract fixes by setting
+    ``a = 1``, so ``R/a`` is the TOML's own ``R0``.
 
     Returns ``None`` rather than guessing when the case is not on that contract.
     """

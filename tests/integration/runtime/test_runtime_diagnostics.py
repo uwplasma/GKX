@@ -325,9 +325,9 @@ def _small_setup():
     grid = select_ky_grid(grid_full, ky_index)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(
-        R_over_Ln=cfg.model.R_over_Ln,
-        R_over_LTi=cfg.model.R_over_LTi,
-        R_over_LTe=cfg.model.R_over_LTe,
+        fprim=cfg.model.fprim,
+        tprim=cfg.model.tprim_i,
+        tprim_e=cfg.model.tprim_e,
         kpar_scale=float(geom.gradpar()),
         nu=cfg.model.nu_i,
     )
@@ -1717,7 +1717,7 @@ def test_linear_explicit_step_applies_completed_step_mask(
 
 def test_energy_drift_small_no_drive():
     cfg, grid, geom, params, cache = _small_setup()
-    params = replace(params, R_over_Ln=0.0, R_over_LTi=0.0, R_over_LTe=0.0, nu=0.0)
+    params = replace(params, fprim=0.0, tprim=0.0, tprim_e=0.0, nu=0.0)
     G0 = _build_initial_condition(
         grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
     )
@@ -1907,9 +1907,9 @@ def test_linear_omega_max_preserves_selected_ky_mode():
     grid = select_ky_grid(grid_full, ky_index)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(
-        R_over_Ln=cfg.model.R_over_Ln,
-        R_over_LTi=cfg.model.R_over_LTi,
-        R_over_LTe=cfg.model.R_over_LTe,
+        fprim=cfg.model.fprim,
+        tprim=cfg.model.tprim_i,
+        tprim_e=cfg.model.tprim_e,
         kpar_scale=float(geom.gradpar()),
         nu=cfg.model.nu_i,
     )

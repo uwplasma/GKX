@@ -79,7 +79,12 @@ carry the charge, mass, density, temperature, and gradient inputs:
 - ``charge_sign``: :math:`Z_s` (e.g., :math:`+1` for ions, :math:`-1` for electrons).
 - ``temp`` / ``mass`` / ``density``: normalized to the reference species.
 - ``tz``: :math:`Z_s / T_s` coupling used in the field terms.
-- ``R_over_LTi`` / ``R_over_Ln``: normalized gradients for each species.
+- ``tprim`` / ``fprim``: normalized gradients for each species,
+  :math:`a/L_T` and :math:`a/L_n`. These are the only gradient units the
+  operator consumes; the fields were called ``R_over_LTi`` / ``R_over_Ln``
+  until the names were corrected, and the old names still work with a
+  ``DeprecationWarning``. Use the :math:`R/L = R_0 \, (a/L)` conversion above
+  when quoting a result against literature values.
 
 For adiabatic closures, ``tau_e`` provides the ratio between the kinetic
 species temperature and the Boltzmann species temperature.

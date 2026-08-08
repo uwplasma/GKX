@@ -1108,9 +1108,9 @@ def _small_kinetic_electron_problem(*, linked: bool = False):
         temp=jnp.asarray([1.0, 1.0]),
         vth=jnp.asarray([1.0, 42.0]),
         rho=jnp.asarray([1.0, 0.023]),
-        R_over_Ln=jnp.asarray([2.2, 2.2]),
-        R_over_LTi=jnp.asarray([6.9, 0.0]),
-        R_over_LTe=jnp.asarray([0.0, 6.9]),
+        fprim=jnp.asarray([2.2, 2.2]),
+        tprim=jnp.asarray([6.9, 0.0]),
+        tprim_e=jnp.asarray([0.0, 6.9]),
         tz=jnp.asarray([1.0, -1.0]),
         tau_e=0.0,
         beta=0.0,
@@ -2039,7 +2039,7 @@ def test_species_pmap_parameter_gradient_matches_centered_difference() -> None:
     def objective(ion_temperature_gradient):
         dynamic_params = replace(
             prepared_params,
-            R_over_LTi=jnp.stack(
+            tprim=jnp.stack(
                 (ion_temperature_gradient, jnp.zeros_like(ion_temperature_gradient))
             ),
         )
@@ -2376,8 +2376,8 @@ def test_diamagnetic_drive_shard_map_matches_production_term() -> None:
         Jl=cache.Jl,
         b=cache.b,
         l4=cache.l4,
-        tprim=params.R_over_LTi,
-        fprim=params.R_over_Ln,
+        tprim=params.tprim,
+        fprim=params.fprim,
         omega_star_scale=params.omega_star_scale,
         ky=cache.ky,
         devices=[jax.devices()[0]],
@@ -2436,8 +2436,8 @@ def test_diamagnetic_drive_shard_map_matches_reference_when_logical_devices_avai
         Jl=cache.Jl,
         b=cache.b,
         l4=cache.l4,
-        tprim=params.R_over_LTi,
-        fprim=params.R_over_Ln,
+        tprim=params.tprim,
+        fprim=params.fprim,
         omega_star_scale=params.omega_star_scale,
         ky=cache.ky,
         devices=devices[:2],
@@ -2448,8 +2448,8 @@ def test_diamagnetic_drive_shard_map_matches_reference_when_logical_devices_avai
         Jl=cache.Jl,
         b=cache.b,
         l4=cache.l4,
-        tprim=params.R_over_LTi,
-        fprim=params.R_over_Ln,
+        tprim=params.tprim,
+        fprim=params.fprim,
         omega_star_scale=params.omega_star_scale,
         ky=cache.ky,
     )
@@ -2481,8 +2481,8 @@ def test_diamagnetic_drive_rejects_invalid_shapes_and_plans() -> None:
         Jl=cache.Jl,
         b=cache.b,
         l4=cache.l4,
-        tprim=params.R_over_LTi,
-        fprim=params.R_over_Ln,
+        tprim=params.tprim,
+        fprim=params.fprim,
         omega_star_scale=params.omega_star_scale,
         ky=cache.ky,
     )
@@ -2962,8 +2962,8 @@ def test_fused_electrostatic_kernel_term_sum_and_finite_quasineutrality(
         tau_e=1.0,
         tz=1.0,
         vth=1.2,
-        R_over_LTi=2.5,
-        R_over_Ln=0.8,
+        tprim=2.5,
+        fprim=0.8,
         omega_d_scale=0.7,
         omega_star_scale=1.1,
         kpar_scale=0.9,

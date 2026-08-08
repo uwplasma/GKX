@@ -158,8 +158,8 @@ in the low Hermite moments. In code it drives:
 Controls:
 
 - ``LinearParams.omega_star_scale``
-- ``LinearParams.R_over_Ln``
-- ``LinearParams.R_over_LTi``
+- ``LinearParams.fprim``
+- ``LinearParams.tprim``
 - ``RuntimeTermsConfig.diamagnetic``
 
 Collisions
