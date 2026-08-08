@@ -135,7 +135,11 @@ name = "installable_source_python_lines"
 path = "src/gkx"
 pattern = "*.py"
 recursive = true
-baseline = 88768
+# 88768 -> 88800: the linear objective's velocity-space closure. Three closure
+# fields, an optional geometry argument for kpar_scale, and the recorded reason
+# the amplitudes must not go back to zero -- without it the objective cannot
+# report a stable design. See test_objective_reports_stability.
+baseline = 88800
 target = 45000
 
 [[line_budget_policy.counts]]
