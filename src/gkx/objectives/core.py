@@ -62,9 +62,12 @@ _SOLVER_OBJECTIVE_ALIASES = {
 
 
 def _default_gradient_linear_params() -> LinearParams:
+    # Cyclone drive in the units the operator consumes, a/L. These used to be
+    # 6.9 and 2.2, which are the same case expressed as R/L: the objective was
+    # running at R/a = 2.78 times the intended gradient.
     return LinearParams(
-        R_over_Ln=2.2,
-        R_over_LTi=6.9,
+        fprim=0.8,
+        tprim=2.49,
         nu=0.0,
         nu_hyper=0.0,
         hypercollisions_const=0.0,

@@ -227,11 +227,17 @@ class GeometryConfig:
 # Literature benchmark presets used by the executable, examples, and public API.
 @dataclass(frozen=True)
 class ModelConfig:
-    """Dimensionless gradients for the Cyclone base case."""
+    r"""Dimensionless gradients for the Cyclone base case.
 
-    R_over_LTi: float = 2.49
-    R_over_LTe: float = 0.0
-    R_over_Ln: float = 0.8
+    These are :math:`a/L_T` and :math:`a/L_n` -- the same quantities the TOML
+    ``tprim``/``fprim`` keys carry and the only ones the linear operator
+    consumes. With the Cyclone :math:`R_0 = R/a = 2.77778`, ``tprim_i = 2.49``
+    is the literature :math:`R/L_T = 6.92`.
+    """
+
+    tprim_i: float = 2.49
+    tprim_e: float = 0.0
+    fprim: float = 0.8
     nu_i: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -294,11 +300,14 @@ class CycloneBaseCase:
 
 @dataclass(frozen=True)
 class KineticElectronModelConfig:
-    """Gradients and ratios for a kinetic-electron Cyclone-base-case setup."""
+    r"""Gradients and ratios for a kinetic-electron Cyclone-base-case setup.
 
-    R_over_LTi: float = 2.49
-    R_over_LTe: float = 2.49
-    R_over_Ln: float = 0.8
+    Gradients are :math:`a/L_T` and :math:`a/L_n`, as in :class:`ModelConfig`.
+    """
+
+    tprim_i: float = 2.49
+    tprim_e: float = 2.49
+    fprim: float = 0.8
     Te_over_Ti: float = 1.0
     mass_ratio: float = REFERENCE_MASS_RATIO
     nu_i: float = 0.0
