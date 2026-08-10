@@ -191,48 +191,45 @@ def stride_runtime_diagnostics(
     if stride_use == 1:
         return diag
 
+    def _take(arr: np.ndarray | jnp.ndarray) -> np.ndarray:
+        return np.asarray(arr)[offset_use::stride_use, ...].copy()
+
     def _stride_optional(arr: np.ndarray | jnp.ndarray | None) -> np.ndarray | None:
-        if arr is None:
-            return None
-        return np.asarray(arr)[offset_use::stride_use, ...]
+        return None if arr is None else _take(arr)
 
     def _stride_resolved(
         resolved: ResolvedDiagnostics | None,
     ) -> ResolvedDiagnostics | None:
         if resolved is None:
             return None
-        payload: dict[str, np.ndarray | None] = {}
-        for field in dataclass_fields(ResolvedDiagnostics):
-            value = getattr(resolved, field.name)
-            payload[field.name] = (
-                None
-                if value is None
-                else np.asarray(value)[offset_use::stride_use, ...]
-            )
+        payload: dict[str, np.ndarray | None] = {
+            field.name: _stride_optional(getattr(resolved, field.name))
+            for field in dataclass_fields(ResolvedDiagnostics)
+        }
         return ResolvedDiagnostics(**payload)
 
-    dt_t = np.asarray(diag.dt_t)[offset_use::stride_use]
-    Wg_t = np.asarray(diag.Wg_t)[offset_use::stride_use]
-    Wphi_t = np.asarray(diag.Wphi_t)[offset_use::stride_use]
-    Wapar_t = np.asarray(diag.Wapar_t)[offset_use::stride_use]
+    dt_t = _take(diag.dt_t)
+    Wg_t = _take(diag.Wg_t)
+    Wphi_t = _take(diag.Wphi_t)
+    Wapar_t = _take(diag.Wapar_t)
     if dt_t.size == 0:
         dt_mean = np.asarray(0.0, dtype=float)
     else:
         dt_mean = np.asarray(np.mean(dt_t), dtype=float)
     return SimulationDiagnostics(
-        t=np.asarray(diag.t)[offset_use::stride_use],
+        t=_take(diag.t),
         dt_t=dt_t,
         dt_mean=dt_mean,
-        gamma_t=np.asarray(diag.gamma_t)[offset_use::stride_use],
-        omega_t=np.asarray(diag.omega_t)[offset_use::stride_use],
+        gamma_t=_take(diag.gamma_t),
+        omega_t=_take(diag.omega_t),
         Wg_t=Wg_t,
         Wphi_t=Wphi_t,
         Wapar_t=Wapar_t,
-        heat_flux_t=np.asarray(diag.heat_flux_t)[offset_use::stride_use],
-        particle_flux_t=np.asarray(diag.particle_flux_t)[offset_use::stride_use],
+        heat_flux_t=_take(diag.heat_flux_t),
+        particle_flux_t=_take(diag.particle_flux_t),
         energy_t=np.asarray(
             total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))
-        ),
+        ).copy(),
         heat_flux_species_t=_stride_optional(diag.heat_flux_species_t),
         particle_flux_species_t=_stride_optional(diag.particle_flux_species_t),
         turbulent_heating_t=_stride_optional(diag.turbulent_heating_t),
