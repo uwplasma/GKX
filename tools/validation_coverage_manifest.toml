@@ -962,10 +962,13 @@ artifact_paths = [
   "docs/_static/nonlinear_device_z_pencil_rhs_cpu4_profile.json",
   "docs/_static/nonlinear_device_z_pencil_rhs_gpu2_profile.json",
   "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.json",
 ]
 next_tests = [
   "add a direct multi-device fixture test when CI has more than one local device available",
   "add a profiler-backed physical transport-window speedup gate before changing release wording",
+  "close the single-device pencil-bracket route overhead measured in the scaling decomposition artifact",
 ]
 
 [[modules]]

@@ -234,6 +234,8 @@ profiling_tools = [
   "tools/profiling/profile_linear_rhs_parallel_slices.py",
   "tools/profiling/profile_nonlinear_sharding.py",
   "tools/profiling/profile_device_z_pencil_transport_window.py",
+  "tools/profiling/profile_device_z_pencil_scaling_decomposition.py",
+  "tools/profiling/aggregate_device_z_pencil_granularity.py",
 ]
 metrics = [
   "strong_scaling_speedup",
@@ -244,6 +246,8 @@ metrics = [
   "device_z_pencil_rhs_identity_error",
   "device_z_pencil_transport_window_identity_error",
   "device_z_pencil_observable_gate_overhead",
+  "device_z_pencil_shard_map_route_overhead",
+  "device_z_pencil_parallel_scaling_vs_one_device",
   "parallel_scaling_artifact_contract_status",
   "production_parallelization_completion_percent",
 ]
@@ -334,6 +338,12 @@ artifact_paths = [
   "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.json",
   "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.csv",
   "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.png",
   ]
 bottleneck_hypotheses = [
   "independent ky/batch/ensemble sharding should scale before nonlinear domain sharding",

@@ -107,8 +107,18 @@ artifact
 passes the transport-window identity gate (``max_abs_error=7.45e-9``), but only
 reaches ``1.48x`` versus one GPU. Its Perfetto/TensorBoard trace was written
 under ``/tmp/gkx_traces`` during generation, and its HLO summary likewise
-shows no collectives. The GPU blocker is therefore speedup/work granularity,
-not numerical identity or a hidden global reconstruction. This remains a
+shows no collectives. The GPU blocker is therefore neither numerical identity
+nor a hidden global reconstruction. It is also not workload granularity: the
+sweep in
+``docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.json``
+shows two-GPU speedup falling from ``1.48x`` to ``1.26x`` as the grid grows to
+``(4,16,128,128,64)``, and flat to within one percent as the window grows from
+four to sixty-four steps. The split in
+``docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.json``
+attributes the shortfall: one-to-two-device parallel scaling is ``1.99x`` to
+``2.01x``, while the single-device ``shard_map`` route costs ``1.37x`` to
+``1.59x`` of the fused serial route. The open target is the single-device
+efficiency of the pencil bracket. This remains a
 micro-route transport-window claim, not a full production nonlinear
 turbulence-solve speedup claim.
 

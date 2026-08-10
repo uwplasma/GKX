@@ -264,9 +264,10 @@ passes transport-window identity, with maximum final-state absolute error
 ``7.45e-9``, but reaches only ``1.48x`` and remains below the ``1.5x`` speedup
 gate. The profiler artifacts include HLO keyword summaries and Perfetto trace
 locations; both CPU and GPU sharded HLO summaries show local FFTs and no
-all-to-all or collective-permute operations. The remaining nonlinear
-parallelization blocker is therefore production workload granularity and
-end-to-end solver routing, not this micro-route's serial-vs-sharded identity.
+all-to-all or collective-permute operations. That ``1.48x`` was originally
+read as a workload-granularity limit. The granularity re-measurement described
+below tested that reading directly and did not support it, so the sentence it
+used to justify has been replaced by the measured decomposition.
 For larger diagnostic grids, ``tools/profiling/profile_device_z_pencil_transport_window.py``
 also accepts ``--z-chunk-size`` and ``--auto-z-chunk-size``. The automatic
 mode uses the device-z pencil FFT batch-pressure model to keep the largest
@@ -274,7 +275,10 @@ axis-wise cuFFT batch below a configured cap before timing. Combined with
 ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` on office GPUs, the chunked route avoids
 the cuFFT plan failures seen on the unchunked ``96x96x64`` and ``128x128x32``
 transport windows, but the measured two-GPU speedups remain below the ``1.5x``
-promotion gate.
+promotion gate. Chunking is a feasibility control, not a performance control:
+at a fixed grid, ``--z-chunk-size`` values of ``8``, ``16``, ``32`` and the
+unchunked route agree on two-GPU speedup to within about one percent, which is
+inside run-to-run scatter.
 Add ``--observable-repeats`` to the same profiler when deciding whether the
 next optimization target is the sharded compute route or the scalar
 diagnostic/host-gather path. The timed speedup row remains compute-only; the
@@ -292,6 +296,182 @@ passes identity on the auto-chunked ``96x96x64`` diagnostic, but still records
 only ``1.19x`` compute speedup and a large observable-gate overhead. This keeps
 the nonlinear decomposition lane diagnostic until an end-to-end solver route
 passes identity and speedup with streamed diagnostics.
+
+Production granularity and where the two-GPU time actually goes
+---------------------------------------------------------------
+
+The ``1.48x`` two-GPU transport-window result was attributed to workload
+granularity: the grids were assumed too small to keep two GPUs busy, so larger
+production-sized grids were expected to approach the ``0.930``
+parallel-efficiency ceiling of the pencil work model. That expectation was
+tested and is not supported by measurement.
+
+All numbers in this section come from two RTX A4000 16 GB GPUs on the office
+host with JAX ``0.6.2`` and CUDA 12, ``XLA_PYTHON_CLIENT_PREALLOCATE=false``,
+and the diagnostic spectral state, which is ``complex64`` irrespective of
+``JAX_ENABLE_X64``. The baseline reproduces the tracked artifact: the tracked
+``(4,16,96,96,32)`` four-step window re-measures at ``1.47x`` with the same
+``7.45e-9`` maximum final-state absolute error.
+
+Two things are worth stating about what "production size" means here. The
+largest nonlinear grid shipped under ``examples/nonlinear/`` is the W7-X and
+HSX stellarator case at ``(N_l,N_m,N_y,N_x,N_z)=(4,8,96,96,48)``; the Cyclone
+and KBM cases are smaller. The tracked ``(4,16,96,96,32)`` profiling grid is
+therefore already at production element count rather than below it. Above that,
+the single-GPU serial baseline is the binding constraint, not the sharded
+route: ``(4,16,192,192,64)`` fails on one A4000 with a ``4.83 GB`` allocation,
+so there is no single-device reference to divide by.
+
+``docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.json``
+records the sweep. Two-GPU speedup does not improve with workload size, it
+degrades, and the artifact records ``speedup_improves_with_size = false``:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 12 14 18 22
+
+   * - ``(N_l,N_m,N_y,N_x,N_z)``
+     - steps
+     - state (10^6)
+     - two-GPU speedup
+     - max abs error
+   * - ``(4,8,96,96,48)`` shipped stellarator
+     - 4
+     - 14.2
+     - ``1.43x``
+     - ``7.45e-9``
+   * - ``(4,16,96,96,32)`` tracked
+     - 4
+     - 18.9
+     - ``1.48x``
+     - ``7.45e-9``
+   * - ``(4,16,128,128,32)``
+     - 4
+     - 33.6
+     - ``1.29x``
+     - ``7.45e-9``
+   * - ``(4,16,96,96,64)``
+     - 4
+     - 37.7
+     - ``1.40x``
+     - ``7.45e-9``
+   * - ``(4,16,128,128,64)``
+     - 4
+     - 67.1
+     - ``1.26x``
+     - ``7.45e-9``
+   * - ``(4,16,96,96,32)`` long window
+     - 64
+     - 18.9
+     - ``1.49x``
+     - ``2.98e-8``
+
+Window length is equally inert. At ``(4,16,96,96,32)`` the four-, sixteen- and
+sixty-four-step windows give ``1.480x``, ``1.485x`` and ``1.486x``: sixteen
+times more work per timed call moves the result by less than one percent, so
+per-call dispatch overhead is not the limiter either.
+
+.. image:: _static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.png
+   :alt: Two-GPU device-z pencil speedup against workload granularity
+   :align: center
+
+The reason is isolated by
+``tools/profiling/profile_device_z_pencil_scaling_decomposition.py``, which
+times a third route the transport-window profiler never times: the same pencil
+``shard_map`` route on a *single*-device mesh. That splits the reported speedup
+into two independent factors, exactly rather than by model, because
+``net_speedup_vs_serial`` is ``parallel_scaling_vs_one_device`` divided by
+``shard_map_route_overhead``. The result in
+``docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.json``
+is unambiguous:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 32 20 20 14 14
+
+   * - ``(N_l,N_m,N_y,N_x,N_z)``
+     - route overhead
+     - parallel scaling
+     - efficiency
+     - net
+   * - ``(4,8,96,96,48)``
+     - ``1.394``
+     - ``2.004``
+     - ``1.002``
+     - ``1.438``
+   * - ``(4,16,96,96,32)``
+     - ``1.373``
+     - ``2.012``
+     - ``1.006``
+     - ``1.466``
+   * - ``(4,16,128,128,32)``
+     - ``1.567``
+     - ``1.992``
+     - ``0.996``
+     - ``1.272``
+   * - ``(4,16,96,96,64)``
+     - ``1.381``
+     - ``1.992``
+     - ``0.996``
+     - ``1.443``
+   * - ``(4,16,128,128,64)``
+     - ``1.587``
+     - ``2.005``
+     - ``1.002``
+     - ``1.263``
+
+One-to-two-device parallel scaling is ``1.992x`` to ``2.012x`` at every grid,
+a parallel efficiency of ``0.996`` to ``1.006``. The sharding itself is not
+lossy on this hardware, which is consistent with the HLO summaries: both routes
+still lower to local FFTs with zero ``all-reduce``, ``all-to-all`` and
+``collective-permute`` operations. The measured efficiency is therefore not
+limited by the ``0.930`` communication ceiling of the work model, because
+communication is effectively absent.
+
+The entire shortfall is ``shard_map_route_overhead``, the cost of the pencil
+route relative to the fused serial route on one device: ``1.37`` to ``1.39``
+for ``96x96`` perpendicular grids and ``1.57`` to ``1.59`` for ``128x128``. It
+tracks perpendicular resolution rather than total state size, which is why the
+sweep looks non-monotonic when it is ordered by element count alone. The
+mechanism is visible in the per-element rates: the sharded route holds a nearly
+constant ``0.40 ns`` per element per step at every grid, while the fused serial
+route improves from ``0.59 ns`` to ``0.50 ns`` as the perpendicular FFT shape
+gets friendlier. The pencil route does not capture that improvement, so the
+gap it must overcome widens exactly where the serial route gets better.
+
+.. image:: _static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.png
+   :alt: Device-z pencil speedup split into route overhead and parallel scaling
+   :align: center
+
+This answers the promotion question directly, and the answer is not a number
+scraped over the line. With parallel scaling already at ``2.0x``, the ``1.5x``
+gate requires a single-device route overhead below ``2.0/1.5``, that is
+``1.341``; the artifact records this as ``route_overhead_needed_for_gate``.
+The best measured overhead is ``1.373``. So ``1.5x`` is missed by roughly three
+percent of single-device route efficiency at ``96x96``, and by about sixteen
+percent at ``128x128``. It is not reachable by growing the grid, by lengthening
+the window, or by tuning ``--z-chunk-size``, because none of those move the
+overhead; it is reachable only by making the pencil bracket competitive with
+the fused serial bracket on one device. The gate threshold is therefore left at
+``1.5x``. It is a meaningful end-to-end target and the measurements do not
+justify moving it; what they justify is re-attributing the blocker.
+
+The scalar diagnostic path remains a separate and much larger cost, and the
+compute-only framing of the timed row matters. With ``--observable-repeats``,
+the transport-window observable gate costs ``3.59 s`` against ``30.4 ms`` of
+compute at ``(4,16,96,96,32)``, an overhead of ``118x``, and ``6.95 s`` against
+``107.6 ms`` at ``(4,16,128,128,64)``, an overhead of ``65x``. The
+``sharded_reduce`` observable mode is slower still at ``154x``, consistent with
+it recomputing the nonlinear bracket for diagnostics. Any end-to-end route that
+evaluates these diagnostics every window is dominated by them, not by the
+compute speedup this section measures.
+
+The practical consequence for the decomposition lane is that its blocker should
+no longer be recorded as workload granularity. The two open items are the
+single-device efficiency of the pencil bracket and the streamed-diagnostic path;
+serial-vs-sharded identity and inter-device communication are not implicated.
+Every timed row above passed its identity gate, and the errors are reported
+beside the timings rather than in a separate table.
 
 Before nonlinear domain decomposition can be promoted beyond this diagnostic
 state, the runtime route must pass all of the following gates on the same
