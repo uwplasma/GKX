@@ -200,9 +200,9 @@ tiles, reconstructs them, recomputes the spectral field and bracket, and gates
 the serial nonlinear RHS contribution ``-\{\phi,g\}`` against the
 tile-reassembled route. Third, it advances a short fixed-step micro-integration
 and checks final-state, free-energy-proxy, field-energy-proxy, and flux-proxy
-trace identity. Fourth, it exercises a pencil-FFT fused-bracket route that
-stacks the derivative operands, performs explicit axis-wise FFT stages, and
-returns the RHS without reconstructing logical output tiles. Fifth, it advances
+trace identity. Fourth, it exercises a device-z pencil fused-bracket route that
+transforms the perpendicular plane local to each slab and returns the RHS
+without reconstructing logical output tiles. Fifth, it advances
 the same pencil route over a short physical-space transport window and compares
 final state, free-energy, field-energy, bracket-RMS, and
 density-times-radial-electric-field transport-proxy traces. Passing this
@@ -229,8 +229,11 @@ its global-reconstruction work model gives a communication/owned-work ratio
 removes the global reconstruction from the model and gives a
 communication/FFT-work ratio ``0.075`` with an efficiency ceiling ``0.930``.
 That is only a plausibility screen: the tracked local CPU timing still fails
-the speedup gate, with the logical route at about ``1.08x`` and the current
-pencil staging at about ``0.75x`` relative to the serial JIT route. The next
+the speedup gate, with the logical route at about ``1.08x`` and the superseded
+axis-staged pencil bracket at about ``0.75x`` relative to the serial JIT route.
+That ``0.75x`` was measured against the axis-staged bracket that
+:ref:`the local fused bracket <device-z-route-overhead>` replaced, and the
+artifact has not been regenerated since. The next
 production step is therefore device-level pencil-FFT routing with real
 collectives and profiler evidence, not a speedup claim from the local
 axis-staged diagnostic.
@@ -455,6 +458,79 @@ overhead; it is reachable only by making the pencil bracket competitive with
 the fused serial bracket on one device. The gate threshold is therefore left at
 ``1.5x``. It is a meaningful end-to-end target and the measurements do not
 justify moving it; what they justify is re-attributing the blocker.
+
+.. _device-z-route-overhead:
+
+Removing the single-device pencil route overhead
+------------------------------------------------
+
+That re-attribution is actionable, and the fix is in the local bracket rather
+than in the sharding. Lowering both routes at ``(4,16,96,96,32)`` and
+``(4,16,128,128,32)`` shows the pencil route allocating about three times the
+scratch memory of the fused serial route -- ``906`` MB against ``307`` MB, and
+``1611`` MB against ``537`` MB -- with two extra ``concatenate`` operations,
+seven ``transpose`` operations against three, and six one-dimensional ``fft``
+operations of ``fft_length={N}`` against five batched two-dimensional ones of
+``fft_length={N,N}``.
+
+All three costs have one source. The device-z decomposition partitions only the
+field-line axis, so ``ky`` and ``kx`` are resident on every device and the
+perpendicular transform pair is entirely local to a slab. Explicit
+axis-at-a-time staging is what a pencil decomposition needs when a *transform*
+axis is itself partitioned, because the inter-stage transpose is then the
+communication step. Sharding ``z`` never partitions a transform axis, so the
+staging bought no communication -- which is why the HLO showed no collectives --
+while still paying a full-size transpose between stages, a stack that
+materialized both derivative operands, and the loss of the fusion that lets the
+serial route feed its physical-space product straight into the forward
+transform. Isolating them on one device at ``128x128``, dropping the stack alone
+moves the overhead from ``1.68`` to ``1.51`` and dropping the staging alone
+moves it to ``1.21``.
+
+Computing the local bracket with the fused route removes all three. Measured
+with ``profile_device_z_pencil_scaling_decomposition.py`` on one RTX A4000,
+JAX 0.6.2, CUDA 12, ``complex64``, one grid per process:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 22 22 22
+
+   * - ``(N_l,N_m,N_y,N_x,N_z)``
+     - staged overhead
+     - fused overhead
+     - final-state error
+   * - ``(4,16,64,64,32)``
+     - ``1.764``
+     - ``0.995``
+     - ``0.0``
+   * - ``(4,16,96,96,32)``
+     - ``1.370``
+     - ``1.000``
+     - ``0.0``
+   * - ``(4,16,128,128,32)``
+     - ``1.560``
+     - ``1.003``
+     - ``0.0``
+
+The overhead is at parity with the serial route at every grid against the
+``1.341`` the gate needs, and it no longer tracks ``N_y x N_x``. Because the
+local slab now performs the same computation the serial route performs,
+serial-versus-sharded identity is exact rather than merely inside tolerance:
+the final-state error falls from ``7.45e-9`` to ``0.0`` under both ``complex64``
+and ``JAX_ENABLE_X64``. The identity gate consequently tests the ``z``
+decomposition and the ``shard_map`` reassembly rather than FFT reassociation.
+
+Two limits bound what this measures. It is the nonlinear *bracket* micro-route:
+a five-dimensional state, a model field solve ``phi = n/(1+kperp^2)``, and the
+ExB bracket ``-\{\phi,g\}`` alone, with no streaming, mirror, curvature,
+grad-B, diamagnetic, collision, hypercollision, end-damping, dealiasing or
+electromagnetic terms and no species axis, all of which the production
+nonlinear RHS carries. No production nonlinear speedup claim follows from it.
+Separately, the two-device rows are **not** re-measured here: the second GPU of
+the office box was saturated by another user throughout, so
+``parallel_scaling_vs_one_device`` and ``net_speedup_vs_serial`` remain those of
+the table above and the end-to-end gate verdict is deferred rather than
+restated.
 
 The scalar diagnostic path remains a separate and much larger cost, and the
 compute-only framing of the timed row matters. With ``--observable-repeats``,

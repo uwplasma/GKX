@@ -89,42 +89,26 @@ def _pencil_fft2(arr: jax.Array, *, y_axis: int, x_axis: int) -> jax.Array:
 
 
 def _pencil_spectral_bracket(state_hat: jax.Array, phi_hat: jax.Array) -> jax.Array:
-    """Return the pseudo-spectral bracket using pencil FFT staging.
+    """Return the pseudo-spectral bracket for one device-z pencil slab.
 
-    This function is the local algorithmic route that a distributed pencil FFT
-    implementation should follow: stack derivative operands, transform through
-    explicit axis-transpose stages, multiply in physical space, and transform
-    the bracket back without first reconstructing logical output tiles.
+    The device-z decomposition partitions only the field-line axis, so both
+    perpendicular axes are resident on every device and the ``(ky, kx)``
+    transform pair is entirely local to a slab. The local bracket is therefore
+    the fused route in :func:`_spectral_bracket`: one batched two-dimensional
+    transform per operand, with the physical-space product fused into the input
+    of the inverse transform.
+
+    Explicit axis-at-a-time staging (:func:`_pencil_ifft2`) is what a pencil
+    decomposition needs when a *transform* axis is itself partitioned, because
+    the inter-stage transpose is then the communication step. Sharding ``z``
+    never partitions ``ky`` or ``kx``, so on a local slab that staging buys no
+    communication and costs a full-size transpose between stages, a stack that
+    materializes both derivative operands, and the loss of the product/transform
+    fusion -- together roughly three times the scratch memory of the fused route
+    and a 1.5x-1.7x single-device slowdown.
     """
 
-    _nl, _nm, ny, nx, _nz = _validate_spectral_state_shape(tuple(state_hat.shape))
-    real_dtype = jnp.real(state_hat).dtype
-    ky, kx = _spectral_wave_numbers(ny, nx, real_dtype)
-    ky_state = ky[None, None, :, None, None]
-    kx_state = kx[None, None, None, :, None]
-    ky_field = ky[:, None, None]
-    kx_field = kx[None, :, None]
-
-    state_grad_hat = jnp.stack(
-        [1j * kx_state * state_hat, 1j * ky_state * state_hat],
-        axis=0,
-    )
-    state_grad_xy = _pencil_ifft2(state_grad_hat, y_axis=-3, x_axis=-2)
-    state_dx = state_grad_xy[0]
-    state_dy = state_grad_xy[1]
-
-    field_grad_hat = jnp.stack(
-        [1j * kx_field * phi_hat, 1j * ky_field * phi_hat],
-        axis=0,
-    )
-    field_grad_xy = _pencil_ifft2(field_grad_hat, y_axis=1, x_axis=2)
-    phi_dx = field_grad_xy[0]
-    phi_dy = field_grad_xy[1]
-
-    bracket_xy = (
-        phi_dx[None, None, :, :, :] * state_dy - phi_dy[None, None, :, :, :] * state_dx
-    )
-    return _pencil_fft2(bracket_xy, y_axis=-3, x_axis=-2)
+    return _spectral_bracket(state_hat, phi_hat)
 
 
 def _pencil_spectral_bracket_z_chunked(
