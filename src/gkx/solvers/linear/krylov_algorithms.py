@@ -166,6 +166,22 @@ def _select_by_target(
     return jnp.where(use_choice, idx_target, fallback_idx)
 
 
+# Accepted preconditioner names, grouped by the builder they select. Single
+# source for validation and dispatch, so nothing is advertised without resolving.
+SHIFT_PRECOND_LINE_NAMES: frozenset[str] = frozenset(
+    {"hermite-line", "hermite_line", "hermite", "streaming-line", "streaming_line",
+     "hermite-line-coarse", "hermite_line_coarse", "hermite_coarse",
+     "streaming-line-coarse"}
+)  # fmt: skip
+SHIFT_PRECOND_FIELD_NAMES: frozenset[str] = frozenset(
+    {"field-corrected", "field_corrected", "field-schur", "field_schur",
+     "field-corrected-coarse", "field_corrected_coarse"}
+)  # fmt: skip
+SHIFT_PRECOND_NAMES: frozenset[str] = (
+    SHIFT_PRECOND_LINE_NAMES | SHIFT_PRECOND_FIELD_NAMES | {"damping", "none"}
+)
+
+
 def _build_shift_invert_precond(
     v: jnp.ndarray,
     cache: LinearCache,
@@ -174,11 +190,27 @@ def _build_shift_invert_precond(
     sigma: jnp.ndarray,
     mode: str | None,
 ) -> tuple[jnp.ndarray | None, Callable[[jnp.ndarray], jnp.ndarray] | None]:
-    """Build the preconditioner used inside shift-invert Krylov GMRES solves."""
+    """Build the preconditioner used inside shift-invert Krylov GMRES solves.
 
-    if mode is None or mode.lower() == "none":
+    ``None``/``"none"`` are the explicit opt-outs; any other unrecognized name
+    raises. This used to return ``(None, None)`` for those too, so a typo
+    disabled preconditioning while the solve reported itself as preconditioned.
+    ``"auto"`` must not arrive here -- it is a real policy resolved one level up
+    by :func:`gkx.solvers.linear.krylov._automatic_shift_preconditioner`, and
+    mapping it to ``"damping"`` would hand a damping diagonal to a caller that
+    asked for a physics-aware line solve.
+    """
+
+    mode_key = "none" if mode is None else mode.strip().lower()
+    if mode_key == "none":
         return None, None
-    mode_key = mode.lower()
+    if mode_key not in SHIFT_PRECOND_NAMES:
+        raise ValueError(
+            f"unknown shift-invert preconditioner {mode!r}; accepted names are "
+            f"{', '.join(repr(n) for n in sorted(SHIFT_PRECOND_NAMES))}, or None to "
+            "disable preconditioning. 'auto' is resolved above this layer by "
+            "_automatic_shift_preconditioner; reaching here means it was bypassed."
+        )
     if mode_key == "damping":
         damping = _compute_damping(v, cache, params)
         diag = -damping.astype(v.dtype) - sigma
@@ -193,25 +225,6 @@ def _build_shift_invert_precond(
 
         return precond, apply_precond_damping
 
-    if mode_key not in {
-        "hermite-line",
-        "hermite_line",
-        "hermite",
-        "streaming-line",
-        "streaming_line",
-        "hermite-line-coarse",
-        "hermite_line_coarse",
-        "hermite_coarse",
-        "streaming-line-coarse",
-        "field-corrected",
-        "field_corrected",
-        "field-schur",
-        "field_schur",
-        "field-corrected-coarse",
-        "field_corrected_coarse",
-    }:
-        return None, None
-
     # Import lazily to keep the core operator module independent of the
     # implicit integration policy at import time.
     from gkx.solvers.linear.implicit import (
@@ -219,23 +232,8 @@ def _build_shift_invert_precond(
         _build_shifted_hermite_preconditioner,
     )
 
-    coarse = mode_key in {
-        "hermite-line-coarse",
-        "hermite_line_coarse",
-        "hermite_coarse",
-        "streaming-line-coarse",
-        "field-corrected-coarse",
-        "field_corrected_coarse",
-    }
-    field_corrected = mode_key in {
-        "field-corrected",
-        "field_corrected",
-        "field-schur",
-        "field_schur",
-        "field-corrected-coarse",
-        "field_corrected_coarse",
-    }
-    if field_corrected:
+    coarse = mode_key.endswith(("-coarse", "_coarse"))
+    if mode_key in SHIFT_PRECOND_FIELD_NAMES:
         apply_preconditioner = _build_field_corrected_shifted_preconditioner(
             v,
             cache,
