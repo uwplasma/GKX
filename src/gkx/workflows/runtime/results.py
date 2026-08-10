@@ -66,6 +66,10 @@ class RuntimeNonlinearResult:
     state: np.ndarray | None = None
     ky_selected: float | None = None
     kx_selected: float | None = None
+    # Wall-clock seconds spent integrating this result, when the caller
+    # measured it. Reported per unit of simulated time so a straggler surface
+    # is comparable against its siblings without normalising by hand.
+    wall_seconds: float | None = None
 
 
 def nonlinear_field_phi2(fields: FieldState) -> np.ndarray:

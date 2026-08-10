@@ -1,15 +1,16 @@
-"""Runtime diagnostic array validation and composition helpers.
+"""Runtime diagnostic array validation, composition, and cost summaries.
 
 These helpers operate on already-sampled diagnostic payloads. They deliberately
-stay host-side: runtime drivers use them to fail fast on invalid artifacts and
-to combine adaptive chunks without mixing that array bookkeeping into the
-linear-fit and quasilinear-finalization code.
+stay host-side: runtime drivers use them to fail fast on invalid artifacts, to
+combine adaptive chunks without mixing that array bookkeeping into the
+linear-fit and quasilinear-finalization code, and to summarise what a run's
+simulated time cost before the payload is handed to the artifact writers.
 """
 
 from __future__ import annotations
 
-from dataclasses import fields as dataclass_fields
-from typing import Sequence
+from dataclasses import asdict, dataclass, fields as dataclass_fields
+from typing import Any, Sequence
 
 import jax.numpy as jnp
 import numpy as np
@@ -19,11 +20,20 @@ from gkx.diagnostics import (
     SimulationDiagnostics,
     total_energy,
 )
+from gkx.diagnostics.analysis import (
+    CFLLimiterReport,
+    CFLScales,
+    cfl_limiter_report,
+    cfl_scales_from_array,
+)
 
 __all__ = [
+    "TimestepCostReport",
     "concat_runtime_diagnostics",
     "slice_runtime_diagnostics",
     "stride_runtime_diagnostics",
+    "timestep_cost_payload",
+    "timestep_cost_report",
     "truncate_runtime_diagnostics",
     "validate_finite_runtime_diagnostics",
 ]
@@ -156,6 +166,8 @@ def slice_runtime_diagnostics(
         turbulent_heating_t=_slice_optional(diag.turbulent_heating_t),
         turbulent_heating_species_t=_slice_optional(diag.turbulent_heating_species_t),
         phi_mode_t=_slice_optional(diag.phi_mode_t),
+        # Run-constant, so it survives slicing/striding untouched.
+        cfl_scales=diag.cfl_scales,
         resolved=_slice_resolved(diag.resolved),
     )
 
@@ -235,6 +247,7 @@ def stride_runtime_diagnostics(
         turbulent_heating_t=_stride_optional(diag.turbulent_heating_t),
         turbulent_heating_species_t=_stride_optional(diag.turbulent_heating_species_t),
         phi_mode_t=_stride_optional(diag.phi_mode_t),
+        cfl_scales=diag.cfl_scales,
         resolved=_stride_resolved(diag.resolved),
     )
 
@@ -315,5 +328,177 @@ def concat_runtime_diagnostics(
         turbulent_heating_t=_concat_optional("turbulent_heating_t"),
         turbulent_heating_species_t=_concat_optional("turbulent_heating_species_t"),
         phi_mode_t=_concat_optional("phi_mode_t"),
+        cfl_scales=next(
+            (d.cfl_scales for d in diags if d.cfl_scales is not None), None
+        ),
         resolved=_concat_resolved(),
     )
+
+
+@dataclass(frozen=True)
+class TimestepCostReport:
+    """Cost per unit of simulated time, and the dt trajectory behind it."""
+
+    n_samples: int
+    t_start: float
+    t_end: float
+    t_span: float
+    steps: float
+    steps_are_exact: bool
+    steps_per_unit_time: float
+    wall_seconds: float | None
+    wall_seconds_per_unit_time: float | None
+    dt_initial: float
+    dt_min: float
+    dt_max: float
+    dt_final: float
+    dt_collapse_ratio: float
+    steps_per_unit_time_first_quarter: float
+    steps_per_unit_time_last_quarter: float
+    cost_growth_ratio: float
+    cfl: CFLLimiterReport | None
+    notes: tuple[str, ...]
+
+
+def _steps_over(t: np.ndarray, dt: np.ndarray) -> float:
+    """Steps across the recorded samples, as the sum of gap over step size.
+
+    ``dt[i]`` is the step that produced ``t[i]``, so on an unstrided series
+    every term is exactly one and the sum is ``len(t) - 1``.
+    """
+
+    return 0.0 if t.size < 2 else float(np.sum(np.diff(t) / dt[1:]))
+
+
+def _rate_in_window(t: np.ndarray, dt: np.ndarray, lo: float, hi: float) -> float:
+    """Steps per unit simulated time over the ``[lo, hi]`` slice of a run."""
+
+    mask = (t >= lo) & (t <= hi)
+    t_win, dt_win = t[mask], dt[mask]
+    span = float(t_win[-1] - t_win[0]) if t_win.size >= 2 else 0.0
+    return _steps_over(t_win, dt_win) / span if span > 0.0 else float("nan")
+
+
+def _timestep_cost_notes(
+    n_samples: int, *, exact: bool, limiter: CFLLimiterReport | None
+) -> tuple[str, ...]:
+    """Non-fatal observations worth surfacing next to the cost numbers."""
+
+    notes: list[str] = []
+    if not exact:
+        notes.append(
+            "dt series is strided: the step count is an estimate that charges "
+            "each gap to its final step size"
+        )
+    if limiter is not None and limiter.samples_at_dt_floor:
+        notes.append(
+            f"dt was pinned at the configured floor for "
+            f"{limiter.samples_at_dt_floor} of {n_samples} samples: the "
+            "requested CFL condition was not honoured there"
+        )
+    if limiter is not None and limiter.samples_attributed == 0:
+        notes.append(
+            "every dt sample sat at the configured ceiling, so this run was "
+            "capped by dt_max rather than limited by any CFL term"
+        )
+    return tuple(notes)
+
+
+def timestep_cost_report(
+    t: np.ndarray,
+    dt: np.ndarray,
+    *,
+    wall_seconds: float | None = None,
+    scales: CFLScales | None = None,
+) -> TimestepCostReport:
+    """Summarise what one unit of simulated time cost, and why.
+
+    Nothing here gates. Within a healthy nonlinear run dt collapses by
+    construction as the initial condition saturates, so a collapse-ratio limit
+    would fire on every well-behaved surface; the ratio is reported and left to
+    the reader. The one note emitted is objective rather than tuned: a step
+    pinned at ``dt_min`` means the requested CFL condition was not honoured.
+    """
+
+    t_arr = np.asarray(t, dtype=float).reshape(-1)
+    dt_arr = np.asarray(dt, dtype=float).reshape(-1)
+    if t_arr.size != dt_arr.size:
+        raise ValueError("t and dt must have the same length")
+    keep = np.isfinite(t_arr) & np.isfinite(dt_arr) & (dt_arr > 0.0)
+    t_arr, dt_arr = t_arr[keep], dt_arr[keep]
+    if t_arr.size == 0:
+        raise ValueError("t and dt must contain at least one usable sample")
+    span = float(t_arr[-1] - t_arr[0])
+    steps = _steps_over(t_arr, dt_arr)
+    # Compare against the unstrided answer directly, with a tolerance loose
+    # enough for a float32 cumulative time axis but far tighter than the
+    # factor-of-stride gap a strided series would show.
+    exact = bool(
+        t_arr.size < 2 or abs(steps - (t_arr.size - 1)) <= 1e-3 * (t_arr.size - 1)
+    )
+    quarter = span / 4.0
+    early = _rate_in_window(t_arr, dt_arr, t_arr[0], t_arr[0] + quarter)
+    late = _rate_in_window(t_arr, dt_arr, t_arr[-1] - quarter, t_arr[-1])
+    limiter = None if scales is None else cfl_limiter_report(dt_arr, scales)
+    wall = None if wall_seconds is None else float(wall_seconds)
+    return TimestepCostReport(
+        n_samples=int(t_arr.size),
+        t_start=float(t_arr[0]),
+        t_end=float(t_arr[-1]),
+        t_span=span,
+        steps=steps,
+        steps_are_exact=exact,
+        steps_per_unit_time=steps / span if span > 0.0 else float("nan"),
+        wall_seconds=wall,
+        wall_seconds_per_unit_time=(
+            wall / span if wall is not None and span > 0.0 else None
+        ),
+        dt_initial=float(dt_arr[0]),
+        dt_min=float(np.min(dt_arr)),
+        dt_max=float(np.max(dt_arr)),
+        dt_final=float(dt_arr[-1]),
+        dt_collapse_ratio=float(dt_arr[0]) / float(np.min(dt_arr)),
+        steps_per_unit_time_first_quarter=early,
+        steps_per_unit_time_last_quarter=late,
+        cost_growth_ratio=late / early if early > 0.0 else float("nan"),
+        cfl=limiter,
+        notes=_timestep_cost_notes(int(t_arr.size), exact=exact, limiter=limiter),
+    )
+
+
+def timestep_cost_payload(
+    diag: SimulationDiagnostics, *, wall_seconds: float | None = None
+) -> dict[str, Any]:
+    """Return the JSON-ready cost block for one run's recorded diagnostics.
+
+    Returns an empty payload rather than raising when the series is unusable,
+    so a summary artifact never fails to write because of a diagnostic field.
+    """
+
+    try:
+        report = timestep_cost_report(
+            np.asarray(diag.t),
+            np.asarray(diag.dt_t),
+            wall_seconds=wall_seconds,
+            scales=cfl_scales_from_array(diag.cfl_scales),
+        )
+    except ValueError:
+        return {}
+    payload = _json_safe(asdict(report))
+    payload["notes"] = list(report.notes)
+    return payload
+
+
+def _json_safe(value: Any) -> Any:
+    """Replace non-finite floats with ``None`` so the summary stays valid JSON.
+
+    ``NaN`` and ``Infinity`` are Python-json extensions that strict parsers
+    reject, and the cost block is deliberately full of ratios that are
+    undefined on a degenerate run.
+    """
+
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, float):
+        return value if np.isfinite(value) else None
+    return value

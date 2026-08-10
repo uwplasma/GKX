@@ -109,6 +109,7 @@ jobs:
           - name: fundamentals-core
             files: >-
               tests/unit/diagnostics/test_analysis.py
+              tests/unit/diagnostics/test_timestep_cost.py
               tests/unit/core/test_core_numerics.py
               tests/unit/geometry/test_geometry.py
               tests/unit/diagnostics/test_plotting.py
@@ -269,6 +270,7 @@ jobs:
             tests/integration/runtime/test_runtime_artifacts.py \
             tests/unit/nonlinear/test_secondary.py \
             tests/unit/diagnostics/test_analysis.py \
+            tests/unit/diagnostics/test_timestep_cost.py \
             tests/validation/benchmarks/test_benchmarking.py \
             --maxfail=1 --disable-warnings \
             --cov=gkx \

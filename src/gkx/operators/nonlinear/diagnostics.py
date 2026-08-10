@@ -205,6 +205,7 @@ def build_nonlinear_simulation_diagnostics(
     resolved_diagnostics: bool,
     sample_indices: slice | np.ndarray | None = None,
     resolved_to_numpy: bool = False,
+    cfl_scales: Any | None = None,
 ) -> SimulationDiagnostics:
     """Build sampled nonlinear diagnostics from the raw scan output tuple."""
 
@@ -264,6 +265,7 @@ def build_nonlinear_simulation_diagnostics(
         turbulent_heating_t=turbulent_heat_t,
         turbulent_heating_species_t=turbulent_heat_s_t,
         phi_mode_t=phi_mode_t,
+        cfl_scales=cfl_scales,
         resolved=resolved,
     )
 
@@ -277,6 +279,7 @@ def finalize_nonlinear_scan_diagnostics(
     sampled_scan: bool = False,
     resolved_diagnostics: bool,
     resolved_to_numpy: bool = False,
+    cfl_scales: Any | None = None,
 ) -> SimulationDiagnostics:
     """Package raw nonlinear scan diagnostics after applying output sampling."""
 
@@ -290,6 +293,7 @@ def finalize_nonlinear_scan_diagnostics(
         resolved_diagnostics=resolved_diagnostics,
         sample_indices=sample_indices,
         resolved_to_numpy=resolved_to_numpy,
+        cfl_scales=cfl_scales,
     )
 
 
