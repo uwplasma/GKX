@@ -1790,6 +1790,7 @@ owned_modules = [
   "gkx.parallel.velocity_hermite",
   "gkx.parallel.velocity_plan",
   "gkx.parallel.velocity_streaming",
+  "gkx.workflows.runtime.parallel_nonlinear",
 ]
 owner_lane = "JAX parallelization policy for CPU/GPU scans and ensemble workloads"
 status = "active"

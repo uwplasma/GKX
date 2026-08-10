@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import os
-
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
@@ -17,6 +17,12 @@ from gkx.core.grid import build_spectral_grid
 from gkx.diagnostics.analysis import fit_growth_rate
 from gkx.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry
 from gkx.workflows.runtime.config import RuntimeConfig, RuntimeExpertConfig
+from gkx.workflows.runtime.parallel_nonlinear import (
+    NonlinearParallelPlan,
+    assert_nonlinear_parallel_identity,
+    resolve_nonlinear_parallel_plan,
+    shard_nonlinear_state,
+)
 from gkx.workflows.runtime.results import RuntimeNonlinearResult
 
 
@@ -367,7 +373,7 @@ def _run_final_state(
     *,
     deps: FullNonlinearRuntimeDeps,
     status: Callable[[str], None],
-) -> RuntimeNonlinearResult:
+) -> tuple[RuntimeNonlinearResult, Any]:
     status(
         "diagnostics disabled; running final-state nonlinear integrator over "
         f"{ctx.steps} steps with dt={ctx.dt:.6g}"
@@ -385,15 +391,18 @@ def _run_final_state(
         **kwargs,
     )
     status("completed nonlinear final-state integration")
-    return _result(
-        ctx,
-        policy,
-        deps=deps,
-        t=np.asarray([]),
-        diagnostics=None,
-        fields=fields,
-        state=G_final,
-        summarize_fields=True,
+    return (
+        _result(
+            ctx,
+            policy,
+            deps=deps,
+            t=np.asarray([]),
+            diagnostics=None,
+            fields=fields,
+            state=G_final,
+            summarize_fields=True,
+        ),
+        G_final,
     )
 
 
@@ -435,6 +444,73 @@ def _diagnostic_run_result(
     )
 
 
+def _run_once(
+    cfg: RuntimeConfig,
+    ctx: _RunContext,
+    policy: _DiagnosticPolicy,
+    *,
+    deps: FullNonlinearRuntimeDeps,
+    method: str | None,
+    status: Callable[[str], None],
+) -> tuple[RuntimeNonlinearResult, Any]:
+    """Run one nonlinear trajectory and return its result plus its final state."""
+
+    if not policy.requires_diagnostic_path and not ctx.adaptive_chunked:
+        return _run_final_state(cfg, ctx, policy, deps=deps, status=status)
+
+    t, diag, G_final, fields_final = _run_diagnostics(
+        cfg, ctx, policy, deps=deps, method=method, status=status
+    )
+    return (
+        _diagnostic_run_result(
+            ctx,
+            policy,
+            deps=deps,
+            t=t,
+            diagnostics=diag,
+            fields=fields_final,
+            state=G_final,
+            status=status,
+        ),
+        G_final,
+    )
+
+
+def _run_sharded(
+    cfg: RuntimeConfig,
+    ctx: _RunContext,
+    policy: _DiagnosticPolicy,
+    *,
+    deps: FullNonlinearRuntimeDeps,
+    method: str | None,
+    status: Callable[[str], None],
+    plan: NonlinearParallelPlan,
+) -> RuntimeNonlinearResult:
+    """Run the sharded nonlinear route, fail-closed against the serial answer."""
+
+    status(f"routing nonlinear run through {plan.describe()}")
+    sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
+    result, sharded_state = _run_once(
+        cfg, sharded_ctx, policy, deps=deps, method=method, status=status
+    )
+    if not plan.strict_identity:
+        status("parallel strict_identity=false; skipping the serial identity gate")
+        return result
+    status("verifying sharded nonlinear identity against the serial route")
+    serial_result, serial_state = _run_once(
+        cfg, ctx, policy, deps=deps, method=method, status=status
+    )
+    assert_nonlinear_parallel_identity(
+        serial_state=serial_state,
+        sharded_state=sharded_state,
+        serial_diagnostics=serial_result.diagnostics,
+        sharded_diagnostics=result.diagnostics,
+        plan=plan,
+    )
+    status("sharded nonlinear identity gate passed")
+    return result
+
+
 def run_full_nonlinear_runtime(
     cfg: RuntimeConfig,
     *,
@@ -457,6 +533,9 @@ def run_full_nonlinear_runtime(
 ) -> RuntimeNonlinearResult:
     """Run one full-GK nonlinear point from a runtime config."""
 
+    # Resolved before any geometry or grid work so an unroutable [parallel]
+    # request fails immediately instead of after a long serial run.
+    plan = resolve_nonlinear_parallel_plan(cfg.parallel)
     status = _status_callback(status_callback)
     ctx = _prepare_context(
         cfg,
@@ -484,21 +563,10 @@ def run_full_nonlinear_runtime(
         f"nonlinear diagnostics={'on' if policy.diagnostics_on else 'off'} "
         f"fixed_mode={'on' if policy.fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
-    if not policy.requires_diagnostic_path and not ctx.adaptive_chunked:
-        return _run_final_state(cfg, ctx, policy, deps=deps, status=status)
-
-    t, diag, G_final, fields_final = _run_diagnostics(
-        cfg, ctx, policy, deps=deps, method=method, status=status
-    )
-    return _diagnostic_run_result(
-        ctx,
-        policy,
-        deps=deps,
-        t=t,
-        diagnostics=diag,
-        fields=fields_final,
-        state=G_final,
-        status=status,
+    if plan is None:
+        return _run_once(cfg, ctx, policy, deps=deps, method=method, status=status)[0]
+    return _run_sharded(
+        cfg, ctx, policy, deps=deps, method=method, status=status, plan=plan
     )
 
 

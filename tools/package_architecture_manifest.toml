@@ -142,14 +142,20 @@ recursive = true
 # 88819 -> 88907: naming the gradient parameters for what the operator consumes.
 # The deprecation aliases keep R_over_L* working for external callers, which is
 # the whole cost; the rename itself is line-neutral.
-# 88907 -> 89356: making a nonlinear run report why it is slow. The CFL scales
-# the adaptive step already uses were discarded inside the traced dt update, so
-# a straggler surface could only be diagnosed by a bespoke post-hoc script.
-# Recording those six run constants and inverting the dt trajectory against
-# them is what buys cost per unit of simulated time, the dt collapse ratio, and
-# the per-term CFL attribution in the run's own summary. The io.py summary
-# writer shrank by ten lines on the way through.
-baseline = 89356
+# 88907 -> 89356: making a nonlinear run report why it is slow (#33). The CFL
+# scales the adaptive step already uses were discarded inside the traced dt
+# update, so a straggler surface could only be diagnosed by a bespoke post-hoc
+# script. Recording those six run constants and inverting the dt trajectory
+# against them buys cost per unit of simulated time, the dt collapse ratio, and
+# the per-term CFL attribution in the run's own summary.
+# 89356 -> 89705: routing [parallel] into the nonlinear solver path (#35).
+# The new workflows/runtime/parallel_nonlinear.py plus the workflow rework that
+# makes one trajectory re-runnable so the sharded answer can be gated against
+# the serial one. The bulk is not mechanism but refusal: every strategy/axis/
+# backend combination the nonlinear path cannot execute raises with the reason
+# and the supported set, because the alternative is the defect this removes --
+# cfg.parallel accepted and silently ignored.
+baseline = 89705
 target = 45000
 
 [[line_budget_policy.counts]]

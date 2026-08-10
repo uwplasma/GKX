@@ -150,8 +150,12 @@ jobs:
               tests/validation/benchmarks/test_benchmark_contracts.py
               tests/integration/runtime/test_runtime_diagnostics.py
           - name: parallel-autodiff
+            # Logical CPU devices so the sharded nonlinear routing gates run
+            # here instead of skipping until wide coverage.
+            xla_flags: "--xla_force_host_platform_device_count=4"
             files: >-
               tests/unit/parallel/test_parallel_core.py
+              tests/unit/parallel/test_parallel_nonlinear_routing.py
               tests/unit/solvers/test_sharded_integrators.py
               tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py
               tests/unit/objectives/test_autodiff_solver_objectives.py
@@ -194,6 +198,8 @@ jobs:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
+          # Empty for every shard that does not opt in to logical CPU devices.
+          XLA_FLAGS: ${{ matrix.shard.xla_flags }}
         run: |
           pytest -q --maxfail=1 --disable-warnings ${{ matrix.shard.files }}
 

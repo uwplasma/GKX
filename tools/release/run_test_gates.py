@@ -36,6 +36,9 @@ WIDE_COVERAGE_LOGICAL_CPU_DEVICES = {
     # Exercise the real species/Hermite collectives and serial-identity gates.
     # The flag must be present before JAX is imported by the pytest subprocess.
     "test_parallel_linear_velocity.py": 4,
+    # Routes [parallel] into the nonlinear path and gates the sharded answer
+    # against the serial one; without real devices every case skips.
+    "test_parallel_nonlinear_routing.py": 4,
 }
 
 WIDE_COVERAGE_LOGICAL_CPU_SELECTIONS = {

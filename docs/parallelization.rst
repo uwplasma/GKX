@@ -473,6 +473,58 @@ serial-vs-sharded identity and inter-device communication are not implicated.
 Every timed row above passed its identity gate, and the errors are reported
 beside the timings rather than in a separate table.
 
+Runtime routing for nonlinear runs
+----------------------------------
+
+``[parallel]`` is now read by the nonlinear runtime path as well as the linear
+one. Before this, a nonlinear TOML could request any strategy and silently get a
+serial run, which is why the section below is mostly about what the path
+refuses.
+
+One sharded nonlinear run is requested with:
+
+.. code-block:: toml
+
+   [parallel]
+   strategy = "shard_map"
+   axis = "ky"
+   num_devices = 2
+   strict_identity = true
+
+The whole nonlinear state is placed on a ``ky`` device mesh and the ordinary
+production integrator runs on it, so the operator is the production nonlinear
+RHS and not a reduced stand-in. ``num_devices`` sizes the mesh and must divide
+the ``k_y`` extent. This is a *routing* claim only. No speedup is claimed here:
+the tracked two-GPU device-z transport-window profile still reaches ``1.48x``,
+below the ``1.5x`` promotion gate, and no matched profiler artifact exists for
+the routed ``ky`` path at all.
+
+Routing is fail-closed on numerical identity. With ``strict_identity = true``
+the run is also executed serially and the two answers must agree on the final
+state and on the ``Wg``, ``Wphi``, heat-flux, and particle-flux traces, using
+the same tolerance convention as the device-z gates
+(``atol = 5e-6``, ``rtol = 1e-4``). A violation raises
+``NonlinearParallelIdentityError`` and the sharded result is discarded; it is
+never returned in place of the serial answer. Setting
+``strict_identity = false`` skips the serial reference and is only appropriate
+once the gate is known to pass for that workload.
+
+Every other combination raises ``NonlinearParallelRoutingError`` naming the
+supported set, rather than degrading to serial. In particular ``axis = "z"`` is
+rejected, for two separate reasons:
+
+- the production parallel-streaming derivative is a spectral FFT along ``z``, so
+  a whole-state ``z`` shard does not survive SPMD partitioning; and
+- ``gkx.operators.nonlinear.device_z`` evaluates a reduced diagnostic bracket
+  operator with a model field solve and no streaming, mirror, curvature,
+  collision, or species terms. Its serial-vs-sharded identity is real, but it is
+  identity for a different operator than the one a runtime nonlinear run
+  integrates, so it cannot stand in for the production RHS.
+
+The independent-work strategies (``batch``, ``combined_ky``) are also rejected
+on this path: they orchestrate separate solver calls for ``k_y`` scans and
+ensembles and cannot shard a single nonlinear run.
+
 Before nonlinear domain decomposition can be promoted beyond this diagnostic
 state, the runtime route must pass all of the following gates on the same
 workload family that appears in the speedup figure:
