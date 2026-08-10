@@ -142,7 +142,14 @@ recursive = true
 # 88819 -> 88907: naming the gradient parameters for what the operator consumes.
 # The deprecation aliases keep R_over_L* working for external callers, which is
 # the whole cost; the rename itself is line-neutral.
-baseline = 88907
+# 88907 -> 89356: making a nonlinear run report why it is slow. The CFL scales
+# the adaptive step already uses were discarded inside the traced dt update, so
+# a straggler surface could only be diagnosed by a bespoke post-hoc script.
+# Recording those six run constants and inverting the dt trajectory against
+# them is what buys cost per unit of simulated time, the dt collapse ratio, and
+# the per-term CFL attribution in the run's own summary. The io.py summary
+# writer shrank by ten lines on the way through.
+baseline = 89356
 target = 45000
 
 [[line_budget_policy.counts]]

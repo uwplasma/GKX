@@ -13,6 +13,19 @@ import numpy as np
 
 ArrayLike = jnp.ndarray | np.ndarray
 
+# Ordering of ``SimulationDiagnostics.cfl_scales``. A fixed-length float vector
+# rather than a nested dataclass so every existing diagnostic pathway -- device
+# transfer, npz spill, concatenation -- keeps treating it as one more array and
+# needs no special case.
+CFL_SCALE_LABELS: tuple[str, ...] = (
+    "omega_magnetic_drift_radial",
+    "omega_magnetic_drift_binormal",
+    "omega_parallel_streaming",
+    "dt_cfl_numerator",
+    "dt_min",
+    "dt_max",
+)
+
 
 @dataclass(frozen=True)
 class ResolvedDiagnostics:
@@ -98,6 +111,11 @@ class SimulationDiagnostics:
     turbulent_heating_t: ArrayLike | None = None
     turbulent_heating_species_t: ArrayLike | None = None
     phi_mode_t: ArrayLike | None = None
+    # Run-constant CFL scales laid out as CFL_SCALE_LABELS, or None when the
+    # integrator did not run an adaptive CFL step. dt_t alone cannot say *why* a
+    # surface got slow; with these six numbers the recorded dt trajectory
+    # inverts back to the CFL frequency and its per-term split.
+    cfl_scales: ArrayLike | None = None
     resolved: ResolvedDiagnostics | None = None
 
 

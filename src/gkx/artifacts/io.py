@@ -22,6 +22,7 @@ from gkx.diagnostics import (
     total_energy,
 )
 from gkx.workflows.runtime.diagnostic_arrays import (
+    timestep_cost_payload,
     validate_finite_runtime_diagnostics,
 )
 
@@ -497,6 +498,10 @@ def write_runtime_linear_artifacts(out: str | Path, result: Any) -> dict[str, st
     return paths
 
 
+def _last_or_zero(series: Any) -> float:
+    arr = np.asarray(series)
+    return float(arr[-1]) if arr.size else 0.0
+
 
 def _nonlinear_summary(result: Any) -> dict[str, Any]:
     diag = result.diagnostics
@@ -516,34 +521,20 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
         payload.update(
             {
                 "n_samples": int(np.asarray(diag.t).size),
-                "t_last": float(np.asarray(diag.t)[-1])
-                if np.asarray(diag.t).size
-                else 0.0,
+                "t_last": _last_or_zero(diag.t),
                 "dt_mean": float(np.asarray(diag.dt_mean)),
-                "gamma_last": float(np.asarray(diag.gamma_t)[-1])
-                if np.asarray(diag.gamma_t).size
-                else 0.0,
-                "omega_last": float(np.asarray(diag.omega_t)[-1])
-                if np.asarray(diag.omega_t).size
-                else 0.0,
-                "Wg_last": float(np.asarray(diag.Wg_t)[-1])
-                if np.asarray(diag.Wg_t).size
-                else 0.0,
-                "Wphi_last": float(np.asarray(diag.Wphi_t)[-1])
-                if np.asarray(diag.Wphi_t).size
-                else 0.0,
-                "Wapar_last": float(np.asarray(diag.Wapar_t)[-1])
-                if np.asarray(diag.Wapar_t).size
-                else 0.0,
-                "heat_flux_last": (
-                    float(np.asarray(diag.heat_flux_t)[-1])
-                    if np.asarray(diag.heat_flux_t).size
-                    else 0.0
-                ),
-                "particle_flux_last": (
-                    float(np.asarray(diag.particle_flux_t)[-1])
-                    if np.asarray(diag.particle_flux_t).size
-                    else 0.0
+                "gamma_last": _last_or_zero(diag.gamma_t),
+                "omega_last": _last_or_zero(diag.omega_t),
+                "Wg_last": _last_or_zero(diag.Wg_t),
+                "Wphi_last": _last_or_zero(diag.Wphi_t),
+                "Wapar_last": _last_or_zero(diag.Wapar_t),
+                "heat_flux_last": _last_or_zero(diag.heat_flux_t),
+                "particle_flux_last": _last_or_zero(diag.particle_flux_t),
+                # Cost per unit of simulated time plus the CFL attribution
+                # behind it, so a slow surface explains itself from the summary
+                # a user already reads.
+                "timestep_cost": timestep_cost_payload(
+                    diag, wall_seconds=getattr(result, "wall_seconds", None)
                 ),
             }
         )

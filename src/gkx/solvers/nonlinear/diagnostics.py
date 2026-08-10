@@ -463,6 +463,7 @@ def _run_explicit_diagnostic_scan_and_finalize(
         stride=stride,
         sampled_scan=sampled_scan,
         resolved_diagnostics=resolved_diagnostics,
+        cfl_scales=getattr(policies.time_step_policy, "cfl_scales", None),
     )
     return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
 

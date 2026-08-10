@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
+import time
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
@@ -478,8 +479,15 @@ def _run_runtime_nonlinear_chunk(
     chunk_steps: int | None,
     deps: RuntimeArtifactHandoffDeps,
 ) -> RuntimeNonlinearResult:
-    """Run and validate one nonlinear artifact/checkpoint chunk."""
+    """Run and validate one nonlinear artifact/checkpoint chunk.
 
+    The elapsed wall clock is attached to the chunk result. It is measured
+    around the whole call, so it includes compilation: that is what the user
+    actually waited for, and it is the number that makes two surfaces of the
+    same campaign comparable once divided by simulated time.
+    """
+
+    wall_start = time.perf_counter()
     result_chunk = deps.run_runtime_nonlinear(
         cfg_run,
         ky_target=options.ky_target,
@@ -498,8 +506,9 @@ def _run_runtime_nonlinear_chunk(
         show_progress=options.show_progress,
         status_callback=options.status_callback,
     )
+    wall_seconds = max(time.perf_counter() - wall_start, 0.0)
     deps.validate_finite_runtime_result(result_chunk)
-    return result_chunk
+    return replace(result_chunk, wall_seconds=wall_seconds)
 
 
 def _write_nonlinear_artifacts_if_requested(
@@ -561,6 +570,10 @@ def _run_artifact_checkpoint_loop(
 
     result_final: RuntimeNonlinearResult | None = None
     paths: dict[str, str] = {}
+    # The merged result carries diagnostics accumulated over every checkpoint,
+    # so its wall clock has to accumulate the same way or the reported cost per
+    # unit of simulated time would only cover the final chunk.
+    wall_total = 0.0
     while True:
         chunk_steps = _next_runtime_chunk_steps(
             remaining_steps=remaining_steps,
@@ -573,6 +586,7 @@ def _run_artifact_checkpoint_loop(
             chunk_steps=chunk_steps,
             deps=deps,
         )
+        wall_total += float(result_chunk.wall_seconds or 0.0)
         result_effective, cumulative_diag, time_offset = _merge_chunk_diagnostics(
             result_chunk,
             cumulative_diag=cumulative_diag,
@@ -580,6 +594,7 @@ def _run_artifact_checkpoint_loop(
             history_from_file=history_from_file,
             deps=deps,
         )
+        result_effective = replace(result_effective, wall_seconds=wall_total)
         result_final = result_effective
         paths = _write_nonlinear_artifacts_if_requested(
             policy, result_effective, cfg, deps

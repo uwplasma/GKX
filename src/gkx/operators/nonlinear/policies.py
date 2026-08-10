@@ -75,6 +75,10 @@ class NonlinearTimeStepPolicy:
     dt_init: jnp.ndarray
     progress_total: jnp.ndarray
     update_dt: Callable[[FieldState, jnp.ndarray], jnp.ndarray]
+    # Run-constant CFL scales in CFL_SCALE_LABELS order, or None for fixed dt.
+    # ``update_dt`` throws away everything but the resulting step, so these are
+    # the only handle a post-hoc reader has on which term set that step.
+    cfl_scales: jnp.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -329,6 +333,34 @@ def build_nonlinear_time_step_policy(
         dt_init=limits.dt_init,
         progress_total=limits.progress_total,
         update_dt=update_dt,
+        cfl_scales=_nonlinear_cfl_scales(limits, bounds, real_dtype=real_dtype),
+    )
+
+
+def _nonlinear_cfl_scales(
+    limits: _TimeStepLimits,
+    bounds: _NonlinearCFLBounds,
+    *,
+    real_dtype: Any,
+) -> jnp.ndarray:
+    """Return the run-constant CFL scales in ``CFL_SCALE_LABELS`` order.
+
+    ``dt_cfl_numerator`` is ``cfl_fac * cfl`` so that the adaptive rule reads
+    ``dt = clip(numerator / omega_total, dt_min, dt_max)``; a reader with the
+    recorded ``dt`` can therefore recover ``omega_total`` exactly wherever the
+    step was not clipped.
+    """
+
+    return jnp.asarray(
+        [
+            bounds.linear_omega[0],
+            bounds.linear_omega[1],
+            bounds.linear_omega[2],
+            limits.cfl_fac * limits.cfl,
+            limits.dt_min,
+            limits.dt_max,
+        ],
+        dtype=real_dtype,
     )
 
 
