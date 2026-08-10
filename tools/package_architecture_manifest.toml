@@ -135,7 +135,11 @@ name = "installable_source_python_lines"
 path = "src/gkx"
 pattern = "*.py"
 recursive = true
-baseline = 88680
+# 88680 -> 88819: bounding adaptive-chunk memory. Per-chunk striding with a
+# carried phase, the npz spill path, and the stride offset argument. The change
+# exists to *reduce* runtime memory by a factor of the diagnostics stride; these
+# lines are what makes that possible without changing which samples are kept.
+baseline = 88819
 target = 45000
 
 [[line_budget_policy.counts]]
