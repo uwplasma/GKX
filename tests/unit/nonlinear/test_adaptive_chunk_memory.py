@@ -20,16 +20,24 @@ the other.
 The second test pins the disk spill, for runs where even the strided series
 outgrows RAM: it must be a pure storage choice, returning bit-identical
 diagnostics.
+
+Keeping the right samples is not enough if the kept chunk is a *view* onto the
+chunk it was strided from, because then nothing is released and only the shapes
+shrink. The third test pins that, at strides 7 and 20 where chunks fall to one
+and zero samples.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from gkx.diagnostics.metadata import ResolvedDiagnostics, SimulationDiagnostics
+from gkx.workflows.runtime import chunks as runtime_chunks
 from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
 
 CHUNK_SAMPLES = 7
@@ -75,6 +83,23 @@ def _run(*, stride: int, spill_dir: Path | None = None):
     )
 
 
+def _chunk_arrays(diag: SimulationDiagnostics) -> Iterator[tuple[str, np.ndarray]]:
+    """Yield ``(name, array)`` for every array on the chunk and its resolved payload."""
+
+    for field in dataclass_fields(SimulationDiagnostics):
+        if field.name == "resolved":
+            continue
+        value = getattr(diag, field.name)
+        if value is not None:
+            yield field.name, np.asarray(value)
+    if diag.resolved is None:
+        return
+    for field in dataclass_fields(ResolvedDiagnostics):
+        value = getattr(diag.resolved, field.name)
+        if value is not None:
+            yield f"resolved.{field.name}", np.asarray(value)
+
+
 @pytest.mark.parametrize("stride", [1, 3, 4])
 def test_per_chunk_stride_keeps_the_post_concatenation_samples(stride: int) -> None:
     kept = np.asarray(_run(stride=stride).diagnostics.gamma_t)
@@ -98,3 +123,38 @@ def test_disk_spill_is_a_storage_choice_not_a_different_answer(tmp_path) -> None
     assert np.array_equal(
         np.asarray(in_ram.resolved.Phi2_kxt), np.asarray(on_disk.resolved.Phi2_kxt)
     ), "the resolved payload did not survive the spill round trip"
+
+
+@pytest.mark.parametrize("stride", [3, 7, 20])
+def test_strided_chunks_own_their_samples(
+    monkeypatch: pytest.MonkeyPatch, stride: int
+) -> None:
+    captured: list[SimulationDiagnostics] = []
+    stride_chunk = runtime_chunks.stride_runtime_diagnostics
+
+    def _capture(diag: SimulationDiagnostics, **kwargs: int) -> SimulationDiagnostics:
+        strided = stride_chunk(diag, **kwargs)
+        captured.append(strided)
+        return strided
+
+    monkeypatch.setattr(runtime_chunks, "stride_runtime_diagnostics", _capture)
+    _run(stride=stride)
+
+    assert len(captured) == CHUNK_COUNT, (
+        f"captured {len(captured)} strided chunks but the loop runs {CHUNK_COUNT}; "
+        "the stride is no longer applied once per chunk, so this test is not "
+        "looking at the arrays it claims to be asserting on"
+    )
+
+    aliased = [
+        f"chunk {index} {name}"
+        for index, chunk in enumerate(captured)
+        for name, arr in _chunk_arrays(chunk)
+        if arr.base is not None
+    ]
+    assert not aliased, (
+        f"stride {stride}: {len(aliased)} array(s) in the strided chunks are views "
+        "onto the unstrided chunk they came from, so every discarded sample stays "
+        "alive in the chunk list until the final concatenation and the per-chunk "
+        f"stride frees nothing: {aliased}"
+    )
