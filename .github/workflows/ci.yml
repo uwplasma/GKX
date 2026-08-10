@@ -143,6 +143,7 @@ jobs:
           - name: nonlinear-core
             files: >-
               tests/unit/nonlinear/test_nonlinear.py
+              tests/unit/nonlinear/test_adaptive_chunk_memory.py
               tests/unit/nonlinear/test_nonlinear_exb.py
               tests/validation/benchmarks/test_benchmark_contracts.py
               tests/integration/runtime/test_runtime_diagnostics.py

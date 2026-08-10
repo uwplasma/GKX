@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Sequence
@@ -168,8 +170,12 @@ def _diagnostic_policy(
         fixed_ky = int(cfg.expert.iky_fixed)
         fixed_kx = int(cfg.expert.ikx_fixed)
     return _DiagnosticPolicy(
-        diagnostics_on=cfg.time.diagnostics if diagnostics is None else bool(diagnostics),
-        sample_stride=cfg.time.sample_stride if sample_stride is None else int(sample_stride),
+        diagnostics_on=cfg.time.diagnostics
+        if diagnostics is None
+        else bool(diagnostics),
+        sample_stride=cfg.time.sample_stride
+        if sample_stride is None
+        else int(sample_stride),
         diagnostics_stride=(
             cfg.time.diagnostics_stride
             if diagnostics_stride is None
@@ -269,9 +275,26 @@ def _run_adaptive_diagnostics(
         show_progress=policy.show_progress,
         status_callback=status,
         diagnostics_stride=max(policy.sample_stride, policy.diagnostics_stride, 1),
+        # Opt-in disk spill for runs whose strided diagnostics still outgrow host
+        # RAM. Off by default because it trades wall time for peak memory; set
+        # GKX_CHUNK_SPILL_DIR to a path to turn it on.
+        spill_dir=_chunk_spill_dir(),
     )
     diag = chunk_result.diagnostics
     return jnp.asarray(diag.t), diag, chunk_result.state, chunk_result.fields
+
+
+def _chunk_spill_dir() -> Path | None:
+    """Directory for spilled chunk diagnostics, or ``None`` to keep them in RAM.
+
+    Environment rather than TOML because it is a property of the *machine* the
+    run lands on, not of the physics case: the same config is submitted to a
+    workstation with 512 GB and to a batch node with 16, and only the second one
+    needs to spill.
+    """
+
+    raw = os.environ.get("GKX_CHUNK_SPILL_DIR", "").strip()
+    return Path(raw) if raw else None
 
 
 def _run_diagnostics(

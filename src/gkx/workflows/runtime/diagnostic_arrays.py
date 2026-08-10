@@ -28,6 +28,7 @@ __all__ = [
     "validate_finite_runtime_diagnostics",
 ]
 
+
 def _first_nonfinite_sample(
     value: np.ndarray | jnp.ndarray, *, nsamples: int
 ) -> int | None:
@@ -173,18 +174,27 @@ def truncate_runtime_diagnostics(
 
 
 def stride_runtime_diagnostics(
-    diag: SimulationDiagnostics, *, stride: int
+    diag: SimulationDiagnostics, *, stride: int, offset: int = 0
 ) -> SimulationDiagnostics:
-    """Apply the runtime output stride after concatenating chunk diagnostics."""
+    """Apply the runtime output stride to chunk diagnostics.
+
+    ``offset`` selects the first sample kept, which is what lets the stride be
+    applied per chunk instead of after concatenation. Striding a chunk that
+    starts at global sample ``g`` with ``offset = (-g) % stride`` keeps exactly
+    the global indices ``0, stride, 2*stride, ...`` -- the same samples the
+    post-concatenation stride would have kept, at a fraction of the peak memory,
+    because the discarded samples are never accumulated in the first place.
+    """
 
     stride_use = int(max(stride, 1))
+    offset_use = int(offset) % stride_use
     if stride_use == 1:
         return diag
 
     def _stride_optional(arr: np.ndarray | jnp.ndarray | None) -> np.ndarray | None:
         if arr is None:
             return None
-        return np.asarray(arr)[::stride_use, ...]
+        return np.asarray(arr)[offset_use::stride_use, ...]
 
     def _stride_resolved(
         resolved: ResolvedDiagnostics | None,
@@ -195,29 +205,31 @@ def stride_runtime_diagnostics(
         for field in dataclass_fields(ResolvedDiagnostics):
             value = getattr(resolved, field.name)
             payload[field.name] = (
-                None if value is None else np.asarray(value)[::stride_use, ...]
+                None
+                if value is None
+                else np.asarray(value)[offset_use::stride_use, ...]
             )
         return ResolvedDiagnostics(**payload)
 
-    dt_t = np.asarray(diag.dt_t)[::stride_use]
-    Wg_t = np.asarray(diag.Wg_t)[::stride_use]
-    Wphi_t = np.asarray(diag.Wphi_t)[::stride_use]
-    Wapar_t = np.asarray(diag.Wapar_t)[::stride_use]
+    dt_t = np.asarray(diag.dt_t)[offset_use::stride_use]
+    Wg_t = np.asarray(diag.Wg_t)[offset_use::stride_use]
+    Wphi_t = np.asarray(diag.Wphi_t)[offset_use::stride_use]
+    Wapar_t = np.asarray(diag.Wapar_t)[offset_use::stride_use]
     if dt_t.size == 0:
         dt_mean = np.asarray(0.0, dtype=float)
     else:
         dt_mean = np.asarray(np.mean(dt_t), dtype=float)
     return SimulationDiagnostics(
-        t=np.asarray(diag.t)[::stride_use],
+        t=np.asarray(diag.t)[offset_use::stride_use],
         dt_t=dt_t,
         dt_mean=dt_mean,
-        gamma_t=np.asarray(diag.gamma_t)[::stride_use],
-        omega_t=np.asarray(diag.omega_t)[::stride_use],
+        gamma_t=np.asarray(diag.gamma_t)[offset_use::stride_use],
+        omega_t=np.asarray(diag.omega_t)[offset_use::stride_use],
         Wg_t=Wg_t,
         Wphi_t=Wphi_t,
         Wapar_t=Wapar_t,
-        heat_flux_t=np.asarray(diag.heat_flux_t)[::stride_use],
-        particle_flux_t=np.asarray(diag.particle_flux_t)[::stride_use],
+        heat_flux_t=np.asarray(diag.heat_flux_t)[offset_use::stride_use],
+        particle_flux_t=np.asarray(diag.particle_flux_t)[offset_use::stride_use],
         energy_t=np.asarray(
             total_energy(jnp.asarray(Wg_t), jnp.asarray(Wphi_t), jnp.asarray(Wapar_t))
         ),

@@ -7,13 +7,15 @@ smaller without changing the accepted diagnostics truncation/stride behavior.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields as dataclass_fields, replace
+from pathlib import Path
 import time
 from typing import Any, Callable
 
 import numpy as np
 
 from gkx.diagnostics import SimulationDiagnostics
+from gkx.diagnostics.metadata import ResolvedDiagnostics
 from gkx.workflows.runtime.diagnostic_arrays import (
     concat_runtime_diagnostics,
     stride_runtime_diagnostics,
@@ -95,6 +97,87 @@ class AdaptiveChunkResult:
 _TIME_PROGRESS_EPS = 1.0e-12
 
 
+def _chunk_diagnostics_to_host(diag: SimulationDiagnostics) -> SimulationDiagnostics:
+    """Move one chunk's diagnostic arrays to host memory.
+
+    The chunk list lives until the final concatenation, so leaving each
+    chunk's arrays on the accelerator makes device memory grow linearly with
+    ``t_max`` — long adaptive runs then fail inside a later chunk whose
+    workspace no longer fits. ``concat_runtime_diagnostics`` converts to
+    numpy anyway; doing it per chunk releases the device buffers as soon as
+    the chunk completes and bounds device residency at one chunk.
+    """
+
+    def _host(value):
+        return None if value is None else np.asarray(value)
+
+    resolved = diag.resolved
+    if resolved is not None:
+        resolved = replace(
+            resolved,
+            **{
+                field.name: _host(getattr(resolved, field.name))
+                for field in dataclass_fields(ResolvedDiagnostics)
+            },
+        )
+    converted = {
+        field.name: _host(getattr(diag, field.name))
+        for field in dataclass_fields(SimulationDiagnostics)
+        if field.name != "resolved"
+    }
+    return replace(diag, **converted, resolved=resolved)
+
+
+def _spill_chunk(
+    diag: SimulationDiagnostics, spill_dir: Path, chunk_index: int
+) -> Path:
+    """Write one chunk's diagnostics to disk and return the path.
+
+    Striding per chunk already cuts the accumulated payload by the stride
+    factor, but a long enough run still outgrows host RAM -- the chunk list and
+    the concatenated result are both live at the end, so the peak is roughly
+    twice the final series. Spilling holds one chunk at a time instead, which
+    trades wall time for a peak that does not grow with ``t_max``.
+
+    ``np.savez`` rather than pickle: the payload is plain arrays, the format is
+    portable and inspectable, and a truncated file fails loudly on load.
+    """
+
+    payload: dict[str, np.ndarray] = {}
+    for field in dataclass_fields(SimulationDiagnostics):
+        if field.name == "resolved":
+            continue
+        value = getattr(diag, field.name)
+        if value is not None:
+            payload[field.name] = np.asarray(value)
+    resolved = diag.resolved
+    if resolved is not None:
+        for field in dataclass_fields(ResolvedDiagnostics):
+            value = getattr(resolved, field.name)
+            if value is not None:
+                payload[f"resolved.{field.name}"] = np.asarray(value)
+    path = spill_dir / f"chunk_{chunk_index:06d}.npz"
+    # numpy's stub types savez's second positional as allow_pickle, so the
+    # keyword-array form it actually documents does not type-check.
+    np.savez(path, **payload)  # type: ignore[arg-type]
+    return path
+
+
+def _load_spilled_chunk(path: Path) -> SimulationDiagnostics:
+    """Read back one spilled chunk, restoring the resolved payload."""
+
+    with np.load(path) as data:
+        flat = {key: data[key] for key in data.files}
+    resolved_fields = {
+        name.split(".", 1)[1]: value
+        for name, value in flat.items()
+        if name.startswith("resolved.")
+    }
+    direct = {name: value for name, value in flat.items() if "." not in name}
+    resolved = ResolvedDiagnostics(**resolved_fields) if resolved_fields else None
+    return SimulationDiagnostics(**direct, resolved=resolved)
+
+
 def _offset_chunk_diagnostics_time(
     diag: SimulationDiagnostics,
     *,
@@ -154,6 +237,7 @@ def run_adaptive_runtime_chunk_loop(
     status_callback: Callable[[str], None] | None = None,
     diagnostics_stride: int = 1,
     max_chunks: int = 100000,
+    spill_dir: Path | None = None,
 ) -> AdaptiveChunkResult:
     """Run repeated diagnostic chunks until ``t_max`` is reached.
 
@@ -167,7 +251,14 @@ def run_adaptive_runtime_chunk_loop(
 
     state_chunk = None
     t_elapsed = 0.0
+    stride = _effective_diagnostics_stride(diagnostics_stride)
+    # Samples seen before the current chunk, so the stride can keep the same
+    # global indices it would have kept after concatenation.
+    samples_seen = 0
     diag_chunks: list[SimulationDiagnostics] = []
+    spill_paths: list[Path] = []
+    if spill_dir is not None:
+        spill_dir.mkdir(parents=True, exist_ok=True)
     fields_final: FieldState | None = None
     wall_start = time.perf_counter()
     _status(
@@ -178,11 +269,14 @@ def run_adaptive_runtime_chunk_loop(
         chunk_start = time.perf_counter()
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(show_progress)
         chunk_index = chunk + 1
+        diag_chunk = _chunk_diagnostics_to_host(diag_chunk)
         diag_chunk = _offset_chunk_diagnostics_time(diag_chunk, offset=t_elapsed)
         validate_finite_runtime_diagnostics(
             diag_chunk, label=f"adaptive {label} chunk {chunk_index}"
         )
-        diag_chunks.append(diag_chunk)
+        # t_elapsed must come from the unstrided chunk: striding can drop the
+        # last sample, and a chunk whose reported end time moved backwards would
+        # loop forever.
         t_next = _next_elapsed_time(
             diag_chunk,
             previous_elapsed=t_elapsed,
@@ -190,6 +284,16 @@ def run_adaptive_runtime_chunk_loop(
             chunk_index=chunk_index,
         )
         t_elapsed = t_next
+        chunk_samples = int(np.asarray(diag_chunk.t).shape[0])
+        if stride > 1:
+            diag_chunk = stride_runtime_diagnostics(
+                diag_chunk, stride=stride, offset=(-samples_seen) % stride
+            )
+        samples_seen += chunk_samples
+        if spill_dir is None:
+            diag_chunks.append(diag_chunk)
+        else:
+            spill_paths.append(_spill_chunk(diag_chunk, spill_dir, chunk_index))
         chunk_wall = max(time.perf_counter() - chunk_start, 0.0)
         wall_elapsed = max(time.perf_counter() - wall_start, 0.0)
         message, _snapshot = build_runtime_progress_message(
@@ -208,11 +312,11 @@ def run_adaptive_runtime_chunk_loop(
             f"adaptive {label} runtime exceeded chunk limit before reaching t_max"
         )
 
+    if spill_dir is not None:
+        diag_chunks = [_load_spilled_chunk(path) for path in spill_paths]
     diag = concat_runtime_diagnostics(diag_chunks)
+    # Already strided per chunk above; striding again would decimate twice.
     diag = truncate_runtime_diagnostics(diag, t_max=float(t_max))
-    stride = _effective_diagnostics_stride(diagnostics_stride)
-    if stride > 1:
-        diag = stride_runtime_diagnostics(diag, stride=stride)
     if fields_final is None:
         raise RuntimeError(f"adaptive {label} runtime did not produce final fields")
     return AdaptiveChunkResult(
