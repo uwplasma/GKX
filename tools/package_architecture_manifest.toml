@@ -170,7 +170,12 @@ recursive = true
 # closure fields, an optional geometry argument for kpar_scale, and the recorded
 # reason the amplitudes must not go back to zero -- without it the objective
 # cannot report a stable design. See test_objective_reports_stability.
-baseline = 89726
+# 89726 -> 89736: computing the device-z observable sums with the local fused
+# transform. The transform swap is line-neutral; the ten lines are the docstring
+# recording why axis-at-a-time staging is wrong here, which is the same reason
+# #36 gave for the bracket. Without it the next reader restores the staging on
+# the assumption that a route named "pencil" should stage its axes.
+baseline = 89736
 target = 45000
 
 [[line_budget_policy.counts]]
