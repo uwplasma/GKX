@@ -1065,14 +1065,6 @@ def test_device_z_transport_window_observable_mode_fails_closed() -> None:
 def test_pencil_fft_route_matches_serial_fft_and_rhs_without_reconstruction() -> None:
     state = nonlinear_parallel.deterministic_nonlinear_spectral_state((2, 3, 6, 4, 2))
 
-    roundtrip_serial = jnp.fft.fft2(jnp.fft.ifft2(state, axes=(-3, -2)), axes=(-3, -2))
-    roundtrip_pencil = nonlinear_parallel_spectral_core._pencil_fft2(
-        nonlinear_parallel_spectral_core._pencil_ifft2(state, y_axis=-3, x_axis=-2),
-        y_axis=-3,
-        x_axis=-2,
-    )
-    assert jnp.allclose(roundtrip_pencil, roundtrip_serial, atol=5.0e-6, rtol=5.0e-6)
-
     report = nonlinear_parallel.nonlinear_spectral_pencil_rhs_identity_gate(
         state,
         y_chunks=(3, 3),

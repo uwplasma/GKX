@@ -175,7 +175,16 @@ recursive = true
 # recording why axis-at-a-time staging is wrong here, which is the same reason
 # #36 gave for the bracket. Without it the next reader restores the staging on
 # the assumption that a route named "pencil" should stage its axes.
-baseline = 89736
+# 89736 -> 89724: retiring the staged pencil transforms _pencil_ifft2 and
+# _pencil_fft2. #36 moved the device-z bracket to the fused transform and the
+# observable sums above took the last caller, so the pair was reachable only
+# from a round-trip assertion in tests. Deleting both drops 22 lines and returns
+# 10 of them to the _pencil_spectral_bracket docstring, which now records why the
+# staging is wrong for a z-partitioned slab and why the deleted code was not a
+# usable starting point for a route that does partition a transform axis: it
+# transposed with jnp.swapaxes, a device-local move, where that step has to be
+# a collective.
+baseline = 89724
 target = 45000
 
 [[line_budget_policy.counts]]
