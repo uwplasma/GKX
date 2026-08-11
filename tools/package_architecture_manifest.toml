@@ -64,7 +64,13 @@ name = "test_python_files"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 95
+# 95 -> 96: tests/validation/physics_gates/test_objective_reports_stability.py.
+# The target is 36, so a new file needs a reason: this one pins that the linear
+# objective can report a design is stable at all. Without the closure it cannot
+# -- at zero drive the whole spectrum sits on the imaginary axis and the branch
+# selector is floored at zero -- and no existing test covered that, because
+# every other objective test runs at a drive where something is unstable.
+baseline = 96
 target = 36
 
 [[topology_policy.counts]]
@@ -160,7 +166,11 @@ recursive = true
 # padding past the retained l, dropping the analytic boundary term the serial
 # route carries; five lines buy the analytic neighbour in each route and the
 # single-species b normalization they need to compute it.
-baseline = 89710
+# -> 89737: the linear objective's velocity-space closure (#30). Three
+# closure fields, an optional geometry argument for kpar_scale, and the recorded
+# reason the amplitudes must not go back to zero -- without it the objective
+# cannot report a stable design. See test_objective_reports_stability.
+baseline = 89726
 target = 45000
 
 [[line_budget_policy.counts]]
