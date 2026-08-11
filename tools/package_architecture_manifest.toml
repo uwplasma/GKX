@@ -184,7 +184,18 @@ recursive = true
 # usable starting point for a route that does partition a transform axis: it
 # transposed with jnp.swapaxes, a device-local move, where that step has to be
 # a collective.
-baseline = 89724
+# 89724 -> 89776: compensating the device-z transport observable reductions.
+# jnp.sum was not enough: XLA lowers a reduction over a materialized array to a
+# blocked vector reduction but lowers the same reduction fused into its
+# elementwise producer -- which is what the sharded reducer gets inside its
+# shard_map jit -- to a far longer accumulation chain. The bracket observable
+# adds ~1e7 terms each ~5e-8 of the total, so in single precision that chain
+# absorbed the whole identity budget and the sharded_reduce transport window
+# failed at Ny = Nx = 96 while both neighbouring powers of two passed. The
+# lines are the Neumaier pass and the two-stage driver that make the sums
+# independent of which chain XLA emits. See
+# test_observable_sums_survive_fused_reduction_at_a_mixed_radix_grid.
+baseline = 89776
 target = 45000
 
 [[line_budget_policy.counts]]

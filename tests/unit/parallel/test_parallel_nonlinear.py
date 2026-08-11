@@ -907,6 +907,98 @@ def test_spectral_physical_observable_sums_are_z_additive() -> None:
     np.testing.assert_allclose(np.asarray(reassembled), np.asarray(whole), rtol=1.0e-6)
 
 
+_MIXED_RADIX_OBSERVABLE_SHAPE = (4, 16, 96, 96, 16)
+
+
+def _mixed_radix_observable_vectors() -> tuple[np.ndarray, np.ndarray]:
+    """Return serial-route and sharded-route observables at Ny = Nx = 96.
+
+    The serial reference reduces already materialized arrays op by op, while
+    the sharded reducer runs inside one jit, so its reduction is fused into its
+    elementwise producer. Reproduce both shapes of that computation without
+    devices: eager over the whole state versus jitted per z half, added.
+    """
+
+    state = nonlinear_parallel.deterministic_nonlinear_spectral_state(
+        _MIXED_RADIX_OBSERVABLE_SHAPE
+    )
+    assert state.dtype == jnp.complex64
+
+    def _fused_sums(local_state: jax.Array) -> jax.Array:
+        _field, bracket, _rhs = (
+            nonlinear_parallel_spectral_core._pencil_nonlinear_spectral_rhs(local_state)
+        )
+        return nonlinear_parallel_device_z._spectral_physical_transport_observable_sums(
+            local_state,
+            bracket,
+        )
+
+    _serial_field, serial_bracket, _serial_rhs = (
+        nonlinear_parallel_spectral_core._serial_nonlinear_spectral_rhs(state)
+    )
+    serial = nonlinear_parallel_device_z._spectral_physical_transport_observable_vector_from_sums(
+        nonlinear_parallel_device_z._spectral_physical_transport_observable_sums(
+            state,
+            serial_bracket,
+        )
+    )
+    half = _MIXED_RADIX_OBSERVABLE_SHAPE[-1] // 2
+    fused = jax.jit(_fused_sums)
+    sharded = nonlinear_parallel_device_z._spectral_physical_transport_observable_vector_from_sums(
+        fused(state[..., :half]) + fused(state[..., half:])
+    )
+    return np.asarray(serial), np.asarray(sharded)
+
+
+def test_observable_sums_survive_fused_reduction_at_a_mixed_radix_grid() -> None:
+    """Pin the single-precision observable reduction at Ny = Nx = 96 = 2**5 * 3.
+
+    ``jnp.sum`` was not enough here. XLA lowers a reduction over a materialized
+    array to a blocked vector reduction, but lowers the same reduction fused
+    into its elementwise producer to a far longer accumulation chain, and this
+    observable adds about 1e7 terms that are each around 5e-8 of the total. In
+    single precision the longer chain absorbed roughly 1e-4 of the bracket
+    observable, which is the whole identity budget, and it did so only at the
+    grids whose shape produced the worse lowering -- 96 failed while both
+    neighbouring powers of two passed, which reads like an FFT defect and is
+    not one. Compensating the reduction removes the dependence on the lowering,
+    so assert well inside the gate tolerance rather than at it.
+    """
+
+    serial, sharded = _mixed_radix_observable_vectors()
+
+    np.testing.assert_allclose(sharded, serial, rtol=1.0e-6)
+
+
+def test_device_z_sharded_reduce_transport_window_holds_at_a_mixed_radix_grid() -> None:
+    """Pin the reported failure: ``sharded_reduce`` at 96 in single precision."""
+
+    if jax.local_device_count() < 2:
+        pytest.skip("requires at least two local JAX devices")
+    state = nonlinear_parallel.deterministic_nonlinear_spectral_state(
+        _MIXED_RADIX_OBSERVABLE_SHAPE
+    )
+    assert state.dtype == jnp.complex64
+
+    report = nonlinear_parallel.device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
+        state,
+        devices=jax.devices()[:2],
+        steps=2,
+        dt=0.0025,
+        observable_mode="sharded_reduce",
+    )
+
+    assert report.identity_passed is True
+    assert report.blocked_reasons == ()
+    assert report.final_state_max_abs_error <= report.atol
+    # Relative, not absolute: the bracket observable is small enough that the
+    # absolute floor alone would pass a reduction that is 1e-3 wrong.
+    assert report.free_energy_trace_max_rel_error <= report.rtol
+    assert report.field_energy_trace_max_rel_error <= report.rtol
+    assert report.physical_flux_trace_max_rel_error <= report.rtol
+    assert report.bracket_rms_trace_max_rel_error <= report.rtol
+
+
 def test_device_z_transport_trace_helpers_build_fail_closed_reports() -> None:
     traces = nonlinear_parallel_device_z._new_transport_trace_dict()
     assert set(traces) == {
