@@ -2525,6 +2525,8 @@ from pathlib import Path
 
 
 from tools.release.run_test_gates import (
+    WIDE_COVERAGE_LOGICAL_CPU_DEVICES,
+    WIDE_COVERAGE_NODE_BATCHES,
     build_coverage_shard_report,
     _resolve_test_dir,
     discover_test_files,
@@ -2532,6 +2534,7 @@ from tools.release.run_test_gates import (
     validate_coverage_shard_report,
     split_shards,
     wide_coverage_environment,
+    wide_coverage_shard_batches,
     write_json,
 )
 
@@ -2602,6 +2605,45 @@ def test_wide_coverage_parallel_owner_requests_four_logical_cpu_devices(
     assert "--xla_force_host_platform_device_count=4" in env["XLA_FLAGS"]
     assert "--xla_cpu_enable_fast_math=false" in env["XLA_FLAGS"]
     assert wide_coverage_environment([Path("tests/test_light.py")]) is None
+
+
+def test_wide_coverage_logical_cpu_owners_run_whole_not_by_test_name() -> None:
+    """Device-gated owners must run entire, not as a chosen subset.
+
+    Selecting part of such a file leaves every unselected device gate unrun
+    while the shard still reports success, so a device-count regression stays
+    invisible. Node batching selects by node ID and is also wrong here for a
+    second reason: these tests share one JAX compilation cache, so separate
+    processes re-pay the compiles the single command pays once.
+    """
+
+    for name in WIDE_COVERAGE_LOGICAL_CPU_DEVICES:
+        assert name not in WIDE_COVERAGE_NODE_BATCHES
+
+
+def test_wide_coverage_shard_batches_cover_every_target_once(monkeypatch) -> None:
+    from tools.release.run_test_gates import REPO_ROOT
+
+    plain = [REPO_ROOT / "tests/test_a.py", REPO_ROOT / "tests/test_b.py"]
+
+    assert wide_coverage_shard_batches(plain, pytest_args=[]) == [
+        ["tests/test_a.py", "tests/test_b.py"]
+    ]
+
+    owner = REPO_ROOT / "tests/unit/nonlinear/test_nonlinear_helpers_extra.py"
+    nodeids = [f"{owner}::test_{idx}" for idx in range(13)]
+    monkeypatch.setattr(
+        "tools.release.run_test_gates.collect_pytest_nodeids",
+        lambda path, pytest_args: nodeids,
+    )
+    batches = wide_coverage_shard_batches([owner], pytest_args=[])
+
+    assert len(batches) == WIDE_COVERAGE_NODE_BATCHES[owner.name]
+    assert [nodeid for batch in batches for nodeid in batch] == nodeids
+    with pytest.raises(SystemExit, match="isolated shard"):
+        wide_coverage_shard_batches(
+            [owner, REPO_ROOT / "tests/test_a.py"], pytest_args=[]
+        )
 
 
 def test_discover_test_files_returns_sorted_recursive_tests(tmp_path: Path) -> None:

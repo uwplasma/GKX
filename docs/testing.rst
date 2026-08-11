@@ -1210,7 +1210,12 @@ physics rigor:
   The same helper, ``tools/release/run_test_gates.py wide-coverage``, is used locally and in
   CI so the threshold is not weakened when the job is parallelized. Each shard
   has its own timeout so a single slow validation slice cannot become an
-  unbounded release job. The combine step also requires labeled coverage data
+  unbounded release job. Files whose tests are gated on a device count run
+  whole at that count, in one command on their own shard. Selecting such a file
+  by test name instead would leave every unnamed device gate unrun while the
+  shard still reported success, and splitting it into node-id batches would
+  make each process re-pay the compiles the whole file pays once. The
+  combine step also requires labeled coverage data
   for every CI shard and writes ``coverage-wide-shard-manifest.json`` before
   refreshing the package-wide Codecov flag.
   Optional VMEC/Boozer artifact builders remain validated by their tracked
@@ -1246,6 +1251,11 @@ The same wide gate can be run locally in one process with:
      --pytest-arg=addopts= \
      --pytest-arg=-m \
      --pytest-arg="not slow"
+
+Raise ``--timeout`` for the shard owning a logical-CPU file: it runs every one
+of its device gates at four devices in a single command and takes nine to
+sixteen minutes, which is why CI passes ``--timeout 1800``. Coverage tracing is
+not what costs that; the same file takes the same time uninstrumented.
 
 On local machines where every pytest process must stay below the five-minute
 release timeout, run one shard at a time and combine afterward. This is the

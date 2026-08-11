@@ -41,18 +41,16 @@ WIDE_COVERAGE_LOGICAL_CPU_DEVICES = {
     "test_parallel_nonlinear_routing.py": 4,
 }
 
-WIDE_COVERAGE_LOGICAL_CPU_SELECTIONS = {
-    "test_parallel_linear_velocity.py": (
-        "bounded_mixed_species_hermite_rhs_matches_serial_operator",
-        "bounded_species_sharded_rhs_matches_serial_operator",
-    ),
-}
-
 WIDE_COVERAGE_NODE_BATCHES = {
     # This owner fits locally but exceeds five minutes under coverage on the
     # slower hosted runner. Disjoint node-id batches retain every test and
     # coverage contribution without weakening the per-command timeout.
     "test_nonlinear_helpers_extra.py": 5,
+    # Do not add a logical-CPU owner here. Those files share one JAX
+    # compilation cache across their tests, so separate processes re-pay the
+    # shard-map compiles the whole file pays once: the file finishes in about
+    # nine minutes as one command, while a five-test batch holding only its
+    # device gates ran past ten.
 }
 
 
@@ -298,6 +296,26 @@ def wide_coverage_environment(shard: list[Path]) -> dict[str, str] | None:
     return env
 
 
+def wide_coverage_shard_batches(
+    shard: list[Path], *, pytest_args: list[str]
+) -> list[list[str]]:
+    """Return the pytest targets for one coverage shard, one entry per command.
+
+    Every test in the shard appears in exactly one batch. Node-batched owners
+    are split by collected node ID so a single command stays inside the
+    per-command timeout; every other shard runs its files in one command.
+    """
+
+    split_owners = [path for path in shard if path.name in WIDE_COVERAGE_NODE_BATCHES]
+    if not split_owners:
+        return [[str(path.relative_to(REPO_ROOT)) for path in shard]]
+    if len(shard) != 1 or len(split_owners) != 1:
+        raise SystemExit("node-batched coverage owners must occupy an isolated shard")
+    owner = split_owners[0]
+    nodeids = collect_pytest_nodeids(owner, list(pytest_args))
+    return split_contiguous(nodeids, WIDE_COVERAGE_NODE_BATCHES[owner.name])
+
+
 def discover_coverage_data(root: Path = REPO_ROOT) -> list[Path]:
     """Return coverage.py data files under ``root`` without descending into docs."""
 
@@ -541,7 +559,6 @@ def main_wide(argv: list[str] | None = None) -> int:
     for idx, shard in selected:
         if not shard:
             continue
-        rel = [str(path.relative_to(REPO_ROOT)) for path in shard]
         coverage_cmd = [
             sys.executable,
             "-m",
@@ -556,51 +573,21 @@ def main_wide(argv: list[str] | None = None) -> int:
             "--disable-warnings",
             *args.pytest_arg,
         ]
-        split_owners = [
-            path for path in shard if path.name in WIDE_COVERAGE_NODE_BATCHES
-        ]
-        if split_owners:
-            if len(shard) != 1 or len(split_owners) != 1:
-                raise SystemExit("node-batched coverage owners must occupy an isolated shard")
-            owner = split_owners[0]
-            nodeids = collect_pytest_nodeids(owner, list(args.pytest_arg))
-            batches = split_contiguous(
-                nodeids, WIDE_COVERAGE_NODE_BATCHES[owner.name]
+        shard_env = wide_coverage_environment(shard)
+        batches = wide_coverage_shard_batches(shard, pytest_args=list(args.pytest_arg))
+        for batch_idx, batch in enumerate(batches, start=1):
+            label = f"running coverage shard {idx + 1}/{len(shards)}"
+            if len(batches) > 1:
+                label += (
+                    f" node batch {batch_idx}/{len(batches)} ({len(batch)} tests)"
+                )
+            print(label, flush=True)
+            _run(
+                [*coverage_cmd, *batch],
+                timeout=int(args.timeout),
+                cwd=REPO_ROOT,
+                env=shard_env,
             )
-            for batch_idx, batch in enumerate(batches, start=1):
-                print(
-                    f"running coverage shard {idx + 1}/{len(shards)} "
-                    f"node batch {batch_idx}/{len(batches)} ({len(batch)} tests)",
-                    flush=True,
-                )
-                _run(
-                    [*coverage_cmd, *batch],
-                    timeout=int(args.timeout),
-                    cwd=REPO_ROOT,
-                )
-        else:
-            cmd = [*coverage_cmd, *rel]
-            print(f"running coverage shard {idx + 1}/{len(shards)}", flush=True)
-            _run(cmd, timeout=int(args.timeout), cwd=REPO_ROOT)
-        for path in shard:
-            for selection in WIDE_COVERAGE_LOGICAL_CPU_SELECTIONS.get(
-                path.name, ()
-            ):
-                print(
-                    f"running logical-CPU coverage selection: {selection}",
-                    flush=True,
-                )
-                _run(
-                    [
-                        *coverage_cmd,
-                        str(path.relative_to(REPO_ROOT)),
-                        "-k",
-                        selection,
-                    ],
-                    timeout=int(args.timeout),
-                    cwd=REPO_ROOT,
-                    env=wide_coverage_environment([path]),
-                )
 
     if args.skip_combine:
         return 0

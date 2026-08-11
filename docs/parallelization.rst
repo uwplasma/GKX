@@ -619,7 +619,10 @@ reduces density over both mesh axes, polarization over species only, and the
 Hermite ladder exchanges one boundary moment within each species row. Width-one
 and width-two exchanges also apply the production mirror, curvature, and
 grad-:math:`B` equations; global Hermite indices place the diamagnetic drive at
-the correct moments. Global basis indices also preserve the physical
+the correct moments. That drive closes its Laguerre sum with the analytic
+truncation coefficient :math:`\mathcal J_{L}=-\mathcal J_{L-1}(b/2)/L` rather
+than a zero pad, so the highest retained :math:`\ell` carries the same physical
+term as serial. Global basis indices also preserve the physical
 normalization of constant and :math:`|k_z|` hypercollisions, while perpendicular
 hyperdiffusion and end damping remain shard-local. Isolated term gates are
 required to be nonzero and match the serial production equations; combined
@@ -634,8 +637,11 @@ only ``0.97x`` end-to-end throughput. The route is therefore promoted for
 equation ownership and RHS acceleration, not complete integration speedup.
 Linked flux-tube boundaries use the same production chain FFT independently on
 each shard because ``ky``, ``kx``, and ``z`` remain local. A nontrivial linked
-case passes combined streaming, linked :math:`|k_z|` hypercollision, linked end
-damping, conserving collisions, and two-step state/field identity. Mixed-mesh
+case passes combined streaming, the diamagnetic drive, linked :math:`|k_z|`
+hypercollision, linked end damping, conserving collisions, and two-step
+state/field identity. That case runs at four logical CPU devices in the
+wide-coverage gate, which runs the whole owner file rather than a list of
+test names, so no device gate in it can pass CI unrun. Mixed-mesh
 electromagnetic fields, other integrators, and all GPU claims remain
 fail-closed. The office host has only two GPUs, so no four-device mixed-mesh GPU
 claim can be tested there.

@@ -419,6 +419,55 @@ def test_fused_electrostatic_slice_route_validates_decomposition_before_mesh() -
         )
 
 
+def test_fused_electrostatic_slice_route_matches_serial_production_route() -> None:
+    """The fused Hermite kernel only runs above one device, so gate it there.
+
+    Its diamagnetic drive must close the Laguerre sum with the analytic
+    truncation coefficient. Zero-padding the upper neighbour drops a physical
+    term from the highest retained ``l`` and leaves the single-device route,
+    which never enters this kernel, matching serial anyway.
+    """
+
+    from gkx.operators.linear.rhs import linear_rhs_cached
+
+    devices = jax.devices()
+    if len(devices) < 2:
+        pytest.skip("requires two logical CPU devices or two accelerators")
+    template, cache, params = _small_periodic_field_problem()
+    rng = np.random.default_rng(20260810)
+    state = jnp.asarray(
+        1.0e-3
+        * (
+            rng.standard_normal(template.shape)
+            + 1j * rng.standard_normal(template.shape)
+        ),
+        dtype=template.dtype,
+    )
+    terms = _electrostatic_slice_terms()
+    expected_rhs, expected_phi = linear_rhs_cached(
+        state,
+        cache,
+        params,
+        terms=terms,
+        use_jit=False,
+        use_custom_vjp=False,
+        force_electrostatic_fields=True,
+    )
+    observed_rhs, observed_phi = (
+        linear_parallel_electrostatic.linear_rhs_electrostatic_slices_velocity_sharded(
+            state, cache, params, terms, devices=devices[:2]
+        )
+    )
+
+    assert float(jnp.linalg.norm(expected_rhs)) > 0.0
+    np.testing.assert_allclose(
+        np.asarray(observed_phi), np.asarray(expected_phi), rtol=3e-6, atol=3e-6
+    )
+    np.testing.assert_allclose(
+        np.asarray(observed_rhs), np.asarray(expected_rhs), rtol=3e-5, atol=3e-5
+    )
+
+
 def test_linear_rhs_parallel_cached_serial_dispatch(monkeypatch) -> None:
     import gkx.operators.linear.rhs as linear_rhs_owner
 

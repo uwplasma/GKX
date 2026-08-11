@@ -155,7 +155,12 @@ recursive = true
 # backend combination the nonlinear path cannot execute raises with the reason
 # and the supported set, because the alternative is the defect this removes --
 # cfg.parallel accepted and silently ignored.
-baseline = 89705
+# 89705 -> 89710: closing the Laguerre truncation in the two sharded
+# diamagnetic drives. Both built the upper gyroaverage neighbour by zero
+# padding past the retained l, dropping the analytic boundary term the serial
+# route carries; five lines buy the analytic neighbour in each route and the
+# single-species b normalization they need to compute it.
+baseline = 89710
 target = 45000
 
 [[line_budget_policy.counts]]
