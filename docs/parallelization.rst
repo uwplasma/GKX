@@ -542,6 +542,53 @@ it recomputing the nonlinear bracket for diagnostics. Any end-to-end route that
 evaluates these diagnostics every window is dominated by them, not by the
 compute speedup this section measures.
 
+Within that diagnostic path, the observable sums carried the same axis-staged
+transform the bracket did. The bracket change above deliberately left them
+alone, so that the identity surface being measured stayed fixed while the
+compute route moved. The staging is wrong there for the same reason: the sums
+are evaluated on a local ``z`` slab, so ``ky`` and ``kx`` are resident and the
+perpendicular transform pair never crosses a shard boundary. Computing them
+with the local fused transform drops the lowered single-device route from six
+``transpose`` operations to four and replaces its one-dimensional
+``fft_length={N}`` transform with the batched two-dimensional
+``fft_length={N,N}``. Inside the two-device sharded reducer the transposes fall
+from ``16`` to ``14`` and the last one-dimensional transform disappears,
+leaving only the batched two-dimensional pair. Compiled scratch for the
+observable sums, on one RTX A4000, JAX 0.6.2, CUDA 12, ``complex64``:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 22 22 22
+
+   * - ``(N_l,N_m,N_y,N_x,N_z)``
+     - staged scratch
+     - fused scratch
+     - ratio
+   * - ``(4,16,64,64,32)``
+     - ``3.67`` MB
+     - ``3.15`` MB
+     - ``0.857``
+   * - ``(4,16,96,96,32)``
+     - ``9.44`` MB
+     - ``7.08`` MB
+     - ``0.750``
+   * - ``(4,16,128,128,32)``
+     - ``16.78`` MB
+     - ``12.59`` MB
+     - ``0.750``
+
+The sharded reducer's own scratch does not move, because the bracket it
+recomputes for diagnostics dominates it; what the change removes there is the
+staging structure rather than the reducer's peak allocation. The serial
+reference and the sharded route evaluate the same function, so the recorded
+identity errors are carried over rather than perturbed: every trace error is
+unchanged at ``(4,16,64,64,32)`` and ``(4,16,96,96,32)`` in ``complex64``, with
+the physical-flux trace marginally smaller, and exactly ``0.0`` on all five
+traces under ``JAX_ENABLE_X64``. No wall-clock figure is stated for this path:
+both GPUs of the office box carried other users' work throughout the
+measurement window, so the timing is deferred rather than reported from a
+contended box.
+
 The practical consequence for the decomposition lane is that its blocker should
 no longer be recorded as workload granularity. The two open items are the
 single-device efficiency of the pencil bracket and the streamed-diagnostic path;
