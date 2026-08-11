@@ -195,7 +195,17 @@ recursive = true
 # lines are the Neumaier pass and the two-stage driver that make the sums
 # independent of which chain XLA emits. See
 # test_observable_sums_survive_fused_reduction_at_a_mixed_radix_grid.
-baseline = 89776
+# 89726 -> 89739: pinning Precision.HIGHEST on the contractions that carry a
+# physical invariant. XLA may satisfy an unpinned dot with TF32 on Ampere and later
+# NVIDIA GPUs, keeping 10 mantissa bits; that broke particle/momentum/energy
+# conservation in the collision operators at ~1e-4 and truncated the shearing remap
+# -- a permutation of exact zeros and ones -- to 1e-3 of the state itself. Thirteen
+# lines is the recorded reason, not mechanism: collisions.py routes its four
+# contractions through one bound _exact_einsum so the pin cannot be forgotten at a
+# call site, and the shearing remap says why a permutation must not be approximated.
+# CPU has no TF32 path and cannot observe any of it, which is why the explanation
+# lives in the source. See test_collision_contractions_pin_exact_dot_precision.
+baseline = 89789
 target = 45000
 
 [[line_budget_policy.counts]]

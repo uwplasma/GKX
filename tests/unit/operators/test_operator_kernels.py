@@ -1500,7 +1500,18 @@ def test_multispecies_sugama_pair_operator_conserves_and_differentiates() -> Non
     )
     np.testing.assert_allclose(rates.particle_density, 0.0, atol=2.0e-6)
     np.testing.assert_allclose(rates.total_parallel_momentum, 0.0, atol=3.0e-6)
-    np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=7.0e-6)
+    # Energy conservation is exact mathematics, and the operator satisfies it:
+    # assembling and applying this same matrix in float64 leaves a residual of
+    # 3.6e-15. What survives in float32 is the cancellation floor of the invariant
+    # sum, which is a property of the arithmetic and not of the physics. The energy
+    # rate sums n_s T_s <thermal energy> over species and moments with terms of
+    # total magnitude 119.5, so that floor is
+    #     sum|terms| * eps_float32 = 119.5 * 1.19e-7 = 1.4e-5,
+    # doubled here because each term is itself an eight-term matvec that carries its
+    # own accumulation. The previous 7.0e-6 sat *below* the floor and passed only
+    # because the CPU reduction order happened to cancel favourably; the identical
+    # operator lands at 7.6e-6 on an RTX A4000.
+    np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=3.0e-5)
     free_energy_rate = collision_quadratic_rate(
         state,
         contribution,
@@ -1656,6 +1667,68 @@ def test_multispecies_sugama_operator_runs_through_linear_rhs() -> None:
     np.testing.assert_allclose(rates.particle_density, 0.0, atol=2.0e-6)
     np.testing.assert_allclose(rates.total_parallel_momentum, 0.0, atol=4.0e-6)
     np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=1.0e-5)
+
+
+def test_collision_contractions_pin_exact_dot_precision() -> None:
+    """Moment-matrix contractions must never be lowered to TF32.
+
+    On Ampere and later NVIDIA GPUs XLA may satisfy an unpinned dot with TF32, which
+    keeps 10 mantissa bits. These contractions carry the collision operator's
+    conservation identities, and TF32 broke them at ~1e-4 -- two orders above the
+    float32 rounding floor. CPU has no TF32 path, so an unpinned dot and
+    Precision.HIGHEST produce bit-identical CPU results and no CPU *value* can
+    expose a missing pin. The precision request is in the jaxpr on every backend,
+    so assert it there and keep this class of regression visible in CPU-only CI.
+    """
+
+    def dot_precisions(function, *args, **kwargs):
+        equations = jax.make_jaxpr(function)(*args, **kwargs).jaxpr.eqns
+        return [
+            equation.params["precision"]
+            for equation in equations
+            if equation.primitive.name == "dot_general"
+        ]
+
+    exact = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
+    state = (
+        jnp.arange(2 * 2 * 4, dtype=jnp.float32).reshape(2, 2, 4, 1, 1, 1) + 0.13j
+    ).astype(jnp.complex64)
+    modes = jnp.zeros((8, 8), dtype=jnp.float32)
+    pair_modes = jnp.zeros((2, 2, 8, 8), dtype=jnp.float32)
+    pair_vector = jnp.zeros((2, 2, 8), dtype=jnp.float32)
+
+    contractions = {
+        "drift_kinetic": dot_precisions(
+            lambda value: apply_collision_moment_matrix(
+                value, modes, nu=jnp.asarray(1.0)
+            ),
+            state,
+        ),
+        "multispecies": dot_precisions(
+            apply_multispecies_collision_moment_matrix, state, pair_modes
+        ),
+        "finite_wavelength_coulomb": dot_precisions(
+            lambda value: apply_finite_wavelength_coulomb_moment_operator(
+                value,
+                pair_modes,
+                pair_modes,
+                pair_vector,
+                pair_vector,
+                pair_vector,
+                pair_vector,
+                phi=jnp.zeros((1, 1, 1), dtype=jnp.float32),
+                pair_frequency=jnp.ones((2, 2), dtype=jnp.float32),
+                charge_over_temperature=jnp.ones(2, dtype=jnp.float32),
+            ),
+            state,
+        ),
+    }
+    for name, precisions in contractions.items():
+        assert precisions, f"{name} lowered to no dot_general; the guard is vacuous"
+        assert all(precision == exact for precision in precisions), (
+            f"{name} has an unpinned contraction {precisions}; it will run in TF32 "
+            "on Ampere and later NVIDIA GPUs and break conservation"
+        )
 
 
 def test_drift_kinetic_collision_model_is_blocked_for_short_wave_itg() -> None:

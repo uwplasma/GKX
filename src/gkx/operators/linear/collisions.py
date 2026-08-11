@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import lru_cache, partial
 import hashlib
 import io
 import json
@@ -19,6 +19,11 @@ if TYPE_CHECKING:
 
 _COLLISION_MATRIX_DATA = "advanced_collision_six_moment.npy"
 _COLLISION_MATRIX_METADATA = "advanced_collision_six_moment.json"
+
+# Every moment contraction here goes through _exact_einsum. An unpinned dot may be
+# lowered to TF32 on recent NVIDIA GPUs, which breaks the conservation identities
+# these matrices carry at ~1e-4. No CPU value reveals it; the operator tests do.
+_exact_einsum = partial(jnp.einsum, precision=jax.lax.Precision.HIGHEST)
 
 
 @lru_cache(maxsize=1)
@@ -844,7 +849,7 @@ def apply_collision_moment_matrix(
         )
     coefficients = jnp.broadcast_to(coefficients, (ns,) + coefficients.shape[1:])
     packed = jnp.swapaxes(expanded, 1, 2).reshape((ns, mode_count) + expanded.shape[3:])
-    applied = jnp.einsum("sij...,sj...->si...", coefficients, packed)
+    applied = _exact_einsum("sij...,sj...->si...", coefficients, packed)
     result = jnp.swapaxes(applied.reshape((ns, nm, nl) + expanded.shape[3:]), 1, 2)
     real_dtype = jnp.real(expanded).dtype
     frequency = jnp.asarray(nu, dtype=real_dtype).reshape(-1)
@@ -883,7 +888,7 @@ def apply_multispecies_collision_moment_matrix(
             "square moment axes, optionally followed by the state spatial shape"
         )
     packed = jnp.swapaxes(expanded, 1, 2).reshape((ns, mode_count) + expanded.shape[3:])
-    applied = jnp.einsum("stij...,tj...->si...", coefficients, packed)
+    applied = _exact_einsum("stij...,tj...->si...", coefficients, packed)
     result = jnp.swapaxes(applied.reshape((ns, nm, nl) + expanded.shape[3:]), 1, 2)
     result = jnp.asarray(weight, dtype=jnp.real(expanded).dtype) * result
     return result[0] if value.ndim == 5 else result
@@ -964,8 +969,8 @@ def apply_finite_wavelength_coulomb_moment_operator(
         raise ValueError(f"phi must have spatial shape {spatial_shape}")
 
     packed = jnp.swapaxes(expanded, 1, 2).reshape((ns, mode_count) + expanded.shape[3:])
-    test_applied = jnp.einsum("stij...,sj...->sti...", matrices[0], packed)
-    field_applied = jnp.einsum("stij...,tj...->sti...", matrices[1], packed)
+    test_applied = _exact_einsum("stij...,sj...->sti...", matrices[0], packed)
+    field_applied = _exact_einsum("stij...,tj...->sti...", matrices[1], packed)
     pair_axes = (None,) * (test_applied.ndim - 2)
     frequency_view = frequency[(slice(None), slice(None)) + pair_axes]
     particle = jnp.sum(frequency_view * (test_applied + field_applied), axis=1)
