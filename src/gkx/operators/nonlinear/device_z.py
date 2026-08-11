@@ -146,6 +146,56 @@ def _device_z_pencil_shard_map_rhs_fn(  # pragma: no cover - exercised by profil
         )
     )
 
+_OBSERVABLE_SUM_LANES = 4096
+
+
+def _neumaier_sum_pass(rows: jax.Array) -> jax.Array:
+    """Return the Neumaier-compensated sum of ``rows`` over its leading axis."""
+
+    def _step(
+        carry: tuple[jax.Array, jax.Array],
+        row: jax.Array,
+    ) -> tuple[tuple[jax.Array, jax.Array], None]:
+        total, compensation = carry
+        updated = total + row
+        compensation = compensation + jnp.where(
+            jnp.abs(total) >= jnp.abs(row),
+            (total - updated) + row,
+            (row - updated) + total,
+        )
+        return (updated, compensation), None
+
+    zeros = jnp.zeros(rows.shape[1:], dtype=rows.dtype)
+    (total, compensation), _ = jax.lax.scan(_step, (zeros, zeros), rows)
+    return total + compensation
+
+
+def _compensated_observable_sum(values: jax.Array) -> jax.Array:
+    """Return a reduction-order-independent total of ``values``.
+
+    ``jnp.sum`` cannot be used for these observables. The serial reference
+    reduces an already materialized array, which XLA lowers to a blocked vector
+    reduction, while the sharded route reduces inside the ``shard_map`` jit
+    where the reduction is fused into its elementwise producer and lowered to a
+    much longer accumulation chain. The bracket observable adds roughly 1e7
+    terms that are each about 5e-8 of the total, so in single precision that
+    longer chain absorbs a systematic 2e-3 of the answer and the two routes
+    disagree far beyond the identity tolerance. Which grids are affected
+    depends on the emitted vector width, so the failure looks size-specific
+    rather than systematic. Neumaier compensation removes the dependence by
+    recovering the low-order bits each addition drops, whatever chain XLA
+    emits, leaving both routes equal to rounding in either precision.
+    """
+
+    flat = jnp.reshape(values, (-1,))
+    width = min(_OBSERVABLE_SUM_LANES, int(flat.size))
+    padding = (-int(flat.size)) % width
+    if padding:
+        flat = jnp.concatenate([flat, jnp.zeros((padding,), dtype=flat.dtype)])
+    lanes = _neumaier_sum_pass(jnp.reshape(flat, (-1, width)))
+    return _neumaier_sum_pass(jnp.reshape(lanes, (-1, 1)))[0]
+
+
 def _spectral_physical_transport_observable_sums(
     state_hat: jax.Array,
     bracket_hat: jax.Array,
@@ -174,11 +224,11 @@ def _spectral_physical_transport_observable_sums(
     bracket_abs2 = jnp.abs(bracket_hat) ** 2
     return jnp.asarray(
         [
-            jnp.sum(jnp.abs(state_hat) ** 2),
-            jnp.sum(jnp.abs(field) ** 2),
-            jnp.sum(flux_density),
+            _compensated_observable_sum(jnp.abs(state_hat) ** 2),
+            _compensated_observable_sum(jnp.abs(field) ** 2),
+            _compensated_observable_sum(flux_density),
             jnp.asarray(flux_density.size, dtype=real_dtype),
-            jnp.sum(bracket_abs2),
+            _compensated_observable_sum(bracket_abs2),
             jnp.asarray(bracket_abs2.size, dtype=real_dtype),
         ],
         dtype=real_dtype,
@@ -679,12 +729,14 @@ __all__ = [
     "_append_spectral_physical_observables",
     "_blocked_device_z_rhs_report",
     "_blocked_device_z_transport_window_report",
+    "_compensated_observable_sum",
     "_device_z_rhs_identity_report",
     "_device_z_pencil_shard_map_observables_fn",
     "_device_z_pencil_shard_map_rhs_fn",
     "_device_z_sharding_for_spectral_state",
     "_device_z_transport_identity_passed",
     "_device_z_transport_window_report",
+    "_neumaier_sum_pass",
     "_new_transport_trace_dict",
     "_run_device_z_compute_window_states",
     "_spectral_physical_transport_observable_sums",
