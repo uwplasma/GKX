@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import subprocess
-import tomllib
+from gkx.utils import tomlcompat as tomllib
 
 from support.paths import REPO_ROOT
 

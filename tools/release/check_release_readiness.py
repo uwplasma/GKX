@@ -16,10 +16,11 @@ import urllib.error
 import urllib.request
 from typing import Any, Iterable
 
-try:
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
-    import tomli as tomllib  # type: ignore[no-redef]
+# The repo-hygiene CI job runs the release gates straight from a checkout with
+# no install, so reach the repository's single TOML shim through ``src``.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from gkx.utils import tomlcompat as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:

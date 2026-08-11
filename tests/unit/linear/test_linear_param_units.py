@@ -22,7 +22,7 @@ falsify them: a runtime path that rescales the drive on its way into
 from __future__ import annotations
 
 import dataclasses
-import tomllib
+from gkx.utils import tomlcompat as tomllib
 import warnings
 
 import numpy as np

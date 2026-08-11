@@ -7,11 +7,7 @@ from typing import Any, Callable, Sequence, cast
 import os
 from pathlib import Path
 
-try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # pragma: no cover - only on Python <3.11
-    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
-
+from gkx.utils import tomlcompat as tomllib
 from gkx.workflows.runtime.config import (
     RuntimeCollisionConfig,
     RuntimeConfig,

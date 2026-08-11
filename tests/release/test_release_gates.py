@@ -1464,13 +1464,9 @@ def test_technical_release_status_reports_missing_required_evidence(
 
 import re
 
-try:
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
-    import tomli as tomllib  # type: ignore[no-redef]
-
-
 from support.paths import REPO_ROOT
+
+from gkx.utils import tomlcompat as tomllib
 from tools.release.check_package_architecture_manifest import (
     validate_architecture_policy,
 )
@@ -3166,3 +3162,112 @@ def test_validation_manifest_rejects_package_coverage_below_target(
             )
     finally:
         mod.REPO_ROOT = old_root
+
+
+# ---- interpreter-floor portability gates ----
+
+"""Tests that the declared ``requires-python`` floor is actually reachable.
+
+``tomllib`` is standard library only from Python 3.11, so a bare ``import
+tomllib`` makes the importing module uncollectable on the declared 3.10 floor.
+Every CI job ran 3.11, so such imports accumulated unseen until the suite was
+run on a stock 3.10 box and died during collection. The fallback now lives in
+exactly one module and these gates keep it there.
+"""
+
+import os
+from pathlib import Path
+
+FLOOR_REPO_ROOT = Path(__file__).resolve().parents[2]
+TOML_SHIM = "src/gkx/utils/tomlcompat.py"
+TOML_SHIM_IMPORT = "from gkx.utils import tomlcompat as tomllib"
+# Gates the repo-hygiene job runs before anything is pip-installed.
+UNINSTALLED_RELEASE_GATES = (
+    "tools/release/check_repository_size_manifest.py",
+    "tools/release/check_package_architecture_manifest.py",
+    "tools/release/check_parallel_scaling_artifacts.py",
+    "tools/release/check_release_readiness.py",
+    "tools/release/check_validation_coverage_manifest.py",
+)
+
+
+def _tracked_python_files() -> list[str]:
+    proc = subprocess.run(
+        ["git", "ls-files", "*.py"],
+        cwd=FLOOR_REPO_ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return [line for line in proc.stdout.splitlines() if line]
+
+
+def _uninstalled_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run the way repo-hygiene does: no installed gkx distribution.
+
+    From 3.11 that is exactly ``-S``, which drops site-packages entirely and so
+    proves the gate reaches the shim through ``src`` and needs nothing but the
+    standard library. On 3.10 the shim legitimately needs ``tomli`` -- the
+    dependency pyproject declares under ``python_version < '3.11'`` -- and that
+    lives in site-packages, so ``-S`` there would assert something false.
+    """
+
+    flags = ["-S"] if sys.version_info >= (3, 11) else []
+    return subprocess.run(
+        [sys.executable, *flags, *args],
+        cwd=FLOOR_REPO_ROOT,
+        check=False,
+        text=True,
+        capture_output=True,
+        env={"PATH": os.environ.get("PATH", "")},
+    )
+
+
+def test_tomllib_fallback_lives_only_in_the_shim() -> None:
+    """No other module may import tomllib/tomli, directly or behind its own guard."""
+
+    offenders: dict[str, list[int]] = {}
+    for relative in _tracked_python_files():
+        if relative == TOML_SHIM:
+            continue
+        text = (FLOOR_REPO_ROOT / relative).read_text(encoding="utf-8")
+        hits = [
+            number
+            for number, line in enumerate(text.splitlines(), start=1)
+            if line.split("#")[0].strip().split(" as ")[0]
+            in {"import tomllib", "import tomli"}
+        ]
+        if hits:
+            offenders[relative] = hits
+
+    assert not offenders, (
+        "these modules import tomllib/tomli directly and so cannot be imported on "
+        f"the declared Python floor; use `{TOML_SHIM_IMPORT}` instead: {offenders}"
+    )
+
+
+def test_toml_shim_stays_cheap_to_import() -> None:
+    """The uninstalled release gates reach the shim through ``src``, so keep it light.
+
+    Importing it must not drag in the solver stack, and on 3.11+ it must need
+    nothing outside the standard library at all.
+    """
+
+    probe = (
+        "import sys; sys.path.insert(0, 'src');"
+        " from gkx.utils import tomlcompat;"
+        " assert tomlcompat.loads('a = 1') == {'a': 1};"
+        " heavy = {'jax', 'jaxlib', 'numpy', 'scipy', 'matplotlib', 'netCDF4'}"
+        " & set(sys.modules);"
+        " assert not heavy, heavy"
+    )
+    proc = _uninstalled_run(["-c", probe])
+    assert proc.returncode == 0, proc.stderr
+
+
+@pytest.mark.parametrize("relative", UNINSTALLED_RELEASE_GATES)
+def test_repo_hygiene_gates_run_without_an_install(relative: str) -> None:
+    """repo-hygiene runs these before any ``pip install``; keep that working."""
+
+    proc = _uninstalled_run([relative, "--help"])
+    assert proc.returncode == 0, proc.stderr
