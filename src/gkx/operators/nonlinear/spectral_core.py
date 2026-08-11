@@ -66,28 +66,6 @@ def _spectral_bracket(state_hat: jax.Array, phi_hat: jax.Array) -> jax.Array:
     return jnp.fft.fft2(bracket_xy, axes=(-3, -2))
 
 
-def _pencil_ifft2(arr: jax.Array, *, y_axis: int, x_axis: int) -> jax.Array:
-    """Return a 2D inverse FFT through explicit x-then-y pencil stages."""
-
-    y_axis = y_axis % arr.ndim
-    x_axis = x_axis % arr.ndim
-    x_transformed = jnp.fft.ifft(arr, axis=x_axis)
-    transposed = jnp.swapaxes(x_transformed, y_axis, x_axis)
-    y_transformed = jnp.fft.ifft(transposed, axis=x_axis)
-    return jnp.swapaxes(y_transformed, y_axis, x_axis)
-
-
-def _pencil_fft2(arr: jax.Array, *, y_axis: int, x_axis: int) -> jax.Array:
-    """Return a 2D forward FFT through explicit x-then-y pencil stages."""
-
-    y_axis = y_axis % arr.ndim
-    x_axis = x_axis % arr.ndim
-    x_transformed = jnp.fft.fft(arr, axis=x_axis)
-    transposed = jnp.swapaxes(x_transformed, y_axis, x_axis)
-    y_transformed = jnp.fft.fft(transposed, axis=x_axis)
-    return jnp.swapaxes(y_transformed, y_axis, x_axis)
-
-
 def _pencil_spectral_bracket(state_hat: jax.Array, phi_hat: jax.Array) -> jax.Array:
     """Return the pseudo-spectral bracket for one device-z pencil slab.
 
@@ -98,14 +76,26 @@ def _pencil_spectral_bracket(state_hat: jax.Array, phi_hat: jax.Array) -> jax.Ar
     transform per operand, with the physical-space product fused into the input
     of the inverse transform.
 
-    Explicit axis-at-a-time staging (:func:`_pencil_ifft2`) is what a pencil
-    decomposition needs when a *transform* axis is itself partitioned, because
-    the inter-stage transpose is then the communication step. Sharding ``z``
-    never partitions ``ky`` or ``kx``, so on a local slab that staging buys no
-    communication and costs a full-size transpose between stages, a stack that
-    materializes both derivative operands, and the loss of the product/transform
-    fusion -- together roughly three times the scratch memory of the fused route
-    and a 1.5x-1.7x single-device slowdown.
+    Explicit axis-at-a-time staging -- transform ``x``, transpose, transform
+    ``y`` -- is what a pencil decomposition needs when a *transform* axis is
+    itself partitioned, because the inter-stage transpose is then the
+    communication step. Sharding ``z`` never partitions ``ky`` or ``kx``, so on
+    a local slab that staging buys no communication and costs a full-size
+    transpose between stages, a stack that materializes both derivative
+    operands, and the loss of the product/transform fusion -- together roughly
+    three times the scratch memory of the fused route and a 1.5x-1.7x
+    single-device slowdown.
+
+    This module used to carry that staging as ``_pencil_ifft2`` and
+    ``_pencil_fft2``. They are gone rather than kept as a reference for a future
+    partitioned-transform route, because they were not one: both staged their
+    axes with :func:`jax.numpy.swapaxes`, a device-local transpose. A route that
+    genuinely partitions ``ky`` or ``kx`` has to express that step as a
+    collective -- an all-to-all, or a resharding across the mesh axis that owns
+    the transform axis -- so the code would be rewritten, not reused. Keeping it
+    would have preserved the shape of a distributed FFT with none of its
+    communication, which is the reading that produced the staged route here in
+    the first place.
     """
 
     return _spectral_bracket(state_hat, phi_hat)
@@ -493,8 +483,6 @@ __all__ = [
     "_logical_spectral_tiles",
     "_max_abs_rel_error",
     "_normalize_spectral_tile_bounds",
-    "_pencil_fft2",
-    "_pencil_ifft2",
     "_pencil_nonlinear_spectral_rhs",
     "_pencil_nonlinear_spectral_rhs_z_chunked",
     "_pencil_spectral_bracket",
