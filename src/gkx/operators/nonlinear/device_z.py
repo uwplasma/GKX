@@ -27,7 +27,6 @@ from gkx.operators.nonlinear.spectral_core import (
     _field_from_state,
     _host_max_abs_rel_error,
     _host_staged_array_for_sharding,
-    _pencil_ifft2,
     _pencil_nonlinear_spectral_rhs,
     _pencil_nonlinear_spectral_rhs_z_chunked,
     _serial_nonlinear_spectral_rhs,
@@ -151,15 +150,26 @@ def _spectral_physical_transport_observable_sums(
     state_hat: jax.Array,
     bracket_hat: jax.Array,
 ) -> jax.Array:
-    """Return additive physical-space observable sums for local z slabs."""
+    """Return additive physical-space observable sums for local z slabs.
+
+    The observable transforms are local for the same reason the slab bracket is.
+    ``PartitionSpec(None, None, None, None, "z")`` partitions only the field-line
+    axis, so ``ky`` and ``kx`` are resident on every device and the ``(ky, kx)``
+    transform pair never crosses a shard boundary. Axis-at-a-time staging is what
+    a pencil decomposition needs when a *transform* axis is itself partitioned,
+    because the inter-stage transpose is then the communication step; here it
+    buys no communication and costs a full-size transpose plus the scratch to
+    materialize it. These sums are therefore taken with the local fused
+    transform.
+    """
 
     _nl, _nm, ny, nx, _nz = _validate_spectral_state_shape(tuple(state_hat.shape))
     real_dtype = jnp.real(state_hat).dtype
     ky, _kx = _spectral_wave_numbers(ny, nx, real_dtype)
     field = _field_from_state(state_hat)
     density_hat = jnp.sum(state_hat[:, 0, :, :, :], axis=0)
-    density_xy = _pencil_ifft2(density_hat, y_axis=0, x_axis=1)
-    phi_y = _pencil_ifft2(1j * ky[:, None, None] * field, y_axis=0, x_axis=1)
+    density_xy = jnp.fft.ifft2(density_hat, axes=(0, 1))
+    phi_y = jnp.fft.ifft2(1j * ky[:, None, None] * field, axes=(0, 1))
     flux_density = jnp.abs(jnp.real(jnp.conj(density_xy) * (-phi_y)))
     bracket_abs2 = jnp.abs(bracket_hat) ** 2
     return jnp.asarray(
