@@ -17,15 +17,30 @@ or from Python.
 pip install gkx && gkx
 ```
 
-[![Saturated ITG turbulence on a Cyclone flux tube](docs/_static/turbulence_poster.jpg)](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)
+<img src="docs/_static/turbulence_loop.webp" width="900" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
 
 **Saturated ITG turbulence on a Cyclone flux tube** (32×32×24, `t ≈ 300–376`),
 shown as the perpendicular cut a gyrokineticist reads and as the field-aligned
 tube in real space — the same data twice, because a flux-tube movie that only
 shows the perpendicular plane hides the parallel elongation that defines the
-turbulence. Amplitude is steady across all 120 frames, not growing.
-**[▶ Play the movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)** (1.8 MB), or regenerate it with
-[`build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py).
+turbulence. Amplitude is steady across the whole loop, not growing.
+
+The loop is an animated image rather than a `<video>`, which GitHub strips from
+Markdown: 60 frames at 10 fps, 828 kB of animated WebP, chosen over GIF because
+no GIF fit the repository's 1 MB per-file limit at a resolution worth showing.
+The
+**[full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)**
+(1.8 MB, 120 frames at 20 fps) is a release asset. Regenerate the physics with
+[`build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py), and
+re-encode the loop from its output with:
+
+```bash
+mkdir -p frames
+ffmpeg -i gkx-cyclone-itg-turbulence.mp4 \
+  -vf "fps=10,scale=1100:-1:flags=lanczos" frames/f_%04d.png
+img2webp -loop 0 -lossy -q 60 -m 6 -d 100 frames/f_*.png \
+  -o docs/_static/turbulence_loop.webp
+```
 
 ## Why GKX
 
