@@ -82,6 +82,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     import jax
     from jax.sharding import NamedSharding, PartitionSpec
 
+    from gkx.core.velocity import laguerre_gyroaverage_neighbors
     from gkx.operators.linear.params import _as_species_array
     from gkx.operators.linear.streaming import (
         abs_z_linked_fft,
@@ -293,8 +294,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             * gradb_kernel
         )
 
-        jl_m1 = shift_axis(local_jl, -1, axis=1)
-        jl_p1 = shift_axis(local_jl, 1, axis=1)
+        jl_m1, jl_p1 = laguerre_gyroaverage_neighbors(local_jl, local_b, axis=1)
         l4 = cache.l4[None, ...]
         tprim5 = tprim_s[:, None, None, None, None]
         fprim5 = fprim_s[:, None, None, None, None]

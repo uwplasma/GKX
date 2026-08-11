@@ -76,6 +76,8 @@ def _fused_electrostatic_constants(
     *,
     local_m: int,
 ) -> SimpleNamespace:
+    from gkx.core.velocity import laguerre_gyroaverage_neighbors
+    from gkx.parallel.velocity_drive import _normalise_single_species_b
     from gkx.operators.linear.streaming import (
         grad_z_periodic as operator_grad_z_periodic,
         shift_axis as operator_shift_axis,
@@ -85,6 +87,9 @@ def _fused_electrostatic_constants(
     jl = jnp.asarray(cache.Jl)
     if jl.ndim == 5:
         jl = jl[0]
+    jl_m1, jl_p1 = laguerre_gyroaverage_neighbors(
+        jl, _normalise_single_species_b(cache.b), axis=0
+    )
     charge_s = jnp.asarray(params.charge_sign, dtype=real_dtype).reshape(-1)[0]
     density_s = jnp.asarray(params.density, dtype=real_dtype).reshape(-1)[0]
     tau = jnp.asarray(params.tau_e, dtype=real_dtype)
@@ -125,8 +130,8 @@ def _fused_electrostatic_constants(
         ).reshape((1, int(jnp.asarray(cache.ky).shape[0]), 1, 1)),
         tprim_s=jnp.asarray(params.tprim, dtype=real_dtype).reshape(-1)[0],
         fprim_s=jnp.asarray(params.fprim, dtype=real_dtype).reshape(-1)[0],
-        jl_m1=operator_shift_axis(jl, -1, axis=0),
-        jl_p1=operator_shift_axis(jl, 1, axis=0),
+        jl_m1=jl_m1,
+        jl_p1=jl_p1,
         l4=jnp.asarray(cache.l4, dtype=real_dtype).reshape((arr.shape[0], 1, 1, 1)),
         w_streaming=jnp.asarray(term_weights.streaming, dtype=real_dtype),
         w_mirror=jnp.asarray(term_weights.mirror, dtype=real_dtype),
