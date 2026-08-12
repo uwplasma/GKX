@@ -73,10 +73,19 @@ def dominant_eigenpairs_propagator_cached(
         projected[:krylov_dim, :krylov_dim],
     )
     candidate_indices = jnp.argsort(jnp.abs(eigenvalues))[-candidates:][::-1]
+    # These lifted vectors are what this function returns and what ``certify``
+    # below measures a residual against, so their error is the floor of every
+    # certification downstream. At ``candidates == 1`` the contraction is a
+    # matvec and XLA leaves it exact, but from two candidates on it is a real
+    # matrix product and Ampere satisfies it with TF32: measured against a
+    # float64 reference on an RTX A4000 the returned eigenvector moves from
+    # 1.2e-08 to 1.8e-05. One config value away from an exact result is not a
+    # property to leave implicit, so pin it at every candidate count.
     lifted = jnp.tensordot(
         coefficients[:, candidate_indices].T,
         basis[:krylov_dim],
         axes=1,
+        precision=jax.lax.Precision.HIGHEST,
     )
     flattened = lifted.reshape((candidates, -1))
     norms = jnp.linalg.norm(flattened, axis=1)

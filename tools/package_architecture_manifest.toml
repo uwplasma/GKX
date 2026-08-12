@@ -70,7 +70,18 @@ recursive = true
 # -- at zero drive the whole spectrum sits on the imaginary axis and the branch
 # selector is floored at zero -- and no existing test covered that, because
 # every other objective test runs at a drive where something is unstable.
-baseline = 96
+# 96 -> 97: tests/unit/solvers/test_dot_precision_guard.py. The target is 36, so
+# a new file needs a reason: this one owns a hazard that has no home in any
+# existing suite, because it is not a property of a value. An unpinned dot and
+# Precision.HIGHEST are bit-identical on CPU, so nothing this repo's x64-only CI
+# executes can observe TF32 -- the evidence lives in the jaxpr, and the assertion
+# has to be about the precision request rather than the answer. It is one file
+# rather than assertions scattered across the solver and geometry suites because
+# the classifier is shared: the rule is shape-based, so a contraction that
+# becomes a matrix product when a config value moves is caught without anyone
+# editing a list of call sites. It also carries the single allowlisted unpinned
+# contraction and the test that keeps that entry honest.
+baseline = 97
 target = 36
 
 [[topology_policy.counts]]
@@ -212,7 +223,21 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 89848: finishing the TF32 sweep across the solver and geometry paths
+# #43 left. The audit measured every contraction in the package rather than
+# assuming, and the answer narrowed the fix: XLA only reaches for the tensor
+# cores when a contraction is matrix-shaped, so the Krylov vector work -- the
+# Arnoldi Gram-Schmidt vdots, the Rayleigh quotients, the Ritz lift, the overlap
+# einsums -- measured exact unpinned on an RTX A4000 and is deliberately left
+# alone. Two products were not exact and are pinned here: the propagator
+# candidate lift, which is a matvec at the default candidates=1 and a real GEMM
+# above it (returned eigenvector 1.2e-08 -> 1.8e-05), and the Gauss-Newton normal
+# equations, where squared conditioning puts 1.7e-04 into a step whose own report
+# gates at rtol 1.0e-04. Most of the 33 lines are those two measurements written
+# down, plus _damped_gauss_newton_step, which exists so the pin is reachable by a
+# jaxpr assertion at all -- the loop around it converts to host floats to build
+# its history and cannot be traced. See test_dot_precision_guard.py.
+baseline = 89848
 target = 45000
 
 [[line_budget_policy.counts]]
