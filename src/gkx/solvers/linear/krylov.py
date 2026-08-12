@@ -17,6 +17,7 @@ from gkx.operators.linear.params import (
 from gkx.solvers.linear.adaptive_propagator import (
     AdaptivePropagatorSolution as AdaptivePropagatorSolution,
     adaptive_propagator_eigenpair,
+    certifiable_residual_tolerance,
 )
 from gkx.solvers.linear.krylov_algorithms import (
     _advance_imex2,
@@ -62,6 +63,8 @@ class KrylovConfig:
     shift_solve_method: str = "batched"
     shift_preconditioner: str | None = "auto"
     shift_selection: str = "targeted"
+    # Certified against the original operator in the working dtype, so this is
+    # raised to that dtype's noise floor; the default is a float64 gate.
     shift_outer_residual_tol: float = 1.0e-6
     mode_family: str = "auto"
     fallback_method: str = "propagator"
@@ -343,7 +346,10 @@ def _shift_invert_fallback(
         return None
     residual = _eigenpair_relative_residual(*result, cache, params, term_cfg)
     _status(status_callback, f"{fallback_key} fallback residual={residual:.3g}")
-    if not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol:
+    residual_tol = certifiable_residual_tolerance(
+        cfg.shift_outer_residual_tol, v0.dtype
+    )
+    if not np.isfinite(residual) or residual > residual_tol:
         return None
     return result
 
@@ -359,6 +365,9 @@ def _shift_invert_branch(
     *,
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    residual_tol = certifiable_residual_tolerance(
+        cfg.shift_outer_residual_tol, v0.dtype
+    )
     _status(
         status_callback,
         "preparing shift-invert solve with "
@@ -429,9 +438,7 @@ def _shift_invert_branch(
             eig_host.imag
         )
         growth_floor_failed = select_growth and eig_host.real < cfg.fallback_real_floor
-        residual_failed = (
-            not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
-        )
+        residual_failed = not np.isfinite(residual) or residual > residual_tol
         need_fallback = nonfinite_pair or growth_floor_failed or residual_failed
         if not need_fallback or attempt + 1 == len(preconditioners):
             break
@@ -456,7 +463,7 @@ def _shift_invert_branch(
         if residual_failed:
             raise RuntimeError(
                 "shift-invert eigenpair failed the outer residual gate: "
-                f"residual={residual:.6g}, tolerance={cfg.shift_outer_residual_tol:.6g}"
+                f"residual={residual:.6g}, tolerance={residual_tol:.6g}"
             )
         if growth_floor_failed:
             raise RuntimeError(
@@ -487,6 +494,9 @@ def _sparse_shift_invert_branch(
         raise ValueError("sparse shift-invert requires an operator of size at least three")
     if cfg.shift is None:
         raise ValueError("sparse shift-invert requires a supplied or coarse-grid shift")
+    residual_tol = certifiable_residual_tolerance(
+        cfg.shift_outer_residual_tol, v0.dtype
+    )
     from scipy.sparse import eye
     from solvax import SpluFactorization
     from solvax import (  # type: ignore[attr-defined]
@@ -516,7 +526,7 @@ def _sparse_shift_invert_branch(
         initial=v0,
         tolerance=min(cfg.shift_tol, 1.0e-10),
         maxiter=max(cfg.shift_maxiter, 20_000),
-        residual_tolerance=cfg.shift_outer_residual_tol,
+        residual_tolerance=residual_tol,
         factorization=factor,
     )
     vectors = modes.eigenvectors.reshape((modes.eigenvectors.shape[0], *v0.shape))
@@ -527,7 +537,7 @@ def _sparse_shift_invert_branch(
         ]
     )
     certified = np.asarray(modes.converged) & np.isfinite(residuals)
-    certified &= residuals <= cfg.shift_outer_residual_tol
+    certified &= residuals <= residual_tol
     _targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
     if select_overlap:
         scores = np.abs(
@@ -700,6 +710,7 @@ __all__ = [
     "_select_by_overlap",
     "_select_by_target",
     "adaptive_propagator_eigenpair",
+    "certifiable_residual_tolerance",
     "dominant_eigenpair",
     "dominant_eigenpair_cached",
     "dominant_eigenpair_power",

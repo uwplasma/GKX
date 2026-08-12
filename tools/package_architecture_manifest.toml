@@ -212,7 +212,22 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 89874: giving every residual gate a precision floor. The
+# gates compared a relative residual assembled from working-dtype operator
+# applications against an absolute constant -- 1e-10 for the adaptive
+# propagator, 1e-9 for the objective's primal and adjoint solves, 1e-8 for its
+# implicit-gradient solve, 1e-6 for the shift-invert outer gate. That ratio
+# bottoms out a few eps above zero, measured between 1.8 and 12.2 eps in
+# complex64 from n=48 to n=8192, so in single precision every one of them sat
+# below anything the arithmetic can produce. Nothing could certify: the restart
+# budget burned to exhaustion on a pair already as good as float32 allows, and
+# the gradient solve, which fails closed to NaN, deleted the gradient outright.
+# x64-only CI never saw any of it. Most of the cost is the one shared helper and
+# the recorded reason a residual gate is not a free parameter; the call sites
+# are nine substitutions, four of them solves that reach solvax directly and so
+# cannot inherit the floor from the propagator wrapper. See
+# test_residual_gate_never_sits_below_the_working_dtype_noise_floor.
+baseline = 89874
 target = 45000
 
 [[line_budget_policy.counts]]
