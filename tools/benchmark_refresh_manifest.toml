@@ -80,3 +80,15 @@ outputs = [
   "docs/_static/benchmark_core_nonlinear_atlas.png",
   "docs/_static/benchmark_readme_panel.png",
 ]
+
+[[job]]
+name = "reference-linear-parity-matrix"
+description = "Refresh the linear parity matrix against the reference comparison code."
+cwd = "{root}"
+requires_env = ["GX_PARITY_REF_DIR"]
+command = "JAX_ENABLE_X64=1 PYTHONPATH=src:. python tools/comparison/build_gx_parity_matrix.py"
+outputs = [
+  "docs/_static/gkx_gx_linear_parity_matrix.json",
+  "docs/_static/gkx_gx_linear_parity_matrix.csv",
+  "docs/_static/gkx_gx_linear_parity_matrix.png",
+]
