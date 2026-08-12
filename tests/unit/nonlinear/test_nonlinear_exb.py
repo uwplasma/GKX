@@ -116,9 +116,19 @@ def test_laguerre_transform_einsum_matches_moveaxis_tensordot_reference():
     G_jax = jnp.asarray(G, dtype=jnp.complex64)
     to_grid_jax = jnp.asarray(to_grid, dtype=jnp.float32)
 
+    # The reference has to be computed at the same precision as the kernel under
+    # test. _laguerre_to_grid pins Precision.HIGHEST; an unpinned tensordot is
+    # lowered to TF32 on Ampere and later NVIDIA GPUs, so without this the
+    # "reference" is the less accurate of the two and the comparison measures
+    # TF32 truncation (1.8e-3) rather than agreement of the two formulations.
     g_mu = _laguerre_to_grid(G_jax, to_grid_jax)
     ref_grid = jnp.moveaxis(
-        jnp.tensordot(jnp.moveaxis(G_jax, 1, -1), to_grid_jax, axes=([-1], [0])),
+        jnp.tensordot(
+            jnp.moveaxis(G_jax, 1, -1),
+            to_grid_jax,
+            axes=([-1], [0]),
+            precision=jax.lax.Precision.HIGHEST,
+        ),
         -1,
         1,
     )
@@ -129,13 +139,74 @@ def test_laguerre_transform_einsum_matches_moveaxis_tensordot_reference():
     to_spectral = jnp.asarray(rng.normal(size=(5, 3)), dtype=jnp.float32)
     spectral = _laguerre_to_spectral(g_mu, to_spectral)
     ref_spectral = jnp.moveaxis(
-        jnp.tensordot(jnp.moveaxis(g_mu, 1, -1), to_spectral, axes=([-1], [0])),
+        jnp.tensordot(
+            jnp.moveaxis(g_mu, 1, -1),
+            to_spectral,
+            axes=([-1], [0]),
+            precision=jax.lax.Precision.HIGHEST,
+        ),
         -1,
         1,
     )
     np.testing.assert_allclose(
         np.asarray(spectral), np.asarray(ref_spectral), rtol=1.0e-6, atol=1.0e-6
     )
+
+
+def test_velocity_and_shearing_contractions_pin_exact_dot_precision():
+    """The Laguerre transforms and the shearing remap must not run in TF32.
+
+    CPU cannot see a missing pin: an unpinned dot and Precision.HIGHEST give
+    bit-identical CPU numbers. On Ampere and later NVIDIA GPUs the unpinned form is
+    lowered to TF32, which truncates to 10 mantissa bits. That is destructive here
+    for a reason worth stating: the shearing remap contracts against a matrix of
+    exact zeros and ones, so it should return the state's own values reordered, yet
+    in TF32 it rounds the state itself (measured 9.7e-4 on an RTX A4000). The jaxpr
+    carries the precision request on every backend, so CPU CI can guard it.
+    """
+
+    def dot_precisions(function, *args, **kwargs):
+        equations = jax.make_jaxpr(function)(*args, **kwargs).jaxpr.eqns
+        return [
+            equation.params["precision"]
+            for equation in equations
+            if equation.primitive.name == "dot_general"
+        ]
+
+    exact = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
+    grid = build_spectral_grid(
+        GridConfig(Nx=8, Ny=8, Nz=4, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
+    )
+    G = jnp.zeros(
+        (1, 2, 3, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
+    )
+    contractions = {
+        "laguerre_to_grid": dot_precisions(
+            _laguerre_to_grid, G, jnp.zeros((2, 2), dtype=jnp.float32)
+        ),
+        "laguerre_to_spectral": dot_precisions(
+            _laguerre_to_spectral, G, jnp.zeros((2, 2), dtype=jnp.float32)
+        ),
+        "shearing_remap": dot_precisions(
+            lambda value: advance_shearing_coordinates(
+                value,
+                kx=grid.kx,
+                ky=grid.ky,
+                x0=grid.x0,
+                shear_rate=1.0,
+                previous_time=0.0,
+                time=1.0,
+                dealias_mask=grid.dealias_mask,
+            ).state,
+            G,
+        ),
+    }
+    for name, precisions in contractions.items():
+        assert precisions, f"{name} lowered to no dot_general; the guard is vacuous"
+        assert all(precision == exact for precision in precisions), (
+            f"{name} has an unpinned contraction {precisions}; it will run in TF32 "
+            "on Ampere and later NVIDIA GPUs"
+        )
 
 
 def test_exb_bracket_zero_mean_mode():

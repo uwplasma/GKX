@@ -101,8 +101,16 @@ def advance_shearing_coordinates(
     target_modes = radial_modes[None, :, None]
     source_modes = target_modes - incremental_shift[:, None, None]
     remap = source_modes == radial_modes[None, None, :]
+    # ``remap`` is a permutation of the radial modes, so this contraction must
+    # return the state's own values, only reordered. An unpinned dot is lowered to
+    # TF32 on Ampere and later NVIDIA GPUs, which rounds ``value`` itself to 10
+    # mantissa bits (~1e-3 relative here) even though every coefficient is 0 or 1.
+    # Pinning keeps the shearing remap a reordering rather than a truncation.
     remapped = jnp.einsum(
-        "yts,...ysz->...ytz", remap.astype(value.dtype), value
+        "yts,...ysz->...ytz",
+        remap.astype(value.dtype),
+        value,
+        precision=jax.lax.Precision.HIGHEST,
     )
     if dealias_mask is not None:
         mask_shape = (1,) * (remapped.ndim - 3) + tuple(dealias_mask.shape) + (1,)
