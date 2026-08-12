@@ -49,6 +49,7 @@ class FullLinearRuntimeDeps:
     fit_growth_rate_auto_with_stats: Callable[..., Any]
     fit_growth_rate_auto: Callable[..., Any]
     fit_growth_rate: Callable[..., Any]
+    fit_growth_rate_with_stats: Callable[..., Any]
     extract_eigenfunction: Callable[..., Any]
 
 
@@ -546,6 +547,7 @@ def _fit_linear_time_series(
         fit_growth_rate_auto_with_stats_fn=deps.fit_growth_rate_auto_with_stats,
         fit_growth_rate_auto_fn=deps.fit_growth_rate_auto,
         fit_growth_rate_fn=deps.fit_growth_rate,
+        fit_growth_rate_with_stats_fn=deps.fit_growth_rate_with_stats,
         extract_eigenfunction_fn=deps.extract_eigenfunction,
     )
     if ctx.fit_key == "auto":

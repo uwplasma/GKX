@@ -212,7 +212,18 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 89860: making fit_signal = "auto" choose a signal and nothing else.
+# Both automatic paths -- the runtime linear fit and the combined-ky scan --
+# scored their candidates through fit_growth_rate_auto_with_stats without
+# passing tmin/tmax, so a run that pinned [fit] auto_window = false with a
+# window got the automatic selector's window instead, silently, while still
+# reporting "automatic fit selected signal 'phi'". On the Cyclone linear case
+# that is gamma = 0.0951 against 0.0413 for the same trajectory. The lines are
+# the fixed-window branch in each scorer plus the fit_growth_rate_with_stats
+# seam they need, which reports the R^2 pair over the requested window so the
+# channel is still chosen on fit quality. See
+# test_auto_fit_signal_keeps_the_requested_runtime_window.
+baseline = 89860
 target = 45000
 
 [[line_budget_policy.counts]]
