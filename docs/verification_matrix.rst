@@ -249,10 +249,17 @@ The instrument is ``tools/comparison/build_gx_parity_matrix.py``, driven by
 - runs the batched GKX linear ``k_y`` scan at the velocity resolution
   ``(N_l, N_m)`` of the GX input deck, importing the GX run's own geometry so
   that both codes integrate identical geometric coefficients;
-- integrates for the same time the GX deck integrated, and fits ``gamma`` and
-  ``omega`` over the last thirty percent of that trajectory; and
+- integrates, and fits ``gamma`` and ``omega`` over the last thirty percent of
+  that trajectory; and
 - repeats the scan over half the integration time and records how far the
   answer moved.
+
+The four electrostatic cases are integrated for exactly the time their GX deck
+integrated, ``t=150`` for Cyclone and ``t=200`` for the two stellarators. The
+two electromagnetic cases are not: their stability-limited step is ``2e-4``
+against ``2e-3`` for the electrostatic cases, so they are integrated to ``t=20``
+against the deck's ``t=40``. Every integration time is recorded per case in the
+``resolution`` block of ``docs/_static/gkx_gx_linear_parity_matrix.json``.
 
 The last step is what makes the table readable. A near-marginal ``k_y`` needs
 far more e-foldings than a peak-``k_y`` mode before either code has an

@@ -108,6 +108,21 @@ def _sample_stride(steps: int, target_samples: int) -> int:
     return stride if steps % stride == 0 else 1
 
 
+def _repo_relative(path: Path) -> str:
+    """Describe a path relative to the repository when it lives inside it.
+
+    A manifest kept outside the checkout is a normal way to run a variant
+    campaign, so this must not raise: losing a completed run while writing its
+    own provenance string would be an expensive way to learn that.
+    """
+
+    resolved = Path(path).expanduser().resolve()
+    try:
+        return str(resolved.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(resolved)
+
+
 def _relative(value: float, reference: float) -> float:
     if not np.isfinite(value) or not np.isfinite(reference) or reference == 0.0:
         return float("nan")
@@ -463,7 +478,7 @@ def main(argv: list[str] | None = None) -> None:
             "reference comparison code, with matched velocity resolution and "
             "imported reference geometry."
         ),
-        "manifest": str(args.manifest.relative_to(REPO_ROOT)),
+        "manifest": _repo_relative(args.manifest),
         "cases": records,
     }
     json_path = stem.with_suffix(".json")
