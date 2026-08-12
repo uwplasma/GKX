@@ -28,9 +28,9 @@ from pathlib import Path
 import resource
 import sys
 import time
-import tomllib
 from typing import Any
 
+from gkx.utils import tomlcompat as tomllib
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
