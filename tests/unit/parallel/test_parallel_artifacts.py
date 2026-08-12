@@ -13,10 +13,7 @@ from support.paths import REPO_ROOT, load_release_tool
 
 import pytest
 
-try:
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
-    import tomli as tomllib  # type: ignore[no-redef]
+from gkx.utils import tomlcompat as tomllib
 
 
 ROOT = REPO_ROOT

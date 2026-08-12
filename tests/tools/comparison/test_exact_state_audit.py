@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-import tomllib
+from gkx.utils import tomlcompat as tomllib
 
 import pytest
 

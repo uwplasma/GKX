@@ -205,7 +205,14 @@ recursive = true
 # call site, and the shearing remap says why a permutation must not be approximated.
 # CPU has no TF32 path and cannot observe any of it, which is why the explanation
 # lives in the source. See test_collision_contractions_pin_exact_dot_precision.
-baseline = 89789
+# 89726 -> 89752: src/gkx/utils/tomlcompat.py, the repository's only
+# tomllib/tomli fallback. It has to live in the installable package because
+# src reads TOML at runtime, and because putting it anywhere else leaves the
+# per-file try/except that made twelve modules uncollectable on the declared
+# 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
+# and the guard it replaces in workflows/runtime/toml.py was 4. See
+# test_tomllib_fallback_lives_only_in_the_shim.
+baseline = 89815
 target = 45000
 
 [[line_budget_policy.counts]]

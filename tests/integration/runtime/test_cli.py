@@ -4,7 +4,7 @@ import argparse
 from dataclasses import dataclass
 import os
 import sys
-import tomllib
+from gkx.utils import tomlcompat as tomllib
 from pathlib import Path
 
 from support.paths import REPO_ROOT

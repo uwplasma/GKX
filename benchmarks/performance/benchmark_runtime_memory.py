@@ -16,7 +16,7 @@ import re
 import shlex
 import subprocess
 import time
-import tomllib
+from gkx.utils import tomlcompat as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = ROOT / "tools" / "runtime_memory_manifest.toml"
