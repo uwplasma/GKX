@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from gkx.diagnostics.analysis import estimate_observed_order
 from gkx.terms.config import FieldState
-from gkx.solvers.nonlinear.explicit import integrate_nonlinear_scan
+from gkx.solvers.nonlinear.explicit import (
+    _checkpoint_block_size,
+    checkpointed_explicit_scan,
+    integrate_nonlinear_scan,
+)
 from gkx.terms.nonlinear import (
     exb_nonlinear_contribution,
     placeholder_nonlinear_contribution,
@@ -28,6 +33,36 @@ def _linear_rhs(rate: complex):
         return dG, FieldState(phi=phi)
 
     return rhs_fn
+
+
+def test_checkpointed_scan_matches_discrete_primal_and_reverse_with_tail() -> None:
+    """Block checkpointing must change storage, not the discrete RK map."""
+
+    steps = 19  # sqrt schedule has three full blocks and a non-empty tail
+    indices = jnp.arange(steps, dtype=jnp.int32)
+
+    def objective(parameter: jnp.ndarray, checkpoint: bool) -> jnp.ndarray:
+        def step(carry: jnp.ndarray, index: jnp.ndarray):
+            weight = jnp.asarray(index + 1, dtype=carry.dtype) / steps
+            updated = jnp.tanh(carry + weight * parameter)
+            return updated, (updated, updated * updated)
+
+        final, (states, squares) = checkpointed_explicit_scan(
+            step,
+            jnp.asarray([0.2, -0.4], dtype=jnp.float32),
+            indices,
+            checkpoint=checkpoint,
+        )
+        return jnp.sum(final) + 0.01 * jnp.sum(states + squares)
+
+    parameter = jnp.asarray(0.03, dtype=jnp.float32)
+    plain = jax.value_and_grad(lambda value: objective(value, False))(parameter)
+    blocked = jax.value_and_grad(lambda value: objective(value, True))(parameter)
+
+    np.testing.assert_allclose(np.asarray(blocked[0]), np.asarray(plain[0]), rtol=1e-6)
+    np.testing.assert_allclose(np.asarray(blocked[1]), np.asarray(plain[1]), rtol=1e-6)
+    assert _checkpoint_block_size(steps) == 5
+    assert _checkpoint_block_size(2048) == 46
 
 
 @pytest.mark.parametrize(

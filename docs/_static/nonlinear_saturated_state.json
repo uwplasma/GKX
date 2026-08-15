@@ -14,8 +14,8 @@
     "median": 0.03890582546591759,
     "max": 0.03890582546591759
   },
-  "wall_seconds": 188.07159233093262,
-  "samples": 515,
+  "wall_seconds": 200.0336561203003,
+  "samples": 516,
   "report": {
     "saturated": true,
     "checks": {
@@ -25,11 +25,11 @@
       "tau_resolved": true,
       "window_long_enough": true
     },
-    "tau_ac": 8.917772886375321,
-    "window_in_tau_ac": 22.424545629594363,
-    "late_drift": 0.015664705008520262,
-    "growth_over_start": 50720430.703907855,
-    "late_mean_flux": 116.84112055857362
+    "tau_ac": 8.705051182140824,
+    "window_in_tau_ac": 22.97252314338646,
+    "late_drift": 0.018647165294274064,
+    "growth_over_start": 49318275.32604334,
+    "late_mean_flux": 116.60041567664699
   },
   "trace_note": "full heat-flux trace omitted deliberately: it was 2096 lines of JSON for a result summarised by report.checks. Regenerate with tools/campaigns/nonlinear_saturated_state.py --output"
 }

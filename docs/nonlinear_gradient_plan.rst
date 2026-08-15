@@ -1,9 +1,10 @@
 Nonlinear turbulence gradients
 ==============================
 
-Status: **plan, with one measurement that has to come first.** Nothing here is
-promoted; the point of the first step is to find out whether the current
-approach can work at all.
+Status: **bounded-memory windowed adjoint implemented; promotion tests still
+pending.** The memory wall and physical divergence window are now measured, but
+the finite-difference bias and descent gates below still prevent calling this a
+production stellarator gradient.
 
 Why the current approach is stuck
 ---------------------------------
@@ -100,14 +101,77 @@ propagated from those understated error bars; corrected for correlation it is
 larger still. The gap to the 0.5 gate is therefore wider than 13x of extra
 sampling -- which strengthens rather than weakens the case for changing method.
 
-**N2 -- Gradient-divergence curve. MEASURED, and it does not diverge.**
+Algorithm selection
+-------------------
+
+The nonlinear run is a chaotic trajectory, not a converged residual
+:math:`F(x,p)=0`. An implicit root adjoint would differentiate a steady root that
+this problem does not have. A continuous backsolve adjoint would also change the
+gradient: stellarator optimization needs the derivative of GKX's actual discrete
+RK map, including its projection and field solves. The implementation therefore
+uses a **checkpointed discrete adjoint** [JAXCheckpointing]_ [Revolve2000]_.
+
+Checkpointing only the scan step rematerializes its local intermediates but
+still leaves all :math:`N` scan carries on the reverse tape. GKX now splits the
+trajectory into blocks of length :math:`B`, rematerializes each step and each
+block, and retains only the block boundaries plus one block's reverse state:
+
+.. math::
+
+   M(B) = O(N/B + B), \qquad B = \lceil\sqrt{N}\rceil,
+   \qquad M = O(\sqrt{N}).
+
+This is reverse-tape state storage; requested time-series outputs retain their
+inherent :math:`O(N)` result storage. The schedule does not alter a time step or
+the returned derivative. A recursive binomial schedule can reduce storage to
+:math:`O(\log N)` [DiffraxAdjoints]_, but incurs :math:`O(N\log N)`
+recomputation. The measured physical knee below is only
+:math:`N=1024`--2048, where the square-root schedule already fits comfortably
+and has the smaller recomputation burden.
+
+``tools/profiling/profile_nonlinear_adjoint_checkpointing.py`` compiles the same
+production nonlinear RHS and checks primal/adjoint parity before reporting XLA
+memory. At :math:`N=2048` in complex64:
+
+.. list-table:: Reverse-mode checkpoint profile
+   :header-rows: 1
+
+   * - device / state
+     - policy
+     - XLA temporary memory
+     - warmed runtime
+   * - CPU, 98 kB state
+     - per-step
+     - 759 MB
+     - 4.57 s
+   * - CPU, 98 kB state
+     - blocked
+     - **12.6 MB (60.1x lower)**
+     - 7.03 s (1.54x)
+   * - RTX A4000, 1.57 MB state
+     - per-step
+     - 11.88 GB
+     - 3.42 s
+   * - RTX A4000, 1.57 MB state
+     - blocked
+     - **168 MB (70.5x lower)**
+     - 5.71 s (1.67x)
+
+The raw CPU and GPU artifacts are
+``docs/_static/nonlinear_adjoint_checkpointing_cpu32.json`` and
+``nonlinear_adjoint_checkpointing_gpu32.json``. The production saturated-state
+ladder below runs in complex128 and now completes at :math:`N=2048` on the same
+16 GB GPU.
+
+**N2 -- Gradient-divergence curve. MEASURED, including the knee.**
 ``tools/campaigns/nonlinear_saturated_state.py`` reaches saturation with the
 production CFL-adaptive stepper (all five checks pass:
-:math:`\tau_{\rm ac} = 8.92`, window 22.4 :math:`\tau_{\rm ac}`, late drift
-1.6%), and ``nonlinear_gradient_window.py`` differentiates a fixed-step window
-from that state. On a ``16^3`` Cyclone case:
+:math:`\tau_{\rm ac} = 8.71`, window 23.0 :math:`\tau_{\rm ac}`, late drift
+1.9%), and ``nonlinear_gradient_window.py`` differentiates a fixed-step window
+from that state. The requested ``Nx=Ny=Nz=16`` linked-grid override retains
+``ntheta=24``, so the actual spectral state is ``16 x 16 x 24``:
 
-.. list-table:: :math:`|dQ/d(\text{drive scale})|` from a verified-saturated state
+.. list-table:: :math:`|dE/d(\text{drive scale})|` from a verified-saturated state
    :header-rows: 1
 
    * - :math:`N`
@@ -117,50 +181,73 @@ from that state. On a ``16^3`` Cyclone case:
      - ratio to previous
    * - 64
      - 2.49
-     - 0.28
+     - 0.29
      - 1.854e-01
      - 2.190
    * - 128
      - 4.98
-     - 0.56
+     - 0.57
      - 4.040e-01
      - 2.179
    * - 256
      - 9.96
-     - 1.12
+     - 1.14
      - 8.353e-01
      - 2.068
    * - 512
      - 19.92
-     - 2.23
+     - 2.29
      - 1.673e+00
      - 2.003
    * - 1024
-     - 39.83
-     - 4.47
+     - 39.84
+     - 4.58
      - 2.297e+00
-     - **1.373**
+     - 1.373
+   * - 2048
+     - 79.68
+     - 9.15
+     - **4.904e+01**
+     - **21.349**
 
-The gradient grows **linearly** in :math:`N` -- each doubling multiplies it by
-2.0 to 2.2 -- out to :math:`N = 512`, then the ratio breaks to 1.37. There is no
-exponential divergence anywhere in the accessible range, which reaches
-:math:`t \approx 40 \approx 4.5\,\tau_{\rm ac}`.
+The gradient grows nearly linearly through :math:`N=512`, then decorrelates at
+:math:`N=1024`. At :math:`N=2048` it jumps by 21.3x. An exponential fit is
+better than a power law on the fitted tail (residual 0.408 versus 0.642), with
+rate :math:`0.0639` per code-time unit. Thus the usable initial-value adjoint
+window is now bracketed between **4.58 and 9.15 correlation times** for this
+case. This is longer than [iGENE2026]_'s roughly one-correlation-time window, but
+it is not an unlimited long-time derivative.
 
-That is the opposite of the expected behaviour and better news than the plan
-assumed. Linear growth is what a windowed adjoint does while the perturbation is
-still propagating coherently; the break at :math:`N = 1024` is the beginning of
-decorrelation, not blow-up. **The usable window is therefore at least 4.5
-correlation times**, against [iGENE2026]_'s divergence at roughly one.
+Two caveats remain:
 
-Three caveats, none of which the numbers above resolve:
-
-* This is a **lower bound**. The knee was not found because the ladder stops at
-  :math:`N = 1024`; reverse mode OOM'd a 16 GB card at :math:`N = 2048` even with
-  ``jax.checkpoint`` (XLA could not get below 5.3 GiB). Whether divergence
-  appears at 10 or 100 :math:`\tau_{\rm ac}` is untested.
 * The objective is a state-norm proxy, not the production heat flux. It shares
   the trajectory's Lyapunov behaviour but is not the quantity being optimized.
 * One case, one resolution, one drive parameter.
+
+The implementation also has a direct mathematics/physics gate: on a nonlinear
+Cyclone trajectory, reverse mode through the blocked scan differentiates the
+production heat-flux kernel and agrees with centered finite differences on both
+CPU and CUDA. The lower-level test covers a non-square step count, so its tail
+block and both primal and reverse results are checked independently.
+
+Hermite--Laguerre structure and SOLVAX
+---------------------------------------
+
+The Hermite--Laguerre recurrences are valuable, but they do not make the full
+nonlinear Jacobian block tridiagonal. Streaming, magnetic drifts, and collisions
+couple nearby :math:`m` and :math:`\ell` orders [Mandell2018]_; GX implements
+that neighborhood as a local stencil. The nonlinear :math:`E\times B` bracket,
+however, transforms Laguerre coefficients to a velocity grid and performs a
+Fourier convolution [GX2022]_. Its Jacobian is therefore global in perpendicular
+wavenumber.
+
+SOLVAX's block-Thomas and transposed block solves are consequently not an exact
+inverse for this trajectory adjoint. They remain the right building blocks for
+a **preconditioner** if N3/N4 require NILSAS or multiple-shooting shadowing:
+retain the local Hermite--Laguerre linear block in the preconditioner and apply
+the nonlinear convolution matrix-free. SOLVAX already exposes the needed
+transposed block solve and Newton--Krylov interfaces, so no SOLVAX change is
+justified at this stage.
 
 **Precision note, found here and applicable well beyond this measurement.** The
 production stepper sets its state dtype with ``result_type(G0, complex64)``, so a
@@ -183,8 +270,10 @@ actually falls, measured with the N1 protocol. A gradient that is 30% of truth
 but correctly signed and low-variance beats an unbiased one with 180%
 uncertainty.
 
-**N5 -- Shadowing, only if N4 fails.** NILSS on the smallest tracked case.
-Deferred deliberately: it is a large build, and N4 may make it unnecessary.
+**N5 -- Shadowing, only if N4 fails.** NILSAS on the smallest tracked case.
+Its adjoint cost is independent of the number of stellarator design parameters
+[NILSAS2019]_. Deferred deliberately: it is a large build, and N4 may make it
+unnecessary.
 
 Validation gates
 ----------------
@@ -234,3 +323,26 @@ References
 .. [Blonigan2018] P. Blonigan & Q. Wang, "Multiple shooting shadowing for
    sensitivity analysis of chaotic dynamical systems", *J. Comput. Phys.* **354**,
    447-475 (2018).
+
+.. [NILSAS2019] A. Ni, "Sensitivity analysis on chaotic dynamical systems by
+   Non-Intrusive Least Squares Adjoint Shadowing (NILSAS)", arXiv:1801.08674.
+   https://arxiv.org/abs/1801.08674
+
+.. [Revolve2000] A. Griewank & A. Walther, "Algorithm 799: Revolve: an
+   implementation of checkpointing for the reverse or adjoint mode of
+   computational differentiation", *ACM TOMS* **26**, 19-45 (2000).
+   https://doi.org/10.1145/347837.347846
+
+.. [JAXCheckpointing] JAX documentation, "Gradient checkpointing".
+   https://docs.jax.dev/en/latest/gradient-checkpointing.html
+
+.. [DiffraxAdjoints] Diffrax documentation, "Adjoints".
+   https://docs.kidger.site/diffrax/api/adjoints/
+
+.. [Mandell2018] N. R. Mandell, W. Dorland & M. Landreman,
+   "Laguerre-Hermite pseudo-spectral velocity formulation of gyrokinetics",
+   *J. Plasma Phys.* **84** (2018). https://arxiv.org/abs/1708.04029
+
+.. [GX2022] N. R. Mandell et al., "GX: a GPU-native gyrokinetic turbulence
+   code for tokamak and stellarator design", arXiv:2209.06731.
+   https://arxiv.org/abs/2209.06731

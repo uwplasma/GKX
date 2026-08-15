@@ -154,24 +154,27 @@ def fluctuation_energy(state):
 def integrate(rhs, state, drive, dt: float, steps: int, *, checkpoint: bool = False):
     """Fixed-step RK2 over ``steps``, returning the final state.
 
-    ``checkpoint`` rematerializes each step in the backward pass instead of
-    storing its residuals. Reverse mode through a plain scan keeps every
-    intermediate, which is the standard memory wall for windowed adjoints -- at
-    a 16x16x16 grid and N=2048 it asked for 5.4 GB and exhausted a 16 GB card.
-    Remat trades that for recomputing the forward step, which is the right side
-    of the trade when the alternative is not running at all.
+    ``checkpoint`` uses GKX's two-level discrete-adjoint schedule.  A rematerialized
+    step by itself still stores all ``steps`` scan carries -- at a 16x16x16 grid
+    and N=2048 that exhausted a 16 GB card.  Rematerialized sqrt-sized blocks
+    retain only ``O(sqrt(steps))`` states while preserving this exact RK2 map.
     """
 
-    import jax
     import jax.numpy as jnp
+
+    from gkx.solvers.nonlinear.explicit import checkpointed_explicit_scan
 
     def body(carry, _):
         k1 = rhs(carry, drive)
         k2 = rhs(carry + dt * k1, drive)
         return carry + 0.5 * dt * (k1 + k2), None
 
-    step = jax.checkpoint(body) if checkpoint else body
-    final, _ = jax.lax.scan(step, state, jnp.arange(steps))
+    final, _ = checkpointed_explicit_scan(
+        body,
+        state,
+        jnp.arange(steps),
+        checkpoint=checkpoint,
+    )
     return final
 
 
