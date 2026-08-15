@@ -218,7 +218,14 @@ recursive = true
 # measured N=2048 XLA temporary memory by 60x on CPU and 70x on GPU while
 # preserving the exact discrete map and device-resident execution. See
 # test_checkpointed_scan_matches_discrete_primal_and_reverse_with_tail.
-baseline = 89890
+# 89890 -> 90591: matrix-free nonlinear trajectory sensitivities. One focused
+# module adds the physical finite-window discrete adjoint, segmented NILSAS,
+# regularized multiple-shooting Schur products/CG, and Benettin QR diagnostics;
+# none assembles a state Jacobian. The remaining lines make the zero-kperp
+# Laguerre--Bessel cache tangent analytic and export the API. See the unstable
+# fixed-point, all-parameter, Lyapunov-spectrum, and zero-mode tangent tests. The
+# shared Bessel helper also protects the uncached electromagnetic fallback.
+baseline = 90591
 target = 45000
 
 [[line_budget_policy.counts]]

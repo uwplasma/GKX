@@ -8,11 +8,12 @@ the last ``N`` steps from a state already in the saturated regime, which is
 biased but bounded.
 
 That only helps if ``N`` is chosen below the divergence. This tool measures the
-divergence directly: hold the trajectory fixed up to step ``T-N``, differentiate
-the windowed heat-flux average through the final ``N`` steps, and report the
-gradient against ``N``. A plateau followed by exponential growth locates the
-usable window; the growth rate of the tail estimates the Lyapunov exponent that
-causes it.
+divergence directly: start every rung from the same detached saturated state,
+differentiate the heat-flux average through ``N`` production-map steps, and
+report the gradient against ``N``. The windows are nested prefixes of one
+physical trajectory. A plateau followed by exponential growth locates the usable
+window; the growth rate of the tail estimates the Lyapunov exponent that causes
+it.
 
 The comparison that matters is against ``tau_ac`` from
 ``heat_flux_autocorrelation.py``: the published result for a differentiable
@@ -25,9 +26,9 @@ building.
 Two traps this avoids explicitly. ``TermConfig`` defaults ``nonlinear=0.0``, so a
 config assembled by hand runs a *linear* case that grows without bound and would
 manufacture a divergence that has nothing to do with turbulence -- the nonlinear
-term is asserted on. And the state is detached at ``T-N`` with ``stop_gradient``
-rather than by re-running a shorter trajectory, so every ``N`` differentiates the
-same physical trajectory and the curve is not confounded by different histories.
+term is asserted on. And the common saturated state is detached with
+``stop_gradient``, so every ``N`` differentiates the same trajectory prefix and
+the curve is not confounded by different histories.
 """
 
 from __future__ import annotations
@@ -61,13 +62,16 @@ def build_nonlinear_case(
     import jax.numpy as jnp
 
     from gkx.core.grid import build_spectral_grid
+    from gkx.diagnostics import fieldline_quadrature_weights, heat_flux_total
     from gkx.operators.linear.cache_builder import build_linear_cache
+    from gkx.operators.nonlinear.projection import _make_hermitian_projector
     from gkx.runtime import (
         build_runtime_geometry,
         build_runtime_linear_params,
         build_runtime_term_config,
     )
     from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+    from gkx.solvers.nonlinear.explicit import advance_explicit_nonlinear_state
     from gkx.workflows.runtime.toml import load_runtime_from_toml
 
     runtime, raw = load_runtime_from_toml(toml_path)
@@ -110,6 +114,10 @@ def build_nonlinear_case(
     cache = build_linear_cache(grid, geometry, params, Nl=n_laguerre, Nm=n_hermite)
     shape = (1, n_laguerre, n_hermite, grid.ky.size, grid.kx.size, grid.z.size)
     base_drive = jnp.asarray(params.tprim)
+    _volume_factor, flux_factor = fieldline_quadrature_weights(geometry, grid)
+    project_state = _make_hermitian_projector(
+        np.asarray(cache.ky), int(np.asarray(cache.kx).size)
+    )
 
     def rhs(state, scale):
         """RHS differentiable in a scalar multiplier on the a/L_T drive.
@@ -124,13 +132,76 @@ def build_nonlinear_case(
         out, _fields = nonlinear_rhs_cached(state, cache, scaled, term_cfg)
         return out
 
+    integration_method = str(runtime.time.method)
+
+    def window_functions(dt: float, *, differentiable: bool = False):
+        """Return the configured production map and heat-flux observable.
+
+        ``differentiable=True`` selects the primitive field solve needed by
+        forward-over-reverse methods such as multiple-shooting JVPs.  The
+        default retains the faster production custom VJP for reverse mode.
+        """
+
+        def scaled_params(scale):
+            return dataclasses.replace(params, tprim=base_drive * scale[0])
+
+        def step(state, scale):
+            state = project_state(state)
+            current_params = scaled_params(scale)
+
+            def bound_rhs(local_state):
+                return nonlinear_rhs_cached(
+                    local_state,
+                    cache,
+                    current_params,
+                    term_cfg,
+                    differentiable=differentiable,
+                )
+
+            derivative, _fields = bound_rhs(state)
+            return advance_explicit_nonlinear_state(
+                state,
+                derivative,
+                jnp.asarray(dt, dtype=jnp.real(state).dtype),
+                method=integration_method,
+                rhs_fn=bound_rhs,
+                project_state=project_state,
+                state_dtype=state.dtype,
+            )
+
+        def objective(state, scale):
+            current_params = scaled_params(scale)
+            _derivative, fields = nonlinear_rhs_cached(
+                state,
+                cache,
+                current_params,
+                term_cfg,
+                differentiable=differentiable,
+            )
+            apar = jnp.zeros_like(fields.phi) if fields.apar is None else fields.apar
+            bpar = jnp.zeros_like(fields.phi) if fields.bpar is None else fields.bpar
+            return heat_flux_total(
+                state,
+                fields.phi,
+                apar,
+                bpar,
+                cache,
+                grid,
+                current_params,
+                flux_factor,
+            )
+
+        return step, objective
+
     return {
         "rhs": rhs,
+        "window_functions": window_functions,
         "shape": shape,
         "drive": 1.0,  # the differentiable parameter is a multiplier
         "base_drive": [float(v) for v in np.asarray(base_drive).ravel()],
         "dissipation": dissipation,
         "case": toml_path.name,
+        "method": integration_method,
         "n_laguerre": n_laguerre,
         "n_hermite": n_hermite,
     }
@@ -151,46 +222,41 @@ def fluctuation_energy(state):
     return jnp.real(jnp.vdot(state, state)) / state.size
 
 
-def integrate(rhs, state, drive, dt: float, steps: int, *, checkpoint: bool = False):
-    """Fixed-step RK2 over ``steps``, returning the final state.
-
-    ``checkpoint`` uses GKX's two-level discrete-adjoint schedule.  A rematerialized
-    step by itself still stores all ``steps`` scan carries -- at a 16x16x16 grid
-    and N=2048 that exhausted a 16 GB card.  Rematerialized sqrt-sized blocks
-    retain only ``O(sqrt(steps))`` states while preserving this exact RK2 map.
-    """
+def windowed_gradient(step, objective, saturated, drive: float, window: int):
+    """Differentiate the physical heat-flux mean over one saturated window."""
 
     import jax.numpy as jnp
 
-    from gkx.solvers.nonlinear.explicit import checkpointed_explicit_scan
+    from gkx.solvers.nonlinear.sensitivity import discrete_window_value_and_grad
 
-    def body(carry, _):
-        k1 = rhs(carry, drive)
-        k2 = rhs(carry + dt * k1, drive)
-        return carry + 0.5 * dt * (k1 + k2), None
-
-    final, _ = checkpointed_explicit_scan(
-        body,
-        state,
-        jnp.arange(steps),
-        checkpoint=checkpoint,
+    value, gradient = discrete_window_value_and_grad(
+        step,
+        objective,
+        saturated,
+        jnp.asarray([drive]),
+        steps=window,
+        checkpoint=True,
     )
-    return final
+    return float(value), float(gradient[0])
 
 
-def windowed_gradient(case, saturated, drive: float, dt: float, window: int):
-    """d(flux)/d(drive) differentiating only the last ``window`` steps."""
+def windowed_value(step, objective, saturated, drive: float, window: int) -> float:
+    """Evaluate the same finite heat-flux window without a reverse pass."""
 
     import jax
+    import jax.numpy as jnp
 
-    detached = jax.lax.stop_gradient(saturated)
+    from gkx.solvers.nonlinear.sensitivity import integrate_discrete_observable
 
-    def objective(value):
-        final = integrate(case["rhs"], detached, value, dt, window, checkpoint=True)
-        return fluctuation_energy(final)
-
-    value, gradient = jax.value_and_grad(objective)(drive)
-    return float(value), float(gradient)
+    _final, values = integrate_discrete_observable(
+        step,
+        objective,
+        jax.lax.stop_gradient(saturated),
+        jnp.asarray([drive]),
+        steps=window,
+        checkpoint=False,
+    )
+    return float(jnp.mean(values))
 
 
 def main() -> int:
@@ -227,7 +293,14 @@ def main() -> int:
         help="proceed even if the state was flagged NOT SATURATED (the ladder "
         "is then uninterpretable and is labelled as such)",
     )
+    parser.add_argument("--min-window", type=int, default=1)
     parser.add_argument("--max-window", type=int, default=512)
+    parser.add_argument(
+        "--fd-step",
+        type=float,
+        default=0.0,
+        help="optional centered-FD drive-scale step evaluated on each exact window",
+    )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -258,6 +331,12 @@ def main() -> int:
     state_saturated = bool(archive["saturated"])
     recorded_dt = float(archive["adaptive_dt"]) if "adaptive_dt" in archive else None
     state_tau_ac = float(archive["tau_ac"]) if "tau_ac" in archive else float("nan")
+    recorded_method = str(archive["method"]) if "method" in archive else None
+    if recorded_method is not None and recorded_method != case["method"]:
+        raise SystemExit(
+            f"state was produced with {recorded_method}, but {case['case']} "
+            f"configures {case['method']}; refusing to differentiate a different map"
+        )
     if args.dt is None:
         if recorded_dt is None:
             raise SystemExit(
@@ -312,23 +391,52 @@ def main() -> int:
     saturated_ok = state_saturated
     energy = float(fluctuation_energy(saturated))
     print(f"  fluctuation energy at the start of the window: {energy:.6e}", flush=True)
+    step_fn, objective_fn = case["window_functions"](dt)
 
-    windows = [2**k for k in range(int(np.log2(args.max_window)) + 1)]
+    if int(args.min_window) < 1 or int(args.max_window) < int(args.min_window):
+        raise SystemExit("require 1 <= --min-window <= --max-window")
+    windows = [
+        2**k
+        for k in range(int(np.log2(args.max_window)) + 1)
+        if int(args.min_window) <= 2**k <= int(args.max_window)
+    ]
     rows = []
     for window in windows:
         started = time.time()
-        value, gradient = windowed_gradient(case, saturated, case["drive"], dt, window)
-        rows.append(
-            {
-                "window": window,
-                "objective": value,
-                "gradient": gradient,
-                "abs_gradient": abs(gradient),
-                "seconds": time.time() - started,
-            }
+        value, gradient = windowed_gradient(
+            step_fn, objective_fn, saturated, case["drive"], window
         )
+        row = {
+            "window": window,
+            "objective": value,
+            "gradient": gradient,
+            "abs_gradient": abs(gradient),
+            "seconds": time.time() - started,
+        }
+        if float(args.fd_step) > 0.0:
+            plus = windowed_value(
+                step_fn,
+                objective_fn,
+                saturated,
+                case["drive"] + float(args.fd_step),
+                window,
+            )
+            minus = windowed_value(
+                step_fn,
+                objective_fn,
+                saturated,
+                case["drive"] - float(args.fd_step),
+                window,
+            )
+            centered_fd = (plus - minus) / (2.0 * float(args.fd_step))
+            row["centered_fd_gradient"] = centered_fd
+            row["ad_fd_relative_error"] = abs(gradient - centered_fd) / max(
+                abs(centered_fd), 1.0e-30
+            )
+        rows.append(row)
         print(
-            f"  N={window:>4d}  |dE/d(drive scale)| = {abs(gradient):.6e}"
+            f"  N={window:>4d}  Q={value:.6e}  "
+            f"|d<Q>/d(drive scale)|={abs(gradient):.6e}"
             f"   [{rows[-1]['seconds']:.1f}s]",
             flush=True,
         )
@@ -348,7 +456,7 @@ def main() -> int:
         # returns a confident rate for data that is a straight line on log-log,
         # which is what this ladder turned out to be -- so the fit would have
         # announced a divergence that is not there.
-        tail = finite[len(finite) // 2 :]
+        tail = finite[-max(3, len(finite) // 2) :]
         times = np.array([r["window"] * dt for r in tail])
         values = np.log(np.array([r["abs_gradient"] for r in tail]))
         exp_fit = np.polyfit(times, values, 1)
@@ -370,14 +478,17 @@ def main() -> int:
 
     summary = {
         "kind": "nonlinear_gradient_window",
-        "claim_level": "windowed_adjoint_divergence_curve_on_the_production_nonlinear_rhs",
+        "claim_level": "production_heat_flux_windowed_discrete_adjoint_not_infinite_time_gradient",
+        "objective": "post_saturation_production_heat_flux_window_mean",
         "case": case["case"],
         "grid_override": override,
         "dissipation": case["dissipation"],
         "dt": dt,
+        "method": case["method"],
         "dt_source": "state file" if args.dt is None else "command line",
         "tau_ac_from_state": state_tau_ac,
         "saturated_energy": energy,
+        "finite_difference_step": float(args.fd_step),
         "saturated_state": str(args.saturated_state),
         "saturated": saturated_ok,
         "interpretable": saturated_ok,

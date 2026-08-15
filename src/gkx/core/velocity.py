@@ -156,6 +156,23 @@ def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
     return jnp.where(jnp.isfinite(out), out, res_small)
 
 
+def _gyro_bessel_factors(alpha2: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return ``J0(sqrt(alpha2))`` and ``J1(sqrt(alpha2))/sqrt(alpha2)``."""
+
+    alpha2 = jnp.asarray(alpha2)
+    small = alpha2 < 1.0e-4
+    safe_alpha = jnp.sqrt(jnp.where(small, 1.0, alpha2))
+    alpha4 = alpha2 * alpha2
+    alpha6 = alpha4 * alpha2
+    j0_series = 1.0 - 0.25 * alpha2 + alpha4 / 64.0 - alpha6 / 2304.0
+    j1_over_alpha_series = 0.5 - alpha2 / 16.0 + alpha4 / 384.0 - alpha6 / 18432.0
+    j0 = jnp.where(small, j0_series, bessel_j0(safe_alpha))
+    j1_over_alpha = jnp.where(
+        small, j1_over_alpha_series, bessel_j1(safe_alpha) / safe_alpha
+    )
+    return j0, j1_over_alpha
+
+
 def bessel_laguerre_kernels(bessel_argument: jnp.ndarray, n_max: int) -> jnp.ndarray:
     r"""Return finite-Larmor Bessel--Laguerre kernels through order ``n_max``.
 
@@ -496,10 +513,10 @@ def _laguerre_j0_field(
         b = b[None, ...]
     if roots.ndim == 0:
         roots = roots[None]
-    alpha = jnp.sqrt(
-        jnp.maximum(0.0, 2.0 * roots[None, :, None, None, None] * b[:, None, ...])
+    alpha2 = jnp.maximum(
+        0.0, 2.0 * roots[None, :, None, None, None] * b[:, None, ...]
     )
-    j0 = bessel_j0(alpha)
+    j0, _j1_over_alpha = _gyro_bessel_factors(alpha2)
     field_b = field[None, None, ...]
     return j0 * field_b * jnp.asarray(factor, dtype=field.dtype)
 
@@ -532,11 +549,10 @@ def _laguerre_bpar_correction(
     tz_arr = jnp.asarray(tz)
     if tz_arr.ndim == 0:
         tz_arr = tz_arr[None]
-    alpha = jnp.sqrt(
-        jnp.maximum(0.0, 2.0 * roots[None, :, None, None, None] * b[:, None, ...])
+    alpha2 = jnp.maximum(
+        0.0, 2.0 * roots[None, :, None, None, None] * b[:, None, ...]
     )
-    j1 = bessel_j1(alpha)
-    j1_over_alpha = jnp.where(alpha < 1.0e-8, 0.5, j1 / alpha)
+    _j0, j1_over_alpha = _gyro_bessel_factors(alpha2)
     coeff = (
         tz_arr[:, None, None, None, None]
         * 2.0
