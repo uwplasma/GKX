@@ -212,7 +212,13 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 89890: bounding nonlinear reverse-mode memory. A checkpointed step
+# still leaves every lax.scan carry on the tape; the two-level scan retains
+# sqrt(N) block boundaries and inner carries instead. These 75 net lines reduce
+# measured N=2048 XLA temporary memory by 60x on CPU and 70x on GPU while
+# preserving the exact discrete map and device-resident execution. See
+# test_checkpointed_scan_matches_discrete_primal_and_reverse_with_tail.
+baseline = 89890
 target = 45000
 
 [[line_budget_policy.counts]]
