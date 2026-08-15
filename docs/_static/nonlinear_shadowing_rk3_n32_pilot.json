@@ -1,0 +1,90 @@
+{
+  "kind": "nonlinear_shadowing_algorithm_pilot",
+  "claim_level": "reduced_resolution_algorithm_comparison_not_production_gradient",
+  "case": "runtime_cyclone_nonlinear_t400.toml",
+  "grid": {
+    "Nx": 8,
+    "Ny": 8,
+    "Nz": 24
+  },
+  "state_shape": [
+    1,
+    4,
+    8,
+    8,
+    8,
+    24
+  ],
+  "real_state_size": 98304,
+  "dt": 0.04562421515583992,
+  "method": "rk3",
+  "tau_ac": 11.30148527616531,
+  "segment_count": 8,
+  "steps_per_segment": 4,
+  "total_steps": 32,
+  "total_time": 1.4599748849868774,
+  "total_time_in_tau_ac": 0.12918433721857303,
+  "finite_window": {
+    "value": 27.05146277998068,
+    "gradient": 2.3576566950258626,
+    "seconds": 48.1606068611145
+  },
+  "lyapunov": {
+    "exponents_per_time": [
+      0.08391883335766094,
+      -0.027817218970133516,
+      -0.029584341110207597,
+      -0.0019116486183277826
+    ],
+    "positive_exponent_count_lower_bound": 1,
+    "orthogonality_residual": 4.221237324783398e-16,
+    "vector_count": 4,
+    "warmup_intervals": 4,
+    "interval_count": 8,
+    "steps_per_interval": 4,
+    "seconds": 8.866487264633179
+  },
+  "nilsas": [
+    {
+      "homogeneous_adjoint_count": 1,
+      "value": 27.05146277998068,
+      "gradient": 2.3576064278967945,
+      "constraint_residual": 6.845017489261494e-17,
+      "kkt_condition_number": 131.5783804919579,
+      "max_boundary_inhomogeneous_norm": 20.764361227059155,
+      "seconds": 32.58674669265747
+    },
+    {
+      "homogeneous_adjoint_count": 2,
+      "value": 27.05146277998068,
+      "gradient": 2.3574333225012394,
+      "constraint_residual": 1.1718374873145975e-16,
+      "kkt_condition_number": 134.0383037012101,
+      "max_boundary_inhomogeneous_norm": 20.762977205432126,
+      "seconds": 28.533847332000732
+    },
+    {
+      "homogeneous_adjoint_count": 4,
+      "value": 27.05146277998068,
+      "gradient": 2.3572665388038354,
+      "constraint_residual": 2.973926835086157e-16,
+      "kkt_condition_number": 135.63431109820334,
+      "max_boundary_inhomogeneous_norm": 20.75952419447388,
+      "seconds": 28.976537466049194
+    }
+  ],
+  "multiple_shooting": {
+    "value": 27.05146277998068,
+    "gradient": -0.29579078421535937,
+    "normal_residual": 9.99076937568353e-06,
+    "cg_iterations": 97,
+    "seconds": 152.2458357810974
+  },
+  "limitations": [
+    "finite reduced-resolution trajectory",
+    "the measured leading spectrum is only a lower bound on unstable dimension",
+    "continuous-time neutral-direction projection/time dilation is not implemented",
+    "the regularized MSS estimate must be checked for regularization convergence",
+    "GKX state projection makes the discrete map non-invertible"
+  ]
+}

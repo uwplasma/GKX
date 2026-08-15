@@ -1,0 +1,41 @@
+{
+  "kind": "nonlinear_stationary_heat_flux_fd_ensemble",
+  "claim_level": "production_long_window_response_ensemble",
+  "parameter": "uniform_tprim_scale",
+  "inputs": [
+    "artifacts/stationary_heat_flux_fd_anchor0_rk3_h0.02.json",
+    "artifacts/stationary_heat_flux_fd_anchor1_rk3_h0.02.json",
+    "artifacts/stationary_heat_flux_fd_anchor2_h0.02.json"
+  ],
+  "statistics": {
+    "anchor_pairs": 3,
+    "distinct_anchors": 3,
+    "gradients": [
+      -526.794988796946,
+      263.9276125086221,
+      525.6196128037695
+    ],
+    "individual_sems": [
+      162.42976985130431,
+      155.03156017507683,
+      181.69344940936196
+    ],
+    "ensemble_mean_gradient": 87.58407883848189,
+    "propagated_within_anchor_sem": 96.2812571713949,
+    "between_anchor_sem": 316.3420642364065,
+    "conservative_sem": 316.3420642364065,
+    "z_score": 0.27686510502450656,
+    "gates": {
+      "minimum_anchor_pairs": true,
+      "distinct_anchors": true,
+      "all_component_windows_passed": false,
+      "consistent_gradient_sign": false,
+      "ensemble_gradient_resolved": false
+    },
+    "passed": false
+  },
+  "limitations": [
+    "block uncertainty treats the late adaptive-step samples as approximately uniform",
+    "finite-difference spacing must still be checked with a second step size"
+  ]
+}

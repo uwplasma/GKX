@@ -1,15 +1,17 @@
 Nonlinear turbulence gradients
 ==============================
 
-Status: **bounded-memory windowed adjoint implemented; promotion tests still
-pending.** The memory wall and physical divergence window are now measured, but
-the finite-difference bias and descent gates below still prevent calling this a
-production stellarator gradient.
+Status: **physical heat-flux windowed adjoint and a local VMEC-state descent are
+implemented; a stationary equilibrium-boundary gradient is not promoted.** The
+discrete RK3 derivative is FD-verified through 2048 steps, the divergence knee
+is measured, and a QH state coefficient descends over one autocorrelation time.
+Three independent long-window finite-difference anchors still disagree in sign,
+so they cannot certify the corresponding infinite-time derivative.
 
 Why the current approach is stuck
 ---------------------------------
 
-GKX gets nonlinear turbulence gradients by central finite differences over
+GKX's earlier turbulence-gradient evidence used central finite differences over
 matched long post-transient windows. The production gate records why that is
 blocked (``docs/_static/nonlinear_turbulence_gradient_evidence_gap_report.json``):
 
@@ -66,9 +68,8 @@ descent direction turns out not to be good enough.
 What GKX must measure first
 ---------------------------
 
-GKX has **no autocorrelation tooling at all** -- the quantity that sets the
-window is not currently computed anywhere in the repository. Every downstream
-choice depends on it, so it comes first.
+Before this work GKX had no autocorrelation tooling, even though that quantity
+sets the usable window. Every downstream choice depends on it, so it came first.
 
 **N1 -- Heat-flux autocorrelation time. DONE, and the result is worse than
 expected.** ``tools/campaigns/heat_flux_autocorrelation.py`` post-processes the
@@ -96,10 +97,24 @@ is not subtle: every one of these windows reports a standard error computed as
 bars are understated by 2 to 3.7 times**, and the worst case averages fewer than
 three independent samples.
 
-That reframes the gradient blocker. ``gradient_uncertainty_rel = 1.806`` was
+That reframes the original gradient blocker. ``gradient_uncertainty_rel = 1.806`` was
 propagated from those understated error bars; corrected for correlation it is
 larger still. The gap to the 0.5 gate is therefore wider than 13x of extra
 sampling -- which strengthens rather than weakens the case for changing method.
+
+The new production continuation experiment makes the point directly. Three
+independent saturated anchors, each evaluated at drive scales 0.98 and 1.02 for
+200 time units, give
+
+.. math::
+
+   -526.8\pm162.4,\qquad +263.9\pm155.0,\qquad +525.6\pm181.7.
+
+Their equally weighted ensemble is :math:`+87.6\pm316.3` (:math:`z=0.28`), two
+of six component windows fail convergence, and the signs are inconsistent.
+``nonlinear_stationary_heat_flux_fd_ensemble.json`` therefore fails closed.
+Long-window FD is useful as a holdout, but it is not a usable optimizer gradient
+at this cost.
 
 Algorithm selection
 -------------------
@@ -163,72 +178,91 @@ The raw CPU and GPU artifacts are
 ladder below runs in complex128 and now completes at :math:`N=2048` on the same
 16 GB GPU.
 
-**N2 -- Gradient-divergence curve. MEASURED, including the knee.**
-``tools/campaigns/nonlinear_saturated_state.py`` reaches saturation with the
-production CFL-adaptive stepper (all five checks pass:
-:math:`\tau_{\rm ac} = 8.71`, window 23.0 :math:`\tau_{\rm ac}`, late drift
-1.9%), and ``nonlinear_gradient_window.py`` differentiates a fixed-step window
-from that state. The requested ``Nx=Ny=Nz=16`` linked-grid override retains
-``ntheta=24``, so the actual spectral state is ``16 x 16 x 24``:
+**N2 -- Physical heat-flux gradient-divergence curve. DONE, including the
+knee.** ``tools/campaigns/nonlinear_saturated_state.py`` reaches saturation with
+the production CFL-adaptive stepper (all five checks pass:
+:math:`\tau_{\rm ac}=8.705`, window 23.0 :math:`\tau_{\rm ac}`, late drift
+1.9%). ``nonlinear_gradient_window.py`` then differentiates the production
+heat-flux average through exactly the RK3 map recorded in that state. The
+``Nx=Ny=16`` override retains ``Nz=24`` and the production four-Laguerre,
+eight-Hermite basis:
 
-.. list-table:: :math:`|dE/d(\text{drive scale})|` from a verified-saturated state
+.. list-table:: Physical :math:`d\langle Q\rangle/d(\text{drive scale})`
    :header-rows: 1
 
    * - :math:`N`
-     - :math:`t`
      - :math:`t/\tau_{\rm ac}`
+     - :math:`\langle Q\rangle`
      - gradient
      - ratio to previous
+     - AD/FD relative error
    * - 64
-     - 2.49
-     - 0.29
-     - 1.854e-01
-     - 2.190
+     - 0.286
+     - 98.928
+     - 40.432
+     - --
+     - 2.5e-11
    * - 128
-     - 4.98
-     - 0.57
-     - 4.040e-01
-     - 2.179
+     - 0.572
+     - 92.980
+     - 68.483
+     - 1.69
+     - 1.1e-11
    * - 256
-     - 9.96
-     - 1.14
-     - 8.353e-01
-     - 2.068
+     - 1.144
+     - 86.296
+     - 102.590
+     - 1.50
+     - 9.1e-12
    * - 512
-     - 19.92
-     - 2.29
-     - 1.673e+00
-     - 2.003
+     - 2.288
+     - 88.958
+     - 153.505
+     - 1.50
+     - 3.1e-11
    * - 1024
-     - 39.84
-     - 4.58
-     - 2.297e+00
-     - 1.373
+     - 4.577
+     - 95.713
+     - 183.253
+     - 1.19
+     - 2.6e-9
    * - 2048
-     - 79.68
-     - 9.15
-     - **4.904e+01**
-     - **21.349**
+     - 9.153
+     - 117.616
+     - **3934.660**
+     - **21.47**
+     - 2.5e-5
 
-The gradient grows nearly linearly through :math:`N=512`, then decorrelates at
-:math:`N=1024`. At :math:`N=2048` it jumps by 21.3x. An exponential fit is
-better than a power law on the fitted tail (residual 0.408 versus 0.642), with
-rate :math:`0.0639` per code-time unit. Thus the usable initial-value adjoint
-window is now bracketed between **4.58 and 9.15 correlation times** for this
-case. This is longer than [iGENE2026]_'s roughly one-correlation-time window, but
-it is not an unlimited long-time derivative.
+The tangent stays bounded enough for optimization through :math:`N=1024`, then
+jumps by 21.5x at :math:`N=2048`. An exponential fits the tail better than a
+power law (residual 0.419 versus 0.681), with rate :math:`0.0575` per code-time
+unit. The usable initial-value adjoint window is therefore bracketed between
+**4.58 and 9.15 correlation times** for this case. This is an actual heat-flux
+derivative, not the earlier state-energy proxy. Its remaining scope limitation
+is one case, resolution, and drive parameter. The machine-readable result is
+``docs/_static/nonlinear_heat_flux_gradient_window_rk3.json``.
 
-Two caveats remain:
+The mathematics/physics gate checks the exact discrete derivative three ways:
+blocked and plain scans agree on a non-square step count, centered FD agrees at
+every production ladder rung, and the same tests run on CPU and CUDA. The
+recorded integration-method check refuses to differentiate an RK3 saturation
+state with an RK2 window.
 
-* The objective is a state-norm proxy, not the production heat flux. It shares
-  the trajectory's Lyapunov behaviour but is not the quantity being optimized.
-* One case, one resolution, one drive parameter.
+The VMEC/Boozer path exposed one additional AD singularity at the zero
+perpendicular-wavenumber mode. Directly evaluating
+:math:`J_0(\sqrt{x})` and :math:`J_1(\sqrt{x})/\sqrt{x}` makes the primal finite
+at :math:`x=0` but leaves a ``sqrt``/division tangent of ``NaN``. GKX now uses
+the analytic small-:math:`x` series
 
-The implementation also has a direct mathematics/physics gate: on a nonlinear
-Cyclone trajectory, reverse mode through the blocked scan differentiates the
-production heat-flux kernel and agrees with centered finite differences on both
-CPU and CUDA. The lower-level test covers a non-square step count, so its tail
-block and both primal and reverse results are checked independently.
+.. math::
+
+   J_0(\sqrt{x}) = 1-\frac{x}{4}+\frac{x^2}{64}-\frac{x^3}{2304},
+   \qquad
+   \frac{J_1(\sqrt{x})}{\sqrt{x}} =
+   \frac12-\frac{x}{16}+\frac{x^2}{384}-\frac{x^3}{18432}.
+
+The unit gate checks both limits and their exact derivatives, :math:`-1/4` and
+:math:`-1/16`, plus a full cache geometry JVP containing the zero mode.
 
 Hermite--Laguerre structure and SOLVAX
 ---------------------------------------
@@ -243,7 +277,7 @@ wavenumber.
 
 SOLVAX's block-Thomas and transposed block solves are consequently not an exact
 inverse for this trajectory adjoint. They remain the right building blocks for
-a **preconditioner** if N3/N4 require NILSAS or multiple-shooting shadowing:
+a **preconditioner** in future production NILSAS or multiple-shooting work:
 retain the local Hermite--Laguerre linear block in the preconditioner and apply
 the nonlinear convolution matrix-free. SOLVAX already exposes the needed
 transposed block solve and Newton--Krylov interfaces, so no SOLVAX change is
@@ -258,22 +292,112 @@ RHS. Whether the tracked nonlinear production results are themselves single
 precision is worth checking on its own; it would affect every nonlinear number in
 the repository, not just this one.
 
-**N3 -- Bias against finite differences, inside the window.** At
-:math:`N` below the knee, compare the windowed adjoint with the existing central
-FD artifact on the same coefficient. Report the ratio, not just the error:
-[iGENE2026]_ found 15--34%, and a similar ratio for GKX would be a
-*reproduction*, not a failure.
+**N3 -- Bias against stationary finite differences. UNRESOLVED, with negative
+evidence preserved.** Inside any fixed window, the discrete adjoint and centered
+FD are the same derivative and agree to at worst :math:`2.5\times10^{-5}`. That
+is a correctness test, not a bias measurement. Bias means comparison with the
+stationary response. The three-anchor result above has inconsistent signs and
+:math:`z=0.28`, so no meaningful adjoint/FD ratio exists yet. Reporting a ratio
+against any single anchor would select noise after seeing it. For completeness,
+the raw :math:`N=1024` magnitude ratios are 0.348, 0.694, and 0.349; the first
+anchor has the opposite sign from the adjoint and from the other two anchors.
 
-**N4 -- Does a biased gradient descend?** The decisive test. Run a short descent
-on one coefficient with the windowed adjoint and check the nonlinear flux
-actually falls, measured with the N1 protocol. A gradient that is 30% of truth
-but correctly signed and low-variance beats an unbiased one with 180%
-uncertainty.
+**N4 -- Does a physical stellarator gradient descend? PARTIAL PASS.** The
+QH ``nfp4_QH_warm_start`` chain now differentiates
 
-**N5 -- Shadowing, only if N4 fails.** NILSAS on the smallest tracked case.
-Its adjoint cost is independent of the number of stellarator design parameters
-[NILSAS2019]_. Deferred deliberately: it is a large build, and N4 may make it
-unnecessary.
+``VMEX state coefficient -> Boozer geometry -> GKX cache -> projected RK2 map
+-> physical heat flux``.
+
+For ``Rcos_mid_surface_m1``, the descent direction persists from 16 steps
+(:math:`1.096\tau_{\rm ac}`) to 32 steps
+(:math:`2.192\tau_{\rm ac}`). At 32 steps reverse AD gives
+:math:`9.6980581\times10^5` and centered FD gives
+:math:`9.6980032\times10^5` (relative error :math:`5.7\times10^{-6}`). A local
+negative-gradient line search lowers the window heat flux from 26.0283 to
+25.7021 (1.253%) while limiting the maximum normalized sampled-geometry change
+to 4.58%. The artifacts ``vmec_boozer_nonlinear_window_descent_n16.json`` and
+``vmec_boozer_nonlinear_window_descent_n32.json`` pass all three gates.
+
+This is deliberately a partial claim: it perturbs one internal equilibrium
+state coefficient without re-solving the fixed-boundary equilibrium, starts all
+candidates from the detached base turbulent state, and measures a finite window.
+It proves the physical solver chain and a local descent direction, not a
+stationary boundary-shape gradient. Independently, GKX's existing replicated
+QA optimized-equilibrium holdout records an 18.44% nonlinear heat-flux reduction
+at 7.82 standard errors, while the QA quasisymmetry/QL weight scan contains
+several points that improve both metrics. Those results support the optimization
+strategy [Jorge2023]_ but were not produced by this new derivative.
+
+**N5 -- Matrix-free shadowing. PROTOTYPE IMPLEMENTED, not promoted.** GKX now
+has two real-state discrete-map pilots:
+
+* discrete NILSAS follows Appendix B of [NILSAS2019]_, recomputes one trajectory
+  segment at a time, uses VJPs only, and solves a reduced constrained problem;
+* multiple-shooting shadowing applies both the constraint and its transpose by
+  segment-map JVPs/VJPs and solves the regularized Schur system by matrix-free
+  CG. Its adjoint form returns all design-parameter derivatives from one solve.
+
+Neither assembles a state Jacobian. Complex spectral states are packed as real
+and imaginary parts so QR and least-squares coefficients remain real. A
+matrix-free Benettin QR iteration [Benettin1980]_ measures the leading Lyapunov
+exponents and therefore the minimum NILSAS homogeneous-adjoint count instead of
+guessing it. Continuous-time neutral projection/time dilation is not yet
+implemented, so neither pilot is an infinite-time gyrokinetic-gradient claim.
+
+On the verified-saturated ``8 x 8 x 24`` RK3 case, the four-vector spectrum is
+:math:`[+0.0839,-0.0278,-0.0296,-0.0019]` per time unit: one resolved positive
+exponent and one nearly neutral direction. At the short 32-step horizon,
+NILSAS with 1, 2, and 4 homogeneous adjoints gives 2.35761, 2.35743, and
+2.35727, versus 2.35766 from finite-window AD, with constraint residuals below
+:math:`3\times10^{-16}`. The one-adjoint horizon ladder is
+
+.. list-table:: Reduced RK3 NILSAS pilot
+   :header-rows: 1
+
+   * - :math:`N`
+     - :math:`t/\tau_{\rm ac}`
+     - finite-window AD
+     - NILSAS
+     - KKT condition
+   * - 32
+     - 0.129
+     - 2.35766
+     - 2.35761
+     - 1.32e2
+   * - 512
+     - 2.067
+     - 32.8397
+     - 32.8449
+     - 2.85e4
+   * - 1024
+     - 4.134
+     - 44.6532
+     - 44.7934
+     - 8.59e4
+   * - 2048
+     - 8.268
+     - 69.4630
+     - 69.4384
+     - 2.86e5
+
+The corresponding artifacts are ``nonlinear_shadowing_rk3_n32_pilot.json`` and
+``nonlinear_nilsas_rk3_n{512,1024,2048}_pilot.json`` in ``docs/_static``.
+
+At :math:`N=2048`, one-adjoint NILSAS takes 55.2 s versus 57.1 s for the
+blocked finite-window adjoint and retains a constraint residual of
+:math:`8.0\times10^{-14}`. This reduced case does not exhibit the production
+case's sharp gradient knee, so agreement is encouraging but not shadowing
+validation. The regularized MSS pilot converges to a :math:`9.99\times10^{-6}`
+normal residual in 97 CG iterations and 152 s, but gives :math:`-0.296` rather
+than :math:`+2.358` at the short horizon. Until regularization convergence,
+neutral-time treatment, and the partial-SVD block preconditioner of
+[Shawki2019]_ are added,
+that sign disagreement is negative evidence.
+
+The resulting method choice is deliberate: use the physical windowed adjoint
+with an explicit local line-search gate now; advance one-adjoint NILSAS on the
+production state as the long-time research path; do not put the present MSS
+estimate in an optimizer.
 
 Validation gates
 ----------------
@@ -281,15 +405,16 @@ Validation gates
 **G1** :math:`\tau_{\rm ac}` is computed per case with the definition and the
 window length in units of :math:`\tau_{\rm ac}` recorded in the artifact.
 
-**G2** The divergence knee from N2 is reported with the growth rate of the
-adjoint norm beyond it, and compared against the leading Lyapunov exponent
-estimated from the same traces.
+**G2** The divergence knee from N2 is reported with the growth rate beyond it.
+Finite-time Lyapunov exponents are reported with their own grid, state, and
+horizon; numerical agreement is claimed only when those match the ladder.
 
 **G3** Any adopted gradient reports its bias against FD *and* its variance.
 A bias-free claim requires shadowing, not a windowed adjoint.
 
-**G4** No promotion without N4: a descent that moves the flux, on the same
-averaging protocol used to certify the flux.
+**G4** A finite-window descent is labelled as such. No stationary
+boundary-gradient promotion without a re-equilibrated candidate and a matched
+long-window holdout.
 
 **G5** Every window used anywhere in the campaign is at least a stated multiple
 of :math:`\tau_{\rm ac}`, replacing the current fixed-time convention.
@@ -297,10 +422,12 @@ of :math:`\tau_{\rm ac}`, replacing the current fixed-time convention.
 What this changes about the existing plan
 -----------------------------------------
 
-The current campaign is trying to make finite differences converge. The
-literature says that costs 13x more sampling than GKX has, and that the field's
-working alternative accepts a biased gradient instead. The plan therefore stops
-buying longer FD windows and starts measuring the window the physics allows.
+The campaign no longer tries to make one central difference do three jobs.
+Exact windowed AD supplies inexpensive design directions; replicated long
+continuations remain independent holdouts; NILSAS is the next long-time method
+to qualify. Regularized MSS is retained as an algorithm comparison, but the
+unpreconditioned solve is presently slower and its gradient is not robust to the
+missing neutral treatment.
 
 The one thing worth keeping unchanged: the matched-perturbation, post-transient
 averaging protocol behind the existing gates. It is what makes N3 and N4
@@ -322,11 +449,25 @@ References
 
 .. [Blonigan2018] P. Blonigan & Q. Wang, "Multiple shooting shadowing for
    sensitivity analysis of chaotic dynamical systems", *J. Comput. Phys.* **354**,
-   447-475 (2018).
+   447-475 (2018). https://arxiv.org/abs/1704.02047
+
+.. [Shawki2019] K. Shawki & G. Papadakis, "A preconditioned multiple shooting
+   shadowing algorithm for the sensitivity analysis of chaotic systems",
+   *J. Comput. Phys.* **398**, 108861 (2019).
+   https://arxiv.org/abs/1810.12222
 
 .. [NILSAS2019] A. Ni, "Sensitivity analysis on chaotic dynamical systems by
    Non-Intrusive Least Squares Adjoint Shadowing (NILSAS)", arXiv:1801.08674.
    https://arxiv.org/abs/1801.08674
+
+.. [Benettin1980] G. Benettin, L. Galgani, A. Giorgilli & J.-M. Strelcyn,
+   "Lyapunov characteristic exponents for smooth dynamical systems and for
+   Hamiltonian systems; a method for computing all of them. Part 1: Theory",
+   *Meccanica* **15**, 9-20 (1980).
+
+.. [Jorge2023] R. Jorge et al., "Direct Microstability Optimization of
+   Stellarator Devices", *J. Plasma Phys.* **89** (2023).
+   https://arxiv.org/abs/2301.09356
 
 .. [Revolve2000] A. Griewank & A. Walther, "Algorithm 799: Revolve: an
    implementation of checkpointing for the reverse or adjoint mode of

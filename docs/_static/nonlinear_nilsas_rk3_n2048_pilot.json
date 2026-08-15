@@ -1,0 +1,52 @@
+{
+  "kind": "nonlinear_shadowing_algorithm_pilot",
+  "claim_level": "reduced_resolution_algorithm_comparison_not_production_gradient",
+  "case": "runtime_cyclone_nonlinear_t400.toml",
+  "grid": {
+    "Nx": 8,
+    "Ny": 8,
+    "Nz": 24
+  },
+  "state_shape": [
+    1,
+    4,
+    8,
+    8,
+    8,
+    24
+  ],
+  "real_state_size": 98304,
+  "dt": 0.04562421515583992,
+  "method": "rk3",
+  "tau_ac": 11.30148527616531,
+  "segment_count": 128,
+  "steps_per_segment": 16,
+  "total_steps": 2048,
+  "total_time": 93.43839263916016,
+  "total_time_in_tau_ac": 8.267797581988674,
+  "finite_window": {
+    "value": 20.704469339754187,
+    "gradient": 69.46300975183188,
+    "seconds": 57.13415312767029
+  },
+  "lyapunov": null,
+  "nilsas": [
+    {
+      "homogeneous_adjoint_count": 1,
+      "value": 20.704469339754194,
+      "gradient": 69.4383601175929,
+      "constraint_residual": 8.028691838023352e-14,
+      "kkt_condition_number": 286426.90292746894,
+      "max_boundary_inhomogeneous_norm": 19076.70778153525,
+      "seconds": 55.243999004364014
+    }
+  ],
+  "multiple_shooting": null,
+  "limitations": [
+    "finite reduced-resolution trajectory",
+    "the separate four-vector leading spectrum is only a lower bound on unstable dimension",
+    "continuous-time neutral-direction projection/time dilation is not implemented",
+    "NILSAS agreement with finite-window AD is not stationary-gradient validation",
+    "GKX state projection makes the discrete map non-invertible"
+  ]
+}

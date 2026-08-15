@@ -15,6 +15,11 @@ from gkx.diagnostics.transport_windows import (
     nonlinear_window_convergence_report,
 )
 from gkx.diagnostics.validation_gates import matched_nonlinear_transport_report
+from tools.campaigns.nonlinear_stationary_heat_flux import time_weighted_mean
+from tools.campaigns.nonlinear_stationary_heat_flux_fd import centered_response
+from tools.campaigns.nonlinear_stationary_heat_flux_fd_ensemble import (
+    combine_responses,
+)
 
 ROOT = REPO_ROOT
 OUTPUT_TARGET_SCRIPT = ROOT / "tools" / "release" / "check_nonlinear_transport_gates.py"
@@ -22,6 +27,24 @@ output_target = load_release_tool("check_nonlinear_transport_gates")
 window_ensemble = load_release_tool("check_nonlinear_transport_gates")
 window_readiness = window_ensemble
 FLOW_SHEAR_GATE = ROOT / "docs" / "_static" / "flow_shear_fixed_step_response_gate.json"
+PHYSICAL_GRADIENT_WINDOW = (
+    ROOT / "docs" / "_static" / "nonlinear_heat_flux_gradient_window_rk3.json"
+)
+STATIONARY_GRADIENT_ENSEMBLE = (
+    ROOT / "docs" / "_static" / "nonlinear_stationary_heat_flux_fd_ensemble.json"
+)
+STATIONARY_GRADIENT_ANCHORS = tuple(
+    ROOT / "docs" / "_static" / f"nonlinear_stationary_heat_flux_fd_anchor{index}.json"
+    for index in range(3)
+)
+SHADOWING_PILOT = ROOT / "docs" / "_static" / "nonlinear_shadowing_rk3_n32_pilot.json"
+NILSAS_HORIZON_PILOTS = tuple(
+    ROOT / "docs" / "_static" / f"nonlinear_nilsas_rk3_n{steps}_pilot.json"
+    for steps in (512, 1024, 2048)
+)
+VMEC_WINDOW_DESCENT = (
+    ROOT / "docs" / "_static" / "vmec_boozer_nonlinear_window_descent_n32.json"
+)
 
 
 def _touch_bundle(output: Path) -> None:
@@ -373,3 +396,132 @@ def test_readiness_tool_writes_reports_and_requires_seed_timestep_replicates(
         ]
         == 2
     )
+
+
+def _stationary_sample(scale: float, mean: float, sem: float) -> dict:
+    return {
+        "kind": "nonlinear_stationary_heat_flux_response_sample",
+        "drive_scale": scale,
+        "initial_state": "same.npz",
+        "late_time_weighted_mean_heat_flux": mean,
+        "window_convergence": {
+            "passed": True,
+            "statistics": {"sem": sem},
+        },
+    }
+
+
+def test_stationary_campaign_uses_time_weighting_and_propagates_fd_error() -> None:
+    times = np.asarray([0.0, 1.0, 3.0])
+    values = np.asarray([0.0, 2.0, 2.0])
+    assert time_weighted_mean(times, values) == 5.0 / 3.0
+    assert time_weighted_mean(times, values) != float(np.mean(values))
+
+    response = centered_response(
+        _stationary_sample(0.98, 8.0, 0.3),
+        _stationary_sample(1.02, 12.0, 0.4),
+    )
+    np.testing.assert_allclose(response["gradient"], 100.0)
+    np.testing.assert_allclose(response["gradient_sem"], 12.5)
+    np.testing.assert_allclose(response["z_score"], 8.0)
+    assert response["both_windows_passed"] is True
+
+
+def test_stationary_response_ensemble_fails_on_anchor_sign_flip() -> None:
+    payloads = [
+        {
+            "initial_state": f"anchor{index}.npz",
+            "response": {
+                "gradient": gradient,
+                "gradient_sem": 0.5,
+                "both_windows_passed": True,
+            },
+        }
+        for index, gradient in enumerate((-4.0, 2.0, -1.0))
+    ]
+
+    result = combine_responses(payloads)
+    assert result["gates"]["minimum_anchor_pairs"] is True
+    assert result["gates"]["consistent_gradient_sign"] is False
+    assert result["passed"] is False
+
+
+def test_production_heat_flux_adjoint_artifact_matches_fd_and_brackets_knee() -> None:
+    payload = json.loads(PHYSICAL_GRADIENT_WINDOW.read_text())
+    rows = payload["rows"]
+
+    assert payload["method"] == "rk3"
+    assert payload["saturated"] is True
+    assert payload["objective"] == "post_saturation_production_heat_flux_window_mean"
+    assert max(row["ad_fd_relative_error"] for row in rows) < 1.0e-3
+    assert rows[-2]["window"] == 1024
+    assert rows[-1]["window"] == 2048
+    assert rows[-2]["window"] * payload["dt"] / payload["tau_ac_from_state"] < 5.0
+    assert rows[-1]["window"] * payload["dt"] / payload["tau_ac_from_state"] > 9.0
+    assert rows[-1]["abs_gradient"] > 10.0 * rows[-2]["abs_gradient"]
+
+
+def test_vmec_boozer_window_descent_is_local_and_fd_verified() -> None:
+    payload = json.loads(VMEC_WINDOW_DESCENT.read_text())
+    best = payload["best_candidate"]
+
+    assert payload["passed"] is True
+    assert payload["method"] == "rk2"
+    assert payload["window_time_in_tau_ac"] >= 2.0
+    assert payload["ad_fd_relative_error"] < payload["max_ad_fd_relative_error"]
+    assert best["relative_change"] < 0.0
+    assert (
+        best["geometry_response"]["max_relative_change"]
+        <= payload["max_geometry_change"]
+    )
+
+
+def test_stationary_gradient_ensemble_preserves_unresolved_sign_evidence() -> None:
+    payload = json.loads(STATIONARY_GRADIENT_ENSEMBLE.read_text())
+    statistics = payload["statistics"]
+    window = json.loads(PHYSICAL_GRADIENT_WINDOW.read_text())["rows"][-2]
+    anchors = [json.loads(path.read_text()) for path in STATIONARY_GRADIENT_ANCHORS]
+
+    assert statistics["anchor_pairs"] == 3
+    assert statistics["gates"]["minimum_anchor_pairs"] is True
+    assert statistics["gates"]["distinct_anchors"] is True
+    assert statistics["gates"]["consistent_gradient_sign"] is False
+    assert statistics["gates"]["ensemble_gradient_resolved"] is False
+    assert statistics["passed"] is False
+    assert all(
+        anchor["finite_window_comparison"]["finite_window_gradient"]
+        == window["gradient"]
+        for anchor in anchors
+    )
+
+
+def test_shadowing_pilot_records_spectrum_and_method_disagreement() -> None:
+    payload = json.loads(SHADOWING_PILOT.read_text())
+    finite_gradient = payload["finite_window"]["gradient"]
+    nilsas = payload["nilsas"]
+    mss = payload["multiple_shooting"]
+
+    assert payload["method"] == "rk3"
+    assert payload["total_time_in_tau_ac"] < 0.2
+    assert payload["lyapunov"]["positive_exponent_count_lower_bound"] == 1
+    assert payload["lyapunov"]["exponents_per_time"][0] > 0.0
+    assert max(row["constraint_residual"] for row in nilsas) < 1.0e-12
+    assert max(abs(row["gradient"] - finite_gradient) for row in nilsas) < 5.0e-4
+    assert mss["normal_residual"] < 1.0e-5
+    assert mss["gradient"] * finite_gradient < 0.0
+
+
+def test_nilsas_horizon_pilots_remain_constrained_through_eight_tau() -> None:
+    payloads = [json.loads(path.read_text()) for path in NILSAS_HORIZON_PILOTS]
+    condition_numbers = []
+    for payload in payloads:
+        finite = payload["finite_window"]["gradient"]
+        row = payload["nilsas"][0]
+        relative_difference = abs(row["gradient"] - finite) / abs(finite)
+        assert payload["method"] == "rk3"
+        assert relative_difference < 5.0e-3
+        assert row["constraint_residual"] < 1.0e-12
+        condition_numbers.append(row["kkt_condition_number"])
+
+    assert payloads[-1]["total_time_in_tau_ac"] > 8.0
+    assert condition_numbers == sorted(condition_numbers)
