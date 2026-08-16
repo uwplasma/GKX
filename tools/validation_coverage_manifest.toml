@@ -640,10 +640,12 @@ reference_anchors = [
 physics_contracts = [
   "nonlinear acceptance uses window statistics rather than one-time samples",
   "mode-resolved Wphi and heat-flux spectra localize transport mismatches",
+  "the post-saturation adjoint differentiates the physical total heat flux",
 ]
 numerics_contracts = [
   "Poisson-bracket paths preserve expected antisymmetry in reduced tests",
   "late-time fixed-mode frequency diagnostics remain conditioned when amplitudes are small",
+  "blocked and plain discrete adjoints preserve values and gradients",
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
@@ -775,40 +777,6 @@ artifact_paths = [
 next_tests = [
   "add observed-order manufactured-time-path checks for promoted explicit methods",
   "add physical transport-window identity tests after explicit scan orchestration is split",
-]
-
-[[modules]]
-module = "gkx.solvers.nonlinear.sensitivity"
-path = "src/gkx/solvers/nonlinear/sensitivity.py"
-owner_lane = "nonlinear discrete adjoints, Lyapunov diagnostics, and shadowing"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "Ni's discrete NILSAS Appendix B segmented adjoint recurrence",
-  "Blonigan-Wang multiple shooting and Benettin QR Lyapunov iteration",
-]
-physics_contracts = [
-  "finite-window gradients differentiate the exact projected discrete production map and physical observable",
-  "shadowing pilots remain scoped below stationary gyrokinetic-gradient claims until neutral-time treatment and holdouts close",
-]
-numerics_contracts = [
-  "blocked and plain discrete adjoints preserve primal values and parameter derivatives",
-  "NILSAS and MSS recover bounded sensitivities of unstable manufactured maps without state-Jacobian assembly",
-  "matrix-free QR recovers the Lyapunov spectrum of a diagonal discrete map",
-]
-fast_tests = [
-  "tests/unit/solvers/test_nonlinear_explicit_scan.py",
-  "tests/validation/nonlinear/test_nonlinear_window_artifact_contracts.py",
-]
-artifact_paths = [
-  "docs/_static/nonlinear_heat_flux_gradient_window_rk3.json",
-  "docs/_static/nonlinear_shadowing_rk3_n32_pilot.json",
-  "docs/_static/nonlinear_nilsas_rk3_n2048_pilot.json",
-]
-next_tests = [
-  "add neutral-direction projection and time dilation before an infinite-time claim",
-  "repeat NILSAS on the production state beyond its measured finite-window knee",
 ]
 
 [[modules]]

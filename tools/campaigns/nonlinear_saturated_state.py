@@ -1,6 +1,6 @@
 """Reach a genuinely saturated nonlinear state, using GKX's own production stepper.
 
-The gradient-window measurement (``nonlinear_gradient_window.py``) needs a
+The nonlinear heat-flux adjoint needs a
 trajectory that has actually saturated. A hand-rolled fixed-step integrator
 cannot supply one: the E x B nonlinearity imposes a CFL condition that tightens
 as the amplitude grows, so a step size that is stable through the linear phase

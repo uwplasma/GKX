@@ -19,8 +19,8 @@ from gkx.operators.nonlinear.policies import build_nonlinear_imex_operator
 from gkx.solvers.nonlinear.diagnostic_integration import integrate_nonlinear_explicit_diagnostics, integrate_nonlinear_explicit_diagnostics_state, prepare_nonlinear_explicit_diagnostics
 from gkx.solvers.nonlinear.state_integration import (
     integrate_nonlinear,
-    integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
+    nonlinear_heat_flux_window,
 )
 from gkx.terms.config import TermConfig
 
@@ -505,44 +505,35 @@ def test_block_checkpointed_nonlinear_heat_flux_gradient_matches_finite_differen
     state = state.at[0, 1, 1, 0, :].set(0.25j * profile)
     state = state.at[0, 0, 1, 1, :].set((0.2 - 0.1j) * profile)
     terms = TermConfig(nonlinear=1.0)
-    _volume_factor, flux_factor = fieldline_quadrature_weights(geom, grid)
 
-    def endpoint_heat_flux(rlt: jnp.ndarray) -> jnp.ndarray:
+    def mean_heat_flux(rlt: jnp.ndarray, checkpoint: bool = True) -> jnp.ndarray:
         params = replace(base_params, tprim=rlt)
-        cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
-        # The compiled scan donates its carry, so materialize one per evaluation.
-        final_state, fields = integrate_nonlinear_cached(
-            state + jnp.asarray(0.0 * rlt, dtype=state.dtype),
-            cache,
+        return nonlinear_heat_flux_window(
+            state,
+            grid,
+            geom,
             params,
             dt=0.01,
             steps=11,
             method="rk2",
+            tail_steps=7,
             terms=terms,
-            checkpoint=True,
+            checkpoint=checkpoint,
             compressed_real_fft=False,
-        )
-        return heat_flux_total(
-            final_state,
-            fields.phi[-1],
-            fields.apar[-1],
-            fields.bpar[-1],
-            cache,
-            grid,
-            params,
-            flux_factor,
         )
 
     point = jnp.asarray(6.9)
-    value, gradient = jax.value_and_grad(endpoint_heat_flux)(point)
+    value, gradient = jax.value_and_grad(mean_heat_flux)(point)
+    plain = jax.value_and_grad(lambda value: mean_heat_flux(value, False))(point)
     step = jnp.asarray(1.0e-2)
     centered_fd = (
-        endpoint_heat_flux(point + step) - endpoint_heat_flux(point - step)
+        mean_heat_flux(point + step) - mean_heat_flux(point - step)
     ) / (2 * step)
 
     assert bool(jnp.isfinite(value))
     assert bool(jnp.isfinite(gradient))
     assert float(gradient) != 0.0
+    np.testing.assert_allclose(np.asarray((value, gradient)), np.asarray(plain), rtol=1e-6)
     np.testing.assert_allclose(
         np.asarray(gradient), np.asarray(centered_fd), rtol=5.0e-2, atol=1.0e-16
     )

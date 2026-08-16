@@ -13,7 +13,7 @@ from gkx.config import resolve_cfl_fac
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from gkx.core.grid import SpectralGrid
 from gkx.operators.collision import CollisionOperator
-from gkx.diagnostics.transport import heat_flux_species
+from gkx.diagnostics.transport import heat_flux_species, heat_flux_total
 from gkx.diagnostics.moments import fieldline_quadrature_weights
 from gkx.solvers.linear.implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
@@ -38,6 +38,8 @@ from gkx.operators.nonlinear.rhs import (
     nonlinear_rhs_cached_impl,
 )
 from gkx.solvers.nonlinear.explicit import (
+    advance_explicit_nonlinear_state,
+    checkpointed_explicit_scan,
     integrate_cached_explicit_scan,
     integrate_nonlinear_scan,
 )
@@ -242,6 +244,107 @@ def integrate_nonlinear(
         return_fields=return_fields,
         collision_operator=collision_operator,
     )
+
+
+def nonlinear_heat_flux_window(
+    saturated_state: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    terms: TermConfig | None = None,
+    method: str = "rk2",
+    tail_steps: int | None = None,
+    checkpoint: bool = True,
+    compressed_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+) -> jnp.ndarray:
+    r"""Mean physical heat flux over a differentiable nonlinear window.
+
+    ``saturated_state`` is deliberately detached: first run GKX to saturation,
+    then differentiate this finite window through ``geom`` and ``params``.
+    Reverse-mode AD follows the exact discrete Runge--Kutta map. Block
+    checkpointing retains :math:`O(\sqrt{N})` distribution states instead of
+    :math:`O(N)` for a window of ``N`` steps.
+    """
+
+    count = int(steps)
+    tail = count if tail_steps is None else int(tail_steps)
+    if count < 1 or not 1 <= tail <= count:
+        raise ValueError("steps must be positive and tail_steps must lie within it")
+    if saturated_state.ndim not in (5, 6):
+        raise ValueError(
+            "saturated_state must have shape (Nl, Nm, Ny, Nx, Nz) or "
+            "(Ns, Nl, Nm, Ny, Nx, Nz)"
+        )
+    offset = saturated_state.ndim - 5
+    Nl, Nm = saturated_state.shape[offset : offset + 2]
+
+    term_cfg = terms or TermConfig(nonlinear=1.0)
+    geometry = ensure_flux_tube_geometry_data(geom, grid.z)
+    cache = build_linear_cache(grid, geometry, params, Nl=Nl, Nm=Nm)
+    _volume_factor, flux_factor = fieldline_quadrature_weights(geometry, grid)
+    def project_state(state: jnp.ndarray) -> jnp.ndarray:
+        return state
+
+    if compressed_real_fft:
+        project_state = _make_hermitian_projector(
+            np.asarray(grid.ky), int(np.asarray(grid.kx).size)
+        )
+
+    def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
+        return nonlinear_rhs_cached(
+            state,
+            cache,
+            params,
+            term_cfg,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+            differentiable=True,
+        )
+
+    def advance(carry: tuple[jnp.ndarray, jnp.ndarray], index: jnp.ndarray):
+        state, total_heat = carry
+        state = project_state(state)
+        derivative, _ = rhs(state)
+        next_state = advance_explicit_nonlinear_state(
+            state,
+            derivative,
+            jnp.asarray(dt, dtype=jnp.real(state).dtype),
+            method=method,
+            rhs_fn=rhs,
+            project_state=project_state,
+            state_dtype=state.dtype,
+        )
+        _, fields = rhs(next_state)
+        zero = jnp.zeros_like(fields.phi)
+        heat = heat_flux_total(
+            next_state,
+            fields.phi,
+            zero if fields.apar is None else fields.apar,
+            zero if fields.bpar is None else fields.bpar,
+            cache,
+            grid,
+            params,
+            flux_factor,
+        )
+        include = jnp.asarray(index >= count - tail, dtype=heat.dtype)
+        return (next_state, total_heat + include * heat), None
+
+    initial_state = jax.lax.stop_gradient(jnp.asarray(saturated_state))
+    heat_dtype = jnp.result_type(
+        jnp.real(initial_state), flux_factor, *jax.tree_util.tree_leaves(params)
+    )
+    initial_heat = jnp.zeros((), dtype=heat_dtype)
+    (_, total_heat), _ = checkpointed_explicit_scan(
+        advance,
+        (initial_state, initial_heat),
+        jnp.arange(count),
+        checkpoint=checkpoint,
+    )
+    return total_heat / tail
 
 
 def _integrate_nonlinear_sheared_scan(
@@ -826,6 +929,7 @@ __all__ = [
     "integrate_nonlinear_imex_cached",
     "integrate_nonlinear_sheared",
     "integrate_nonlinear_sheared_transport",
+    "nonlinear_heat_flux_window",
     "nonlinear_rhs_cached",
     "ShearedTransportTrace",
 ]
