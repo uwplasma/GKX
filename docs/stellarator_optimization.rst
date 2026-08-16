@@ -95,6 +95,7 @@ An optimizer post-saturation window supplies a design direction, not the final
 physics claim.
 Promote a result only after matched baseline/candidate runs pass:
 
+* centered finite-difference checks of the local analytic direction;
 * saturation and running-mean convergence;
 * independent random-seed and timestep repeats;
 * resolved heat-flux reduction with uncertainty;
