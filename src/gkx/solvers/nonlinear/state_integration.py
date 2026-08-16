@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, NamedTuple
+from typing import Any, Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -286,13 +286,13 @@ def nonlinear_heat_flux_window(
     geometry = ensure_flux_tube_geometry_data(geom, grid.z)
     cache = build_linear_cache(grid, geometry, params, Nl=Nl, Nm=Nm)
     _volume_factor, flux_factor = fieldline_quadrature_weights(geometry, grid)
-    def project_state(state: jnp.ndarray) -> jnp.ndarray:
-        return state
-
-    if compressed_real_fft:
-        project_state = _make_hermitian_projector(
+    project_state: Callable[[jnp.ndarray], jnp.ndarray] = (
+        _make_hermitian_projector(
             np.asarray(grid.ky), int(np.asarray(grid.kx).size)
         )
+        if compressed_real_fft
+        else lambda state: state
+    )
 
     def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
         return nonlinear_rhs_cached(
