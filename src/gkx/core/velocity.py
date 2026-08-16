@@ -297,24 +297,11 @@ def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
     log_abs = (
         ell * jnp.log(half_b_safe[None, ...]) - gammaln(ell + 1.0) - half_b[None, ...]
     )
-    logarithmic = sign * jnp.exp(log_abs)
-
-    coefficient0 = jnp.exp(-half_b)
-
-    def step(coefficient, order):
-        next_coefficient = -coefficient * half_b / order
-        return next_coefficient, next_coefficient
-
-    if l_max == 0:
-        recurrent = coefficient0[None, ...]
-    else:
-        _, tail = jax.lax.scan(
-            step,
-            coefficient0,
-            jnp.arange(1, l_max + 1, dtype=b.dtype),
-        )
-        recurrent = jnp.concatenate([coefficient0[None, ...], tail], axis=0)
-    return jnp.where((half_b < 1.0e-4)[None, ...], recurrent, logarithmic)
+    orders = jnp.arange(1, l_max + 1, dtype=b.dtype).reshape((l_max,) + (1,) * b.ndim)
+    ratios = -jnp.broadcast_to(half_b, (l_max,) + b.shape) / orders
+    powers = jnp.concatenate([jnp.ones_like(half_b)[None], jnp.cumprod(ratios, axis=0)])
+    recurrent = jnp.exp(-half_b)[None] * powers
+    return jnp.where((half_b < 1.0e-4)[None], recurrent, sign * jnp.exp(log_abs))
 
 
 def laguerre_gyroaverage_neighbors(
