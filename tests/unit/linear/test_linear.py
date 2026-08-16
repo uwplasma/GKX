@@ -448,6 +448,40 @@ def test_long_wavelength_collision_invariants_and_free_energy_rate():
     )
 
 
+def test_collision_geometry_tangent_is_finite_at_zero_wavelength():
+    """The finite-Larmor correction is smooth in b at the spectral zero mode."""
+
+    shape = (1, 3, 5, 1, 1, 1)
+    state = (
+        jnp.arange(np.prod(shape), dtype=jnp.float32).reshape(shape) + 0.2j
+    ).astype(jnp.complex64)
+    eigenvalues = jnp.asarray(
+        [[2 * ell + m for m in range(5)] for ell in range(3)], dtype=jnp.float32
+    )
+
+    def loss(b_value):
+        b = jnp.full((1, 1, 1, 1), b_value)
+        Jl = jnp.moveaxis(J_l_all(b, 2), 0, 1)
+        Jl_m1 = jnp.pad(Jl[:, :-1], ((0, 0), (1, 0), (0, 0), (0, 0), (0, 0)))
+        contribution = collisions_contribution(
+            state,
+            G=state,
+            Jl=Jl,
+            JlB=Jl + Jl_m1,
+            b=b,
+            nu=jnp.asarray([0.01], dtype=jnp.float32),
+            lb_lam=eigenvalues,
+            weight=jnp.asarray(1.0, dtype=jnp.float32),
+        )
+        return jnp.real(jnp.vdot(contribution, contribution))
+
+    tangent = jax.grad(loss)(jnp.asarray(0.0, dtype=jnp.float32))
+    step = jnp.asarray(1.0e-4, dtype=jnp.float32)
+    forward_difference = (loss(step) - loss(0.0)) / step
+    assert jnp.isfinite(tangent)
+    np.testing.assert_allclose(tangent, forward_difference, rtol=2.0e-3, atol=2.0e-3)
+
+
 def test_long_wavelength_collision_matches_published_dougherty_equation_c6():
     """Production moments match Frei et al. (2022), Appendix C, equation C6."""
 
