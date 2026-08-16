@@ -492,27 +492,21 @@ blocks without running a full benchmark case:
 Differentiable optimization examples
 ------------------------------------
 
-The public optimization examples are actual VMEC-JAX QA stellarator workflows
-with one GKX transport tuple appended to the VMEC-JAX objective list:
+The public optimization example is a VMEX QA stellarator workflow with one
+physical GKX heat-flux tuple appended to the objective list:
 
 .. code-block:: bash
 
-   python examples/optimization/QA_optimization_linear_ITG.py
-   python examples/optimization/QA_optimization_quasilinear_ITG.py
-   python examples/optimization/QA_optimization_nonlinear_ITG.py
+   python examples/optimization/QA_optimization.py
 
-The three ``QA_optimization_*_ITG.py`` scripts intentionally mirror upstream
-``vmex/examples/optimization/QA_optimization.py`` on the current
-``VmecInput``/``opt.least_squares`` API. They preserve its ``A=6`` and mean-
-``iota=0.42`` targets and add only one GKX objective tuple. Keep the
-transport weight small until solved-equilibrium aspect, iota, and
-quasisymmetry gates pass. They are deliberately edited through top-level
-constants, not command-line arguments.
+``QA_optimization.py`` mirrors VMEX's boundary-mode ladder, preserves its
+``A=6`` and mean-``iota=0.42`` targets, and adds the checkpointed nonlinear
+heat-flux derivative. The equilibrium is vacuum; finite ``a/L_T`` and ``a/L_n``
+drive GKX. Edit the top-level constants to set resolution and run length.
 
-The linear-growth script uses VMEC-JAX's implicit Jacobian. The quasilinear
-and reduced nonlinear-window scripts use finite-difference outer Jacobians
-because their dominant-eigenvector weights do not yet have the required JAX
-derivative. None of these optimizer residuals is a saturated heat-flux claim.
+The optimizer window starts from a detached saturated state and supplies a
+local design derivative. Validate an accepted design with independent,
+replicated post-saturation runs.
 
 Reduced synthetic scripts are kept outside ``examples/optimization`` as
 development diagnostics only:
