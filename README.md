@@ -459,7 +459,9 @@ accepted direction: 24 nominal seed pairs give a 12.26% reduction (95% CI
 4.95% (2.12--7.78%) and 8.50% (6.34--10.66%). The refinement intervals
 overlap and remain above zero. A 16-pair `(Nl,Nm)=(6,12)` check gives 12.32%
 (9.62--15.03%), with all pairs positive. This is one vacuum QA surface and
-field line, not a universal transport claim. See the concise [autodiff
+field line, not a universal transport claim; broader claims still require
+converged post-transient heat-flux windows across surfaces and field lines.
+See the concise [autodiff
 mathematics](docs/nonlinear_autodiff.rst) and [matched-run validation and
 optimization workflow](docs/stellarator_optimization.rst).
 
