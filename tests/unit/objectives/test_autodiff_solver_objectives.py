@@ -2729,7 +2729,7 @@ def test_public_optimization_examples_keep_editable_constant_style() -> None:
         if script.name in optimizer_scripts:
             assert "s_index=7" in text
             assert "alpha=0.0" in text
-            assert "A_OVER_LT, A_OVER_LN = 2.49, 0.8" in text
+            assert "A_OVER_LT, A_OVER_LN = 3.0, 1.0" in text
             assert "WINDOW_STEPS" in text
         else:
             raise AssertionError(f"unexpected optimization example {script.name}")

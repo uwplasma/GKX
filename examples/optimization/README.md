@@ -5,17 +5,17 @@ ladder and appends one physical GKX heat-flux tuple:
 
 ```python
 objective_function_terms = [
-    (qs, 0.0, 1.0),
-    (opt.aspect_ratio, ASPECT_TARGET, 1.0),
-    (opt.mean_iota, IOTA_TARGET, 10.0),
+    (qs, 0.0, QA_PRIORITY),
+    (opt.aspect_ratio, ASPECT_TARGET, ASPECT_PRIORITY),
+    (opt.mean_iota, IOTA_TARGET, IOTA_PRIORITY),
     (turbulent_transport, 0.0, transport_weight),
 ]
 ```
 
-The equilibrium is vacuum. `A_OVER_LT=2.49` and `A_OVER_LN=0.8` provide a
-finite ITG drive in GKX. The script runs to saturation, differentiates an
-actual post-saturation heat-flux window with exact discrete differentiation,
-and refreshes the saturated state after each accepted VMEX stage.
+The equilibrium is vacuum. `A_OVER_LT=3` and `A_OVER_LN=1` provide finite ITG
+transport. The script carries the VMEX parallel scale into GKX, runs to
+saturation, differentiates an actual post-saturation heat-flux window with
+exact discrete differentiation, and refreshes the state after each VMEX stage.
 
 ```bash
 python examples/optimization/QA_optimization.py

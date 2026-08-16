@@ -20,12 +20,13 @@ MAX_MODES, MAX_NFEV = [1, 2, 3, 4, 5], [10, 20, 40, 80, 120]
 ASPECT_TARGET, IOTA_TARGET = 6.0, 0.42
 MINIMUM_MPOL = 5
 SEED_PERTURBATION = 0.01
-TRANSPORT_PRIORITY = 2.0
+QA_PRIORITY, ASPECT_PRIORITY, IOTA_PRIORITY = 1.0e3, 1.0e3, 1.0e5
+TRANSPORT_PRIORITY = 20.0
 
-# Finite Cyclone-like drives: GKX uses a/L, not R/L.
-A_OVER_LT, A_OVER_LN = 2.49, 0.8
-NX, NY, NZ, NL, NM = 8, 8, 16, 2, 4
-DT, SATURATION_STEPS, WINDOW_STEPS = 0.02, 20_000, 1_024
+# Finite ITG drive: GKX uses a/L, not R/L.
+A_OVER_LT, A_OVER_LN = 3.0, 1.0
+NX, NY, NZ, NL, NM = 8, 8, 16, 4, 8
+DT, SATURATION_STEPS, WINDOW_STEPS = 0.05, 8_000, 1_024
 
 ci_smoke = os.environ.get("VMEX_EXAMPLES_CI") == "1"
 if ci_smoke:
@@ -52,20 +53,13 @@ if ci_smoke:
     ).change_resolution(mpol=3, ntor=3, ntheta=12, nzeta=10)
 
 grid = gkx.build_spectral_grid(
-    gkx.GridConfig(Nx=NX, Ny=NY, Nz=NZ, Lx=20.0, Ly=20.0)
-)
-params = gkx.LinearParams(
-    tprim=A_OVER_LT,
-    fprim=A_OVER_LN,
-    D_hyper=0.05,
-    p_hyper_kperp=2.0,
-    nu_hyper_m=1.0,
-    p_hyper_m=4.0,
+    gkx.GridConfig(Nx=NX, Ny=NY, Nz=NZ, Lx=62.8, Ly=62.8)
 )
 terms = gkx.TermConfig(
-    collisions=0.0,
+    collisions=1.0,
     hypercollisions=1.0,
     hyperdiffusion=1.0,
+    end_damping=1.0,
     nonlinear=1.0,
     apar=0.0,
     bpar=0.0,
@@ -92,15 +86,34 @@ def geometry(state, runtime):
     )
 
 
+def parameters(local_geometry):
+    return gkx.LinearParams(
+        tprim=A_OVER_LT,
+        fprim=A_OVER_LN,
+        nu=0.01,
+        kpar_scale=local_geometry.gradpar_value,
+        nu_hermite=1.0,
+        nu_laguerre=2.0,
+        p_hyper_m=float(min(20, max(NM // 2, 1))),
+        hypercollisions_const=0.0,
+        hypercollisions_kz=1.0,
+        D_hyper=0.05,
+        p_hyper_kperp=2.0,
+        damp_ends_amp=0.1,
+        damp_ends_widthfrac=0.125,
+    )
+
+
 def saturate(equilibrium):
+    local_geometry = geometry(equilibrium.state, equilibrium.runtime)
     return gkx.integrate_nonlinear(
         initial_state(),
         grid,
-        geometry(equilibrium.state, equilibrium.runtime),
-        params,
+        local_geometry,
+        parameters(local_geometry),
         DT,
         SATURATION_STEPS,
-        method="rk2",
+        method="rk3",
         terms=terms,
         checkpoint=False,
         return_fields=False,
@@ -117,15 +130,16 @@ qs = opt.QuasisymmetryRatioResidual(SURFACES, helicity_m=1, helicity_n=0)
 def turbulent_transport(state, runtime):
     """Actual GKX heat flux, differentiated through the post-saturation window."""
 
+    local_geometry = geometry(state, runtime)
     return gkx.nonlinear_heat_flux_window(
         saturated_state,
         grid,
-        geometry(state, runtime),
-        params,
+        local_geometry,
+        parameters(local_geometry),
         DT,
         WINDOW_STEPS,
         terms=terms,
-        method="rk2",
+        method="rk3",
     )
 
 
@@ -133,9 +147,9 @@ seed_flux = float(turbulent_transport(equilibrium.state, equilibrium.runtime))
 flux_scale = max(abs(seed_flux), 1.0e-4 if ci_smoke else 1.0e-12)
 transport_weight = TRANSPORT_PRIORITY / (flux_scale * flux_scale)
 objective_function_terms = [
-    (qs, 0.0, 1.0),
-    (opt.aspect_ratio, ASPECT_TARGET, 1.0),
-    (opt.mean_iota, IOTA_TARGET, 10.0),
+    (qs, 0.0, QA_PRIORITY),
+    (opt.aspect_ratio, ASPECT_TARGET, ASPECT_PRIORITY),
+    (opt.mean_iota, IOTA_TARGET, IOTA_PRIORITY),
     (turbulent_transport, 0.0, transport_weight),
 ]
 

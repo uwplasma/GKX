@@ -448,7 +448,7 @@ heat_flux, gradient = jax.value_and_grad(loss)(shape0)
 
 The single [`QA_optimization.py`](examples/optimization/QA_optimization.py)
 follows VMEX's vacuum QA mode ladder and adds this heat flux as a fourth tuple.
-Finite `a/L_T=2.49` and `a/L_n=0.8` drive ITG turbulence. The analytic Jacobian
+Finite `a/L_T=3` and `a/L_n=1` drive ITG turbulence. The analytic Jacobian
 composes VMEX's implicit equilibrium derivative with the exact GKX window
 derivative.
 

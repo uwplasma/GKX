@@ -29,14 +29,16 @@ def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
     assert "SEED_PERTURBATION = 0.01" in text
     assert "ASPECT_TARGET, IOTA_TARGET = 6.0, 0.42" in text
     assert "am=np.zeros_like(inp.am), pres_scale=0.0" in text
-    assert "A_OVER_LT, A_OVER_LN = 2.49, 0.8" in text
+    assert "A_OVER_LT, A_OVER_LN = 3.0, 1.0" in text
+    assert "kpar_scale=local_geometry.gradpar_value" in text
+    assert "p_hyper_m=float(min(20, max(NM // 2, 1)))" in text
     assert "gkx.integrate_nonlinear(" in text
     assert "gkx.nonlinear_heat_flux_window(" in text
     assert "implicit_jacobian_method=\"auto\"" in text
     assert "objective_function_terms = [" in text
-    assert "(qs, 0.0, 1.0)," in text
-    assert "(opt.aspect_ratio, ASPECT_TARGET, 1.0)," in text
-    assert "(opt.mean_iota, IOTA_TARGET, 10.0)," in text
+    assert "(qs, 0.0, QA_PRIORITY)," in text
+    assert "(opt.aspect_ratio, ASPECT_TARGET, ASPECT_PRIORITY)," in text
+    assert "(opt.mean_iota, IOTA_TARGET, IOTA_PRIORITY)," in text
     assert "(turbulent_transport, 0.0, transport_weight)," in text
     assert "result = least_squares(" in text
     assert "def report(label, local_equilibrium):" in text
@@ -100,7 +102,7 @@ def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None
     assert "QA_optimization.py" in docs
     assert "nonlinear_heat_flux_window" not in docs or "physical heat-flux window" in docs
     assert ".. figure:: _static/stellarator_itg_optimization_comparison.png" not in docs
-    assert "development diagnostics only" in docs
+    assert "screening diagnostics" in docs
     assert (
         "current artifact bases: ``docs/_static/stellarator_itg_optimization_comparison.png``"
         not in manuscript
@@ -125,7 +127,7 @@ def test_reduced_surface_comparison_is_not_current_primary_optimization_figure()
     assert reduced_png not in release_contract
     assert "stellarator_itg_growth_optimization.py" not in examples_readme
     assert "reduced_stellarator_itg" not in examples_readme
-    assert "development diagnostics only" in re.sub(r"\s+", " ", docs)
+    assert "screening diagnostics" in re.sub(r"\s+", " ", docs)
 
 
 def test_solved_wout_candidate_gate_passes_valid_qa_branch() -> None:

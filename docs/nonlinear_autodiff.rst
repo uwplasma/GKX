@@ -57,6 +57,16 @@ At 2048 steps, measured XLA temporary memory fell from 759 MB to 12.6 MB on CPU
 and from 11.88 GB to 168 MB on an RTX A4000. Runtime rose by 1.54x and 1.67x,
 respectively. The blocked and plain values and gradients agree.
 
+Spectral zero mode
+------------------
+
+The :math:`k_\perp=0` mode is differentiated analytically. Near :math:`b=0`,
+GKX evaluates :math:`\mathcal J_{\ell+1}=-\mathcal J_\ell b/[2(\ell+1)]`, so
+:math:`d\mathcal J_1/db=-1/2` is retained even though
+:math:`\mathcal J_1(0)=0`. The collision correction contracts its two
+:math:`\sqrt b` factors as :math:`b`; this removes a removable ``sqrt(0)``
+tangent singularity without changing the operator.
+
 .. figure:: _static/nonlinear_autodiff_validation.png
    :width: 760px
    :alt: nonlinear adjoint memory and finite-difference validation
@@ -74,13 +84,13 @@ Run to saturation once, then differentiate the physical window:
 
    saturated = gkx.integrate_nonlinear(
        initial, grid, geometry(theta0), params, dt, saturation_steps,
-       method="rk2", terms=terms, return_fields=False,
+       method="rk3", terms=terms, return_fields=False,
    )
 
    def loss(theta):
        return gkx.nonlinear_heat_flux_window(
            saturated, grid, geometry(theta), params, dt, window_steps,
-           method="rk2", terms=terms,
+           method="rk3", terms=terms,
        )
 
    heat_flux, gradient = jax.value_and_grad(loss)(theta0)
