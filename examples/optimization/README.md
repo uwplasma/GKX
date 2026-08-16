@@ -27,5 +27,8 @@ end-to-end smoke test. The main accuracy/cost controls are
 
 The analytic Jacobian includes both the implicit VMEX equilibrium response and
 the exact GKX window derivative; SciPy's `least_squares` consumes it directly.
-Final transport claims still require independent, replicated post-transient
-baseline/candidate runs.
+Independent, replicated post-transient runs validate the accepted direction:
+24 nominal pairs reduce transport by 12.26% (95% CI 10.64--13.88%), and the
+20x20 and stationary 24x24 refinement intervals overlap above zero. The full
+protocol and CSV data are in the [stellarator optimization
+documentation](../../docs/stellarator_optimization.rst).

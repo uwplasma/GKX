@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 
 from support.paths import REPO_ROOT
@@ -18,6 +19,18 @@ from gkx.objectives.vmec_candidate_admission import (
 ROOT = REPO_ROOT
 EXAMPLES = ROOT / "examples" / "optimization"
 QA_SCRIPT = EXAMPLES / "QA_optimization.py"
+TRANSPORT_SUMMARY = ROOT / "docs" / "_static" / "qa_transport_summary.csv"
+TRANSPORT_TRACES = ROOT / "docs" / "_static" / "qa_transport_traces.csv"
+
+
+def _transport_summary() -> dict[str, dict[str, float]]:
+    with TRANSPORT_SUMMARY.open(encoding="utf-8", newline="") as stream:
+        return {
+            row["case"]: {
+                key: float(value) for key, value in row.items() if key != "case"
+            }
+            for row in csv.DictReader(stream)
+        }
 
 
 def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
@@ -95,7 +108,8 @@ def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None
     assert "docs/_static/vmex_qa_solved_boundary_boozer_panel.png" not in readme
     assert "docs/_static/stellarator_itg_optimization_comparison.png" not in readme
     assert "docs/_static/stellarator_itg_optimization_uq.png" not in readme
-    assert "final claims still require independent" in normalized_readme.lower()
+    assert "independent matched runs validate" in normalized_readme.lower()
+    assert "12.26% reduction" in normalized_readme
     assert "replicated" in normalized_readme.lower()
     assert "post-saturation" in normalized_readme.lower()
 
@@ -128,6 +142,103 @@ def test_reduced_surface_comparison_is_not_current_primary_optimization_figure()
     assert "stellarator_itg_growth_optimization.py" not in examples_readme
     assert "reduced_stellarator_itg" not in examples_readme
     assert "screening diagnostics" in re.sub(r"\s+", " ", docs)
+
+
+def test_matched_qa_transport_is_statistically_resolved_and_converged() -> None:
+    """Freeze the Sokal-estimated matched-run validation of Kim et al.'s task."""
+    rows = _transport_summary()
+    assert set(rows) == {
+        "nominal",
+        "dt04",
+        "dt025",
+        "perp12",
+        "perp20",
+        "perp24",
+        "perp24long",
+        "z16",
+        "z32",
+        "v36",
+        "v612",
+    }
+    assert all(np.isfinite(value) for row in rows.values() for value in row.values())
+    with TRANSPORT_TRACES.open(encoding="utf-8", newline="") as stream:
+        traces = list(csv.DictReader(stream))
+    for row in rows.values():
+        assert row["p_hyper_m"] == min(20, max(int(row["nm"]) // 2, 1))
+    for case, row in rows.items():
+        case_traces = [trace for trace in traces if trace["case"] == case]
+        pairs = int(row["pairs"])
+        assert len(case_traces) == 2 * pairs
+        for design in ("baseline", "candidate"):
+            seeds = {int(trace["seed"]) for trace in case_traces if trace["design"] == design}
+            assert seeds == set(range(pairs))
+        assert all(float(trace["tau"]) > 0.0 for trace in case_traces)
+        assert all(float(trace["neff"]) > 0.0 for trace in case_traces)
+
+    nominal = rows["nominal"]
+    assert nominal["pairs"] == 24
+    assert nominal["positive_pairs"] == nominal["pairs"]
+    assert nominal["ci95_low_percent"] > 0.0
+    assert nominal["minimum_window_in_tau"] > 10.0
+    assert abs(nominal["baseline_half_shift_percent"]) < 2.0 * nominal[
+        "baseline_half_shift_sem_percent"
+    ]
+    assert abs(nominal["candidate_half_shift_percent"]) < 2.0 * nominal[
+        "candidate_half_shift_sem_percent"
+    ]
+
+    for case in ("dt04", "dt025"):
+        assert rows[case]["ci95_low_percent"] > 0.0
+        assert (
+            abs(rows[case]["reduction_percent"] - nominal["reduction_percent"])
+            < 5.0
+        )
+
+    perp20 = rows["perp20"]
+    short_perp24 = rows["perp24"]
+    long_perp24 = rows["perp24long"]
+    assert perp20["pairs"] == 16
+    assert perp20["ci95_low_percent"] > 0.0
+    assert short_perp24["ci95_low_percent"] < 0.0
+    assert short_perp24["baseline_half_shift_percent"] > 2.0 * short_perp24[
+        "baseline_half_shift_sem_percent"
+    ]
+    assert long_perp24["pairs"] == 16
+    assert long_perp24["positive_pairs"] == long_perp24["pairs"]
+    assert long_perp24["ci95_low_percent"] > 0.0
+    assert long_perp24["minimum_window_in_tau"] > 10.0
+    assert abs(long_perp24["baseline_half_shift_percent"]) < 2.0 * long_perp24[
+        "baseline_half_shift_sem_percent"
+    ]
+    assert abs(long_perp24["candidate_half_shift_percent"]) < 2.0 * long_perp24[
+        "candidate_half_shift_sem_percent"
+    ]
+    assert max(
+        perp20["ci95_low_percent"], long_perp24["ci95_low_percent"]
+    ) <= min(perp20["ci95_high_percent"], long_perp24["ci95_high_percent"])
+    for key in ("baseline_mean", "candidate_mean"):
+        relative_difference = abs(perp20[key] - long_perp24[key]) / max(
+            perp20[key], long_perp24[key]
+        )
+        assert relative_difference < 5.5e-2
+
+    for case in ("z16", "z32"):
+        assert rows[case]["ci95_low_percent"] > 0.0
+        assert rows[case]["ci95_low_percent"] < nominal["ci95_high_percent"]
+        assert rows[case]["ci95_high_percent"] > nominal["ci95_low_percent"]
+
+    coarse_velocity = rows["v36"]
+    refined_velocity = rows["v612"]
+    assert any(
+        abs(coarse_velocity[key] - nominal[key]) / nominal[key] > 0.15
+        for key in ("baseline_mean", "candidate_mean")
+    )
+    assert refined_velocity["pairs"] == 16
+    assert refined_velocity["ci95_low_percent"] > 0.0
+    assert refined_velocity["ci95_low_percent"] < nominal["ci95_high_percent"]
+    assert refined_velocity["ci95_high_percent"] > nominal["ci95_low_percent"]
+    for key in ("baseline_mean", "candidate_mean"):
+        assert abs(refined_velocity[key] - nominal[key]) / nominal[key] < 5.0e-2
 
 
 def test_solved_wout_candidate_gate_passes_valid_qa_branch() -> None:

@@ -505,8 +505,10 @@ heat-flux derivative. The equilibrium is vacuum; finite ``a/L_T`` and ``a/L_n``
 drive GKX. Edit the top-level constants to set resolution and run length.
 
 The optimizer window starts from a detached saturated state and supplies a
-local design derivative. Validate an accepted design with independent,
-replicated post-saturation runs.
+local design derivative. The accepted direction is validated by independent,
+matched post-saturation runs: the nominal 24-pair reduction is 12.26% (95% CI
+10.64--13.88%), with positive refined-grid intervals. See
+:doc:`stellarator_optimization` for the resolution ladder and CSV data.
 
 Reduced synthetic scripts are kept outside ``examples/optimization`` as
 development diagnostics only:

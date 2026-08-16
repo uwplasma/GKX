@@ -109,9 +109,11 @@ through 2048 RK3 steps; the worst relative discrepancy is
 differences to :math:`5.7\times10^{-6}` and lowers the local heat flux by 1.25%.
 
 These results establish a finite-window derivative and local descent. They do
-not establish an infinite-time turbulent derivative. Publication claims still
-require converged, replicated, post-transient heat-flux comparisons of the
-accepted equilibrium.
+not establish an infinite-time turbulent derivative. Independent matched runs
+of the accepted QA equilibrium establish a finite-time transport reduction:
+the nominal 24-pair interval is 10.64--13.88%, and the 20x20 and stationary
+24x24 refinement intervals overlap above zero. The protocol and scope are in
+:doc:`stellarator_optimization`.
 
 Tests
 -----

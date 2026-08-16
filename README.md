@@ -453,10 +453,15 @@ composes VMEX's implicit equilibrium derivative with the exact GKX window
 derivative.
 
 The saturation state is detached and refreshed after accepted stages. The
-window is a local design derivative; final claims still require independent,
-replicated, converged post-transient heat-flux windows. See the concise
-[autodiff mathematics](docs/nonlinear_autodiff.rst) and
-[optimization workflow](docs/stellarator_optimization.rst).
+window is a local design derivative. Independent matched runs validate the
+accepted direction: 24 nominal seed pairs give a 12.26% reduction (95% CI
+10.64--13.88%), while 16-pair 20x20 and stationary 24x24 refinements give
+4.95% (2.12--7.78%) and 8.50% (6.34--10.66%). The refinement intervals
+overlap and remain above zero. A 16-pair `(Nl,Nm)=(6,12)` check gives 12.32%
+(9.62--15.03%), with all pairs positive. This is one vacuum QA surface and
+field line, not a universal transport claim. See the concise [autodiff
+mathematics](docs/nonlinear_autodiff.rst) and [matched-run validation and
+optimization workflow](docs/stellarator_optimization.rst).
 
 
 ## Parallelization

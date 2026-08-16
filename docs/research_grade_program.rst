@@ -170,8 +170,9 @@ this tool:
 
 **A5 -- Nonlinear autodiff. DONE.** *Algorithmic.* The physical post-saturation
 heat flux uses a block-checkpointed discrete adjoint. Centered finite differences
-bound its useful window below the measured trajectory-divergence knee. Final
-transport claims still require independent replicated runs.
+bound its useful window below the measured trajectory-divergence knee. The
+selected vacuum QA direction now has independent matched-run, timestep, and
+resolution evidence in :doc:`stellarator_optimization`.
 
 *Done: the gradient fields.* ``LinearParams`` carried ``R_over_LTi`` /
 ``R_over_Ln`` / ``R_over_LTe``, but the operator consumes :math:`a/L_T` and

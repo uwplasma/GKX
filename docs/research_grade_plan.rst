@@ -36,7 +36,8 @@ reduction additionally requires:
 * matched baseline and candidate equilibria that satisfy aspect, iota, and
   quasisymmetry constraints.
 
-The QA workflow is in :doc:`stellarator_optimization`.
+The selected vacuum QA direction passes these gates. Its scope, including the
+rejected short-horizon control, is in :doc:`stellarator_optimization`.
 
 Open numerical work
 -------------------
