@@ -446,24 +446,45 @@ def loss(shape):
 heat_flux, gradient = jax.value_and_grad(loss)(shape0)
 ```
 
+![Nonlinear adjoint memory and derivative validation](docs/_static/nonlinear_autodiff_validation.png)
+
+**One derivative, bounded memory.** Block checkpointing cuts the measured
+2048-step temporary state from 759 MB to 12.6 MB on CPU and from 11.88 GB to
+168 MB on an RTX A4000. The discrete adjoint and centered finite differences
+agree until chaotic trajectory separation sets the useful window length.
+
 The single [`QA_optimization.py`](examples/optimization/QA_optimization.py)
 follows VMEX's vacuum QA mode ladder and adds this heat flux as a fourth tuple.
 Finite `a/L_T=3` and `a/L_n=1` drive ITG turbulence. The analytic Jacobian
 composes VMEX's implicit equilibrium derivative with the exact GKX window
 derivative.
 
+![Initial and optimized QA equilibria](docs/_static/qa_transport_equilibria.png)
+
+**A small shape step with a resolved transport effect.** Eight low-order
+boundary coefficients move; aspect ratio and mean iota change by less than
+0.05%, while the 3-D LCFS and LCFS Boozer `|B|` show where the equilibrium
+changes. The QA residual remains `O(10^-3)`; all panels use the same
+`|B|/<|B|>` color scale.
+
 The saturation state is detached and refreshed after accepted stages. The
 window is a local design derivative. Independent matched runs validate the
-accepted direction: 24 nominal seed pairs give a 12.26% reduction (95% CI
-10.64--13.88%), while 16-pair 20x20 and stationary 24x24 refinements give
-4.95% (2.12--7.78%) and 8.50% (6.34--10.66%). The refinement intervals
-overlap and remain above zero. A 16-pair `(Nl,Nm)=(6,12)` check gives 12.32%
-(9.62--15.03%), with all pairs positive. This is one vacuum QA surface and
-field line, not a universal transport claim; broader claims still require
-converged post-transient heat-flux windows across surfaces and field lines.
-See the concise [autodiff
-mathematics](docs/nonlinear_autodiff.rst) and [matched-run validation and
-optimization workflow](docs/stellarator_optimization.rst).
+accepted direction with replicated saturated trajectories.
+
+![Matched QA heat-flux traces and convergence](docs/_static/qa_transport_reduction.svg)
+
+**The startup spike is excluded; the shaded window is measured.** Across 24
+nominal matched seeds, the result is a **12.26% reduction** (95% CI
+10.64--13.88%).
+The stationary 24x24 and `(Nl,Nm)=(6,12)` refinements give 8.50%
+(6.34--10.66%) and 12.32% (9.62--15.03%); all 16 pairs improve in both. The
+orange cross is the short 24x24 pilot rejected by its stationarity test.
+
+This is one vacuum QA surface and field line, not a universal transport claim;
+broader claims still require converged post-transient heat-flux windows across
+surfaces and field lines. See the concise [autodiff
+mathematics](docs/nonlinear_autodiff.rst) and the [equations, scripts, matched
+statistics, and resolution study](docs/stellarator_optimization.rst).
 
 
 ## Parallelization

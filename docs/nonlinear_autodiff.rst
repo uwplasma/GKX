@@ -17,8 +17,19 @@ GKX differentiates
    J(p)=\frac{1}{N_w}\sum_{k=N-N_w+1}^{N}
         Q(G_k,p), \qquad G_0=\operatorname{stop\_gradient}(G_{sat}).
 
-``p`` may enter the species drives, field-line geometry, or both. Reverse mode
-applies the discrete recursion
+``p`` may enter the species drives, field-line geometry, or both.
+
+Discrete derivation
+-------------------
+
+Introduce one multiplier per executed time-step constraint,
+
+.. math::
+
+   \mathscr L=J+\sum_{k=0}^{N-1}\lambda_{k+1}^{T}
+      \left[\Phi_{\Delta t}(G_k;p)-G_{k+1}\right].
+
+Setting :math:`\partial\mathscr L/\partial G_k=0` gives the reverse recursion
 
 .. math::
 
@@ -26,7 +37,20 @@ applies the discrete recursion
                \lambda_{k+1}
                +\frac{1}{N_w}\left(\frac{\partial Q_k}{\partial G_k}\right)^T,
 
-and accumulates :math:`dJ/dp` during the same backward sweep.
+with the heat-flux term included only inside the chosen tail window. The design
+gradient is
+
+.. math::
+
+   \frac{dJ}{dp}=\frac1{N_w}\sum_{k\in W}\frac{\partial Q_k}{\partial p}
+      +\sum_{k=0}^{N-1}\lambda_{k+1}^{T}
+       \frac{\partial\Phi_k}{\partial p}.
+
+:math:`\Phi_k` is the implemented Runge--Kutta stage sequence followed by the
+Hermitian projection. JAX supplies its vector--Jacobian products; GKX controls
+only the checkpoint schedule. Thus the adjoint differentiates the executed
+discrete map, including fields, collisions, nonlinear convolution, and
+projection.
 
 Why this method
 ---------------

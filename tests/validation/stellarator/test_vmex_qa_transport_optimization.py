@@ -21,6 +21,9 @@ EXAMPLES = ROOT / "examples" / "optimization"
 QA_SCRIPT = EXAMPLES / "QA_optimization.py"
 TRANSPORT_SUMMARY = ROOT / "docs" / "_static" / "qa_transport_summary.csv"
 TRANSPORT_TRACES = ROOT / "docs" / "_static" / "qa_transport_traces.csv"
+TRANSPORT_TIMESERIES = (
+    ROOT / "docs" / "_static" / "qa_transport_nominal_timeseries.csv"
+)
 
 
 def _transport_summary() -> dict[str, dict[str, float]]:
@@ -83,6 +86,55 @@ def test_docs_scope_vmex_transport_optimizer_claims() -> None:
         assert "transport" in text, path
         assert "nonlinear" in text, path
         assert "post-saturation" in normalized, path
+
+
+def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(
+        encoding="utf-8"
+    )
+    figures = (
+        "nonlinear_autodiff_validation.png",
+        "qa_transport_equilibria.png",
+        "qa_transport_reduction.svg",
+    )
+    for filename in figures:
+        path = ROOT / "docs" / "_static" / filename
+        assert f"docs/_static/{filename}" in readme
+        assert path.stat().st_size > 0
+
+    for filename in (
+        "input.qa_transport_baseline",
+        "input.qa_transport_candidate",
+    ):
+        assert (EXAMPLES / filename).is_file()
+        assert filename in docs
+    for script in (
+        ROOT / "tools" / "campaigns" / "qa_transport_validation.py",
+        ROOT / "tools" / "artifacts" / "build_qa_transport_figures.py",
+    ):
+        py_compile.compile(str(script), doraise=True)
+        assert script.name in docs
+
+    with TRANSPORT_TIMESERIES.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    time = np.asarray([float(row["time"]) for row in rows])
+    values = np.asarray(
+        [
+            [
+                float(row["baseline_mean"]),
+                float(row["baseline_sem"]),
+                float(row["candidate_mean"]),
+                float(row["candidate_sem"]),
+            ]
+            for row in rows
+        ]
+    )
+    assert len(rows) == 301
+    assert np.all(np.diff(time) > 0.0)
+    assert time[0] < 1.0 and time[-1] > 1499.0
+    assert np.all(np.isfinite(values))
+    assert np.all(values[:, (1, 3)] >= 0.0)
 
 
 def test_optimization_examples_document_user_customization_knobs() -> None:

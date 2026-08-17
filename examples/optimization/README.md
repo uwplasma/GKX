@@ -32,3 +32,6 @@ Independent, replicated post-transient runs validate the accepted direction:
 20x20 and stationary 24x24 refinement intervals overlap above zero. The full
 protocol and CSV data are in the [stellarator optimization
 documentation](../../docs/stellarator_optimization.rst).
+
+The accepted initial/final VMEX inputs, restartable ensemble driver, statistical
+estimator, reproduction commands, and figures are linked from that page.
