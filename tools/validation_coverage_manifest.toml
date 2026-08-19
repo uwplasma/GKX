@@ -108,6 +108,7 @@ owned_modules = [
   "gkx.solvers.time.explicit_steps",
   "gkx.workflows.runtime.toml",
   "gkx.utils.tomlcompat",
+  "gkx.utils.compilation_cache",
   "gkx.solvers.time.runners",
   "gkx.workflows.runtime.config",
   "gkx.workflows.runtime.diagnostic_arrays",
@@ -2863,6 +2864,8 @@ next_tests = [
 module = "gkx.artifacts.plotting"
 path = "src/gkx/artifacts/plotting.py"
 owned_modules = [
+  "gkx.artifacts.gx_output",
+  "gkx.artifacts.run_figures",
   "gkx.artifacts.snapshots",
   "gkx.artifacts.transport_figures",
 ]

@@ -654,6 +654,27 @@ Real-Space Snapshots
    :members:
    :no-index:
 
+Automatic Run Figures
+---------------------
+
+.. automodule:: gkx.artifacts.run_figures
+   :members:
+   :no-index:
+
+GX Output Plotting
+------------------
+
+.. automodule:: gkx.artifacts.gx_output
+   :members:
+   :no-index:
+
+Persistent Compilation Cache
+----------------------------
+
+.. automodule:: gkx.utils.compilation_cache
+   :members:
+   :no-index:
+
 Config
 ------
 

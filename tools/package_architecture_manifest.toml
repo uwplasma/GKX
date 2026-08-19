@@ -238,6 +238,11 @@ recursive = true
 # existing scan figure reachable from --plot. The guards are the point: the
 # alternative is the defect this removes, a fit over a 1e102 trajectory
 # reported without comment.
+# 90936 -> 91752: plotting every run and reusing compiled kernels (#58). The auto-plot
+# orchestration, the GX output reader, and the compilation-cache install. The
+# cache is the point: a short nonlinear run spent 13.5 s compiling ~320 kernels
+# and now spends 0.9 s, because JAX's default refuses to persist anything under
+# a second and almost every GKX kernel is 20 ms.
 # 89815 -> 89890: bounding nonlinear reverse-mode memory. A checkpointed step
 # still leaves every lax.scan carry on the tape; the two-level scan retains
 # sqrt(N) block boundaries and inner carries instead. These 75 net lines reduce
@@ -297,7 +302,7 @@ recursive = true
 # floor. Both land in the fit path; the count is the sum, not new surface.
 # 89919 -> 90011: certifying the default linear branch alongside the residual
 # floor it now uses (#52 over #47). The adaptive branch and its precision pin.
-baseline = 91417
+baseline = 92154
 target = 45000
 
 [[line_budget_policy.counts]]

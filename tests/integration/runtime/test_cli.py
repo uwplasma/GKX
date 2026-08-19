@@ -1959,3 +1959,464 @@ def test_cli_run_runtime_linear_cli_geometry_file_does_not_change_vmec_model(
     assert captured["geometry_file"] == expected_cwd_resolved
     # --geometry-file must not promote a VMEC-backed run into imported-geometry mode.
     assert captured["model"] == "vmec"
+
+
+# ---------------------------------------------------------------------------
+# Automatic figures: a completed run draws its own output.
+# ---------------------------------------------------------------------------
+
+
+def _record_auto_plot(monkeypatch) -> list[tuple[str, dict[str, str]]]:
+    """Capture what the executable asks the figure writer to draw."""
+
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    def _fake(kind, paths, **_kwargs):
+        calls.append((kind, dict(paths)))
+        return [f"{kind}.png"]
+
+    monkeypatch.setattr("gkx.artifacts.run_figures.auto_plot_saved_run", _fake)
+    return calls
+
+
+def _nonlinear_namespace(**overrides) -> argparse.Namespace:
+    args = argparse.Namespace(
+        config="case.toml",
+        init_file=None,
+        ky=None,
+        Nl=None,
+        Nm=None,
+        dt=None,
+        steps=None,
+        method=None,
+        sample_stride=None,
+        diagnostics_stride=None,
+        diagnostics=False,
+        no_diagnostics=False,
+        laguerre_mode=None,
+        progress=False,
+        no_progress=False,
+        no_plots=False,
+        out="case.out.nc",
+    )
+    for name, value in overrides.items():
+        setattr(args, name, value)
+    return args
+
+
+def _linear_namespace(**overrides) -> argparse.Namespace:
+    args = argparse.Namespace(
+        config="case.toml",
+        ky=None,
+        Nl=None,
+        Nm=None,
+        dt=None,
+        steps=None,
+        method=None,
+        sample_stride=None,
+        solver=None,
+        fit_signal=None,
+        progress=False,
+        no_progress=False,
+        no_plots=False,
+        out="bundle",
+    )
+    for name, value in overrides.items():
+        setattr(args, name, value)
+    return args
+
+
+def _stub_nonlinear_run(monkeypatch, paths: dict[str, str], cfg=None) -> None:
+    diag = SimulationDiagnostics(
+        t=np.asarray([0.1, 0.2]),
+        dt_t=np.asarray([0.1, 0.1]),
+        dt_mean=np.asarray(0.1),
+        gamma_t=np.asarray([0.0, 0.0]),
+        omega_t=np.asarray([0.0, 0.0]),
+        Wg_t=np.asarray([1.0, 1.1]),
+        Wphi_t=np.asarray([2.0, 2.1]),
+        Wapar_t=np.asarray([0.0, 0.0]),
+        heat_flux_t=np.asarray([3.0, 3.1]),
+        particle_flux_t=np.asarray([4.0, 4.1]),
+        energy_t=np.asarray([3.0, 3.2]),
+        phi_mode_t=None,
+    )
+    result = RuntimeNonlinearResult(
+        t=np.asarray([0.1, 0.2]),
+        diagnostics=diag,
+        ky_selected=0.2,
+        kx_selected=0.0,
+    )
+    monkeypatch.setattr(
+        "gkx.cli.load_runtime_from_toml",
+        lambda _path: (cfg if cfg is not None else RuntimeConfig(), {"run": {}}),
+    )
+    monkeypatch.setattr(
+        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+        lambda *_args, **_kwargs: (result, paths),
+    )
+
+
+def _stub_linear_run(monkeypatch, paths: dict[str, str], cfg=None) -> None:
+    monkeypatch.setattr(
+        "gkx.cli.load_runtime_from_toml",
+        lambda _path: (cfg if cfg is not None else RuntimeConfig(), {"run": {}}),
+    )
+    monkeypatch.setattr(
+        "gkx.cli.run_runtime_linear",
+        lambda *_args, **_kwargs: _runtime_linear_result(),
+    )
+    monkeypatch.setattr(
+        "gkx.cli.write_runtime_linear_artifacts", lambda *_a, **_k: paths
+    )
+
+
+def test_cli_nonlinear_run_auto_plots_its_saved_bundle(monkeypatch, capsys) -> None:
+    """A finished nonlinear run draws its figures without being asked."""
+
+    calls = _record_auto_plot(monkeypatch)
+    paths = {"summary": "case.summary.json", "out": "case.out.nc"}
+    _stub_nonlinear_run(monkeypatch, paths)
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace()) == 0
+
+    assert calls == [("nonlinear", paths)]
+    assert "saved nonlinear.png" in capsys.readouterr().out
+
+
+def test_cli_linear_run_auto_plots_its_saved_bundle(monkeypatch, capsys) -> None:
+    calls = _record_auto_plot(monkeypatch)
+    paths = {"summary": "bundle.summary.json", "timeseries": "bundle.timeseries.csv"}
+    _stub_linear_run(monkeypatch, paths)
+
+    assert _cmd_run_runtime_linear(_linear_namespace()) == 0
+
+    assert calls == [("linear", paths)]
+    assert "saved linear.png" in capsys.readouterr().out
+
+
+def test_cli_linear_scan_auto_plots_its_saved_scan(monkeypatch, capsys) -> None:
+    calls = _record_auto_plot(monkeypatch)
+    paths = {"summary": "scan.summary.json", "scan": "scan.scan.csv"}
+    scan = type(
+        "Scan",
+        (),
+        {
+            "ky": np.array([0.2, 0.3]),
+            "gamma": np.array([0.05, 0.08]),
+            "omega": np.array([0.25, 0.31]),
+        },
+    )()
+    monkeypatch.setattr(
+        "gkx.cli.load_runtime_from_toml", lambda _path: (RuntimeConfig(), {"scan": {}})
+    )
+    monkeypatch.setattr("gkx.cli.run_runtime_scan", lambda *_a, **_k: scan)
+    monkeypatch.setattr(
+        "gkx.cli.write_runtime_linear_scan_artifacts", lambda *_a, **_k: paths
+    )
+    args = argparse.Namespace(
+        config="case.toml",
+        ky_values="0.2,0.3",
+        Nl=None,
+        Nm=None,
+        dt=None,
+        steps=None,
+        method=None,
+        sample_stride=None,
+        solver=None,
+        fit_signal=None,
+        batch_ky=False,
+        workers=1,
+        parallel_executor="thread",
+        progress=False,
+        no_progress=False,
+        quasilinear=False,
+        ql_mode=None,
+        ql_saturation_rule=None,
+        ql_csat=None,
+        ql_normalization=None,
+        ql_output=None,
+        no_plots=False,
+        out="scan",
+    )
+
+    assert _cmd_scan_runtime_linear(args) == 0
+
+    assert calls == [("linear_scan", paths)]
+    assert "saved linear_scan.png" in capsys.readouterr().out
+
+
+def test_cli_no_plots_flag_suppresses_the_figure_set(monkeypatch) -> None:
+    calls = _record_auto_plot(monkeypatch)
+    _stub_nonlinear_run(monkeypatch, {"summary": "s.json", "out": "case.out.nc"})
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(no_plots=True)) == 0
+
+    assert calls == []
+
+
+def test_cli_output_plots_false_suppresses_the_figure_set(monkeypatch) -> None:
+    """``[output] plots = false`` is the configuration form of ``--no-plots``."""
+
+    from dataclasses import replace
+
+    cfg = RuntimeConfig()
+    cfg = replace(cfg, output=replace(cfg.output, plots=False))
+    calls = _record_auto_plot(monkeypatch)
+    _stub_nonlinear_run(monkeypatch, {"summary": "s.json", "out": "c.out.nc"}, cfg=cfg)
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace()) == 0
+
+    assert calls == []
+
+
+def test_cli_output_plots_default_is_on() -> None:
+    assert RuntimeConfig().output.plots is True
+
+
+def test_cli_plot_failure_never_fails_a_completed_run(monkeypatch, capsys) -> None:
+    """A broken plotting stack costs the figures, never the simulation."""
+
+    def _explode(*_args, **_kwargs):
+        raise RuntimeError("no usable matplotlib backend")
+
+    monkeypatch.setattr("gkx.artifacts.run_figures.auto_plot_saved_run", _explode)
+    _stub_nonlinear_run(monkeypatch, {"summary": "s.json", "out": "case.out.nc"})
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace()) == 0
+
+    out = capsys.readouterr().out
+    assert "no usable matplotlib backend" in out
+    assert "saved case.out.nc" in out
+
+
+def _write_grouped_out_nc(path: Path, *, code: str = "gkx", nt: int = 6) -> Path:
+    """Write a minimal bundle in the grouped layout GKX and GX both use."""
+
+    netcdf4 = pytest.importorskip("netCDF4")
+    nky, nkx, ns = 4, 3, 1
+    t = np.linspace(0.5, 6.0, nt)
+    ky = np.linspace(0.0, 0.6, nky)
+    kx = np.linspace(-0.4, 0.4, nkx)
+    with netcdf4.Dataset(path, "w") as root:
+        for name, size in (("time", nt), ("s", ns), ("ky", nky), ("kx", nkx)):
+            root.createDimension(name, size)
+        if code == "gkx":
+            info = root.createVariable("code_info", "i4", ())
+            info[:] = np.int32(1)
+            info.setncattr("value", "gkx")
+        else:
+            root.setncattr("Title", "GX simulation data")
+            info = root.createVariable("code_info", "i4", ())
+            info[:] = np.int32(1)
+            info.setncattr("Hash", "deadbeef")
+        grids = root.createGroup("Grids")
+        grids.createVariable("time", "f8", ("time",))[:] = t
+        grids.createVariable("ky", "f4", ("ky",))[:] = ky
+        grids.createVariable("kx", "f4", ("kx",))[:] = kx
+        diag = root.createGroup("Diagnostics")
+        history = 0.5 + 0.1 * np.outer(t, np.arange(1, ns + 1))
+        for name in ("Wg_st", "Wphi_st", "Wapar_st", "HeatFlux_st", "ParticleFlux_st"):
+            diag.createVariable(name, "f4", ("time", "s"))[:, :] = history
+        diag.createVariable("Phi2_t", "f4", ("time",))[:] = np.exp(0.1 * t)
+        diag.createVariable("HeatFlux_kyst", "f4", ("time", "s", "ky"))[:, :, :] = (
+            np.broadcast_to((ky * np.exp(-2.0 * ky))[None, None, :], (nt, ns, nky))
+        )
+        diag.createVariable("HeatFlux_kxst", "f4", ("time", "s", "kx"))[:, :, :] = (
+            np.broadcast_to(np.exp(-np.abs(kx))[None, None, :], (nt, ns, nkx))
+        )
+        phi2_kxky = np.broadcast_to(
+            (np.exp(-2.0 * ky)[:, None] * np.exp(-np.abs(kx))[None, :])[None, :, :],
+            (nt, nky, nkx),
+        )
+        diag.createVariable("Phi2_kxkyt", "f4", ("time", "ky", "kx"))[:, :, :] = (
+            phi2_kxky
+        )
+    return path
+
+
+def test_cli_nonlinear_run_writes_the_real_figure_set(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    """The default figure set really lands on disk beside a NetCDF bundle."""
+
+    bundle = _write_grouped_out_nc(tmp_path / "case.out.nc")
+    _stub_nonlinear_run(monkeypatch, {"out": str(bundle)})
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(bundle))) == 0
+
+    out = capsys.readouterr().out
+    for suffix in ("flux_time", "flux_spectra", "phi2_spectra"):
+        figure = tmp_path / f"case.{suffix}.png"
+        assert figure.exists(), suffix
+        assert f"saved {figure}" in out
+
+
+def test_cli_nonlinear_csv_sidecar_degrades_to_the_time_traces(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    """A CSV sidecar has no spectra, so it gets Q(t)/Gamma(t) and no crash."""
+
+    base = tmp_path / "nl_case"
+    (tmp_path / "nl_case.summary.json").write_text(
+        '{"kind":"nonlinear"}', encoding="utf-8"
+    )
+    (tmp_path / "nl_case.diagnostics.csv").write_text(
+        "t,dt,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux\n"
+        "0.1,0.1,0.01,-0.02,1.0,2.0,0.0,3.0,0.4,0.02\n"
+        "0.2,0.1,0.02,-0.03,1.1,2.1,0.0,3.2,0.5,0.03\n"
+        "0.3,0.1,0.02,-0.03,1.2,2.2,0.0,3.4,0.6,0.04\n",
+        encoding="utf-8",
+    )
+    _stub_nonlinear_run(
+        monkeypatch,
+        {
+            "summary": str(tmp_path / "nl_case.summary.json"),
+            "diagnostics": str(tmp_path / "nl_case.diagnostics.csv"),
+        },
+    )
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(base))) == 0
+
+    assert (tmp_path / "nl_case.flux_time.png").exists()
+    assert not (tmp_path / "nl_case.flux_spectra.png").exists()
+    assert not (tmp_path / "nl_case.phi2_spectra.png").exists()
+    assert "saved" in capsys.readouterr().out
+
+
+def test_cli_nonlinear_run_shades_a_measured_average_window(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A summary that records where it averaged gets that window shaded."""
+
+    from gkx.artifacts.run_figures import measured_average_window
+
+    bundle = _write_grouped_out_nc(tmp_path / "win.out.nc")
+    summary = tmp_path / "win.summary.json"
+    summary.write_text('{"kind":"nonlinear","average_window":[3.0,6.0]}', "utf-8")
+    captured: dict[str, object] = {}
+
+    def _spy(source, *, window=None, title="", out=None):
+        captured["window"] = window
+        import matplotlib.pyplot as plt
+
+        return plt.subplots(1, 1)
+
+    monkeypatch.setattr(
+        "gkx.artifacts.transport_figures.heat_flux_time_figure", _spy, raising=True
+    )
+    _stub_nonlinear_run(
+        monkeypatch, {"out": str(bundle), "summary": str(summary)}
+    )
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(bundle))) == 0
+
+    assert captured["window"] == (3.0, 6.0)
+    assert measured_average_window({"fit_window_tmin": 1.0, "fit_window_tmax": 2.0}) == (
+        1.0,
+        2.0,
+    )
+    assert measured_average_window({}) is None
+    assert measured_average_window({"average_window": [4.0, 1.0]}) is None
+
+
+def test_cli_global_plot_renders_a_gx_netcdf_bundle(
+    capsys, monkeypatch, tmp_path: Path
+) -> None:
+    """--plot accepts GX output so a cross-code check is one command."""
+
+    from gkx.artifacts.gx_output import is_gx_output
+
+    gx_bundle = _write_grouped_out_nc(tmp_path / "gx_case.out.nc", code="gx")
+    gkx_bundle = _write_grouped_out_nc(tmp_path / "gkx_case.out.nc", code="gkx")
+    assert is_gx_output(gx_bundle) is True
+    assert is_gx_output(gkx_bundle) is False
+
+    monkeypatch.setattr(sys, "argv", ["gkx", "--plot", str(gx_bundle)])
+    assert main() == 0
+
+    rendered = tmp_path / "gx_case.plot.png"
+    assert rendered.exists()
+    assert f"saved {rendered}" in capsys.readouterr().out
+
+
+def test_cli_global_plot_titles_gx_data_as_gx(tmp_path: Path) -> None:
+    """The figure must say GX so a lifted panel cannot be read as GKX."""
+
+    import matplotlib.pyplot as plt
+
+    from gkx.artifacts.gx_output import gx_summary_figure
+
+    gx_bundle = _write_grouped_out_nc(tmp_path / "gx_titled.out.nc", code="gx")
+    fig, axes = gx_summary_figure(gx_bundle)
+    try:
+        assert "GX" in axes[0].get_title(loc="left")
+    finally:
+        plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Persistent compilation cache: cold start is the cost users actually pay.
+# ---------------------------------------------------------------------------
+
+
+def test_compilation_cache_directory_honours_the_environment(tmp_path: Path) -> None:
+    from gkx.utils import compilation_cache as cache
+
+    override = tmp_path / "elsewhere"
+    assert cache.compilation_cache_directory(
+        {cache.DIRECTORY_ENV_VAR: str(override)}
+    ) == override
+    # No override: the repository-local .cache/gkx tree, matching where
+    # generated *.eik.nc geometry already lives.
+    assert cache.compilation_cache_directory({}).parts[-3:] == (
+        ".cache",
+        "gkx",
+        "jax",
+    )
+
+
+def test_compilation_cache_can_be_switched_off(tmp_path: Path) -> None:
+    from gkx.utils import compilation_cache as cache
+
+    assert cache.compilation_cache_enabled({}) is True
+    for value in ("0", "off", "false", "no"):
+        assert cache.compilation_cache_enabled({cache.ENABLE_ENV_VAR: value}) is False
+    assert (
+        cache.enable_persistent_compilation_cache(
+            {cache.ENABLE_ENV_VAR: "0", cache.DIRECTORY_ENV_VAR: str(tmp_path)}
+        )
+        is None
+    )
+
+
+def test_compilation_cache_is_namespaced_by_jax_version(tmp_path: Path) -> None:
+    """A JAX upgrade must start a fresh directory, never reuse old executables."""
+
+    import jax
+
+    from gkx.utils import compilation_cache as cache
+
+    previous = jax.config.values.get("jax_compilation_cache_dir")
+    try:
+        directory = cache.enable_persistent_compilation_cache(
+            {cache.DIRECTORY_ENV_VAR: str(tmp_path)}
+        )
+        assert directory == tmp_path / f"jax-{jax.__version__}"
+        assert directory.is_dir()
+        assert jax.config.values["jax_compilation_cache_dir"] == str(directory)
+    finally:
+        jax.config.update("jax_compilation_cache_dir", previous)
+
+
+def test_cli_main_installs_the_compilation_cache(monkeypatch, tmp_path: Path) -> None:
+    installed: list[object] = []
+    monkeypatch.setattr(
+        cli, "enable_persistent_compilation_cache", lambda: installed.append(True)
+    )
+    rendered = tmp_path / "rendered.png"
+    monkeypatch.setattr("gkx.cli.plot_saved_output", lambda path, out=None: rendered)
+    monkeypatch.setattr(sys, "argv", ["gkx", "--plot", "case.summary.json"])
+
+    assert main() == 0
+    assert installed == [True]

@@ -575,6 +575,10 @@ The ``[output]`` section controls runtime artifact layout and restart behavior:
   the larger spectral-history arrays.
 * ``nsave``: checkpoint cadence fallback, in steps, for nonlinear NetCDF
   bundles when ``time.nstep_restart`` is not set.
+* ``plots``: draw the run's figures beside its output once it finishes. It
+  defaults to ``true``; set it to ``false`` (or pass ``--no-plots``) on batch
+  surfaces that only want the data. See :doc:`outputs` for the figure set each
+  run kind writes.
 
 For direct restart control outside the ``[output]`` helper path, the generic
 ``[init] init_file`` / ``init_file_scale`` / ``init_file_mode`` keys remain the
