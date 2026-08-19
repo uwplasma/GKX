@@ -221,6 +221,12 @@ recursive = true
 # docstring and import header and returns plotting.py to the size it had
 # before this branch; the two modules are split by what they read, benchmark
 # and scan results on one side and saved run output on the other.
+# 89815 -> 89894: failing loudly instead of reporting a confident wrong growth rate (#50).
+# The overflow and non-finite guards on both fit paths, the CFL estimate that
+# warns before a run goes unstable, and the linear_scan branch that makes the
+# existing scan figure reachable from --plot. The guards are the point: the
+# alternative is the defect this removes, a fit over a 1e102 trajectory
+# reported without comment.
 baseline = 90936
 target = 45000
 

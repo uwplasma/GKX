@@ -10,6 +10,7 @@ import numpy as np
 
 from gkx.diagnostics.modes import ModeSelection
 from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.workflows.runtime.diagnostics import ensure_finite_linear_history
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,
     RuntimeLinearScanResult,
@@ -432,6 +433,8 @@ def _run_batch_diagnostics(
     )
     phi_t_np = np.asarray(diag[1])
     dens_t_np = np.asarray(diag[2])
+    ensure_finite_linear_history("field", phi_t_np)
+    ensure_finite_linear_history("density", dens_t_np)
     t_arr = (
         float(tcfg.dt)
         * float(tcfg.sample_stride)

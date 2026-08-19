@@ -56,10 +56,11 @@ jobs:
 
   python-floor:
     # Every other job pins 3.11, which is why a stdlib-only-from-3.11 import
-    # could sit in twelve modules while pyproject advertised 3.10. This job runs
-    # the declared floor and collects the whole suite: collection is where an
-    # import that does not exist on 3.10 actually fails, and it costs a minute
-    # rather than a second full test run.
+    # could sit in twelve modules while pyproject advertised a lower floor. This
+    # job runs the declared floor and collects the whole suite: collection is
+    # where an import that does not exist on the floor actually fails, and it
+    # costs a minute rather than a second full test run. The floor moved to 3.11
+    # when the jax minimum did; jax >= 0.10.1 publishes no 3.10 wheels.
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     needs: repo-hygiene
@@ -71,15 +72,15 @@ jobs:
       - name: Set up Python at the declared requires-python floor
         uses: actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Cache pip
         uses: actions/cache@v5
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-3.10-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pip-3.11-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
-            ${{ runner.os }}-pip-3.10-
+            ${{ runner.os }}-pip-3.11-
 
       - name: Install build + runtime deps
         run: |
@@ -89,9 +90,9 @@ jobs:
       - name: Confirm the floor really is the floor
         run: |
           python - <<'PY'
-          import sys, tomli, gkx
+          import sys, tomllib, gkx
           from gkx.utils import tomlcompat
-          assert sys.version_info[:2] == (3, 10), sys.version_info
+          assert sys.version_info[:2] == (3, 11), sys.version_info
           assert tomlcompat.loads("a = 1") == {"a": 1}
           print("gkx", gkx.__version__, "on", sys.version)
           PY
