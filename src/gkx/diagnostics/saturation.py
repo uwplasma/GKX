@@ -37,12 +37,18 @@ def sokal_autocorrelation_time(
     units as ``dt``. A trace that never crosses zero is truncated at its end and
     the caller is told, because that means the trace is too short to resolve its
     own correlation time -- the one case where a number here would be a lie.
+
+    A trace with no fluctuation at all is told the same way. Callers read
+    "resolved" as ``cut < rho.size``, so the degenerate return has to place the
+    cut at the end rather than at lag zero: a constant signal has no correlation
+    time to resolve, and reporting one resolved is the same lie in the other
+    direction.
     """
 
     fluctuation = signal - signal.mean()
     variance = float(fluctuation @ fluctuation)
     if variance <= 0.0:
-        return 0.0, 0, np.zeros(1)
+        return 0.0, 1, np.zeros(1)
 
     # Full unbiased-by-count autocorrelation via FFT (O(n log n)).
     size = int(2 ** np.ceil(np.log2(2 * fluctuation.size)))
@@ -71,6 +77,14 @@ _SATURATION_VALUE_FLOOR = 1.0e-12
 # How far above the floor a mean must sit before the relative SEM built on it
 # means anything. Generous, because the cost of waiting is wall time and the
 # cost of stopping early is a silently truncated run.
+#
+# This threshold is absolute, and a heat flux is not: its scale is set by the
+# initial amplitude the deck seeds and by the diagnostic normalization it
+# picks. So it covers a dead trace only when that trace happens to sit below
+# it, and cannot be the whole protection against one. What a dead trace shows
+# in every normalization is that it has no correlation time this sampling can
+# resolve, which is the gate that actually carries the case; see the
+# ``resolved`` definition in ``_sokal_window_mean_sem``.
 _SATURATION_SIGNAL_FACTOR = 1.0e3
 _SATURATION_DECISION_FIELDS = (
     "window_tmin",
@@ -107,7 +121,24 @@ def _sokal_window_mean_sem(
     """
 
     tau, cut, rho = sokal_autocorrelation_time(values, dt)
-    resolved = cut < rho.size
+    # Resolved means the trace showed this sampling a correlation time: the
+    # autocorrelation came back inside the window, and the time it integrates
+    # to is longer than the interval it was sampled at. A correlation time
+    # shorter than one sample is not a measurement of anything -- it is the
+    # discretization floor, and it is what uncorrelated noise returns.
+    #
+    # Both halves of that matter, and for the same reason: ``min_window`` is
+    # derived as ``10 tau``, so a ``tau`` at the floor makes the window-length
+    # requirement vacuous exactly on the traces carrying the least information.
+    # Requiring only ``tau > 0`` is not enough, because the lag-one sample
+    # autocorrelation of white noise is positive about half the time: measured
+    # over 400 realizations of a flat trace, 190 produced a positive ``tau``
+    # and saturated, at any amplitude -- scaling a trace cannot change its
+    # autocorrelation. Across those same 400, ``tau`` never exceeded
+    # ``0.883 dt``, while the shipped nonlinear decks measure ``tau`` between
+    # ``8.5 dt`` and ``81 dt``. One sampling interval sits in that gap with an
+    # order of magnitude of room on the physical side.
+    resolved = cut < rho.size and tau > dt
     n_eff = (
         min(float(values.size), values.size * dt / (2.0 * tau))
         if tau > 0.0 and dt > 0.0
@@ -166,7 +197,9 @@ def saturation_stop_decision(
     decay that follows is left to the stationarity gate rather than trimmed.
 
     Saturation requires all of: a resolved ``tau_ac`` (the autocorrelation
-    crosses zero inside the window), window span at least ``min_window``
+    crosses zero inside the window, and not at the first lag -- a trace that
+    decorrelates within one diagnostic sample has shown no correlation time,
+    only noise), window span at least ``min_window``
     (default ``10 tau_ac``), IAT-corrected relative SEM at most ``rel_sem``,
     first/second half-window means within twice their combined SEM, and --
     when a ``guard`` trace (Phi^2) is given -- the same half-window

@@ -27,6 +27,13 @@ ntheta = 64
 nperiod = 4
 
 [time]
+# run_to must stay "t_max". This is a zero-gradient zonal-flow relaxation run:
+# tprim = fprim = 0, so the heat-flux moment is identically zero -- measured
+# 0.0 in every one of the first 512 samples, not merely small -- and there is
+# no saturated flux for the default run_to = "saturation" to find. The
+# observable this benchmark exists to produce is the zonal potential response
+# Phi_zonal(kx, t) out to t = 60, which a flux-based stop policy cannot see.
+run_to = "t_max"
 t_max = 60.0
 dt = 0.05
 method = "rk4"
