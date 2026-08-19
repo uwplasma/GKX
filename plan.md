@@ -1334,3 +1334,58 @@ and as unreachable commit `ffa475b209a54d1cad6ce5dd4092dffb34c322f7`), but nothi
 **Rule for this program: never `git stash` while other worktrees are active.** To compare
 against a clean tree use `git show HEAD:<path> > /tmp/copy.py`, or a throwaway
 `git worktree add --detach /tmp/clean origin/main`. Both running agents were warned mid-flight.
+
+### 2026-08-19 agent/tracedsweep — 3.5 DONE → PR #70. NOT a clean sweep: five more, two SILENT
+All proven under `jit`/`grad`, not pattern-matched.
+**Loud:** (1) `parallel/integrators.py:890` — the Hermitian projector again, a **sibling of the
+call PR #61 fixed IN THE SAME FILE and missed**; (2) `solvers/time/explicit_cfl.py:66` —
+`float(np.asarray(grid.z[1] - grid.z[0]))`, where `grid.z[1]-grid.z[0]` is a `jnp` op that
+stages out, breaking every jitted adaptive-dt run **with nothing traced at all**. `fixed_dt=false`
+is what `runtime_cyclone_nonlinear.toml`, `examples/common_input.toml` and 4 other production
+inputs run.
+**Silent, and worse:** (4) `operators/linear/dissipation.py:76` `_is_static_zero` reported every
+amplitude dynamic under `jit`, so **`TermConfig(apar=0,bpar=0)` still assembled the FULL
+ELECTROMAGNETIC RHS in every jitted run**, and ~20 `_is_static_zero`-gated fast paths across
+dissipation/assembly/linear_terms were dead once compiled — correct outside a trace, useless
+inside one; (5) `operators/linear/params.py:367` + a duplicate in `streaming.py` — **every
+positivity guard in the linear operator was dead inside any trace**;
+`_check_positive(-1.0,"vth")` returned silently under `jit`.
+Fixes read the stored value with numpy, `dtype=` preserving the cast so an amplitude that
+underflows in the operator's precision still counts as static zero. Duplicate guard deleted.
+**New meta-gate** walks `src/gkx` for `lru_cache`d functions materializing a `jnp` array in
+their own body — the escaping-constant shape — validated by pointing it at pre-#61 source,
+where it flags the exact line. Candidates judged LEGITIMATE are enumerated in the PR rather
+than silently dropped (most host reads in the tree are correct, including 5 of 6 lru_cache sites).
+
+**METHODOLOGICAL WARNING, applies retroactively**: `tests/conftest.py` prepends the worktree
+`src` to `sys.path`, so a `PYTHONPATH`-based "pristine comparison" silently runs against your
+OWN source. The agent nearly shipped a false "pre-existing failure" claim this way and reversed
+its conclusion after redoing it properly (`test_prepared_nonlinear_diagnostics_reuses_compiled_scan`
+was NOT pre-existing — its own guard test let a ValueError escape a `jax.jit` trace, zeroing a
+process-global `jit._cache_size()`). **Any "this failure is pre-existing" claim in this log made
+via PYTHONPATH swapping should be treated as unverified.** Correct methods: `git show
+HEAD:<path>`, `git archive HEAD | tar -x` into a scratch dir, or a throwaway `git worktree`.
+
+### 2026-08-19 agent/warmstart — 1.6 DONE → PR #71, shipped OPT-IN on a negative result
+Correctness gate PASSED: warm vs cold agree to **4e-7–1e-6 relative** across a 5-point ky scan,
+inside the solver's certified residual and four orders below the ky-to-ky variation, with **no
+branch inheritance** — the specific hazard of seeding an eigensolver from a neighbour.
+**The certified eigensolver gains NOTHING, and the first measurement said otherwise.** An initial
+824 s cold → 463 s warm (1.78x) was an ARTIFACT of running cold first in a fresh process, so cold
+paid the XLA compilations warm then reused. Order swapped with `jax_log_compiles` on:
+**240.8 s warm vs 214.7 s cold**, identical operator-application counts at 4 of 5 points. It is
+structural: adaptive-propagator cost per restart is `4*filter_steps*krylov_dim`, independent of
+`v0`, so a seed can only pay by removing restarts and there are none to remove.
+Time integration DOES gain ~2x — but by needing less HORIZON, and on a fixed horizon a seeded run
+reports a DIFFERENT growth rate (0.06811 vs 0.08648 at t_max=20) because it skipped the startup
+transient the parity decks are pinned to reproduce. **So it ships opt-in**: defaulting it on would
+have made the flagship deck ~12% slower for no gain and silently moved published scan numbers.
+Single run byte-identical. Optimization policy wired but `max_reuse=0` — verifying a reduced
+spin-up budget needs multi-hour nonlinear runs, and shipping an unverified objective change is
+worse than shipping none. → item **1.8**: auto-shorten horizons for seeded points, gated by the
+`fit_settled` probe; that is where the real 2x lives.
+
+### 2026-08-19 RJ — stash incident resolved; no work lost
+The foreign stash the tracedsweep agent popped was the **Merlo agent's** zonal work, which that
+agent had already recovered itself from unreachable commit `20ab39d5` and which shipped as PR #67.
+A second copy is at `scratchpad/patches/RECOVERED_other_session_zonal_work.patch`. Nothing lost.
