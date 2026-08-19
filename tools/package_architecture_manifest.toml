@@ -128,7 +128,15 @@ reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, resta
 
 [[complexity_policy.exceptions]]
 path = "artifacts/io.py"
-baseline_lines = 1088
+# 1088 -> 1093: carrying the fit-quality diagnostics into the linear summary
+# (#56). The summary is where a growth rate is read from, so it is where the
+# evidence that the rate is resolved has to appear: gamma_stderr, omega_stderr,
+# fit_r2, and fit_settled. Four of the five lines are those fields. The fifth
+# is _optional_float, which writes JSON null rather than NaN for a missing or
+# non-finite diagnostic, because NaN is not JSON and an eigensolver result has
+# no fit to describe. Splitting five lines of one summary into another module
+# would cost more than it saves and break the rule this exception records.
+baseline_lines = 1093
 target_lines = 1000
 reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
 
