@@ -789,3 +789,45 @@ that CI was silently relying on — worth remembering when the floor moves again
 
 **State at handoff: #50–#56 all passing CI** (#50 last shard pending at time of writing).
 Task #16/#17 of the session board are complete; the plan board above is authoritative.
+
+### 2026-08-18 agent/pr45 — VERDICT: MERGE AS-IS. All five PR assessments now complete.
+Reproduction landed (not stalled — the half-time probe took 1446 s under contention):
+GKX side matches the tracked matrix to **1.9e-9 relative across all 11 ky** on macOS arm64
+CPU against a matrix built on an A4000, and every half-time settled flag matches. Peak
+ky=0.30: +0.0165% γ / +0.0095% ω (claimed +0.02%/+0.01%); settled 10 of 11, identical flags.
+
+**One honest correction the PR should absorb**: the secondary figures "0.21%" and "0.6%" are
+against the PR's own GX re-run; against GX's SHIPPED `_correct.out.nc` they are 0.25% and
+0.7%. The excursions are on the REFERENCE side (GX uses adaptive RK4 and its late-window mean
+over ~30 samples is noisy at marginal ky), not GKX's. The headline is robust; soften or
+attribute those two.
+
+**Fit protocol, fully specified** (candidate default for 0.3): signal = complex φ at outboard
+midplane `z=Nz//2+1`, one ky at a time out of a batched multi-ky run; FIXED window
+`[0.7·t_end, t_end]` with `auto_window=False`; two independent OLS fits (`log|φ|`→γ,
+unwrapped `arg φ`→−ω), no weighting; stride capping samples near 2000 (563 points in-window);
+Nl=16/Nm=48, Nz=96, imported GX geometry; `solver="time"`, imex2, fixed dt=0.002, float64;
+settled gate = same fit at half integration time, ≤5% γ movement.
+Two caveats if promoted: the estimator is ASYMMETRIC (GKX OLS over last 30% vs GX's mean of
+its own instantaneous diagnostic over last 50%) — harmless when converged, and the source of
+the marginal-ky reference noise above; and `min_points=80`/`require_positive=True` are passed
+but **silently ignored** on this code path (`build_gx_parity_matrix.py:167-168`) — delete or wire up.
+
+**New defects logged** (all minor, none blocking #45):
+- `docs/normalization.rst` writes `ω/(v_th/R_0)` but NEVER defines whether v_th is sqrt(T/m)
+  or sqrt(2T/m) — the exact ambiguity that caused this whole false alarm. **One sentence
+  pinning it (and noting GX shares it, stella does not) is the highest-value doc change in
+  the review.** → new item **2.7**.
+- `docs/verification_matrix.rst:288-297` mixes units in one column (`+0.02%` beside
+  `-5.6e-05`) — a 100× reading hazard.
+- `contract="cyclone"` is DEAD SCAFFOLDING: every contract in
+  `src/gkx/diagnostics/normalization.py:41-74` is identity and `diagnostic_norm="none"` is a
+  passthrough. Candidate for the Phase 5 deletion list.
+- **HSX parity row is not third-party reproducible**: no upstream deck, no shipped reference,
+  and the flux tube needed "a locally patched copy of the GX geometry module" that exists
+  nowhere in the repo. Tracking the six parity decks (esp. HSX + that patch) would close most
+  of the regenerability gap cheaply → folds into item **2.4-r0**.
+Office-GPU re-measure list recorded: the parity matrix is float64 so tf32 should not move it,
+but the two-device bracket claims (route overhead, scaling, and especially the **bitwise 0.0
+identity**) MUST be re-measured after #44/#52 pins; per-case risk mapped to each upstream GX
+fix (g0/FLR → high-ky W7-X+HSX; bpar CFL → the two EM cases; pyvmec sign → W7-X/HSX geometry).
