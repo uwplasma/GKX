@@ -640,6 +640,41 @@ Publication Plotting
    :members:
    :no-index:
 
+Transport Figures
+-----------------
+
+.. automodule:: gkx.artifacts.transport_figures
+   :members:
+   :no-index:
+
+Real-Space Snapshots
+--------------------
+
+.. automodule:: gkx.artifacts.snapshots
+   :members:
+   :no-index:
+
+Automatic Run Figures
+---------------------
+
+.. automodule:: gkx.artifacts.run_figures
+   :members:
+   :no-index:
+
+GX Output Plotting
+------------------
+
+.. automodule:: gkx.artifacts.gx_output
+   :members:
+   :no-index:
+
+Persistent Compilation Cache
+----------------------------
+
+.. automodule:: gkx.utils.compilation_cache
+   :members:
+   :no-index:
+
 Config
 ------
 
@@ -797,6 +832,13 @@ Quasilinear Nonlinear-Window Gates
 ----------------------------------
 
 .. automodule:: gkx.diagnostics.transport_windows
+   :members:
+   :private-members:
+
+Run-to-Saturation Stop Policy
+-----------------------------
+
+.. automodule:: gkx.diagnostics.saturation
    :members:
    :private-members:
 

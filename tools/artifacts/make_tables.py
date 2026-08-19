@@ -1039,6 +1039,17 @@ def _run_tem_tables(*, outdir: Path, verbose: bool, progress: bool) -> None:
     tem_cfg, _raw = load_runtime_from_toml(
         ROOT / "examples" / "linear" / "axisymmetric" / "runtime_tem.toml"
     )
+    # This is the one table generator that pins a window without pinning a fit
+    # signal, so it is the one whose tracked output predates the fix that made
+    # fit_signal="auto" honour an explicit window: docs/_static/tem_mismatch_table.csv
+    # was fitted over windows the automatic selector chose for itself. Rerunning
+    # it now changes every row, and at ky = 0.2 the pinned 0.4-0.85 window is not
+    # a usable fit interval for either channel (omega = 150 on density, 481 on
+    # phi), so the table needs a window policy for this lane rather than a plain
+    # rerun. Regenerating also invalidates the derived
+    # docs/_static/tem_branch_parity_audit.{png,pdf,json,csv} and the 4.25 / 3.3 /
+    # -0.986 figures quoted in docs/benchmarks.rst, docs/testing.rst, and
+    # docs/manuscript_figures.rst, which have to move in the same commit.
     tem_ky, tem_g, tem_w = _scan_linear_verbose(
         ky_values=tem_ref.ky,
         run_linear_fn=_run_runtime_linear_adapter,

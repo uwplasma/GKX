@@ -31,6 +31,7 @@ from gkx.workflows.demo import (
     run_default_linear_demo,
 )
 from gkx.runtime import run_runtime_linear, run_runtime_scan
+from gkx.utils.compilation_cache import enable_persistent_compilation_cache
 from gkx.workflows.runtime.commands import (
     RuntimeCommandDeps,
     attach_preloaded_runtime_config,
@@ -114,6 +115,14 @@ def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
         cmd.add_argument(flag, **options)
 
 
+def _add_plot_flags(cmd: argparse.ArgumentParser) -> None:
+    cmd.add_argument(
+        "--no-plots",
+        action="store_true",
+        help="Skip the figures a completed run writes beside its output",
+    )
+
+
 def _add_progress_flags(cmd: argparse.ArgumentParser) -> None:
     group = cmd.add_mutually_exclusive_group()
     group.add_argument("--progress", action="store_true", help="Enable progress output")
@@ -129,6 +138,20 @@ def _add_diagnostics_flags(cmd: argparse.ArgumentParser) -> None:
     )
     group.add_argument(
         "--no-diagnostics", action="store_true", help="Disable diagnostics output"
+    )
+
+
+def _add_saturation_flags(cmd: argparse.ArgumentParser) -> None:
+    group = cmd.add_mutually_exclusive_group()
+    group.add_argument(
+        "--until-saturated",
+        action="store_true",
+        help="Stop once the heat-flux window saturates ([time] run_to = 'saturation')",
+    )
+    group.add_argument(
+        "--no-until-saturated",
+        action="store_true",
+        help="Always integrate to t_max ([time] run_to = 't_max')",
     )
 
 
@@ -261,10 +284,12 @@ def _add_generic_run_parser(sub: argparse._SubParsersAction) -> None:
     _add_time_solver_flags(generic_run, sample_stride=True, fit_signal=True)
     generic_run.add_argument("--diagnostics-stride", type=int, default=None)
     _add_diagnostics_flags(generic_run)
+    _add_saturation_flags(generic_run)
     _add_laguerre_mode_flag(generic_run, help_text="grid or spectral (nonlinear only)")
     _add_runtime_paths(generic_run, init_help="Optional init file for nonlinear runs")
     _add_quasilinear_flags(generic_run)
     _add_progress_flags(generic_run)
+    _add_plot_flags(generic_run)
     generic_run.set_defaults(func=_cmd_run)
 
 
@@ -281,6 +306,7 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
     _add_runtime_paths(run_runtime)
     _add_quasilinear_flags(run_runtime)
     _add_progress_flags(run_runtime)
+    _add_plot_flags(run_runtime)
     run_runtime.set_defaults(func=_cmd_run_runtime_linear)
 
     scan_runtime = sub.add_parser(
@@ -300,6 +326,7 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
     )
     _add_quasilinear_flags(scan_runtime)
     _add_progress_flags(scan_runtime)
+    _add_plot_flags(scan_runtime)
     scan_runtime.set_defaults(func=_cmd_scan_runtime_linear)
 
     run_runtime_nl = sub.add_parser(
@@ -312,6 +339,7 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
     run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
     run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
     _add_diagnostics_flags(run_runtime_nl)
+    _add_saturation_flags(run_runtime_nl)
     _add_laguerre_mode_flag(
         run_runtime_nl, help_text="grid or spectral (nonlinear Laguerre handling)"
     )
@@ -320,6 +348,7 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
         init_help="Optional restart/init-state file containing a matching distribution state",
     )
     _add_progress_flags(run_runtime_nl)
+    _add_plot_flags(run_runtime_nl)
     run_runtime_nl.set_defaults(func=_cmd_run_runtime_nonlinear)
 
 
@@ -352,6 +381,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     argv = sys.argv[1:]
+    # Every executable path that can compile gets the persistent cache, before
+    # any solver is built. Re-running an unchanged case is the common case
+    # while a user edits a TOML, and it is the case that was paying a full
+    # cold compile every time. See gkx.utils.compilation_cache.
+    enable_persistent_compilation_cache()
     if not argv:
         return _cmd_default_demo()
     if argv[0] == "--plot":
