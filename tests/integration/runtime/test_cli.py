@@ -1934,3 +1934,231 @@ def test_cli_run_runtime_linear_cli_geometry_file_does_not_change_vmec_model(
     assert captured["geometry_file"] == expected_cwd_resolved
     # --geometry-file must not promote a VMEC-backed run into imported-geometry mode.
     assert captured["model"] == "vmec"
+
+
+# ---- wout equilibrium shorthand ------------------------------------------
+
+
+def _write_tiny_wout(path: Path) -> Path:
+    """Write a minimal NetCDF file bearing the VMEC/VMEX wout signature."""
+
+    from netCDF4 import Dataset
+
+    with Dataset(path, "w") as ds:
+        ds.createDimension("mn_mode", 4)
+        ds.createDimension("radius", 3)
+        for name in ("xm", "xn"):
+            ds.createVariable(name, "f8", ("mn_mode",))[:] = 0.0
+        for name in ("rmnc", "zmns"):
+            ds.createVariable(name, "f8", ("radius", "mn_mode"))[:] = 0.0
+    return path
+
+
+def _fake_nonlinear_result() -> RuntimeNonlinearResult:
+    diag = SimulationDiagnostics(
+        t=np.asarray([0.1]),
+        dt_t=np.asarray([0.1]),
+        dt_mean=np.asarray(0.1),
+        gamma_t=np.asarray([0.0]),
+        omega_t=np.asarray([0.0]),
+        Wg_t=np.asarray([1.0]),
+        Wphi_t=np.asarray([0.5]),
+        Wapar_t=np.asarray([0.0]),
+        heat_flux_t=np.asarray([0.0]),
+        particle_flux_t=np.asarray([0.0]),
+        energy_t=np.asarray([1.5]),
+    )
+    return RuntimeNonlinearResult(
+        t=np.asarray([0.1]), diagnostics=diag, ky_selected=0.2, kx_selected=0.0
+    )
+
+
+def test_wout_sniffing_detects_signature_and_rejects_others(tmp_path: Path) -> None:
+    from gkx.workflows.runtime import wout as runtime_wout
+
+    wout = _write_tiny_wout(tmp_path / "wout_tiny.nc")
+    assert runtime_wout.is_wout_file(wout) is True
+
+    from netCDF4 import Dataset
+
+    plain = tmp_path / "plain.nc"
+    with Dataset(plain, "w") as ds:
+        ds.createDimension("x", 2)
+        ds.createVariable("data", "f8", ("x",))[:] = 0.0
+    assert runtime_wout.is_wout_file(plain) is False
+
+    toml_file = tmp_path / "case.toml"
+    toml_file.write_text("[physics]\n", encoding="utf-8")
+    assert runtime_wout.is_wout_file(toml_file) is False
+    assert runtime_wout.is_wout_file(tmp_path / "missing.nc") is False
+
+
+def test_wout_default_deck_is_single_sourced_from_examples() -> None:
+    from gkx.workflows.runtime import wout as runtime_wout
+
+    deck = runtime_wout.default_wout_deck_path()
+    assert deck.is_file()
+    assert deck.resolve() == (REPO_ROOT / "examples" / "common_input.toml").resolve()
+    data = tomllib.loads(deck.read_text(encoding="utf-8"))
+    assert data["geometry"]["model"] == "vmec"
+    assert data["physics"]["nonlinear"] is True
+    assert data["terms"]["nonlinear"] == 1.0
+    assert data["species"][0]["tprim"] == 3.0
+    assert data["species"][0]["fprim"] == 1.0
+    assert data["grid"]["boundary"] == "fix aspect"
+    assert data["geometry"]["torflux"] == 0.64
+
+
+def test_direct_config_shorthand_wout_positional_uses_default_deck(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_tiny.nc")
+
+    args = _direct_config_shorthand_args([str(wout), "--steps", "3"])
+
+    resolved = tmp_path / "wout_tiny" / "gkx.toml"
+    assert args == ["run", "--config", str(resolved), "--steps", "3"]
+    data = tomllib.loads(resolved.read_text(encoding="utf-8"))
+    assert data["geometry"]["model"] == "vmec"
+    assert data["geometry"]["vmec_file"] == str(wout.resolve())
+    assert data["output"]["path"] == str(tmp_path / "wout_tiny" / "gkx")
+    assert data["physics"]["nonlinear"] is True
+    assert data["species"][0]["tprim"] == 3.0
+
+
+def test_direct_config_shorthand_toml_plus_wout_both_orders_force_vmec_model(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_case.nc")
+    deck = tmp_path / "deck.toml"
+    deck.write_text(_RUNTIME_NONLINEAR_TOML_MIN, encoding="utf-8")
+
+    for argv in ([str(deck), str(wout)], [str(wout), str(deck)]):
+        args = _direct_config_shorthand_args(argv)
+        resolved = tmp_path / "wout_case" / "gkx.toml"
+        assert args == ["run", "--config", str(resolved)]
+        data = tomllib.loads(resolved.read_text(encoding="utf-8"))
+        # Non-VMEC deck geometry is forced onto the supplied equilibrium.
+        assert data["geometry"]["model"] == "vmec"
+        assert data["geometry"]["vmec_file"] == str(wout.resolve())
+        # The rest of the user deck is preserved.
+        assert data["grid"]["Ny"] == 6
+        assert data["run"]["steps"] == 1
+
+
+def test_direct_config_shorthand_wout_flag_aliases_match_positional(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_alias.nc")
+    deck = tmp_path / "deck.toml"
+    deck.write_text(_RUNTIME_NONLINEAR_TOML_MIN, encoding="utf-8")
+    resolved = str(tmp_path / "wout_alias" / "gkx.toml")
+
+    assert _direct_config_shorthand_args(["--vmec", str(wout)]) == [
+        "run",
+        "--config",
+        resolved,
+    ]
+    assert _direct_config_shorthand_args([f"--vmex={wout}"]) == [
+        "run",
+        "--config",
+        resolved,
+    ]
+    assert _direct_config_shorthand_args([str(deck), "--vmex", str(wout)]) == [
+        "run",
+        "--config",
+        resolved,
+    ]
+    data = tomllib.loads(Path(resolved).read_text(encoding="utf-8"))
+    assert data["geometry"]["model"] == "vmec"
+    assert data["grid"]["Ny"] == 6
+
+
+def test_cli_wout_run_groups_outputs_and_writes_resolved_deck(
+    capsys, monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_tiny.nc")
+    captured: dict[str, object] = {}
+
+    def _fake_run_runtime_nonlinear_with_artifacts(cfg, **kwargs):
+        captured["cfg"] = cfg
+        captured["out"] = kwargs.get("out")
+        return _fake_nonlinear_result(), {}
+
+    monkeypatch.setattr(
+        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+        _fake_run_runtime_nonlinear_with_artifacts,
+    )
+    monkeypatch.setattr(sys, "argv", ["gkx", str(wout), "--steps", "2"])
+
+    assert main() == 0
+    out = capsys.readouterr().out
+    assert "wrote resolved input" in out
+    cfg = captured["cfg"]
+    assert cfg.geometry.model == "vmec"
+    assert cfg.geometry.vmec_file == str(wout.resolve())
+    assert captured["out"] == str(tmp_path / "wout_tiny" / "gkx")
+    assert (tmp_path / "wout_tiny" / "gkx.toml").exists()
+
+
+def test_cli_wout_linear_flag_runs_default_ky_scan(
+    capsys, monkeypatch, tmp_path: Path
+) -> None:
+    from gkx.workflows.runtime.wout import DEFAULT_LINEAR_KY_VALUES
+
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_lin.nc")
+    captured: dict[str, object] = {}
+    scan = type(
+        "Scan",
+        (),
+        {
+            "ky": np.array([0.1]),
+            "gamma": np.array([0.2]),
+            "omega": np.array([-0.3]),
+        },
+    )()
+
+    def _fake_run_runtime_scan(cfg, ky_values, **kwargs):
+        captured["cfg"] = cfg
+        captured["ky_values"] = ky_values
+        return scan
+
+    def _fake_write_scan(base, scan_in, **_kwargs):
+        captured["out_base"] = str(base)
+        return {"summary": "scan.summary.json", "scan": "scan.csv"}
+
+    monkeypatch.setattr("gkx.cli.run_runtime_scan", _fake_run_runtime_scan)
+    monkeypatch.setattr(
+        "gkx.cli.write_runtime_linear_scan_artifacts", _fake_write_scan
+    )
+    monkeypatch.setattr(sys, "argv", ["gkx", str(wout), "--linear", "--no-progress"])
+
+    assert main() == 0
+    out = capsys.readouterr().out
+    assert "saved scan.csv" in out
+    cfg = captured["cfg"]
+    assert cfg.physics.linear is True
+    assert cfg.physics.nonlinear is False
+    assert cfg.geometry.model == "vmec"
+    assert captured["ky_values"] == list(DEFAULT_LINEAR_KY_VALUES)
+    assert captured["out_base"] == str(tmp_path / "wout_lin" / "gkx")
+    assert (tmp_path / "wout_lin" / "gkx.toml").exists()
+
+
+def test_direct_config_shorthand_wout_honors_out_flag(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_out.nc")
+
+    args = _direct_config_shorthand_args([str(wout), "--out", "custom/prefix"])
+
+    resolved = tmp_path / "custom" / "prefix.toml"
+    assert args == ["run", "--config", str(resolved), "--out", "custom/prefix"]
+    data = tomllib.loads(resolved.read_text(encoding="utf-8"))
+    assert data["output"]["path"] == str(tmp_path / "custom" / "prefix")
