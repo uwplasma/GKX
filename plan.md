@@ -859,3 +859,51 @@ Coordinator note: the shipped test asserted exactness at rtol 1e-12/exact-equali
 passes under CI's `JAX_ENABLE_X64=true` but FAILS a bare local `pytest` at float32 eps (1e-7).
 Made the tolerances track `np.finfo(dtype).eps` so the suite is green both ways — the inverse
 of the "green locally, red in CI" trap, and just as confusing.
+
+### 2026-08-18 agent/stella-r2 — RUNG 2 PASSES + a currently-passing gate may be an artifact
+**Rosenbluth–Hinton residual, the convention-independent check: stella 0.1050 ± 0.0010 vs
+GKX 0.1021 ± 0.0010 = −2.8%** (analytic RH asymptote 0.1192; both codes on the same side,
+−11.9% and −14.3%). Sharpest row, identical physical window and highest GKX resolution:
+residuals differ by **2.5%**, GAM frequencies by **0.08%**.
+GAM rates (which DO convert): ω ratio measured **1.4116–1.4131** vs √2=1.41421, ≤0.19% — an
+independent confirmation of the rung-1 conversion. Two fit-free confirmations from the
+geometry exports: stella's drift coefficients are **exactly 2×** GKX's and `kperp2` is
+**exactly 2×** at matched physical kx.
+Time axis subtlety worth recording: `t_stella = √2·t_gkx` (stella's a/vth unit is SMALLER);
+getting this inverted inflates the apparent frequency error from 0.2% to 1.1%.
+Three method systematics were measured and REMOVED rather than absorbed into tolerance:
+stella's plateau decays secularly (reading it "at late time" is a 33% error on a converged
+run), GKX can never reach the plateau (Hermite recurrence at t_rec = 2√Nm/k_par = 38 a/cs at
+Nm=24), and the fit start matters (dropping the first GAM period costs −9 to −16%).
+
+**DEFECT 1 — `Nm=24` is not converged, and a tracked gate may pass only because of it.**
+The residual falls monotonically with Hermite resolution (0.11137 / 0.10838 / 0.10586 for
+Nm=24/48/96 at fixed window), extrapolating in 1/√Nm to **0.10046** (0.15% fit). So the
+tracked resolution reads **~11% high** — larger than the tracked gate's own tolerance
+(0.015 on 0.19 = 7.9%). **`docs/_static/miller_zonal_response_pilot.json` (Merlo Case III,
+residual 0.19245 vs published 0.19, currently one of the PASSING gate-index rows) sits at
+exactly Nm=24.** If the same ~11% bias applies there, the converged value would be ≈0.173 and
+the row would FAIL its own gate. → **NEW ITEM 2.8 (high priority): re-run the Merlo Case III
+zonal artifact at Nm=48 and 96, extrapolate, and re-judge the gate.** `Nl` (≤0.3%) and `Nz`
+(0.6%) are already converged, so this is a Hermite-only effect.
+
+**DEFECT 2 — the kx trap is real but locally inert.** `benchmarks/runtime_miller_zonal_response.toml`
+has `kx=0.05` with `Lx=125.6`, i.e. √2 too large physically. Measured effect here: residual
+−0.4%, GAM ω −0.19%, GAM γ +4.4% — practically inert because both wavenumbers sit at kρ≈0.04–0.05
+in the long-wavelength limit, but it MISLABELS the result and will bite in rung 3 where kxρ
+reaches 0.30.
+
+**Rung 3 (W7-X) prerequisites, now precise:** stella's `wout_w7x_standardConfig.nc` ships
+(nfp=5, aspect 10.22, iota(s≈0.49)=0.8994 → q≈1.112) but has no VMEC regression case, so the
+input is hand-built and `torflux` must be set to 0.49 (default 0.635). **`nfield_periods` is
+its own trap**: default −1 resets to nfp (all five periods, NOT a flux tube), and stella then
+multiplies `gradpar`/`b_dot_grad_z` by `nfp/nfield_periods` — so **stella's `gradpar` carries
+the field-line-length convention and is not a pure geometric quantity**, while GKX's
+`nperiod`/`ntheta` convention differs. The `input.geometry` hook contract: 3 list-directed
+header skips (works only because stella's header has a blank third line) then fixed-width
+`(13e12.4)`; `cvdrift0` is forced equal to `gbdrift0`; `gds23/24` have no GKX counterpart; and
+**drift columns must be ×2 going in** (measured, not assumed). Note GKX's tracked W7-X toml is
+NOT the target case — it points at a QI placeholder absent from `examples/vmec/` at
+torflux=0.64. Recommended first step: smoke-test the geometry bridge on THIS CBC case, where
+the answer (0.1050) is now known, before adding stellarator ambiguity.
+Full report: `plan/notes/stella_vs_gkx_rung2.md`.
