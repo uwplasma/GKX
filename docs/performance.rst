@@ -141,7 +141,7 @@ on this deck there are none to remove.
    variants only with the persistent cache already populated for both.
 
 Time integration: half the horizon for the same answer
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 On a fixed-step time integration the win is real, and it is in the horizon
 rather than the cost per step. At ``ky = 0.4`` on the same deck, seeded from

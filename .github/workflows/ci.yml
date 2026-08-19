@@ -63,7 +63,6 @@ jobs:
     # when the jax minimum did; jax >= 0.10.1 publishes no 3.10 wheels.
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs: repo-hygiene
     timeout-minutes: 15
 
     steps:
@@ -123,7 +122,6 @@ jobs:
   mypy:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs: repo-hygiene
 
     steps:
       - uses: actions/checkout@v6
@@ -165,8 +163,18 @@ jobs:
   quick-tests:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs: mypy
-    timeout-minutes: 8
+    # No ``needs``. This job used to sit behind ``mypy``, so a red type check
+    # skipped every shard here and everything below it: the run then reported
+    # no test signal instead of a failing one, and #62 merged to main with
+    # seven genuine NameErrors in src/gkx/parallel/integrators.py. Types and
+    # tests are independent signals; both are required by the ci-required gate
+    # at the bottom of this file, and neither may stand in for the other.
+    #
+    # Budget: 8 -> 15 minutes. The linear, nonlinear, and runtime shards below
+    # name files that pytest.ini used to deselect entirely, so they now run
+    # test_linear.py (~5 min), test_nonlinear.py (~8 min), and
+    # test_runtime_runner.py (~5 min) on a hosted runner for the first time.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -274,7 +282,6 @@ jobs:
   adaptive-eigensolver:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs: mypy
     timeout-minutes: 20
 
     steps:
@@ -309,7 +316,6 @@ jobs:
   fast-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs: quick-tests
 
     steps:
       - uses: actions/checkout@v6
@@ -398,7 +404,6 @@ jobs:
   wide-coverage-shards:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs: quick-tests
     # The logical-CPU owner now runs whole at four devices, so its shard costs
     # roughly fifteen times the single-device run it replaces: nine to sixteen
     # minutes measured locally, with or without coverage tracing. Its tests
@@ -477,6 +482,10 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The only remaining ``needs`` in this workflow, and the only real one: this
+    # job downloads the ``.coverage`` shard artifacts the matrix above uploads.
+    # Every other job checks out and installs for itself, so ordering them
+    # bought nothing and cost the signal from everything downstream.
     needs: wide-coverage-shards
 
     steps:
@@ -553,7 +562,6 @@ jobs:
   docs-and-packaging:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs: quick-tests
 
     steps:
       - uses: actions/checkout@v6
@@ -620,6 +628,37 @@ jobs:
           PY
           /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
           /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
+
+  ci-required:
+    # One aggregate check for branch protection to require. The jobs above are
+    # now independent, so nothing can hide behind a failed dependency -- but a
+    # job that never reported can still read as green: GitHub scores a skipped
+    # or cancelled check as satisfied for a required status check, which is how
+    # a cancelled run and a mypy-blocked matrix both passed for #62. This job
+    # is red unless every gate reported success, so "no signal" is a failure.
+    #
+    # ``nightly-full`` is deliberately absent: it is skipped by design on
+    # pull_request and push.
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - repo-hygiene
+      - python-floor
+      - mypy
+      - quick-tests
+      - adaptive-eigensolver
+      - fast-coverage
+      - wide-coverage-shards
+      - wide-coverage
+      - docs-and-packaging
+
+    steps:
+      - name: Every gate must have reported success
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: |
+          echo "gate results: ${{ join(needs.*.result, ' ') }}"
+          echo "A required gate did not succeed. A skipped or cancelled gate is not a pass."
+          exit 1
 
   nightly-full:
     if: github.event_name == 'workflow_dispatch' && inputs.run_nightly
