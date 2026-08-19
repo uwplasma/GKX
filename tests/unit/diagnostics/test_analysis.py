@@ -13,12 +13,14 @@ from gkx.diagnostics.analysis import (
     fit_growth_rate,
     fit_growth_rate_auto,
     fit_growth_rate_auto_with_stats,
+    fit_growth_rate_uncertainty,
     fit_growth_rate_with_stats,
     instantaneous_growth_rate_from_phi,
     windowed_growth_rate_from_omega_series,
     select_ky_index,
     select_fit_window,
     select_fit_window_loglinear,
+    select_fit_window_stationary,
 )
 
 
@@ -891,3 +893,132 @@ def test_window_metrics_report_independent_samples_not_output_count() -> None:
         np.sqrt(metrics.nsamples / metrics.heat_flux_n_eff), rel=1e-6
     )
     assert metrics.window_in_tau_ac > 1.0
+
+
+def _transient_then_exponential(
+    *,
+    gamma: float = 0.25,
+    omega: float = 0.4,
+    n: int = 800,
+    t_max: float = 40.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """A decaying transient branch plus the dominant growing branch."""
+
+    t = np.linspace(0.0, t_max, n)
+    dominant = np.exp((gamma - 1j * omega) * t)
+    transient = 30.0 * np.exp((-0.9 - 1j * 2.5) * t)
+    return t, dominant + transient
+
+
+def test_select_fit_window_stationary_skips_the_transient() -> None:
+    """The stationary window starts after the subdominant branch has decayed."""
+
+    t, signal = _transient_then_exponential()
+    window = select_fit_window_stationary(t, signal, min_points=20)
+    assert window is not None
+    tmin, tmax = window
+    # The transient is 30x larger at t=0 and decays at rate 0.9, so it is
+    # negligible only after t ~ 8; the window must not reach back into it.
+    assert tmin > 6.0
+    assert tmax > 0.5 * t[-1]
+    assert (tmax - tmin) * 0.25 >= 2.0  # at least two growth times
+
+
+def test_fit_growth_rate_auto_stationary_beats_loglinear_on_a_transient() -> None:
+    """Stationary window selection recovers the dominant branch accurately."""
+
+    gamma_true, omega_true = 0.25, 0.4
+    t, signal = _transient_then_exponential(gamma=gamma_true, omega=omega_true)
+
+    g_stat, w_stat, tmin, tmax = fit_growth_rate_auto(
+        t, signal, min_points=20, window_method="stationary"
+    )
+    assert g_stat == pytest.approx(gamma_true, rel=1e-3)
+    assert w_stat == pytest.approx(omega_true, rel=1e-3)
+    assert tmin < tmax
+
+    g_log, _w_log, _tmin, _tmax = fit_growth_rate_auto(
+        t, signal, min_points=20, window_method="loglinear"
+    )
+    # Both methods must be sane here; the stationary one is at least as close
+    # to the true dominant growth rate.
+    assert abs(g_stat - gamma_true) <= abs(g_log - gamma_true) + 1e-12
+
+
+def test_fit_growth_rate_auto_falls_back_when_no_stationary_window() -> None:
+    """A purely damped signal has no growth window, so auto falls back."""
+
+    t = np.linspace(0.0, 10.0, 200)
+    signal = np.exp((-0.5 - 1j * 0.3) * t)
+    assert select_fit_window_stationary(t, signal, min_points=20) is None
+
+    with pytest.warns(RuntimeWarning, match="no stationary growth window"):
+        gamma, _omega, _tmin, _tmax = fit_growth_rate_auto(
+            t, signal, min_points=20, window_method="stationary"
+        )
+    assert gamma == pytest.approx(-0.5, abs=1e-6)
+
+
+def test_fit_growth_rate_auto_rejects_unknown_window_method() -> None:
+    t = np.linspace(0.0, 10.0, 64)
+    signal = np.exp((0.2 - 1j * 0.1) * t)
+    with pytest.raises(ValueError, match="window_method"):
+        fit_growth_rate_auto(t, signal, window_method="bogus")
+
+
+def test_fit_growth_rate_uncertainty_reports_stderr_and_r2() -> None:
+    """A clean exponential fits exactly; noise inflates the slope stderr."""
+
+    t = np.linspace(0.0, 20.0, 400)
+    clean = np.exp((0.3 - 1j * 0.7) * t)
+    stats = fit_growth_rate_uncertainty(t, clean)
+    assert stats.gamma == pytest.approx(0.3, rel=1e-9)
+    assert stats.omega == pytest.approx(0.7, rel=1e-9)
+    assert stats.r2_log == pytest.approx(1.0, abs=1e-9)
+    assert stats.gamma_stderr < 1e-6
+    assert stats.n_points == 400
+    assert (stats.tmin, stats.tmax) == (pytest.approx(0.0), pytest.approx(20.0))
+
+    rng = np.random.default_rng(0)
+    noisy = clean * np.exp(rng.normal(scale=0.05, size=t.size))
+    noisy_stats = fit_growth_rate_uncertainty(t, noisy)
+    assert noisy_stats.gamma_stderr > stats.gamma_stderr
+    assert noisy_stats.gamma == pytest.approx(0.3, abs=5.0 * noisy_stats.gamma_stderr)
+
+
+def test_fit_growth_rate_uncertainty_honours_the_window() -> None:
+    t = np.linspace(0.0, 20.0, 400)
+    signal = np.exp((0.3 - 1j * 0.7) * t)
+    stats = fit_growth_rate_uncertainty(t, signal, tmin=5.0, tmax=15.0)
+    assert stats.tmin >= 5.0
+    assert stats.tmax <= 15.0
+    assert stats.n_points < 400
+    assert stats.gamma == pytest.approx(0.3, rel=1e-9)
+
+
+def test_select_fit_window_stationary_tolerates_sub_percent_drift() -> None:
+    """A window drifting well under a percent still counts as stationary.
+
+    gamma(t) is smoothed before the stationarity test, so its residual scatter
+    on a clean run is orders of magnitude below any meaningful drift. The
+    acceptance band is therefore floored at ``rel_tolerance`` times the mean,
+    without which the selector refuses windows that are stationary to 0.5%.
+    """
+
+    t = np.linspace(0.0, 120.0, 2400)
+    gamma0 = 0.1
+    # gamma(t) relaxes onto gamma0 from 0.5% above it with a long time
+    # constant: over the late half the drift is well under one percent.
+    gamma_t = gamma0 * (1.0 + 0.005 * np.exp(-t / 40.0))
+    phase = -0.3 * t
+    signal = np.exp(np.cumsum(gamma_t) * (t[1] - t[0]) + 1j * phase)
+
+    window = select_fit_window_stationary(t, signal, min_points=40)
+    assert window is not None
+    tmin, tmax = window
+    assert (tmax - tmin) * gamma0 >= 2.0
+
+    g, _w, _a, _b = fit_growth_rate_auto(
+        t, signal, min_points=40, window_method="stationary"
+    )
+    assert g == pytest.approx(gamma0, rel=0.01)

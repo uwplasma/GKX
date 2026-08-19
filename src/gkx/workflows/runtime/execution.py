@@ -38,6 +38,7 @@ class _RuntimeLinearRequest:
     growth_weight: float
     require_positive: bool
     min_amp_fraction: float
+    window_method: str
     krylov_cfg: Any
     mode_method: str
     fit_signal: str
@@ -123,6 +124,7 @@ def _run_full_linear_request(
         growth_weight=request.growth_weight,
         require_positive=request.require_positive,
         min_amp_fraction=request.min_amp_fraction,
+        window_method=request.window_method,
         krylov_cfg=request.krylov_cfg,
         mode_method=request.mode_method,
         fit_signal=request.fit_signal,
@@ -163,6 +165,7 @@ def run_runtime_linear_impl(
     growth_weight: float = 0.2,
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
+    window_method: str = "stationary",
     krylov_cfg: Any = None,
     mode_method: str = "project",
     fit_signal: str = "auto",
@@ -194,6 +197,7 @@ def run_runtime_linear_impl(
             growth_weight=growth_weight,
             require_positive=require_positive,
             min_amp_fraction=min_amp_fraction,
+            window_method=window_method,
             krylov_cfg=krylov_cfg,
             mode_method=mode_method,
             fit_signal=fit_signal,

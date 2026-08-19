@@ -10,13 +10,16 @@ import numpy as np
 from gkx.diagnostics.growth_windows import _tail_stats, _tail_window
 from gkx.diagnostics.metadata import CFL_SCALE_LABELS
 from gkx.diagnostics.growth_rates import (
+    GrowthRateFitStats,
     _log_amp_phase,
     fit_growth_rate,
     fit_growth_rate_auto,
+    fit_growth_rate_uncertainty,
     fit_growth_rate_with_stats,
     instantaneous_growth_rate_from_phi,
     select_fit_window,
     select_fit_window_loglinear,
+    select_fit_window_stationary,
     windowed_growth_rate_from_omega_series,
 )
 from gkx.diagnostics.modes import (
@@ -666,13 +669,16 @@ __all__ = [
     "extract_eigenfunction",
     "extract_mode",
     "extract_mode_time_series",
+    "GrowthRateFitStats",
     "fit_growth_rate",
     "fit_growth_rate_auto",
     "fit_growth_rate_auto_with_stats",
+    "fit_growth_rate_uncertainty",
     "fit_growth_rate_with_stats",
     "instantaneous_growth_rate_from_phi",
     "select_fit_window",
     "select_fit_window_loglinear",
+    "select_fit_window_stationary",
     "select_ky_index",
     "windowed_growth_rate_from_omega_series",
 ]
@@ -690,7 +696,7 @@ def fit_growth_rate_auto_with_stats(
     require_positive: bool = False,
     min_amp_fraction: float = 0.0,
     max_amp_fraction: float = 0.9,
-    window_method: str = "loglinear",
+    window_method: str = "stationary",
     max_fraction: float = 0.8,
     end_fraction: float = 0.9,
     num_windows: int = 8,

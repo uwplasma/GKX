@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, cast
 
+import numpy as np
+
 from gkx.workflows.runtime.config import RuntimeConfig
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,
@@ -30,6 +32,7 @@ RUNTIME_COMMAND_FIT_KEYS = {
     "growth_weight",
     "require_positive",
     "min_amp_fraction",
+    "window_method",
     "mode_method",
 }
 
@@ -87,6 +90,15 @@ class RuntimeNonlinearCommandOptions:
     diagnostics: bool
     laguerre_mode: str | None
     show_progress: bool
+
+
+def _format_fitted_value(value: float, stderr: Any, precision: int) -> str:
+    """Format 'value' or 'value+/-stderr' when the fit reports uncertainty."""
+
+    text = f"{value:.{precision}f}"
+    if stderr is not None and np.isfinite(stderr):
+        text += f"+/-{stderr:.{precision}f}"
+    return text
 
 
 def _arg_or_section(args: Any, section: dict[str, Any], name: str, default: Any) -> Any:
@@ -543,7 +555,9 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
         status_callback=_status_printer("runtime"),
         **fit_cfg,
     )
-    print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
+    gamma_text = _format_fitted_value(res.gamma, getattr(res, "gamma_stderr", None), 6)
+    omega_text = _format_fitted_value(res.omega, getattr(res, "omega_stderr", None), 6)
+    print(f"ky={res.ky:.4f} gamma={gamma_text} omega={omega_text}")
     _write_linear_runtime_command_outputs(args, cfg, res, deps=deps)
     return 0
 
@@ -680,6 +694,7 @@ RUNTIME_CASE_FIT_KEYS = {
     "growth_weight",
     "require_positive",
     "min_amp_fraction",
+    "window_method",
     "mode_method",
     "fit_signal",
 }
@@ -831,7 +846,13 @@ def run_linear_case(
         paths = case_deps.write_runtime_linear_artifacts(cfg.output.path, result)
         if "summary" in paths:
             print(f"saved {paths['summary']}")
-    print(f"ky={result.ky:.6f} gamma={result.gamma:.8f} omega={result.omega:.8f}")
+    gamma_text = _format_fitted_value(
+        result.gamma, getattr(result, "gamma_stderr", None), 8
+    )
+    omega_text = _format_fitted_value(
+        result.omega, getattr(result, "omega_stderr", None), 8
+    )
+    print(f"ky={result.ky:.6f} gamma={gamma_text} omega={omega_text}")
     return 0
 
 

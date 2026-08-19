@@ -85,6 +85,7 @@ class _LinearFitPolicy:
     growth_weight: float
     require_positive: bool
     min_amp_fraction: float
+    window_method: str = "stationary"
 
 
 @dataclass(frozen=True)
@@ -542,6 +543,7 @@ def _fit_linear_time_series(
         growth_weight=fit_policy.growth_weight,
         require_positive=fit_policy.require_positive,
         min_amp_fraction=fit_policy.min_amp_fraction,
+        window_method=fit_policy.window_method,
         extract_mode_time_series_fn=deps.extract_mode_time_series,
         fit_growth_rate_auto_with_stats_fn=deps.fit_growth_rate_auto_with_stats,
         fit_growth_rate_auto_fn=deps.fit_growth_rate_auto,
@@ -559,6 +561,16 @@ def _fit_linear_time_series(
         rho_star=float(np.asarray(ctx.params.rho_star)),
         diagnostic_norm=ctx.cfg.normalization.diagnostic_norm,
     )
+    gamma_stderr = fit_result.gamma_stderr
+    omega_stderr = fit_result.omega_stderr
+    if gamma_stderr is not None and omega_stderr is not None:
+        # Standard errors transform with the same linear reporting scale.
+        gamma_stderr, omega_stderr = deps.apply_diagnostic_normalization(
+            gamma_stderr,
+            omega_stderr,
+            rho_star=float(np.asarray(ctx.params.rho_star)),
+            diagnostic_norm=ctx.cfg.normalization.diagnostic_norm,
+        )
     _status(status_callback, f"fit complete: gamma={gamma:.6f} omega={omega:.6f}")
     return RuntimeLinearResult(
         ky=float(ctx.grid.ky[ctx.selection.ky_index]),
@@ -576,6 +588,10 @@ def _fit_linear_time_series(
         fit_window_tmin=fit_result.fit_window_tmin,
         fit_window_tmax=fit_result.fit_window_tmax,
         fit_signal_used=fit_result.fit_signal_used,
+        gamma_stderr=None if gamma_stderr is None else float(gamma_stderr),
+        omega_stderr=None if omega_stderr is None else float(omega_stderr),
+        fit_r2=fit_result.fit_r2,
+        fit_settled=fit_result.fit_settled,
     )
 
 
@@ -705,6 +721,7 @@ def run_full_linear_runtime(
     fit_signal: str,
     return_state: bool,
     show_progress: bool,
+    window_method: str = "stationary",
     initial_state: Any | None = None,
     status_callback: Callable[[str], None] | None = None,
 ) -> RuntimeLinearResult:
@@ -733,6 +750,7 @@ def run_full_linear_runtime(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        window_method=window_method,
     )
 
     return _run_linear_runtime_branch(

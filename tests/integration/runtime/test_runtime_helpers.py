@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,7 +14,11 @@ import gkx.workflows.runtime.orchestration_artifacts as runtime_artifacts
 import gkx.workflows.runtime.commands as runtime_commands
 import gkx.workflows.runtime.policies as runtime_policies
 from gkx.diagnostics.analysis import ModeSelection
-from gkx.workflows.runtime.diagnostics import fit_runtime_linear_diagnostics
+from gkx.workflows.runtime.diagnostics import (
+    fit_runtime_linear_diagnostics,
+    half_horizon_settled_probe,
+    warn_if_growth_unresolved,
+)
 from gkx.workflows.runtime.diagnostics import (
     RuntimeQuasilinearFinalizationDeps,
     finalize_runtime_linear_quasilinear,
@@ -655,6 +660,7 @@ def test_runtime_scan_ky_task_forwards_linear_options() -> None:
         "growth_weight": 0.3,
         "require_positive": False,
         "min_amp_fraction": 0.05,
+        "window_method": "loglinear",
         "krylov_cfg": None,
         "mode_method": "project",
         "fit_signal": "phi",
@@ -686,6 +692,7 @@ def test_runtime_scan_ky_task_forwards_linear_options() -> None:
             "growth_weight": 0.3,
             "require_positive": False,
             "min_amp_fraction": 0.05,
+            "window_method": "loglinear",
             "krylov_cfg": None,
             "mode_method": "project",
             "fit_signal": "phi",
@@ -2380,3 +2387,85 @@ def test_runtime_nonlinear_result_summary_contracts() -> None:
             kx_selected=None,
             summarize_fields=True,
         )
+
+
+def test_warn_if_growth_unresolved_flags_short_runs() -> None:
+    """A run shorter than five e-foldings is reported as under-resolved."""
+
+    t = np.linspace(0.0, 10.0, 101)
+
+    with pytest.warns(RuntimeWarning, match="growth under-resolved"):
+        message = warn_if_growth_unresolved(
+            gamma=0.2, t=t, fit_window_tmin=0.0, fit_window_tmax=10.0
+        )
+    # The message reports the achieved e-folding count and the horizon that
+    # would reach the gamma*t_max >= 7 threshold (7 / 0.2 = 35).
+    assert message is not None
+    assert "2.00 e-foldings" in message
+    assert "t_max >~ 35" in message
+
+    # Long enough overall, but the selected window covers under two growth
+    # times, so the fit itself is only marginally constrained.
+    with pytest.warns(RuntimeWarning, match="marginally resolved"):
+        message = warn_if_growth_unresolved(
+            gamma=1.0, t=t, fit_window_tmin=9.0, fit_window_tmax=10.0
+        )
+    assert message is not None and "1.00 growth times" in message
+
+
+def test_warn_if_growth_unresolved_stays_quiet_when_resolved() -> None:
+    """Resolved growth and decaying modes produce no warning."""
+
+    t = np.linspace(0.0, 100.0, 1001)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        # gamma*t_max = 20 >= 7, and the window spans 10 growth times.
+        assert (
+            warn_if_growth_unresolved(
+                gamma=0.2, t=t, fit_window_tmin=50.0, fit_window_tmax=100.0
+            )
+            is None
+        )
+        # A damped mode has no growth to resolve.
+        assert (
+            warn_if_growth_unresolved(
+                gamma=-0.2, t=t, fit_window_tmin=0.0, fit_window_tmax=1.0
+            )
+            is None
+        )
+
+
+def test_half_horizon_settled_probe_detects_an_unsettled_fit() -> None:
+    """Halving the window must not move gamma once the mode dominates."""
+
+    t = np.linspace(0.0, 40.0, 800)
+
+    settled_signal = np.exp((0.2 - 1j * 0.3) * t)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        drift, settled = half_horizon_settled_probe(
+            t, settled_signal, gamma=0.2, tmin=10.0, tmax=40.0
+        )
+    assert settled is True
+    assert drift == pytest.approx(0.0, abs=1e-6)
+
+    # A dominant branch still emerging from a decaying transient: the second
+    # half of the window fits a visibly larger gamma than the whole window.
+    ramping = np.exp((0.2 - 1j * 0.3) * t) + 50.0 * np.exp((-0.15 - 1j * 1.0) * t)
+    with pytest.warns(RuntimeWarning, match="fit not settled"):
+        drift, settled = half_horizon_settled_probe(
+            t, ramping, gamma=0.10, tmin=0.0, tmax=40.0
+        )
+    assert settled is False
+    assert drift > 0.05
+
+
+def test_half_horizon_settled_probe_declines_degenerate_input() -> None:
+    t = np.linspace(0.0, 10.0, 50)
+    signal = np.exp(0.1 * t)
+    assert half_horizon_settled_probe(
+        t, signal, gamma=0.0, tmin=None, tmax=None
+    ) == (None, None)
+    assert half_horizon_settled_probe(
+        t, signal, gamma=0.1, tmin=5.0, tmax=1.0
+    ) == (None, None)

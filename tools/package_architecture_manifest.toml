@@ -212,7 +212,13 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 90285: measuring whether a growth rate is resolved before reporting it (#56).
+# The stationary window selector, the AR(1)-corrected slope stderr, the
+# half-horizon settled probe, and the warning that names the horizon actually
+# needed. The shipped Cyclone deck stops at 0.93 e-foldings, where the mode is
+# still ringing; these lines are what turns that from a confident wrong number
+# into a warned one.
+baseline = 90285
 target = 45000
 
 [[line_budget_policy.counts]]

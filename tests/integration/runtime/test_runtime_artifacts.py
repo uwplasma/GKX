@@ -2062,3 +2062,35 @@ def test_run_runtime_nonlinear_with_artifacts_history_and_restart_paths(
     assert isinstance(result, RuntimeNonlinearResult)
     assert paths["out"] == str(out)
     assert captured["writes"] >= 1
+
+
+def test_linear_summary_carries_fit_quality_fields(tmp_path: Path) -> None:
+    """gamma/omega stderr and R^2 reach the summary, with None for eigensolves."""
+
+    base = dict(
+        ky=0.2,
+        omega=-0.4,
+        selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+        t=np.asarray([0.1, 0.2, 0.3]),
+        signal=np.asarray([1.0, 2.0, 4.0]),
+        fit_window_tmin=0.1,
+        fit_window_tmax=0.3,
+        fit_signal_used="phi",
+    )
+    fitted = RuntimeLinearResult(
+        gamma=0.3, gamma_stderr=0.004, omega_stderr=0.007, fit_r2=0.999, **base
+    )
+    paths = write_runtime_linear_artifacts(tmp_path / "fitted", fitted)
+    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+    assert summary["gamma_stderr"] == pytest.approx(0.004)
+    assert summary["omega_stderr"] == pytest.approx(0.007)
+    assert summary["fit_r2"] == pytest.approx(0.999)
+
+    # An eigensolve has no fit window statistics, and a degenerate fit reports
+    # an infinite stderr; both must serialize as JSON null rather than NaN.
+    eigen = RuntimeLinearResult(gamma=0.3, gamma_stderr=float("inf"), **base)
+    paths = write_runtime_linear_artifacts(tmp_path / "eigen", eigen)
+    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+    assert summary["gamma_stderr"] is None
+    assert summary["omega_stderr"] is None
+    assert summary["fit_r2"] is None

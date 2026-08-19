@@ -152,6 +152,7 @@ _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS = (
     "growth_weight",
     "require_positive",
     "min_amp_fraction",
+    "window_method",
     "mode_method",
     "fit_signal",
 )
@@ -300,6 +301,7 @@ def run_runtime_linear(
     growth_weight: float = 0.2,
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
+    window_method: str = "stationary",
     krylov_cfg: KrylovConfig | None = None,
     mode_method: str = "project",
     fit_signal: str = "auto",
@@ -347,6 +349,7 @@ def run_runtime_scan(
     growth_weight: float = 0.2,
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
+    window_method: str = "stationary",
     krylov_cfg: KrylovConfig | None = None,
     mode_method: str = "project",
     fit_signal: str = "auto",
@@ -404,6 +407,7 @@ def _run_runtime_scan_batch(
     mode_method: str,
     fit_signal: str,
     show_progress: bool,
+    window_method: str = "stationary",
 ) -> RuntimeLinearScanResult:
     """Facade wrapper for the extracted combined-ky scan batch helper."""
 
