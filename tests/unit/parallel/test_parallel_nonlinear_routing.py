@@ -119,12 +119,73 @@ def test_z_axis_is_rejected_with_the_measured_reason() -> None:
     assert "axis='ky'" in message
 
 
-@pytest.mark.parametrize("axis", ["kx", "species", "hermite", "l", "m"])
+@pytest.mark.parametrize("axis", ["kx", "l", "laguerre"])
 def test_unsupported_axis_raises(axis: str) -> None:
     with pytest.raises(NonlinearParallelRoutingError, match="axis='ky'"):
         resolve_nonlinear_parallel_plan(
             RuntimeParallelConfig(strategy="shard_map", axis=axis, num_devices=2)
         )
+
+
+@pytest.mark.parametrize(
+    "axis", ["species_hermite", "velocity", "s_m", "species", "m", "hermite"]
+)
+def test_velocity_axis_aliases_resolve_to_the_production_mesh(axis: str) -> None:
+    """Every spelling of the velocity mesh routes to one canonical axis."""
+
+    _require_devices(2)
+    plan = resolve_nonlinear_parallel_plan(
+        RuntimeParallelConfig(strategy="shard_map", axis=axis, num_devices=2)
+    )
+    assert plan is not None
+    assert plan.axis == "species_hermite"
+
+
+def test_auto_selects_the_species_hermite_mesh_and_says_which() -> None:
+    """``auto = true`` resolves the mesh from the devices and reports it."""
+
+    _require_devices(2)
+    from gkx.workflows.runtime.parallel_nonlinear import resolve_species_hermite_mesh
+
+    plan = resolve_nonlinear_parallel_plan(
+        RuntimeParallelConfig(auto=True, num_devices=2)
+    )
+    assert plan is not None and plan.axis == "species_hermite" and plan.auto
+    resolved = resolve_species_hermite_mesh(
+        jnp.zeros((2, 4, 16, 4, 4, 4), dtype=jnp.complex64), plan
+    )
+    assert resolved.mesh_shape == (2, 1)
+    described = resolved.describe()
+    assert "2 species x 1 Hermite" in described
+    assert "auto-selected" in described
+    assert "no halo" in described
+
+
+def test_auto_conflicting_with_an_explicit_strategy_is_an_error() -> None:
+    """``auto`` must not silently overrule an explicit request."""
+
+    with pytest.raises(ValueError, match="conflicts with"):
+        RuntimeParallelConfig(auto=True, strategy="batch")
+    with pytest.raises(ValueError, match="conflicts with"):
+        RuntimeParallelConfig(auto=True, axis="kx")
+
+
+def test_indivisible_device_count_names_the_counts_that_work() -> None:
+    """A rejected mesh reports its alternatives, not only its failure."""
+
+    _require_devices(3)
+    from gkx.workflows.runtime.parallel_nonlinear import resolve_species_hermite_mesh
+
+    plan = resolve_nonlinear_parallel_plan(
+        RuntimeParallelConfig(auto=True, num_devices=3)
+    )
+    with pytest.raises(NonlinearParallelRoutingError) as excinfo:
+        resolve_species_hermite_mesh(
+            jnp.zeros((2, 4, 16, 4, 4, 4), dtype=jnp.complex64), plan
+        )
+    message = str(excinfo.value)
+    assert "supports 1, 2, 4, 8, 16 devices" in message
+    assert "divide" in message
 
 
 def test_independent_worker_options_are_rejected() -> None:

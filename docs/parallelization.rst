@@ -526,11 +526,67 @@ ExB bracket ``-\{\phi,g\}`` alone, with no streaming, mirror, curvature,
 grad-B, diamagnetic, collision, hypercollision, end-damping, dealiasing or
 electromagnetic terms and no species axis, all of which the production
 nonlinear RHS carries. No production nonlinear speedup claim follows from it.
-Separately, the two-device rows are **not** re-measured here: the second GPU of
-the office box was saturated by another user throughout, so
-``parallel_scaling_vs_one_device`` and ``net_speedup_vs_serial`` remain those of
-the table above and the end-to-end gate verdict is deferred rather than
-restated.
+The two-device rows are now measured end to end, on both RTX A4000s of the
+office box, with the first GPU verified idle before and after the run. They are
+timed one grid per process through the ``--isolate-shapes`` flag of
+``profile_device_z_pencil_scaling_decomposition.py``. That flag is a
+correctness requirement rather than a convenience: several grids timed inside
+one process share compiled executables and a warm allocator, and have been
+measured to report a single-device route overhead near unity where an isolated
+process reports the true, much larger value. Timing all three routes again
+after the fused local bracket landed gives
+``docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.json``:
+
+.. list-table:: Device-z pencil bracket, two devices, one grid per process
+   :header-rows: 1
+   :widths: 30 16 16 14 24
+
+   * - ``(N_l,N_m,N_y,N_x,N_z)``
+     - route overhead
+     - parallel scaling
+     - net
+     - final-state error
+   * - ``(4,8,96,96,48)``
+     - ``0.997``
+     - ``1.978``
+     - ``1.983``
+     - ``0.0``
+   * - ``(4,16,96,96,32)``
+     - ``1.005``
+     - ``2.010``
+     - ``2.000``
+     - ``0.0``
+   * - ``(4,16,128,128,32)``
+     - ``0.988``
+     - ``1.923``
+     - ``1.947``
+     - ``0.0``
+   * - ``(4,16,96,96,64)``
+     - ``0.996``
+     - ``2.004``
+     - ``2.013``
+     - ``0.0``
+   * - ``(4,16,128,128,64)``
+     - ``1.002``
+     - ``1.955``
+     - ``1.952``
+     - ``0.0``
+
+The end-to-end number lands where the decomposition said it would. Route
+overhead is at parity at every grid, between ``0.988`` and ``1.005``, so the
+net speedup is now just the parallel scaling: ``1.95`` to ``2.01`` against the
+``1.5`` gate, and the artifact's limiting factor moves from
+``shard_map_route_overhead`` to ``parallel_scaling``. Serial-versus-sharded
+identity is exact, ``0.0`` at every grid rather than the earlier ``7.45e-9``,
+so the timed routes are bit-identical and the ratios are not paid for with
+accuracy.
+
+Two limits bound how far that number travels, and they are the same two as
+above. It is the bracket micro-route on a reduced five-dimensional operator
+with a model field solve, not the production nonlinear RHS, so it is a
+localization result and not a production nonlinear speedup claim. And the
+scalar diagnostic path below still dominates any end-to-end route that
+evaluates observables every window.
 
 The scalar diagnostic path remains a separate and much larger cost, and the
 compute-only framing of the timed row matters. With ``--observable-repeats``,
@@ -596,6 +652,135 @@ serial-vs-sharded identity and inter-device communication are not implicated.
 Every timed row above passed its identity gate, and the errors are reported
 beside the timings rather than in a separate table.
 
+Production decomposition: species x Hermite (plan item 4.2)
+-----------------------------------------------------------
+
+The production nonlinear decomposition is a 2-D ``(species, hermite)`` device
+mesh under ``jax.shard_map``, species factored first and Hermite second, with
+``(ky, kx)``, the Laguerre axis and ``z`` replicated on every device. Every
+FFT the RHS performs -- both bracket transforms, the periodic ``z`` derivative
+and the twist-shift linked chains -- runs over an axis this mesh never splits,
+so a shard is a slab the *serial* kernels already evaluate and there is no
+distributed transpose anywhere in the operator.
+
+Factoring rule (``gkx.parallel.velocity_plan.build_species_hermite_mesh_plan``):
+``ns_chunks`` is the largest factor of the
+device count that divides ``Ns``, ``nm_chunks`` is the remainder, and
+``Nm % nm_chunks`` must be **exactly** zero. A padded Hermite axis would put a
+shard's ghost rows outside its neighbour, so an indivisible request fails closed
+and the error names the device counts that do work. Two devices with two species
+therefore give a mesh ``(2, 1)``: halo-free, one collective.
+
+Collectives, and nothing else:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 12 20 68
+
+   * - Tag
+     - Primitive
+     - What it carries
+   * - C1
+     - ``psum``
+     - The masked global ``m = 0..3`` moment head, then the species sum inside
+       the field solve. Delivers those rows to every shard in one collective
+       rather than a reduce followed by a broadcast; adding exact zeros from the
+       non-owning Hermite blocks leaves the owner's contribution bit-for-bit
+       unchanged.
+   * - C2
+     - ``ppermute`` x2
+     - One width-2 Hermite halo, one exchange per direction, covering the
+       ``m +- 1`` ladder of streaming and mirror and the ``m +- 2`` reach of
+       curvature together. Emitted only when the Hermite axis is actually split.
+   * - C5
+     - ``psum``
+     - The four scalar traces, accumulated inside the integration scan carry.
+
+Measured HLO census for the compiled RHS (``all-to-all`` is an automatic fail):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Mesh
+     - all-to-all
+     - all-reduce
+     - collective-permute
+   * - (2, 1), 2 devices
+     - 0
+     - 2
+     - 0
+   * - (2, 2), 4 devices
+     - 0
+     - 3
+     - 2
+   * - (2, 4), 8 devices
+     - 0
+     - 3
+     - 2
+
+Shard-local kernels are the unmodified serial kernels. That is possible because
+a ``HermiteWindow`` carries the *global* moment coordinates of the slab into the
+five operators whose coefficient is a function of the global Hermite index --
+the streaming field drives at ``m = 0, 1, 2``, the diamagnetic drive at
+``m = 0..3``, the reflectionless closure at the last moment, ``build_H``, and the
+hypercollision normalization. Without it every shard would drive its own local
+row zero and close the hierarchy at its own last moment, which is a wrong answer
+rather than a slow one.
+
+Identity evidence (Cyclone-like, two kinetic species, electrostatic, periodic):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Quantity
+     - complex64
+     - x64
+   * - RHS, mesh (1,1)/(2,1)/(2,2)/(2,4), 8 logical CPU devices
+     - 5.23e-9 rel, identical at every mesh
+     - 9.74e-18 rel
+   * - RHS, mesh (2,1), 2 x RTX A4000
+     - 1.05e-8 rel; one run measured 0.0 bitwise
+     - --
+   * - Final state, 4-step RK2, every mesh
+     - 9.74e-8 rel
+     - **0.0 (bitwise)**
+   * - Wg / Wphi / heat / particle traces
+     - 5.9e-6 / 5.1e-8 / 3.3e-6 / 2.7e-7 rel
+     - 4.3e-15 / 8.1e-11 / 3.2e-15 / 6.8e-16 rel
+
+The residual is *not* communication. The single-device mesh reproduces the
+multi-device residual exactly, so the whole complex64 difference is the
+single-device route (the explicit field solve plus
+``assemble_rhs_cached_with_fields`` fuse differently from the serial
+``assemble_rhs_cached``) -- the reduction-fusion effect ``device_z`` already
+documents, not a collective.
+
+**Placement must be staged from host.** Handing ``device_put`` an array already
+committed to one device asks the runtime to reshard it across the mesh, and on
+the two-GPU box that path silently returns a wrong answer: max relative error
+1.0 against serial, while a one-device mesh on the same GPU is exact.
+``gkx.parallel.integrators.stage_from_host`` round-trips through host memory
+once per run and is a no-op when the buffer is already correctly placed.
+
+Speedup status: **not yet a production speedup claim.** Measured on 2 x RTX
+A4000 (jax 0.11.1, one grid per process, warmup 3, 8 repeats, median) at grid
+``(Ns, Nl, Nm, Nky, Nkx, Nz) = (2, 8, 16, 64, 64, 32)``: compute-only
+191.9 ms/step on a one-device mesh versus 175.1 ms/step on the two-device mesh,
+i.e. 1.10x parallel scaling; with streamed diagnostics, 250.9 versus
+198.5 ms/step, 1.26x. Both are far below the 1.90x scaling gate. Streamed
+diagnostics are 31% of the step on one device and 13% on two -- fusing them into
+the scan removed the 118x recompute of the unfused observable path, but not the
+5% budget, because the flux and field-energy kernels work on replicated arrays
+that every shard duplicates. On 2 logical CPU devices at grid
+``(2, 4, 16, 16, 16, 16)`` the same route measures 85.6 ms/step serial,
+81.4 ms/step on a one-device mesh (route overhead 0.95) and 66.7 ms/step on two
+(1.22x scaling, 1.28x net); logical CPU devices share the same cores, so that
+ceiling is a harness property rather than a decomposition one.
+
+Identity artifacts and speedup artifacts stay separate under the claim rules
+below: the identity gates above are the landable result, and the scaling gate
+is not yet met.
+
 Runtime routing for nonlinear runs
 ----------------------------------
 
@@ -610,9 +795,37 @@ One sharded nonlinear run is requested with:
 
    [parallel]
    strategy = "shard_map"
-   axis = "ky"
+   axis = "species_hermite"
    num_devices = 2
    strict_identity = true
+
+or, letting the mesh follow the visible devices:
+
+.. code-block:: toml
+
+   [parallel]
+   auto = true
+
+``auto`` resolves to ``strategy = "shard_map"``, ``axis = "species_hermite"``,
+``num_devices = len(jax.devices())`` and ``strict_identity = true``, and the
+resolved plan is printed before the run starts, for example::
+
+   routing nonlinear run through shard_map nonlinear route on a auto-selected
+   species x Hermite mesh (2 species x 1 Hermite) across 2 devices, shard
+   (1, 4, 16, 8, 8, 8), collectives: field psum, no halo (strict_identity=on)
+
+``auto`` never silently overrules an explicit request: a conflicting
+``strategy`` or ``axis`` is a configuration error. The accepted axis aliases for
+the production mesh are ``species_hermite``, ``velocity``, ``s_m``, ``species``,
+``m`` and ``hermite``; ``ky`` remains the routing diagnostic and ``z`` keeps its
+two-reason rejection.
+
+The runtime lane places the state on the production mesh and runs the ordinary
+integrator on it. The audited ``shard_map`` route with the named collectives
+above is
+``gkx.parallel.integrators.integrate_nonlinear_species_hermite`` and its
+fixed-step trajectory gate; wiring that route through the runtime's full
+diagnostic contract is not done yet.
 
 The whole nonlinear state is placed on a ``ky`` device mesh and the ordinary
 production integrator runs on it, so the operator is the production nonlinear

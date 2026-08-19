@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Callable, NamedTuple
+from typing import Any, Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -11,6 +11,7 @@ import numpy as np
 
 __all__ = [
     "ShearingCoordinateUpdate",
+    "_make_compressed_real_fft_projector",
     "_make_fixed_mode_projector",
     "_make_hermitian_projector",
     "_make_nonlinear_state_projector",
@@ -144,21 +145,25 @@ def advance_shearing_coordinates(
 
 @lru_cache(maxsize=32)
 def _cached_hermitian_projector(
-    ky_vals: tuple[float, ...], nx: int
+    ny_full: int, two_sided: bool, nx: int
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    ny_full = len(ky_vals)
     nyc = ny_full // 2 + 1
-    use_hermitian = nyc > 2 and any(value < 0.0 for value in ky_vals)
+    use_hermitian = nyc > 2 and two_sided
     if not use_hermitian:
         return lambda G_state: G_state
 
     neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
-    if nx > 1:
-        kx_neg = jnp.asarray(
-            np.concatenate(([0], np.arange(nx - 1, 0, -1))), dtype=jnp.int32
-        )
-    else:
-        kx_neg = None
+    # The conjugate kx ordering stays a host array. These projectors are cached
+    # and reused across traces, and a device constant materialized here would
+    # belong to whichever trace happened to build it first, escaping that scope
+    # the moment a second trace reuses the same grid signature. The ordering is
+    # an index reversal, so numpy holds it exactly and each trace gets its own
+    # constant at use.
+    kx_neg = (
+        np.concatenate(([0], np.arange(nx - 1, 0, -1))).astype(np.int32)
+        if nx > 1
+        else None
+    )
 
     def project(G_state: jnp.ndarray) -> jnp.ndarray:
         pos = G_state[..., :nyc, :, :]
@@ -170,13 +175,57 @@ def _cached_hermitian_projector(
     return project
 
 
+_TRACED_KY_AXIS_MESSAGE = (
+    "the Hermitian projector cannot read a traced ky axis: it needs the axis "
+    "layout -- length, and whether the negative-ky half is carried -- which is "
+    "grid topology and has no derivative. Pass a concrete ky axis, or build "
+    "the projector from the layout directly with "
+    "_make_compressed_real_fft_projector, which the compressed real-FFT path "
+    "uses so that a cache built inside a trace still projects."
+)
+
+
+def _hermitian_ky_axis_layout(ky_vals: Any) -> tuple[int, bool]:
+    """Return ``(ny_full, two_sided)`` for one ky axis, read on the host.
+
+    The projector never uses a wavenumber, only the layout of the axis it acts
+    on: how many rows there are, and whether the conjugate half is among them.
+    Read that off the stored array rather than a ``jnp`` copy of it -- inside a
+    trace every ``jnp`` call stages out, so a round trip yields a tracer whose
+    values cannot be inspected at all.
+    """
+
+    if isinstance(ky_vals, jax.core.Tracer):
+        raise ValueError(_TRACED_KY_AXIS_MESSAGE)
+    host = np.asarray(ky_vals, dtype=float).reshape(-1)
+    return int(host.size), bool(np.any(host < 0.0))
+
+
 def _make_hermitian_projector(
     ky_vals: np.ndarray, nx: int
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
     """Return a stable projector for one full-ky grid signature."""
 
-    ky_key = tuple(float(value) for value in np.asarray(ky_vals, dtype=float))
-    return _cached_hermitian_projector(ky_key, int(nx))
+    ny_full, two_sided = _hermitian_ky_axis_layout(ky_vals)
+    return _cached_hermitian_projector(ny_full, two_sided, int(nx))
+
+
+def _make_compressed_real_fft_projector(
+    *, ny_full: int, nx: int
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Return the Hermitian projector for a compressed real-FFT ky axis.
+
+    A compressed run is on a full two-sided ky axis by construction: the
+    bracket transforms the first ``ny_full // 2 + 1`` rows and rebuilds the
+    rest with ``_complete_hermitian_ky``, which reads that layout off shapes
+    alone. Taking the same route here keeps the projector buildable inside a
+    trace. The cache's own ``ky`` is ``rho_star * grid.ky``, so it is a tracer
+    whenever the cache is built inside one, and asking it for its sign pattern
+    refused every compressed nonlinear gradient -- for a fact that is fixed by
+    the grid and carries no derivative either way.
+    """
+
+    return _cached_hermitian_projector(int(ny_full), True, int(nx))
 
 
 def _make_nonlinear_state_projector(

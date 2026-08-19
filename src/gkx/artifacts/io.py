@@ -546,6 +546,9 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
                 "phi2_last": float(np.asarray(result.phi2)),
             }
         )
+    saturation = getattr(result, "saturation", None)
+    if saturation is not None:
+        payload["saturation"] = saturation
     return payload
 
 

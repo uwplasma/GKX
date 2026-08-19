@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Any, Callable, cast
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
-from gkx.operators.nonlinear.projection import _make_hermitian_projector
+from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
 
 
@@ -288,7 +288,9 @@ def integrate_nonlinear_sharded(
     state_dtype = jnp.result_type(G0, jnp.complex64)
     G_init = jnp.asarray(G0, dtype=state_dtype)
     projector = (
-        _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
+        _make_compressed_real_fft_projector(
+            ny_full=int(cache.ky.size), nx=int(cache.kx.size)
+        )
         if compressed_real_fft
         else None
     )
@@ -309,4 +311,655 @@ def integrate_nonlinear_sharded(
     return runner(G_init, cache, params, _dt_array(dt, state_dtype))
 
 
-__all__ = ["integrate_linear_sharded", "integrate_nonlinear_sharded"]
+
+
+
+# ---------------------------------------------------------------------------
+# Production species x Hermite shard_map route
+# ---------------------------------------------------------------------------
+#
+# One device owns a species block and a Hermite block; the perpendicular plane,
+# Laguerre and z stay whole. That choice is what keeps the shard-local kernels
+# the *serial* kernels: every FFT in the bracket and in parallel streaming runs
+# over an axis this mesh never splits, so a shard is a slab the production RHS
+# already knows how to evaluate, and route overhead is structural rather than
+# tuned. See docs/parallelization.rst for the evidence behind the choice.
+#
+# Collectives, and nothing else:
+#   C1  psum   masked m = 0..3 moment head, then the species sum inside the
+#              field solve            -> quasineutrality, Ampere, fluxes
+#   C2  ppermute x2  one width-2 Hermite halo covering m+-1 (streaming, mirror)
+#              and m+-2 (curvature) in a single exchange, only when m is split
+#   C5  psum   scalar diagnostics, accumulated in the scan carry
+# Any all-to-all in the HLO of this route is a bug, not a cost.
+
+_SPECIES_PARAM_NAMES = (
+    "charge_sign",
+    "density",
+    "mass",
+    "temp",
+    "vth",
+    "rho",
+    "fprim",
+    "tprim",
+    "tprim_e",
+    "nu",
+    "tz",
+)
+
+# Cache arrays carrying a species axis at dimension 0.
+_SPECIES_CACHE_NAMES = ("Jl", "JlB", "b", "laguerre_j0", "laguerre_j1_over_alpha")
+
+_DIAGNOSTIC_MOMENT_ROWS = 4
+
+
+@dataclass(frozen=True)
+class SpeciesHermiteRun:
+    """Result of one sharded nonlinear trajectory."""
+
+    state: jnp.ndarray
+    traces: dict[str, jnp.ndarray]
+    plan: Any
+    mesh_shape: tuple[int, int]
+
+    def describe(self) -> str:
+        ns_chunks, nm_chunks = self.mesh_shape
+        halo = int(self.plan.hermite_ghost_depth)
+        collectives = "field psum" + (
+            f" + width-{halo} Hermite ppermute" if nm_chunks > 1 else ""
+        )
+        return (
+            f"species x Hermite mesh ({ns_chunks}, {nm_chunks}) on "
+            f"{ns_chunks * nm_chunks} devices, shard "
+            f"{tuple(self.plan.shard_shape)}, collectives: {collectives}"
+        )
+
+
+def _species_hermite_inputs(cache, params, ns, real_dtype, plan, hermite_count):
+    """Return the sharded leaves and their specs for one mesh placement."""
+
+    from jax.sharding import PartitionSpec
+    from gkx.operators.linear.params import _as_species_array
+    from gkx.parallel.velocity_hermite import (
+        hermite_cache_partition_specs,
+        hermite_window_cache_arrays,
+        hermite_window_indices,
+    )
+
+    nm_chunks = int(plan.chunks.get("m", 1))
+    indices = hermite_window_indices(
+        hermite_count,
+        chunks=nm_chunks,
+        ghost_depth=int(plan.hermite_ghost_depth),
+    )
+    windowed = hermite_window_cache_arrays(
+        cache, indices, hermite_count=hermite_count
+    )
+    window_specs = hermite_cache_partition_specs(windowed, "m")
+    species_cache = {
+        name: getattr(cache, name)
+        for name in _SPECIES_CACHE_NAMES
+        if getattr(cache, name, None) is not None
+    }
+    species_specs = {
+        name: PartitionSpec("s", *([None] * (value.ndim - 1)))
+        for name, value in species_cache.items()
+    }
+    species_params = {
+        name: _as_species_array(getattr(params, name), ns, name).astype(real_dtype)
+        for name in _SPECIES_PARAM_NAMES
+    }
+    return indices, windowed, window_specs, species_cache, species_specs, species_params
+
+
+def _fused_scalar_diagnostics(
+    local,
+    head,
+    fields,
+    cache,
+    params,
+    grid,
+    *,
+    vol_fac,
+    flux_fac,
+    mesh_axes,
+    global_species,
+):
+    """Return the four gated scalar traces from state the RHS already built.
+
+    Fused deliberately. Recomputing these outside the timed route costs up to
+    118x the step because the observable path re-runs the bracket; here they are
+    reductions over arrays that are already resident, followed by one scalar
+    ``psum`` each. ``Wg`` reduces over both mesh axes (every shard owns a
+    distinct slab of it); ``Wphi`` and the fluxes reduce over species only,
+    because the head and the fields are already Hermite-complete on every shard.
+    """
+
+    from gkx.diagnostics.moments import (
+        distribution_free_energy,
+        electrostatic_field_energy,
+    )
+    from gkx.diagnostics.transport import heat_flux_species, particle_flux_species
+
+    zero = jnp.zeros_like(fields.phi)
+    apar = fields.apar if fields.apar is not None else zero
+    bpar = fields.bpar if fields.bpar is not None else zero
+
+    def owner_sum(value):
+        # The head and the fields are already Hermite-complete on every shard,
+        # so every Hermite block holds the same species contribution. Masking to
+        # one block and reducing over the whole mesh is exact -- the others add
+        # a true zero -- and it leaves the result provably invariant over both
+        # mesh axes, which a species-only psum does not.
+        return jax.lax.psum(value * _mesh_owner_mask(mesh_axes, value), mesh_axes)
+
+    wg = jax.lax.psum(
+        distribution_free_energy(local, grid, params, vol_fac), mesh_axes
+    )
+    wphi = owner_sum(
+        electrostatic_field_energy(fields.phi, cache, params, vol_fac)
+    )
+    heat = owner_sum(
+        jnp.sum(
+            heat_flux_species(
+                head, fields.phi, apar, bpar, cache, grid, params, flux_fac
+            )
+        )
+    )
+    particle = owner_sum(
+        jnp.sum(
+            particle_flux_species(
+                head,
+                fields.phi,
+                apar,
+                bpar,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                global_species=global_species,
+            )
+        )
+    )
+    return wg, wphi, heat, particle
+
+
+def _mesh_owner_mask(mesh_axes, like):
+    """Return 1 on the first Hermite block and 0 elsewhere, varying over the mesh.
+
+    The trivially-true species factor is deliberate: it makes the mask -- and so
+    the masked scalar -- formally vary over both mesh axes, which is what lets a
+    single ``psum`` over the whole mesh type-check for a quantity that is
+    already Hermite-complete.
+    """
+
+    species_axis, hermite_axis = mesh_axes
+    mask = (jax.lax.axis_index(hermite_axis) == 0) & (
+        jax.lax.axis_index(species_axis) >= 0
+    )
+    return mask.astype(jnp.asarray(like).dtype)
+
+
+def _species_hermite_local_rhs(
+    local,
+    *,
+    cache,
+    params,
+    term_cfg,
+    linear_cfg,
+    index,
+    hermite_count,
+    nm_chunks,
+    ghost_depth,
+    real_dtype,
+    compressed_real_fft,
+    laguerre_mode,
+):
+    """Evaluate the production nonlinear RHS on one shard of the mesh."""
+
+    from gkx.operators.linear.cache_model import HermiteWindow
+    from gkx.parallel.velocity_hermite import (
+        hermite_field_moment_head,
+        hermite_halo_extend,
+        hermite_halo_interior,
+    )
+    from gkx.terms.assembly import assemble_rhs_cached_with_fields
+    from gkx.terms.fields import _solve_fields_impl
+    from gkx.terms.nonlinear import nonlinear_em_contribution
+
+    # ``index`` covers the *extended* slab; the head is built from the rows the
+    # shard actually owns, so it reads the interior window.
+    interior = (
+        slice(ghost_depth, ghost_depth + local.shape[2])
+        if nm_chunks > 1
+        else slice(None)
+    )
+    head = hermite_field_moment_head(
+        local,
+        index=index[interior],
+        rows=(
+            _DIAGNOSTIC_MOMENT_ROWS
+            if nm_chunks > 1
+            else min(_DIAGNOSTIC_MOMENT_ROWS, local.shape[2])
+        ),
+        chunks=nm_chunks,
+        axis_name="m",
+    )
+    fields = _solve_fields_impl(
+        head,
+        cache,
+        params,
+        charge=params.charge_sign,
+        density=params.density,
+        temp=params.temp,
+        mass=params.mass,
+        tz=params.tz,
+        vth=params.vth,
+        fapar=jnp.asarray(params.fapar, dtype=real_dtype),
+        w_bpar=jnp.asarray(term_cfg.bpar, dtype=real_dtype),
+        axis_name="s",
+    )
+    extended = hermite_halo_extend(
+        local, chunks=nm_chunks, ghost_depth=ghost_depth, axis_name="m"
+    )
+    window = HermiteWindow(index=index, total=hermite_count)
+    dG = assemble_rhs_cached_with_fields(
+        extended,
+        cache,
+        params,
+        fields,
+        terms=linear_cfg,
+        force_electrostatic_fields=term_cfg.apar == 0.0 and term_cfg.bpar == 0.0,
+        hermite_window=window,
+    )
+    dG = hermite_halo_interior(dG, chunks=nm_chunks, ghost_depth=ghost_depth)
+    if term_cfg.nonlinear == 0.0:
+        return dG, fields, head
+    return (
+        dG
+        + nonlinear_em_contribution(
+            local,
+            phi=fields.phi,
+            apar=fields.apar if term_cfg.apar != 0.0 else None,
+            bpar=fields.bpar if term_cfg.bpar != 0.0 else None,
+            Jl=cache.Jl,
+            JlB=cache.JlB,
+            tz=params.tz,
+            vth=params.vth,
+            sqrt_m=cache.sqrt_m[:, interior],
+            sqrt_m_p1=cache.sqrt_m_p1[:, interior],
+            kx_grid=cache.kx_grid,
+            ky_grid=cache.ky_grid,
+            dealias_mask=cache.dealias_mask,
+            kxfac=cache.kxfac,
+            weight=jnp.asarray(term_cfg.nonlinear, dtype=real_dtype),
+            apar_weight=float(term_cfg.apar),
+            bpar_weight=float(term_cfg.bpar),
+            laguerre_to_grid=cache.laguerre_to_grid,
+            laguerre_to_spectral=cache.laguerre_to_spectral,
+            laguerre_roots=cache.laguerre_roots,
+            laguerre_j0=cache.laguerre_j0,
+            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
+            b=cache.b,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+        ),
+        fields,
+        head,
+    )
+
+
+def stage_from_host(value: Any, sharding: Any) -> Any:
+    """Place ``value`` on ``sharding`` from host memory rather than resharding.
+
+    Handing ``device_put`` an array that is already committed to one device asks
+    the runtime to reshard it across the mesh, and on the two-GPU box that path
+    silently produces a wrong answer: the sharded route drops to a max relative
+    error of 1.0 against serial while a one-device mesh on the same GPU is exact.
+    Round-tripping through the host is the reliable placement, and it happens
+    once per run rather than once per step.
+    """
+
+    if isinstance(value, jax.core.Tracer):
+        return value
+    if getattr(value, "sharding", None) == sharding:
+        # Already exactly where it belongs: re-staging would only add a host
+        # round trip per call, which on a repeated route dominates the step.
+        return value
+    return jax.device_put(np.asarray(jax.device_get(value)), sharding)
+
+
+def _reject_unsharded_hermite_terms(term_cfg, params, plan) -> None:
+    """Fail closed on the one term family a split Hermite axis cannot serve yet.
+
+    The conserving-collision correction reads the ``m = 0, 1, 2`` moments of the
+    *local* slab. Those are the global moments only on the Hermite block that
+    owns them, so with the Hermite axis split the operator would quietly become a
+    different one on every other shard. Species sharding is unaffected -- and
+    species-first factoring means a two-device box with two species never enters
+    this branch.
+    """
+
+    if int(plan.chunks.get("m", 1)) < 2:
+        return
+    nu = np.asarray(jax.device_get(getattr(params, "nu", 0.0)), dtype=float)
+    if float(term_cfg.collisions) == 0.0 or not np.any(nu != 0.0):
+        return
+    raise NotImplementedError(
+        "conserving collisions need the m = 0, 1, 2 moments summed across the "
+        "Hermite mesh axis, which this route does not yet reduce; run with "
+        f"{int(plan.chunks.get('s', 1))} devices for a species-only mesh, or "
+        "with terms.collisions = 0."
+    )
+
+
+def _resolve_species_hermite_placement(G0, cache, params, *, plan, devices, num_devices):
+    """Return the mesh, plan, and every sharded leaf for one placement."""
+
+    from gkx.parallel.state import build_species_hermite_mesh, species_hermite_state_spec
+    from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
+    from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
+
+    if G0.ndim != 6:
+        raise ValueError(
+            "the species x Hermite route requires a 6D (Ns, Nl, Nm, Nky, Nkx, Nz) state"
+        )
+    device_list = (
+        list(devices)
+        if devices is not None
+        else list(_resolve_parallel_devices(num_devices=num_devices))
+    )
+    resolved = plan or build_species_hermite_mesh_plan(
+        tuple(G0.shape), num_devices=len(device_list)
+    )
+    mesh = build_species_hermite_mesh(resolved, devices=device_list)
+    return mesh, resolved, species_hermite_state_spec(6)
+
+
+def _species_hermite_mapped(
+    G0,
+    cache,
+    params,
+    grid,
+    *,
+    term_cfg,
+    plan,
+    mesh,
+    state_spec,
+    compressed_real_fft,
+    laguerre_mode,
+    vol_fac,
+    flux_fac,
+):
+    """Return the shard-mapped step callable plus its sharded argument tuple."""
+
+    import jax.sharding as jsharding
+
+    ns = int(G0.shape[0])
+    hermite_count = int(G0.shape[2])
+    real_dtype = jnp.real(jnp.empty((), dtype=G0.dtype)).dtype
+    nm_chunks = int(plan.chunks.get("m", 1))
+    ghost_depth = int(plan.hermite_ghost_depth)
+    (
+        indices,
+        windowed,
+        window_specs,
+        species_cache,
+        species_specs,
+        species_params,
+    ) = _species_hermite_inputs(cache, params, ns, real_dtype, plan, hermite_count)
+    linear_cfg = replace(term_cfg, nonlinear=0.0)
+    index_spec = jsharding.PartitionSpec("m")
+    names = (
+        tuple(species_cache)
+        + tuple(windowed)
+        + tuple(_SPECIES_PARAM_NAMES)
+    )
+    values = (
+        tuple(species_cache.values())
+        + tuple(windowed.values())
+        + tuple(species_params[name] for name in _SPECIES_PARAM_NAMES)
+    )
+    specs = (
+        tuple(species_specs[name] for name in species_cache)
+        + tuple(window_specs[name] for name in windowed)
+        + (jsharding.PartitionSpec("s"),) * len(_SPECIES_PARAM_NAMES)
+    )
+    n_cache = len(species_cache) + len(windowed)
+    mesh_axes = ("s", "m")
+
+    def local_step(local, index, *leaves):
+        shard_cache = replace(cache, **dict(zip(names[:n_cache], leaves[:n_cache])))
+        shard_params = replace(
+            params, **dict(zip(_SPECIES_PARAM_NAMES, leaves[n_cache:], strict=True))
+        )
+        dG, fields, head = _species_hermite_local_rhs(
+            local,
+            cache=shard_cache,
+            params=shard_params,
+            term_cfg=term_cfg,
+            linear_cfg=linear_cfg,
+            index=index,
+            hermite_count=hermite_count,
+            nm_chunks=nm_chunks,
+            ghost_depth=ghost_depth,
+            real_dtype=real_dtype,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+        )
+        scalars = (
+            _fused_scalar_diagnostics(
+                local,
+                head,
+                fields,
+                shard_cache,
+                shard_params,
+                grid,
+                vol_fac=vol_fac,
+                flux_fac=flux_fac,
+                mesh_axes=mesh_axes,
+                global_species=ns,
+            )
+            if vol_fac is not None and flux_fac is not None
+            else None
+        )
+        return dG, scalars
+
+    sharded = tuple(
+        stage_from_host(value, jsharding.NamedSharding(mesh, spec))
+        for value, spec in zip(values, specs, strict=True)
+    )
+    index_array = jax.device_put(
+        np.asarray(indices, dtype=np.int32),
+        jsharding.NamedSharding(mesh, index_spec),
+    )
+    return local_step, (index_array,) + sharded, (index_spec,) + specs, state_spec
+
+
+def species_hermite_nonlinear_rhs(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    terms: TermConfig | None = None,
+    plan: Any | None = None,
+    devices: Any | None = None,
+    num_devices: int | None = None,
+    compressed_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+) -> jnp.ndarray:
+    """Evaluate one production nonlinear RHS on a species x Hermite mesh."""
+
+    term_cfg = terms or TermConfig()
+    state_dtype = jnp.result_type(G0, jnp.complex64)
+    state = jnp.asarray(G0, dtype=state_dtype)
+    mesh, resolved, state_spec = _resolve_species_hermite_placement(
+        state, cache, params, plan=plan, devices=devices, num_devices=num_devices
+    )
+    _reject_unsharded_hermite_terms(term_cfg, params, resolved)
+    local_step, leaves, specs, state_spec = _species_hermite_mapped(
+        state,
+        cache,
+        params,
+        None,
+        term_cfg=term_cfg,
+        plan=resolved,
+        mesh=mesh,
+        state_spec=state_spec,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        vol_fac=None,
+        flux_fac=None,
+    )
+
+    def rhs_only(local, *rest):
+        return local_step(local, *rest)[0]
+
+    mapped = jax.shard_map(
+        rhs_only,
+        mesh=mesh,
+        in_specs=(state_spec,) + specs,
+        out_specs=state_spec,
+        axis_names={"s", "m"},
+    )
+    from jax.sharding import NamedSharding
+
+    return jax.jit(mapped)(
+        stage_from_host(state, NamedSharding(mesh, state_spec)), *leaves
+    )
+
+
+_TRACE_NAMES = ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t")
+
+
+def integrate_nonlinear_species_hermite(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str = "rk2",
+    terms: TermConfig | None = None,
+    grid: Any | None = None,
+    vol_fac: jnp.ndarray | None = None,
+    flux_fac: jnp.ndarray | None = None,
+    plan: Any | None = None,
+    devices: Any | None = None,
+    num_devices: int | None = None,
+    compressed_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+) -> SpeciesHermiteRun:
+    """Integrate the nonlinear system on a species x Hermite ``shard_map`` mesh.
+
+    The whole trajectory is one jitted ``lax.scan`` on the mesh, and the scalar
+    traces are stacked from inside that scan rather than recomputed afterwards.
+    Supplying ``grid`` with ``vol_fac``/``flux_fac`` turns the traces on; without
+    them the route is compute-only and returns an empty trace map.
+    """
+
+    _validate_steps(steps)
+    method_key = _validate_explicit_method(method)
+    term_cfg = terms or TermConfig()
+    state_dtype = jnp.result_type(G0, jnp.complex64)
+    state = jnp.asarray(G0, dtype=state_dtype)
+    mesh, resolved, state_spec = _resolve_species_hermite_placement(
+        state, cache, params, plan=plan, devices=devices, num_devices=num_devices
+    )
+    _reject_unsharded_hermite_terms(term_cfg, params, resolved)
+    record = grid is not None and vol_fac is not None and flux_fac is not None
+    local_step, leaves, specs, state_spec = _species_hermite_mapped(
+        state,
+        cache,
+        params,
+        grid,
+        term_cfg=term_cfg,
+        plan=resolved,
+        mesh=mesh,
+        state_spec=state_spec,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        vol_fac=vol_fac if record else None,
+        flux_fac=flux_fac if record else None,
+    )
+    projector = (
+        _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
+        if compressed_real_fft
+        else None
+    )
+    dt_val = _dt_array(dt, state_dtype)
+    scalar_spec = jax.sharding.PartitionSpec()
+
+    def local_scan(local, index, *rest):
+        def rhs(value):
+            return local_step(value, index, *rest)
+
+        def stage(value, increment, scale):
+            nxt = value + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
+            return _project_local(nxt, projector, state_dtype)
+
+        def step(carry, _unused):
+            value = _project_local(carry, projector, state_dtype)
+            k1, scalars = rhs(value)
+            nxt = _nonlinear_explicit_update(
+                method_key,
+                value,
+                k1,
+                rhs=lambda arg: (rhs(arg)[0], None),
+                stage=stage,
+                project_shard=lambda arg: _project_local(
+                    arg, projector, state_dtype
+                ),
+                dt_val=dt_val,
+            )
+            nxt = _project_local(nxt, projector, state_dtype)
+            return nxt, (scalars if record else None)
+
+        final, stacked = jax.lax.scan(step, local, xs=None, length=steps)
+        return (final, stacked) if record else (final, None)
+
+    out_specs = (
+        (state_spec, (scalar_spec,) * len(_TRACE_NAMES)) if record else (state_spec, None)
+    )
+    mapped = jax.shard_map(
+        local_scan,
+        mesh=mesh,
+        in_specs=(state_spec,) + specs,
+        out_specs=out_specs,
+        axis_names={"s", "m"},
+    )
+    from jax.sharding import NamedSharding
+
+    final, stacked = jax.jit(mapped)(
+        stage_from_host(state, NamedSharding(mesh, state_spec)), *leaves
+    )
+    traces = (
+        dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
+    )
+    return SpeciesHermiteRun(
+        state=final,
+        traces=traces,
+        plan=resolved,
+        mesh_shape=(
+            int(resolved.chunks.get("s", 1)),
+            int(resolved.chunks.get("m", 1)),
+        ),
+    )
+
+
+def _project_local(value, projector, dtype):
+    """Apply the Hermitian projector to one shard, if the run uses one."""
+
+    if projector is not None:
+        value = projector(value)
+    return jnp.asarray(value, dtype=dtype)
+
+
+__all__ = [
+    "SpeciesHermiteRun",
+    "stage_from_host",
+    "integrate_linear_sharded",
+    "integrate_nonlinear_sharded",
+    "integrate_nonlinear_species_hermite",
+    "species_hermite_nonlinear_rhs",
+]

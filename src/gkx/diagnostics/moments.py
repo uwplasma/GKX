@@ -288,6 +288,7 @@ def _particle_flux_channel_contrib_species(
     *,
     use_dealias: bool,
     flux_scale: float,
+    global_species: int | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     if G.ndim == 5:
         Gs = G[None, ...]
@@ -295,7 +296,10 @@ def _particle_flux_channel_contrib_species(
         Gs = G
     ns = Gs.shape[0]
     zero_shape = (ns, grid.ky.size, grid.kx.size, grid.z.size)
-    if ns == 1:
+    # A one-species run carries no particle flux, but that is a property of the
+    # *simulation*, not of a slab: on a species-sharded state every shard holds
+    # one species and would otherwise report zero for all of them.
+    if (ns if global_species is None else int(global_species)) == 1:
         zero = jnp.zeros(zero_shape, dtype=jnp.real(phi).dtype)
         return zero, zero, zero
     fac = _transport_mode_weight(grid, use_dealias=use_dealias)[:, :, None]

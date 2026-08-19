@@ -13,7 +13,7 @@ from gkx.diagnostics.analysis import estimate_observed_order
 from gkx.config import GridConfig
 from gkx.geometry import FluxTubeGeometryData, SAlphaGeometry
 from gkx.core.grid import build_spectral_grid
-from gkx.core.velocity import J_l_all
+from gkx.core.velocity import _gyro_bessel_factors, J_l_all
 import gkx.operators.linear as linear_cache
 import gkx.solvers.linear.implicit as linear_implicit
 import gkx.operators.linear.dissipation as linear_dissipation
@@ -517,6 +517,40 @@ def test_build_linear_cache_allows_traced_shear_for_periodic_sampled_geometry() 
     assert np.isfinite(float(grad))
 
 
+def test_laguerre_bessel_factors_have_analytic_zero_limit_and_tangent() -> None:
+    zero = jnp.asarray(0.0, dtype=jnp.float64)
+
+    def factors(alpha2: jnp.ndarray) -> jnp.ndarray:
+        return jnp.stack(_gyro_bessel_factors(alpha2))
+
+    value, tangent = jax.jvp(factors, (zero,), (jnp.ones_like(zero),))
+
+    np.testing.assert_allclose(value, np.asarray([1.0, 0.5]), rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(
+        tangent, np.asarray([-0.25, -0.0625]), rtol=1.0e-12, atol=1.0e-12
+    )
+
+
+def test_laguerre_bessel_cache_has_finite_geometry_tangent_at_zero_mode() -> None:
+    grid = build_spectral_grid(
+        GridConfig(
+            Nx=2, Ny=4, Nz=4, Lx=2.0 * np.pi, Ly=2.0 * np.pi, boundary="periodic"
+        )
+    )
+    theta = jnp.asarray(grid.z, dtype=jnp.float64)
+    params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0)
+
+    def observable(s_hat: jnp.ndarray) -> jnp.ndarray:
+        geom = _sampled_geometry_with_shear(theta, s_hat)
+        cache = build_linear_cache(grid, geom, params, Nl=2, Nm=1)
+        return jnp.sum(cache.laguerre_j0) + jnp.sum(cache.laguerre_j1_over_alpha)
+
+    shear = jnp.asarray(0.8, dtype=jnp.float64)
+    tangent = jax.jvp(observable, (shear,), (jnp.ones_like(shear),))[1]
+
+    assert np.isfinite(float(tangent))
+
+
 def test_build_linear_cache_periodic_non_twist_uses_geometry_shear() -> None:
     grid = build_spectral_grid(
         GridConfig(
@@ -679,7 +713,8 @@ def test_build_linear_cache_rejects_traced_shear_for_twist_shift_geometry() -> N
         return jnp.sum(cache.kperp2)
 
     with pytest.raises(
-        ValueError, match="traced magnetic shear is not supported with twist-shift"
+        ValueError,
+        match="differentiating with respect to magnetic shear is not supported",
     ):
         jax.grad(objective)(jnp.asarray(0.8, dtype=jnp.float32))
 
