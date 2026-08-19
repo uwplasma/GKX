@@ -628,3 +628,32 @@ def test_saturation_stop_decision_honors_min_window_override() -> None:
     assert decision["saturated"] is False
     assert "window_below_min_window" in decision["reasons"]
     assert decision["min_window"] == pytest.approx(1.0e6)
+
+
+def test_saturation_stop_decision_refuses_a_trace_that_never_left_zero() -> None:
+    """A flux that is identically zero has no saturated mean to find.
+
+    The relative SEM divides by a floor when the mean is zero, so without a
+    signal gate every other criterion passes on a dead trace and the run stops
+    in its first chunk. A zonal-response case, whose heat flux is zero by
+    construction, was truncated at t=7.7 of a requested 60 that way.
+    """
+
+    time = np.linspace(0.0, 60.0, 600)
+    decision = saturation_stop_decision(time, np.zeros_like(time))
+
+    assert decision["saturated"] is False
+    assert "flux_indistinguishable_from_zero" in decision["reasons"]
+
+
+def test_saturation_stop_decision_still_stops_a_small_but_real_flux() -> None:
+    """The signal gate must not reject a converged run for being faint."""
+
+    rng = np.random.default_rng(0)
+    time = np.linspace(0.0, 60.0, 600)
+    flux = 3.0e-9 + 1.0e-10 * rng.standard_normal(time.size)
+
+    decision = saturation_stop_decision(time, flux)
+
+    assert decision["saturated"] is True
+    assert "flux_indistinguishable_from_zero" not in decision["reasons"]

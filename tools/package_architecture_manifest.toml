@@ -441,7 +441,10 @@ recursive = true
 # damping rate whose window is derived rather than configured has to report the
 # window it actually used. See
 # test_period_rms_damping_is_independent_of_the_diagnostic_output_cadence.
-baseline = 94966
+# 94966 -> 94978: refusing to call a dead trace saturated. The relative SEM
+# divides by a floor when the mean is zero, so every other gate passed on a
+# flux that never left zero and truncated the run in its first chunk.
+baseline = 94978
 target = 45000
 
 [[line_budget_policy.counts]]
