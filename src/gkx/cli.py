@@ -233,6 +233,19 @@ def _add_scan_worker_flags(cmd: argparse.ArgumentParser) -> None:
         default="thread",
         help="Executor for independent ky workers.",
     )
+    cmd.add_argument(
+        "--warm-start",
+        dest="warm_start",
+        action="store_true",
+        default=None,
+        help="Seed each ky from its neighbour's converged state (default off).",
+    )
+    cmd.add_argument(
+        "--no-warm-start",
+        dest="warm_start",
+        action="store_false",
+        help="Start every ky from the cold initial condition (the default).",
+    )
 
 
 def _add_laguerre_mode_flag(cmd: argparse.ArgumentParser, *, help_text: str) -> None:

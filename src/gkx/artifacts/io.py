@@ -242,6 +242,9 @@ def _runtime_linear_scan_summary(
     parallel = getattr(result, "parallel", None)
     if isinstance(parallel, dict):
         summary["parallel"] = parallel
+    warm_start = getattr(result, "warm_start", None)
+    if isinstance(warm_start, dict):
+        summary["warm_start"] = warm_start
     return summary
 
 

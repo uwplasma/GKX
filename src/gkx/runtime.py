@@ -358,11 +358,15 @@ def run_runtime_scan(
     show_progress: bool = False,
     workers: int = 1,
     parallel_executor: str = "thread",
+    warm_start: bool | None = None,
 ) -> RuntimeLinearScanResult:
     """Run a ky scan using the unified runtime config path.
 
     The public facade keeps runtime monkeypatch seams intact while scan
     coordination lives in ``workflows/runtime/orchestration_scan.py``.
+    ``warm_start`` overrides ``[output] warm_start``: with it on, the scan is
+    walked in neighbour order and each point starts from the previous point's
+    converged state.
     """
 
     return _run_runtime_scan_orchestration_impl(
@@ -377,6 +381,7 @@ def run_runtime_scan(
         show_progress=show_progress,
         workers=workers,
         parallel_executor=parallel_executor,
+        warm_start=warm_start,
         deps=_runtime_scan_orchestration_deps(),
     )
 

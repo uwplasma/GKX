@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Sequence, cast
 import numpy as np
 
 from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.workflows.runtime.warm_start import resolve_scan_warm_start
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,
     RuntimeNonlinearResult,
@@ -73,6 +74,7 @@ class RuntimeScanCommandOptions:
     show_progress: bool
     workers: int
     parallel_executor: str
+    warm_start: bool | None
 
 
 @dataclass(frozen=True)
@@ -246,6 +248,7 @@ def _resolve_scan_command_options(
         show_progress=should_show_progress(args, bool(cfg.time.progress_bar)),
         workers=int(getattr(args, "workers", 1)),
         parallel_executor=str(getattr(args, "parallel_executor", "thread")),
+        warm_start=resolve_scan_warm_start(args, scan_cfg),
     )
 
 
@@ -645,6 +648,7 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
         show_progress=opts.show_progress,
         workers=opts.workers,
         parallel_executor=opts.parallel_executor,
+        warm_start=opts.warm_start,
         **fit_cfg,
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
