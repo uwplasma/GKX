@@ -94,7 +94,21 @@ Open PRs: [#44](https://github.com/uwplasma/GKX/pull/44) tf32 audit ·
 
 ## Key findings a fresh agent must know (evidence in plan/notes/ and §Log)
 
-1. **Normalization convention (OPEN — resolve first for any cross-code work).**
+1. **Normalization convention — SOLVED for stella; OPEN for GX.**
+   **The conversion is one factor sqrt(2), in OPPOSITE senses on wavenumber and rates:**
+   `ky_stella = sqrt(2)*ky_gkx` and `(gamma,omega)_stella[v_th/a] = (gamma,omega)_gkx[c_s/a]/sqrt(2)`
+   (GKX: `c_s=sqrt(T/m)`, `rho_s=sqrt(Tm)/|q|`; stella/GX: `v_th=sqrt(2T/m)`).
+   Verified three ways (`plan/notes/stella_vs_gkx_rung1.md`): ratio constant to ~1% of
+   sqrt(2) while gamma varies x2.68 and omega x4.64; five alternative mappings falsified
+   (next-best 28.6% error vs 1.2%); and confirmed fit-free via the certified eigenpair
+   (R_gamma=1.42850, R_omega=1.42897, mutually consistent to 0.03%).
+   **omega is the discriminating channel** for any convention audit — dropping the ky
+   remap costs only ~30% in gamma (it is flat near peak) but 53.7% in omega.
+   STILL OPEN for GX: the rung-1 lane (Miller, collisionless) is not like-for-like with
+   the tracked `cyclone_mismatch_table.csv` lane (s-alpha, hypercollisional), so it
+   cannot say whether the GX parity tooling folds in the sqrt(2). Needs a like-for-like
+   s-alpha collisional GKX-vs-GX run (the office gx-rebaseline agent is on it).
+   ORIGINAL NOTE:
    GKX source uses `vth=sqrt(T/m)`, `rho=sqrt(T*m)/|q|` (`src/gkx/operators/linear/
    params.py:264-265`) — the GENE-like c_s family — while GX and stella use
    `vth=sqrt(2T/m)` (GS2 family). Empirically `ky_stella = sqrt(2)·ky_gkx`; after the
@@ -105,7 +119,14 @@ Open PRs: [#44](https://github.com/uwplasma/GKX/pull/44) tf32 audit ·
    contract="cyclone"`) already fold in the factor, and write ONE definitive
    conventions doc (docs/normalization.rst) with a conversion table. All existing
    "GX ref γ=0.1018 at ky=0.3" comparisons in this file inherit this caveat.
-2. **Time-solver fit bias (OPEN defect).** The IVP fit γ reads ~30% below the
+2. **Time-solver fit bias — RE-SCOPED to the collisional s-alpha lane only.**
+   On the collisionless Miller CBC lane the time fit matches the certified eigensolve to
+   **+0.30% in gamma** (0.13902 vs 0.138607 c_s/a) and errs the OPPOSITE way from the
+   collisional lane, so the fit machinery is NOT generally broken. Hunt the pathology in
+   the collisional s-alpha cyclone lane specifically (candidates: end-damping /
+   kz-hypercollisions acting on the fitted signal, collisional transient in the window,
+   z_index mode selection under s-alpha, phi-vs-density signal choice).
+   ORIGINAL NOTE: The IVP fit γ reads ~30% below the
    certified/dense eigenvalue on the collisional s-α cyclone lane at two resolutions
    (fit 0.070 @ t_max=80 vs dense 0.1027, reduced res), yet the stella agent's
    collisionless-Miller fits agreed with stella to 0.1–3% and converged upward with
@@ -327,3 +348,33 @@ plot-library PR, whose diff is append-only.)
   `~/gx_rebaseline_20260818/` so later runs can diff.
 Note for future GX work: the `[Wspectra]` input group was removed upstream, so old
 GX decks carrying it may need editing before they run.
+
+### 2026-08-18 agent/stella-r1 — 2.4-r1 CBC RUNG PASSES + conversion solved
+GKX vs stella, collisionless Miller CBC, six ky points: **|Δγ| ≤ 2.8%, |Δω| ≤ 1.9%**
+(≤0.5%/1.7% at every point with an adequate fit horizon). Rung 1 passes. The exact
+sqrt(2) conversion is now established and triple-verified — see finding #1 above.
+Certified-vs-fit on this lane: fit is +0.30% in γ vs the certified eigenvalue, which
+**re-scopes finding #2** to the collisional s-α lane only (relayed to the fitrobust agent).
+Certification note: the runtime builds complex64 states, so the certification tolerance
+floors at 1.19e-4 (1000·eps) — a real ceiling on how tightly this path can certify.
+
+**NEW DEFECT (0.3-adjacent): fixed-`t_max` scans under-report low-ky growth, one-sided
+downward.** The controlling parameter is the e-folding count N = γ·t_max: N≈2–3 → 9–14%
+low; N≈5–6 → 1.3–5.7%; N≈6–10 → ≤0.5%. **Size t_max by γ·t_max ≳ 7, not by wall clock.**
+This should become the under-resolved warning threshold (supersedes the γ·t<5 guess) and
+likely explains part of the measured horizon scatter.
+
+**Rung 2 (Rosenbluth–Hinton) is scoped and ready** — `plan/notes/stella_vs_gkx_rung1.md`
+§rung2. Both endpoints exist (stella `tests/regression/linear/RH/RH.in`, which already
+uses the exact rung-1 CBC Miller geometry, and GKX `benchmarks/runtime_miller_zonal_response.toml`).
+Three blockers: (i) the GKX zonal benchmark is Merlo Case III geometry, not stella's RH
+CBC — needs the rung-1 Miller block substituted; (ii) **live trap in the repo**: kx carries
+the same sqrt(2), so the tracked toml's `kx=0.05` is a *different physical kx* than stella's
+`akx_min=0.05` (GKX equivalent is 0.0353553); (iii) stella needs `write_phi_vs_time=.true.`.
+Why rung 2 is valuable: the RH residual is a pure ratio and therefore **convention-independent**
+— immune to the sqrt(2) question entirely — with an analytic anchor ≈0.119 for the matched
+geometry (ε=0.18, q=1.4). GAM frequency/damping are rates and convert as /sqrt(2).
+
+Artifacts: `plan/notes/stella_vs_gkx_rung1.md`; regeneration scripts (`make_comparison.py`
+rebuilds the table from logs without re-running, `verify_units.py`) in the session
+scratchpad `stella_vs_gkx/`.
