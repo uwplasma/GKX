@@ -1037,3 +1037,35 @@ Dispatched in parallel:
   performance work. Office A4000s available for the real benchmark.
 
 Item 0.8 (the two example decks) is owned by a separate background session — not duplicated here.
+
+### 2026-08-19 agent/merlo — 2.8 INTERIM: kx trap RETRACTED; the gate window is the real problem
+**CORRECTION to the 2026-08-18 rung-2 entry: the "kx trap" does NOT apply to the Merlo case.**
+The agent pulled the accepted manuscript (UKAEA preprint CCFE-PR(15)88) and Merlo et al.
+define their thermal velocity as `sqrt(T_j/m_j)` with `rho_i = v_i/Omega_i` — the SAME one-T
+convention GKX uses (`rho = sqrt(T*m)/|q|`, FLR argument `b = rho^2 k_perp^2`). So
+`kx = 0.05` in `benchmarks/runtime_miller_zonal_response.toml` is the CORRECT physical
+wavenumber and there is no sqrt(2) error in this case. The rung-2 study's kx observation was
+about matching STELLA's convention for a stella comparison, which is a different question.
+I propagated it as a live repo defect; that was wrong and is withdrawn. (The sqrt(2) DOES
+still apply to any stella-matched run, e.g. rung 3.)
+
+**The artifact reproduces**: residual 0.19329 vs 0.19245 tracked (+0.43%, explained by a
+2-sample time-axis difference), omega 2.2042 vs 2.2033, gamma -0.1745 vs -0.1755. So the audit
+is measuring the right thing.
+
+**But the gate window is recurrence-contaminated at the tracked resolution.**
+`residual_std/residual` = **1.19 at Nm=24**, 0.61 at Nm=48, 0.15 at Nm=96 — i.e. at the shipped
+resolution the scatter EXCEEDS the value being gated. The quietest point of the trace moves as
+**5.5*sqrt(Nm)** (26.0 / 38.5 / 55.5), so the shipped window [42,60] needs **Nm >~ 120** to sit
+before recurrence. The tracked row is not measuring a converged residual; it is measuring a
+window that partly sits in the recurrence tail.
+Compounding: **Nm=144 at the tracked dt=0.005 goes non-finite at t=46.5** — the shipped timestep
+is not stable past Nm~96, so the high-Nm ladder needs dt=0.0025. Residual and omega are
+dt-insensitive (<0.1%); gamma is not.
+
+**gamma_GAM is not stable at its own tolerance**: halving the diagnostic output cadence at
+IDENTICAL physics moves it from -0.1745 to **-0.2645 (+52%)**, because a single near-zero
+extremum at t~25 enters the 4-point log-linear fit. A gated quantity that moves 52% with an
+output-cadence choice is not a measurement. → **new item 2.9: re-derive gamma_GAM with a fit
+that cannot be swung by one sample** (more points, amplitude-weighted, or an envelope fit).
+Final Nm=96-at-dt/2 and Nl=8 control runs still in flight; verdict pending.
