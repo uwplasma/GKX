@@ -940,3 +940,38 @@ Line budget 90936 → 91752.
 
 **Merge order addendum**: #58 is stacked on #53 and #50 — merge those first, then #58 shows
 only its own commit. #54 (saturation windows) after #58 makes the window shading live.
+
+### 2026-08-18 agent/twistad — 3.1 DONE: the twist-shift AD block was a FALSE POSITIVE
+**Nothing was ever traced.** Under JAX 0.9.2 `jnp` stops constant-folding inside a trace, so
+`jnp.asarray(0.8)` on a HOST float returns a `DynamicJaxprTracer`. The old code lifted shear
+into the trace and then asked whether the result was traced — so the answer was always yes and
+`boundary="linked"` was refused for EVERY cache built under `jit`, even with fully concrete
+S-alpha geometry. Three more host reads had the same shape and would have failed next
+(`gds21[0]`/`gds22[0]`, `float(dz)`, and the chain index maps).
+Fix: read the STORED attribute via numpy instead of a jnp round trip, with `dtype=` reproducing
+the cast the round trip applied (that detail matters — reading the raw float instead of its
+float32 copy shifted the twist-shift kx rescale at ~1e-7).
+
+Static vs genuinely traced, now separated properly: `jtwist = round(2·s_hat·gds21/gds22)`,
+the chain/gather/inverse-permutation maps and the end-damping profile are integer topology →
+host/`np.ndarray`; while `shat_inv` in the NTFT kperp/drift arrays and the **kx rescale**
+`scale = x0_eff/x0_target` stay traced — and that rescale is NOT 1 (Cyclone: geo_fac=5.0265,
+jtwist=5, x0_target=0.94989 vs x0_eff=0.95493 → 1.00531), so freezing it would have been wrong.
+The refusal now names the actual unsupported case — differentiating **with respect to shear** —
+and fires only for genuinely traced geometry.
+
+**Gradients through the standard sheared flux tube now work** (x64, matched harness):
+linear linked AD vs central FD **1.13e-10** (periodic 3.49e-12); nonlinear heat-flux window
+linked **7.74e-12**. Cost ratios ~4x on BOTH boundaries in this harness — linked costs only ~5%
+more than periodic relative to its own forward, so the earlier 2.1x/2.70x figures are a harness
+difference, not a boundary penalty.
+Forward path proven unchanged two ways: byte-identical CLI stdout on the cyclone example, and a
+full 622-leaf `LinearCache` dump across linked / fix-aspect / periodic at two resolutions with
+**zero mismatches**. Net +37 source lines (two dead helpers removed); both checkers exit 0.
+
+**NEW ITEM 3.4 (separate, pre-existing, boundary-independent):** `compressed_real_fft=True`
+cannot be used under `jit` AT ALL — `_make_hermitian_projector(np.asarray(cache.ky), ...)` at
+`src/gkx/solvers/nonlinear/state_integration.py:176` reads host data off a cache array that is
+a tracer. Verified to fail identically for periodic and linked. **Same defect class as the one
+just fixed**, so the fix is likely the same shape (read the stored attribute, not a jnp round
+trip). Until then every gradient test must pass `compressed_real_fft=False`, as they do.
