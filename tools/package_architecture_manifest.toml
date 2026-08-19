@@ -223,6 +223,11 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
+# 89815 -> 90055: running an equilibrium file without writing a deck first (#51). The
+# wout module is the whole cost: sniffing a VMEC signature, resolving the
+# packaged default deck, forcing the geometry model when a supplied deck is not
+# VMEC-shaped, and writing the resolved deck back out so the run reproduces
+# itself.
 # 89815 -> 90216: letting a nonlinear run decide when it has converged (#54). The chunked
 # stop loop, the stationarity and autocorrelation decision, and the reporting of
 # the window that was actually measured. The alternative is what the code did
@@ -312,7 +317,7 @@ recursive = true
 # floor. Both land in the fit path; the count is the sum, not new surface.
 # 89919 -> 90011: certifying the default linear branch alongside the residual
 # floor it now uses (#52 over #47). The adaptive branch and its precision pin.
-baseline = 92583
+baseline = 92823
 target = 45000
 
 [[line_budget_policy.counts]]
