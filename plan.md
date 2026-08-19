@@ -653,3 +653,28 @@ lands), and its CI/manifest wiring.
 Nit filed on #44: its prose calls the lift "a matvec at the default `candidates=1`", but the
 jaxpr keeps the size-1 free axis, so it lowers matrix-shaped `(1,k)·(k,n)` even there — the
 pin is right, the sentence understates it.
+
+### 2026-08-18 RJ — CI caught two real defects in the new PRs
+Opening the PRs against real CI surfaced two things local testing could not:
+
+1. **Line budget** (`repo-hygiene`): `tools/package_architecture_manifest.toml` enforces a
+   no-regression baseline on `installable_source_python_lines`, and every PR adding source
+   must bump it **with a written reason** in the house style (a `# old -> new: why these
+   lines exist` comment). Bumped on all five: #50 89815→89894, #52 →89913, #54 →90216,
+   #51 →90055, #53 →90926. This is the mechanism that makes the Phase 5 slimming goal real
+   — treat it as a design constraint, not a chore, and note that #53's +1111 is largely a
+   MOVE (the movie tool shrinks by the same renderers).
+2. **`jax>=0.10.1` publishes no Python 3.10 wheels**, so the `python-floor` job — which
+   installs at the declared `requires-python` floor precisely to catch this class of lie —
+   could not install the package. Resolved by moving the floor to **3.11** in
+   `pyproject.toml` (dropping the 3.10 classifier) and in `.github/workflows/ci.yml`.
+   This is the same defect class PR #41 fixed for the previous floor: a declared floor the
+   dependency set cannot satisfy. **Consequence for the plan: GKX's minimum Python is now
+   3.11**, forced by the differentiable-eigensolver jax requirement.
+   (Also fixed a mypy narrowing introduced by the linear_scan plot branch: reusing
+   `gamma`/`omega` across two branches of `plot_saved_output` made mypy adopt the
+   non-optional type bound first. Renamed the scan locals.)
+
+Standing instruction for future contributors: **open the PR early and read CI**, because
+the line budget, the mypy gate, the python-floor job and the artifact/manifest checkers all
+enforce contracts that a green local `pytest` will not.
