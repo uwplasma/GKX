@@ -1009,3 +1009,31 @@ cost three agents hours). 3.4 `compressed_real_fft=True` unusable under jit (sam
 as #59). 0.8 two example decks ship settings that produce a wrong number by default.
 2.4-r0 HSX parity row is not third-party reproducible (no deck anywhere).
 Phase 4.2 (species×Hermite shard_map) is designed and unstarted — the largest remaining item.
+
+### 2026-08-19 RJ — 2.7 shipped (PR #60); 2.8, 3.4 and 4.2 dispatched
+The 10-hour Cyclone t=150 process was stopped by the user; **nothing was lost** — PR #45's
+verdict (1.9e-9 reproduction, merge as-is) landed hours before it, so that process was
+redundant. Note for future runs: that protocol is ~46 min of pure integration on an idle
+laptop and stretches past 10x under contention; run it on the office GPU (537 s there).
+
+**PR [#60](https://github.com/uwplasma/GKX/pull/60)** closes item 2.7 — `docs/normalization.rst`
+now states `v_th = sqrt(T/m)` (not `sqrt(2T/m)`), notes GX shares it so GKX<->GX needs no
+conversion, gives the full GS2-family conversion set (ky, gamma, omega, time, and the factor
+two on drifts), marks tprim/fprim/beta convention-free, and records that **frequency is the
+diagnostic channel** (omitting the ky remap costs ~30% in gamma near its flat peak but 54% in
+omega). Docs only; 108 release-gate tests pass.
+
+Dispatched in parallel:
+- **2.8 Merlo zonal gate audit** — falsification exercise on the project's own evidence:
+  reproduce the tracked 0.19245 at Nm=24, re-run at 48/96, extrapolate in 1/sqrt(Nm), and
+  judge PASS/FAIL against the gate's own atol=0.015. Also checks the two GAM quantities for
+  the same sensitivity, and whether the Merlo reference is quoted in GS2 units (which would
+  make the toml's kx wrong by sqrt(2) — a SECOND compounding error).
+- **3.4 compressed_real_fft under jit** — built ON TOP of PR #59 (same defect class, same
+  template). This matters more than it looks: `compressed_real_fft=true` is the DEFAULT in the
+  production nonlinear TOMLs, so the path most users actually run has never been differentiated.
+- **4.2 species x Hermite shard_map** — the largest remaining item, staged so that a
+  correct-but-slow sharded route is a landable result and identity is proven before any
+  performance work. Office A4000s available for the real benchmark.
+
+Item 0.8 (the two example decks) is owned by a separate background session — not duplicated here.
