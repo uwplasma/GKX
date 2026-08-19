@@ -199,6 +199,7 @@ jobs:
               tests/unit/solvers/test_nonlinear_explicit_scan.py
               tests/unit/operators/test_linear_streaming.py
               tests/unit/solvers/test_linear_krylov_core.py
+              tests/unit/solvers/test_dot_precision_guard.py
           - name: runtime-core
             files: >-
               tests/unit/solvers/test_diffrax_integrators_core.py
