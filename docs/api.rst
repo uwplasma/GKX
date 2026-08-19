@@ -800,6 +800,13 @@ Quasilinear Nonlinear-Window Gates
    :members:
    :private-members:
 
+Run-to-Saturation Stop Policy
+-----------------------------
+
+.. automodule:: gkx.diagnostics.saturation
+   :members:
+   :private-members:
+
 Quasilinear Model Selection
 ---------------------------
 

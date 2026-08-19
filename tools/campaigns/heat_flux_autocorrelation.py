@@ -52,7 +52,7 @@ import numpy as np
 
 # Promoted into the package so the run-to-saturation runtime stop check and
 # this post-hoc campaign tool share one estimator.
-from gkx.diagnostics.transport_windows import (
+from gkx.diagnostics.saturation import (
     sokal_autocorrelation_time as autocorrelation_time,
 )
 

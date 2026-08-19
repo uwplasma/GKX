@@ -11,16 +11,18 @@ import sys
 import numpy as np
 import pytest
 
+from gkx.diagnostics.saturation import (
+    SaturationStopConfig,
+    saturation_stop_decision,
+)
 from gkx.diagnostics.transport_windows import (
     NonlinearWindowConvergenceConfig,
     NonlinearWindowEnsembleConfig,
-    SaturationStopConfig,
     nonlinear_window_convergence_from_csv,
     nonlinear_window_convergence_from_summary,
     nonlinear_window_convergence_report,
     nonlinear_window_ensemble_report,
     nonlinear_window_stats_promotion_ready,
-    saturation_stop_decision,
 )
 
 

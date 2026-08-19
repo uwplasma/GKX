@@ -1257,6 +1257,9 @@ next_tests = [
 [[modules]]
 module = "gkx.diagnostics.transport_windows"
 path = "src/gkx/diagnostics/transport_windows.py"
+owned_modules = [
+  "gkx.diagnostics.saturation",
+]
 owner_lane = "nonlinear late-window convergence metadata for quasilinear holdouts"
 status = "active"
 coverage_priority = "high"
