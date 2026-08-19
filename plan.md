@@ -308,3 +308,22 @@ Merge order unchanged: #46 → #47 → #44 → #48 → #45, then #50 → #52 →
 (#52 conflicts with #47 only in the intentional duplicate `certifiable_residual_tolerance`
 block; #50 touches `plot_saved_output` in plotting.py so it must land before the
 plot-library PR, whose diff is append-only.)
+
+### 2026-08-18 RJ — OFFICE GPU UNBLOCKED
+`ssh office` confirmed available for GPU + GX work. Two agents dispatched:
+- **office-gkx-setup**: stand GKX up on the A4000s (clone/pull, jax[cuda] venv at
+  `~/.venvs/gkx-gpu`, GPU visibility), then a CPU-vs-GPU parity table against the
+  laptop reference values (demo γ=0.089982/ω=0.289838; cyclone time-solver scan
+  γ=[0.0168,0.0362,0.0632,0.0575,0.0244]; nonlinear-short Wg=4.06441e-4,
+  Wphi=8.41601e-6, heat_flux(t=5)=3.4246564609; krylov-fixed ky=0.3 γ=0.088930),
+  plus warm-step and cold-compile timings. Fetches PR branches #50/#51/#52 for
+  GPU testing. This CPU/GPU agreement check is a standing plan gate.
+- **gx-rebaseline (2.1b)**: run the rebuilt GX @3865a537 on the tracked Cyclone
+  linear probe (tracked value from GX @bc2fe552: γ=0.101814, ω=0.286777) to measure
+  whether the 56-commit upstream drift invalidates the frozen parity tables, extend
+  to the other tracked linear cases where decks exist, and **settle finding #1
+  (normalization)** by reading BOTH codes' definitions and reporting the exact
+  ky/γ/ω conversions with file:line evidence. Outputs archived on office under
+  `~/gx_rebaseline_20260818/` so later runs can diff.
+Note for future GX work: the `[Wspectra]` input group was removed upstream, so old
+GX decks carrying it may need editing before they run.
