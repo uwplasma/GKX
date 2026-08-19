@@ -364,27 +364,36 @@ def _x64_enabled() -> bool:
     return bool(getattr(jax.config, "jax_enable_x64", False))
 
 
+def _host_values_or_none(x) -> np.ndarray | None:
+    """Return ``x`` as host values, or ``None`` when it is genuinely traced.
+
+    Read the argument itself, never a ``jnp`` copy of it. Inside a trace every
+    ``jnp`` call stages out, so ``jnp.asarray(-1.0)`` is a tracer even for a
+    Python constant; a guard that asks after that round trip sees a tracer for
+    every input and stops validating anything at all under ``jit``. ``numpy``
+    answers from the buffer, so a concrete argument is still checked inside a
+    trace and only a value that really is traced goes unchecked -- which it
+    must, since its sign is not known until the trace is run.
+    """
+
+    if _is_tracer(x):
+        return None
+    return np.asarray(x)
+
+
 def _check_positive(x, name: str) -> None:
-    arr = jnp.asarray(x)
-    if _is_tracer(x) or _is_tracer(arr):
+    arr = _host_values_or_none(x)
+    if arr is None:
         return
-    if arr.ndim == 0:
-        if float(arr) <= 0.0:
-            raise ValueError(f"{name} must be > 0")
-        return
-    if np.any(np.asarray(arr) <= 0.0):
+    if np.any(arr <= 0.0):
         raise ValueError(f"{name} must be > 0")
 
 
 def _check_nonnegative(x, name: str) -> None:
-    arr = jnp.asarray(x)
-    if _is_tracer(x) or _is_tracer(arr):
+    arr = _host_values_or_none(x)
+    if arr is None:
         return
-    if arr.ndim == 0:
-        if float(arr) < 0.0:
-            raise ValueError(f"{name} must be >= 0")
-        return
-    if np.any(np.asarray(arr) < 0.0):
+    if np.any(arr < 0.0):
         raise ValueError(f"{name} must be >= 0")
 
 

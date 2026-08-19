@@ -3281,3 +3281,100 @@ def test_repo_hygiene_gates_run_without_an_install(relative: str) -> None:
 
     proc = _uninstalled_run([relative, "--help"])
     assert proc.returncode == 0, proc.stderr
+
+
+# ---- traced-constant hygiene gate ----
+
+
+def _cached_factories_building_device_arrays(root: Path) -> list[str]:
+    """Report ``lru_cache``d functions that build a ``jnp`` array in their body.
+
+    A cached factory hands one object to every caller. An array built with
+    ``jnp`` while filling that cache belongs to whichever trace happened to be
+    active first, so the next trace that reuses the key gets a constant from a
+    scope that has closed -- an ``UnexpectedTracerError`` with no line of its
+    own to blame. This is the shape that hid under the compressed real-FFT
+    projector until #61 made its index array host data.
+
+    Arrays built inside a closure the factory *returns* are fine: those are
+    constructed once per call of the closure, in the caller's own trace. The
+    walk therefore stops at nested ``def``/``lambda`` bodies, which is what
+    keeps the gate quiet enough to be worth having.
+    """
+
+    import ast
+
+    def is_cache_decorator(node: ast.AST) -> bool:
+        target = node.func if isinstance(node, ast.Call) else node
+        if isinstance(target, ast.Attribute):
+            return target.attr in {"lru_cache", "cache"}
+        return isinstance(target, ast.Name) and target.id in {"lru_cache", "cache"}
+
+    def own_body(fn: ast.AST):
+        stack = list(fn.body)
+        while stack:
+            node = stack.pop()
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue
+            yield node
+            stack.extend(ast.iter_child_nodes(node))
+
+    findings: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not any(is_cache_decorator(d) for d in fn.decorator_list):
+                continue
+            for node in own_body(fn):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "jnp"
+                ):
+                    findings.append(
+                        f"{path.name}:{node.lineno} {fn.name} materializes "
+                        f"jnp.{node.attr} while filling its cache"
+                    )
+    return findings
+
+
+def test_no_cached_factory_materializes_a_device_array() -> None:
+    """No cached factory leaks one trace's device constant into the next."""
+
+    findings = _cached_factories_building_device_arrays(REPO_ROOT / "src" / "gkx")
+    assert not findings, "\n".join(findings)
+
+
+def test_cached_factory_gate_sees_the_shape_it_is_written_for(tmp_path) -> None:
+    """The gate flags the escaping constant and spares the returned closure.
+
+    A gate nobody can make fail is not a gate; a gate that fires on every
+    cached factory mentioning ``jnp`` anywhere would be switched off within a
+    week. Run the real scanner over both forms side by side so neither half of
+    that claim can rot.
+    """
+
+    (tmp_path / "probe.py").write_text(
+        "from functools import lru_cache\n"
+        "import jax.numpy as jnp\n"
+        "\n"
+        "@lru_cache(maxsize=4)\n"
+        "def escaping(n):\n"
+        "    index = jnp.arange(n)\n"
+        "    return lambda state: state[..., index]\n"
+        "\n"
+        "@lru_cache(maxsize=4)\n"
+        "def contained(n):\n"
+        "    def project(state):\n"
+        "        return state + jnp.arange(n)\n"
+        "    return project\n"
+        "\n"
+        "def uncached(n):\n"
+        "    return jnp.arange(n)\n",
+        encoding="utf-8",
+    )
+    findings = _cached_factories_building_device_arrays(tmp_path)
+    assert len(findings) == 1, findings
+    assert "escaping materializes jnp.arange" in findings[0]

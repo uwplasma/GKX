@@ -444,7 +444,11 @@ recursive = true
 # 94966 -> 94978: refusing to call a dead trace saturated. The relative SEM
 # divides by a floor when the mean is zero, so every other gate passed on a
 # flux that never left zero and truncated the run in its first chunk.
-baseline = 94978
+# 94978 -> 95031: reading host values with numpy instead of round-tripping
+# through jnp. Inside a trace the round trip returns a tracer, so guards
+# written that way answered yes unconditionally and the fast paths they
+# selected went dead exactly where they pay.
+baseline = 95031
 target = 45000
 
 [[line_budget_policy.counts]]

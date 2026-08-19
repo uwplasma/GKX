@@ -14,10 +14,7 @@ from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
-from gkx.operators.nonlinear.projection import (
-    _make_compressed_real_fft_projector,
-    _make_hermitian_projector,
-)
+from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
 
 
@@ -887,7 +884,9 @@ def integrate_nonlinear_species_hermite(
         flux_fac=flux_fac if record else None,
     )
     projector = (
-        _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
+        _make_compressed_real_fft_projector(
+            ny_full=int(cache.ky.size), nx=int(cache.kx.size)
+        )
         if compressed_real_fft
         else None
     )

@@ -74,10 +74,23 @@ class MultispeciesCollisionRates(NamedTuple):
 
 
 def _is_static_zero(value: Any, dtype: jnp.dtype | None = None) -> bool:
-    arr = jnp.asarray(value, dtype=dtype)
-    if isinstance(arr, jax.core.Tracer):
+    """Report whether ``value`` is a switch the host can already see is off.
+
+    Ask the stored value, never a ``jnp`` copy of it. Inside a trace every
+    ``jnp`` call stages out, so ``jnp.asarray(0.0)`` is a tracer even though
+    the operand is a Python zero, and a check made after that round trip
+    answers "not statically zero" for every term of every jitted run. That
+    turned off every fast path this predicate exists to select -- the
+    electrostatic RHS for an electrostatic ``TermConfig`` above all -- exactly
+    where it pays. ``numpy`` answers from the buffer, so only a genuinely
+    traced switch is unknowable. ``dtype`` reproduces the cast the round trip
+    applied, keeping an amplitude that underflows to zero in the operator's
+    own precision a static zero here too.
+    """
+
+    if isinstance(value, jax.core.Tracer):
         return False
-    return bool(np.all(np.asarray(arr) == 0.0))
+    return bool(np.all(np.asarray(value, dtype=dtype) == 0.0))
 
 
 def _zeros_like_result(x: jnp.ndarray, *values: jnp.ndarray) -> jnp.ndarray:
