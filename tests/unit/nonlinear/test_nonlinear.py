@@ -26,8 +26,6 @@ from gkx.solvers.nonlinear.state_integration import (
 )
 from gkx.terms.config import TermConfig
 
-pytestmark = pytest.mark.integration
-
 
 def test_integrate_nonlinear_checkpoint_runs():
     """Checkpointed nonlinear integration should run on a tiny grid."""

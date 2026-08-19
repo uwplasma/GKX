@@ -1095,17 +1095,167 @@ Running tests
 
    pytest
 
+What a bare ``pytest`` selects
+------------------------------
+
+``pytest.ini`` deselects one marker, ``slow``, and nothing else. A bare
+``pytest`` therefore collects 2498 of the 2502 tests in the tree; the four it
+skips are the three finite-beta VMEC/Boozer parity cases and one
+adaptive-eigensolver literature case, all of which are also gated on external
+checkouts. The wide package-coverage shards apply the same ``-m "not slow"``
+filter, so the routine local selection and the CI coverage lane now agree.
+
+The default used to be ``-m "not integration"``, and three files carried a
+file-level ``pytestmark = pytest.mark.integration``:
+``tests/unit/linear/test_linear.py``,
+``tests/unit/nonlinear/test_nonlinear.py``, and
+``tests/integration/runtime/test_runtime_runner.py``. A bare ``pytest``
+collected **zero** tests from all three. That silently removed the published
+Sugama/Coulomb collision matrices, the slab-ITG gyro-moment hierarchy check,
+the collision free-energy identities, and every finite-difference gradient
+contract from the local loop -- and, because the quick-test shards inherit
+``addopts``, from the CI shards that name those files as well. The physics
+only ever ran in the wide coverage matrix, which clears ``addopts``
+altogether. Re-including those 204 tests costs about seven minutes locally.
+
+Use the markers for what they now mean:
+
+- ``slow``: a test whose cost is not worth paying in a routine loop. It is
+  excluded by default *and* by the wide coverage shards, so marking a test
+  ``slow`` removes it from the package-coverage denominator. Do not reach for
+  it to quiet a test that merely takes a minute.
+- ``integration``: a label for broader end-to-end or workflow tests. It no
+  longer deselects anything. Prefer expressing the category with the
+  directory (``tests/integration/``) and keep the marker for cases that also
+  need to be selectable by name.
+- ``gpu``: exercises a device-specific execution path.
+
+If you need the old fast loop, ask for it explicitly rather than changing the
+default, for example ``pytest tests/unit -x -m "not slow"`` or the bounded
+per-file runner described under `CI split: fast PR vs manual full`_.
+
+Contracts a local ``pytest`` cannot catch
+-----------------------------------------
+
+Five CI gates enforce contracts that no test in ``tests/`` will fail on for
+you, because they are checked by manifest scripts, by the docs build, or on a
+different interpreter. Each one is cheap to run locally; run them before
+pushing rather than discovering them from a red PR.
+
+**1. The repo-wide line budget.** The total physical line count of
+``src/gkx/**/*.py`` must not exceed the ``installable_source_python_lines``
+baseline in ``tools/package_architecture_manifest.toml``. The baseline is
+currently 95456 lines and the tree measures exactly 95456: there is **no
+headroom**, so any net addition to the installable package fails
+``repo-hygiene`` until the baseline is raised.
+
+.. code-block:: bash
+
+   python tools/release/check_package_architecture_manifest.py
+   # current count, the same way the checker counts it:
+   find src/gkx -name '*.py' -exec cat {} + | wc -l
+
+Failure reads ``installable_source_python_lines: line count regressed to N,
+above baseline 95456``. The fix is either to delete as much as you added or to
+raise the baseline in the manifest with an inline ``# old -> new: reason``
+comment saying what the lines buy. That comment is the point of the gate;
+several existing entries record exactly which physics a line increase paid
+for.
+
+**2. The per-module 1000-line cap.** ``[complexity_policy]`` in the same
+manifest caps each hand-written module at ``default_max_lines = 1000``, and
+each listed public facade (``api/__init__.py``, ``benchmarks.py``,
+``linear.py``, ``nonlinear.py``, ``quasilinear.py``, ``runtime.py``) at 500.
+Going over requires a reviewed ``[[complexity_policy.exceptions]]`` entry with
+``baseline_lines``, ``target_lines``, and a ``reason``. Three modules sit above
+the cap on recorded exceptions, and several sit within a handful of lines of
+it -- ``operators/linear/collisions.py`` at 999 and
+``solvers/linear/krylov_algorithms.py`` at 997 -- so a two-line addition there
+is a CI failure, not a rounding error.
+
+.. code-block:: bash
+
+   python tools/release/check_package_architecture_manifest.py
+   find src/gkx -name '*.py' -exec wc -l {} + | sort -rn | head -20
+
+Failure reads ``<path>: complexity regressed to N lines, above baseline M``.
+
+**3. The coverage-owner manifest.** Every module under ``src/gkx`` must be
+reachable from ``tools/validation_coverage_manifest.toml``: as a direct
+``[[modules]]`` row, inside some row's ``owned_modules``, or in
+``coverage_inventory.excluded_modules``. Extracting a helper into a new file
+therefore fails CI until you declare who owns its coverage. Modules of 2000
+source lines or more additionally need their own direct row. ``fast_tests`` and
+``artifact_paths`` must name files, never directories, and no list may repeat
+an entry.
+
+.. code-block:: bash
+
+   python tools/release/check_validation_coverage_manifest.py
+   pytest tests/release/test_release_gates.py -k "manifest"
+
+**4. The** ``docs/api.rst`` **automodule requirement.** Every
+``.. automodule:: gkx...`` directive in ``docs/api.rst`` must resolve to a real
+module *and* be tracked by the coverage manifest, and a documented package
+``__init__`` may not be excluded from coverage unless it is in the reviewed
+exception set. Renaming or moving a public module without editing
+``docs/api.rst`` fails the release-gate test; adding a directive for an
+untracked module fails it too. Separately, the docs job builds with ``-W``, so
+any Sphinx warning from a stale directive is an error.
+
+.. code-block:: bash
+
+   pytest tests/release/test_release_gates.py \
+     -k "documented_public_api or large_modules_have_direct_manifest_rows"
+   python -m sphinx -W -b html docs docs/_build/html
+
+**5. The** ``python-floor`` **job.** Every other job pins 3.11 explicitly;
+this one installs at the declared ``requires-python`` floor and collects the
+whole suite, because collection is where an import that does not exist on the
+floor actually fails. It is also where the "no per-module ``tomllib``/``tomli``
+try/except" rule is enforced: TOML reads go through ``gkx.utils.tomlcompat``,
+the repository's only shim.
+
+.. code-block:: bash
+
+   python -c "import gkx; import gkx.cli"
+   gkx --help > /dev/null
+   pytest -q --collect-only --disable-warnings > /dev/null
+   pytest -q --disable-warnings tests/release/test_release_gates.py \
+     -k "tomllib or toml_shim or repo_hygiene_gates"
+
+The whole checklist, in the order CI runs it:
+
+.. code-block:: bash
+
+   python tools/release/check_repository_size_manifest.py
+   python tools/release/check_package_architecture_manifest.py
+   python tools/release/check_validation_coverage_manifest.py
+   mypy
+   pytest -q --collect-only --disable-warnings > /dev/null
+   pytest tests/release/test_release_gates.py
+   python -m sphinx -W -b html docs docs/_build/html
+
 Benchmark reproducibility stack
 -------------------------------
 
 The public CI and the tracked benchmark atlas are currently validated against a
-tested numerical stack:
+tested numerical stack. Every job prints it, so the authoritative record is the
+"Print benchmark stack" step of a recent green run rather than this page; at
+the time of writing it resolved to:
 
-- ``jax>=0.8,<0.9``
-- ``jaxlib>=0.8,<0.9``
-- ``numpy>=2.3,<2.4``
-- ``diffrax>=0.7,<0.8``
-- ``equinox>=0.13,<0.14``
+- ``jax`` 0.10.2 (``pyproject`` floor ``jax>=0.10.1``)
+- ``jaxlib`` 0.10.2 (``pyproject`` floor ``jaxlib>=0.10.1``)
+- ``numpy`` 2.4.6
+- ``diffrax`` 0.7.2
+- ``equinox`` 0.13.8
+
+The jax floor is a hard one, not a preference: ``gkx.objectives.core`` calls
+``lax_linalg.eig(..., enable_eigvec_derivs=True)``, which first shipped in jax
+0.10.1. On an older jax the solver-objective and adaptive-eigenmode tests fail
+with ``TypeError: eig() got an unexpected keyword argument``, which is an
+environment symptom rather than a physics regression. Check ``python -c
+"import jax; print(jax.__version__)"`` before investigating such a failure.
 
 This is not a claim that newer releases are unsupported. It is a statement
 about benchmark reproducibility. Near-marginal or branch-sensitive lanes such
@@ -1280,11 +1430,11 @@ CI split: fast PR vs manual full
 CI is split into two tiers to keep pull requests fast while preserving full
 physics rigor:
 
-- **Fast PR/push tier**: the quick-test matrix runs mypy and targeted test
-  subsets across fundamentals, release artifacts, linear core, runtime,
-  nonlinear, and parallel/autodiff contracts. This catches solver and dtype
-  regressions quickly.
-- **Wide coverage tier**: CI runs the 48 top-level coverage shards as a matrix,
+- **Fast PR/push tier**: the quick-test matrix runs targeted test subsets
+  across fundamentals, release artifacts, linear core, runtime, nonlinear, and
+  parallel/autodiff contracts. This catches solver and dtype regressions
+  quickly.
+- **Wide coverage tier**: CI runs the 24 top-level coverage shards as a matrix,
   uploads the per-shard ``coverage.py`` data, then combines the artifacts in one
   final ``wide-coverage`` check that enforces the package-wide ``>=95%`` target.
   The same helper, ``tools/release/run_test_gates.py wide-coverage``, is used locally and in
@@ -1307,6 +1457,28 @@ physics rigor:
 
 This keeps iteration latency low for development and still enforces complete
 coverage and regression checks on demand without relying on scheduled runners.
+
+Gates are independent, and a skip is not a pass
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Every job in ``.github/workflows/ci.yml`` checks out and installs for itself,
+so the only ``needs:`` edge left in the workflow is the real one:
+``wide-coverage`` consumes the coverage artifacts that ``wide-coverage-shards``
+uploads. Nothing else is ordered.
+
+That is a deliberate correction rather than a preference. ``quick-tests`` used
+to declare ``needs: mypy``, so a red type check did not fail the tests -- it
+*skipped* them, along with the coverage, docs, and packaging jobs behind them.
+GitHub scores a skipped required check as satisfied, so the run reported no
+test signal instead of a failing one, and #62 reached main with seven genuine
+``NameError`` sites in ``src/gkx/parallel/integrators.py``. A first-stage gate
+that silently disables everything behind it converts one red light into none.
+
+The ``ci-required`` job closes the same hole from the other side. It depends on
+every gate, runs with ``if: always()``, and fails if any of them reports
+``failure``, ``cancelled``, or ``skipped``. Require that single check in branch
+protection: it is the one status whose green means every gate actually ran and
+actually passed.
 
 For bounded local feedback, use the per-file runner:
 

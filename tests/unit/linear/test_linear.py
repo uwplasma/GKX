@@ -7,8 +7,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-pytestmark = pytest.mark.integration
-
 from gkx.config import CycloneBaseCase, GridConfig, GeometryConfig
 from gkx.diagnostics.analysis import estimate_observed_order
 from gkx.geometry import SAlphaGeometry, SlabGeometry, sample_flux_tube_geometry
