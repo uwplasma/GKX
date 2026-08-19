@@ -75,6 +75,12 @@ class KrylovConfig:
 
 _StatusCallback = Callable[[str], None] | None
 
+# Base residual gate for the certified adaptive branch. The effective gate is
+# floored by certifiable_residual_tolerance at what the working precision can
+# express, so a converged complex64 eigenpair is not rejected for failing an
+# f64-only tolerance.
+_ADAPTIVE_BASE_TOL = 1.0e-9
+
 
 def _status(status_callback: _StatusCallback, message: str) -> None:
     if status_callback is not None:
@@ -560,6 +566,61 @@ def _sparse_shift_invert_branch(
     return modes.eigenvalues[selected], vectors[selected]
 
 
+def _adaptive_branch(
+    v0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None,
+    cfg: KrylovConfig,
+    status_callback: _StatusCallback,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Run the residual-certified adaptive eigensolve; fail closed on rejection.
+
+    Unlike the raw propagator/power/arnoldi branches, this path never returns
+    an uncertified pair: the eigenvalue is either certified against the
+    continuous operator by the adaptive solver's residual gate or the solve
+    raises with the measured residual.
+    """
+
+    max_restarts = max(int(cfg.restarts), 4)
+    tol = certifiable_residual_tolerance(_ADAPTIVE_BASE_TOL, v0.dtype)
+    krylov_dim = max(min(int(cfg.krylov_dim), int(v0.size) - 1), 2)
+    restart_krylov_dim = max(krylov_dim // 2, 2)
+    candidate_count = min(2, krylov_dim, restart_krylov_dim)
+    _status(
+        status_callback,
+        "running certified adaptive propagator with "
+        f"dim={krylov_dim} max_restarts={max_restarts} tol={tol:.3g}",
+    )
+    solution = adaptive_propagator_eigenpair(
+        v0,
+        cache,
+        params,
+        terms,
+        krylov_dim=krylov_dim,
+        restart_krylov_dim=restart_krylov_dim,
+        candidate_count=candidate_count,
+        max_restarts=max_restarts,
+        tol=tol,
+    )
+    eig_host = complex(np.asarray(solution.eigenvalue))
+    residual = float(np.asarray(solution.residual))
+    _status(
+        status_callback,
+        "adaptive solve finished with "
+        f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g} "
+        f"converged={bool(solution.converged)} stable={bool(solution.stable)}",
+    )
+    if not (bool(solution.stable) and bool(solution.converged)):
+        raise RuntimeError(
+            "certified adaptive eigensolve rejected the dominant eigenpair: "
+            f"stable={bool(solution.stable)} converged={bool(solution.converged)} "
+            f"residual={residual:.6g} tolerance={tol:.6g}; refusing to report "
+            "an uncertified growth rate"
+        )
+    return solution.eigenvalue, solution.eigenvector
+
+
 def _dispatch_dominant_eigenpair(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -608,7 +669,7 @@ def _dispatch_dominant_eigenpair(
         )
     if cfg.method != "arnoldi":
         raise ValueError(
-            "Krylov method must be power, propagator, shift_invert, "
+            "Krylov method must be adaptive, power, propagator, shift_invert, "
             "sparse_shift_invert, or arnoldi"
         )
     return _arnoldi_branch(
@@ -663,6 +724,8 @@ def dominant_eigenpair(
         status_callback,
         f"krylov method={cfg.method} dim={cfg.krylov_dim} restarts={cfg.restarts}",
     )
+    if cfg.method == "adaptive":
+        return _adaptive_branch(v0, cache, params, terms, cfg, status_callback)
     return _dispatch_dominant_eigenpair(
         v0,
         v_ref_use,

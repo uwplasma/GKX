@@ -212,6 +212,12 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
+# 89815 -> 89913: certifying the linear branch the runtime defaults to (#52). The adaptive
+# branch, the precision floor that keeps a complex64 state from being judged
+# against an f64-only tolerance, and the exact-precision pin on the one
+# matrix-shaped contraction the residual is measured through. Without these the
+# path returns an unconverged Rayleigh quotient at residual 0.999 and calls it
+# a growth rate.
 # 89815 -> 89874: giving every residual gate a precision floor. The
 # gates compared a relative residual assembled from working-dtype operator
 # applications against an absolute constant -- 1e-10 for the adaptive
@@ -240,7 +246,9 @@ recursive = true
 # test_auto_fit_signal_keeps_the_requested_runtime_window.
 # 89874 -> 89919: merging the auto-window signal fix (#46) under the residual
 # floor. Both land in the fit path; the count is the sum, not new surface.
-baseline = 89919
+# 89919 -> 90011: certifying the default linear branch alongside the residual
+# floor it now uses (#52 over #47). The adaptive branch and its precision pin.
+baseline = 89997
 target = 45000
 
 [[line_budget_policy.counts]]
