@@ -3396,6 +3396,83 @@ def test_species_hermite_route_emits_no_all_to_all():
     assert re.findall(r"\ball-reduce\b", text)
 
 
+def test_species_hermite_keeps_the_bracket_in_its_own_kernel():
+    """The nonlinear bracket must not be fused into the linear operator's add.
+
+    Left alone, XLA folds every shifted copy of the slab that streaming, mirror,
+    curvature and the diamagnetic drive contribute into the elementwise ``add``
+    that joins them to the bracket, and emits one 29-operand ``kLoop`` fusion
+    that re-reads the shard once per term. The cost model tips over on shard
+    *shape*: on 2 x RTX A4000 (jax 0.11.1, grid ``(2, 8, 16, 64, 64, 32)``) that
+    fusion costs 11.0 ms of a 98.4 ms step at two species and 37.4 ms of a
+    75.8 ms step on the one-species shard a two-device mesh hands it. Measured
+    two-device scaling was 1.30x with the fusion and 2.14x without, so this
+    barrier is the whole difference between missing and passing the 1.90x gate.
+
+    Pinned as structure rather than as a timing, because a timing assertion on
+    shared hardware is a flake and this is the decision that has to survive.
+    """
+
+    import jax
+
+    from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
+    from gkx.terms.config import TermConfig
+    import gkx.parallel.integrators as integrators
+
+    state, cache, params, _grid, _vol, _flux = _species_hermite_problem()
+    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
+    plan = build_species_hermite_mesh_plan(tuple(state.shape), num_devices=1)
+    mesh, resolved, spec = integrators._resolve_species_hermite_placement(
+        state, cache, params, plan=plan, devices=None, num_devices=1
+    )
+    local_step, leaves, specs, spec = integrators._species_hermite_mapped(
+        state,
+        cache,
+        params,
+        None,
+        term_cfg=terms,
+        plan=resolved,
+        mesh=mesh,
+        state_spec=spec,
+        compressed_real_fft=True,
+        laguerre_mode="grid",
+        vol_fac=None,
+        flux_fac=None,
+    )
+    mapped = jax.shard_map(
+        lambda arg, *rest: local_step(arg, *rest)[0],
+        mesh=mesh,
+        in_specs=(spec,) + specs,
+        out_specs=spec,
+        axis_names={"s", "m"},
+    )
+
+    def equations(jaxpr):
+        for eqn in jaxpr.eqns:
+            yield eqn
+            for value in eqn.params.values():
+                for item in value if isinstance(value, (list, tuple)) else (value,):
+                    inner = getattr(item, "jaxpr", item)
+                    if isinstance(inner, jax.extend.core.Jaxpr):
+                        yield from equations(inner)
+
+    eqns = list(equations(jax.make_jaxpr(mapped)(state, *leaves).jaxpr))
+    guarded = {
+        id(var)
+        for eqn in eqns
+        if eqn.primitive.name == "optimization_barrier"
+        for var in eqn.outvars
+    }
+    assert guarded, "the shard-local RHS lost its fusion barrier"
+    # Which side of the sum the barrier guards is the whole result: guarding the
+    # *returned* RHS instead measured slower than doing nothing at all
+    # (148.6 ms/step on the one-device mesh against 98.4).
+    assert any(
+        eqn.primitive.name == "add" and any(id(var) in guarded for var in eqn.invars)
+        for eqn in eqns
+    ), "the barrier must guard the bracket the linear RHS is added to"
+
+
 def test_species_hermite_trajectory_and_fused_traces_match_serial():
     """Traces come out of the scan carry and still equal the serial trajectory."""
 
