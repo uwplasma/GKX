@@ -3,7 +3,7 @@ case = "cyclone-linear"
 label = "Cyclone ITG Linear"
 backend = "gkx_cpu"
 host = "office"
-command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/linear/axisymmetric/cyclone_runtime_linear.py --ky 0.3 --Nl 24 --Nm 12 --solver auto"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/linear/axisymmetric/cyclone_runtime_linear.py --ky 0.3 --Nl 16 --Nm 48 --solver auto"
 cwd = "${GKX_BENCH_ROOT}"
 
 [[run]]
@@ -11,7 +11,7 @@ case = "cyclone-linear"
 label = "Cyclone ITG Linear"
 backend = "gkx_gpu"
 host = "office"
-command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/linear/axisymmetric/cyclone_runtime_linear.py --ky 0.3 --Nl 24 --Nm 12 --solver auto"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/linear/axisymmetric/cyclone_runtime_linear.py --ky 0.3 --Nl 16 --Nm 48 --solver auto"
 cwd = "${GKX_BENCH_ROOT}"
 
 [[run]]
@@ -19,7 +19,7 @@ case = "cyclone-linear"
 label = "Cyclone ITG Linear"
 backend = "gx"
 host = "office"
-command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('itg_salpha_adiabatic_electrons.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 10.0', text)\np.write_text(text)\nPY\nCUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} itg_salpha_adiabatic_electrons.in"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('itg_salpha_adiabatic_electrons.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 150.0', text)\np.write_text(text)\nPY\nCUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} itg_salpha_adiabatic_electrons.in"
 cwd = "${REFERENCE_GK_REPO}/benchmarks/linear/ITG_cyclone"
 
 [[run]]

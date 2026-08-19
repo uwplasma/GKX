@@ -477,6 +477,19 @@ recursive = true
 # keyword that lets a caller remeasure it. The warning is the cost of the
 # window being usable past the point where it stops being a gradient; the
 # alternative is a large, reproducible, meaningless number.
+# 95456 -> 95478: closing the second half of the run-to-saturation defect. The
+# zero-flux guard added in #68 is an absolute threshold on a quantity whose
+# scale the deck chooses, so it covered a dead trace only when that trace
+# happened to sit below it; a flat flux a few decades higher stopped a run in
+# its first chunk at any amplitude. Two lines of that are the fix -- the
+# degenerate autocorrelation return no longer reports a resolved correlation
+# time, and "resolved" now means tau > 0 rather than tau >= 0, which is what
+# stops the derived min_window = 10 tau from collapsing to zero on exactly the
+# traces carrying no information. The rest is the comment saying why the
+# absolute threshold cannot be the protection, so it is not restored as one.
+# 95480 -> 95489: refusing to resolve a correlation time the sampling cannot
+# see. A flat trace crossed zero at lag one, which read as resolved and
+# collapsed the window floor built on it.
 baseline = 95504
 target = 45000
 

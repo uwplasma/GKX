@@ -19,8 +19,14 @@ from gkx.benchmarking.shared import load_cyclone_reference
 CONFIG = Path("examples/linear/axisymmetric/cyclone.toml")
 N_LAGUERRE = 16
 N_HERMITE = 48
-FIT_TMIN = 7.0
-FIT_TMAX = 10.0
+# Asymptotic fit window: the last 30% of the deck's horizon, which is well clear
+# of the startup transient (the fitted gamma is still 24% high at t = 30 and
+# does not settle until t ~= 60). These track [time].t_max in CONFIG; the
+# coupling is enforced by
+# tests/validation/benchmarks/test_benchmark_contracts.py::
+# test_cyclone_publication_driver_uses_asymptotic_fit_window.
+FIT_TMIN = 105.0
+FIT_TMAX = 150.0
 
 
 def main() -> None:
@@ -44,19 +50,24 @@ def main() -> None:
         min_points=80,
         require_positive=True,
     )
+    # Take the integrator settings from the deck rather than repeating them, so
+    # the published figures cannot drift away from the shipped example again.
+    numerics_kw = dict(
+        dt=float(cfg.time.dt),
+        steps=round(float(cfg.time.t_max) / float(cfg.time.dt)),
+        method=str(cfg.time.method),
+    )
 
     scan = run_runtime_scan(
         cfg,
         ky_values,
         Nl=N_LAGUERRE,
         Nm=N_HERMITE,
-        dt=0.002,
-        steps=5000,
-        method="imex2",
         solver="time",
         batch_ky=True,
         fit_signal="phi",
         mode_method="z_index",
+        **numerics_kw,
         **window_kw,
     )
     ky_selected = float(scan.ky[int(np.nanargmax(scan.gamma))])
@@ -65,12 +76,10 @@ def main() -> None:
         ky_target=ky_selected,
         Nl=N_LAGUERRE,
         Nm=N_HERMITE,
-        dt=0.002,
-        steps=5000,
-        method="imex2",
         solver="time",
         fit_signal="phi",
         mode_method="z_index",
+        **numerics_kw,
         **window_kw,
     )
 

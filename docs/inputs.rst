@@ -488,6 +488,12 @@ Notable runtime-only keys:
   exactly. Linear runs and nonlinear runs with ``diagnostics = false`` ignore
   the key, because the stop test needs the streamed heat-flux trace. The
   executable overrides are ``--until-saturated`` and ``--no-until-saturated``.
+  Set ``"t_max"`` explicitly on any deck whose heat flux is not the observable
+  it exists to produce -- zonal-flow and secondary-instability responses,
+  linear-response diagnostics -- because a horizon chosen by a quantity that is
+  zero by construction is not a horizon. Which shipped decks do that, and the
+  measurement clearing the rest to run under the default, are held by the
+  ``run_to`` audit in ``tests/release/test_release_gates.py``.
 * ``[time] saturation_rel_sem``: target relative standard error of the mean on
   the windowed heat flux (default ``0.05``, i.e. 5%). The SEM is corrected for
   autocorrelation via the Sokal integrated autocorrelation time, so it is the

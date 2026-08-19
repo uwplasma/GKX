@@ -21,6 +21,15 @@ ntheta = 8
 nperiod = 1
 
 [time]
+# run_to must stay "t_max". This deck ships as the stage-1 linear seed, but
+# benchmarks/secondary_slab_workflow.py promotes it through
+# build_secondary_stage2_config into a nonlinear run that inherits this [time]
+# block, so the stop policy set here is the one stage 2 obeys. Stage 2 measures
+# the secondary growth rate from a log-linear fit to phi_mode over the last
+# half of its trace; its heat flux is a by-product at -5.6e-12 (zero gradients,
+# a seeded primary mode), and a horizon chosen by that flux would set the
+# fitting window for a growth rate that has nothing to do with it.
+run_to = "t_max"
 t_max = 2.0
 dt = 1.0
 method = "sspx3"

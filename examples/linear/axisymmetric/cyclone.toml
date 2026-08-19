@@ -26,9 +26,16 @@ ntheta = 32
 nperiod = 2
 
 [time]
-t_max = 10.0
-dt = 0.002
-method = "imex2"
+# Horizon, scheme and step size match the GX reference deck for this case
+# (benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in): t_max = 150
+# and rk4, whose adaptive step averages ~0.0047. At gamma ~= 0.0930 this is
+# gamma*t_max ~= 14, well clear of the transient -- the fitted growth rate is
+# 24% high at t_max = 30 and only settles beyond t_max ~= 60. dt = 0.004663 is
+# the step already used by tools/artifacts/make_tables.py and by the tracked
+# parity artifact, so t_max/dt = 32168 steps (divisible by sample_stride).
+t_max = 150.0
+dt = 0.004663
+method = "rk4"
 use_diffrax = false
 sample_stride = 2
 progress_bar = true
@@ -83,26 +90,35 @@ bpar = 0.0
 nonlinear = 0.0
 
 [run]
+# Nl/Nm match the GX reference deck's nlaguerre = 16, nhermite = 48. The former
+# 24/12 is Hermite-starved for this case and reports gamma ~4.5% low.
 ky = 0.3
-Nl = 24
-Nm = 12
+Nl = 16
+Nm = 48
 solver = "krylov"
 
 [scan]
 ky = [0.1, 0.2, 0.3, 0.4, 0.5]
-Nl = 24
-Nm = 12
+Nl = 16
+Nm = 48
 solver = "krylov"
 
 [fit]
+# window_method is left at the default "stationary", which selects the longest
+# window over which the instantaneous gamma(t) is stationary and enforces a
+# two-growth-time floor. This is the analogue of what GX does -- its check.py
+# averages the instantaneous gamma over the back half of the trace -- and it is
+# what every other shipped deck uses. The former "loglinear" override scored
+# candidate windows instead and, with min_points an absolute sample count, took
+# the shortest legal window: 0.32 time units, 0.2% of this run.
+#
+# mode_method stays "z_index": GX computes its growth rate from phi at a single
+# midplane z index (growthRates in src/device_funcs.cu), so this is the
+# parity-matched observable. "project" converges faster from a short horizon but
+# measures a different quantity than the reference.
 auto_window = true
-window_method = "loglinear"
 window_fraction = 0.3
 start_fraction = 0.58
 min_points = 80
 min_amp_fraction = 0.05
-max_fraction = 0.6
-end_fraction = 0.8
-max_amp_fraction = 0.8
-late_penalty = 0.3
 mode_method = "z_index"

@@ -3378,3 +3378,302 @@ def test_cached_factory_gate_sees_the_shape_it_is_written_for(tmp_path) -> None:
     findings = _cached_factories_building_device_arrays(tmp_path)
     assert len(findings) == 1, findings
     assert "escaping materializes jnp.arange" in findings[0]
+
+
+# ---- [time] run_to audit for shipped nonlinear configs ----
+
+"""Every shipped deck that reaches the nonlinear runtime declares its horizon.
+
+``[time] run_to`` defaults to ``"saturation"``: a diagnosed nonlinear run ends
+when its post-spin-up heat-flux window converges, with ``t_max`` only as a hard
+cap. That default arrived after most of these decks were written, and it is not
+neutral for a deck whose heat flux is not the observable -- a zero-gradient
+zonal-response benchmark was silently truncated at ``t = 7.66`` of a requested
+60, reporting ``gamma = NaN``, because a flux that never leaves zero satisfies
+every convergence test built on it.
+
+The tables below are the audit. A deck is either in ``_RUN_TO_REQUIRED``, and
+must then carry that ``run_to`` in its own ``[time]`` block, or in
+``_RUN_TO_DEFAULT_CLEARED``, whose value records the measured first-chunk stop
+decision that cleared it. The gate's real work is the completeness check: a new
+deck reaching the nonlinear runtime fails here until somebody measures it,
+which is the step that was skipped when the default changed.
+
+Measurement protocol for the cleared decks: run the deck's own configuration
+through ``run_runtime_nonlinear`` for its first saturation chunk -- 512 steps or
+the deck's whole budget, whichever is smaller, one diagnostic sample per step,
+which is what ``_run_chunked_diagnostics`` does -- and evaluate
+``saturation_stop_decision`` on the resulting trace. That reproduces the first
+decision the chunk loop would make, which is where a premature stop lands.
+"""
+
+from support.paths import REPO_ROOT as RUN_TO_REPO_ROOT
+
+# Decks that must pin run_to themselves, and the value they must pin.
+_RUN_TO_REQUIRED = {
+    "benchmarks/runtime_miller_zonal_response.toml": "t_max",
+    "benchmarks/runtime_w7x_zonal_response_vmec.toml": "t_max",
+    "benchmarks/runtime_secondary_slab.toml": "t_max",
+}
+
+# Decks cleared to run under the default, with the measurement that cleared
+# them: the first-chunk stop decision, and the gate that refused it.
+_RUN_TO_DEFAULT_CLEARED: dict[str, str] = {}
+
+# Decks that reach the nonlinear runtime and have NOT been measured yet. This
+# is debt, not clearance: the audit that produced the tables above was stopped
+# partway, and every deck here is a turbulence case where saturation stopping
+# is the intended behaviour, so the open question is only whether it fires
+# early. Naming them keeps the completeness check doing its real work -- a
+# deck that appears from now on still fails until somebody measures it -- while
+# not claiming measurements nobody took. Empty this by moving each entry into
+# _RUN_TO_DEFAULT_CLEARED with its first-chunk stop decision.
+_RUN_TO_AUDIT_PENDING = {
+    "examples/common_input.toml",
+    "examples/nonlinear/axisymmetric/runtime_circular_vmec_nonlinear.toml",
+    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
+    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml",
+    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml",
+    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_t400.toml",
+    "examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml",
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear.toml",
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_seed.toml",
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml",
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short_lockin.toml",
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml",
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100_nx4ny8_dt9e4.toml",
+    "examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml",
+    "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml",
+    "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml",
+}
+
+# Decks that ship as linear but are promoted into the nonlinear runtime by a
+# shipped driver, so their [time] block still sets a nonlinear stop policy.
+_RUN_TO_PROMOTED = {
+    "benchmarks/runtime_secondary_slab.toml": (
+        "benchmarks/secondary_slab_workflow.py, via build_secondary_stage2_config"
+    ),
+}
+
+# Files under the audited roots that are not GKX runtime decks at all. Listed
+# rather than skipped: a deck that stops parsing would otherwise leave the
+# audit silently by the same door.
+_NOT_A_GKX_RUNTIME_DECK = {
+    "examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml": (
+        "reference-code input deck, [Dimensions]/[Physics] schema, not a GKX runtime TOML"
+    ),
+}
+
+
+def _shipped_toml_paths() -> list[str]:
+    """Repo-relative paths of every TOML under the audited roots."""
+
+    paths: list[str] = []
+    for root in ("benchmarks", "examples"):
+        for path in sorted((RUN_TO_REPO_ROOT / root).rglob("*.toml")):
+            paths.append(str(path.relative_to(RUN_TO_REPO_ROOT)))
+    return paths
+
+
+def _decks_reaching_the_nonlinear_runtime() -> tuple[set[str], set[str]]:
+    """Split the shipped decks into (reaches nonlinear runtime, unparseable).
+
+    A deck reaches the nonlinear runtime when it turns the nonlinear term on or
+    when it is not a linear run -- the second half is what catches the
+    initial-value relaxation benchmarks, which carry ``nonlinear = false`` and
+    still go through ``run_runtime_nonlinear`` because that is the only route
+    with streamed diagnostics. Decks a shipped driver promotes are added by
+    name, since nothing in their own contents says so.
+    """
+
+    from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+    reaches: set[str] = set()
+    unparseable: set[str] = set()
+    for relative in _shipped_toml_paths():
+        try:
+            cfg, _raw = load_runtime_from_toml(RUN_TO_REPO_ROOT / relative)
+        except Exception:
+            unparseable.add(relative)
+            continue
+        if bool(cfg.physics.nonlinear) or not bool(cfg.physics.linear):
+            reaches.add(relative)
+    return reaches | set(_RUN_TO_PROMOTED), unparseable
+
+
+def _deck_run_to(relative: str) -> str | None:
+    """The ``[time] run_to`` the deck itself carries, or None if it leaves it."""
+
+    from gkx.utils import tomlcompat as tomllib
+
+    data = tomllib.loads((RUN_TO_REPO_ROOT / relative).read_text(encoding="utf-8"))
+    value = data.get("time", {}).get("run_to")
+    return None if value is None else str(value).strip().lower()
+
+
+def test_every_shipped_nonlinear_deck_is_covered_by_the_run_to_audit() -> None:
+    """No deck reaches the nonlinear runtime without an audited stop policy."""
+
+    reaches, unparseable = _decks_reaching_the_nonlinear_runtime()
+    audited = (
+        set(_RUN_TO_REQUIRED) | set(_RUN_TO_DEFAULT_CLEARED) | _RUN_TO_AUDIT_PENDING
+    )
+
+    assert unparseable == set(_NOT_A_GKX_RUNTIME_DECK), (
+        "a shipped TOML changed parseability; audit it or record why it is not "
+        f"a GKX runtime deck: {sorted(unparseable ^ set(_NOT_A_GKX_RUNTIME_DECK))}"
+    )
+    assert reaches - audited == set(), (
+        "these decks reach the nonlinear runtime and are not in the run_to "
+        "audit. Measure the first-chunk saturation decision (see this module's "
+        "protocol) and add them to _RUN_TO_REQUIRED or "
+        f"_RUN_TO_DEFAULT_CLEARED: {sorted(reaches - audited)}"
+    )
+    assert audited - reaches == set(), (
+        "these decks are audited but no longer reach the nonlinear runtime; "
+        f"drop them from the audit: {sorted(audited - reaches)}"
+    )
+
+
+def test_decks_that_must_pin_run_to_pin_it_in_their_own_time_block() -> None:
+    """A required stop policy has to be in the deck, not in a caller."""
+
+    for relative, expected in sorted(_RUN_TO_REQUIRED.items()):
+        assert _deck_run_to(relative) == expected, (
+            f"{relative} must set [time] run_to = \"{expected}\"; its heat flux "
+            "is not the observable it exists to produce, so the default "
+            "saturation stop would end it on a quantity nobody asked for"
+        )
+
+
+def test_decks_cleared_for_the_default_carry_their_measurement() -> None:
+    """A deck cleared to run under the default records what cleared it.
+
+    The evidence has to name the gate that refused the first-chunk stop, in the
+    vocabulary ``saturation_stop_decision`` reports, so that "measured, looked
+    fine" cannot pass for a measurement.
+    """
+
+    refusal_gates = {
+        "flux_indistinguishable_from_zero",
+        "tau_ac_unresolved",
+        "window_below_min_window",
+        "rel_sem_above_threshold",
+        "window_not_stationary",
+        "guard_not_stationary",
+        "trace_shorter_than_min_samples",
+        "post_spinup_window_too_short",
+    }
+    for relative, evidence in sorted(_RUN_TO_DEFAULT_CLEARED.items()):
+        assert _deck_run_to(relative) is None, (
+            f"{relative} now pins run_to; move it to _RUN_TO_REQUIRED"
+        )
+        named = refusal_gates.intersection(evidence.split())
+        assert named, (
+            f"{relative} is cleared without naming the gate that refused its "
+            f"first-chunk stop; one of {sorted(refusal_gates)} must appear"
+        )
+
+
+def test_run_to_audit_discovery_sees_a_deck_that_only_the_flags_reveal() -> None:
+    """The classifier catches the relaxation shape, not just nonlinear = true.
+
+    The zonal-response benchmarks are the reason this gate exists and they ship
+    ``nonlinear = false``. A classifier keyed on that flag alone would have
+    passed every one of them.
+    """
+
+    reaches, _ = _decks_reaching_the_nonlinear_runtime()
+
+    assert "benchmarks/runtime_miller_zonal_response.toml" in reaches
+    assert "benchmarks/runtime_w7x_zonal_response_vmec.toml" in reaches
+    # Promoted by a driver: nothing in the deck itself says nonlinear.
+    assert "benchmarks/runtime_secondary_slab.toml" in reaches
+    # A genuinely linear deck stays out, or the audit becomes noise.
+    assert "examples/linear/axisymmetric/cyclone.toml" not in reaches
+    assert "benchmarks/collisional_zonal_response.toml" not in reaches
+
+
+# ---- GX parity: measured build-reproducibility floors ----
+
+"""A parity case may not be gated below the spread of its own reference.
+
+The linear parity matrix reports differences against reference-code output. For
+one case, ``kbm_miller``, that reference moves by 0.16-0.20 percent between two
+legitimate builds of the same reference commit -- the only difference being
+``-prec-sqrt=true``, IEEE-correct single-precision ``sqrtf`` -- while the
+run-to-run noise floor is exactly zero, the same binary reproducing its output
+bitwise. Every other case in the matrix is bit-identical between those builds
+or moves by at most 0.07 percent.
+
+So a sub-0.1-percent gate on that case would be gating the compiler, and the
+manifest records the resolution of the instrument as
+``build_reproducibility_floor``. This gate keeps that number from being quietly
+tightened back below what was measured, and keeps floors from being invented
+for cases where nothing was measured.
+"""
+
+_PARITY_MANIFEST = RUN_TO_REPO_ROOT / "tools" / "gx_parity_matrix_manifest.toml"
+_PARITY_BUILDER = (
+    RUN_TO_REPO_ROOT / "tools" / "comparison" / "build_gx_parity_matrix.py"
+)
+# Largest relative move measured between the two builds: 0.204% in omega at
+# ky = 0.2. A floor at or below that would not cover the measurement it exists
+# to record. See plan/notes/gx_precsqrt.md.
+_KBM_TWO_BUILD_SPREAD = 0.00204
+
+
+def _parity_cases() -> list[dict]:
+    from gkx.utils import tomlcompat as tomllib
+
+    return tomllib.loads(_PARITY_MANIFEST.read_text(encoding="utf-8"))["case"]
+
+
+def test_kbm_miller_parity_floor_covers_its_measured_two_build_spread() -> None:
+    """The one case with a measured floor keeps a floor that covers it."""
+
+    cases = {case["key"]: case for case in _parity_cases()}
+    floor = cases["kbm_miller"].get("build_reproducibility_floor")
+
+    assert floor is not None, (
+        "kbm_miller must declare build_reproducibility_floor; without it the "
+        "reported differences invite a gate tighter than the reference's own "
+        "build-to-build spread"
+    )
+    assert float(floor) > _KBM_TWO_BUILD_SPREAD, (
+        f"kbm_miller floor {floor} does not cover the measured two-build "
+        f"spread {_KBM_TWO_BUILD_SPREAD}; that spread is compiler arithmetic, "
+        "not physics, so a gate under it cannot be met by any build choice"
+    )
+
+
+def test_parity_floors_are_declared_only_where_they_were_measured() -> None:
+    """A floor is a measurement, so it needs a reason beside it."""
+
+    cases = _parity_cases()
+    declared = {
+        case["key"]
+        for case in cases
+        if case.get("build_reproducibility_floor") is not None
+    }
+
+    assert declared == {"kbm_miller"}, (
+        "build_reproducibility_floor is a claim that a case's reference moves "
+        "between builds. Add one only with the measurement that shows it, and "
+        f"the comment recording that measurement: {sorted(declared)}"
+    )
+    manifest_text = _PARITY_MANIFEST.read_text(encoding="utf-8")
+    reason_block = manifest_text.split("build_reproducibility_floor = ")[0]
+    assert "prec-sqrt" in reason_block, (
+        "the reason for the kbm_miller floor must stay beside the number"
+    )
+
+
+def test_parity_builder_reads_the_declared_floor() -> None:
+    """A manifest key nothing reads is documentation pretending to be a gate."""
+
+    source = _PARITY_BUILDER.read_text(encoding="utf-8")
+
+    assert 'case.get("build_reproducibility_floor")' in source
+    assert '"build_reproducibility_floor": floor' in source
+    assert '"within_build_reproducibility_floor"' in source

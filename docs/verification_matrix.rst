@@ -355,6 +355,35 @@ frequency is over a hundred times the GX value: that is a different branch, the
 electrostatic shear-Alfven response that the GX deck's own comments warn about
 at small but finite ``beta``, and not a growth-rate error on the ITG branch.
 
+One case in that table has a coarser instrument than the others, and the table
+does not show it. Rebuilding GX at the same commit with ``-prec-sqrt=true``
+added -- IEEE-correct single-precision ``sqrtf``, the setting upstream's own
+maintained desktop makefile uses, and one that only 4 of upstream's 20
+makefiles carry -- moves **KBM, Miller** by ``0.16%`` to ``0.20%`` in ``gamma``
+and ``omega``. It moves nothing else: the converged Cyclone and W7-X modes come
+back bit-identical, and the rest of the matrix moves by at most ``0.07%``. The
+run-to-run noise floor underneath that measurement is exactly zero, because
+rerunning one binary reproduces its ``omega_kxkyt`` bitwise, so the whole
+``0.2%`` is the compiler flag. KBM is the electromagnetic branch at finite
+``beta`` with kinetic electrons and the shortest integration in the matrix,
+``t=20`` against ``t=150``, which is where single-precision rounding has the
+most room to accumulate.
+
+So the KBM row is only readable down to a few tenths of a percent, and a gate
+on it tighter than that would be gating ``nvcc``, not physics. That resolution
+is recorded as ``build_reproducibility_floor = 0.003`` on the ``kbm_miller``
+case in ``tools/gx_parity_matrix_manifest.toml``;
+``tools/comparison/build_gx_parity_matrix.py`` writes it into the artifact per
+case and marks each row that falls inside it, so the next regeneration carries
+the resolution of the instrument beside the reading, and
+``tests/release/test_release_gates.py`` keeps the number from being tightened
+back below what was measured. Regenerating the KBM reference under one
+canonical build would not remove the floor: upstream is not uniform about the
+flag, so the same spread would reappear against any reference taken on the
+other setting. No other case in the matrix has a measured floor, which is a
+statement about what has been measured and not a claim that theirs is zero.
+The underlying two-build measurement is in ``plan/notes/gx_precsqrt.md``.
+
 Cost was measured on the same RTX A4000 for the three cases where both codes
 were re-run under ``/usr/bin/time -v``. Both codes evaluate the whole ``k_y``
 spectrum in a single invocation, so the wall times are per-spectrum, and they
