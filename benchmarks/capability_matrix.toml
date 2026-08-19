@@ -6,7 +6,7 @@ comparison_revision = "bc2fe552"
 comparison_source_fingerprint = "sha256:bfaaadfa724c4e56e32364b5cb957449555bed94f6a4ee082e3b4e651b0cc20b"
 office_instrumented_source_fingerprint = "sha256:436e403e769cae7fc38362185d1da49920255d5dfd288eb06ad4ac8715b5a004"
 office_binary_status = "validated_clean_rebuild; isolated revision bc2fe552 links one local OpenMPI 4.1.6, parallel netCDF 4.9.2, and HDF5 1.14.5 stack; the older instrumented binary remains excluded because of its HDF5 ABI mismatch"
-office_runtime_probe = "2026-07-13: canonical Cyclone s-alpha adiabatic-electron run completed 2145 steps to t=10 in 23.1 s and wrote valid netCDF/restart outputs; ky=0.3 terminal gamma=0.101814 and omega=0.286777"
+office_runtime_probe = "2026-07-13: canonical Cyclone s-alpha adiabatic-electron run completed 2145 steps to t=10 in 23.1 s and wrote valid netCDF/restart outputs; ky=0.3 gamma=0.101814 and omega=0.286777, a mid-transient smoke reading and not a parity target; the same deck run to t_max=150 converges to gamma=0.093049 and omega=0.281991, matching the reference GX ships for that case"
 scope = "Required-core and differentiable-extension capability contract; feature names are mathematical, while GX appears only as benchmark provenance."
 
 [[capabilities]]

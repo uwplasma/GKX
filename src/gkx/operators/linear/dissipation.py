@@ -13,6 +13,11 @@ import jax.numpy as jnp
 from gkx.operators.collision import CollisionContext, CollisionOperator
 from gkx.terms.config import FieldState
 from gkx.terms.config import TermConfig
+from gkx.operators.linear.cache_model import (
+    HermiteWindow,
+    hermite_index_of,
+    hermite_total_of,
+)
 from gkx.operators.linear.streaming import abs_z_linked_fft, shift_axis
 
 
@@ -146,10 +151,18 @@ def _hermite_mode_drive(
     template: jnp.ndarray,
     mode: int,
     drive: jnp.ndarray,
+    *,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
-    """Embed a single-Hermite-mode drive into a full state-shaped array."""
+    """Embed a single-Hermite-mode drive into a full state-shaped array.
 
-    mask = jnp.arange(template.shape[2], dtype=jnp.int32)[
+    ``mode`` is always a *global* moment index. On a Hermite-sharded slab the
+    local rows carry the global indices in ``hermite_window``, so a shard that
+    does not own ``mode`` contributes exactly zero instead of driving its own
+    local row of that number.
+    """
+
+    mask = hermite_index_of(hermite_window, template.shape[2])[
         None, None, :, None, None, None
     ]
     return (mask == int(mode)).astype(template.dtype) * drive[:, :, None, ...]
@@ -275,19 +288,18 @@ def _collision_moment_correction(
 ) -> jnp.ndarray:
     nu_s = nu[:, None, None, None, None]
     b_s = jnp.asarray(b, dtype=jnp.real(H).dtype)
-    sqrt_b = jnp.sqrt(jnp.maximum(b_s, 0.0))
     H_m0 = H[:, :, 0, ...]
     Nm = H.shape[2]
     H_m1 = H[:, :, 1, ...] if Nm > 1 else jnp.zeros_like(H_m0)
     G_m2 = G[:, :, 2, ...] if Nm > 2 else jnp.zeros_like(H_m0)
 
     coeff_t, t_bar = _laguerre_temperature_coupling(H_m0, G_m2, Jl)
-    uperp_bar = sqrt_b * jnp.sum(JlB * H_m0, axis=1)
+    uperp_moment = jnp.sum(JlB * H_m0, axis=1)
     upar_bar = jnp.sum(Jl * H_m1, axis=1)
 
     corr = jnp.zeros_like(H)
     corr_m0 = (
-        nu_s * sqrt_b[:, None, ...] * JlB * uperp_bar[:, None, ...]
+        nu_s * b_s[:, None, ...] * JlB * uperp_moment[:, None, ...]
         + nu_s * 2.0 * coeff_t * t_bar[:, None, ...]
     )
     corr = corr + _hermite_mode_drive(corr, 0, corr_m0)
@@ -596,9 +608,12 @@ def _constant_hypercollision_contribution(
     mask_const: jnp.ndarray,
     hypercollisions_const: jnp.ndarray,
     weight: jnp.ndarray,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     l_norm = jnp.asarray(max(G.shape[1], 1), dtype=ratio_l.dtype)
-    m_norm = jnp.asarray(max(G.shape[2], 1), dtype=ratio_m.dtype)
+    m_norm = jnp.asarray(
+        max(hermite_total_of(hermite_window, G.shape[2]), 1), dtype=ratio_m.dtype
+    )
     scaled_nu_l = l_norm * nu_hyper_l
     scaled_nu_m = m_norm * nu_hyper_m
     vth_s = vth[:, None, None, None, None, None]
@@ -767,6 +782,7 @@ def hypercollisions_contribution(
     linked_gather_map: jnp.ndarray | None = None,
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     coeffs = _HypercollisionCoefficients(
         vth=vth,
@@ -823,6 +839,7 @@ def hypercollisions_contribution(
         mask_const=masks.mask_const,
         hypercollisions_const=coeffs.hypercollisions_const,
         weight=weight,
+        hermite_window=hermite_window,
     )
     if _is_static_zero(weight * coeffs.hypercollisions_kz, real_dtype):
         return dG

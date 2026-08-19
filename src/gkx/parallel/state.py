@@ -87,4 +87,70 @@ def resolve_state_sharding(
     return NamedSharding(mesh, PartitionSpec(*spec_list))
 
 
-__all__ = ["resolve_state_sharding"]
+SPECIES_MESH_AXIS = "s"
+HERMITE_MESH_AXIS = "m"
+
+
+def build_species_hermite_mesh(
+    plan,
+    *,
+    devices: Iterable[jax.Device] | None = None,
+) -> Mesh:
+    """Return the 2-D ``(species, hermite)`` device mesh a plan asks for.
+
+    Species vary slowest so that a species-only mesh keeps each species'
+    devices adjacent, which makes the halo-free configuration the natural one
+    on a two-GPU box.
+    """
+
+    device_list = list(devices) if devices is not None else list(jax.devices())
+    ns_chunks = int(plan.chunks.get(SPECIES_MESH_AXIS, 1))
+    nm_chunks = int(plan.chunks.get(HERMITE_MESH_AXIS, 1))
+    needed = ns_chunks * nm_chunks
+    if len(device_list) < needed:
+        raise ValueError(
+            f"the ({ns_chunks}, {nm_chunks}) species-Hermite mesh needs {needed} "
+            f"devices, but {len(device_list)} are visible"
+        )
+    grid = np.array(device_list[:needed], dtype=object).reshape(ns_chunks, nm_chunks)
+    return Mesh(grid, (SPECIES_MESH_AXIS, HERMITE_MESH_AXIS))
+
+
+def species_hermite_state_spec(ndim: int) -> PartitionSpec:
+    """Return ``P('s', None, 'm', None, None, None)`` for a packed state.
+
+    ``(ky, kx)``, Laguerre and ``z`` stay replicated: every FFT in the bracket
+    and in parallel streaming runs over one of them, so sharding any of them
+    would put a distributed transpose inside the RHS.
+    """
+
+    if ndim == 6:
+        return PartitionSpec(SPECIES_MESH_AXIS, None, HERMITE_MESH_AXIS, None, None, None)
+    if ndim == 5:
+        return PartitionSpec(None, HERMITE_MESH_AXIS, None, None, None)
+    raise ValueError("packed state must have 5 or 6 dimensions")
+
+
+def resolve_species_hermite_sharding(
+    G0: jnp.ndarray,
+    plan,
+    *,
+    devices: Iterable[jax.Device] | None = None,
+    mesh: Mesh | None = None,
+) -> NamedSharding:
+    """Return the ``NamedSharding`` that places a packed state on the mesh."""
+
+    resolved = mesh if mesh is not None else build_species_hermite_mesh(
+        plan, devices=devices
+    )
+    return NamedSharding(resolved, species_hermite_state_spec(int(G0.ndim)))
+
+
+__all__ = [
+    "HERMITE_MESH_AXIS",
+    "SPECIES_MESH_AXIS",
+    "build_species_hermite_mesh",
+    "resolve_species_hermite_sharding",
+    "resolve_state_sharding",
+    "species_hermite_state_spec",
+]

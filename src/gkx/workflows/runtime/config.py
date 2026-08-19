@@ -151,6 +151,10 @@ class RuntimeOutputConfig:
     restart_with_perturb: bool = False
     append_on_restart: bool = True
     resolved_diagnostics: bool = True
+    # Whether a completed run draws its own figures beside its output. On by
+    # default: a saved bundle nobody plotted is a run nobody looked at. Set
+    # false (or pass --no-plots) on batch surfaces that only want the data.
+    plots: bool = True
     restart_scale: float = 1.0
     nsave: int = 10000
 
@@ -198,6 +202,7 @@ class RuntimeParallelConfig:
     strict_identity: bool = True
     profile: bool = False
     backend: str = "auto"
+    auto: bool = False
 
     def __post_init__(self) -> None:
         strategy = str(self.strategy).strip().lower().replace("-", "_")
@@ -225,6 +230,22 @@ class RuntimeParallelConfig:
         axis = str(self.axis).strip().lower().replace("-", "_")
         if not axis:
             raise ValueError("parallel axis must be nonempty")
+        if bool(self.auto):
+            # auto resolves strategy and axis from the visible devices, so an
+            # explicit disagreeing request is a conflict to report, not a
+            # preference to silently overrule.
+            if strategy not in {"serial", "shard_map"}:
+                raise ValueError(
+                    f"[parallel] auto=true resolves to strategy='shard_map', "
+                    f"which conflicts with strategy='{self.strategy}'"
+                )
+            strategy = "shard_map"
+            if axis not in {"ky", "species_hermite", "velocity", "s_m"}:
+                raise ValueError(
+                    f"[parallel] auto=true resolves to axis='species_hermite', "
+                    f"which conflicts with axis='{self.axis}'"
+                )
+            axis = "species_hermite"
         if self.batch_size is not None and int(self.batch_size) < 1:
             raise ValueError("parallel batch_size must be >= 1 when provided")
         if self.num_devices is not None and int(self.num_devices) < 1:

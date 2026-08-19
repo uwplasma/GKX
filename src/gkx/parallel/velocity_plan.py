@@ -176,4 +176,108 @@ def build_velocity_sharding_plan(
     )
 
 
-__all__ = ["VelocityShardingPlan", "build_velocity_sharding_plan"]
+def species_hermite_device_counts(
+    ns: int, nm: int, *, hermite_ghost_depth: int = 2, limit: int = 64
+) -> tuple[int, ...]:
+    """Return the device counts a ``(Ns, Nm)`` grid can be decomposed over.
+
+    Reported verbatim in routing errors so an unroutable request names its
+    alternatives instead of only its failure.
+    """
+
+    counts = []
+    for total in range(1, int(limit) + 1):
+        try:
+            build_species_hermite_mesh_plan(
+                (int(ns), 1, int(nm), 1, 1, 1),
+                num_devices=total,
+                hermite_ghost_depth=hermite_ghost_depth,
+            )
+        except ValueError:
+            continue
+        counts.append(total)
+    return tuple(counts)
+
+
+def build_species_hermite_mesh_plan(
+    state_shape: Sequence[int],
+    *,
+    num_devices: int,
+    hermite_ghost_depth: int = 2,
+) -> VelocityShardingPlan:
+    """Factor ``num_devices`` over a species-first, Hermite-second device mesh.
+
+    Unlike the ceil-padded chunking of :func:`build_velocity_sharding_plan`,
+    species are factored first, the Hermite remainder must divide the moment
+    count *exactly*, and the local moment count must be at least the ghost
+    depth so a width-``hermite_ghost_depth`` halo is satisfiable from nearest
+    neighbours alone. Anything else fails closed -- a padded Hermite axis would
+    put a shard's ghost rows outside its neighbour, which is a wrong answer
+    rather than a slow one.
+    """
+
+    shape = tuple(int(x) for x in state_shape)
+    dims = _state_dims(len(shape))
+    sizes = dict(zip(dims, shape, strict=True))
+    devices = int(num_devices)
+    if devices < 1:
+        raise ValueError("num_devices must be >= 1")
+    depth = int(hermite_ghost_depth)
+    if depth < 0:
+        raise ValueError("hermite_ghost_depth must be >= 0")
+
+    ns = int(sizes.get("s", 1))
+    nm = int(sizes["m"])
+    ns_chunks = _largest_factor_at_most(devices, ns) if "s" in dims else 1
+    while ns_chunks > 1 and ns % ns_chunks:
+        ns_chunks -= 1
+    nm_chunks = devices // ns_chunks
+    if ns_chunks * nm_chunks != devices:
+        raise ValueError(
+            f"{devices} devices do not factor over Ns={ns} species-first"
+        )
+    if nm % nm_chunks:
+        raise ValueError(
+            f"Hermite extent Nm={nm} is not exactly divisible by the "
+            f"{nm_chunks} Hermite blocks that {devices} devices leave after "
+            f"factoring Ns={ns} species-first"
+        )
+    nm_local = nm // nm_chunks
+    if nm_chunks > 1 and nm_local < max(depth, 1):
+        raise ValueError(
+            f"a width-{depth} Hermite halo needs at least {depth} moments per "
+            f"shard, but Nm={nm} over {nm_chunks} blocks leaves {nm_local}"
+        )
+
+    chunks = {dim: 1 for dim in dims}
+    if "s" in dims:
+        chunks["s"] = ns_chunks
+    chunks["m"] = nm_chunks
+    shard_shape = tuple(sizes[dim] // chunks[dim] for dim in dims)
+    needs_halo = bool(nm_chunks > 1 and depth > 0)
+    return VelocityShardingPlan(
+        state_shape=shape,
+        dims=dims,
+        num_devices=devices,
+        chunks=chunks,
+        shard_shape=shard_shape,
+        active_axes=tuple(dim for dim in dims if chunks[dim] > 1),
+        hermite_ghost_depth=depth if needs_halo else 0,
+        needs_hermite_exchange=needs_halo,
+        needs_field_reduction=True,
+        field_reduction_axes=tuple(
+            axis for axis in ("s", "m") if chunks.get(axis, 1) > 1
+        ),
+        communication_pattern=(
+            "hermite_ghost_exchange+field_psum" if needs_halo else "field_psum"
+        ),
+        load_balance=1.0,
+    )
+
+
+__all__ = [
+    "VelocityShardingPlan",
+    "build_species_hermite_mesh_plan",
+    "build_velocity_sharding_plan",
+    "species_hermite_device_counts",
+]

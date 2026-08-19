@@ -70,7 +70,28 @@ recursive = true
 # -- at zero drive the whole spectrum sits on the imaginary axis and the branch
 # selector is floored at zero -- and no existing test covered that, because
 # every other objective test runs at a drive where something is unstable.
-baseline = 96
+# 96 -> 97: tests/validation/stellarator/test_finite_beta_vmec_boozer_parity.py.
+# A new file again needs a reason: this is the only place the two VMEC geometry
+# paths are compared against each other at finite beta, and it is what shows the
+# vmex-state bridge was returning the grad-B drift labelled as the curvature
+# drift. No existing test could catch it -- every other VMEC parity fixture is a
+# vacuum or near-vacuum equilibrium, where the two drifts genuinely coincide and
+# the missing pressure term is invisible.
+# 96 -> 97: tests/unit/solvers/test_dot_precision_guard.py. The target is 36, so
+# a new file needs a reason: this one owns a hazard that has no home in any
+# existing suite, because it is not a property of a value. An unpinned dot and
+# Precision.HIGHEST are bit-identical on CPU, so nothing this repo's x64-only CI
+# executes can observe TF32 -- the evidence lives in the jaxpr, and the assertion
+# has to be about the precision request rather than the answer. It is one file
+# rather than assertions scattered across the solver and geometry suites because
+# the classifier is shared: the rule is shape-based, so a contraction that
+# becomes a matrix product when a config value moves is caught without anyone
+# editing a list of call sites. It also carries the single allowlisted unpinned
+# contraction and the test that keeps that entry honest.
+# 97 -> 98: the finite-beta A-vs-B drift parity fixture (#57). It is a new
+# file because the vacuum suites cannot express it: the two geometry paths
+# agree identically at zero beta, which is why the mislabelled drift hid.
+baseline = 98
 target = 36
 
 [[topology_policy.counts]]
@@ -212,7 +233,156 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 91057: the production species x Hermite nonlinear decomposition
+# (plan item 4.2). Three quarters of it is one new route -- the shard_map mesh,
+# the width-2 Hermite halo, the masked field psum and the scan-carry
+# diagnostics -- inside gkx/parallel/{state,velocity_plan,velocity_hermite,
+# integrators}.py, with no new module and so no new facade to keep in sync.
+# The rest is the reason the shard-local kernels can stay the *serial* kernels:
+# a HermiteWindow carrying the global moment coordinates of a slab, threaded
+# into the five places whose coefficient is a function of the global Hermite
+# index (the field drives, the diamagnetic drive, the reflectionless closure,
+# build_H, the hypercollision normalization). Without it each shard would place
+# m = 0..3 drives at its own local rows and close the hierarchy at its own last
+# moment -- a wrong answer, not a slow one -- and the alternative, forking a
+# sharded copy of every term, is what the measured lanes show costs identity.
+# The evidence the lines buy: RHS identity at f32 rounding on two A4000s, an
+# exact final state under x64, and an HLO census with zero all-to-all. Part of
+# the count is refusal rather than mechanism, and that part is load-bearing:
+# conserving collisions read the m = 0, 1, 2 moments of the local slab, so a
+# split Hermite axis would silently evaluate a different operator on every
+# non-owning shard, and the route raises instead of returning it.
+# 89815 -> 89852: differentiating the twist-shift boundary (#49). The linked
+# flux tube refused every cache built inside a trace, so gradient work had to
+# use boundary="periodic" -- the one boundary a sheared tokamak does not have.
+# Nothing about the shear was ever traced: jnp.asarray of a host constant
+# returns a tracer inside a trace, so reading s_hat, the edge metrics, the
+# parallel spacing, and the chain index maps back off their own jnp copies
+# reported concrete geometry as traced. The lines move those four reads to the
+# buffer they already live in and spend the rest on the refusal that remains
+# real -- shear as a design variable, where the integer link index would have
+# to be rounded off a tracer -- so it names the parameter that is unsupported
+# instead of the boundary. See
+# test_linked_boundary_growth_gradient_matches_finite_difference.
+# 89852 -> 89903: differentiating the compressed real FFT. The projector that
+# keeps the nonlinear state real asked cache.ky for its sign pattern, and
+# cache.ky is rho_star * grid.ky, so it is a tracer whenever the cache is built
+# inside one. compressed_real_fft = true -- what every production nonlinear
+# TOML sets -- therefore refused jit outright on both boundaries, and every
+# gradient in the repository quietly ran the full-complex bracket instead. All
+# the projector needs is the ky axis layout, which is grid topology and which
+# the compressed bracket already reads off shapes alone. The lines are that
+# entry point, the host-side layout read that replaces the jnp round trip, and
+# the reason the conjugate kx ordering has to stay a numpy array: these
+# projectors are cached across traces, so a device constant built here belongs
+# to whichever trace built it first and escapes that scope on reuse. See
+# test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference.
+# 89815 -> 89964: finite-beta pressure in the differentiable vmex-state bridge.
+# The bridge aliased gbdrift to cvdrift and left mu0 dp/ds out of the normal
+# curvature, so it returned the grad-B drift under both names and every
+# boundary-coefficient gradient in the adjoint stack dropped finite-beta drift
+# physics -- silently, because a finite-beta wout raises nothing there. The new
+# geometry/vmec_boozer_drifts.py owns the drift assembly the pressure gradient
+# touches, which is also what keeps vmec_boozer_core.py under the per-module cap
+# it was three lines below. On two 1.9%-beta QA equilibria this takes the
+# runtime-path-vs-bridge cvdrift disagreement from 2.1e-1 to 3.3e-3 while
+# leaving every zero-beta array bit-identical. See
+# test_finite_beta_vmec_boozer_parity.
+# 89815 -> 90055: running an equilibrium file without writing a deck first (#51). The
+# wout module is the whole cost: sniffing a VMEC signature, resolving the
+# packaged default deck, forcing the geometry model when a supplied deck is not
+# VMEC-shaped, and writing the resolved deck back out so the run reproduces
+# itself.
+# 89815 -> 90216: letting a nonlinear run decide when it has converged (#54). The chunked
+# stop loop, the stationarity and autocorrelation decision, and the reporting of
+# the window that was actually measured. The alternative is what the code did
+# before: integrate to a t_max the user guessed, and average whatever came out.
+# The stop policy then moved out of transport_windows.py into
+# diagnostics/saturation.py, which costs 28 lines of module docstring and
+# imports and returns transport_windows.py to its pre-branch size. The split is
+# by question asked: transport_windows scores a finished window against
+# promotion gates, saturation answers a running solver about a trace that is
+# still growing under it.
+# 89815 -> 90926: drawing the diagnostics the solver already writes (#53). snapshots.py is
+# a move rather than new surface -- the renderers came out of the movie tool,
+# which shrinks by the same amount -- and the figure functions cover the
+# spectra and particle flux that were being written to NetCDF and never
+# plotted. The transport figures then moved out of plotting.py into
+# artifacts/transport_figures.py, which costs the ten lines of a module
+# docstring and import header and returns plotting.py to the size it had
+# before this branch; the two modules are split by what they read, benchmark
+# and scan results on one side and saved run output on the other.
+# 89815 -> 89894: failing loudly instead of reporting a confident wrong growth rate (#50).
+# The overflow and non-finite guards on both fit paths, the CFL estimate that
+# warns before a run goes unstable, and the linear_scan branch that makes the
+# existing scan figure reachable from --plot. The guards are the point: the
+# alternative is the defect this removes, a fit over a 1e102 trajectory
+# reported without comment.
+# 90936 -> 91752: plotting every run and reusing compiled kernels (#58). The auto-plot
+# orchestration, the GX output reader, and the compilation-cache install. The
+# cache is the point: a short nonlinear run spent 13.5 s compiling ~320 kernels
+# and now spends 0.9 s, because JAX's default refuses to persist anything under
+# a second and almost every GKX kernel is 20 ms.
+# 89815 -> 89890: bounding nonlinear reverse-mode memory. A checkpointed step
+# still leaves every lax.scan carry on the tape; the two-level scan retains
+# sqrt(N) block boundaries and inner carries instead. These 75 net lines reduce
+# measured N=2048 XLA temporary memory by 60x on CPU and 70x on GPU while
+# preserving the exact discrete map and device-resident execution. See
+# test_checkpointed_scan_matches_discrete_primal_and_reverse_with_tail.
+# The physical heat-flux window now lives with nonlinear state integration;
+# experimental shadowing methods and their separate module were removed. Its
+# scan accumulates one scalar instead of retaining O(N) diagnostic outputs.
+# 89815 -> 89848: finishing the TF32 sweep across the solver and geometry paths
+# #43 left. The audit measured every contraction in the package rather than
+# assuming, and the answer narrowed the fix: XLA only reaches for the tensor
+# cores when a contraction is matrix-shaped, so the Krylov vector work -- the
+# Arnoldi Gram-Schmidt vdots, the Rayleigh quotients, the Ritz lift, the overlap
+# einsums -- measured exact unpinned on an RTX A4000 and is deliberately left
+# alone. Two products were not exact and are pinned here: the propagator
+# candidate lift, which is a matvec at the default candidates=1 and a real GEMM
+# above it (returned eigenvector 1.2e-08 -> 1.8e-05), and the Gauss-Newton normal
+# equations, where squared conditioning puts 1.7e-04 into a step whose own report
+# gates at rtol 1.0e-04. Most of the 33 lines are those two measurements written
+# down, plus _damped_gauss_newton_step, which exists so the pin is reachable by a
+# jaxpr assertion at all -- the loop around it converts to host floats to build
+# its history and cannot be traced. See test_dot_precision_guard.py.
+# 89815 -> 89913: certifying the linear branch the runtime defaults to (#52). The adaptive
+# branch, the precision floor that keeps a complex64 state from being judged
+# against an f64-only tolerance, and the exact-precision pin on the one
+# matrix-shaped contraction the residual is measured through. Without these the
+# path returns an unconverged Rayleigh quotient at residual 0.999 and calls it
+# a growth rate.
+# 89815 -> 89874: giving every residual gate a precision floor. The
+# gates compared a relative residual assembled from working-dtype operator
+# applications against an absolute constant -- 1e-10 for the adaptive
+# propagator, 1e-9 for the objective's primal and adjoint solves, 1e-8 for its
+# implicit-gradient solve, 1e-6 for the shift-invert outer gate. That ratio
+# bottoms out a few eps above zero, measured between 1.8 and 12.2 eps in
+# complex64 from n=48 to n=8192, so in single precision every one of them sat
+# below anything the arithmetic can produce. Nothing could certify: the restart
+# budget burned to exhaustion on a pair already as good as float32 allows, and
+# the gradient solve, which fails closed to NaN, deleted the gradient outright.
+# x64-only CI never saw any of it. Most of the cost is the one shared helper and
+# the recorded reason a residual gate is not a free parameter; the call sites
+# are nine substitutions, four of them solves that reach solvax directly and so
+# cannot inherit the floor from the propagator wrapper. See
+# test_residual_gate_never_sits_below_the_working_dtype_noise_floor.
+# 89815 -> 89860: making fit_signal = "auto" choose a signal and nothing else.
+# Both automatic paths -- the runtime linear fit and the combined-ky scan --
+# scored their candidates through fit_growth_rate_auto_with_stats without
+# passing tmin/tmax, so a run that pinned [fit] auto_window = false with a
+# window got the automatic selector's window instead, silently, while still
+# reporting "automatic fit selected signal 'phi'". On the Cyclone linear case
+# that is gamma = 0.0951 against 0.0413 for the same trajectory. The lines are
+# the fixed-window branch in each scorer plus the fit_growth_rate_with_stats
+# seam they need, which reports the R^2 pair over the requested window so the
+# channel is still chosen on fit quality. See
+# test_auto_fit_signal_keeps_the_requested_runtime_window.
+# 89874 -> 89919: merging the auto-window signal fix (#46) under the residual
+# floor. Both land in the fit path; the count is the sum, not new surface.
+# 89919 -> 90011: certifying the default linear branch alongside the residual
+# floor it now uses (#52 over #47). The adaptive branch and its precision pin.
+baseline = 94302
 target = 45000
 
 [[line_budget_policy.counts]]

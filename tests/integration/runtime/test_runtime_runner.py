@@ -63,6 +63,7 @@ from gkx.workflows.runtime.diagnostics import refit_runtime_linear_trajectory
 from gkx.workflows.runtime.results import RuntimeParameterScanResult
 from gkx.terms.assembly import compute_fields_cached
 from gkx.terms.config import FieldState
+from support.paired_solvax import requires_paired_solvax
 
 pytestmark = pytest.mark.integration
 
@@ -499,6 +500,78 @@ def test_runtime_scan_returns_arrays() -> None:
     assert scan.ky.shape == (2,)
     assert scan.gamma.shape == (2,)
     assert scan.omega.shape == (2,)
+
+
+@requires_paired_solvax("adaptive_eigenpair", "estimate_rk4_timestep")
+def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
+    """solver="krylov" must recover the ITG branch the time solver finds.
+
+    Physics-anchored regression gate for the collisional cyclone example: the
+    generic runtime Krylov default used to run an ungated propagator Arnoldi
+    whose returned pair was unconverged (relative residual ~1) and silently
+    reported damped, unphysical growth rates while ``solver="time"`` found the
+    unstable ITG mode. The certified adaptive default must recover the exact
+    dominant eigenvalue of the linear operator (dense ground truth) and agree
+    with the time-solver branch, or raise from its residual gate -- a silently
+    wrong eigenvalue is the defect.
+    """
+
+    from gkx.operators.linear.params import linear_terms_to_term_config
+    from gkx.solvers.linear.krylov_algorithms import _apply_operator
+    from gkx.core.grid import select_ky_grid
+    from gkx.diagnostics.modes import select_ky_index
+
+    runtime, _raw = load_runtime_from_toml(
+        REPO_ROOT / "examples/linear/axisymmetric/cyclone.toml"
+    )
+    runtime = replace(
+        runtime,
+        grid=replace(runtime.grid, Ny=8, ntheta=16, nperiod=1, Nz=16),
+    )
+    reference = run_runtime_linear(
+        runtime, ky_target=0.3, Nl=8, Nm=8, solver="time", steps=20_000
+    )
+    krylov = run_runtime_linear(runtime, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
+    assert reference.ky == pytest.approx(krylov.ky)
+
+    # Operator ground truth: the certified pair must be the exact dominant
+    # eigenvalue of the discretized linear operator at this resolution.
+    geom = build_runtime_geometry(runtime)
+    grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, runtime.grid))
+    grid = select_ky_grid(
+        grid_full, select_ky_index(np.asarray(grid_full.ky), 0.3)
+    )
+    params = build_runtime_linear_params(runtime, Nm=8, geom=geom)
+    term_cfg = linear_terms_to_term_config(build_runtime_linear_terms(runtime))
+    cache = build_linear_cache(grid, geom, params, 8, 8)
+    shape = (1, 8, 8, grid.ky.size, grid.kx.size, grid.z.size)
+    size = int(np.prod(shape))
+    identity = np.eye(size, dtype=np.complex64)
+    columns = [
+        np.asarray(
+            _apply_operator(
+                jnp.asarray(identity[j].reshape(shape)),
+                cache,
+                params,
+                term_cfg,
+            )
+        ).reshape(-1)
+        for j in range(size)
+    ]
+    eigenvalues = np.linalg.eigvals(np.stack(columns, axis=1).astype(np.complex128))
+    dominant = eigenvalues[np.argmax(eigenvalues.real)]
+    assert krylov.gamma == pytest.approx(float(dominant.real), abs=2.0e-3)
+    assert krylov.omega == pytest.approx(float(-dominant.imag), abs=2.0e-3)
+
+    # Same unstable branch as the time solver: positive growth, matching
+    # propagation direction and frequency. The time-solver growth rate carries
+    # a known fit/integration bias at this resolution, so gate it loosely; the
+    # defect regressed here reported gamma < 0 and an unrelated frequency.
+    assert reference.gamma > 0.0
+    assert krylov.gamma > 0.0
+    assert np.sign(krylov.omega) == np.sign(reference.omega)
+    assert krylov.omega == pytest.approx(reference.omega, rel=0.15)
+    assert krylov.gamma == pytest.approx(reference.gamma, rel=0.75)
 
 
 def test_runtime_scan_batch_matches_serial() -> None:

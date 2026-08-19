@@ -65,6 +65,25 @@ gyrokinetic scaling:
    \tilde{\phi} = \frac{e \phi}{T_i}, \qquad
    \tilde{\omega} = \frac{\omega}{v_{th}/R_0}.
 
+Here :math:`v_{th} = \sqrt{T/m}`, not :math:`\sqrt{2T/m}`, and correspondingly
+:math:`\rho = \sqrt{T m}/|q|` (``gkx.operators.linear.params``). GX uses the
+same definition, so GKX and GX results compare directly with no conversion.
+Codes in the GS2 family, including stella, define :math:`v_{th} = \sqrt{2T/m}`;
+against those, wave numbers and rates convert as
+
+.. math::
+
+   k_{y,\mathrm{GS2}} = \sqrt{2}\, k_{y,\mathrm{GKX}}, \qquad
+   \gamma_{\mathrm{GS2}} = \gamma_{\mathrm{GKX}}/\sqrt{2}, \qquad
+   \omega_{\mathrm{GS2}} = \omega_{\mathrm{GKX}}/\sqrt{2},
+
+with the same factor on the time axis and a factor of two on the drift
+coefficients. Gradient inputs such as ``tprim`` and ``fprim``, and
+:math:`\beta`, are convention-free. Frequency is the channel that exposes a
+mistaken convention: omitting the wave-number conversion costs about 30 per
+cent in a growth rate near its peak, where the curve is flat, but 54 per cent
+in the frequency.
+
 For the Cyclone base case we take the reference length :math:`L_{ref}=a` so
 that the input gradients are expressed as
 :math:`a/L_T` and :math:`a/L_n`. With :math:`R_0 = R/a`, this means

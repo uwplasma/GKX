@@ -145,6 +145,7 @@ def particle_flux_species(
     *,
     use_dealias: bool = True,
     flux_scale: float = 1.0,
+    global_species: int | None = None,
 ) -> jnp.ndarray:
     """Particle-flux diagnostic per species."""
 
@@ -159,6 +160,7 @@ def particle_flux_species(
         flux_fac,
         use_dealias=use_dealias,
         flux_scale=flux_scale,
+        global_species=global_species,
     )
     return jnp.sum(es_contrib + apar_contrib + bpar_contrib, axis=(1, 2, 3))
 
