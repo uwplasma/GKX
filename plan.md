@@ -1069,3 +1069,30 @@ extremum at t~25 enters the 4-point log-linear fit. A gated quantity that moves 
 output-cadence choice is not a measurement. → **new item 2.9: re-derive gamma_GAM with a fit
 that cannot be swung by one sample** (more points, amplitude-weighted, or an envelope fit).
 Final Nm=96-at-dt/2 and Nl=8 control runs still in flight; verdict pending.
+
+### 2026-08-19 agent/compressed-fft — 3.4 DONE → PR #61 (stacked on #59)
+`compressed_real_fft=True` now differentiates. Root cause was the #59 defect class again: the
+Hermitian projector read ky/kx off CACHE arrays (`state_integration.py:176`,
+`parallel/integrators.py:291`), and `cache.ky = rho_star * grid.ky` is a tracer whenever the
+cache is built inside a trace — on BOTH boundaries. **Significance: this flag is the DEFAULT in
+the production nonlinear TOMLs, so the path most real runs take had never been differentiated.**
+The projector never needed wavenumbers — only `len(ky)`, two-sidedness, and `nx`, all shape
+topology — so it now takes the layout from shapes.
+**A second latent bug surfaced once the projector could be built in-trace**: the negative-ky
+index array was materialized with `jnp.asarray` inside an `lru_cache`d closure, so the first
+trace's device constant ESCAPED and a second trace reusing that grid signature died with
+`UnexpectedTracerError` (reproducible: periodic then linked in one process). Now host data,
+with a regression test.
+AD vs FD: periodic compressed **5.4e-12**, linked compressed **3.1e-11**. Forward output
+byte-identical (diagnostics CSV sha256 match on the shipped 64x64x24 example; raw final
+state/phi identical on both boundaries) — structural, since shape- and value-derived gates
+agree for every grid from `build_spectral_grid`. imex + compressed also verified (it
+early-returned before the broken line, so never blocked, merely never tested).
+
+**Pattern worth naming for future work**: three separate defects this session
+(#59 twist-shift, #61 projector, #61's escaped constant) were all "host data read off a traced
+array, or a device constant captured in a cache". Under current JAX `jnp.asarray(host_value)`
+inside a trace returns a tracer, so any `is-this-traced` check written that way is always true,
+and any `lru_cache` that closes over `jnp` arrays leaks constants across traces. **Grep for
+`np.asarray(cache.` / `float(cache.` / `int(np.asarray(` and for `jnp.` inside `lru_cache`d
+factories — the remaining instances are probably the same bug.** → new item **3.5**.
