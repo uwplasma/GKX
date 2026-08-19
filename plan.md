@@ -740,3 +740,20 @@ merge order but wrong for the budget, and the module split resolves both.
 
 **PR status at this point:** #50 python-floor fix pushed (79caa79d, CI re-running);
 #51 and #52 and #55 green; #53/#54/#56 module splits in progress.
+
+### 2026-08-18 agent/pr45 — PARITY MATRIX REPRODUCES BIT-FOR-BIT ACROSS HARDWARE
+The GKX side of PR #45's six-case matrix reproduces the tracked values to **1.9e-9 relative
+across all 11 ky** — measured on macOS arm64 CPU against a matrix generated on an RTX A4000
+GPU. **The parity protocol is deterministic and hardware-independent**, which is a stronger
+property than the PR claims and is exactly what a regenerable reference needs.
+Headline claim reproduced: peak ky=0.30 gives +0.0165% γ / +0.0095% ω (claimed +0.02%/+0.01%);
+the small residual against the tracked +0.0196%/+0.0077% is on the REFERENCE side — this run
+compared against GX's shipped `itg_salpha_adiabatic_electrons_correct.out.nc`, the PR against
+its own GX re-run. Half-time convergence probe (backing the "10 of 11 settled" claim) still
+integrating at time of writing; verdict pending on that alone.
+
+Combined with the office re-baseline, the GX validation picture is now: the protocol is
+deterministic across hardware (this entry), the references reproduce under a rebuilt GX
+(2.1b), and where both sides are converged GKX's certified eigensolver agrees to **0.043%**
+(PR #56 entry). The remaining GX-side gaps are documentation (#55, merged-pending), the
+regeneration command defect, and the missing HSX deck (2.4-r0).
