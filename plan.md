@@ -94,7 +94,21 @@ Open PRs: [#44](https://github.com/uwplasma/GKX/pull/44) tf32 audit ·
 
 ## Key findings a fresh agent must know (evidence in plan/notes/ and §Log)
 
-1. **Normalization convention — SOLVED for stella; OPEN for GX.**
+1. **Normalization convention — FULLY RESOLVED. Both earlier claims were right.**
+   **GX is NOT in the GS2/stella family — GX shares GKX's convention.** GX
+   `src/parameters.cu:1336-1338` defines `vt=sqrt(temp/mass)`, `tz=temp/z`,
+   `rho2=temp*mass/(z*z)` — a line-for-line match of GKX `params.py:264-266`. GX halves
+   the GS2-convention drifts on ingest (`src/geometry.cu:537,795`), so its stored geometry
+   is the halved form and its netCDF has `gbdrift(0)=0.36=1/rmaj` not `2/rmaj`. GKX's
+   importer reads GX grouped output verbatim and applies 0.5 only to root-level
+   GS2-convention `.eik.nc` (`src/gkx/geometry/flux_tube.py:433-452`) — correct bridge on
+   each branch. ky grids agree to 6e-8. `contract="cyclone"` is a pure no-op.
+   **=> GKX <-> GX: NO remap (why the tracked parity tables are legitimately sub-%).**
+   **=> GKX <-> stella: sqrt(2) remap (stella genuinely is GS2-family).**
+   **=> GX <-> stella: sqrt(2) remap.**
+   (An earlier working assumption that "GX and stella share conventions" was WRONG and is
+   retracted; it briefly propagated into agent prompts.)
+   Details of the stella side:
    **The conversion is one factor sqrt(2), in OPPOSITE senses on wavenumber and rates:**
    `ky_stella = sqrt(2)*ky_gkx` and `(gamma,omega)_stella[v_th/a] = (gamma,omega)_gkx[c_s/a]/sqrt(2)`
    (GKX: `c_s=sqrt(T/m)`, `rho_s=sqrt(Tm)/|q|`; stella/GX: `v_th=sqrt(2T/m)`).
@@ -378,3 +392,20 @@ geometry (ε=0.18, q=1.4). GAM frequency/damping are rates and convert as /sqrt(
 Artifacts: `plan/notes/stella_vs_gkx_rung1.md`; regeneration scripts (`make_comparison.py`
 rebuilds the table from logs without re-running, `verify_units.py`) in the session
 scratchpad `stella_vs_gkx/`.
+
+### 2026-08-18 agent/pr45 — NORMALIZATION RESOLVED + GX-parity fit protocol
+Finding #1 is closed (see above): GX shares GKX's `vt=sqrt(T/m)` convention — verified in
+GX source, in the drift halving on ingest, in the netCDF drift values, in GKX's importer
+branching, in the ky grids (6e-8), and by `contract="cyclone"` being a no-op. So no remap
+is needed GKX<->GX, and the sqrt(2) applies only against stella (and GX<->stella).
+
+**The GX-parity fit protocol is now documented** and is the best-performing fit recipe in
+the repo (sub-0.1% agreement) — a strong candidate default for item 0.3:
+fixed window `[0.7*t_end, t_end]` with auto_window OFF; signal = complex phi at midplane
+`z=Nz//2+1`; TWO OLS fits — `log|phi|` -> gamma and the UNWRAPPED PHASE -> -omega;
+Nl=16/Nm=48; imex2 at dt=0.002; float64; plus a **half-integration-time probe** that
+re-fits at `t_end/2` and gates a 5% "settled" flag. That probe is a ready-made stationarity
+self-check. Relayed to the fitrobust agent, with the hypothesis that the collisional-lane
+bias may partly come from `fit_signal="auto"` selecting density rather than midplane phi.
+PR #45's own Cyclone reproduction (t=150, 75000 steps + half-time probe, ~82 min under
+contention) was still integrating at the time of writing; verdict pending on that number.
