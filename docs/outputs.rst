@@ -128,8 +128,7 @@ Use the plotting helper to visualize nonlinear diagnostic histories from
 .. code-block:: bash
 
    python examples/utilities/plot_runtime_outputs.py tools_out/cyclone_release.out.nc \
-     --out tools_out/cyclone_release_diagnostics.png \
-     --title "Cyclone Diagnostics"
+     --out tools_out/cyclone_release_diagnostics.png
 
 The script reads ``Diagnostics/t`` together with ``Phi2_t``, ``Wg_st``,
 ``Wphi_st``, and ``HeatFlux_st`` (when present) and produces a 2x2 panel.

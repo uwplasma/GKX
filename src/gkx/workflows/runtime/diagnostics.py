@@ -21,10 +21,36 @@ from gkx.workflows.runtime.results import RuntimeLinearResult
 __all__ = [
     "RuntimeLinearFitResult",
     "RuntimeQuasilinearFinalizationDeps",
+    "ensure_finite_linear_history",
     "finalize_runtime_linear_quasilinear",
     "fit_runtime_linear_diagnostics",
     "refit_runtime_linear_trajectory",
 ]
+
+#: Finite amplitudes beyond this scale are numerical overflow, not physics: a
+#: linear mode history this large means the integration blew up before hitting
+#: inf, and any growth fit through it would be confidently wrong.
+_OVERFLOW_AMPLITUDE = 1.0e30
+
+
+def ensure_finite_linear_history(name: str, values: np.ndarray | None) -> None:
+    """Reject non-finite or overflow-scale histories before any growth fit."""
+
+    if values is None:
+        return
+    if not np.all(np.isfinite(values)):
+        raise FloatingPointError(
+            f"linear integration produced a non-finite {name} history; "
+            "reduce the timestep or select a stable integration policy"
+        )
+    peak = float(np.max(np.abs(values)))
+    if peak > _OVERFLOW_AMPLITUDE:
+        raise FloatingPointError(
+            f"linear integration produced an overflowing {name} history "
+            f"(|{name}| up to {peak:.3g} exceeds {_OVERFLOW_AMPLITUDE:.0e}), "
+            "which indicates timestep instability; reduce dt or select a "
+            "stable integration policy"
+        )
 
 
 @dataclass(frozen=True)
@@ -204,11 +230,7 @@ def _prepare_runtime_linear_fit_inputs(
         ("field", inputs.phi),
         ("density", inputs.density),
     ):
-        if values is not None and not np.all(np.isfinite(values)):
-            raise FloatingPointError(
-                f"linear integration produced a non-finite {name} history; "
-                "reduce the timestep or select a stable integration policy"
-            )
+        ensure_finite_linear_history(name, values)
     return inputs
 
 

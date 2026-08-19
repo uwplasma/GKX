@@ -23,8 +23,10 @@ classifiers = [
 ]
 
 dependencies = [
-  "jax",
-  "jaxlib",
+  # gkx.objectives.core opts into lax_linalg.eig(..., enable_eigvec_derivs=True),
+  # which first shipped in jax 0.10.1.
+  "jax>=0.10.1",
+  "jaxlib>=0.10.1",
   "numpy",
   "matplotlib",
   "scipy",
@@ -32,6 +34,9 @@ dependencies = [
   "diffrax",
   "equinox",
   "solvax>=0.12.0",
+  # The VMEC geometry path hard-requires the booz_xform_jax bridge
+  # (gkx.geometry.backend_discovery).
+  "booz_xform_jax",
   "tomli; python_version < '3.11'",
   "tqdm",
 ]
