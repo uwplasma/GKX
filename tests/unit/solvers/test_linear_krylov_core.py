@@ -197,6 +197,33 @@ def test_arnoldi_uses_dtype_scaled_near_breakdown_threshold() -> None:
     assert jnp.linalg.norm(basis_resolved[1]) == pytest.approx(1.0)
 
 
+def test_residual_gate_never_sits_below_the_working_dtype_noise_floor() -> None:
+    """A residual gate no precision can reach certifies nothing and never stops."""
+
+    double = float(np.finfo(np.complex128).eps)
+    single = float(np.finfo(np.complex64).eps)
+
+    # A relative residual built from float32 operator applications bottoms out a
+    # few eps above zero, so the historic 1e-10 gate was unreachable there while
+    # remaining a genuine gate in float64.
+    assert ap.certifiable_residual_tolerance(1.0e-10, np.complex128) == 1.0e-10
+    assert ap.certifiable_residual_tolerance(1.0e-10, np.complex64) == pytest.approx(
+        1.0e3 * single
+    )
+    assert 1.0e3 * single > 1.0e-10
+
+    # The floor tracks the dtype rather than a hard-coded constant, and a request
+    # the arithmetic can already meet is passed through untouched.
+    assert ap.certifiable_residual_tolerance(0.0, np.complex128) == pytest.approx(
+        1.0e3 * double
+    )
+    assert ap.certifiable_residual_tolerance(1.0e-3, np.complex64) == 1.0e-3
+    assert ap.certifiable_residual_tolerance(1.0e-3, np.complex128) == 1.0e-3
+    assert ap.certifiable_residual_tolerance(
+        1.0e-10, np.float32
+    ) == ap.certifiable_residual_tolerance(1.0e-10, np.complex64)
+
+
 def test_rayleigh_quotient_minimizes_fixed_vector_residual(monkeypatch) -> None:
     matrix = jnp.asarray(
         [[1.0 + 0.2j, 0.4 - 0.1j], [-0.3 + 0.5j, 2.0 - 0.4j]],
@@ -721,6 +748,68 @@ def test_long_horizon_propagator_selects_growth_and_recovers_frequency(
     assert abs(complex(np.asarray(vector[0]))) > 1.0 - 1.0e-10
 
 
+def test_certified_candidate_lift_requests_exact_dot_precision() -> None:
+    """The vector the residual gate measures must not be built in TF32.
+
+    ``certifiable_residual_tolerance`` floors the gate at ``1000 * eps`` of the
+    working precision, 1.19e-04 for the complex64 runtime state. TF32 keeps ten
+    mantissa bits, ~4.9e-04, so an unpinned lift puts more error into the
+    eigenvector than the gate is allowed to accept and the certified branch
+    rejects converged pairs on every Ampere-or-newer GPU. No CPU *value* can see
+    this -- there is no TF32 path on CPU and both precisions are bit-identical --
+    but the request is recorded in the jaxpr on every backend, so that is what is
+    asserted, at the candidate counts ``_adaptive_branch`` can select.
+    """
+
+    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
+
+    def lift_precisions(candidates: int) -> list[object]:
+        jaxpr = jax.make_jaxpr(
+            lambda value: kp.dominant_eigenpairs_propagator_cached(
+                value,
+                cache,
+                params,
+                term_cfg,
+                krylov_dim=4,
+                dt=0.01,
+                propagator_steps=2,
+                candidates=candidates,
+            )
+        )(v0).jaxpr
+
+        def walk(inner):
+            for eqn in inner.eqns:
+                if eqn.primitive.name == "dot_general":
+                    yield eqn
+                for value in eqn.params.values():
+                    items = value if isinstance(value, (list, tuple)) else [value]
+                    for item in items:
+                        nested = getattr(item, "jaxpr", item)
+                        nested = getattr(nested, "jaxpr", nested)
+                        if hasattr(nested, "eqns"):
+                            yield from walk(nested)
+
+        found = []
+        for eqn in walk(jaxpr):
+            frames = getattr(eqn.source_info.traceback, "frames", []) or []
+            if any("krylov_propagator" in getattr(f, "file_name", "") for f in frames):
+                found.append(eqn.params["precision"])
+        return found
+
+    exact = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
+    for candidates in (1, 2):
+        precisions = [p for p in lift_precisions(candidates) if p is not None]
+        assert precisions, (
+            f"the candidate lift lowered to no pinned dot at candidates={candidates}; "
+            "the certified eigenvector is being built at the backend default"
+        )
+        assert all(precision == exact for precision in precisions), (
+            f"the candidate lift is not pinned at candidates={candidates} "
+            f"({precisions}); TF32 puts ~4.9e-04 into the vector the residual gate "
+            "measures, against its 1.19e-04 complex64 floor"
+        )
+
+
 @requires_solvax_eigen_api
 def test_adaptive_propagator_selects_stable_step_and_stops_on_residual(
     monkeypatch: pytest.MonkeyPatch,
@@ -784,14 +873,17 @@ def test_adaptive_propagator_selects_stable_step_and_stops_on_residual(
         stability_dimension=8,
     )
 
+    # The requested gate is what x64 certifies against; single precision cannot
+    # reach it, so the adapter certifies against its own dtype noise floor.
+    gate = ap.certifiable_residual_tolerance(1.0e-9, eigenvalues.dtype)
     assert solution.converged
     assert solution.stable
     assert solution.restarts < 5
     assert solution.filter_dt < 2.8 / float(jnp.max(jnp.abs(eigenvalues)))
     assert complex(np.asarray(solution.eigenvalue)) == pytest.approx(
-        complex(np.asarray(eigenvalues[0])), rel=1.0e-9
+        complex(np.asarray(eigenvalues[0])), rel=gate
     )
-    assert float(np.asarray(solution.residual)) < 1.0e-9
+    assert float(np.asarray(solution.residual)) < gate
     np.testing.assert_array_equal(
         np.asarray(solution.eigenvalue),
         np.asarray(repeated.eigenvalue),

@@ -288,19 +288,18 @@ def _collision_moment_correction(
 ) -> jnp.ndarray:
     nu_s = nu[:, None, None, None, None]
     b_s = jnp.asarray(b, dtype=jnp.real(H).dtype)
-    sqrt_b = jnp.sqrt(jnp.maximum(b_s, 0.0))
     H_m0 = H[:, :, 0, ...]
     Nm = H.shape[2]
     H_m1 = H[:, :, 1, ...] if Nm > 1 else jnp.zeros_like(H_m0)
     G_m2 = G[:, :, 2, ...] if Nm > 2 else jnp.zeros_like(H_m0)
 
     coeff_t, t_bar = _laguerre_temperature_coupling(H_m0, G_m2, Jl)
-    uperp_bar = sqrt_b * jnp.sum(JlB * H_m0, axis=1)
+    uperp_moment = jnp.sum(JlB * H_m0, axis=1)
     upar_bar = jnp.sum(Jl * H_m1, axis=1)
 
     corr = jnp.zeros_like(H)
     corr_m0 = (
-        nu_s * sqrt_b[:, None, ...] * JlB * uperp_bar[:, None, ...]
+        nu_s * b_s[:, None, ...] * JlB * uperp_moment[:, None, ...]
         + nu_s * 2.0 * coeff_t * t_bar[:, None, ...]
     )
     corr = corr + _hermite_mode_drive(corr, 0, corr_m0)

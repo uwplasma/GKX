@@ -97,3 +97,9 @@ ky = 0.3
 Nl = 8
 Nm = 8
 solver = "krylov"
+
+[scan]
+ky = [0.1, 0.2, 0.3, 0.4]
+Nl = 8
+Nm = 8
+solver = "krylov"

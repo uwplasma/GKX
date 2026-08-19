@@ -2711,9 +2711,7 @@ def test_public_optimization_examples_exclude_reduced_synthetic_workflows() -> N
     examples = REPO_ROOT / "examples" / "optimization"
     names = {path.name for path in examples.iterdir() if path.is_file()}
 
-    assert "QA_optimization_linear_ITG.py" in names
-    assert "QA_optimization_quasilinear_ITG.py" in names
-    assert "QA_optimization_nonlinear_ITG.py" in names
+    assert "QA_optimization.py" in names
     assert not any(name.startswith("stellarator_itg_") for name in names)
     assert "_stellarator_itg_plotting.py" not in names
     assert "compare_stellarator_itg_optimizations.py" not in names
@@ -2721,11 +2719,7 @@ def test_public_optimization_examples_exclude_reduced_synthetic_workflows() -> N
 
 def test_public_optimization_examples_keep_editable_constant_style() -> None:
     examples = REPO_ROOT / "examples" / "optimization"
-    optimizer_scripts = {
-        "QA_optimization_linear_ITG.py",
-        "QA_optimization_quasilinear_ITG.py",
-        "QA_optimization_nonlinear_ITG.py",
-    }
+    optimizer_scripts = {"QA_optimization.py"}
     for script in sorted(examples.glob("*.py")):
         text = script.read_text(encoding="utf-8")
         assert "argparse" not in text
@@ -2733,10 +2727,10 @@ def test_public_optimization_examples_keep_editable_constant_style() -> None:
         assert "def _main(" not in text
         assert 'if __name__ == "__main__"' not in text
         if script.name in optimizer_scripts:
-            assert "SURFACE_INDEX = 7" in text
-            assert "ALPHA = 0.0" in text
-            assert "NTHETA = 24" in text
-            assert "SELECTED_KY_INDEX = 1" in text
+            assert "s_index=7" in text
+            assert "alpha=0.0" in text
+            assert "A_OVER_LT, A_OVER_LN = 3.0, 1.0" in text
+            assert "WINDOW_STEPS" in text
         else:
             raise AssertionError(f"unexpected optimization example {script.name}")
 

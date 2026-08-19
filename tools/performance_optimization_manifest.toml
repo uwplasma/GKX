@@ -344,6 +344,9 @@ artifact_paths = [
   "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.json",
   "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.csv",
   "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.png",
   ]
 bottleneck_hypotheses = [
   "independent ky/batch/ensemble sharding should scale before nonlinear domain sharding",

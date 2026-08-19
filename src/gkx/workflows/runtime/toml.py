@@ -65,17 +65,39 @@ def direct_config_shorthand_args(
     *,
     load_toml_func: Callable[[str | Path], dict[str, Any]] = load_toml,
 ) -> list[str] | None:
-    """Return parser arguments for ``gkx case.toml`` shorthand."""
+    """Return parser arguments for ``gkx case.toml`` / ``gkx wout_XXX.nc`` shorthand.
 
-    if not argv:
+    Leading positionals may be a runtime TOML deck and/or a VMEC/VMEX wout
+    equilibrium (in either order); ``--vmec FILE``/``--vmex FILE`` are explicit
+    aliases for the wout positional. A wout argument routes through the
+    equilibrium shorthand, which writes a fully-resolved deck next to the
+    grouped outputs before dispatch.
+    """
+
+    if not argv or argv[0] in EXECUTABLE_TOML_SHORTHAND_COMMANDS:
         return None
-    config_arg = argv[0]
-    if config_arg.startswith("-") or config_arg in EXECUTABLE_TOML_SHORTHAND_COMMANDS:
-        return None
-    if not Path(config_arg).exists():
+    from gkx.workflows.runtime import wout as runtime_wout
+
+    args = list(argv)
+    wout_arg = runtime_wout.extract_wout_flag_value(args)
+    config_arg: str | None = None
+    while args and not args[0].startswith("-") and Path(args[0]).exists():
+        if runtime_wout.is_wout_file(args[0]):
+            if wout_arg is not None:
+                break
+            wout_arg = args.pop(0)
+        elif config_arg is None:
+            config_arg = args.pop(0)
+        else:
+            break
+    if wout_arg is not None:
+        return runtime_wout.wout_shorthand_args(
+            wout_arg, config_arg, args, load_toml_func=load_toml_func
+        )
+    if config_arg is None:
         return None
     command = toml_shorthand_command(load_toml_func(config_arg))
-    return [command, "--config", config_arg, *argv[1:]]
+    return [command, "--config", config_arg, *args]
 
 
 def resolve_runtime_path(value: str | None, *, base_dir: Path) -> str | None:

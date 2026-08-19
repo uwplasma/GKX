@@ -8,13 +8,12 @@ from typing import Any, Callable, cast
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
-from gkx.operators.nonlinear.projection import _make_hermitian_projector
+from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
 
 
@@ -289,7 +288,9 @@ def integrate_nonlinear_sharded(
     state_dtype = jnp.result_type(G0, jnp.complex64)
     G_init = jnp.asarray(G0, dtype=state_dtype)
     projector = (
-        _make_hermitian_projector(np.asarray(cache.ky), int(np.asarray(cache.kx).size))
+        _make_compressed_real_fft_projector(
+            ny_full=int(cache.ky.size), nx=int(cache.kx.size)
+        )
         if compressed_real_fft
         else None
     )

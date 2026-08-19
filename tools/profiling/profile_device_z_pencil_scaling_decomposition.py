@@ -37,6 +37,7 @@ import json
 import math
 from pathlib import Path
 import statistics
+import sys
 import time
 from typing import Any
 
@@ -263,6 +264,57 @@ def build_decomposition(
     )
 
 
+def _isolated_grids(
+    *,
+    shapes: list[tuple[int, int, int, int, int]],
+    device_counts: tuple[int, ...],
+    steps: int,
+    dt: float,
+    warmups: int,
+    repeats: int,
+    atol: float,
+    rtol: float,
+    min_speedup: float,
+    z_chunk_size: int | None,
+) -> list[dict[str, Any]]:
+    """Time every grid in its own process.
+
+    Several grids timed inside one process share compiled executables and a
+    warmed allocator, which has been measured to report a single-device route
+    overhead near unity where an isolated process reports the true, much larger
+    value. One process per grid is therefore a correctness requirement for this
+    measurement, not a convenience.
+    """
+
+    import subprocess
+    import tempfile
+
+    grids: list[dict[str, Any]] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for index, shape in enumerate(shapes):
+            prefix = Path(tmp) / f"shape{index}"
+            command = [
+                sys.executable,
+                str(Path(__file__).resolve()),
+                "--shape", ",".join(str(item) for item in shape),
+                "--device-counts", ",".join(str(item) for item in device_counts),
+                "--steps", str(int(steps)),
+                "--dt", repr(float(dt)),
+                "--warmups", str(int(warmups)),
+                "--repeats", str(int(repeats)),
+                "--atol", repr(float(atol)),
+                "--rtol", repr(float(rtol)),
+                "--min-speedup", repr(float(min_speedup)),
+                "--out-prefix", str(prefix),
+            ]
+            if z_chunk_size is not None:
+                command += ["--z-chunk-size", str(int(z_chunk_size))]
+            subprocess.run(command, check=True)
+            payload = json.loads(prefix.with_suffix(".json").read_text(encoding="utf-8"))
+            grids.extend(payload["grids"])
+    return grids
+
+
 def build_summary(
     *,
     shapes: list[tuple[int, int, int, int, int]],
@@ -275,10 +327,11 @@ def build_summary(
     rtol: float,
     min_speedup: float,
     z_chunk_size: int | None,
+    isolate_shapes: bool = False,
 ) -> dict[str, Any]:
-    grids = [
-        build_decomposition(
-            shape=shape,
+    if isolate_shapes:
+        grids = _isolated_grids(
+            shapes=shapes,
             device_counts=device_counts,
             steps=steps,
             dt=dt,
@@ -289,8 +342,22 @@ def build_summary(
             min_speedup=min_speedup,
             z_chunk_size=z_chunk_size,
         )
-        for shape in shapes
-    ]
+    else:
+        grids = [
+            build_decomposition(
+                shape=shape,
+                device_counts=device_counts,
+                steps=steps,
+                dt=dt,
+                warmups=warmups,
+                repeats=repeats,
+                atol=atol,
+                rtol=rtol,
+                min_speedup=min_speedup,
+                z_chunk_size=z_chunk_size,
+            )
+            for shape in shapes
+        ]
     grids.sort(key=lambda grid: grid["state_elements"])
     all_identity = all(bool(grid["all_active_identity_passed"]) for grid in grids)
     nets = [
@@ -328,6 +395,7 @@ def build_summary(
             "atol": float(atol),
             "rtol": float(rtol),
             "min_speedup": float(min_speedup),
+            "per_shape_process_isolation": bool(isolate_shapes),
             "grids": grids,
             "summary": {
                 "status": (
@@ -502,6 +570,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rtol", type=float, default=1.0e-4)
     parser.add_argument("--min-speedup", type=float, default=1.5)
     parser.add_argument("--z-chunk-size", type=int)
+    parser.add_argument(
+        "--isolate-shapes",
+        action="store_true",
+        help=(
+            "time every grid in its own process; required for a trustworthy "
+            "single-device route overhead when more than one grid is requested"
+        ),
+    )
     return parser
 
 
@@ -525,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
         rtol=float(args.rtol),
         min_speedup=float(args.min_speedup),
         z_chunk_size=args.z_chunk_size,
+        isolate_shapes=bool(args.isolate_shapes),
     )
     write_artifacts(summary, args.out_prefix or DEFAULT_OUT_PREFIX)
     print(json.dumps(summary["summary"], indent=2, sort_keys=True))

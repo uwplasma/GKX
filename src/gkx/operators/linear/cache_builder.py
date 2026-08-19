@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from gkx.core.velocity import bessel_j0, bessel_j1, laguerre_transform
+from gkx.core.velocity import _gyro_bessel_factors, laguerre_transform
 from gkx.core.grid import SpectralGrid
 from gkx.operators.linear.cache_arrays import (
     _build_end_damping_profile_array,
@@ -93,8 +93,8 @@ class _KxLinkCache:
 
 @dataclass(frozen=True)
 class _LinkedFFTCache:
-    linked_indices: tuple[jnp.ndarray, ...]
-    linked_kz: tuple[jnp.ndarray, ...]
+    linked_indices: tuple[np.ndarray, ...]
+    linked_kz: tuple[np.ndarray, ...]
     linked_inverse_permutation: jnp.ndarray
     linked_full_cover: bool
     linked_gather_map: jnp.ndarray
@@ -155,6 +155,17 @@ def _build_geometry_cache_arrays(
     )
 
 
+_TRACED_SHEAR_TWIST_SHIFT_MESSAGE = (
+    "differentiating with respect to magnetic shear is not supported with "
+    "twist-shift boundaries: the parallel link map is the integer kx-index "
+    "shift jtwist = round(2 * s_hat * gds21 / gds22), and an integer read off "
+    "a traced shear has no derivative. Every other parameter differentiates "
+    "normally under boundary='linked' -- keep the geometry concrete (build or "
+    "sample it outside the trace) instead of routing s_hat, gds21, or gds22 "
+    "through jit/grad."
+)
+
+
 def _default_twist_y0(grid: SpectralGrid) -> float:
     y0 = getattr(grid, "y0", None)
     if y0 is not None:
@@ -164,21 +175,35 @@ def _default_twist_y0(grid: SpectralGrid) -> float:
     return 1.0
 
 
-def _host_twist_shear(shat_arr: jnp.ndarray) -> float | None:
-    return None if _is_tracer(shat_arr) else float(np.asarray(shat_arr))
+def _host_edge_scalar(value: Any, *, dtype: Any = None) -> float | None:
+    """Host float for a scalar, or a profile's edge sample; ``None`` if traced.
 
+    Read the stored attribute, never a ``jnp`` copy or a ``jnp`` slice of it.
+    Inside a trace every ``jnp`` call stages out, so ``jnp.asarray(0.8)`` and
+    ``profile[0]`` both return tracers even when the operand is a host
+    constant. Asking after such a round trip reports every concrete geometry
+    as traced and refuses twist-shift caches that are perfectly resolvable;
+    ``numpy`` answers from the buffer and only genuinely traced geometry
+    reaches the refusal. ``dtype`` reproduces the cast the round trip used to
+    apply, so the value read here is the value the cache was built from.
+    """
 
-def _edge_metric_scalar(value: jnp.ndarray) -> float:
-    return float(value[0]) if value.ndim else float(value)
+    if _is_tracer(value):
+        return None
+    arr = np.asarray(value, dtype=dtype).reshape(-1)
+    return None if arr.size == 0 else float(arr[0])
 
 
 def _twist_shift_geometric_factor(
     shat: float, *, gds21: jnp.ndarray, gds22: jnp.ndarray
-) -> float:
-    gds22_min = _edge_metric_scalar(gds22)
+) -> float | None:
+    gds22_min = _host_edge_scalar(gds22)
     if gds22_min == 0.0:
         return 0.0
-    return float(2.0 * shat * _edge_metric_scalar(gds21) / gds22_min)
+    gds21_edge = _host_edge_scalar(gds21)
+    if gds22_min is None or gds21_edge is None:
+        return None
+    return float(2.0 * shat * gds21_edge / gds22_min)
 
 
 def _jtwist_and_x0_target(
@@ -234,18 +259,18 @@ def _resolve_twist_shift_policy(
     use_ntft = bool(getattr(grid, "non_twist", False))
     y0 = _default_twist_y0(grid)
     shat_arr = jnp.asarray(geom_data.s_hat, dtype=kx_eff.dtype)
-    shat_host = _host_twist_shear(shat_arr)
+    shat_host = _host_edge_scalar(geom_data.s_hat, dtype=kx_eff.dtype)
     x0_eff = float(getattr(grid, "x0", 1.0))
     jtwist = 0
     x0_target = x0_eff
     if use_twist_shift:
-        if shat_host is None:
-            raise ValueError(
-                "traced magnetic shear is not supported with twist-shift boundaries"
-            )
-        twist_shift_geo_fac = _twist_shift_geometric_factor(
-            shat_host, gds21=gds21, gds22=gds22
+        twist_shift_geo_fac = (
+            None
+            if shat_host is None
+            else _twist_shift_geometric_factor(shat_host, gds21=gds21, gds22=gds22)
         )
+        if twist_shift_geo_fac is None:
+            raise ValueError(_TRACED_SHEAR_TWIST_SHIFT_MESSAGE)
         jtwist, x0_target = _jtwist_and_x0_target(
             grid, y0=y0, x0_eff=x0_eff, twist_shift_geo_fac=twist_shift_geo_fac
         )
@@ -533,17 +558,13 @@ def _build_laguerre_gyro_cache(
     laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
     laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
     laguerre_roots = jnp.asarray(lag_roots_np, dtype=real_dtype)
-    alpha = jnp.sqrt(
-        jnp.maximum(
-            0.0,
-            2.0 * laguerre_roots[None, :, None, None, None] * b[:, None, ...],
-        )
+    alpha2 = jnp.maximum(
+        0.0,
+        2.0 * laguerre_roots[None, :, None, None, None] * b[:, None, ...],
     )
-    laguerre_j0 = bessel_j0(alpha).astype(real_dtype)
-    laguerre_j1 = bessel_j1(alpha)
-    laguerre_j1_over_alpha = jnp.where(alpha < 1.0e-8, 0.5, laguerre_j1 / alpha).astype(
-        real_dtype
-    )
+    laguerre_j0, laguerre_j1_over_alpha = _gyro_bessel_factors(alpha2)
+    laguerre_j0 = laguerre_j0.astype(real_dtype)
+    laguerre_j1_over_alpha = laguerre_j1_over_alpha.astype(real_dtype)
     return _LaguerreGyroCache(
         b=b,
         Jl=Jl,
@@ -605,7 +626,7 @@ def _empty_linked_fft_cache(real_dtype: Any) -> _LinkedFFTCache:
 
 
 def _linked_fft_gather_metadata(
-    linked_indices: tuple[jnp.ndarray, ...],
+    linked_indices: tuple[np.ndarray, ...],
     *,
     n_modes: int,
 ) -> tuple[jnp.ndarray, bool, jnp.ndarray, jnp.ndarray, bool]:
@@ -660,19 +681,23 @@ def _build_linked_fft_cache(
     use_twist_shift: bool,
     y0: float,
     jtwist: int,
-    dz: jnp.ndarray,
     real_dtype: Any,
 ) -> _LinkedFFTCache:
     if not use_twist_shift:
         return _empty_linked_fft_cache(real_dtype)
 
+    # The chain maps are host topology, so the parallel spacing has to be read
+    # off the buffer beside the wavenumbers rather than recovered from the
+    # cache's own device copy, which is a tracer whenever the cache is built
+    # inside one.
+    z_host = np.asarray(grid.z)
     ky_mode = getattr(grid, "ky_mode", None)
     linked_indices, linked_kz = _build_linked_fft_maps(
         np.asarray(grid.kx),
         np.asarray(grid.ky),
         float(y0),
         int(jtwist),
-        float(dz),
+        float(z_host[1] - z_host[0]),
         int(grid.z.size),
         real_dtype,
         None if ky_mode is None else np.asarray(ky_mode),
@@ -703,7 +728,7 @@ def _build_linked_damp_profile(
     params: LinearParams,
     *,
     boundary: str,
-    linked_indices: tuple[jnp.ndarray, ...],
+    linked_indices: tuple[np.ndarray, ...],
     real_dtype: Any,
 ) -> jnp.ndarray:
     if boundary == "periodic":
@@ -733,7 +758,6 @@ def _build_linked_boundary_cache(
     use_twist_shift: bool,
     y0: float,
     jtwist: int,
-    dz: jnp.ndarray,
     real_dtype: Any,
 ) -> dict[str, Any]:
     damp_profile = _build_end_damping_profile_array(
@@ -753,7 +777,6 @@ def _build_linked_boundary_cache(
         use_twist_shift=use_twist_shift,
         y0=y0,
         jtwist=kx_links.jtwist,
-        dz=dz,
         real_dtype=real_dtype,
     )
     linked_damp_profile = (
@@ -780,8 +803,12 @@ def _build_linked_boundary_cache(
         "linked_gather_map": linked_fft.linked_gather_map,
         "linked_gather_mask": linked_fft.linked_gather_mask,
         "linked_use_gather": linked_fft.linked_use_gather,
-        "linked_indices": linked_fft.linked_indices,
-        "linked_kz": linked_fft.linked_kz,
+        "linked_indices": tuple(
+            jnp.asarray(idx, dtype=jnp.int32) for idx in linked_fft.linked_indices
+        ),
+        "linked_kz": tuple(
+            jnp.asarray(kz, dtype=real_dtype) for kz in linked_fft.linked_kz
+        ),
         "jtwist": kx_links.jtwist,
     }
 
@@ -928,7 +955,6 @@ def build_linear_cache(
         use_twist_shift=twist.use_twist_shift,
         y0=twist.y0,
         jtwist=twist.jtwist,
-        dz=grid_arrays.dz,
         real_dtype=grid_arrays.real_dtype,
     )
     return _pack_linear_cache(
