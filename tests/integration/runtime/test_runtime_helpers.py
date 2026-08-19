@@ -1321,6 +1321,40 @@ def test_linear_history_rejects_nonfinite_trajectories(
     )
 
 
+def test_linear_fit_rejects_overflowing_trajectory() -> None:
+    """Finite-but-overflowed histories must fail loudly, naming the timestep."""
+
+    t = np.linspace(0.0, 10.0, 64)
+    # Synthetic unstable run: still finite everywhere but overflow-scale
+    # (~1e102 at the end), the regime a plain finite mask fits confidently.
+    phi = np.exp((23.5 + 0.3j) * t)[:, None, None, None] * np.ones(
+        (1, 1, 1, 2), dtype=np.complex128
+    )
+    assert np.all(np.isfinite(phi))
+
+    with pytest.raises(
+        FloatingPointError, match=r"overflowing field history.*timestep instability"
+    ):
+        fit_runtime_linear_diagnostics(
+            t=t,
+            phi_t=phi,
+            density_t=None,
+            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+            z=np.asarray([-1.0, 1.0]),
+            fit_signal="phi",
+            mode_method="z_index",
+            auto_window=True,
+            tmin=None,
+            tmax=None,
+            window_fraction=1.0,
+            min_points=3,
+            start_fraction=0.0,
+            growth_weight=0.0,
+            require_positive=True,
+            min_amp_fraction=0.0,
+        )
+
+
 def test_runtime_wrapper_patch_surfaces(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = _base_cfg()
     captured: dict[str, object] = {}

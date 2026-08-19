@@ -341,7 +341,7 @@ def _solver_operator_matrix(context: _SolverGeometryContext) -> jnp.ndarray:
 def _dominant_linear_branch(context: _SolverGeometryContext) -> _DominantLinearBranch:
     matrix = _solver_operator_matrix(context)
     # jnp.linalg.eig refuses to differentiate non-symmetric eigenvectors unless
-    # the caller opts in (jax >= 0.11). The dominant ITG branch is a simple,
+    # the caller opts in (jax >= 0.10.1). The dominant ITG branch is a simple,
     # well-separated eigenvalue here, which is exactly the condition under which
     # the eigenvector derivative is well defined, so opt in explicitly -- without
     # it the whole objective vector is forward-only.

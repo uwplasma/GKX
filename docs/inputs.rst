@@ -300,7 +300,8 @@ Executable usage
 .. code-block:: bash
 
   cd examples/linear/axisymmetric && gkx cyclone.toml
-  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --plot --outdir docs/_static
+  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --out docs/_static/runtime_etg_scan
+  gkx --plot docs/_static/runtime_etg_scan.scan.csv
   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out tools_out/cyclone_runtime
    gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --batch-ky
    gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --sample-stride 5 --out docs/_static/nonlinear_cyclone_diag.csv

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import Any, Callable
+import warnings
 
 import jax.numpy as jnp
 import numpy as np
@@ -328,6 +329,39 @@ def _resolve_linear_time_config(
     return tcfg
 
 
+def _warn_if_linear_dt_exceeds_cfl(ctx: _LinearRuntimeContext, tcfg: Any) -> None:
+    """Warn at startup when a fixed linear dt exceeds the explicit CFL estimate.
+
+    The fixed-step linear paths advance the whole physical RHS explicitly (the
+    imex methods only treat damping implicitly), so the explicit-time frequency
+    bound applies to them too. An over-CFL dt overflows the trajectory, and the
+    growth fit then fails loudly; this names the cause before the run starts.
+    """
+
+    from gkx.config import resolve_cfl_fac
+    from gkx.solvers.time.explicit_cfl import _linear_frequency_bound
+
+    wmax = float(
+        np.sum(
+            _linear_frequency_bound(
+                ctx.grid, ctx.geom, ctx.params, ctx.n_laguerre, ctx.n_hermite
+            )
+        )
+    )
+    if wmax <= 0.0:
+        return
+    cfl_fac = resolve_cfl_fac(str(tcfg.method), tcfg.cfl_fac)
+    dt_stable = cfl_fac * float(tcfg.cfl) / wmax
+    if float(tcfg.dt) > dt_stable:
+        warnings.warn(
+            f"requested dt={float(tcfg.dt):.4g} exceeds the estimated "
+            f"CFL-stable step {dt_stable:.4g} (max linear frequency "
+            f"{wmax:.4g}); the integration may overflow -- reduce dt",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
 def _validate_parallel_linear_time_path(ctx: _LinearRuntimeContext, tcfg: Any) -> None:
     need_density = ctx.fit_key in {"density", "auto"}
     parallel_strategy = (
@@ -643,6 +677,8 @@ def _run_linear_runtime_branch(
         sample_stride=sample_stride,
     )
     _validate_parallel_linear_time_path(ctx, time_config)
+    if ctx.solver_key != "explicit_time":
+        _warn_if_linear_dt_exceeds_cfl(ctx, time_config)
     trajectory = _integrate_linear_time_series(
         ctx,
         deps=deps,

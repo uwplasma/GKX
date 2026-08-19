@@ -22,7 +22,6 @@ Executable demo
 .. code-block:: bash
 
    gkx
-   gkx
    gkx examples/linear/axisymmetric/cyclone.toml
    gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out cyclone_runtime
    gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --steps 50 --out tools_out/cyclone_nonlinear.out.nc
