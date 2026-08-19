@@ -237,7 +237,43 @@ recursive = true
 # down, plus _damped_gauss_newton_step, which exists so the pin is reachable by a
 # jaxpr assertion at all -- the loop around it converts to host floats to build
 # its history and cannot be traced. See test_dot_precision_guard.py.
-baseline = 89848
+# 89815 -> 89913: certifying the linear branch the runtime defaults to (#52). The adaptive
+# branch, the precision floor that keeps a complex64 state from being judged
+# against an f64-only tolerance, and the exact-precision pin on the one
+# matrix-shaped contraction the residual is measured through. Without these the
+# path returns an unconverged Rayleigh quotient at residual 0.999 and calls it
+# a growth rate.
+# 89815 -> 89874: giving every residual gate a precision floor. The
+# gates compared a relative residual assembled from working-dtype operator
+# applications against an absolute constant -- 1e-10 for the adaptive
+# propagator, 1e-9 for the objective's primal and adjoint solves, 1e-8 for its
+# implicit-gradient solve, 1e-6 for the shift-invert outer gate. That ratio
+# bottoms out a few eps above zero, measured between 1.8 and 12.2 eps in
+# complex64 from n=48 to n=8192, so in single precision every one of them sat
+# below anything the arithmetic can produce. Nothing could certify: the restart
+# budget burned to exhaustion on a pair already as good as float32 allows, and
+# the gradient solve, which fails closed to NaN, deleted the gradient outright.
+# x64-only CI never saw any of it. Most of the cost is the one shared helper and
+# the recorded reason a residual gate is not a free parameter; the call sites
+# are nine substitutions, four of them solves that reach solvax directly and so
+# cannot inherit the floor from the propagator wrapper. See
+# test_residual_gate_never_sits_below_the_working_dtype_noise_floor.
+# 89815 -> 89860: making fit_signal = "auto" choose a signal and nothing else.
+# Both automatic paths -- the runtime linear fit and the combined-ky scan --
+# scored their candidates through fit_growth_rate_auto_with_stats without
+# passing tmin/tmax, so a run that pinned [fit] auto_window = false with a
+# window got the automatic selector's window instead, silently, while still
+# reporting "automatic fit selected signal 'phi'". On the Cyclone linear case
+# that is gamma = 0.0951 against 0.0413 for the same trajectory. The lines are
+# the fixed-window branch in each scorer plus the fit_growth_rate_with_stats
+# seam they need, which reports the R^2 pair over the requested window so the
+# channel is still chosen on fit quality. See
+# test_auto_fit_signal_keeps_the_requested_runtime_window.
+# 89874 -> 89919: merging the auto-window signal fix (#46) under the residual
+# floor. Both land in the fit path; the count is the sum, not new surface.
+# 89919 -> 90011: certifying the default linear branch alongside the residual
+# floor it now uses (#52 over #47). The adaptive branch and its precision pin.
+baseline = 90021
 target = 45000
 
 [[line_budget_policy.counts]]

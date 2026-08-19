@@ -73,14 +73,15 @@ def dominant_eigenpairs_propagator_cached(
         projected[:krylov_dim, :krylov_dim],
     )
     candidate_indices = jnp.argsort(jnp.abs(eigenvalues))[-candidates:][::-1]
-    # These lifted vectors are what this function returns and what ``certify``
-    # below measures a residual against, so their error is the floor of every
-    # certification downstream. At ``candidates == 1`` the contraction is a
-    # matvec and XLA leaves it exact, but from two candidates on it is a real
-    # matrix product and Ampere satisfies it with TF32: measured against a
-    # float64 reference on an RTX A4000 the returned eigenvector moves from
-    # 1.2e-08 to 1.8e-05. One config value away from an exact result is not a
-    # property to leave implicit, so pin it at every candidate count.
+    # The only matrix-shaped contraction anywhere on the certified path, and it
+    # produces the very vectors ``certify`` below and the adaptive solver's own
+    # residual are measured against. XLA answers a matrix-shaped dot with TF32 on
+    # Ampere and later NVIDIA GPUs, whose 10 mantissa bits carry ~4.9e-04 -- four
+    # times ``certifiable_residual_tolerance``'s complex64 floor of 1.19e-04, so
+    # unpinned the gate cannot certify a converged pair no matter how many
+    # restarts it spends. On an RTX A4000 the Cyclone ky = 0.3 runtime scan
+    # measured 3.37e-03 and was rejected after 19 minutes of restarts; pinned it
+    # certifies on the first restart in 28.7 s at the CPU eigenvalue.
     lifted = jnp.tensordot(
         coefficients[:, candidate_indices].T,
         basis[:krylov_dim],
