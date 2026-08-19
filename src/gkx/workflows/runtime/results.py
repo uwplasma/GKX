@@ -75,6 +75,10 @@ class RuntimeNonlinearResult:
     # measured it. Reported per unit of simulated time so a straggler surface
     # is comparable against its siblings without normalising by hand.
     wall_seconds: float | None = None
+    # Run-to-saturation stop decision: measured heat-flux window, mean +/- SEM,
+    # and whether the run stopped before t_max. None when the run was not
+    # driven by the saturation stop policy.
+    saturation: dict[str, Any] | None = None
 
 
 def nonlinear_field_phi2(fields: FieldState) -> np.ndarray:
@@ -92,6 +96,7 @@ def build_runtime_nonlinear_result(
     ky_selected: float | None,
     kx_selected: float | None,
     summarize_fields: bool,
+    saturation: dict[str, Any] | None = None,
 ) -> RuntimeNonlinearResult:
     """Build a runtime nonlinear result with optional final-field summary."""
 
@@ -112,4 +117,5 @@ def build_runtime_nonlinear_result(
         state=state,
         ky_selected=ky_selected,
         kx_selected=kx_selected,
+        saturation=saturation,
     )

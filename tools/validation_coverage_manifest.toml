@@ -108,6 +108,7 @@ owned_modules = [
   "gkx.solvers.time.explicit_steps",
   "gkx.workflows.runtime.toml",
   "gkx.utils.tomlcompat",
+  "gkx.utils.compilation_cache",
   "gkx.solvers.time.runners",
   "gkx.workflows.runtime.config",
   "gkx.workflows.runtime.diagnostic_arrays",
@@ -117,6 +118,7 @@ owned_modules = [
   "gkx.workflows.runtime.initial_phi",
   "gkx.workflows.runtime.startup",
   "gkx.workflows.runtime.commands",
+  "gkx.workflows.runtime.wout",
   "gkx.workflows.demo",
   "gkx.workflows.linear",
   "gkx.workflows.nonlinear",
@@ -640,10 +642,12 @@ reference_anchors = [
 physics_contracts = [
   "nonlinear acceptance uses window statistics rather than one-time samples",
   "mode-resolved Wphi and heat-flux spectra localize transport mismatches",
+  "the post-saturation adjoint differentiates the physical total heat flux",
 ]
 numerics_contracts = [
   "Poisson-bracket paths preserve expected antisymmetry in reduced tests",
   "late-time fixed-mode frequency diagnostics remain conditioned when amplitudes are small",
+  "blocked and plain discrete adjoints preserve values and gradients",
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
@@ -1257,6 +1261,9 @@ next_tests = [
 [[modules]]
 module = "gkx.diagnostics.transport_windows"
 path = "src/gkx/diagnostics/transport_windows.py"
+owned_modules = [
+  "gkx.diagnostics.saturation",
+]
 owner_lane = "nonlinear late-window convergence metadata for quasilinear holdouts"
 status = "active"
 coverage_priority = "high"
@@ -2860,6 +2867,12 @@ next_tests = [
 [[modules]]
 module = "gkx.artifacts.plotting"
 path = "src/gkx/artifacts/plotting.py"
+owned_modules = [
+  "gkx.artifacts.gx_output",
+  "gkx.artifacts.run_figures",
+  "gkx.artifacts.snapshots",
+  "gkx.artifacts.transport_figures",
+]
 owner_lane = "publication plotting for benchmarks, diagnostics, saved outputs, and public style"
 status = "active"
 coverage_priority = "medium"

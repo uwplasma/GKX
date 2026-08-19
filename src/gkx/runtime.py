@@ -12,6 +12,7 @@ from gkx.diagnostics.growth_rates import (
     fit_growth_rate,
     fit_growth_rate_auto,
     fit_growth_rate_auto_with_stats,
+    fit_growth_rate_with_stats,
 )
 from gkx.diagnostics.modes import (
     extract_eigenfunction,
@@ -123,6 +124,7 @@ _PATCHABLE_RUNTIME_GLOBALS = (
     fit_growth_rate,
     fit_growth_rate_auto,
     fit_growth_rate_auto_with_stats,
+    fit_growth_rate_with_stats,
     fit_runtime_linear_diagnostics,
     independent_map,
     integrate_linear_diagnostics,

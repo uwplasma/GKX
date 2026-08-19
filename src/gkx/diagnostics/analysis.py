@@ -258,8 +258,8 @@ def integrated_autocorrelation_time(signal: np.ndarray, dt: float) -> float:
     Turbulence outputs are correlated, so ``std / sqrt(n)`` understates the
     uncertainty of their mean by ``sqrt(n / n_eff)`` -- 2.0x to 3.7x across the
     tracked traces. This converts an output count into an independent one.
-    Truncation at the first zero crossing is the standard initial-positive-
-    sequence estimator; summing past it accumulates noise, not signal.
+    Truncation at the first zero crossing is a positive-window estimator;
+    summing farther into a noisy tail adds variance with little signal.
     """
 
     x = np.asarray(signal, dtype=float)

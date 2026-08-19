@@ -13,6 +13,7 @@ from typing import Any
 _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'CycloneBaseCase': ('gkx.config', 'CycloneBaseCase'),
     'GridConfig': ('gkx.config', 'GridConfig'),
+    'build_spectral_grid': ('gkx.core.grid', 'build_spectral_grid'),
     'KBMBaseCase': ('gkx.config', 'KBMBaseCase'),
     'TimeConfig': ('gkx.config', 'TimeConfig'),
     'SAlphaGeometry': ('gkx.geometry', 'SAlphaGeometry'),
@@ -106,6 +107,7 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'hermite_streaming': ('gkx.operators', 'hermite_streaming'),
     'LinearParams': ('gkx.operators.linear.params', 'LinearParams'),
     'LinearTerms': ('gkx.operators.linear.params', 'LinearTerms'),
+    'TermConfig': ('gkx.terms.config', 'TermConfig'),
     'LinearCache': ('gkx.operators.linear.cache_model', 'LinearCache'),
     'build_linear_cache': ('gkx.operators.linear.cache_builder', 'build_linear_cache'),
     'linear_terms_to_term_config': ('gkx.operators.linear.params', 'linear_terms_to_term_config'),
@@ -127,6 +129,7 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'integrate_nonlinear_sharded': ('gkx.parallel.integrators', 'integrate_nonlinear_sharded'),
     'integrate_nonlinear': ('gkx.solvers.nonlinear.state_integration', 'integrate_nonlinear'),
     'integrate_nonlinear_cached': ('gkx.solvers.nonlinear.state_integration', 'integrate_nonlinear_cached'),
+    'nonlinear_heat_flux_window': ('gkx.solvers.nonlinear.state_integration', 'nonlinear_heat_flux_window'),
     'integrate_nonlinear_explicit_diagnostics': ('gkx.solvers.nonlinear.diagnostic_integration', 'integrate_nonlinear_explicit_diagnostics'),
     'integrate_nonlinear_diffrax': ('gkx.solvers.time.diffrax_nonlinear', 'integrate_nonlinear_diffrax'),
     'build_nonlinear_imex_operator': ('gkx.operators.nonlinear.policies', 'build_nonlinear_imex_operator'),

@@ -7,7 +7,7 @@ name = "gkx"
 version = "1.7.1"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "GKX team"}]
@@ -17,14 +17,15 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Topic :: Scientific/Engineering :: Physics",
 ]
 
 dependencies = [
-  "jax",
-  "jaxlib",
+  # gkx.objectives.core opts into lax_linalg.eig(..., enable_eigvec_derivs=True),
+  # which first shipped in jax 0.10.1.
+  "jax>=0.10.1",
+  "jaxlib>=0.10.1",
   "numpy",
   "matplotlib",
   "scipy",
@@ -32,7 +33,9 @@ dependencies = [
   "diffrax",
   "equinox",
   "solvax>=0.12.0",
-  "tomli; python_version < '3.11'",
+  # The VMEC geometry path hard-requires the booz_xform_jax bridge
+  # (gkx.geometry.backend_discovery).
+  "booz_xform_jax",
   "tqdm",
 ]
 
@@ -83,7 +86,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-gkx = ["data/*.csv", "data/*.json", "data/*.npy", "data/*.npz"]
+gkx = ["data/*.csv", "data/*.json", "data/*.npy", "data/*.npz", "data/*.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

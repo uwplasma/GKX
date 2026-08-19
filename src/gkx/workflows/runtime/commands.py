@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, cast
 
@@ -90,6 +90,9 @@ class RuntimeNonlinearCommandOptions:
     diagnostics: bool
     laguerre_mode: str | None
     show_progress: bool
+    # [time] run_to override from --until-saturated / --no-until-saturated,
+    # or None to keep the TOML value.
+    run_to: str | None = None
 
 
 def _format_fitted_value(value: float, stderr: Any, precision: int) -> str:
@@ -270,6 +273,13 @@ def _resolve_nonlinear_command_options(
     else:
         diagnostics = bool(run_cfg.get("diagnostics", cfg.time.diagnostics))
 
+    if getattr(args, "until_saturated", False):
+        run_to: str | None = "saturation"
+    elif getattr(args, "no_until_saturated", False):
+        run_to = "t_max"
+    else:
+        run_to = None
+
     diagnostics_stride = getattr(args, "diagnostics_stride", None)
     laguerre_mode = _arg_or_section(args, run_cfg, "laguerre_mode", None)
     return RuntimeNonlinearCommandOptions(
@@ -286,6 +296,7 @@ def _resolve_nonlinear_command_options(
         diagnostics=diagnostics,
         laguerre_mode=None if laguerre_mode is None else str(laguerre_mode),
         show_progress=should_show_progress(args, bool(cfg.time.progress_bar)),
+        run_to=run_to,
     )
 
 
@@ -450,6 +461,45 @@ def _status_printer(prefix: str) -> Callable[[str], None]:
     return _emit
 
 
+def should_write_plots(args: Any, cfg: RuntimeConfig) -> bool:
+    """Resolve whether a finished run draws its own figures.
+
+    ``--no-plots`` overrides the configuration, which itself defaults to on.
+    """
+
+    if bool(getattr(args, "no_plots", False)):
+        return False
+    return bool(getattr(cfg.output, "plots", True))
+
+
+def auto_plot_runtime_outputs(
+    kind: str,
+    paths: Mapping[str, str],
+    *,
+    enabled: bool,
+) -> list[str]:
+    """Draw and announce the figure set for a run that has finished writing.
+
+    The whole call is contained. The simulation is already on disk by the time
+    this runs, so a headless display, an unusable matplotlib backend, or an
+    import that fails outright must cost the pictures and nothing else -- the
+    caller's exit status never depends on what happens here.
+    """
+
+    if not enabled or not paths:
+        return []
+    try:
+        from gkx.artifacts.run_figures import auto_plot_saved_run
+
+        written = auto_plot_saved_run(kind, paths)
+    except Exception as exc:  # pragma: no cover - guards a broken plotting stack
+        print(f"warning: could not plot {kind} outputs: {exc}", flush=True)
+        return []
+    for figure in written:
+        print(f"saved {figure}")
+    return written
+
+
 def _write_linear_runtime_command_outputs(
     args: Any,
     cfg: RuntimeConfig,
@@ -558,7 +608,12 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     gamma_text = _format_fitted_value(res.gamma, getattr(res, "gamma_stderr", None), 6)
     omega_text = _format_fitted_value(res.omega, getattr(res, "omega_stderr", None), 6)
     print(f"ky={res.ky:.4f} gamma={gamma_text} omega={omega_text}")
-    _write_linear_runtime_command_outputs(args, cfg, res, deps=deps)
+    written = _write_linear_runtime_command_outputs(args, cfg, res, deps=deps)
+    auto_plot_runtime_outputs(
+        "linear",
+        written.get("linear", {}),
+        enabled=should_write_plots(args, cfg),
+    )
     return 0
 
 
@@ -594,7 +649,12 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
         print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
-    _write_scan_runtime_command_outputs(args, cfg, scan, deps=deps)
+    written = _write_scan_runtime_command_outputs(args, cfg, scan, deps=deps)
+    auto_plot_runtime_outputs(
+        "linear_scan",
+        written,
+        enabled=should_write_plots(args, cfg),
+    )
     return 0
 
 
@@ -609,6 +669,8 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
     )
     run_cfg = data.get("run", {})
     opts = _resolve_nonlinear_command_options(args, cfg, run_cfg)
+    if opts.run_to is not None:
+        cfg = replace(cfg, time=replace(cfg.time, run_to=opts.run_to))
 
     print_nonlinear_run_header(
         config_path=str(args.config),
@@ -643,6 +705,11 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
     if not print_nonlinear_run_summary(result):
         return 0
     print_nonlinear_command_outputs(paths, enabled=out_path is not None)
+    auto_plot_runtime_outputs(
+        "nonlinear",
+        paths if out_path is not None else {},
+        enabled=should_write_plots(args, cfg),
+    )
     return 0
 
 
@@ -667,6 +734,7 @@ __all__ = [
     "apply_quasilinear_overrides",
     "apply_runtime_path_overrides",
     "attach_preloaded_runtime_config",
+    "auto_plot_runtime_outputs",
     "build_runtime_command_deps",
     "load_runtime_command_config",
     "plot_saved_output_command",
@@ -680,6 +748,7 @@ __all__ = [
     "runtime_output_path",
     "scan_runtime_linear_command",
     "should_show_progress",
+    "should_write_plots",
 ]
 
 

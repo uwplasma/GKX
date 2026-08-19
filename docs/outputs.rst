@@ -122,14 +122,37 @@ history in ``*.out.nc``.
 Plotting diagnostics
 --------------------
 
+Every run that writes an output prefix also draws its own figures beside that
+output, so a finished run leaves both the data and the pictures of it. A
+nonlinear run writes ``<base>.flux_time.png`` (``Q(t)`` and ``Gamma(t)``, with
+the averaging window shaded when the summary records one) plus
+``<base>.flux_spectra.png`` and ``<base>.phi2_spectra.png`` when the output is
+a NetCDF bundle carrying k-resolved spectra; the CSV diagnostics sidecar has
+no spectra, so it gets the time traces alone. A linear point and a ``ky`` scan
+each write ``<base>.plot.png``. Pass ``--no-plots``, or set ``[output] plots =
+false``, to skip them. Plotting never affects a run's exit status: a failure
+prints a warning and leaves the saved simulation untouched.
+
+To re-render a saved bundle later, or to look at a GX run with the same
+command:
+
+.. code-block:: bash
+
+   gkx --plot tools_out/cyclone_release.out.nc
+   gkx --plot gx_run.out.nc --out gx_run_panel.png
+
+``--plot`` recognizes GX output as well as GKX's own and draws whatever the
+file carries -- ``Phi^2(t)``, the fluxes, and the ``ky`` spectrum when present
+-- with a title that names GX, so a panel lifted into a slide cannot be
+mistaken for GKX data.
+
 Use the plotting helper to visualize nonlinear diagnostic histories from
 ``*.out.nc`` files:
 
 .. code-block:: bash
 
    python examples/utilities/plot_runtime_outputs.py tools_out/cyclone_release.out.nc \
-     --out tools_out/cyclone_release_diagnostics.png \
-     --title "Cyclone Diagnostics"
+     --out tools_out/cyclone_release_diagnostics.png
 
 The script reads ``Diagnostics/t`` together with ``Phi2_t``, ``Wg_st``,
 ``Wphi_st``, and ``HeatFlux_st`` (when present) and produces a 2x2 panel.

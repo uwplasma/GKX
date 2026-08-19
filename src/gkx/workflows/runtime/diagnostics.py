@@ -13,6 +13,7 @@ from gkx.diagnostics.growth_rates import (
     fit_growth_rate_auto,
     fit_growth_rate_auto_with_stats,
     fit_growth_rate_uncertainty,
+    fit_growth_rate_with_stats,
 )
 from gkx.diagnostics.modes import (
     extract_eigenfunction,
@@ -23,12 +24,38 @@ from gkx.workflows.runtime.results import RuntimeLinearResult
 __all__ = [
     "RuntimeLinearFitResult",
     "RuntimeQuasilinearFinalizationDeps",
+    "ensure_finite_linear_history",
     "finalize_runtime_linear_quasilinear",
     "fit_runtime_linear_diagnostics",
     "half_horizon_settled_probe",
     "refit_runtime_linear_trajectory",
     "warn_if_growth_unresolved",
 ]
+
+#: Finite amplitudes beyond this scale are numerical overflow, not physics: a
+#: linear mode history this large means the integration blew up before hitting
+#: inf, and any growth fit through it would be confidently wrong.
+_OVERFLOW_AMPLITUDE = 1.0e30
+
+
+def ensure_finite_linear_history(name: str, values: np.ndarray | None) -> None:
+    """Reject non-finite or overflow-scale histories before any growth fit."""
+
+    if values is None:
+        return
+    if not np.all(np.isfinite(values)):
+        raise FloatingPointError(
+            f"linear integration produced a non-finite {name} history; "
+            "reduce the timestep or select a stable integration policy"
+        )
+    peak = float(np.max(np.abs(values)))
+    if peak > _OVERFLOW_AMPLITUDE:
+        raise FloatingPointError(
+            f"linear integration produced an overflowing {name} history "
+            f"(|{name}| up to {peak:.3g} exceeds {_OVERFLOW_AMPLITUDE:.0e}), "
+            "which indicates timestep instability; reduce dt or select a "
+            "stable integration policy"
+        )
 
 
 @dataclass(frozen=True)
@@ -108,6 +135,7 @@ class _RuntimeLinearDiagnosticDeps:
     fit_growth_rate_auto_with_stats: Any
     fit_growth_rate_auto: Any
     fit_growth_rate: Any
+    fit_growth_rate_with_stats: Any
     extract_eigenfunction: Any
 
 
@@ -214,11 +242,7 @@ def _prepare_runtime_linear_fit_inputs(
         ("field", inputs.phi),
         ("density", inputs.density),
     ):
-        if values is not None and not np.all(np.isfinite(values)):
-            raise FloatingPointError(
-                f"linear integration produced a non-finite {name} history; "
-                "reduce the timestep or select a stable integration policy"
-            )
+        ensure_finite_linear_history(name, values)
     return inputs
 
 
@@ -231,22 +255,37 @@ def _fit_auto_candidate(
     options: _RuntimeLinearFitOptions,
     deps: _RuntimeLinearDiagnosticDeps,
 ) -> _RuntimeLinearFitCandidate:
-    """Fit and score one channel for automatic runtime fit-signal selection."""
+    """Fit and score one channel for automatic runtime fit-signal selection.
+
+    ``auto`` chooses the diagnostic channel, never the fit window: with
+    ``auto_window`` off, each candidate is fitted over the requested window so
+    the selected channel reports the same gamma/omega an explicit
+    ``fit_signal`` request for that channel would.
+    """
 
     signal = np.asarray(
         deps.extract_mode_time_series(data, selection, method=options.mode_method)
     )
-    gamma, omega, tmin, tmax, r2, r2_phase = deps.fit_growth_rate_auto_with_stats(
-        inputs.t,
-        signal,
-        window_fraction=options.window_fraction,
-        min_points=options.min_points,
-        start_fraction=options.start_fraction,
-        growth_weight=options.growth_weight,
-        require_positive=options.require_positive,
-        min_amp_fraction=options.min_amp_fraction,
-        window_method=options.window_method,
-    )
+    if options.auto_window:
+        gamma, omega, tmin, tmax, r2, r2_phase = deps.fit_growth_rate_auto_with_stats(
+            inputs.t,
+            signal,
+            window_fraction=options.window_fraction,
+            min_points=options.min_points,
+            start_fraction=options.start_fraction,
+            growth_weight=options.growth_weight,
+            require_positive=options.require_positive,
+            min_amp_fraction=options.min_amp_fraction,
+            window_method=options.window_method,
+        )
+    else:
+        gamma, omega, r2, r2_phase = deps.fit_growth_rate_with_stats(
+            inputs.t,
+            signal,
+            tmin=options.tmin,
+            tmax=options.tmax,
+        )
+        tmin, tmax = _resolved_fit_bounds(inputs.t, options.tmin, options.tmax)
     score = float(r2) + 0.2 * float(r2_phase) + options.growth_weight * float(gamma)
     return _RuntimeLinearFitCandidate(
         signal_name=name,
@@ -529,6 +568,7 @@ def fit_runtime_linear_diagnostics(
     fit_growth_rate_auto_with_stats_fn: Any = fit_growth_rate_auto_with_stats,
     fit_growth_rate_auto_fn: Any = fit_growth_rate_auto,
     fit_growth_rate_fn: Any = fit_growth_rate,
+    fit_growth_rate_with_stats_fn: Any = fit_growth_rate_with_stats,
     extract_eigenfunction_fn: Any = extract_eigenfunction,
 ) -> RuntimeLinearFitResult:
     """Fit linear growth/frequency and extract the eigenfunction diagnostic."""
@@ -558,6 +598,7 @@ def fit_runtime_linear_diagnostics(
         fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats_fn,
         fit_growth_rate_auto=fit_growth_rate_auto_fn,
         fit_growth_rate=fit_growth_rate_fn,
+        fit_growth_rate_with_stats=fit_growth_rate_with_stats_fn,
         extract_eigenfunction=extract_eigenfunction_fn,
     )
     fit = _select_runtime_linear_fit(

@@ -151,6 +151,10 @@ class RuntimeOutputConfig:
     restart_with_perturb: bool = False
     append_on_restart: bool = True
     resolved_diagnostics: bool = True
+    # Whether a completed run draws its own figures beside its output. On by
+    # default: a saved bundle nobody plotted is a run nobody looked at. Set
+    # false (or pass --no-plots) on batch surfaces that only want the data.
+    plots: bool = True
     restart_scale: float = 1.0
     nsave: int = 10000
 
