@@ -431,56 +431,60 @@ shaped-pressure stress outliers are retained.
 Derivations, calibration splits, uncertainty and holdout gates:
 [quasilinear docs](docs/quasilinear.rst).
 
-## QA ITG Optimization
+## Nonlinear autodiff and QA optimization
 
-Objective = aspect ratio + mean iota + quasisymmetry, plus one GKX residual
-(growth rate, quasilinear, or nonlinear window). Baseline is the max-mode-5 QA
-workflow; all transport comparisons use solved VMEC equilibria.
+GKX differentiates one production nonlinear objective: the physical heat flux
+averaged over a post-saturation RK window. A block-checkpointed discrete adjoint
+stores `O(sqrt(N))` distribution states and works on CPU and GPU.
 
-### Turbulence has to be weighted to be optimized
+```python
+def loss(shape):
+    return gkx.nonlinear_heat_flux_window(
+        saturated, grid, geometry(shape), params, dt, steps, terms=terms
+    )
 
-At the shipped weight the transport term was **0.00% of the objective** — iota
-94.4%, aspect 5.4%, quasisymmetry 0.2%. The optimizer never saw it. Weighting
-the seed-normalized transport residual properly buys a large flux reduction for
-a modest quasisymmetry cost:
+heat_flux, gradient = jax.value_and_grad(loss)(shape0)
+```
 
-| transport weight | quasisymmetry / seed | quasilinear flux / seed |
-| --- | --- | --- |
-| 0.01 (old default) | 0.14 | 0.38 |
-| 0.5 | 0.24 | 0.29 |
-| **2.0** (current default) | 0.67 | **0.07** |
-| 8.0 | — | solver stalls |
+![Nonlinear adjoint memory and derivative validation](docs/_static/nonlinear_autodiff_validation.png)
 
-![QA transport weight scan](docs/_static/qa_transport_weight_scan.png)
+**One derivative, bounded memory.** Block checkpointing cuts the measured
+2048-step temporary state from 759 MB to 12.6 MB on CPU and from 11.88 GB to
+168 MB on an RTX A4000. The discrete adjoint and centered finite differences
+agree until chaotic trajectory separation sets the useful window length.
 
-`TRANSPORT_WEIGHT = 2.0` cuts the quasilinear proxy by **93%** while
-quasisymmetry stays 33% better than the seed. Above ~4 the least-squares solver
-stalls on the finite-difference gradient of the proxy — raise it only with an
-analytic Jacobian. Regenerate with
-[`build_qa_transport_weight_scan.py`](tools/artifacts/build_qa_transport_weight_scan.py).
+The single [`QA_optimization.py`](examples/optimization/QA_optimization.py)
+follows VMEX's vacuum QA mode ladder and adds this heat flux as a fourth tuple.
+Finite `a/L_T=3` and `a/L_n=1` drive ITG turbulence. The analytic Jacobian
+composes VMEX's implicit equilibrium derivative with the exact GKX window
+derivative.
 
-**This is the quasilinear proxy, not a transport prediction.** A 0.07x proxy is
-evidence the objective now drives the design it is supposed to drive; it is not
-evidence of nonlinear flux reduction, which requires the audits below.
+![Initial and optimized QA equilibria](docs/_static/qa_transport_equilibria.png)
 
-### Nonlinear flux reduction is not demonstrated
+**A small shape step with a resolved transport effect.** Eight low-order
+boundary coefficients move; aspect ratio and mean iota change by less than
+0.05%, while the 3-D LCFS and LCFS Boozer `|B|` show where the equilibrium
+changes. The QA residual remains `O(10^-3)`; all panels use the same
+`|B|/<|B|>` color scale.
 
-The weight scan above fixes the *objective*, not the physics claim. Matched
-long post-transient nonlinear audits of the reweighted designs have not been
-run. The earlier audits, which used converged post-transient heat-flux windows,
-predate the reweighting and showed no statistically significant transport
-reduction against the strict QA baseline.
+The saturation state is detached and refreshed after accepted stages. The
+window is a local design derivative. Independent matched runs validate the
+accepted direction with replicated saturated trajectories.
 
-Two measurements say why that evidence is not close. The production gradient
-gate is blocked at `gradient_uncertainty_rel = 1.806` against a 0.5 maximum,
-and the heat-flux windows behind it hold only 2.6-11.8 statistically
-independent samples, so their error bars are understated 2.0-3.7x. Closing that
-by longer averaging alone costs more than 13x the sampling. See the
-[nonlinear gradient plan](docs/nonlinear_gradient_plan.rst).
+![Matched QA heat-flux traces and convergence](docs/_static/qa_transport_reduction.svg)
 
-Scripts: [examples/optimization](examples/optimization). Objective equations,
-optimizer policies and the audit record:
-[optimization docs](docs/stellarator_optimization.rst).
+**The startup spike is excluded; the shaded window is measured.** Across 24
+nominal matched seeds, the result is a **12.26% reduction** (95% CI
+10.64--13.88%).
+The stationary 24x24 and `(Nl,Nm)=(6,12)` refinements give 8.50%
+(6.34--10.66%) and 12.32% (9.62--15.03%); all 16 pairs improve in both. The
+orange cross is the short 24x24 pilot rejected by its stationarity test.
+
+This is one vacuum QA surface and field line, not a universal transport claim;
+broader claims still require converged post-transient heat-flux windows across
+surfaces and field lines. See the concise [autodiff
+mathematics](docs/nonlinear_autodiff.rst) and the [equations, scripts, matched
+statistics, and resolution study](docs/stellarator_optimization.rst).
 
 
 ## Parallelization
