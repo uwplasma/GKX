@@ -1096,3 +1096,51 @@ inside a trace returns a tracer, so any `is-this-traced` check written that way 
 and any `lru_cache` that closes over `jnp` arrays leaks constants across traces. **Grep for
 `np.asarray(cache.` / `float(cache.` / `int(np.asarray(` and for `jnp.` inside `lru_cache`d
 factories — the remaining instances are probably the same bug.** → new item **3.5**.
+
+### 2026-08-19 agent/merlo — 2.8 VERDICT: two gated quantities FAIL at converged resolution
+Ladder (Nl=4, Nz=32 fixed; Nm=144 at the tracked dt=0.005 goes NON-FINITE, Hermite CFL ~ sqrt(Nm),
+so the high end was rerun at dt=0.0025; ladders agree <0.3%):
+
+| Nm | residual | std/res | omega | gamma | t_quiet |
+|---|---|---|---|---|---|
+| **24 (tracked)** | 0.19318 | **1.20** | 2.20318 | -0.26452 | 26.0 |
+| 48 | 0.19554 | 0.61 | 2.28602 | -0.21958 | 38.8 |
+| 96 | 0.20448 | 0.15 | 2.33983 | -0.20157 | 55.5 |
+| 144 | 0.20590 | 0.14 | 2.34507 | -0.20280 | >60 |
+| 192 | 0.20820 | 0.11 | 2.35341 | -0.20618 | >60 |
+
+- **residual_level: FAIL** — 0.208 +/- 0.006 vs 0.19, |err| 0.018 = **1.2x atol**, still rising at
+  Nm=192. **My "Nm=24 reads ~11% high" hypothesis was WRONG IN DIRECTION**: the residual RISES
+  with Nm, so Nm=24 reads ~7% LOW. The gate fails, but not for the reason I predicted.
+- **gam_frequency: FAIL** — 2.38 +/- 0.05 vs 2.24, |err| 0.14 = **1.4x atol**, smooth monotone
+  rise with an excellent 1/Nm fit. **Nm=24 is the ONLY resolution on the ladder where this
+  gate passes.**
+- **gam_growth_rate: INCONCLUSIVE** — survives refinement at the shipped cadence (-0.166, PASS)
+  but the converged value is set by DIAGNOSTIC OUTPUT CADENCE: decimating identical traces gives
+  -0.166 (stride 0.05, PASS) vs -0.204 (stride 0.025, FAIL). The gate flips on `sample_stride`.
+
+**Mechanism is Hermite recurrence, not truncation error.** The quiet point scales as
+**t_quiet ~ 5.5*sqrt(Nm)**. At Nm=24 the entire residual window [42,60] sits **1.6-2.3x PAST
+recurrence onset**, peak-to-peak swing 0.78 against a physical GAM remnant of ~0.03. A legitimate
+window needs **Nm >~ 120 and dt <= 0.0025**. Merlo et al. explicitly require running to
+~150 R0/v_i and verifying recurrence is not affecting the result; the shipped run reaches
+**21.6 R0/v_i** and does not check.
+Estimator fragility at FIXED resolution: `tail_fraction` alone moves the residual by 3.0x atol;
+`fit_window_tmax` alone moves omega by 3.3x atol and gamma by 2.3x atol — and the shipped
+`fit_window_tmax=30.0` is the single best-agreeing value in the sweep at Nm=24.
+Nl=4 confirmed converged (Nl=8 moves everything <1.6%).
+
+**The project already knew.** `docs/testing.rst` and `docs/manuscript_figures.rst` state that
+raising resolution moves omega onto the read-off but pushes gamma off, and that "the frozen
+Merlo artifact remains on the current Nm=24 baseline". The artifact is pinned at the resolution
+where it agrees. That is the finding to act on, more than any single number.
+**Also: alpha_MHD is dropped** — Merlo Table III Case III lists alpha_MHD = 0.5425 while the TOML
+sets `betaprim = 0.0` (alpha_MHD = -q^2 R0 dbeta/dr implies betaprim ~ -0.101). Impact unmeasured
+→ **new item 2.10 (fidelity)**.
+**kx trap definitively FALSIFIED** (second, independent confirmation of the retraction above):
+the manuscript defines v_th = sqrt(T_j/m_j) with rho_i = v_i/Omega_i, matching GKX; corroborated
+physically because omega_GAM ~ 2.2-2.7 R0/v_i is only consistent with one-T units (GS2 units
+would put it near 1.6). The sqrt(2) suspicion likely belongs to the **W7-X zonal lane** instead,
+which IS transcribed from stella-family work (kx_rhoi = 0.05/0.07/0.10/0.30) and whose residuals
+already fail at 0.07/0.10/0.30 — **not checked; new item 2.11**.
+Full report + sources: `plan/notes/merlo_resolution_audit.md`.
