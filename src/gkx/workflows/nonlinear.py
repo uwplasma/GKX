@@ -21,6 +21,7 @@ from gkx.workflows.runtime.parallel_nonlinear import (
     NonlinearParallelPlan,
     assert_nonlinear_parallel_identity,
     resolve_nonlinear_parallel_plan,
+    resolve_species_hermite_mesh,
     shard_nonlinear_state,
 )
 from gkx.workflows.runtime.results import RuntimeNonlinearResult
@@ -488,6 +489,8 @@ def _run_sharded(
 ) -> RuntimeNonlinearResult:
     """Run the sharded nonlinear route, fail-closed against the serial answer."""
 
+    if plan.axis == "species_hermite":
+        plan = resolve_species_hermite_mesh(ctx.G0, plan)
     status(f"routing nonlinear run through {plan.describe()}")
     sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
     result, sharded_state = _run_once(

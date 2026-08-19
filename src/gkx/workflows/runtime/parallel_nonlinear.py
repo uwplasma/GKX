@@ -5,11 +5,16 @@ so a nonlinear TOML could ask for a sharded run and silently get a serial one.
 This module is the nonlinear half of that routing, and it is deliberately
 narrow about what it will accept.
 
-Supported today: ``strategy = "shard_map"`` with ``axis = "ky"``. The whole
-nonlinear state is placed on a ``ky`` device mesh and the ordinary production
-integrator runs on it, so the operator is the production nonlinear RHS rather
-than a reduced stand-in. Every other strategy/axis combination raises instead
-of falling back to serial.
+Supported today: ``strategy = "shard_map"`` with ``axis = "species_hermite"``
+(the production decomposition -- a ``(species, hermite)`` mesh with the
+perpendicular plane, Laguerre and ``z`` replicated) or ``axis = "ky"`` (kept as
+a routing diagnostic). ``auto = true`` picks the species x Hermite mesh from the
+visible devices and reports which one it chose. In both cases the whole
+nonlinear state is placed on the mesh and the ordinary production integrator
+runs on it, so the operator is the production nonlinear RHS rather than a
+reduced stand-in; the audited ``shard_map`` route with named collectives is
+:func:`gkx.parallel.integrators.integrate_nonlinear_species_hermite`. Every
+other strategy/axis combination raises instead of falling back to serial.
 
 ``axis = "z"`` is rejected for two independent reasons, both measured on this
 stack rather than assumed:
@@ -31,7 +36,7 @@ a second tolerance convention.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import jax
@@ -45,7 +50,20 @@ from gkx.parallel.state import resolve_state_sharding
 from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
 
 SUPPORTED_NONLINEAR_STRATEGIES = ("serial", "shard_map")
-SUPPORTED_NONLINEAR_AXES = ("ky",)
+SUPPORTED_NONLINEAR_AXES = ("ky", "species_hermite")
+
+# ``species_hermite`` is the production decomposition: a 2-D device mesh with
+# species factored first and Hermite second, the perpendicular plane, Laguerre
+# and z replicated. Its aliases exist because the same mesh is the natural
+# reading of "velocity space" and of an explicit "(s, m)".
+_SPECIES_HERMITE_ALIASES = {
+    "species_hermite",
+    "velocity",
+    "s_m",
+    "species",
+    "m",
+    "hermite",
+}
 
 # Same convention as the device-z identity gates, so a nonlinear routing failure
 # and a device-z gate failure mean the same thing.
@@ -56,7 +74,9 @@ _MESH_AXIS_NAME = "d"
 
 _SUPPORT_SUMMARY = (
     "the nonlinear path supports [parallel] strategy='serial' and "
-    "strategy='shard_map' with axis='ky'"
+    "strategy='shard_map' with axis='species_hermite' (the production "
+    "species x Hermite mesh; aliases 'velocity', 's_m', 'species', 'm') or "
+    "axis='ky' (routing diagnostic)"
 )
 
 _Z_AXIS_REASON = (
@@ -93,16 +113,41 @@ class NonlinearParallelPlan:
     strict_identity: bool
     atol: float = IDENTITY_ATOL
     rtol: float = IDENTITY_RTOL
+    mesh_plan: Any | None = None
+    auto: bool = False
 
     @property
     def device_count(self) -> int:
         return len(self.devices)
 
+    @property
+    def mesh_shape(self) -> tuple[int, int]:
+        if self.mesh_plan is None:
+            return (self.device_count, 1)
+        return (
+            int(self.mesh_plan.chunks.get("s", 1)),
+            int(self.mesh_plan.chunks.get("m", 1)),
+        )
+
     def describe(self) -> str:
         strict = "on" if self.strict_identity else "off"
+        if self.mesh_plan is None:
+            return (
+                f"shard_map nonlinear route on axis='{self.axis}' across "
+                f"{self.device_count} devices (strict_identity={strict})"
+            )
+        ns_chunks, nm_chunks = self.mesh_shape
+        chosen = "auto-selected " if self.auto else ""
+        halo = int(self.mesh_plan.hermite_ghost_depth)
+        collectives = "field psum" + (
+            f", width-{halo} Hermite ppermute" if nm_chunks > 1 else ", no halo"
+        )
         return (
-            f"shard_map nonlinear route on axis='{self.axis}' across "
-            f"{self.device_count} devices (strict_identity={strict})"
+            f"shard_map nonlinear route on a {chosen}species x Hermite mesh "
+            f"({ns_chunks} species x {nm_chunks} Hermite) across "
+            f"{self.device_count} devices, shard "
+            f"{tuple(self.mesh_plan.shard_shape)}, collectives: {collectives} "
+            f"(strict_identity={strict})"
         )
 
 
@@ -153,6 +198,8 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
     axis = _normalized(getattr(parallel, "axis", ""), "")
     if axis == "z":
         raise NonlinearParallelRoutingError(_Z_AXIS_REASON)
+    if axis in _SPECIES_HERMITE_ALIASES:
+        axis = "species_hermite"
     if axis not in SUPPORTED_NONLINEAR_AXES:
         raise NonlinearParallelRoutingError(
             f"[parallel] axis='{axis}' has no nonlinear runtime route. "
@@ -181,11 +228,62 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
         axis=axis,
         devices=devices,
         strict_identity=bool(getattr(parallel, "strict_identity", True)),
+        auto=bool(getattr(parallel, "auto", False)),
     )
+
+
+def resolve_species_hermite_mesh(
+    state: Any, plan: NonlinearParallelPlan
+) -> NonlinearParallelPlan:
+    """Attach the ``(species, hermite)`` mesh a state and device count imply.
+
+    Failure is a routing error naming the device counts that *do* factor, so a
+    user who asked for three devices is told which numbers work rather than
+    only which one did not.
+    """
+
+    from gkx.parallel.velocity_plan import (
+        build_species_hermite_mesh_plan,
+        species_hermite_device_counts,
+    )
+
+    shape = tuple(int(x) for x in state.shape)
+    try:
+        mesh_plan = build_species_hermite_mesh_plan(
+            shape, num_devices=plan.device_count
+        )
+    except ValueError as exc:
+        ns = shape[0] if len(shape) == 6 else 1
+        nm = shape[2] if len(shape) == 6 else shape[1]
+        supported = species_hermite_device_counts(ns, nm)
+        raise NonlinearParallelRoutingError(
+            f"[parallel] axis='species_hermite' cannot factor "
+            f"{plan.device_count} devices over Ns={ns}, Nm={nm}: {exc}. "
+            "Species are factored first and the Hermite remainder must divide "
+            "Nm exactly, so this grid supports "
+            f"{', '.join(str(count) for count in supported)} devices."
+        ) from exc
+    return replace(plan, mesh_plan=mesh_plan)
 
 
 def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
     """Return the initial nonlinear state placed on the plan's device mesh."""
+
+    if plan.axis == "species_hermite":
+        from gkx.parallel.integrators import stage_from_host
+        from gkx.parallel.state import resolve_species_hermite_sharding
+
+        resolved = (
+            plan
+            if plan.mesh_plan is not None
+            else resolve_species_hermite_mesh(state, plan)
+        )
+        return stage_from_host(
+            state,
+            resolve_species_hermite_sharding(
+                state, resolved.mesh_plan, devices=list(plan.devices)
+            ),
+        )
 
     # ky is the third-from-last axis in both the (Nl, Nm, Nky, Nkx, Nz) and
     # (Ns, Nl, Nm, Nky, Nkx, Nz) layouts.
@@ -280,5 +378,6 @@ __all__ = [
     "NonlinearParallelRoutingError",
     "assert_nonlinear_parallel_identity",
     "resolve_nonlinear_parallel_plan",
+    "resolve_species_hermite_mesh",
     "shard_nonlinear_state",
 ]
