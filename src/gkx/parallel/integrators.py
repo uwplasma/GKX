@@ -501,6 +501,36 @@ def _mesh_owner_mask(mesh_axes, like):
     return mask.astype(jnp.asarray(like).dtype)
 
 
+def _unfused(value):
+    """Keep ``value`` in its own kernel instead of the consumer's.
+
+    Measured on 2 x RTX A4000 (jax 0.11.1) at ``(2, 8, 16, 64, 64, 32)``. Left
+    alone, XLA folds the whole linear operator -- every shifted, scaled copy of
+    the slab that streaming, mirror, curvature and the diamagnetic drive
+    contribute -- into the elementwise ``add`` that joins it to the nonlinear
+    bracket, and emits one ``kLoop`` fusion with 29 operands that re-reads the
+    shard once per shifted term. That fusion is the single most expensive
+    kernel in the step and it runs at roughly 40% of the throughput the
+    two-kernel form reaches.
+
+    The cost model tips over on shard *shape*, not on shard size, which is why
+    it is a sharding bug rather than a small-problem effect: on one device with
+    two species the fusion costs 11.0 ms/step, and on the one-species shard a
+    two-device mesh gives it, the same fusion costs 37.4 ms/step -- 3.4x longer
+    on half the data. Per-species cost is otherwise flat (49.2, 49.1 and
+    47.1 ms/step/species at Ns = 2, 3, 4) and jumps to 69.7 at Ns = 1, so a
+    two-species run on two devices could never scale past 1.41x however cheap
+    the collectives were. Splitting the bracket out takes the shard from
+    69.7 to 46.7 ms/step and the two-device mesh from 75.8 to 47.4.
+
+    ``optimization_barrier`` is an identity, so this cannot move the answer on
+    its own; it can only change which multiply-adds XLA contracts, and the
+    identity gates below cover that.
+    """
+
+    return jax.lax.optimization_barrier(value)
+
+
 def _species_hermite_local_rhs(
     local,
     *,
@@ -576,9 +606,8 @@ def _species_hermite_local_rhs(
     dG = hermite_halo_interior(dG, chunks=nm_chunks, ghost_depth=ghost_depth)
     if term_cfg.nonlinear == 0.0:
         return dG, fields, head
-    return (
-        dG
-        + nonlinear_em_contribution(
+    bracket = _unfused(
+        nonlinear_em_contribution(
             local,
             phi=fields.phi,
             apar=fields.apar if term_cfg.apar != 0.0 else None,
@@ -604,10 +633,9 @@ def _species_hermite_local_rhs(
             b=cache.b,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
-        ),
-        fields,
-        head,
+        )
     )
+    return dG + bracket, fields, head
 
 
 def stage_from_host(value: Any, sharding: Any) -> Any:

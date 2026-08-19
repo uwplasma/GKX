@@ -491,7 +491,10 @@ recursive = true
 # see. A flat trace crossed zero at lag one, which read as resolved and
 # collapsed the window floor built on it.
 # 95504 -> 95537: merging the gradient coverage work over the deck audit.
-baseline = 95537
+# 95537 -> 95565: keeping the bracket out of the linear operator's fusion. The
+# lines are the measurement: which fusion, on which shard shape, and why an
+# identity is the right instrument for it.
+baseline = 95565
 target = 45000
 
 [[line_budget_policy.counts]]
