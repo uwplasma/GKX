@@ -717,3 +717,26 @@ Honest gap: on fallback the loglinear number is still RETURNED (loudly warned), 
 **NEW WORK ITEM 0.8**: fix the two decks — `examples/linear/axisymmetric/cyclone.toml` and
 `cyclone_coulomb_collisions.toml` — to use `mode_method="project"` and a horizon reaching
 γ·t_max ≳ 7 (t_max ≈ 80). Both currently ship settings that produce a wrong number by default.
+
+### 2026-08-18 RJ — A SECOND, STRICTER CI CONTRACT: per-module complexity budgets
+`repo-hygiene` enforces **two independent budgets**, and the second one is not obvious:
+1. the repo-wide `installable_source_python_lines` no-regression baseline (bump with a
+   written reason), and
+2. a **per-module cap of 1000 lines**, plus explicit per-module baselines for files already
+   over it, with "reviewed exceptions" required otherwise.
+
+Three of the new PRs tripped (2): #53 `artifacts/plotting.py` 1510>1000, #54
+`diagnostics/transport_windows.py` 1120>1000, #56 `artifacts/io.py` regressed 1088→1093.
+
+**Design consequence — this is a good constraint, not an obstacle.** The right response to
+(2) is almost never a bigger budget; it is a new module. Dispatched accordingly: #53's
+figure functions move to `src/gkx/artifacts/transport_figures.py`, #54's stop machinery to
+`src/gkx/diagnostics/saturation.py`, leaving the host modules at their pre-PR size. Only
+#56 (5 lines of summary fields on a file with an explicit baseline) gets a documented bump.
+**Guidance for contributors: append-only editing of a large module will pass local pytest and
+fail CI — plan new surface as a new module from the start.** Note this interacts with the
+earlier instruction to keep #53 append-only for conflict avoidance; that was right for
+merge order but wrong for the budget, and the module split resolves both.
+
+**PR status at this point:** #50 python-floor fix pushed (79caa79d, CI re-running);
+#51 and #52 and #55 green; #53/#54/#56 module splits in progress.
