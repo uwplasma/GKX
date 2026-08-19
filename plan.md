@@ -1260,3 +1260,77 @@ plus a three-way shipped/old/new comparison; **1.6** warm restart for ky scans, 
 and optimization iterations, with a cold-vs-warm correctness gate per scan point (a warm start
 can bias an eigensolver toward its neighbour's branch) and single-run invariance; **3.5** the
 traced-host-read sweep, where a clean result is also a useful result.
+
+### 2026-08-19 agent/merlo — 2.8b/2.9/2.10 DONE → PR #67, path (b)
+**gamma_GAM was not a measurement** and was fixed FIRST, as required. New
+`period_rms_envelope` mode (`src/gkx/diagnostics/zonal_validation.py`): for
+`y = C(t) + A e^{-gt}cos(wt+p)` the RMS about the trace's own running ONE-PERIOD mean is
+`A e^{-gt}` times a t-independent factor, fitted over a window stated in **GAM periods**,
+weighted by envelope^2 (the inverse-variance weight for a log fit), both convolutions
+`mode="valid"`. Every sample enters, so refining the cadence refines a quadrature instead of
+changing which points are fitted.
+Cadence spread (gate atol 0.03): decimation x1/2/4/8 **plus sampling-phase offsets** gives
+**0.00030 (1% of atol)** vs the retired estimator's **0.03790 (126%)**. On the exact pair that
+produced the audit's 52% swing: **-0.11924 vs -0.11937 (0.1%)**. Consequence worth noting —
+with the estimator fixed, gamma is *then* demonstrably resolution- and dt-converged; **the
+audit's apparent dt-sensitivity of gamma was the cadence artifact all along.**
+
+**alpha_MHD (2.10) FALSIFIED — structurally, not statistically.** Restoring
+`betaprim = -0.1012` (from Merlo's alpha_MHD=0.5425) leaves the trace **bit-identical**,
+max|dphi| = 0.0 over 2401 samples. Diffing the eik files: it moves gds2/gds21/gbdrift/cvdrift/
+aprime and leaves gds22/gbdrift0/cvdrift0/bmag/gradpar/jacob EXACTLY unchanged. At ky=0 only
+the kx drifts survive — **every coefficient alpha_MHD touches is multiplied by ky**, so it
+cannot affect a purely radial zonal mode. Path (a) closed.
+
+**Path (b) taken, no tolerance widened.** Rebaselined Nm 24->144, dt 0.005->0.0025, window
+closing before `t_quiet = 5.5*sqrt(Nm)`. Converged: residual **0.2059 +/- 0.006** (Merlo 0.19,
+gap 1.06x atol, FAILS), omega **2.345 +/- 0.05** (Merlo 2.24, 1.05x, FAILS), gamma
+**-0.184 +/- 0.010** (PASSES). The artifact carries TWO reports: `gate_report` (asserted) pins
+GKX's own converged values **plus the conditions that make them measurements** —
+scatter ratio <= 0.25 (measures 0.143; retired Nm=24 sat at **1.20**, scatter exceeding the
+gated number), window-before-recurrence, and trace completeness; `literature_comparison`
+(reported, never asserted) carries `passed: false` with the gap quantified.
+
+### 2026-08-19 RJ — REGRESSION I INTRODUCED, fixed in PR #68
+The Merlo re-run surfaced a **fourth defect, and it is mine**: `[time] run_to` defaults to
+`"saturation"` (PR #54, which I merged), and `rel_sem = sem / max(|mean|, 1e-12)` divides by
+the FLOOR when a flux never leaves zero — so every other gate passes on a dead trace and the
+run stops in its first chunk. Regenerating the zonal artifact stopped at **t=7.66 of 60 with
+gamma=NaN, silently**. A zonal response carries no heat flux by construction.
+Fixed by requiring a mean the floor cannot explain (threshold 1e3x the floor — deliberately
+generous, since waiting costs wall time and stopping early costs a truncated run). Verified it
+does not reject faint-but-real turbulence: mean 3e-9 still saturates. Two regression tests.
+**Still unchecked: `runtime_w7x_zonal_response_vmec.toml` and `runtime_secondary_slab.toml`
+also do not set `run_to`.** → item **1.7**: audit every shipped config against the new default.
+
+### 2026-08-19 agent/gx-precsqrt — 2.1e DONE: flag adopted, references stand
+Rebuilt GX @3865a537 with `-use_fast_math -prec-sqrt=true` into a SEPARATE tree
+(`/home/rjorge/GX_precsqrt`, binaries kept side by side at `~/gx_builds/gx.{nofastsqrt,precsqrt}`),
+re-ran all five cases into `~/gx_rebaseline_precsqrt_20260819/`.
+**Flag interaction settled empirically, not assumed**: nvcc docs say `-use_fast_math` implies
+`-prec-sqrt=false`, but PTX inspection shows the explicit `-prec-sqrt=true` **wins,
+order-independently** (`sqrt.approx.ftz.f32` -> `sqrt.rn.ftz.f32`); only f32 sqrt changes, FTZ
+and fast division and FMA contraction stay on. Also: **upstream is not uniform** — only 4 of 20
+makefiles carry the flag; perlmutter/summit/stellar/daint use the old office setting.
+**Noise floor measured as exactly zero** (same binary rerun -> bitwise-identical `omega_kxkyt`),
+so every delta is the flag.
+Result: not a no-op but close. Converged modes bit-identical (cyclone ky=0.3/0.4/0.5, W7-X
+ky=1.0); elsewhere 0.01-0.07%. **Exception: kbm_miller 0.16-0.20%, and it moves TOWARD the
+references** — under upstream's own `check.py` kbm flips **FAIL (2.6e-3) -> PASS (9.3e-4)**.
+**Recommendations adopted**: (1) the `-prec-sqrt=true` build is canonical; (2) tracked parity
+numbers do NOT need regenerating — every `converged=True` row still agrees to <=0.11%, and the
+converged headline pair (gamma=0.093049, omega=0.281991) is unchanged, so PR #55's doc edit
+stands as written; (3) **new item 2.12: kbm_miller must not be gated at sub-0.1%** — it moves
+0.16-0.20% between two legitimate builds of the SAME commit with zero run-to-run noise, so a
+tight gate there gates compiler arithmetic rather than physics.
+Full report: `plan/notes/gx_precsqrt.md`.
+
+### 2026-08-19 RJ — OPERATIONAL HAZARD: `git stash` is shared across worktrees
+`refs/stash` is a single ref for the whole repository, NOT per-worktree. With several agents
+working in parallel worktrees, one agent's `git stash pop` applied a DIFFERENT session's stash
+into its tree and destroyed its own uncommitted work. Both were recovered (from unreachable
+commits; the foreign stash is saved at `scratchpad/rescue/other_session_linear_operators.patch`
+and as unreachable commit `ffa475b209a54d1cad6ce5dd4092dffb34c322f7`), but nothing warned.
+**Rule for this program: never `git stash` while other worktrees are active.** To compare
+against a clean tree use `git show HEAD:<path> > /tmp/copy.py`, or a throwaway
+`git worktree add --detach /tmp/clean origin/main`. Both running agents were warned mid-flight.
