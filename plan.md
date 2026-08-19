@@ -1224,3 +1224,39 @@ entry in the validation coverage manifest, and that checker fails closed on any 
 module — so main briefly could not pass its own docs gate. Fixed by adding it to the runtime
 orchestration lane. **The gate did its job**: this is the fourth CI contract that a green local
 `pytest` does not check, and it caught a real gap within minutes.
+
+### 2026-08-19 RJ — POST-MERGE: two defects I shipped, both fixed; next wave dispatched
+Verified both problems the #56 resolution agent reported, since both came from PRs I merged:
+1. **#62 put genuinely broken code on main.** At commit a2a74f97,
+   `src/gkx/parallel/integrators.py` used `np` (7 `np.<attr>` sites) and
+   `_make_hermitian_projector` with NEITHER imported — confirmed by AST analysis of that exact
+   blob, not by eyeball. Real `NameError`s. **Why CI did not catch it: mypy gates
+   `quick-tests`, so the type failure SKIPPED THE ENTIRE DOWNSTREAM SUITE** — CI gave zero
+   signal rather than a red light, and #62's own runs were cancelled. That failure mode
+   (a first-stage gate silently disabling everything behind it) is worth a CI-structure fix in
+   the Phase 5 pass. Fixed inside #56.
+2. **#58 turned a release gate red.** `test_core_source_avoids_comparison_code_terminology_outside_benchmarks`
+   went red because the `--plot` dispatch named the comparison code inside `plotting.py` — the
+   exact scattering the gate exists to prevent. The #56 agent correctly REFUSED to decide this
+   inside an unrelated merge (a positioning call, not a mechanical one).
+   Fixed in **PR #64**: new `src/gkx/artifacts/foreign_output.py` holds a registry of
+   (recognizer, plotter) pairs; `plot_saved_output` now asks whether ANOTHER CODE wrote this
+   file and never learns which codes exist. Adding a stella reader later is a row in that
+   registry, not another branch in the figure code. The gate's allowlist — which had never been
+   used (`= ()`) — now covers exactly the reader and the registry, with the rationale beside it.
+   108/108 release gates green; main healthy; zero open PRs.
+
+Process note: PR #56 was merged BY A SUBAGENT using `--admin`, which tripped a security warning.
+The authorization chain was real (owner authorized merging; I explicitly instructed that agent
+to merge once green) but delegating a branch-protection bypass is authority worth keeping
+closer. **Merges should be performed by the coordinator, not delegated.**
+
+**Next wave dispatched** (all owner-approved): **2.8b/2.9/2.10** Merlo re-baseline — fix the
+cadence-dependent gamma_GAM estimator FIRST, re-baseline at Nm>=144/dt<=0.0025, test the dropped
+alpha_MHD=0.5425 as the likely cause of the residual/omega offset, and explicitly forbid
+widening tolerances to force a pass; **2.1e** office GX rebuild with `-prec-sqrt=true` (note
+`-use_fast_math` implies `-prec-sqrt=false`, so the interaction must be measured, not assumed)
+plus a three-way shipped/old/new comparison; **1.6** warm restart for ky scans, parameter scans
+and optimization iterations, with a cold-vs-warm correctness gate per scan point (a warm start
+can bias an eigensolver toward its neighbour's branch) and single-run invariance; **3.5** the
+traced-host-read sweep, where a clean result is also a useful result.
