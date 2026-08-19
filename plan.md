@@ -941,7 +941,7 @@ Line budget 90936 → 91752.
 **Merge order addendum**: #58 is stacked on #53 and #50 — merge those first, then #58 shows
 only its own commit. #54 (saturation windows) after #58 makes the window shading live.
 
-### 2026-08-18 agent/twistad — 3.1 DONE: the twist-shift AD block was a FALSE POSITIVE
+### 2026-08-18 agent/twistad — 3.1 DONE → PR #59: the twist-shift AD block was a FALSE POSITIVE
 **Nothing was ever traced.** Under JAX 0.9.2 `jnp` stops constant-folding inside a trace, so
 `jnp.asarray(0.8)` on a HOST float returns a `DynamicJaxprTracer`. The old code lifted shear
 into the trace and then asked whether the result was traced — so the answer was always yes and
@@ -975,3 +975,37 @@ cannot be used under `jit` AT ALL — `_make_hermitian_projector(np.asarray(cach
 a tracer. Verified to fail identically for periodic and linked. **Same defect class as the one
 just fixed**, so the fix is likely the same shape (read the stored attribute, not a jnp round
 trip). Until then every gradient test must pass `compressed_real_fft=False`, as they do.
+
+### 2026-08-18 RJ — SESSION CLOSE: eleven PRs open, plan phases 0–1 complete
+Work PRs from this program, all authored by rogeriojorge, all with green local tests:
+| PR | item | what |
+|---|---|---|
+| [#49](https://github.com/uwplasma/GKX/pull/49) | — | this plan + log + notes + patches |
+| [#50](https://github.com/uwplasma/GKX/pull/50) | 0.2/0.4/0.5/0.6 | overflow guards, --plot scans, drift fixes, dep floors |
+| [#51](https://github.com/uwplasma/GKX/pull/51) | 1.1 | `gkx wout_XXX.nc` |
+| [#52](https://github.com/uwplasma/GKX/pull/52) | 0.1 | certified eigensolver default (+ TF32 pin) |
+| [#53](https://github.com/uwplasma/GKX/pull/53) | 1.3a | figure library + shared snapshot renderers |
+| [#54](https://github.com/uwplasma/GKX/pull/54) | 1.2 | run_to="saturation" |
+| [#55](https://github.com/uwplasma/GKX/pull/55) | 2.1c | GX probe labelled transient |
+| [#56](https://github.com/uwplasma/GKX/pull/56) | 0.3 | resolved-or-not growth rates |
+| [#57](https://github.com/uwplasma/GKX/pull/57) | 3.2b | finite-beta drifts in the differentiable bridge |
+| [#58](https://github.com/uwplasma/GKX/pull/58) | 1.3b + cache | auto-plot, GX reading, compile cache |
+| [#59](https://github.com/uwplasma/GKX/pull/59) | 3.1 | linked-boundary autodiff |
+
+**Merge order**: pre-existing queue `#46 → #47 → #52 → #44` (note: #52 BEFORE #44 now — see
+the TF32 entry), then `#48 → #45`, then `#50 → #53 → #58 → #54 → #51 → #56 → #57 → #59`,
+with #55 independent at any time. #58 is stacked on #50+#53; #54 after #58 makes window
+shading live.
+
+**Validation numbers established today** (all measured, all regenerable):
+GKX certified eigensolver vs converged GX **+0.043% γ / +0.008% ω**; GKX vs stella linear
+**≤2.8% γ / ≤1.9% ω** over six ky; GKX vs stella Rosenbluth–Hinton residual **−2.8%**
+(convention-independent); parity protocol reproduces **across hardware to 1.9e-9**.
+
+**Highest-priority open items** (all logged above with evidence):
+2.8 Merlo zonal gate may pass only from Nm=24 under-resolution (~11% high) — re-run at
+Nm=48/96 and re-judge. 2.7 pin `v_th` in docs/normalization.rst (one sentence; this ambiguity
+cost three agents hours). 3.4 `compressed_real_fft=True` unusable under jit (same defect class
+as #59). 0.8 two example decks ship settings that produce a wrong number by default.
+2.4-r0 HSX parity row is not third-party reproducible (no deck anywhere).
+Phase 4.2 (species×Hermite shard_map) is designed and unstarted — the largest remaining item.
