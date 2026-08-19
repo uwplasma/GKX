@@ -681,7 +681,7 @@ def nonlinear_runtime_panel_figure(
 
 def _artifact_base(path: Path) -> Path:
     name = path.name
-    for suffix in (".summary.json", ".timeseries.csv", ".eigenfunction.csv", ".diagnostics.csv", ".out.nc"):
+    for suffix in (".summary.json", ".timeseries.csv", ".eigenfunction.csv", ".diagnostics.csv", ".scan.csv", ".out.nc"):
         if name.lower().endswith(suffix):
             return path.with_name(name[: -len(suffix)])
     if path.suffix.lower() in {".json", ".csv", ".nc"}:
@@ -698,6 +698,15 @@ def _load_linear_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.nd
     z = np.asarray(eigen["z"], dtype=float)
     eig = np.asarray(eigen["eigen_real"], dtype=float) + 1j * np.asarray(eigen["eigen_imag"], dtype=float)
     return summary, t, signal, z, eig
+
+
+def _load_linear_scan_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+    summary = json.loads(base.with_suffix(".summary.json").read_text(encoding="utf-8"))
+    scan = np.genfromtxt(base.with_suffix(".scan.csv"), delimiter=",", names=True, dtype=float)
+    ky = np.atleast_1d(np.asarray(scan["ky"], dtype=float))
+    gamma = np.atleast_1d(np.asarray(scan["gamma"], dtype=float))
+    omega = np.atleast_1d(np.asarray(scan["omega"], dtype=float))
+    return summary, ky, gamma, omega
 
 
 def _load_nonlinear_csv(base: Path) -> tuple[dict, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
@@ -720,7 +729,18 @@ def _load_nonlinear_netcdf(path: Path) -> tuple[np.ndarray, np.ndarray | None, n
 
     with netCDF4.Dataset(path) as root:
         diag = root.groups["Diagnostics"]
-        t = np.asarray(diag.variables["t"][:], dtype=float)
+        # The time axis lives in Grids/time, which is where both GKX and GX
+        # write it; Diagnostics/t was never written by either, so --plot on a
+        # real *.out.nc used to die on a KeyError before reaching a figure.
+        grids = root.groups.get("Grids")
+        time_var = None
+        if grids is not None and "time" in grids.variables:
+            time_var = grids.variables["time"]
+        elif "t" in diag.variables:
+            time_var = diag.variables["t"]
+        if time_var is None:
+            raise KeyError(f"{Path(path).name} carries no Grids/time axis")
+        t = np.asarray(time_var[:], dtype=float)
         phi2 = np.asarray(diag.variables["Phi2_t"][:], dtype=float) if "Phi2_t" in diag.variables else None
         wphi = None
         heat_flux = None
@@ -732,7 +752,12 @@ def _load_nonlinear_netcdf(path: Path) -> tuple[np.ndarray, np.ndarray | None, n
 
 
 def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Path:
-    """Plot a saved linear or nonlinear output bundle."""
+    """Plot a saved linear or nonlinear output bundle.
+
+    A GX output bundle is accepted alongside GKX's own, so a cross-code
+    comparison is one command rather than a script; see
+    :mod:`gkx.artifacts.gx_output` for how the two are told apart.
+    """
 
     in_path = Path(path)
     base = _artifact_base(in_path)
@@ -740,6 +765,10 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if in_path.suffix.lower() == ".nc" or in_path.name.lower().endswith(".out.nc"):
+        from gkx.artifacts.gx_output import is_gx_output, plot_gx_output
+
+        if is_gx_output(in_path):
+            return plot_gx_output(in_path, out=out_path)
         t, phi2, wphi, heat_flux = _load_nonlinear_netcdf(in_path)
         fig, _axes = nonlinear_runtime_panel_figure(
             t=t,
@@ -764,6 +793,15 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
                 gamma=float(summary["gamma"]),
                 omega=float(summary["omega"]),
                 title=f"GKX linear runtime: {base.name}",
+            )
+        elif kind == "linear_scan":
+            _summary, scan_ky, scan_gamma, scan_omega = _load_linear_scan_bundle(base)
+            fig, _axes = scan_comparison_figure(
+                scan_ky,
+                scan_gamma,
+                scan_omega,
+                r"$k_y \rho_i$",
+                f"GKX linear scan: {base.name}",
             )
         elif kind == "nonlinear":
             _summary, t, wphi, heat_flux, gamma, omega = _load_nonlinear_csv(base)

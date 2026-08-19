@@ -8,6 +8,7 @@ step policy remains pure, small, and directly testable.
 from __future__ import annotations
 
 from functools import partial
+import math
 from typing import Any, Callable
 
 import jax
@@ -205,6 +206,75 @@ def checkpoint_explicit_step(step: Callable[..., object], checkpoint: bool):
     return jax.checkpoint(step) if checkpoint else step
 
 
+def _checkpoint_block_size(steps: int) -> int:
+    """Balance retained block boundaries and states within one reverse block."""
+
+    return max(1, math.isqrt(max(int(steps) - 1, 0)) + 1)
+
+
+def _concatenate_scan_outputs(blocks: Any, tail: Any) -> Any:
+    """Flatten block-major scan outputs and append a possibly empty tail."""
+
+    return jax.tree.map(
+        lambda block, remainder: jnp.concatenate(
+            (block.reshape((-1, *block.shape[2:])), remainder), axis=0
+        ),
+        blocks,
+        tail,
+    )
+
+
+def checkpointed_explicit_scan(
+    step: Callable[..., object],
+    initial_carry: Any,
+    indices: jnp.ndarray,
+    *,
+    checkpoint: bool,
+) -> tuple[Any, Any]:
+    """Scan with a two-level discrete-adjoint checkpoint schedule.
+
+    A rematerialized step alone still leaves every scan carry on the reverse
+    tape.  Grouping steps into rematerialized blocks retains only block
+    boundaries, while the inner rematerialized scan retains the states needed
+    to reverse one block.  A block length near ``sqrt(steps)`` therefore lowers
+    state storage from ``O(steps)`` to ``O(sqrt(steps))`` without changing the
+    discrete time integrator. Requested scan outputs retain their inherent
+    ``O(steps)`` result storage.
+    """
+
+    steps = int(indices.shape[0])
+    scan_step = checkpoint_explicit_step(step, checkpoint)
+    if not checkpoint or steps <= 1:
+        return jax.lax.scan(scan_step, initial_carry, indices, length=steps)
+
+    block_size = _checkpoint_block_size(steps)
+    block_count, tail_size = divmod(steps, block_size)
+    blocked_size = block_count * block_size
+    block_indices = indices[:blocked_size].reshape((block_count, block_size))
+
+    def scan_block(carry: Any, local_indices: jnp.ndarray) -> tuple[Any, Any]:
+        return jax.lax.scan(
+            scan_step,
+            carry,
+            local_indices,
+            length=block_size,
+        )
+
+    carry, block_outputs = jax.lax.scan(
+        jax.checkpoint(scan_block),
+        initial_carry,
+        block_indices,
+        length=block_count,
+    )
+    carry, tail_outputs = jax.lax.scan(
+        scan_step,
+        carry,
+        indices[blocked_size:],
+        length=tail_size,
+    )
+    return carry, _concatenate_scan_outputs(block_outputs, tail_outputs)
+
+
 def _maybe_emit_progress(
     G: jnp.ndarray,
     idx: jnp.ndarray,
@@ -300,8 +370,12 @@ def integrate_nonlinear_scan(
         _dG_new, fields_new = bound_rhs(G_new)
         return G_new, fields_new
 
-    step_fn = checkpoint_explicit_step(step, checkpoint)
-    G_final, fields_t = jax.lax.scan(step_fn, G0, jnp.arange(steps))
+    G_final, fields_t = checkpointed_explicit_scan(
+        step,
+        G0,
+        jnp.arange(steps),
+        checkpoint=checkpoint,
+    )
     if return_fields:
         return G_final, fields_t
     return G_final
@@ -552,17 +626,18 @@ def run_explicit_diagnostic_scan(
     (
         (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last, _dt_last),
         scan_diag_out,
-    ) = jax.lax.scan(
-        scan_step,
+    ) = checkpointed_explicit_scan(
+        step_fn,
         initial_carry,
         idx,
-        length=steps,
+        checkpoint=checkpoint,
     )
     return G_final, scan_diag_out
 
 
 __all__ = [
     "advance_explicit_nonlinear_state",
+    "checkpointed_explicit_scan",
     "checkpoint_explicit_step",
     "integrate_cached_explicit_scan",
     "integrate_nonlinear_scan",

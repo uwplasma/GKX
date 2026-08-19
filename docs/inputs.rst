@@ -300,7 +300,8 @@ Executable usage
 .. code-block:: bash
 
   cd examples/linear/axisymmetric && gkx cyclone.toml
-  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --plot --outdir docs/_static
+  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --out docs/_static/runtime_etg_scan
+  gkx --plot docs/_static/runtime_etg_scan.scan.csv
   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out tools_out/cyclone_runtime
    gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --batch-ky
    gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --sample-stride 5 --out docs/_static/nonlinear_cyclone_diag.csv
@@ -600,6 +601,10 @@ The ``[output]`` section controls runtime artifact layout and restart behavior:
   the larger spectral-history arrays.
 * ``nsave``: checkpoint cadence fallback, in steps, for nonlinear NetCDF
   bundles when ``time.nstep_restart`` is not set.
+* ``plots``: draw the run's figures beside its output once it finishes. It
+  defaults to ``true``; set it to ``false`` (or pass ``--no-plots``) on batch
+  surfaces that only want the data. See :doc:`outputs` for the figure set each
+  run kind writes.
 
 For direct restart control outside the ``[output]`` helper path, the generic
 ``[init] init_file`` / ``init_file_scale`` / ``init_file_mode`` keys remain the
