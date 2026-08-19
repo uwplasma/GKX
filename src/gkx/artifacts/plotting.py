@@ -729,9 +729,9 @@ def _load_nonlinear_netcdf(path: Path) -> tuple[np.ndarray, np.ndarray | None, n
 
     with netCDF4.Dataset(path) as root:
         diag = root.groups["Diagnostics"]
-        # The time axis lives in Grids/time, which is where both GKX and GX
-        # write it; Diagnostics/t was never written by either, so --plot on a
-        # real *.out.nc used to die on a KeyError before reaching a figure.
+        # The time axis lives in Grids/time, which is where this and the
+        # comparison code both write it; Diagnostics/t was never written by
+        # either, so --plot on a real *.out.nc used to die on a KeyError.
         grids = root.groups.get("Grids")
         time_var = None
         if grids is not None and "time" in grids.variables:
@@ -754,9 +754,9 @@ def _load_nonlinear_netcdf(path: Path) -> tuple[np.ndarray, np.ndarray | None, n
 def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Path:
     """Plot a saved linear or nonlinear output bundle.
 
-    A GX output bundle is accepted alongside GKX's own, so a cross-code
-    comparison is one command rather than a script; see
-    :mod:`gkx.artifacts.gx_output` for how the two are told apart.
+    A bundle written by another gyrokinetic code is accepted alongside GKX's
+    own, so a cross-code comparison is one command rather than a script; see
+    :mod:`gkx.artifacts.foreign_output` for how they are told apart.
     """
 
     in_path = Path(path)
@@ -765,10 +765,11 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if in_path.suffix.lower() == ".nc" or in_path.name.lower().endswith(".out.nc"):
-        from gkx.artifacts.gx_output import is_gx_output, plot_gx_output
+        from gkx.artifacts.foreign_output import foreign_output_plotter
 
-        if is_gx_output(in_path):
-            return plot_gx_output(in_path, out=out_path)
+        plot_foreign = foreign_output_plotter(in_path)
+        if plot_foreign is not None:
+            return plot_foreign(in_path, out=out_path)
         t, phi2, wphi, heat_flux = _load_nonlinear_netcdf(in_path)
         fig, _axes = nonlinear_runtime_panel_figure(
             t=t,

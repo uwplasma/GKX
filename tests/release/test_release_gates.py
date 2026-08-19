@@ -2328,7 +2328,17 @@ FORBIDDEN_PHRASES = (
 COMPARISON_CODE_PATTERN = re.compile(
     r"\bGX\b|\bgx\b|gx_|_gx|GX-reference|comparison-code"
 )
-COMPARISON_ALLOWED_SOURCE_PREFIXES: tuple[Path, ...] = ()
+# The gate keeps the comparison code out of the physics, not out of the two
+# files that exist to read its output. ``gkx --plot`` accepts a bundle written
+# by another code so a cross-code comparison is one command rather than a
+# bespoke script, and a reader cannot describe what it parses without naming
+# it. Confining that to a reader plus the registry that selects it is the
+# point: the figure code never learns which codes exist, and naming one
+# anywhere else is still a violation.
+COMPARISON_ALLOWED_SOURCE_PREFIXES: tuple[Path, ...] = (
+    Path("src/gkx/artifacts/foreign_output.py"),
+    Path("src/gkx/artifacts/gx_output.py"),
+)
 
 
 def test_claim_scope_pages_keep_required_quasilinear_boundaries() -> None:

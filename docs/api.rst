@@ -668,6 +668,13 @@ Automatic Run Figures
    :members:
    :no-index:
 
+Foreign Output Dispatch
+-----------------------
+
+.. automodule:: gkx.artifacts.foreign_output
+   :members:
+   :no-index:
+
 GX Output Plotting
 ------------------
 

@@ -423,7 +423,10 @@ recursive = true
 # 94771 -> 94775: the two imports the sharded Hermite route was missing. np is
 # used in five places and _make_hermitian_projector in one, so these four lines
 # turn five NameErrors into working code rather than adding surface.
-baseline = 94775
+# 94775 -> 94808: naming the comparison code in one reader instead of the
+# plotting path. The dispatch is a registry so a second code's reader is a
+# row rather than another branch in the figure code.
+baseline = 94808
 target = 45000
 
 [[line_budget_policy.counts]]
