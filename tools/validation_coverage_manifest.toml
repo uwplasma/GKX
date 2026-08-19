@@ -192,6 +192,7 @@ owned_modules = [
   "gkx.workflows.runtime.chunks",
   "gkx.workflows.runtime.orchestration_artifacts",
   "gkx.workflows.runtime.results",
+  "gkx.workflows.runtime.warm_start",
 ]
 owner_lane = "runtime progress, scan batching, and nonlinear artifact handoff orchestration"
 status = "active"

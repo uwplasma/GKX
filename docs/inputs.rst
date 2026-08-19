@@ -593,6 +593,10 @@ The ``[output]`` section controls runtime artifact layout and restart behavior:
 * ``restart_scale``: multiplicative scale applied to the loaded restart state.
 * ``append_on_restart``: append continued diagnostic history to the existing
   ``*.out.nc`` file instead of replacing it.
+* ``warm_start``: carry a converged state from one point of a *repeated*
+  workload to the next instead of restarting every point cold. It is opt-in
+  (default ``false``) and has no effect on a single run, which has no
+  predecessor. See `Warm-started scans`_ below.
 * ``resolved_diagnostics``: materialize mode-resolved spectra in nonlinear
   diagnostic history. It defaults to ``true`` for publication and restart
   artifacts. Set it to ``false`` when only scalar time traces such as heat and
@@ -609,5 +613,58 @@ The ``[output]`` section controls runtime artifact layout and restart behavior:
 For direct restart control outside the ``[output]`` helper path, the generic
 ``[init] init_file`` / ``init_file_scale`` / ``init_file_mode`` keys remain the
 lower-level mechanism.
+
+Warm-started scans
+^^^^^^^^^^^^^^^^^^
+
+``[output] restart`` reuses a state written to disk by an earlier run.
+``[output] warm_start`` is its in-memory sibling for work that repeats inside
+one invocation: a converged eigenmode at one ``ky`` is an excellent initial
+guess at a neighbouring ``ky``, so the next point can start from the answer
+instead of rediscovering it from the analytic seed. How much that is worth
+depends entirely on the solver, and :doc:`performance` measures both cases
+before you decide.
+
+``gkx scan-runtime-linear`` therefore walks the requested ``ky`` list in
+monotone order -- so that neighbours follow neighbours regardless of the order
+you asked for -- and seeds each point from the previous point's final state.
+On the eigensolver paths that state is the converged eigenvector and becomes
+the Krylov starting vector; on the time-integration paths it is the final
+distribution function. Results are written back into the order you requested,
+so the reported arrays are unchanged in shape, ordering, and meaning.
+
+The carried state is rescaled by an exact power of two before reuse. Both the
+eigensolve and the growth-rate fit are invariant to the overall scale of the
+initial condition, so this loses nothing, and it stops a state that has grown
+by ``exp(gamma T)`` from overflowing. A state that comes back non-finite or
+zero is refused and the next point starts cold.
+
+Turn it on with ``--warm-start``, with ``[scan] warm_start = true``, or with
+``[output] warm_start = true``; the flag wins over ``[scan]``, which wins over
+``[output]``. It is opt-in rather than the default because it is not free and
+not always identical -- see :doc:`performance` for the measurements. GKX also
+declines to warm start on its own when carrying state would break a contract
+you asked for:
+
+* ``--workers`` greater than one, or ``[parallel] strategy = "batch"``, because
+  independent workers must stay independent;
+* ``solver = "explicit_time"``, which cannot return a final state;
+* ``--batch-ky`` and ``[parallel] strategy = "combined_ky"``, which already
+  integrate every ``ky`` in one pass and so have nothing to carry.
+
+**Two things to know before switching it on.** First, on a *fixed* horizon a
+warm-seeded time integration reports a different growth rate than a cold one,
+because it has removed a startup transient the cold run still contains; the two
+agree only once the horizon is long enough that both are converged, which is
+also why the GX-parity decks are left cold. Second, an eigensolver started
+inside one branch can converge to that branch. On a case whose branch structure
+you do not already know, run the scan once with ``--no-warm-start`` and compare
+point by point before trusting the warm numbers.
+
+``run_runtime_parameter_scan`` takes the same idea as an opt-in
+``warm_start=True``: the previous point's state is reused only while the
+parameter moves by no more than ``warm_start_max_step`` (relative, default
+0.25) from the point before it. That is weaker than ``continuation=True``,
+which follows one branch and requires every point to return a state.
 
 For the explicit equations attached to these controls, see :doc:`operators`.

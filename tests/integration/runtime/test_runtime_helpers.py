@@ -99,6 +99,7 @@ from gkx.workflows.runtime.config import (
     RuntimeQuasilinearConfig,
     RuntimeSpeciesConfig,
 )
+import gkx.workflows.runtime.warm_start as warm_start
 from gkx.terms.config import FieldState
 
 
@@ -707,6 +708,10 @@ def test_runtime_scan_ky_task_forwards_linear_options() -> None:
             "mode_method": "project",
             "fit_signal": "phi",
             "show_progress": True,
+            # A task that says nothing about warm start forwards the cold
+            # defaults, so the independent-worker path is unchanged.
+            "initial_state": None,
+            "return_state": False,
         }
     ]
 
@@ -2654,3 +2659,146 @@ def test_half_horizon_settled_probe_declines_degenerate_input() -> None:
     assert half_horizon_settled_probe(
         t, signal, gamma=0.1, tmin=5.0, tmax=1.0
     ) == (None, None)
+
+
+def test_warm_start_carry_state_rescales_without_losing_a_bit() -> None:
+    """A carried state differs from the converged one by an exact power of two."""
+
+    converged = np.asarray(
+        [[1.0 + 2.0j, -3.0 + 0.5j], [0.25 - 4.0j, 7.0 + 0.0j]], dtype=np.complex64
+    ) * np.float32(1.0e18)
+
+    carried = warm_start.carry_state(converged)
+
+    assert carried is not None
+    assert carried.dtype == converged.dtype
+    assert float(np.linalg.norm(carried)) == pytest.approx(1.0, rel=0.5)
+    ratio = converged.reshape(-1)[0] / carried.reshape(-1)[0]
+    # Exact, not approximate: every entry is scaled by the same binary exponent.
+    np.testing.assert_array_equal(carried * ratio, converged)
+
+
+def test_warm_start_refuses_states_that_cannot_seed_a_solve() -> None:
+    assert warm_start.carry_state(None) is None
+    assert warm_start.carry_state(np.zeros((2, 2), dtype=np.complex64)) is None
+    assert warm_start.carry_state(np.asarray([], dtype=np.complex64)) is None
+    assert warm_start.carry_state(np.asarray([np.nan, 1.0])) is None
+    assert warm_start.carry_state(np.asarray([np.inf, 1.0])) is None
+    with pytest.raises(ValueError, match="amplitude must be positive"):
+        warm_start.carry_state(np.asarray([1.0]), amplitude=0.0)
+
+
+def test_warm_start_visit_order_puts_neighbours_next_to_each_other() -> None:
+    order = warm_start.scan_visit_order([0.5, 0.1, 0.4, 0.2])
+    np.testing.assert_array_equal(order, [1, 3, 2, 0])
+    values = np.asarray([0.5, 0.1, 0.4, 0.2])[order]
+    assert np.all(np.diff(values) > 0.0)
+
+
+def test_warm_start_refusal_names_the_contract_it_protects() -> None:
+    enabled = warm_start.WarmStartPolicy(enabled=True)
+    assert (
+        warm_start.linear_scan_warm_start_refusal(
+            policy=enabled, solver_key="krylov", workers=1
+        )
+        is None
+    )
+    assert "disabled" in warm_start.linear_scan_warm_start_refusal(
+        policy=warm_start.WarmStartPolicy(enabled=False), solver_key="krylov", workers=1
+    )
+    assert "final state" in warm_start.linear_scan_warm_start_refusal(
+        policy=enabled, solver_key="explicit_time", workers=1
+    )
+    assert "independent" in warm_start.linear_scan_warm_start_refusal(
+        policy=enabled, solver_key="krylov", workers=4
+    )
+
+
+def test_warm_start_policy_reads_output_section_and_honors_override() -> None:
+    cfg = RuntimeConfig()
+    # Opt-in: nothing warm starts until something asks for it.
+    assert warm_start.WarmStartPolicy.from_config(cfg).enabled is False
+    assert warm_start.WarmStartPolicy.from_config(cfg, override=True).enabled is True
+    on = replace(cfg, output=replace(cfg.output, warm_start=True))
+    assert warm_start.WarmStartPolicy.from_config(on).enabled is True
+    assert warm_start.WarmStartPolicy.from_config(on, override=False).enabled is False
+
+
+def test_resolve_scan_warm_start_prefers_flag_then_scan_section() -> None:
+    flag_on = SimpleNamespace(warm_start=True)
+    assert warm_start.resolve_scan_warm_start(flag_on, {"warm_start": False}) is True
+    flag_off = SimpleNamespace(warm_start=False)
+    assert warm_start.resolve_scan_warm_start(flag_off, {"warm_start": True}) is False
+    unset = SimpleNamespace(warm_start=None)
+    assert warm_start.resolve_scan_warm_start(unset, {"warm_start": True}) is True
+    assert warm_start.resolve_scan_warm_start(unset, {}) is None
+    assert warm_start.resolve_scan_warm_start(SimpleNamespace(), {}) is None
+
+
+def test_saturation_refresh_policy_bounds_reuse_and_geometry_drift() -> None:
+    cache = warm_start.SaturationWarmStart(
+        policy=warm_start.SaturationRefreshPolicy(
+            max_reuse=2, geometry_tolerance=0.05, warm_step_fraction=0.25
+        )
+    )
+    base = np.asarray([1.0, 2.0, 3.0])
+    state = np.ones((2, 2), dtype=np.complex64)
+
+    first = cache.plan(base, cold_steps=8000)
+    assert (first.warm, first.steps, first.seed) == (False, 8000, None)
+    cache.record(state, base, warm=first.warm)
+
+    # Geometry barely moved: reuse the saturated state on a reduced budget.
+    near = base * 1.001
+    second = cache.plan(near, cold_steps=8000)
+    assert second.warm is True
+    assert second.steps == 2000
+    np.testing.assert_array_equal(second.seed, state)
+    cache.record(state, near, warm=second.warm)
+
+    # A large geometry step invalidates the attractor and restores cold cost.
+    far = base + 10.0
+    third = cache.plan(far, cold_steps=8000)
+    assert (third.warm, third.steps) == (False, 8000)
+    assert "geometry moved" in third.reason
+
+    # The reuse budget alone forces a cold spin-up even when nothing moved.
+    cache.record(state, near, warm=True)
+    cache.record(state, near, warm=True)
+    exhausted = cache.plan(near, cold_steps=8000)
+    assert exhausted.warm is False
+    assert exhausted.reason == "reuse budget exhausted"
+
+
+def test_saturation_refresh_policy_rejects_unusable_state_and_bad_bounds() -> None:
+    cache = warm_start.SaturationWarmStart()
+    cache.record(np.zeros((2, 2), dtype=np.complex64), np.asarray([1.0]), warm=False)
+    plan = cache.plan(np.asarray([1.0]), cold_steps=100)
+    assert plan.warm is False
+    assert plan.reason == "no usable saved state"
+    with pytest.raises(ValueError, match="cold_steps"):
+        cache.plan(np.asarray([1.0]), cold_steps=0)
+    with pytest.raises(ValueError, match="warm_step_fraction"):
+        warm_start.SaturationRefreshPolicy(warm_step_fraction=0.0)
+    with pytest.raises(ValueError, match="max_reuse"):
+        warm_start.SaturationRefreshPolicy(max_reuse=-1)
+    with pytest.raises(ValueError, match="geometry_tolerance"):
+        warm_start.SaturationRefreshPolicy(geometry_tolerance=-1.0)
+
+
+def test_warm_start_geometry_signature_tracks_the_metric_profiles() -> None:
+    geom = SimpleNamespace(
+        gradpar_value=0.25,
+        bmag_profile=np.asarray([1.0, 1.1]),
+        gds2_profile=np.asarray([2.0, 2.2]),
+        unrelated=np.asarray([9.0]),
+    )
+    signature = warm_start.flux_tube_signature(geom)
+    np.testing.assert_allclose(signature, [0.25, 1.0, 1.1, 2.0, 2.2])
+    assert warm_start.relative_change(signature, signature) == 0.0
+    assert warm_start.relative_change(signature, signature[:-1]) == float("inf")
+    assert warm_start.relative_change([1.0], [np.nan]) == float("inf")
+    with pytest.raises(ValueError, match="signature profiles"):
+        warm_start.flux_tube_signature(SimpleNamespace(other=1.0))
+    with pytest.raises(ValueError, match="at least one array"):
+        warm_start.signature_from_arrays([])

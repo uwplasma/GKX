@@ -10,6 +10,11 @@ import numpy as np
 from scipy.optimize import least_squares
 
 import gkx
+from gkx.workflows.runtime.warm_start import (
+    SaturationRefreshPolicy,
+    SaturationWarmStart,
+    flux_tube_signature,
+)
 import vmex as vj
 from vmex import optimize as opt
 from vmex.core import turbulence
@@ -104,20 +109,55 @@ def parameters(local_geometry):
     )
 
 
+# Spin-up warm start, wired but not switched on. The saturated state is still
+# detached and still refreshed exactly where it always was -- once per accepted
+# VMEX stage -- so the objective remains a fixed function of (state, runtime)
+# for the whole of each stage and never becomes a function of the optimizer's
+# within-stage history. What a warm spin-up would change is only the cost of
+# producing the refreshed state: a stage that barely moved the flux tube could
+# reseed from the previous saturated state instead of climbing out of a 1e-3
+# seed again, on a quarter of the step budget. The policy restores the full
+# cold spin-up as soon as the geometry moves by more than `geometry_tolerance`,
+# or after `max_reuse` consecutive warm spin-ups, so a run of individually
+# small steps cannot drift away from the attractor.
+#
+# `max_reuse=0` disables it, so this script's numbers are exactly what they
+# were. Raise it to opt in. It is off by default because the saving is real but
+# its cost has not been measured here: a shortened spin-up still has to
+# re-equilibrate to the new geometry, and whether a quarter budget suffices is
+# a question about this objective's sensitivity that only a full optimization
+# run answers. Turn it on alongside a comparison against a `max_reuse=0` run.
+saturation_warm_start = SaturationWarmStart(
+    policy=SaturationRefreshPolicy(
+        max_reuse=0, geometry_tolerance=0.05, warm_step_fraction=0.25
+    )
+)
+
+
 def saturate(equilibrium):
     local_geometry = geometry(equilibrium.state, equilibrium.runtime)
-    return gkx.integrate_nonlinear(
-        initial_state(),
+    signature = flux_tube_signature(local_geometry)
+    plan = saturation_warm_start.plan(signature, cold_steps=SATURATION_STEPS)
+    seed = initial_state() if plan.seed is None else jnp.asarray(plan.seed)
+    print(
+        f"saturation spin-up: {'warm' if plan.warm else 'cold'} seed, "
+        f"{plan.steps} steps ({plan.reason or 'first spin-up'})",
+        flush=True,
+    )
+    state = gkx.integrate_nonlinear(
+        seed,
         grid,
         local_geometry,
         parameters(local_geometry),
         DT,
-        SATURATION_STEPS,
+        plan.steps,
         method="rk3",
         terms=terms,
         checkpoint=False,
         return_fields=False,
     )
+    saturation_warm_start.record(state, signature, warm=plan.warm)
+    return state
 
 
 print("solving vacuum seed equilibrium", flush=True)

@@ -150,6 +150,16 @@ class RuntimeOutputConfig:
     restart_from_file: str | None = None
     restart_with_perturb: bool = False
     append_on_restart: bool = True
+    # In-memory sibling of the restart controls above: carry a converged state
+    # from one point of a repeated workload (ky scan, parameter scan) to the
+    # next instead of restarting every point from the cold initial condition.
+    # It has no effect on a single run, which never has a predecessor.
+    # Off by default, on measurement rather than caution: the certified
+    # adaptive eigensolver's cost is a fixed-size filtered Arnoldi that does
+    # not shrink with a better starting vector, and on a fixed-horizon time
+    # integration a warm seed removes a startup transient that the benchmark
+    # parity decks are pinned to reproduce. See docs/performance.rst.
+    warm_start: bool = False
     resolved_diagnostics: bool = True
     # Whether a completed run draws its own figures beside its output. On by
     # default: a saved bundle nobody plotted is a run nobody looked at. Set

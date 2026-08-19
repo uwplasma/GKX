@@ -25,6 +25,28 @@ The default run is a GPU calculation. Use `VMEX_EXAMPLES_CI=1` for a short
 end-to-end smoke test. The main accuracy/cost controls are
 `SATURATION_STEPS`, `WINDOW_STEPS`, `NX`, `NY`, `NZ`, `NL`, and `NM`.
 
+The spin-up between stages can be warm-started by
+`gkx.workflows.runtime.warm_start.SaturationWarmStart`, which is wired into
+`saturate()` but **off by default** (`max_reuse = 0`). Switching it on does not
+move the refresh points: the saturated state is still detached and still
+replaced once per accepted VMEX stage, so the objective stays a fixed function
+of `(state, runtime)` for the whole of each stage and never becomes a function
+of the optimizer's within-stage history. Only the cost of the refresh changes.
+A stage that moved the flux tube by less than
+`geometry_tolerance = 0.05` (relative L2 over the metric profiles the nonlinear
+operator reads) reseeds from the previous saturated state and runs
+`warm_step_fraction = 0.25` of `SATURATION_STEPS`, because a saturated seed
+does not have to climb out of a 1e-3 perturbation again. The full cold spin-up
+comes back the moment the geometry moves further than that, or after
+`max_reuse` consecutive warm spin-ups, so a chain of small accepted steps
+cannot drift away from the attractor unchecked.
+
+It is off by default because the saving is real but its cost has not been
+measured on this objective: a shortened spin-up still has to re-equilibrate to
+the new geometry, and whether a quarter budget suffices is a question about
+this objective's sensitivity that only a full optimization run answers. Raise
+`max_reuse` to opt in, and compare against a `max_reuse = 0` run when you do.
+
 The analytic Jacobian includes both the implicit VMEX equilibrium response and
 the exact GKX window derivative; SciPy's `least_squares` consumes it directly.
 Independent, replicated post-transient runs validate the accepted direction:
