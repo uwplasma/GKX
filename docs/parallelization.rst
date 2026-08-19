@@ -526,11 +526,67 @@ ExB bracket ``-\{\phi,g\}`` alone, with no streaming, mirror, curvature,
 grad-B, diamagnetic, collision, hypercollision, end-damping, dealiasing or
 electromagnetic terms and no species axis, all of which the production
 nonlinear RHS carries. No production nonlinear speedup claim follows from it.
-Separately, the two-device rows are **not** re-measured here: the second GPU of
-the office box was saturated by another user throughout, so
-``parallel_scaling_vs_one_device`` and ``net_speedup_vs_serial`` remain those of
-the table above and the end-to-end gate verdict is deferred rather than
-restated.
+The two-device rows are now measured end to end, on both RTX A4000s of the
+office box, with the first GPU verified idle before and after the run. They are
+timed one grid per process through the ``--isolate-shapes`` flag of
+``profile_device_z_pencil_scaling_decomposition.py``. That flag is a
+correctness requirement rather than a convenience: several grids timed inside
+one process share compiled executables and a warm allocator, and have been
+measured to report a single-device route overhead near unity where an isolated
+process reports the true, much larger value. Timing all three routes again
+after the fused local bracket landed gives
+``docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.json``:
+
+.. list-table:: Device-z pencil bracket, two devices, one grid per process
+   :header-rows: 1
+   :widths: 30 16 16 14 24
+
+   * - ``(N_l,N_m,N_y,N_x,N_z)``
+     - route overhead
+     - parallel scaling
+     - net
+     - final-state error
+   * - ``(4,8,96,96,48)``
+     - ``0.997``
+     - ``1.978``
+     - ``1.983``
+     - ``0.0``
+   * - ``(4,16,96,96,32)``
+     - ``1.005``
+     - ``2.010``
+     - ``2.000``
+     - ``0.0``
+   * - ``(4,16,128,128,32)``
+     - ``0.988``
+     - ``1.923``
+     - ``1.947``
+     - ``0.0``
+   * - ``(4,16,96,96,64)``
+     - ``0.996``
+     - ``2.004``
+     - ``2.013``
+     - ``0.0``
+   * - ``(4,16,128,128,64)``
+     - ``1.002``
+     - ``1.955``
+     - ``1.952``
+     - ``0.0``
+
+The end-to-end number lands where the decomposition said it would. Route
+overhead is at parity at every grid, between ``0.988`` and ``1.005``, so the
+net speedup is now just the parallel scaling: ``1.95`` to ``2.01`` against the
+``1.5`` gate, and the artifact's limiting factor moves from
+``shard_map_route_overhead`` to ``parallel_scaling``. Serial-versus-sharded
+identity is exact, ``0.0`` at every grid rather than the earlier ``7.45e-9``,
+so the timed routes are bit-identical and the ratios are not paid for with
+accuracy.
+
+Two limits bound how far that number travels, and they are the same two as
+above. It is the bracket micro-route on a reduced five-dimensional operator
+with a model field solve, not the production nonlinear RHS, so it is a
+localization result and not a production nonlinear speedup claim. And the
+scalar diagnostic path below still dominates any end-to-end route that
+evaluates observables every window.
 
 The scalar diagnostic path remains a separate and much larger cost, and the
 compute-only framing of the timed row matters. With ``--observable-repeats``,

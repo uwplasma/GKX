@@ -1,8 +1,0 @@
-{
-  "kind": "quasilinear_spectrum_figure",
-  "ky_max": 0.2857142857142857,
-  "ky_min": 0.047619047619047616,
-  "n_ky": 6,
-  "png": "docs/_static/quasilinear_hsx_spectrum.png",
-  "source": "docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv"
-}

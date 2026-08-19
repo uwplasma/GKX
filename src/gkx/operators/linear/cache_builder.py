@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from gkx.core.velocity import bessel_j0, bessel_j1, laguerre_transform
+from gkx.core.velocity import _gyro_bessel_factors, laguerre_transform
 from gkx.core.grid import SpectralGrid
 from gkx.operators.linear.cache_arrays import (
     _build_end_damping_profile_array,
@@ -533,17 +533,13 @@ def _build_laguerre_gyro_cache(
     laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
     laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
     laguerre_roots = jnp.asarray(lag_roots_np, dtype=real_dtype)
-    alpha = jnp.sqrt(
-        jnp.maximum(
-            0.0,
-            2.0 * laguerre_roots[None, :, None, None, None] * b[:, None, ...],
-        )
+    alpha2 = jnp.maximum(
+        0.0,
+        2.0 * laguerre_roots[None, :, None, None, None] * b[:, None, ...],
     )
-    laguerre_j0 = bessel_j0(alpha).astype(real_dtype)
-    laguerre_j1 = bessel_j1(alpha)
-    laguerre_j1_over_alpha = jnp.where(alpha < 1.0e-8, 0.5, laguerre_j1 / alpha).astype(
-        real_dtype
-    )
+    laguerre_j0, laguerre_j1_over_alpha = _gyro_bessel_factors(alpha2)
+    laguerre_j0 = laguerre_j0.astype(real_dtype)
+    laguerre_j1_over_alpha = laguerre_j1_over_alpha.astype(real_dtype)
     return _LaguerreGyroCache(
         b=b,
         Jl=Jl,
