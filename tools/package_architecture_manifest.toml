@@ -70,7 +70,14 @@ recursive = true
 # -- at zero drive the whole spectrum sits on the imaginary axis and the branch
 # selector is floored at zero -- and no existing test covered that, because
 # every other objective test runs at a drive where something is unstable.
-baseline = 96
+# 96 -> 97: tests/validation/stellarator/test_finite_beta_vmec_boozer_parity.py.
+# A new file again needs a reason: this is the only place the two VMEC geometry
+# paths are compared against each other at finite beta, and it is what shows the
+# vmex-state bridge was returning the grad-B drift labelled as the curvature
+# drift. No existing test could catch it -- every other VMEC parity fixture is a
+# vacuum or near-vacuum equilibrium, where the two drifts genuinely coincide and
+# the missing pressure term is invisible.
+baseline = 97
 target = 36
 
 [[topology_policy.counts]]
@@ -212,7 +219,18 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 89964: finite-beta pressure in the differentiable vmex-state bridge.
+# The bridge aliased gbdrift to cvdrift and left mu0 dp/ds out of the normal
+# curvature, so it returned the grad-B drift under both names and every
+# boundary-coefficient gradient in the adjoint stack dropped finite-beta drift
+# physics -- silently, because a finite-beta wout raises nothing there. The new
+# geometry/vmec_boozer_drifts.py owns the drift assembly the pressure gradient
+# touches, which is also what keeps vmec_boozer_core.py under the per-module cap
+# it was three lines below. On two 1.9%-beta QA equilibria this takes the
+# runtime-path-vs-bridge cvdrift disagreement from 2.1e-1 to 3.3e-3 while
+# leaving every zero-beta array bit-identical. See
+# test_finite_beta_vmec_boozer_parity.
+baseline = 89964
 target = 45000
 
 [[line_budget_policy.counts]]

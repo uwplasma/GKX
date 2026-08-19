@@ -124,6 +124,13 @@ Differentiable VMEC Boozer Core
    :members:
    :private-members:
 
+Differentiable VMEC Boozer Drifts
+---------------------------------
+
+.. automodule:: gkx.geometry.vmec_boozer_drifts
+   :members:
+   :private-members:
+
 Differentiable VMEC Boozer Constants
 ------------------------------------
 
