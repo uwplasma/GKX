@@ -3203,3 +3203,275 @@ def test_bounded_species_sharded_rhs_matches_serial_operator() -> None:
     np.testing.assert_allclose(
         np.asarray(observed_rhs), np.asarray(expected_rhs), rtol=4.0e-5, atol=4.0e-6
     )
+
+
+# ---- production species x Hermite mesh (plan item 4.2) ----
+
+
+def _species_hermite_problem(ns: int = 2, nl: int = 2, nm: int = 8, n: int = 4):
+    """Build a small two-species electrostatic nonlinear problem."""
+
+    import numpy as np
+
+    from gkx.config import CycloneBaseCase, GridConfig
+    from gkx.core.grid import build_spectral_grid
+    from gkx.diagnostics.moments import fieldline_quadrature_weights
+    from gkx.geometry import SAlphaGeometry
+    from gkx.operators.linear.cache_builder import build_linear_cache
+
+    cfg = CycloneBaseCase(
+        grid=GridConfig(Nx=n, Ny=n, Nz=n, Lx=6.0, Ly=6.0, boundary="periodic")
+    )
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams(
+        beta=0.0,
+        fapar=0.0,
+        tau_e=0.0,
+        charge_sign=jnp.asarray([1.0, -1.0][:ns]),
+        density=jnp.asarray([1.0, 1.0][:ns]),
+        mass=jnp.asarray([1.0, 1.0 / 1836.0][:ns]),
+        temp=jnp.asarray([1.0, 1.0][:ns]),
+        vth=jnp.asarray([1.0, 42.0][:ns]),
+        rho=jnp.asarray([1.0, 0.023][:ns]),
+        tprim=jnp.asarray([6.9, 0.0][:ns]),
+        tprim_e=jnp.asarray([0.0, 6.9][:ns]),
+        fprim=jnp.asarray([2.2, 2.2][:ns]),
+        tz=jnp.asarray([1.0, -1.0][:ns]),
+    )
+    cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=nm)
+    rng = np.random.default_rng(0)
+    shape = (ns, nl, nm, grid.ky.size, grid.kx.size, grid.z.size)
+    state = 1e-3 * (rng.standard_normal(shape) + 1j * rng.standard_normal(shape))
+    vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
+    return (
+        jnp.asarray(state, dtype=jnp.complex64),
+        cache,
+        params,
+        grid,
+        vol_fac,
+        flux_fac,
+    )
+
+
+def test_species_hermite_plan_factors_species_first_with_exact_hermite_division():
+    """Species are factored first and the Hermite remainder must divide exactly."""
+
+    from gkx.parallel.velocity_plan import (
+        build_species_hermite_mesh_plan,
+        species_hermite_device_counts,
+    )
+
+    shape = (2, 4, 16, 8, 8, 8)
+    assert build_species_hermite_mesh_plan(shape, num_devices=2).chunks["s"] == 2
+    assert build_species_hermite_mesh_plan(shape, num_devices=2).chunks["m"] == 1
+    four = build_species_hermite_mesh_plan(shape, num_devices=4)
+    assert (four.chunks["s"], four.chunks["m"]) == (2, 2)
+    assert four.hermite_ghost_depth == 2 and four.needs_hermite_exchange
+    # Two devices and two species is the halo-free production configuration.
+    assert build_species_hermite_mesh_plan(shape, num_devices=2).hermite_ghost_depth == 0
+    with pytest.raises(ValueError, match="not exactly divisible"):
+        build_species_hermite_mesh_plan(shape, num_devices=3)
+    assert species_hermite_device_counts(2, 16) == (1, 2, 4, 8, 16)
+
+
+def test_species_hermite_halo_is_one_exchange_per_direction():
+    """A width-2 halo must not become one exchange per Hermite coupling."""
+
+    import re
+
+    import jax
+    import numpy as np
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    from gkx.parallel.velocity_hermite import hermite_halo_extend
+
+    devices = jax.devices()
+    if len(devices) < 2:
+        pytest.skip("needs two devices")
+    mesh = Mesh(np.asarray(devices[:2]).reshape(1, 2), ("s", "m"))
+    spec = PartitionSpec("s", None, "m", None, None, None)
+    state = jnp.arange(1 * 2 * 8 * 2 * 2 * 2, dtype=jnp.float32).reshape(
+        (1, 2, 8, 2, 2, 2)
+    )
+    mapped = jax.shard_map(
+        lambda local: hermite_halo_extend(
+            local, chunks=2, ghost_depth=2, axis_name="m"
+        ),
+        mesh=mesh,
+        in_specs=spec,
+        out_specs=spec,
+        axis_names={"s", "m"},
+    )
+    text = jax.jit(mapped).lower(jax.device_put(state, NamedSharding(mesh, spec))).compile().as_text()
+    assert len(re.findall(r"\bcollective-permute\b", text)) == 2
+    assert "all-to-all" not in text
+
+    widened = np.asarray(jax.jit(mapped)(state))
+    reference = np.asarray(state)
+    # Shard 0 keeps a zero lower boundary and receives shard 1's first rows.
+    assert np.array_equal(widened[:, :, :2], np.zeros_like(widened[:, :, :2]))
+    assert np.array_equal(widened[:, :, 2:6], reference[:, :, :4])
+    assert np.array_equal(widened[:, :, 6:8], reference[:, :, 4:6])
+
+
+def test_species_hermite_rhs_reproduces_the_serial_nonlinear_rhs():
+    """The sharded production RHS is the serial answer, not an approximation."""
+
+    import jax
+    import numpy as np
+
+    from gkx.parallel.integrators import species_hermite_nonlinear_rhs
+    from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
+    from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+    from gkx.terms.config import TermConfig
+
+    devices = len(jax.devices())
+    if devices < 2:
+        pytest.skip("needs at least two devices")
+    state, cache, params, _grid, _vol, _flux = _species_hermite_problem()
+    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
+    reference, _fields = nonlinear_rhs_cached(state, cache, params, terms)
+    for count in (1, 2, 4):
+        if count > devices:
+            continue
+        plan = build_species_hermite_mesh_plan(tuple(state.shape), num_devices=count)
+        got = species_hermite_nonlinear_rhs(
+            state, cache, params, terms=terms, plan=plan, num_devices=count
+        )
+        error = float(np.max(np.abs(np.asarray(reference) - np.asarray(got))))
+        scale = float(np.max(np.abs(np.asarray(reference))))
+        assert error / scale < 1.0e-6, f"{count} devices drifted by {error:.3e}"
+
+
+def test_species_hermite_route_emits_no_all_to_all():
+    """An all-to-all in this route would mean a perpendicular axis got split."""
+
+    import re
+
+    import jax
+
+    from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
+    from gkx.terms.config import TermConfig
+    import gkx.parallel.integrators as integrators
+
+    if len(jax.devices()) < 2:
+        pytest.skip("needs at least two devices")
+    state, cache, params, _grid, _vol, _flux = _species_hermite_problem()
+    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
+    plan = build_species_hermite_mesh_plan(tuple(state.shape), num_devices=2)
+    mesh, resolved, spec = integrators._resolve_species_hermite_placement(
+        state, cache, params, plan=plan, devices=None, num_devices=2
+    )
+    local_step, leaves, specs, spec = integrators._species_hermite_mapped(
+        state,
+        cache,
+        params,
+        None,
+        term_cfg=terms,
+        plan=resolved,
+        mesh=mesh,
+        state_spec=spec,
+        compressed_real_fft=True,
+        laguerre_mode="grid",
+        vol_fac=None,
+        flux_fac=None,
+    )
+    mapped = jax.shard_map(
+        lambda local, *rest: local_step(local, *rest)[0],
+        mesh=mesh,
+        in_specs=(spec,) + specs,
+        out_specs=spec,
+        axis_names={"s", "m"},
+    )
+    from jax.sharding import NamedSharding
+
+    text = (
+        jax.jit(mapped)
+        .lower(integrators.stage_from_host(state, NamedSharding(mesh, spec)), *leaves)
+        .compile()
+        .as_text()
+    )
+    assert not re.findall(r"\ball-to-all\b", text)
+    assert re.findall(r"\ball-reduce\b", text)
+
+
+def test_species_hermite_trajectory_and_fused_traces_match_serial():
+    """Traces come out of the scan carry and still equal the serial trajectory."""
+
+    import jax
+    import numpy as np
+
+    from gkx.diagnostics.moments import (
+        distribution_free_energy,
+        electrostatic_field_energy,
+    )
+    from gkx.diagnostics.transport import heat_flux_species, particle_flux_species
+    from gkx.operators.nonlinear.projection import _make_hermitian_projector
+    from gkx.parallel.integrators import integrate_nonlinear_species_hermite
+    from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
+    from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+    from gkx.terms.config import TermConfig
+
+    if len(jax.devices()) < 2:
+        pytest.skip("needs at least two devices")
+    state, cache, params, grid, vol_fac, flux_fac = _species_hermite_problem()
+    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
+    steps, dt = 3, 1.0e-3
+    project = _make_hermitian_projector(
+        np.asarray(cache.ky), int(np.asarray(cache.kx).size)
+    )
+    dt_val = jnp.asarray(dt, dtype=jnp.float32)
+
+    def serial_step(carry, _unused):
+        value = jnp.asarray(project(carry), dtype=jnp.complex64)
+        k1, fields = nonlinear_rhs_cached(value, cache, params, terms)
+        mid = jnp.asarray(project(value + 0.5 * dt_val * k1), dtype=jnp.complex64)
+        k2, _f = nonlinear_rhs_cached(mid, cache, params, terms)
+        head = value[:, :, :4, ...]
+        zero = jnp.zeros_like(fields.phi)
+        scalars = (
+            distribution_free_energy(value, grid, params, vol_fac),
+            electrostatic_field_energy(fields.phi, cache, params, vol_fac),
+            jnp.sum(
+                heat_flux_species(
+                    head, fields.phi, zero, zero, cache, grid, params, flux_fac
+                )
+            ),
+            jnp.sum(
+                particle_flux_species(
+                    head, fields.phi, zero, zero, cache, grid, params, flux_fac
+                )
+            ),
+        )
+        return jnp.asarray(project(value + dt_val * k2), dtype=jnp.complex64), scalars
+
+    serial_final, serial_traces = jax.lax.scan(
+        jax.jit(serial_step), state, xs=None, length=steps
+    )
+    plan = build_species_hermite_mesh_plan(tuple(state.shape), num_devices=2)
+    run = integrate_nonlinear_species_hermite(
+        state,
+        cache,
+        params,
+        dt=dt,
+        steps=steps,
+        terms=terms,
+        grid=grid,
+        vol_fac=vol_fac,
+        flux_fac=flux_fac,
+        plan=plan,
+        num_devices=2,
+    )
+    assert run.mesh_shape == (2, 1)
+    state_error = float(
+        np.max(np.abs(np.asarray(serial_final) - np.asarray(run.state)))
+    )
+    assert state_error < 5.0e-6
+    names = ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t")
+    for name, reference in zip(names, serial_traces, strict=True):
+        got = np.asarray(run.traces[name])
+        assert got.shape == (steps,)
+        assert np.max(np.abs(np.asarray(reference) - got)) < 5.0e-6
+        # A trace that is identically zero would pass any tolerance.
+        assert np.max(np.abs(got)) > 0.0

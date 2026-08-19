@@ -152,8 +152,15 @@ provenances must not be interchanged. The older binaries mixed system OpenMPI
 and netCDF with local HDF5 and are excluded. An isolated clean-revision rebuild
 now links one local OpenMPI 4.1.6, parallel netCDF 4.9.2, and HDF5 1.14.5 stack.
 The canonical Cyclone s-alpha probe completed 2,145 steps to ``t=10`` in 23.1 s
-and wrote valid netCDF/restart outputs; at ``ky=0.3`` its terminal diagnostic is
-``(gamma, omega)=(0.101814, 0.286777)``. GX remains the mature baseline for conventional GPU nonlinear
+and wrote valid netCDF/restart outputs; at ``ky=0.3`` it reports
+``(gamma, omega)=(0.101814, 0.286777)``. That pair is a smoke-test reading taken
+while the mode is still ringing, not a converged eigenvalue, and it must not be
+used as a parity target. Running the same deck to its own ``t_max=150`` settles
+at ``(gamma, omega)=(0.093049, 0.281991)``, which agrees with the
+``*_correct.out.nc`` regression reference GX ships for that case to 0.03 per
+cent. Between those horizons ``gamma`` swings 0.018, 0.101, 0.086, 0.115 before
+settling at 0.093, so a comparison against the ``t=10`` value shows an
+apparent 8.6 per cent gap that is entirely transient. GX remains the mature baseline for conventional GPU nonlinear
 initial-value runs and species/Hermite multi-device execution. GKX's
 distinct validated scope is its Python/JAX API, differentiable objectives,
 implicit gradient paths, CPU execution, and in-memory ``vmex``/

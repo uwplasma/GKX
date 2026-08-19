@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from gkx.core.grid import SpectralGrid
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.cache_model import LinearCache
+from gkx.operators.linear.cache_model import HermiteWindow, LinearCache
 from gkx.operators.linear.moments import build_H
 from gkx.operators.linear.params import LinearParams, _as_species_array
 from gkx.terms.config import FieldState, TermConfig
@@ -371,6 +371,7 @@ def _streaming_contribution(
     scalars: _ScalarParams,
     weights: _TermWeights,
     rhs_fields: _RHSFields,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     return linked_streaming_contribution(
         G,
@@ -395,6 +396,7 @@ def _streaming_contribution(
         linked_gather_mask=cache.linked_gather_mask,
         linked_use_gather=cache.linked_use_gather,
         use_twist_shift=cache.use_twist_shift,
+        hermite_window=hermite_window,
     )
 
 
@@ -451,6 +453,7 @@ def _diamagnetic_contribution(
     weights: _TermWeights,
     rhs_fields: _RHSFields,
     imag: jnp.ndarray,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     return diamagnetic_contribution(
         jnp.zeros_like(G),
@@ -468,6 +471,7 @@ def _diamagnetic_contribution(
         omega_star_scale=scalars.omega_star_scale,
         ky=cache.ky,
         imag=imag,
+        hermite_window=hermite_window,
         weight=weights.diamagnetic,
     )
 
@@ -479,6 +483,7 @@ def _dissipation_contributions(
     species: _SpeciesArrays,
     scalars: _ScalarParams,
     weights: _TermWeights,
+    hermite_window: HermiteWindow | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     collisions = _collision_contribution_or_zero(
         H,
@@ -518,6 +523,7 @@ def _dissipation_contributions(
         linked_gather_map=cache.linked_gather_map,
         linked_gather_mask=cache.linked_gather_mask,
         linked_use_gather=cache.linked_use_gather,
+        hermite_window=hermite_window,
     )
     hyperdiffusion = hyperdiffusion_contribution(
         G,
@@ -548,6 +554,7 @@ def _rhs_term_contributions(
     rhs_fields: _RHSFields,
     *,
     skip_dissipation: bool = False,
+    hermite_window: HermiteWindow | None = None,
 ) -> dict[str, jnp.ndarray]:
     """Return named RHS contributions in the fixed diagnostic sum convention."""
 
@@ -566,18 +573,19 @@ def _rhs_term_contributions(
     else:
         collisions, hypercollisions, hyperdiffusion, end_damping = (
             _dissipation_contributions(
-                state.G, rhs_fields.H, cache, species, scalars, weights
+                state.G, rhs_fields.H, cache, species, scalars, weights, hermite_window
             )
         )
     return {
         "streaming": _streaming_contribution(
-            state.G, cache, species, scalars, weights, rhs_fields
+            state.G, cache, species, scalars, weights, rhs_fields, hermite_window
         ),
         "mirror": mirror,
         "curvature": curvature,
         "gradb": gradb,
         "diamagnetic": _diamagnetic_contribution(
-            state.G, cache, species, scalars, weights, rhs_fields, state.imag
+            state.G, cache, species, scalars, weights, rhs_fields, state.imag,
+            hermite_window,
         ),
         "collisions": collisions,
         "hypercollisions": hypercollisions,
@@ -604,6 +612,7 @@ def _assemble_normalized_rhs(
     rhs_fields: _RHSFields,
     *,
     skip_dissipation: bool = False,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     contrib = _rhs_term_contributions(
         state,
@@ -613,6 +622,7 @@ def _assemble_normalized_rhs(
         weights,
         rhs_fields,
         skip_dissipation=skip_dissipation,
+        hermite_window=hermite_window,
     )
     dG = _sum_rhs_terms(contrib)
     if state.squeeze_species:
@@ -682,8 +692,16 @@ def assemble_rhs_cached_with_fields(
     dt: jnp.ndarray | float | None = None,
     force_electrostatic_fields: bool = False,
     skip_dissipation: bool = False,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
-    """Assemble local RHS terms from fields reduced outside this state shard."""
+    """Assemble local RHS terms from fields reduced outside this state shard.
+
+    ``hermite_window`` names the global Hermite coordinates of ``G`` when the
+    caller passes a Hermite-sharded slab (optionally widened by ghost rows).
+    Without it every moment-index-dependent coefficient -- field drives, the
+    closure, the hypercollision normalization -- would be computed against the
+    slab's own ``arange`` and silently answer a different problem.
+    """
 
     term_cfg = terms or TermConfig()
     state = _normalized_rhs_state(G, cache)
@@ -704,6 +722,7 @@ def assemble_rhs_cached_with_fields(
             vth=species.vth,
             bpar=h_bpar,
             JlB=cache.JlB,
+            hermite_window=hermite_window,
         ),
         h_apar=h_apar,
         h_bpar=h_bpar,
@@ -716,6 +735,7 @@ def assemble_rhs_cached_with_fields(
         weights,
         rhs_fields,
         skip_dissipation=skip_dissipation,
+        hermite_window=hermite_window,
     )
 
 

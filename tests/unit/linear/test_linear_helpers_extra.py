@@ -713,7 +713,8 @@ def test_build_linear_cache_rejects_traced_shear_for_twist_shift_geometry() -> N
         return jnp.sum(cache.kperp2)
 
     with pytest.raises(
-        ValueError, match="traced magnetic shear is not supported with twist-shift"
+        ValueError,
+        match="differentiating with respect to magnetic shear is not supported",
     ):
         jax.grad(objective)(jnp.asarray(0.8, dtype=jnp.float32))
 

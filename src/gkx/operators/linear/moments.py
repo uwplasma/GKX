@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from gkx.core.velocity import hermite_ladder_coeffs
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.core.grid import SpectralGrid
+from gkx.operators.linear.cache_model import HermiteWindow, hermite_index_of
 from gkx.operators.linear.params import _check_nonnegative, _check_positive
 from gkx.operators.linear.streaming import (
     apply_hermite_v,
@@ -145,6 +146,7 @@ def build_H(
     vth: jnp.ndarray | None = None,
     bpar: jnp.ndarray | None = None,
     JlB: jnp.ndarray | None = None,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     """Map G -> H for mirror/curvature/grad-B/collision terms.
 
@@ -165,14 +167,15 @@ def build_H(
         tz_arr = tz_arr[None]
     zt_arr = jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr)
     Nm = G.shape[-4]
-    m0_mask = (jnp.arange(Nm, dtype=jnp.int32) == 0).astype(G.dtype)
+    m_index = hermite_index_of(hermite_window, Nm)
+    m0_mask = (m_index == 0).astype(G.dtype)
     m0_mask = m0_mask.reshape((1, 1, Nm, 1, 1, 1))
     phi_term = (zt_arr[:, None, None, None, None] * Jl * phi)[:, :, None, ...]
     H = G + m0_mask * phi_term
     if apar is not None:
         if vth is None:
             raise ValueError("vth must be provided when apar is supplied")
-        m1_mask = (jnp.arange(Nm, dtype=jnp.int32) == 1).astype(G.dtype)
+        m1_mask = (m_index == 1).astype(G.dtype)
         m1_mask = m1_mask.reshape((1, 1, Nm, 1, 1, 1))
         vth_arr = jnp.asarray(vth)
         if vth_arr.ndim == 0:
