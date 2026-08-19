@@ -149,9 +149,36 @@ reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, resta
 
 [[complexity_policy.exceptions]]
 path = "artifacts/io.py"
-baseline_lines = 1088
+# 1088 -> 1093: carrying the fit-quality diagnostics into the linear summary
+# (#56). The summary is where a growth rate is read from, so it is where the
+# evidence that the rate is resolved has to appear: gamma_stderr, omega_stderr,
+# fit_r2, and fit_settled. Four of the five lines are those fields. The fifth
+# is _optional_float, which writes JSON null rather than NaN for a missing or
+# non-finite diagnostic, because NaN is not JSON and an eigensolver result has
+# no fit to describe. Splitting five lines of one summary into another module
+# would cost more than it saves and break the rule this exception records.
+# 1093 -> 1096: merging #56 over the run-directory and plotting work that
+# landed on main. Both sides add to the same summary writer and neither
+# subsumes the other, so the count is the sum rather than new surface.
+baseline_lines = 1096
 target_lines = 1000
 reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
+
+[[complexity_policy.exceptions]]
+path = "workflows/linear.py"
+# 983 -> 1001: merging the fit-stationarity work (#56) into the linear workflow
+# that #51, #53, and #54 had already grown. Neither side is optional and neither
+# subsumes the other: main threads the run directory and auto-plot handoff
+# through the same branch dispatcher that this branch threads window_method and
+# the stderr renormalization through, so the merged module lands one line over
+# the default budget. The overage is recorded rather than absorbed by a split,
+# because the thing to remove here is the duplication between the three
+# _run_*_linear_runtime branches, not the module boundary -- splitting on the
+# boundary that is one line away would leave that duplication in place and cost
+# an import cycle back to the shared context dataclass.
+baseline_lines = 1001
+target_lines = 1000
+reason = "One linear-runtime branch dispatcher keeps the explicit, Krylov, and full-trajectory paths reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
 [line_budget_policy]
 mode = "no_regression_until_target"
@@ -233,6 +260,12 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
+# 89815 -> 90285: measuring whether a growth rate is resolved before reporting it (#56).
+# The stationary window selector, the AR(1)-corrected slope stderr, the
+# half-horizon settled probe, and the warning that names the horizon actually
+# needed. The shipped Cyclone deck stops at 0.93 e-foldings, where the mode is
+# still ringing; these lines are what turns that from a confident wrong number
+# into a warned one.
 # 89815 -> 91057: the production species x Hermite nonlinear decomposition
 # (plan item 4.2). Three quarters of it is one new route -- the shard_map mesh,
 # the width-2 Hermite halo, the masked field psum and the scan-carry
@@ -382,7 +415,15 @@ recursive = true
 # floor. Both land in the fit path; the count is the sum, not new surface.
 # 89919 -> 90011: certifying the default linear branch alongside the residual
 # floor it now uses (#52 over #47). The adaptive branch and its precision pin.
-baseline = 94302
+# 94302 -> 94771: merging the stationary-window fit (#56) onto main. The two
+# auto-fit scorers already carry the fixed-window branch #46 added, so the
+# branch's inlined per-channel copies collapse into that seam and into the
+# shared scan candidate helper instead of standing beside them; the stationary
+# selector reaches both by threading window_method through the same argument.
+# 94771 -> 94775: the two imports the sharded Hermite route was missing. np is
+# used in five places and _make_hermitian_projector in one, so these four lines
+# turn five NameErrors into working code rather than adding surface.
+baseline = 94775
 target = 45000
 
 [[line_budget_policy.counts]]

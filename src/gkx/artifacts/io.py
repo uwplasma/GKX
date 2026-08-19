@@ -362,6 +362,15 @@ def _runtime_linear_artifact_targets(out: str | Path) -> _LinearArtifactTargets:
     )
 
 
+def _optional_float(value: Any) -> float | None:
+    """JSON-safe float: ``None`` for missing or non-finite fit diagnostics."""
+
+    if value is None:
+        return None
+    number = float(value)
+    return number if np.isfinite(number) else None
+
+
 def _runtime_linear_summary(result: Any) -> dict[str, Any]:
     summary = {
         "kind": "linear",
@@ -375,6 +384,11 @@ def _runtime_linear_summary(result: Any) -> dict[str, Any]:
         if result.fit_window_tmax is None
         else float(result.fit_window_tmax),
         "fit_signal_used": result.fit_signal_used,
+        # Fit-quality diagnostics; absent (None) for eigensolver results.
+        "gamma_stderr": _optional_float(getattr(result, "gamma_stderr", None)),
+        "omega_stderr": _optional_float(getattr(result, "omega_stderr", None)),
+        "fit_r2": _optional_float(getattr(result, "fit_r2", None)),
+        "fit_settled": getattr(result, "fit_settled", None),
         "selection": {
             "ky_index": int(result.selection.ky_index),
             "kx_index": int(result.selection.kx_index),

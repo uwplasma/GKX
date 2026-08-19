@@ -30,6 +30,11 @@ class RuntimeLinearResult:
     fit_window_tmin: float | None = None
     fit_window_tmax: float | None = None
     fit_signal_used: str | None = None
+    # Fit-quality diagnostics over the selected window (None for eigensolves).
+    gamma_stderr: float | None = None
+    omega_stderr: float | None = None
+    fit_r2: float | None = None
+    fit_settled: bool | None = None
     quasilinear: dict[str, Any] | None = None
 
 

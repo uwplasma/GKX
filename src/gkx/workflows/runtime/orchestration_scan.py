@@ -82,6 +82,7 @@ class _RuntimeScanOptions:
     growth_weight: float
     require_positive: bool
     min_amp_fraction: float
+    window_method: str
     mode_method: str
     fit_signal: str
     show_progress: bool
@@ -105,6 +106,7 @@ def _runtime_scan_options(
     growth_weight: float,
     require_positive: bool,
     min_amp_fraction: float,
+    window_method: str,
     mode_method: str,
     fit_signal: str,
     show_progress: bool,
@@ -125,6 +127,7 @@ def _runtime_scan_options(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        window_method=window_method,
         mode_method=mode_method,
         fit_signal=fit_signal,
         show_progress=show_progress,
@@ -200,6 +203,7 @@ def run_runtime_scan_ky_task(
         growth_weight=float(task["growth_weight"]),
         require_positive=bool(task["require_positive"]),
         min_amp_fraction=float(task["min_amp_fraction"]),
+        window_method=str(task.get("window_method", "stationary")),
         krylov_cfg=task["krylov_cfg"],
         mode_method=str(task["mode_method"]),
         fit_signal=str(task["fit_signal"]),
@@ -476,6 +480,7 @@ def _auto_fit_scan_candidate(
             growth_weight=options.growth_weight,
             require_positive=options.require_positive,
             min_amp_fraction=options.min_amp_fraction,
+            window_method=options.window_method,
         )
     else:
         gamma, omega, r2, r2_phase = deps.fit_growth_rate_with_stats(
@@ -543,6 +548,7 @@ def _fit_batch_scan_point(
             growth_weight=options.growth_weight,
             require_positive=options.require_positive,
             min_amp_fraction=options.min_amp_fraction,
+            window_method=options.window_method,
         )
         return g_val, o_val
     return deps.fit_growth_rate(
@@ -605,6 +611,7 @@ def run_runtime_scan_orchestration(
     growth_weight: float,
     require_positive: bool,
     min_amp_fraction: float,
+    window_method: str,
     krylov_cfg: Any,
     mode_method: str,
     fit_signal: str,
@@ -632,6 +639,7 @@ def run_runtime_scan_orchestration(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        window_method=window_method,
         mode_method=mode_method,
         fit_signal=fit_signal,
         show_progress=show_progress,
@@ -685,6 +693,7 @@ def run_runtime_scan_batch(
     fit_signal: str,
     show_progress: bool,
     deps: RuntimeScanBatchDeps,
+    window_method: str = "stationary",
 ) -> RuntimeLinearScanResult:
     """Batch a ky scan using one time integration over the full grid."""
 
@@ -709,6 +718,7 @@ def run_runtime_scan_batch(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        window_method=window_method,
         mode_method=mode_method,
         fit_signal=fit_signal,
         show_progress=show_progress,
