@@ -453,3 +453,63 @@ Conflict notes: #52 duplicates #47's `certifiable_residual_tolerance` helper (ke
 there, so **#50 before #53**; #54 touches `docs/inputs.rst`, `cli.py` and `config.py`, which
 #50 and #51 also touch — expect small textual conflicts, no semantic ones.
 Worktrees backing these: `GKX-worktrees/{applytest,woutpr,krylovpr,plotspr,autostoppr}`.
+
+### 2026-08-18 agent/gx-rebaseline — 2.1b: THE TRACKED GX REFERENCE IS MID-TRANSIENT
+Run on office with the rebuilt GX @3865a537 using **GX's own shipped decks** (found at
+`/home/rjorge/GX/benchmarks/linear/`, each with a `*_correct.out.nc` regression reference;
+none carries `[Wspectra]`, so all ran unedited; **no HSX GX deck exists in either repo**).
+
+**Two results, same binary:**
+1. **The 56-commit drift is benign.** Re-running at `t_max=10` lands on the same step
+   (2145, t=10.00213, dt=4.663e-3) that `capability_matrix.toml:9` records, giving
+   γ=0.101840 / ω=0.286760 vs tracked 0.101814 / 0.286777 — **+0.026% / −0.006%**.
+2. **But t=10 is mid-transient.** The same deck run to its own `t_max=150` settles at
+   **γ=0.093049, ω=0.281991**, matching GX's shipped `_correct.out.nc` (0.093018/0.281990)
+   to 0.03% and PR #45's `gamma_reference` column to 0.02%. γ RINGS before settling:
+   0.0183 (t=4.7) → 0.1014 (t=9.3) → 0.0856 (t=14) → 0.1147 (t=18.7) → **0.0930 (t>50)**.
+
+**Consequences — this reframes every parity comparison so far:**
+- `docs/benchmarks.rst:156` presents a fixed-step smoke-probe reading as GX's "terminal
+  diagnostic". Anyone comparing a converged solver against it sees a spurious ~8.6% γ gap.
+  **This is a documentation defect to fix** (PR #45's matrix already uses the converged pair,
+  which is a point in that PR's favour).
+- The honest converged comparison at cyclone ky=0.3 is **GX 0.093049 vs GKX certified
+  0.088930 = −4.4%** — a respectable cross-code agreement, not the 12.6% the tracked
+  number implied.
+- `examples/linear/axisymmetric/cyclone.toml` has `t_max=10`, i.e. γ·t_max ≈ **0.9** at the
+  converged γ — an order of magnitude below the calibrated γ·t_max ≳ 7. The shipped example
+  fits a ringing transient. Retire the "time fit reads 30% low" framing (it compared a
+  short-horizon fit against a reduced-resolution dense eigenvalue — two confounds).
+- Other converged cases vs PR #45's references: cyclone_miller Δγ +0.02%/−0.01%,
+  kbm_miller Δγ +0.09%/+0.07% (KBM slightly larger, as expected — it is the EM branch the
+  upstream bpar/g0 fixes touch). w7x_itg still running on office.
+
+**Normalization independently confirmed as (d) "a premise was wrong"**, with two corrections
+to the PR #45 agent's citations and one structural proof a ratio alone cannot give:
+GX `src/parameters.cu:**1062-1065**` (not 1336-1338) has `vt=sqrt(temp/mass)`; and
+GX `device_funcs.cu:3035` uses the **probabilists' Hermite ladder** `sqrtf(m+1), sqrtf(m)`
+with no 1/√2 — valid only for weight `exp(-v∥²/2v_t²)`, i.e. `v_t²=T/m`; a GS2-family code
+would carry `sqrt((m+1)/2)`. GKX `cache_arrays.py:60-61` + `streaming.py:474` use the
+identical ladder. Empirically confirmed from the new run's output: `gbdrift(θ=0)=0.35999972
+= 1/Rmaj`, not 2/Rmaj. Formulas (G=GKX/GX, S=stella): `ky_S=√2·ky_G`, `γ_S=γ_G/√2`,
+`ω_S=ω_G/√2`, `t_S=t_G/√2`; **GKX↔GX is the identity**; tprim/fprim/β are convention-free.
+The erroneous claim in `plan/notes/stella_study.md` has been corrected in place.
+
+**Reproducibility gotcha for anyone running GX**: GX shells out to `python` (not `python3`
+or `sys.executable`) for Miller/VMEC geometry, and the VMEC path needs `booz_xform`; both
+fail with a misleading `Cannot open file *.eik.out`. Fix on office was a wrapper script at
+`~/bin/python` pointing into the venv — a bare symlink does NOT work (breaks venv detection).
+Worth reporting upstream.
+
+Outputs archived on office under `~/gx_rebaseline_20260818/` (cyclone_salpha,
+cyclone_salpha_t10 which regenerates the tracked pair in ~55 s, cyclone_miller, kbm_miller,
+w7x_itg, plus `extract.py`), each keeping GX's `_correct.out.nc` alongside for three-way diffs.
+Full report: `plan/notes/gx_rebaseline.md`.
+
+**New work items this creates:**
+- **2.1c** fix `docs/benchmarks.rst` to quote the converged GX pair (0.093049/0.281991) and
+  label the t=10 value as a smoke probe; re-check every doc/table quoting 0.1018.
+- **2.1d** raise `examples/linear/axisymmetric/cyclone.toml`'s `t_max` so γ·t_max ≳ 7
+  (t_max ≈ 80–150), or make the auto-stop/warning machinery flag it. Coordinate with 0.3.
+- **2.4-r0** an HSX GX deck must be authored — none exists in either repo, so the tracked
+  HSX parity row has no regenerable GX side.
