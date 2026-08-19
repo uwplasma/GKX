@@ -68,6 +68,10 @@ class SaturationStopConfig:
 
 
 _SATURATION_VALUE_FLOOR = 1.0e-12
+# How far above the floor a mean must sit before the relative SEM built on it
+# means anything. Generous, because the cost of waiting is wall time and the
+# cost of stopping early is a silently truncated run.
+_SATURATION_SIGNAL_FACTOR = 1.0e3
 _SATURATION_DECISION_FIELDS = (
     "window_tmin",
     "window_tmax",
@@ -201,7 +205,15 @@ def saturation_stop_decision(
     rel_sem = float(sem / max(abs(mean), _SATURATION_VALUE_FLOOR))
     first_mean, second_mean, halves_sem, stationary = _halves_stationary(wy, dt)
     guard_stationary = None if g is None else _halves_stationary(g[start:], dt)[3]
+    # A trace that never left zero has nothing to converge: the relative SEM
+    # divides by a floor rather than a mean, so every gate below passes on a
+    # dead signal and the run stops in its first chunk. A zonal-response case,
+    # whose heat flux is identically zero by construction, hit exactly that.
+    # Requiring a flux the floor cannot explain leaves such a run to t_max,
+    # which is the only honest answer when there is no saturated mean to find.
+    signal_present = abs(mean) > _SATURATION_SIGNAL_FACTOR * _SATURATION_VALUE_FLOOR
     gates = {
+        "flux_indistinguishable_from_zero": bool(signal_present),
         "tau_ac_unresolved": bool(tau_resolved),
         "window_below_min_window": span >= min_window,
         "rel_sem_above_threshold": rel_sem <= float(cfg.rel_sem),
