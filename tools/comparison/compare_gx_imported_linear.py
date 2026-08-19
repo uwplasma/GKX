@@ -1100,7 +1100,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run_fields(argv: list[str] | None = None) -> None:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     gx_time, gx_ky, gx_kx, gx_omega, distribution_free_energy, electrostatic_field_energy, magnetic_vector_potential_energy, gx_Phi2 = _load_gx_reference(args.gx)
     positive_ky = gx_ky[gx_ky > 0.0]
