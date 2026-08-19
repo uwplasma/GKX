@@ -616,3 +616,40 @@ running all six cases in one process (as that command does) would contaminate
 non-monotonic across cases (1340, 1409, 1335, 1303, 1954, 1548 MB), which proves the shipped
 matrix was actually built case-by-case via `--cases`/`--merge` — i.e. the documented
 regeneration command has never been the one used. Fix belongs with #45.
+
+### 2026-08-18 agent/tf32-fix — #52 GPU BLOCKER CLEARED (commit 0be83ae1, pushed)
+The GPU failure needed **one line**: `src/gkx/solvers/linear/krylov_propagator.py:85-90`,
+the candidate lift in `dominant_eigenpairs_propagator_cached`, now carries
+`precision=jax.lax.Precision.HIGHEST` in #44's exact idiom.
+
+Method worth reusing: the agent WALKED THE JAXPR of the whole certified path (descending
+into sub-jaxprs, since `fori_loop`/`scan` park their equations there) and found it contains
+**exactly one** matrix-shaped `dot_general` — that lift, which builds the very vectors
+`certify()` and solvax's residual are measured against. Everything else is vector-shaped and
+needs no pin (Arnoldi Gram-Schmidt vdots, the vmapped Rayleigh quotient and residual, the
+overlap einsum, the `candidate_count==1` Ritz lift, solvax's residual). Notably
+`_apply_operator` lowers to **zero** `dot_general`, so the RHS precision policy needed no
+decision at all.
+
+**Results**: GPU with `JAX_DEFAULT_MATMUL_PRECISION` UNSET now certifies —
+γ=0.08893223851919174, ω=0.2802199721336365 in **29.1 s**, against the previous
+RuntimeError at 1148 s. That equals the `=highest` result to every printed digit, which is
+the strongest possible evidence the lift was the only TF32-sensitive site. CPU unchanged
+(γ=0.088930/ω=0.280209) and the scan CSV is **bit-identical pinned vs unpinned** —
+`Precision.HIGHEST` is a no-op where there is no TF32 path, so the pin costs nothing on CPU.
+GPU↔CPU agreement 3.2e-6 (γ) / 7.4e-7 (ω). Tests 159 passed / 4 failed, all four
+pre-existing f32 failures confirmed by stashing.
+New test `test_certified_candidate_lift_requests_exact_dot_precision`
+(`tests/unit/solvers/test_linear_krylov_core.py:724`) — in a file #44 does not touch, so
+zero conflict; verified non-vacuous.
+
+**MERGE ORDER CHANGE**: #52 and #44 pin the same line with byte-identical arguments (only
+the comment differs), so they do not disagree. Recommend **#52 BEFORE #44** — #52 is the
+release blocker and should not sit behind an audit PR; #44 then rebases with its krylov hunk
+collapsing to a comment-only change. #44 is still needed for its second unrelated pin
+(`geometry/sensitivity.py` normal equations), its repo-wide shape-classified ratchet
+(strictly stronger than the path-specific test added here, which becomes droppable once #44
+lands), and its CI/manifest wiring.
+Nit filed on #44: its prose calls the lift "a matvec at the default `candidates=1`", but the
+jaxpr keeps the size-1 free axis, so it lowers matrix-shaped `(1,k)·(k,n)` even there — the
+pin is right, the sentence understates it.
