@@ -34,6 +34,11 @@ from gkx.geometry.vmec_boozer_derivatives import (
     boozer_coordinate_gradients,
     evaluate_boozer_field_line_derivatives,
 )
+from gkx.geometry.vmec_boozer_drifts import (
+    RawDriftProfiles,
+    boozer_pressure_gradient,
+    raw_drift_profiles,
+)
 
 
 def _import_vmex_boozer_modules() -> tuple[Any, Any]:
@@ -156,6 +161,7 @@ class _BoozerRadialProfiles:
     s_hat: jnp.ndarray
     boozer_i: jnp.ndarray
     boozer_g: jnp.ndarray
+    d_pressure_ds: jnp.ndarray
 
 
 @dataclass(frozen=True)
@@ -204,12 +210,6 @@ class _RawMetricProfiles:
     gds21: jnp.ndarray
     gds22: jnp.ndarray
     grho: jnp.ndarray
-
-
-@dataclass(frozen=True)
-class _RawDriftProfiles:
-    cvdrift: jnp.ndarray
-    cvdrift0: jnp.ndarray
 
 
 def _resolve_boozer_core_request(
@@ -427,6 +427,7 @@ def _interpolate_boozer_radial_profiles(
     out: dict[str, Any],
     request: _BoozerCoreRequest,
     *,
+    wout: Any,
     s_half: jnp.ndarray,
     radial_spacing: float,
 ) -> _BoozerRadialProfiles:
@@ -476,6 +477,7 @@ def _interpolate_boozer_radial_profiles(
         s_hat=s_hat,
         boozer_i=boozer_i,
         boozer_g=boozer_g,
+        d_pressure_ds=boozer_pressure_gradient(wout, s_value=s_value, dtype=dtype),
     )
 
 
@@ -661,76 +663,6 @@ def _raw_metric_profiles(
     return _RawMetricProfiles(gds2=gds2, gds21=gds21, gds22=gds22, grho=grho)
 
 
-def _raw_drift_profiles(
-    request: _BoozerCoreRequest,
-    scales: _ReferenceScales,
-    profiles: _BoozerRadialProfiles,
-    equal_arc: _EqualArcFieldLine,
-    state: _MetricDifferentialState,
-) -> _RawDriftProfiles:
-    """Compute raw curvature drift coefficients before equal-arc remap."""
-
-    dtype = request.base_Rcos.dtype
-    s_arr = jnp.asarray(request.torflux, dtype=dtype)
-    L = jnp.asarray(float(scales.length), dtype=dtype)
-    Bref = jnp.asarray(float(scales.magnetic_field), dtype=dtype)
-    boozer_current_sum = profiles.boozer_g + profiles.iota_safe * profiles.boozer_i
-    d_sqrt_g_booz_d_theta = (
-        -2.0
-        * boozer_current_sum
-        * state.spectral.d_mod_b_d_theta
-        / (equal_arc.mod_b_safe**3)
-    )
-    d_sqrt_g_booz_d_phi = (
-        -2.0
-        * boozer_current_sum
-        * state.spectral.d_mod_b_d_phi
-        / (equal_arc.mod_b_safe**3)
-    )
-    curvature_numerator = (
-        profiles.boozer_g * d_sqrt_g_booz_d_theta
-        - profiles.boozer_i * d_sqrt_g_booz_d_phi
-    )
-    curvature_denom = 2.0 * equal_arc.sqrt_g_booz * boozer_current_sum
-    curvature_denom_safe = jnp.where(
-        jnp.abs(curvature_denom) < state.eps,
-        jnp.sign(curvature_denom + state.eps) * state.eps,
-        curvature_denom,
-    )
-    kappa_g = curvature_numerator / curvature_denom_safe
-    local_shear_l0 = -(
-        state.local_shear_l1 + profiles.d_iota_ds / state.etf_safe * state.shear_phase
-    )
-    kappa_n = (
-        state.spectral.d_mod_b_d_s / (equal_arc.mod_b_safe * state.etf_safe)
-        + local_shear_l0 * kappa_g
-    )
-    b_cross_kappa_dot_grad_alpha = (
-        kappa_n + kappa_g * state.local_shear_l1
-    ) * state.metric_bmag_sq
-    b_cross_kappa_dot_grad_psi = kappa_g * state.metric_bmag_sq
-    toroidal_flux_sign = jnp.sign(state.etf)
-    sqrt_s = jnp.sqrt(s_arr)
-    cvdrift0 = (
-        -b_cross_kappa_dot_grad_psi
-        * 2.0
-        * profiles.s_hat
-        / jnp.maximum(state.metric_bmag_sq * sqrt_s, state.eps)
-        * toroidal_flux_sign
-    )
-    cvdrift = (
-        -2.0
-        * Bref
-        * L
-        * L
-        * sqrt_s
-        * b_cross_kappa_dot_grad_alpha
-        / state.metric_bmag_sq
-        * toroidal_flux_sign
-    )
-    return _RawDriftProfiles(cvdrift=cvdrift, cvdrift0=cvdrift0)
-
-
 def _equal_arc_open_profile(
     equal_arc: _EqualArcFieldLine, profile: jnp.ndarray
 ) -> jnp.ndarray:
@@ -745,25 +677,30 @@ def _pack_metric_drift_profiles(
     request: _BoozerCoreRequest,
     equal_arc: _EqualArcFieldLine,
     metrics: _RawMetricProfiles,
-    drifts: _RawDriftProfiles,
+    drifts: RawDriftProfiles,
 ) -> _MetricDriftProfiles:
-    """Remap raw metric/drift coefficients onto the open equal-arc grid."""
+    """Remap raw metric/drift coefficients onto the open equal-arc grid.
+
+    The four drift coefficients are remapped independently: at finite beta
+    ``gbdrift`` differs from ``cvdrift`` by the pressure gradient, so the
+    remap has to carry both.
+    """
 
     dtype = request.base_Rcos.dtype
     drift_loader_factor = jnp.asarray(0.5, dtype=dtype)
-    cvdrift = drift_loader_factor * _equal_arc_open_profile(equal_arc, drifts.cvdrift)
-    cvdrift0 = drift_loader_factor * _equal_arc_open_profile(
-        equal_arc, drifts.cvdrift0
-    )
+
+    def remap_drift(profile: jnp.ndarray) -> jnp.ndarray:
+        return drift_loader_factor * _equal_arc_open_profile(equal_arc, profile)
+
     return _MetricDriftProfiles(
         gds2=_equal_arc_open_profile(equal_arc, metrics.gds2),
         gds21=_equal_arc_open_profile(equal_arc, metrics.gds21),
         gds22=_equal_arc_open_profile(equal_arc, metrics.gds22),
         grho=_equal_arc_open_profile(equal_arc, metrics.grho),
-        cvdrift=cvdrift,
-        gbdrift=cvdrift,
-        cvdrift0=cvdrift0,
-        gbdrift0=cvdrift0,
+        cvdrift=remap_drift(drifts.cvdrift),
+        gbdrift=remap_drift(drifts.gbdrift),
+        cvdrift0=remap_drift(drifts.cvdrift0),
+        gbdrift0=remap_drift(drifts.gbdrift0),
     )
 
 
@@ -785,7 +722,7 @@ def _build_metric_and_drift_profiles(
         alpha=alpha,
     )
     metrics = _raw_metric_profiles(request, scales, profiles, state)
-    drifts = _raw_drift_profiles(request, scales, profiles, equal_arc, state)
+    drifts = raw_drift_profiles(request, scales, profiles, equal_arc, state)
     return _pack_metric_drift_profiles(request, equal_arc, metrics, drifts)
 
 
@@ -833,8 +770,10 @@ def _assemble_core_mapping(
         else [int(x) for x in np.asarray(surface_indices)],
         "field_line_convention": "Boozer theta, alpha=theta-iota*zeta, equal-arc remap",
         "scope": (
-            "Boozer equal-arc bmag/gradpar/Jacobian plus zero-beta metric/drift parity; "
-            "finite-beta pressure corrections and broad-equilibrium drift gates remain open"
+            "Boozer equal-arc bmag/gradpar/Jacobian plus finite-beta metric/drift "
+            "parity: the equilibrium mu0 dp/ds enters the curvature drift and splits "
+            "gbdrift from cvdrift; Hegna-Nakajima local-equilibrium drift gates "
+            "(beta_b mode correction, D_HNGC shear term) remain open"
         ),
     }
 
@@ -844,6 +783,7 @@ def _core_mapping_from_boozer_output(
     request: _BoozerCoreRequest,
     scales: _ReferenceScales,
     *,
+    wout: Any,
     alpha: float,
     surface_stencil_width: int | None,
     surface_indices: np.ndarray | None,
@@ -858,6 +798,7 @@ def _core_mapping_from_boozer_output(
     profiles = _interpolate_boozer_radial_profiles(
         out,
         request,
+        wout=wout,
         s_half=s_half,
         radial_spacing=radial_spacing,
     )
@@ -909,9 +850,10 @@ def vmex_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
     ``state``/``runtime``/``inp``/``wout`` come from
     :func:`load_solved_vmex_case` (or any :class:`vmex.optimize.Equilibrium`).
     The bridge keeps the imported VMEC/EIK conventions for the scalar/core
-    field-line quantities and the zero-beta Boozer metric/drift terms from
-    ``booz_xform_jax`` output; finite-beta pressure corrections and
-    broader-equilibrium drift gates remain separate promotion steps.
+    field-line quantities and the Boozer metric/drift terms from
+    ``booz_xform_jax`` output, including the finite-beta pressure gradient read
+    from ``wout``; the Hegna-Nakajima local-equilibrium drift gates remain a
+    separate promotion step.
     """
 
     request = _resolve_boozer_core_request(
@@ -939,6 +881,7 @@ def vmex_boozer_equal_arc_core_profiles_from_state(  # pragma: no cover
         out,
         request,
         scales,
+        wout=wout,
         alpha=alpha,
         surface_stencil_width=surface_stencil_width,
         surface_indices=surface_indices,

@@ -1586,6 +1586,7 @@ owned_modules = [
   "gkx.geometry.vmec_boozer_constants",
   "gkx.geometry.vmec_boozer_core",
   "gkx.geometry.vmec_boozer_derivatives",
+  "gkx.geometry.vmec_boozer_drifts",
   "gkx.geometry.vmec_field_line_sampling",
   "gkx.geometry.vmec_flux_tube_reports",
   "gkx.geometry.vmec_state_controls",

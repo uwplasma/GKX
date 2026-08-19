@@ -70,6 +70,13 @@ recursive = true
 # -- at zero drive the whole spectrum sits on the imaginary axis and the branch
 # selector is floored at zero -- and no existing test covered that, because
 # every other objective test runs at a drive where something is unstable.
+# 96 -> 97: tests/validation/stellarator/test_finite_beta_vmec_boozer_parity.py.
+# A new file again needs a reason: this is the only place the two VMEC geometry
+# paths are compared against each other at finite beta, and it is what shows the
+# vmex-state bridge was returning the grad-B drift labelled as the curvature
+# drift. No existing test could catch it -- every other VMEC parity fixture is a
+# vacuum or near-vacuum equilibrium, where the two drifts genuinely coincide and
+# the missing pressure term is invisible.
 # 96 -> 97: tests/unit/solvers/test_dot_precision_guard.py. The target is 36, so
 # a new file needs a reason: this one owns a hazard that has no home in any
 # existing suite, because it is not a property of a value. An unpinned dot and
@@ -81,7 +88,10 @@ recursive = true
 # becomes a matrix product when a config value moves is caught without anyone
 # editing a list of call sites. It also carries the single allowlisted unpinned
 # contraction and the test that keeps that entry honest.
-baseline = 97
+# 97 -> 98: the finite-beta A-vs-B drift parity fixture (#57). It is a new
+# file because the vacuum suites cannot express it: the two geometry paths
+# agree identically at zero beta, which is why the mislabelled drift hid.
+baseline = 98
 target = 36
 
 [[topology_policy.counts]]
@@ -223,6 +233,17 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
+# 89815 -> 89964: finite-beta pressure in the differentiable vmex-state bridge.
+# The bridge aliased gbdrift to cvdrift and left mu0 dp/ds out of the normal
+# curvature, so it returned the grad-B drift under both names and every
+# boundary-coefficient gradient in the adjoint stack dropped finite-beta drift
+# physics -- silently, because a finite-beta wout raises nothing there. The new
+# geometry/vmec_boozer_drifts.py owns the drift assembly the pressure gradient
+# touches, which is also what keeps vmec_boozer_core.py under the per-module cap
+# it was three lines below. On two 1.9%-beta QA equilibria this takes the
+# runtime-path-vs-bridge cvdrift disagreement from 2.1e-1 to 3.3e-3 while
+# leaving every zero-beta array bit-identical. See
+# test_finite_beta_vmec_boozer_parity.
 # 89815 -> 90055: running an equilibrium file without writing a deck first (#51). The
 # wout module is the whole cost: sniffing a VMEC signature, resolving the
 # packaged default deck, forcing the geometry model when a supplied deck is not
@@ -317,7 +338,7 @@ recursive = true
 # floor. Both land in the fit path; the count is the sum, not new surface.
 # 89919 -> 90011: certifying the default linear branch alongside the residual
 # floor it now uses (#52 over #47). The adaptive branch and its precision pin.
-baseline = 92823
+baseline = 92972
 target = 45000
 
 [[line_budget_policy.counts]]
