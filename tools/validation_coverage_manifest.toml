@@ -2862,6 +2862,10 @@ next_tests = [
 [[modules]]
 module = "gkx.artifacts.plotting"
 path = "src/gkx/artifacts/plotting.py"
+owned_modules = [
+  "gkx.artifacts.snapshots",
+  "gkx.artifacts.transport_figures",
+]
 owner_lane = "publication plotting for benchmarks, diagnostics, saved outputs, and public style"
 status = "active"
 coverage_priority = "medium"

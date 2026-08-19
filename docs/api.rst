@@ -640,6 +640,20 @@ Publication Plotting
    :members:
    :no-index:
 
+Transport Figures
+-----------------
+
+.. automodule:: gkx.artifacts.transport_figures
+   :members:
+   :no-index:
+
+Real-Space Snapshots
+--------------------
+
+.. automodule:: gkx.artifacts.snapshots
+   :members:
+   :no-index:
+
 Config
 ------
 
