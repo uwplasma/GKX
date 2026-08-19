@@ -107,6 +107,7 @@ owned_modules = [
   "gkx.solvers.time.explicit_cfl",
   "gkx.solvers.time.explicit_steps",
   "gkx.workflows.runtime.toml",
+  "gkx.workflows.runtime.wout",
   "gkx.utils.tomlcompat",
   "gkx.utils.compilation_cache",
   "gkx.solvers.time.runners",
