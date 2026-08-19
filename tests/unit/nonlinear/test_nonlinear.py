@@ -17,7 +17,7 @@ from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams
 from gkx.operators.nonlinear.policies import build_nonlinear_imex_operator
 from gkx.solvers.nonlinear.diagnostic_integration import integrate_nonlinear_explicit_diagnostics, integrate_nonlinear_explicit_diagnostics_state, prepare_nonlinear_explicit_diagnostics
-from gkx.solvers.nonlinear.state_integration import integrate_nonlinear, integrate_nonlinear_imex_cached
+from gkx.solvers.nonlinear.state_integration import integrate_nonlinear, integrate_nonlinear_cached, integrate_nonlinear_imex_cached
 from gkx.terms.config import TermConfig
 
 pytestmark = pytest.mark.integration
@@ -863,3 +863,73 @@ def test_nonlinear_state_diagnostics_can_freeze_one_mode(method: str):
     )
 
     assert np.allclose(np.asarray(G_final)[..., 1, 0, :], np.asarray(G)[..., 1, 0, :])
+
+
+def test_linked_boundary_heat_flux_window_gradient_matches_finite_difference() -> None:
+    """A twist-shift nonlinear window differentiates through its own cache.
+
+    The window is the shape a turbulent design objective has -- several
+    integration chunks, the heat flux read at each chunk end, averaged. Under
+    ``boundary="linked"`` the cache is rebuilt inside the trace on every call,
+    which used to fail closed. Dissipation is on because the toy grid blows up
+    without it, not because the boundary needs it.
+    """
+
+    grid_cfg = GridConfig(Nx=8, Ny=8, Nz=8, Lx=6.0, Ly=6.0, boundary="linked")
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    base_params = LinearParams(nu=0.05, nu_hyper=0.5)
+    terms = TermConfig(nonlinear=1.0)
+    _volume_factor, flux_factor = fieldline_quadrature_weights(geom, grid)
+    Nl, Nm = 2, 2
+    dt, chunk, chunks = 0.02, 8, 2
+
+    shape = (Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    initial_state = 1.0e-3 * (
+        jax.random.normal(jax.random.PRNGKey(0), shape)
+        + 1.0j * jax.random.normal(jax.random.PRNGKey(1), shape)
+    )
+
+    def window_heat_flux(rlt: jnp.ndarray) -> jnp.ndarray:
+        params = replace(base_params, tprim=rlt)
+        cache = build_linear_cache(grid, geom, params, Nl, Nm)
+        state = initial_state
+        total = jnp.zeros((), dtype=jnp.result_type(float))
+        for _ in range(chunks):
+            state, fields = integrate_nonlinear_cached(
+                state,
+                cache,
+                params,
+                dt,
+                chunk,
+                terms=terms,
+                compressed_real_fft=False,
+            )
+            total = total + heat_flux_total(
+                state,
+                fields.phi[-1],
+                fields.apar[-1],
+                fields.bpar[-1],
+                cache,
+                grid,
+                params,
+                flux_factor,
+            )
+        return total / float(chunks)
+
+    rlt = jnp.asarray(6.9)
+    forward = jax.jit(window_heat_flux)
+    value = forward(rlt)
+    gradient = jax.jit(jax.grad(window_heat_flux))(rlt)
+    step = jnp.asarray(0.05)
+    centered_fd = (forward(rlt + step) - forward(rlt - step)) / (2.0 * step)
+
+    assert bool(jnp.isfinite(value))
+    assert bool(jnp.isfinite(gradient))
+    assert float(gradient) != 0.0
+    np.testing.assert_allclose(
+        np.asarray(gradient), np.asarray(centered_fd), rtol=2.0e-2, atol=1.0e-10
+    )

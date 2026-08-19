@@ -212,7 +212,19 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 89852: differentiating the twist-shift boundary (#49). The linked
+# flux tube refused every cache built inside a trace, so gradient work had to
+# use boundary="periodic" -- the one boundary a sheared tokamak does not have.
+# Nothing about the shear was ever traced: jnp.asarray of a host constant
+# returns a tracer inside a trace, so reading s_hat, the edge metrics, the
+# parallel spacing, and the chain index maps back off their own jnp copies
+# reported concrete geometry as traced. The lines move those four reads to the
+# buffer they already live in and spend the rest on the refusal that remains
+# real -- shear as a design variable, where the integer link index would have
+# to be rounded off a tracer -- so it names the parameter that is unsupported
+# instead of the boundary. See
+# test_linked_boundary_growth_gradient_matches_finite_difference.
+baseline = 89852
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -163,10 +163,10 @@ def _linked_kz_for_length(
     nz: int,
     dz: float,
     real_dtype: jnp.dtype,
-) -> jnp.ndarray:
+) -> np.ndarray:
     nz_linked = int(nlinks_val) * int(nz)
     kz_linked = 2.0 * np.pi * np.fft.fftfreq(nz_linked, d=float(dz))
-    return jnp.asarray(kz_linked, dtype=real_dtype)
+    return np.asarray(kz_linked, dtype=real_dtype)
 
 
 def _build_linked_fft_maps(
@@ -178,8 +178,15 @@ def _build_linked_fft_maps(
     nz: int,
     real_dtype: jnp.dtype,
     ky_mode: np.ndarray | None = None,
-) -> tuple[tuple[jnp.ndarray, ...], tuple[jnp.ndarray, ...]]:
-    """Construct linked-chain FFT index maps for the parallel derivative."""
+) -> tuple[tuple[np.ndarray, ...], tuple[np.ndarray, ...]]:
+    """Construct linked-chain FFT index maps for the parallel derivative.
+
+    The maps stay on the host. They are pure chain topology -- which ``(ky, kx)``
+    modes a parallel chain visits and in what order -- so the caller has to be
+    able to read them back as integers to derive the gather metadata and the
+    end-damping profile, which a cache built inside a trace could not do if
+    these were staged out as device constants.
+    """
 
     ny = ky.size
     nx = kx.size
@@ -190,8 +197,8 @@ def _build_linked_fft_maps(
     neighbors = _linked_neighbor_maps(active=active, jtwist=jtwist)
     counts = _linked_chain_counts(neighbors)
 
-    linked_indices: list[jnp.ndarray] = []
-    linked_kz: list[jnp.ndarray] = []
+    linked_indices: list[np.ndarray] = []
+    linked_kz: list[np.ndarray] = []
     for nlinks_val, nchains_val in zip(counts.n_links, counts.n_chains):
         if nlinks_val <= 0 or nchains_val <= 0:
             continue
@@ -203,7 +210,7 @@ def _build_linked_fft_maps(
             nlinks_val=int(nlinks_val),
             nchains_val=int(nchains_val),
         )
-        linked_indices.append(jnp.asarray(idx_flat, dtype=jnp.int32))
+        linked_indices.append(np.asarray(idx_flat, dtype=np.int32))
         linked_kz.append(
             _linked_kz_for_length(
                 nlinks_val=int(nlinks_val),
@@ -218,7 +225,7 @@ def _build_linked_fft_maps(
 
 def _build_linked_end_damping_profile(
     *,
-    linked_indices: tuple[jnp.ndarray, ...],
+    linked_indices: tuple[np.ndarray, ...],
     ny: int,
     nx: int,
     nz: int,
