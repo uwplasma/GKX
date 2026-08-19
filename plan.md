@@ -1144,3 +1144,22 @@ would put it near 1.6). The sqrt(2) suspicion likely belongs to the **W7-X zonal
 which IS transcribed from stella-family work (kx_rhoi = 0.05/0.07/0.10/0.30) and whose residuals
 already fail at 0.07/0.10/0.30 — **not checked; new item 2.11**.
 Full report + sources: `plan/notes/merlo_resolution_audit.md`.
+
+### 2026-08-19 agent/shard — 4.2 LANDED (PR #62): identity exact, speedup gate NOT met
+(species,hermite) shard_map mesh per the design. **Final state bitwise 0.0 vs serial at x64 at
+every mesh**; single-device mesh reproduces the c64 residual exactly, so collectives contribute
+ZERO error. **HLO: all-to-all = 0 at every mesh**, 2 all-reduce (field solve) + 2
+collective-permute (the width-2 halo, one per direction). Halo bandwidth verified from the code
+(linear_terms.py:358 mirror m+-1 with l+-1, :385 curvature m+-2), not from the design note.
+**Speedup 1.10x compute / 1.26x with diagnostics on 2x A4000 vs the 1.90x gate — NOT production.**
+Cause is precisely located: fusion removed the 118x recompute but flux and field-energy kernels
+still read REPLICATED arrays, so every shard duplicates that work (31% of step on 1 device,
+13% on 2). That is the next task.
+**GPU-only defect found**: passing device_put an already-committed array to reshard gave max rel
+error **1.0** on 2 A4000s while a 1-device mesh on the same GPU was exact — CPU testing cannot
+see this class. `stage_from_host` fixes it.
+Also: conserving collisions fail closed when the Hermite axis is split (they read the local
+slab m=0,1,2 rows, global only on the owning block); species-first factoring avoids it on a
+2-GPU two-species box.
+Not done: runtime 13-field diagnostic contract, adjoint gate, 256-step transport window,
+memory-headroom run. → item **4.3**.
