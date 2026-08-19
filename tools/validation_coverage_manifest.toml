@@ -2870,6 +2870,7 @@ module = "gkx.artifacts.plotting"
 path = "src/gkx/artifacts/plotting.py"
 owned_modules = [
   "gkx.artifacts.gx_output",
+  "gkx.artifacts.foreign_output",
   "gkx.artifacts.run_figures",
   "gkx.artifacts.snapshots",
   "gkx.artifacts.transport_figures",
