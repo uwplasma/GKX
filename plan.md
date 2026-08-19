@@ -757,3 +757,25 @@ deterministic across hardware (this entry), the references reproduce under a reb
 (2.1b), and where both sides are converged GKX's certified eigensolver agrees to **0.043%**
 (PR #56 entry). The remaining GX-side gaps are documentation (#55, merged-pending), the
 regeneration command defect, and the missing HSX deck (2.4-r0).
+
+### 2026-08-18 agent/ci-budgets — module splits done; A THIRD CI GATE FOUND
+#53: figure functions → new `src/gkx/artifacts/transport_figures.py`; `plotting.py` is now
+**byte-identical to pre-PR** (816 lines, verified against fb559974). #54: stop machinery →
+new `src/gkx/diagnostics/saturation.py`; `transport_windows.py` back to its exact 911 lines.
+#56: `artifacts/io.py` per-module baseline 1088→1093 with a house-style reason (no source
+change). All three: checker exit 0, tests green (38 / 33 / 145), ruff clean, pushed.
+
+**THIRD GATE (document this for contributors):**
+`tools/release/check_validation_coverage_manifest.py` (run by the docs job) **fails closed on
+any `src/gkx` module with no coverage owner**. It had ALREADY been failing on #53 before the
+split — `gkx.artifacts.snapshots`, added earlier on that branch, had no owner, so that PR's
+docs job was red for a reason unrelated to the budget. Fixed by giving `gkx.artifacts.plotting`
+ownership of both `snapshots` and `transport_figures`, and `gkx.diagnostics.transport_windows`
+ownership of `saturation`; `docs/api.rst` `automodule` entries added for all three, since the
+moved functions were previously documented through their old modules and would have silently
+dropped off the API page.
+
+**So the full contributor checklist for adding a new source module is: (1) repo-wide line
+budget with a written reason, (2) per-module 1000-line cap, (3) a coverage owner in the
+validation-coverage manifest, (4) a `docs/api.rst` automodule entry.** None of these is
+caught by a local `pytest` run. Add this to `docs/testing.rst` in the Phase 5 CI pass.
