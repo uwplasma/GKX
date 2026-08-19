@@ -384,6 +384,34 @@ def test_terms_positive_validation_skips_tracer_runtime_checks() -> None:
     assert float(out) == 1.0
 
 
+def test_streaming_positive_validation_is_the_shared_guard() -> None:
+    """Streaming validates a concrete ``dz`` under ``jit`` like everything else.
+
+    The streaming kernels carried their own copy of the guard, and that copy
+    asked whether a ``jnp`` round trip of its argument was traced -- true of
+    every argument inside a trace -- so ``dz`` and ``vth`` went unchecked in
+    every jitted run. One guard now answers for the whole linear operator.
+    """
+
+    from gkx.operators.linear import params as linear_params
+    from gkx.operators.linear import streaming as streaming_mod
+
+    assert streaming_mod._check_positive is linear_params._check_positive
+
+    seen: dict[str, str | None] = {}
+
+    def probe(x: jnp.ndarray) -> jnp.ndarray:
+        try:
+            _check_positive(0.0, "dz")
+            seen["dz"] = None
+        except ValueError as exc:
+            seen["dz"] = str(exc)
+        return x
+
+    jax.jit(probe)(jnp.asarray(1.0))
+    assert seen["dz"] == "dz must be > 0"
+
+
 def test_terms_package_lazy_exports() -> None:
     assert callable(term_pkg.assemble_rhs)
     assert callable(term_pkg.assemble_rhs_cached)

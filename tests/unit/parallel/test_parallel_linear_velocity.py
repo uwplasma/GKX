@@ -3475,3 +3475,55 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
         assert np.max(np.abs(np.asarray(reference) - got)) < 5.0e-6
         # A trace that is identically zero would pass any tolerance.
         assert np.max(np.abs(got)) > 0.0
+
+
+def test_species_hermite_route_builds_its_projector_inside_a_trace():
+    """The production shard_map route runs under ``jit``, on any device count.
+
+    Its Hermitian projector was built by reading ``cache.ky`` and ``cache.kx``
+    back on the host. Those are cache leaves, so they are tracers whenever the
+    cache is built inside the trace -- which is what a design objective does on
+    every call -- and the whole route refused with a bare conversion error.
+    The sibling whole-state route was fixed for exactly this; this one was
+    missed. The projector needs the ky length, the kx count and the fact that a
+    compressed run is two-sided, all of which are shape topology.
+    """
+
+    from dataclasses import replace as dataclass_replace
+
+    import jax
+    import numpy as np
+
+    from gkx.config import CycloneBaseCase
+    from gkx.geometry import SAlphaGeometry
+    from gkx.operators.linear.cache_builder import build_linear_cache
+    from gkx.parallel.integrators import integrate_nonlinear_species_hermite
+    from gkx.terms.config import TermConfig
+
+    state, _cache, params, grid, _vol, _flux = _species_hermite_problem(
+        ns=1, nl=2, nm=2, n=4
+    )
+    geom = SAlphaGeometry.from_config(CycloneBaseCase().geometry)
+    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
+
+    def window(rlt):
+        run_params = dataclass_replace(params, tprim=jnp.asarray([rlt]))
+        cache = build_linear_cache(grid, geom, run_params, Nl=2, Nm=2)
+        run = integrate_nonlinear_species_hermite(
+            state,
+            cache,
+            run_params,
+            dt=1.0e-3,
+            steps=2,
+            terms=terms,
+            num_devices=1,
+            compressed_real_fft=True,
+        )
+        return jnp.sum(jnp.abs(run.state) ** 2)
+
+    eager = float(window(6.9))
+    traced = float(jax.jit(window)(jnp.asarray(6.9)))
+    assert np.isfinite(eager) and eager > 0.0
+    # Same trajectory, compiled or not -- the fix is a layout read, not a
+    # different projection.
+    assert abs(traced - eager) <= 1.0e-5 * abs(eager)

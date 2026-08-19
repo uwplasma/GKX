@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from numpy.polynomial.laguerre import laggauss
+import jax
 import jax.numpy as jnp
 
 from gkx.core.grid import SpectralGrid
@@ -61,11 +63,22 @@ class _GeometryFrequencyScales:
 
 
 def _parallel_periods_from_grid(grid: SpectralGrid) -> float:
+    """Return the parallel extent of the flux tube in 2*pi periods.
+
+    Take the spacing off the host buffer rather than out of ``grid.z`` by
+    ``jnp`` arithmetic. Inside a trace every ``jnp`` call stages out, so
+    ``grid.z[1] - grid.z[0]`` is a tracer even when ``grid.z`` is the concrete
+    axis built from the run's own config, and reading it back on the host then
+    fails. Nothing here is differentiable -- the number of periods is grid
+    topology -- so this refused every adaptive-dt run under ``jit`` for a
+    quantity that was never traced.
+    """
+
     if grid.z.size <= 1:
         return 1.0
-    dz = float(np.asarray(grid.z[1] - grid.z[0]))
-    extent = float(np.asarray(grid.z[-1] - grid.z[0] + dz))
-    return extent / (2.0 * np.pi)
+    z_host = np.asarray(grid.z, dtype=float)
+    dz = float(z_host[1] - z_host[0])
+    return float(z_host[-1] - z_host[0] + dz) / (2.0 * np.pi)
 
 
 def _cfl_wavenumber_arrays(
@@ -115,17 +128,44 @@ def _gradient_ratio_max(tprim: np.ndarray, fprim: np.ndarray) -> float:
     return float(np.max(eta))
 
 
+_TRACED_CFL_INPUT_MESSAGE = (
+    "the adaptive time step cannot read a traced {name}: the CFL bound is a "
+    "host scalar that fixes dt_max before the scan is staged, so it needs the "
+    "value and not a promise of one. Run with fixed_dt=True, where the step is "
+    "the dt you pass and the trajectory is still exact and still "
+    "differentiable, or keep {name} concrete. An analytic geometry sampled "
+    "inside the trace arrives here traced even when nothing physical is: "
+    "sample it once outside with ensure_flux_tube_geometry_data and pass the "
+    "sampled geometry in."
+)
+
+
+def _host_cfl_value(value: Any, name: str) -> np.ndarray:
+    """Return host samples of one CFL input, naming it if it is traced."""
+
+    if isinstance(value, jax.core.Tracer):
+        raise ValueError(_TRACED_CFL_INPUT_MESSAGE.format(name=name))
+    return np.asarray(value, dtype=float)
+
+
 def _geometry_frequency_maxima(
     geom: FluxTubeGeometryLike, theta: np.ndarray
 ) -> tuple[float, float, float, float, float, float]:
-    theta_j = jnp.asarray(theta)
-    cv_j, gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
-    bmag_j = geom.bmag(theta_j)
-    cv = np.asarray(cv_j, dtype=float)
-    gb = np.asarray(gb_j, dtype=float)
-    cv0 = np.asarray(cv0_j, dtype=float)
-    gb0 = np.asarray(gb0_j, dtype=float)
-    bmag = np.asarray(bmag_j, dtype=float)
+    # Sample the geometry as a compile-time constant. ``theta`` is the host
+    # axis and an analytic geometry evaluates it with ``jnp``, which stages out
+    # inside a trace; the maxima below then could not be read back, so an
+    # adaptive-dt run refused under ``jit`` for a geometry that was never
+    # traced. Genuinely traced geometry stays traced here and is named below.
+    with jax.ensure_compile_time_eval():
+        theta_j = jnp.asarray(theta)
+        cv_j, gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
+        bmag_j = geom.bmag(theta_j)
+        gradpar_value = geom.gradpar()
+    cv = _host_cfl_value(cv_j, "curvature drift")
+    gb = _host_cfl_value(gb_j, "grad-B drift")
+    cv0 = _host_cfl_value(cv0_j, "radial curvature drift")
+    gb0 = _host_cfl_value(gb0_j, "radial grad-B drift")
+    bmag = _host_cfl_value(bmag_j, "bmag")
     bmag_max = float(np.max(np.abs(bmag)))
     cvdrift_max = float(np.max(np.abs(cv)))
     gbdrift_max = float(np.max(np.abs(gb)))
@@ -137,7 +177,7 @@ def _geometry_frequency_maxima(
         gbdrift_max,
         cvdrift0_max,
         gbdrift0_max,
-        float(geom.gradpar()),
+        float(_host_cfl_value(gradpar_value, "gradpar")),
     )
 
 
@@ -149,19 +189,22 @@ def _non_twist_shift_frequency_max(
     muB_max: float,
 ) -> tuple[float, float, float]:
     theta = np.asarray(grid.z, dtype=float)
-    theta_j = jnp.asarray(theta)
-    _gds2, gds21_j, gds22_j = geom.metric_coeffs(theta_j)
-    gds21 = np.asarray(gds21_j, dtype=float)
-    gds22 = np.asarray(gds22_j, dtype=float)
-    shat = float(geom.s_hat)
+    # Same compile-time sampling as _geometry_frequency_maxima: the metric on a
+    # host theta axis is a constant, not a stage-out.
+    with jax.ensure_compile_time_eval():
+        theta_j = jnp.asarray(theta)
+        _gds2, gds21_j, gds22_j = geom.metric_coeffs(theta_j)
+        _cv_j, _gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
+    gds21 = _host_cfl_value(gds21_j, "gds21")
+    gds22 = _host_cfl_value(gds22_j, "gds22")
+    shat = float(_host_cfl_value(geom.s_hat, "s_hat"))
     ftwist = shat * gds21 / gds22
     nz = theta.size
     if nz <= 1:
-        _cv_j, _gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
         return (
             0.0,
-            float(np.max(np.abs(np.asarray(cv0_j)))),
-            float(np.max(np.abs(np.asarray(gb0_j)))),
+            float(np.max(np.abs(_host_cfl_value(cv0_j, "radial curvature drift")))),
+            float(np.max(np.abs(_host_cfl_value(gb0_j, "radial grad-B drift")))),
         )
     delta = 0.01313
     x0 = float(grid.x0)
@@ -171,9 +214,8 @@ def _non_twist_shift_frequency_max(
     mid_next = min(mid + 1, nz - 1)
     ref_term = (1.0 - delta) * ftwist[mid] + delta * ftwist[mid_next]
 
-    cv_j, gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)
-    cv0 = np.asarray(cv0_j, dtype=float)
-    gb0 = np.asarray(gb0_j, dtype=float)
+    cv0 = _host_cfl_value(cv0_j, "radial curvature drift")
+    gb0 = _host_cfl_value(gb0_j, "radial grad-B drift")
 
     m0_max = 0.0
     cv0_max = float(np.max(np.abs(cv0)))
@@ -229,13 +271,13 @@ def _species_frequency_scales(
     nl: int,
     nm: int,
 ) -> _SpeciesFrequencyScales:
-    tprim = np.atleast_1d(np.asarray(params.tprim, dtype=float))
-    fprim = np.atleast_1d(np.asarray(params.fprim, dtype=float))
-    tz = np.atleast_1d(np.asarray(params.tz, dtype=float))
-    vth = np.atleast_1d(np.asarray(params.vth, dtype=float))
-    temp = np.atleast_1d(np.asarray(params.temp, dtype=float))
-    dens = np.atleast_1d(np.asarray(params.density, dtype=float))
-    charge = np.atleast_1d(np.asarray(params.charge_sign, dtype=float))
+    tprim = np.atleast_1d(_host_cfl_value(params.tprim, "tprim"))
+    fprim = np.atleast_1d(_host_cfl_value(params.fprim, "fprim"))
+    tz = np.atleast_1d(_host_cfl_value(params.tz, "tz"))
+    vth = np.atleast_1d(_host_cfl_value(params.vth, "vth"))
+    temp = np.atleast_1d(_host_cfl_value(params.temp, "temp"))
+    dens = np.atleast_1d(_host_cfl_value(params.density, "density"))
+    charge = np.atleast_1d(_host_cfl_value(params.charge_sign, "charge_sign"))
 
     tzmax = float(np.max(np.abs(tz))) if tz.size else 0.0
     vtmax = float(np.max(np.abs(vth))) if vth.size else 0.0
@@ -270,7 +312,7 @@ def _effective_geometry_frequency_scales(
         gradpar,
     ) = _geometry_frequency_maxima(geom, np.asarray(grid.z, dtype=float))
 
-    shat = float(geom.s_hat)
+    shat = float(_host_cfl_value(geom.s_hat, "s_hat"))
     non_twist = bool(getattr(grid, "non_twist", False))
     m0_max = 0.0
     if non_twist and abs(shat) > 0.0 and grid_bounds.ky.size > 0:
@@ -303,7 +345,7 @@ def _radial_drift_frequency(
         species.vpar_max * species.vpar_max * abs(geometry.cvdrift0_max)
         + species.muB_max * abs(geometry.gbdrift0_max)
     )
-    shat = float(geom.s_hat)
+    shat = float(_host_cfl_value(geom.s_hat, "s_hat"))
     if abs(shat) == 0.0:
         kx_effective = grid_bounds.kx_max
     elif bool(getattr(grid, "non_twist", False)):
@@ -354,7 +396,7 @@ def _parallel_streaming_frequency(
     species: _SpeciesFrequencyScales,
     geometry: _GeometryFrequencyScales,
 ) -> float:
-    beta = float(params.beta)
+    beta = float(_host_cfl_value(params.beta, "beta"))
     nspec_in = int(max(species.charge.size, 1))
     nte = _electron_pressure_product(species)
     mime = (

@@ -452,3 +452,47 @@ def test_collision_zero_weight_skips_invalid_preexpanded_operator_shape() -> Non
     )
     np.testing.assert_allclose(np.asarray(rhs), 0.0, atol=1.0e-7)
     np.testing.assert_allclose(np.asarray(contrib["collisions"]), 0.0, atol=1.0e-7)
+
+
+def test_static_zero_switches_stay_static_inside_a_trace() -> None:
+    """A term switch the host can see is off stays off under ``jit``.
+
+    ``_is_static_zero`` used to ask whether a ``jnp`` copy of its argument was
+    traced. Inside a trace that copy always is, so every switch of every jitted
+    run answered "not statically zero" and every fast path this predicate
+    selects was silently abandoned -- including the electrostatic RHS for a
+    ``TermConfig`` with ``apar = bpar = 0``, which is what the linear
+    benchmarks and every electrostatic nonlinear run are.
+    """
+
+    import jax
+
+    from gkx.operators.nonlinear.rhs import linear_rhs_jit_for_terms_impl
+
+    seen: dict[str, object] = {}
+
+    def probe(x: jnp.ndarray) -> jnp.ndarray:
+        seen["python_zero"] = assembly_mod._is_static_zero(0.0)
+        seen["python_one"] = assembly_mod._is_static_zero(1.0)
+        seen["host_array"] = assembly_mod._is_static_zero(np.zeros(3))
+        seen["underflows"] = assembly_mod._is_static_zero(1.0e-50, jnp.float32)
+        seen["traced"] = assembly_mod._is_static_zero(x)
+        seen["route"] = linear_rhs_jit_for_terms_impl(
+            TermConfig(apar=0.0, bpar=0.0)
+        )
+        return x * 2.0
+
+    jax.jit(probe)(jnp.asarray(3.0))
+    assert seen["python_zero"] is True
+    assert seen["python_one"] is False
+    assert seen["host_array"] is True
+    # ``dtype`` still reproduces the operator's own cast.
+    assert seen["underflows"] is True
+    # A value that really is traced stays unknowable, which is the only case
+    # the predicate was ever entitled to give up on.
+    assert seen["traced"] is False
+    assert seen["route"] is assemble_rhs_cached_electrostatic_jit
+    assert (
+        linear_rhs_jit_for_terms_impl(TermConfig(apar=1.0, bpar=0.0))
+        is assemble_rhs_cached_jit
+    )

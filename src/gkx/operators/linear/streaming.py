@@ -4,25 +4,15 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from gkx.core.velocity import hermite_ladder_coeffs
 
-
-def _is_tracer(x) -> bool:
-    return isinstance(x, jax.core.Tracer)
-
-
-def _check_positive(x, name: str) -> None:
-    arr = jnp.asarray(x)
-    if _is_tracer(x) or _is_tracer(arr):
-        return
-    if arr.ndim == 0:
-        if float(arr) <= 0.0:
-            raise ValueError(f"{name} must be > 0")
-        return
-    if np.any(np.asarray(arr) <= 0.0):
-        raise ValueError(f"{name} must be > 0")
+# One positivity guard for the whole linear operator. The local copy asked
+# whether a ``jnp`` round trip of its argument was traced, which is true of every
+# argument inside a trace, so the streaming kernels stopped checking ``dz`` and
+# ``vth`` under ``jit`` at all. Sharing the guard keeps one answer to the
+# question rather than two that can drift apart again.
+from gkx.operators.linear.params import _check_positive, _is_tracer  # noqa: F401
 
 
 def _fft_ik_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:

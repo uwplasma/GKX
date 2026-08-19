@@ -330,3 +330,60 @@ def test_integrate_linear_explicit_adaptive_dt_completes() -> None:
     assert np.all(np.isfinite(t))
     assert np.all(np.isfinite(np.asarray(phi)))
     assert float(t[-1]) <= 0.1 + 1.0e-9
+
+
+def test_cfl_host_scales_read_inside_a_trace_that_touched_nothing_physical() -> None:
+    """The CFL bound reads its own grid and geometry from inside a jit trace.
+
+    Both used to be lifted through ``jnp`` first -- ``grid.z[1] - grid.z[0]``
+    for the parallel extent, ``jnp.asarray(theta)`` for the drift maxima. Under
+    current JAX those stage out inside a trace, so reading the result back on
+    the host raised and every adaptive-dt run refused under ``jit`` even though
+    the grid, the geometry and the parameters were all concrete host data.
+    """
+
+    import jax
+
+    _g0, grid, geom, _params, _cache, _n_l, _n_m = _tiny_linear_case()
+    theta = np.asarray(grid.z, dtype=float)
+    expected_zp = eti._parallel_periods_from_grid(grid)
+    expected_maxima = eti._geometry_frequency_maxima(geom, theta)
+    seen: dict[str, object] = {}
+
+    def probe(x: jnp.ndarray) -> jnp.ndarray:
+        seen["zp"] = eti._parallel_periods_from_grid(grid)
+        seen["maxima"] = eti._geometry_frequency_maxima(geom, theta)
+        seen["kz"] = eti._cfl_wavenumber_arrays(grid)[2]
+        return x * 2.0
+
+    jax.jit(probe)(jnp.asarray(1.0))
+    assert seen["zp"] == pytest.approx(expected_zp)
+    np.testing.assert_allclose(np.asarray(seen["maxima"]), np.asarray(expected_maxima))
+    # A host float, not a zero-dimensional device array standing in for one.
+    assert all(isinstance(value, float) for value in seen["maxima"])
+    assert isinstance(seen["kz"], np.ndarray)
+
+
+def test_cfl_bound_names_the_traced_input_it_cannot_read() -> None:
+    """A genuinely traced drift is refused by name, not as a conversion error.
+
+    ``dt_max`` is a host scalar fixed before the scan is staged, so a drift
+    that only exists inside the trace has no value to bound with. The refusal
+    says which input and what to do instead.
+    """
+
+    import jax
+    from dataclasses import replace as dataclass_replace
+
+    from gkx.geometry import ensure_flux_tube_geometry_data
+
+    _g0, grid, geom, _params, _cache, _n_l, _n_m = _tiny_linear_case()
+    sampled = ensure_flux_tube_geometry_data(geom, grid.z)
+    theta = np.asarray(grid.z, dtype=float)
+
+    def probe(scale: jnp.ndarray):
+        traced = dataclass_replace(sampled, cv_profile=sampled.cv_profile * scale)
+        return eti._geometry_frequency_maxima(traced, theta)
+
+    with pytest.raises(ValueError, match="cannot read a traced curvature drift"):
+        jax.jit(probe)(jnp.asarray(1.0))

@@ -82,6 +82,49 @@ def test_linear_validation_helpers_accept_traced_values() -> None:
     assert float(_checked(jnp.asarray(1.0))) == pytest.approx(1.0)
 
 
+def test_linear_validation_helpers_still_check_host_values_inside_a_trace() -> None:
+    """A concrete argument is validated under ``jit``, not waved through.
+
+    The guard used to build a ``jnp`` copy of its argument and ask whether
+    *that* was traced. Inside a trace it always is, so the answer was yes for
+    every argument and the operator stopped validating anything at all under
+    ``jit`` -- a negative ``vth`` or a zero ``dz`` written into a jitted run
+    went straight into the kernels. Only a genuinely traced value may skip.
+    """
+
+    # The guard is called from inside a live trace and its verdict is carried
+    # out rather than raised out, so the trace this test opens is also the
+    # trace it closes.
+    seen: dict[str, str | None] = {}
+
+    def verdict(fn, value, name):
+        try:
+            fn(value, name)
+        except ValueError as exc:
+            return str(exc)
+        return None
+
+    def probe(x):
+        seen["negative_scalar"] = verdict(_check_positive, -1.0, "vth")
+        seen["zero_in_array"] = verdict(
+            _check_positive, np.asarray([1.0, 0.0]), "dz"
+        )
+        seen["negative_nonneg"] = verdict(_check_nonnegative, -1.0, "tau_e")
+        seen["good_scalar"] = verdict(_check_positive, 1.0, "vth")
+        seen["traced"] = verdict(_check_positive, x, "vth")
+        return x * 2.0
+
+    jax.jit(probe)(jnp.asarray(-1.0))
+    assert seen["negative_scalar"] == "vth must be > 0"
+    assert seen["zero_in_array"] == "dz must be > 0"
+    assert seen["negative_nonneg"] == "tau_e must be >= 0"
+    assert seen["good_scalar"] is None
+    # A negative value that is genuinely traced still goes unchecked: its sign
+    # is not known until the trace runs, which is the one case the guard may
+    # skip.
+    assert seen["traced"] is None
+
+
 def test_as_species_array_and_preconditioner_resolution() -> None:
     np.testing.assert_allclose(
         np.asarray(_as_species_array(2.0, 3, "nu")), [2.0, 2.0, 2.0]

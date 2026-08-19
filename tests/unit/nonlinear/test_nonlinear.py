@@ -350,9 +350,25 @@ def test_prepared_nonlinear_diagnostics_reuses_compiled_scan():
         resolved_diagnostics=False,
     )
 
+    # Count traces locally rather than reading the jit cache size: that cache is
+    # process-wide and unrelated compilations can evict this entry, which makes
+    # the reuse claim depend on what else ran first. The wrapped body below runs
+    # once per compilation and never on a cache hit.
+    traces = 0
+    scan_raw = prepared._run_raw.__wrapped__
+
+    def counting_scan_raw(initial_state):
+        nonlocal traces
+        traces += 1
+        return scan_raw(initial_state)
+
+    prepared = replace(prepared, _run_raw=jax.jit(counting_scan_raw))
+
     first = prepared.run()
-    cache_size = prepared._run_raw._cache_size()
+    assert traces == 1
     second = prepared.run()
+    # A different state of the same shape and dtype is the same signature.
+    reused = prepared.run(jnp.full_like(prepared.initial_state, 1.0e-3))
     direct = integrate_nonlinear_explicit_diagnostics_state(
         state,
         grid,
@@ -365,8 +381,8 @@ def test_prepared_nonlinear_diagnostics_reuses_compiled_scan():
         resolved_diagnostics=False,
     )
 
-    assert cache_size == 1
-    assert prepared._run_raw._cache_size() == cache_size
+    assert traces == 1
+    assert bool(jnp.all(jnp.isfinite(reused[0])))
     for first_value, second_value in zip(
         first[:1] + first[2:], second[:1] + second[2:]
     ):
@@ -1076,3 +1092,55 @@ def test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference
     np.testing.assert_allclose(
         np.asarray(gradient), np.asarray(centered_fd), rtol=2.0e-2, atol=1.0e-10
     )
+
+
+def test_adaptive_time_step_run_compiles_and_matches_the_eager_trajectory() -> None:
+    """``fixed_dt = false`` is what the Cyclone inputs run, and it now jits.
+
+    The CFL bound that sets ``dt_max`` lifted the parallel extent out of
+    ``grid.z`` with ``jnp`` arithmetic before reading it back on the host.
+    Inside a trace that stages out, so the adaptive route refused under ``jit``
+    with a bare conversion error -- for a grid, a geometry and a parameter set
+    that were all concrete host data, and for a number (how many 2*pi periods
+    the tube spans) that has no derivative in the first place.
+    """
+
+    from gkx.solvers.nonlinear.state_integration import (
+        integrate_nonlinear_sheared_transport,
+    )
+
+    grid_cfg = GridConfig(Nx=8, Ny=8, Nz=8, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    params = LinearParams(nu=0.05, nu_hyper=0.5)
+    terms = TermConfig(nonlinear=1.0)
+    Nl, Nm = 2, 2
+    shape = (Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    state = 1.0e-3 * (
+        jax.random.normal(jax.random.PRNGKey(0), shape)
+        + 1.0j * jax.random.normal(jax.random.PRNGKey(1), shape)
+    )
+
+    def run(initial):
+        trace = integrate_nonlinear_sheared_transport(
+            initial,
+            grid,
+            geom,
+            params,
+            0.02,
+            3,
+            shear_rate=0.0,
+            terms=terms,
+            fixed_dt=False,
+        )
+        return jnp.sum(jnp.abs(trace.final_state) ** 2)
+
+    eager = run(state)
+    compiled = jax.jit(run)(state)
+    assert bool(jnp.isfinite(eager)) and float(eager) > 0.0
+    # The adaptive step is chosen from the same host bound either way, so the
+    # compiled trajectory is the eager one, not an approximation of it.
+    np.testing.assert_allclose(np.asarray(compiled), np.asarray(eager), rtol=1.0e-12)
