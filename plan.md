@@ -144,9 +144,9 @@ Status: `ready-to-commit` = finished patch in plan/patches, needs review+commit 
 | P0.5-46 | Assess PR #46 | **done — verdict: merge as-is** (0.3 remainder scoped) | — | — |
 | P0.5-47 | Assess PR #47 | **done — verdict: merge as-is, before krylov fix** (2 caveats to ack) | — | — |
 | P0.5-45 | Assess PR #45 | **partial** — all checks done except Cyclone repro; comparison-tool fix verified correct; verdict pending | worktree `pr45` | 0f860069 |
-| 0.1 | krylov fix + adaptive default | **ready-to-commit** | `plan/patches/krylov_fix.patch` (+165/−4, incl. regression test) | 7cf5e6d1 |
-| 0.2/0.4/0.5/0.6 | overflow guard, --plot scan, drift fixes, dep floors | **ready-to-commit** | `plan/patches/phase0_bundle.patch` (+161/−13, 12 files, tests incl.) | 7cf5e6d1 |
-| 1.1 | `gkx wout.nc` UX + common_input.toml | **ready-to-commit** | `plan/patches/wout_ux.patch` (+577/−8, 8 tests, real QHS smoke passed) | 7cf5e6d1 |
+| 0.1 | krylov fix + adaptive default | **PR open: [#52](https://github.com/uwplasma/GKX/pull/52)** branch `fix/krylov-certified-default` | `plan/patches/krylov_fix.patch` (+165/−4, incl. regression test) | rebased onto main |
+| 0.2/0.4/0.5/0.6 | overflow guard, --plot scan, drift fixes, dep floors | **PR open: [#50](https://github.com/uwplasma/GKX/pull/50)** branch `fix/phase0-robustness` (89 tests green) | `plan/patches/phase0_bundle.patch` | rebased onto main |
+| 1.1 | `gkx wout.nc` UX + common_input.toml | **PR open: [#51](https://github.com/uwplasma/GKX/pull/51)** branch `feat/wout-cli` (42 CLI tests green) | `plan/patches/wout_ux.patch` | rebased onto main |
 | 1.2 | auto-stop run_to="saturation" | **partial** (+559/−48; implementation ~complete, agent died at verification: byte-identical t_max check + saturation integration run + docs) | `plan/patches/autostop_partial.patch`, worktree `autostop` | 7cf5e6d1 |
 | 0.3 | fit robustness (stationary windows, γ±stderr, warnings) | **partial** (+380/−7; agent died updating CLI print sites; must then verify vs certified eigenvalue per finding #2) | `plan/patches/fitrobust_partial.patch`, worktree `fitrobust` | 7cf5e6d1 |
 | 1.3a | plot library (snapshots module, flux/spectra figures) | **partial** (+1266/−128; figures render, agent died fixing x-y title/colorbar collision, then final QA + tests rerun) | `plan/patches/plots_partial.patch`, worktree `plots` | 7cf5e6d1 |
@@ -292,3 +292,19 @@ eigensolver default; run_to="saturation"; authorship rule; PR queue #46→#47→
   stella-r1, pr45) — partial patches captured into plan/patches; remaining steps
   itemized in §Remaining steps. Plan v2 (this file) created on branch
   `plan/research-grade-roadmap` as its own PR.
+
+### 2026-08-18 RJ — PR MECHANICS: three ready patches → PRs #50/#51/#52
+All three ready patches were verified to apply cleanly on `main` (not just on the
+feat branch), so each became an independent PR off main rather than a stacked one:
+- **[#50](https://github.com/uwplasma/GKX/pull/50)** `fix/phase0-robustness` — items
+  0.2/0.4/0.5/0.6. 89 tests green (test_cli.py + test_runtime_helpers.py, x64).
+- **[#51](https://github.com/uwplasma/GKX/pull/51)** `feat/wout-cli` — item 1.1.
+  42 CLI tests green; symlink single-sourcing of the default deck confirmed in place.
+- **[#52](https://github.com/uwplasma/GKX/pull/52)** `fix/krylov-certified-default` —
+  item 0.1. Re-verified the fix on a main-based branch: cyclone ky=0.3 gives
+  **γ=0.088930, ω=0.280209** (was γ=−0.113 garbage), matching the diagnosis exactly.
+Worktrees for these: `GKX-worktrees/{applytest,woutpr,krylovpr}`.
+Merge order unchanged: #46 → #47 → #44 → #48 → #45, then #50 → #52 → #51.
+(#52 conflicts with #47 only in the intentional duplicate `certifiable_residual_tolerance`
+block; #50 touches `plot_saved_output` in plotting.py so it must land before the
+plot-library PR, whose diff is append-only.)
