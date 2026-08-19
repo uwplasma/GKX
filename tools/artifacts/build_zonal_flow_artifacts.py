@@ -7,6 +7,7 @@ import argparse
 import csv
 from dataclasses import dataclass, replace
 import json
+import math
 from pathlib import Path
 import sys
 from typing import Any
@@ -75,6 +76,38 @@ MERLO_CASE_III_GATE_TOLERANCES = {
     "residual_atol": 0.015,
     "omega_atol_R0_over_vi": 0.10,
     "gamma_atol_R0_over_vi": 0.03,
+}
+
+# GKX's own converged Case-III answer, and what the artifact gate asserts.
+#
+# The literature read-offs above are still reported, but they are NOT gated any
+# more: at converged Hermite resolution GKX's residual and GAM frequency sit
+# outside the paper-scale tolerances, and the previous baseline passed only
+# because Nm=24 puts the whole averaging window past the onset of Hermite
+# recurrence. The honest gate is therefore GKX's converged value plus the
+# stability conditions that make it a measurement at all. See
+# plan/notes/merlo_resolution_audit.md and docs/testing.rst.
+MERLO_CASE_III_GKX_CONVERGED = {
+    "protocol": (
+        "Nm=144, Nl=4, Nz=32, dt=0.0025 a/v_i, t_max=60 a/v_i, "
+        "diagnostic sample spacing 0.025 a/v_i"
+    ),
+    "ladder": "Nm = 24, 48, 96, 144, 192 at dt = 0.0025 with Nl=4, Nz=32 held fixed",
+    "residual_phi_over_phi0": 0.2059,
+    "residual_atol": 0.006,
+    "omega_gam_R0_over_vi": 2.345,
+    "omega_atol_R0_over_vi": 0.05,
+    "gamma_gam_R0_over_vi": -0.184,
+    "gamma_atol_R0_over_vi": 0.010,
+    # t_quiet ~ recurrence_coefficient * sqrt(Nm) is the measured onset of
+    # Hermite recurrence for this case; every analysis window must close before
+    # it. At Nm=144 that is t ~ 66 against a 4-period damping window at t ~ 30.
+    "recurrence_coefficient": 5.5,
+    # residual_std / |residual_level| inside the averaging window. It is 1.20 at
+    # the retired Nm=24 baseline -- the scatter exceeded the gated number -- and
+    # 0.14 here. The limit is what separates those two regimes.
+    "residual_scatter_ratio_limit": 0.25,
+    "trace_completeness_atol": 0.02,
 }
 
 COLLISIONAL_ZONAL_PROTOCOL = {
@@ -2112,6 +2145,21 @@ def _build_miller_panel_parser() -> argparse.ArgumentParser:
         help="Upper time bound for the common pre-recurrence GAM fit window.",
     )
     parser.add_argument(
+        "--damping-fit-start-periods",
+        type=float,
+        default=1.0,
+        help=(
+            "GAM periods to skip before the damping window opens, so the "
+            "initial-condition relaxation stays out of the envelope fit."
+        ),
+    )
+    parser.add_argument(
+        "--damping-fit-periods",
+        type=float,
+        default=3.0,
+        help="Length of the GAM damping window, in periods of the measured oscillation.",
+    )
+    parser.add_argument(
         "--reuse-output",
         action="store_true",
         help="Reuse an existing out.nc bundle instead of rerunning the panel source simulation.",
@@ -2136,6 +2184,146 @@ def _setup_note(cfg) -> str:
     if source == "phiext_full":
         return "external phiext_full source"
     return f"initial {cfg.init.init_field} perturbation"
+
+
+def _miller_stability_evidence(
+    *,
+    metrics,
+    nm: int,
+    requested_tmax: float,
+) -> dict[str, float]:
+    """Measure the conditions that decide whether the gated numbers mean anything.
+
+    Three things silently broke this benchmark before, and each one is a number
+    here rather than a comment: the averaging window sitting past Hermite
+    recurrence, the damping window reaching past it too, and the run stopping
+    early so that "the last 30% of the trace" was 30% of something much shorter
+    than the configured horizon.
+    """
+
+    recurrence_time = float(
+        MERLO_CASE_III_GKX_CONVERGED["recurrence_coefficient"]
+    ) * math.sqrt(float(nm))
+    residual = abs(float(metrics.residual_level))
+    scatter_ratio = (
+        float(metrics.residual_std) / residual if residual > 0.0 else float("inf")
+    )
+    windows = [float(metrics.tmax)]
+    if np.isfinite(metrics.damping_fit_tmax):
+        windows.append(float(metrics.damping_fit_tmax))
+    overshoot = max(0.0, max(windows) - recurrence_time)
+    completeness = (
+        float(metrics.tmax) / float(requested_tmax)
+        if float(requested_tmax) > 0.0
+        else float("nan")
+    )
+    return {
+        "hermite_recurrence_time": recurrence_time,
+        "residual_scatter_ratio": scatter_ratio,
+        "analysis_window_past_recurrence": overshoot,
+        "trace_completeness": completeness,
+        "requested_tmax": float(requested_tmax),
+    }
+
+
+def _miller_converged_gate_report(
+    *,
+    metrics,
+    omega_r0_over_vi: float,
+    gamma_r0_over_vi: float,
+    evidence: dict[str, float],
+):
+    """Gate the converged GKX answer and the conditions that make it one."""
+
+    converged = MERLO_CASE_III_GKX_CONVERGED
+    return gate_report(
+        "merlo_case_iii_zonal_response",
+        (
+            "GKX converged Hermite baseline (Nm=144, dt=0.0025); agreement with "
+            "the Merlo et al. read-off is reported under literature_comparison "
+            "and is NOT asserted here"
+        ),
+        (
+            evaluate_scalar_gate(
+                "residual_level",
+                metrics.residual_level,
+                float(converged["residual_phi_over_phi0"]),
+                atol=float(converged["residual_atol"]),
+                rtol=0.0,
+                notes=(
+                    "GKX's own converged residual, not the paper value. The "
+                    "tolerance is the residual's remaining drift across "
+                    "Nm=96/144/192, so refining Hermite resolution further must "
+                    "not move it more than the ladder already did."
+                ),
+            ),
+            evaluate_scalar_gate(
+                "gam_frequency_R0_over_vi",
+                omega_r0_over_vi,
+                float(converged["omega_gam_R0_over_vi"]),
+                atol=float(converged["omega_atol_R0_over_vi"]),
+                rtol=0.0,
+                units="R0/vi",
+                notes="GKX's own converged GAM frequency, not the paper value.",
+            ),
+            evaluate_scalar_gate(
+                "gam_growth_rate_R0_over_vi",
+                gamma_r0_over_vi,
+                float(converged["gamma_gam_R0_over_vi"]),
+                atol=float(converged["gamma_atol_R0_over_vi"]),
+                rtol=0.0,
+                units="R0/vi",
+                notes=(
+                    "Signed growth-rate convention; negative values are damping. "
+                    "Measured with the period-RMS envelope estimator. Across a "
+                    "factor-8 span of diagnostic output cadence on this same "
+                    "trace it moves by 0.0003 in R0/v_i; the retired "
+                    "branchwise-extrema fit moves by 0.038 over the same span, "
+                    "which is why the tolerance below can be this tight at all."
+                ),
+            ),
+            evaluate_scalar_gate(
+                "residual_scatter_ratio",
+                evidence["residual_scatter_ratio"],
+                0.0,
+                atol=float(converged["residual_scatter_ratio_limit"]),
+                rtol=0.0,
+                notes=(
+                    "residual_std / |residual_level| inside the averaging "
+                    "window. Above this limit the window is measuring Hermite "
+                    "recurrence rather than the residual: the retired Nm=24 "
+                    "baseline sat at 1.20, i.e. the scatter exceeded the number "
+                    "being gated."
+                ),
+            ),
+            evaluate_scalar_gate(
+                "analysis_window_past_recurrence",
+                evidence["analysis_window_past_recurrence"],
+                0.0,
+                atol=0.0,
+                rtol=0.0,
+                units="a/vi",
+                notes=(
+                    "How far the residual and damping windows reach past the "
+                    "measured recurrence onset t_quiet ~ "
+                    f"{converged['recurrence_coefficient']} sqrt(Nm). Must be zero."
+                ),
+            ),
+            evaluate_scalar_gate(
+                "trace_completeness",
+                evidence["trace_completeness"],
+                1.0,
+                atol=float(converged["trace_completeness_atol"]),
+                rtol=0.0,
+                notes=(
+                    "Fraction of the configured horizon the trace actually "
+                    "reaches. [time] run_to defaults to \"saturation\", which "
+                    "declares a zero-gradient run converged inside the first "
+                    "chunk and truncates it at t ~ 6 without raising."
+                ),
+            ),
+        ),
+    )
 
 
 def _main_miller_panel(argv: list[str]) -> int:
@@ -2190,10 +2378,12 @@ def _main_miller_panel(argv: list[str]) -> int:
         peak_fit_max_peaks=int(args.peak_fit_max_peaks)
         if args.peak_fit_max_peaks is not None
         else None,
-        damping_fit_mode="branchwise_extrema",
+        damping_fit_mode="period_rms_envelope",
         frequency_fit_mode="hilbert_phase",
         fit_window_tmax=float(args.fit_window_tmax),
         hilbert_trim_fraction=0.2,
+        damping_fit_start_periods=float(args.damping_fit_start_periods),
+        damping_fit_periods=float(args.damping_fit_periods),
     )
     setup_note = _setup_note(cfg)
     ref_residual = float(MERLO_CASE_III_REFERENCE["residual_phi_over_phi0"])
@@ -2206,9 +2396,23 @@ def _main_miller_panel(argv: list[str]) -> int:
     residual_abs_error = abs(float(metrics.residual_level) - ref_residual)
     omega_abs_error = abs(omega_r0_over_vi - ref_omega)
     gamma_abs_error = abs(gamma_r0_over_vi - ref_gamma)
-    validation_gate_report = gate_report(
-        "merlo_case_iii_zonal_response",
-        "Merlo et al. paper-scale read-off",
+    evidence = _miller_stability_evidence(
+        metrics=metrics,
+        nm=nm,
+        requested_tmax=float(steps) * dt,
+    )
+    validation_gate_report = _miller_converged_gate_report(
+        metrics=metrics,
+        omega_r0_over_vi=omega_r0_over_vi,
+        gamma_r0_over_vi=gamma_r0_over_vi,
+        evidence=evidence,
+    )
+    # Reported, never asserted: the same three numbers against the published
+    # read-off at the published tolerances. Two of them do not pass at converged
+    # resolution, and that is the claim boundary this artifact exists to state.
+    literature_report = gate_report(
+        "merlo_case_iii_literature_comparison",
+        "Merlo et al. paper-scale read-off (reported, NOT gated)",
         (
             evaluate_scalar_gate(
                 "residual_level",
@@ -2296,31 +2500,68 @@ def _main_miller_panel(argv: list[str]) -> int:
                 "tmax": float(metrics.tmax),
                 "fit_tmin": float(metrics.fit_tmin),
                 "fit_tmax": float(metrics.fit_tmax),
+                "damping_fit_tmin": float(metrics.damping_fit_tmin),
+                "damping_fit_tmax": float(metrics.damping_fit_tmax),
+                "damping_fit_start_periods": float(args.damping_fit_start_periods),
+                "damping_fit_periods": float(args.damping_fit_periods),
+                "resolution": {
+                    "Nm": int(nm),
+                    "Nl": int(nl),
+                    "Nz": int(cfg.grid.Nz),
+                    "dt": float(dt),
+                    "steps": int(steps),
+                    "sample_stride": int(sample_stride),
+                    "sample_dt": float(dt) * float(sample_stride),
+                },
+                "stability_evidence": {
+                    key: float(value) for key, value in evidence.items()
+                },
                 "literature_reference": dict(MERLO_CASE_III_REFERENCE),
                 "gate_tolerances": dict(MERLO_CASE_III_GATE_TOLERANCES),
+                "converged_reference": dict(MERLO_CASE_III_GKX_CONVERGED),
                 "gate_report": gate_report_to_dict(validation_gate_report),
-                "paper_scale_gate_passed": bool(validation_gate_report.passed),
+                "literature_comparison": gate_report_to_dict(literature_report),
+                "paper_scale_gate_passed": bool(literature_report.passed),
                 "residual_abs_error_vs_literature": float(residual_abs_error),
                 "omega_abs_error_vs_literature_R0_over_vi": float(omega_abs_error),
                 "gamma_abs_error_vs_literature_R0_over_vi": float(gamma_abs_error),
                 "setup": setup_note,
                 "validation_status": "open",
                 "notes": (
-                    "This is a Merlo Case-III shaped-Miller zonal-relaxation run "
-                    f"built from the signed zonal observable Phi_zonal_mode_kxt with zero gradients, "
-                    f"adiabatic electrons, and an {setup_note}. "
-                    "The literature reference values are read from Merlo et al. Figs. 12, 14, and 16; "
-                    "the residual is normalized with the Rosenbluth-Hinton first-sample convention. "
-                    f"The GAM damping follows the paper convention by fitting positive and negative extrema separately "
-                    f"over the common pre-recurrence window t in [{metrics.fit_tmin:.1f}, {metrics.fit_tmax:.1f}] "
-                    f"using up to {args.peak_fit_max_peaks} extrema per branch, while the frequency is obtained from "
-                    "the instantaneous phase of the same window via a Hilbert-transform analytic signal. "
-                    "The residual, damping, and GAM frequency are now close to the paper-scale read-off; the long-time recurrence "
-                    "behavior still remains an explicit numerical follow-up item."
+                    "Merlo Case-III shaped-Miller zonal-relaxation run built from the signed "
+                    f"zonal observable Phi_zonal_mode_kxt with zero gradients, adiabatic "
+                    f"electrons, and an {setup_note}. "
+                    "WHAT IS GATED: GKX's own converged answer at Nm=144, dt=0.0025, plus the "
+                    "conditions that make it a measurement -- that the averaging window is not "
+                    "recurrence-dominated, that no analysis window reaches past the recurrence "
+                    "onset t_quiet ~ 5.5 sqrt(Nm), and that the trace reaches its configured "
+                    "horizon. WHAT IS NOT GATED: agreement with the published read-off. At "
+                    "converged resolution GKX gives residual "
+                    f"{float(metrics.residual_level):.3f} against the paper's {ref_residual:.3f} "
+                    f"(gap {float(residual_abs_error):.3f}, tolerance "
+                    f"{float(MERLO_CASE_III_GATE_TOLERANCES['residual_atol']):.3f}) and "
+                    f"omega_GAM {float(omega_r0_over_vi):.2f} against {ref_omega:.2f} "
+                    f"(gap {float(omega_abs_error):.2f}, tolerance "
+                    f"{float(MERLO_CASE_III_GATE_TOLERANCES['omega_atol_R0_over_vi']):.2f}) "
+                    "in R0/v_i, so two of the three literature comparisons FAIL and are "
+                    "recorded under literature_comparison rather than widened until they pass. "
+                    "The previous Nm=24 baseline agreed with the paper only because its whole "
+                    "averaging window sat past Hermite recurrence, where the scatter (1.20 of "
+                    "the gated value) exceeded the number being gated. The residual is "
+                    "normalized with the Rosenbluth-Hinton first-sample convention. The GAM "
+                    "frequency comes from the Hilbert instantaneous phase over t in "
+                    f"[{metrics.fit_tmin:.1f}, {metrics.fit_tmax:.1f}]; the damping comes from a "
+                    "sliding one-period RMS envelope fitted over "
+                    f"{float(args.damping_fit_periods):.1f} GAM periods starting "
+                    f"{float(args.damping_fit_start_periods):.1f} period(s) in, i.e. t in "
+                    f"[{metrics.damping_fit_tmin:.1f}, {metrics.damping_fit_tmax:.1f}]. That "
+                    "estimator replaces a four-extrema log-linear fit that moved by 52 percent "
+                    "when the diagnostic output cadence alone was halved."
                 ),
                 "references": [
                     "Merlo et al. 2016 shaped-tokamak collisionless GAM benchmark, Case III",
                     "W7-X stella/GENE benchmark 2022 for zonal-flow observable conventions",
+                    "plan/notes/merlo_resolution_audit.md -- resolution and estimator audit",
                 ],
             },
             indent=2,

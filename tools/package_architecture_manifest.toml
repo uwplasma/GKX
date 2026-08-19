@@ -426,7 +426,22 @@ recursive = true
 # 94775 -> 94808: naming the comparison code in one reader instead of the
 # plotting path. The dispatch is a registry so a second code's reader is a
 # row rather than another branch in the figure code.
-baseline = 94808
+# 94808 -> 94966: making the gated GAM damping rate a measurement (item 2.9).
+# The old branchwise-extrema fit read four hand-picked peaks, so one shallow
+# extremum that the diagnostic output cadence happened to resolve swung it by
+# 52 percent -- more than three times its own gate tolerance -- at identical
+# physics. The lines are one estimator, period_rms_envelope: a sliding
+# one-period RMS about the trace's own running mean, amplitude-weighted in the
+# log, over a window stated in GAM periods rather than in samples or in a
+# hard-coded absolute time. Every sample enters, so refining the cadence
+# refines the quadrature of one continuum integral instead of changing which
+# points are fitted; the measured spread over a factor-8 cadence span drops
+# from 126 percent of the gate tolerance to 1 percent. The remaining lines are
+# the two window bounds carried onto ZonalFlowResponseMetrics, because a gated
+# damping rate whose window is derived rather than configured has to report the
+# window it actually used. See
+# test_period_rms_damping_is_independent_of_the_diagnostic_output_cadence.
+baseline = 94966
 target = 45000
 
 [[line_budget_policy.counts]]

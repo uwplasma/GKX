@@ -515,3 +515,125 @@ Runtimes on this machine (macOS arm64, CPU): Nm=24 ~71 s, 48 ~141 s, 96 ~277 s a
 dt=0.005; roughly 2x that at dt=0.0025 (Nm=192 took ~977 s).
 
 **The GKX repo was not modified.** All outputs went to the scratch directory.
+
+
+---
+
+# Follow-through: items 2.8b / 2.9 / 2.10 (2026-08-19, agent/merlo)
+
+The audit above is the diagnosis. This section is what was changed, measured, and
+shipped, with the owner's sign-off to raise the baselines to converged values.
+
+## 0. A fourth defect, found while re-running: the benchmark truncates silently
+
+Regenerating the *tracked* artifact from its own TOML on current `main` produces a
+trace that stops at **t = 7.66** instead of 60, with `residual = 0.293` and
+`gamma = NaN`. `[time] run_to` defaults to `"saturation"`; for a zero-gradient
+relaxation run the heat flux is identically ~0, the saturation stop declares the
+flux window converged inside the first chunk, and the loop breaks. Nothing raises.
+The residual is then read off "the last 30% of the trace" -- of a trace one sixth
+of a GAM period long.
+
+The audit's own reproduction predates this behaviour, which is why it did not see it.
+Adding `run_to = "t_max"` to `benchmarks/runtime_miller_zonal_response.toml` restores
+the audit numbers exactly: `residual 0.193287`, `omega 2.204211`,
+`gamma -0.174475` at Nm=24, dt=0.005, against the audit's 0.19329 / 2.20421 /
+-0.17448. **The other two runtime TOMLs (`runtime_w7x_zonal_response_vmec.toml`,
+`runtime_secondary_slab.toml`) also do not set `run_to` and were not checked.**
+
+## 1. Item 2.9 -- gamma_GAM now has an estimator that one sample cannot move
+
+New damping mode `period_rms_envelope` in `src/gkx/diagnostics/zonal_validation.py`.
+For `y(t) = C(t) + A exp(-gamma t) cos(omega t + phi)` with `C` slowly varying, the
+RMS of `y` about its own running one-period mean is `A exp(-gamma t)` times a
+`t`-independent factor. So: sliding one-period mean, sliding one-period RMS of the
+deviation, then a log-linear fit weighted by `envelope^2` (the inverse-variance
+weight for a log fit) over a window stated in **GAM periods**, not samples and not a
+hard-coded absolute time. Both convolutions are `mode="valid"`, so no output sample
+ever sees zero padding.
+
+Cadence independence, measured three ways on the converged Nm=144 trace:
+
+| test | period_rms_envelope | branchwise_extrema (retired) |
+|---|---|---|
+| 3 independent runs, only `sample_stride` changed (5/10/20) | spread **0.00070** | 0.00293 |
+| same trace, decimation x1/x2/x4/x8 + sampling-phase offsets | spread **0.00030** | **0.03790** |
+| `fit_window_tmax` 22 -> 35 (moves omega by 0.24) | spread **0.0015** | 0.018 |
+| `damping_fit_periods` 2 -> 4 | spread 0.0026 | n/a |
+| `damping_fit_start_periods` 0.5 -> 1.5 | spread 0.0045 | n/a |
+| `tail_fraction` 0.20 -> 0.40 | spread 0.0004 | 0.0065 |
+
+Against the gate tolerance 0.03 the decimation spread is **1.0% vs 126%**.
+On the Nm=24 trace pair that produced the audit's headline 52% swing
+(-0.17448 at dt_sample=0.05 vs -0.26452 at 0.025), the new estimator gives
+**-0.11924 vs -0.11937**, a 0.1% move.
+
+Correctness, not only stability: on synthetic `0.2 + exp(-gamma t) cos(omega t)` the
+estimator returns gamma to within 1-2% for gamma = 0.03 / 0.06 / 0.10 and
+omega = 0.8 / 1.2, with a cadence spread below 1e-4 across a 16x span. The 1-2% low
+bias is deterministic (one window of a *decaying* signal is not one window of a
+stationary one) and is inside the quoted uncertainty. Pinned by three tests in
+`tests/validation/physics_gates/test_zonal_validation.py`.
+
+With the fixed estimator, gamma is also **resolution- and timestep-converged**, which
+the old one could not show: Nm = 96/144/192 give -0.1834 / -0.1841 / -0.1856, Nl=8
+moves it by 1.0%, and dt=0.005 vs 0.0025 at Nm=96 moves it by 0.1%. The apparent dt
+sensitivity in the audit was the cadence artifact all along -- halving dt doubled the
+output cadence.
+
+## 2. Item 2.10 -- alpha_MHD: FALSIFIED, and structurally so
+
+`alpha_MHD = -q^2 R0 dbeta/dr` with Merlo Table III's 0.5425 gives
+`betaprim = -0.5425 / (1.389^2 * 2.77778) = -0.1012272`. Rerun at Nm=144, dt=0.0025:
+the trace is **bit-identical** to the baseline, max `|delta phi| = 0.0` over 2401
+samples; residual, omega and gamma agree to every printed digit.
+
+That is not a null result, it is a structural one. Diffing the two generated
+`*.eiknc.nc` files: `betaprim` changes `gds2` (by 9.6%), `gds21` (8.1%),
+`gbdrift` (32%), `cvdrift` (22%) and `aprime` (9.8%), and leaves `gds22`,
+`gbdrift0`, `cvdrift0`, `bmag`, `gradpar`, `grho`, `jacob`, `drhodpsi` and `kxfac`
+**exactly** unchanged. At `ky = 0`, `kperp^2 = gds2 ky^2 + 2 gds21 kx ky + gds22 kx^2`
+collapses to `gds22 kx^2`, and the drift keeps only its `kx` partners. Every
+coefficient alpha_MHD touches is multiplied by `ky`. **The dropped alpha_MHD cannot
+explain a residual or frequency offset for a purely radial zonal mode**, so path (a)
+is closed. (It would matter for any finite-ky Case-III comparison, and the TOML
+should still carry it if this deck is ever reused at `ky != 0`.)
+
+## 3. Item 2.8b -- the new baseline, and what the gate asserts
+
+`benchmarks/runtime_miller_zonal_response.toml`: `Nm 24 -> 144`, `dt 0.005 -> 0.0025`,
+`steps 12000 -> 24000`, plus `run_to = "t_max"`.
+
+| quantity | GKX converged | uncertainty | Merlo read-off | gap | paper tolerance |
+|---|---|---|---|---|---|
+| `residual_level` | **0.2059** | +/- 0.006 | 0.19 | 0.0159 | 0.015 -> **FAIL 1.06x** |
+| `omega_GAM R0/v_i` | **2.345** | +/- 0.05 | 2.24 | 0.1051 | 0.10 -> **FAIL 1.05x** |
+| `gamma_GAM R0/v_i` | **-0.184** | +/- 0.010 | -0.17 | 0.0141 | 0.03 -> PASS |
+
+Uncertainties are the Hermite drift over Nm = 96/144/192 (residual 0.2045/0.2059/0.2082,
+omega 2.340/2.345/2.353, gamma -0.1834/-0.1841/-0.1856) combined with the estimator-knob
+systematics measured above. Both failures grow monotonically with Nm, so refinement
+widens them.
+
+**Path taken: (b).** The tolerances were not touched. The artifact carries two reports:
+
+* `gate_report` -- **asserted**. GKX's own converged residual / omega / gamma at the
+  tolerances above, plus three conditions that make them measurements rather than
+  window artifacts: `residual_scatter_ratio <= 0.25` (measures 0.143; the retired
+  Nm=24 baseline sat at 1.20, i.e. the scatter exceeded the gated number),
+  `analysis_window_past_recurrence == 0` against `t_quiet = 5.5 sqrt(Nm) = 66.0`, and
+  `trace_completeness == 1` against the configured horizon.
+* `literature_comparison` -- **reported, never asserted**. The same three observables
+  against Merlo at the published tolerances, `passed: false`, with
+  `paper_scale_gate_passed: false` at the top level. The failing metrics are named in
+  the artifact and the gap is quantified in the artifact's own `notes`.
+
+## 4. What is still open
+
+1. The residual/omega gap itself. Candidates left, in order of plausibility:
+   the Fig. 16 read-off (Sec. 6 above already notes omega may be read ~0.03 low, and
+   0.03 is a third of the gap); the dropped squareness `zeta = 2.83e-3`,
+   `dzeta/dr = 0.003`, which GKX's Miller cannot express; and the horizon -- the paper
+   runs to 150 R0/v_i and GKX reaches 21.6 with recurrence-free windows only to ~24.
+2. `run_to` in the other two runtime TOMLs (item 0 above).
+3. The W7-X zonal lane's sqrt(2) convention question (item 2.11), untouched here.

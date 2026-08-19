@@ -761,10 +761,20 @@ def test_miller_zonal_response_example_uses_merlo_case_iii_contract() -> None:
     assert cfg.geometry.shift == pytest.approx(-0.1569)
     assert cfg.grid.Nz == 32
     assert data["run"]["Nl"] == 4
-    assert data["run"]["Nm"] == 24
-    assert data["run"]["dt"] == pytest.approx(0.005)
     assert data["run"]["kx"] == pytest.approx(0.05)
     assert data["run"]["ky"] == pytest.approx(0.0)
+    # Converged Hermite baseline, not the retired Nm=24 one. Nm >= 120 is what
+    # puts the whole analysis window before the recurrence onset
+    # t_quiet ~ 5.5 sqrt(Nm), and dt <= 0.0025 is what keeps Nm=144 stable --
+    # the Hermite streaming CFL scales as sqrt(Nm) and dt=0.005 goes non-finite
+    # at t=46.5 there.
+    assert data["run"]["Nm"] >= 120
+    assert data["run"]["dt"] <= 0.0025
+    assert data["run"]["steps"] * data["run"]["dt"] == pytest.approx(60.0)
+    # A zero-gradient relaxation run has no saturation to stop at: the default
+    # run_to = "saturation" declares the ~0 heat flux converged inside the first
+    # chunk and truncates the trace at t ~ 6 without raising.
+    assert cfg.time.run_to == "t_max"
 
 
 def test_w7x_zonal_response_vmec_example_uses_test4_contract() -> None:
