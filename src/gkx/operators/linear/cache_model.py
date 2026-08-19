@@ -8,6 +8,39 @@ import jax
 import jax.numpy as jnp
 
 
+@dataclass(frozen=True)
+class HermiteWindow:
+    """Global Hermite coordinates of a locally held slab of moments.
+
+    A Hermite-sharded route hands the serial kernels a slab that is a window
+    onto the global ``m`` axis, optionally widened by ghost rows. Every operator
+    whose coefficient is a function of the *global* moment index -- the field
+    drives at ``m = 0..3``, the closure at the last moment, the hypercollision
+    normalization -- needs the global coordinates rather than the slab's own
+    ``arange``. ``index`` may be a tracer (the offset is a per-shard quantity),
+    ``total`` is static because it selects Python branches.
+    """
+
+    index: jnp.ndarray
+    total: int
+
+
+def hermite_index_of(
+    window: HermiteWindow | None, local_count: int
+) -> jnp.ndarray:
+    """Return the global Hermite index of every row of a local slab."""
+
+    if window is None:
+        return jnp.arange(int(local_count), dtype=jnp.int32)
+    return jnp.asarray(window.index, dtype=jnp.int32)
+
+
+def hermite_total_of(window: HermiteWindow | None, local_count: int) -> int:
+    """Return the global Hermite extent behind a local slab."""
+
+    return int(local_count) if window is None else int(window.total)
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LinearCache:

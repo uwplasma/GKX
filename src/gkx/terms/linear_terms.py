@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import math
 
 import jax.numpy as jnp
@@ -27,6 +28,11 @@ from gkx.operators.linear.dissipation import (
     hypercollisions_contribution as hypercollisions_contribution,
     hyperdiffusion_contribution as hyperdiffusion_contribution,
     multispecies_collision_invariant_rates as multispecies_collision_invariant_rates,
+)
+from gkx.operators.linear.cache_model import (
+    HermiteWindow,
+    hermite_index_of,
+    hermite_total_of,
 )
 from gkx.operators.linear.streaming import (
     grad_z_linked_fft,
@@ -151,24 +157,26 @@ def _streaming_field_drive(
     JlB: jnp.ndarray,
     tz: jnp.ndarray,
     vth: jnp.ndarray,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     zt5 = _field_inverse_temperature(tz)
     vth5 = vth[:, None, None, None, None]
     phi_s = phi[None, None, ...]
-    Nm = template.shape[2]
+    Nm = hermite_total_of(hermite_window, template.shape[2])
+    place = functools.partial(_hermite_mode_drive, hermite_window=hermite_window)
     field_rhs = jnp.zeros_like(template)
     if apar is not None:
         apar_s = apar[None, None, ...]
         drive_m0 = zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 0, drive_m0)
+        field_rhs = field_rhs + place(field_rhs, 0, drive_m0)
     if Nm > 1:
         drive_m1 = -zt5 * vth5 * Jl * phi_s
         if bpar is not None:
             drive_m1 = drive_m1 - vth5 * JlB * bpar[None, None, ...]
-        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 1, drive_m1)
+        field_rhs = field_rhs + place(field_rhs, 1, drive_m1)
     if Nm > 2 and apar is not None:
         drive_m2 = jnp.sqrt(2.0) * zt5 * (vth5 * vth5) * Jl * apar_s
-        field_rhs = field_rhs + _hermite_mode_drive(field_rhs, 2, drive_m2)
+        field_rhs = field_rhs + place(field_rhs, 2, drive_m2)
     return field_rhs
 
 
@@ -230,6 +238,7 @@ def linked_streaming_contribution(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
     hermite_closure: str = "truncation",
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     """Hermite-Laguerre streaming: ladder on g, add field terms, then apply parallel derivative.
 
@@ -253,6 +262,7 @@ def linked_streaming_contribution(
         JlB=JlB,
         tz=tz,
         vth=vth,
+        hermite_window=hermite_window,
     )
     rhs = kpar_scale * (ladder_rhs + field_rhs)
     streamed = weight * _streaming_parallel_derivative(
@@ -284,6 +294,7 @@ def linked_streaming_contribution(
         linked_gather_map=linked_gather_map,
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
+        hermite_window=hermite_window,
     )
 
 
@@ -302,21 +313,25 @@ def _reflectionless_closure(
     linked_gather_map: jnp.ndarray | None,
     linked_gather_mask: jnp.ndarray | None,
     linked_use_gather: bool,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     """Return ``-R sqrt(M+1) v_th |k_par| G`` on the last Hermite moment only."""
 
     from gkx.operators.linear.streaming import abs_z_linked_fft, abs_z_periodic
 
     axis_m = -4
-    hermite_count = int(G.shape[axis_m])
+    local_count = int(G.shape[axis_m])
+    hermite_count = hermite_total_of(hermite_window, local_count)
     coefficient = hermite_closure_coefficient(hermite_count)
     if coefficient == 0.0:
         return jnp.zeros_like(G)
 
-    # Isolate the last moment; the closure must not touch any other m.
-    last = jnp.arange(hermite_count) == (hermite_count - 1)
+    # Isolate the last moment; the closure must not touch any other m. On a
+    # Hermite-sharded slab "last" means the last *global* moment, so every
+    # shard but the owner contributes zero.
+    last = hermite_index_of(hermite_window, local_count) == (hermite_count - 1)
     shape = [1] * G.ndim
-    shape[axis_m] = hermite_count
+    shape[axis_m] = local_count
     mask = last.reshape(shape)
     tail = jnp.where(mask, G, 0.0)
 
@@ -553,8 +568,10 @@ def diamagnetic_contribution(
     ky: jnp.ndarray,
     imag: jnp.ndarray,
     weight: jnp.ndarray,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
-    Nm = dG.shape[2]
+    Nm = hermite_total_of(hermite_window, dG.shape[2])
+    place = functools.partial(_hermite_mode_drive, hermite_window=hermite_window)
     tprim_s, fprim_s, omega_star_s, omega_star_bpar = _diamagnetic_scalar_factors(
         tprim=tprim,
         fprim=fprim,
@@ -575,7 +592,7 @@ def diamagnetic_contribution(
         omega_star_s=omega_star_s,
         omega_star_bpar=omega_star_bpar,
     )
-    drive = _hermite_mode_drive(dG, 0, drive_m0)
+    drive = place(dG, 0, drive_m0)
     if Nm > 2:
         drive_m2 = _diamagnetic_m2_drive(
             phi=phi,
@@ -586,7 +603,7 @@ def diamagnetic_contribution(
             omega_star_s=omega_star_s,
             omega_star_bpar=omega_star_bpar,
         )
-        drive = drive + _hermite_mode_drive(dG, 2, drive_m2)
+        drive = drive + place(dG, 2, drive_m2)
     if Nm > 1 and apar is not None:
         apar_drive = _diamagnetic_apar_profile_drive(
             apar=apar,
@@ -598,7 +615,7 @@ def diamagnetic_contribution(
             vth=vth,
             omega_star_s=omega_star_s,
         )
-        drive = drive + _hermite_mode_drive(dG, 1, apar_drive)
+        drive = drive + place(dG, 1, apar_drive)
     if Nm > 3 and apar is not None:
         drive_m3 = _diamagnetic_apar_temperature_drive(
             apar=apar,
@@ -607,5 +624,5 @@ def diamagnetic_contribution(
             vth=vth,
             omega_star_s=omega_star_s,
         )
-        drive = drive + _hermite_mode_drive(dG, 3, drive_m3)
+        drive = drive + place(dG, 3, drive_m3)
     return dG + weight * drive

@@ -12,16 +12,23 @@ from gkx.parallel.velocity_drive import (
     electrostatic_phi_shard_map,
 )
 from gkx.parallel.velocity_hermite import (
+    hermite_field_moment_head,
+    hermite_halo_extend,
+    hermite_halo_interior,
     hermite_neighbor_reference,
     hermite_neighbor_shard_map,
     hermite_shift_reference,
     hermite_shift_shard_map,
+    hermite_window_cache_arrays,
+    hermite_window_indices,
     velocity_field_reduce_reference,
     velocity_field_reduce_shard_map,
 )
 from gkx.parallel.velocity_plan import (
     VelocityShardingPlan,
+    build_species_hermite_mesh_plan,
     build_velocity_sharding_plan,
+    species_hermite_device_counts,
 )
 from gkx.parallel.velocity_streaming import (
     curvature_gradb_drift_reference,
@@ -97,6 +104,7 @@ def periodic_streaming_shard_map(
 
 __all__ = [
     "VelocityShardingPlan",
+    "build_species_hermite_mesh_plan",
     "build_velocity_sharding_plan",
     "curvature_gradb_drift_reference",
     "curvature_gradb_drift_shard_map",
@@ -104,16 +112,22 @@ __all__ = [
     "diamagnetic_drive_shard_map",
     "electrostatic_phi_reference",
     "electrostatic_phi_shard_map",
+    "hermite_field_moment_head",
+    "hermite_halo_extend",
+    "hermite_halo_interior",
     "hermite_neighbor_reference",
     "hermite_neighbor_shard_map",
     "hermite_shift_reference",
     "hermite_shift_shard_map",
     "hermite_streaming_ladder_reference",
     "hermite_streaming_ladder_shard_map",
+    "hermite_window_cache_arrays",
+    "hermite_window_indices",
     "mirror_drift_reference",
     "mirror_drift_shard_map",
     "periodic_streaming_reference",
     "periodic_streaming_shard_map",
+    "species_hermite_device_counts",
     "velocity_field_reduce_reference",
     "velocity_field_reduce_shard_map",
 ]
