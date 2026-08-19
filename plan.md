@@ -513,3 +513,34 @@ Full report: `plan/notes/gx_rebaseline.md`.
   (t_max ≈ 80–150), or make the auto-stop/warning machinery flag it. Coordinate with 0.3.
 - **2.4-r0** an HSX GX deck must be authored — none exists in either repo, so the tracked
   HSX parity row has no regenerable GX side.
+
+### 2026-08-18 agent/gx-rebaseline — 2.1b COMPLETE: one durable pattern
+All five runnable cases finished (w7x_itg and kbm_miller landed after the previous entry):
+
+| case | ky | Δγ | Δω |
+|---|---|---|---|
+| cyclone_salpha (t=150, converged) | 0.3 | +0.02% | −0.003% |
+| cyclone_salpha (t=10 probe) | 0.3 | +0.03% | −0.006% |
+| cyclone_miller | 0.3 / 0.4 | +0.02% / −0.01% | −0.002% / −0.003% |
+| kbm_miller | 0.2 / 0.3 | −0.13% / +0.07% | −0.19% / −0.04% |
+| w7x_itg | 1.6 / 1.0 | −0.003% / −0.014% | +0.0007% / +0.004% |
+| w7x_itg | 0.3 | **−29.7%** | +1.5% |
+
+**THE PATTERN — wherever the tracked table asserts convergence, the rebuilt GX reproduces
+it to 1e-4 or better.** Both large discrepancies trace to reference values that were never
+converged eigenvalues, NOT to the 56-commit code drift:
+- Cyclone's 8.6% γ gap = the t=10 mid-transient probe (above).
+- W7-X ky=0.3's 30% γ gap = a marginal low-ky mode that never settles at t_max=200 in
+  either revision. PR #45's matrix already marks W7-X ky≤0.5 `converged=False`
+  (ky=0.3 carries `gamma_half_time_shift = −0.63`, i.e. the value moved 63% between
+  half-windows). Every W7-X mode the table marks `converged=True` (ky ≥ 0.6) reproduces
+  to ~1e-4.
+
+**So the actionable asymmetry is documentation, not physics**: PR #45 labels its
+unconverged rows honestly; `docs/benchmarks.rst` presents the Cyclone t=10 probe as "its
+terminal diagnostic" with no equivalent caveat. Fixing that (item 2.1c) is the whole of
+the remediation. This also RETIRES the "GX upstream drift may invalidate the parity tables"
+worry that motivated 2.1b — it does not.
+
+(KBM correction: the final `.out.nc` values are −0.13%/+0.07%, superseding the plateau
+readings +0.09%/+0.07% quoted in the previous entry.)

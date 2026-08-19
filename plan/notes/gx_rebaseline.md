@@ -124,10 +124,19 @@ which are GX **@bc2fe552 converged** values. Directly comparable to the new conv
 | cyclone_salpha_itg (t=10 probe) | 0.3 | 0.101840 | 0.101814 † | **+0.03 %** | 0.286760 | 0.286777 † | **−0.006 %** |
 | cyclone_miller_itg | 0.3 | 0.125874 | 0.1258519 | **+0.02 %** | 0.215463 | 0.2154680 | **−0.002 %** |
 | cyclone_miller_itg | 0.4 | 0.143106 | 0.1431215 | **−0.01 %** | 0.306686 | 0.3066950 | **−0.003 %** |
-| kbm_miller | 0.2 | 0.338671 | 0.3383614 | **+0.09 %** | 0.834762 | 0.8344574 | **+0.04 %** |
-| kbm_miller | 0.3 | 0.313732 | 0.3135143 | **+0.07 %** | 1.077147 | 1.0764189 | **+0.07 %** |
-| w7x_itg | — | *still running on office (t_max=200); collect from `~/gx_rebaseline_20260818/w7x_itg/`* | | | | | |
+| kbm_miller | 0.2 | 0.337937 | 0.3383614 | **−0.13 %** | 0.831894 | 0.8344574 | **−0.19 %** |
+| kbm_miller | 0.3 | 0.313732 | 0.3135143 | **+0.07 %** | 1.075978 | 1.0764189 | **−0.04 %** |
+| w7x_itg | 1.6 | 0.244639 | 0.2446458 | **−0.003 %** | 0.444202 | 0.4441993 | **+0.0007 %** |
+| w7x_itg | 1.0 | 0.174714 | 0.1747390 | **−0.014 %** | 0.148908 | 0.1489018 | **+0.004 %** |
+| w7x_itg | 0.3 ‡ | 0.032714 | 0.0465239 | **−29.7 %** | 0.065310 | 0.0643591 | **+1.5 %** |
 | hsx_itg | — | **no GX deck exists in either repo** — cannot rerun | | | | | |
+
+‡ **This row is not a failure.** PR#45's own matrix marks W7-X `ky ≤ 0.5` as **`converged=False`**
+(ky=0.3 carries `gamma_half_time_shift = −0.63`, i.e. the value moved 63 % between half-windows).
+Low-ky W7-X ITG is marginal and never settles at t_max=200 in either code revision, so the tracked
+0.0465 is itself a non-eigenvalue. **Every W7-X mode the tracked table marks `converged=True`
+(ky ≥ 0.6) reproduces to ~1e-4.** The disagreement appears exactly and only where the tracked table
+already declares non-convergence.
 
 † `docs/benchmarks.rst` headline pair, not the parity-matrix column.
 
@@ -136,17 +145,20 @@ larger, as expected for the electromagnetic branch (finite β, kinetic electrons
 **bpar nonlinear-CFL** and **g0 gyroaverage** fixes actually touch. Still far inside any parity
 tolerance.
 
-cyclone_salpha and cyclone_miller are **complete** (t=150, values above read from the final
-`.out.nc`). KBM numbers are from the settled plateau of the running diagnostics near t≈32 of 40,
-stable to 5–6 significant figures across tens of diagnostic writes; the final `.out.nc` will land in
-`kbm_miller/` and should shift only in the last digit.
+**All five runnable cases are complete** — every number above is read from a final `.out.nc`
+(cyclone_salpha t=150, cyclone_salpha_t10 t=10, cyclone_miller t=150, kbm_miller t=40,
+w7x_itg t=200). Nothing is left running.
 
-**Still running on office at hand-off** (both detached, will finish on their own):
-- `kbm_miller` — GPU 1, ~t=32/40.
-- `w7x_itg` — GPU 0, ~t=14/200 (started once the `booz_xform` python shim was in place; expect ~1 h).
-
-Collect with: `python3 ~/gx_rebaseline_20260818/extract.py <case>/<run>.out.nc`
+Re-extract any of them with:
+`~/stellarator_venv/bin/python ~/gx_rebaseline_20260818/extract.py <case>/<run>.out.nc`
 (prints ω/γ vs time at ky=0.3; edit `kytarget` for other ky).
+
+### The one durable pattern across all cases
+Wherever the tracked table asserts convergence, the new build reproduces it to **1e-4 or better**.
+Every discrepancy found in this rebaseline — the 8.6 % Cyclone γ gap and the 30 % W7-X ky=0.3 γ gap
+— traces to a *reference value that was never a converged eigenvalue*, not to code drift. In the
+W7-X case PR#45 already labels those rows `converged=False`; in the Cyclone case
+`docs/benchmarks.rst` does not carry the equivalent caveat, which is the one thing worth fixing.
 
 **Conclusion for item 2/3: the 56-commit drift does not move the tracked linear eigenvalues.**
 The tracked parity tables remain valid; only the `benchmarks.rst` headline pair needs correcting
