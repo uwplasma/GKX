@@ -36,7 +36,6 @@ dependencies = [
   # The VMEC geometry path hard-requires the booz_xform_jax bridge
   # (gkx.geometry.backend_discovery).
   "booz_xform_jax",
-  "tomli; python_version < '3.11'",
   "tqdm",
 ]
 
