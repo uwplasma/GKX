@@ -775,11 +775,11 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
                 title=f"GKX linear runtime: {base.name}",
             )
         elif kind == "linear_scan":
-            _summary, ky, gamma, omega = _load_linear_scan_bundle(base)
+            _summary, scan_ky, scan_gamma, scan_omega = _load_linear_scan_bundle(base)
             fig, _axes = scan_comparison_figure(
-                ky,
-                gamma,
-                omega,
+                scan_ky,
+                scan_gamma,
+                scan_omega,
                 r"$k_y \rho_i$",
                 f"GKX linear scan: {base.name}",
             )
