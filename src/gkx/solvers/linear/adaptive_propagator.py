@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax.typing import DTypeLike
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
@@ -22,19 +23,20 @@ from gkx.solvers.linear.krylov_propagator import (
     dominant_eigenpairs_propagator_cached,
 )
 
+_RESIDUAL_NOISE_EPS = 1.0e3
 
-def certifiable_residual_tolerance(tol: float, dtype: Any) -> float:
-    """Floor a residual gate at what ``dtype`` arithmetic can certify.
 
-    A relative eigenpair residual below roughly ``1000 * eps`` of the working
-    precision is indistinguishable from rounding noise, so gating tighter than
-    that rejects converged pairs instead of wrong ones. The runtime CLI path
-    builds complex64 states, where the floor is ~1.192e-4; float64 keeps any
-    reasonable configured tolerance unchanged.
+def certifiable_residual_tolerance(tol: float, dtype: DTypeLike) -> float:
+    """Raise a residual gate to the noise floor of the arithmetic feeding it.
+
+    A relative residual bottoms out a few ``eps`` above zero at every precision,
+    so an absolute gate that is comfortable in ``float64`` can sit below
+    anything ``float32`` can ever produce. Such a gate certifies nothing and
+    only burns restarts on an answer that is already as good as the dtype
+    allows. A request the working precision can reach is honored unchanged.
     """
 
-    eps = float(jnp.finfo(jnp.real(jnp.zeros((), dtype=dtype)).dtype).eps)
-    return max(float(tol), 1000.0 * eps)
+    return max(float(tol), _RESIDUAL_NOISE_EPS * float(np.finfo(np.dtype(dtype)).eps))
 
 
 class AdaptivePropagatorSolution(NamedTuple):
@@ -133,6 +135,11 @@ def adaptive_propagator_eigenpair(
     fallback when a left vector is unavailable. This follows one physical mode
     through a growth-rate crossing instead of silently switching to the newly
     dominant branch.
+
+    ``tol`` gates a relative residual built from operator applications in the
+    dtype of ``v0``, so it is raised to that dtype's noise floor. The default
+    is a strict ``float64`` gate; the same call certifies in ``float32`` at the
+    tightest residual single precision can actually deliver.
     """
 
     try:
@@ -162,6 +169,7 @@ def adaptive_propagator_eigenpair(
         raise ValueError("continuation_overlap_floor must be non-negative")
     if continuation_spectral_gap_floor < 0.0:
         raise ValueError("continuation_spectral_gap_floor must be non-negative")
+    tol = certifiable_residual_tolerance(tol, v0.dtype)
     selection_reference = (
         continuation_covector
         if continuation_covector is not None

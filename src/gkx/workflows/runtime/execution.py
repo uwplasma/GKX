@@ -87,6 +87,7 @@ def build_runtime_linear_dispatch_deps(scope: Any) -> RuntimeLinearDispatchDeps:
             fit_growth_rate_auto_with_stats=scope.fit_growth_rate_auto_with_stats,
             fit_growth_rate_auto=scope.fit_growth_rate_auto,
             fit_growth_rate=scope.fit_growth_rate,
+            fit_growth_rate_with_stats=scope.fit_growth_rate_with_stats,
             extract_eigenfunction=scope.extract_eigenfunction,
         ),
     )
