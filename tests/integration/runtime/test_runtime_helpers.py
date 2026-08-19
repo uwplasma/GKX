@@ -13,6 +13,13 @@ import gkx.workflows.runtime.orchestration_artifacts as runtime_artifacts
 import gkx.workflows.runtime.commands as runtime_commands
 import gkx.workflows.runtime.policies as runtime_policies
 from gkx.diagnostics.analysis import ModeSelection
+from gkx.diagnostics.growth_rates import (
+    fit_growth_rate,
+    fit_growth_rate_auto,
+    fit_growth_rate_auto_with_stats,
+    fit_growth_rate_with_stats,
+)
+from gkx.diagnostics.modes import extract_mode_time_series
 from gkx.workflows.runtime.diagnostics import fit_runtime_linear_diagnostics
 from gkx.workflows.runtime.diagnostics import (
     RuntimeQuasilinearFinalizationDeps,
@@ -27,6 +34,9 @@ from gkx.workflows.runtime.results import (
     RuntimeNonlinearResult,
 )
 from gkx.workflows.runtime.orchestration_scan import (
+    _BatchDiagnostics,
+    _fit_batch_scan_point,
+    _RuntimeScanOptions,
     run_runtime_scan_ky_task,
 )
 from gkx.workflows.runtime.diagnostics import _prepare_runtime_linear_fit_inputs
@@ -994,6 +1004,146 @@ def test_fit_runtime_linear_diagnostics_auto_selects_best_scored_channel() -> No
     np.testing.assert_allclose(out.signal, density[:, 0, 0, 0])
 
 
+def _two_phase_channel(
+    t: np.ndarray,
+    *,
+    early_gamma: float,
+    early_omega: float,
+    late_gamma: float,
+    late_omega: float,
+    t_break: float,
+) -> np.ndarray:
+    """Build a channel whose growth rate changes at ``t_break``.
+
+    The requested window sees ``late_gamma``/``late_omega`` only; any window the
+    automatic selector picks for itself includes the faster early phase, so a
+    discarded window shows up as a different gamma rather than a rounding
+    difference.
+    """
+
+    early = np.exp((early_gamma - 1j * early_omega) * t)
+    late = np.exp((early_gamma - 1j * early_omega) * t_break) * np.exp(
+        (late_gamma - 1j * late_omega) * (t - t_break)
+    )
+    return np.where(t < t_break, early, late).astype(np.complex128)
+
+
+def _fixed_window_fit_case() -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+    """Time base, phi/density histories, and the pinned-window fit options."""
+
+    t = np.linspace(0.0, 4.0, 401)
+    phi = _two_phase_channel(
+        t,
+        early_gamma=1.0,
+        early_omega=0.3,
+        late_gamma=0.2,
+        late_omega=0.5,
+        t_break=2.0,
+    )
+    density = _two_phase_channel(
+        t,
+        early_gamma=0.8,
+        early_omega=0.1,
+        late_gamma=0.35,
+        late_omega=0.9,
+        t_break=2.0,
+    )
+    options = {
+        "mode_method": "z_index",
+        "auto_window": False,
+        "tmin": 3.0,
+        "tmax": 4.0,
+        "window_fraction": 0.3,
+        "min_points": 20,
+        "start_fraction": 0.0,
+        "growth_weight": 1.0,
+        "require_positive": True,
+        "min_amp_fraction": 0.0,
+    }
+    return t, phi[:, None, None, None], density[:, None, None, None], options
+
+
+def test_auto_fit_signal_keeps_the_requested_runtime_window() -> None:
+    """'auto' selects the channel; an explicit window still decides the fit."""
+
+    t, phi, density, options = _fixed_window_fit_case()
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    z = np.asarray([0.0])
+
+    auto = fit_runtime_linear_diagnostics(
+        t=t,
+        phi_t=phi,
+        density_t=density,
+        selection=sel,
+        z=z,
+        fit_signal="auto",
+        **options,
+    )
+    explicit = fit_runtime_linear_diagnostics(
+        t=t,
+        phi_t=phi,
+        density_t=density,
+        selection=sel,
+        z=z,
+        fit_signal=auto.fit_signal_used,
+        **options,
+    )
+
+    assert auto.gamma == explicit.gamma
+    assert auto.omega == explicit.omega
+    assert auto.fit_window_tmin == pytest.approx(3.0)
+    assert auto.fit_window_tmax == pytest.approx(4.0)
+    # growth_weight=1.0 scores the faster late-phase channel higher, and the
+    # window it is scored over is the requested one, not an auto-selected one.
+    assert auto.fit_signal_used == "density"
+    assert auto.gamma == pytest.approx(0.35, rel=1e-6)
+    assert auto.omega == pytest.approx(0.9, rel=1e-6)
+
+
+def test_auto_fit_signal_keeps_the_requested_window_in_a_batched_scan() -> None:
+    """The combined-ky scan path selects a channel, not a window, too."""
+
+    t, phi, density, options = _fixed_window_fit_case()
+    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
+    diagnostics = _BatchDiagnostics(phi_t=phi, density_t=density, time=t)
+    deps = SimpleNamespace(
+        extract_mode_time_series=extract_mode_time_series,
+        fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats,
+        fit_growth_rate_auto=fit_growth_rate_auto,
+        fit_growth_rate=fit_growth_rate,
+        fit_growth_rate_with_stats=fit_growth_rate_with_stats,
+    )
+    scan_options = _RuntimeScanOptions(
+        method=None,
+        dt=None,
+        steps=None,
+        sample_stride=None,
+        fit_signal="auto",
+        show_progress=False,
+        **options,
+    )
+
+    gamma_auto, omega_auto = _fit_batch_scan_point(
+        diagnostics,
+        sel,
+        fit_key="auto",
+        options=scan_options,
+        deps=deps,
+    )
+    gamma_density, omega_density = _fit_batch_scan_point(
+        diagnostics,
+        sel,
+        fit_key="density",
+        options=scan_options,
+        deps=deps,
+    )
+
+    assert gamma_auto == gamma_density
+    assert omega_auto == omega_density
+    assert gamma_auto == pytest.approx(0.35, rel=1e-6)
+    assert omega_auto == pytest.approx(0.9, rel=1e-6)
+
+
 def test_finalize_runtime_linear_quasilinear_contract() -> None:
     cfg = replace(
         _base_cfg(),
@@ -1169,6 +1319,40 @@ def test_linear_history_rejects_nonfinite_trajectories(
         z=np.ones(1),
         fit_signal="auto",
     )
+
+
+def test_linear_fit_rejects_overflowing_trajectory() -> None:
+    """Finite-but-overflowed histories must fail loudly, naming the timestep."""
+
+    t = np.linspace(0.0, 10.0, 64)
+    # Synthetic unstable run: still finite everywhere but overflow-scale
+    # (~1e102 at the end), the regime a plain finite mask fits confidently.
+    phi = np.exp((23.5 + 0.3j) * t)[:, None, None, None] * np.ones(
+        (1, 1, 1, 2), dtype=np.complex128
+    )
+    assert np.all(np.isfinite(phi))
+
+    with pytest.raises(
+        FloatingPointError, match=r"overflowing field history.*timestep instability"
+    ):
+        fit_runtime_linear_diagnostics(
+            t=t,
+            phi_t=phi,
+            density_t=None,
+            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+            z=np.asarray([-1.0, 1.0]),
+            fit_signal="phi",
+            mode_method="z_index",
+            auto_window=True,
+            tmin=None,
+            tmax=None,
+            window_fraction=1.0,
+            min_points=3,
+            start_fraction=0.0,
+            growth_weight=0.0,
+            require_positive=True,
+            min_amp_fraction=0.0,
+        )
 
 
 def test_runtime_wrapper_patch_surfaces(monkeypatch: pytest.MonkeyPatch) -> None:

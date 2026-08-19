@@ -304,7 +304,7 @@ def _surface_indices_for_stencil(
     surface_stencil_width: int | None,
     ns_full: int,
     torflux: float,
-) -> jnp.ndarray | None:
+) -> np.ndarray | None:
     if surface_stencil_width is None:
         return None
     ns_b_est = max(1, int(ns_full) - 1)
@@ -312,7 +312,8 @@ def _surface_indices_for_stencil(
     center = int(round(float(torflux) * float(ns_b_est) - 0.5))
     half_width = width // 2
     start = max(0, min(center - half_width, ns_b_est - width))
-    return jnp.arange(start, start + width, dtype=jnp.int32)
+    # Static metadata must stay outside the differentiated physics graph.
+    return np.arange(start, start + width, dtype=np.int32)
 
 
 def _boozer_xform_inputs_from_state(
@@ -350,7 +351,7 @@ def _run_boozer_transform_from_state(
     *,
     jit: bool,
     surface_stencil_width: int | None,
-) -> tuple[dict[str, Any], jnp.ndarray | None]:
+) -> tuple[dict[str, Any], np.ndarray | None]:
     boozer_tables_mod, bx = _import_vmex_boozer_modules()
     surface_indices = _surface_indices_for_stencil(
         surface_stencil_width=surface_stencil_width,
@@ -733,7 +734,7 @@ def _assemble_core_mapping(
     metric_drift: _MetricDriftProfiles,
     *,
     surface_stencil_width: int | None,
-    surface_indices: jnp.ndarray | None,
+    surface_indices: np.ndarray | None,
 ) -> dict[str, Any]:
     eps = jnp.asarray(1.0e-30, dtype=request.base_Rcos.dtype)
     return {
@@ -785,7 +786,7 @@ def _core_mapping_from_boozer_output(
     wout: Any,
     alpha: float,
     surface_stencil_width: int | None,
-    surface_indices: jnp.ndarray | None,
+    surface_indices: np.ndarray | None,
 ) -> dict[str, Any]:
     """Assemble solver-facing core profiles from Boozer transform output."""
 

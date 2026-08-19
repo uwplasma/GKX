@@ -92,6 +92,10 @@ class AdaptiveChunkResult:
     diagnostics: SimulationDiagnostics
     state: Any
     fields: FieldState
+    # Last stop_condition decision, when one was supplied. Carries the
+    # measured saturation window statistics whether or not the run stopped
+    # before t_max.
+    stop_decision: dict[str, Any] | None = None
 
 
 _TIME_PROGRESS_EPS = 1.0e-12
@@ -238,11 +242,18 @@ def run_adaptive_runtime_chunk_loop(
     diagnostics_stride: int = 1,
     max_chunks: int = 100000,
     spill_dir: Path | None = None,
+    stop_condition: Callable[[np.ndarray, np.ndarray, np.ndarray], dict[str, Any]]
+    | None = None,
 ) -> AdaptiveChunkResult:
     """Run repeated diagnostic chunks until ``t_max`` is reached.
 
     ``integrate_chunk`` must return ``(t_chunk, diag_chunk, state, fields)`` in
     the same contract used by the runtime integrators.
+
+    ``stop_condition`` is evaluated after every chunk on the accumulated
+    *unstrided* ``(t, heat_flux, Wphi)`` traces and returns a decision dict;
+    a truthy ``"stop"`` key ends the loop before ``t_max``. The last decision
+    is returned on the result either way.
     """
 
     def _status(message: str) -> None:
@@ -256,6 +267,10 @@ def run_adaptive_runtime_chunk_loop(
     # global indices it would have kept after concatenation.
     samples_seen = 0
     diag_chunks: list[SimulationDiagnostics] = []
+    # Accumulated unstrided stop-check traces: three floats per sample, so the
+    # stop check sees the full-resolution series even when output is strided.
+    trace_chunks: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+    stop_decision: dict[str, Any] | None = None
     spill_paths: list[Path] = []
     if spill_dir is not None:
         spill_dir.mkdir(parents=True, exist_ok=True)
@@ -284,6 +299,14 @@ def run_adaptive_runtime_chunk_loop(
             chunk_index=chunk_index,
         )
         t_elapsed = t_next
+        if stop_condition is not None:
+            trace_chunks.append(
+                (
+                    np.asarray(diag_chunk.t, dtype=float),
+                    np.asarray(diag_chunk.heat_flux_t, dtype=float),
+                    np.asarray(diag_chunk.Wphi_t, dtype=float),
+                )
+            )
         chunk_samples = int(np.asarray(diag_chunk.t).shape[0])
         if stride > 1:
             diag_chunk = stride_runtime_diagnostics(
@@ -305,6 +328,15 @@ def run_adaptive_runtime_chunk_loop(
             elapsed_seconds=wall_elapsed,
         )
         _status(message)
+        if stop_condition is not None:
+            stop_decision = stop_condition(
+                np.concatenate([chunk[0] for chunk in trace_chunks]),
+                np.concatenate([chunk[1] for chunk in trace_chunks]),
+                np.concatenate([chunk[2] for chunk in trace_chunks]),
+            )
+            if bool(stop_decision.get("stop")):
+                _status(f"stopping {label} integration at t={t_elapsed:.6g}")
+                break
         if t_elapsed >= float(t_max):
             break
     else:
@@ -323,4 +355,5 @@ def run_adaptive_runtime_chunk_loop(
         diagnostics=diag,
         state=state_chunk,
         fields=fields_final,
+        stop_decision=stop_decision,
     )

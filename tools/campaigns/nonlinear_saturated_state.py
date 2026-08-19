@@ -1,6 +1,6 @@
 """Reach a genuinely saturated nonlinear state, using GKX's own production stepper.
 
-The gradient-window measurement (``nonlinear_gradient_window.py``) needs a
+The nonlinear heat-flux adjoint needs a
 trajectory that has actually saturated. A hand-rolled fixed-step integrator
 cannot supply one: the E x B nonlinearity imposes a CFL condition that tightens
 as the amplitude grows, so a step size that is stable through the linear phase
@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -57,7 +58,11 @@ def integrated_autocorrelation_time(
 
 
 def saturation_report(
-    times: np.ndarray, flux: np.ndarray, *, min_tau_multiples: float
+    times: np.ndarray,
+    flux: np.ndarray,
+    *,
+    min_tau_multiples: float,
+    require_growth_from_seed: bool = True,
 ) -> dict[str, Any]:
     """Judge saturation on the production heat-flux trace."""
 
@@ -86,7 +91,7 @@ def saturation_report(
     checks = {
         "flux_is_finite": bool(np.all(np.isfinite(flux))),
         "stopped_trending": bool(drift < 0.25),
-        "grew_from_seed": bool(grown > 10.0),
+        "grew_from_seed": bool(grown > 10.0 or not require_growth_from_seed),
         "tau_resolved": bool(resolved),
         "window_long_enough": bool(windows >= min_tau_multiples),
     }
@@ -97,6 +102,7 @@ def saturation_report(
         "window_in_tau_ac": windows,
         "late_drift": float(drift),
         "growth_over_start": float(grown),
+        "growth_from_seed_required": bool(require_growth_from_seed),
         "late_mean_flux": float(late_q.mean()),
     }
 
@@ -115,6 +121,13 @@ def main() -> int:
     parser.add_argument("--nz", type=int, default=None)
     parser.add_argument("--t-max", type=float, default=None)
     parser.add_argument("--min-tau-multiples", type=float, default=10.0)
+    parser.add_argument(
+        "--initial-state",
+        type=Path,
+        default=None,
+        help="optional npz continuation state; unlike the gradient campaign, "
+        "this may be marked unsaturated because the purpose is to finish it",
+    )
     parser.add_argument("--state-out", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
@@ -156,14 +169,52 @@ def main() -> int:
             flush=True,
         )
 
+    n_laguerre = int(raw.get("run", {}).get("Nl", 4))
+    n_hermite = int(raw.get("run", {}).get("Nm", 8))
+    previous_t_end = 0.0
+
+    def run(config):
+        return run_runtime_nonlinear(
+            config,
+            Nl=n_laguerre,
+            Nm=n_hermite,
+            return_state=True,
+            diagnostics=True,
+        )
+
     started = time.time()
-    result = run_runtime_nonlinear(
-        runtime,
-        Nl=int(raw.get("run", {}).get("Nl", 4)),
-        Nm=int(raw.get("run", {}).get("Nm", 8)),
-        return_state=True,
-        diagnostics=True,
-    )
+    if args.initial_state is None:
+        result = run(runtime)
+    else:
+        archive = np.load(args.initial_state)
+        continuation_state = np.asarray(archive["state"])
+        expected_shape = (
+            len(runtime.species),
+            n_laguerre,
+            n_hermite,
+            runtime.grid.Ny,
+            runtime.grid.Nx,
+            runtime.grid.Nz,
+        )
+        if continuation_state.shape != expected_shape:
+            raise SystemExit(
+                f"continuation shape {continuation_state.shape} != {expected_shape}"
+            )
+        previous_t_end = float(archive["t_end"]) if "t_end" in archive else 0.0
+        with tempfile.TemporaryDirectory(prefix="gkx-saturation-continuation-") as temp:
+            restart_file = Path(temp) / "restart.bin"
+            np.asarray(continuation_state, dtype=np.complex64).tofile(restart_file)
+            continuation_runtime = dataclasses.replace(
+                runtime,
+                init=dataclasses.replace(
+                    runtime.init,
+                    init_file=str(restart_file),
+                    init_file_scale=1.0,
+                    init_file_mode="replace",
+                    init_amp=0.0,
+                ),
+            )
+            result = run(continuation_runtime)
     elapsed = time.time() - started
 
     diagnostics = result.diagnostics
@@ -173,7 +224,12 @@ def main() -> int:
     flux = np.asarray(diagnostics.heat_flux_t, dtype=float)
     steps_dt = np.asarray(diagnostics.dt_t, dtype=float)
 
-    report = saturation_report(times, flux, min_tau_multiples=args.min_tau_multiples)
+    report = saturation_report(
+        times,
+        flux,
+        min_tau_multiples=args.min_tau_multiples,
+        require_growth_from_seed=args.initial_state is None,
+    )
     print(
         f"\nran {times.size} samples to t={times[-1]:.1f} in {elapsed:.1f}s", flush=True
     )
@@ -200,7 +256,7 @@ def main() -> int:
             args.state_out,
             state=np.asarray(result.state),
             saturated=report["saturated"],
-            t_end=times[-1],
+            t_end=previous_t_end + times[-1],
             # The step the trajectory was actually produced with. Without it the
             # consumer has to be told by hand, and a mismatched --dt silently
             # rescales its time axis: every t/tau_ac it reports would be wrong
@@ -215,6 +271,10 @@ def main() -> int:
         "kind": "nonlinear_saturated_state",
         "claim_level": "production_adaptive_stepper_saturation_check",
         "case": args.toml.name,
+        "initial_state": None
+        if args.initial_state is None
+        else str(args.initial_state),
+        "previous_t_end": previous_t_end,
         "grid_override": grid_override,
         "t_max": float(time_cfg.t_max),
         "fixed_dt": bool(time_cfg.fixed_dt),
