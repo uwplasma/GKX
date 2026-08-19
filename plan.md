@@ -779,3 +779,13 @@ dropped off the API page.
 budget with a written reason, (2) per-module 1000-line cap, (3) a coverage owner in the
 validation-coverage manifest, (4) a `docs/api.rst` automodule entry.** None of these is
 caught by a local `pytest` run. Add this to `docs/testing.rst` in the Phase 5 CI pass.
+
+### 2026-08-18 RJ — floor move followed through; ALL SEVEN WORK PRs GREEN
+The 3.11 floor had a tail: `tomli` carries the marker `python_version < '3.11'`, so after the
+bump it could never install, yet the floor job's own check imported it (and asserted 3.10).
+Removed the now-unsatisfiable dependency and pointed the check at stdlib `tomllib`, which the
+`gkx.utils.tomlcompat` shim already uses on every supported interpreter. A dead dependency
+that CI was silently relying on — worth remembering when the floor moves again.
+
+**State at handoff: #50–#56 all passing CI** (#50 last shard pending at time of writing).
+Task #16/#17 of the session board are complete; the plan board above is authoritative.
