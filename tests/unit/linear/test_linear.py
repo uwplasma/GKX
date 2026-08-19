@@ -1,5 +1,7 @@
 """Linear operator tests for the flux-tube electrostatic model."""
 
+from dataclasses import replace
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -2074,3 +2076,54 @@ def test_apar_streaming_coupling_changes_rhs():
     dG0, _phi0 = linear_rhs_cached(G, cache, params_base, terms=LinearTerms())
     dG1, _phi1 = linear_rhs_cached(G, cache, params_beta, terms=LinearTerms())
     assert jnp.max(jnp.abs(dG1 - dG0)) > 0.0
+
+
+def test_linked_boundary_growth_gradient_matches_finite_difference() -> None:
+    """The sheared flux-tube boundary differentiates, not only the periodic one.
+
+    Building the cache inside a trace used to fail closed on twist-shift
+    boundaries, so every gradient test had to fall back to ``periodic``. The
+    link topology is integer and stays on the host; only the drive is traced.
+    """
+
+    cfg = CycloneBaseCase(
+        grid=GridConfig(Nx=4, Ny=8, Nz=16, Lx=6.0, Ly=6.0, boundary="linked")
+    )
+    grid = build_spectral_grid(cfg.grid)
+    geom = sample_flux_tube_geometry(SAlphaGeometry.from_config(cfg.geometry), grid.z)
+    base_params = LinearParams()
+    Nl, Nm = 2, 4
+    tprim = jnp.asarray(6.9)
+
+    cache = build_linear_cache(
+        grid, geom, replace(base_params, tprim=tprim), Nl, Nm
+    )
+    assert bool(cache.use_twist_shift)
+    assert int(cache.jtwist) != 0
+
+    profile = 1.0e-3 * (1.0 + 0.2 * jnp.cos(grid.z))
+    G0 = jnp.zeros(
+        (Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
+    )
+    G0 = G0.at[0, 0, 1, 0, :].set(profile * (1.0 + 0.35j * jnp.sin(grid.z)))
+
+    dt, steps = 0.05, 20
+
+    def growth(drive: jnp.ndarray) -> jnp.ndarray:
+        params = replace(base_params, tprim=drive)
+        traj, _fields = integrate_linear(
+            G0, grid, geom, params, dt, steps, sample_stride=steps
+        )
+        energy = jnp.real(jnp.vdot(traj[-1], traj[-1]))
+        return 0.5 * jnp.log(energy) / (dt * steps)
+
+    forward = jax.jit(growth)
+    gradient = jax.jit(jax.grad(growth))(tprim)
+    step = jnp.asarray(0.05)
+    centered_fd = (forward(tprim + step) - forward(tprim - step)) / (2.0 * step)
+
+    assert bool(jnp.isfinite(gradient))
+    assert float(gradient) != 0.0
+    np.testing.assert_allclose(
+        np.asarray(gradient), np.asarray(centered_fd), rtol=2.0e-2, atol=1.0e-6
+    )
