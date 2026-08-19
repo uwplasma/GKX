@@ -182,13 +182,13 @@ Status: `ready-to-commit` = finished patch in plan/patches, needs review+commit 
 | 0.1 | krylov fix + adaptive default | **PR open: [#52](https://github.com/uwplasma/GKX/pull/52)** branch `fix/krylov-certified-default` | `plan/patches/krylov_fix.patch` (+165/−4, incl. regression test) | rebased onto main |
 | 0.2/0.4/0.5/0.6 | overflow guard, --plot scan, drift fixes, dep floors | **PR open: [#50](https://github.com/uwplasma/GKX/pull/50)** branch `fix/phase0-robustness` (89 tests green) | `plan/patches/phase0_bundle.patch` | rebased onto main |
 | 1.1 | `gkx wout.nc` UX + common_input.toml | **PR open: [#51](https://github.com/uwplasma/GKX/pull/51)** branch `feat/wout-cli` (42 CLI tests green) | `plan/patches/wout_ux.patch` | rebased onto main |
-| 1.2 | auto-stop run_to="saturation" | **partial** (+559/−48; implementation ~complete, agent died at verification: byte-identical t_max check + saturation integration run + docs) | `plan/patches/autostop_partial.patch`, worktree `autostop` | 7cf5e6d1 |
+| 1.2 | auto-stop run_to="saturation" | **PR open: [#54](https://github.com/uwplasma/GKX/pull/54)** `feat/run-to-saturation` (129 tests green on main; stops at t=128/200) | patch `autostop.patch` | rebased onto main |
 | 0.3 | fit robustness (stationary windows, γ±stderr, warnings) | **partial** (+380/−7; agent died updating CLI print sites; must then verify vs certified eigenvalue per finding #2) | `plan/patches/fitrobust_partial.patch`, worktree `fitrobust` | 7cf5e6d1 |
-| 1.3a | plot library (snapshots module, flux/spectra figures) | **partial** (+1266/−128; figures render, agent died fixing x-y title/colorbar collision, then final QA + tests rerun) | `plan/patches/plots_partial.patch`, worktree `plots` | 7cf5e6d1 |
+| 1.3a | plot library (snapshots module, flux/spectra figures) | **PR open: [#53](https://github.com/uwplasma/GKX/pull/53)** `feat/plot-library` (38 tests green; 3 real-data collisions fixed) | patch `plots_lib.patch` | rebased onto main |
 | 2.1 | GX office re-baseline | **done** (rebuilt @3865a537; reference re-runs still todo → 2.1b) | `plan/notes/gx_Makefile.office` | — |
 | 2.2 | finite-beta equilibria + geometry audit | **done (start)**; path-B fix → item 3.2b | `plan/decks/*`, `plan/notes/finite_beta_findings.md` | — |
 | 2.3 | stella build + study | **done** | `plan/notes/stella_study.md` | — |
-| 2.4-r1 | stella↔GKX CBC rung | **partial** — scans done, √2 convention found; final table + certified-krylov cross-check unfinished | `plan/notes/stella_vs_gkx_runs.md` + `make_comparison.py` | — |
+| 2.4-r1 | stella↔GKX CBC rung | **done — PASSES** (\|Δγ\|≤2.8%, \|Δω\|≤1.9%, 6 ky points); √2 conversion triple-verified | `plan/notes/stella_vs_gkx_rung1.md` | — |
 | 4.1 | parallelization design | **done** | `plan/notes/parallelization_design.md` | — |
 | 0.7 | latest-JAX venv | **done** | `~/.venvs/gkx-jax-latest` | — |
 
@@ -436,3 +436,20 @@ Known follow-up (deliberately not done here): `sokal_autocorrelation_time` in
 `transport_windows.py` and `integrated_autocorrelation_time` in `analysis.py` are now
 near-duplicate FFT estimators in sibling modules. Consolidating touches a numerically
 validated gate path and inverts module layering — belongs in the Phase 5 slimming pass.
+
+### 2026-08-18 RJ — SIX WORK PRs NOW OPEN
+Implementation PRs opened off `main`, all authored by rogeriojorge, all with green local
+tests: **[#50](https://github.com/uwplasma/GKX/pull/50)** phase-0 robustness (89) ·
+**[#51](https://github.com/uwplasma/GKX/pull/51)** wout CLI (42) ·
+**[#52](https://github.com/uwplasma/GKX/pull/52)** krylov certified default (γ=0.088930
+re-verified on a main-based branch) · **[#53](https://github.com/uwplasma/GKX/pull/53)**
+plot library (38) · **[#54](https://github.com/uwplasma/GKX/pull/54)** run-to-saturation
+(129). Plus **[#49](https://github.com/uwplasma/GKX/pull/49)** = this plan.
+
+**Suggested merge order** (pre-existing queue first, then new work):
+`#46 → #47 → #44 → #48 → #45`, then `#50 → #52 → #53 → #54 → #51`.
+Conflict notes: #52 duplicates #47's `certifiable_residual_tolerance` helper (keep either);
+#53 is append-only in `plotting.py` and #50 adds the `plot_saved_output` linear_scan branch
+there, so **#50 before #53**; #54 touches `docs/inputs.rst`, `cli.py` and `config.py`, which
+#50 and #51 also touch — expect small textual conflicts, no semantic ones.
+Worktrees backing these: `GKX-worktrees/{applytest,woutpr,krylovpr,plotspr,autostoppr}`.
