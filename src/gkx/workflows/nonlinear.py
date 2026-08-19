@@ -15,6 +15,10 @@ from jax.typing import ArrayLike
 from gkx.artifacts.io import write_netcdf_restart_state
 from gkx.core.grid import build_spectral_grid
 from gkx.diagnostics.analysis import fit_growth_rate
+from gkx.diagnostics.saturation import (
+    SaturationStopConfig,
+    saturation_stop_decision,
+)
 from gkx.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry
 from gkx.workflows.runtime.config import RuntimeConfig, RuntimeExpertConfig
 from gkx.workflows.runtime.parallel_nonlinear import (
@@ -235,7 +239,45 @@ def _diagnostic_kwargs(
     )
 
 
-def _run_adaptive_diagnostics(
+_RUN_TO_VALUES = ("saturation", "t_max")
+
+
+def _saturation_stop_condition(
+    cfg: RuntimeConfig, ctx: _RunContext, policy: _DiagnosticPolicy
+) -> Callable[[Any, Any, Any], dict[str, Any]] | None:
+    """Build the run-to-saturation stop check, or ``None`` to run to t_max.
+
+    Saturation stopping needs the streamed heat-flux trace, so a run with
+    diagnostics disabled falls back to the t_max horizon. So does a run whose
+    whole step budget is shorter than the minimum sample count: it could never
+    reach a stop decision, and routing it through the chunk loop would only
+    add machinery around the same integration.
+    """
+
+    run_to = str(cfg.time.run_to).strip().lower()
+    if run_to not in _RUN_TO_VALUES:
+        raise ValueError(f"unknown [time] run_to '{cfg.time.run_to}'")
+    if run_to != "saturation" or not policy.diagnostics_on:
+        return None
+    stop_cfg = SaturationStopConfig(
+        rel_sem=float(cfg.time.saturation_rel_sem),
+        min_window=(
+            None
+            if cfg.time.saturation_min_window is None
+            else float(cfg.time.saturation_min_window)
+        ),
+    )
+    # The chunked route records one diagnostic sample per step.
+    if int(ctx.steps) < max(int(stop_cfg.min_samples), 8):
+        return None
+
+    def check(t: Any, heat_flux: Any, wphi: Any) -> dict[str, Any]:
+        return saturation_stop_decision(t, heat_flux, guard=wphi, config=stop_cfg)
+
+    return check
+
+
+def _run_chunked_diagnostics(
     cfg: RuntimeConfig,
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
@@ -243,22 +285,34 @@ def _run_adaptive_diagnostics(
     deps: FullNonlinearRuntimeDeps,
     method: str | None,
     status: Callable[[str], None],
-) -> tuple[Any, Any, Any, Any]:
-    chunk_steps = min(ctx.steps, 1024)
+    stop_condition: Callable[[Any, Any, Any], dict[str, Any]] | None,
+) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
+    """Run chunked nonlinear diagnostics for the adaptive and saturation routes.
+
+    The adaptive route keeps its historical chunking; the fixed-step route only
+    goes through here for run-to-saturation, chunking on step count so the stop
+    check runs a few times per horizon while the total step budget stays the
+    hard cap.
+    """
+
+    step_capped = not ctx.adaptive_chunked
+    chunk_steps = min(ctx.steps, 512 if step_capped else 1024)
     G_chunk = ctx.G0
+    steps_left = ctx.steps
 
     def run_chunk(chunk_show_progress: bool):
-        nonlocal G_chunk
+        nonlocal G_chunk, steps_left
+        steps_now = min(chunk_steps, steps_left) if step_capped else chunk_steps
         kwargs = _diagnostic_kwargs(
             cfg,
             ctx,
             policy,
             deps=deps,
-            steps=chunk_steps,
+            steps=steps_now,
             method=method,
             sample_stride=1,
             diagnostics_stride=1,
-            fixed_dt=False,
+            fixed_dt=bool(cfg.time.fixed_dt),
             show_progress=chunk_show_progress,
         )
         t_chunk, diag_chunk, G_next, fields_next = (
@@ -271,11 +325,20 @@ def _run_adaptive_diagnostics(
             )
         )
         G_chunk = G_next
+        steps_left -= steps_now
         return t_chunk, diag_chunk, G_next, fields_next
+
+    def loop_stop(t: Any, heat_flux: Any, wphi: Any) -> dict[str, Any]:
+        assert stop_condition is not None
+        decision = stop_condition(t, heat_flux, wphi)
+        # "stop" ends the loop; "saturated" is the physics verdict. The step
+        # budget running out stops the loop without claiming saturation.
+        stop = bool(decision.get("saturated")) or (step_capped and steps_left <= 0)
+        return {**decision, "stop": stop}
 
     chunk_result = deps.run_adaptive_runtime_chunk_loop(
         integrate_chunk=run_chunk,
-        t_max=float(cfg.time.t_max),
+        t_max=ctx.dt * ctx.steps if step_capped else float(cfg.time.t_max),
         chunk_steps=chunk_steps,
         label="nonlinear",
         show_progress=policy.show_progress,
@@ -285,9 +348,16 @@ def _run_adaptive_diagnostics(
         # RAM. Off by default because it trades wall time for peak memory; set
         # GKX_CHUNK_SPILL_DIR to a path to turn it on.
         spill_dir=_chunk_spill_dir(),
+        stop_condition=None if stop_condition is None else loop_stop,
     )
     diag = chunk_result.diagnostics
-    return jnp.asarray(diag.t), diag, chunk_result.state, chunk_result.fields
+    return (
+        jnp.asarray(diag.t),
+        diag,
+        chunk_result.state,
+        chunk_result.fields,
+        chunk_result.stop_decision,
+    )
 
 
 def _chunk_spill_dir() -> Path | None:
@@ -311,14 +381,26 @@ def _run_diagnostics(
     deps: FullNonlinearRuntimeDeps,
     method: str | None,
     status: Callable[[str], None],
-) -> tuple[Any, Any, Any, Any]:
+) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
     status(
         f"sample_stride={policy.sample_stride} "
         f"diagnostics_stride={policy.diagnostics_stride} laguerre_mode={policy.laguerre_mode}"
     )
-    if ctx.adaptive_chunked:
-        return _run_adaptive_diagnostics(
-            cfg, ctx, policy, deps=deps, method=method, status=status
+    stop_condition = _saturation_stop_condition(cfg, ctx, policy)
+    if ctx.adaptive_chunked or stop_condition is not None:
+        if stop_condition is not None:
+            status(
+                "run_to=saturation: stopping on the converged heat-flux window "
+                f"(rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
+            )
+        return _run_chunked_diagnostics(
+            cfg,
+            ctx,
+            policy,
+            deps=deps,
+            method=method,
+            status=status,
+            stop_condition=stop_condition,
         )
     status(
         f"running nonlinear diagnostics integrator over {ctx.steps} steps with dt={ctx.dt:.6g}"
@@ -335,13 +417,16 @@ def _run_diagnostics(
         fixed_dt=bool(cfg.time.fixed_dt),
         show_progress=policy.show_progress,
     )
-    return deps.integrate_nonlinear_explicit_diagnostics_state(
-        ctx.G0,
-        ctx.grid,
-        ctx.geom,
-        ctx.params,
-        **kwargs,
+    t, diag, G_final, fields_final = (
+        deps.integrate_nonlinear_explicit_diagnostics_state(
+            ctx.G0,
+            ctx.grid,
+            ctx.geom,
+            ctx.params,
+            **kwargs,
+        )
     )
+    return t, diag, G_final, fields_final, None
 
 
 def _result(
@@ -354,6 +439,7 @@ def _result(
     fields: Any,
     state: Any,
     summarize_fields: bool,
+    saturation: dict[str, Any] | None = None,
 ) -> RuntimeNonlinearResult:
     return deps.build_runtime_nonlinear_result(
         t=np.asarray(t),
@@ -363,6 +449,7 @@ def _result(
         ky_selected=float(np.asarray(ctx.grid.ky[ctx.ky_index])),
         kx_selected=float(np.asarray(ctx.grid.kx[ctx.kx_index])),
         summarize_fields=summarize_fields,
+        saturation=saturation,
     )
 
 
@@ -415,6 +502,7 @@ def _diagnostic_run_result(
     diagnostics: Any,
     fields: Any,
     state: Any,
+    saturation: dict[str, Any] | None,
     status: Callable[[str], None],
 ) -> RuntimeNonlinearResult:
     if policy.diagnostics_on:
@@ -428,6 +516,7 @@ def _diagnostic_run_result(
             fields=fields,
             state=state,
             summarize_fields=False,
+            saturation=saturation,
         )
     if fields is None:
         raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
@@ -458,7 +547,7 @@ def _run_once(
     if not policy.requires_diagnostic_path and not ctx.adaptive_chunked:
         return _run_final_state(cfg, ctx, policy, deps=deps, status=status)
 
-    t, diag, G_final, fields_final = _run_diagnostics(
+    t, diag, G_final, fields_final, saturation = _run_diagnostics(
         cfg, ctx, policy, deps=deps, method=method, status=status
     )
     return (
@@ -470,6 +559,7 @@ def _run_once(
             diagnostics=diag,
             fields=fields_final,
             state=G_final,
+            saturation=saturation,
             status=status,
         ),
         G_final,

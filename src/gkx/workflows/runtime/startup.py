@@ -148,7 +148,12 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
 
         return KBM_KRYLOV_DEFAULT
 
-    return KrylovConfig()
+    # Generic contracts (cyclone included) use the residual-certified adaptive
+    # eigensolve. The raw propagator default has no certification gate and can
+    # silently return an unconverged, unphysical branch at collisional runtime
+    # resolutions; the adaptive path either certifies the dominant pair against
+    # the continuous operator or fails closed with the measured residual.
+    return KrylovConfig(method="adaptive")
 
 
 def _resolve_runtime_hl_dims(

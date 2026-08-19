@@ -17,7 +17,12 @@ from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams
 from gkx.operators.nonlinear.policies import build_nonlinear_imex_operator
 from gkx.solvers.nonlinear.diagnostic_integration import integrate_nonlinear_explicit_diagnostics, integrate_nonlinear_explicit_diagnostics_state, prepare_nonlinear_explicit_diagnostics
-from gkx.solvers.nonlinear.state_integration import integrate_nonlinear, integrate_nonlinear_cached, integrate_nonlinear_imex_cached
+from gkx.solvers.nonlinear.state_integration import (
+    integrate_nonlinear,
+    integrate_nonlinear_cached,
+    integrate_nonlinear_imex_cached,
+    nonlinear_heat_flux_window,
+)
 from gkx.terms.config import TermConfig
 
 pytestmark = pytest.mark.integration
@@ -481,6 +486,58 @@ def test_prepared_nonlinear_arrays_accept_matched_dynamic_cache_and_params():
     )
     with pytest.raises(ValueError, match="supplied together"):
         prepared.run_arrays(params=base_params)
+
+
+def test_block_checkpointed_nonlinear_heat_flux_gradient_matches_finite_difference():
+    """The bounded-memory adjoint must differentiate the physical heat flux."""
+
+    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    base_params = LinearParams()
+    state = jnp.zeros(
+        (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64
+    )
+    profile = 1.0e-4 * (1.0 + 0.2 * jnp.cos(grid.z))
+    state = state.at[0, 0, 1, 0, :].set(profile + 0.3j * profile * jnp.sin(grid.z))
+    state = state.at[0, 1, 1, 0, :].set(0.25j * profile)
+    state = state.at[0, 0, 1, 1, :].set((0.2 - 0.1j) * profile)
+    terms = TermConfig(nonlinear=1.0)
+
+    def mean_heat_flux(rlt: jnp.ndarray, checkpoint: bool = True) -> jnp.ndarray:
+        params = replace(base_params, tprim=rlt)
+        return nonlinear_heat_flux_window(
+            state,
+            grid,
+            geom,
+            params,
+            dt=0.01,
+            steps=11,
+            method="rk2",
+            tail_steps=7,
+            terms=terms,
+            checkpoint=checkpoint,
+            compressed_real_fft=False,
+        )
+
+    point = jnp.asarray(6.9)
+    value, gradient = jax.value_and_grad(mean_heat_flux)(point)
+    plain = jax.value_and_grad(lambda value: mean_heat_flux(value, False))(point)
+    step = jnp.asarray(1.0e-2)
+    centered_fd = (
+        mean_heat_flux(point + step) - mean_heat_flux(point - step)
+    ) / (2 * step)
+
+    assert bool(jnp.isfinite(value))
+    assert bool(jnp.isfinite(gradient))
+    assert float(gradient) != 0.0
+    np.testing.assert_allclose(np.asarray((value, gradient)), np.asarray(plain), rtol=1e-6)
+    np.testing.assert_allclose(
+        np.asarray(gradient), np.asarray(centered_fd), rtol=5.0e-2, atol=1.0e-16
+    )
 
 
 @pytest.mark.parametrize("checkpoint", [False, True])
