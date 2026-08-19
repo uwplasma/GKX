@@ -907,3 +907,36 @@ NOT the target case — it points at a QI placeholder absent from `examples/vmec
 torflux=0.64. Recommended first step: smoke-test the geometry bridge on THIS CBC case, where
 the answer (0.1050) is now known, before adding stellarator ambiguity.
 Full report: `plan/notes/stella_vs_gkx_rung2.md`.
+
+### 2026-08-18 agent/cliplots — 1.3b + compile cache DONE (PR #58, stacked on #53+#50)
+The one-command goal is now closed end to end: every run writes its figures beside its
+outputs, `gkx --plot` reads GX files too, and repeat runs stop recompiling.
+
+**Compile cache — the measurement is the finding.** JAX persists only compilations longer
+than 1 s by default, which is nearly useless here: a 16×16×32 nonlinear step compiles
+**~320 kernels**, the fused `jit(scan)` is just 2.1 s of 13.5 s, and everything else is
+~20 ms apiece — all refused by the default threshold. Keeping the default recovered under a
+third of the compile. Storing everything costs 1.6 MB and gives:
+compile 13.5 s → **0.9 s**; solver phase 23.3/24.6/23.4 s → **6.2/7.0/8.9 s**; small case
+28.5 → 7.3 s. This matters most on GPU, where compile was 22.9 s of a 25 s wall — the reason
+a GPU only won past ~70 steps. Keys are XLA's own, namespaced by `jax.__version__` so a
+toolchain upgrade starts fresh. `jax_persistent_cache_max_size` is NOT settable via
+`jax.config.update` on jax 0.9.2 (AttributeError) — eviction is `rm -rf`, documented.
+
+**Pre-existing bug fixed**: the GKX NetCDF loader read `Diagnostics/t`, which NEITHER code
+writes, so `gkx --plot case.out.nc` died on `KeyError: 't'` before drawing anything. NetCDF
+plotting was simply broken.
+**GX reading**: separate reader with all-optional variables (a GX LINEAR run carries none of
+the `Wg_st`/`HeatFlux_st`/`ParticleFlux_st` that GKX's loader demands unconditionally);
+files told apart by self-description (`code_info.value="gkx"` vs GX's `Title`/build
+provenance), not filename.
+**Containment done right**: matplotlib imported INSIDE the try (a broken backend fails at
+import), plus an outer guard — a plotting failure costs a figure, never a completed run.
+Escapes `--no-plots` / `[output] plots = false`.
+Honest scope note: nothing on this base writes an averaging window yet, so window shading is
+inert until #54 lands — deliberately not faked.
+89 tests green here (371 across runtime+plotting, 180 in tools); both manifest checkers exit 0.
+Line budget 90936 → 91752.
+
+**Merge order addendum**: #58 is stacked on #53 and #50 — merge those first, then #58 shows
+only its own commit. #54 (saturation windows) after #58 makes the window shading live.
