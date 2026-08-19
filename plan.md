@@ -409,3 +409,30 @@ self-check. Relayed to the fitrobust agent, with the hypothesis that the collisi
 bias may partly come from `fit_signal="auto"` selecting density rather than midplane phi.
 PR #45's own Cyclone reproduction (t=150, 75000 steps + half-time probe, ~82 min under
 contention) was still integrating at the time of writing; verdict pending on that number.
+
+### 2026-08-18 agent/autostop — 1.2 DONE, and a SEM convention bug fixed
+Auto-stop works: the shrunk cyclone case (32×32×16, Nl2/Nm4, rel_sem 0.15) **stopped at
+t=128 of t_max=200** (36% of the horizon saved) in ~85 s, reporting
+`window=[64.05,128.0] heat_flux=35.92+/-3.85 rel_sem=0.107 tau_ac=4.24`, stationary,
+window span 63.95 vs min_window 42.37 (=10·τ_ac). `run_to="t_max"` is **byte-identical**
+to base on the diagnostics CSV (summary differs only in wall-clock fields); the default
+saturation path at 20 steps is also byte-identical and correctly reports
+"no measurable window".
+
+**Real bug caught while finishing**: the stop criterion used `n_eff = n/(1+2τ/dt)`, a
+convention that `gkx/diagnostics/analysis.py::_correlated_sample_stats` explicitly
+documents as REJECTED — it double-counts the zero-lag term, returns n/2 for independent
+samples, and overestimates the SEM by 22% at zero correlation. A run would therefore have
+stopped on a SEM disagreeing with the SEM the post-hoc transport-window gates report for
+the same window. Switched to the validated `n_eff = min(n, n·dt/(2τ))`.
+
+Also: flipping the default routed tiny stub runs into the chunk loop and broke 4 existing
+tests; fixed at the source (the stop condition returns None when the entire step budget is
+below the minimum sample count — such a run can never reach a decision, so chunking it is
+pure overhead) rather than by patching the tests. 303 tests green across the four suites;
+ruff clean.
+
+Known follow-up (deliberately not done here): `sokal_autocorrelation_time` in
+`transport_windows.py` and `integrated_autocorrelation_time` in `analysis.py` are now
+near-duplicate FFT estimators in sibling modules. Consolidating touches a numerically
+validated gate path and inverts module layering — belongs in the Phase 5 slimming pass.
