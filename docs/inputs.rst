@@ -300,7 +300,8 @@ Executable usage
 .. code-block:: bash
 
   cd examples/linear/axisymmetric && gkx cyclone.toml
-  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --plot --outdir docs/_static
+  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --out docs/_static/runtime_etg_scan
+  gkx --plot docs/_static/runtime_etg_scan.scan.csv
   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out tools_out/cyclone_runtime
    gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --batch-ky
    gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --sample-stride 5 --out docs/_static/nonlinear_cyclone_diag.csv
@@ -310,6 +311,18 @@ you explicitly want a capped step count. The executable now preserves ``steps = 
 for adaptive nonlinear runs so the runtime can keep integrating in chunks until
 it reaches the requested ``t_max`` instead of silently reverting to the old
 ``round(t_max / dt)`` ceiling.
+
+Diagnosed nonlinear runs stop at saturation by default (``[time] run_to =
+"saturation"``): the runtime integrates in chunks and, after each chunk, tests
+the accumulated heat-flux trace with spin-up excluded. It stops once the
+autocorrelation-corrected relative SEM of the windowed mean is at or below
+``saturation_rel_sem``, the window is at least ``saturation_min_window`` long,
+and the first and second halves of the window agree within twice their combined
+SEM (with the same stationarity test applied to ``Wphi`` as a guard). ``t_max``
+remains the hard cap, so a run that never saturates behaves exactly as before.
+The chosen window and its ``mean +/- SEM`` are printed in the run summary and
+recorded under ``saturation`` in the summary JSON. Pass
+``--no-until-saturated`` (or set ``run_to = "t_max"``) for a fixed horizon.
 
 For single-point runtime commands, artifact output can be requested either with
 ``--out`` or directly in the runtime TOML:
@@ -468,6 +481,20 @@ Notable runtime-only keys:
   diagnostics.  The Merlo Case-III Rosenbluth-Hinton/GAM example uses the
   literature protocol instead: ``source = "default"`` plus an initial ion
   density perturbation.
+* ``[time] run_to``: nonlinear stop policy. ``"saturation"`` (the default)
+  ends a diagnosed nonlinear run as soon as the post-spin-up heat-flux window
+  has converged, with ``t_max`` kept as the hard cap; ``"t_max"`` always
+  integrates the full horizon and reproduces the pre-auto-stop behavior
+  exactly. Linear runs and nonlinear runs with ``diagnostics = false`` ignore
+  the key, because the stop test needs the streamed heat-flux trace. The
+  executable overrides are ``--until-saturated`` and ``--no-until-saturated``.
+* ``[time] saturation_rel_sem``: target relative standard error of the mean on
+  the windowed heat flux (default ``0.05``, i.e. 5%). The SEM is corrected for
+  autocorrelation via the Sokal integrated autocorrelation time, so it is the
+  error of the physical time average rather than of independent samples.
+* ``[time] saturation_min_window``: minimum averaging-window span in time
+  units before a run may stop. When omitted, the requirement is derived from
+  the trace itself as ten integrated autocorrelation times.
 * ``[time] nstep_restart``: when writing a nonlinear NetCDF bundle,
   checkpoint every ``nstep_restart`` steps instead of waiting for the end of
   the run. This is useful for long adaptive runs and batch jobs.
@@ -574,6 +601,10 @@ The ``[output]`` section controls runtime artifact layout and restart behavior:
   the larger spectral-history arrays.
 * ``nsave``: checkpoint cadence fallback, in steps, for nonlinear NetCDF
   bundles when ``time.nstep_restart`` is not set.
+* ``plots``: draw the run's figures beside its output once it finishes. It
+  defaults to ``true``; set it to ``false`` (or pass ``--no-plots``) on batch
+  surfaces that only want the data. See :doc:`outputs` for the figure set each
+  run kind writes.
 
 For direct restart control outside the ``[output]`` helper path, the generic
 ``[init] init_file`` / ``init_file_scale`` / ``init_file_mode`` keys remain the
