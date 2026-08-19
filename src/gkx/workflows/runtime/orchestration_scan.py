@@ -33,6 +33,7 @@ class RuntimeScanBatchDeps(Protocol):
     fit_growth_rate_auto_with_stats: Callable[..., Any]
     fit_growth_rate_auto: Callable[..., Any]
     fit_growth_rate: Callable[..., Any]
+    fit_growth_rate_with_stats: Callable[..., Any]
     apply_diagnostic_normalization: Callable[..., tuple[float, float]]
 
 
@@ -166,6 +167,7 @@ def build_runtime_scan_batch_deps(facade: Any) -> RuntimeScanBatchDeps:
             fit_growth_rate_auto_with_stats=facade.fit_growth_rate_auto_with_stats,
             fit_growth_rate_auto=facade.fit_growth_rate_auto,
             fit_growth_rate=facade.fit_growth_rate,
+            fit_growth_rate_with_stats=facade.fit_growth_rate_with_stats,
             apply_diagnostic_normalization=facade.apply_diagnostic_normalization,
         ),
     )
@@ -447,6 +449,41 @@ def _fit_signal_key(fit_signal: str) -> str:
     return fit_key
 
 
+def _auto_fit_scan_candidate(
+    signal: Any,
+    time: np.ndarray,
+    *,
+    options: _RuntimeScanOptions,
+    deps: RuntimeScanBatchDeps,
+) -> tuple[float, float, float]:
+    """Fit and score one channel of a combined-ky scan point.
+
+    ``auto`` selects the diagnostic channel, never the fit window: with
+    ``auto_window`` off, both channels are fitted over the requested window so
+    the winner reports what an explicit ``fit_signal`` request would.
+    """
+
+    if options.auto_window:
+        gamma, omega, _tmin, _tmax, r2, r2_phase = deps.fit_growth_rate_auto_with_stats(
+            time,
+            signal,
+            window_fraction=options.window_fraction,
+            min_points=options.min_points,
+            start_fraction=options.start_fraction,
+            growth_weight=options.growth_weight,
+            require_positive=options.require_positive,
+            min_amp_fraction=options.min_amp_fraction,
+        )
+    else:
+        gamma, omega, r2, r2_phase = deps.fit_growth_rate_with_stats(
+            time,
+            signal,
+            tmin=options.tmin,
+            tmax=options.tmax,
+        )
+    return gamma, omega, r2 + 0.2 * r2_phase + options.growth_weight * gamma
+
+
 def _auto_fit_scan_point(
     diagnostics: _BatchDiagnostics,
     sel: ModeSelection,
@@ -454,38 +491,22 @@ def _auto_fit_scan_point(
     options: _RuntimeScanOptions,
     deps: RuntimeScanBatchDeps,
 ) -> tuple[float, float]:
-    phi_signal = deps.extract_mode_time_series(
-        diagnostics.phi_t, sel, method=options.mode_method
+    gamma_phi, omega_phi, score_phi = _auto_fit_scan_candidate(
+        deps.extract_mode_time_series(
+            diagnostics.phi_t, sel, method=options.mode_method
+        ),
+        diagnostics.time,
+        options=options,
+        deps=deps,
     )
-    gamma_phi, omega_phi, _, _, r2_phi, r2p_phi = (
-        deps.fit_growth_rate_auto_with_stats(
-            diagnostics.time,
-            phi_signal,
-            window_fraction=options.window_fraction,
-            min_points=options.min_points,
-            start_fraction=options.start_fraction,
-            growth_weight=options.growth_weight,
-            require_positive=options.require_positive,
-            min_amp_fraction=options.min_amp_fraction,
-        )
+    gamma_den, omega_den, score_den = _auto_fit_scan_candidate(
+        deps.extract_mode_time_series(
+            diagnostics.density_t, sel, method=options.mode_method
+        ),
+        diagnostics.time,
+        options=options,
+        deps=deps,
     )
-    dens_signal = deps.extract_mode_time_series(
-        diagnostics.density_t, sel, method=options.mode_method
-    )
-    gamma_den, omega_den, _, _, r2_den, r2p_den = (
-        deps.fit_growth_rate_auto_with_stats(
-            diagnostics.time,
-            dens_signal,
-            window_fraction=options.window_fraction,
-            min_points=options.min_points,
-            start_fraction=options.start_fraction,
-            growth_weight=options.growth_weight,
-            require_positive=options.require_positive,
-            min_amp_fraction=options.min_amp_fraction,
-        )
-    )
-    score_phi = r2_phi + 0.2 * r2p_phi + options.growth_weight * gamma_phi
-    score_den = r2_den + 0.2 * r2p_den + options.growth_weight * gamma_den
     return (gamma_phi, omega_phi) if score_phi >= score_den else (gamma_den, omega_den)
 
 
