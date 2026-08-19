@@ -233,6 +233,191 @@ gives normalized overlap ``0.9999999994`` and relative ``L^2`` mismatch
    :alt: W7-X raw eigenfunction overlay against the frozen GX reference
    :width: 100%
 
+Reference-Code Linear Parity Matrix
+-----------------------------------
+
+The lanes above each close one physics family against its own reference. This
+section is the cross-cutting view: one instrument, one convention, several
+cases run as a single campaign, so the numbers are comparable with each other
+and not only with their own histories.
+
+The instrument is ``tools/comparison/build_gx_parity_matrix.py``, driven by
+``tools/gx_parity_matrix_manifest.toml``. For each case it
+
+- reads the GX spectrum with GX's own late-window convention, the mean over the
+  second half of its diagnostic trace;
+- runs the batched GKX linear ``k_y`` scan at the velocity resolution
+  ``(N_l, N_m)`` of the GX input deck, importing the GX run's own geometry so
+  that both codes integrate identical geometric coefficients;
+- integrates, and fits ``gamma`` and ``omega`` over the last thirty percent of
+  that trajectory; and
+- repeats the scan over half the integration time and records how far the
+  answer moved.
+
+The four electrostatic cases are integrated for exactly the time their GX deck
+integrated, ``t=150`` for Cyclone and ``t=200`` for the two stellarators. The
+two electromagnetic cases are not: their stability-limited step is ``2e-4``
+against ``2e-3`` for the electrostatic cases, so they are integrated to ``t=20``
+against the deck's ``t=40``. Every integration time is recorded per case in the
+``resolution`` block of ``docs/_static/gkx_gx_linear_parity_matrix.json``.
+
+The last step is what makes the table readable. A near-marginal ``k_y`` needs
+far more e-foldings than a peak-``k_y`` mode before either code has an
+eigenvalue rather than a transient, so a raw relative difference at the edge of
+a spectrum mixes model disagreement with unfinished convergence. A wavenumber
+whose growth rate moves by more than five percent between the half-length and
+the full-length integration is marked unsettled in
+``docs/_static/gkx_gx_linear_parity_matrix.csv``, and the headline column below
+reports the largest difference over the settled wavenumbers only.
+
+.. list-table:: Linear parity against GX, matched resolution and geometry
+   :header-rows: 1
+   :widths: 20 12 10 14 14 14 16
+
+   * - Case
+     - geometry
+     - ``(N_l,N_m)``
+     - settled ``k_y``
+     - max ``|d gamma|``
+     - ``d gamma`` at peak
+     - ``d omega`` at peak
+   * - Cyclone ITG, s-alpha
+     - s-alpha analytic
+     - ``(16,48)``
+     - 10 of 11
+     - ``0.6%``
+     - ``+0.02%``
+     - ``+7.7e-05``
+   * - Cyclone ITG, Miller
+     - Miller
+     - ``(16,48)``
+     - 15 of 15
+     - ``2.4%``
+     - ``-5.6e-05``
+     - ``-1.6e-05``
+   * - Cyclone ITG, Miller, kinetic electrons
+     - Miller
+     - ``(16,48)``
+     - 1 of 7
+     - ``10.8%``
+     - ``-2.13%``
+     - ``-1.32%``
+   * - KBM, Miller
+     - Miller
+     - ``(16,48)``
+     - 3 of 5
+     - ``1.3%``
+     - ``-0.91%``
+     - ``+0.44%``
+   * - W7-X ITG, VMEC
+     - VMEC flux tube
+     - ``(8,16)``
+     - 22 of 27
+     - ``3.2%``
+     - ``+3.3e-05``
+     - ``-2.2e-06``
+   * - HSX QHS ITG, VMEC
+     - VMEC flux tube
+     - ``(8,16)``
+     - 9 of 11
+     - ``0.9%``
+     - ``+1.3e-05``
+     - ``-8.7e-06``
+
+.. image:: _static/gkx_gx_linear_parity_matrix.png
+   :alt: Growth rate and frequency parity against the GX comparison code
+   :width: 100%
+
+Two results in that table are worth stating in words.
+
+First, the integration length, not the model, sets the Cyclone difference.
+Reproducing the tracked ``t=10`` Cyclone protocol at ``(N_l,N_m)=(16,48)``
+gives ``+2.24%`` in ``gamma`` and ``+5.41%`` in ``omega`` at the peak
+``k_y rho_i = 0.3``. Integrating the same configuration for the ``t=150`` the
+GX deck itself runs moves that to ``+0.02%`` and ``+0.01%``, and the whole
+resolved band ``0.15 <= k_y rho_i <= 0.55`` falls inside ``0.21%`` in ``gamma``
+and ``0.07%`` in ``omega``. The older Cyclone mismatch figures are therefore a
+statement about a short fitting window, not about the operators.
+
+Second, where both codes are converged and discretized identically, they agree
+to far better than any gate in this repository. At the W7-X peak
+``k_y rho_i = 1.6`` the growth-rate difference is ``3.3e-5`` and the frequency
+difference is ``2.2e-6``; at the HSX peak ``k_y rho_i = 1.1`` both are below
+``5e-5``. This is the expected behaviour when the geometry, the velocity
+resolution and the parallel grid are shared: the two codes are converging on
+the same discrete eigenvalue, so what remains is time-integration and fitting
+error rather than a model difference.
+
+The unsettled rows are all low-``k_y`` near-marginal modes, and they are
+reported rather than dropped. The one genuinely unresolved row is the
+kinetic-electron Cyclone case at ``k_y rho_i = 0.1``, where the fitted GKX
+frequency is over a hundred times the GX value: that is a different branch, the
+electrostatic shear-Alfven response that the GX deck's own comments warn about
+at small but finite ``beta``, and not a growth-rate error on the ITG branch.
+
+Cost was measured on the same RTX A4000 for the three cases where both codes
+were re-run under ``/usr/bin/time -v``. Both codes evaluate the whole ``k_y``
+spectrum in a single invocation, so the wall times are per-spectrum, and they
+are normalized by the simulated time each run covered because the two codes
+were not always integrated for the same interval. The comparison is not
+like-for-like in arithmetic: GX is compiled in single precision, while these
+GKX runs are float64 under ``JAX_ENABLE_X64``.
+
+.. list-table:: Cost per unit simulated time, same device, whole-spectrum runs
+   :header-rows: 1
+   :widths: 24 19 19 19 19
+
+   * - Case
+     - GKX s per unit ``t``
+     - GX s per unit ``t``
+     - GKX peak host / device
+     - GX peak host / device
+   * - Cyclone ITG, s-alpha
+     - ``3.58``
+     - ``2.44``
+     - ``1340`` / ``178`` MB
+     - ``645`` / ``1547`` MB
+   * - W7-X ITG, VMEC
+     - ``1.58``
+     - ``2.20``
+     - ``1954`` / ``636`` MB
+     - ``2838`` / ``1547`` MB
+   * - HSX QHS ITG, VMEC
+     - ``0.70``
+     - ``0.51``
+     - ``1548`` / ``269`` MB
+     - ``636`` / ``1499`` MB
+
+The two codes are therefore within about a factor of ``1.5`` of each other in
+either direction on this hardware, with GKX ahead on the W7-X flux tube and
+behind on the two smaller-``N_z`` cases, and GKX consistently resident in far
+less device memory. The GX device figures are the peak of a two-second
+``nvidia-smi`` sample stream with the idle baseline of the shared card
+subtracted, so they are coarser than the GKX figures, which come from the JAX
+allocator's own peak counter.
+
+Coverage of this campaign, stated as scope rather than implied by the table: it
+covers electrostatic and electromagnetic cases, adiabatic and kinetic
+electrons, tokamak and stellarator geometry, and three geometry models, all
+linear. It does not cover ETG or TEM, because GX ships no deck for either, and
+it covers no nonlinear case. The KAW lane stays deferred for a reason upstream
+of GKX: a freshly built GX does not reproduce its own shipped KAW reference, so
+there is nothing stable to compare against yet.
+
+Provenance differs across the rows and the distinction matters. The Cyclone and
+KBM references are the spectra that ship with GX, reproduced by the local
+build. The W7-X and HSX references were generated by this campaign with that
+build, so comparing against them is a cross-code check, not a check against a
+published result. The HSX case is new: no upstream deck exists, the input deck
+was written for this campaign, and its VMEC flux tube had to be generated
+through a locally patched copy of the GX geometry module, which fails on a
+vacuum equilibrium because two drift arrays keep two extra length-one axes. The
+patch only squeezes those axes. Two independent checks confirm it changed no
+values: the generated tube satisfies the vacuum identity ``cvdrift == gbdrift``
+to ``2.8e-17``, and GKX's own VMEC flux-tube construction from the same
+equilibrium reproduces the tube's ``|B|`` to a relative ``1.2e-6``, with
+``q`` and ``s_hat`` agreeing to ``2.2e-7`` and ``1.6e-5``.
+
 Nonlinear Validation
 --------------------
 

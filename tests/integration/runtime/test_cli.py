@@ -161,6 +161,31 @@ def test_cli_global_plot_accepts_out_argument(
     assert f"saved {rendered}" in out
 
 
+def test_cli_global_plot_renders_linear_scan_bundle(
+    capsys, monkeypatch, tmp_path: Path
+) -> None:
+    """--plot should render the saved ky-scan bundle written by scan-runtime-linear."""
+
+    scan = type(
+        "Scan",
+        (),
+        {
+            "ky": np.array([0.2, 0.3]),
+            "gamma": np.array([0.05, 0.08]),
+            "omega": np.array([0.25, 0.31]),
+        },
+    )()
+    paths = cli.write_runtime_linear_scan_artifacts(tmp_path / "scan", scan)
+    assert (tmp_path / "scan.scan.csv").exists()
+
+    monkeypatch.setattr(sys, "argv", ["gkx", "--plot", paths["scan"]])
+    code = main()
+    out = capsys.readouterr().out
+    assert code == 0
+    assert f"saved {tmp_path / 'scan.plot.png'}" in out
+    assert (tmp_path / "scan.plot.png").exists()
+
+
 def test_cli_plot_usage_errors(capsys, monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["gkx", "--plot"])
     assert main() == 1

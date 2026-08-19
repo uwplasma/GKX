@@ -158,6 +158,10 @@ References
    `arXiv <https://arxiv.org/abs/2310.18842>`__,
    `DOI <https://doi.org/10.1017/S0022377824000369>`__.
 
+.. [Sokal97] A. D. Sokal, "Monte Carlo methods in statistical mechanics:
+   foundations and new algorithms," in *Functional Integration*, pp. 131--192
+   (1997). `DOI <https://doi.org/10.1007/978-1-4899-0319-8_6>`__.
+
 .. [Pueschel16] M. J. Pueschel, B. J. Faber, J. Citrin, C. C. Hegna,
    P. W. Terry, and D. R. Hatch, "Stellarator Turbulence: Subdominant
    Eigenmodes and Quasilinear Modeling," Physical Review Letters 116, 085001

@@ -168,16 +168,11 @@ this tool:
   brackets the root with no model at all, and the fit can be checked against it.
   Refinement tightens both together.
 
-**A5 -- Nonlinear autodiff.** *Algorithmic.* As previously scoped: production
-heat flux inside the differentiated window, find the divergence knee, measure the
-bias against finite differences, then choose windowed adjoint or NILSS on
-evidence. Gate: a descent that lowers the flux, with bias **and** variance
-reported.
-
-**A6 -- Naming.** *Unit.* ``nonlinear_heat_flux_proxy`` returns a closure over
-linear quantities. Rename so no public name asserts nonlinear gyrokinetics for a
-linear-solve quantity. Gate: a test asserts the public surface contains no such
-name.
+**A5 -- Nonlinear autodiff. DONE.** *Algorithmic.* The physical post-saturation
+heat flux uses a block-checkpointed discrete adjoint. Centered finite differences
+bound its useful window below the measured trajectory-divergence knee. The
+selected vacuum QA direction now has independent matched-run, timestep, and
+resolution evidence in :doc:`stellarator_optimization`.
 
 *Done: the gradient fields.* ``LinearParams`` carried ``R_over_LTi`` /
 ``R_over_Ln`` / ``R_over_LTe``, but the operator consumes :math:`a/L_T` and
@@ -265,7 +260,5 @@ correlation. Each new gate must state what result would falsify it.
 Sequencing
 ----------
 
-A6 is an afternoon and unblocks nothing; do it first to clear the naming debt.
 A1 and A2 are independent and both feed A3. A4 needs A2 for its window
-statistics. A5 is the long pole and should be its own PR series. A7 is
-measurement and can run alongside anything.
+statistics. A5 is complete. A7 is measurement and can run alongside anything.

@@ -224,6 +224,18 @@ duplicating large run products. The current tracked result set is:
      - ``tools/benchmark_atlas_manifest.toml``
      - manifest of small tracked benchmark inputs
      - ``python tools/artifacts/make_benchmark_atlas.py``
+   * - Reference-code linear parity matrix
+     - ``docs/_static/gkx_gx_linear_parity_matrix.png``
+     - cross-code linear growth-rate and frequency parity across tokamak and stellarator cases
+     - ``python tools/comparison/build_gx_parity_matrix.py``
+   * - Reference-code linear parity rows
+     - ``docs/_static/gkx_gx_linear_parity_matrix.csv``
+     - machine-readable per-wavenumber parity rows with convergence flags
+     - ``python tools/comparison/build_gx_parity_matrix.py``
+   * - Reference-code linear parity summary
+     - ``docs/_static/gkx_gx_linear_parity_matrix.json``
+     - per-case resolution, provenance and cost metadata behind the parity rows
+     - ``python tools/comparison/build_gx_parity_matrix.py``
 
 This keeps the repository light: ``benchmarks/`` stores only drivers and
 pointers, ``docs/_static`` stores reviewed compact figures/tables, and raw

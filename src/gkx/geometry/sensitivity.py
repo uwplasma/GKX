@@ -96,6 +96,32 @@ def _geometry_observable_fn(
     return observable_fn
 
 
+def _damped_gauss_newton_step(
+    jac: jnp.ndarray,
+    residual: jnp.ndarray,
+    *,
+    damping: float,
+) -> jnp.ndarray:
+    """Return one damped Gauss-Newton step, with the normal equations pinned.
+
+    ``J^T J`` is the only matrix-times-matrix product in the loop, and XLA
+    satisfies it with TF32 on Ampere and later NVIDIA GPUs. Forming the normal
+    equations already squares the conditioning, so 10 mantissa bits land straight
+    in the step: measured against a float64 reference on an RTX A4000 the entries
+    carry 1.8e-04 and the step itself 1.7e-04, against the 1.0e-04 rtol this
+    module's own AD-versus-FD report gates on. Pinned they are 4.0e-08 and
+    4.7e-08. The matvec below is vector-shaped and stays exact unpinned.
+
+    The step lives in its own function because the loop around it converts to
+    host floats to build its history, so it cannot be traced -- and a CPU test
+    can only see this pin in a jaxpr.
+    """
+
+    normal = jnp.matmul(jac.T, jac, precision=jax.lax.Precision.HIGHEST)
+    normal = normal + float(damping) * jnp.eye(jac.shape[1], dtype=jac.dtype)
+    return jnp.linalg.solve(normal, jac.T @ residual)
+
+
 def _run_geometry_inverse_design_iterations(
     observable_fn: Any,
     params: jnp.ndarray,
@@ -125,9 +151,7 @@ def _run_geometry_inverse_design_iterations(
         if step == int(max_steps):
             break
         jac = jax.jacfwd(observable_fn)(p)
-        normal = jac.T @ jac + float(damping) * jnp.eye(int(p.shape[0]), dtype=p.dtype)
-        delta = jnp.linalg.solve(normal, jac.T @ residual)
-        p = p - delta
+        p = p - _damped_gauss_newton_step(jac, residual, damping=damping)
     return p, residual, history
 
 

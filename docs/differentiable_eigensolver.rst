@@ -32,10 +32,27 @@ and every accepted vector must satisfy
    \frac{\lVert A v-\lambda v\rVert_2}
         {\max(\lVert A v\rVert_2,|\lambda|\lVert v\rVert_2)} < \epsilon .
 
+That ratio is built from operator applications in the working dtype, so it
+bottoms out a few machine epsilons above zero rather than at zero.  Evaluated
+against an exact dense eigenpair on Cyclone ITG flux tubes from ``n = 48`` to
+``n = 8,192``, the complex64 floor stays between ``1.8`` and ``12.2`` eps; the
+restarted solver stalls at ``4.5`` eps in complex64 and ``5.2`` eps in
+complex128 on the smallest of them.  A requested :math:`\epsilon` below that
+floor is not a strict gate but an unreachable one, certifying nothing while the
+restart budget burns on a pair that is already as good as the precision allows.
+Every residual gate is therefore raised to ``1e3`` times the epsilon of the
+dtype it is measuring.  That leaves roughly two decades of headroom over the
+measured complex64 floor, and it is far below every default this package ships,
+so complex128 gates pass through untouched and remain exactly as strict as
+before.  Solutions report the residual actually achieved, so the accepted
+quality stays visible rather than implied by the requested tolerance.
+
 Near a growth-rate crossing, candidate vectors may be selected by overlap with
 the previous right mode or by biorthogonal overlap with its left mode.  The
 overlap, complex spectral gap, residual, and eigenpair condition number are
-independent fail-closed gates.
+independent fail-closed gates.  Only the residual gates carry a precision
+floor: the overlap and gap gates compare normalized ``O(1)`` quantities, which
+resolve identically at either precision.
 
 For a supplied target or continuation shift, ``dominant_eigenpair`` can instead
 use right-preconditioned shift-invert Arnoldi.  The default ``"auto"`` policy

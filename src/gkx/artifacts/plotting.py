@@ -681,7 +681,7 @@ def nonlinear_runtime_panel_figure(
 
 def _artifact_base(path: Path) -> Path:
     name = path.name
-    for suffix in (".summary.json", ".timeseries.csv", ".eigenfunction.csv", ".diagnostics.csv", ".out.nc"):
+    for suffix in (".summary.json", ".timeseries.csv", ".eigenfunction.csv", ".diagnostics.csv", ".scan.csv", ".out.nc"):
         if name.lower().endswith(suffix):
             return path.with_name(name[: -len(suffix)])
     if path.suffix.lower() in {".json", ".csv", ".nc"}:
@@ -698,6 +698,15 @@ def _load_linear_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.nd
     z = np.asarray(eigen["z"], dtype=float)
     eig = np.asarray(eigen["eigen_real"], dtype=float) + 1j * np.asarray(eigen["eigen_imag"], dtype=float)
     return summary, t, signal, z, eig
+
+
+def _load_linear_scan_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+    summary = json.loads(base.with_suffix(".summary.json").read_text(encoding="utf-8"))
+    scan = np.genfromtxt(base.with_suffix(".scan.csv"), delimiter=",", names=True, dtype=float)
+    ky = np.atleast_1d(np.asarray(scan["ky"], dtype=float))
+    gamma = np.atleast_1d(np.asarray(scan["gamma"], dtype=float))
+    omega = np.atleast_1d(np.asarray(scan["omega"], dtype=float))
+    return summary, ky, gamma, omega
 
 
 def _load_nonlinear_csv(base: Path) -> tuple[dict, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
@@ -764,6 +773,15 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
                 gamma=float(summary["gamma"]),
                 omega=float(summary["omega"]),
                 title=f"GKX linear runtime: {base.name}",
+            )
+        elif kind == "linear_scan":
+            _summary, scan_ky, scan_gamma, scan_omega = _load_linear_scan_bundle(base)
+            fig, _axes = scan_comparison_figure(
+                scan_ky,
+                scan_gamma,
+                scan_omega,
+                r"$k_y \rho_i$",
+                f"GKX linear scan: {base.name}",
             )
         elif kind == "nonlinear":
             _summary, t, wphi, heat_flux, gamma, omega = _load_nonlinear_csv(base)

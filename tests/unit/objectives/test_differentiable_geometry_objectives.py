@@ -1151,6 +1151,19 @@ def test_vmex_boozer_equal_arc_core_profiles_supports_surface_stencil(
         )
 
 
+def test_vmex_boozer_surface_stencil_indices_remain_static_under_ad() -> None:
+    indices = vmec_boozer_core._surface_indices_for_stencil(
+        surface_stencil_width=3, ns_full=6, torflux=0.5
+    )
+
+    assert isinstance(indices, np.ndarray)
+    np.testing.assert_array_equal(indices, [1, 2, 3])
+    derivative = jax.jit(jax.grad(lambda value: value * jnp.sum(jnp.asarray(indices))))(
+        jnp.asarray(2.0)
+    )
+    np.testing.assert_allclose(derivative, 6.0)
+
+
 def test_vmex_metric_tensor_sensitivity_report_checks_real_metric_tensors_when_available() -> (
     None
 ):
