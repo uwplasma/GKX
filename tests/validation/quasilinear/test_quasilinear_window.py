@@ -14,6 +14,7 @@ import pytest
 from gkx.diagnostics.saturation import (
     SaturationStopConfig,
     saturation_stop_decision,
+    sokal_autocorrelation_time,
 )
 from gkx.diagnostics.transport_windows import (
     NonlinearWindowConvergenceConfig,
@@ -647,13 +648,104 @@ def test_saturation_stop_decision_refuses_a_trace_that_never_left_zero() -> None
 
 
 def test_saturation_stop_decision_still_stops_a_small_but_real_flux() -> None:
-    """The signal gate must not reject a converged run for being faint."""
+    """The signal gate must not reject a converged run for being faint.
+
+    The fluctuation here is correlated, because that is what separates a faint
+    real flux from a flat one. This test originally used white noise about the
+    same mean; that trace is now refused, on purpose, for having no resolved
+    correlation time -- see the stationary-from-t=0 test below. Faintness is
+    still not a reason to refuse: three parts in a billion saturates.
+    """
 
     rng = np.random.default_rng(0)
     time = np.linspace(0.0, 60.0, 600)
-    flux = 3.0e-9 + 1.0e-10 * rng.standard_normal(time.size)
+    noise = np.zeros(time.size)
+    for index in range(1, time.size):
+        noise[index] = 0.9 * noise[index - 1] + rng.normal(0.0, 1.0)
+    flux = 3.0e-9 * (1.0 + 0.03 * noise / np.std(noise))
 
     decision = saturation_stop_decision(time, flux)
 
     assert decision["saturated"] is True
-    assert "flux_indistinguishable_from_zero" not in decision["reasons"]
+    assert decision["reasons"] == []
+    assert decision["mean"] == pytest.approx(3.0e-9, rel=0.05)
+    assert decision["tau_ac"] > 0.0
+
+
+def test_saturation_stop_decision_refuses_a_flux_stationary_from_t_zero() -> None:
+    """A flux that never left its starting value is not a saturated flux.
+
+    The zero-flux guard is an absolute threshold, so it only covers traces that
+    happen to sit below it. A run whose heat flux is flat from the first sample
+    but a few decades above that floor passed every other gate and stopped in
+    its first chunk, at any amplitude: the correlation time of such a trace
+    crosses zero at lag one, which made ``tau_ac`` exactly zero, which made the
+    derived ``min_window = 10 tau_ac`` zero as well. The window-length
+    requirement therefore vanished precisely on the traces carrying the least
+    information, and the relative SEM of a long stretch of uncorrelated samples
+    is tiny.
+
+    Requiring only ``tau_ac > 0`` does not close it. The lag-one sample
+    autocorrelation of uncorrelated noise is positive about half the time, and
+    each such realization integrates to a small positive ``tau_ac`` that reads
+    as resolved: before the sampling-interval floor, 190 of the 400 draws below
+    saturated. So this sweeps realizations rather than checking one, and checks
+    two amplitudes because the defect is scale-free while the zero-flux guard
+    is not -- scaling a trace cannot change its autocorrelation, so the two
+    levels must give identical verdicts.
+    """
+
+    time = np.linspace(0.0, 60.0, 600)
+    sampling_interval = float(np.median(np.diff(time)))
+    saturated_draws = {1.0e-8: 0, 1.0e2: 0}
+    for seed in range(400):
+        shape = 1.0 + 0.01 * np.random.default_rng(seed).standard_normal(time.size)
+        for level in saturated_draws:
+            decision = saturation_stop_decision(time, level * shape)
+            saturated_draws[level] += bool(decision["saturated"])
+            assert decision["tau_ac"] <= sampling_interval, (seed, level)
+
+    assert saturated_draws == {1.0e-8: 0, 1.0e2: 0}, saturated_draws
+
+
+def test_saturation_stop_decision_still_stops_a_run_that_started_saturated(
+) -> None:
+    """A warm-started run has no growth phase and must still be allowed to stop.
+
+    This is the case that rules out the obvious alternative fix. Requiring the
+    trace to have risen above its own early-time level before a plateau counts
+    would also refuse the flat traces above -- but it would refuse these too,
+    and these are the runs the stop policy is worth the most on: a run seeded
+    from a converged neighbour begins at its saturated flux by construction and
+    never grows. Its late/early ratio is 1.02 against 65 for a run that spun up
+    from a small perturbation, so no threshold on growth separates it from a
+    dead trace. What separates them is that this one has a correlation time.
+    """
+
+    time = np.linspace(0.0, 60.0, 600)
+    stopped = 0
+    for seed in range(40):
+        rng = np.random.default_rng(seed)
+        noise = np.zeros(time.size)
+        for index in range(1, time.size):
+            noise[index] = 0.7 * noise[index - 1] + rng.normal(0.0, 1.0)
+        flux = 5.0 * (1.0 + 0.05 * noise / np.std(noise))
+        stopped += bool(saturation_stop_decision(time, flux)["saturated"])
+
+    # Not all 40: the half-window stationarity test rejects a minority of
+    # realizations on its own, which is its job and predates this gate.
+    assert stopped >= 30, stopped
+
+
+def test_sokal_reports_a_constant_trace_as_unresolved() -> None:
+    """A constant signal has no correlation time, so it must not report one.
+
+    Callers read "resolved" as ``cut < rho.size``. The degenerate return placed
+    the cut at lag zero, which reads as resolved for any non-empty ``rho`` --
+    the opposite of what a zero-variance trace has shown them.
+    """
+
+    tau, cut, rho = sokal_autocorrelation_time(np.zeros(64), 0.05)
+
+    assert tau == 0.0
+    assert cut >= rho.size

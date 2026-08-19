@@ -14,6 +14,13 @@ For every case in the manifest this driver
    and
 4. records wall time and peak host memory for the GKX scan.
 
+A case may also declare ``build_reproducibility_floor``: the relative difference
+below which its reference number carries no information, because the reference
+side moves by that much between two legitimate builds of the same reference
+commit. It is carried into the artifact rather than applied as a filter -- rows
+below the floor are still reported, and marked -- so that a reader, and any
+later gate, sees the resolution of the instrument next to the reading.
+
 The reference outputs are not tracked in this repository. Point
 ``GX_PARITY_REF_DIR`` at a directory holding them, or pass ``--reference-dir``.
 """
@@ -191,6 +198,9 @@ def run_case(
         **common,
     )
 
+    floor = case.get("build_reproducibility_floor")
+    floor = None if floor is None else float(floor)
+
     rows = []
     for index, ky in enumerate(ky_values):
         match = int(np.argmin(np.abs(spectrum.ky - ky)))
@@ -216,6 +226,18 @@ def run_case(
                 "converged": bool(
                     np.isfinite(gamma)
                     and abs(_relative(gamma_half, gamma)) <= 0.05
+                ),
+                # True when the difference this row reports is inside the
+                # spread the reference itself shows between two legitimate
+                # builds of the same commit. Such a row is not evidence of
+                # agreement or of disagreement; it is below the instrument.
+                "within_build_reproducibility_floor": (
+                    None
+                    if floor is None
+                    else bool(
+                        abs(_relative(gamma, gamma_ref)) <= floor
+                        and abs(_relative(omega, omega_ref)) <= floor
+                    )
                 ),
             }
         )
@@ -262,6 +284,7 @@ def run_case(
             "reference_peak_host_rss_mb": case.get("reference_peak_host_rss_mb"),
             "reference_peak_device_mb": case.get("reference_peak_device_mb"),
         },
+        "build_reproducibility_floor": floor,
         "summary": {
             "settled_ky_count": len(settled),
             "total_ky_count": len(rows),
@@ -301,6 +324,7 @@ def write_csv(records: list[dict[str, Any]], path: Path) -> None:
         "gamma_half_time_shift",
         "omega_half_time_shift",
         "converged",
+        "within_build_reproducibility_floor",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -455,12 +479,14 @@ def main(argv: list[str] | None = None) -> None:
     ]
     for record in records:
         summary = record["summary"]
+        floor = record.get("build_reproducibility_floor")
         print(
             f"{record['key']:34s} settled {summary['settled_ky_count']}/{summary['total_ky_count']} ky"
             f"  max|d gamma|(settled)={summary['max_absolute_gamma_relative_difference_settled']:.4f}"
             f"  at peak ky={summary['peak_ky']:.3f}: "
             f"d gamma={summary['gamma_relative_difference_at_peak']:+.4f} "
-            f"d omega={summary['omega_relative_difference_at_peak']:+.4f}",
+            f"d omega={summary['omega_relative_difference_at_peak']:+.4f}"
+            + ("" if floor is None else f"  [build floor {floor:.4f}]"),
             flush=True,
         )
 

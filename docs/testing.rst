@@ -504,6 +504,12 @@ without raising -- one sixth of a GAM period, with the residual then read off
 whatever the last 30% of *that* happens to be. The artifact gates
 ``trace_completeness = 1`` so a silently short run cannot be published.
 
+That was one deck. ``tests/release/test_release_gates.py`` carries the audit of
+all of them: every shipped TOML reaching the nonlinear runtime either pins
+``run_to`` in its own ``[time]`` block or is listed with the measured
+first-chunk stop decision that cleared it to run under the default, and a new
+deck fails the gate until somebody measures it.
+
 **Agreement with the published read-off is reported, not asserted.** At
 converged resolution GKX disagrees with Merlo Case III by more than the
 paper-scale tolerances on two of the three quantities:
