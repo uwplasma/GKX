@@ -227,7 +227,20 @@ recursive = true
 # are nine substitutions, four of them solves that reach solvax directly and so
 # cannot inherit the floor from the propagator wrapper. See
 # test_residual_gate_never_sits_below_the_working_dtype_noise_floor.
-baseline = 89874
+# 89815 -> 89860: making fit_signal = "auto" choose a signal and nothing else.
+# Both automatic paths -- the runtime linear fit and the combined-ky scan --
+# scored their candidates through fit_growth_rate_auto_with_stats without
+# passing tmin/tmax, so a run that pinned [fit] auto_window = false with a
+# window got the automatic selector's window instead, silently, while still
+# reporting "automatic fit selected signal 'phi'". On the Cyclone linear case
+# that is gamma = 0.0951 against 0.0413 for the same trajectory. The lines are
+# the fixed-window branch in each scorer plus the fit_growth_rate_with_stats
+# seam they need, which reports the R^2 pair over the requested window so the
+# channel is still chosen on fit quality. See
+# test_auto_fit_signal_keeps_the_requested_runtime_window.
+# 89874 -> 89919: merging the auto-window signal fix (#46) under the residual
+# floor. Both land in the fit path; the count is the sum, not new surface.
+baseline = 89919
 target = 45000
 
 [[line_budget_policy.counts]]
