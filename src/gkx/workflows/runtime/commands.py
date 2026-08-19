@@ -438,6 +438,45 @@ def _status_printer(prefix: str) -> Callable[[str], None]:
     return _emit
 
 
+def should_write_plots(args: Any, cfg: RuntimeConfig) -> bool:
+    """Resolve whether a finished run draws its own figures.
+
+    ``--no-plots`` overrides the configuration, which itself defaults to on.
+    """
+
+    if bool(getattr(args, "no_plots", False)):
+        return False
+    return bool(getattr(cfg.output, "plots", True))
+
+
+def auto_plot_runtime_outputs(
+    kind: str,
+    paths: Mapping[str, str],
+    *,
+    enabled: bool,
+) -> list[str]:
+    """Draw and announce the figure set for a run that has finished writing.
+
+    The whole call is contained. The simulation is already on disk by the time
+    this runs, so a headless display, an unusable matplotlib backend, or an
+    import that fails outright must cost the pictures and nothing else -- the
+    caller's exit status never depends on what happens here.
+    """
+
+    if not enabled or not paths:
+        return []
+    try:
+        from gkx.artifacts.run_figures import auto_plot_saved_run
+
+        written = auto_plot_saved_run(kind, paths)
+    except Exception as exc:  # pragma: no cover - guards a broken plotting stack
+        print(f"warning: could not plot {kind} outputs: {exc}", flush=True)
+        return []
+    for figure in written:
+        print(f"saved {figure}")
+    return written
+
+
 def _write_linear_runtime_command_outputs(
     args: Any,
     cfg: RuntimeConfig,
@@ -544,7 +583,12 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
         **fit_cfg,
     )
     print(f"ky={res.ky:.4f} gamma={res.gamma:.6f} omega={res.omega:.6f}")
-    _write_linear_runtime_command_outputs(args, cfg, res, deps=deps)
+    written = _write_linear_runtime_command_outputs(args, cfg, res, deps=deps)
+    auto_plot_runtime_outputs(
+        "linear",
+        written.get("linear", {}),
+        enabled=should_write_plots(args, cfg),
+    )
     return 0
 
 
@@ -580,7 +624,12 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
         print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
-    _write_scan_runtime_command_outputs(args, cfg, scan, deps=deps)
+    written = _write_scan_runtime_command_outputs(args, cfg, scan, deps=deps)
+    auto_plot_runtime_outputs(
+        "linear_scan",
+        written,
+        enabled=should_write_plots(args, cfg),
+    )
     return 0
 
 
@@ -629,6 +678,11 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
     if not print_nonlinear_run_summary(result):
         return 0
     print_nonlinear_command_outputs(paths, enabled=out_path is not None)
+    auto_plot_runtime_outputs(
+        "nonlinear",
+        paths if out_path is not None else {},
+        enabled=should_write_plots(args, cfg),
+    )
     return 0
 
 
@@ -653,6 +707,7 @@ __all__ = [
     "apply_quasilinear_overrides",
     "apply_runtime_path_overrides",
     "attach_preloaded_runtime_config",
+    "auto_plot_runtime_outputs",
     "build_runtime_command_deps",
     "load_runtime_command_config",
     "plot_saved_output_command",
@@ -666,6 +721,7 @@ __all__ = [
     "runtime_output_path",
     "scan_runtime_linear_command",
     "should_show_progress",
+    "should_write_plots",
 ]
 
 
