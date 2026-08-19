@@ -490,7 +490,8 @@ recursive = true
 # 95480 -> 95489: refusing to resolve a correlation time the sampling cannot
 # see. A flat trace crossed zero at lag one, which read as resolved and
 # collapsed the window floor built on it.
-baseline = 95504
+# 95504 -> 95537: merging the gradient coverage work over the deck audit.
+baseline = 95537
 target = 45000
 
 [[line_budget_policy.counts]]
