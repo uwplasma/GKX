@@ -831,3 +831,31 @@ Office-GPU re-measure list recorded: the parity matrix is float64 so tf32 should
 but the two-device bracket claims (route overhead, scaling, and especially the **bitwise 0.0
 identity**) MUST be re-measured after #44/#52 pins; per-case risk mapped to each upstream GX
 fix (g0/FLR → high-ky W7-X+HSX; bpar CFL → the two EM cases; pyvmec sign → W7-X/HSX geometry).
+
+### 2026-08-18 agent/fbeta — 3.2b DONE (PR #57): the bridge had a MISLABELLED DRIFT
+Not merely a missing pressure term. **The vmex-state bridge was returning the grad-B drift
+under both names**: its `cvdrift` matched the runtime path's `gbdrift` to 6.7e-4. Because the
+two coincide identically in vacuum, every existing test (all vacuum) was blind to it — so
+every boundary-coefficient gradient ever taken at finite beta carried the wrong drift.
+
+Parity (path B vs path A, normalized max abs): cvdrift 2.593e-1 → **2.995e-3** (s=0.25),
+2.088e-1 → 3.252e-3 (s=0.64), 2.519e-1 → 7.796e-4 (+current) — 86×/64×/323×. Every other
+array bit-identical. Residual 3e-3 is the bridge's own pre-existing metric floor (bgrad and
+gds2 already disagree up to 4.7e-2 with no pressure involved), NOT missing physics.
+Vacuum EXACTLY preserved (gbdrift−cvdrift ≡ 0.0). Gradient FD-consistent with clean
+second-order convergence (2.6e-1 → 6.8e-3 → **7.0e-5** as h goes 1e-4 → 1e-6) on an
+observable that is identically zero in vacuum, so it isolates the new terms.
+
+**Change 4 (Hegna–Nakajima) deliberately NOT implemented — measured, not assumed.** Zeroing
+`beta_b` inside path A moves drifts by 4.5e-4 to 8.1e-4, ~4× BELOW the 3e-3 parity floor, so
+adding it would change adjoint gradients by an amount the gate cannot resolve. Number and the
+cheap route to adding it later (Vprime cancels analytically in betamns_b; gmnc_b is already in
+the booz_xform_jax output) recorded in `vmec_boozer_drifts.py`. Revisit when the metric floor drops.
+Structure: `vmec_boozer_core.py` was at **997/1000** — three lines from the cap — so the drift
+assembly moved to new `src/gkx/geometry/vmec_boozer_drifts.py` (core → 940), with coverage
+owner + `docs/api.rst` entry. Line budget 89815 → 89964; `test_python_files` 96 → 97 (the
+checker caught that second count too — a fourth CI contract to know about).
+Coordinator note: the shipped test asserted exactness at rtol 1e-12/exact-equality, which
+passes under CI's `JAX_ENABLE_X64=true` but FAILS a bare local `pytest` at float32 eps (1e-7).
+Made the tolerances track `np.finfo(dtype).eps` so the suite is green both ways — the inverse
+of the "green locally, red in CI" trap, and just as confusing.
