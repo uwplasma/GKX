@@ -420,7 +420,10 @@ recursive = true
 # branch's inlined per-channel copies collapse into that seam and into the
 # shared scan candidate helper instead of standing beside them; the stationary
 # selector reaches both by threading window_method through the same argument.
-baseline = 94771
+# 94771 -> 94775: the two imports the sharded Hermite route was missing. np is
+# used in five places and _make_hermitian_projector in one, so these four lines
+# turn five NameErrors into working code rather than adding surface.
+baseline = 94775
 target = 45000
 
 [[line_budget_policy.counts]]
