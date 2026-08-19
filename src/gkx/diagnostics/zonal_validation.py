@@ -185,6 +185,11 @@ def tail_trace_metrics(
 
 
 # Zonal-response metrics used by benchmark and manuscript validation gates.
+_DAMPING_FIT_MODES = frozenset(
+    {"combined_envelope", "branchwise_extrema", "period_rms_envelope"}
+)
+
+
 @dataclass(frozen=True)
 class _ZonalWindowState:
     t_arr: np.ndarray
@@ -212,6 +217,8 @@ class _ZonalPeakFitState:
     gam_damping: float
     peak_fit_count: int
     gam_frequency: float
+    damping_fit_tmin: float = float("nan")
+    damping_fit_tmax: float = float("nan")
 
 
 def _coerce_zonal_trace(t: np.ndarray, response: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -244,8 +251,8 @@ def _normalized_zonal_options(
     if peak_fit_max_peaks is not None and int(peak_fit_max_peaks) <= 0:
         raise ValueError("peak_fit_max_peaks must be > 0 when provided")
     damping_mode = str(damping_fit_mode).strip().lower().replace("-", "_")
-    if damping_mode not in {"combined_envelope", "branchwise_extrema"}:
-        raise ValueError("damping_fit_mode must be one of {'combined_envelope', 'branchwise_extrema'}")
+    if damping_mode not in _DAMPING_FIT_MODES:
+        raise ValueError(f"damping_fit_mode must be one of {sorted(_DAMPING_FIT_MODES)}")
     frequency_mode = str(frequency_fit_mode).strip().lower().replace("-", "_")
     if frequency_mode not in {"peak_spacing", "hilbert_phase"}:
         raise ValueError("frequency_fit_mode must be one of {'peak_spacing', 'hilbert_phase'}")
@@ -388,6 +395,108 @@ def _branchwise_extrema_damping(
     return float(np.mean(branch_gammas)), int(np.sum(branch_counts))
 
 
+def _sliding_period_envelope(
+    t_arr: np.ndarray,
+    detrended_norm: np.ndarray,
+    *,
+    period: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(times, envelope)`` from a sliding one-period RMS of the trace.
+
+    For ``y(t) = C(t) + A exp(-gamma t) cos(omega t + phi)`` with ``C`` varying
+    slowly on the oscillation period, the RMS of ``y`` about its *own* running
+    mean over exactly one period is ``A exp(-gamma t)`` times a factor that does
+    not depend on ``t``. So ``log(envelope)`` has slope ``-gamma`` whatever the
+    offset does, and every sample inside the window enters the average with
+    weight ``1/width`` -- no single extremum, and therefore no single output
+    sample, can move the fit. Refining the diagnostic output cadence refines the
+    quadrature of the same continuum integral instead of changing which points
+    are fitted, which is what makes the estimate cadence-independent.
+    """
+
+    spacing = float(np.median(np.diff(t_arr))) if t_arr.size > 1 else 0.0
+    if not np.isfinite(spacing) or spacing <= 0.0 or not np.isfinite(period) or period <= 0.0:
+        return np.asarray([], dtype=float), np.asarray([], dtype=float)
+    width = int(round(float(period) / spacing))
+    if width % 2 == 0:
+        width += 1
+    if width < 5 or 2 * width > int(t_arr.size):
+        return np.asarray([], dtype=float), np.asarray([], dtype=float)
+    kernel = np.full(width, 1.0 / float(width), dtype=float)
+    # Both passes are "valid" convolutions so no output ever sees the zero
+    # padding "same" would splice in at the ends: an edge-contaminated local
+    # mean would otherwise leak one full window into the squared deviations.
+    half = width // 2
+    size = int(t_arr.size)
+    local_mean = np.convolve(detrended_norm, kernel, mode="valid")
+    deviation = detrended_norm[half : size - half] - local_mean
+    local_var = np.convolve(np.square(deviation), kernel, mode="valid")
+    times = np.asarray(t_arr[width - 1 : size - width + 1], dtype=float)
+    return times, np.sqrt(2.0 * np.maximum(local_var, 0.0))
+
+
+def _amplitude_weighted_log_slope(
+    times: np.ndarray,
+    envelope: np.ndarray,
+) -> tuple[float, int]:
+    """Weighted log-linear slope of an envelope, with weights ``envelope**2``.
+
+    Additive noise of size ``delta`` on an envelope sample of size ``A`` costs
+    ``delta / A`` in the log, so the inverse-variance weight of a log-envelope
+    point is proportional to ``A**2``. That is also what keeps the late,
+    near-zero end of the window -- where recurrence and round-off live -- from
+    dominating a fit whose early points carry the actual signal.
+    """
+
+    valid = np.isfinite(times) & np.isfinite(envelope) & (envelope > 0.0)
+    count = int(np.count_nonzero(valid))
+    if count < 4:
+        return float("nan"), count
+    x = times[valid]
+    y = np.log(envelope[valid])
+    weights = np.square(envelope[valid])
+    total = float(np.sum(weights))
+    if not np.isfinite(total) or total <= 0.0:
+        return float("nan"), count
+    weights = weights / total
+    x_mean = float(np.sum(weights * x))
+    y_mean = float(np.sum(weights * y))
+    denominator = float(np.sum(weights * np.square(x - x_mean)))
+    if denominator <= 0.0:
+        return float("nan"), count
+    slope = float(np.sum(weights * (x - x_mean) * (y - y_mean)) / denominator)
+    return -slope, count
+
+
+def _period_rms_envelope_damping(
+    *,
+    t_arr: np.ndarray,
+    detrended_norm: np.ndarray,
+    gam_frequency: float,
+    damping_fit_start_periods: float,
+    damping_fit_periods: float,
+) -> tuple[float, int, float, float]:
+    """Fit the GAM damping over a whole number of GAM periods of the envelope.
+
+    The window is stated in periods of the measured oscillation rather than in
+    samples or in an absolute time, so it does not move when the output cadence
+    or the timestep changes. ``damping_fit_start_periods`` skips the initial
+    relaxation that precedes the first full oscillation.
+    """
+
+    if not np.isfinite(gam_frequency) or gam_frequency <= 0.0:
+        return float("nan"), 0, float("nan"), float("nan")
+    period = 2.0 * np.pi / float(gam_frequency)
+    window_tmin = float(t_arr[0]) + float(damping_fit_start_periods) * period
+    window_tmax = window_tmin + float(damping_fit_periods) * period
+    times, envelope = _sliding_period_envelope(t_arr, detrended_norm, period=period)
+    if times.size == 0:
+        return float("nan"), 0, window_tmin, window_tmax
+    inside = (times >= window_tmin) & (times <= window_tmax)
+    damping, count = _amplitude_weighted_log_slope(times[inside], envelope[inside])
+    return damping, count, window_tmin, window_tmax
+
+
 def _fit_peak_times_for_frequency(
     *,
     peak_times: np.ndarray,
@@ -453,23 +562,39 @@ def _zonal_damping_fit(
     max_peak_idx: np.ndarray,
     min_peak_idx: np.ndarray,
     peak_fit_max_peaks: int | None,
-) -> tuple[float, int]:
+    gam_frequency: float,
+    damping_fit_start_periods: float,
+    damping_fit_periods: float,
+) -> tuple[float, int, float, float]:
+    if damping_mode == "period_rms_envelope":
+        return _period_rms_envelope_damping(
+            t_arr=t_arr,
+            detrended_norm=detrended_norm,
+            gam_frequency=gam_frequency,
+            damping_fit_start_periods=damping_fit_start_periods,
+            damping_fit_periods=damping_fit_periods,
+        )
     if damping_mode == "combined_envelope":
-        return _combined_envelope_damping(
+        damping, count = _combined_envelope_damping(
             peak_times=peak_times,
             peak_values=peak_values,
             fit_mask=fit_mask,
             peak_idx=peak_idx,
             peak_fit_max_peaks=peak_fit_max_peaks,
         )
-    return _branchwise_extrema_damping(
-        t_arr=t_arr,
-        detrended_norm=detrended_norm,
-        fit_mask=fit_mask,
-        max_peak_idx=max_peak_idx,
-        min_peak_idx=min_peak_idx,
-        peak_fit_max_peaks=peak_fit_max_peaks,
-    )
+    else:
+        damping, count = _branchwise_extrema_damping(
+            t_arr=t_arr,
+            detrended_norm=detrended_norm,
+            fit_mask=fit_mask,
+            max_peak_idx=max_peak_idx,
+            min_peak_idx=min_peak_idx,
+            peak_fit_max_peaks=peak_fit_max_peaks,
+        )
+    windowed = t_arr[fit_mask]
+    if windowed.size:
+        return damping, count, float(windowed[0]), float(windowed[-1])
+    return damping, count, float("nan"), float("nan")
 
 
 def _zonal_frequency_fit(
@@ -522,6 +647,8 @@ def _zonal_metric_result(
     tmax: float,
     fit_tmin: float,
     fit_tmax: float,
+    damping_fit_tmin: float,
+    damping_fit_tmax: float,
     t_arr: np.ndarray,
     response_norm: np.ndarray,
     detrended_norm: np.ndarray,
@@ -546,6 +673,8 @@ def _zonal_metric_result(
         tmax=tmax,
         fit_tmin=float(fit_tmin),
         fit_tmax=float(fit_tmax),
+        damping_fit_tmin=float(damping_fit_tmin),
+        damping_fit_tmax=float(damping_fit_tmax),
         peak_times=np.asarray(t_arr[peak_idx], dtype=float),
         peak_envelope=np.asarray(peak_values, dtype=float),
         max_peak_times=np.asarray(t_arr[max_peak_idx], dtype=float),
@@ -626,22 +755,14 @@ def _zonal_peak_fit_state(
     *,
     peak_fit_max_peaks: int | None,
     hilbert_trim_fraction: float,
+    damping_fit_start_periods: float,
+    damping_fit_periods: float,
 ) -> _ZonalPeakFitState:
     max_peak_idx, min_peak_idx, peak_idx = _zonal_peak_indices(state.detrended_norm)
     peak_times = state.t_arr[peak_idx]
     peak_values = np.abs(state.detrended_norm[peak_idx])
-    gam_damping, peak_fit_count = _zonal_damping_fit(
-        damping_mode=state.damping_mode,
-        peak_times=peak_times,
-        peak_values=peak_values,
-        fit_mask=state.fit_mask,
-        peak_idx=peak_idx,
-        t_arr=state.t_arr,
-        detrended_norm=state.detrended_norm,
-        max_peak_idx=max_peak_idx,
-        min_peak_idx=min_peak_idx,
-        peak_fit_max_peaks=peak_fit_max_peaks,
-    )
+    # The frequency is fitted first because ``period_rms_envelope`` states its
+    # own window in GAM periods, so it needs the measured oscillation frequency.
     gam_frequency = _zonal_frequency_fit(
         frequency_mode=state.frequency_mode,
         peak_times=peak_times,
@@ -653,6 +774,21 @@ def _zonal_peak_fit_state(
         detrended_norm=state.detrended_norm,
         hilbert_trim_fraction=hilbert_trim_fraction,
     )
+    gam_damping, peak_fit_count, damping_tmin, damping_tmax = _zonal_damping_fit(
+        damping_mode=state.damping_mode,
+        peak_times=peak_times,
+        peak_values=peak_values,
+        fit_mask=state.fit_mask,
+        peak_idx=peak_idx,
+        t_arr=state.t_arr,
+        detrended_norm=state.detrended_norm,
+        max_peak_idx=max_peak_idx,
+        min_peak_idx=min_peak_idx,
+        peak_fit_max_peaks=peak_fit_max_peaks,
+        gam_frequency=gam_frequency,
+        damping_fit_start_periods=damping_fit_start_periods,
+        damping_fit_periods=damping_fit_periods,
+    )
     return _ZonalPeakFitState(
         max_peak_idx=max_peak_idx,
         min_peak_idx=min_peak_idx,
@@ -660,6 +796,8 @@ def _zonal_peak_fit_state(
         gam_damping=gam_damping,
         peak_fit_count=peak_fit_count,
         gam_frequency=gam_frequency,
+        damping_fit_tmin=damping_tmin,
+        damping_fit_tmax=damping_tmax,
     )
 
 
@@ -677,6 +815,8 @@ def zonal_flow_response_metrics(
     fit_window_tmin: float | None = None,
     fit_window_tmax: float | None = None,
     hilbert_trim_fraction: float = 0.2,
+    damping_fit_start_periods: float = 1.0,
+    damping_fit_periods: float = 3.0,
 ) -> ZonalFlowResponseMetrics:
     """Estimate residual level and GAM envelope metrics from a zonal response.
 
@@ -688,6 +828,15 @@ def zonal_flow_response_metrics(
     supports benchmarks whose published normalization is an external initial
     amplitude, for example a Gaussian potential maximum rather than the first
     line-averaged sample.
+
+    ``damping_fit_mode="period_rms_envelope"`` is the estimator to prefer for a
+    *gated* damping rate. The extrema-based modes fit a handful of hand-picked
+    peaks, so a near-zero-crossing wiggle that one output cadence resolves and
+    another does not enters the fit and moves the answer by tens of percent; the
+    period-RMS envelope averages every sample over whole GAM periods and does
+    not. ``damping_fit_start_periods`` and ``damping_fit_periods`` state that
+    window in periods of the measured oscillation, so it is fixed in physical
+    time rather than in samples or in a hard-coded absolute time.
     """
 
     state = _zonal_window_state(
@@ -708,6 +857,8 @@ def zonal_flow_response_metrics(
         state,
         peak_fit_max_peaks=peak_fit_max_peaks,
         hilbert_trim_fraction=hilbert_trim_fraction,
+        damping_fit_start_periods=damping_fit_start_periods,
+        damping_fit_periods=damping_fit_periods,
     )
     return _zonal_metric_result(
         initial_level=state.initial_level,
@@ -724,6 +875,8 @@ def zonal_flow_response_metrics(
         tmax=state.tail_tmax,
         fit_tmin=state.fit_tmin,
         fit_tmax=state.fit_tmax,
+        damping_fit_tmin=peaks.damping_fit_tmin,
+        damping_fit_tmax=peaks.damping_fit_tmax,
         t_arr=state.t_arr,
         response_norm=state.response_norm,
         detrended_norm=state.detrended_norm,
