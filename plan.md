@@ -509,8 +509,10 @@ w7x_itg, plus `extract.py`), each keeping GX's `_correct.out.nc` alongside for t
 Full report: `plan/notes/gx_rebaseline.md`.
 
 **New work items this creates:**
-- **2.1c** fix `docs/benchmarks.rst` to quote the converged GX pair (0.093049/0.281991) and
-  label the t=10 value as a smoke probe; re-check every doc/table quoting 0.1018.
+- **2.1c** DONE → **PR [#55](https://github.com/uwplasma/GKX/pull/55)** `docs/gx-probe-convergence`
+  (217 gate tests green). Both `docs/benchmarks.rst:156` and
+  `benchmarks/capability_matrix.toml:9` now label the t=10 pair a smoke reading and give the
+  converged pair alongside. Those were the only two places quoting 0.101814.
 - **2.1d** raise `examples/linear/axisymmetric/cyclone.toml`'s `t_max` so γ·t_max ≳ 7
   (t_max ≈ 80–150), or make the auto-stop/warning machinery flag it. Coordinate with 0.3.
 - **2.4-r0** an HSX GX deck must be authored — none exists in either repo, so the tracked
@@ -599,3 +601,18 @@ the single biggest UX win available for the one-command goal** (promote it out o
 Phase 1). Only ONE GPU is used today; nothing shards across both (Phase 4.2). The plan's
 "65 s laptop CPU" figure is superseded by 52.6 s.
 Full report: `plan/notes/office_gkx_setup.md`.
+
+### 2026-08-18 RJ — 2.1c shipped as PR #55; #45 regeneration-command defect logged
+Docs/capability-matrix now distinguish the GX smoke probe from the converged pair
+(PR #55, 217 gate tests green; grep confirms those were the only two sites quoting 0.101814).
+
+Separately, the PR #45 agent found a **regeneration-command defect cluster**: the command
+documented in `docs/benchmarks.rst` and `benchmarks/results/manifest.toml` is a bare
+`python tools/comparison/build_gx_parity_matrix.py`, missing the `PYTHONPATH=src` and
+`GX_PARITY_REF_DIR` that `tools/benchmark_refresh_manifest.toml` correctly declares. Worse,
+running all six cases in one process (as that command does) would contaminate
+`gkx_peak_host_rss_mb`, because `_peak_rss_mb()` (`build_gx_parity_matrix.py:81-84`) reads
+`ru_maxrss`, a per-process high-water mark that never resets. The tracked RSS values are
+non-monotonic across cases (1340, 1409, 1335, 1303, 1954, 1548 MB), which proves the shipped
+matrix was actually built case-by-case via `--cases`/`--merge` — i.e. the documented
+regeneration command has never been the one used. Fix belongs with #45.
