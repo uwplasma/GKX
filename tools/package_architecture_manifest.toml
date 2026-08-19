@@ -245,6 +245,19 @@ recursive = true
 # to be rounded off a tracer -- so it names the parameter that is unsupported
 # instead of the boundary. See
 # test_linked_boundary_growth_gradient_matches_finite_difference.
+# 89852 -> 89903: differentiating the compressed real FFT. The projector that
+# keeps the nonlinear state real asked cache.ky for its sign pattern, and
+# cache.ky is rho_star * grid.ky, so it is a tracer whenever the cache is built
+# inside one. compressed_real_fft = true -- what every production nonlinear
+# TOML sets -- therefore refused jit outright on both boundaries, and every
+# gradient in the repository quietly ran the full-complex bracket instead. All
+# the projector needs is the ky axis layout, which is grid topology and which
+# the compressed bracket already reads off shapes alone. The lines are that
+# entry point, the host-side layout read that replaces the jnp round trip, and
+# the reason the conjugate kx ordering has to stay a numpy array: these
+# projectors are cached across traces, so a device constant built here belongs
+# to whichever trace built it first and escapes that scope on reuse. See
+# test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference.
 # 89815 -> 89964: finite-beta pressure in the differentiable vmex-state bridge.
 # The bridge aliased gbdrift to cvdrift and left mu0 dp/ds out of the normal
 # curvature, so it returned the grad-B drift under both names and every
@@ -350,7 +363,7 @@ recursive = true
 # floor. Both land in the fit path; the count is the sum, not new surface.
 # 89919 -> 90011: certifying the default linear branch alongside the residual
 # floor it now uses (#52 over #47). The adaptive branch and its precision pin.
-baseline = 93009
+baseline = 93060
 target = 45000
 
 [[line_budget_policy.counts]]
