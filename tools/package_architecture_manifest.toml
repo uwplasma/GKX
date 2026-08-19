@@ -212,7 +212,12 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
-baseline = 89815
+# 89815 -> 90926: drawing the diagnostics the solver already writes (#53). snapshots.py is
+# a move rather than new surface -- the renderers came out of the movie tool,
+# which shrinks by the same amount -- and the figure functions cover the
+# spectra and particle flux that were being written to NetCDF and never
+# plotted.
+baseline = 90926
 target = 45000
 
 [[line_budget_policy.counts]]
