@@ -87,8 +87,10 @@ Open PRs: [#44](https://github.com/uwplasma/GKX/pull/44) tf32 audit ·
   Laguerre dead — dense full-l transform in grid mode). Diagnostics fuse into the scan
   carry (the measured 118× lesson). Sanity: halo/psum/`jax.grad` through shard_map
   bitwise-exact on 2 logical CPUs at jax 0.9.2.
-- **JAX floor = 0.10.1** (`enable_eigvec_derivs` introduced there; **0.11 does not
-  exist** — a `>=0.11` pin bricks installs). `jaxlib>=0.10.1`, `booz_xform_jax`
+- **JAX floor = 0.10.1** (`enable_eigvec_derivs` first shipped there; the in-code comment
+  claiming 0.11 was wrong for the floor). NOTE 2026-08-18: jax **0.11.1 does now exist**
+  for py312 and is what the office GPU box runs — the `>=0.10.1` floor remains correct and
+  safe; only the earlier "0.11 does not exist" remark is superseded. `jaxlib>=0.10.1`, `booz_xform_jax`
   becomes a declared dependency. Already in `plan/patches/phase0_bundle.patch`.
 - **All commits authored by rogeriojorge** (see log protocol §4).
 
@@ -544,3 +546,56 @@ worry that motivated 2.1b — it does not.
 
 (KBM correction: the final `.out.nc` values are −0.13%/+0.07%, superseding the plateau
 readings +0.09%/+0.07% quoted in the previous entry.)
+
+### 2026-08-18 agent/office-gkx — GKX RUNS ON THE A4000s; PR #52 BLOCKED ON GPU
+**Environment recipe (office only had Python 3.10, where PyPI caps jax at 0.6.2 — below our
+floor).** Solved with `uv` fetching a standalone CPython 3.12 into the user's home, no
+system packages touched:
+```
+python3 -m venv ~/.venvs/bootstrap && ~/.venvs/bootstrap/bin/pip install -U pip uv
+export PATH=$HOME/.venvs/bootstrap/bin:$PATH
+uv python install 3.12 && uv venv --python 3.12 ~/.venvs/gkx-gpu
+VIRTUAL_ENV=$HOME/.venvs/gkx-gpu uv pip install "jax[cuda12]>=0.10.1" pytest
+cd ~/gkx-wt/main && VIRTUAL_ENV=$HOME/.venvs/gkx-gpu uv pip install -e .
+```
+→ jax/jaxlib 0.11.1, `[CudaDevice(0), CudaDevice(1)]`. cuda12 wheels work despite system
+nvcc 11.5. **Gotcha: uv's editable install uses a metapath finder that BEATS `PYTHONPATH`**,
+so branch switching needs a venv per worktree, not a path override. Worktrees at
+`~/gkx-wt/{main,krylov}`; the pre-existing DIRTY `~/GKX` (275 changed paths on the feat
+branch) was left untouched.
+
+**CPU↔GPU parity gate: PASS.** Demo γ=0.089982/ω=0.289838 exact to all printed digits;
+ky scan ≤2.8e-5; nonlinear short 2–4e-6 relative on Wg/Wphi/heat_flux (textbook f32).
+**Reference correction**: the plan's `Wg=0.000406441` is a `7cf5e6d1` feature-branch value;
+office GPU (0.000406695), office CPU (0.000406694) AND laptop CPU on main (0.000406694)
+all agree — **re-baseline the Wg reference to 0.00040669**. Wphi and heat_flux reproduce on
+main to 7e-7, so only Wg moved.
+
+**BLOCKER — PR #52 hard-fails on GPU.** The certified adaptive path (which #52 makes the
+default) dies after **19 minutes**: `residual=0.00337443 tolerance=0.000119209`. Root cause
+is **TF32**: the A4000 is Ampere, so default f32 matmuls carry a ~10-bit mantissa, inflating
+the residual ~28× above the `1000*eps(complex64)` floor. With
+`JAX_DEFAULT_MATMUL_PRECISION=highest` the same run gives γ=0.088932/ω=0.280220 (matching
+laptop CPU to 3.2e-6) in **28.7 s — 40× faster**, because the failing run burns every restart.
+The gate is right; the arithmetic feeding it is not. → **#44 (tf32 audit) becomes a hard
+dependency of #52**, and #52 needs its Krylov/residual contractions pinned in #44's idiom.
+Fix agent dispatched; will push to the #52 branch and comment there.
+
+**Bonus finding that strengthens #52's case**: main's *uncertified* krylov returns
+γ=**−0.126120** on GPU and **−0.115960** on CPU for a mode whose true value is **+0.08893** —
+a stable, WRONG-SIGN answer that differs between backends, unchanged by `highest` precision.
+So #52 is fixing a genuine wrong answer, not adding hygiene.
+
+**Timings (100-step nonlinear short case):**
+| host | warm ms/step | cold compile | wall |
+|---|---|---|---|
+| GPU (1× A4000) | **20.3** | ~22.9 s | 27.6–33.8 s |
+| office CPU (36 cores) | 403.1 | ~17.1 s | 59.7 s |
+| laptop CPU | 341.8 | ~14.3 s | 52.6 s |
+
+**~17–20× warm-step speedup**, linear scan 4.1×. But compile is 23 s of a 25 s integrator
+wall, so GPU only wins end-to-end past ~70 steps → **JAX's persistent compilation cache is
+the single biggest UX win available for the one-command goal** (promote it out of 4.3 into
+Phase 1). Only ONE GPU is used today; nothing shards across both (Phase 4.2). The plan's
+"65 s laptop CPU" figure is superseded by 52.6 s.
+Full report: `plan/notes/office_gkx_setup.md`.
