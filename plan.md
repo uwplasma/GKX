@@ -1389,3 +1389,57 @@ worse than shipping none. → item **1.8**: auto-shorten horizons for seeded poi
 The foreign stash the tracedsweep agent popped was the **Merlo agent's** zonal work, which that
 agent had already recovered itself from unreachable commit `20ab39d5` and which shipped as PR #67.
 A second copy is at `scratchpad/patches/RECOVERED_other_session_zonal_work.patch`. Nothing lost.
+
+### 2026-08-19 RJ — WAVE 5 harvested from interrupted agents; PRs #73, #75, #76, #77
+Four agents were stopped mid-flight on request and their worktrees harvested. All four had
+coherent, gated work; each shipped with what was NOT finished stated in the PR.
+
+**#73 — the deck audit, and my #68 fix was insufficient.** I verified this myself before
+shipping: `sokal_autocorrelation_time` reads `resolved` as `cut < rho.size`, and a flat trace
+crosses zero at LAG ONE, so it reports a resolved tau_ac ~ 0 and `min_window = 10*tau_ac`
+collapses. The remaining gates then pass on scatter alone. **Scale-free**, so my absolute 1e-9
+floor only appeared to work — the shipped zonal decks escaped solely because their flux is
+EXACTLY zero. Measured before/after: flat traces at 1e-08 AND 1e+02 both went
+`saturated=True, reasons=[]` -> `tau_ac_unresolved`. Guarded against over-correction: an
+AR(1)-correlated plateau (tau=0.571 vs dt=0.100) still stops; a white-noise plateau does not,
+correctly, since sampling coarser than the correlation time cannot measure it.
+Three decks pinned `run_to="t_max"` with measurements recorded. A release gate now holds the
+audit open. **16 turbulence decks are named as OWING a measurement, not cleared** — the audit
+was stopped partway and I did not fill in clearances nobody took. Item **1.7b**: empty
+`_RUN_TO_AUDIT_PENDING`. kbm floor declared in `tools/gx_parity_matrix_manifest.toml` (there
+was no sub-0.1% gate to loosen; the matrix is report-only).
+
+**#75 — CI gave no signal where it should have given red.** Test shards sat behind `mypy`, so
+a type failure SKIPPED every shard; that is how #62 merged with 7 NameErrors while its own runs
+were cancelled. Types and tests are independent signals now, both required. Also fixed the
+default marker: deselecting `integration` meant a bare `pytest` collected **ZERO** tests from
+`test_linear.py` (published gyro-moment hierarchy), `test_nonlinear.py` (FD gradient contracts)
+and `test_runtime_runner.py`. Now deselects `slow`: **2294 -> 2498 collected; test_linear.py
+0 -> 73**. The four contracts a local pytest cannot catch are written into `docs/testing.rst`.
+UNVERIFIABLE: workflow YAML cannot be exercised locally — the change is minimal and reasoned
+in-file, reviewed by reading.
+
+**#76 — autodiff coverage + regenerable evidence.** The production window had exactly ONE
+gradient test (single-species, electrostatic, collisionless, 4x4x8). Now a 16-test matrix:
+multi-species 6-D state, **EM with apar/bpar actually under `grad`** rather than merely wired,
+custom collision operators, hypercollisions, rk3/rk4. **Defect found while building it: the
+window silently DROPPED a `collision_operator` that `integrate_nonlinear` accepts** — saturate
+with collisions, differentiate without them, nothing said. Restored the deleted generators
+(FD ladder, checkpointing memory, CPU/GPU device parity — the last being a gate the plan had
+CLAIMED while its two profiles used different platforms AND grids). Divergence-knee warning
+added; QA_optimization sits one step below it.
+
+**#77 — the sharding diagnosis was WRONG, and profiling said so.** Not replicated diagnostics.
+XLA folds the whole linear operator into the elementwise add joining it to the bracket and
+emits **one kLoop fusion with 29 operands**, re-reading the shard once per shifted term, at
+~40% of the two-kernel throughput. **The cost model tips on shard SHAPE, not size**: the same
+fusion is 11.0 ms/step on a two-species shard and **37.4 ms/step on the one-species shard a
+two-device mesh creates — 3.4x longer on half the data**. Per-species cost is flat (49.2/49.1/
+47.1 at Ns=2/3/4) and jumps to 69.7 at Ns=1, so **a two-species run on two devices could never
+have exceeded 1.41x however cheap the collectives were.** An `optimization_barrier` (an
+identity) takes the shard 69.7 -> 46.7 and the mesh 75.8 -> 47.4 ms/step. This removes the
+ceiling; it does not by itself reach 1.90x. → item **4.4**: re-measure end-to-end scaling.
+
+**Lesson worth keeping**: three of these four reversed the hypothesis they were given
+(the saturation floor, the sharding bottleneck, the "pre-existing" test failures). Dispatching
+with "refute this if the numbers disagree" was what made that possible.
