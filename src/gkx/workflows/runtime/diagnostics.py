@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import Any
+import warnings
 
 import numpy as np
 
@@ -11,6 +12,7 @@ from gkx.diagnostics.growth_rates import (
     fit_growth_rate,
     fit_growth_rate_auto,
     fit_growth_rate_auto_with_stats,
+    fit_growth_rate_uncertainty,
     fit_growth_rate_with_stats,
 )
 from gkx.diagnostics.modes import (
@@ -25,7 +27,9 @@ __all__ = [
     "ensure_finite_linear_history",
     "finalize_runtime_linear_quasilinear",
     "fit_runtime_linear_diagnostics",
+    "half_horizon_settled_probe",
     "refit_runtime_linear_trajectory",
+    "warn_if_growth_unresolved",
 ]
 
 #: Finite amplitudes beyond this scale are numerical overflow, not physics: a
@@ -66,6 +70,11 @@ class RuntimeLinearFitResult:
     fit_window_tmin: float | None
     fit_window_tmax: float | None
     fit_signal_used: str
+    # Fit-quality diagnostics over the selected window.
+    gamma_stderr: float | None = None
+    omega_stderr: float | None = None
+    fit_r2: float | None = None
+    fit_settled: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -115,6 +124,7 @@ class _RuntimeLinearFitOptions:
     growth_weight: float
     require_positive: bool
     min_amp_fraction: float
+    window_method: str = "stationary"
 
 
 @dataclass(frozen=True)
@@ -266,6 +276,7 @@ def _fit_auto_candidate(
             growth_weight=options.growth_weight,
             require_positive=options.require_positive,
             min_amp_fraction=options.min_amp_fraction,
+            window_method=options.window_method,
         )
     else:
         gamma, omega, r2, r2_phase = deps.fit_growth_rate_with_stats(
@@ -345,6 +356,7 @@ def _fit_requested_runtime_linear_signal(
             growth_weight=options.growth_weight,
             require_positive=options.require_positive,
             min_amp_fraction=options.min_amp_fraction,
+            window_method=options.window_method,
         )
     else:
         gamma, omega = deps.fit_growth_rate(
@@ -395,6 +407,120 @@ def _extract_runtime_linear_eigenfunction(
         return None
 
 
+def _runtime_linear_fit_statistics(
+    t: np.ndarray,
+    candidate: _RuntimeLinearFitCandidate,
+) -> tuple[float | None, float | None, float | None]:
+    """Return ``(gamma_stderr, omega_stderr, r2_log)`` for a fitted candidate.
+
+    Kept separate from ``_prepare_runtime_linear_fit_inputs`` so fit-quality
+    reporting composes with (and never alters) the overflow guards there.
+    """
+
+    try:
+        stats = fit_growth_rate_uncertainty(
+            np.asarray(t, dtype=float),
+            np.asarray(candidate.signal),
+            tmin=candidate.fit_window_tmin,
+            tmax=candidate.fit_window_tmax,
+        )
+    except (ValueError, FloatingPointError):
+        return None, None, None
+    return float(stats.gamma_stderr), float(stats.omega_stderr), float(stats.r2_log)
+
+
+def warn_if_growth_unresolved(
+    *,
+    gamma: float,
+    t: np.ndarray,
+    fit_window_tmin: float | None,
+    fit_window_tmax: float | None,
+    min_total_growth_times: float = 7.0,
+    min_window_growth_times: float = 2.0,
+) -> str | None:
+    """Warn when a linear run is too short to resolve its fitted growth rate.
+
+    The controlling parameter is the e-folding count ``N = gamma * t_max``.
+    Fixed-horizon linear scans under-report growth one-sidedly downward when
+    ``N`` is small -- measured at roughly 9-14% low for ``N ~ 2-3``, 1-6% for
+    ``N ~ 5-6``, and under 0.5% for ``N >= 7`` -- so ``min_total_growth_times``
+    defaults to 7. The message reports the achieved e-folding count and the
+    horizon that would reach the threshold.
+
+    Returns the emitted message, or ``None`` when the run is resolved. Only
+    positive growth rates are checked: a decaying fit has no growth to
+    resolve.
+    """
+
+    if not np.isfinite(gamma) or gamma <= 0.0:
+        return None
+    t_arr = np.asarray(t, dtype=float)
+    t_span = float(t_arr[-1] - t_arr[0]) if t_arr.size > 1 else 0.0
+    message: str | None = None
+    e_foldings = gamma * t_span
+    if e_foldings < min_total_growth_times:
+        needed = min_total_growth_times / gamma
+        message = (
+            f"growth under-resolved: only {e_foldings:.2f} e-foldings over the "
+            f"fit signal (want gamma*t_max >= {min_total_growth_times:g}); "
+            f"expect a one-sided low bias in gamma -- extend the run to "
+            f"t_max >~ {needed:.3g} (about {needed / max(t_span, 1e-30):.1f}x "
+            "longer)"
+        )
+    elif fit_window_tmin is not None and fit_window_tmax is not None:
+        window_growth = gamma * float(fit_window_tmax - fit_window_tmin)
+        if window_growth < min_window_growth_times:
+            message = (
+                f"growth marginally resolved: fit window spans only "
+                f"{window_growth:.2f} growth times (< "
+                f"{min_window_growth_times:g}) -- increase t_max or steps"
+            )
+    if message is not None:
+        warnings.warn(message, RuntimeWarning)
+    return message
+
+
+def half_horizon_settled_probe(
+    t: np.ndarray,
+    signal: np.ndarray,
+    *,
+    gamma: float,
+    tmin: float | None,
+    tmax: float | None,
+    rel_tolerance: float = 0.05,
+) -> tuple[float | None, bool | None]:
+    """Re-fit the second half of the fit window and compare with the full fit.
+
+    A converged linear run has reached its dominant eigenmode, so halving the
+    window must not move gamma. Returns ``(relative_drift, settled)``, or
+    ``(None, None)`` when the half window has too few points to fit. A drift
+    above ``rel_tolerance`` also emits a ``RuntimeWarning``: the reported
+    gamma is then still tracking a transient rather than an eigenvalue.
+    """
+
+    t_arr = np.asarray(t, dtype=float)
+    lo = float(t_arr[0]) if tmin is None else float(tmin)
+    hi = float(t_arr[-1]) if tmax is None else float(tmax)
+    if not np.isfinite(gamma) or gamma == 0.0 or hi <= lo:
+        return None, None
+    try:
+        half = fit_growth_rate_uncertainty(
+            t_arr, np.asarray(signal), tmin=0.5 * (lo + hi), tmax=hi
+        )
+    except (ValueError, FloatingPointError):
+        return None, None
+    drift = float(abs(half.gamma - gamma) / abs(gamma))
+    settled = bool(drift <= float(rel_tolerance))
+    if not settled:
+        warnings.warn(
+            f"fit not settled: gamma moves {100.0 * drift:.1f}% (to "
+            f"{half.gamma:.6g}) when the fit window is halved -- the mode has "
+            "not reached exponential dominance; extend the run",
+            RuntimeWarning,
+        )
+    return drift, settled
+
+
 def _select_runtime_linear_fit(
     inputs: _RuntimeLinearFitInputs,
     *,
@@ -437,6 +563,7 @@ def fit_runtime_linear_diagnostics(
     growth_weight: float,
     require_positive: bool,
     min_amp_fraction: float,
+    window_method: str = "stationary",
     extract_mode_time_series_fn: Any = extract_mode_time_series,
     fit_growth_rate_auto_with_stats_fn: Any = fit_growth_rate_auto_with_stats,
     fit_growth_rate_auto_fn: Any = fit_growth_rate_auto,
@@ -464,6 +591,7 @@ def fit_runtime_linear_diagnostics(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        window_method=window_method,
     )
     deps = _RuntimeLinearDiagnosticDeps(
         extract_mode_time_series=extract_mode_time_series_fn,
@@ -486,6 +614,22 @@ def fit_runtime_linear_diagnostics(
         fit_window_tmax=fit.fit_window_tmax,
         deps=deps,
     )
+    gamma_stderr, omega_stderr, fit_r2 = _runtime_linear_fit_statistics(
+        inputs.t, fit
+    )
+    warn_if_growth_unresolved(
+        gamma=fit.gamma,
+        t=inputs.t,
+        fit_window_tmin=fit.fit_window_tmin,
+        fit_window_tmax=fit.fit_window_tmax,
+    )
+    _drift, fit_settled = half_horizon_settled_probe(
+        inputs.t,
+        fit.signal,
+        gamma=fit.gamma,
+        tmin=fit.fit_window_tmin,
+        tmax=fit.fit_window_tmax,
+    )
 
     return RuntimeLinearFitResult(
         gamma=fit.gamma,
@@ -496,6 +640,10 @@ def fit_runtime_linear_diagnostics(
         fit_window_tmin=fit.fit_window_tmin,
         fit_window_tmax=fit.fit_window_tmax,
         fit_signal_used=fit.signal_name,
+        gamma_stderr=gamma_stderr,
+        omega_stderr=omega_stderr,
+        fit_r2=fit_r2,
+        fit_settled=fit_settled,
     )
 
 
@@ -512,6 +660,7 @@ def refit_runtime_linear_trajectory(
     growth_weight: float = 1.0,
     require_positive: bool = True,
     min_amp_fraction: float = 0.0,
+    window_method: str = "stationary",
 ) -> RuntimeLinearResult:
     """Refit one stored trajectory without repeating its integration."""
 
@@ -534,6 +683,7 @@ def refit_runtime_linear_trajectory(
         growth_weight=growth_weight,
         require_positive=require_positive,
         min_amp_fraction=min_amp_fraction,
+        window_method=window_method,
     )
     return replace(
         result,
@@ -544,4 +694,8 @@ def refit_runtime_linear_trajectory(
         fit_window_tmin=fit.fit_window_tmin,
         fit_window_tmax=fit.fit_window_tmax,
         fit_signal_used=fit.fit_signal_used,
+        gamma_stderr=fit.gamma_stderr,
+        omega_stderr=fit.omega_stderr,
+        fit_r2=fit.fit_r2,
+        fit_settled=fit.fit_settled,
     )
