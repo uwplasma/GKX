@@ -11,7 +11,7 @@ docs/_static/nonlinear_hsx_gate_summary.json,hsx_nonlinear_window,GX nonlinear d
 docs/_static/kbm_branch_gate_summary.json,kbm_linear_branch_continuity,selected KBM comparison rows,True,3,0,,0.3879740373283112,0.0
 docs/_static/reference_modes/kbm_eigenfunction_reference_overlay_ky0p3000.json,kbm_linear_eigenfunction_ky0p3000,GX raw eigenfunction bundle,True,2,0,,0.007208594542278349,1.5458590091999014e-05
 docs/_static/nonlinear_kbm_gate_summary.json,kbm_nonlinear_window,GX nonlinear diagnostics,True,5,0,,0.009363342524391386,
-docs/_static/miller_zonal_response_pilot.json,merlo_case_iii_zonal_response,Merlo et al. paper-scale read-off,True,3,0,,0.03671330516346405,0.03242887795802641
+docs/_static/miller_zonal_response_pilot.json,merlo_case_iii_zonal_response,"GKX converged Hermite baseline (Nm=144, dt=0.0025); agreement with the Merlo et al. read-off is reported under literature_comparison and is NOT asserted here",True,6,0,,0.14330304022387083,0.0005359844034632112
 docs/_static/quasilinear_promotion_guardrails.json,quasilinear_absolute_flux_promotion_guardrails,tracked quasilinear JSON artifacts and documentation scope checks,True,116,0,,0.0,0.0
 docs/_static/quasilinear_model_selection_status.json,quasilinear_model_selection,,False,10,4,"dataset_sufficiency_passed,candidate_uncertainty_passed,required_candidate_accepted,required_candidate_transport_error",1.0,1.0
 docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json,updown_asym_external_vmec_t450,external_vmec_nonlinear_pilot_reports,True,0,0,,,

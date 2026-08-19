@@ -252,9 +252,14 @@ observable, reference, absolute/relative tolerance, and pass/fail convention.
 The companion coverage manifest should be updated when a new gate helper,
 artifact script, or refactor extraction changes module ownership or test
 responsibility.
-``tools/artifacts/build_zonal_flow_artifacts.py miller-panel`` now writes the first such
-gate report into its JSON metadata for the residual, GAM frequency, and signed
-GAM growth/damping comparison against the Merlo Case-III paper-scale read-off.
+``tools/artifacts/build_zonal_flow_artifacts.py miller-panel`` writes two such
+reports into its JSON metadata. ``gate_report`` is the asserted one: the
+residual, GAM frequency, and signed GAM damping against **GKX's own converged
+Nm=144 values**, plus the recurrence, window, and trace-completeness conditions
+that make those three numbers measurements at all. ``literature_comparison``
+holds the same three observables against the Merlo Case-III paper-scale
+read-off at the published tolerances, is reported rather than gated, and
+currently does not pass.
 ``tools/artifacts/generate_linear_reference_overlays.py kbm`` writes the same gate structure for
 the raw KBM eigenfunction overlay, using a strict overlap/relative-L2 policy.
 The current refreshed KBM overlay passes that policy with overlap ``0.999985``
@@ -463,37 +468,112 @@ Rosenbluth-Hinton / GAM work. ``Diagnostics/Phi2_zonal_t`` remains useful as a
 zonal-energy proxy for intermediate checks, but it is no longer the target
 observable for the final paper lane.
 
-The first case-specific shaped-Miller pilot for this lane is now reproducible
+The case-specific shaped-Miller lane for this benchmark is reproducible
 through ``benchmarks/runtime_miller_zonal_response.toml`` and
-``tools/artifacts/build_zonal_flow_artifacts.py miller-panel``. Its frozen artifact lives in
-``docs/_static/miller_zonal_response_pilot.png``. The current frozen artifact
-is pinned to Merlo et al. Case III: adiabatic electrons, zero gradients,
-``k_xρ_i≈0.05``, ``k_y=0``, and an initial ion-density perturbation.  It uses
-``Nz=32``, ``Nl=4``, ``Nm=24``, ``dt=0.005``, and runs to ``t≈60`` through the
-same checkpoint-capable artifact writer used by long nonlinear runs.  Using the
-Rosenbluth-Hinton convention ``phi(t -> infinity) / phi(0)`` gives a residual
-of about ``0.192`` against the Merlo Case-III figure read-off of about
-``0.19``.  The shipped extraction now follows the paper convention more
-closely: positive and negative extrema of the signed residual-subtracted trace
-are fit separately over a common pre-recurrence window, and the GAM frequency
-is extracted from the instantaneous phase of that same window via a Hilbert
-analytic signal.  With the current ``t≈30`` pre-recurrence window the artifact
-gives ``ω_GAM R0 / v_i≈2.20`` and ``γ_GAM R0 / v_i≈-0.176``, both close to
-the Merlo figure read-off.  The explicit remaining follow-up item is the
-long-time recurrence visible in finite moment runs, rather than the
-benchmark-scale residual/frequency/damping gate itself.
+``tools/artifacts/build_zonal_flow_artifacts.py miller-panel``, and its frozen
+artifact lives in ``docs/_static/miller_zonal_response_pilot.png`` with the
+gate in the companion ``.json``. The physics contract is Merlo et al. Case III:
+adiabatic electrons, zero gradients, ``k_xρ_i≈0.05``, ``k_y=0``, and an initial
+ion-density perturbation.
 
-An additional recurrence audit now brackets the numerical trade-off more
-explicitly: increasing the resolution to ``Nm=28`` and ``Nl=4`` lowers the
-late-time recurrence ratio from about ``0.60`` to about ``0.54`` and brings
-``ω_GAM R0 / v_i`` nearly onto the Merlo read-off, but it also pushes the
-damping to roughly ``γ_GAM R0 / v_i≈-0.192``, which is more damped than the
-paper-scale target near ``-0.17``. A minimal ``hypercollisions_const`` ladder
-through ``10^{-4}`` is effectively inert for this case, while ``10^{-3}``
-only lowers the recurrence ratio to roughly ``0.589`` and still does not beat
-the clean higher-moment run. The shipped artifact therefore remains on the
-``Nm=24``, ``Nl=4`` baseline until the long-time recurrence can be reduced
-without moving the benchmark-scale damping gate.
+**The baseline is the converged run, not the agreeing one.** The artifact now
+uses ``Nz=32``, ``Nl=4``, ``Nm=144``, ``dt=0.0025``, and runs to ``t=60 a/v_i``.
+It reports ``residual = 0.2059``, ``ω_GAM R0 / v_i = 2.345``, and
+``γ_GAM R0 / v_i = -0.184``. Two conditions set that protocol and both are
+gated rather than described:
+
+* **Recurrence.** The quiet point of the trace -- the gap between the damped
+  primary GAM and the regrowing velocity-space recurrence -- moves as
+  ``t_quiet ≈ 5.5 sqrt(Nm)``, measured at ``26.0``, ``38.8``, and ``55.5`` for
+  ``Nm = 24``, ``48``, and ``96``. **Every analysis window must close before it.**
+  The residual window is the last 30% of the trace, ``t ∈ [42, 60]``, so the run
+  needs ``Nm ≳ 120``. At the retired ``Nm=24`` baseline that whole window sat
+  1.6--2.3x *past* recurrence onset, and the scatter inside it
+  (``residual_std/residual = 1.20``) exceeded the number being gated. The
+  artifact now gates ``residual_scatter_ratio ≤ 0.25`` (it measures ``0.143``)
+  and ``analysis_window_past_recurrence = 0``.
+* **Timestep.** The Hermite streaming CFL scales as ``sqrt(Nm)``, and ``Nm=144``
+  at the old ``dt=0.005`` goes non-finite at ``t=46.5``. Refining the Hermite
+  resolution therefore requires ``dt ≤ 0.0025``. Residual and frequency are
+  timestep-converged to better than ``0.3%`` on both ladders.
+
+Also gated: ``run_to`` must stay ``"t_max"``. The default is ``"saturation"``,
+which for a zero-gradient relaxation run declares the identically-zero heat
+flux converged inside the first chunk and truncates the trace at ``t ≈ 6``
+without raising -- one sixth of a GAM period, with the residual then read off
+whatever the last 30% of *that* happens to be. The artifact gates
+``trace_completeness = 1`` so a silently short run cannot be published.
+
+**Agreement with the published read-off is reported, not asserted.** At
+converged resolution GKX disagrees with Merlo Case III by more than the
+paper-scale tolerances on two of the three quantities:
+
+.. list-table::
+   :header-rows: 1
+
+   * - quantity
+     - GKX converged
+     - Merlo read-off
+     - gap
+     - paper-scale tolerance
+     - literature comparison
+   * - ``residual``
+     - ``0.206 ± 0.006``
+     - ``0.19``
+     - ``0.016``
+     - ``0.015``
+     - **fails**
+   * - ``ω_GAM R0/v_i``
+     - ``2.345 ± 0.05``
+     - ``2.24``
+     - ``0.105``
+     - ``0.10``
+     - **fails**
+   * - ``γ_GAM R0/v_i``
+     - ``-0.184 ± 0.010``
+     - ``-0.17``
+     - ``0.014``
+     - ``0.03``
+     - passes
+
+Both failures are marginal (``1.06x`` and ``1.05x`` tolerance) and both are
+monotone in ``Nm``: the residual rises ``0.2045 → 0.2059 → 0.2082`` and the
+frequency rises ``2.340 → 2.345 → 2.353`` across ``Nm = 96/144/192``, so
+further refinement widens the gap rather than closing it. The tolerances have
+**not** been widened to absorb this. The tracked ``gate_report`` asserts GKX's
+own converged numbers and the stability conditions above; the paper comparison
+is recorded separately under ``literature_comparison`` with
+``paper_scale_gate_passed: false``, so the claim boundary is visible in the
+artifact itself.
+
+The most likely physical explanation was tested and **falsified**: Merlo
+Table III lists ``α_MHD = 0.5425`` while the runtime TOML sets
+``betaprim = 0.0``. Carrying it across gives
+``betaprim = -α_MHD / (q² R0) = -0.1012``, and rerunning at converged
+resolution reproduces the baseline trace **bit for bit** (max ``|Δφ| = 0``
+over 2401 samples). The reason is structural: ``betaprim`` changes ``gds2``,
+``gds21``, ``gbdrift``, ``cvdrift``, and ``aprime``, and leaves ``gds22``,
+``gbdrift0``, ``cvdrift0``, ``bmag``, ``gradpar``, and ``jacob`` exactly
+unchanged -- every coefficient it touches is multiplied by ``k_y``, and this
+benchmark runs at ``k_y = 0``. The dropped ``α_MHD`` cannot be the source of
+the offset for a purely radial zonal mode.
+
+Finally, ``γ_GAM`` is measured with an estimator that cannot be swung by one
+sample. The retired fit took up to four extrema per branch and fitted
+``log|amplitude|`` through them, so a shallow extremum that one diagnostic
+output cadence resolved and another did not entered the fit: halving the output
+cadence at *identical physics* moved the shipped value from ``-0.1745`` to
+``-0.2645``, a 52% swing and three times its own gate tolerance. The current
+``period_rms_envelope`` mode takes the sliding RMS of the trace about its own
+running one-period mean -- which for ``C(t) + A e^{-γt} cos(ωt+φ)`` is
+``A e^{-γt}`` times a constant, whatever the slowly-varying offset ``C`` does --
+and fits its log with weights ``A²`` over a window stated in GAM periods rather
+than in samples. Measured spreads on the ``Nm=144`` trace: over a factor-8
+cadence span with sampling-phase offsets, ``0.0003`` for the envelope estimator
+against ``0.0379`` for the extrema fit; over ``fit_window_tmax ∈ [22, 35]``,
+which moves ``ω_GAM`` by ``0.24``, ``0.0015`` against ``0.018``. On the
+``Nm=24`` trace that produced the original 52% swing, the envelope estimator
+moves by ``0.00013``.
 
 The next literature lane now has a dedicated runtime contract as well:
 ``benchmarks/runtime_w7x_zonal_response_vmec.toml`` and

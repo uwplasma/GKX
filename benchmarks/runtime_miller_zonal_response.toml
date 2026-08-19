@@ -28,8 +28,13 @@ Ly = 62.8
 boundary = "periodic"
 
 [time]
+# run_to must stay "t_max": this is a zero-gradient relaxation benchmark whose
+# heat flux is identically ~0, so the default run_to = "saturation" declares the
+# flux window converged inside the first chunk and truncates the trace at
+# t ~ 6.4 -- less than one GAM period -- without raising.
+run_to = "t_max"
 t_max = 60.0
-dt = 0.005
+dt = 0.0025
 method = "rk2"
 sample_stride = 10
 diagnostics_stride = 10
@@ -106,8 +111,8 @@ phi_ext = 0.0
 ky = 0.0
 kx = 0.05
 Nl = 4
-Nm = 24
-dt = 0.005
-steps = 12000
+Nm = 144
+dt = 0.0025
+steps = 24000
 sample_stride = 10
 diagnostics = true

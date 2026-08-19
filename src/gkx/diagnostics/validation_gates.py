@@ -45,6 +45,11 @@ class ZonalFlowResponseMetrics:
     max_peak_values: np.ndarray
     min_peak_times: np.ndarray
     min_peak_values: np.ndarray
+    # Window the damping was actually fitted over. It is not always fit_tmin /
+    # fit_tmax: period_rms_envelope states its window in GAM periods, so a
+    # gated damping rate can be checked against the window it came from.
+    damping_fit_tmin: float = float("nan")
+    damping_fit_tmax: float = float("nan")
 
 
 @dataclass(frozen=True)

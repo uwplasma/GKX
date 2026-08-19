@@ -16,7 +16,13 @@ from gkx.diagnostics.zonal_validation import (
     reference_time_limits,
     tail_trace_metrics,
     w7x_trace_path,
+    zonal_flow_response_metrics,
 )
+
+# The Merlo Case-III gate tolerance on gamma_GAM R0/v_i. Everything below is
+# quoted against it, so a change to the gate changes the test with it.
+GAMMA_GATE_ATOL_R0_OVER_VI = 0.03
+MERLO_R0 = 2.77778
 
 
 def test_kx_token_and_trace_path_contract() -> None:
@@ -226,3 +232,113 @@ def test_tail_trace_metrics_reports_late_window_envelope_errors() -> None:
     assert metrics["tail_max_abs_error"] == pytest.approx(float(np.max(np.abs(diff))))
     assert metrics["tail_std"] == pytest.approx(float(np.std(obs_tail)))
     assert metrics["reference_tail_std"] == pytest.approx(float(np.std(ref_tail)))
+
+
+def _merlo_like_gam_trace(n_samples: int) -> tuple[np.ndarray, np.ndarray]:
+    """A damped GAM on a residual, plus the ripple that broke the old estimator.
+
+    The second term is a weakly damped, higher-frequency ripple -- what
+    velocity-space recurrence actually adds to a collisionless Hermite trace. It
+    puts shallow extra extrema inside the fit window, and a four-extrema
+    log-linear fit resolves them at one output cadence and not at another. That
+    is the mechanism that moved the shipped gamma_GAM by 52 percent when only
+    the diagnostic sample spacing changed, at identical physics.
+    """
+
+    t = np.linspace(0.0, 60.0, n_samples)
+    gam = 0.2 + np.exp(-0.066 * t) * np.cos(0.845 * t)
+    ripple = 0.08 * np.exp(-0.02 * t) * np.cos(4.2 * t + 2.1)
+    return t, gam + ripple
+
+
+def _gamma_r0_over_vi(t: np.ndarray, y: np.ndarray, mode: str) -> float:
+    metrics = zonal_flow_response_metrics(
+        t,
+        y,
+        tail_fraction=0.3,
+        initial_policy="first_abs",
+        peak_fit_max_peaks=4,
+        damping_fit_mode=mode,
+        frequency_fit_mode="hilbert_phase",
+        fit_window_tmax=30.0,
+    )
+    return -float(metrics.gam_damping_rate) * MERLO_R0
+
+
+def test_period_rms_damping_is_independent_of_the_diagnostic_output_cadence() -> None:
+    """The gated GAM damping must not move when only the output cadence changes.
+
+    Output cadence carries no physics: the same trajectory written out twice as
+    often has to give the same damping rate. The retired branchwise-extrema fit
+    did not -- it moved by more than its own gate tolerance, so its PASS was a
+    property of ``sample_stride`` rather than of the solver. This pins that the
+    period-RMS envelope estimator is flat across a 4x cadence span while the
+    extrema fit is not.
+    """
+
+    cadences = [(4801, "0.0125"), (2401, "0.025"), (1201, "0.05")]
+    envelope = []
+    extrema = []
+    for n_samples, _label in cadences:
+        t, y = _merlo_like_gam_trace(n_samples)
+        envelope.append(_gamma_r0_over_vi(t, y, "period_rms_envelope"))
+        extrema.append(_gamma_r0_over_vi(t, y, "branchwise_extrema"))
+
+    envelope_spread = max(envelope) - min(envelope)
+    extrema_spread = max(extrema) - min(extrema)
+
+    assert envelope_spread < 0.1 * GAMMA_GATE_ATOL_R0_OVER_VI
+    assert extrema_spread > GAMMA_GATE_ATOL_R0_OVER_VI
+    assert all(np.isfinite(envelope))
+
+
+def test_period_rms_damping_recovers_a_known_decay_rate() -> None:
+    """The estimator has to be right, not only stable."""
+
+    t = np.linspace(0.0, 60.0, 4801)
+    for truth in (0.03, 0.06, 0.10):
+        response = 0.2 + np.exp(-truth * t) * np.cos(0.8 * t)
+        metrics = zonal_flow_response_metrics(
+            t,
+            response,
+            initial_policy="first_abs",
+            damping_fit_mode="period_rms_envelope",
+            frequency_fit_mode="hilbert_phase",
+            fit_window_tmax=30.0,
+        )
+        # A sliding one-period RMS reads a decaying sinusoid about 1-2 percent
+        # low, because one window of a decaying signal is not one window of a
+        # stationary one. That bias is deterministic and far inside the gate.
+        assert metrics.gam_damping_rate == pytest.approx(truth, rel=0.03)
+        assert metrics.damping_fit_tmax > metrics.damping_fit_tmin
+
+
+def test_period_rms_damping_ignores_a_slowly_drifting_offset() -> None:
+    """A drifting oscillation centre must not leak into the damping rate.
+
+    The residual subtraction uses one number for the whole trace, so at early
+    times the oscillation is not centred on it. Branch-wise extrema fits inherit
+    that offset; a sliding one-period mean removes it wherever it sits.
+    """
+
+    t = np.linspace(0.0, 60.0, 4801)
+    oscillation = np.exp(-0.06 * t) * np.cos(0.8 * t)
+    flat = zonal_flow_response_metrics(
+        t,
+        0.2 + oscillation,
+        initial_policy="first_abs",
+        damping_fit_mode="period_rms_envelope",
+        frequency_fit_mode="hilbert_phase",
+        fit_window_tmax=30.0,
+    )
+    drifting = zonal_flow_response_metrics(
+        t,
+        0.2 + 0.08 * np.exp(-0.05 * t) + oscillation,
+        initial_policy="first_abs",
+        damping_fit_mode="period_rms_envelope",
+        frequency_fit_mode="hilbert_phase",
+        fit_window_tmax=30.0,
+    )
+
+    shift = abs(drifting.gam_damping_rate - flat.gam_damping_rate) * MERLO_R0
+    assert shift < 0.1 * GAMMA_GATE_ATOL_R0_OVER_VI
