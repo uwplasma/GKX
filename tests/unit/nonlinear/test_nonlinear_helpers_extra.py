@@ -455,6 +455,34 @@ def test_make_hermitian_projector_and_mode_mask() -> None:
     np.testing.assert_array_equal(np.asarray(positive_mask), positive_grid.dealias_mask)
 
 
+def test_hermitian_projector_names_the_traced_ky_axis_it_cannot_read() -> None:
+    """A traced ky axis is refused by name, and the layout route still works.
+
+    Reading a sign pattern off a tracer is the one case with nothing to read.
+    The compressed real-FFT path does not go through it: the layout it passes
+    is grid topology, so it builds inside a trace like any other constant.
+    """
+
+    def build(ky: jnp.ndarray) -> jnp.ndarray:
+        nonlinear_projection._make_hermitian_projector(ky, nx=2)
+        return jnp.sum(ky)
+
+    with pytest.raises(ValueError, match="cannot read a traced ky axis"):
+        jax.jit(build)(jnp.asarray([0.0, 0.2, -0.2, -0.4]))
+
+    def project_inside_trace(state: jnp.ndarray) -> jnp.ndarray:
+        projector = nonlinear_projection._make_compressed_real_fft_projector(
+            ny_full=4, nx=2
+        )
+        return projector(state)
+
+    state = jnp.arange(8, dtype=jnp.complex64).reshape(1, 4, 2, 1) * (1.0 + 1.0j)
+    np.testing.assert_allclose(
+        np.asarray(jax.jit(project_inside_trace)(state)),
+        np.asarray(project_inside_trace(state)),
+    )
+
+
 def test_make_nonlinear_state_projector_composes_fixed_mode_and_hermitian() -> None:
     fixed = jnp.zeros((1, 4, 3, 2), dtype=jnp.complex64)
     fixed = fixed.at[..., 1:2, 1:2, :].set(7.0 + 1.0j)

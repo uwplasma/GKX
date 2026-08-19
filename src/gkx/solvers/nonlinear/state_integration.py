@@ -29,6 +29,7 @@ from gkx.operators.nonlinear.policies import (
     build_nonlinear_time_step_policy,
 )
 from gkx.operators.nonlinear.projection import (
+    _make_compressed_real_fft_projector,
     _make_hermitian_projector,
     advance_shearing_coordinates,
 )
@@ -172,8 +173,8 @@ def integrate_nonlinear_cached(
 
     project_state = None
     if compressed_real_fft:
-        project_state = _make_hermitian_projector(
-            np.asarray(cache.ky), int(np.asarray(cache.kx).size)
+        project_state = _make_compressed_real_fft_projector(
+            ny_full=int(cache.ky.size), nx=int(cache.kx.size)
         )
 
     return integrate_cached_explicit_scan(
