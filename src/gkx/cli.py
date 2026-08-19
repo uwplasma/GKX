@@ -141,6 +141,20 @@ def _add_diagnostics_flags(cmd: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_saturation_flags(cmd: argparse.ArgumentParser) -> None:
+    group = cmd.add_mutually_exclusive_group()
+    group.add_argument(
+        "--until-saturated",
+        action="store_true",
+        help="Stop once the heat-flux window saturates ([time] run_to = 'saturation')",
+    )
+    group.add_argument(
+        "--no-until-saturated",
+        action="store_true",
+        help="Always integrate to t_max ([time] run_to = 't_max')",
+    )
+
+
 def _add_resolution_flags(
     cmd: argparse.ArgumentParser,
     *,
@@ -270,6 +284,7 @@ def _add_generic_run_parser(sub: argparse._SubParsersAction) -> None:
     _add_time_solver_flags(generic_run, sample_stride=True, fit_signal=True)
     generic_run.add_argument("--diagnostics-stride", type=int, default=None)
     _add_diagnostics_flags(generic_run)
+    _add_saturation_flags(generic_run)
     _add_laguerre_mode_flag(generic_run, help_text="grid or spectral (nonlinear only)")
     _add_runtime_paths(generic_run, init_help="Optional init file for nonlinear runs")
     _add_quasilinear_flags(generic_run)
@@ -324,6 +339,7 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
     run_runtime_nl.add_argument("--sample-stride", type=int, default=None)
     run_runtime_nl.add_argument("--diagnostics-stride", type=int, default=None)
     _add_diagnostics_flags(run_runtime_nl)
+    _add_saturation_flags(run_runtime_nl)
     _add_laguerre_mode_flag(
         run_runtime_nl, help_text="grid or spectral (nonlinear Laguerre handling)"
     )
