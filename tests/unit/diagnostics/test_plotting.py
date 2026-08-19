@@ -413,3 +413,295 @@ def test_plot_saved_output_nonlinear_netcdf_bundle(tmp_path):
 
     out = plot_saved_output(path)
     assert out.exists()
+
+
+# ---------------------------------------------------------------------------
+# Publication nonlinear-transport figures and real-space snapshots.
+# ---------------------------------------------------------------------------
+
+from types import SimpleNamespace
+
+import gkx.artifacts.snapshots as snapshots
+from gkx.artifacts.plotting import (
+    flux_spectra_figure,
+    heat_flux_time_figure,
+    phi2_spectra_figure,
+)
+
+
+def _memory_nonlinear_diag(*, nt=30, ns=2, nky=5, nkx=7, with_resolved=True):
+    from gkx.diagnostics import ResolvedDiagnostics, SimulationDiagnostics
+
+    t = np.linspace(0.0, 30.0, nt)
+    heat_species = np.stack(
+        [0.6 + 0.1 * np.sin(0.3 * t), 0.3 + 0.05 * np.cos(0.2 * t)][:ns], axis=1
+    )
+    particle_species = 0.1 * heat_species
+    ky = np.linspace(0.0, 1.2, nky)
+    kx = np.linspace(-1.5, 1.5, nkx)
+
+    resolved = None
+    if with_resolved:
+        heat_kyst = (
+            np.maximum(
+                np.einsum("t,k->tk", 1.0 + 0.05 * np.sin(t), ky * np.exp(-3.0 * ky)),
+                0.0,
+            )[:, None, :]
+            * np.array([1.0, 0.5][:ns])[None, :, None]
+        )
+        heat_kxst = np.exp(-2.0 * np.abs(kx))[None, None, :] * np.ones((nt, ns, 1))
+        phi2_kxky = (
+            np.exp(-2.0 * np.abs(kx))[None, None, :]
+            * np.exp(-3.0 * ky)[None, :, None]
+            * (1.0 + 0.1 * np.cos(0.2 * t))[:, None, None]
+        )
+        resolved = ResolvedDiagnostics(
+            Phi2_kxkyt=phi2_kxky,
+            Phi2_zonal_t=phi2_kxky[:, 0, :].sum(axis=-1),
+            HeatFlux_kyst=heat_kyst,
+            HeatFlux_kxst=heat_kxst,
+        )
+    zeros = np.zeros_like(t)
+    diag = SimulationDiagnostics(
+        t=t,
+        dt_t=np.full_like(t, 0.05),
+        dt_mean=np.asarray(0.05),
+        gamma_t=zeros,
+        omega_t=zeros,
+        Wg_t=1.0 + t,
+        Wphi_t=0.5 + 0.1 * t,
+        Wapar_t=zeros,
+        heat_flux_t=heat_species.sum(axis=1),
+        particle_flux_t=particle_species.sum(axis=1),
+        energy_t=1.5 + 1.1 * t,
+        heat_flux_species_t=heat_species,
+        particle_flux_species_t=particle_species,
+        resolved=resolved,
+    )
+    return diag, ky, kx
+
+
+def _write_synthetic_out_nc(path, *, nt=12, ns=2, nky=5, nkx=7):
+    netcdf4 = pytest.importorskip("netCDF4")
+    t = np.linspace(0.5, 12.0, nt)
+    ky = np.linspace(0.0, 1.2, nky)
+    kx = np.linspace(-1.5, 1.5, nkx)
+    with netcdf4.Dataset(path, "w") as root:
+        for name, size in (("time", nt), ("s", ns), ("ky", nky), ("kx", nkx)):
+            root.createDimension(name, size)
+        grids = root.createGroup("Grids")
+        grids.createVariable("time", "f8", ("time",))[:] = t
+        grids.createVariable("ky", "f4", ("ky",))[:] = ky
+        grids.createVariable("kx", "f4", ("kx",))[:] = kx
+        diag = root.createGroup("Diagnostics")
+        species_history = 0.5 + 0.1 * np.outer(t, np.arange(1, ns + 1))
+        for name in (
+            "Wg_st",
+            "Wphi_st",
+            "Wapar_st",
+            "HeatFlux_st",
+            "ParticleFlux_st",
+        ):
+            diag.createVariable(name, "f4", ("time", "s"))[:, :] = species_history
+        heat_kyst = np.broadcast_to(
+            (ky * np.exp(-3.0 * ky))[None, None, :], (nt, ns, nky)
+        )
+        diag.createVariable("HeatFlux_kyst", "f4", ("time", "s", "ky"))[:, :, :] = (
+            heat_kyst
+        )
+        heat_kxst = np.broadcast_to(
+            np.exp(-2.0 * np.abs(kx))[None, None, :], (nt, ns, nkx)
+        )
+        diag.createVariable("HeatFlux_kxst", "f4", ("time", "s", "kx"))[:, :, :] = (
+            heat_kxst
+        )
+        phi2_kxky = np.broadcast_to(
+            (np.exp(-3.0 * ky)[:, None] * np.exp(-2.0 * np.abs(kx))[None, :])[
+                None, :, :
+            ],
+            (nt, nky, nkx),
+        )
+        diag.createVariable("Phi2_kxkyt", "f4", ("time", "ky", "kx"))[:, :, :] = (
+            phi2_kxky
+        )
+        diag.createVariable("Phi2_zonal_t", "f4", ("time",))[:] = phi2_kxky[
+            :, 0, :
+        ].sum(axis=-1)
+    return path
+
+
+def _write_csv_sidecar(tmp_path, name="nl_case"):
+    base = tmp_path / name
+    (tmp_path / f"{name}.summary.json").write_text(
+        '{"kind":"nonlinear"}', encoding="utf-8"
+    )
+    (tmp_path / f"{name}.diagnostics.csv").write_text(
+        "t,dt,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux,"
+        "heat_flux_s0,heat_flux_s1,particle_flux_s0,particle_flux_s1\n"
+        "0.1,0.1,0.01,-0.02,1.0,2.0,0.0,3.0,0.4,0.02,0.3,0.1,0.01,0.01\n"
+        "0.2,0.1,0.02,-0.03,1.1,2.1,0.0,3.2,0.5,0.03,0.35,0.15,0.02,0.01\n"
+        "0.3,0.1,0.02,-0.03,1.2,2.2,0.0,3.4,0.6,0.04,0.4,0.2,0.02,0.02\n",
+        encoding="utf-8",
+    )
+    return base
+
+
+def test_heat_flux_time_figure_from_arrays(tmp_path):
+    diag, _ky, _kx = _memory_nonlinear_diag()
+    out = tmp_path / "heat_flux_time.png"
+    fig, axes = heat_flux_time_figure(diag, window=(15.0, 30.0), out=out)
+    plt.close(fig)
+    assert out.exists()
+    assert axes[0].get_ylabel()
+    assert axes[1].get_xlabel()
+
+
+def test_heat_flux_time_figure_from_csv_sidecar(tmp_path):
+    base = _write_csv_sidecar(tmp_path)
+    out = tmp_path / "heat_flux_csv.png"
+    fig, _axes = heat_flux_time_figure(
+        base.with_suffix(".diagnostics.csv"), window=(0.1, 0.3), out=out
+    )
+    plt.close(fig)
+    assert out.exists()
+
+
+def test_flux_spectra_figure_from_netcdf(tmp_path):
+    path = _write_synthetic_out_nc(tmp_path / "case.out.nc")
+    out = tmp_path / "flux_spectra.png"
+    fig, axes = flux_spectra_figure(path, out=out)
+    plt.close(fig)
+    assert out.exists()
+    assert len(axes) == 2
+
+
+def test_phi2_spectra_figure_from_netcdf(tmp_path):
+    path = _write_synthetic_out_nc(tmp_path / "case.out.nc")
+    out = tmp_path / "phi2_spectra.png"
+    fig, axes = phi2_spectra_figure(path, out=out)
+    plt.close(fig)
+    assert out.exists()
+    assert axes.shape == (2, 2)
+
+
+def test_flux_spectra_figure_from_memory_arrays(tmp_path):
+    diag, ky, kx = _memory_nonlinear_diag()
+    with pytest.raises(ValueError, match="ky"):
+        flux_spectra_figure(diag)
+    out = tmp_path / "flux_spectra_memory.png"
+    fig, _axes = flux_spectra_figure(diag, ky=ky, kx=kx, window=(10.0, 30.0), out=out)
+    plt.close(fig)
+    assert out.exists()
+
+
+def test_phi2_spectra_figure_from_memory_arrays(tmp_path):
+    diag, ky, kx = _memory_nonlinear_diag()
+    out = tmp_path / "phi2_spectra_memory.png"
+    fig, _axes = phi2_spectra_figure(diag, ky=ky, kx=kx, out=out)
+    plt.close(fig)
+    assert out.exists()
+
+
+def test_spectra_figures_reject_csv_sidecar(tmp_path):
+    base = _write_csv_sidecar(tmp_path)
+    for figure in (flux_spectra_figure, phi2_spectra_figure):
+        with pytest.raises(ValueError, match=r"out\.nc"):
+            figure(base.with_suffix(".diagnostics.csv"))
+
+
+def test_spectra_figures_reject_missing_resolved():
+    diag, ky, kx = _memory_nonlinear_diag(with_resolved=False)
+    for figure in (flux_spectra_figure, phi2_spectra_figure):
+        with pytest.raises(ValueError, match="resolved"):
+            figure(diag, ky=ky, kx=kx)
+
+
+def _synthetic_spectral_phi(*, nx=12, ny=10, nz=6, seed=3):
+    rng = np.random.default_rng(seed)
+    real_xyz = rng.normal(size=(nx, ny, nz))
+    real_yxz = np.transpose(real_xyz, (1, 0, 2))
+    spectral = np.fft.rfft2(real_yxz, axes=(-2, -3)) / float(nx * ny)
+    return real_xyz, spectral
+
+
+def test_potential_real_space_round_trip():
+    real_xyz, spectral = _synthetic_spectral_phi()
+    ny = real_xyz.shape[1]
+    recovered = snapshots.potential_real_space(spectral, ny_full=ny)
+    np.testing.assert_allclose(recovered, real_xyz, atol=1e-12)
+
+    full = np.fft.fft2(np.transpose(real_xyz, (1, 0, 2)), axes=(0, 1)) / float(
+        real_xyz.shape[0] * ny
+    )
+    recovered_full = snapshots.potential_real_space(full)
+    np.testing.assert_allclose(recovered_full, real_xyz, atol=1e-12)
+
+    with pytest.raises(ValueError):
+        snapshots.potential_real_space(spectral[:2], ny_full=ny)
+
+
+def test_phi_xy_snapshot_figure_renders(tmp_path):
+    _real, spectral = _synthetic_spectral_phi()
+    grid = SimpleNamespace(x0=1.6, y0=2.4)
+    out = tmp_path / "phi_xy_snapshot.png"
+    fig, ax = snapshots.phi_xy_snapshot_figure(
+        spectral, grid, ny_full=10, time=12.5, out=out
+    )
+    plt.close(fig)
+    assert out.exists()
+    assert ax.get_xlabel() == r"$x/\rho_i$"
+
+
+def test_flux_tube_3d_figure_renders(tmp_path):
+    real_xyz, _spectral = _synthetic_spectral_phi()
+    geom = SimpleNamespace(q=1.4, epsilon=0.18, R0=2.78, nfp=1)
+    out = tmp_path / "flux_tube_3d.png"
+    fig, _ax3d = snapshots.flux_tube_3d_figure(real_xyz, geom, time=12.5, out=out)
+    plt.close(fig)
+    assert out.exists()
+
+
+def _colorbar_axes(fig, main_ax):
+    extra = [ax for ax in fig.axes if ax is not main_ax]
+    assert extra, "expected a colorbar axes"
+    return extra[0]
+
+
+def test_small_amplitude_colorbar_states_its_decade_in_the_label():
+    """A 1e-5 field must not park offset text where the title ends up.
+
+    matplotlib would otherwise print a floating "1e-5" above the colorbar, in
+    the same corner the left-aligned title reaches once a time stamp is
+    appended -- the two overprinted each other on real saturated output.
+    """
+
+    _real, spectral = _synthetic_spectral_phi()
+    fig, ax = snapshots.phi_xy_snapshot_figure(1.0e-5 * spectral, ny_full=10, time=12.5)
+    fig.canvas.draw()  # offset text is only populated at draw time
+    bar_ax = _colorbar_axes(fig, ax)
+    assert r"\times 10^{-5}" in bar_ax.get_ylabel()
+    assert bar_ax.yaxis.get_offset_text().get_text() == ""
+    plt.close(fig)
+
+
+def test_order_one_colorbar_keeps_a_plain_label():
+    _real, spectral = _synthetic_spectral_phi()
+    fig, ax = snapshots.phi_xy_snapshot_figure(spectral, ny_full=10)
+    fig.canvas.draw()
+    bar_ax = _colorbar_axes(fig, ax)
+    assert r"\times" not in bar_ax.get_ylabel()
+    assert bar_ax.yaxis.get_offset_text().get_text() == ""
+    plt.close(fig)
+
+
+def test_flux_spectra_annotation_gets_clear_headroom():
+    """The averaging-window box must not be drawn over the spectrum itself."""
+
+    diag, ky, kx = _memory_nonlinear_diag()
+    fig, axes = flux_spectra_figure(diag, ky=ky, kx=kx, window=(10.0, 30.0))
+    ky_ax = axes[0]
+    drawn = np.concatenate(
+        [np.asarray(line.get_ydata(), dtype=float) for line in ky_ax.get_lines()]
+    )
+    assert ky_ax.get_ylim()[1] > float(np.nanmax(drawn))
+    plt.close(fig)
