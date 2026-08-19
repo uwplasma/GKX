@@ -135,7 +135,20 @@ Open PRs: [#44](https://github.com/uwplasma/GKX/pull/44) tf32 audit ·
    contract="cyclone"`) already fold in the factor, and write ONE definitive
    conventions doc (docs/normalization.rst) with a conversion table. All existing
    "GX ref γ=0.1018 at ky=0.3" comparisons in this file inherit this caveat.
-2. **Time-solver fit bias — RE-SCOPED to the collisional s-alpha lane only.**
+2. **Time-solver fit bias — CLOSED. There was never a fit-machinery bias.**
+   Root cause: horizon. The shipped `cyclone.toml` runs to `t_max=10` = **0.93 e-foldings**,
+   inside the ringing transient (instantaneous γ climbs monotonically −0.42 → +0.102 through
+   the whole run). At `t_max=80` (7.4 e-foldings) EVERY combination of window method and mode
+   extraction agrees with the certified eigenvalue to **<0.6%**. The error is not even
+   one-signed: too-short fits land 34% low, the old auto window could land 22% high.
+   Secondary real effect: `cyclone.toml` and `cyclone_coulomb_collisions.toml` are the ONLY
+   example decks pinning `mode_method="z_index"` (all others use `"project"`); a single
+   z-slice is contaminated by a weak near-degenerate branch (γ scatters ±25% across z at
+   t=30, late-time std 0.0046 vs 0.0003 for `project`). That, not collisions, is why the
+   collisionless-Miller lane looked clean — the lane was mislabeled.
+   Ruled out with direct evidence: signal choice (adiabatic electrons ⇒ n_i ∝ φ ⇒
+   bit-identical fits) and collisions (nothing collisional touches the fitted quantity).
+   SUPERSEDED NOTE:
    On the collisionless Miller CBC lane the time fit matches the certified eigensolve to
    **+0.30% in gamma** (0.13902 vs 0.138607 c_s/a) and errs the OPPOSITE way from the
    collisional lane, so the fit machinery is NOT generally broken. Hunt the pathology in
@@ -185,7 +198,7 @@ Status: `ready-to-commit` = finished patch in plan/patches, needs review+commit 
 | 0.2/0.4/0.5/0.6 | overflow guard, --plot scan, drift fixes, dep floors | **PR open: [#50](https://github.com/uwplasma/GKX/pull/50)** branch `fix/phase0-robustness` (89 tests green) | `plan/patches/phase0_bundle.patch` | rebased onto main |
 | 1.1 | `gkx wout.nc` UX + common_input.toml | **PR open: [#51](https://github.com/uwplasma/GKX/pull/51)** branch `feat/wout-cli` (42 CLI tests green) | `plan/patches/wout_ux.patch` | rebased onto main |
 | 1.2 | auto-stop run_to="saturation" | **PR open: [#54](https://github.com/uwplasma/GKX/pull/54)** `feat/run-to-saturation` (129 tests green on main; stops at t=128/200) | patch `autostop.patch` | rebased onto main |
-| 0.3 | fit robustness (stationary windows, γ±stderr, warnings) | **partial** (+380/−7; agent died updating CLI print sites; must then verify vs certified eigenvalue per finding #2) | `plan/patches/fitrobust_partial.patch`, worktree `fitrobust` | 7cf5e6d1 |
+| 0.3 | fit robustness (stationary windows, γ±stderr, warnings) | **PR open: [#56](https://github.com/uwplasma/GKX/pull/56)** `fix/fit-stationarity` (109+279 tests green) | patch `fitrobust.patch` | rebased onto main |
 | 1.3a | plot library (snapshots module, flux/spectra figures) | **PR open: [#53](https://github.com/uwplasma/GKX/pull/53)** `feat/plot-library` (38 tests green; 3 real-data collisions fixed) | patch `plots_lib.patch` | rebased onto main |
 | 2.1 | GX office re-baseline | **done** (rebuilt @3865a537; reference re-runs still todo → 2.1b) | `plan/notes/gx_Makefile.office` | — |
 | 2.2 | finite-beta equilibria + geometry audit | **done (start)**; path-B fix → item 3.2b | `plan/decks/*`, `plan/notes/finite_beta_findings.md` | — |
@@ -678,3 +691,29 @@ Opening the PRs against real CI surfaced two things local testing could not:
 Standing instruction for future contributors: **open the PR early and read CI**, because
 the line budget, the mypy gate, the python-floor job and the artifact/manifest checkers all
 enforce contracts that a green local `pytest` will not.
+
+### 2026-08-18 agent/fitrobust — 0.3 DONE (PR #56) + THE HEADLINE VALIDATION NUMBER
+**GKX's certified eigensolver reproduces converged GX to +0.043% in γ and +0.008% in ω**
+on the Cyclone s-α lane (GKX 0.093089/0.282015, residual 6.1e-5, converged; GX 0.093049/
+0.281991 from re-running GX's own deck to t=150). That is the strongest cross-code linear
+number GKX has, and it is ~150× tighter than the 6.8% "Cyclone ITG" mismatch the README
+quotes — because the README figure compares against the t=10 transient probe (finding #1).
+**The linear physics is validated; the old mismatch was a measurement artifact.**
+
+Fit bias finding CLOSED (see finding #2 above) — horizon, plus a `z_index` mode-extraction
+effect, neither of them the fit machinery.
+
+Delivered in #56: stationary-window selection (longest late interval where instantaneous γ
+is stationary, ≥2 growth times, warned fallback), AR(1)-corrected γ/ω stderrs + R² + a
+half-horizon settled probe, all surfaced in the summary JSON and printed line
+(`gamma=0.061743+/-0.000575`), and an under-resolved warning that names the horizon needed
+("only 0.62 e-foldings … extend to t_max >~ 113"). Threshold is γ·t_max ≳ 7 per the stella
+agent's calibration.
+Bug fixed inside the selector: tolerance was `3σ + 0.1%·μ` but γ(t) is rolling-mean smoothed
+first, so σ≈3e-6 made the band ~1e-4 and refused windows stationary to 0.5%; a 2% relative
+floor is what makes the method work.
+Honest gap: on fallback the loglinear number is still RETURNED (loudly warned), not withheld.
+
+**NEW WORK ITEM 0.8**: fix the two decks — `examples/linear/axisymmetric/cyclone.toml` and
+`cyclone_coulomb_collisions.toml` — to use `mode_method="project"` and a horizon reaching
+γ·t_max ≳ 7 (t_max ≈ 80). Both currently ship settings that produce a wrong number by default.
