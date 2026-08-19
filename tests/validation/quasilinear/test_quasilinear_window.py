@@ -14,11 +14,13 @@ import pytest
 from gkx.diagnostics.transport_windows import (
     NonlinearWindowConvergenceConfig,
     NonlinearWindowEnsembleConfig,
+    SaturationStopConfig,
     nonlinear_window_convergence_from_csv,
     nonlinear_window_convergence_from_summary,
     nonlinear_window_convergence_report,
     nonlinear_window_ensemble_report,
     nonlinear_window_stats_promotion_ready,
+    saturation_stop_decision,
 )
 
 
@@ -543,3 +545,84 @@ def test_nonlinear_window_ensemble_promotion_rejects_string_pass_flags() -> None
     assert "nonlinear window ensemble report did not pass" in failures
     assert "missing passed ensemble gate_report" in failures
     assert "not all ensemble rows are promotion-ready" in failures
+
+
+def _spinup_then_plateau(
+    plateau: float = 5.0, *, drift_per_time: float = 0.0, seed: int = 7
+) -> tuple[np.ndarray, np.ndarray]:
+    """Exponential growth to an overshoot, then a correlated noisy plateau."""
+
+    rng = np.random.default_rng(seed)
+    t = np.arange(6000) * 0.05
+    noise = np.zeros(t.size)
+    for i in range(1, t.size):
+        noise[i] = 0.9 * noise[i - 1] + rng.normal(0.0, 0.25)
+    growth = np.minimum(1.0e-3 * np.exp(0.35 * t), 2.0 * plateau)
+    saturated = plateau + drift_per_time * t + noise
+    return t, np.where(t < 30.0, growth, saturated)
+
+
+def test_saturation_stop_decision_stops_converged_trace_and_excludes_spinup() -> None:
+    t, heat = _spinup_then_plateau()
+
+    decision = saturation_stop_decision(
+        t, heat, guard=heat**2, config=SaturationStopConfig(rel_sem=0.05)
+    )
+
+    assert decision["saturated"] is True
+    assert decision["reasons"] == []
+    # The exponential spin-up (heat < median until it nears the plateau) must
+    # not pollute the window: the mean lands on the plateau, not on the
+    # overshoot, and the window starts after the early growth phase.
+    assert decision["window_tmin"] > 20.0
+    assert decision["mean"] == pytest.approx(5.0, abs=0.5)
+    assert decision["sem"] > 0.0
+    assert decision["rel_sem"] <= 0.05
+    assert decision["tau_ac_resolved"] is True
+    assert decision["window_span"] >= decision["min_window"]
+
+
+def test_saturation_stop_decision_rejects_non_stationary_trace() -> None:
+    t, heat = _spinup_then_plateau(drift_per_time=0.02)
+
+    decision = saturation_stop_decision(t, heat)
+
+    assert decision["saturated"] is False
+    assert "window_not_stationary" in decision["reasons"]
+
+
+def test_saturation_stop_decision_rejects_unresolved_or_short_traces() -> None:
+    t = np.arange(2000) * 0.05
+    growing = 1.0e-3 * np.exp(0.1 * t)
+
+    decision = saturation_stop_decision(t, growing)
+    assert decision["saturated"] is False
+    assert decision["reasons"]
+
+    short = saturation_stop_decision(t[:8], growing[:8])
+    assert short["saturated"] is False
+    assert short["reasons"] == ["trace_shorter_than_min_samples"]
+    assert short["mean"] is None
+
+
+def test_saturation_stop_decision_guard_blocks_drifting_field_energy() -> None:
+    t, heat = _spinup_then_plateau()
+    _, drifting_guard = _spinup_then_plateau(drift_per_time=0.05, seed=11)
+
+    decision = saturation_stop_decision(t, heat, guard=drifting_guard)
+
+    assert decision["saturated"] is False
+    assert "guard_not_stationary" in decision["reasons"]
+    assert decision["guard_stationary"] is False
+
+
+def test_saturation_stop_decision_honors_min_window_override() -> None:
+    t, heat = _spinup_then_plateau()
+
+    decision = saturation_stop_decision(
+        t, heat, config=SaturationStopConfig(rel_sem=0.05, min_window=1.0e6)
+    )
+
+    assert decision["saturated"] is False
+    assert "window_below_min_window" in decision["reasons"]
+    assert decision["min_window"] == pytest.approx(1.0e6)

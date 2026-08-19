@@ -178,7 +178,30 @@ def print_nonlinear_run_summary(result: Any) -> bool:
         f"Wphi={float(diag.Wphi_t[-1]):.6g} "
         f"Wapar={float(diag.Wapar_t[-1]):.6g}"
     )
+    saturation = getattr(result, "saturation", None)
+    if saturation is not None:
+        print(_format_saturation_summary(saturation))
     return True
+
+
+def _format_saturation_summary(saturation: Mapping[str, Any]) -> str:
+    """Format the measured saturation window for the executable summary."""
+
+    if saturation.get("mean") is None:
+        reasons = ",".join(saturation.get("reasons", ())) or "no_window"
+        return f"saturation: no measurable window ({reasons})"
+    label = (
+        "stopped at saturation"
+        if saturation.get("saturated")
+        else "not saturated by the time horizon"
+    )
+    return (
+        f"saturation: {label} "
+        f"window=[{saturation['window_tmin']:.6g},{saturation['window_tmax']:.6g}] "
+        f"heat_flux={saturation['mean']:.6g}+/-{saturation['sem']:.6g} "
+        f"rel_sem={saturation['rel_sem']:.6g} "
+        f"tau_ac={saturation['tau_ac']:.6g}"
+    )
 
 
 def print_nonlinear_command_outputs(paths: Mapping[str, str], *, enabled: bool) -> None:
@@ -609,7 +632,8 @@ def _run_artifact_checkpoint_loop(
             remaining_steps=remaining_steps,
             time_offset=time_offset,
         )
-        if stop:
+        saturation = getattr(result_chunk, "saturation", None)
+        if stop or bool(saturation and saturation.get("saturated")):
             break
 
     if result_final is None:

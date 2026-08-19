@@ -342,6 +342,26 @@ GKX CPU→GPU speedup spans **0.7× to 13.1×** depending on the case — the sm
 linear cases are dominated by startup, so the GPU can be slower. Warm timings
 and profiler artifacts: [performance](docs/performance.rst).
 
+### Run to saturation
+
+The cheapest way to make a nonlinear run faster is to not integrate past the
+point where the answer has stopped changing. Diagnosed nonlinear runs therefore
+stop at saturation by default (`[time] run_to = "saturation"`). GKX integrates
+in chunks and, after each one, measures the heat-flux trace with the spin-up
+phase excluded: it stops when the autocorrelation-corrected relative SEM of the
+windowed mean falls to `saturation_rel_sem` (default 5%), the window is long
+enough (`saturation_min_window`, ten autocorrelation times when unset), and the
+two halves of the window agree within twice their combined SEM. `t_max` stays
+the hard cap, so nothing is lost if the run never saturates, and the summary
+reports the window it averaged over together with `mean ± SEM` — the number you
+would have computed by hand afterwards. Set `run_to = "t_max"` or pass
+`--no-until-saturated` for a fixed horizon.
+
+GX has no equivalent: it runs a fixed `nstep`/`t_max` and can only be halted
+early by dropping a `.stop` file next to the run, which is a manual
+intervention rather than a convergence criterion (`src/run_gx.cu:128`,
+`src/diagnostics.cu:319-324`).
+
 ## Differentiable Python API
 
 ```python

@@ -50,34 +50,11 @@ from typing import Any
 
 import numpy as np
 
-
-def autocorrelation_time(
-    signal: np.ndarray, dt: float
-) -> tuple[float, int, np.ndarray]:
-    """Integrated autocorrelation time, truncated at the first zero crossing.
-
-    Returns ``(tau_ac, lag_index_of_crossing, rho)``. ``tau_ac`` is in the same
-    units as ``dt``. A trace that never crosses zero is truncated at its end and
-    the caller is told, because that means the trace is too short to resolve its
-    own correlation time -- the one case where a number here would be a lie.
-    """
-
-    fluctuation = signal - signal.mean()
-    variance = float(fluctuation @ fluctuation)
-    if variance <= 0.0:
-        return 0.0, 0, np.zeros(1)
-
-    # Full unbiased-by-count autocorrelation via FFT (O(n log n)).
-    size = int(2 ** np.ceil(np.log2(2 * fluctuation.size)))
-    spectrum = np.fft.rfft(fluctuation, n=size)
-    correlation = np.fft.irfft(spectrum * np.conj(spectrum), n=size)[: fluctuation.size]
-    rho = correlation / correlation[0]
-
-    negative = np.nonzero(rho < 0.0)[0]
-    cut = int(negative[0]) if negative.size else rho.size
-    tau = float(np.trapezoid(rho[:cut], dx=dt)) if cut > 1 else 0.0
-    return tau, cut, rho
-
+# Promoted into the package so the run-to-saturation runtime stop check and
+# this post-hoc campaign tool share one estimator.
+from gkx.diagnostics.transport_windows import (
+    sokal_autocorrelation_time as autocorrelation_time,
+)
 
 REQUIRED_COLUMNS = ("t", "heat_flux")
 

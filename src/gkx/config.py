@@ -106,6 +106,13 @@ class TimeConfig:
     compressed_real_fft: bool = True
     nonlinear_dealias: bool = True
     laguerre_nonlinear_mode: str = "grid"
+    # Nonlinear stop policy. "saturation" (the default) ends a diagnosed
+    # nonlinear run once the post-spin-up heat-flux window statistics converge,
+    # with t_max as the hard cap; "t_max" always integrates the full horizon.
+    # Linear runs ignore these keys.
+    run_to: str = "saturation"
+    saturation_rel_sem: float = 0.05
+    saturation_min_window: float | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
