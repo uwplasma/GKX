@@ -233,6 +233,25 @@ recursive = true
 # 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
 # and the guard it replaces in workflows/runtime/toml.py was 4. See
 # test_tomllib_fallback_lives_only_in_the_shim.
+# 89815 -> 91057: the production species x Hermite nonlinear decomposition
+# (plan item 4.2). Three quarters of it is one new route -- the shard_map mesh,
+# the width-2 Hermite halo, the masked field psum and the scan-carry
+# diagnostics -- inside gkx/parallel/{state,velocity_plan,velocity_hermite,
+# integrators}.py, with no new module and so no new facade to keep in sync.
+# The rest is the reason the shard-local kernels can stay the *serial* kernels:
+# a HermiteWindow carrying the global moment coordinates of a slab, threaded
+# into the five places whose coefficient is a function of the global Hermite
+# index (the field drives, the diamagnetic drive, the reflectionless closure,
+# build_H, the hypercollision normalization). Without it each shard would place
+# m = 0..3 drives at its own local rows and close the hierarchy at its own last
+# moment -- a wrong answer, not a slow one -- and the alternative, forking a
+# sharded copy of every term, is what the measured lanes show costs identity.
+# The evidence the lines buy: RHS identity at f32 rounding on two A4000s, an
+# exact final state under x64, and an HLO census with zero all-to-all. Part of
+# the count is refusal rather than mechanism, and that part is load-bearing:
+# conserving collisions read the m = 0, 1, 2 moments of the local slab, so a
+# split Hermite axis would silently evaluate a different operator on every
+# non-owning shard, and the route raises instead of returning it.
 # 89815 -> 89852: differentiating the twist-shift boundary (#49). The linked
 # flux tube refused every cache built inside a trace, so gradient work had to
 # use boundary="periodic" -- the one boundary a sheared tokamak does not have.
@@ -363,7 +382,7 @@ recursive = true
 # floor. Both land in the fit path; the count is the sum, not new surface.
 # 89919 -> 90011: certifying the default linear branch alongside the residual
 # floor it now uses (#52 over #47). The adaptive branch and its precision pin.
-baseline = 93060
+baseline = 94302
 target = 45000
 
 [[line_budget_policy.counts]]

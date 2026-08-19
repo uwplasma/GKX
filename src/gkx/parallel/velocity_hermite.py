@@ -279,11 +279,180 @@ def velocity_field_reduce_shard_map(
     return mapped(jax.device_put(arr, sharding))
 
 
+# Cache arrays whose value is a function of the Hermite index, and the axis
+# that carries it. A Hermite-sharded shard must see the window of these that
+# matches its own slab; feeding it the global arrays is a shape error and
+# feeding it the wrong window is a silent wrong answer.
+HERMITE_CACHE_AXES: dict[str, int] = {
+    "lb_lam": 1,
+    "m": 1,
+    "sqrt_m": 1,
+    "sqrt_m_p1": 1,
+    "hyper_ratio": 1,
+    "ratio_m": 1,
+    "ratio_lm": 1,
+    "mask_const": 1,
+    "mask_kz": 1,
+    "m_pow": 1,
+    "sqrt_p": 2,
+    "sqrt_m_ladder": 2,
+}
+
+
+def hermite_window_indices(
+    hermite_count: int, *, chunks: int, ghost_depth: int
+) -> np.ndarray:
+    """Return the global Hermite index of every extended row of every shard.
+
+    The shards' windows are concatenated, so the result shards cleanly along
+    the Hermite mesh axis and each device receives exactly its own extended
+    coordinates. Indices outside ``[0, Nm)`` mark ghost rows whose outputs are
+    discarded and whose physical boundary is zero.
+    """
+
+    total = int(hermite_count)
+    blocks = int(chunks)
+    depth = int(ghost_depth) if blocks > 1 else 0
+    local = total // blocks
+    return np.concatenate(
+        [
+            np.arange(block * local - depth, (block + 1) * local + depth)
+            for block in range(blocks)
+        ]
+    )
+
+
+def hermite_window_cache_arrays(
+    cache: Any, indices: np.ndarray, *, hermite_count: int
+) -> dict[str, Any]:
+    """Return every Hermite-indexed cache array gathered onto ``indices``.
+
+    Ghost rows are zero-filled. That is safe rather than approximate: a ghost
+    row's coefficient only ever multiplies a ghost row's output, and those are
+    sliced away before the shard returns.
+    """
+
+    import jax.numpy as jnp
+
+    total = int(hermite_count)
+    idx = np.asarray(indices)
+    valid = (idx >= 0) & (idx < total)
+    clipped = np.clip(idx, 0, total - 1)
+    windowed: dict[str, Any] = {}
+    for name, axis in HERMITE_CACHE_AXES.items():
+        array = getattr(cache, name, None)
+        if array is None or array.ndim <= axis or array.shape[axis] != total:
+            continue
+        gathered = jnp.take(array, jnp.asarray(clipped), axis=axis)
+        mask_shape = [1] * gathered.ndim
+        mask_shape[axis] = idx.size
+        windowed[name] = jnp.where(
+            jnp.asarray(valid).reshape(mask_shape), gathered, 0
+        )
+    return windowed
+
+
+def hermite_cache_partition_specs(windowed: dict[str, Any], axis_name: str) -> dict:
+    """Return the ``PartitionSpec`` for each windowed Hermite cache array."""
+
+    from jax.sharding import PartitionSpec
+
+    specs = {}
+    for name, array in windowed.items():
+        axis = HERMITE_CACHE_AXES[name]
+        entries: list[str | None] = [None] * array.ndim
+        entries[axis] = axis_name
+        specs[name] = PartitionSpec(*entries)
+    return specs
+
+
+def hermite_halo_extend(
+    local: Any, *, chunks: int, ghost_depth: int, axis_name: str, axis: int = 2
+) -> Any:
+    """Widen a Hermite shard by ``ghost_depth`` rows from each neighbour.
+
+    One ``ppermute`` per direction carries the whole halo, so the ``m +- 1``
+    ladder of streaming and mirror and the ``m +- 2`` reach of curvature are
+    paid for in a single exchange rather than one per coupling. Shards at the
+    global Hermite boundary receive nothing, which is exactly the zero the
+    serial ``shift_axis`` introduces there.
+    """
+
+    import jax
+    import jax.numpy as jnp
+
+    blocks = int(chunks)
+    depth = int(ghost_depth)
+    if blocks < 2 or depth < 1:
+        return local
+    lower_pairs = tuple((block, block + 1) for block in range(blocks - 1))
+    upper_pairs = tuple((block, block - 1) for block in range(1, blocks))
+    from_below = jax.lax.ppermute(
+        _slice_axis(local, axis, -depth, None), axis_name, lower_pairs
+    )
+    from_above = jax.lax.ppermute(
+        _slice_axis(local, axis, 0, depth), axis_name, upper_pairs
+    )
+    return jnp.concatenate([from_below, local, from_above], axis=axis)
+
+
+def hermite_halo_interior(extended: Any, *, chunks: int, ghost_depth: int, axis: int = 2):
+    """Drop the ghost rows a :func:`hermite_halo_extend` slab carries."""
+
+    blocks = int(chunks)
+    depth = int(ghost_depth)
+    if blocks < 2 or depth < 1:
+        return extended
+    return _slice_axis(extended, axis, depth, -depth)
+
+
+def hermite_field_moment_head(
+    local: Any, *, index: Any, chunks: int, axis_name: str, rows: int = 2
+) -> Any:
+    """Return the leading global Hermite moment rows on every shard of the mesh.
+
+    The field solve reads quasineutrality from ``m = 0`` and Ampere from
+    ``m = 1``, and the flux diagnostics reach ``m = 3``; on a Hermite-sharded
+    state those rows may live on more than one block. Selecting them by their
+    *global* index and summing over the Hermite mesh axis delivers all of them
+    to every shard in a single collective instead of a reduce followed by a
+    broadcast. Each row's sum has exactly one non-zero term, so the owner's
+    contribution survives bit-for-bit.
+
+    ``index`` gives the global Hermite index of each row of ``local``.
+    """
+
+    import jax
+    import jax.numpy as jnp
+
+    blocks = int(chunks)
+    if blocks < 2:
+        return _slice_axis(local, 2, 0, int(rows))
+    selected = [
+        jnp.sum(
+            jnp.where(
+                (index == row).reshape((1, 1, index.shape[0], 1, 1, 1)), local, 0
+            ),
+            axis=2,
+            keepdims=True,
+        )
+        for row in range(int(rows))
+    ]
+    return jax.lax.psum(jnp.concatenate(selected, axis=2), axis_name)
+
+
 __all__ = [
+    "HERMITE_CACHE_AXES",
+    "hermite_cache_partition_specs",
+    "hermite_field_moment_head",
+    "hermite_halo_extend",
+    "hermite_halo_interior",
     "hermite_neighbor_reference",
     "hermite_neighbor_shard_map",
     "hermite_shift_reference",
     "hermite_shift_shard_map",
+    "hermite_window_cache_arrays",
+    "hermite_window_indices",
     "velocity_field_reduce_reference",
     "velocity_field_reduce_shard_map",
 ]
