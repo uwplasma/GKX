@@ -216,8 +216,12 @@ recursive = true
 # a move rather than new surface -- the renderers came out of the movie tool,
 # which shrinks by the same amount -- and the figure functions cover the
 # spectra and particle flux that were being written to NetCDF and never
-# plotted.
-baseline = 90926
+# plotted. The transport figures then moved out of plotting.py into
+# artifacts/transport_figures.py, which costs the ten lines of a module
+# docstring and import header and returns plotting.py to the size it had
+# before this branch; the two modules are split by what they read, benchmark
+# and scan results on one side and saved run output on the other.
+baseline = 90936
 target = 45000
 
 [[line_budget_policy.counts]]
