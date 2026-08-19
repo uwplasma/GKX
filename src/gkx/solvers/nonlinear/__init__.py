@@ -31,6 +31,7 @@ from gkx.solvers.nonlinear.imex import (
     solve_imex_step,
 )
 from gkx.solvers.nonlinear.state_integration import (
+    DIVERGENCE_KNEE_STEPS,
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
@@ -43,6 +44,7 @@ from gkx.solvers.nonlinear.state_integration import (
 
 __all__ = [
     "advance_explicit_nonlinear_state",
+    "DIVERGENCE_KNEE_STEPS",
     "advance_imex_nonlinear_state",
     "checkpoint_explicit_step",
     "ExplicitNonlinearDiagnosticsDeps",

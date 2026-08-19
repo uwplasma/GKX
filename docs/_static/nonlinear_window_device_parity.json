@@ -1,0 +1,88 @@
+{
+  "kind": "nonlinear_window_device_parity",
+  "claim_level": "one_identical_windowed_adjoint_case_across_devices",
+  "generator": "tools/profiling/profile_nonlinear_window_device_parity.py",
+  "entry_point": "gkx.nonlinear_heat_flux_window",
+  "case": {
+    "Nx": 16,
+    "Ny": 16,
+    "Nz": 8,
+    "Lx": 6.0,
+    "Ly": 6.0,
+    "Nl": 2,
+    "Nm": 4,
+    "dt": 0.004,
+    "steps": 8,
+    "tail_steps": 5,
+    "method": "rk3",
+    "seed": 17,
+    "amplitude": 0.0001,
+    "beta": 0.02,
+    "n_species": 2,
+    "mass_ratio": 0.00027,
+    "precision": "64"
+  },
+  "state_checksum": 0.0006603705095419078,
+  "runs": {
+    "laptop_cpu_jax0.9.2": {
+      "platform": "macOS-14.4.1-arm64-arm-64bit",
+      "jax": "0.9.2",
+      "jaxlib": "0.9.2",
+      "devices": [
+        "TFRT_CPU_0"
+      ],
+      "default_backend": "cpu",
+      "x64_enabled": true,
+      "value": -3.500122599612275e-06,
+      "gradient": 8.596796520451882e-08
+    },
+    "office_cpu_jax0.11.1": {
+      "platform": "Linux-6.17.9-76061709-generic-x86_64-with-glibc2.35",
+      "jax": "0.11.1",
+      "jaxlib": "0.11.1",
+      "devices": [
+        "cpu:0"
+      ],
+      "default_backend": "cpu",
+      "x64_enabled": true,
+      "value": -3.5001225996122694e-06,
+      "gradient": 8.596796520451862e-08
+    },
+    "office_rtx_a4000_jax0.11.1": {
+      "platform": "Linux-6.17.9-76061709-generic-x86_64-with-glibc2.35",
+      "jax": "0.11.1",
+      "jaxlib": "0.11.1",
+      "devices": [
+        "cuda:0",
+        "cuda:1"
+      ],
+      "default_backend": "gpu",
+      "x64_enabled": true,
+      "value": -3.5001225996122707e-06,
+      "gradient": 8.596796520451875e-08
+    }
+  },
+  "comparisons": [
+    {
+      "left": "office_cpu_jax0.11.1",
+      "right": "office_rtx_a4000_jax0.11.1",
+      "isolates": "device only: same host, same jax 0.11.1, same case",
+      "value_relative_difference": 3.6300140487141703e-16,
+      "gradient_relative_difference": 1.5395141398732065e-15
+    },
+    {
+      "left": "laptop_cpu_jax0.9.2",
+      "right": "office_rtx_a4000_jax0.11.1",
+      "isolates": "device + architecture + jax version, the end-to-end laptop-vs-GPU number",
+      "value_relative_difference": 1.2100046829047234e-15,
+      "gradient_relative_difference": 7.697570699366032e-16
+    },
+    {
+      "left": "laptop_cpu_jax0.9.2",
+      "right": "office_cpu_jax0.11.1",
+      "isolates": "architecture + jax version with the device held fixed at CPU",
+      "value_relative_difference": 1.573006087776141e-15,
+      "gradient_relative_difference": 2.3092712098098135e-15
+    }
+  ]
+}

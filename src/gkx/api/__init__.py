@@ -130,6 +130,7 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'integrate_nonlinear': ('gkx.solvers.nonlinear.state_integration', 'integrate_nonlinear'),
     'integrate_nonlinear_cached': ('gkx.solvers.nonlinear.state_integration', 'integrate_nonlinear_cached'),
     'nonlinear_heat_flux_window': ('gkx.solvers.nonlinear.state_integration', 'nonlinear_heat_flux_window'),
+    'DIVERGENCE_KNEE_STEPS': ('gkx.solvers.nonlinear.state_integration', 'DIVERGENCE_KNEE_STEPS'),
     'integrate_nonlinear_explicit_diagnostics': ('gkx.solvers.nonlinear.diagnostic_integration', 'integrate_nonlinear_explicit_diagnostics'),
     'integrate_nonlinear_diffrax': ('gkx.solvers.time.diffrax_nonlinear', 'integrate_nonlinear_diffrax'),
     'build_nonlinear_imex_operator': ('gkx.operators.nonlinear.policies', 'build_nonlinear_imex_operator'),
