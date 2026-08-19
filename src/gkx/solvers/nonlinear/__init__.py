@@ -36,6 +36,7 @@ from gkx.solvers.nonlinear.state_integration import (
     integrate_nonlinear_imex_cached,
     integrate_nonlinear_sheared,
     integrate_nonlinear_sheared_transport,
+    nonlinear_heat_flux_window,
     nonlinear_rhs_cached,
     ShearedTransportTrace,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "integrate_cached_explicit_scan",
     "imex_fixed_point_guess",
     "make_explicit_diagnostic_step",
+    "nonlinear_heat_flux_window",
     "nonlinear_rhs_cached",
     "run_explicit_diagnostic_scan",
     "integrate_cached_imex_scan",

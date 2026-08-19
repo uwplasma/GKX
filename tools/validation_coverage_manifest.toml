@@ -641,10 +641,12 @@ reference_anchors = [
 physics_contracts = [
   "nonlinear acceptance uses window statistics rather than one-time samples",
   "mode-resolved Wphi and heat-flux spectra localize transport mismatches",
+  "the post-saturation adjoint differentiates the physical total heat flux",
 ]
 numerics_contracts = [
   "Poisson-bracket paths preserve expected antisymmetry in reduced tests",
   "late-time fixed-mode frequency diagnostics remain conditioned when amplitudes are small",
+  "blocked and plain discrete adjoints preserve values and gradients",
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",

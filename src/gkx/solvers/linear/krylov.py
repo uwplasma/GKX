@@ -17,6 +17,7 @@ from gkx.operators.linear.params import (
 from gkx.solvers.linear.adaptive_propagator import (
     AdaptivePropagatorSolution as AdaptivePropagatorSolution,
     adaptive_propagator_eigenpair,
+    certifiable_residual_tolerance,
 )
 from gkx.solvers.linear.krylov_algorithms import (
     _advance_imex2,
@@ -62,6 +63,8 @@ class KrylovConfig:
     shift_solve_method: str = "batched"
     shift_preconditioner: str | None = "auto"
     shift_selection: str = "targeted"
+    # Certified against the original operator in the working dtype, so this is
+    # raised to that dtype's noise floor; the default is a float64 gate.
     shift_outer_residual_tol: float = 1.0e-6
     mode_family: str = "auto"
     fallback_method: str = "propagator"
@@ -71,6 +74,12 @@ class KrylovConfig:
 
 
 _StatusCallback = Callable[[str], None] | None
+
+# Base residual gate for the certified adaptive branch. The effective gate is
+# floored by certifiable_residual_tolerance at what the working precision can
+# express, so a converged complex64 eigenpair is not rejected for failing an
+# f64-only tolerance.
+_ADAPTIVE_BASE_TOL = 1.0e-9
 
 
 def _status(status_callback: _StatusCallback, message: str) -> None:
@@ -343,7 +352,10 @@ def _shift_invert_fallback(
         return None
     residual = _eigenpair_relative_residual(*result, cache, params, term_cfg)
     _status(status_callback, f"{fallback_key} fallback residual={residual:.3g}")
-    if not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol:
+    residual_tol = certifiable_residual_tolerance(
+        cfg.shift_outer_residual_tol, v0.dtype
+    )
+    if not np.isfinite(residual) or residual > residual_tol:
         return None
     return result
 
@@ -359,6 +371,9 @@ def _shift_invert_branch(
     *,
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    residual_tol = certifiable_residual_tolerance(
+        cfg.shift_outer_residual_tol, v0.dtype
+    )
     _status(
         status_callback,
         "preparing shift-invert solve with "
@@ -429,9 +444,7 @@ def _shift_invert_branch(
             eig_host.imag
         )
         growth_floor_failed = select_growth and eig_host.real < cfg.fallback_real_floor
-        residual_failed = (
-            not np.isfinite(residual) or residual > cfg.shift_outer_residual_tol
-        )
+        residual_failed = not np.isfinite(residual) or residual > residual_tol
         need_fallback = nonfinite_pair or growth_floor_failed or residual_failed
         if not need_fallback or attempt + 1 == len(preconditioners):
             break
@@ -456,7 +469,7 @@ def _shift_invert_branch(
         if residual_failed:
             raise RuntimeError(
                 "shift-invert eigenpair failed the outer residual gate: "
-                f"residual={residual:.6g}, tolerance={cfg.shift_outer_residual_tol:.6g}"
+                f"residual={residual:.6g}, tolerance={residual_tol:.6g}"
             )
         if growth_floor_failed:
             raise RuntimeError(
@@ -487,6 +500,9 @@ def _sparse_shift_invert_branch(
         raise ValueError("sparse shift-invert requires an operator of size at least three")
     if cfg.shift is None:
         raise ValueError("sparse shift-invert requires a supplied or coarse-grid shift")
+    residual_tol = certifiable_residual_tolerance(
+        cfg.shift_outer_residual_tol, v0.dtype
+    )
     from scipy.sparse import eye
     from solvax import SpluFactorization
     from solvax import (  # type: ignore[attr-defined]
@@ -516,7 +532,7 @@ def _sparse_shift_invert_branch(
         initial=v0,
         tolerance=min(cfg.shift_tol, 1.0e-10),
         maxiter=max(cfg.shift_maxiter, 20_000),
-        residual_tolerance=cfg.shift_outer_residual_tol,
+        residual_tolerance=residual_tol,
         factorization=factor,
     )
     vectors = modes.eigenvectors.reshape((modes.eigenvectors.shape[0], *v0.shape))
@@ -527,7 +543,7 @@ def _sparse_shift_invert_branch(
         ]
     )
     certified = np.asarray(modes.converged) & np.isfinite(residuals)
-    certified &= residuals <= cfg.shift_outer_residual_tol
+    certified &= residuals <= residual_tol
     _targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
     if select_overlap:
         scores = np.abs(
@@ -548,6 +564,61 @@ def _sparse_shift_invert_branch(
         f"sparse shift-invert residual={residuals[selected]:.3g}",
     )
     return modes.eigenvalues[selected], vectors[selected]
+
+
+def _adaptive_branch(
+    v0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms | None,
+    cfg: KrylovConfig,
+    status_callback: _StatusCallback,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Run the residual-certified adaptive eigensolve; fail closed on rejection.
+
+    Unlike the raw propagator/power/arnoldi branches, this path never returns
+    an uncertified pair: the eigenvalue is either certified against the
+    continuous operator by the adaptive solver's residual gate or the solve
+    raises with the measured residual.
+    """
+
+    max_restarts = max(int(cfg.restarts), 4)
+    tol = certifiable_residual_tolerance(_ADAPTIVE_BASE_TOL, v0.dtype)
+    krylov_dim = max(min(int(cfg.krylov_dim), int(v0.size) - 1), 2)
+    restart_krylov_dim = max(krylov_dim // 2, 2)
+    candidate_count = min(2, krylov_dim, restart_krylov_dim)
+    _status(
+        status_callback,
+        "running certified adaptive propagator with "
+        f"dim={krylov_dim} max_restarts={max_restarts} tol={tol:.3g}",
+    )
+    solution = adaptive_propagator_eigenpair(
+        v0,
+        cache,
+        params,
+        terms,
+        krylov_dim=krylov_dim,
+        restart_krylov_dim=restart_krylov_dim,
+        candidate_count=candidate_count,
+        max_restarts=max_restarts,
+        tol=tol,
+    )
+    eig_host = complex(np.asarray(solution.eigenvalue))
+    residual = float(np.asarray(solution.residual))
+    _status(
+        status_callback,
+        "adaptive solve finished with "
+        f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g} "
+        f"converged={bool(solution.converged)} stable={bool(solution.stable)}",
+    )
+    if not (bool(solution.stable) and bool(solution.converged)):
+        raise RuntimeError(
+            "certified adaptive eigensolve rejected the dominant eigenpair: "
+            f"stable={bool(solution.stable)} converged={bool(solution.converged)} "
+            f"residual={residual:.6g} tolerance={tol:.6g}; refusing to report "
+            "an uncertified growth rate"
+        )
+    return solution.eigenvalue, solution.eigenvector
 
 
 def _dispatch_dominant_eigenpair(
@@ -598,7 +669,7 @@ def _dispatch_dominant_eigenpair(
         )
     if cfg.method != "arnoldi":
         raise ValueError(
-            "Krylov method must be power, propagator, shift_invert, "
+            "Krylov method must be adaptive, power, propagator, shift_invert, "
             "sparse_shift_invert, or arnoldi"
         )
     return _arnoldi_branch(
@@ -653,6 +724,8 @@ def dominant_eigenpair(
         status_callback,
         f"krylov method={cfg.method} dim={cfg.krylov_dim} restarts={cfg.restarts}",
     )
+    if cfg.method == "adaptive":
+        return _adaptive_branch(v0, cache, params, terms, cfg, status_callback)
     return _dispatch_dominant_eigenpair(
         v0,
         v_ref_use,
@@ -700,6 +773,7 @@ __all__ = [
     "_select_by_overlap",
     "_select_by_target",
     "adaptive_propagator_eigenpair",
+    "certifiable_residual_tolerance",
     "dominant_eigenpair",
     "dominant_eigenpair_cached",
     "dominant_eigenpair_power",
