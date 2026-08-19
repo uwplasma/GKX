@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import replace
 from typing import Any, Callable, NamedTuple
 
@@ -60,6 +61,35 @@ from gkx.terms.assembly import (
 )
 from gkx.terms.config import FieldState, TermConfig
 from gkx.terms.nonlinear import nonlinear_em_contribution
+
+
+#: Longest window whose discrete adjoint has been measured to still behave like
+#: a gradient on the shipped saturated Cyclone case: the AD/FD ladder in
+#: ``tools/campaigns/nonlinear_gradient_window.py`` tracks centered differences
+#: through 1024 RK3 steps and departs between 1024 and 2048. It is a property of
+#: that trajectory's Lyapunov time, not a solver tolerance, so it is a default to
+#: warn against and remeasure -- not a hard limit. ``examples/optimization/
+#: QA_optimization.py`` runs at exactly 1024, one rung below the departure.
+DIVERGENCE_KNEE_STEPS = 1024
+
+
+def _warn_if_window_exceeds_divergence_knee(
+    steps: int, knee: int | None = DIVERGENCE_KNEE_STEPS
+) -> None:
+    """Warn when a differentiated window runs past the measured knee."""
+
+    if knee is None or steps <= int(knee):
+        return
+    warnings.warn(
+        f"differentiating a {steps}-step window, above the measured divergence "
+        f"knee of {knee} steps: past it the windowed adjoint grows with the "
+        "leading Lyapunov exponent and is large, reproducible, and not a "
+        "descent direction. Remeasure the knee for this case with "
+        "tools/campaigns/nonlinear_gradient_window.py, then pass "
+        "divergence_knee_steps=<measured> or None.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
 
 
 class ShearedTransportTrace(NamedTuple):
@@ -261,6 +291,8 @@ def nonlinear_heat_flux_window(
     checkpoint: bool = True,
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    collision_operator: CollisionOperator | None = None,
+    divergence_knee_steps: int | None = DIVERGENCE_KNEE_STEPS,
 ) -> jnp.ndarray:
     r"""Mean physical heat flux over a differentiable nonlinear window.
 
@@ -269,12 +301,24 @@ def nonlinear_heat_flux_window(
     Reverse-mode AD follows the exact discrete Runge--Kutta map. Block
     checkpointing retains :math:`O(\sqrt{N})` distribution states instead of
     :math:`O(N)` for a window of ``N`` steps.
+
+    ``collision_operator`` is the same custom model
+    :func:`integrate_nonlinear` accepts, and must be passed here too: a run
+    saturated with a custom operator and then differentiated without one is a
+    derivative of different physics from the trajectory it starts on.
+
+    ``steps`` above ``divergence_knee_steps`` warns. Past the measured knee the
+    windowed adjoint grows with the leading Lyapunov exponent and stops being a
+    useful design direction; pass ``None`` to silence the check when the knee
+    has been remeasured for the case at hand with
+    ``tools/campaigns/nonlinear_gradient_window.py``.
     """
 
     count = int(steps)
     tail = count if tail_steps is None else int(tail_steps)
     if count < 1 or not 1 <= tail <= count:
         raise ValueError("steps must be positive and tail_steps must lie within it")
+    _warn_if_window_exceeds_divergence_knee(count, divergence_knee_steps)
     if saturated_state.ndim not in (5, 6):
         raise ValueError(
             "saturated_state must have shape (Nl, Nm, Ny, Nx, Nz) or "
@@ -303,6 +347,7 @@ def nonlinear_heat_flux_window(
             term_cfg,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
+            collision_operator=collision_operator,
             differentiable=True,
         )
 

@@ -91,7 +91,22 @@ recursive = true
 # 97 -> 98: the finite-beta A-vs-B drift parity fixture (#57). It is a new
 # file because the vacuum suites cannot express it: the two geometry paths
 # agree identically at zero beta, which is why the mislabelled drift hid.
-baseline = 98
+# 98 -> 100: the two nonlinear-autodiff coverage files. The target is 36, so
+# both need a reason.
+# tests/unit/nonlinear/test_nonlinear_window_gradient_matrix.py is a new file
+# because it is a matrix, not a case: one parametrized builder covers RK2/3/4,
+# one and two species, electrostatic and finite-beta EM, hypercollisions, a
+# custom collision operator, and all of them together, and folding ten rows
+# into test_nonlinear.py would bury them under an integration marker the
+# default suite skips -- which is how every switch but RK2 stayed unexercised
+# under grad in the first place.
+# tests/tools/profiling/test_nonlinear_gradient_evidence_contracts.py is a new
+# file because it owns a failure mode no solver test can see: the generators
+# behind the docs figure were deleted and the numbers survived as literals in
+# the plotting script. The assertions are about the tree -- generators present,
+# docs naming them, figure reading their JSON, knee matching the runtime guard
+# -- and belong with the tool contracts, not with the physics.
+baseline = 100
 target = 36
 
 [[topology_policy.counts]]
@@ -453,7 +468,16 @@ recursive = true
 # 95031 -> 95456: carrying converged state between related runs. The policy is
 # the cost -- which points may seed which, when a seed is refused, and the
 # exact rescaling that leaves a growth fit invariant.
-baseline = 95456
+# 95456 -> 95504: closing two gaps in the differentiable heat-flux window.
+# Threading collision_operator through it is four lines and removes a silent
+# physics change: integrate_nonlinear took a custom operator, the window did
+# not, so a run saturated with collisions and then differentiated returned the
+# derivative of a different model with no diagnostic. The rest is the
+# divergence-knee guard -- one measured constant, one warning helper, and the
+# keyword that lets a caller remeasure it. The warning is the cost of the
+# window being usable past the point where it stops being a gradient; the
+# alternative is a large, reproducible, meaningless number.
+baseline = 95504
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -77,9 +77,17 @@ steps in blocks of length :math:`B` and retains block boundaries:
    M(B)=O(N/B+B),\qquad B=\lceil\sqrt N\rceil,
    \qquad M=O(\sqrt N).
 
-At 2048 steps, measured XLA temporary memory fell from 759 MB to 12.6 MB on CPU
-and from 11.88 GB to 168 MB on an RTX A4000. Runtime rose by 1.54x and 1.67x,
-respectively. The blocked and plain values and gradients agree.
+Measured on the same host, the same 16x16x16 Cyclone case and the same 1024-step
+window of ``nonlinear_heat_flux_window``, XLA temporary memory falls from
+7.82 GB to 187 MB on 36 CPU cores and from 7.80 GB to 148 MB on an RTX A4000 --
+42x and 53x. Runtime rises by 1.92x and 1.77x respectively: rematerialization is
+the trade. The blocked and plain values and gradients agree to single-precision
+round-off, which the profiler asserts before it reports anything.
+
+The step-checkpoint policy is what sets the ceiling. At 2048 steps it asks for
+about 15 GB, which does not fit on a 16 GB A4000 alongside anything else; the
+block policy at the same window is two orders of magnitude smaller and fits
+easily.
 
 Spectral zero mode
 ------------------
@@ -124,6 +132,57 @@ refresh it after an accepted geometry step. Choose a window of several measured
 heat-flux autocorrelation times, check the AD direction with a local line
 search, and verify the final design with independent saturated runs.
 
+``nonlinear_heat_flux_window`` also accepts ``collision_operator``, the same
+custom model ``integrate_nonlinear`` takes. Pass it here whenever the saturation
+run used one: a window differentiated without it is the derivative of different
+physics from the trajectory it starts on.
+
+Choosing the window
+-------------------
+
+Windows longer than the measured divergence knee emit a ``RuntimeWarning``. The
+default knee is ``gkx.DIVERGENCE_KNEE_STEPS`` (1024), the last rung of the
+ladder below whose adjoint still tracks a centered difference on the shipped
+Cyclone case. It is a property of that trajectory's Lyapunov time, not a solver
+tolerance, so remeasure it for a new case and then pass
+``divergence_knee_steps=<measured>`` (or ``None`` to silence the check).
+``examples/optimization/QA_optimization.py`` runs at exactly 1024, one rung
+below the departure.
+
+Regenerating the evidence
+-------------------------
+
+Every number on this page and on the figure below is written by one of three
+generators; the figure builder reads their JSON rather than carrying literals.
+
+.. code-block:: bash
+
+   # (i) AD-vs-FD ladder and the divergence knee (right panel)
+   python tools/campaigns/nonlinear_saturated_state.py --nx 16 --ny 16 --nz 16 \
+       --state-out tools_out/cyclone16_saturated.npz
+   python tools/campaigns/nonlinear_gradient_window.py --nx 16 --ny 16 --nz 16 \
+       --saturated-state tools_out/cyclone16_saturated.npz \
+       --min-window 64 --max-window 2048 --fd-step 1e-5 \
+       --output docs/_static/nonlinear_heat_flux_gradient_window_rk3.json
+
+   # (ii) checkpoint memory profile (left panel), once per device
+   python tools/profiling/profile_nonlinear_adjoint_checkpointing.py \
+       --nx 16 --ny 16 --nz 16 --steps 2048 --precision 32 \
+       --output docs/_static/nonlinear_adjoint_checkpointing_gpu32.json
+
+   # (iii) CPU/GPU parity on one fixed case, once per device, then compare
+   python tools/profiling/profile_nonlinear_window_device_parity.py \
+       --output tools_out/window_parity_cpu.json
+   python tools/profiling/profile_nonlinear_window_device_parity.py \
+       --compare tools_out/window_parity_cpu.json tools_out/window_parity_gpu.json
+
+   python tools/artifacts/build_nonlinear_autodiff_figure.py
+
+Cost: the saturation run and the 2048-step ladder are ~40 min together on one
+RTX A4000; the 2048-step memory profile needs about 15 GB of device memory for
+the step-checkpoint policy, so run it on a card with a free 16 GB or drop to
+``--steps 1024``. The parity case is seconds anywhere.
+
 Evidence and scope
 ------------------
 
@@ -139,11 +198,43 @@ the nominal 24-pair interval is 10.64--13.88%, and the 20x20 and stationary
 24x24 refinement intervals overlap above zero. The protocol and scope are in
 :doc:`stellarator_optimization`.
 
+Device parity
+-------------
+
+One fixed case -- 16x16x8, kinetic electrons at :math:`m_e/m_i=2.7\times10^{-4}`,
+finite :math:`\beta` with ``apar`` and ``bpar``, RK3, float64, host-drawn seed --
+differentiated on three environments. The recorded values are in
+``docs/_static/nonlinear_window_device_parity.json``:
+
+.. list-table::
+   :header-rows: 1
+
+   * - compared
+     - isolates
+     - relative gradient difference
+   * - office CPU vs RTX A4000, both jax 0.11.1
+     - device only
+     - :math:`1.5\times10^{-15}`
+   * - laptop CPU (jax 0.9.2) vs RTX A4000 (jax 0.11.1)
+     - device, architecture and jax version
+     - :math:`7.7\times10^{-16}`
+   * - laptop CPU (jax 0.9.2) vs office CPU (jax 0.11.1)
+     - architecture and jax version, device fixed
+     - :math:`2.3\times10^{-15}`
+
+All three are float64 round-off. The first row is the like-for-like device
+comparison: same host, same jax, same case, only the backend differs.
+
 Tests
 -----
 
-* mathematics: blocked and plain discrete adjoints are identical;
-* numerics: Runge--Kutta order and AD/centered-FD agreement;
+* mathematics: blocked and plain discrete adjoints are identical, including on
+  a six-dimensional multi-species carry;
+* numerics: Runge--Kutta order and AD/centered-FD agreement across the
+  production switch matrix -- RK2/RK3/RK4, one and two species (including
+  kinetic electrons), electrostatic and finite-:math:`\beta` electromagnetic,
+  built-in hypercollisions, a custom collision operator, and all of them at
+  once;
 * physics: the differentiated diagnostic is GKX's physical total heat flux;
 * optimization: the QA example uses the analytic VMEX and GKX derivatives.
 
