@@ -468,10 +468,14 @@ heat_flux, gradient = jax.value_and_grad(loss)(shape0)
 
 ![Nonlinear adjoint memory and derivative validation](docs/_static/nonlinear_autodiff_validation.png)
 
-**One derivative, bounded memory.** Block checkpointing cuts the measured
-2048-step temporary state from 759 MB to 12.6 MB on CPU and from 11.88 GB to
-168 MB on an RTX A4000. The discrete adjoint and centered finite differences
-agree until chaotic trajectory separation sets the useful window length.
+**One derivative, bounded memory.** On one host, one 16x16x16 Cyclone case and
+one 1024-step window, block checkpointing cuts the measured temporary state from
+7.82 GB to 187 MB on 36 CPU cores and from 7.80 GB to 148 MB on an RTX A4000,
+for 1.9x and 1.8x more runtime. The discrete adjoint and centered finite
+differences agree to 1e-11 through 1024 steps and part at 2048, where chaotic
+trajectory separation sets the useful window length; longer windows warn.
+The same gradient agrees between CPU and an A4000 to 1.5e-15.
+[Regenerate every number](docs/nonlinear_autodiff.rst).
 
 The single [`QA_optimization.py`](examples/optimization/QA_optimization.py)
 follows VMEX's vacuum QA mode ladder and adds this heat flux as a fourth tuple.
