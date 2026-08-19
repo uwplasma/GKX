@@ -16,6 +16,13 @@ from gkx.workflows.runtime.results import (
     RuntimeLinearScanResult,
     RuntimeParameterScanResult,
 )
+from gkx.workflows.runtime.warm_start import (
+    WarmStartPolicy,
+    carry_state,
+    linear_scan_warm_start_refusal,
+    relative_change,
+    scan_visit_order,
+)
 
 class RuntimeScanBatchDeps(Protocol):
     """Dependency surface needed by the combined-ky scan batch helper."""
@@ -208,6 +215,8 @@ def run_runtime_scan_ky_task(
         mode_method=str(task["mode_method"]),
         fit_signal=str(task["fit_signal"]),
         show_progress=bool(task["show_progress"]),
+        initial_state=task.get("initial_state"),
+        return_state=bool(task.get("return_state", False)),
     )
 
 
@@ -299,6 +308,47 @@ def _run_combined_ky_scan(
     )
 
 
+def _run_warm_serial_ky_scan(
+    ky_arr: np.ndarray,
+    tasks: list[dict[str, Any]],
+    parallel_plan: Any,
+    *,
+    deps: RuntimeScanDeps,
+) -> RuntimeLinearScanResult:
+    """Walk a ky scan in neighbour order, seeding each point from the last one.
+
+    The converged state of one ky is an excellent guess at the next, so the
+    scan is visited in monotone ky order and each point starts from its
+    neighbour's answer instead of the cold initial condition. Results are
+    written back into the requested ky order, so the reported arrays are
+    identical in shape and ordering to the cold scan. A point whose state comes
+    back unusable simply seeds the next point cold rather than poisoning it.
+    """
+
+    order = scan_visit_order(ky_arr)
+    results: list[Any] = [None] * int(ky_arr.size)
+    carried: np.ndarray | None = None
+    warm_points = 0
+    for position in order:
+        index = int(position)
+        result = deps.run_runtime_scan_ky_task(
+            {**tasks[index], "initial_state": carried, "return_state": True}
+        )
+        results[index] = result
+        warm_points += int(carried is not None)
+        carried = carry_state(result.state)
+    scan = _scan_result_from_worker_results(ky_arr, results, parallel_plan)
+    return replace(
+        scan,
+        warm_start={
+            "enabled": True,
+            "visit_order": [int(value) for value in order],
+            "warm_points": int(warm_points),
+            "cold_points": int(ky_arr.size) - int(warm_points),
+        },
+    )
+
+
 def _run_independent_ky_scan(
     cfg: RuntimeConfig,
     ky_arr: np.ndarray,
@@ -310,6 +360,8 @@ def _run_independent_ky_scan(
     options: _RuntimeScanOptions,
     workers: int,
     parallel_executor: str,
+    warm_policy: WarmStartPolicy,
+    solver_key: str,
     deps: RuntimeScanDeps,
 ) -> RuntimeLinearScanResult:
     tasks = _scan_worker_tasks(
@@ -324,6 +376,16 @@ def _run_independent_ky_scan(
     parallel_plan = deps.runtime_independent_parallel_plan(
         cfg, problem_size=int(ky_arr.size), workers=workers, executor=parallel_executor
     )
+    # The plan is resolved first because it can promote the worker count from
+    # ``[parallel]``: warm start yields to any request for real independence
+    # rather than quietly serializing it.
+    refusal = linear_scan_warm_start_refusal(
+        policy=warm_policy,
+        solver_key=solver_key,
+        workers=parallel_plan.requested_workers,
+    )
+    if refusal is None and ky_arr.size > 1:
+        return _run_warm_serial_ky_scan(ky_arr, tasks, parallel_plan, deps=deps)
     results = deps.independent_map(
         deps.run_runtime_scan_ky_task,
         tasks,
@@ -619,6 +681,7 @@ def run_runtime_scan_orchestration(
     workers: int,
     parallel_executor: str,
     deps: RuntimeScanDeps,
+    warm_start: bool | None = None,
 ) -> RuntimeLinearScanResult:
     """Coordinate serial, independent-worker, or combined-ky runtime scans."""
 
@@ -666,6 +729,8 @@ def run_runtime_scan_orchestration(
         options=options,
         workers=workers,
         parallel_executor=parallel_executor,
+        warm_policy=WarmStartPolicy.from_config(cfg, override=warm_start),
+        solver_key=solver_key,
         deps=deps,
     )
 
@@ -754,8 +819,20 @@ def run_runtime_parameter_scan(
         [float, int, tuple[RuntimeLinearResult, ...], RuntimeLinearResult | None], int
     ] | None = None,
     continuation: bool = False,
+    warm_start: bool = False,
+    warm_start_max_step: float = 0.25,
 ) -> RuntimeParameterScanResult:
-    """Run a scalar scan and optionally continue a selected solution branch."""
+    """Run a scalar scan and optionally continue a selected solution branch.
+
+    ``continuation`` follows one branch and requires every point to hand back a
+    state. ``warm_start`` is the weaker, opportunistic form: the previous
+    point's state is reused only while the parameter moves by no more than
+    ``warm_start_max_step`` relative to the point before it, and only when that
+    state is finite and non-degenerate. A larger step, or an unusable state,
+    silently restores the cold initial condition rather than seeding the solver
+    from somewhere it has no reason to be. Both compile once and reuse the same
+    executable for every point, because the shapes never change.
+    """
 
     from gkx.runtime import run_runtime_linear
 
@@ -776,12 +853,21 @@ def run_runtime_parameter_scan(
         options = dict(shared)
         if point_options is not None:
             options.update(point_options(float(value), index, previous))
-        if continuation or candidate_options is not None:
+        if continuation or warm_start or candidate_options is not None:
             options["return_state"] = True
         if continuation and previous is not None:
             if previous.state is None:
                 raise ValueError("continuation requires each point to return state")
             options["initial_state"] = previous.state
+        elif warm_start and previous is not None:
+            step = relative_change([values[index - 1]], [value])
+            seed = (
+                carry_state(previous.state)
+                if step <= float(warm_start_max_step)
+                else None
+            )
+            if seed is not None:
+                options["initial_state"] = seed
 
         overrides = (
             tuple(candidate_options(float(value), index, previous))

@@ -65,6 +65,135 @@ cache, and ``GKX_JAX_CACHE_DIR`` relocates it (useful on a cluster where the
 source tree is read-only or on a shared scratch filesystem). Clearing the cache
 is ``rm -rf`` on the directory; nothing is lost but the next cold compile.
 
+Warm-started scans
+------------------
+
+The compilation cache reuses the *executable* between runs. Warm start
+(``[output] warm_start``, ``--warm-start``) is its state-side counterpart: it
+reuses the *answer*, seeding each point of a repeated workload from the
+converged state of its neighbour. A ky scan is walked in monotone ky order so
+that neighbours follow neighbours, and results are written back into the
+requested order. See :doc:`inputs` for the controls.
+
+It is **opt-in**, and these measurements are the reason.
+
+Certified eigensolver: correct, but not faster
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A 5-point ky scan of ``examples/linear/axisymmetric/cyclone.toml``
+(``solver = "krylov"``, ``Nl = 24``, ``Nm = 12``, laptop CPU, ``jax`` 0.9.2,
+float32, persistent compile cache already populated) agrees point by point:
+
+.. list-table::
+   :header-rows: 1
+
+   * - ky
+     - gamma cold
+     - gamma warm
+     - rel. diff
+     - omega rel. diff
+   * - 0.1
+     - 0.03320486
+     - 0.03320486
+     - 0 (cold-seeded)
+     - 0
+   * - 0.2
+     - 0.07473060
+     - 0.07473057
+     - 4.0e-07
+     - 1.7e-07
+   * - 0.3
+     - 0.08893009
+     - 0.08893013
+     - 4.2e-07
+     - 1.1e-07
+   * - 0.4
+     - 0.07149670
+     - 0.07149667
+     - 5.2e-07
+     - 4.7e-07
+   * - 0.5
+     - 0.04319829
+     - 0.04319825
+     - 1.0e-06
+     - 0
+
+Every difference is at float32 round-off, four orders of magnitude below the
+ky-to-ky variation in gamma and well inside the solver's own certified residual
+(6e-06 to 3.6e-05 on these points). No point inherited its neighbour's branch.
+
+It is also no faster: 240.8 s warm against 214.7 s cold for the whole scan, and
+the two runs used the *same* number of operator applications at four of the
+five points (46395 / 72411 / 99483 / 154779; only ky = 0.4 differed, and warm
+used 0.08% more). Both converge in **one** restart. This is structural, not
+incidental -- the certified adaptive propagator's cost per restart is
+``4 * filter_steps * krylov_dim`` operator applications, fixed by the Krylov
+dimension and the filter length, so a better starting vector cannot make one
+restart cheaper. Warm start can only pay on this path by removing restarts, and
+on this deck there are none to remove.
+
+.. warning::
+
+   An earlier measurement of the same scan appeared to show a 1.78x speedup.
+   It was an artifact of running the cold scan first in a fresh process, so the
+   cold half paid the XLA compilations that the warm half then reused. Swapping
+   the order and instrumenting ``jax_log_compiles`` removed it. Compare scan
+   variants only with the persistent cache already populated for both.
+
+Time integration: half the horizon for the same answer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+On a fixed-step time integration the win is real, and it is in the horizon
+rather than the cost per step. At ``ky = 0.4`` on the same deck, seeded from
+the converged ``ky = 0.3`` eigenvector, against the certified eigensolver value
+gamma = 0.0714967:
+
+.. list-table::
+   :header-rows: 1
+
+   * - t_max
+     - steps
+     - gamma cold (err)
+     - gamma warm (err)
+     - warm gamma_stderr
+   * - 5
+     - 2500
+     - 0.03395 (-52%)
+     - 0.09471 (+32%)
+     - 1.5e-03
+   * - 10
+     - 5000
+     - 0.08733 (+22%)
+     - 0.07631 (+6.7%)
+     - 7.6e-04
+   * - 20
+     - 10000
+     - 0.08648 (+21%)
+     - 0.06811 (-4.7%)
+     - 1.4e-04
+   * - 40
+     - 20000
+     - 0.06777 (-5.2%)
+     - 0.06787 (-5.1%)
+     - 3.2e-05
+
+Both seeds converge to the same answer -- the residual -5% at t_max = 40 is the
+time path's own bias at this resolution and is present either way -- but the
+cold run needs t_max = 40 to get there and the warm run is already there at
+t_max = 20. That is 9.9 s against 20.1 s per point, a **2.0x** saving, and the
+warm fits are cleaner throughout (``gamma_stderr`` 4-11x smaller, ``fit_r2``
+closer to one).
+
+The same table is why this is not the default. At any horizon short of
+convergence the warm and cold numbers *differ*, by far more than any fit
+uncertainty, because the warm seed has removed a startup transient the cold run
+still contains. That transient is physical and GKX's parity decks are pinned to
+reproduce it against GX's own cold initialization, so switching warm start on
+for everyone would silently move published numbers. Switch it on deliberately,
+on a horizon you have checked, and record it: a warm-started scan writes its
+visit order and warm/cold point counts into the ``warm_start`` block of its
+summary artifact.
+
 Cache profiling
 ---------------
 

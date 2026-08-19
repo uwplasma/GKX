@@ -47,6 +47,9 @@ class RuntimeLinearScanResult:
     omega: np.ndarray
     quasilinear: tuple[dict[str, Any], ...] | None = None
     parallel: dict[str, Any] | None = None
+    # Provenance for a state-carrying scan: visit order and how many points
+    # were seeded from a neighbour. None when every point started cold.
+    warm_start: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

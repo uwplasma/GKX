@@ -809,3 +809,19 @@ def test_w7x_zonal_response_vmec_example_uses_test4_contract() -> None:
     assert data["run"]["Nl"] == 8
     assert data["run"]["Nm"] == 32
     assert data["run"]["dt"] == pytest.approx(0.05)
+
+
+def test_output_warm_start_is_opt_in_and_round_trips(tmp_path: Path) -> None:
+    """Warm start is an [output] restart control and is opt-in from TOML."""
+
+    assert RuntimeConfig().output.warm_start is False
+    assert RuntimeConfig().to_dict()["output"]["warm_start"] is False
+
+    path = tmp_path / "warm_on.toml"
+    path.write_text("[output]\nwarm_start = true\n", encoding="utf-8")
+    cfg, _data = load_runtime_from_toml(path)
+
+    assert cfg.output.warm_start is True
+    # Nothing else about the restart contract moved.
+    assert cfg.output.restart is False
+    assert cfg.output.save_for_restart is True

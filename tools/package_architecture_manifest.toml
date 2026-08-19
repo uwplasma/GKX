@@ -160,7 +160,9 @@ path = "artifacts/io.py"
 # 1093 -> 1096: merging #56 over the run-directory and plotting work that
 # landed on main. Both sides add to the same summary writer and neither
 # subsumes the other, so the count is the sum rather than new surface.
-baseline_lines = 1096
+# 1096 -> 1099: recording which scan points were seeded from a neighbour.
+# A warm-started number that does not say so is not reproducible.
+baseline_lines = 1099
 target_lines = 1000
 reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
 
@@ -448,7 +450,10 @@ recursive = true
 # through jnp. Inside a trace the round trip returns a tracer, so guards
 # written that way answered yes unconditionally and the fast paths they
 # selected went dead exactly where they pay.
-baseline = 95031
+# 95031 -> 95456: carrying converged state between related runs. The policy is
+# the cost -- which points may seed which, when a seed is refused, and the
+# exact rescaling that leaves a growth fit invariant.
+baseline = 95456
 target = 45000
 
 [[line_budget_policy.counts]]

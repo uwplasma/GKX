@@ -2650,3 +2650,54 @@ def test_direct_config_shorthand_wout_honors_out_flag(
     assert args == ["run", "--config", str(resolved), "--out", "custom/prefix"]
     data = tomllib.loads(resolved.read_text(encoding="utf-8"))
     assert data["output"]["path"] == str(tmp_path / "custom" / "prefix")
+
+
+def _scan_stub():
+    return type(
+        "Scan",
+        (),
+        {
+            "ky": np.array([0.1, 0.2]),
+            "gamma": np.array([0.2, 0.3]),
+            "omega": np.array([-0.3, -0.4]),
+            "quasilinear": None,
+            "parallel": None,
+            "warm_start": None,
+        },
+    )()
+
+
+@pytest.mark.parametrize(
+    ("argv_flag", "toml_scan", "expected"),
+    [
+        (None, {}, None),
+        ("--no-warm-start", {}, False),
+        ("--warm-start", {"warm_start": False}, True),
+        (None, {"warm_start": False}, False),
+    ],
+)
+def test_scan_runtime_linear_resolves_warm_start(
+    monkeypatch, capsys, argv_flag, toml_scan, expected
+) -> None:
+    """The flag wins over [scan] warm_start, which wins over the config default."""
+
+    cfg = RuntimeConfig()
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "gkx.cli.load_runtime_from_toml",
+        lambda _path: (cfg, {"scan": {"ky": [0.1, 0.2], **toml_scan}, "fit": {}}),
+    )
+
+    def _fake_scan(*_args, **kwargs):
+        captured.update(kwargs)
+        return _scan_stub()
+
+    monkeypatch.setattr("gkx.cli.run_runtime_scan", _fake_scan)
+    argv = ["gkx", "scan-runtime-linear", "--config", "case.toml", "--no-plots"]
+    if argv_flag is not None:
+        argv.append(argv_flag)
+    monkeypatch.setattr(sys, "argv", argv)
+
+    assert main() == 0
+    capsys.readouterr()
+    assert captured["warm_start"] is expected

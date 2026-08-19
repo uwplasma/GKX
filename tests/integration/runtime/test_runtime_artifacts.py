@@ -2094,3 +2094,42 @@ def test_linear_summary_carries_fit_quality_fields(tmp_path: Path) -> None:
     assert summary["gamma_stderr"] is None
     assert summary["omega_stderr"] is None
     assert summary["fit_r2"] is None
+
+
+def test_write_runtime_linear_scan_artifacts_records_warm_start(
+    tmp_path: Path,
+) -> None:
+    """A reader with only the artifact can tell how each point was seeded."""
+
+    warm = {
+        "enabled": True,
+        "visit_order": [1, 0],
+        "warm_points": 1,
+        "cold_points": 1,
+    }
+    result = SimpleNamespace(
+        ky=np.asarray([0.3, 0.2]),
+        gamma=np.asarray([0.2, 0.1]),
+        omega=np.asarray([-0.5, -0.4]),
+        quasilinear=None,
+        parallel=None,
+        warm_start=warm,
+    )
+
+    paths = write_runtime_linear_scan_artifacts(tmp_path / "warm_bundle", result)
+    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+
+    assert summary["warm_start"] == warm
+
+    cold = SimpleNamespace(
+        ky=np.asarray([0.3]),
+        gamma=np.asarray([0.2]),
+        omega=np.asarray([-0.5]),
+        quasilinear=None,
+        parallel=None,
+        warm_start=None,
+    )
+    cold_paths = write_runtime_linear_scan_artifacts(tmp_path / "cold_bundle", cold)
+    cold_summary = json.loads(Path(cold_paths["summary"]).read_text(encoding="utf-8"))
+
+    assert "warm_start" not in cold_summary

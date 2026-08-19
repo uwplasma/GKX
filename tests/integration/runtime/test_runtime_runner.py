@@ -4160,3 +4160,184 @@ def test_runtime_trajectory_can_be_refit_without_integration() -> None:
         refit_runtime_linear_trajectory(
             replace(result, field_history=None), mode_method="project"
         )
+
+
+def test_run_runtime_scan_warm_start_seeds_neighbours_and_restores_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A warm scan walks ky in monotone order but reports the requested order."""
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_run(_cfg, **kwargs):
+        ky = float(kwargs["ky_target"])
+        calls.append({"ky": ky, "initial_state": kwargs.get("initial_state")})
+        return RuntimeLinearResult(
+            ky=ky,
+            gamma=ky,
+            omega=-ky,
+            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+            state=np.full((2, 2), ky, dtype=np.complex64),
+        )
+
+    import gkx.runtime as runtime
+
+    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    out = run_runtime_scan(
+        cfg, ky_values=[0.5, 0.1, 0.3], solver="krylov", warm_start=True
+    )
+
+    assert [call["ky"] for call in calls] == [0.1, 0.3, 0.5]
+    assert calls[0]["initial_state"] is None
+    # Each later point is seeded from its neighbour, rescaled to unit norm.
+    for call, source in zip(calls[1:], (0.1, 0.3)):
+        seed = np.asarray(call["initial_state"])
+        assert seed.shape == (2, 2)
+        np.testing.assert_allclose(seed / np.linalg.norm(seed), 0.5 * np.ones((2, 2)))
+        assert np.all(np.isclose(seed.real / source, seed.real[0, 0] / source))
+    np.testing.assert_allclose(out.ky, [0.5, 0.1, 0.3])
+    np.testing.assert_allclose(out.gamma, [0.5, 0.1, 0.3])
+    np.testing.assert_allclose(out.omega, [-0.5, -0.1, -0.3])
+    assert out.warm_start == {
+        "enabled": True,
+        "visit_order": [1, 2, 0],
+        "warm_points": 2,
+        "cold_points": 1,
+    }
+
+
+def test_run_runtime_scan_warm_start_off_leaves_every_point_cold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_run(_cfg, **kwargs):
+        calls.append(dict(kwargs))
+        return RuntimeLinearResult(
+            ky=float(kwargs["ky_target"]),
+            gamma=1.0,
+            omega=-1.0,
+            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+            state=np.ones((2, 2), dtype=np.complex64),
+        )
+
+    import gkx.runtime as runtime
+
+    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    # The default is cold; passing nothing must behave like warm_start=False.
+    out = run_runtime_scan(cfg, ky_values=[0.5, 0.1], solver="krylov")
+
+    assert [call["ky_target"] for call in calls] == [0.5, 0.1]
+    assert all(call["initial_state"] is None for call in calls)
+    assert all(call["return_state"] is False for call in calls)
+    assert out.warm_start is None
+
+
+def test_run_runtime_scan_warm_start_yields_to_independent_workers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A request for real parallelism is not silently serialized by warm start."""
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+        parallel=RuntimeParallelConfig(strategy="batch", axis="ky", num_devices=2),
+    )
+    seen: list[object] = []
+
+    def fake_run(_cfg, **kwargs):
+        seen.append(kwargs.get("initial_state"))
+        return RuntimeLinearResult(
+            ky=float(kwargs["ky_target"]),
+            gamma=1.0,
+            omega=-1.0,
+            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+            state=np.ones((2, 2), dtype=np.complex64),
+        )
+
+    import gkx.runtime as runtime
+
+    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    out = run_runtime_scan(
+        cfg, ky_values=[0.15, 0.35], solver="krylov", warm_start=True
+    )
+
+    assert out.warm_start is None
+    assert seen == [None, None]
+    assert out.parallel["effective_workers"] == 2
+
+
+def test_run_runtime_scan_warm_start_matches_cold_growth_rates() -> None:
+    """The correctness gate: warm and cold must report the same physics."""
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion", tprim=3.0, fprim=1.0),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+    )
+    ky_values = [0.2, 0.3, 0.4]
+    shared = dict(Nl=2, Nm=4, solver="krylov")
+
+    cold = run_runtime_scan(cfg, ky_values=ky_values, warm_start=False, **shared)
+    warm = run_runtime_scan(cfg, ky_values=ky_values, warm_start=True, **shared)
+
+    assert warm.warm_start["warm_points"] == 2
+    np.testing.assert_allclose(warm.ky, cold.ky)
+    np.testing.assert_allclose(warm.gamma, cold.gamma, rtol=2.0e-3, atol=1.0e-6)
+    np.testing.assert_allclose(warm.omega, cold.omega, rtol=2.0e-3, atol=1.0e-6)
+
+
+def test_runtime_parameter_scan_warm_start_declines_a_large_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Opportunistic reuse stops where the parameter stops being a neighbour."""
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        physics=RuntimePhysicsConfig(beta=0.0),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_run(point_cfg, **kwargs):
+        calls.append(dict(kwargs))
+        return RuntimeLinearResult(
+            ky=0.3,
+            gamma=float(point_cfg.physics.beta),
+            omega=0.0,
+            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+            state=np.full((2,), float(point_cfg.physics.beta) + 1.0),
+        )
+
+    import gkx.runtime as runtime
+
+    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    result = run_runtime_parameter_scan(
+        cfg,
+        [0.01, 0.011, 1.0],
+        parameter_name="beta",
+        update_config=lambda base, value, _index: replace(
+            base, physics=replace(base.physics, beta=value)
+        ),
+        warm_start=True,
+        warm_start_max_step=0.25,
+    )
+
+    assert "initial_state" not in calls[0]
+    # 0.010 -> 0.011 is a 9% step, so the state carries.
+    assert calls[1]["initial_state"] is not None
+    # 0.011 -> 1.0 is a 99% step, so it does not.
+    assert "initial_state" not in calls[2]
+    assert all(call["return_state"] is True for call in calls)
+    np.testing.assert_allclose(result.gamma, [0.01, 0.011, 1.0])
