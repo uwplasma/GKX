@@ -24,6 +24,47 @@ coefficients, drift components, mirror term, and zero-mode masks) in a ``LinearC
 avoid recomputing them at each time step. This cache is reused inside the JIT
 compiled integrator.
 
+Persistent compilation cache
+----------------------------
+
+A GKX run is compile-dominated at the sizes people iterate on, and that cost
+was being paid again on every fresh process even when nothing about the problem
+had changed. The executable therefore enables JAX's persistent compilation
+cache by default, in ``.cache/gkx/jax`` beside the source tree -- the same
+place generated ``*.eik.nc`` geometry is cached -- namespaced by the installed
+JAX version so a toolchain upgrade starts a new directory rather than reading
+executables built by a different compiler. The cache key itself is XLA's, over
+the lowered HLO, the compilation options, and the target device, so a changed
+grid, changed physics, or a different backend is a miss rather than a stale
+hit.
+
+Measured on a laptop CPU (M-series, ``jax`` 0.9.2), a 16x16x32 nonlinear case
+with ``Nl = 4``, ``Nm = 12`` run twice in a fresh cache directory:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Phase
+     - Cold (first run)
+     - Warm (second run)
+   * - XLA compilation, summed over all kernels
+     - 13.5 s
+     - 0.9 s
+   * - Solver phase (excludes interpreter import)
+     - 23.3-24.6 s
+     - 6.2-8.9 s
+
+The step is a fused ``scan`` plus roughly 320 smaller kernels. The ``scan`` is
+only 2.1 s of the 13.5 s; the rest is ~20 ms apiece, which is why GKX overrides
+JAX's default of persisting only compiles slower than one second. Keeping that
+default caches the ``scan`` alone and recovers under a third of the compile.
+The whole directory is about 1.6 MB per distinct problem shape.
+
+Two environment variables are the escape: ``GKX_JAX_CACHE=0`` disables the
+cache, and ``GKX_JAX_CACHE_DIR`` relocates it (useful on a cluster where the
+source tree is read-only or on a shared scratch filesystem). Clearing the cache
+is ``rm -rf`` on the directory; nothing is lost but the next cold compile.
+
 Cache profiling
 ---------------
 

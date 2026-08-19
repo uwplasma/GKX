@@ -27,7 +27,10 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.linear.krylov import adaptive_propagator_eigenpair
+from gkx.solvers.linear.krylov import (
+    adaptive_propagator_eigenpair,
+    certifiable_residual_tolerance,
+)
 from gkx.solvers.linear.krylov_algorithms import _build_shift_invert_precond
 
 
@@ -152,6 +155,8 @@ class AdaptiveLinearEigensolverConfig:
     restart_krylov_dim: int = 12
     candidate_count: int = 2
     max_restarts: int = 4
+    # Gates the primal and adjoint relative residuals, so it is raised to the
+    # working dtype's noise floor; the default is a float64 gate.
     tolerance: float = 1.0e-9
     chunk_horizon: float = 30.0
     stability_dimension: int = 12
@@ -162,6 +167,8 @@ class AdaptiveLinearEigensolverConfig:
     exponential_horizon: float = 5.0
     adjoint_krylov_dim: int = 24
     adjoint_max_restarts: int = 200
+    # Gates the implicit-gradient linear solve, whose acceptance fails closed to
+    # NaN, so it carries the same working-dtype noise floor as ``tolerance``.
     sensitivity_rtol: float = 1.0e-8
     sensitivity_restart: int = 200
     sensitivity_max_restarts: int = 4
@@ -334,7 +341,7 @@ def _solver_operator_matrix(context: _SolverGeometryContext) -> jnp.ndarray:
 def _dominant_linear_branch(context: _SolverGeometryContext) -> _DominantLinearBranch:
     matrix = _solver_operator_matrix(context)
     # jnp.linalg.eig refuses to differentiate non-symmetric eigenvectors unless
-    # the caller opts in (jax >= 0.11). The dominant ITG branch is a simple,
+    # the caller opts in (jax >= 0.10.1). The dominant ITG branch is a simple,
     # well-separated eigenvalue here, which is exactly the condition under which
     # the eigenvector derivative is well defined, so opt in explicitly -- without
     # it the whole objective vector is forward-only.
@@ -448,6 +455,10 @@ def _matrix_free_dominant_linear_branch(
         def adjoint(vector: jnp.ndarray) -> jnp.ndarray:
             return jnp.conj(transpose(jnp.conj(vector))[0])
 
+        # The adjoint pair is certified by the same relative residual as the
+        # primal one, so it needs the same precision floor. These calls reach
+        # solvax directly and would otherwise keep the unreachable request.
+        adjoint_tol = certifiable_residual_tolerance(config.tolerance, initial.dtype)
         if config.exponential_krylov_dim is None:
             candidates = propagator_eigenpairs(
                 adjoint,
@@ -456,7 +467,7 @@ def _matrix_free_dominant_linear_branch(
                 steps=primal.filter_steps,
                 krylov_dim=adjoint_krylov_dim,
                 candidates=config.candidate_count,
-                tol=config.tolerance,
+                tol=adjoint_tol,
             )
         else:
             from solvax import exponential_eigenpairs  # type: ignore[attr-defined]
@@ -468,7 +479,7 @@ def _matrix_free_dominant_linear_branch(
                 inner_krylov_dim=min(config.exponential_krylov_dim, operator_size),
                 outer_krylov_dim=adjoint_krylov_dim,
                 candidates=config.candidate_count,
-                tol=config.tolerance,
+                tol=adjoint_tol,
                 restarts=config.max_restarts,
             )
         converged = np.asarray(candidates.converged, dtype=bool)
@@ -586,16 +597,25 @@ def _matrix_free_dominant_linear_branch(
         # while retaining an O(n) matrix-free operator.
         from solvax import gmres
 
+        # The acceptance below is fail-closed to NaN, so an unreachable
+        # threshold does not merely loosen the gradient, it deletes it. The
+        # inner solve keeps aiming a decade tighter than the acceptance.
+        accept_rtol = certifiable_residual_tolerance(
+            config.sensitivity_rtol, rhs.dtype
+        )
+        solve_rtol = certifiable_residual_tolerance(
+            0.1 * config.sensitivity_rtol, rhs.dtype
+        )
         fixed_point = gmres(
             lambda vector: vector - propagate(vector),
             affine_source,
             restart=config.sensitivity_krylov_dim,
-            rtol=0.1 * config.sensitivity_rtol,
+            rtol=solve_rtol,
             max_restarts=config.sensitivity_max_restarts,
         )
         reduced_solution = fixed_point.x
         rhs_norm = jnp.linalg.norm(rhs)
-        threshold = config.sensitivity_rtol * rhs_norm
+        threshold = accept_rtol * rhs_norm
         solution = reduced_solution + border_coefficient * border_mode
         full_residual = jnp.linalg.norm(rhs - transpose_bordered(solution))
         converged = fixed_point.converged & (full_residual <= threshold)
@@ -619,7 +639,9 @@ def _matrix_free_dominant_linear_branch(
             and config.exponential_krylov_dim is None
             else None
         ),
-        sensitivity_rtol=config.sensitivity_rtol,
+        sensitivity_rtol=certifiable_residual_tolerance(
+            config.sensitivity_rtol, start.dtype
+        ),
         sensitivity_restart=config.sensitivity_restart,
         sensitivity_max_restarts=config.sensitivity_max_restarts,
         condition_limit=config.condition_limit,
