@@ -1163,3 +1163,30 @@ slab m=0,1,2 rows, global only on the owning block); species-first factoring avo
 2-GPU two-species box.
 Not done: runtime 13-field diagnostic contract, adjoint gate, 256-step transport window,
 memory-headroom run. → item **4.3**.
+
+### 2026-08-19 RJ — DECISIONS RECORDED (owner sign-off)
+1. **Python floor 3.11 ACCEPTED**, conditional on it being genuinely forced. It is, and the
+   trade is explicit: `jax >= 0.10.1` publishes no 3.10 wheels, and 0.10.1 is the first release
+   carrying `lax_linalg.eig(..., enable_eigvec_derivs=True)`. Staying on 3.10 means giving up
+   the dense differentiable eigensolver path (and the 11 tests that exercise it). Not a
+   packaging accident — a capability trade, decided in favour of the capability.
+2. **Merlo gate baselines to be RAISED to converged values**, with the code demonstrably
+   research-grade and the evidence written into the docs — i.e. NOT re-pinning at the
+   resolution that agrees. Required: re-baseline at Nm >~ 120 with dt <= 0.0025, quote the
+   converged residual/omega with their uncertainties, record the recurrence criterion
+   (t_quiet ~ 5.5*sqrt(Nm), window must sit before it), and fix gamma_GAM's estimator so it
+   cannot be swung by `sample_stride` (item 2.9). → **item 2.8b**, the follow-through.
+3. **Sharding lands at 1.10x/1.26x** as a gated non-production route, explicitly on condition
+   that closing the gap stays in the plan → item **4.3** is the commitment (fuse the flux and
+   field-energy kernels, which still read replicated arrays: 31% of step on 1 device, 13% on 2).
+4. **Redo the office GX build with `-prec-sqrt=true`** (upstream's current flag; the office
+   build kept `-use_fast_math` without it) and REGENERATE the references so the parity numbers
+   are taken under upstream's own numerics → **item 2.1e**.
+5. **Performance priority clarified by the owner** — this reframes the caching work:
+   most users run GKX ONCE locally to see a solution, so a single CLI/Python run must be fast
+   on its own. Compile caching and **warm restart** matter most where work REPEATS:
+   linear ky/kx scans, parameter scans, and stellarator optimization, where each iteration
+   should NOT start from scratch. → **new item 1.6 (high priority)**: carry compiled
+   executables AND converged state across scan points and optimization iterations. PR #58
+   delivers the persistent compile cache (13.5 s -> 0.9 s) which already serves the
+   single-run case; what is NOT yet done is warm-starting the *state* between related runs.
