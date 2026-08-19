@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -21,6 +21,20 @@ from gkx.solvers.linear.krylov_algorithms import (
 from gkx.solvers.linear.krylov_propagator import (
     dominant_eigenpairs_propagator_cached,
 )
+
+
+def certifiable_residual_tolerance(tol: float, dtype: Any) -> float:
+    """Floor a residual gate at what ``dtype`` arithmetic can certify.
+
+    A relative eigenpair residual below roughly ``1000 * eps`` of the working
+    precision is indistinguishable from rounding noise, so gating tighter than
+    that rejects converged pairs instead of wrong ones. The runtime CLI path
+    builds complex64 states, where the floor is ~1.192e-4; float64 keeps any
+    reasonable configured tolerance unchanged.
+    """
+
+    eps = float(jnp.finfo(jnp.real(jnp.zeros((), dtype=dtype)).dtype).eps)
+    return max(float(tol), 1000.0 * eps)
 
 
 class AdaptivePropagatorSolution(NamedTuple):
@@ -420,4 +434,8 @@ def adaptive_propagator_eigenpair(
     )
 
 
-__all__ = ["AdaptivePropagatorSolution", "adaptive_propagator_eigenpair"]
+__all__ = [
+    "AdaptivePropagatorSolution",
+    "adaptive_propagator_eigenpair",
+    "certifiable_residual_tolerance",
+]
