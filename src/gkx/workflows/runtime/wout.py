@@ -170,16 +170,63 @@ def _flag_value(args: list[str], flag: str) -> str | None:
 
 def _resolved_output_prefix(
     data: dict[str, Any], extra: list[str], wout_path: Path
-) -> Path:
-    """Return the output prefix grouping wout-run artifacts and deck."""
+) -> tuple[Path, bool]:
+    """Return the output prefix for wout-run artifacts, and whether it was asked for.
+
+    The second element says the target came from ``--out`` or from the deck's
+    own ``[output] path``; only the prefix this function invents is free to
+    grow a suffix in :func:`_resolved_output_target`.
+    """
 
     out_flag = _flag_value(extra, "--out")
     if out_flag is not None:
-        return Path(str(resolve_runtime_path(out_flag, base_dir=Path.cwd())))
+        return Path(str(resolve_runtime_path(out_flag, base_dir=Path.cwd()))), True
     configured = data.get("output", {}).get("path")
     if configured:
-        return Path(configured)
-    return Path.cwd() / wout_path.stem / "gkx"
+        return Path(configured), True
+    return Path.cwd() / wout_path.stem / "gkx", False
+
+
+def _resolved_output_target(prefix: Path, *, explicit: bool, linear: bool) -> Path:
+    """Return the ``[output] path`` a bare equilibrium run writes to.
+
+    A plain prefix makes the runtime write CSV/JSON sidecars, which carry time
+    traces only -- so the spectra, the potential map, and the restart file all
+    silently do not exist, and the figure set shrinks to one panel. The default
+    is therefore the NetCDF bundle, which is the format the rest of the result
+    set is read from. A linear ky scan has no NetCDF form, and a target the
+    user named is theirs; both keep the prefix as given.
+    """
+
+    if linear or explicit:
+        return prefix
+    return Path(f"{prefix}.out.nc")
+
+
+def _print_deck_header(
+    *, wout_path: Path, deck_path: Path, resolved_path: Path, shipped: bool
+) -> None:
+    """Name the deck the defaults came from before the run starts.
+
+    The resolved copy alone does not tell a first-time user what to edit: it is
+    generated, it is inside the output directory, and it is overwritten by the
+    next run. Naming the shipped deck -- and the command that runs an edited
+    copy of it -- is what makes the next run theirs.
+    """
+
+    print(f"equilibrium: {wout_path}", flush=True)
+    if shipped:
+        # resolve() follows the packaged symlink back to examples/ in a repo
+        # checkout, and is a no-op for an installed wheel: either way the
+        # printed path is a file the user can copy.
+        print(
+            f"default deck: {deck_path.resolve()} "
+            f"(copy, edit, then: gkx my_input.toml {wout_path.name})",
+            flush=True,
+        )
+    else:
+        print(f"input deck: {deck_path}", flush=True)
+    print(f"wrote resolved input: {resolved_path}", flush=True)
 
 
 def wout_shorthand_args(
@@ -202,15 +249,20 @@ def wout_shorthand_args(
     if linear:
         _apply_linear_scan_defaults(data)
 
-    prefix = _resolved_output_prefix(data, extra, wout_path)
-    data["output"] = {**data.get("output", {}), "path": str(prefix)}
+    prefix, explicit = _resolved_output_prefix(data, extra, wout_path)
+    target = _resolved_output_target(prefix, explicit=explicit, linear=linear)
+    data["output"] = {**data.get("output", {}), "path": str(target)}
     resolved_path = Path(f"{prefix}.toml")
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
     resolved_path.write_text(
         resolved_deck_text(data, wout_path=wout_path), encoding="utf-8"
     )
-    print(f"equilibrium: {wout_path}", flush=True)
-    print(f"wrote resolved input: {resolved_path}", flush=True)
+    _print_deck_header(
+        wout_path=wout_path,
+        deck_path=deck_path,
+        resolved_path=resolved_path,
+        shipped=config_arg is None,
+    )
 
     command = "scan-runtime-linear" if linear else "run"
     return [command, "--config", str(resolved_path), *extra]

@@ -497,7 +497,23 @@ recursive = true
 # 95565 -> 95612: saying what a file is when it is not the TOML the CLI
 # expected. The signature table is the cost; the alternative is a decode
 # error against a byte offset, which names neither the file nor the problem.
-baseline = 95612
+# 95612 -> 96431: finishing the `gkx wout_XXX.nc` result set. Two thirds is the
+# new artifacts/run_summary.py, which owns the one page a first-time user
+# reads: it composes the existing figure functions through the ax/panels
+# arguments added to transport_figures rather than restating them, so the
+# summary cannot drift from the figures it summarizes, and it is the only
+# reader of the *.big.nc final-field companion -- including the 1/(Ny Nx) that
+# companion is written through, which is why the potential on the summary and
+# on the standalone snapshot are the same number. The rest is refusal and
+# identity: a bundle missing spectra or fields gets a panel saying which and
+# why instead of losing the page, the run header names the shipped deck and
+# the command that replaces it, and the default wout output target became the
+# NetCDF bundle -- a plain prefix silently has no spectra, no potential, and no
+# restart file, which is three quarters of the set the run then cannot draw.
+# 96431 -> 96465: saying whether the shaded window is a measurement. The stop
+# policy records a window whether or not the trace settled in it, so the
+# window alone cannot tell a converged run from a capped one.
+baseline = 96465
 target = 45000
 
 [[line_budget_policy.counts]]

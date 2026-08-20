@@ -668,6 +668,13 @@ Automatic Run Figures
    :members:
    :no-index:
 
+Whole-Run Summary Figure
+------------------------
+
+.. automodule:: gkx.artifacts.run_summary
+   :members:
+   :no-index:
+
 Foreign Output Dispatch
 -----------------------
 
