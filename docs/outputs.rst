@@ -39,6 +39,13 @@ When the nonlinear output target ends in ``.out.nc`` (recommended) or another
 This is the release-facing format for nonlinear parity, restart, and external
 post-processing workflows.
 
+It is also what the bare equilibrium shorthand writes: ``gkx wout_XXX.nc``
+groups its artifacts under ``./<wout-stem>/`` with ``[output] path`` set to
+``<wout-stem>/gkx.out.nc``. A plain prefix there would have produced CSV
+sidecars, and with them no spectra, no final fields, and no restart file --
+which is most of what the run's own figure set is drawn from. Naming
+``--out`` or an ``[output] path`` yourself overrides the default unchanged.
+
 ``*.out.nc``
 ^^^^^^^^^^^^
 
@@ -123,15 +130,37 @@ Plotting diagnostics
 --------------------
 
 Every run that writes an output prefix also draws its own figures beside that
-output, so a finished run leaves both the data and the pictures of it. A
-nonlinear run writes ``<base>.flux_time.png`` (``Q(t)`` and ``Gamma(t)``, with
-the averaging window shaded when the summary records one) plus
-``<base>.flux_spectra.png`` and ``<base>.phi2_spectra.png`` when the output is
-a NetCDF bundle carrying k-resolved spectra; the CSV diagnostics sidecar has
-no spectra, so it gets the time traces alone. A linear point and a ``ky`` scan
-each write ``<base>.plot.png``. Pass ``--no-plots``, or set ``[output] plots =
-false``, to skip them. Plotting never affects a run's exit status: a failure
-prints a warning and leaves the saved simulation untouched.
+output, so a finished run leaves both the data and the pictures of it. The
+nonlinear figure set is:
+
+- ``<base>.summary.png`` -- the one-page summary: ``Q(t)`` and ``Gamma(t)``
+  with the measured window shaded and ``<Q> +/- SEM`` annotated, the ``Q(ky)``
+  and ``Phi^2(ky)`` spectra, the real-space potential at the outboard
+  midplane, and a text panel naming the equilibrium, the resolution, the input
+  deck, the averaging window and where it came from, and the stop time. It is
+  always written, and any panel the output form cannot supply says so in
+  place rather than costing the page.
+- ``<base>.flux_time.png`` -- ``Q(t)`` and ``Gamma(t)`` at full size.
+- ``<base>.flux_spectra.png`` and ``<base>.phi2_spectra.png`` -- the
+  ``ky``/``kx`` heat-flux spectra and the four-panel ``Phi^2`` summary. Both
+  need the k-resolved spectra, which only the NetCDF bundle carries.
+- ``<base>.snapshot_xy.png`` and ``<base>.flux_tube_3d.png`` -- the final
+  potential as an ``x``-``y`` cut and on the field-aligned flux tube itself,
+  which is the one figure showing the geometry the run was performed on. Both
+  read the ``*.big.nc`` final-field companion and are skipped when the run did
+  not write one.
+
+A CSV diagnostics sidecar carries time traces only, so it gets the summary and
+the flux traces. A linear point and a ``ky`` scan each write
+``<base>.plot.png``. Pass ``--no-plots``, or set ``[output] plots = false``,
+to skip them. Plotting never affects a run's exit status: a failure prints a
+warning and leaves the saved simulation untouched.
+
+Alongside a NetCDF bundle the runtime also writes ``<base>.summary.json``,
+which is where the measured saturation window and ``<Q> +/- SEM`` are recorded
+in machine-readable form. ``gkx --plot`` reads it back, so a re-plot shades the
+same window the run reported rather than falling back to the second half of
+the trace.
 
 To re-render a saved bundle later, or to look at a GX run with the same
 command:
@@ -144,7 +173,8 @@ command:
 ``--plot`` recognizes GX output as well as GKX's own and draws whatever the
 file carries -- ``Phi^2(t)``, the fluxes, and the ``ky`` spectrum when present
 -- with a title that names GX, so a panel lifted into a slide cannot be
-mistaken for GKX data.
+mistaken for GKX data. On GKX's own nonlinear bundle it rebuilds the whole
+figure set listed above, not only the single panel.
 
 Use the plotting helper to visualize nonlinear diagnostic histories from
 ``*.out.nc`` files:

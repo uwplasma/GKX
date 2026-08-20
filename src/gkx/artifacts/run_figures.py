@@ -5,8 +5,11 @@ result nobody has looked at. This module is what the executable calls once the
 artifacts are on disk, so the default outcome of ``gkx run ...`` is a directory
 containing both the data and the pictures of it. Nothing here decides physics;
 it decides which of the figure functions in
-:mod:`gkx.artifacts.transport_figures` and :mod:`gkx.artifacts.plotting` a
-given run kind can support, and what to name the files.
+:mod:`gkx.artifacts.transport_figures`, :mod:`gkx.artifacts.run_summary` and
+:mod:`gkx.artifacts.plotting` a given run kind can support, and what to name
+the files. A nonlinear NetCDF run gets the whole set: the flux traces, both
+spectra, the real-space potential and the flux tube it was integrated on, and
+the one-page summary that a reader opens first.
 
 Two rules shape the code. First, plotting runs *after* the science is already
 saved, so a failure here is never allowed to propagate: a headless machine, a
@@ -30,6 +33,9 @@ from typing import Any, Callable, Mapping
 TIME_TRACE_SUFFIX = "flux_time"
 FLUX_SPECTRA_SUFFIX = "flux_spectra"
 PHI2_SPECTRA_SUFFIX = "phi2_spectra"
+SNAPSHOT_SUFFIX = "snapshot_xy"
+FLUX_TUBE_SUFFIX = "flux_tube_3d"
+SUMMARY_SUFFIX = "summary"
 PANEL_SUFFIX = "plot"
 
 # Ordered per run kind: the first artifact key that is present names the file
@@ -46,7 +52,15 @@ _WINDOW_PAIR_KEYS = (
     ("saturation_window_tmin", "saturation_window_tmax"),
     ("fit_window_tmin", "fit_window_tmax"),
 )
-_WINDOW_NESTED_KEYS = ("average_window", "averaging_window", "saturation_window")
+_WINDOW_NESTED_KEYS = (
+    "average_window",
+    "averaging_window",
+    "saturation_window",
+    # What the stop policy actually writes: gkx.diagnostics.saturation names the
+    # bounds window_tmin/window_tmax inside a "saturation" table. Without this
+    # entry no run in the repository ever shaded the window it measured.
+    "saturation",
+)
 
 
 def _warn(message: str) -> None:
@@ -63,7 +77,8 @@ def _pair_from(value: Any) -> tuple[float, float] | None:
     """Coerce a mapping or two-element sequence into ``(tmin, tmax)``."""
 
     if isinstance(value, ABCMapping):
-        lo, hi = value.get("tmin"), value.get("tmax")
+        lo = value.get("tmin", value.get("window_tmin"))
+        hi = value.get("tmax", value.get("window_tmax"))
     elif isinstance(value, ABCSequence) and not isinstance(value, (str, bytes)):
         if len(value) != 2:
             return None
@@ -100,6 +115,23 @@ def measured_average_window(summary: Mapping[str, Any] | None) -> tuple[float, f
     return None
 
 
+def measured_window_is_saturated(summary: Mapping[str, Any] | None) -> bool | None:
+    """Return whether the run that produced ``summary`` actually saturated.
+
+    The stop policy records the window it evaluated whether or not the trace
+    converged in it, so the window alone cannot say. A run that reached its
+    cap still carries a window, and calling that a measured saturation would
+    tell a reader the flux converged when it was still climbing.
+    """
+
+    if not summary:
+        return None
+    block = summary.get("saturation")
+    if isinstance(block, Mapping) and "saturated" in block:
+        return bool(block["saturated"])
+    return None
+
+
 def _read_summary(path: str | Path | None) -> dict[str, Any] | None:
     if path is None:
         return None
@@ -132,11 +164,19 @@ def write_nonlinear_run_figures(
     *,
     base: str | Path | None = None,
     window: tuple[float, float] | None = None,
+    saturated: bool | None = None,
     label: str | None = None,
 ) -> list[Path]:
     """Write ``Q(t)``/``Gamma(t)`` plus the spectra a NetCDF bundle supports."""
 
     from gkx.artifacts.plotting import _artifact_base
+    from gkx.artifacts.run_summary import (
+        flux_tube_figure,
+        has_final_field,
+        nonlinear_summary_figure,
+        phi_xy_figure,
+        run_label,
+    )
     from gkx.artifacts.transport_figures import (
         flux_spectra_figure,
         heat_flux_time_figure,
@@ -145,7 +185,7 @@ def write_nonlinear_run_figures(
 
     source_path = Path(source)
     stem = Path(base) if base is not None else _artifact_base(source_path)
-    name = label if label is not None else stem.name
+    name = label if label is not None else run_label(stem)
     spectra_available = _is_netcdf_source(source_path)
 
     def _draw(figure: Callable[..., Any], title: str) -> Callable[[Path], Any]:
@@ -170,6 +210,33 @@ def write_nonlinear_run_figures(
                 _draw(phi2_spectra_figure, f"GKX potential spectra: {name}"),
             ),
         ]
+    # The final fields live in the *.big.nc companion, which only a NetCDF run
+    # that saved its state writes. Its absence is a fact about the output form,
+    # like the missing spectra above, so the panels are skipped rather than
+    # attempted and warned about.
+    if has_final_field(source_path):
+        plan += [
+            (
+                SNAPSHOT_SUFFIX,
+                lambda out: phi_xy_figure(str(source_path), out=out),
+            ),
+            (
+                FLUX_TUBE_SUFFIX,
+                lambda out: flux_tube_figure(
+                    str(source_path),
+                    title=rf"GKX flux tube: {name}",
+                    out=out,
+                ),
+            ),
+        ]
+    plan.append(
+        (
+            SUMMARY_SUFFIX,
+            lambda out: nonlinear_summary_figure(
+                str(source_path), window=window, saturated=saturated, out=out
+            ),
+        )
+    )
 
     written: list[Path] = []
     for suffix, render in plan:
@@ -188,6 +255,54 @@ def write_panel_run_figure(source: str | Path) -> list[Path]:
         return [Path(plot_saved_output(source))]
     except Exception as exc:
         _warn(f"could not plot {Path(source).name}: {exc}")
+        return []
+
+
+def is_gkx_nonlinear_bundle(source: str | Path) -> bool:
+    """Return whether ``source`` is a GKX nonlinear NetCDF history bundle."""
+
+    path = Path(source)
+    if not _is_netcdf_source(path) or not path.is_file():
+        return False
+    try:
+        from gkx.artifacts.foreign_output import foreign_output_plotter
+
+        if foreign_output_plotter(path) is not None:
+            return False
+        import netCDF4
+
+        with netCDF4.Dataset(path) as root:
+            group = root.groups.get("Diagnostics")
+            return group is not None and "HeatFlux_st" in group.variables
+    except Exception:
+        return False
+
+
+def replot_nonlinear_bundle(source: str | Path) -> list[Path]:
+    """Re-render the standard figure set for an already-saved nonlinear bundle.
+
+    ``gkx --plot`` renders one panel from whatever it is given, including other
+    codes' output. When the file is GKX's own nonlinear bundle there is a whole
+    set to reproduce, and the window to reproduce it over is in the summary
+    sidecar the run wrote next to it -- so a re-plot shows the same measured
+    window the run reported rather than a fresh guess.
+    """
+
+    try:
+        from gkx.artifacts.plotting import _artifact_base
+
+        path = Path(source)
+        if not is_gkx_nonlinear_bundle(path):
+            return []
+        base = _artifact_base(path)
+        summary = _read_summary(Path(f"{base}.summary.json"))
+        window = measured_average_window(summary)
+        saturated = measured_window_is_saturated(summary)
+        return write_nonlinear_run_figures(
+            path, base=base, window=window, saturated=saturated
+        )
+    except Exception as exc:  # pragma: no cover - guards a broken plotting stack
+        _warn(f"could not replot {Path(source).name}: {exc}")
         return []
 
 
@@ -224,11 +339,16 @@ def auto_plot_saved_run(
 
 __all__ = [
     "FLUX_SPECTRA_SUFFIX",
+    "FLUX_TUBE_SUFFIX",
     "PANEL_SUFFIX",
     "PHI2_SPECTRA_SUFFIX",
+    "SNAPSHOT_SUFFIX",
+    "SUMMARY_SUFFIX",
     "TIME_TRACE_SUFFIX",
     "auto_plot_saved_run",
+    "is_gkx_nonlinear_bundle",
     "measured_average_window",
+    "replot_nonlinear_bundle",
     "write_nonlinear_run_figures",
     "write_panel_run_figure",
 ]

@@ -2246,10 +2246,92 @@ def test_cli_nonlinear_run_writes_the_real_figure_set(
     assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(bundle))) == 0
 
     out = capsys.readouterr().out
-    for suffix in ("flux_time", "flux_spectra", "phi2_spectra"):
+    for suffix in ("flux_time", "flux_spectra", "phi2_spectra", "summary"):
         figure = tmp_path / f"case.{suffix}.png"
         assert figure.exists(), suffix
         assert f"saved {figure}" in out
+
+
+def _write_final_field_companion(base: Path, *, nx: int = 8, ny: int = 6, nz: int = 4):
+    """Write the ``*.big.nc`` companion carrying a run's final real-space fields."""
+
+    netcdf4 = pytest.importorskip("netCDF4")
+    rng = np.random.default_rng(11)
+    phi_yxz = rng.normal(size=(ny, nx, nz)) * 1e-3
+    path = Path(f"{base}.big.nc")
+    with netcdf4.Dataset(path, "w") as root:
+        for name, size in (("time", 1), ("x", nx), ("y", ny), ("theta", nz)):
+            root.createDimension(name, size)
+        grids = root.createGroup("Grids")
+        grids.createVariable("time", "f8", ("time",))[:] = np.asarray([6.0])
+        grids.createVariable("x", "f4", ("x",))[:] = np.linspace(
+            0.0, 40.0, nx, endpoint=False
+        )
+        grids.createVariable("y", "f4", ("y",))[:] = np.linspace(
+            0.0, 30.0, ny, endpoint=False
+        )
+        geom = root.createGroup("Geometry")
+        for name, value in (("q", 1.4), ("rmaj", 3.0), ("aminor", 0.5), ("nfp", 3)):
+            geom.createVariable(name, "f4", ())[:] = np.float32(value)
+        diag = root.createGroup("Diagnostics")
+        diag.createVariable("PhiXY", "f4", ("time", "y", "x", "theta"))[0, ...] = (
+            phi_yxz
+        )
+    return path
+
+
+def test_cli_nonlinear_run_includes_the_flux_tube_in_the_standard_set(
+    monkeypatch, capsys, tmp_path: Path
+) -> None:
+    """A nonlinear run that saved its fields also draws the geometry it ran on."""
+
+    bundle = _write_grouped_out_nc(tmp_path / "tube.out.nc")
+    _write_final_field_companion(tmp_path / "tube")
+    _stub_nonlinear_run(monkeypatch, {"out": str(bundle)})
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(bundle))) == 0
+
+    out = capsys.readouterr().out
+    for suffix in ("flux_tube_3d", "snapshot_xy", "summary"):
+        figure = tmp_path / f"tube.{suffix}.png"
+        assert figure.exists(), suffix
+        assert f"saved {figure}" in out
+
+
+def test_cli_nonlinear_run_without_saved_fields_skips_the_flux_tube(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """No ``*.big.nc`` is a fact about the output form, not a failure to warn about."""
+
+    bundle = _write_grouped_out_nc(tmp_path / "nofields.out.nc")
+    _stub_nonlinear_run(monkeypatch, {"out": str(bundle)})
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(bundle))) == 0
+
+    assert not (tmp_path / "nofields.flux_tube_3d.png").exists()
+    assert not (tmp_path / "nofields.snapshot_xy.png").exists()
+    assert (tmp_path / "nofields.summary.png").exists()
+
+
+def test_cli_global_plot_reproduces_the_whole_gkx_figure_set(
+    capsys, monkeypatch, tmp_path: Path
+) -> None:
+    """--plot on a saved GKX bundle rebuilds the set, over the recorded window."""
+
+    bundle = _write_grouped_out_nc(tmp_path / "again.out.nc")
+    _write_final_field_companion(tmp_path / "again")
+    (tmp_path / "again.summary.json").write_text(
+        '{"kind":"nonlinear","saturation":{"window_tmin":3.0,"window_tmax":6.0}}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(sys, "argv", ["gkx", "--plot", str(bundle)])
+    assert main() == 0
+
+    out = capsys.readouterr().out
+    for suffix in ("plot", "flux_time", "flux_spectra", "flux_tube_3d", "summary"):
+        assert (tmp_path / f"again.{suffix}.png").exists(), suffix
+        assert f"saved {tmp_path / f'again.{suffix}.png'}" in out
 
 
 def test_cli_nonlinear_csv_sidecar_degrades_to_the_time_traces(
@@ -2318,6 +2400,10 @@ def test_cli_nonlinear_run_shades_a_measured_average_window(
     )
     assert measured_average_window({}) is None
     assert measured_average_window({"average_window": [4.0, 1.0]}) is None
+    # The shape gkx.diagnostics.saturation actually writes into the summary.
+    assert measured_average_window(
+        {"saturation": {"window_tmin": 3.05, "window_tmax": 6.0}}
+    ) == (3.05, 6.0)
 
 
 def test_cli_global_plot_renders_a_gx_netcdf_bundle(
@@ -2510,9 +2596,45 @@ def test_direct_config_shorthand_wout_positional_uses_default_deck(
     data = tomllib.loads(resolved.read_text(encoding="utf-8"))
     assert data["geometry"]["model"] == "vmec"
     assert data["geometry"]["vmec_file"] == str(wout.resolve())
-    assert data["output"]["path"] == str(tmp_path / "wout_tiny" / "gkx")
+    # The default target is the NetCDF bundle, not a bare prefix: the spectra,
+    # the potential map, and the restart file exist only in that form.
+    assert data["output"]["path"] == str(tmp_path / "wout_tiny" / "gkx.out.nc")
     assert data["physics"]["nonlinear"] is True
     assert data["species"][0]["tprim"] == 3.0
+
+
+def test_direct_config_shorthand_wout_header_names_the_shipped_deck(
+    capsys, monkeypatch, tmp_path: Path
+) -> None:
+    """The header says which deck the defaults came from, and how to replace it."""
+
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_hdr.nc")
+
+    _direct_config_shorthand_args([str(wout)])
+
+    out = capsys.readouterr().out
+    shipped = (REPO_ROOT / "examples" / "common_input.toml").resolve()
+    assert f"default deck: {shipped}" in out
+    assert "gkx my_input.toml wout_hdr.nc" in out
+    assert f"wrote resolved input: {tmp_path / 'wout_hdr' / 'gkx.toml'}" in out
+
+
+def test_direct_config_shorthand_wout_header_names_a_supplied_deck(
+    capsys, monkeypatch, tmp_path: Path
+) -> None:
+    """A user's own deck is named as theirs, without the copy-and-edit advice."""
+
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_own.nc")
+    deck = tmp_path / "mine.toml"
+    deck.write_text(_RUNTIME_NONLINEAR_TOML_MIN, encoding="utf-8")
+
+    _direct_config_shorthand_args([str(deck), str(wout)])
+
+    out = capsys.readouterr().out
+    assert f"input deck: {deck}" in out
+    assert "default deck" not in out
 
 
 def test_direct_config_shorthand_toml_plus_wout_both_orders_force_vmec_model(
@@ -2589,7 +2711,7 @@ def test_cli_wout_run_groups_outputs_and_writes_resolved_deck(
     cfg = captured["cfg"]
     assert cfg.geometry.model == "vmec"
     assert cfg.geometry.vmec_file == str(wout.resolve())
-    assert captured["out"] == str(tmp_path / "wout_tiny" / "gkx")
+    assert captured["out"] == str(tmp_path / "wout_tiny" / "gkx.out.nc")
     assert (tmp_path / "wout_tiny" / "gkx.toml").exists()
 
 

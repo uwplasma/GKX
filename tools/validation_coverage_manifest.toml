@@ -2873,6 +2873,7 @@ owned_modules = [
   "gkx.artifacts.gx_output",
   "gkx.artifacts.foreign_output",
   "gkx.artifacts.run_figures",
+  "gkx.artifacts.run_summary",
   "gkx.artifacts.snapshots",
   "gkx.artifacts.transport_figures",
 ]

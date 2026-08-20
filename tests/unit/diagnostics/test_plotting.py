@@ -4,6 +4,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+import pathlib
+
 import numpy as np
 
 from gkx.benchmarking.shared import CycloneReference, CycloneScanResult
@@ -705,3 +707,182 @@ def test_flux_spectra_annotation_gets_clear_headroom():
     )
     assert ky_ax.get_ylim()[1] > float(np.nanmax(drawn))
     plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# The one-page run summary: every panel drawn by the function that owns it.
+# ---------------------------------------------------------------------------
+
+
+def _write_final_field_bundle(base, *, nx=8, ny=6, nz=4, t_last=12.0):
+    """Write the ``*.big.nc`` companion that carries a run's final fields."""
+
+    netcdf4 = pytest.importorskip("netCDF4")
+    rng = np.random.default_rng(5)
+    phi_yxz = rng.normal(size=(ny, nx, nz)) * 1e-3
+    path = pathlib.Path(f"{base}.big.nc")
+    with netcdf4.Dataset(path, "w") as root:
+        for name, size in (("time", 1), ("x", nx), ("y", ny), ("theta", nz)):
+            root.createDimension(name, size)
+        grids = root.createGroup("Grids")
+        grids.createVariable("time", "f8", ("time",))[:] = np.asarray([t_last])
+        grids.createVariable("x", "f4", ("x",))[:] = np.linspace(
+            0.0, 40.0, nx, endpoint=False
+        )
+        grids.createVariable("y", "f4", ("y",))[:] = np.linspace(
+            0.0, 30.0, ny, endpoint=False
+        )
+        geom = root.createGroup("Geometry")
+        for name, value in (("q", 1.4), ("rmaj", 3.0), ("aminor", 0.5), ("nfp", 3)):
+            geom.createVariable(name, "f4", ())[:] = np.float32(value)
+        diag = root.createGroup("Diagnostics")
+        diag.createVariable("PhiXY", "f4", ("time", "y", "x", "theta"))[0, ...] = (
+            phi_yxz
+        )
+    return phi_yxz, path
+
+
+def test_run_summary_figure_draws_every_panel_from_a_bundle(tmp_path):
+    """The summary page carries the traces, both spectra, the map, and the text."""
+
+    from gkx.artifacts.run_summary import nonlinear_summary_figure
+
+    base = tmp_path / "case"
+    _write_synthetic_out_nc(tmp_path / "case.out.nc")
+    _write_final_field_bundle(base)
+    (tmp_path / "case.toml").write_text(
+        '[geometry]\nmodel = "vmec"\nvmec_file = "wout_demo.nc"\ntorflux = 0.64\n'
+        "[grid]\nNx = 8\nNy = 6\nNz = 4\n"
+        "[run]\nNl = 2\nNm = 3\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "case.summary.png"
+
+    fig, axes = nonlinear_summary_figure(
+        tmp_path / "case.out.nc", window=(6.0, 12.0), saturated=True, out=out
+    )
+    try:
+        assert out.exists()
+        assert set(axes) == {
+            "heat_flux",
+            "particle_flux",
+            "metadata",
+            "flux_spectrum",
+            "phi2_spectrum",
+            "potential",
+        }
+        # Every data panel carries a labelled axis, and the potential a colorbar.
+        assert axes["heat_flux"].get_ylabel()
+        assert axes["particle_flux"].get_xlabel()
+        assert axes["flux_spectrum"].get_xlabel()
+        assert axes["phi2_spectrum"].get_ylabel()
+        assert axes["potential"].images
+        assert axes["potential"].get_xlabel() and axes["potential"].get_ylabel()
+        extras = [ax for ax in fig.axes if ax not in axes.values()]
+        assert extras and extras[0].get_ylabel(), "potential needs a labelled colorbar"
+        # The window is shaded on both traces rather than only annotated.
+        assert axes["heat_flux"].patches and axes["particle_flux"].patches
+        # The metadata panel is text-only and names the deck and equilibrium.
+        assert not axes["metadata"].axison
+        text = " ".join(item.get_text() for item in axes["metadata"].texts)
+        assert "wout_demo.nc" in text
+        assert "case.toml" in text
+        assert "8 x 6 x 4" in text
+        assert "measured saturation" in text
+    finally:
+        plt.close(fig)
+
+
+def test_run_summary_figure_survives_a_bundle_without_spectra(tmp_path):
+    """A CSV sidecar still gets a page; the panels it cannot draw say why."""
+
+    from gkx.artifacts.run_summary import nonlinear_summary_figure
+
+    base = _write_csv_sidecar(tmp_path, name="thin_case")
+    out = tmp_path / "thin.summary.png"
+
+    fig, axes = nonlinear_summary_figure(
+        base.with_suffix(".diagnostics.csv"), out=out
+    )
+    try:
+        assert out.exists()
+        assert axes["heat_flux"].get_lines()
+        for key in ("flux_spectrum", "phi2_spectrum", "potential"):
+            note = " ".join(item.get_text() for item in axes[key].texts)
+            assert "out.nc" in note or "final-field" in note
+        text = " ".join(item.get_text() for item in axes["metadata"].texts)
+        assert "second half" in text
+    finally:
+        plt.close(fig)
+
+
+def test_run_summary_final_field_undoes_the_writer_normalization(tmp_path):
+    """``PhiXY`` is stored through ifft2, so the amplitude needs its Ny*Nx back."""
+
+    from gkx.artifacts.run_summary import load_final_field
+
+    base = tmp_path / "amp"
+    phi_yxz, _path = _write_final_field_bundle(base, nx=8, ny=6)
+    field = load_final_field(tmp_path / "amp.out.nc")
+
+    expected = np.transpose(phi_yxz, (1, 0, 2)) * (6 * 8)
+    assert np.allclose(field.phi_xyz, expected, rtol=1e-5, atol=1e-9)
+    # The stored axes drop the repeated endpoint, so the box length is the last
+    # sample plus one spacing -- the extent the writer was handed.
+    assert field.extent == pytest.approx((40.0, 30.0))
+    assert field.geometry.nfp == 3
+    assert field.geometry.epsilon == pytest.approx(0.5 / 3.0)
+    assert field.time == pytest.approx(12.0)
+
+
+def test_flux_tube_figure_renders_from_a_saved_bundle(tmp_path):
+    """The 3-D tube reads the same companion and labels its own amplitude."""
+
+    from gkx.artifacts.run_summary import flux_tube_figure
+
+    _write_final_field_bundle(tmp_path / "tube")
+    out = tmp_path / "tube.flux_tube_3d.png"
+
+    fig, ax3d = flux_tube_figure(tmp_path / "tube.out.nc", out=out)
+    try:
+        assert out.exists()
+        assert ax3d.collections
+        assert r"c_s/a" in ax3d.get_title()
+    finally:
+        plt.close(fig)
+
+
+def test_embedded_spectra_panels_leave_the_host_figure_alone(tmp_path):
+    """``axes=``/``panels=`` draw into a caller's figure without owning it."""
+
+    path = _write_synthetic_out_nc(tmp_path / "embed.out.nc")
+    fig, (left, right) = plt.subplots(1, 2)
+    try:
+        flux_spectra_figure(path, panels=("ky",), axes=(left,), out=tmp_path / "no.png")
+        phi2_spectra_figure(path, panels=("ky",), axes=(right,))
+        # No suptitle, and nothing saved: layout and output stay the caller's.
+        assert not (tmp_path / "no.png").exists()
+        assert fig._suptitle is None
+        assert left.get_lines() and right.get_lines()
+        with pytest.raises(ValueError, match="axes="):
+            flux_spectra_figure(path, panels=("ky", "kx"), axes=(left,))
+        with pytest.raises(ValueError, match="unknown panels"):
+            phi2_spectra_figure(path, panels=("nope",), axes=(right,))
+    finally:
+        plt.close(fig)
+
+
+def test_summary_does_not_call_an_unsaturated_window_a_measurement() -> None:
+    """A run that hit its cap must not read as converged.
+
+    The stop policy records the window it evaluated whether or not the trace
+    settled in it, so the window alone cannot distinguish the two. Labelling a
+    capped run "measured saturation" tells a reader the flux converged while it
+    was still climbing.
+    """
+
+    from gkx.artifacts.run_figures import measured_window_is_saturated
+
+    assert measured_window_is_saturated({"saturation": {"saturated": False}}) is False
+    assert measured_window_is_saturated({"saturation": {"saturated": True}}) is True
+    assert measured_window_is_saturated({}) is None
