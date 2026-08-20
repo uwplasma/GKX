@@ -559,6 +559,11 @@ def plot_saved_output_command(
             return 1
     rendered = plot_saved_output(input_path, out=out_path)
     print(f"saved {rendered}")
+    from gkx.artifacts.run_figures import replot_nonlinear_bundle
+
+    # On GKX's own nonlinear bundle, rebuild the run's whole figure set.
+    for figure in replot_nonlinear_bundle(input_path):
+        print(f"saved {figure}")
     return 0
 
 
