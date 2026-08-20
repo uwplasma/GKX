@@ -38,12 +38,59 @@ EXECUTABLE_TOML_SHORTHAND_COMMANDS = {
 }
 
 
+# Leading bytes of the binary formats a user is most likely to hand the CLI by
+# mistake, mapped to what that file actually is.
+_BINARY_SIGNATURES: tuple[tuple[bytes, str], ...] = (
+    (b"CDF\x01", "a NetCDF classic file"),
+    (b"CDF\x02", "a NetCDF 64-bit-offset file"),
+    (b"\x89HDF\r\n\x1a\n", "an HDF5 file, which is what NetCDF-4 uses"),
+    (b"PK\x03\x04", "a zip archive"),
+    (b"\x93NUMPY", "a NumPy array file"),
+)
+
+
+def describe_binary_input(path: Path) -> str | None:
+    """Return what ``path`` actually is when it is not text, else ``None``."""
+
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(8)
+    except OSError:
+        return None
+    for signature, description in _BINARY_SIGNATURES:
+        if head.startswith(signature):
+            return description
+    return None
+
+
 def load_toml(path: str | Path) -> dict:
-    """Load a TOML file into a plain dictionary."""
+    """Load a TOML file into a plain dictionary.
+
+    A binary file reaches here whenever it was not recognised earlier -- most
+    often an equilibrium whose name or contents did not match the wout
+    signature -- and ``tomllib`` reports that as a decode error against a byte
+    offset, which says nothing about what went wrong. Name the file and what it
+    turned out to be instead.
+    """
 
     path = Path(path)
-    with path.open("rb") as f:
-        return tomllib.load(f)
+    try:
+        with path.open("rb") as f:
+            return tomllib.load(f)
+    except UnicodeDecodeError as exc:
+        binary = describe_binary_input(path)
+        if binary is not None:
+            raise ValueError(
+                f"{path} is {binary}, not a TOML input file. If this is a VMEC "
+                "equilibrium, it was not recognised as one: check that it "
+                "carries the wout variables (rmnc, zmns, xm, xn), or pass it "
+                "with --vmec to say so explicitly."
+            ) from exc
+        raise ValueError(
+            f"{path} is not valid UTF-8, so it cannot be a TOML input file."
+        ) from exc
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"{path} is not valid TOML: {exc}") from exc
 
 
 def is_runtime_toml(data: dict[str, Any]) -> bool:

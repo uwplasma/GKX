@@ -494,7 +494,10 @@ recursive = true
 # 95537 -> 95565: keeping the bracket out of the linear operator's fusion. The
 # lines are the measurement: which fusion, on which shard shape, and why an
 # identity is the right instrument for it.
-baseline = 95565
+# 95565 -> 95612: saying what a file is when it is not the TOML the CLI
+# expected. The signature table is the cost; the alternative is a decode
+# error against a byte offset, which names neither the file nor the problem.
+baseline = 95612
 target = 45000
 
 [[line_budget_policy.counts]]
