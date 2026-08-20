@@ -13,6 +13,7 @@ import pytest
 from gkx.workflows.runtime.toml import (
     direct_config_shorthand_args,
     is_runtime_toml,
+    load_toml,
     load_runtime_from_toml,
     toml_shorthand_command,
 )
@@ -825,3 +826,27 @@ def test_output_warm_start_is_opt_in_and_round_trips(tmp_path: Path) -> None:
     # Nothing else about the restart contract moved.
     assert cfg.output.restart is False
     assert cfg.output.save_for_restart is True
+
+
+def test_load_toml_names_a_netcdf_handed_to_it_instead_of_a_decode_error(
+    tmp_path: Path,
+) -> None:
+    """A wout that missed the equilibrium sniff must not surface as byte 55.
+
+    tomllib reports a binary file as a UnicodeDecodeError against an offset,
+    which tells a user nothing about what they actually passed.
+    """
+
+    masquerading = tmp_path / "looks_like_a_config.toml"
+    masquerading.write_bytes(b"CDF\x02\x00\x00\x00\x00" + b"\xc8" * 64)
+
+    with pytest.raises(ValueError, match="NetCDF.*not a TOML input file"):
+        load_toml(masquerading)
+
+
+def test_load_toml_reports_invalid_toml_with_the_file_name(tmp_path: Path) -> None:
+    config = tmp_path / "broken.toml"
+    config.write_text("this = = not toml", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="broken.toml is not valid TOML"):
+        load_toml(config)
