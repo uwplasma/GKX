@@ -1,16 +1,4 @@
-"""Real-space snapshot figures of the turbulent electrostatic potential.
-
-Promoted from ``tools/artifacts/build_turbulence_movie.py`` so any workflow --
-the movie tool, notebooks, or the plotting CLI -- renders the same two views a
-gyrokineticist reads: the perpendicular ``x``-``y`` cut at the outboard
-midplane, and the field-aligned flux tube in real space that shows why the cut
-looks the way it does.
-
-The module is deliberately free of solver imports: it consumes a spectral (or
-already real-space) potential as a plain array plus a duck-typed geometry
-(``q``, ``epsilon``, ``R0``, ``nfp`` attributes), so it can render from a live
-state, a NetCDF bundle, or a snapshot ``.npz`` alike.
-"""
+"""Real-space electrostatic-potential snapshots without solver dependencies."""
 
 from __future__ import annotations
 
@@ -23,11 +11,8 @@ import numpy as np
 
 from gkx.artifacts.figure_style import figure_style, save_figure
 
-#: The shipped nonlinear TOMLs set ``diagnostic_norm = "rho_star"``, so the
-#: field carried through the movie/snapshot pipeline is the rho-star-normalized
-#: potential, not ``ephi/T_i``. Labelling it ``ephi/T_i`` overstates the
-#: amplitude by ``1/rho_star`` and once made a physically saturated run look
-#: like a blow-up.
+#: Shipped decks use ``diagnostic_norm = "rho_star"``; this is the
+#: rho-star-normalized potential, not ``ephi/T_i``.
 PHI_LABEL: str = r"$(e\phi/T_i)\,/\,\rho_*$"
 
 
@@ -36,16 +21,9 @@ def potential_real_space(
 ) -> np.ndarray:
     """Transform a spectral potential ``phi(ky, kx, z)`` to real ``phi(x, y, z)``.
 
-    Matches the transform the nonlinear bracket itself uses
-    (``operators/nonlinear/brackets.py``): ``ky`` is the compressed real-FFT
-    axis and only its first ``nyc = Ny // 2 + 1`` entries are physical, while
-    ``kx`` is a full complex axis. Treating both as full axes instead -- the
-    obvious guess -- silently mixes the redundant negative-``ky`` half back in
-    and leaves a "real-space" field with a few percent imaginary part.
-
-    Accepts either the full Hermitian ``ky`` layout (first axis of length
-    ``Ny``) or the compressed non-negative block (length ``Ny // 2 + 1``; pass
-    ``ny_full`` to disambiguate when supplying the compressed form).
+    ``ky`` uses the nonlinear bracket's compressed real-FFT layout; ``kx`` is
+    a full complex axis. Accepts either the full Hermitian ``ky`` array or its
+    non-negative block; pass ``ny_full`` with the compressed form.
     """
 
     phi = np.asarray(phi_spectral)
@@ -92,32 +70,44 @@ def _grid_extent(grid: Any | None) -> tuple[float, float] | None:
 
 
 def _field_line_tube(geometry: Any, samples: int, *, turns: float = 1.5):
-    """Cartesian centre line of the flux tube plus an orthonormal local frame.
-
-    The field line advances ``q`` times faster in toroidal than in poloidal
-    angle, and a stellarator's field-period count sets how far it wanders per
-    poloidal transit -- so the twist drawn here is the equilibrium's own rather
-    than decoration.
-    """
+    """Cartesian field line and local frame; prefer imported physical coordinates."""
 
     q = float(getattr(geometry, "q", 1.4) or 1.4)
     epsilon = float(getattr(geometry, "epsilon", 0.18) or 0.18)
     major = float(getattr(geometry, "R0", 3.0) or 3.0)
     minor = epsilon * major
-    nfp = max(int(getattr(geometry, "nfp", 1) or 1), 1)
-
-    theta = np.linspace(-turns * np.pi, turns * np.pi, samples)
-    zeta = q * theta / nfp
-
-    radius = major + minor * np.cos(theta)
-    centre = np.stack(
-        [radius * np.cos(zeta), radius * np.sin(zeta), minor * np.sin(theta)], axis=-1
-    )
-
+    R = getattr(geometry, "cylindrical_R_profile", None)
+    Z = getattr(geometry, "cylindrical_Z_profile", None)
+    zeta = getattr(geometry, "toroidal_angle_profile", None)
+    if R is not None and Z is not None and zeta is not None:
+        source = np.linspace(0.0, 1.0, len(R))
+        target = np.linspace(0.0, 1.0, samples)
+        R_line = np.interp(target, source, np.asarray(R, dtype=float))
+        Z_line = np.interp(target, source, np.asarray(Z, dtype=float))
+        zeta_line = np.interp(
+            target, source, np.unwrap(np.asarray(zeta, dtype=float))
+        )
+        centre = np.stack(
+            [R_line * np.cos(zeta_line), R_line * np.sin(zeta_line), Z_line],
+            axis=-1,
+        )
+        major = float(np.mean(R_line))
+        Z_mean = float(np.mean(Z_line))
+        minor = max(float(np.max(np.hypot(R_line - major, Z_line - Z_mean))), 1.0e-6)
+        radial_R = R_line - major
+        radial_Z = Z_line - Z_mean
+    else:
+        theta = np.linspace(-turns * np.pi, turns * np.pi, samples)
+        zeta_line = q * theta
+        radius = major + minor * np.cos(theta)
+        centre = np.stack([radius * np.cos(zeta_line), radius * np.sin(zeta_line),
+                           minor * np.sin(theta)], axis=-1)
+        radial_R = minor * np.cos(theta)
+        radial_Z = minor * np.sin(theta)
     tangent = np.gradient(centre, axis=0)
     tangent /= np.linalg.norm(tangent, axis=-1, keepdims=True) + 1e-30
     outward = np.stack(
-        [np.cos(zeta) * np.cos(theta), np.sin(zeta) * np.cos(theta), np.sin(theta)],
+        [np.cos(zeta_line) * radial_R, np.sin(zeta_line) * radial_R, radial_Z],
         axis=-1,
     )
     outward -= tangent * np.sum(outward * tangent, axis=-1, keepdims=True)
@@ -131,7 +121,7 @@ def _torus_wireframe(major: float, minor: float, n_major: int = 60, n_minor: int
 
     u = np.linspace(0.0, 2.0 * np.pi, n_major)
     v = np.linspace(0.0, 2.0 * np.pi, n_minor)
-    uu, vv = np.meshgrid(u, v, indexing="ij")
+    uu, vv = np.meshgrid(u, v, indexing="ij")  # type: np.ndarray, np.ndarray
     r = major + minor * np.cos(vv)
     return r * np.cos(uu), r * np.sin(uu), minor * np.sin(vv)
 
@@ -233,13 +223,7 @@ def draw_flux_tube_3d(
     cmap: str = "RdBu_r",
     show_torus: bool = True,
 ) -> None:
-    """Render the field-aligned flux tube onto an existing 3D axes.
-
-    Maps the field-aligned coordinate ``z`` onto the actual field line: for an
-    axisymmetric equilibrium that is a helix on a torus of aspect ratio
-    ``R0/a``; for a stellarator the same construction uses the device's field
-    periods, so the twist shown is the geometry's own.
-    """
+    """Render physical imported coordinates, with an analytic fallback."""
 
     phi_arr = np.asarray(phi_xyz, dtype=float)
     if phi_arr.ndim != 3:
@@ -261,7 +245,8 @@ def draw_flux_tube_3d(
     )
 
     angle = np.linspace(0.0, 2.0 * np.pi, ny, endpoint=False)
-    radius = radius_fraction * minor
+    physical = getattr(geometry, "cylindrical_R_profile", None) is not None
+    radius = radius_fraction * minor * (0.3 if physical else 1.0)
     surface = (
         centre[None, :, :]
         + radius * np.cos(angle)[:, None, None] * outward[None, :, :]
@@ -269,7 +254,7 @@ def draw_flux_tube_3d(
     )
     normed = 0.5 + 0.5 * np.clip(resampled / (scale + 1e-30), -1.0, 1.0)
 
-    if show_torus:
+    if show_torus and not physical:
         wire_x, wire_y, wire_z = _torus_wireframe(major, minor)
         ax3d.plot_wireframe(
             wire_x,
@@ -365,14 +350,7 @@ def flux_tube_3d_figure(
     title: str = r"Flux tube along $\mathbf{B}$",
     out: str | Path | None = None,
 ) -> Tuple[plt.Figure, Any]:
-    """Publication 3D rendering of the potential on the field-aligned tube.
-
-    ``phi_spectral`` follows the same convention as
-    :func:`phi_xy_snapshot_figure`; ``geom`` needs only ``q``, ``epsilon``,
-    ``R0`` and ``nfp`` attributes (missing ones fall back to Cyclone-like
-    values). A colorbar carries the amplitude the surface colors encode, since
-    the 3D axes themselves are switched off.
-    """
+    """Render the field-aligned potential, using host-only physical coordinates."""
 
     del grid  # perpendicular box size does not enter the 3D rendering
     phi_xyz = _as_real_space(phi_spectral, ny_full=ny_full)

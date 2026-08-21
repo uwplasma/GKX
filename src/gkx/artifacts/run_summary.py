@@ -142,8 +142,15 @@ def _scalar(group: Any, name: str, default: float) -> float:
         return float(default)
 
 
+def _profile(group: Any, name: str) -> np.ndarray | None:
+    if group is None or name not in group.variables:
+        return None
+    values = np.asarray(group.variables[name][...], dtype=float).reshape(-1)
+    return values if values.size >= 2 and np.isfinite(values).all() else None
+
+
 def _bundle_geometry(group: Any) -> Any:
-    """Duck-typed geometry the 3-D flux tube needs: ``q``, ``epsilon``, ``R0``, ``nfp``."""
+    """Read plotting geometry from a nonlinear bundle."""
 
     major = _scalar(group, "rmaj", 3.0)
     minor = _scalar(group, "aminor", 0.18 * major)
@@ -152,6 +159,9 @@ def _bundle_geometry(group: Any) -> Any:
         epsilon=(minor / major) if major else 0.18,
         R0=major,
         nfp=max(int(_scalar(group, "nfp", 1.0)), 1),
+        cylindrical_R_profile=_profile(group, "Rplot"),
+        cylindrical_Z_profile=_profile(group, "Zplot"),
+        toroidal_angle_profile=_profile(group, "zeta_plot"),
     )
 
 
