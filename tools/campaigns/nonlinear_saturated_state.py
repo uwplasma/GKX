@@ -119,7 +119,23 @@ def main() -> int:
     parser.add_argument("--nx", type=int, default=None)
     parser.add_argument("--ny", type=int, default=None)
     parser.add_argument("--nz", type=int, default=None)
+    parser.add_argument("--nl", type=int, default=None)
+    parser.add_argument("--nm", type=int, default=None)
     parser.add_argument("--t-max", type=float, default=None)
+    parser.add_argument("--sample-stride", type=int, default=None)
+    parser.add_argument("--diagnostics-stride", type=int, default=None)
+    parser.add_argument(
+        "--run-to",
+        choices=("saturation", "t_max"),
+        default=None,
+        help="override the deck stop policy; use t_max for held-out audits",
+    )
+    parser.add_argument(
+        "--vmec-file",
+        type=Path,
+        default=None,
+        help="override [geometry].vmec_file after loading the deck",
+    )
     parser.add_argument("--min-tau-multiples", type=float, default=10.0)
     parser.add_argument(
         "--initial-state",
@@ -129,6 +145,12 @@ def main() -> int:
         "this may be marked unsaturated because the purpose is to finish it",
     )
     parser.add_argument("--state-out", type=Path, default=None)
+    parser.add_argument(
+        "--trace-out",
+        type=Path,
+        default=None,
+        help="compact npz with scalar traces and available kx/ky spectra",
+    )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -150,9 +172,21 @@ def main() -> int:
         runtime = dataclasses.replace(
             runtime, grid=dataclasses.replace(runtime.grid, **grid_override)
         )
+    time_override = {}
     if args.t_max is not None:
+        time_override["t_max"] = args.t_max
+    if args.run_to is not None:
+        time_override["run_to"] = args.run_to
+    if time_override:
         runtime = dataclasses.replace(
-            runtime, time=dataclasses.replace(runtime.time, t_max=args.t_max)
+            runtime, time=dataclasses.replace(runtime.time, **time_override)
+        )
+    if args.vmec_file is not None:
+        runtime = dataclasses.replace(
+            runtime,
+            geometry=dataclasses.replace(
+                runtime.geometry, vmec_file=str(args.vmec_file.resolve())
+            ),
         )
 
     time_cfg = runtime.time
@@ -169,8 +203,8 @@ def main() -> int:
             flush=True,
         )
 
-    n_laguerre = int(raw.get("run", {}).get("Nl", 4))
-    n_hermite = int(raw.get("run", {}).get("Nm", 8))
+    n_laguerre = int(args.nl or raw.get("run", {}).get("Nl", 4))
+    n_hermite = int(args.nm or raw.get("run", {}).get("Nm", 8))
     previous_t_end = 0.0
 
     def run(config):
@@ -178,6 +212,8 @@ def main() -> int:
             config,
             Nl=n_laguerre,
             Nm=n_hermite,
+            sample_stride=args.sample_stride,
+            diagnostics_stride=args.diagnostics_stride,
             return_state=True,
             diagnostics=True,
         )
@@ -222,6 +258,8 @@ def main() -> int:
         raise RuntimeError("run returned no diagnostics; cannot judge saturation")
     times = np.asarray(diagnostics.t, dtype=float)
     flux = np.asarray(diagnostics.heat_flux_t, dtype=float)
+    wphi = np.asarray(diagnostics.Wphi_t, dtype=float)
+    wg = np.asarray(diagnostics.Wg_t, dtype=float)
     steps_dt = np.asarray(diagnostics.dt_t, dtype=float)
 
     report = saturation_report(
@@ -249,6 +287,30 @@ def main() -> int:
             flush=True,
         )
     print(f"  -> {'SATURATED' if report['saturated'] else 'NOT SATURATED'}", flush=True)
+
+    if args.trace_out is not None:
+        payload = {
+            "time": times,
+            "dt": steps_dt,
+            "heat_flux": flux,
+            "Wphi": wphi,
+            "Wg": wg,
+            "elapsed_seconds": np.asarray(elapsed),
+        }
+        resolved = diagnostics.resolved
+        if resolved is not None:
+            for name in (
+                "Phi2_kxt",
+                "Phi2_kyt",
+                "HeatFlux_kxst",
+                "HeatFlux_kyst",
+            ):
+                value = getattr(resolved, name)
+                if value is not None:
+                    payload[name] = np.asarray(value)
+        args.trace_out.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(args.trace_out, **payload)
+        print(f"trace written: {args.trace_out}", flush=True)
 
     if args.state_out is not None and result.state is not None:
         args.state_out.parent.mkdir(parents=True, exist_ok=True)
@@ -286,7 +348,15 @@ def main() -> int:
         "wall_seconds": elapsed,
         "samples": int(times.size),
         "report": report,
-        "trace": [{"t": float(a), "heat_flux": float(b)} for a, b in zip(times, flux)],
+        "trace": [
+            {
+                "t": float(t),
+                "heat_flux": float(q),
+                "Wphi": float(phi),
+                "Wg": float(g),
+            }
+            for t, q, phi, g in zip(times, flux, wphi, wg)
+        ],
     }
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
