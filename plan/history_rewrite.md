@@ -56,6 +56,22 @@ asset addressed by SHA-256; small deterministic fixtures remain in Git.
   footers. Ordinary scientific prose containing “generated with” is not an
   authorship marker.
 
+The full candidate audit is explicit. The selected history contains seven
+objects with AI attribution markers: four objects (two duplicated logical
+changes) with a Claude co-author trailer and three merge objects with `codex/`
+or `[codex]` labels. Their original IDs are
+
+```text
+49ce7a8e b3c77752 a451089f b2959b06
+f0e5ff99 5f84b0c4 4c56ba28
+```
+
+The rehearsal removes the four trailers, rewrites the three labels to
+`rogeriojorge/`, and maps every Rogerio Wisc identity to the IST identity. Its
+reachable authors are 3,355 Rogerio commits, two Eduardo Lascas Neto commits,
+and two Raheem Hashmani identities; no Claude/Codex/co-author/generated-by
+marker remains. The other human identities are unchanged.
+
 ## Required cutover sequence
 
 1. Freeze merges and export the old branch, tag, protection, and open-PR maps.
@@ -81,12 +97,19 @@ asset addressed by SHA-256; small deterministic fixtures remain in Git.
 
 ## Current blocker
 
-The 5.93-MiB candidate is a proof, not a publishable repository. Its release
-suite fails because
-`tests/release/test_release_gates.py` reads
-`docs/_static/quasilinear_cyclone_miller_train_holdout_report.json`, which the
-rewrite correctly excludes. All such documentation/artifact dependencies must
-be removed before the candidate can pass the cutover gates. PR #88 safely
+The 5.93-MiB candidate is a proof, not a publishable repository. Running the
+complete release-gate file against its asset-free tree gives 110 passes and
+seven failures in three dependency classes:
+
+1. a test reads four generated quasilinear train/holdout reports from
+   `docs/_static`;
+2. the performance manifest requires local rendered result files; and
+3. the validation-coverage manifest requires local rendered/result files.
+
+Schema and source coverage must stay in CI, but bulky result availability must
+move to a hash-verified release manifest or be regenerated in an explicit
+artifact job. Small deterministic numerical fixtures belong under
+`benchmarks/references`, not a documentation image directory. PR #88 safely
 removes 153 unreferenced assets after restoring 44 files consumed outside the
-documentation tree, but deliberately retains this referenced file; it is tree
+documentation tree, but deliberately retains these dependencies; it is tree
 slimming, not yet dependency decoupling.

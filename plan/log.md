@@ -128,3 +128,8 @@
   trajectory instead of sampling the production solve, stores full 3-D fields,
   and reconstructs a circular torus without VMEC coordinates. MOV-1 must record
   only decimated `x-y` and physical tube-skin cuts during the source run.
+- Audited authorship over the complete selected rewrite history. Seven objects
+  carry AI markers: four duplicated Claude co-author trailers and three Codex
+  branch/message labels. The rewrite rehearsal removes those markers and maps
+  164 Rogerio Wisc-address commits to the IST identity; its reachable history
+  has 3,355 Rogerio commits and preserves the four non-Rogerio human commits.
