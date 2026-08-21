@@ -87,5 +87,6 @@ suite fails because
 `docs/_static/quasilinear_cyclone_miller_train_holdout_report.json`, which the
 rewrite correctly excludes. All such documentation/artifact dependencies must
 be removed before the candidate can pass the cutover gates. PR #88 safely
-removes 197 unreferenced assets, but deliberately retains this referenced file;
-it is tree slimming, not yet dependency decoupling.
+removes 153 unreferenced assets after restoring 44 files consumed outside the
+documentation tree, but deliberately retains this referenced file; it is tree
+slimming, not yet dependency decoupling.

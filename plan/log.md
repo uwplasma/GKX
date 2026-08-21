@@ -74,9 +74,10 @@
 - Fixed PR #86's mypy failure by narrowing imported `R`, `Z`, and toroidal-angle
   profiles to explicit NumPy arrays; mypy, Ruff, and 122 relevant tests pass.
 - Opened draft PR #88 after a literal-consumer audit of all 1,201 tracked
-  `docs/_static` files. It removes 197 unreferenced generated assets, 8,035,642
-  bytes, and 6,944 text lines while retaining 1,004 used assets. Strict Sphinx,
-  117 release gates, both size manifests, and 103 artifact/physics tests pass.
+  `docs/_static` files. CI exposed that the first audit followed documentation
+  links but missed a tool/test consumer. A repository-wide basename audit
+  restored 44 consumed artifacts (339,046 bytes). The corrected cut removes
+  153 assets, 7,696,596 bytes, and 5,882 text lines; 88 affected tests pass.
 - Re-reduced all 208 raw QA campaign NPZ files (104 matched pairs). Signed
   ensemble drift had hidden individual failures. Under the published 20%
   final-drift gate the nominal set is 44/48 stationary; `dt=0.04` is 13/16,
@@ -101,3 +102,19 @@
   `17312709` condensed redundant snapshot prose without losing its FFT or
   normalization contract; the branch now has 96,464 source lines. Mypy, Ruff,
   the architecture gate, and 122 geometry/plot/runtime tests pass.
+- Retrospective held-out stopping tests show why the current rule cannot be
+  promoted unchanged. Heat-flux-only stopping accepted 54/208 traces with
+  median 5.30% and 90th-percentile 10.50% error against their last 400 time
+  units; 29 accepted means missed by more than 5% and 7 by more than 10%. The
+  Oberparleiter 100-time burn-in plus five-correlation-time batches stopped
+  earlier but was less safe on these traces. Q-only rules cannot replace fresh
+  `Q`, `Wphi`, `Wg`, and spectral evidence.
+- Added compact fixed-horizon saturation-audit output on branch
+  `fix/statistical-saturation-window`: time, adaptive step, `Q`, `Wphi`, `Wg`,
+  `kx`, `ky`, and resolved spectra. A local `16^2 x 16`, `t=100` CPU pilot took
+  66.3 s and failed saturation with `Wg` still rising. A shared RTX A4000
+  `32^2 x 32`, `t=250` pilot took 469.8 s and was also pre-saturation: mean `Q`
+  rose from 0.147 over `t=100--150` to 2.45 over `150--200` and 7.25 over
+  `200--250`; the highest retained positive-`ky` mode was the flux-spectrum
+  maximum. These are diagnostic pilots, not timing baselines or converged
+  transport results.

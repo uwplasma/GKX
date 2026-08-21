@@ -151,6 +151,14 @@ Acceptance requires a minimum number of independent samples, bounded trend in
 IAT and five-correlation-time batch means on the same traces. Scan at most 32
 candidate suffixes so selection remains `O(N log N)` or better.
 
+The first held-out audit rejects a heat-flux-only shortcut. The current GKX
+rule stops 54/208 traces, but 29 accepted means differ by more than 5% and 7 by
+more than 10% from the mean of the final 400 time units. A direct
+Oberparleiter-style rule stops earlier and increases the tail error. Conservative
+Q-only variants remove the >10% errors only by saving about 13% median runtime.
+Fresh runs therefore record both energy guards and spectra before SAT-1 changes
+the production default.
+
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
 out of 48; the `dt=0.04`, perpendicular 24, and velocity `(6,12)` refinements
@@ -248,11 +256,11 @@ with that target.
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
 
-PR #88 is the first non-destructive tree cut. It deletes 197 generated
-documentation assets with no literal tracked consumer: 8,035,642 bytes and
-6,944 text lines. It retains all 1,004 referenced assets, reduces the tracked
-tree from 45.98 to 37.94 MB, and passes strict Sphinx plus repository,
-release-artifact, and focused physics gates. The remaining 26.90 MB
+PR #88 is the first non-destructive tree cut. After CI exposed one missed
+tool/test dependency, a repository-wide reachability audit restored 44 consumed
+artifacts. The corrected cut deletes 153 generated assets: 7,696,596 bytes and
+5,882 text lines. It reduces the tracked tree from 45.98 to 38.28 MB; the
+affected 88 tests pass and full CI is rerunning. The remaining 27.24 MB
 `docs/_static` tree must become generated previews plus hash-addressed release
 artifacts; deleting it blindly would break documented evidence and tests.
 
@@ -352,7 +360,7 @@ coordinates and show the selected averaging interval only inside saved data.
 | CI-1 | P0 | review | PR #81 mypy fix | CI green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
-| SAT-1 | P0 | pending | stationary suffix + Q/Wphi/Wg gates | synthetic + held-out long traces |
+| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; fixed-horizon trace capture on `fix/statistical-saturation-window` | synthetic + held-out long traces |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; source budget restored |
 | RES-1 | P0 | review | PR #87 spectrum-tail warnings; convergence protocol pending | known resolved/unresolved fixtures + paired Nx/Ny scan |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
@@ -360,7 +368,7 @@ coordinates and show the selected averaging interval only inside saved data.
 | MOV-1 | P1 | pending | decimated x-y and 3-D movies | no physics rerun, size/time budgets |
 | VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |
 | AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
-| SLIM-1 | P1 | review/blocked | PR #88 removes 8.04 MB; artifact migration and rewrite remain | 5.93-MiB rehearsal; remove `_static` test dependencies, then fsck/install/docs/tests |
+| SLIM-1 | P1 | review/blocked | corrected PR #88 removes 7.70 MB; artifact migration and rewrite remain | 5.93-MiB rehearsal; remove `_static` test dependencies, then fsck/install/docs/tests |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | pending | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
 
