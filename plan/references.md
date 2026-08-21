@@ -26,6 +26,8 @@ operators and converged observables.
   https://doi.org/10.1088/1361-6587/aad38a
 - Ball & Brunner, non-twisting flux tubes,
   https://arxiv.org/abs/2012.04785
+- Sánchez et al., stellarator gyrokinetics across flux-tube, full-surface, and
+  global domains, https://arxiv.org/abs/2106.02828
 - Schekochihin et al., gyrokinetic phase-space cascade,
   https://arxiv.org/abs/0806.1069
 - Morel et al., dynamic gyrokinetic large-eddy procedure,
@@ -33,8 +35,11 @@ operators and converged observables.
 
 Leverage: boundary-condition tests must use real stellarator geometry;
 perpendicular pile-up can be numerical and must be resolved before transport is
-trusted. LES-style closures are research options only after direct-resolution
-baselines exist.
+trusted. Sánchez et al. show that required flux-tube length is
+configuration-dependent and that short W7-X tubes can disagree even between
+field-line labels; scan both `alpha` and `npol` rather than treating `Nz` on one
+tube as a complete parallel convergence test. LES-style closures are research
+options only after direct-resolution baselines exist.
 
 ## Stochastic averages and stopping
 
@@ -95,19 +100,31 @@ convergence proof.
   https://docs.jax.dev/en/latest/gradient-checkpointing.html
 - Wang, Hu & Blonigan, least-squares shadowing,
   https://arxiv.org/abs/1204.0159
+- Acton et al., adjoint optimization of linear gyrokinetic microstability,
+  https://doi.org/10.1017/S0022377824000709
 
 Leverage: retain the finite discrete adjoint with rematerialization as GKX's one
 production nonlinear derivative. Validate its useful window for each physics
-class. Shadowing remains research-only until it passes sign, conditioning, and
-cost gates on GKX trajectories.
+class. Acton et al. provide an independent linear-adjoint benchmark and warn
+that nearly degenerate dominant modes can make a growth-rate gradient
+ambiguous; GKX's eigenpair residual/overlap/conditioning gates remain required.
+That linear result does not justify an implicit fixed-point adjoint for chaotic
+saturated turbulence. Shadowing remains research-only until it passes sign,
+conditioning, and cost gates on GKX trajectories.
 
 ## Stellarator optimization chain
 
 - Hirshman & Whitson, steepest-descent moment method for VMEC,
   https://doi.org/10.1063/1.864116
+- Kim et al., nonlinear stellarator turbulence optimization with GX/DESC,
+  https://arxiv.org/abs/2310.18842
 - VMEC/VMEX and GKX must expose the chain
   `boundary -> equilibrium -> Boozer/field line -> gyrokinetic window -> Q` with
   every local derivative checked against finite differences before composition.
+  Kim et al. are the direct nonlinear comparator: their noisy objective used
+  two-evaluation SPSA. GKX's finite-window adjoint should be compared against
+  matched SPSA/finite-difference cost and final independent saturated transport,
+  not against a noiseless optimization trace.
 
 ## SOLVAX relevance
 
