@@ -228,11 +228,15 @@ dry run instead:
 6. deletes merged remote topic branches after preserving the original refs in
    an offline `git bundle --all`.
 
-Dry-run result: 3,359 commits including the snapshot, `git fsck --full` clean,
-7.72 MiB pack, and a 2.2 MiB compressed current source tree. This meets the
+Dry-run result after aggressive garbage collection: 3,359 commits including
+the snapshot, `git fsck --full --strict` clean, a 5.93 MiB pack, and a 2.27 MB
+compressed current tree. This meets the
 sub-10-MiB clone target while preserving every commit and all core source
 history. Keeping every historical generated plot/test/tool blob is incompatible
 with that target.
+
+The verified backup, exact retention contract, identity policy, blockers, and
+coordinated cutover sequence are in `plan/history_rewrite.md`.
 
 Before the coordinated force push:
 
@@ -323,7 +327,7 @@ coordinates and show the selected averaging interval only inside saved data.
 | MOV-1 | P1 | pending | decimated x-y and 3-D movies | no physics rerun, size/time budgets |
 | VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |
 | AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
-| SLIM-1 | P1 | rehearsal | asset migration and history rewrite | recovery bundle + 7.72-MiB pack + fsck/install/docs/tests |
+| SLIM-1 | P1 | blocked | asset migration and history rewrite | 5.93-MiB rehearsal; remove `_static` test dependencies, then fsck/install/docs/tests |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | pending | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
 
@@ -332,4 +336,5 @@ coordinates and show the selected averaging interval only inside saved data.
 - PR inventory and audit findings: `plan/pr_audit.md`
 - literature and code survey: `plan/references.md`
 - chronological decisions and measurements: `plan/log.md`
+- exact recovery and force-push protocol: `plan/history_rewrite.md`
 - detailed legacy investigations retained pending consolidation: `plan/notes/`

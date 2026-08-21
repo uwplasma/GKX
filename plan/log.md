@@ -54,3 +54,22 @@
   ratios are 0.65 for `Q(ky)` and 0.36 for `Phi2(ky)`, both above the 0.10
   warning threshold. The check is labelled necessary, not sufficient; the
   paired `Nx`/`Ny` convergence campaign remains open.
+- Rebased PR #74 onto the CI-fix branch, removed its Claude co-author trailer
+  and generated-by footer, and preserved Rogerio as both author and committer.
+- Created and verified a complete 285,415,042-byte recovery bundle containing
+  178 refs. Its SHA-256 is
+  `d08b073f34886914512d9c6d459c08d3404a49f26b4b0df5388e73acfa837205`.
+- Repeated the source-complete rewrite with aggressive garbage collection: one
+  5.93-MiB pack, 15,925 objects, 3,359 commits, 29 refs, strict `fsck` clean,
+  and a 2,269,659-byte current-tree archive. The candidate is not publishable:
+  the release suite still reads a removed `_static` quasilinear JSON artifact.
+  `plan/history_rewrite.md` records the lossless recovery and cutover protocol.
+- Compared the documentation footprint with MHX and VMEX. MHX keeps 31 concise
+  pages and about 1.1 MB of documentation; VMEX keeps a tutorial/how-to/
+  reference/explanation hierarchy and about 3.3 MB of tracked documentation.
+  GKX's 35 MB tree and test-coupled result archive should adopt the same small,
+  generated-or-fetched evidence model rather than store campaign outputs.
+- Fixed the new PR #84 x64 CI fixture to honor its declared float32 scan
+  contract; the focused x64 horizon gate and all 15 explicit-step tests pass.
+- Fixed PR #86's mypy failure by narrowing imported `R`, `Z`, and toroidal-angle
+  profiles to explicit NumPy arrays; mypy, Ruff, and 122 relevant tests pass.
