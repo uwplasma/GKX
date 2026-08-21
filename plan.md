@@ -176,17 +176,20 @@ spectrum is better but also turns up/noises at the tail. Treat this as a failed
 resolution gate, not a physical result. Increasing `Ny` increases `ky_max` for
 fixed `Ly`, but nonlinear triads and dealiasing require joint `(Nx,Ny)` tests.
 
-For each retained spectrum require, for example,
+PR #87 adds a visible, fail-loud precheck to every ``Q(ky)`` and ``Phi^2(ky)``
+plot,
 
 \[
- f_{tail}=\frac{\sum_{k\in\text{top 20%}}|Q_k|}
- {\sum_k|Q_k|}<f_{max},\qquad
- \partial_{k_y}\log |Q_{k_y}|<0
+ R_{tail}=\frac{\max_{k_y\in\text{top 10%}}|S(k_y)|}
+ {\max_{k_y>0}|S(k_y)|}.
 \]
 
-over the resolved tail, plus convergence of integrated `Q`. The thresholds are
-to be calibrated against 96/128-point refinements, not chosen after seeing the
-answer.
+``R_tail >= 0.1`` warns that the cutoff is unresolved. This is a necessary
+screen, not an acceptance gate. On the supplied QA bundle over ``t=[100,200]``,
+``R_tail=0.65`` for heat flux and ``0.36`` for potential: both fail despite the
+smoother-looking potential plot. Acceptance still requires convergence of
+integrated ``Q`` and its spectrum over paired ``Nx``/``Ny`` refinements; the
+warning threshold must be calibrated against those refinements.
 
 ### R5 — CI and review governance
 
@@ -315,7 +318,7 @@ coordinates and show the selected averaging interval only inside saved data.
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
 | SAT-1 | P0 | pending | stationary suffix + Q/Wphi/Wg gates | synthetic + held-out long traces |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test |
-| RES-1 | P0 | pending | spectrum-tail warnings and convergence protocol | known resolved/unresolved fixtures |
+| RES-1 | P0 | review | PR #87 spectrum-tail warnings; convergence protocol pending | known resolved/unresolved fixtures + paired Nx/Ny scan |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | pending | decimated x-y and 3-D movies | no physics rerun, size/time budgets |
 | VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |

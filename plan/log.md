@@ -49,3 +49,8 @@
   decisions, 34 named-debt decisions, 9 superseded/remove decisions and 1 diff
   whose old objects are no longer reconstructible. Validation debt in a `D` row
   remains open even though the diff audit is complete.
+- Opened PR #87 with a high-`ky` cutoff warning on both transport and potential
+  spectra. For the supplied QA run over `t=[100,200]`, the top-10%-tail/peak
+  ratios are 0.65 for `Q(ky)` and 0.36 for `Phi2(ky)`, both above the 0.10
+  warning threshold. The check is labelled necessary, not sufficient; the
+  paired `Nx`/`Ny` convergence campaign remains open.
