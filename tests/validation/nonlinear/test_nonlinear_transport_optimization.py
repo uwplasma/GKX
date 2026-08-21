@@ -54,8 +54,32 @@ def _startup_payload() -> dict[str, object]:
     }
 
 
-def _ensemble_payload(*, case: str = "holdout", mean: float = 4.0) -> dict[str, object]:
+def _promotion_evidence(n_sources: int) -> dict[str, object]:
     return {
+        "source_artifacts": [
+            {
+                "path": f"raw/run_{index}.out.nc",
+                "sha256": f"{index + 1:064x}",
+                "time_max": 700.0,
+                "window_tmin": 350.0,
+                "window_tmax": 700.0,
+            }
+            for index in range(n_sources)
+        ],
+        "individual_stationarity_passed": True,
+        "autocorrelation_corrected_uncertainty_passed": True,
+        "timestep_convergence_passed": True,
+        "perpendicular_resolution_convergence_passed": True,
+        "parallel_resolution_convergence_passed": True,
+        "velocity_resolution_convergence_passed": True,
+        "spectral_convergence_passed": True,
+    }
+
+
+def _ensemble_payload(
+    *, case: str = "holdout", mean: float = 4.0, promotable: bool = False
+) -> dict[str, object]:
+    payload: dict[str, object] = {
         "kind": "nonlinear_window_ensemble_report",
         "case": case,
         "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
@@ -82,6 +106,9 @@ def _ensemble_payload(*, case: str = "holdout", mean: float = 4.0) -> dict[str, 
             },
         ],
     }
+    if promotable:
+        payload["promotion_evidence"] = _promotion_evidence(3)
+    return payload
 
 
 def _matched_audit_payload(
@@ -107,6 +134,7 @@ def _matched_audit_payload(
             {"metric": "optimized_replicated_ensemble_qualified", "passed": True},
             {"metric": "selected_optimized_equilibrium_audit", "passed": True},
         ],
+        "promotion_evidence": _promotion_evidence(2),
     }
 
 
@@ -193,7 +221,7 @@ def test_production_nonlinear_guard_blocks_optimized_window_without_matched_redu
         },
         optimized_equilibrium_artifacts={
             "optimized_equilibrium_final.json": _ensemble_payload(
-                case="optimized_equilibrium_final", mean=2.6
+                case="optimized_equilibrium_final", mean=2.6, promotable=True
             )
         },
     )
@@ -217,7 +245,7 @@ def test_production_nonlinear_guard_requires_three_matched_optimized_audits() ->
         },
         optimized_equilibrium_artifacts={
             "optimized_equilibrium_final.json": _ensemble_payload(
-                case="optimized_equilibrium_final", mean=2.6
+                case="optimized_equilibrium_final", mean=2.6, promotable=True
             )
         },
         matched_optimized_transport_artifacts={
@@ -249,13 +277,13 @@ def test_production_nonlinear_guard_promotes_only_with_three_matched_audits() ->
         },
         optimized_equilibrium_artifacts={
             "optimized_equilibrium_final.json": _ensemble_payload(
-                case="optimized_equilibrium_final", mean=2.6
+                case="optimized_equilibrium_final", mean=2.6, promotable=True
             ),
             "optimized_equilibrium_second.json": _ensemble_payload(
-                case="optimized_equilibrium_second", mean=2.7
+                case="optimized_equilibrium_second", mean=2.7, promotable=True
             ),
             "optimized_equilibrium_third.json": _ensemble_payload(
-                case="optimized_equilibrium_third", mean=2.8
+                case="optimized_equilibrium_third", mean=2.8, promotable=True
             ),
         },
         matched_optimized_transport_artifacts={
@@ -316,12 +344,15 @@ def test_production_nonlinear_guard_tool_writes_artifacts(tmp_path: Path) -> Non
     assert rc == 0
     assert out_png.exists()
     assert payload["safe_to_release"] is True
-    assert payload["production_nonlinear_optimization_promoted"] is True
-    assert payload["summary"]["qualifying_matched_optimized_transport_audits"] >= 3
-    assert payload["summary"]["qualifying_optimized_equilibrium_ensembles"] >= 3
+    assert payload["production_nonlinear_optimization_promoted"] is False
+    assert payload["summary"]["qualifying_matched_optimized_transport_audits"] == 0
+    assert payload["summary"]["qualifying_optimized_equilibrium_ensembles"] == 0
     assert payload["summary"]["total_matched_optimized_transport_audits"] >= 6
     assert payload["summary"]["failed_matched_optimized_transport_audits"] >= 3
-    assert payload["promotion_gate"]["blockers"] == []
+    assert payload["promotion_gate"]["blockers"] == [
+        "optimized_equilibrium_replicated_transport_window",
+        "matched_baseline_to_optimized_transport_reduction",
+    ]
 
 
 def test_matched_optimized_transport_report_requires_reduction_and_uncertainty() -> (
@@ -340,10 +371,7 @@ def test_matched_optimized_transport_report_requires_reduction_and_uncertainty()
     assert weak["qualifies_for_production_optimization"] is False
     assert "insufficient_matched_optimized_reduction" in weak["blockers"]
     assert "insufficient_matched_optimized_uncertainty_separation" in weak["blockers"]
-    assert (
-        gkx.matched_optimized_transport_report
-        is matched_optimized_transport_report
-    )
+    assert gkx.matched_optimized_transport_report is matched_optimized_transport_report
 
 
 def test_matched_transport_explicit_zero_uncertainty_overrides_fallback() -> None:
@@ -374,7 +402,7 @@ def test_strict_matched_comparison_schema_is_counted_as_negative_evidence() -> N
     assert "insufficient_matched_optimized_uncertainty_separation" in report["blockers"]
 
 
-def test_strict_t1500_candidate_ensembles_count_as_optimized_trace_evidence() -> None:
+def test_strict_t1500_candidate_ensembles_lack_auditable_promotion_evidence() -> None:
     report = optimized_equilibrium_transport_report(
         "docs/_static/vmec_qa_t1500_replicates/growth_from_strict_baseline_t1500_ensemble_gate.json",
         _ensemble_payload(
@@ -384,7 +412,42 @@ def test_strict_t1500_candidate_ensembles_count_as_optimized_trace_evidence() ->
 
     assert report["qualifies_as_long_post_transient_replicate"] is True
     assert report["optimized_equilibrium_marker"] is True
-    assert report["qualifies_for_production_optimization"] is True
+    assert report["promotion_evidence_ok"] is False
+    assert report["qualifies_for_production_optimization"] is False
+
+
+def test_optimized_transport_rejects_invalid_source_hash_and_open_spectral_gate() -> (
+    None
+):
+    payload = _ensemble_payload(case="optimized", promotable=True)
+    evidence = payload["promotion_evidence"]
+    assert isinstance(evidence, dict)
+    sources = evidence["source_artifacts"]
+    assert isinstance(sources, list)
+    assert isinstance(sources[0], dict)
+    sources[0]["sha256"] = "not-a-digest"
+    evidence["spectral_convergence_passed"] = False
+
+    report = optimized_equilibrium_transport_report("optimized.json", payload)
+
+    assert report["promotion_evidence_ok"] is False
+    assert report["promotion_evidence"]["source_artifacts_passed"] is False
+    assert report["promotion_evidence"]["invalid_source_artifacts"] == 1
+    assert report["promotion_evidence"]["missing_gates"] == [
+        "spectral_convergence_passed"
+    ]
+    assert report["qualifies_for_production_optimization"] is False
+
+
+def test_matched_transport_requires_auditable_promotion_evidence() -> None:
+    payload = _matched_audit_payload()
+    payload.pop("promotion_evidence")
+
+    report = matched_optimized_transport_report("matched.json", payload)
+
+    assert report["promotion_evidence_ok"] is False
+    assert "promotion_evidence_not_auditable" in report["blockers"]
+    assert report["qualifies_for_production_optimization"] is False
 
 
 def test_replicated_transport_report_fails_closed_on_unscoped_or_noisy_payloads() -> (
@@ -469,7 +532,7 @@ def test_optimized_equilibrium_marker_and_reduced_scope_reports_are_fail_closed(
 ):
     optimized = optimized_equilibrium_transport_report(
         "post_optimization_transport.json",
-        _ensemble_payload(case="final"),
+        _ensemble_payload(case="final", promotable=True),
     )
     nonoptimized = optimized_equilibrium_transport_report(
         "baseline.json", _ensemble_payload(case="baseline")
