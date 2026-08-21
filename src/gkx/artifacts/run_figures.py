@@ -1,26 +1,4 @@
-"""The figure set a completed run writes beside its own output.
-
-A run that finishes and leaves only a NetCDF bundle behind is a run whose
-result nobody has looked at. This module is what the executable calls once the
-artifacts are on disk, so the default outcome of ``gkx run ...`` is a directory
-containing both the data and the pictures of it. Nothing here decides physics;
-it decides which of the figure functions in
-:mod:`gkx.artifacts.transport_figures`, :mod:`gkx.artifacts.run_summary` and
-:mod:`gkx.artifacts.plotting` a given run kind can support, and what to name
-the files. A nonlinear NetCDF run gets the whole set: the flux traces, both
-spectra, the real-space potential and the flux tube it was integrated on, and
-the one-page summary that a reader opens first.
-
-Two rules shape the code. First, plotting runs *after* the science is already
-saved, so a failure here is never allowed to propagate: a headless machine, a
-broken matplotlib backend, or a figure function meeting an edge case it does
-not like must cost a picture, not a simulation. Every render is therefore
-wrapped and reported on stderr. Second, the CSV diagnostics sidecar carries
-time traces only -- the k-resolved spectra exist solely in the NetCDF bundle --
-so the spectra figures are skipped rather than attempted when the run wrote
-the sidecar form, which is a plain fact about the output format and not a
-failure worth warning about.
-"""
+"""Render run figures; plotting failures warn but never fail a simulation."""
 
 from __future__ import annotations
 
@@ -38,9 +16,6 @@ FLUX_TUBE_SUFFIX = "flux_tube_3d"
 SUMMARY_SUFFIX = "summary"
 PANEL_SUFFIX = "plot"
 
-# Ordered per run kind: the first artifact key that is present names the file
-# the figures are rendered from. Nonlinear prefers the NetCDF bundle because
-# it is the only form carrying spectra.
 _SOURCE_KEYS: dict[str, tuple[str, ...]] = {
     "nonlinear": ("out", "diagnostics", "summary"),
     "linear": ("summary",),
@@ -56,9 +31,7 @@ _WINDOW_NESTED_KEYS = (
     "average_window",
     "averaging_window",
     "saturation_window",
-    # What the stop policy actually writes: gkx.diagnostics.saturation names the
-    # bounds window_tmin/window_tmax inside a "saturation" table. Without this
-    # entry no run in the repository ever shaded the window it measured.
+    # The stop policy nests window_tmin/window_tmax here.
     "saturation",
 )
 
@@ -142,11 +115,7 @@ def _read_summary(path: str | Path | None) -> dict[str, Any] | None:
 
 
 def _render(out_path: Path, render: Callable[[Path], Any]) -> Path | None:
-    """Draw one figure, containing every failure mode it can have.
-
-    The matplotlib import is inside the guard on purpose: an unusable backend
-    fails at import time, and that is exactly the case this must survive.
-    """
+    """Draw one figure; contain imports, rendering and saving failures."""
 
     try:
         import matplotlib.pyplot as plt
@@ -181,6 +150,7 @@ def write_nonlinear_run_figures(
         flux_spectra_figure,
         heat_flux_time_figure,
         phi2_spectra_figure,
+        spectrum_cutoff_warnings,
     )
 
     source_path = Path(source)
@@ -200,6 +170,8 @@ def write_nonlinear_run_figures(
         )
     ]
     if spectra_available:
+        for message in spectrum_cutoff_warnings(source_path, window=window):
+            _warn(message)
         plan += [
             (
                 FLUX_SPECTRA_SUFFIX,
@@ -210,10 +182,7 @@ def write_nonlinear_run_figures(
                 _draw(phi2_spectra_figure, f"GKX potential spectra: {name}"),
             ),
         ]
-    # The final fields live in the *.big.nc companion, which only a NetCDF run
-    # that saved its state writes. Its absence is a fact about the output form,
-    # like the missing spectra above, so the panels are skipped rather than
-    # attempted and warned about.
+    # Final fields live in the optional *.big.nc companion.
     if has_final_field(source_path):
         plan += [
             (

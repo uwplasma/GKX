@@ -1,16 +1,6 @@
-"""Publication figures for the nonlinear transport outputs GKX already writes.
+"""Figures for saved or in-memory nonlinear transport diagnostics.
 
-Each figure function accepts either an in-memory ``SimulationDiagnostics``
-(duck-typed: only the attributes actually used are touched) or a path to a
-saved GKX output -- a NetCDF bundle (``*.out.nc``) or a CSV diagnostics
-sidecar (``*.diagnostics.csv`` / its ``*.summary.json`` / bare base path).
-The CSV sidecars carry time traces only; the spectra figures therefore
-require the NetCDF bundle and say so in their errors.
-
-These live apart from ``plotting.py`` because they read saved run output
-rather than benchmark or scan results: the only thing they borrow from the
-older module is its rule for stripping an artifact suffix back to the base
-path, so a caller can name any file of a bundle and get the same figure.
+CSV sidecars carry time traces; resolved spectra require a NetCDF bundle.
 """
 
 from __future__ import annotations
@@ -37,6 +27,9 @@ _HEAT_FLUX_LABEL = r"$Q/Q_{\mathrm{gB}}$"
 _PARTICLE_FLUX_LABEL = r"$\Gamma/\Gamma_{\mathrm{gB}}$"
 _KY_LABEL = r"$k_y \rho_i$"
 _KX_LABEL = r"$k_x \rho_i$"
+
+_KY_TAIL_FRACTION = 0.10
+_KY_TAIL_RATIO_LIMIT = 0.10
 
 _CSV_HAS_NO_SPECTRA = (
     "{name} needs k-resolved spectra, which only the NetCDF output bundle "
@@ -208,13 +201,7 @@ def _host_axes(
     figsize: tuple[float, float],
     sharex: bool = False,
 ) -> tuple[plt.Figure, np.ndarray, bool]:
-    """Return ``(fig, axes, owns_figure)`` for a standalone or embedded figure.
-
-    Every figure function here draws the same panels whether it owns its figure
-    or is one block of a larger composition, so the only thing that varies is
-    where the axes come from -- and whether the layout, the suptitle, and the
-    save are this function's business or the caller's.
-    """
+    """Return figure/axes and whether this call created them."""
 
     if axes is None:
         fig, created = plt.subplots(
@@ -237,20 +224,11 @@ def heat_flux_time_figure(
     out: str | Path | None = None,
     axes: Any = None,
 ) -> Tuple[plt.Figure, np.ndarray]:
-    """Stacked ``Q(t)`` and ``Gamma(t)`` traces with an optional averaging window.
+    """Plot ``Q(t)`` and ``Gamma(t)`` with an optional measured window.
 
-    ``source`` is a ``SimulationDiagnostics``, a NetCDF output bundle path
-    (``*.out.nc``), or a CSV diagnostics sidecar path. Per-species traces are
-    drawn when the diagnostics resolve two or more species. When ``window``
-    (``(tmin, tmax)``) is given, the window is shaded and the windowed
-    mean +/- SEM of the total flux is annotated on each panel; SEM here treats
-    samples as independent, so quote a proper correlation-time analysis for
-    numbers that leave the figure. ``out`` optionally saves the figure (which
-    stays open) via :func:`gkx.artifacts.figure_style.save_figure`.
-
-    Pass ``axes=`` (two axes, ``Q`` then ``Gamma``) to draw into a composition
-    such as :func:`gkx.artifacts.run_summary.nonlinear_summary_figure`; layout
-    and saving then belong to whoever owns the figure.
+    Sources may be diagnostics, NetCDF, or CSV. Figure SEM treats samples as
+    independent; published estimates need correlation-corrected uncertainty.
+    ``axes=`` embeds the two panels in another figure.
     """
 
     diag, _ky, _kx, _kind = _coerce_nonlinear_source(source)
@@ -298,8 +276,6 @@ def heat_flux_time_figure(
             g_mean, g_sem = _mean_sem(particle[mask])
             for ax in panel_axes:
                 ax.axvspan(tmin, tmax, color=GKX_COLORS["grey"], alpha=0.16, zorder=0)
-            # Lower right stays clear for a saturating flux trace: the linear
-            # phase hugs the lower left and the saturated level fills the top.
             annotate_reference(
                 ax_q,
                 rf"$\langle Q \rangle = {q_mean:.3g} \pm {q_sem:.2g}$"
@@ -357,19 +333,96 @@ def _window_average(values: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return np.mean(np.asarray(values, dtype=float)[mask], axis=0)
 
 
+def ky_spectrum_tail_ratio(ky: np.ndarray, spectrum: np.ndarray) -> float | None:
+    r"""Return the high-:math:`k_y` amplitude relative to the spectral peak.
+
+    The last 10% of positive ``ky`` modes must decay below the peak for the
+    cutoff to be credible. This ratio is only a necessary resolution check;
+    passing it does not replace an ``Nx``/``Ny`` convergence scan.
+    """
+
+    axis = np.asarray(ky, dtype=float).reshape(-1)
+    values = np.abs(np.asarray(spectrum, dtype=float).reshape(-1))
+    if axis.size != values.size:
+        raise ValueError("ky and spectrum must have the same length")
+    keep = (axis > 0.0) & np.isfinite(axis) & np.isfinite(values)
+    if np.count_nonzero(keep) < 4:
+        return None
+    order = np.argsort(axis[keep])
+    amplitudes = values[keep][order]
+    peak = float(np.max(amplitudes))
+    if peak <= 0.0:
+        return None
+    tail_count = max(1, int(np.ceil(_KY_TAIL_FRACTION * amplitudes.size)))
+    return float(np.max(amplitudes[-tail_count:]) / peak)
+
+
+def _annotate_ky_cutoff(
+    ax: plt.Axes, ky: np.ndarray, spectrum: np.ndarray
+) -> float | None:
+    """Mark a spectrum whose retained high-``ky`` tail has not decayed."""
+
+    ratio = ky_spectrum_tail_ratio(ky, spectrum)
+    if ratio is None or ratio < _KY_TAIL_RATIO_LIMIT:
+        return ratio
+    ax.text(
+        0.98,
+        0.97,
+        rf"$k_y$ cutoff unresolved" "\n" rf"tail / peak = {ratio:.2f}",
+        transform=ax.transAxes,
+        fontsize=8.5,
+        color=GKX_COLORS["vermillion"],
+        ha="right",
+        va="top",
+        bbox={
+            "boxstyle": "round,pad=0.32",
+            "facecolor": "white",
+            "edgecolor": GKX_COLORS["vermillion"],
+            "linewidth": 0.8,
+            "alpha": 0.95,
+        },
+    )
+    return ratio
+
+
+def spectrum_cutoff_warnings(
+    source: Any, *, window: tuple[float, float] | None = None
+) -> tuple[str, ...]:
+    """Explain unresolved ``ky`` cutoffs in a saved nonlinear result."""
+
+    diag, ky, _kx, kind = _coerce_nonlinear_source(source)
+    resolved = _resolved_spectra_or_error(
+        diag, name="spectrum cutoff check", kind=kind
+    )
+    if ky is None:
+        return ()
+    mask, _tmin, _tmax = _time_window(np.asarray(diag.t, dtype=float), window)
+    candidates = (
+        ("heat-flux", getattr(resolved, "HeatFlux_kyst", None)),
+        ("potential", getattr(resolved, "Phi2_kyt", None)),
+    )
+    messages: list[str] = []
+    for label, history in candidates:
+        if history is None:
+            continue
+        averaged = _window_average(history, mask)
+        spectrum = averaged.sum(axis=0) if averaged.ndim == 2 else averaged
+        ratio = ky_spectrum_tail_ratio(ky, spectrum)
+        if ratio is not None and ratio >= _KY_TAIL_RATIO_LIMIT:
+            messages.append(
+                f"{label} ky cutoff is unresolved: the highest 10% of retained "
+                f"positive-ky modes reach {ratio:.0%} of the spectral peak "
+                f"(warning threshold {_KY_TAIL_RATIO_LIMIT:.0%}). Increase Ny at "
+                "fixed Ly, then repeat matched Nx/Ny convergence; this warning is "
+                "necessary, not sufficient, for resolution."
+            )
+    return tuple(messages)
+
+
 def _annotate_with_headroom(
     ax: plt.Axes, text: str, *, loc: str = "upper left", fraction: float = 0.22
 ) -> None:
-    """Annotate a corner after clearing a strip for the box to sit in.
-
-    :func:`annotate_reference` draws an opaque box *inside* the axes, so it
-    lands on top of the data whenever the curve happens to run through that
-    corner -- and a spectrum peaks exactly where a fixed corner choice puts it
-    (``Q(k_y)`` rises into "upper right", ``Phi^2(k_y)`` dips into "lower
-    left"; both collided on the real Cyclone output). Expanding the limit on
-    the annotated side first guarantees the strip is empty whatever the data
-    does, rather than relying on a corner that only looks free for one run.
-    """
+    """Clear a strip, then place an annotation without covering data."""
 
     lo, hi = ax.get_ylim()
     upper = loc.startswith("upper")
@@ -391,21 +444,11 @@ def _annotate_with_headroom(
 
 
 def _label_log_ky_axis(ax: plt.Axes) -> None:
-    """Put readable plain-number labels on a sub-decade log ``ky`` axis.
-
-    A dealiased ``ky`` range frequently spans less than one decade (0.035 to
-    0.355 for a 32-point box), where the default log locator prints the single
-    label ``10^-1`` and the reader cannot tell which ``ky`` the spectrum peaks
-    at. Labelling a couple of minor ticks per decade in plain notation costs
-    nothing on a wide-range production run and rescues the narrow one.
-    """
+    """Label major/minor ticks on a narrow log-``ky`` interval."""
 
     if ax.get_xscale() != "log":
         return
     ax.xaxis.set_minor_locator(LogLocator(base=10.0, subs=(2.0, 5.0), numticks=12))
-    # One formatter shape for both tick levels: two independent ScalarFormatters
-    # pick their precision separately and print "0.05, 0.100, 0.20" down a
-    # single axis.
     plain = FuncFormatter(lambda value, _pos: f"{value:g}")
     ax.xaxis.set_major_formatter(plain)
     ax.xaxis.set_minor_formatter(plain)
@@ -444,6 +487,7 @@ def _plot_ky_spectrum(
     ax.axhline(0.0, color=GKX_COLORS["grey"], linewidth=0.8, alpha=0.6)
     ax.set_xlabel(_KY_LABEL)
     ax.set_ylabel(y_label)
+    _annotate_ky_cutoff(ax, ky, total)
 
 
 def _plot_kx_spectrum(
@@ -508,18 +552,10 @@ def flux_spectra_figure(
     axes: Any = None,
     panels: Any = None,
 ) -> Tuple[plt.Figure, np.ndarray]:
-    """Time-averaged ``Q(ky)`` and ``Q(kx)`` from resolved flux spectra.
+    """Plot window-averaged ``Q(ky)`` and ``Q(kx)``.
 
-    Reads ``HeatFlux_kyst``/``HeatFlux_kxst`` from a NetCDF output bundle
-    (``*.out.nc``) or an in-memory ``SimulationDiagnostics`` with resolved
-    spectra (pass ``ky=``/``kx=`` for the latter). The average is taken over
-    ``window`` (default: the second half of the run). The zonal ``ky = 0``
-    channel carries no flux and is omitted from the logarithmic ``ky`` axis.
-    Raises ``ValueError`` for CSV sidecar sources, which carry no spectra.
-
-    ``panels`` selects a subset of ``("ky", "kx")`` and ``axes`` supplies the
-    axes to draw them on, so one panel of this figure can be embedded in a
-    larger composition without a second copy of the averaging logic.
+    NetCDF or resolved in-memory diagnostics are accepted; CSV is not.
+    ``panels``/``axes`` support embedding selected panels.
     """
 
     diag, ky_file, kx_file, kind = _coerce_nonlinear_source(source)
@@ -624,6 +660,7 @@ def _draw_phi2_ky_panel(
         ax.set_yscale("log")
     ax.set_xlabel(_KY_LABEL)
     ax.set_ylabel(r"$\Phi^2(k_y)$")
+    _annotate_ky_cutoff(ax, ky_axis, ky_avg)
     _annotate_with_headroom(
         ax, rf"time average over $t \in [{tmin:.4g}, {tmax:.4g}]$", loc="upper left"
     )
@@ -727,17 +764,9 @@ def phi2_spectra_figure(
     axes: Any = None,
     panels: Any = None,
 ) -> Tuple[plt.Figure, np.ndarray]:
-    """Four-panel ``Phi^2`` spectra summary from resolved diagnostics.
+    """Plot ``Phi^2`` by ``ky``, ``kx``, 2-D map, and zonal share.
 
-    Panels: (a) time-averaged ``Phi^2(ky)``, (b) time-averaged ``Phi^2(kx)``,
-    (c) the time-averaged ``Phi^2(kx, ky)`` heatmap, and (d) the zonal
-    (``ky = 0``) versus nonzonal split of ``Phi^2`` over time. Sources follow
-    :func:`flux_spectra_figure`; CSV sidecars raise ``ValueError`` because
-    only the NetCDF output bundle (``*.out.nc``) carries spectra.
-
-    ``panels`` selects a subset of :data:`PHI2_PANEL_NAMES` and ``axes``
-    supplies the axes to draw them on, so a single panel can be embedded in a
-    larger composition without restating how it is built.
+    Sources and embedding follow :func:`flux_spectra_figure`.
     """
 
     diag, ky_file, kx_file, kind = _coerce_nonlinear_source(source)
