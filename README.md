@@ -485,30 +485,30 @@ derivative.
 
 ![Initial and optimized QA equilibria](docs/_static/qa_transport_equilibria.png)
 
-**A small shape step with a resolved transport effect.** Eight low-order
+**A small shape step with a preliminary transport effect.** Eight low-order
 boundary coefficients move; aspect ratio and mean iota change by less than
 0.05%, while the 3-D LCFS and LCFS Boozer `|B|` show where the equilibrium
 changes. The QA residual remains `O(10^-3)`; all panels use the same
 `|B|/<|B|>` color scale.
 
 The saturation state is detached and refreshed after accepted stages. The
-window is a local design derivative. Independent matched runs validate the
-accepted direction with replicated saturated trajectories.
+window is a local design derivative. Matched runs measure the accepted
+direction with independent trajectories.
 
 ![Matched QA heat-flux traces and convergence](docs/_static/qa_transport_reduction.svg)
 
-**The startup spike is excluded; the shaded window is measured.** Across 24
-nominal matched seeds, the result is a **12.26% reduction** (95% CI
-10.64--13.88%).
-The stationary 24x24 and `(Nl,Nm)=(6,12)` refinements give 8.50%
-(6.34--10.66%) and 12.32% (9.62--15.03%); all 16 pairs improve in both. The
-orange cross is the short 24x24 pilot rejected by its stationarity test.
+**The startup spike is excluded; the shaded window is measured.** The
+preliminary 12.26% reduction across 24 nominal pairs has a conditional 95% CI
+of 10.64--13.88%. It is **not statistically resolved**: 4 of 48 nominal traces
+fail the published per-trace final-drift test, and the compact outputs contain
+no resolved heat-flux spectra. Signed ensemble drifts had hidden these failures.
 
-This is one vacuum QA surface and field line, not a universal transport claim;
-broader claims still require converged post-transient heat-flux windows across
-surfaces and field lines. See the concise [autodiff
+The 24x24 and `(Nl,Nm)=(6,12)` means remain useful diagnostics, but 2 of 32
+traces fail the drift test in each refinement. Promotion requires stationary
+individual traces, autocorrelation-aware batches, resolved spectral tails, and
+grid/timestep convergence. See the concise [autodiff
 mathematics](docs/nonlinear_autodiff.rst) and the [equations, scripts, matched
-statistics, and resolution study](docs/stellarator_optimization.rst).
+statistics, audit, and next-run contract](docs/stellarator_optimization.rst).
 
 
 ## Parallelization

@@ -63,6 +63,11 @@ LABELS = {
     "v612": r"$(N_l,N_m)=(6,12)$",
 }
 
+# Final-drift gate from Oberparleiter et al., JPCS 775, 012009 (2016),
+# doi:10.1088/1742-6596/775/1/012009. Apply it to every trace: signed
+# ensemble averages can hide nonstationarity.
+MAX_FINAL_DRIFT_PERCENT = 20.0
+
 
 def _write_csv(path: Path, rows: list[dict]) -> None:
     with path.open("w", newline="", encoding="utf-8") as stream:
@@ -96,6 +101,7 @@ def trace_stats(path: Path) -> dict[str, float | int | str]:
         flux[time > midpoint].mean() - flux[time <= midpoint].mean()
     ) / flux.mean()
     trend = 100.0 * np.polyfit(time, flux, 1)[0] * (time[-1] - time[0]) / flux.mean()
+    stationary = abs(trend) <= MAX_FINAL_DRIFT_PERCENT
     return {
         "case": match[1],
         "design": match[2],
@@ -108,6 +114,7 @@ def trace_stats(path: Path) -> dict[str, float | int | str]:
         "window_in_tau": float((time[-1] - time[0]) / tau),
         "half_shift_percent": float(half_shift),
         "trend_percent": float(trend),
+        "stationary": int(stationary),
         "elapsed_seconds": float(data["elapsed_seconds"]),
     }
 
@@ -141,6 +148,11 @@ def summarize(rows: list[dict]) -> list[dict]:
         candidate_half = np.asarray(
             [float(candidate[s]["half_shift_percent"]) for s in seeds]
         )
+        stationary_traces = sum(
+            int(base[s]["stationary"]) + int(candidate[s]["stationary"])
+            for s in seeds
+        )
+        trace_count = 2 * len(seeds)
         nx, ny, nz, nl, nm, timestep = METADATA[case]
         output.append(
             {
@@ -194,6 +206,13 @@ def summarize(rows: list[dict]) -> list[dict]:
                         + [abs(float(candidate[s]["trend_percent"])) for s in seeds]
                     )
                 ),
+                "stationary_traces": stationary_traces,
+                "nonstationary_traces": trace_count - stationary_traces,
+                "all_traces_stationary": int(stationary_traces == trace_count),
+                # The compact campaign outputs contain Q_i(t), not resolved
+                # spectra. Transport promotion therefore remains fail-closed.
+                "resolved_spectra_available": 0,
+                "promotion_ready": 0,
                 "total_gpu_seconds": float(
                     sum(
                         float(base[s]["elapsed_seconds"])

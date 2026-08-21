@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import csv
 import json
+from pathlib import Path
 
-from support.paths import REPO_ROOT
+from support.paths import REPO_ROOT, load_artifact_tool
 import py_compile
 import re
 from types import SimpleNamespace
@@ -34,6 +35,19 @@ def _transport_summary() -> dict[str, dict[str, float]]:
             }
             for row in csv.DictReader(stream)
         }
+
+
+def test_qa_transport_stationarity_gate_is_per_trace(tmp_path: Path) -> None:
+    mod = load_artifact_tool("build_qa_transport_figures")
+    time = np.linspace(1100.0, 1500.0, 401)
+    drift = 10.0 + 3.0 * (time - time[0]) / (time[-1] - time[0])
+    path = tmp_path / "nominal_baseline_seed000.npz"
+    np.savez(path, time=time, heat_flux=drift, elapsed_seconds=1.0)
+
+    report = mod.trace_stats(path)
+
+    assert abs(float(report["trend_percent"])) > mod.MAX_FINAL_DRIFT_PERCENT
+    assert report["stationary"] == 0
 
 
 def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
@@ -160,8 +174,9 @@ def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None
     assert "docs/_static/vmex_qa_solved_boundary_boozer_panel.png" not in readme
     assert "docs/_static/stellarator_itg_optimization_comparison.png" not in readme
     assert "docs/_static/stellarator_itg_optimization_uq.png" not in readme
-    assert "independent matched runs validate" in normalized_readme.lower()
-    assert "12.26% reduction" in normalized_readme
+    assert "independent matched runs validate" not in normalized_readme.lower()
+    assert "preliminary 12.26% reduction" in normalized_readme.lower()
+    assert "not statistically resolved" in normalized_readme.lower()
     assert "replicated" in normalized_readme.lower()
     assert "post-saturation" in normalized_readme.lower()
 
@@ -196,8 +211,8 @@ def test_reduced_surface_comparison_is_not_current_primary_optimization_figure()
     assert "screening diagnostics" in re.sub(r"\s+", " ", docs)
 
 
-def test_matched_qa_transport_is_statistically_resolved_and_converged() -> None:
-    """Freeze the Sokal-estimated matched-run validation of Kim et al.'s task."""
+def test_matched_qa_transport_evidence_fails_closed() -> None:
+    """Keep the preliminary campaign reproducible without promoting it."""
     rows = _transport_summary()
     assert set(rows) == {
         "nominal",
@@ -226,71 +241,29 @@ def test_matched_qa_transport_is_statistically_resolved_and_converged() -> None:
             assert seeds == set(range(pairs))
         assert all(float(trace["tau"]) > 0.0 for trace in case_traces)
         assert all(float(trace["neff"]) > 0.0 for trace in case_traces)
+        assert all(
+            int(trace["stationary"])
+            == int(abs(float(trace["trend_percent"])) <= 20.0)
+            for trace in case_traces
+        )
+        assert row["stationary_traces"] == sum(
+            int(trace["stationary"]) for trace in case_traces
+        )
+        assert row["nonstationary_traces"] == len(case_traces) - row[
+            "stationary_traces"
+        ]
+        assert row["resolved_spectra_available"] == 0.0
+        assert row["promotion_ready"] == 0.0
 
     nominal = rows["nominal"]
     assert nominal["pairs"] == 24
     assert nominal["positive_pairs"] == nominal["pairs"]
     assert nominal["ci95_low_percent"] > 0.0
     assert nominal["minimum_window_in_tau"] > 10.0
-    assert abs(nominal["baseline_half_shift_percent"]) < 2.0 * nominal[
-        "baseline_half_shift_sem_percent"
-    ]
-    assert abs(nominal["candidate_half_shift_percent"]) < 2.0 * nominal[
-        "candidate_half_shift_sem_percent"
-    ]
-
-    for case in ("dt04", "dt025"):
-        assert rows[case]["ci95_low_percent"] > 0.0
-        assert (
-            abs(rows[case]["reduction_percent"] - nominal["reduction_percent"])
-            < 5.0
-        )
-
-    perp20 = rows["perp20"]
-    short_perp24 = rows["perp24"]
-    long_perp24 = rows["perp24long"]
-    assert perp20["pairs"] == 16
-    assert perp20["ci95_low_percent"] > 0.0
-    assert short_perp24["ci95_low_percent"] < 0.0
-    assert short_perp24["baseline_half_shift_percent"] > 2.0 * short_perp24[
-        "baseline_half_shift_sem_percent"
-    ]
-    assert long_perp24["pairs"] == 16
-    assert long_perp24["positive_pairs"] == long_perp24["pairs"]
-    assert long_perp24["ci95_low_percent"] > 0.0
-    assert long_perp24["minimum_window_in_tau"] > 10.0
-    assert abs(long_perp24["baseline_half_shift_percent"]) < 2.0 * long_perp24[
-        "baseline_half_shift_sem_percent"
-    ]
-    assert abs(long_perp24["candidate_half_shift_percent"]) < 2.0 * long_perp24[
-        "candidate_half_shift_sem_percent"
-    ]
-    assert max(
-        perp20["ci95_low_percent"], long_perp24["ci95_low_percent"]
-    ) <= min(perp20["ci95_high_percent"], long_perp24["ci95_high_percent"])
-    for key in ("baseline_mean", "candidate_mean"):
-        relative_difference = abs(perp20[key] - long_perp24[key]) / max(
-            perp20[key], long_perp24[key]
-        )
-        assert relative_difference < 5.5e-2
-
-    for case in ("z16", "z32"):
-        assert rows[case]["ci95_low_percent"] > 0.0
-        assert rows[case]["ci95_low_percent"] < nominal["ci95_high_percent"]
-        assert rows[case]["ci95_high_percent"] > nominal["ci95_low_percent"]
-
-    coarse_velocity = rows["v36"]
-    refined_velocity = rows["v612"]
-    assert any(
-        abs(coarse_velocity[key] - nominal[key]) / nominal[key] > 0.15
-        for key in ("baseline_mean", "candidate_mean")
-    )
-    assert refined_velocity["pairs"] == 16
-    assert refined_velocity["ci95_low_percent"] > 0.0
-    assert refined_velocity["ci95_low_percent"] < nominal["ci95_high_percent"]
-    assert refined_velocity["ci95_high_percent"] > nominal["ci95_low_percent"]
-    for key in ("baseline_mean", "candidate_mean"):
-        assert abs(refined_velocity[key] - nominal[key]) / nominal[key] < 5.0e-2
+    assert nominal["stationary_traces"] == 44
+    assert nominal["nonstationary_traces"] == 4
+    assert nominal["all_traces_stationary"] == 0.0
+    assert rows["z32"]["all_traces_stationary"] == 1.0
 
 
 def test_solved_wout_candidate_gate_passes_valid_qa_branch() -> None:
