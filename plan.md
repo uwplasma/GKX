@@ -117,10 +117,9 @@ Required gate:
  t_{window,max}\le t_{diag,last}\le t_{max}+\epsilon_{step}.
 \]
 
-Fix in a dedicated PR: cap the terminal accepted step, retain the terminal
-diagnostic independent of output stride, reduce the check interval from 1,024
-to a measured value (start at 128), and replace the regression test that
-currently blesses state/diagnostic mismatch.
+PR #84 implements the contract: it caps the terminal accepted step, keeps the
+terminal diagnostic under output striding, rejects horizon overshoot, and checks
+every 128 steps. The interval remains provisional pending the PERF-1 campaign.
 
 ### R2 — the present saturation interval includes nonlinear overshoot
 
@@ -312,8 +311,8 @@ coordinates and show the selected averaging interval only inside saved data.
 | ID | Priority | Deliverable | Gate |
 | --- | --- | --- | --- |
 | CI-1 | P0 | PR #81 mypy fix | all CI green; no LOC regression |
-| GOV-1 | P0 | remove plan from main; keep replacement plan PR open | plan absent from main, branch recoverable |
-| RUN-1 | P0 | exact state/diagnostic horizon and short check chunks | R1 equations above |
+| GOV-1 | P0 | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
+| RUN-1 | P0 | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
 | SAT-1 | P0 | stationary suffix + Q/Wphi/Wg gates | synthetic + held-out long traces |
 | GEO-1 | P0 | physical VMEC tube coordinates | non-axisymmetric numerical closure test |
 | RES-1 | P0 | spectrum-tail warnings and convergence protocol | known resolved/unresolved fixtures |

@@ -20,4 +20,12 @@
   without migration.
 - Replaced the stale append-only roadmap with current evidence. Old prose and
   patch snapshots remain recoverable in Git history and the pre-rewrite bundle.
-
+- Opened PR #83 to remove the accidentally merged plan from `main`; this PR #82
+  remains the branch-only living roadmap and must not be merged.
+- Opened PR #84 to make the state, fields, restart, and terminal diagnostic share
+  the exact physical-time horizon and to check saturation every 128 steps. Its
+  broad nonlinear/runtime/release suite passes; the stopping statistic itself
+  is deliberately unchanged pending the replicated validation campaign.
+- Recorded an independent pre-existing validation defect: a float32 eager/JIT
+  trajectory test demands `rtol=1e-12` although its observed relative difference
+  is about `8e-8` on both the PR branch and untouched `main`.
