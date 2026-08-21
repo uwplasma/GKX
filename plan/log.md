@@ -118,3 +118,13 @@
   `200--250`; the highest retained positive-`ky` mode was the flux-spectrum
   maximum. These are diagnostic pilots, not timing baselines or converged
   transport results.
+- The `48^2 x 32`, `t=250` resolution rung also failed the production
+  stop rule: its selected `t=80.3--250` window has 17.7% autocorrelation-corrected
+  relative SEM. `Wphi` and `Wg` pass the half-window drift check, showing why an
+  energy plateau cannot replace flux uncertainty. The final four positive
+  `ky` modes carry 49.7% of late heat flux and the cutoff mode carries 13.1%,
+  so the grid fails perpendicular convergence even if the trace is extended.
+- Audited the movie generator independently. It reruns a fixed-step RK4
+  trajectory instead of sampling the production solve, stores full 3-D fields,
+  and reconstructs a circular torus without VMEC coordinates. MOV-1 must record
+  only decimated `x-y` and physical tube-skin cuts during the source run.

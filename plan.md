@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-21 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#90.
+and open PRs #74 and #81--#91.
 
 ## Rules
 
@@ -159,6 +159,14 @@ Q-only variants remove the >10% errors only by saving about 13% median runtime.
 Fresh runs therefore record both energy guards and spectra before SAT-1 changes
 the production default.
 
+The first fresh VMEC pilots confirm that the guards and resolution gate cannot
+be collapsed into one scalar. At `32x32x32`, the means over successive
+50-time-unit intervals rose from `Q=0.147` to `2.45` and `7.25`; `Wg` rose from
+`3.62` to `68.97` and `271.08`. At `48x48x32`, the current production decision
+over `t=80.3--250` still reports 17.7% corrected relative SEM. `Wphi` and `Wg`
+pass the same half-window stationarity check, but that does not override the
+flux uncertainty. Both runs used shared GPUs and are not performance baselines.
+
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
 out of 48; the `dt=0.04`, perpendicular 24, and velocity `(6,12)` refinements
@@ -208,6 +216,13 @@ screen, not an acceptance gate. On the supplied QA bundle over ``t=[100,200]``,
 smoother-looking potential plot. Acceptance still requires convergence of
 integrated ``Q`` and its spectrum over paired ``Nx``/``Ny`` refinements; the
 warning threshold must be calibrated against those refinements.
+
+The fresh `48x48x32` pilot extends the positive retained range from
+`ky*rho=0.476` to `0.714`, but the last four modes still carry 49.7% of the
+late positive-`ky` heat flux and the cutoff mode carries 13.1%. The `32x32x32`
+cutoff mode carries 36.5%. Neither rung is a converged transport calculation;
+continue to `64x64`, then `96x96` if the tail still fails, preserving restarts
+so statistical duration can be extended without repeating spin-up.
 
 ### R5 — CI and review governance
 
@@ -352,6 +367,12 @@ Movies must reuse lightweight decimated runtime cuts rather than rerun the
 physics. Store only an `x-y` cut and a `(y,z)` tube skin for about 60 frames;
 encode a small WebP/MP4. Both the still and movie must use physical VMEC
 coordinates and show the selected averaging interval only inside saved data.
+The present `build_turbulence_movie.py` violates this contract: it launches a
+new fixed-step RK4 trajectory, retains a full `phi(x,y,z)` volume per frame,
+and reconstructs a circular torus from only `q`, `epsilon`, `R0`, and `nfp`.
+Existing scalar/spectral NetCDF output cannot reconstruct field phases, so a
+physical movie requires opt-in decimated cuts during the original run (or a
+restart continuation), not post-hoc animation of the inspected file.
 
 ## Work queue
 
