@@ -86,7 +86,7 @@ MERLO_CASE_III_GATE_TOLERANCES = {
 # because Nm=24 puts the whole averaging window past the onset of Hermite
 # recurrence. The honest gate is therefore GKX's converged value plus the
 # stability conditions that make it a measurement at all. See
-# plan/notes/merlo_resolution_audit.md and docs/testing.rst.
+# The branch-only roadmap's Merlo audit and docs/testing.rst.
 MERLO_CASE_III_GKX_CONVERGED = {
     "protocol": (
         "Nm=144, Nl=4, Nz=32, dt=0.0025 a/v_i, t_max=60 a/v_i, "
@@ -2561,7 +2561,7 @@ def _main_miller_panel(argv: list[str]) -> int:
                 "references": [
                     "Merlo et al. 2016 shaped-tokamak collisionless GAM benchmark, Case III",
                     "W7-X stella/GENE benchmark 2022 for zonal-flow observable conventions",
-                    "plan/notes/merlo_resolution_audit.md -- resolution and estimator audit",
+                    "research-roadmap Merlo note -- resolution and estimator audit",
                 ],
             },
             indent=2,
