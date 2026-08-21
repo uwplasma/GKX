@@ -90,27 +90,36 @@ def _field_line_tube(geometry: Any, samples: int, *, turns: float = 1.5):
     Z = getattr(geometry, "cylindrical_Z_profile", None)
     zeta = getattr(geometry, "toroidal_angle_profile", None)
     if R is not None and Z is not None and zeta is not None:
-        physical = True
         source = np.linspace(0.0, 1.0, len(R))
         target = np.linspace(0.0, 1.0, samples)
-        R = np.interp(target, source, np.asarray(R, dtype=float))
-        Z = np.interp(target, source, np.asarray(Z, dtype=float))
-        zeta = np.interp(target, source, np.unwrap(np.asarray(zeta, dtype=float)))
-        centre = np.stack([R * np.cos(zeta), R * np.sin(zeta), Z], axis=-1)
-        major = float(np.mean(R))
-        minor = max(float(np.max(np.hypot(R - major, Z - np.mean(Z)))), 1.0e-6)
+        R_line = np.interp(target, source, np.asarray(R, dtype=float))
+        Z_line = np.interp(target, source, np.asarray(Z, dtype=float))
+        zeta_line = np.interp(
+            target, source, np.unwrap(np.asarray(zeta, dtype=float))
+        )
+        centre = np.stack(
+            [R_line * np.cos(zeta_line), R_line * np.sin(zeta_line), Z_line],
+            axis=-1,
+        )
+        major = float(np.mean(R_line))
+        Z_mean = float(np.mean(Z_line))
+        minor = max(float(np.max(np.hypot(R_line - major, Z_line - Z_mean))), 1.0e-6)
+        radial_R = R_line - major
+        radial_Z = Z_line - Z_mean
     else:
-        physical = False
         theta = np.linspace(-turns * np.pi, turns * np.pi, samples)
-        zeta = q * theta
+        zeta_line = q * theta
         radius = major + minor * np.cos(theta)
-        centre = np.stack([radius * np.cos(zeta), radius * np.sin(zeta),
+        centre = np.stack([radius * np.cos(zeta_line), radius * np.sin(zeta_line),
                            minor * np.sin(theta)], axis=-1)
+        radial_R = minor * np.cos(theta)
+        radial_Z = minor * np.sin(theta)
     tangent = np.gradient(centre, axis=0)
     tangent /= np.linalg.norm(tangent, axis=-1, keepdims=True) + 1e-30
-    radial_R = np.asarray(R) - major if physical else minor * np.cos(theta)
-    radial_Z = np.asarray(Z) - np.mean(Z) if physical else minor * np.sin(theta)
-    outward = np.stack([np.cos(zeta) * radial_R, np.sin(zeta) * radial_R, radial_Z], axis=-1)
+    outward = np.stack(
+        [np.cos(zeta_line) * radial_R, np.sin(zeta_line) * radial_R, radial_Z],
+        axis=-1,
+    )
     outward -= tangent * np.sum(outward * tangent, axis=-1, keepdims=True)
     outward /= np.linalg.norm(outward, axis=-1, keepdims=True) + 1e-30
     binormal = np.cross(tangent, outward)
