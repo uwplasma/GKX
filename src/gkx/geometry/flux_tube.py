@@ -49,6 +49,9 @@ class FluxTubeGeometryData:
     bessel_bmag_power: float = 0.0
     source_model: str = "sampled"
     theta_closed_interval: bool = False
+    cylindrical_R_profile: np.ndarray | None = None
+    cylindrical_Z_profile: np.ndarray | None = None
+    toroidal_angle_profile: np.ndarray | None = None
 
     def tree_flatten(self):
         children = (
@@ -152,6 +155,9 @@ class FluxTubeGeometryData:
             gb0_profile=self.gb0_profile[:-1],
             jacobian_profile=self.jacobian_profile[:-1],
             grho_profile=self.grho_profile[:-1],
+            cylindrical_R_profile=_trim_optional_profile(self.cylindrical_R_profile),
+            cylindrical_Z_profile=_trim_optional_profile(self.cylindrical_Z_profile),
+            toroidal_angle_profile=_trim_optional_profile(self.toroidal_angle_profile),
             theta_closed_interval=False,
         )
 
@@ -353,6 +359,17 @@ def _read_imported_profile(variables: Any, *names: str) -> np.ndarray:
     raise KeyError(names[0])
 
 
+def _optional_imported_profile(variables: Any, *names: str) -> np.ndarray | None:
+    try:
+        return _read_imported_profile(variables, *names)
+    except KeyError:
+        return None
+
+
+def _trim_optional_profile(profile: np.ndarray | None) -> np.ndarray | None:
+    return None if profile is None else profile[:-1]
+
+
 def _infer_root_theta_closed_interval(theta: np.ndarray, variables: Any) -> bool:
     """Infer whether a root-level ``*.eik.nc`` file includes terminal theta."""
 
@@ -468,6 +485,12 @@ def _pack_imported_geometry_data(
     rmaj = _read_imported_scalar(geom_vars, "rmaj", "Rmaj", default=1.0)
     aminor = _read_imported_scalar(geom_vars, "aminor", default=0.0)
     epsilon = aminor / rmaj if abs(rmaj) > 0.0 else 0.0
+    q = _read_imported_scalar(geom_vars, "q", default=0.0)
+    toroidal_angle = _optional_imported_profile(geom_vars, "zeta_plot")
+    theta_pest = _optional_imported_profile(geom_vars, "theta_PEST")
+    if toroidal_angle is None and theta_pest is not None:
+        center = _read_imported_scalar(geom_vars, "zeta_center", default=0.0)
+        toroidal_angle = center + q * theta_pest
     return FluxTubeGeometryData(
         theta=jnp.asarray(selection.theta),
         gradpar_value=gradpar_val,
@@ -482,7 +505,7 @@ def _pack_imported_geometry_data(
         gb0_profile=jnp.asarray(gbdrift0),
         jacobian_profile=jnp.asarray(jacobian),
         grho_profile=jnp.asarray(_read_imported_profile(geom_vars, "grho")),
-        q=_read_imported_scalar(geom_vars, "q", default=0.0),
+        q=q,
         s_hat=_read_imported_scalar(geom_vars, "shat", default=0.0),
         epsilon=float(epsilon),
         R0=float(rmaj),
@@ -498,6 +521,9 @@ def _pack_imported_geometry_data(
         bessel_bmag_power=0.0,
         source_model="imported-netcdf",
         theta_closed_interval=selection.theta_closed_interval,
+        cylindrical_R_profile=_optional_imported_profile(geom_vars, "Rplot"),
+        cylindrical_Z_profile=_optional_imported_profile(geom_vars, "Zplot"),
+        toroidal_angle_profile=toroidal_angle,
     )
 
 

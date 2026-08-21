@@ -1082,6 +1082,9 @@ def test_runtime_artifact_geometry_writer_applies_imported_grid_defaults(
         nfp=5,
         theta_closed_interval=True,
         source_model="imported-netcdf",
+        cylindrical_R_profile=np.linspace(5.0, 6.0, theta_closed.size),
+        cylindrical_Z_profile=np.linspace(-0.5, 0.5, theta_closed.size),
+        toroidal_angle_profile=np.linspace(-1.0, 1.0, theta_closed.size),
     )
     cfg = SimpleNamespace(
         grid=GridConfig(Nx=4, Ny=4, Nz=17, Lx=6.28, Ly=6.28, boundary="periodic"),
@@ -1102,6 +1105,8 @@ def test_runtime_artifact_geometry_writer_applies_imported_grid_defaults(
         group.values["bmag"], np.asarray(geom.bmag_profile[:-1], dtype=np.float32)
     )
     assert geom_out.theta_closed_interval is False
+    np.testing.assert_allclose(group.values["Rplot"], geom.cylindrical_R_profile[:-1])
+    np.testing.assert_allclose(group.values["zeta_plot"], geom.toroidal_angle_profile[:-1])
     assert float(group.values["kxfac"]) == pytest.approx(1.25)
 
 
