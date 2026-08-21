@@ -73,3 +73,31 @@
   contract; the focused x64 horizon gate and all 15 explicit-step tests pass.
 - Fixed PR #86's mypy failure by narrowing imported `R`, `Z`, and toroidal-angle
   profiles to explicit NumPy arrays; mypy, Ruff, and 122 relevant tests pass.
+- Opened draft PR #88 after a literal-consumer audit of all 1,201 tracked
+  `docs/_static` files. It removes 197 unreferenced generated assets, 8,035,642
+  bytes, and 6,944 text lines while retaining 1,004 used assets. Strict Sphinx,
+  117 release gates, both size manifests, and 103 artifact/physics tests pass.
+- Re-reduced all 208 raw QA campaign NPZ files (104 matched pairs). Signed
+  ensemble drift had hidden individual failures. Under the published 20%
+  final-drift gate the nominal set is 44/48 stationary; `dt=0.04` is 13/16,
+  perpendicular 12 is 7/8, perpendicular 20 is 27/32, perpendicular 24 is 6/8,
+  long perpendicular 24 is 30/32, `Nz=16` is 6/8, `Nz=32` is 8/8, velocity
+  `(3,6)` is 6/8, and velocity `(6,12)` is 30/32. No resolved spectra were
+  saved. Draft PR #89 changes the public 12.26% result to preliminary and makes
+  the audit fail closed. Its release-test phrase mismatch was fixed in
+  `330e07a9` after GitHub CI exposed it.
+- The separately advertised strict-QA `t=1500` raw NetCDF directory is absent.
+  Retained generated trace CSVs end near `t=400`, so those summaries cannot be
+  reconstructed or promoted. Their recorded matched results are negative:
+  growth 0.60%, quasilinear -0.49%, and nonlinear-window -0.25%.
+- Opened draft PR #90, stacked on #89, to require auditable promotion evidence:
+  unique raw paths and SHA-256 hashes, observed time/window bounds, individual
+  stationarity, autocorrelation-corrected uncertainty, timestep, perpendicular,
+  parallel, velocity, and spectral convergence. The production guard remains
+  safe but unpromoted: zero qualifying optimized ensembles and matched audits.
+  Focused tests (154), Ruff, mypy, strict Sphinx, and all release manifests pass;
+  installable source decreases from 96,465 to 96,463 lines.
+- GitHub CI found PR #86 nine lines over the no-regression source budget. Commit
+  `17312709` condensed redundant snapshot prose without losing its FFT or
+  normalization contract; the branch now has 96,464 source lines. Mypy, Ruff,
+  the architecture gate, and 122 geometry/plot/runtime tests pass.

@@ -45,7 +45,28 @@ baselines exist.
 Leverage: remove burn-in by stationarity testing; account for autocorrelation;
 use batches of several correlation times; guard late drift; quote uncertainty,
 not raw output count. GKX should compare its IAT estimator against the paper's
-five-correlation-time batch means.
+five-correlation-time batch means. The executable contract is: regression
+stationarity first, estimate the 1/e correlation time, use non-overlapping
+batches of length `5*tau_c`, target 5--10% corrected relative SEM, and require
+the final-window drift to remain within 20% of the mean. Manual review remains
+necessary when stationarity fails.
+
+## Nonlinear convergence and validation hierarchy
+
+- Frei et al., gyrokinetic Z-pinch turbulence with gyromoments and advanced
+  collisions, JPP 89 (2023),
+  https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gyrokinetic-simulations-of-plasma-turbulence-in-a-zpinch-using-a-momentbased-approach-and-advanced-collision-operators/037F92D5250416CA7E7EDAC5A0480FB0
+- White, validation of nonlinear gyrokinetic transport models using turbulence
+  measurements, JPP 85 (2019),
+  https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/validation-of-nonlinear-gyrokinetic-transport-models-using-turbulence-measurements/D659391275AB4B71D37BEF8BB2241D45
+
+Leverage: a converged mean alone does not establish moment convergence or
+dynamics; retain spectra and refine the Hermite--Laguerre tail around the
+transport-carrying scales. Organize validation hierarchically: operator
+identities, manufactured/numerical convergence, standard physics benchmarks,
+code-to-code comparison, then stellarator transport with sensitivity and
+synthetic diagnostics. GKX's promotion gate therefore requires both integrated
+transport and resolved spatial/velocity spectra.
 
 ## Discrete adjoints and chaotic sensitivity
 

@@ -4,7 +4,8 @@ This branch is the living plan and audit log. It is intentionally not part of
 `main`. The previous long-form log remains in Git history; this file records the
 current evidence, open defects, and next decisions.
 
-Last reconciled: 2026-08-21 against `main` at `5f3ab32e` (merged PR #80).
+Last reconciled: 2026-08-21 against `main` at `5f3ab32e` (merged PR #80)
+and open PRs #74 and #81--#90.
 
 ## Rules
 
@@ -30,10 +31,10 @@ independent replicated validation.
 | --- | --- | --- | --- |
 | Hermite--Laguerre electrostatic GK | streaming, drifts, mirror, drive, fields, collisions, nonlinear bracket | many unit identities; selected linear/collision benchmarks | usable, validation matrix incomplete |
 | Electromagnetic GK | `A_parallel`, `B_parallel`, finite-beta paths | selected derivative/device gates | experimental outside tested lanes |
-| VMEC/Boozer geometry | imported and differentiable paths | selected finite-beta and state-control checks | geometry-to-plot path is wrong |
+| VMEC/Boozer geometry | imported and differentiable paths | selected finite-beta and state-control checks | main plot is synthetic; physical renderer is in PR #86 |
 | Linear derivatives | implicit eigenpair VJP with residual gates | AD/FD tests and selected GX comparisons | promoted on certified simple branches |
 | Nonlinear derivative | checkpointed discrete adjoint of a finite post-saturation window | reduced AD/FD and device-parity tests | local finite-window derivative only |
-| QA transport reduction | optimization scripts and preliminary paired runs | resolution/seed evidence is incomplete | do not claim statistically resolved reduction |
+| QA transport reduction | optimization scripts and preliminary paired runs | 44/48 nominal traces pass the per-trace drift gate; spectra absent | 12.26% is preliminary, not statistically resolved |
 | Saturation stopping | IAT-corrected SEM and stationarity guards | implementation tests | production policy has defects below |
 | CPU/GPU | JAX CPU/GPU and experimental sharding | selected kernels/cases | no general scaling or GX-competitive claim |
 
@@ -150,6 +151,15 @@ Acceptance requires a minimum number of independent samples, bounded trend in
 IAT and five-correlation-time batch means on the same traces. Scan at most 32
 candidate suffixes so selection remains `O(N log N)` or better.
 
+PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
+than to a signed ensemble mean. The nominal campaign has 44 stationary traces
+out of 48; the `dt=0.04`, perpendicular 24, and velocity `(6,12)` refinements
+have 13/16, 6/8, and 30/32. No compact campaign output contains resolved spectra,
+so the published 12.26% reduction is preliminary. PR #90 makes this fail-closed
+in the release contract: promotion requires hashed raw sources, observed time
+limits and averaging windows, and explicit stationarity, autocorrelation,
+timestep, perpendicular, parallel, velocity, and spectral gates.
+
 ### R3 — the plotted stellarator tube is a synthetic torus
 
 `gkx.flux_tube_3d` uses
@@ -238,6 +248,14 @@ with that target.
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
 
+PR #88 is the first non-destructive tree cut. It deletes 197 generated
+documentation assets with no literal tracked consumer: 8,035,642 bytes and
+6,944 text lines. It retains all 1,004 referenced assets, reduces the tracked
+tree from 45.98 to 37.94 MB, and passes strict Sphinx plus repository,
+release-artifact, and focused physics gates. The remaining 26.90 MB
+`docs/_static` tree must become generated previews plus hash-addressed release
+artifacts; deleting it blindly would break documented evidence and tests.
+
 Before the coordinated force push:
 
 - publish the immutable bundle and SHA-256 checksum;
@@ -245,8 +263,8 @@ Before the coordinated force push:
 - make docs build without local `_static` results, using generated or fetched
   assets with verified hashes;
 - normalize Rogerio's old Wisc/lowercase identities to the IST identity;
-- remove five Claude co-author trailers and relabel three `codex/...` merge
-  messages; keep the other human authors unchanged;
+- remove known Claude co-author trailers and relabel three Codex-labelled
+  commits; keep the other human authors unchanged;
 - rehearse clone, install, docs, tests, tags, open PR rebases, and branch rules;
 - announce that every existing clone must be recloned or hard-rebased.
 
@@ -283,6 +301,20 @@ transport-reduction claim requires the paired 95% interval below zero at two
 overlapping resolutions, stable sign under timestep refinement, and acceptable
 spectral tails. The optimization derivative is evaluated on training windows;
 the final claim uses independent seeds and windows.
+
+Every promotable run record must include
+
+```text
+path, sha256, seed, dt/CFL, Nx, Ny, Nz, Nl, Nm,
+t_max, window_tmin, window_tmax, tau_int, batch_length,
+Q_mean, Q_sem_corr, drift_Q, drift_Wphi, drift_Wg, spectral_tail
+```
+
+No ensemble average may cancel a failing member. Require all individual
+stationarity gates, at least four non-overlapping batches of length
+`5*tau_c`, a final-window drift below 20% of the mean, and a reported 5--10%
+autocorrelation-corrected relative SEM target. Failed traces remain in the
+artifact and are not silently discarded.
 
 ## Performance campaign
 
@@ -321,13 +353,14 @@ coordinates and show the selected averaging interval only inside saved data.
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
 | SAT-1 | P0 | pending | stationary suffix + Q/Wphi/Wg gates | synthetic + held-out long traces |
-| GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test |
+| GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; source budget restored |
 | RES-1 | P0 | review | PR #87 spectrum-tail warnings; convergence protocol pending | known resolved/unresolved fixtures + paired Nx/Ny scan |
+| VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | pending | decimated x-y and 3-D movies | no physics rerun, size/time budgets |
 | VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |
 | AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
-| SLIM-1 | P1 | blocked | asset migration and history rewrite | 5.93-MiB rehearsal; remove `_static` test dependencies, then fsck/install/docs/tests |
+| SLIM-1 | P1 | review/blocked | PR #88 removes 8.04 MB; artifact migration and rewrite remain | 5.93-MiB rehearsal; remove `_static` test dependencies, then fsck/install/docs/tests |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | pending | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
 
