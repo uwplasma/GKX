@@ -111,7 +111,7 @@
   `Q`, `Wphi`, `Wg`, and spectral evidence.
 - Opened draft PR #91 with compact fixed-horizon saturation-audit output: time,
   adaptive step, `Q`, `Wphi`, `Wg`,
-  `kx`, `ky`, and resolved spectra. A local `16^2 x 16`, `t=100` CPU pilot took
+  `kx`, `ky`, and resolved spectra. A local `16^2 x 48`, `t=100` CPU pilot took
   66.3 s and failed saturation with `Wg` still rising. A shared RTX A4000
   `32^2 x 48`, `t=250` pilot took 469.8 s and was also pre-saturation: mean `Q`
   rose from 0.147 over `t=100--150` to 2.45 over `150--200` and 7.25 over
@@ -138,6 +138,9 @@
   The exact production decision is now the only stopping method used by the
   audit utility, 76 focused analysis/saturation tests and all 117 release tests
   pass, and installed source decreases by 21 lines.
+- PR #91 exposes random seed, `dt`, `dt_max`, and CFL controls for matched
+  ensembles without deck copies. A real `8^3` CPU smoke confirmed seed 31,
+  `dt_max=0.04`, `cfl=0.8`, the built state shape, and persisted metadata.
 - Audited authorship over the complete selected rewrite history. Seven objects
   carry AI markers: four duplicated Claude co-author trailers and three Codex
   branch/message labels. The rewrite rehearsal removes those markers and maps
