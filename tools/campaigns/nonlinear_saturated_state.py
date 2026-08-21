@@ -47,6 +47,10 @@ def main() -> int:
     parser.add_argument("--nl", type=int, default=None)
     parser.add_argument("--nm", type=int, default=None)
     parser.add_argument("--t-max", type=float, default=None)
+    parser.add_argument("--dt", type=float, default=None)
+    parser.add_argument("--dt-max", type=float, default=None)
+    parser.add_argument("--cfl", type=float, default=None)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--sample-stride", type=int, default=None)
     parser.add_argument("--diagnostics-stride", type=int, default=None)
     parser.add_argument(
@@ -118,6 +122,12 @@ def main() -> int:
     time_override = {}
     if args.t_max is not None:
         time_override["t_max"] = args.t_max
+    if args.dt is not None:
+        time_override["dt"] = args.dt
+    if args.dt_max is not None:
+        time_override["dt_max"] = args.dt_max
+    if args.cfl is not None:
+        time_override["cfl"] = args.cfl
     if args.run_to is not None:
         time_override["run_to"] = args.run_to
     if time_override:
@@ -130,6 +140,10 @@ def main() -> int:
             geometry=dataclasses.replace(
                 runtime.geometry, vmec_file=str(args.vmec_file.resolve())
             ),
+        )
+    if args.seed is not None:
+        runtime = dataclasses.replace(
+            runtime, init=dataclasses.replace(runtime.init, random_seed=args.seed)
         )
 
     time_cfg = runtime.time
@@ -294,6 +308,12 @@ def main() -> int:
             # while every number still looked plausible.
             adaptive_dt=float(np.nanmedian(steps_dt)),
             method=str(time_cfg.method),
+            Nx=grid_shape["Nx"],
+            Ny=grid_shape["Ny"],
+            Nz=grid_shape["Nz"],
+            Nl=n_laguerre,
+            Nm=n_hermite,
+            random_seed=int(runtime.init.random_seed),
             tau_ac=(
                 float(report["tau_ac"])
                 if report.get("tau_ac") is not None
@@ -312,6 +332,7 @@ def main() -> int:
         "previous_t_end": previous_t_end,
         "grid": grid_shape,
         "grid_override": grid_override,
+        "random_seed": int(runtime.init.random_seed),
         "t_max": float(time_cfg.t_max),
         "fixed_dt": bool(time_cfg.fixed_dt),
         "adaptive_dt": {
