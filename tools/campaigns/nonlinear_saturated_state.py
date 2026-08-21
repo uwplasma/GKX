@@ -145,6 +145,7 @@ def main() -> int:
         "this may be marked unsaturated because the purpose is to finish it",
     )
     parser.add_argument("--state-out", type=Path, default=None)
+    parser.add_argument("--progress", action="store_true")
     parser.add_argument(
         "--trace-out",
         type=Path,
@@ -216,6 +217,7 @@ def main() -> int:
             diagnostics_stride=args.diagnostics_stride,
             return_state=True,
             diagnostics=True,
+            show_progress=args.progress,
         )
 
     started = time.time()
