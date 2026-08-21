@@ -263,6 +263,7 @@ def main() -> int:
     wphi = np.asarray(diagnostics.Wphi_t, dtype=float)
     wg = np.asarray(diagnostics.Wg_t, dtype=float)
     steps_dt = np.asarray(diagnostics.dt_t, dtype=float)
+    absolute_times = previous_t_end + times
 
     report = saturation_report(
         times,
@@ -271,7 +272,8 @@ def main() -> int:
         require_growth_from_seed=args.initial_state is None,
     )
     print(
-        f"\nran {times.size} samples to t={times[-1]:.1f} in {elapsed:.1f}s", flush=True
+        f"\nran {times.size} samples to t={absolute_times[-1]:.1f} in {elapsed:.1f}s",
+        flush=True,
     )
     print(
         f"  adaptive dt: min={np.nanmin(steps_dt):.4g} "
@@ -293,7 +295,7 @@ def main() -> int:
     if args.trace_out is not None:
         grid = build_spectral_grid(runtime.grid)
         payload = {
-            "time": times,
+            "time": absolute_times,
             "dt": steps_dt,
             "kx": np.asarray(grid.kx),
             "ky": np.asarray(grid.ky),
@@ -303,6 +305,7 @@ def main() -> int:
             "Nl": np.asarray(n_laguerre),
             "Nm": np.asarray(n_hermite),
             "elapsed_seconds": np.asarray(elapsed),
+            "previous_t_end": np.asarray(previous_t_end),
         }
         resolved = diagnostics.resolved
         if resolved is not None:
@@ -325,7 +328,7 @@ def main() -> int:
             args.state_out,
             state=np.asarray(result.state),
             saturated=report["saturated"],
-            t_end=previous_t_end + times[-1],
+            t_end=absolute_times[-1],
             # The step the trajectory was actually produced with. Without it the
             # consumer has to be told by hand, and a mismatched --dt silently
             # rescales its time axis: every t/tau_ac it reports would be wrong
@@ -362,7 +365,7 @@ def main() -> int:
                 "Wphi": float(phi),
                 "Wg": float(g),
             }
-            for t, q, phi, g in zip(times, flux, wphi, wg)
+            for t, q, phi, g in zip(absolute_times, flux, wphi, wg)
         ],
     }
     if args.output is not None:
