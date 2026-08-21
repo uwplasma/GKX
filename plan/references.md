@@ -41,6 +41,10 @@ baselines exist.
 - Oberparleiter et al., uncertainty estimation and a stopping rule in nonlinear
   gyrokinetic simulations,
   https://publications.lib.chalmers.se/records/fulltext/247070/local_247070.pdf
+- Vaezi & Holland, quantifying temporal uncertainties of nonlinear turbulence
+  simulations, https://arxiv.org/abs/1902.10879
+- Rezaeiravesh et al., in-situ estimation of time-averaging uncertainties,
+  https://arxiv.org/abs/2310.08676
 
 Leverage: remove burn-in by stationarity testing; account for autocorrelation;
 use batches of several correlation times; guard late drift; quote uncertainty,
@@ -50,6 +54,11 @@ stationarity first, estimate the 1/e correlation time, use non-overlapping
 batches of length `5*tau_c`, target 5--10% corrected relative SEM, and require
 the final-window drift to remain within 20% of the mean. Manual review remains
 necessary when stationarity fails.
+Vaezi--Holland specifically warns that gyrokinetic flux uncertainty becomes
+harder near the critical gradient, so SAT-1 must be checked across drive, not
+only on the present `tprim=3` case. The low-memory in-situ ACF update is a
+future bounded-memory option; adopt it only if it reproduces offline batch/IAT
+uncertainties on GKX traces.
 
 ## Nonlinear convergence and validation hierarchy
 
@@ -59,6 +68,11 @@ necessary when stationarity fails.
 - White, validation of nonlinear gyrokinetic transport models using turbulence
   measurements, JPP 85 (2019),
   https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/validation-of-nonlinear-gyrokinetic-transport-models-using-turbulence-measurements/D659391275AB4B71D37BEF8BB2241D45
+- Mandell et al., GX GPU-native gyrokinetics, including nonlinear filter and
+  parallel-resolution convergence studies,
+  https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA
+- Faber et al., stellarator microinstabilities and turbulence at low magnetic
+  shear, https://doi.org/10.1017/S0022377818001022
 
 Leverage: a converged mean alone does not establish moment convergence or
 dynamics; retain spectra and refine the Hermite--Laguerre tail around the
@@ -67,6 +81,11 @@ identities, manufactured/numerical convergence, standard physics benchmarks,
 code-to-code comparison, then stellarator transport with sensitivity and
 synthetic diagnostics. GKX's promotion gate therefore requires both integrated
 transport and resolved spatial/velocity spectra.
+GX also makes the end-damping amplitude/width part of the convergence surface,
+not an invisible fixed constant. Low-shear stellarators can require multiple
+field-line turns to resolve saturation structures, so `npol=1`/`nperiod=1`
+must be scanned with `Nz`; a one-turn `Nz` refinement alone is not a parallel
+convergence proof.
 
 ## Discrete adjoints and chaotic sensitivity
 
