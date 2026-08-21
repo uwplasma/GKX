@@ -11,11 +11,8 @@ import numpy as np
 
 from gkx.artifacts.figure_style import figure_style, save_figure
 
-#: The shipped nonlinear TOMLs set ``diagnostic_norm = "rho_star"``, so the
-#: field carried through the movie/snapshot pipeline is the rho-star-normalized
-#: potential, not ``ephi/T_i``. Labelling it ``ephi/T_i`` overstates the
-#: amplitude by ``1/rho_star`` and once made a physically saturated run look
-#: like a blow-up.
+#: Shipped decks use ``diagnostic_norm = "rho_star"``; this is the
+#: rho-star-normalized potential, not ``ephi/T_i``.
 PHI_LABEL: str = r"$(e\phi/T_i)\,/\,\rho_*$"
 
 
@@ -24,16 +21,9 @@ def potential_real_space(
 ) -> np.ndarray:
     """Transform a spectral potential ``phi(ky, kx, z)`` to real ``phi(x, y, z)``.
 
-    Matches the transform the nonlinear bracket itself uses
-    (``operators/nonlinear/brackets.py``): ``ky`` is the compressed real-FFT
-    axis and only its first ``nyc = Ny // 2 + 1`` entries are physical, while
-    ``kx`` is a full complex axis. Treating both as full axes instead -- the
-    obvious guess -- silently mixes the redundant negative-``ky`` half back in
-    and leaves a "real-space" field with a few percent imaginary part.
-
-    Accepts either the full Hermitian ``ky`` layout (first axis of length
-    ``Ny``) or the compressed non-negative block (length ``Ny // 2 + 1``; pass
-    ``ny_full`` to disambiguate when supplying the compressed form).
+    ``ky`` uses the nonlinear bracket's compressed real-FFT layout; ``kx`` is
+    a full complex axis. Accepts either the full Hermitian ``ky`` array or its
+    non-negative block; pass ``ny_full`` with the compressed form.
     """
 
     phi = np.asarray(phi_spectral)
