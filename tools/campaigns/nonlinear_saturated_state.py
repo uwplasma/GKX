@@ -13,11 +13,11 @@ projector enforcing the reality and fixed-mode constraints, and a dealias mask.
 Rather than reimplement any of that, this tool drives ``run_runtime_nonlinear``
 -- the same entry point the CLI uses -- and saves the final state.
 
-Saturation is then judged on the **production heat-flux trace**, not on a proxy:
-the run is accepted only if the late-time flux has stopped trending and the
-window spans enough correlation times to mean anything, reusing the tau_ac
-definition from ``heat_flux_autocorrelation.py``. A state that fails is written
-out anyway, flagged, so the failure is inspectable rather than silent.
+Saturation is judged by the production stop policy on the production heat-flux
+trace, with ``Wphi`` as its stationarity guard. ``Wg`` is reported as an
+additional audit guard without changing the runtime decision. A state that
+fails is written out anyway, flagged, so the failure is inspectable rather than
+silent.
 """
 
 from __future__ import annotations
@@ -28,83 +28,8 @@ import json
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
 
 import numpy as np
-
-
-def integrated_autocorrelation_time(
-    signal: np.ndarray, dt: float
-) -> tuple[float, bool]:
-    """Integrated autocorrelation time, truncated at the first zero crossing.
-
-    Same definition as ``heat_flux_autocorrelation.py`` so the numbers here are
-    comparable to the ones measured on the committed traces. The boolean reports
-    whether the trace was long enough to resolve its own correlation time.
-    """
-
-    fluctuation = np.asarray(signal, dtype=float)
-    fluctuation = fluctuation - fluctuation.mean()
-    if fluctuation.size < 4 or not np.any(fluctuation):
-        return 0.0, False
-    size = int(2 ** np.ceil(np.log2(2 * fluctuation.size)))
-    spectrum = np.fft.rfft(fluctuation, n=size)
-    correlation = np.fft.irfft(spectrum * np.conj(spectrum), n=size)[: fluctuation.size]
-    rho = correlation / correlation[0]
-    negative = np.nonzero(rho < 0.0)[0]
-    cut = int(negative[0]) if negative.size else rho.size
-    tau = float(np.trapezoid(rho[:cut], dx=dt)) if cut > 1 else 0.0
-    return tau, bool(cut < rho.size)
-
-
-def saturation_report(
-    times: np.ndarray,
-    flux: np.ndarray,
-    *,
-    min_tau_multiples: float,
-    require_growth_from_seed: bool = True,
-) -> dict[str, Any]:
-    """Judge saturation on the production heat-flux trace."""
-
-    times = np.asarray(times, dtype=float)
-    flux = np.asarray(flux, dtype=float)
-    finite = np.isfinite(flux)
-    times, flux = times[finite], flux[finite]
-    if times.size < 8:
-        return {"saturated": False, "reason": "trace too short to judge"}
-
-    half = times.size // 2
-    late_t, late_q = times[half:], flux[half:]
-    dt = float(np.median(np.diff(late_t))) if late_t.size > 1 else 0.0
-    tau, resolved = integrated_autocorrelation_time(late_q, dt)
-    span = float(late_t[-1] - late_t[0])
-    windows = span / tau if tau > 0 else float("inf")
-
-    quarter = max(1, late_q.size // 4)
-    drift = abs(
-        late_q[-quarter:].mean() - late_q[-2 * quarter : -quarter].mean()
-    ) / max(abs(late_q[-quarter:].mean()), 1e-300)
-    grown = float(flux[-1]) / max(
-        abs(float(flux[: max(1, flux.size // 20)].mean())), 1e-300
-    )
-
-    checks = {
-        "flux_is_finite": bool(np.all(np.isfinite(flux))),
-        "stopped_trending": bool(drift < 0.25),
-        "grew_from_seed": bool(grown > 10.0 or not require_growth_from_seed),
-        "tau_resolved": bool(resolved),
-        "window_long_enough": bool(windows >= min_tau_multiples),
-    }
-    return {
-        "saturated": all(checks.values()),
-        "checks": checks,
-        "tau_ac": tau,
-        "window_in_tau_ac": windows,
-        "late_drift": float(drift),
-        "growth_over_start": float(grown),
-        "growth_from_seed_required": bool(require_growth_from_seed),
-        "late_mean_flux": float(late_q.mean()),
-    }
 
 
 def main() -> int:
@@ -136,7 +61,6 @@ def main() -> int:
         default=None,
         help="override [geometry].vmec_file after loading the deck",
     )
-    parser.add_argument("--min-tau-multiples", type=float, default=10.0)
     parser.add_argument(
         "--initial-state",
         type=Path,
@@ -161,14 +85,32 @@ def main() -> int:
     print(f"devices: {jax.devices()}", flush=True)
 
     from gkx import build_spectral_grid, run_runtime_nonlinear
+    from gkx.diagnostics.saturation import (
+        SaturationStopConfig,
+        saturation_stop_decision,
+    )
     from gkx.workflows.runtime.toml import load_runtime_from_toml
 
     runtime, raw = load_runtime_from_toml(args.toml)
     grid_override = {
-        k: v
-        for k, v in (("Nx", args.nx), ("Ny", args.ny), ("Nz", args.nz))
-        if v is not None
+        k: v for k, v in (("Nx", args.nx), ("Ny", args.ny)) if v is not None
     }
+    if args.nz is not None:
+        grid_override["Nz"] = args.nz
+        if runtime.grid.ntheta is not None:
+            periods = runtime.grid.zp
+            if periods is None:
+                periods = (
+                    2 * int(runtime.grid.nperiod) - 1
+                    if runtime.grid.nperiod is not None
+                    else 1
+                )
+            if args.nz % periods:
+                raise SystemExit(
+                    f"--nz={args.nz} must be divisible by the field-line period "
+                    f"factor {periods}"
+                )
+            grid_override["ntheta"] = args.nz // periods
     if grid_override:
         runtime = dataclasses.replace(
             runtime, grid=dataclasses.replace(runtime.grid, **grid_override)
@@ -191,8 +133,14 @@ def main() -> int:
         )
 
     time_cfg = runtime.time
+    spectral_grid = build_spectral_grid(runtime.grid)
+    grid_shape = {
+        "Nx": int(spectral_grid.kx.size),
+        "Ny": int(spectral_grid.ky.size),
+        "Nz": int(spectral_grid.z.size),
+    }
     print(
-        f"case: {args.toml.name}  grid={grid_override or 'as shipped'}  "
+        f"case: {args.toml.name}  grid={grid_shape}  "
         f"t_max={time_cfg.t_max}  fixed_dt={time_cfg.fixed_dt}  "
         f"dt={time_cfg.dt} dt_max={time_cfg.dt_max} cfl={time_cfg.cfl}",
         flush=True,
@@ -230,9 +178,9 @@ def main() -> int:
             len(runtime.species),
             n_laguerre,
             n_hermite,
-            runtime.grid.Ny,
-            runtime.grid.Nx,
-            runtime.grid.Nz,
+            grid_shape["Ny"],
+            grid_shape["Nx"],
+            grid_shape["Nz"],
         )
         if continuation_state.shape != expected_shape:
             raise SystemExit(
@@ -265,12 +213,18 @@ def main() -> int:
     steps_dt = np.asarray(diagnostics.dt_t, dtype=float)
     absolute_times = previous_t_end + times
 
-    report = saturation_report(
+    stop_config = SaturationStopConfig(
+        rel_sem=float(time_cfg.saturation_rel_sem),
+        min_window=time_cfg.saturation_min_window,
+    )
+    report = saturation_stop_decision(
         times,
         flux,
-        min_tau_multiples=args.min_tau_multiples,
-        require_growth_from_seed=args.initial_state is None,
+        guard=wphi,
+        config=stop_config,
     )
+    wg_report = saturation_stop_decision(times, flux, guard=wg, config=stop_config)
+    report["Wg_guard_stationary"] = wg_report["guard_stationary"]
     print(
         f"\nran {times.size} samples to t={absolute_times[-1]:.1f} in {elapsed:.1f}s",
         flush=True,
@@ -280,25 +234,30 @@ def main() -> int:
         f"median={np.nanmedian(steps_dt):.4g} max={np.nanmax(steps_dt):.4g}",
         flush=True,
     )
-    for name, passed in report.get("checks", {}).items():
-        print(f"  {'PASS' if passed else 'FAIL'}  {name}", flush=True)
-    if "tau_ac" in report:
+    if report.get("tau_ac") is not None:
+        tau_ac = float(report["tau_ac"])
+        window_span = float(report["window_span"])
         print(
-            f"  tau_ac={report['tau_ac']:.2f}  "
-            f"window={report['window_in_tau_ac']:.1f} tau_ac  "
-            f"late drift={report['late_drift']:.1%}  "
-            f"mean flux={report['late_mean_flux']:.4e}",
+            f"  window={report['window_tmin']:.2f}--{report['window_tmax']:.2f}  "
+            f"tau_ac={tau_ac:.2f}  window/tau_ac={window_span / tau_ac:.1f}  "
+            f"rel_sem={report['rel_sem']:.1%}  mean flux={report['mean']:.4e}",
             flush=True,
         )
+    print(
+        f"  Wphi stationary={report['guard_stationary']}  "
+        f"Wg stationary={report['Wg_guard_stationary']}",
+        flush=True,
+    )
+    if report["reasons"]:
+        print(f"  failed gates: {', '.join(report['reasons'])}", flush=True)
     print(f"  -> {'SATURATED' if report['saturated'] else 'NOT SATURATED'}", flush=True)
 
     if args.trace_out is not None:
-        grid = build_spectral_grid(runtime.grid)
         payload = {
             "time": absolute_times,
             "dt": steps_dt,
-            "kx": np.asarray(grid.kx),
-            "ky": np.asarray(grid.ky),
+            "kx": np.asarray(spectral_grid.kx),
+            "ky": np.asarray(spectral_grid.ky),
             "heat_flux": flux,
             "Wphi": wphi,
             "Wg": wg,
@@ -335,18 +294,23 @@ def main() -> int:
             # while every number still looked plausible.
             adaptive_dt=float(np.nanmedian(steps_dt)),
             method=str(time_cfg.method),
-            tau_ac=float(report.get("tau_ac", float("nan"))),
+            tau_ac=(
+                float(report["tau_ac"])
+                if report.get("tau_ac") is not None
+                else float("nan")
+            ),
         )
         print(f"state written: {args.state_out}", flush=True)
 
     summary = {
         "kind": "nonlinear_saturated_state",
-        "claim_level": "production_adaptive_stepper_saturation_check",
+        "claim_level": "production_saturation_stop_policy_audit",
         "case": args.toml.name,
         "initial_state": None
         if args.initial_state is None
         else str(args.initial_state),
         "previous_t_end": previous_t_end,
+        "grid": grid_shape,
         "grid_override": grid_override,
         "t_max": float(time_cfg.t_max),
         "fixed_dt": bool(time_cfg.fixed_dt),
