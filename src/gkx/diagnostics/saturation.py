@@ -12,11 +12,8 @@ That module scores a window after the fact against promotion gates; this one is
 asked the same question repeatedly by a running solver, on a trace that grows
 under it, and has to answer "not yet" with a reason the runtime can record.
 
-The Sokal estimator here was promoted from
-``tools/campaigns/heat_flux_autocorrelation.py`` so the runtime stop check and
-the post-hoc campaign tooling share one definition. It duplicates
-``integrated_autocorrelation_time`` in ``gkx.diagnostics.analysis``, which is on
-a validated gate path; consolidating the two is deliberately left alone here.
+The Sokal estimator is shared with post-hoc analysis, so runtime and campaign
+uncertainties use one definition.
 """
 
 from __future__ import annotations
@@ -27,39 +24,7 @@ import math
 
 import numpy as np
 
-
-def sokal_autocorrelation_time(
-    signal: np.ndarray, dt: float
-) -> tuple[float, int, np.ndarray]:
-    """Integrated autocorrelation time, truncated at the first zero crossing.
-
-    Returns ``(tau_ac, lag_index_of_crossing, rho)``. ``tau_ac`` is in the same
-    units as ``dt``. A trace that never crosses zero is truncated at its end and
-    the caller is told, because that means the trace is too short to resolve its
-    own correlation time -- the one case where a number here would be a lie.
-
-    A trace with no fluctuation at all is told the same way. Callers read
-    "resolved" as ``cut < rho.size``, so the degenerate return has to place the
-    cut at the end rather than at lag zero: a constant signal has no correlation
-    time to resolve, and reporting one resolved is the same lie in the other
-    direction.
-    """
-
-    fluctuation = signal - signal.mean()
-    variance = float(fluctuation @ fluctuation)
-    if variance <= 0.0:
-        return 0.0, 1, np.zeros(1)
-
-    # Full unbiased-by-count autocorrelation via FFT (O(n log n)).
-    size = int(2 ** np.ceil(np.log2(2 * fluctuation.size)))
-    spectrum = np.fft.rfft(fluctuation, n=size)
-    correlation = np.fft.irfft(spectrum * np.conj(spectrum), n=size)[: fluctuation.size]
-    rho = correlation / correlation[0]
-
-    negative = np.nonzero(rho < 0.0)[0]
-    cut = int(negative[0]) if negative.size else rho.size
-    tau = float(np.trapezoid(rho[:cut], dx=dt)) if cut > 1 else 0.0
-    return tau, cut, rho
+from gkx.diagnostics.analysis import sokal_autocorrelation_time
 
 
 @dataclass(frozen=True)
@@ -274,6 +239,7 @@ def saturation_stop_decision(
         "guard_stationary": guard_stationary,
         "config": asdict(cfg),
     }
+
 
 __all__ = [
     "SaturationStopConfig",
