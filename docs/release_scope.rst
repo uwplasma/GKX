@@ -93,14 +93,13 @@ score.
        multi-surface/multi-alpha optimization, calibrated absolute
        quasilinear flux prediction, or converged nonlinear heat-flux gradients.
    * - Stellarator optimization examples
-     - release-ready as reduced examples plus selected optimized-equilibrium audit
+     - release-ready as reduced examples; nonlinear transport validation open
      - The examples demonstrate differentiable reduced ITG objectives, UQ, and
        AD/finite-difference checks. The nonlinear objective is a reduced
        window-estimator path, not a nonlinear turbulence-gradient path. The
-       selected optimized QA equilibrium now has a converged post-transient
-       seed/timestep transport-window audit, so the production guard is closed
-       for that scoped audit. Broad multi-surface nonlinear optimization and
-       nonlinear turbulence gradients remain unpromoted. A VMEC-JAX
+       selected optimized QA summaries lack hashed raw sources, per-trace
+       stationarity, and resolved spectra, so the production guard remains
+       unpromoted. A VMEC-JAX
        transport-gradient diagnostic now also shows a measurable local
        boundary gradient for the aspect-6 QA restart and a solved-gate
        projected line-search bracket: the best accepted reduced transport
@@ -149,17 +148,16 @@ Do not make these claims from the current artifacts:
   the tracked broad matrix campaign failed all selected candidate families and
   is recorded as negative evidence in
   ``docs/_static/broad_nonlinear_transport_matrix_negative_evidence.json``;
-- production nonlinear optimization without converged post-transient audits of
-  optimized equilibria; the selected QA optimized-equilibrium audit is the
-  current scoped exception;
+- production nonlinear optimization without auditable raw post-transient runs,
+  per-trace stationarity, autocorrelation-aware uncertainty, and resolution
+  plus spectral convergence;
 - treating the historical strict QA full-sweep matched audit that stopped near
   ``t=400`` as a nonlinear holdout or optimized-transport success; it remains
   launch-contract evidence only;
-- treating the newly admitted true ``t=1500`` growth-objective,
-  quasilinear-objective, or nonlinear-window-objective QA candidate triplets as
-  an optimization-success or quasilinear-calibration claim. The matched strict
-  QA baseline now passes the same ``t=[1100,1500]`` postprocess, and all three
-  candidate comparisons fail the ``4%`` reduction gate: growth gives only
+- treating the historical summaries labelled ``t=1500`` as auditable
+  long-window evidence. Their referenced office NetCDF files are unavailable,
+  while the retained generated traces end near ``t=400``. Even the recorded
+  summary comparisons fail the ``4%`` reduction gate: growth gives only
   ``0.60%`` reduction (``z=0.26``), while quasilinear and nonlinear-window give
   ``-0.49%`` (``z=-0.19``) and ``-0.25%`` (``z=-0.09``), respectively.
 - converged nonlinear transport gradients through ``vmex`` and
@@ -336,15 +334,10 @@ Quasilinear model-selection state:
   ``docs/_static/production_nonlinear_optimization_guard.json``, passes release
   safety because reduced/startup estimators are blocked and three long
   post-transient replicated holdout ensembles pass: D-shaped VMEC, circular
-  VMEC, and QH VMEC/Boozer. The selected optimized QA equilibrium contributes
-  one accepted ``t=[350,700]`` seed/timestep replicated transport-window audit,
-  and the strict ``t=1500`` growth/QL/nonlinear-window candidates now close the
-  optimized-equilibrium trace-count requirement with four qualifying
-  ensembles. The scoped production nonlinear turbulent-flux optimization guard
-  now promotes under its explicit ``2%`` long-window matched-audit policy:
-  three matched baseline-to-optimized audits pass with positive
-  uncertainty-separated heat-flux reductions. This is scoped candidate
-  evidence, not a broad multi-surface nonlinear transport-optimization claim.
+  VMEC, and QH VMEC/Boozer. Release safety is closed; production optimization
+  is not promoted. Existing optimized and matched summaries lack the required
+  hashed raw-source/time-window manifest and explicit per-trace stationarity,
+  autocorrelation, resolution, and spectral-convergence gates.
 - ``tools/release/check_nonlinear_optimization_gates.py gradient-evidence`` is the stricter
   nonlinear turbulence-gradient claim gate. The tracked
   ``docs/_static/nonlinear_turbulence_gradient_evidence_status.json`` artifact

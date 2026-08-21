@@ -254,14 +254,6 @@
       "checks": [
         {
           "exists": true,
-          "name": "architecture refactor plan",
-          "passed": true,
-          "path": "plan.md",
-          "required": true,
-          "snippet": "single implementation plan"
-        },
-        {
-          "exists": true,
           "name": "package architecture manifest",
           "passed": true,
           "path": "tools/package_architecture_manifest.toml",
@@ -399,8 +391,8 @@
       ],
       "completion_percent": 100.0,
       "failed_required": [],
-      "passed_required": 18,
-      "required": 18
+      "passed_required": 17,
+      "required": 17
     },
     "scientific_gate_guardrails": {
       "checks": [

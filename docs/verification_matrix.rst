@@ -647,9 +647,9 @@ as a promoted runtime predictor.
 These gates do not change the deferred W7-X lanes: W7-X zonal long-window
 recurrence/damping and W7-X TEM / kinetic-electron validation remain outside
 the current manuscript/release scope. They also do not promote a universal
-absolute-flux model. Production nonlinear optimization is promoted only for the
-selected optimized-equilibrium audit now attached to the guard; nonlinear
-turbulence gradients and broad multi-surface claims remain separate gates.
+absolute-flux model. Production nonlinear optimization remains unpromoted:
+the selected optimized-equilibrium summaries do not carry auditable raw-source,
+stationarity, uncertainty, resolution, and spectral evidence.
 
 Autodiff Validation
 -------------------
@@ -741,10 +741,9 @@ gate.
      - aggregate finite-difference and line-search artifacts pass on the same
        training sample set, and the independent QH production-scope validation
        artifact covers a held-out field-line ``alpha`` with a passed replicated
-       nonlinear-window ensemble. Production nonlinear optimization promotion
-       now has the optimized-equilibrium ensemble count closed, but still
-       requires three matched baseline-to-optimized audits with positive
-       uncertainty-separated reductions. One converged held-out VMEC/Boozer
+       nonlinear-window ensemble. Production nonlinear optimization still
+       requires auditable optimized-equilibrium ensembles and matched audits.
+       One converged held-out VMEC/Boozer
        transport window cannot by itself support a broad optimized-equilibrium
        heat-flux claim.
        The multi-alpha finite-difference artifact passes and the growth-vs-QL
@@ -758,14 +757,10 @@ gate.
        the QH held-out transport artifact closes the VMEC/Boozer aggregate
        promotion gate. The separate production nonlinear optimization guard now
        includes long-window D-shaped, circular, and QH VMEC/Boozer holdouts plus
-       one selected optimized-equilibrium seed/timestep audit plus the strict
-       ``t=1500`` growth/QL/nonlinear-window optimized-candidate trace
-       ensembles. The optimized-equilibrium trace-count requirement now passes,
-       and the scoped production guard now promotes because three matched
-       audits pass the explicit ``2%`` late-window reduction policy with
-       positive uncertainty-separated reductions. Broader nonlinear turbulence
-       gradients and multi-surface transport optimization are still separate
-       gates.
+       historical optimized-equilibrium and matched summaries. None includes
+       the required immutable raw-source/time-window manifest or all
+       stationarity, uncertainty, resolution, and spectral gates; the scoped
+       production guard therefore remains unpromoted.
    * - Reduced stellarator ITG optimization and UQ
      - objective reduction history, AD/finite-difference derivative parity,
        local covariance, and projected uncertainty
@@ -848,10 +843,10 @@ gate.
        and nonlinear audit bars
      - ``docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.json``
        and ``docs/_static/production_nonlinear_optimization_guard.json``
-     - Closed for selected optimized-equilibrium replicated transport audit
-     - the selected QA optimized equilibrium passes the ``t=[350,700]`` seed
-       and timestep ensemble gate; nonlinear turbulence-gradient and broad
-       multi-surface/multi-field-line optimization claims remain open
+     - Historical aggregate; blocked from promotion
+     - the selected QA summary passes its old ``t=[350,700]`` aggregate gate
+       but lacks the new raw-source, per-trace stationarity, resolution, and
+       spectral evidence contract
    * - QA/ESS ``ZBS(1,0)`` 7.5% nonlinear-gradient follow-up
      - matched baseline/plus/minus post-transient heat-flux windows and central
        finite-difference response

@@ -119,13 +119,13 @@
         "scalar_sha256": "07d1a0630b426b0c5c7861ae5bd667e527f79b89df042926788cf67b96bc5564"
       },
       {
-        "array_count": 5,
-        "array_sha256": "0e0356407780c89ad32d6147d726954f4131af1605978148bd77f0b36bab6523",
-        "content_sha256": "efa5bcab21450cf3fcd1387070216ab1ef3f542ce9365ca195b5a1341321a568",
+        "array_count": 1,
+        "array_sha256": "4c3909ea73348e3f1ee63269c74dc9c9286d741551e6622bd6970e1bda925faf",
+        "content_sha256": "fdbe3e1b82380b5b4e58a6f2bb5d4f91ad57143dfc08d99ed6e2651c8701784c",
         "label": "nonlinear optimization claim guard",
         "path": "docs/_static/production_nonlinear_optimization_guard.json",
-        "scalar_count": 90,
-        "scalar_sha256": "c2875a13c5cd0dbdfa0e001d6cc5cf57f6ccfa85e7b09c50911c84e05596a504"
+        "scalar_count": 126,
+        "scalar_sha256": "8429124196d4328430cc08b36d21dc39219ba48441ee1befa733f3a12dfd4cc0"
       }
     ]
   },
@@ -2460,14 +2460,15 @@
         "matched_qa_no_ess_uncertainty_separation_sigma": 7.819308425110687,
         "n_objectives": 3,
         "production_nonlinear_optimization_guard_safe": true,
-        "production_nonlinear_optimization_promoted": true,
-        "production_nonlinear_optimized_equilibrium_ensembles": 4,
+        "production_nonlinear_optimization_promoted": false,
+        "production_nonlinear_optimized_equilibrium_ensembles": 0,
+        "production_nonlinear_promotion_evidence_complete": false,
         "production_nonlinear_replicated_holdout_ensembles": 3,
         "weighted_residual_uq_gate_passed": true,
         "worst_reduction_factor": 0.14944986630532714
       },
       "lane": "Reduced differentiable stellarator ITG optimization",
-      "next_action": "Use the UQ, production-guard, replicated-ensemble, and matched-audit artifacts as the current optimization-evidence figures. Do not use the reduced synthetic surface comparison as the solved-geometry optimization figure. The matched QA no-ESS to optimized QA/ESS audit is closed, but nonlinear-window VMEC/Boozer/GK gradients and matched audits across broader geometry families remain future requirements before claiming broad end-to-end stellarator heat-flux optimization.",
+      "next_action": "Keep the UQ and derivative artifacts as reduced-objective evidence. Re-run optimized and matched transport with hashed raw outputs, observed windows, per-trace stationarity, autocorrelation-aware uncertainty, resolution convergence, and resolved spectra before production promotion.",
       "primary_artifacts": [
         "docs/_static/stellarator_itg_optimization_uq.json",
         "docs/_static/stellarator_itg_optimization_uq.png",
@@ -2497,10 +2498,11 @@
         "multi_equilibrium_gradient_max_rel_error": 0.026774412331418387,
         "multi_equilibrium_reduced_nonlinear_window_gradient_gate": true,
         "nonlinear_transport_average_gate": false,
-        "optimized_equilibrium_replicated_transport_ensembles": 4,
+        "optimized_equilibrium_replicated_transport_ensembles": 0,
         "production_nonlinear_observable_fd_path_gate": false,
         "production_nonlinear_optimization_guard_safe": true,
-        "production_nonlinear_optimization_promoted": true,
+        "production_nonlinear_optimization_promoted": false,
+        "production_nonlinear_promotion_evidence_complete": false,
         "production_nonlinear_window_gradient_gate": false,
         "quasilinear_weight_gradient_gate": true,
         "reduced_nonlinear_window_gradient_gate": true,
@@ -2526,7 +2528,7 @@
         "vmec_boozer_startup_nonlinear_response_fraction": 0.04008881189273438
       },
       "lane": "Production solver-objective geometry gradients",
-      "next_action": "Full VMEC/Boozer eigenfrequency, quasilinear, and multi-equilibrium reduced nonlinear-window estimator gradients are closed. The compact nonlinear FD audits are tracked only as startup plumbing checks; they do not validate transport heat-flux averages. The selected optimized-equilibrium long-window audit is closed; VMEC/Boozer turbulence gradients, local-gradient conditioning, and broader multi-surface baseline-to-optimized audits remain required before full nonlinear stellarator-optimization claims.",
+      "next_action": "Full VMEC/Boozer eigenfrequency, quasilinear, and multi-equilibrium reduced nonlinear-window estimator gradients are closed. Compact nonlinear FD audits remain startup plumbing checks. Re-run optimized and matched transport under the auditable promotion contract before any full nonlinear stellarator-optimization claim.",
       "primary_artifacts": [
         "docs/_static/solver_objective_gradient_gate.json",
         "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",

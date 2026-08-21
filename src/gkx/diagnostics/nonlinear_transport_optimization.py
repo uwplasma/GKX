@@ -45,6 +45,16 @@ _PRODUCTION_CLAIM_MARKERS = (
     "converged_nonlinear_turbulent",
 )
 
+_PROMOTION_EVIDENCE_GATES = (
+    "individual_stationarity_passed",
+    "autocorrelation_corrected_uncertainty_passed",
+    "timestep_convergence_passed",
+    "perpendicular_resolution_convergence_passed",
+    "parallel_resolution_convergence_passed",
+    "velocity_resolution_convergence_passed",
+    "spectral_convergence_passed",
+)
+
 
 @dataclass(frozen=True)
 class ProductionNonlinearOptimizationGuardConfig:
@@ -123,31 +133,23 @@ def _artifact_passed(payload: Mapping[str, Any]) -> bool:
 
 def _claim_text(payload: Mapping[str, Any]) -> str:
     fields = (
-        "kind",
-        "case",
-        "comparison",
-        "claim_level",
-        "claim_scope",
-        "notes",
-        "next_action",
-        "model",
+        "kind case comparison claim_level claim_scope notes next_action model".split()
     )
     return " ".join(str(payload.get(field, "")) for field in fields).lower()
 
 
 def _claims_production(payload: Mapping[str, Any]) -> bool:
     text = _claim_text(payload)
-    if any(marker in text for marker in _NON_PROMOTABLE_MARKERS):
-        return False
-    if any(
+    explicit = any(
         bool(payload.get(key, False))
         for key in (
             "production_transport_claim",
             "production_nonlinear_optimization_claim",
         )
-    ):
-        return True
-    return any(marker in text for marker in _PRODUCTION_CLAIM_MARKERS)
+    )
+    return not any(marker in text for marker in _NON_PROMOTABLE_MARKERS) and (
+        explicit or any(marker in text for marker in _PRODUCTION_CLAIM_MARKERS)
+    )
 
 
 def _variant_value_from_row(row: Mapping[str, Any], axis: str) -> str | None:
@@ -203,6 +205,47 @@ def _ensemble_variant_provenance_report(
             "min_seed_variants": int(config.min_seed_variants),
             "min_timestep_variants": int(config.min_timestep_variants),
         },
+    }
+
+
+def _promotion_evidence_report(
+    payload: Mapping[str, Any], *, min_source_artifacts: int
+) -> dict[str, Any]:
+    evidence = _payload_mapping(payload, "promotion_evidence")
+    sources = _mapping_rows(evidence, "source_artifacts")
+    valid_sources: set[tuple[str, str]] = set()
+    for source in sources:
+        path = str(source.get("path", "")).strip()
+        digest = str(source.get("sha256", "")).strip().lower()
+        time_max = _finite_float(source.get("time_max"))
+        window_tmin = _finite_float(source.get("window_tmin"))
+        window_tmax = _finite_float(source.get("window_tmax"))
+        identity = (path, digest)
+        if (
+            path
+            and re.fullmatch(r"[0-9a-f]{64}", digest)
+            and time_max is not None
+            and window_tmin is not None
+            and window_tmax is not None
+            and window_tmin < window_tmax <= time_max
+            and identity not in valid_sources
+        ):
+            valid_sources.add(identity)
+    source_artifacts_passed = len(sources) >= min_source_artifacts and len(
+        valid_sources
+    ) == len(sources)
+    missing_gates = [
+        gate
+        for gate in _PROMOTION_EVIDENCE_GATES
+        if not _explicit_true(evidence.get(gate))
+    ]
+    return {
+        "required_source_artifacts": min_source_artifacts,
+        "observed_source_artifacts": len(sources),
+        "invalid_source_artifacts": len(sources) - len(valid_sources),
+        "source_artifacts_passed": source_artifacts_passed,
+        "missing_gates": missing_gates,
+        "passed": source_artifacts_passed and not missing_gates,
     }
 
 
@@ -272,22 +315,6 @@ class _MatchedTransportContext:
     strict_baseline: Mapping[str, Any]
     strict_candidate: Mapping[str, Any]
     named_gate_passed: dict[str, bool]
-
-
-@dataclass(frozen=True)
-class _MatchedTransportMetrics:
-    relative_reduction: float | None
-    uncertainty_sigma: float | None
-
-
-@dataclass(frozen=True)
-class _MatchedTransportFlags:
-    passed: bool
-    baseline_qualified: bool
-    optimized_qualified: bool
-    selected_closed: bool
-    reduction_ok: bool
-    uncertainty_ok: bool
 
 
 def _payload_mapping(payload: Mapping[str, Any], key: str) -> Mapping[str, Any]:
@@ -390,7 +417,6 @@ def optimized_equilibrium_transport_report(
     config: ProductionNonlinearOptimizationGuardConfig | None = None,
 ) -> dict[str, Any]:
     """Return whether an artifact can promote optimized-equilibrium transport."""
-
     row = replicated_transport_ensemble_report(path, payload, config=config)
     text = _claim_text(payload) + " " + str(path).lower()
     optimized_marker = (
@@ -402,16 +428,30 @@ def optimized_equilibrium_transport_report(
         or "quasilinear_from_strict_baseline" in text
         or "nonlinear_window_from_strict_baseline" in text
     )
+    evidence = _promotion_evidence_report(
+        payload, min_source_artifacts=max(int(row["n_reports"]), 1)
+    )
     row["optimized_equilibrium_marker"] = optimized_marker
+    row["promotion_evidence"] = evidence
+    row["promotion_evidence_ok"] = evidence["passed"]
     row["qualifies_for_production_optimization"] = bool(
-        row["qualifies_as_long_post_transient_replicate"] and optimized_marker
+        row["qualifies_as_long_post_transient_replicate"]
+        and optimized_marker
+        and evidence["passed"]
     )
     return row
 
 
-def _matched_transport_metrics(
-    context: _MatchedTransportContext,
-) -> _MatchedTransportMetrics:
+def matched_optimized_transport_report(
+    path: str,
+    payload: Mapping[str, Any],
+    *,
+    config: ProductionNonlinearOptimizationGuardConfig | None = None,
+) -> dict[str, Any]:
+    """Return whether a matched baseline-to-optimized audit promotes transport."""
+    cfg = _validated_config(config)
+    context = _matched_transport_context(payload)
+    named = context.named_gate_passed
     relative_reduction = _first_finite(
         context.comparison.get("relative_reduction"),
         context.statistics.get("relative_reduction"),
@@ -422,106 +462,63 @@ def _matched_transport_metrics(
         context.statistics.get("uncertainty_separation_sigma"),
         context.statistics.get("uncertainty_z_score"),
     )
-    return _MatchedTransportMetrics(
-        relative_reduction=relative_reduction,
-        uncertainty_sigma=uncertainty_sigma,
-    )
-
-
-def _matched_transport_flags(
-    *,
-    payload: Mapping[str, Any],
-    context: _MatchedTransportContext,
-    metrics: _MatchedTransportMetrics,
-    config: ProductionNonlinearOptimizationGuardConfig,
-) -> _MatchedTransportFlags:
-    named_gate_passed = context.named_gate_passed
     baseline_qualified = _any_explicit_true(
         context.baseline.get("qualifies"),
         context.strict_baseline.get("passed"),
         context.strict_baseline.get("raw_passed"),
-        named_gate_passed.get("baseline_replicated_ensemble_qualified"),
-        named_gate_passed.get("baseline_ensemble_passed"),
+        named.get("baseline_replicated_ensemble_qualified"),
+        named.get("baseline_ensemble_passed"),
     )
     optimized_qualified = _any_explicit_true(
         context.optimized.get("qualifies"),
         context.strict_candidate.get("passed"),
         context.strict_candidate.get("raw_passed"),
-        named_gate_passed.get("optimized_replicated_ensemble_qualified"),
-        named_gate_passed.get("candidate_ensemble_passed"),
+        named.get("optimized_replicated_ensemble_qualified"),
+        named.get("candidate_ensemble_passed"),
     )
     selected_closed = _any_explicit_true(
         context.selected.get("passed"),
-        named_gate_passed.get("selected_optimized_equilibrium_audit"),
+        named.get("selected_optimized_equilibrium_audit"),
     ) or bool(
         context.strict_baseline
         and context.strict_candidate
         and baseline_qualified
         and optimized_qualified
     )
-    reduction_ok = (
-        metrics.relative_reduction is not None
-        and metrics.relative_reduction
-        >= float(config.min_matched_optimized_relative_reduction)
+    passed = _artifact_passed(payload)
+    reduction_ok = relative_reduction is not None and relative_reduction >= float(
+        cfg.min_matched_optimized_relative_reduction
     )
-    uncertainty_ok = (
-        metrics.uncertainty_sigma is not None
-        and metrics.uncertainty_sigma
-        >= float(config.min_matched_optimized_uncertainty_sigma)
+    uncertainty_ok = uncertainty_sigma is not None and uncertainty_sigma >= float(
+        cfg.min_matched_optimized_uncertainty_sigma
     )
-    return _MatchedTransportFlags(
-        passed=_artifact_passed(payload),
-        baseline_qualified=baseline_qualified,
-        optimized_qualified=optimized_qualified,
-        selected_closed=selected_closed,
-        reduction_ok=reduction_ok,
-        uncertainty_ok=uncertainty_ok,
-    )
-
-
-def _matched_transport_blockers(flags: _MatchedTransportFlags) -> list[str]:
     checks = (
-        (flags.passed, "matched_optimized_audit_failed"),
-        (flags.baseline_qualified, "baseline_replicated_ensemble_not_qualified"),
-        (flags.optimized_qualified, "optimized_replicated_ensemble_not_qualified"),
-        (flags.selected_closed, "selected_optimized_audit_not_closed"),
-        (flags.reduction_ok, "insufficient_matched_optimized_reduction"),
-        (flags.uncertainty_ok, "insufficient_matched_optimized_uncertainty_separation"),
+        (passed, "matched_optimized_audit_failed"),
+        (baseline_qualified, "baseline_replicated_ensemble_not_qualified"),
+        (optimized_qualified, "optimized_replicated_ensemble_not_qualified"),
+        (selected_closed, "selected_optimized_audit_not_closed"),
+        (reduction_ok, "insufficient_matched_optimized_reduction"),
+        (uncertainty_ok, "insufficient_matched_optimized_uncertainty_separation"),
     )
-    return [blocker for passed, blocker in checks if not passed]
-
-
-def matched_optimized_transport_report(
-    path: str,
-    payload: Mapping[str, Any],
-    *,
-    config: ProductionNonlinearOptimizationGuardConfig | None = None,
-) -> dict[str, Any]:
-    """Return whether a matched baseline-to-optimized audit promotes transport."""
-
-    cfg = _validated_config(config)
-    context = _matched_transport_context(payload)
-    metrics = _matched_transport_metrics(context)
-    flags = _matched_transport_flags(
-        payload=payload,
-        context=context,
-        metrics=metrics,
-        config=cfg,
-    )
-    blockers = _matched_transport_blockers(flags)
+    blockers = [blocker for condition, blocker in checks if not condition]
+    evidence = _promotion_evidence_report(payload, min_source_artifacts=2)
+    if not evidence["passed"]:
+        blockers.append("promotion_evidence_not_auditable")
     return {
         "path": path,
         "kind": str(payload.get("kind", "")),
         "case": str(payload.get("case", "")),
         "claim_level": str(payload.get("claim_level", "")),
-        "passed": flags.passed,
-        "baseline_ensemble_qualified": flags.baseline_qualified,
-        "optimized_ensemble_qualified": flags.optimized_qualified,
-        "selected_optimized_audit_closed": flags.selected_closed,
-        "relative_reduction": metrics.relative_reduction,
-        "uncertainty_separation_sigma": metrics.uncertainty_sigma,
-        "relative_reduction_ok": flags.reduction_ok,
-        "uncertainty_separation_ok": flags.uncertainty_ok,
+        "passed": passed,
+        "baseline_ensemble_qualified": baseline_qualified,
+        "optimized_ensemble_qualified": optimized_qualified,
+        "selected_optimized_audit_closed": selected_closed,
+        "relative_reduction": relative_reduction,
+        "uncertainty_separation_sigma": uncertainty_sigma,
+        "relative_reduction_ok": reduction_ok,
+        "uncertainty_separation_ok": uncertainty_ok,
+        "promotion_evidence": evidence,
+        "promotion_evidence_ok": evidence["passed"],
         "blockers": blockers,
         "qualifies_for_production_optimization": not blockers,
     }
@@ -851,8 +848,9 @@ def _guard_report_payload(
         "evidence_gap": {
             "claim_boundary": (
                 "Existing strict matched audits are included as negative evidence. "
-                "They do not promote broad nonlinear turbulent-flux optimization unless "
-                "they pass the same long-window reduction and uncertainty-separation gates."
+                "Promotion also requires hashed raw sources, observed time windows, "
+                "per-trace stationarity, autocorrelation-aware uncertainty, resolution, "
+                "and spectral-convergence gates."
             ),
             "failed_matched_optimized_transport_audits": rows.failed_matched_optimized,
             "required_additional_optimized_equilibrium_ensembles": max(

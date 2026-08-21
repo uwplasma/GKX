@@ -673,7 +673,12 @@ coverage:
         ],
     }
     contract_path.write_text(json.dumps(contract), encoding="utf-8")
-    (root / "benchmarks" / "references" / "gkx_2_representative_performance_refresh.json").write_text(
+    (
+        root
+        / "benchmarks"
+        / "references"
+        / "gkx_2_representative_performance_refresh.json"
+    ).write_text(
         json.dumps(
             {
                 "kind": "gkx_representative_performance_refresh",
@@ -2190,9 +2195,7 @@ def test_large_modules_have_direct_manifest_rows() -> None:
 
 
 def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
-    _write_package(
-        tmp_path, "gkx.runtime", "gkx.workflows.runtime.config"
-    )
+    _write_package(tmp_path, "gkx.runtime", "gkx.workflows.runtime.config")
     _write_fast_inputs(tmp_path)
 
     summary = _validate_tmp_coverage_manifest(
@@ -2214,9 +2217,7 @@ def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
 
 
 def test_manifest_rejects_unowned_package_modules(tmp_path: Path) -> None:
-    _write_package(
-        tmp_path, "gkx.runtime", "gkx.workflows.runtime.config"
-    )
+    _write_package(tmp_path, "gkx.runtime", "gkx.workflows.runtime.config")
     _write_fast_inputs(tmp_path)
 
     with pytest.raises(ValueError, match="package modules lack coverage ownership"):
@@ -2235,12 +2236,8 @@ def test_manifest_rejects_duplicate_owned_modules(tmp_path: Path) -> None:
     _write_fast_inputs(tmp_path)
 
     manifest = _coverage_manifest(
-        _coverage_row(
-            "gkx.runtime", owned_modules=["gkx.workflows.runtime.config"]
-        ),
-        _coverage_row(
-            "gkx.linear", owned_modules=["gkx.workflows.runtime.config"]
-        ),
+        _coverage_row("gkx.runtime", owned_modules=["gkx.workflows.runtime.config"]),
+        _coverage_row("gkx.linear", owned_modules=["gkx.workflows.runtime.config"]),
     )
     with pytest.raises(ValueError, match="duplicate coverage ownership"):
         _validate_tmp_coverage_manifest(tmp_path, manifest)
@@ -2277,13 +2274,13 @@ REQUIRED_PHRASES = {
         "Solovev and shaped-pressure stress outliers outside the scoped claim",
         "W7-X TEM / kinetic-electron validation",
         "W7-X long-window zonal recurrence/damping closure",
-        "selected QA optimized-equilibrium audit is the current scoped exception",
+        "production optimization is not promoted",
     ),
     "docs/verification_matrix.rst": (
         "Closed as scoped model-development result / failed promotion gate",
         "does not promote a runtime/TOML absolute-flux predictor",
         "W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron validation remain outside",
-        "Production nonlinear optimization is promoted only for the selected optimized-equilibrium audit",
+        "Production nonlinear optimization remains unpromoted",
     ),
     "README.md": (
         "not a runtime/TOML absolute-flux predictor",
@@ -2317,6 +2314,9 @@ FORBIDDEN_PHRASES = (
     "production nonlinear heat-flux stellarator optimization is release-ready",
     "nonlinear production optimization is release-ready",
     "optimized-equilibrium nonlinear heat-flux validation is closed",
+    "selected QA optimized-equilibrium audit is the current scoped exception",
+    "Production nonlinear optimization is promoted only for the selected optimized-equilibrium audit",
+    "production guard now promotes",
     "production parallelization path for linear scans, quasilinear studies, sensitivity sweeps, and UQ ensembles",
     "production parallelization path for linear scans, quasilinear studies, sensitivity sweeps",
     "current production-parallelization identity artifact",
@@ -2799,17 +2799,10 @@ def test_repository_validation_manifest_is_well_formed() -> None:
     assert rows["gkx.terms.assembly"]["coverage_target_percent"] == 95.0
     assert rows["gkx.runtime"]["n_owned_modules"] >= 5
     assert rows["gkx.diagnostics.validation_gates"]["n_physics_contracts"] >= 2
-    assert (
-        rows["gkx.objectives.gradient_gates"]["coverage_target_percent"] == 95.0
-    )
-    assert (
-        rows["gkx.objectives.vmec_boozer_gradients"]["n_numerics_contracts"] >= 2
-    )
+    assert rows["gkx.objectives.gradient_gates"]["coverage_target_percent"] == 95.0
+    assert rows["gkx.objectives.vmec_boozer_gradients"]["n_numerics_contracts"] >= 2
 
-    assert (
-        rows["gkx.operators.linear.cache_builder"]["coverage_target_percent"]
-        == 95.0
-    )
+    assert rows["gkx.operators.linear.cache_builder"]["coverage_target_percent"] == 95.0
     assert rows["gkx.operators.linear.cache_builder"]["n_owned_modules"] == 2
     assert rows["gkx.operators.linear.moments"]["n_numerics_contracts"] >= 2
     assert rows["gkx.operators.linear.params"]["n_physics_contracts"] >= 2
@@ -2818,23 +2811,16 @@ def test_repository_validation_manifest_is_well_formed() -> None:
     assert rows["gkx.operators.nonlinear.rhs"]["coverage_target_percent"] == 95.0
     assert rows["gkx.operators.nonlinear.rhs"]["n_numerics_contracts"] >= 2
     assert (
-        rows["gkx.operators.nonlinear.diagnostic_state"][
-            "coverage_target_percent"
-        ]
+        rows["gkx.operators.nonlinear.diagnostic_state"]["coverage_target_percent"]
         == 95.0
     )
-    assert (
-        rows["gkx.operators.nonlinear.diagnostic_state"]["n_physics_contracts"]
-        >= 2
-    )
+    assert rows["gkx.operators.nonlinear.diagnostic_state"]["n_physics_contracts"] >= 2
     spectral_core = rows["gkx.operators.nonlinear.spectral_core"]
     assert spectral_core["coverage_target_percent"] == 95.0
     assert spectral_core["n_owned_modules"] >= 4
     assert spectral_core["n_numerics_contracts"] >= 2
     assert spectral_core["n_physics_contracts"] >= 2
-    assert (
-        rows["gkx.solvers.nonlinear.explicit"]["coverage_target_percent"] == 95.0
-    )
+    assert rows["gkx.solvers.nonlinear.explicit"]["coverage_target_percent"] == 95.0
     assert rows["gkx.solvers.nonlinear.explicit"]["n_numerics_contracts"] >= 2
     assert rows["gkx.solvers.nonlinear.imex"]["coverage_target_percent"] == 95.0
     assert rows["gkx.solvers.nonlinear.imex"]["n_physics_contracts"] >= 2
@@ -3540,7 +3526,7 @@ def test_decks_that_must_pin_run_to_pin_it_in_their_own_time_block() -> None:
 
     for relative, expected in sorted(_RUN_TO_REQUIRED.items()):
         assert _deck_run_to(relative) == expected, (
-            f"{relative} must set [time] run_to = \"{expected}\"; its heat flux "
+            f'{relative} must set [time] run_to = "{expected}"; its heat flux '
             "is not the observable it exists to produce, so the default "
             "saturation stop would end it on a quantity nobody asked for"
         )
