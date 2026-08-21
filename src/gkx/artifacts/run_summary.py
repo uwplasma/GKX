@@ -526,8 +526,8 @@ def phi_xy_figure(
         field.phi_xyz,
         extent=field.extent,
         time=field.time,
+        title=r"Outboard-midplane cut of $\phi$" if title is None else title,
         out=out,
-        **({} if title is None else {"title": title}),
     )
 
 
