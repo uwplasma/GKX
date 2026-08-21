@@ -143,7 +143,18 @@ nonlinear figure set is:
 - ``<base>.flux_time.png`` -- ``Q(t)`` and ``Gamma(t)`` at full size.
 - ``<base>.flux_spectra.png`` and ``<base>.phi2_spectra.png`` -- the
   ``ky``/``kx`` heat-flux spectra and the four-panel ``Phi^2`` summary. Both
-  need the k-resolved spectra, which only the NetCDF bundle carries.
+  need the k-resolved spectra, which only the NetCDF bundle carries. The
+  high-``ky`` check shown on the plot is
+
+  .. math::
+
+     R_{\rm tail} =
+     \frac{\max_{k_y\,\mathrm{in\ top\ }10\%}|S(k_y)|}
+          {\max_{k_y>0}|S(k_y)|}.
+
+  ``R_tail >= 0.1`` prints a warning: increase ``Ny`` at fixed ``Ly``, then
+  repeat a matched ``Nx``/``Ny`` scan. A small tail is necessary but does not
+  prove convergence; trust ``Q(ky)`` even when ``Phi^2(ky)`` looks converged.
 - ``<base>.snapshot_xy.png`` and ``<base>.flux_tube_3d.png`` -- the final
   potential as an ``x``-``y`` cut and on the field-aligned flux tube itself,
   which is the one figure showing the geometry the run was performed on. Both
