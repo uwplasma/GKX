@@ -348,10 +348,12 @@ def test_prepared_nonlinear_diagnostics_reuses_compiled_scan():
         resolved_diagnostics=False,
     )
 
-    # Count traces locally rather than reading the jit cache size: that cache is
-    # process-wide and unrelated compilations can evict this entry, which makes
-    # the reuse claim depend on what else ran first. The wrapped body below runs
-    # once per compilation and never on a cache hit.
+    # Count traces locally rather than reading ``_run_raw._cache_size()``. That
+    # counter is process-wide jit bookkeeping, and in a long test session it
+    # reads 0 for a scan that was in fact compiled once and reused, so the
+    # assertion turned into a false alarm about whatever else ran first. The
+    # wrapped body below runs once per trace and never on a cache hit, which is
+    # the reuse claim itself rather than a proxy for it.
     traces = 0
     scan_raw = prepared._run_raw.__wrapped__
 
@@ -380,7 +382,10 @@ def test_prepared_nonlinear_diagnostics_reuses_compiled_scan():
     )
 
     assert traces == 1
-    assert bool(jnp.all(jnp.isfinite(reused[0])))
+    # Index 2 is the final state: the reused executable integrated the new
+    # initial condition rather than replaying the first one.
+    assert bool(jnp.all(jnp.isfinite(reused[2])))
+    assert not bool(jnp.allclose(reused[2], first[2]))
     for first_value, second_value in zip(
         first[:1] + first[2:], second[:1] + second[2:]
     ):
