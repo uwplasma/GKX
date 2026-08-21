@@ -1,0 +1,121 @@
+{
+  "case": "landscape_rbc_1_1_0_replicated_nonlinear_window_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "landscape_rbc_1_1_0_replicated_nonlinear_window_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "landscape_rbc_1_1_0_replicated_nonlinear_window_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=3 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": true
+      },
+      {
+        "detail": "finite_means=3 reports=3",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.04684675910814912 gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": true
+      },
+      {
+        "detail": "combined_sem_rel=0.01920707889204539 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=3 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": true
+    },
+    {
+      "detail": "finite_means=3 reports=3",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.04684675910814912 gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.01920707889204539 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": true,
+  "rows": [
+    {
+      "case": "landscape_rbc_1_1_0_replicated_nonlinear_window",
+      "failures": [],
+      "index": 0,
+      "late_mean": 11.191344187293524,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.11982455177281974,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_0_nonlinear_t700_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_0_nonlinear_t700_n64_seed31_transport_window.json"
+    },
+    {
+      "case": "landscape_rbc_1_1_0_replicated_nonlinear_window",
+      "failures": [],
+      "index": 1,
+      "late_mean": 11.726644072733874,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.18107118077813733,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_0_nonlinear_t700_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_0_nonlinear_t700_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "landscape_rbc_1_1_0_replicated_nonlinear_window",
+      "failures": [],
+      "index": 2,
+      "late_mean": 11.361857067452274,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.2194718978706719,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_0_nonlinear_t700_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_0_nonlinear_t700_n64_dt0p04_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 0.2194718978706719,
+    "combined_sem_rel": 0.01920707889204539,
+    "ensemble_mean": 11.426615109159892,
+    "max_individual_sem": 0.2194718978706719,
+    "mean_rel_spread": 0.04684675910814912,
+    "mean_spread": 0.5352998854403506,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.15788360144155486
+  }
+}

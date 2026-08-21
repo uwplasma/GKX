@@ -1,0 +1,273 @@
+{
+  "label": "QA constraints-only optimization",
+  "max_nfev": 40,
+  "ftol": 1e-05,
+  "gtol": 1e-05,
+  "xtol": 1e-08,
+  "method": "scipy",
+  "method_requested": "scipy",
+  "method_auto_reason": null,
+  "exact_path": "tape",
+  "scipy_tr_solver": "exact",
+  "scipy_lsmr_maxiter": null,
+  "lbfgs_step_bound": null,
+  "scalar_step_bound": null,
+  "scalar_cost_only_trials": null,
+  "solver_device": "default",
+  "inner_max_iter": 180,
+  "inner_ftol": 1e-10,
+  "trial_max_iter": 180,
+  "trial_ftol": 1e-10,
+  "total_wall_time_s": 602.8352665035054,
+  "nfev": 39,
+  "njev": 23,
+  "success": true,
+  "message": "`ftol` termination condition is satisfied.",
+  "objective_initial": 1682.6412678151569,
+  "objective_final": 0.0002601228390813915,
+  "qs_initial": 6.809751800894292e-05,
+  "qs_final": 0.00026009823221811865,
+  "aspect_initial": 4.999948569749187,
+  "aspect_final": 5.000154379138371,
+  "history": [
+    {
+      "wall_time_s": 0.0,
+      "cost": 841.3206339075784,
+      "objective": 1682.6412678151569,
+      "qs_objective": 6.809751800894292e-05,
+      "aspect": 4.999948569749187,
+      "iota": -9.747865655500204e-08
+    },
+    {
+      "wall_time_s": 47.36695901490748,
+      "cost": 841.3206339075784,
+      "objective": 1682.6412678151569,
+      "qs_objective": 6.809751800894295e-05,
+      "aspect": 4.999948569749187,
+      "iota": -9.747865655500204e-08
+    },
+    {
+      "wall_time_s": 602.8352665035054,
+      "cost": 0.00013006141954069575,
+      "objective": 0.0002601228390813915,
+      "qs_objective": 0.00026009823221811865,
+      "aspect": 5.000154379138371,
+      "iota": 0.41019972180134634,
+      "transport_objective_source": "constraints_only_skipped"
+    }
+  ],
+  "profile": {
+    "exact_cache_hit": {
+      "count": 3,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "exact_residual_cache_hit": {
+      "count": 1,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "exact_solve_with_tape_jvp_only_total": {
+      "count": 22,
+      "wall_time_s": 85.72147497255355,
+      "mean_wall_time_s": 3.896430680570616
+    },
+    "exact_solve_with_tape_total": {
+      "count": 22,
+      "wall_time_s": 85.72143849544227,
+      "mean_wall_time_s": 3.896429022520103
+    },
+    "exact_state_cache_hit": {
+      "count": 1,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "exact_tape_build": {
+      "count": 22,
+      "wall_time_s": 85.01518790051341,
+      "mean_wall_time_s": 3.8643267227506097
+    },
+    "exact_tape_build_dynamic_payload": {
+      "count": 22,
+      "wall_time_s": 21.757736559957266,
+      "mean_wall_time_s": 0.988988025452603
+    },
+    "exact_tape_build_final_state_pack": {
+      "count": 22,
+      "wall_time_s": 0.02872512023895979,
+      "mean_wall_time_s": 0.0013056872835890813
+    },
+    "exact_tape_build_jvp_only": {
+      "count": 22,
+      "wall_time_s": 85.01518790051341,
+      "mean_wall_time_s": 3.8643267227506097
+    },
+    "exact_tape_build_solve_call": {
+      "count": 22,
+      "wall_time_s": 62.95380929950625,
+      "mean_wall_time_s": 2.861536786341193
+    },
+    "exact_tape_build_step_trace_extract": {
+      "count": 22,
+      "wall_time_s": 0.00021813809871673584,
+      "mean_wall_time_s": 9.915368123487992e-06
+    },
+    "exact_tape_build_trace_stack": {
+      "count": 22,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "exact_tape_build_unattributed": {
+      "count": 22,
+      "wall_time_s": 0.27469878271222115,
+      "mean_wall_time_s": 0.012486308305100962
+    },
+    "exact_tape_jvp_only_auto_gpu": {
+      "count": 23,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "exact_tape_jvp_only_basepoint_carries_auto": {
+      "count": 23,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "exact_unpack_cache": {
+      "count": 22,
+      "wall_time_s": 0.04906081408262253,
+      "mean_wall_time_s": 0.0022300370037555695
+    },
+    "initial_guess_exact_cache_hit": {
+      "count": 22,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "initial_guess_trial": {
+      "count": 38,
+      "wall_time_s": 12.935832314193249,
+      "mean_wall_time_s": 0.3404166398471908
+    },
+    "jacobian_chunked_projected_replay_projection_total": {
+      "count": 23,
+      "wall_time_s": 341.6253086766228,
+      "mean_wall_time_s": 14.853274290287947
+    },
+    "jacobian_chunked_projected_replay_projection_total_dispatch": {
+      "count": 23,
+      "wall_time_s": 339.6218761680648,
+      "mean_wall_time_s": 14.766168529046295
+    },
+    "jacobian_chunked_projected_replay_projection_total_ready": {
+      "count": 23,
+      "wall_time_s": 2.003432508558035,
+      "mean_wall_time_s": 0.08710576124165369
+    },
+    "jacobian_host_materialize": {
+      "count": 23,
+      "wall_time_s": 0.4639974758028984,
+      "mean_wall_time_s": 0.02017380329577819
+    },
+    "jacobian_initial_tangents": {
+      "count": 23,
+      "wall_time_s": 7.369066312909126,
+      "mean_wall_time_s": 0.3203941875177881
+    },
+    "jacobian_initial_tangents_cache_hit": {
+      "count": 21,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "jacobian_initial_tangents_cache_key": {
+      "count": 23,
+      "wall_time_s": 0.017084824852645397,
+      "mean_wall_time_s": 0.0007428184718541477
+    },
+    "jacobian_initial_tangents_cache_miss": {
+      "count": 2,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "jacobian_initial_tangents_cache_store": {
+      "count": 2,
+      "wall_time_s": 2.4316832423210144e-06,
+      "mean_wall_time_s": 1.2158416211605072e-06
+    },
+    "jacobian_initial_tangents_eye": {
+      "count": 1,
+      "wall_time_s": 0.17662547901272774,
+      "mean_wall_time_s": 0.17662547901272774
+    },
+    "jacobian_initial_tangents_eye_cache_hit": {
+      "count": 1,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "jacobian_initial_tangents_eye_cache_miss": {
+      "count": 1,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "jacobian_initial_tangents_linearize": {
+      "count": 2,
+      "wall_time_s": 3.7695838157087564,
+      "mean_wall_time_s": 1.8847919078543782
+    },
+    "jacobian_initial_tangents_vmap": {
+      "count": 2,
+      "wall_time_s": 3.4050204809755087,
+      "mean_wall_time_s": 1.7025102404877543
+    },
+    "jacobian_initial_tangents_vmap_dispatch": {
+      "count": 2,
+      "wall_time_s": 3.4050204809755087,
+      "mean_wall_time_s": 1.7025102404877543
+    },
+    "jacobian_projected_replay_column_chunk_60": {
+      "count": 23,
+      "wall_time_s": 0.0,
+      "mean_wall_time_s": 0.0
+    },
+    "jacobian_residual_tangent_helper_build": {
+      "count": 1,
+      "wall_time_s": 0.00022664666175842285,
+      "mean_wall_time_s": 0.00022664666175842285
+    },
+    "jacobian_residual_tangent_helper_cache_hit": {
+      "count": 22,
+      "wall_time_s": 3.926362842321396e-05,
+      "mean_wall_time_s": 1.7847103828733617e-06
+    },
+    "jacobian_total": {
+      "count": 23,
+      "wall_time_s": 435.5677129207179,
+      "mean_wall_time_s": 18.937726648726866
+    },
+    "residual_eval_exact": {
+      "count": 1,
+      "wall_time_s": 0.0050422316417098045,
+      "mean_wall_time_s": 0.0050422316417098045
+    },
+    "residual_eval_trial": {
+      "count": 38,
+      "wall_time_s": 0.19189404230564833,
+      "mean_wall_time_s": 0.005049843218569693
+    },
+    "solve_forward_trial": {
+      "count": 38,
+      "wall_time_s": 145.9498219806701,
+      "mean_wall_time_s": 3.8407847889650024
+    },
+    "solve_forward_trial_total": {
+      "count": 38,
+      "wall_time_s": 158.88795503601432,
+      "mean_wall_time_s": 4.181261974631956
+    }
+  },
+  "selected_best_exact_point": false,
+  "rejected_trial_exact_history_count": 0,
+  "iota_initial": -9.747865655500204e-08,
+  "iota_final": 0.41019972180134634,
+  "target_iota": 0.4102,
+  "target_aspect": 5.0,
+  "transport_objective_source": "constraints_only_skipped"
+}
