@@ -242,8 +242,8 @@ def test_explicit_diagnostic_step_caps_and_holds_at_time_horizon() -> None:
         state_dtype=jnp.float32,
         real_dtype=jnp.float32,
         time_step_policy=SimpleNamespace(
-            update_dt=lambda _fields, _dt_prev: jnp.asarray(0.5),
-            progress_total=jnp.asarray(1.0),
+            update_dt=lambda _fields, _dt_prev: jnp.asarray(0.5, dtype=jnp.float32),
+            progress_total=jnp.asarray(1.0, dtype=jnp.float32),
         ),
         compute_fields_fn=lambda G, *_args, **_kwargs: G,
         cache=None,
@@ -259,12 +259,12 @@ def test_explicit_diagnostic_step_caps_and_holds_at_time_horizon() -> None:
         time_horizon=0.75,
     )
     carry = (
-        jnp.asarray([1.0]),
-        jnp.asarray([1.0]),
-        jnp.asarray([1.0]),
-        jnp.asarray(1.0),
-        jnp.asarray(0.5),
-        jnp.asarray(0.5),
+        jnp.asarray([1.0], dtype=jnp.float32),
+        jnp.asarray([1.0], dtype=jnp.float32),
+        jnp.asarray([1.0], dtype=jnp.float32),
+        jnp.asarray(1.0, dtype=jnp.float32),
+        jnp.asarray(0.5, dtype=jnp.float32),
+        jnp.asarray(0.5, dtype=jnp.float32),
     )
 
     carry, first = step(carry, jnp.asarray(0))
