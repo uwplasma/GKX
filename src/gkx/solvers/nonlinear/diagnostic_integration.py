@@ -95,7 +95,7 @@ _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "method", "cache", "terms", "checkpoint", "sample_stride",
     "diagnostics_stride", "use_dealias_mask", "z_index", "compressed_real_fft",
     "laguerre_mode", "omega_ky_index", "omega_kx_index", "flux_scale",
-    "wphi_scale", "fixed_dt", "dt_min", "dt_max", "cfl", "cfl_fac",
+    "wphi_scale", "fixed_dt", "dt_min", "dt_max", "time_horizon", "cfl", "cfl_fac",
     "collision_split", "collision_scheme", "implicit_tol", "implicit_maxiter",
     "implicit_iters", "implicit_relax", "implicit_restart",
     "implicit_preconditioner", "fixed_mode_ky_index",
@@ -105,7 +105,7 @@ _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
 _IMEX_DIAGNOSTIC_OPTION_KEYS = tuple(
     key
     for key in _EXPLICIT_DIAGNOSTIC_OPTION_KEYS
-    if key not in {"fixed_dt", "dt_min", "dt_max", "cfl", "cfl_fac", "resolved_diagnostics"}
+    if key not in {"fixed_dt", "dt_min", "dt_max", "time_horizon", "cfl", "cfl_fac", "resolved_diagnostics"}
 )
 
 
@@ -194,6 +194,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     fixed_dt: bool = True,
     dt_min: float = 1.0e-7,
     dt_max: float | None = None,
+    time_horizon: float | None = None,
     cfl: float = 0.9,
     cfl_fac: float | None = None,
     collision_split: bool = False,
@@ -250,6 +251,7 @@ def integrate_nonlinear_explicit_diagnostics(
     fixed_dt: bool = True,
     dt_min: float = 1.0e-7,
     dt_max: float | None = None,
+    time_horizon: float | None = None,
     cfl: float = 0.9,
     cfl_fac: float | None = None,
     collision_split: bool = False,
@@ -316,6 +318,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
     fixed_dt: bool = True,
     dt_min: float = 1.0e-7,
     dt_max: float | None = None,
+    time_horizon: float | None = None,
     cfl: float = 0.9,
     cfl_fac: float | None = None,
     collision_split: bool = False,

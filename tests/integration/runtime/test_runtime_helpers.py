@@ -78,7 +78,6 @@ from gkx.runtime import (
     _slice_runtime_diagnostics,
     _species_to_linear,
     _stride_runtime_diagnostics,
-    _truncate_runtime_diagnostics,
     _zero_kx_index,
     _run_runtime_scan_batch,
     build_runtime_geometry,
@@ -916,7 +915,7 @@ def test_runtime_nonlinear_diagnostics_kwargs_policy() -> None:
     assert kwargs["show_progress"] is True
 
 
-def test_runtime_diagnostic_slice_stride_truncate_concat() -> None:
+def test_runtime_diagnostic_slice_stride_concat() -> None:
     diag = _diag()
     sliced = _slice_runtime_diagnostics(diag, 1)
     assert sliced.t.shape == (1,)
@@ -925,11 +924,6 @@ def test_runtime_diagnostic_slice_stride_truncate_concat() -> None:
     assert float(zero.dt_mean) == 0.0
     with pytest.raises(ValueError):
         _slice_runtime_diagnostics(diag, -1)
-
-    truncated = _truncate_runtime_diagnostics(diag, t_max=0.15)
-    assert truncated.t.shape == (2,)
-    empty = _truncate_runtime_diagnostics(replace(diag, t=np.asarray([])), t_max=1.0)
-    assert empty is not None
 
     strided = _stride_runtime_diagnostics(diag, stride=2)
     assert strided.t.shape == (1,)
@@ -2467,10 +2461,13 @@ def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_
     def _fake_diag_integrator(*args, **kwargs):
         captured.append(dict(kwargs))
         t = np.asarray([0.1, 0.2], dtype=float)
+        if kwargs.get("time_horizon") is not None:
+            t = np.minimum(t, float(kwargs["time_horizon"]))
+        dt_t = np.diff(np.insert(t, 0, 0.0))
         diag = SimulationDiagnostics(
             t=t,
-            dt_t=np.asarray([0.1, 0.1], dtype=float),
-            dt_mean=float(0.1),
+            dt_t=dt_t,
+            dt_mean=float(np.mean(dt_t)),
             gamma_t=np.asarray([0.0, 0.0], dtype=float),
             omega_t=np.asarray([0.0, 0.0], dtype=float),
             Wg_t=np.asarray([0.0, 0.0], dtype=float),
@@ -2513,7 +2510,7 @@ def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_
     assert out.diagnostics is not None
     assert out.state is None
     assert out.fields is not None
-    np.testing.assert_allclose(out.diagnostics.t, [0.1, 0.2, 0.3, 0.4])
+    np.testing.assert_allclose(out.diagnostics.t, [0.1, 0.2, 0.3, 0.35])
 
 
 def test_runtime_nonlinear_result_summary_contracts() -> None:

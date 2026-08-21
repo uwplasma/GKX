@@ -34,7 +34,6 @@ __all__ = [
     "stride_runtime_diagnostics",
     "timestep_cost_payload",
     "timestep_cost_report",
-    "truncate_runtime_diagnostics",
     "validate_finite_runtime_diagnostics",
 ]
 
@@ -172,21 +171,12 @@ def slice_runtime_diagnostics(
     )
 
 
-def truncate_runtime_diagnostics(
-    diag: SimulationDiagnostics, *, t_max: float
-) -> SimulationDiagnostics:
-    """Keep samples through the first entry that reaches ``t_max``."""
-
-    t_arr = np.asarray(diag.t, dtype=float)
-    if t_arr.size == 0:
-        return diag
-    stop = int(np.searchsorted(t_arr, float(t_max), side="left")) + 1
-    stop = min(max(stop, 1), int(t_arr.size))
-    return slice_runtime_diagnostics(diag, stop)
-
-
 def stride_runtime_diagnostics(
-    diag: SimulationDiagnostics, *, stride: int, offset: int = 0
+    diag: SimulationDiagnostics,
+    *,
+    stride: int,
+    offset: int = 0,
+    keep_last: bool = False,
 ) -> SimulationDiagnostics:
     """Apply the runtime output stride to chunk diagnostics.
 
@@ -202,9 +192,11 @@ def stride_runtime_diagnostics(
     offset_use = int(offset) % stride_use
     if stride_use == 1:
         return diag
-
+    indices = np.arange(offset_use, np.asarray(diag.t).size, stride_use)
+    if keep_last and (indices.size == 0 or indices[-1] != np.asarray(diag.t).size - 1):
+        indices = np.append(indices, np.asarray(diag.t).size - 1)
     def _take(arr: np.ndarray | jnp.ndarray) -> np.ndarray:
-        return np.asarray(arr)[offset_use::stride_use, ...].copy()
+        return np.asarray(arr)[indices, ...].copy()
 
     def _stride_optional(arr: np.ndarray | jnp.ndarray | None) -> np.ndarray | None:
         return None if arr is None else _take(arr)

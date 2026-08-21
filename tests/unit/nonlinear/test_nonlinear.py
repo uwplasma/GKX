@@ -396,6 +396,30 @@ def test_prepared_nonlinear_diagnostics_reuses_compiled_scan():
     np.testing.assert_allclose(np.asarray(first[2]), np.asarray(direct[2]))
 
 
+def test_nonlinear_diagnostics_honors_time_horizon():
+    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    state = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+
+    t, diag, _state, _fields = integrate_nonlinear_explicit_diagnostics_state(
+        state,
+        grid,
+        geom,
+        LinearParams(),
+        dt=0.1,
+        steps=4,
+        method="rk2",
+        terms=TermConfig(nonlinear=0.0),
+        time_horizon=0.25,
+        resolved_diagnostics=False,
+    )
+
+    np.testing.assert_allclose(np.asarray(t), [0.1, 0.2, 0.25, 0.25])
+    np.testing.assert_allclose(np.asarray(diag.dt_t), [0.1, 0.1, 0.05, 0.0])
+
+
 def test_prepared_nonlinear_diagnostics_preserves_adaptive_default_path():
     """Default adaptive runs keep static CFL setup outside traced overrides."""
 
