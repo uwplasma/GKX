@@ -160,9 +160,9 @@ Fresh runs therefore record both energy guards and spectra before SAT-1 changes
 the production default.
 
 The first fresh VMEC pilots confirm that the guards and resolution gate cannot
-be collapsed into one scalar. At `32x32x32`, the means over successive
+be collapsed into one scalar. At `32x32x48`, the means over successive
 50-time-unit intervals rose from `Q=0.147` to `2.45` and `7.25`; `Wg` rose from
-`3.62` to `68.97` and `271.08`. At `48x48x32`, the current production decision
+`3.62` to `68.97` and `271.08`. At `48x48x48`, the current production decision
 over `t=80.3--250` still reports 17.7% corrected relative SEM. `Wphi` and `Wg`
 pass the same half-window stationarity check, but that does not override the
 flux uncertainty. Both runs used shared GPUs and are not performance baselines.
@@ -217,7 +217,7 @@ smoother-looking potential plot. Acceptance still requires convergence of
 integrated ``Q`` and its spectrum over paired ``Nx``/``Ny`` refinements; the
 warning threshold must be calibrated against those refinements.
 
-The fresh `48x48x32` pilot extends the positive retained range from
+The fresh `48x48x48` pilot extends the positive retained range from
 `ky*rho=0.476` to `0.714`, but the last four modes still carry 49.7% of the
 late positive-`ky` heat flux and the cutoff mode carries 13.1%. The `32x32x32`
 cutoff mode carries 36.5%. Neither rung is a converged transport calculation;

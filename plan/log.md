@@ -113,12 +113,12 @@
   adaptive step, `Q`, `Wphi`, `Wg`,
   `kx`, `ky`, and resolved spectra. A local `16^2 x 16`, `t=100` CPU pilot took
   66.3 s and failed saturation with `Wg` still rising. A shared RTX A4000
-  `32^2 x 32`, `t=250` pilot took 469.8 s and was also pre-saturation: mean `Q`
+  `32^2 x 48`, `t=250` pilot took 469.8 s and was also pre-saturation: mean `Q`
   rose from 0.147 over `t=100--150` to 2.45 over `150--200` and 7.25 over
   `200--250`; the highest retained positive-`ky` mode was the flux-spectrum
   maximum. These are diagnostic pilots, not timing baselines or converged
   transport results.
-- The `48^2 x 32`, `t=250` resolution rung also failed the production
+- The `48^2 x 48`, `t=250` resolution rung also failed the production
   stop rule: its selected `t=80.3--250` window has 17.7% autocorrelation-corrected
   relative SEM. `Wphi` and `Wg` pass the half-window drift check, showing why an
   energy plateau cannot replace flux uncertainty. The final four positive
@@ -128,6 +128,12 @@
   trajectory instead of sampling the production solve, stores full 3-D fields,
   and reconstructs a circular torus without VMEC coordinates. MOV-1 must record
   only decimated `x-y` and physical tube-skin cuts during the source run.
+- A restart smoke exposed that PR #91's first `--nz` override changed `Nz` but
+  left a deck's explicit `ntheta` in control. The `32^2` and `48^2` pilots
+  therefore used 48 parallel points, not 32. Commit `177587ea` makes the tool
+  report the built grid, updates `ntheta` consistently, verifies restart shape,
+  keeps continuation time absolute, and removes its duplicate saturation rule
+  in favour of the exact production policy.
 - Audited authorship over the complete selected rewrite history. Seven objects
   carry AI markers: four duplicated Claude co-author trailers and three Codex
   branch/message labels. The rewrite rehearsal removes those markers and maps
