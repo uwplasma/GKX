@@ -1,0 +1,123 @@
+{
+  "case": "dshape_external_vmec_t250_high_grid_window",
+  "claim_level": "passed_grid_converged_external_vmec_transport_window",
+  "gate_report": {
+    "case": "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence",
+    "gates": [
+      {
+        "abs_error": 0.0015040655057189268,
+        "atol": 0.002,
+        "metric": "common_window_max_relative_slope_per_time",
+        "notes": "Same physical late-time window across all grids.",
+        "observed": 0.0015040655057189268,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": "1/time"
+      },
+      {
+        "abs_error": 0.00029032376170350023,
+        "atol": 0.002,
+        "metric": "least_window_max_relative_slope_per_time",
+        "notes": "Best late-time window selected independently for each run.",
+        "observed": 0.00029032376170350023,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": "1/time"
+      },
+      {
+        "abs_error": 0.11399225658571877,
+        "atol": 0.2,
+        "metric": "common_window_max_heat_flux_cv",
+        "notes": "Standard deviation divided by absolute mean on the common window.",
+        "observed": 0.11399225658571877,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.10456003919023446,
+        "atol": 0.2,
+        "metric": "least_window_max_heat_flux_cv",
+        "notes": "Standard deviation divided by absolute mean on each least-trending window.",
+        "observed": 0.10456003919023446,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "common_window_min_samples_deficit",
+        "notes": "The common window must contain enough diagnostic samples on every grid.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "samples"
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "least_window_min_samples_deficit",
+        "notes": "Each independently selected late window must contain enough diagnostic samples.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "samples"
+      },
+      {
+        "abs_error": 0.1394540590795482,
+        "atol": 0.15,
+        "metric": "common_window_pairwise_heat_flux_symmetric_relative_difference",
+        "notes": "Grid-refined heat-flux means on the same physical window.",
+        "observed": 0.1394540590795482,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.1078391837756314,
+        "atol": 0.15,
+        "metric": "least_window_pairwise_heat_flux_symmetric_relative_difference",
+        "notes": "Grid-refined heat-flux means on least-trending windows.",
+        "observed": 0.1078391837756314,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.1394540590795482,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "external_vmec_nonlinear_pilot_reports"
+  },
+  "heat_flux_mean": 18.479456131274883,
+  "heat_flux_std": 2.1065149048808203,
+  "kind": "nonlinear_window_summary",
+  "n_samples": 52,
+  "notes": "DSHAPE external-VMEC ITG adiabatic-electron t=250 nonlinear holdout admission window.",
+  "promotion_gate": {
+    "passed": true,
+    "reason": "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence passed external-VMEC nonlinear grid-convergence gate"
+  },
+  "source_gate": "docs/_static/external_vmec_dshape_t250_high_grid_convergence_gate.json",
+  "gkx": "docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.traces.csv",
+  "tmax": 250.00604248046875,
+  "tmin": 125.05303192138672,
+  "window_policy": "highest_resolution_common_late_window_from_passed_external_vmec_grid_gate"
+}

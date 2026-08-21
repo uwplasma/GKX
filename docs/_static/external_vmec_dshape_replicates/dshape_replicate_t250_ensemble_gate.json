@@ -1,0 +1,121 @@
+{
+  "case": "external_vmec_dshape_replicate_t250_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "seed_and_timestep_replicated_dshape_heat_flux",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "external_vmec_dshape_replicate_t250_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=3 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": true
+      },
+      {
+        "detail": "finite_means=3 reports=3",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.14102885109482344 gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": true
+      },
+      {
+        "detail": "combined_sem_rel=0.05360630620607054 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=3 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": true
+    },
+    {
+      "detail": "finite_means=3 reports=3",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.14102885109482344 gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.05360630620607054 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": true,
+  "rows": [
+    {
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "failures": [],
+      "index": 0,
+      "late_mean": 18.8143419027375,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.7811679230796592,
+      "source_artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_seed31_transport_window.json"
+    },
+    {
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "failures": [],
+      "index": 1,
+      "late_mean": 20.81944429875,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.8273152493949744,
+      "source_artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "failures": [],
+      "index": 2,
+      "late_mean": 18.105158615112497,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 1.0317238519513563,
+      "source_artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_dt0p04_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 1.0317238519513563,
+    "combined_sem_rel": 0.05360630620607054,
+    "ensemble_mean": 19.246314938866664,
+    "max_individual_sem": 1.0317238519513563,
+    "mean_rel_spread": 0.14102885109482344,
+    "mean_spread": 2.7142856836375024,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.812770410603319
+  }
+}

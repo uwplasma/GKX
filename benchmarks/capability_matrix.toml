@@ -1,0 +1,237 @@
+[metadata]
+schema_version = 1
+updated = "2026-07-13"
+comparison_code = "GX"
+comparison_revision = "bc2fe552"
+comparison_source_fingerprint = "sha256:bfaaadfa724c4e56e32364b5cb957449555bed94f6a4ee082e3b4e651b0cc20b"
+office_instrumented_source_fingerprint = "sha256:436e403e769cae7fc38362185d1da49920255d5dfd288eb06ad4ac8715b5a004"
+office_binary_status = "validated_clean_rebuild; isolated revision bc2fe552 links one local OpenMPI 4.1.6, parallel netCDF 4.9.2, and HDF5 1.14.5 stack; the older instrumented binary remains excluded because of its HDF5 ABI mismatch"
+office_runtime_probe = "2026-07-13: canonical Cyclone s-alpha adiabatic-electron run completed 2145 steps to t=10 in 23.1 s and wrote valid netCDF/restart outputs; ky=0.3 gamma=0.101814 and omega=0.286777, a mid-transient smoke reading and not a parity target; the same deck run to t_max=150 converges to gamma=0.093049 and omega=0.281991, matching the reference GX ships for that case"
+scope = "Required-core and differentiable-extension capability contract; feature names are mathematical, while GX appears only as benchmark provenance."
+
+[[capabilities]]
+id = "electrostatic_flux_tube"
+group = "required_core"
+status = "validated"
+gkx_owner = "gkx.terms.fields and gkx.operators.linear"
+comparison_owner = "src/fields.cu and src/linear.cu"
+evidence = "Cyclone, Cyclone Miller, W7-X, and HSX linear/nonlinear atlas gates"
+
+[[capabilities]]
+id = "electromagnetic_apar_bpar"
+group = "required_core"
+status = "validated_scoped"
+gkx_owner = "gkx.terms.fields and gkx.operators.linear"
+comparison_owner = "src/fields.cu and src/linear.cu"
+evidence = "KBM and KAW linear gates; KBM nonlinear window gate"
+
+[[capabilities]]
+id = "boltzmann_and_kinetic_species"
+group = "required_core"
+status = "validated_scoped"
+gkx_owner = "gkx.operators.linear.params"
+comparison_owner = "src/parameters.cu and src/moments.cu"
+evidence = "adiabatic-electron ITG atlas plus kinetic-electron Cyclone/TEM stress lanes"
+
+[[capabilities]]
+id = "hermite_laguerre_velocity_basis"
+group = "required_core"
+status = "validated"
+gkx_owner = "gkx.core.velocity and gkx.terms.gyroaveraging"
+comparison_owner = "src/moments.cu and src/laguerre_transform.cu"
+evidence = "basis orthonormality, streaming, gyroaverage, and velocity-resolution gates"
+
+[[capabilities]]
+id = "salpha_miller_vmec_geometry"
+group = "required_core"
+status = "validated_scoped"
+gkx_owner = "gkx.geometry"
+comparison_owner = "src/geometry.cu and src/geo"
+evidence = "Cyclone, Cyclone Miller, circular VMEC, W7-X, and HSX comparison gates"
+
+[[capabilities]]
+id = "periodic_and_linked_parallel_boundaries"
+group = "required_core"
+status = "validated_scoped"
+gkx_owner = "gkx.operators.linear.linked"
+comparison_owner = "src/grad_parallel.cu and src/grad_parallel_linked.cu"
+evidence = "periodic streaming and linked-boundary operator tests; stellarator linear atlas"
+
+[[capabilities]]
+id = "vmec_flux_tube_boundary_selection"
+group = "required_core"
+status = "validated_scoped"
+gkx_owner = "gkx.geometry.imported_vmec and gkx.operators.linear.linked"
+comparison_owner = "src/parameters.cu, src/geometry.cu, and src/grad_parallel_linked.cu"
+evidence = "exact-periodic, continuous-drift, and fixed-aspect geometry-policy tests; fixed-aspect W7-X/HSX benchmark lanes"
+
+[[capabilities]]
+id = "nonlinear_exb_bracket"
+group = "required_core"
+status = "validated_scoped"
+gkx_owner = "gkx.operators.nonlinear.brackets"
+comparison_owner = "src/nonlinear.cu and src/exb.cu"
+evidence = "operator identity, de-aliasing, invariant, and nonlinear transport-window gates"
+
+[[capabilities]]
+id = "equilibrium_exb_flow_shear"
+group = "optional_extension"
+status = "planned_research_lane"
+gkx_owner = "gkx.operators.nonlinear.projection, gkx.operators.linear.cache_builder, and gkx.solvers.nonlinear.state_integration"
+comparison_owner = "src/exb.cu plus sheared perpendicular-grid phase updates"
+evidence = "coordinate, periodic/linked cache, split-phase and canonical compressed brackets, Hermitian stage projection, fixed/adaptive/restartable RK2/Heun-RK3, fixed-step IMEX, and canonical heat-flux trace pass zero-shear trajectory identity, analytic kx evolution, integer/fractional remap/dealias, linked-chain invariance, machine-zero Hermitian residual, inverse-remap, designed-order, linear-suppression, adaptive-CFL accepted-time/JVP/finite-difference, chunk-restart, fast/differentiable identity, endpoint-IMEX transport, and transport JVP/gradient/finite-difference gates; an adaptive 64x64x24 periodic x64 campaign gave a 6.10% gamma_E=0.01 reduction, while an adaptive comparison gave -0.084% under a different stage-time policy; the final fixed-step campaign rejects physical-model promotion: internal fixed-IMEX t=[240,300] windows drift and give a 4.82% increase, while independently stationary fixed-RK4 comparison windows give a 24.82% increase with -11.29-SEM reduction separation; the compact negative-evidence artifact is docs/_static/flow_shear_fixed_step_response_gate.json, and no input-file option is exposed"
+
+[[capabilities]]
+id = "initial_value_time_integration"
+group = "required_core"
+status = "validated"
+gkx_owner = "gkx.solvers.time and gkx.solvers.nonlinear"
+comparison_owner = "src/ts_rk3.cu, src/ts_rk4.cu, src/ts_sspx2.cu, and src/ts_sspx3.cu"
+evidence = "observed-order, stability, restart, and benchmark-window gates"
+
+[[capabilities]]
+id = "explicit_and_adaptive_time_policy"
+group = "required_core"
+status = "validated_scoped"
+gkx_owner = "gkx.solvers.time and gkx.workflows.runtime"
+comparison_owner = "src/ts_rk3.cu, src/ts_rk4.cu, src/ts_sspx2.cu, src/ts_sspx3.cu, and src/ts_k10.cu"
+evidence = "Euler/RK2/RK3/RK4/SSPx3/K10 observed-order tests plus fixed-CFL and Diffrax adaptive-path gates; identical method names are not assumed to imply identical tableaux"
+
+[[capabilities]]
+id = "dominant_eigenmode_solver"
+group = "differentiable_extension"
+status = "validated_scoped"
+gkx_owner = "gkx.solvers.linear"
+comparison_owner = "initial-value branch extraction"
+evidence = "Krylov-versus-time evolution, residual, branch-continuity, and eigenfunction gates"
+
+[[capabilities]]
+id = "restart_and_resolved_diagnostics"
+group = "required_core"
+status = "validated"
+gkx_owner = "gkx.artifacts and gkx.diagnostics"
+comparison_owner = "src/ncdf.cu, src/diagnostics.cu, and src/spectra_calc.cu"
+evidence = "restart identity, schema, heat-flux, field-energy, and resolved-spectrum tests"
+
+[[capabilities]]
+id = "conserving_lenard_bernstein_dougherty_like_collisions"
+group = "required_core"
+status = "validated_limited_model"
+gkx_owner = "gkx.operators.nonlinear.collisions and linear dissipation terms"
+comparison_owner = "src/closures.cu"
+evidence = "moment damping and low-order momentum/temperature correction tests; model remains limited for trapped-particle and multispecies collisional physics"
+
+[[capabilities]]
+id = "multispecies_conserving_dougherty_collision_operator"
+group = "optional_extension"
+status = "planned"
+gkx_owner = "future collision-operator protocol implementation"
+comparison_owner = "src/closures.cu"
+evidence = "must pass species-coupled particle, total momentum, total energy, null-space, adjointness, and entropy gates"
+
+[[capabilities]]
+id = "drift_kinetic_advanced_six_moment_operators"
+group = "optional_extension"
+status = "validated_scoped"
+gkx_owner = "gkx.operators.linear drift-kinetic original/improved-Sugama and Coulomb equations, multispecies pair matrices, and checked table application"
+comparison_owner = "published analytic six-gyromoment matrices"
+evidence = "Frei, Ernst & Ricci (2022) Appendix C equations 101-105 and C9; exact original/improved-Sugama and Coulomb equal/unequal-species coefficients, particle/total-momentum/total-energy conservation, unequal-species relaxation, equal-temperature matrix-wide dissipation, improved heat-flow proximity to Coulomb, generated-table checksum/direct identity, device-side kperp interpolation/spatial application, physical finite-b held-out interpolation convergence, JVP/finite-difference gates, and a fail-closed short-wave ITG probe"
+
+[[capabilities]]
+id = "linearized_sugama_or_coulomb_collisions"
+group = "optional_extension"
+status = "planned_research_lane"
+gkx_owner = "validated reduced original/improved-Sugama equation slices plus future full-hierarchy coefficient implementation"
+comparison_owner = "not a complete shipped capability"
+evidence = "requires field-particle terms, conservation, conductivity, zonal damping, and collisional-ITG benchmarks"
+
+[[capabilities]]
+id = "independent_scan_and_ensemble_parallelism"
+group = "required_core"
+status = "validated"
+gkx_owner = "gkx.parallel.independent and gkx.parallel.batch"
+comparison_owner = "MPI/CUDA run decomposition"
+evidence = "CPU/GPU numerical-identity and strong-scaling gates for ky scans and UQ ensembles"
+
+[[capabilities]]
+id = "nonlinear_multi_device_domain_decomposition"
+group = "optional_extension"
+status = "blocked"
+gkx_owner = "gkx.parallel and nonlinear device-z diagnostics"
+comparison_owner = "species/Hermite MPI/CUDA decomposition"
+evidence = "compile-stable benchmark-grid whole-state route is 0.211x and fails trajectory identity"
+
+[[capabilities]]
+id = "species_hermite_multi_device_decomposition"
+group = "optional_extension"
+status = "planned"
+gkx_owner = "gkx.parallel.velocity and future nonlinear integrator routing"
+comparison_owner = "src/grids.cu, src/moments.cu, and src/reductions.cu"
+evidence = "GX source prioritizes species decomposition then Hermite decomposition with explicit ghost exchange and MPI/NCCL field reductions; GKX requires state, invariant, diagnostic, transport-window, and speedup gates before routing"
+
+[[capabilities]]
+id = "jax_autodiff_and_implicit_gradients"
+group = "differentiable_extension"
+status = "validated_scoped"
+gkx_owner = "gkx.objectives and gkx.geometry"
+comparison_owner = "not available"
+evidence = "AD/FD, tangent, implicit eigenpair, conditioning, and covariance gates"
+
+[[capabilities]]
+id = "differentiable_vmec_boozer_optimization"
+group = "differentiable_extension"
+status = "validated_scoped"
+gkx_owner = "gkx.geometry and gkx.objectives"
+comparison_owner = "file-based geometry input"
+evidence = "vmex/booz_xform_jax parity, gradient holdout, and scoped QA optimization gates"
+
+[[capabilities]]
+id = "generic_forcing_and_transport_framework_coupling"
+group = "explicitly_out_of_scope"
+status = "not_shipped"
+gkx_owner = "none"
+comparison_owner = "src/forcing.cu and src/trinity_interface.cu"
+evidence = "no release claim; add only with a scientific owner and validation campaign"
+
+[[capabilities]]
+id = "specialized_reduced_equation_sets"
+group = "explicitly_out_of_scope"
+status = "not_shipped"
+gkx_owner = "none"
+comparison_owner = "src/run_gx.cu plus KREHM, Vlasov-Poisson, and collisional-ETG implementations"
+evidence = "the release claim is the full gyrokinetic model; specialized reduced systems require separate equations, diagnostics, and literature validation"
+
+[[capabilities]]
+id = "beer_smith_moment_closures"
+group = "optional_extension"
+status = "not_shipped"
+gkx_owner = "none"
+comparison_owner = "src/linear.cu and src/smith_par_closure.cu"
+evidence = "GKX currently uses resolved Hermite-Laguerre truncation and dissipation; closure models should be added only through the collision/closure protocol with dispersion and convergence gates"
+
+[[capabilities]]
+id = "long_wavelength_reduced_field_limit"
+group = "optional_extension"
+status = "not_shipped"
+gkx_owner = "none"
+comparison_owner = "src/solver.cu long_wavelength_GK path"
+evidence = "the shipped field solve retains finite-Larmor-radius response; a reduced long-wavelength field model needs separate asymptotic and parity tests"
+
+[matched_comparison_contract]
+required_fields = [
+  "equations_and_normalization",
+  "geometry_coefficients_and_parallel_boundary",
+  "species_and_gradient_conventions",
+  "spectral_grid_and_velocity_resolution",
+  "initial_condition_and_random_seed",
+  "precision_and_dealiasing",
+  "time_integrator_dt_and_adaptivity",
+  "collision_and_dissipation_settings",
+  "diagnostic_definition_and_normalization",
+  "fit_or_transport_window",
+]
+fail_closed_rules = [
+  "Do not attribute a mismatch to physics until the matched contract is complete.",
+  "Short state-level gates do not replace converged late-time transport windows.",
+  "A speedup requires active parallel work plus numerical identity on the same workload.",
+]

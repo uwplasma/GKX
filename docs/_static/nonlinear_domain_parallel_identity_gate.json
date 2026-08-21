@@ -1,0 +1,364 @@
+{
+  "boundary_identity": {
+    "indices": [
+      0,
+      7,
+      8,
+      15,
+      16,
+      23
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0
+  },
+  "case": "Nonlinear state-domain decomposition identity gate",
+  "claim_scope": "diagnostic nonlinear state-domain identity gate only; bounded local-stencil prototype with no production routing or speedup claim",
+  "decomposition": {
+    "axis": 0,
+    "boundary_indices": [
+      0,
+      7,
+      8,
+      15,
+      16,
+      23
+    ],
+    "chunk_bounds": [
+      [
+        0,
+        8
+      ],
+      [
+        8,
+        16
+      ],
+      [
+        16,
+        24
+      ]
+    ],
+    "chunk_sizes": [
+      8,
+      8,
+      8
+    ],
+    "domain_size": 24,
+    "halo": 1,
+    "num_domains": 3,
+    "offsets": [
+      0,
+      8,
+      16
+    ],
+    "state_shape": [
+      24,
+      24
+    ]
+  },
+  "dt": 0.025,
+  "gate": {
+    "atol": 1e-10,
+    "blocked_reasons": [],
+    "boundary_indices": [
+      0,
+      7,
+      8,
+      15,
+      16,
+      23
+    ],
+    "boundary_max_abs_error": 0.0,
+    "boundary_max_rel_error": 0.0,
+    "claim_scope": "diagnostic nonlinear state-domain identity gate only; bounded local-stencil prototype with no production routing or speedup claim",
+    "decomposed_path_enabled": true,
+    "gate_name": "nonlinear_domain_local_stencil_identity",
+    "identity_passed": true,
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "plan": {
+      "axis": 0,
+      "chunk_sizes": [
+        8,
+        8,
+        8
+      ],
+      "halo": 1,
+      "state_shape": [
+        24,
+        24
+      ]
+    },
+    "plan_valid": true,
+    "rtol": 1e-10
+  },
+  "gated_state_matches_decomposed": true,
+  "gated_state_matches_serial": true,
+  "rows": [
+    {
+      "abs_error": 0.0,
+      "axis_index": 0,
+      "decomposed_real": 0.0007828797097317874,
+      "serial_real": 0.0007828797097317874
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 1,
+      "decomposed_real": 0.04175199568271637,
+      "serial_real": 0.04175199568271637
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 2,
+      "decomposed_real": 0.08350301533937454,
+      "serial_real": 0.08350301533937454
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 3,
+      "decomposed_real": 0.12525209784507751,
+      "serial_real": 0.12525209784507751
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 4,
+      "decomposed_real": 0.16699835658073425,
+      "serial_real": 0.16699835658073425
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 5,
+      "decomposed_real": 0.2087409496307373,
+      "serial_real": 0.2087409496307373
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 6,
+      "decomposed_real": 0.2504792809486389,
+      "serial_real": 0.2504792809486389
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 7,
+      "decomposed_real": 0.29221293330192566,
+      "serial_real": 0.29221293330192566
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 8,
+      "decomposed_real": 0.3339417576789856,
+      "serial_real": 0.3339417576789856
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 9,
+      "decomposed_real": 0.37566596269607544,
+      "serial_real": 0.37566596269607544
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 10,
+      "decomposed_real": 0.41738608479499817,
+      "serial_real": 0.41738608479499817
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 11,
+      "decomposed_real": 0.4591028690338135,
+      "serial_real": 0.4591028690338135
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 12,
+      "decomposed_real": 0.5008171796798706,
+      "serial_real": 0.5008171796798706
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 13,
+      "decomposed_real": 0.542529821395874,
+      "serial_real": 0.542529821395874
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 14,
+      "decomposed_real": 0.5842416286468506,
+      "serial_real": 0.5842416286468506
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 15,
+      "decomposed_real": 0.6259531378746033,
+      "serial_real": 0.6259531378746033
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 16,
+      "decomposed_real": 0.6676647663116455,
+      "serial_real": 0.6676647663116455
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 17,
+      "decomposed_real": 0.7093763947486877,
+      "serial_real": 0.7093763947486877
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 18,
+      "decomposed_real": 0.75108802318573,
+      "serial_real": 0.75108802318573
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 19,
+      "decomposed_real": 0.7927995324134827,
+      "serial_real": 0.7927995324134827
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 20,
+      "decomposed_real": 0.8345104455947876,
+      "serial_real": 0.8345104455947876
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 21,
+      "decomposed_real": 0.8762205243110657,
+      "serial_real": 0.8762205243110657
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 22,
+      "decomposed_real": 0.9179292917251587,
+      "serial_real": 0.9179292917251587
+    },
+    {
+      "abs_error": 0.0,
+      "axis_index": 23,
+      "decomposed_real": 0.9588536620140076,
+      "serial_real": 0.9588536620140076
+    }
+  ],
+  "source": "gkx.operators.nonlinear.parallel nonlinear-domain prototype utilities",
+  "state_shape": [
+    24,
+    24
+  ],
+  "transport_window": {
+    "gate": {
+      "atol": 1e-10,
+      "blocked_reasons": [],
+      "boundary_indices": [
+        0,
+        7,
+        8,
+        15,
+        16,
+        23
+      ],
+      "claim_scope": "diagnostic nonlinear state-domain transport-window identity gate only; serial-vs-halo-decomposed state, boundary, mass, free-energy, and flux-proxy traces with no production routing or speedup claim",
+      "decomposed_flux_proxy_trace": [
+        0.19478252530097961,
+        0.19431491196155548,
+        0.19384874403476715,
+        0.1933842897415161,
+        0.19292140007019043
+      ],
+      "decomposed_free_energy_drift": -0.5882415771484375,
+      "decomposed_free_energy_trace": [
+        196.67481994628906,
+        196.5269775390625,
+        196.37969970703125,
+        196.23297119140625,
+        196.08657836914062
+      ],
+      "decomposed_mass_drift": -0.228363037109375,
+      "decomposed_mass_trace": [
+        287.99981689453125,
+        287.9428405761719,
+        287.8856201171875,
+        287.8283386230469,
+        287.7714538574219
+      ],
+      "decomposed_path_enabled": true,
+      "dt": 0.025,
+      "flux_proxy_trace_max_abs_error": 0.0,
+      "flux_proxy_trace_max_rel_error": 0.0,
+      "free_energy_trace_max_abs_error": 0.0,
+      "free_energy_trace_max_rel_error": 0.0,
+      "gate_name": "nonlinear_domain_transport_window_identity",
+      "identity_passed": true,
+      "mass_trace_max_abs_error": 0.0,
+      "mass_trace_max_rel_error": 0.0,
+      "max_abs_boundary_error": 0.0,
+      "max_abs_state_error": 0.0,
+      "max_rel_boundary_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "plan": {
+        "axis": 0,
+        "chunk_sizes": [
+          8,
+          8,
+          8
+        ],
+        "halo": 1,
+        "state_shape": [
+          24,
+          24
+        ]
+      },
+      "plan_valid": true,
+      "rtol": 1e-10,
+      "serial_flux_proxy_trace": [
+        0.19478252530097961,
+        0.19431491196155548,
+        0.19384874403476715,
+        0.1933842897415161,
+        0.19292140007019043
+      ],
+      "serial_free_energy_drift": -0.5882415771484375,
+      "serial_free_energy_trace": [
+        196.67481994628906,
+        196.5269775390625,
+        196.37969970703125,
+        196.23297119140625,
+        196.08657836914062
+      ],
+      "serial_mass_drift": -0.228363037109375,
+      "serial_mass_trace": [
+        287.99981689453125,
+        287.9428405761719,
+        287.8856201171875,
+        287.8283386230469,
+        287.7714538574219
+      ],
+      "steps": 4
+    },
+    "metrics": [
+      {
+        "decomposed_drift": -0.228363037109375,
+        "identity_passed": true,
+        "max_abs_error": 0.0,
+        "max_rel_error": 0.0,
+        "metric": "mass_trace",
+        "serial_drift": -0.228363037109375
+      },
+      {
+        "decomposed_drift": -0.5882415771484375,
+        "identity_passed": true,
+        "max_abs_error": 0.0,
+        "max_rel_error": 0.0,
+        "metric": "free_energy_trace",
+        "serial_drift": -0.5882415771484375
+      },
+      {
+        "decomposed_drift": null,
+        "identity_passed": true,
+        "max_abs_error": 0.0,
+        "max_rel_error": 0.0,
+        "metric": "boundary_flux_proxy_trace",
+        "serial_drift": null
+      }
+    ]
+  }
+}

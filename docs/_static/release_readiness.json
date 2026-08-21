@@ -1,0 +1,540 @@
+{
+  "failures": [],
+  "kind": "gkx_release_readiness",
+  "lane_status": {
+    "active_fraction_closed": 1.0,
+    "frozen_outputs": {
+      "count": 12,
+      "passed": true,
+      "rows": [
+        {
+          "array_count": 0,
+          "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "content_sha256": "111fd81afa2635624acff6510f4b3bc3576889b7a3f7a02d27fbaa4e53ab10fe",
+          "label": "Cyclone nonlinear transport",
+          "passed": true,
+          "path": "docs/_static/nonlinear_cyclone_gate_summary.json",
+          "scalar_count": 47,
+          "scalar_sha256": "7665be891175cb69248e03ce4c9533fe3219157a15494021bc768e5e97f8e09c"
+        },
+        {
+          "array_count": 0,
+          "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "content_sha256": "9167f43d8141769d884ac05159f69def12f9fcf42696c74cb3c66dd14a385755",
+          "label": "Cyclone Miller nonlinear transport",
+          "passed": true,
+          "path": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+          "scalar_count": 46,
+          "scalar_sha256": "543dcfca549952e5b2c7b551ffaf6d291e2969792b0e5133b1aa498a6772aecc"
+        },
+        {
+          "array_count": 0,
+          "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "content_sha256": "7a1dcdbc3c752a8b2968edbb68ef53a9ecf0df5896353c54c478e0eac43d3f24",
+          "label": "KBM linear branch continuity",
+          "passed": true,
+          "path": "docs/_static/kbm_branch_gate_summary.json",
+          "scalar_count": 73,
+          "scalar_sha256": "8626867c9fcf1dde6ae1749e091e65c8d3b9e9e34fe04ab48d764702af9d5d86"
+        },
+        {
+          "array_count": 0,
+          "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "content_sha256": "ab66d23fddbe19e8a8ca3700cd30d476514301da3d156c7bfa71a80f37b24b00",
+          "label": "KBM nonlinear transport",
+          "passed": true,
+          "path": "docs/_static/nonlinear_kbm_gate_summary.json",
+          "scalar_count": 43,
+          "scalar_sha256": "bd9e56d774d6cbc8507ae37dd6dcceda497133d03184fa64deed94e2a8f8a17e"
+        },
+        {
+          "array_count": 0,
+          "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "content_sha256": "813ccc5be4916cc1678c2b5382784d6d276e8a03e05f9796ab1be3b3305f4f85",
+          "label": "W7-X nonlinear transport",
+          "passed": true,
+          "path": "docs/_static/nonlinear_w7x_gate_summary.json",
+          "scalar_count": 53,
+          "scalar_sha256": "5d6291a2d1060d767875d7f50e108bca6ffb3e798f1a8e19b507d2ee05c04e39"
+        },
+        {
+          "array_count": 0,
+          "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "content_sha256": "ed9518e3f9c20c05605a1b392d32b676bd16bc7fe0eb2be840cb5622ee8f1d09",
+          "label": "HSX nonlinear transport",
+          "passed": true,
+          "path": "docs/_static/nonlinear_hsx_gate_summary.json",
+          "scalar_count": 46,
+          "scalar_sha256": "81d5ec138ee9412acae61ad13cd89f2f6a416de29b3516221824fbd499cb42dd"
+        },
+        {
+          "array_count": 16,
+          "array_sha256": "2adc015631a0211d3e567f4c9de97fa8580860044c133eef8fa7c027eb498c9d",
+          "content_sha256": "5429454bbc5b726c4ff0c175203babbf956d8d3fc115d4989b8b46793be46ac2",
+          "label": "collision operator invariants",
+          "passed": true,
+          "path": "docs/_static/collision_operator_verification.json",
+          "scalar_count": 46,
+          "scalar_sha256": "a53f1ac5ce7679f01f3bb40f01a5a65c1e5ffae2ce958308253caf77d8d05986"
+        },
+        {
+          "array_count": 3,
+          "array_sha256": "856810e35d5d9503efa1df798edbbee83c3d67df66b4cf2b775b6912cda2b3f0",
+          "content_sha256": "63fa8d86745eb257ab298430c19317ac2690822fdce9ef3194a5ed970eea453e",
+          "label": "restart and append identity contract",
+          "passed": true,
+          "path": "benchmarks/references/gkx_1_7_restart_identity.json",
+          "scalar_count": 1,
+          "scalar_sha256": "94a81f09f7fc9692b1df0b33fe2f8d4a3b4787b656782aaba66d762ce65a055a"
+        },
+        {
+          "array_count": 145,
+          "array_sha256": "a23b1cea554c79e8172d4688d7c242c5a81d30d966bf94bc711c233112a7fc06",
+          "content_sha256": "1c4585575c72f19cd19dabf146a06a1a0a1a1c8804686220e6faa575ea375aa3",
+          "label": "VMEC/Boozer geometry bridge",
+          "passed": true,
+          "path": "docs/_static/differentiable_geometry_bridge.json",
+          "scalar_count": 418,
+          "scalar_sha256": "941b3d2517439a4bde6ab7755bd72142689c27e4420286bb7c62c554ddba83d6"
+        },
+        {
+          "array_count": 5,
+          "array_sha256": "da0405020935abbf2863591449488a7aa5b9e5cc83f56c59fcb6c899f2469c7e",
+          "content_sha256": "7981d19a31a25b93f3aa843f27b0870dfd766ef1f4677d7ef699910adf1991c1",
+          "label": "solver objective derivatives",
+          "passed": true,
+          "path": "docs/_static/solver_objective_gradient_gate.json",
+          "scalar_count": 91,
+          "scalar_sha256": "3a3a72313ed2c25b7816fd25d4b7c557e5ad71a42e884aebbefc671898ab4ae0"
+        },
+        {
+          "array_count": 24,
+          "array_sha256": "786a6efb9d6d8f05376bebfbd6a39976c39ad3fb843ab068916cc0d8a7c23607",
+          "content_sha256": "1029086e191a9d54f57c5ded44a47a3ca0ed33b15c30ca75fed06d9b437f4f4b",
+          "label": "stellarator ITG objective portfolio",
+          "passed": true,
+          "path": "docs/_static/stellarator_itg_portfolio_gate.json",
+          "scalar_count": 123,
+          "scalar_sha256": "07d1a0630b426b0c5c7861ae5bd667e527f79b89df042926788cf67b96bc5564"
+        },
+        {
+          "array_count": 5,
+          "array_sha256": "0e0356407780c89ad32d6147d726954f4131af1605978148bd77f0b36bab6523",
+          "content_sha256": "efa5bcab21450cf3fcd1387070216ab1ef3f542ce9365ca195b5a1341321a568",
+          "label": "nonlinear optimization claim guard",
+          "passed": true,
+          "path": "docs/_static/production_nonlinear_optimization_guard.json",
+          "scalar_count": 90,
+          "scalar_sha256": "c2875a13c5cd0dbdfa0e001d6cc5cf57f6ccfa85e7b09c50911c84e05596a504"
+        }
+      ]
+    },
+    "passed": true,
+    "recomputed_active_summary": {
+      "active_fraction_closed": 1.0,
+      "incomplete_lanes": [],
+      "n_active": 5,
+      "n_closed": 5,
+      "n_incomplete": 0
+    },
+    "release_scoped_incomplete": 0,
+    "release_scoped_open_or_blocked": 0,
+    "source": "benchmarks/references/gkx_1_7_release_contract.json:release_lanes",
+    "status_artifacts": {
+      "benchmarks/references/gkx_1_7_release_contract.json": {
+        "frozen_output_fingerprint_count": 12,
+        "kind": "gkx_1_7_frozen_release_contract",
+        "lanes": [
+          {
+            "claim_level": "validated_diagnostics_negative_absolute_flux_promotion",
+            "key_metrics": {
+              "absolute_flux_promoted": false,
+              "accepted_uq_candidates": [],
+              "circular_replicate_combined_sem_rel": 0.04283952221624353,
+              "circular_replicate_mean_rel_spread": 0.035473869975602645,
+              "circular_replicate_passed": true,
+              "dataset_blockers": [
+                "downstream_candidate_skill_gates_not_passed"
+              ],
+              "dataset_current_total_cases": 12,
+              "dataset_current_train_geometries": 2,
+              "dataset_min_total_cases": 6,
+              "dataset_min_train_geometries": 2,
+              "dataset_sufficiency_promotion_passed": false,
+              "dshape_replicate_combined_sem_rel": 0.05360630620607054,
+              "dshape_replicate_mean_rel_spread": 0.14102885109482344,
+              "dshape_replicate_passed": true,
+              "holdout_mean_abs_relative_error": 6.491149442266367,
+              "holdout_points": 10,
+              "model_selection_candidate_mean_error": 0.6972871490908844,
+              "model_selection_interval_coverage": 0.9166666666666666,
+              "model_selection_status_passed": false,
+              "null_training_mean_error": 1.1705195192974545,
+              "promotion_guardrails_passed": true,
+              "shape_aware_promotion_passed": false,
+              "simple_rule_promotion_passed": false,
+              "train_points": 2,
+              "uq_candidate_promotion_passed": false,
+              "validated_inputs_passed": true
+            },
+            "lane": "Quasilinear diagnostics and saturation-model selection",
+            "next_action": "Use these as manuscript-grade diagnostics and negative model-selection results; do not expose an absolute-flux runtime model until a future candidate beats the null baseline on held-out nonlinear data.",
+            "primary_artifacts": [
+              "docs/_static/quasilinear_validated_calibration_inputs.json",
+              "docs/_static/quasilinear_stellarator_train_holdout_report.json",
+              "docs/_static/quasilinear_saturation_rule_sweep.json",
+              "docs/_static/quasilinear_shape_aware_saturation.json",
+              "docs/_static/quasilinear_candidate_uncertainty.json",
+              "docs/_static/quasilinear_dataset_sufficiency.json",
+              "docs/_static/quasilinear_model_selection_status.json",
+              "docs/_static/quasilinear_promotion_guardrails.json",
+              "docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.json",
+              "docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.json"
+            ],
+            "status": "closed"
+          },
+          {
+            "claim_level": "zero_beta_equal_arc_geometry_bridge_closed",
+            "key_metrics": {
+              "bridge_ad_fd_available": true,
+              "matrix_all_equal_arc_passed": true,
+              "matrix_n_cases": 3,
+              "minimum_boozer_mode_count": 21
+            },
+            "lane": "VMEC/Boozer differentiable geometry parity",
+            "next_action": "Keep finite-beta pressure-correction drift parity as a future extension unless the manuscript claims finite-beta transport-gradient optimization.",
+            "primary_artifacts": [
+              "docs/_static/differentiable_geometry_bridge.json",
+              "docs/_static/vmec_boozer_parity_matrix.json"
+            ],
+            "status": "closed"
+          },
+          {
+            "claim_level": "reduced_objective_optimization_closed_not_full_production_vmec_gk",
+            "key_metrics": {
+              "all_objective_gradient_gates_passed": true,
+              "best_reduction_factor": 0.05277983764808415,
+              "matched_qa_no_ess_relative_reduction": 0.1844401904195982,
+              "matched_qa_no_ess_to_optimized_audit_passed": true,
+              "matched_qa_no_ess_uncertainty_separation_sigma": 7.819308425110687,
+              "n_objectives": 3,
+              "production_nonlinear_optimization_guard_safe": true,
+              "production_nonlinear_optimization_promoted": true,
+              "production_nonlinear_optimized_equilibrium_ensembles": 4,
+              "production_nonlinear_replicated_holdout_ensembles": 3,
+              "weighted_residual_uq_gate_passed": true,
+              "worst_reduction_factor": 0.14944986630532714
+            },
+            "lane": "Reduced differentiable stellarator ITG optimization",
+            "next_action": "Use the UQ, production-guard, replicated-ensemble, and matched-audit artifacts as the current optimization-evidence figures. Do not use the reduced synthetic surface comparison as the solved-geometry optimization figure. The matched QA no-ESS to optimized QA/ESS audit is closed, but nonlinear-window VMEC/Boozer/GK gradients and matched audits across broader geometry families remain future requirements before claiming broad end-to-end stellarator heat-flux optimization.",
+            "primary_artifacts": [
+              "docs/_static/stellarator_itg_optimization_uq.json",
+              "docs/_static/stellarator_itg_optimization_uq.png",
+              "docs/_static/production_nonlinear_optimization_guard.json",
+              "docs/_static/production_nonlinear_optimization_guard.png",
+              "docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.json",
+              "docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.png",
+              "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_t700_ensemble_gate.json",
+              "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_t700_ensemble_gate.png",
+              "docs/_static/qa_no_ess_to_optimized_nonlinear_audit.json",
+              "docs/_static/qa_no_ess_to_optimized_nonlinear_audit.png"
+            ],
+            "status": "closed",
+            "supporting_artifacts": [
+              "docs/_static/stellarator_itg_optimization_comparison.json"
+            ]
+          },
+          {
+            "claim_level": "required_for_full_end_to_end_stellarator_optimization_claim",
+            "key_metrics": {
+              "full_vmec_boozer_frequency_gradient_gate": true,
+              "full_vmec_boozer_quasilinear_gradient_gate": true,
+              "full_vmec_boozer_reduced_nonlinear_window_gradient_gate": true,
+              "linear_growth_gradient_gate": true,
+              "multi_equilibrium_gradient_cases": 2,
+              "multi_equilibrium_gradient_holdout_matrix": true,
+              "multi_equilibrium_gradient_max_rel_error": 0.026774412331418387,
+              "multi_equilibrium_reduced_nonlinear_window_gradient_gate": true,
+              "nonlinear_transport_average_gate": false,
+              "optimized_equilibrium_replicated_transport_ensembles": 4,
+              "production_nonlinear_observable_fd_path_gate": false,
+              "production_nonlinear_optimization_guard_safe": true,
+              "production_nonlinear_optimization_promoted": true,
+              "production_nonlinear_window_gradient_gate": false,
+              "quasilinear_weight_gradient_gate": true,
+              "reduced_nonlinear_window_gradient_gate": true,
+              "solver_ready_gradient_gate": true,
+              "source_scope": "solver_ready_geometry_contract",
+              "startup_nonlinear_plumbing_fd_path_gate": true,
+              "startup_nonlinear_plumbing_max_window_cv": 0.09509712103158827,
+              "startup_nonlinear_plumbing_max_window_trend": 0.3125158414254592,
+              "startup_nonlinear_plumbing_repeatability_rel_error": 0.0,
+              "startup_nonlinear_plumbing_response_fraction": 0.11085605870343603,
+              "variance_reduced_nonlinear_gradient_common_pairs": 21,
+              "variance_reduced_nonlinear_gradient_control_mean_passed": true,
+              "variance_reduced_nonlinear_gradient_response_mean": -0.3561353531352798,
+              "variance_reduced_nonlinear_gradient_uncertainty_rel": 0.31148835872140096,
+              "vmec_boozer_frequency_rel_error": 0.004892743510544424,
+              "vmec_boozer_li383_reduced_nonlinear_window_rel_error": 0.0009180110087433277,
+              "vmec_boozer_nonlinear_transport_average_gate": false,
+              "vmec_boozer_production_nonlinear_observable_fd_path_gate": false,
+              "vmec_boozer_quasilinear_rel_error": 0.004282152564851315,
+              "vmec_boozer_reduced_nonlinear_window_rel_error": 0.026774412331418387,
+              "vmec_boozer_startup_nonlinear_derivative_asymmetry": 2.8552511209300935,
+              "vmec_boozer_startup_nonlinear_plumbing_fd_path_gate": true,
+              "vmec_boozer_startup_nonlinear_response_fraction": 0.04008881189273438
+            },
+            "lane": "Production solver-objective geometry gradients",
+            "next_action": "Full VMEC/Boozer eigenfrequency, quasilinear, and multi-equilibrium reduced nonlinear-window estimator gradients are closed. The compact nonlinear FD audits are tracked only as startup plumbing checks; they do not validate transport heat-flux averages. The selected optimized-equilibrium long-window audit is closed; VMEC/Boozer turbulence gradients, local-gradient conditioning, and broader multi-surface baseline-to-optimized audits remain required before full nonlinear stellarator-optimization claims.",
+            "primary_artifacts": [
+              "docs/_static/solver_objective_gradient_gate.json",
+              "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
+              "docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
+              "docs/_static/vmec_boozer_nonlinear_window_gradient_gate.json",
+              "docs/_static/vmec_boozer_li383_nonlinear_window_gradient_gate.json",
+              "docs/_static/vmec_boozer_gradient_holdout_matrix.json",
+              "docs/_static/nonlinear_window_fd_audit.json",
+              "docs/_static/nonlinear_window_fd_audit.png",
+              "docs/_static/vmec_boozer_nonlinear_window_fd_audit.json",
+              "docs/_static/vmec_boozer_nonlinear_window_fd_audit.png",
+              "docs/_static/production_nonlinear_optimization_guard.json",
+              "docs/_static/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_gate.json",
+              "docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.json"
+            ],
+            "status": "closed"
+          },
+          {
+            "claim_level": "release_performance_artifacts_closed_no_broad_speedup_claim",
+            "key_metrics": {
+              "best_identity_candidate": null,
+              "best_identity_candidate_speedup": null,
+              "engineering_speedup": 0.2114953704830928,
+              "full_trace_cpu_warm_seconds": 0.3346847665961832,
+              "full_trace_gpu_transpose_count": 32.0,
+              "full_trace_gpu_warm_seconds": 0.012807567021809518,
+              "hsx_cpu_full_rhs": 0.3086076334118843,
+              "hsx_gpu_full_rhs": 0.027057467214763164,
+              "identity_gate_pass": false,
+              "miller_cpu_grid_full_rhs": 0.3484569167951122,
+              "miller_gpu_grid_full_rhs": 0.012803101912140846,
+              "miller_gpu_spectral_full_rhs": 0.014757980592548847,
+              "release_performance_gate": true,
+              "rhs_cpu_bracket_grid_over_spectral": 1.544788374379975,
+              "rhs_cpu_full_grid_over_spectral": 1.3022508836871707,
+              "rhs_fastest_full_label": "GPU spectral",
+              "rhs_gpu_bracket_grid_over_spectral": 2.2429853842950562,
+              "rhs_gpu_full_grid_over_spectral": 1.5129955548419813,
+              "w7x_cpu_full_rhs": 0.30949455841910095,
+              "w7x_gpu_full_rhs": 0.027265143021941184
+            },
+            "lane": "Profiler-backed nonlinear performance claims",
+            "next_action": "Release performance evidence is closed for scoped CPU/GPU profiler artifacts; keep broad production nonlinear speedup and domain-decomposition claims for the next manuscript/science lane.",
+            "primary_artifacts": [
+              "docs/_static/nonlinear_sharding_profile_office_gpu_benchmark_grid.json",
+              "docs/_static/nonlinear_rhs_profile.json",
+              "docs/_static/nonlinear_rhs_profile_miller.json",
+              "docs/_static/nonlinear_rhs_profile_stellarator_runtime.json",
+              "docs/_static/full_nonlinear_rhs_trace_summary.json",
+              "docs/_static/full_nonlinear_rhs_trace_gpu_summary.json"
+            ],
+            "status": "closed"
+          },
+          {
+            "claim_level": "deferred_out_of_current_manuscript_scope",
+            "key_metrics": {},
+            "lane": "W7-X zonal recurrence/damping",
+            "next_action": "Post-manuscript lane.",
+            "primary_artifacts": [
+              "docs/_static/w7x_zonal_reference_compare.json"
+            ],
+            "status": "deferred"
+          },
+          {
+            "claim_level": "deferred_out_of_current_manuscript_scope",
+            "key_metrics": {},
+            "lane": "TEM / kinetic-electron stellarator extension",
+            "next_action": "Post-manuscript lane.",
+            "primary_artifacts": [
+              "docs/_static/w7x_tem_extension_status.json"
+            ],
+            "status": "deferred"
+          }
+        ],
+        "performance_row_count": 30,
+        "public_api_count": 362,
+        "status_counts": {
+          "closed": 5,
+          "deferred": 2
+        }
+      }
+    },
+    "target_fraction": 0.98
+  },
+  "optimization_status": {
+    "failed_flags": [],
+    "failed_prelaunch_contracts": [],
+    "failed_prelaunch_rows": [],
+    "kind": "gkx_1_7_frozen_release_contract",
+    "passed": true,
+    "prelaunch_gate_count": 4,
+    "required_flags": {
+      "long_window_nonlinear_audit_passed": true,
+      "negative_reference_blocks_weak_margin": true,
+      "nonlinear_campaign_admission_ready": true,
+      "nonlinear_prelaunch_policy_ready": true,
+      "qa_baseline_gate_passed": true,
+      "quasilinear_model_selection_passed": false,
+      "simple_quasilinear_absolute_flux_promoted": false
+    },
+    "required_prelaunch_gate_rows": [
+      {
+        "expected_raw_passed": true,
+        "label": "replicated landscape admission",
+        "min_sample_count": 12.0,
+        "path": "docs/_static/vmec_boundary_transport_landscape_admission.json",
+        "required_blocker": null
+      },
+      {
+        "expected_raw_passed": true,
+        "label": "selected reduced prelaunch",
+        "min_sample_count": 18.0,
+        "path": "docs/_static/vmec_boundary_transport_prelaunch_gate.json",
+        "required_blocker": null
+      },
+      {
+        "expected_raw_passed": false,
+        "label": "weak reduced-margin reference",
+        "min_sample_count": 18.0,
+        "path": "docs/_static/strict_qa_top12_edge_prelaunch_gate.json",
+        "required_blocker": "insufficient_reduced_margin_for_nonlinear_audit"
+      },
+      {
+        "expected_raw_passed": true,
+        "label": "next nonlinear campaign admission",
+        "min_sample_count": 18.0,
+        "path": "docs/_static/nonlinear_campaign_admission_report.json",
+        "required_blocker": null
+      }
+    ],
+    "source": "benchmarks/references/gkx_1_7_release_contract.json",
+    "summary": {
+      "claim_evidence_level": "scoped_matched_replicated_nonlinear_audit",
+      "claim_promotion_blockers": [
+        "direct_scalar_transport_branch_blocked",
+        "projected_transport_metric_not_improved",
+        "quasilinear_model_selection_not_promoted",
+        "simple_quasilinear_absolute_flux_not_promoted"
+      ],
+      "direct_scalar_transport_blocked": true,
+      "landscape_admission_passed": true,
+      "long_window_nonlinear_audit_passed": true,
+      "negative_reference_blocks_weak_margin": true,
+      "nonlinear_campaign_admission_ready": true,
+      "nonlinear_prelaunch_policy_ready": true,
+      "positive_prelaunch_gate_passed": true,
+      "projected_transport_improved": false,
+      "qa_baseline_gate_passed": true,
+      "quasilinear_model_selection_passed": false,
+      "simple_quasilinear_absolute_flux_promoted": false
+    }
+  },
+  "passed": true,
+  "project": {
+    "name": "gkx",
+    "scripts": [
+      "gkx",
+      "gkx"
+    ],
+    "version": "1.7.0"
+  },
+  "release_target": {
+    "status_source": "benchmarks/references/gkx_1_7_release_contract.json:release_lanes",
+    "technical_completion_fraction": 0.98
+  },
+  "required_ci_snippets": [
+    "wide-coverage-shards",
+    "coverage-wide-shard-manifest.json",
+    "--require-shard-data",
+    "--coverage-xml coverage-wide.xml",
+    "--enforce-package-coverage",
+    "codecov/codecov-action",
+    "tools/release/check_parallel_scaling_artifacts.py",
+    "tools/release/check_package_architecture_manifest.py",
+    "tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only",
+    "tools/release/check_quasilinear_promotion_guardrails.py",
+    "tools/release/check_vmec_boozer_gates.py differentiability-claim",
+    "tools/artifacts/build_parallelization_completion_status.py",
+    "tools/release/check_release_readiness.py technical-status",
+    "tools/release/check_release_readiness.py",
+    "rm -rf build dist"
+  ],
+  "required_codecov_snippets": [
+    "after_n_builds: 2",
+    "wait_for_ci: true",
+    "flags:",
+    "- wide-package"
+  ],
+  "required_readme_snippets": [
+    "pip install gkx",
+    "gkx",
+    "MIT"
+  ],
+  "required_release_snippets": [
+    "name: Release",
+    "gh-action-pypi-publish",
+    "tools/release/check_release_readiness.py version",
+    "tools/release/check_repository_size_manifest.py",
+    "tools/release/check_repository_size_manifest.py release-artifacts",
+    "tools/release/check_package_architecture_manifest.py",
+    "tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only",
+    "tools/release/check_parallel_scaling_artifacts.py",
+    "tools/release/check_quasilinear_promotion_guardrails.py",
+    "tools/release/check_vmec_boozer_gates.py differentiability-claim",
+    "tools/artifacts/build_parallelization_completion_status.py",
+    "tools/release/check_release_readiness.py technical-status",
+    "tools/release/check_release_readiness.py",
+    "rm -rf build dist"
+  ],
+  "required_static_artifacts": [
+    "benchmarks/references/gkx_1_7_release_contract.json",
+    "docs/_static/runtime_memory_benchmark.png",
+    "docs/_static/runtime_memory_summary_ship_refresh.json",
+    "docs/_static/runtime_memory_results_ship_refresh.csv",
+    "docs/_static/validation_gate_index.json",
+    "docs/_static/validation_coverage_manifest_summary.json",
+    "docs/_static/quasilinear_promotion_guardrails.json",
+    "docs/_static/vmec_boozer_differentiability_claim_guard.json",
+    "docs/_static/vmec_boozer_shaped_pressure_solver_frequency_gradient_gate.json",
+    "docs/_static/vmec_boozer_shaped_pressure_quasilinear_gradient_gate.json",
+    "docs/_static/vmec_boozer_shaped_pressure_nonlinear_window_gradient_gate.json",
+    "docs/_static/technical_release_status.json",
+    "docs/_static/w7x_tem_extension_status.json",
+    "docs/_static/independent_ky_scan_scaling_large.json",
+    "docs/_static/quasilinear_uq_ensemble_scaling_large.json",
+    "docs/_static/parallelization_completion_status.json",
+    "docs/_static/nonlinear_sharding_strong_scaling_large.json",
+    "docs/_static/nonlinear_domain_parallel_identity_gate.json",
+    "docs/_static/nonlinear_spectral_communication_identity_gate.json",
+    "docs/_static/vmec_boundary_transport_landscape_admission.json",
+    "docs/_static/vmec_boundary_transport_prelaunch_gate.json",
+    "docs/_static/nonlinear_campaign_admission_report.json",
+    "docs/_static/strict_qa_top12_edge_prelaunch_gate.json"
+  ],
+  "root": "/Users/rogeriojorge/local/GKX",
+  "technical_status": {
+    "completion_percent": 100.0,
+    "failed_required": [],
+    "passed": true,
+    "source": "docs/_static/technical_release_status.json",
+    "target_percent": 98.0
+  },
+  "version": {
+    "checked_pypi": false,
+    "duplicate_on_pypi": false,
+    "package": "gkx",
+    "project_version": "1.7.0",
+    "require_tag": false,
+    "source_version": "1.7.0",
+    "tag": null
+  }
+}

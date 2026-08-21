@@ -1,0 +1,131 @@
+{
+  "case": "cyclone_short_nonlinear_window",
+  "gate_index_include": false,
+  "gate_mean_rel": 0.1,
+  "gate_passed": false,
+  "gate_report": {
+    "case": "cyclone_short_nonlinear_window",
+    "gates": [
+      {
+        "abs_error": 1.2475408051938597,
+        "atol": 0.1,
+        "metric": "Phi2_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 1.2475408051938597,
+        "passed": false,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.19855514502789434,
+        "atol": 0.1,
+        "metric": "Wg_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.19855514502789434,
+        "passed": false,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.16064952183104747,
+        "atol": 0.1,
+        "metric": "Wphi_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.16064952183104747,
+        "passed": false,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.1,
+        "metric": "Wapar_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.20066701660670386,
+        "atol": 0.1,
+        "metric": "HeatFlux_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.20066701660670386,
+        "passed": false,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.1,
+        "metric": "ParticleFlux_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 1.2475408051938597,
+    "max_rel_error": 0.0,
+    "passed": false,
+    "source": "GX nonlinear diagnostics"
+  },
+  "gx": "tools_out/cyclone_resolved_audit/cyclone_salpha_short.out.nc",
+  "notes": "Short t=5 resolved diagnostic audit retained for debugging startup/resolved spectra; not a mature nonlinear transport-window release gate.",
+  "source": "GX nonlinear diagnostics",
+  "gkx": "tools_out/cyclone_resolved_audit/cyclone_nonlinear_gkx_t5_gxshort_fixed_dt005_nocoll_cpu_diag.out.nc",
+  "summary": [
+    {
+      "final_rel": 1.3111708597637566,
+      "max_rel_abs": 1.3111708597637566,
+      "mean_rel_abs": 1.2475408051938597,
+      "metric": "Phi2"
+    },
+    {
+      "final_rel": 0.2700095393542988,
+      "max_rel_abs": 0.2700095393542988,
+      "mean_rel_abs": 0.19855514502789434,
+      "metric": "Wg"
+    },
+    {
+      "final_rel": 0.1799708473173722,
+      "max_rel_abs": 0.1799708473173722,
+      "mean_rel_abs": 0.16064952183104747,
+      "metric": "Wphi"
+    },
+    {
+      "final_rel": 0.0,
+      "max_rel_abs": 0.0,
+      "mean_rel_abs": 0.0,
+      "metric": "Wapar"
+    },
+    {
+      "final_rel": 0.23710581222992444,
+      "max_rel_abs": 0.24179897198692127,
+      "mean_rel_abs": 0.20066701660670386,
+      "metric": "HeatFlux"
+    },
+    {
+      "final_rel": 0.0,
+      "max_rel_abs": 0.0,
+      "mean_rel_abs": 0.0,
+      "metric": "ParticleFlux"
+    }
+  ],
+  "tmax": 5.0,
+  "validation_role": "exploratory_short_transient_diagnostic"
+}

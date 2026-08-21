@@ -1,0 +1,16 @@
+{
+  "case": "external_vmec_dshape_replicate_nonlinear_window",
+  "dt": 0.04,
+  "kind": "nonlinear_window_summary",
+  "nonlinear_artifact": "dshape_replicate_nonlinear_t250_n64_dt0p04.out.nc",
+  "promotion_gate": {
+    "passed": true
+  },
+  "seed": 22,
+  "gkx": "dshape_replicate_nonlinear_t250_n64_dt0p04_heat_flux_trace.csv",
+  "tmax": 250.0,
+  "tmin": 170.0,
+  "variant_axis": "timestep",
+  "variant_label": "dt0p04",
+  "window_note": "post-transient t=[170,250] chosen to keep >=8 terminal samples for dt=0.05 and dt=0.04 output cadence while preserving late saturated transport window"
+}

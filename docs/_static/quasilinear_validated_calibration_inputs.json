@@ -1,0 +1,1790 @@
+{
+  "claim_level": "calibration_inputs_validated_by_passed_nonlinear_gates",
+  "gate_patterns": [
+    "/Users/rogeriojorge/local/GKX/docs/_static/**/*.json"
+  ],
+  "kind": "quasilinear_calibration_input_audit",
+  "n_gate_artifact_matches": 724,
+  "n_negative_evidence": 96,
+  "negative_evidence": [
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_holdout_nonlinear_t450_n48_pilot.json",
+      "case": "external_vmec_circular_holdout_nonlinear_t450_n48_pilot",
+      "claim_level": "finite_long_external_vmec_pilot_pending_high_grid_gate",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.json",
+      "case": "external_vmec_circular_holdout_nonlinear_t450_n64_pilot",
+      "claim_level": "finite_long_external_vmec_pilot_pending_high_grid_gate",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_replicates/circular_replicate_nonlinear_t700_n64_dt0p04_transport_window.json",
+      "case": "circular_external_vmec_t700_replicate_window",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_replicates/circular_replicate_nonlinear_t700_n64_seed31_transport_window.json",
+      "case": "circular_external_vmec_t700_replicate_window",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_replicates/circular_replicate_nonlinear_t700_n64_seed32_transport_window.json",
+      "case": "circular_external_vmec_t700_replicate_window",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.json",
+      "case": "circular_external_vmec_t700_replicate_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_readiness.json",
+      "case": "circular_external_vmec_t700_replicate_window_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_replicates/nonlinear_window_convergence_reports/circular_replicate_nonlinear_t700_n64_dt0p04_transport_window.convergence.json",
+      "case": "circular_external_vmec_t700_replicate_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_replicates/nonlinear_window_convergence_reports/circular_replicate_nonlinear_t700_n64_seed31_transport_window.convergence.json",
+      "case": "circular_external_vmec_t700_replicate_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_replicates/nonlinear_window_convergence_reports/circular_replicate_nonlinear_t700_n64_seed32_transport_window.convergence.json",
+      "case": "circular_external_vmec_t700_replicate_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_t150_high_grid_convergence_gate.json",
+      "case": "Circular tokamak external VMEC nonlinear t150 high-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_circular_t250_high_grid_convergence_gate.json",
+      "case": "Circular tokamak external VMEC nonlinear t250 high-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_cth_like_grid_convergence_gate.json",
+      "case": "CTH-like external VMEC nonlinear grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_cth_like_nonlinear_t150_n48_pilot.json",
+      "case": "external_vmec_cth_like_nonlinear_t150_n48_pilot",
+      "claim_level": "finite_higher_grid_nonlinear_feasibility_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_cth_like_nonlinear_t150_pilot.json",
+      "case": "external_vmec_cth_like_nonlinear_t150_pilot",
+      "claim_level": "finite_long_nonlinear_feasibility_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_cth_like_modified_high_grid_time_horizon_gate.json",
+      "case": "CTH-like external VMEC modified-protocol high-grid time-horizon stability",
+      "claim_level": "negative_time_horizon_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_time_horizon_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_cth_like_modified_late_high_grid_time_horizon_gate.json",
+      "case": "CTH-like external VMEC modified-protocol late high-grid time-horizon stability",
+      "claim_level": "passed_high_grid_time_horizon_candidate_not_replicated_holdout",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_time_horizon_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_cth_like_modified_t150_high_grid_convergence_gate.json",
+      "case": "CTH-like external VMEC modified-protocol t=150 high-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_cth_like_modified_t350_full_grid_convergence_gate.json",
+      "case": "CTH-like external VMEC modified-protocol t=350 full-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_nonlinear_t150_n64_pilot.json",
+      "case": "external_vmec_dshape_nonlinear_t150_n64_pilot",
+      "claim_level": "finite_high_grid_long_nonlinear_feasibility_not_yet_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_high_grid_convergence_gate.json",
+      "case": "D-shaped tokamak external VMEC nonlinear high-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_nonlinear_t150_n32_pilot.json",
+      "case": "external_vmec_dshape_nonlinear_t150_n32_pilot",
+      "claim_level": "finite_low_grid_long_nonlinear_feasibility_not_yet_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_nonlinear_t150_n48_pilot.json",
+      "case": "external_vmec_dshape_nonlinear_t150_n48_pilot",
+      "claim_level": "finite_mid_grid_long_nonlinear_feasibility_not_yet_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_nonlinear_t250_n48_pilot.json",
+      "case": "external_vmec_dshape_nonlinear_t250_n48_pilot",
+      "claim_level": "finite_mid_grid_long_nonlinear_feasibility_pending_high_grid_gate",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.json",
+      "case": "external_vmec_dshape_nonlinear_t250_n64_pilot",
+      "claim_level": "finite_high_grid_long_nonlinear_feasibility_pending_high_grid_gate",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_dt0p04_transport_window.json",
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_seed31_transport_window.json",
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_nonlinear_t250_n64_seed32_transport_window.json",
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.json",
+      "case": "external_vmec_dshape_replicate_t250_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_readiness.json",
+      "case": "external_vmec_dshape_replicate_t250_ensemble_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_replicates/nonlinear_window_convergence_reports/dshape_replicate_nonlinear_t250_n64_dt0p04_transport_window.convergence.json",
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_replicates/nonlinear_window_convergence_reports/dshape_replicate_nonlinear_t250_n64_seed31_transport_window.convergence.json",
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_dshape_replicates/nonlinear_window_convergence_reports/dshape_replicate_nonlinear_t250_n64_seed32_transport_window.convergence.json",
+      "case": "external_vmec_dshape_replicate_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_transport_window.json",
+      "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed31_transport_window.json",
+      "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed32_transport_window.json",
+      "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+      "claim_level": "",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_summary",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_itermodel_independent_audit_nonlinear_t450_n48_pilot.json",
+      "case": "external_vmec_itermodel_independent_audit_nonlinear_t450_n48_pilot",
+      "claim_level": "finite_same_family_audit_grid_gate_pending",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_itermodel_independent_audit_nonlinear_t450_n64_pilot.json",
+      "case": "external_vmec_itermodel_independent_audit_nonlinear_t450_n64_pilot",
+      "claim_level": "finite_same_family_audit_grid_gate_pending",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_itermodel_nonlinear_t350_n48_pilot.json",
+      "case": "external_vmec_itermodel_nonlinear_t350_n48_pilot",
+      "claim_level": "finite_nonlinear_feasibility_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.json",
+      "case": "external_vmec_itermodel_nonlinear_t350_n64_pilot",
+      "claim_level": "finite_nonlinear_feasibility_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_itermodel_t150_high_grid_convergence_gate.json",
+      "case": "ITERModel external VMEC nonlinear t150 high-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_itermodel_t250_high_grid_convergence_gate.json",
+      "case": "ITERModel external VMEC nonlinear t250 high-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_qh_grid_convergence_gate.json",
+      "case": "nfp4 QH external VMEC nonlinear grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_qh_nonlinear_t150_n48_pilot.json",
+      "case": "external_vmec_qh_nonlinear_t150_n48_pilot",
+      "claim_level": "finite_higher_grid_long_nonlinear_feasibility_not_yet_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_qh_nonlinear_t150_pilot.json",
+      "case": "external_vmec_qh_nonlinear_t150_pilot",
+      "claim_level": "finite_reduced_grid_long_nonlinear_feasibility_not_grid_converged_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_qh_high_grid_convergence_gate.json",
+      "case": "nfp4 QH external VMEC nonlinear high-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_qh_nonlinear_t150_n64_pilot.json",
+      "case": "external_vmec_qh_nonlinear_t150_n64_pilot",
+      "claim_level": "finite_high_grid_long_nonlinear_feasibility_not_yet_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_dt0p04_high_grid_time_horizon_gate.json",
+      "case": "Shaped tokamak pressure external VMEC dt=0.04 high-grid time-horizon stability",
+      "claim_level": "passed_high_grid_time_horizon_candidate_not_replicated_holdout",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_time_horizon_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_readiness.json",
+      "case": "shaped_tokamak_pressure_n80_t650_seed_timestep_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": true,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_t450_dt0p04_full_grid_convergence_gate.json",
+      "case": "Shaped tokamak pressure external VMEC n48/n64/n80 dt=0.04 t450 full-grid convergence",
+      "claim_level": "negative_grid_convergence_result_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "external_vmec_nonlinear_grid_convergence_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n48_pilot.json",
+      "case": "external_vmec_updown_asym_nonlinear_t450_n48_pilot",
+      "claim_level": "finite_long_nonlinear_feasibility_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.json",
+      "case": "external_vmec_updown_asym_nonlinear_t450_n64_pilot",
+      "claim_level": "finite_long_nonlinear_feasibility_not_transport_validation",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_feasibility_pilot",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/nonlinear_cyclone_short_gate_summary.json",
+      "case": "cyclone_short_nonlinear_window",
+      "claim_level": "",
+      "claim_level_acceptable": true,
+      "kind": "",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/nonlinear_sharding_production_speedup_gate.json",
+      "case": "nonlinear_sharding_production_speedup_gate",
+      "claim_level": "",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_sharding_production_speedup_gate",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/nonlinear_window_convergence_reports/external_vmec_circular_t450_n64_transport_window.convergence.json",
+      "case": "circular_external_vmec_t450_high_grid_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/nonlinear_window_convergence_reports/external_vmec_dshape_t250_n64_transport_window.convergence.json",
+      "case": "dshape_external_vmec_t250_high_grid_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable",
+        "gate_report_not_passed",
+        "payload_not_passed"
+      ],
+      "artifact": "docs/_static/nonlinear_window_convergence_reports/external_vmec_itermodel_t350_n64_transport_window.convergence.json",
+      "case": "itermodel_external_vmec_t350_high_grid_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/nonlinear_window_convergence_reports/external_vmec_updown_asym_t450_n64_transport_window.convergence.json",
+      "case": "updown_asym_external_vmec_t450_high_grid_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": false,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": true
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/nonlinear_window_ensemble_readiness_manifest.json",
+      "case": "nonlinear_window_ensemble_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_dt0p04_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed32_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed33_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_nonlinear_t1500_n64_dt0p04_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_nonlinear_t1500_n64_seed32_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_nonlinear_t1500_n64_seed33_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_dt0p04_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_qa_baseline_scipy_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_seed32_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_qa_baseline_scipy_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_seed33_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_qa_baseline_scipy_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_dt0p04_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed32_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed33_transport_window.convergence.json",
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window",
+      "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_convergence_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_ensemble_gate.json",
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_readiness.json",
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_ensemble_gate.json",
+      "case": "vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_readiness.json",
+      "case": "vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_replicated_nonlinear_window_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_qa_baseline_scipy_ensemble_gate.json",
+      "case": "vmec_qa_full_sweep_qa_baseline_scipy_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_qa_baseline_scipy_readiness.json",
+      "case": "vmec_qa_full_sweep_qa_baseline_scipy_replicated_nonlinear_window_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_quasilinear_from_strict_baseline_ensemble_gate.json",
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_quasilinear_from_strict_baseline_readiness.json",
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/production_nonlinear_optimization_guard.json",
+      "case": "production_nonlinear_optimization_guard",
+      "claim_level": "production_nonlinear_optimization_blocked_until_optimized_equilibrium_replicated_transport_windows",
+      "claim_level_acceptable": true,
+      "kind": "production_nonlinear_turbulent_flux_optimization_guard",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_t900_ensemble_gate.json",
+      "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_t900_followup_ensemble_gate.json",
+      "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_readiness.json",
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_plus_delta_readiness.json",
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_plus_delta_replicated_nonlinear_window_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_plus_delta_replicates/qa_ess_zbs10_rel7p5_nonlinear_gradient_plus_delta_t900_ensemble_gate.json",
+      "case": "qa_ess_zbs10_rel7p5_nonlinear_gradient_plus_delta_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/quasilinear_candidate_regularization_sweep.json",
+      "case": "quasilinear_candidate_regularization_sweep",
+      "claim_level": "spectral_envelope_regularization_audit_not_runtime_flux_predictor",
+      "claim_level_acceptable": true,
+      "kind": "quasilinear_candidate_regularization_sweep",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/quasilinear_candidate_uncertainty.json",
+      "case": "quasilinear_candidate_uncertainty",
+      "claim_level": "candidate_model_development_not_runtime_option",
+      "claim_level_acceptable": true,
+      "kind": "quasilinear_candidate_uncertainty_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/quasilinear_dataset_sufficiency.json",
+      "case": "quasilinear_dataset_sufficiency",
+      "claim_level": "scoped_low_parameter_candidate_promotion_not_runtime_option",
+      "claim_level_acceptable": true,
+      "kind": "quasilinear_dataset_sufficiency",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/quasilinear_error_anatomy.json",
+      "case": "quasilinear_error_anatomy",
+      "claim_level": "model_development_residual_anatomy_not_absolute_flux_promotion",
+      "claim_level_acceptable": true,
+      "kind": "quasilinear_error_anatomy",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/quasilinear_model_selection_status.json",
+      "case": "quasilinear_model_selection",
+      "claim_level": "model_selection_or_scope_incomplete",
+      "claim_level_acceptable": true,
+      "kind": "quasilinear_model_selection_status",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "promotion_gate_not_passed",
+        "claim_level_not_acceptable"
+      ],
+      "artifact": "docs/_static/quasilinear_holdout_gap_report.json",
+      "case": "quasilinear_holdout_gap_report",
+      "claim_level": "holdout_gap_report_no_absolute_flux_promotion",
+      "claim_level_acceptable": false,
+      "kind": "quasilinear_holdout_gap_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/quasilinear_saturation_rule_sweep.json",
+      "case": "quasilinear_saturation_rule_sweep",
+      "claim_level": "model_comparison_not_validated_transport",
+      "claim_level_acceptable": true,
+      "kind": "quasilinear_saturation_rule_sweep",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/quasilinear_shape_aware_saturation.json",
+      "case": "quasilinear_shape_aware_saturation",
+      "claim_level": "leave_one_geometry_out_model_development",
+      "claim_level_acceptable": true,
+      "kind": "quasilinear_shape_aware_saturation_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/m0p5_ensemble_gate.json",
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/m0p5_readiness.json",
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window_readiness",
+      "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+      "claim_level_acceptable": true,
+      "kind": "nonlinear_window_ensemble_readiness_manifest",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    },
+    {
+      "admissible_for_calibration": false,
+      "admission_blockers": [
+        "gate_not_passed"
+      ],
+      "artifact": "docs/_static/w7x_zonal_reference_compare.json",
+      "case": "w7x_zonal_response_reference",
+      "claim_level": "",
+      "claim_level_acceptable": true,
+      "kind": "",
+      "negative_evidence": true,
+      "passed": false,
+      "promotion_gate_passed": false,
+      "raw_gate_passed": false
+    }
+  ],
+  "passed": true,
+  "reports": [
+    {
+      "n_points": 12,
+      "n_required": 12,
+      "n_required_passed": 12,
+      "passed": true,
+      "points": [
+        {
+          "case": "cyclone_long_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/nonlinear_cyclone_gate_summary.json",
+            "case": "cyclone_nonlinear_long_window",
+            "claim_level": "",
+            "claim_level_acceptable": true,
+            "kind": "",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "tools_out/cyclone_long_audit/cyclone_nonlinear_diag_t400.csv",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "train"
+        },
+        {
+          "case": "cyclone_miller_long_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+            "case": "cyclone_miller_nonlinear_window",
+            "claim_level": "",
+            "claim_level_acceptable": true,
+            "kind": "",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "tools_out/office_refresh_cyclone_miller_t122.csv",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "hsx_nonlinear_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/nonlinear_hsx_gate_summary.json",
+            "case": "hsx_nonlinear_window",
+            "claim_level": "",
+            "claim_level_acceptable": true,
+            "kind": "",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "tools_out/final_nonlinear_audit/hsx_gkx_true_t50.csv",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "w7x_nonlinear_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/nonlinear_w7x_gate_summary.json",
+            "case": "w7x_nonlinear_window",
+            "claim_level": "",
+            "claim_level_acceptable": true,
+            "kind": "",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "tools_out/final_nonlinear_audit/w7x_gkx_current_adaptive_t200.out.nc",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "dshape_external_vmec_t250_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+            "case": "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence",
+            "claim_level": "passed_grid_converged_external_vmec_transport_window",
+            "claim_level_acceptable": true,
+            "kind": "nonlinear_window_summary",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.traces.csv",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "itermodel_external_vmec_t350_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+            "case": "ITERModel external VMEC nonlinear t350 high-grid convergence",
+            "claim_level": "passed_grid_converged_external_vmec_transport_window",
+            "claim_level_acceptable": true,
+            "kind": "nonlinear_window_summary",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "train"
+        },
+        {
+          "case": "updown_asym_external_vmec_t450_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+            "case": "updown_asym_external_vmec_t450",
+            "claim_level": "passed_grid_converged_external_vmec_transport_window",
+            "claim_level_acceptable": true,
+            "kind": "external_vmec_transport_window_summary",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "circular_external_vmec_t450_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+            "case": "circular_external_vmec_t450",
+            "claim_level": "passed_grid_converged_external_vmec_transport_window",
+            "claim_level_acceptable": true,
+            "kind": "external_vmec_transport_window_summary",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "cth_like_external_vmec_t700_high_grid_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/external_vmec_cth_like_modified_high_grid_admission_gate.json",
+            "case": "CTH-like external VMEC modified-protocol high-grid admission",
+            "claim_level": "passed_high_grid_transport_holdout_admission_under_coarse_grid_exclusion",
+            "claim_level_acceptable": true,
+            "kind": "external_vmec_high_grid_admission_gate",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.json",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "shaped_tokamak_pressure_external_vmec_t650_high_grid_window",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_dt0p04_high_grid_admission_gate.json",
+            "case": "Shaped tokamak pressure external VMEC dt=0.04 high-grid transport holdout admission",
+            "claim_level": "passed_high_grid_transport_holdout_admission_under_coarse_grid_exclusion",
+            "claim_level_acceptable": true,
+            "kind": "external_vmec_high_grid_admission_gate",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_gate.json",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "qp_diag_nfp2_m4_final_t250",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/qp_diag_nfp2_m4_t250_replicate_ensemble_gate.json",
+            "case": "qp_diag_nfp2_m4_final_t250_n64_seed_timestep_ensemble_gate",
+            "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+            "claim_level_acceptable": true,
+            "kind": "nonlinear_window_ensemble_report",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "docs/_static/qp_diag_nfp2_m4_t250_replicate_ensemble_gate.json",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        },
+        {
+          "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+          "matched_gate": {
+            "admissible_for_calibration": true,
+            "admission_blockers": [],
+            "artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_admission_gate.json",
+            "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+            "claim_level": "passed_replicated_external_vmec_transport_holdout_under_explicit_spread_gate",
+            "claim_level_acceptable": true,
+            "kind": "external_vmec_replicate_admission_gate",
+            "negative_evidence": false,
+            "passed": true,
+            "promotion_gate_passed": true,
+            "raw_gate_passed": true
+          },
+          "nonlinear_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_ensemble_gate.json",
+          "passed": true,
+          "reason": "matched passed nonlinear gate",
+          "required": true,
+          "split": "holdout"
+        }
+      ],
+      "report": "docs/_static/quasilinear_stellarator_train_holdout_report.json"
+    }
+  ],
+  "required_splits": [
+    "train",
+    "holdout"
+  ]
+}

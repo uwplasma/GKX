@@ -1,0 +1,149 @@
+{
+  "compact_bundle_policy": {
+    "reason": "raw NetCDF outputs remain on office or are regenerated locally; release git tracks compact diagnostics only",
+    "tracked_bundle": "output-gate JSON only"
+  },
+  "config": {
+    "min_abs_window_mean": null,
+    "min_samples": 120,
+    "min_window_samples": 100,
+    "tmax": 650.0,
+    "tmax_atol": null,
+    "tmin": 325.0
+  },
+  "heat_flux_variable": "Diagnostics/HeatFlux_st",
+  "kind": "nonlinear_runtime_output_diagnostics_gate",
+  "passed": true,
+  "rows": [
+    {
+      "failures": [],
+      "generated_path": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04.out.nc",
+      "heat_flux_last": 6.403039932250977,
+      "heat_flux_max": 38.900840759277344,
+      "heat_flux_min": 1.0371204552939162e-06,
+      "heat_flux_shape": [
+        327,
+        1
+      ],
+      "passed": true,
+      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04.out.nc",
+      "samples": 327,
+      "time_max": 650.012939453125,
+      "time_min": 0.03999999910593033,
+      "tmax_atol": 0.5000114440917969,
+      "warnings": [],
+      "window": {
+        "mean_heat_flux": 7.083457648388447,
+        "samples": 163,
+        "sem_heat_flux": 0.08517258487550641,
+        "tmax": 650.0,
+        "tmin": 325.0
+      }
+    },
+    {
+      "failures": [],
+      "generated_path": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04.out.nc",
+      "heat_flux_last": 6.79439640045166,
+      "heat_flux_max": 43.06378936767578,
+      "heat_flux_min": 1.0019539331551641e-06,
+      "heat_flux_shape": [
+        326,
+        1
+      ],
+      "passed": true,
+      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04.out.nc",
+      "samples": 326,
+      "time_max": 649.9598999023438,
+      "time_min": 0.03999999910593033,
+      "tmax_atol": 0.5000114440917969,
+      "warnings": [],
+      "window": {
+        "mean_heat_flux": 7.033116873056611,
+        "samples": 163,
+        "sem_heat_flux": 0.07920623004843985,
+        "tmax": 650.0,
+        "tmin": 325.0
+      }
+    },
+    {
+      "failures": [],
+      "generated_path": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04.out.nc",
+      "heat_flux_last": 4.953282356262207,
+      "heat_flux_max": 41.37469482421875,
+      "heat_flux_min": 9.877344382402953e-07,
+      "heat_flux_shape": [
+        326,
+        1
+      ],
+      "passed": true,
+      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04.out.nc",
+      "samples": 326,
+      "time_max": 649.9598999023438,
+      "time_min": 0.03999999910593033,
+      "tmax_atol": 0.5000114440917969,
+      "warnings": [],
+      "window": {
+        "mean_heat_flux": 6.803694423722344,
+        "samples": 163,
+        "sem_heat_flux": 0.07296237996730527,
+        "tmax": 650.0,
+        "tmin": 325.0
+      }
+    },
+    {
+      "failures": [],
+      "generated_path": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04.out.nc",
+      "heat_flux_last": 6.461669921875,
+      "heat_flux_max": 32.77392578125,
+      "heat_flux_min": 9.645839327276917e-07,
+      "heat_flux_shape": [
+        326,
+        1
+      ],
+      "passed": true,
+      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04.out.nc",
+      "samples": 326,
+      "time_max": 649.9598999023438,
+      "time_min": 0.03999999910593033,
+      "tmax_atol": 0.5000114440917969,
+      "warnings": [],
+      "window": {
+        "mean_heat_flux": 7.386259748891819,
+        "samples": 163,
+        "sem_heat_flux": 0.07911952885785373,
+        "tmax": 650.0,
+        "tmin": 325.0
+      }
+    },
+    {
+      "failures": [],
+      "generated_path": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035.out.nc",
+      "heat_flux_last": 7.443998336791992,
+      "heat_flux_max": 39.75843811035156,
+      "heat_flux_min": 9.080239919967426e-07,
+      "heat_flux_shape": [
+        373,
+        1
+      ],
+      "passed": true,
+      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035.out.nc",
+      "samples": 373,
+      "time_max": 649.960693359375,
+      "time_min": 0.03500000014901161,
+      "tmax_atol": 0.4375457763671875,
+      "warnings": [],
+      "window": {
+        "mean_heat_flux": 7.475841338621741,
+        "samples": 187,
+        "sem_heat_flux": 0.09831992366990168,
+        "tmax": 650.0,
+        "tmin": 325.0
+      }
+    }
+  ],
+  "summary": {
+    "failed": 0,
+    "outputs": 5,
+    "passed": 5
+  }
+}

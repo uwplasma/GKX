@@ -1,0 +1,72 @@
+{
+  "actual_devices": 2,
+  "atol": 2e-05,
+  "claim_scope": "engineering timing for the current opt-in electrostatic linear-slices route; not a publication speedup claim",
+  "decomposition_axis": "species",
+  "git_revision": "65318b32a1bb9dac06fc883119a9415e1a159c6c",
+  "grid": {
+    "Nx": 1,
+    "Ny_actual": 128,
+    "Ny_requested": 128,
+    "Nz": 128
+  },
+  "identity_passed": true,
+  "jax_version": "0.6.2",
+  "kind": "linear_rhs_parallel_slices_profile",
+  "max_abs_error": 3.242843149564578e-06,
+  "max_phi_abs_error": 6.5854449671221e-10,
+  "max_rel_error": 5.2621513905865136e-08,
+  "notes": "Both routes are warmed before timing. The serial route uses the production JIT path; the species route compiles a host-prepared two-device shard-map callable.",
+  "phi_norm": 0.09761404246091843,
+  "platform": "gpu",
+  "python_version": "3.10.12",
+  "repeats": 10,
+  "requested_devices": 2,
+  "rows": [
+    {
+      "median_s": 0.008214663015678525,
+      "route": "serial",
+      "samples_s": [
+        0.008176186995115131,
+        0.008166125975549221,
+        0.008141227008309215,
+        0.008240170020144433,
+        0.008230224018916488,
+        0.008200270996894687,
+        0.008229055034462363,
+        0.008232296037022024,
+        0.00824075099080801,
+        0.008142807055264711
+      ]
+    },
+    {
+      "median_s": 0.00710782699752599,
+      "route": "sharded",
+      "samples_s": [
+        0.006582680973224342,
+        0.00701716699404642,
+        0.006485378020443022,
+        0.008025240036658943,
+        0.007231316005345434,
+        0.006410498986952007,
+        0.008072527998592705,
+        0.00719848700100556,
+        0.006402142986189574,
+        0.008021408983040601
+      ]
+    }
+  ],
+  "rtol": 2e-06,
+  "serial_median_s": 0.008214663015678525,
+  "sharded_median_s": 0.00710782699752599,
+  "speedup": 1.155720731320246,
+  "state_shape": [
+    2,
+    8,
+    32,
+    128,
+    1,
+    128
+  ],
+  "warmups": 2
+}

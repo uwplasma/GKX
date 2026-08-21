@@ -1,0 +1,122 @@
+[policy]
+release_series = "v1.x"
+default_destination = "GitHub Releases"
+status = "planned"
+
+[[artifacts]]
+path = "examples/wout_HSX_QHS_vacuum_ns201.nc"
+size_bytes = 3924584
+sha256 = "a666187e934128dad37683cb7d19551622a58a638fdbd71c4da7943473be0671"
+action = "move_to_release"
+artifact_type = "vmec_fixture"
+release_asset_name = "wout_HSX_QHS_vacuum_ns201.nc"
+release_tag = "v1.6.1"
+release_url = "https://github.com/uwplasma/GKX/releases/download/v1.6.1/wout_HSX_QHS_vacuum_ns201.nc"
+reason = "HSX VMEC fixture used by non-axisymmetric examples; hosted as a release asset so normal Git clones stay lightweight."
+preview_strategy = "release-hosted VMEC NetCDF fixture, not checked into Git"
+replay_command = "pytest -q tests/integration/examples/test_examples.py tests/unit/geometry/test_geometry.py"
+
+[[artifacts]]
+path = "docs/_static/benchmark_readme_panel.png"
+size_bytes = 246482
+sha256 = "8605e77d44e126c68998d99b736cb404c6665fa8402ff3f429f4ce61ac08e498"
+action = "keep_preview_in_repo"
+artifact_type = "documentation_preview"
+release_asset_name = "benchmark_readme_panel.png"
+reason = "Compressed README benchmark preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
+preview_strategy = "compressed docs/_static preview below 500 kB"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+
+[[artifacts]]
+path = "docs/_static/benchmark_readme_panel.pdf"
+size_bytes = 1001986
+sha256 = "0790c502aeb222759fe6429543193d01ec94f34ec7de9ca4f0672e81f484914f"
+action = "move_to_release"
+artifact_type = "high_resolution_panel"
+release_asset_name = "benchmark_readme_panel.pdf"
+release_tag = "v1.5.0"
+release_url = "https://github.com/uwplasma/GKX/releases/download/v1.5.0/benchmark_readme_panel.pdf"
+reason = "PDF companion belongs in release assets once docs link to the release artifact."
+preview_strategy = "release-only high-resolution PDF"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+
+[[artifacts]]
+path = "docs/_static/benchmark_core_nonlinear_atlas.png"
+size_bytes = 171443
+sha256 = "c9789906b11dfa6f0e1c3057c31ae69c0c28ba1e2d9989d97db806be6d75be5c"
+action = "keep_preview_in_repo"
+artifact_type = "documentation_preview"
+release_asset_name = "benchmark_core_nonlinear_atlas.png"
+reason = "Compressed nonlinear atlas preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
+preview_strategy = "compressed docs/_static preview below 500 kB"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+
+[[artifacts]]
+path = "docs/_static/benchmark_core_nonlinear_atlas.pdf"
+size_bytes = 697345
+sha256 = "21ee083bc565d81dbb092fbf6f2d0c68d12380c784db0d8e9ee03ec89d290413"
+action = "move_to_release"
+artifact_type = "high_resolution_panel"
+release_asset_name = "benchmark_core_nonlinear_atlas.pdf"
+release_tag = "v1.5.0"
+release_url = "https://github.com/uwplasma/GKX/releases/download/v1.5.0/benchmark_core_nonlinear_atlas.pdf"
+reason = "High-resolution nonlinear atlas PDF should be release-hosted."
+preview_strategy = "release-only high-resolution PDF"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+
+[[artifacts]]
+path = "docs/_static/benchmark_core_linear_atlas.png"
+size_bytes = 142351
+sha256 = "fb9b967b6a8450f0fd2d98982e7d75dfa6047eb4a35e1cdb07ba72afd742d99f"
+action = "keep_preview_in_repo"
+artifact_type = "documentation_preview"
+release_asset_name = "benchmark_core_linear_atlas.png"
+reason = "Compressed linear atlas preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
+preview_strategy = "compressed docs/_static preview below 500 kB"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+
+[[artifacts]]
+path = "docs/_static/comparison/reference_publication_panel.png"
+size_bytes = 142940
+sha256 = "f0efa3af8a11b316c43bafece659616dce70953adcedd7b64fe1aab8edd7aced"
+action = "keep_preview_in_repo"
+artifact_type = "comparison_panel"
+release_asset_name = "reference_publication_panel.png"
+reason = "Compressed comparison preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
+preview_strategy = "compressed docs/_static preview below 500 kB"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+
+[[artifacts]]
+path = "docs/_static/comparison/reference_publication_panel.pdf"
+size_bytes = 372218
+sha256 = "421a77c3b44b9052f06efb3e08f849f385b8585998e0f1d93d39bd8599b43f30"
+action = "move_to_release"
+artifact_type = "high_resolution_panel"
+release_asset_name = "reference_publication_panel.pdf"
+release_tag = "v1.5.0"
+release_url = "https://github.com/uwplasma/GKX/releases/download/v1.5.0/reference_publication_panel.pdf"
+reason = "PDF comparison panel should be release-hosted."
+preview_strategy = "release-only high-resolution PDF"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+
+[[artifacts]]
+path = "docs/_static/comparison/reference_summary_panel.png"
+size_bytes = 142910
+sha256 = "6635d367da28dd1fe725fa162df9e30931ecc59247d6a82ac9bd06ff2c0a4ac5"
+action = "keep_preview_in_repo"
+artifact_type = "comparison_panel"
+release_asset_name = "reference_summary_panel.png"
+reason = "Compressed comparison summary kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
+preview_strategy = "compressed docs/_static preview below 500 kB"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+
+[[artifacts]]
+path = "docs/_static/comparison/reference_cyclone_kbm_panel.png"
+size_bytes = 112474
+sha256 = "c477ed140de98335efc559fa642a65774de93aa2e2a59fec8f13140b9a5bf690"
+action = "keep_preview_in_repo"
+artifact_type = "comparison_panel"
+release_asset_name = "reference_cyclone_kbm_panel.png"
+reason = "Compressed comparison preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
+preview_strategy = "compressed docs/_static preview below 500 kB"
+replay_command = "python tools/artifacts/make_benchmark_atlas.py"

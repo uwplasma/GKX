@@ -1,0 +1,455 @@
+{
+  "backend": "gpu",
+  "claim_scope": "large fixed-step nonlinear state-sharding strong-scaling artifact with numerical identity gates; speedup is a separate fail-closed field, and this artifact is profiler evidence unless speedup_passed is true, not as a broad production speedup claim",
+  "devices": [
+    1,
+    2
+  ],
+  "dt": 0.02,
+  "grid": {
+    "Nl": 4,
+    "Nm": 8,
+    "Nx": 48,
+    "Ny_requested": 96,
+    "Nz": 128
+  },
+  "identity_passed": true,
+  "kind": "nonlinear_sharding_strong_scaling_sweep",
+  "laguerre_mode": "grid",
+  "method": "rk2",
+  "profiles": {
+    "1": {
+      "_profile_json": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json",
+      "allow_unsafe_cpu_state_sharding": false,
+      "backend": "gpu",
+      "best_identity_preserving_candidate": {
+        "engineering_speedup_median": 1.0769149471416644,
+        "identity_gate_pass": true,
+        "spec": "auto",
+        "state_sharding_active": false
+      },
+      "case": "cyclone_nonlinear_fixed_step",
+      "claim_scope": "Profiler/identity artifact for fixed-step nonlinear state sharding and candidate state-axis decompositions. Do not use as a published runtime claim without a larger matched CPU/GPU sweep and profiler trace review.",
+      "default_backend": "gpu",
+      "device_count": 1,
+      "devices": [
+        "cuda:0"
+      ],
+      "dt": 0.02,
+      "engineering_speedup": 1.0769149471416644,
+      "identity_gate_pass": true,
+      "laguerre_mode": "grid",
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "method": "rk2",
+      "profile_command": "/usr/bin/python3 /home/rjorge/gkx_perf/tools/profiling/profile_nonlinear_sharding.py --out-json /tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json --nx 48 --ny 96 --nz 128 --nl 4 --nm 8 --dt 0.02 --steps 12 --method rk2 --sharding auto --sharding-options auto --laguerre-mode grid --warmups 1 --repeats 2 --trace-dir /tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_1devices",
+      "profile_command_argv": [
+        "/usr/bin/python3",
+        "/home/rjorge/gkx_perf/tools/profiling/profile_nonlinear_sharding.py",
+        "--out-json",
+        "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json",
+        "--nx",
+        "48",
+        "--ny",
+        "96",
+        "--nz",
+        "128",
+        "--nl",
+        "4",
+        "--nm",
+        "8",
+        "--dt",
+        "0.02",
+        "--steps",
+        "12",
+        "--method",
+        "rk2",
+        "--sharding",
+        "auto",
+        "--sharding-options",
+        "auto",
+        "--laguerre-mode",
+        "grid",
+        "--warmups",
+        "1",
+        "--repeats",
+        "2",
+        "--trace-dir",
+        "/tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_1devices"
+      ],
+      "profile_returncode": 0,
+      "profiler_trace": {
+        "error": null,
+        "path": "/tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_1devices",
+        "requested": true
+      },
+      "repeats": 2,
+      "serial_stats_s": {
+        "max": 11.304154840297997,
+        "mean": 11.114449765067548,
+        "median": 11.114449765067548,
+        "min": 10.924744689837098,
+        "std": 0.18970507523044944
+      },
+      "serial_times_s": [
+        11.304154840297997,
+        10.924744689837098
+      ],
+      "serial_warm_s": 11.114449765067548,
+      "sharded_results": {
+        "auto": {
+          "diagnostic_identity_gate_pass": true,
+          "engineering_speedup_median": 1.0769149471416644,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_phi_error": 0.0,
+          "max_abs_rhs_error": 0.0,
+          "max_abs_state_error": 0.0,
+          "max_rel_phi_error": 0.0,
+          "max_rel_rhs_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": false,
+          "stats_s": {
+            "max": 10.407576297409832,
+            "mean": 10.320638407487422,
+            "median": 10.320638407487422,
+            "min": 10.233700517565012,
+            "std": 0.08693788992241025
+          },
+          "times_s": [
+            10.407576297409832,
+            10.233700517565012
+          ]
+        }
+      },
+      "sharded_warm_s": 10.320638407487422,
+      "sharding_axis": "auto",
+      "sharding_options": [
+        "auto"
+      ],
+      "software_versions": {
+        "jax": "0.6.2",
+        "jaxlib": "0.6.2",
+        "numpy": "2.2.4",
+        "python": "3.10.12",
+        "gkx": "1.6.9"
+      },
+      "source_artifact": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json",
+      "source_contract_version": 1,
+      "state_shape": [
+        4,
+        8,
+        96,
+        48,
+        128
+      ],
+      "state_sharding_active": false,
+      "state_sharding_requested": "auto",
+      "steps": 12,
+      "timing_warmup_repeat": {
+        "repeats": 2,
+        "warmups": 1
+      },
+      "warmups": 1
+    },
+    "2": {
+      "_profile_json": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json",
+      "allow_unsafe_cpu_state_sharding": false,
+      "backend": "gpu",
+      "best_identity_preserving_candidate": {
+        "engineering_speedup_median": 0.626665239810527,
+        "identity_gate_pass": true,
+        "spec": "auto",
+        "state_sharding_active": true
+      },
+      "case": "cyclone_nonlinear_fixed_step",
+      "claim_scope": "Profiler/identity artifact for fixed-step nonlinear state sharding and candidate state-axis decompositions. Do not use as a published runtime claim without a larger matched CPU/GPU sweep and profiler trace review.",
+      "default_backend": "gpu",
+      "device_count": 2,
+      "devices": [
+        "cuda:0",
+        "cuda:1"
+      ],
+      "dt": 0.02,
+      "engineering_speedup": 0.626665239810527,
+      "identity_gate_pass": true,
+      "laguerre_mode": "grid",
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "method": "rk2",
+      "profile_command": "/usr/bin/python3 /home/rjorge/gkx_perf/tools/profiling/profile_nonlinear_sharding.py --out-json /tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json --nx 48 --ny 96 --nz 128 --nl 4 --nm 8 --dt 0.02 --steps 12 --method rk2 --sharding auto --sharding-options auto --laguerre-mode grid --warmups 1 --repeats 2 --trace-dir /tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_2devices",
+      "profile_command_argv": [
+        "/usr/bin/python3",
+        "/home/rjorge/gkx_perf/tools/profiling/profile_nonlinear_sharding.py",
+        "--out-json",
+        "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json",
+        "--nx",
+        "48",
+        "--ny",
+        "96",
+        "--nz",
+        "128",
+        "--nl",
+        "4",
+        "--nm",
+        "8",
+        "--dt",
+        "0.02",
+        "--steps",
+        "12",
+        "--method",
+        "rk2",
+        "--sharding",
+        "auto",
+        "--sharding-options",
+        "auto",
+        "--laguerre-mode",
+        "grid",
+        "--warmups",
+        "1",
+        "--repeats",
+        "2",
+        "--trace-dir",
+        "/tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_2devices"
+      ],
+      "profile_returncode": 0,
+      "profiler_trace": {
+        "error": null,
+        "path": "/tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_2devices",
+        "requested": true
+      },
+      "repeats": 2,
+      "serial_stats_s": {
+        "max": 11.08732189796865,
+        "mean": 11.040561188943684,
+        "median": 11.040561188943684,
+        "min": 10.993800479918718,
+        "std": 0.04676070902496576
+      },
+      "serial_times_s": [
+        11.08732189796865,
+        10.993800479918718
+      ],
+      "serial_warm_s": 11.040561188943684,
+      "sharded_results": {
+        "auto": {
+          "diagnostic_identity_gate_pass": true,
+          "engineering_speedup_median": 0.626665239810527,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_phi_error": 0.0,
+          "max_abs_rhs_error": 0.0,
+          "max_abs_state_error": 0.0,
+          "max_rel_phi_error": 0.0,
+          "max_rel_rhs_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": true,
+          "stats_s": {
+            "max": 17.642525166273117,
+            "mean": 17.6179569051601,
+            "median": 17.6179569051601,
+            "min": 17.59338864404708,
+            "std": 0.024568261113017797
+          },
+          "times_s": [
+            17.642525166273117,
+            17.59338864404708
+          ]
+        }
+      },
+      "sharded_warm_s": 17.6179569051601,
+      "sharding_axis": "auto",
+      "sharding_options": [
+        "auto"
+      ],
+      "software_versions": {
+        "jax": "0.6.2",
+        "jaxlib": "0.6.2",
+        "numpy": "2.2.4",
+        "python": "3.10.12",
+        "gkx": "1.6.9"
+      },
+      "source_artifact": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json",
+      "source_contract_version": 1,
+      "state_shape": [
+        4,
+        8,
+        96,
+        48,
+        128
+      ],
+      "state_sharding_active": true,
+      "state_sharding_requested": "auto",
+      "steps": 12,
+      "timing_warmup_repeat": {
+        "repeats": 2,
+        "warmups": 1
+      },
+      "warmups": 1
+    }
+  },
+  "repeats": 2,
+  "rows": [
+    {
+      "actual_devices": 1,
+      "backend": "gpu",
+      "best_spec": "auto",
+      "error": null,
+      "identity_gate_pass": true,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_median_s": 10.320638407487422,
+      "profile_backend": "gpu",
+      "profile_command": "/usr/bin/python3 /home/rjorge/gkx_perf/tools/profiling/profile_nonlinear_sharding.py --out-json /tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json --nx 48 --ny 96 --nz 128 --nl 4 --nm 8 --dt 0.02 --steps 12 --method rk2 --sharding auto --sharding-options auto --laguerre-mode grid --warmups 1 --repeats 2 --trace-dir /tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_1devices",
+      "profile_command_argv": [
+        "/usr/bin/python3",
+        "/home/rjorge/gkx_perf/tools/profiling/profile_nonlinear_sharding.py",
+        "--out-json",
+        "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json",
+        "--nx",
+        "48",
+        "--ny",
+        "96",
+        "--nz",
+        "128",
+        "--nl",
+        "4",
+        "--nm",
+        "8",
+        "--dt",
+        "0.02",
+        "--steps",
+        "12",
+        "--method",
+        "rk2",
+        "--sharding",
+        "auto",
+        "--sharding-options",
+        "auto",
+        "--laguerre-mode",
+        "grid",
+        "--warmups",
+        "1",
+        "--repeats",
+        "2",
+        "--trace-dir",
+        "/tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_1devices"
+      ],
+      "profile_device_count": 1,
+      "profile_json": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json",
+      "profile_returncode": 0,
+      "profile_sharding_axis": "auto",
+      "requested_devices": 1,
+      "same_process_speedup": 1.0769149471416644,
+      "serial_median_s": 11.114449765067548,
+      "software_versions": {
+        "jax": "0.6.2",
+        "jaxlib": "0.6.2",
+        "numpy": "2.2.4",
+        "python": "3.10.12",
+        "gkx": "1.6.9"
+      },
+      "source_artifact": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json",
+      "source_contract_version": 1,
+      "state_shape": [
+        4,
+        8,
+        96,
+        48,
+        128
+      ],
+      "state_sharding_active": false,
+      "strong_speedup_vs_1_device": 1.0,
+      "timing_warmup_repeat": {
+        "repeats": 2,
+        "warmups": 1
+      }
+    },
+    {
+      "actual_devices": 2,
+      "backend": "gpu",
+      "best_spec": "auto",
+      "error": null,
+      "identity_gate_pass": true,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_median_s": 17.6179569051601,
+      "profile_backend": "gpu",
+      "profile_command": "/usr/bin/python3 /home/rjorge/gkx_perf/tools/profiling/profile_nonlinear_sharding.py --out-json /tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json --nx 48 --ny 96 --nz 128 --nl 4 --nm 8 --dt 0.02 --steps 12 --method rk2 --sharding auto --sharding-options auto --laguerre-mode grid --warmups 1 --repeats 2 --trace-dir /tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_2devices",
+      "profile_command_argv": [
+        "/usr/bin/python3",
+        "/home/rjorge/gkx_perf/tools/profiling/profile_nonlinear_sharding.py",
+        "--out-json",
+        "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json",
+        "--nx",
+        "48",
+        "--ny",
+        "96",
+        "--nz",
+        "128",
+        "--nl",
+        "4",
+        "--nm",
+        "8",
+        "--dt",
+        "0.02",
+        "--steps",
+        "12",
+        "--method",
+        "rk2",
+        "--sharding",
+        "auto",
+        "--sharding-options",
+        "auto",
+        "--laguerre-mode",
+        "grid",
+        "--warmups",
+        "1",
+        "--repeats",
+        "2",
+        "--trace-dir",
+        "/tmp/gkx-nonlinear-scaling-ox56a4zs/trace_gpu_2devices"
+      ],
+      "profile_device_count": 2,
+      "profile_json": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json",
+      "profile_returncode": 0,
+      "profile_sharding_axis": "auto",
+      "requested_devices": 2,
+      "same_process_speedup": 0.626665239810527,
+      "serial_median_s": 11.040561188943684,
+      "software_versions": {
+        "jax": "0.6.2",
+        "jaxlib": "0.6.2",
+        "numpy": "2.2.4",
+        "python": "3.10.12",
+        "gkx": "1.6.9"
+      },
+      "source_artifact": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json",
+      "source_contract_version": 1,
+      "state_shape": [
+        4,
+        8,
+        96,
+        48,
+        128
+      ],
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 0.5858022279793762,
+      "timing_warmup_repeat": {
+        "repeats": 2,
+        "warmups": 1
+      }
+    }
+  ],
+  "sharding": "auto",
+  "sharding_options": "auto",
+  "speedup_blockers": [
+    "gpu_2devices_speedup_0.586_below_1"
+  ],
+  "speedup_passed": false,
+  "speedup_threshold_vs_1_device": 1.0,
+  "status": "diagnostic_identity_only",
+  "steps": 12,
+  "timeout_s": 600.0,
+  "warmups": 1
+}

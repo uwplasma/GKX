@@ -1,0 +1,77 @@
+{
+  "analysis_tmax": 100.0,
+  "audit_csv": "docs/_static/w7x_zonal_hypercollision_probe_kx070.csv",
+  "audit_png": "docs/_static/w7x_zonal_hypercollision_probe_kx070.png",
+  "case": "w7x_zonal_response_recurrence_sweep_kx070",
+  "gate_index_include": false,
+  "kx": 0.07,
+  "notes": "This is an open recurrence audit. It separates moment-resolution changes from closure-source changes at fixed paper-facing Gaussian width and line-average normalization. The analysis cutoff keeps all rows on the same bounded window, so long existing runs and new shorter probes can be compared without mixing tail horizons.",
+  "reference": "Gonzalez-Jerez et al., J. Plasma Phys. 88, 905880310 (2022), W7-X test 4",
+  "reference_traces": "docs/_static/w7x_zonal_reference_digitized.csv",
+  "rows": [
+    {
+      "Nl": 16,
+      "Nm": 64,
+      "analysis_tmax": 100.0,
+      "closure_source": "const",
+      "free_energy_at_tmax_over_initial": 0.7591914981298664,
+      "hermite_tail_at_tmax": 0.2196396340266003,
+      "initial_level": 2.820915767642873e-07,
+      "kx_index": 2,
+      "kx_selected": 0.07000000029802322,
+      "kx_target": 0.07,
+      "label": "Nl16 Nm64 const nuhm0.01",
+      "laguerre_tail_at_tmax": 0.02810646568042363,
+      "max_abs_error": 0.5738288120000966,
+      "mean_abs_error": 0.293204805745812,
+      "n_samples_used": 100,
+      "raw_tmax": 100.00150299072266,
+      "reference_tail_std": 0.027638319299296457,
+      "source_path": "tools_out/zonal_response/w7x_probe_nl16_nm64_nuhm0p01_const_t100/w7x_test4_kx070.out.nc",
+      "sweep": "closure_source",
+      "tail_abs_max": 0.43140420635724264,
+      "tail_mean": 0.20551556103990354,
+      "tail_std": 0.11735626543561611
+    },
+    {
+      "Nl": 16,
+      "Nm": 64,
+      "analysis_tmax": 100.0,
+      "closure_source": "const",
+      "free_energy_at_tmax_over_initial": 0.5995926659677548,
+      "hermite_tail_at_tmax": 0.09923573863156468,
+      "initial_level": 2.820915767642873e-07,
+      "kx_index": 2,
+      "kx_selected": 0.07000000029802322,
+      "kx_target": 0.07,
+      "label": "Nl16 Nm64 const nuhm0.03",
+      "laguerre_tail_at_tmax": 0.016099908503371913,
+      "max_abs_error": 0.5740115788217725,
+      "mean_abs_error": 0.28925894943488784,
+      "n_samples_used": 100,
+      "raw_tmax": 100.00150299072266,
+      "reference_tail_std": 0.027638319299296457,
+      "source_path": "tools_out/zonal_response/w7x_probe_nl16_nm64_nuhm0p03_const_t100/w7x_test4_kx070.out.nc",
+      "sweep": "closure_source",
+      "tail_abs_max": 0.41554787478155386,
+      "tail_mean": 0.20029077560704392,
+      "tail_std": 0.11828227178339677
+    }
+  ],
+  "runs": [
+    {
+      "closure_source": "const",
+      "label": "Nl16 Nm64 const nuhm0.01",
+      "path": "tools_out/zonal_response/w7x_probe_nl16_nm64_nuhm0p01_const_t100/w7x_test4_kx070.out.nc",
+      "sweep": "closure_source"
+    },
+    {
+      "closure_source": "const",
+      "label": "Nl16 Nm64 const nuhm0.03",
+      "path": "tools_out/zonal_response/w7x_probe_nl16_nm64_nuhm0p03_const_t100/w7x_test4_kx070.out.nc",
+      "sweep": "closure_source"
+    }
+  ],
+  "tail_fraction": 0.3,
+  "validation_status": "open"
+}

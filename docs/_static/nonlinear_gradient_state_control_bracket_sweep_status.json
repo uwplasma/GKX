@@ -1,0 +1,101 @@
+{
+  "claim_level": "bracket_amplitude_sweep_negative_nonlinear_gradient_evidence",
+  "kind": "vmec_state_control_bracket_sweep_status",
+  "next_action": "do not increase single-control bracket amplitude further; the 3e-3 and 1e-2 sweeps are runtime-stable but response fractions remain well below the resolved-gradient gate, so the next scientific step is variance reduction through longer replicated windows or a better-conditioned multi-control observable",
+  "passed": false,
+  "rows": [
+    {
+      "alpha_delta": 0.003,
+      "artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1_central_fd_gradient_gate.json",
+      "baseline_window_mean": 10.239552934546152,
+      "blockers": [
+        "fd_response_resolved",
+        "fd_asymmetry_bounded",
+        "gradient_uncertainty_bounded"
+      ],
+      "fd_asymmetry_rel": 0.6926208164606568,
+      "gradient_uncertainty_rel": 8.865820385545353,
+      "max_fd_asymmetry_rel": 0.5,
+      "max_gradient_uncertainty_rel": 0.5,
+      "min_response_fraction": 0.03,
+      "minus_window_mean": 10.210884553227766,
+      "parameter_name": "state_control_rsin_mid_surface_m1",
+      "passed": false,
+      "plus_window_mean": 10.253472623769492,
+      "response_fraction": 0.004159172848068613,
+      "state_parameter": "rsin_mid_surface_m1"
+    },
+    {
+      "alpha_delta": 0.003,
+      "artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1_central_fd_gradient_gate.json",
+      "baseline_window_mean": 10.22712637806693,
+      "blockers": [
+        "fd_response_resolved",
+        "fd_asymmetry_bounded",
+        "gradient_uncertainty_bounded"
+      ],
+      "fd_asymmetry_rel": 85.16812394848048,
+      "gradient_uncertainty_rel": 28.96880860425934,
+      "max_fd_asymmetry_rel": 0.5,
+      "max_gradient_uncertainty_rel": 0.5,
+      "min_response_fraction": 0.03,
+      "minus_window_mean": 9.961881067038687,
+      "parameter_name": "state_control_zcos_mid_surface_m1",
+      "passed": false,
+      "plus_window_mean": 9.949124001065067,
+      "response_fraction": 0.001247375411433147,
+      "state_parameter": "zcos_mid_surface_m1"
+    },
+    {
+      "alpha_delta": 0.01,
+      "artifact": "docs/_static/qa_lowres_alpha0p010_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1_central_fd_gradient_gate.json",
+      "baseline_window_mean": 10.22712637806693,
+      "blockers": [
+        "fd_response_resolved",
+        "fd_asymmetry_bounded",
+        "gradient_uncertainty_bounded"
+      ],
+      "fd_asymmetry_rel": 11.234771562572886,
+      "gradient_uncertainty_rel": 10.150197349817086,
+      "max_fd_asymmetry_rel": 0.5,
+      "max_gradient_uncertainty_rel": 0.5,
+      "min_response_fraction": 0.03,
+      "minus_window_mean": 10.074738564401924,
+      "parameter_name": "state_control_rsin_mid_surface_m1",
+      "passed": false,
+      "plus_window_mean": 10.120795366499197,
+      "response_fraction": 0.004503396202871371,
+      "state_parameter": "rsin_mid_surface_m1"
+    },
+    {
+      "alpha_delta": 0.01,
+      "artifact": "docs/_static/qa_lowres_alpha0p010_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1_central_fd_gradient_gate.json",
+      "baseline_window_mean": 10.22712637806693,
+      "blockers": [
+        "fd_response_resolved",
+        "fd_asymmetry_bounded",
+        "gradient_uncertainty_bounded"
+      ],
+      "fd_asymmetry_rel": 28.19849781531051,
+      "gradient_uncertainty_rel": 9.652476970541581,
+      "max_fd_asymmetry_rel": 0.5,
+      "max_gradient_uncertainty_rel": 0.5,
+      "min_response_fraction": 0.03,
+      "minus_window_mean": 9.977541334585128,
+      "parameter_name": "state_control_zcos_mid_surface_m1",
+      "passed": false,
+      "plus_window_mean": 9.939434562931076,
+      "response_fraction": 0.003726048769258922,
+      "state_parameter": "zcos_mid_surface_m1"
+    }
+  ],
+  "summary": {
+    "central_fd_gates_passed": 0,
+    "central_fd_gates_total": 4,
+    "max_response_fraction": 0.004503396202871371,
+    "min_gradient_uncertainty_rel": 8.865820385545353,
+    "nonlinear_run_failures": 0,
+    "nonlinear_run_seconds": 3541.9382162094116,
+    "nonlinear_runs_completed": 36
+  }
+}

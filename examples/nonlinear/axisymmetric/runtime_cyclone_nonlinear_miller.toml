@@ -1,0 +1,90 @@
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+kinetic = true
+
+[grid]
+Nx = 192
+Ny = 64
+Nz = 24
+Lx = 176.25000339052914
+Ly = 62.8
+boundary = "linked"
+y0 = 28.2
+ntheta = 24
+nperiod = 1
+
+[time]
+t_max = 400.0
+dt = 0.01
+method = "rk3"
+sample_stride = 20
+diagnostics_stride = 20
+use_diffrax = false
+fixed_dt = false
+dt_max = 0.05
+cfl = 0.9
+cfl_fac = 1.0
+compressed_real_fft = true
+laguerre_nonlinear_mode = "grid"
+
+[geometry]
+model = "miller"
+rhoc = 0.5
+q = 1.4
+s_hat = 0.8
+R0 = 2.77778
+R_geo = 2.77778
+shift = 0.0
+akappa = 1.0
+akappri = 0.0
+tri = 0.0
+tripri = 0.0
+betaprim = 0.0
+
+[init]
+init_field = "density"
+init_amp = 1.0e-3
+init_single = false
+random_seed = 22
+gaussian_init = false
+kpar_init = 0.0
+
+[physics]
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+tau_e = 1.0
+nonlinear = true
+beta = 0.0
+
+[collisions]
+D_hyper = 0.05
+p_hyper_kperp = 2.0
+hypercollisions_const = false
+hypercollisions_kz = true
+p_hyper = 2
+p_hyper_m = 4
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[terms]
+nonlinear = 1.0
+hyperdiffusion = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+
+[normalization]
+contract = "cyclone"
+diagnostic_norm = "rho_star"
+
+[run]
+ky = 0.3
+Nl = 4
+Nm = 8
+steps = 200

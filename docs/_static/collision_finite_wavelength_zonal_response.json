@@ -1,0 +1,64 @@
+{
+  "claim_scope": "collisional_zonal_response_figures_12_14",
+  "early_window_rms_error_vs_coulomb": {
+    "0.10": {
+      "improved_sugama": 0.002652103548256323,
+      "original_sugama": 0.003928738283407465
+    },
+    "0.20": {
+      "improved_sugama": 0.0014758586169842946,
+      "original_sugama": 0.002803646577095416
+    }
+  },
+  "gate_passed": true,
+  "gates": {
+    "drift_kinetic_residual_matches_xiao": true,
+    "finite_values": true,
+    "gyrokinetic_tail_ordering_os_is_coulomb": true,
+    "improved_sugama_closer_to_coulomb_before_tnu10": true,
+    "normalized_time_window_reaches_30": true,
+    "paper_resolution_reached": true,
+    "required_model_wavenumber_traces_present": true,
+    "velocity_sections_present_at_tnu5": true
+  },
+  "protocol": {
+    "epsilon": 0.1,
+    "figures": [
+      12,
+      13,
+      14
+    ],
+    "maximum_hermite_order": 24,
+    "maximum_laguerre_order": 10,
+    "normalized_collisionality": 3.13,
+    "paper": "Frei, Ernst & Ricci, Phys. Plasmas 29, 093902 (2022)",
+    "q": 1.4,
+    "wavenumbers": [
+      0.05,
+      0.1,
+      0.2
+    ],
+    "xiao_residual": 0.005076142131979697
+  },
+  "schema_version": 1,
+  "tail_response": {
+    "coulomb": {
+      "0.05": 0.005720524835652089,
+      "0.10": 0.002878161324692669,
+      "0.20": 0.0001918306197642028
+    },
+    "improved_sugama": {
+      "0.05": 0.005854334762681554,
+      "0.10": 0.0025528564639055134,
+      "0.20": 0.00011481375617351459
+    },
+    "original_sugama": {
+      "0.05": 0.005650742911988207,
+      "0.10": 0.002415182407894897,
+      "0.20": 9.664867091767516e-05
+    }
+  },
+  "thresholds": {
+    "xiao_residual_absolute_tolerance": 0.0015
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "dt": 0.01,
+  "eig_tmax": 10.200231210584304,
+  "eig_tmin": 6.120682303819888,
+  "eigenfunction_gate_passed": true,
+  "fit_tmax": 9.693638357204051,
+  "fit_tmin": 4.89458453725481,
+  "gamma": 0.2274187337117139,
+  "gate_report": {
+    "case": "kbm_linear_eigenfunction_ky0p3000",
+    "gates": [
+      {
+        "abs_error": 1.5458590091999014e-05,
+        "atol": 0.050000000000000044,
+        "metric": "eigenfunction_overlap",
+        "notes": "Passes when overlap >= 0.95.",
+        "observed": 0.999984541409908,
+        "passed": true,
+        "reference": 1.0,
+        "rel_error": 1.5458590091999014e-05,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.007208594542278349,
+        "atol": 0.25,
+        "metric": "eigenfunction_relative_l2",
+        "notes": "Passes when relative L2 <= 0.25.",
+        "observed": 0.007208594542278349,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.007208594542278349,
+    "max_rel_error": 1.5458590091999014e-05,
+    "passed": true,
+    "source": "GX raw eigenfunction bundle"
+  },
+  "gate_tolerances": {
+    "max_relative_l2": 0.25,
+    "min_overlap": 0.95
+  },
+  "ky": 0.3,
+  "nky_full": 5,
+  "nsamples": 7506,
+  "ny": 13,
+  "omega": 1.156737782407707,
+  "overlap": 0.999984541409908,
+  "phase_shift": -0.00047171639768758854,
+  "relative_l2": 0.007208594542278349,
+  "sample_stride": 2,
+  "steps": 1020,
+  "t_final": 10.200231210584304,
+  "validation_status": "closed"
+}

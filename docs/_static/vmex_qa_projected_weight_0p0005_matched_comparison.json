@@ -1,0 +1,50 @@
+{
+  "artifacts": {
+    "baseline": "tools_out/vmex_qa_full_sweep_onepoint_final/runs_onepoint/qa_baseline_scipy/nonlinear_transport_audit/baseline_replicate_ensemble_gate.json",
+    "candidate": "tools_out/vmex_qa_full_sweep_onepoint_final/runs_onepoint/projected_guarded_ladder/transport_weight_0p0005/nonlinear_transport_audit/projected_0p0005_replicate_ensemble_gate.json"
+  },
+  "baseline": {
+    "combined_sem": 0.1409422986587405,
+    "combined_sem_relative": 0.01453693382465068,
+    "ensemble_mean": 9.695462630485444,
+    "mean_relative_spread": 0.014118441470438153,
+    "passed": true
+  },
+  "candidate": {
+    "combined_sem": 0.13596410897978736,
+    "combined_sem_relative": 0.01440906728434698,
+    "ensemble_mean": 9.436010415989204,
+    "mean_relative_spread": 0.014225578512722242,
+    "passed": true
+  },
+  "case": "vmec_qa_full_sweep_projected_weight_0p0005",
+  "claim_level": "matched_replicated_late_window_transport_comparison",
+  "config": {
+    "min_relative_reduction": 0.02
+  },
+  "gates": [
+    {
+      "detail": "baseline passed=True",
+      "metric": "baseline_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "candidate passed=True",
+      "metric": "candidate_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "relative reduction 0.0267602 >= 0.02",
+      "metric": "relative_transport_reduction",
+      "passed": true
+    }
+  ],
+  "kind": "matched_nonlinear_transport_comparison",
+  "passed": true,
+  "statistics": {
+    "absolute_reduction": 0.2594522144962408,
+    "combined_uncertainty": 0.19583403810848893,
+    "relative_reduction": 0.0267601685844722,
+    "uncertainty_z_score": 1.3248576039294477
+  }
+}

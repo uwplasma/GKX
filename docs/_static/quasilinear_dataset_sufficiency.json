@@ -1,0 +1,372 @@
+{
+  "candidate_requirements": [
+    {
+      "candidate": "linear_weight",
+      "data_volume_passed": true,
+      "label": "linear weight",
+      "leave_one_out_train_cases_per_fold": 11,
+      "min_train_to_parameter_ratio": 2.0,
+      "n_parameters": 1,
+      "train_to_parameter_ratio": 11.0
+    },
+    {
+      "candidate": "shape_power_law",
+      "data_volume_passed": true,
+      "label": "shape power law",
+      "leave_one_out_train_cases_per_fold": 11,
+      "min_train_to_parameter_ratio": 2.0,
+      "n_parameters": 2,
+      "train_to_parameter_ratio": 5.5
+    },
+    {
+      "candidate": "spectral_envelope_ridge",
+      "data_volume_passed": true,
+      "label": "spectral-envelope ridge",
+      "leave_one_out_train_cases_per_fold": 11,
+      "min_train_to_parameter_ratio": 2.0,
+      "n_parameters": 3,
+      "train_to_parameter_ratio": 3.6666666666666665
+    },
+    {
+      "candidate": "linear_state_ridge",
+      "data_volume_passed": true,
+      "label": "linear-state ridge",
+      "leave_one_out_train_cases_per_fold": 11,
+      "min_train_to_parameter_ratio": 2.0,
+      "n_parameters": 5,
+      "train_to_parameter_ratio": 2.2
+    }
+  ],
+  "cases": [
+    {
+      "case": "cyclone_long_window",
+      "gate_case": "cyclone_nonlinear_long_window",
+      "geometry": "cyclone",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_cyclone_gate_summary.json",
+      "shape_gate": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_cyclone_spectrum_shape_gate.json",
+      "shape_gate_passed": false,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "train"
+    },
+    {
+      "case": "cyclone_miller_long_window",
+      "gate_case": "cyclone_miller_nonlinear_window",
+      "geometry": "cyclone_miller",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+      "shape_gate": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_cyclone_miller_spectrum_shape_gate.json",
+      "shape_gate_passed": true,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_cyclone_miller_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "hsx_nonlinear_window",
+      "gate_case": "hsx_nonlinear_window",
+      "geometry": "hsx",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_hsx_gate_summary.json",
+      "shape_gate": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_hsx_spectrum_shape_gate.json",
+      "shape_gate_passed": true,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "w7x_nonlinear_window",
+      "gate_case": "w7x_nonlinear_window",
+      "geometry": "w7x",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_w7x_gate_summary.json",
+      "shape_gate": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_w7x_spectrum_shape_gate.json",
+      "shape_gate_passed": true,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_w7x_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "dshape_external_vmec_t250_window",
+      "gate_case": "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence",
+      "geometry": "dshape_external_vmec",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+      "shape_gate": null,
+      "shape_gate_passed": null,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_vmec_dshape_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "itermodel_external_vmec_t350_window",
+      "gate_case": "ITERModel external VMEC nonlinear t350 high-grid convergence",
+      "geometry": "itermodel_external_vmec",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+      "shape_gate": null,
+      "shape_gate_passed": null,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_vmec_itermodel_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "train"
+    },
+    {
+      "case": "updown_asym_external_vmec_t450_window",
+      "gate_case": "updown_asym_external_vmec_t450",
+      "geometry": "updown_asym_external_vmec",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+      "shape_gate": null,
+      "shape_gate_passed": null,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_vmec_updown_asym_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "circular_external_vmec_t450_window",
+      "gate_case": "circular_external_vmec_t450",
+      "geometry": "circular_external_vmec",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+      "shape_gate": null,
+      "shape_gate_passed": null,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_vmec_circular_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "cth_like_external_vmec_t700_high_grid_ensemble",
+      "gate_case": "cth_like_modified_n80_t700_seed_timestep_ensemble_gate",
+      "geometry": "cth_like_external_vmec",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.json",
+      "shape_gate": null,
+      "shape_gate_passed": null,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_vmex_cth_like_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "shaped_tokamak_pressure_external_vmec_t650_high_grid_window",
+      "gate_case": "shaped_tokamak_pressure_n80_t650_seed_timestep_ensemble_gate",
+      "geometry": "shaped_tokamak_external_vmec",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_gate.json",
+      "shape_gate": null,
+      "shape_gate_passed": null,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_vmex_shaped_tokamak_pressure_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "qp_diag_nfp2_m4_final_t250",
+      "gate_case": "qp_diag_nfp2_m4_final_t250_n64_seed_timestep_ensemble_gate",
+      "geometry": "qp_diag_nfp2_m4",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/qp_diag_nfp2_m4_t250_replicate_ensemble_gate.json",
+      "shape_gate": null,
+      "shape_gate_passed": null,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_vmec_qp_diag_nfp2_m4_final_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+      "gate_case": "solovev_reference_repair_dt002_amp1em5_n48_t250_ensemble_gate",
+      "geometry": "solovev_external_vmec",
+      "nonlinear_summary": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_ensemble_gate.json",
+      "shape_gate": null,
+      "shape_gate_passed": null,
+      "spectrum": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_vmec_solovev_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    }
+  ],
+  "claim_level": "scoped_low_parameter_candidate_promotion_not_runtime_option",
+  "downstream_gates": {
+    "candidate_uncertainty": {
+      "accepted": [],
+      "kind": "quasilinear_candidate_uncertainty_report",
+      "passed": false,
+      "path": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_candidate_uncertainty.json"
+    },
+    "saturation_rule_sweep": {
+      "accepted": [],
+      "kind": "quasilinear_saturation_rule_sweep",
+      "passed": false,
+      "path": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_saturation_rule_sweep.json"
+    }
+  },
+  "excluded_validated_nonlinear_cases": [
+    {
+      "case": "kbm_nonlinear_window",
+      "case_gate_mean_rel": 0.02,
+      "gate_passed": true,
+      "reason": "electromagnetic nonlinear lane; electrostatic quasilinear channels are not promoted"
+    }
+  ],
+  "geometries": [
+    "circular_external_vmec",
+    "cth_like_external_vmec",
+    "cyclone",
+    "cyclone_miller",
+    "dshape_external_vmec",
+    "hsx",
+    "itermodel_external_vmec",
+    "qp_diag_nfp2_m4",
+    "shaped_tokamak_external_vmec",
+    "solovev_external_vmec",
+    "updown_asym_external_vmec",
+    "w7x"
+  ],
+  "holdout_geometries": [
+    "circular_external_vmec",
+    "cth_like_external_vmec",
+    "cyclone_miller",
+    "dshape_external_vmec",
+    "hsx",
+    "qp_diag_nfp2_m4",
+    "shaped_tokamak_external_vmec",
+    "solovev_external_vmec",
+    "updown_asym_external_vmec",
+    "w7x"
+  ],
+  "input_validation": {
+    "cases": [
+      {
+        "case": "cyclone_long_window",
+        "gate_case": "cyclone_nonlinear_long_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_cyclone_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "train"
+      },
+      {
+        "case": "cyclone_miller_long_window",
+        "gate_case": "cyclone_miller_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "hsx_nonlinear_window",
+        "gate_case": "hsx_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_hsx_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "w7x_nonlinear_window",
+        "gate_case": "w7x_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_w7x_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "dshape_external_vmec_t250_window",
+        "gate_case": "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "itermodel_external_vmec_t350_window",
+        "gate_case": "ITERModel external VMEC nonlinear t350 high-grid convergence",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "train"
+      },
+      {
+        "case": "updown_asym_external_vmec_t450_window",
+        "gate_case": "updown_asym_external_vmec_t450",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "circular_external_vmec_t450_window",
+        "gate_case": "circular_external_vmec_t450",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "cth_like_external_vmec_t700_high_grid_ensemble",
+        "gate_case": "cth_like_modified_n80_t700_seed_timestep_ensemble_gate",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "shaped_tokamak_pressure_external_vmec_t650_high_grid_window",
+        "gate_case": "shaped_tokamak_pressure_n80_t650_seed_timestep_ensemble_gate",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_gate.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "qp_diag_nfp2_m4_final_t250",
+        "gate_case": "qp_diag_nfp2_m4_final_t250_n64_seed_timestep_ensemble_gate",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/qp_diag_nfp2_m4_t250_replicate_ensemble_gate.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+        "gate_case": "solovev_reference_repair_dt002_amp1em5_n48_t250_ensemble_gate",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_ensemble_gate.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      }
+    ],
+    "kind": "quasilinear_model_input_validation",
+    "passed": true,
+    "required_splits": [
+      "train",
+      "holdout"
+    ]
+  },
+  "kind": "quasilinear_dataset_sufficiency",
+  "notes": "This report is a promotion guard, not a transport model. It prevents candidate saturation rules from being documented as absolute-flux predictors until the nonlinear calibration portfolio is large enough, electrostatic-compatible, and at least one downstream held-out skill gate passes.",
+  "promotion_gate": {
+    "blockers": [
+      "downstream_candidate_skill_gates_not_passed"
+    ],
+    "passed": false,
+    "requires_downstream_candidate_skill_gates": true,
+    "requires_passed_nonlinear_input_gates": true
+  },
+  "requirements": {
+    "checks": {
+      "candidate_data_volume": true,
+      "minimum_explicit_train_geometries": true,
+      "minimum_holdout_geometries": true,
+      "minimum_total_electrostatic_cases": true,
+      "validated_input_gates": true
+    },
+    "current_explicit_train_geometries": 2,
+    "current_holdout_geometries": 10,
+    "current_leave_one_out_train_cases_per_fold": 11,
+    "current_total_cases": 12,
+    "min_explicit_train_geometries": 2,
+    "min_holdout_geometries": 3,
+    "min_leave_one_out_train_to_parameter_ratio": 2.0,
+    "min_total_electrostatic_cases": 6
+  },
+  "train_geometries": [
+    "cyclone",
+    "itermodel_external_vmec"
+  ]
+}

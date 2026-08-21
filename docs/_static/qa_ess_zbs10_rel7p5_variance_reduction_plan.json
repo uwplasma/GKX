@@ -1,0 +1,148 @@
+{
+  "action": "estimate_control_mean_or_redesign_observable",
+  "case": "qa_ess_zbs10_rel7p5_variance_reduction_plan",
+  "claim_level": "campaign_design_not_gradient_evidence",
+  "config": {
+    "max_control_variate_uncertainty_rel": 0.5,
+    "max_extra_paired_seeds": 4,
+    "max_paired_response_uncertainty_rel": 0.5,
+    "min_common_pairs": 2,
+    "min_control_variate_sem_reduction": 0.25,
+    "require_known_control_mean": true,
+    "sem_safety_factor": 1.1,
+    "value_floor": 1e-12
+  },
+  "control_variate_candidates": [
+    {
+      "adjusted_response_mean": -0.5197114183913005,
+      "adjusted_response_sample_std": 0.9299524855719132,
+      "adjusted_response_sem": 0.4649762427859566,
+      "adjusted_response_uncertainty_rel": 0.8946815989250908,
+      "admissible": false,
+      "beta": -0.4804008554690983,
+      "blockers": [
+        "control_variate_uncertainty_above_gate",
+        "control_variate_sem_reduction_too_small",
+        "control_mean_not_independently_known"
+      ],
+      "control_mean_sample": 16.286128404515622,
+      "control_sample_sem": 0.44347677542629926,
+      "control_sample_std": 0.8869535508525985,
+      "correlation": -0.416545661294333,
+      "n_samples": 4,
+      "name": "baseline_transport_common_mode",
+      "requires_independent_control_mean": true,
+      "sem_reduction_fraction": 0.09088520413708656
+    },
+    {
+      "adjusted_response_mean": -0.5197114183913021,
+      "adjusted_response_sample_std": 0.24688265060336206,
+      "adjusted_response_sem": 0.12344132530168103,
+      "adjusted_response_uncertainty_rel": 0.23751897867431396,
+      "admissible": false,
+      "beta": 1.1131096688582216,
+      "blockers": [
+        "control_mean_not_independently_known"
+      ],
+      "control_mean_sample": 16.280377946207143,
+      "control_sample_sem": 0.44590450666495113,
+      "control_sample_std": 0.8918090133299023,
+      "correlation": 0.9704379662201951,
+      "n_samples": 4,
+      "name": "plus_minus_midpoint_common_mode",
+      "requires_independent_control_mean": true,
+      "sem_reduction_fraction": 0.7586493138223735
+    }
+  ],
+  "kind": "nonlinear_turbulence_gradient_variance_reduction_plan",
+  "label": "zbs_1_0:qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0",
+  "pair_rows": [
+    {
+      "baseline_mean": 15.654428089611947,
+      "baseline_minus_difference": -0.705951880568584,
+      "label": "dt0p04",
+      "minus_mean": 16.36037997018053,
+      "plus_baseline_difference": -0.7342163609168146,
+      "plus_mean": 14.920211728695133,
+      "plus_minus_difference": -1.4401682414853987
+    },
+    {
+      "baseline_mean": 15.401224974748901,
+      "baseline_minus_difference": -1.740478529982843,
+      "label": "seed31",
+      "minus_mean": 17.141703504731744,
+      "plus_baseline_difference": 2.658956612715121,
+      "plus_mean": 18.060181587464022,
+      "plus_minus_difference": 0.9184780827322783
+    },
+    {
+      "baseline_mean": 16.926284229363738,
+      "baseline_minus_difference": 0.7231630807423102,
+      "label": "seed32",
+      "minus_mean": 16.203121148621427,
+      "plus_baseline_difference": -1.29026049834121,
+      "plus_mean": 15.636023731022528,
+      "plus_minus_difference": -0.5670974175988999
+    },
+    {
+      "baseline_mean": 17.162576324337913,
+      "baseline_minus_difference": 0.7068463262604396,
+      "label": "seed33",
+      "minus_mean": 16.455729998077473,
+      "plus_baseline_difference": -1.696904423473626,
+      "plus_mean": 15.465671900864287,
+      "plus_minus_difference": -0.9900580972131863
+    }
+  ],
+  "passed": false,
+  "path": "docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.json",
+  "recommendation": "a common-mode control variate reduces residual scatter, but its expectation is not independently known; estimate the control mean or redesign the observable before using it as a production uncertainty reducer",
+  "summary": {
+    "best_control_variate": "plus_minus_midpoint_common_mode",
+    "common_pair_count": 4,
+    "common_with_baseline_count": 4,
+    "extra_pair_count": 14,
+    "paired_response_mean": -0.5197114183913016,
+    "paired_response_sem": 0.5114604282120505,
+    "paired_response_uncertainty_rel": 0.9841239005200405,
+    "required_pair_count": 18
+  },
+  "variance_reduction": {
+    "failed_sem_states": [],
+    "failed_spread_states": [
+      "plus"
+    ],
+    "limiting_state": "plus",
+    "max_mean_rel_spread": 0.19599672297291024,
+    "recommendation": "target paired-seed or control-variate variance reduction for plus before adding blind replicas",
+    "state_rows": [
+      {
+        "combined_sem_rel": 0.02723033764754902,
+        "mean_rel_spread": 0.10815040295891594,
+        "n_reports": 4,
+        "passed": true,
+        "sem_gate_passed": true,
+        "spread_gate_passed": true,
+        "state": "baseline"
+      },
+      {
+        "combined_sem_rel": 0.04853950685421821,
+        "mean_rel_spread": 0.19599672297291024,
+        "n_reports": 4,
+        "passed": false,
+        "sem_gate_passed": true,
+        "spread_gate_passed": false,
+        "state": "plus"
+      },
+      {
+        "combined_sem_rel": 0.03178597142840365,
+        "mean_rel_spread": 0.0567454109575854,
+        "n_reports": 4,
+        "passed": true,
+        "sem_gate_passed": true,
+        "spread_gate_passed": true,
+        "state": "minus"
+      }
+    ]
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "case": "hsx_nonlinear_window",
+  "gate_mean_rel": 0.1,
+  "gate_passed": true,
+  "gate_report": {
+    "case": "hsx_nonlinear_window",
+    "gates": [
+      {
+        "abs_error": 0.02786339708527333,
+        "atol": 0.1,
+        "metric": "Wg_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.02786339708527333,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.035790363972650306,
+        "atol": 0.1,
+        "metric": "Wphi_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.035790363972650306,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.1,
+        "metric": "Wapar_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.03010640472255274,
+        "atol": 0.1,
+        "metric": "HeatFlux_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.03010640472255274,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.1,
+        "metric": "ParticleFlux_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.035790363972650306,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "GX nonlinear diagnostics"
+  },
+  "gx": "tools_out/final_nonlinear_audit/hsx_nonlinear_t50.out.nc",
+  "source": "GX nonlinear diagnostics",
+  "gkx": "tools_out/final_nonlinear_audit/hsx_gkx_true_t50.csv",
+  "summary": [
+    {
+      "final_rel": 0.018411088384644492,
+      "max_rel_abs": 0.0829789424018699,
+      "mean_rel_abs": 0.02786339708527333,
+      "metric": "Wg"
+    },
+    {
+      "final_rel": -0.04860474220046443,
+      "max_rel_abs": 0.12009852463979573,
+      "mean_rel_abs": 0.035790363972650306,
+      "metric": "Wphi"
+    },
+    {
+      "final_rel": 0.0,
+      "max_rel_abs": 0.0,
+      "mean_rel_abs": 0.0,
+      "metric": "Wapar"
+    },
+    {
+      "final_rel": 0.12310437259369555,
+      "max_rel_abs": 0.12310437259369555,
+      "mean_rel_abs": 0.03010640472255274,
+      "metric": "HeatFlux"
+    },
+    {
+      "final_rel": 0.0,
+      "max_rel_abs": 0.0,
+      "mean_rel_abs": 0.0,
+      "metric": "ParticleFlux"
+    }
+  ],
+  "tmax": 49.2
+}

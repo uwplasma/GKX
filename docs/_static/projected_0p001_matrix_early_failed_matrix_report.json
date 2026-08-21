@@ -1,0 +1,222 @@
+{
+  "blockers": [
+    "missing comparisons: s0p45_a0p785398_ky0p3, s0p45_a0p785398_ky0p5, s0p64_a0_ky0p1, s0p64_a0_ky0p3, s0p64_a0_ky0p5, s0p64_a0p785398_ky0p1, s0p64_a0p785398_ky0p3, s0p64_a0p785398_ky0p5 ...",
+    "pass_fraction 0.0555556 < 1",
+    "mean_relative_reduction 0.00748452 < 0.02"
+  ],
+  "claim_level": "multi_surface_alpha_ky_matched_transport_matrix_gate",
+  "config": {
+    "min_mean_relative_reduction": 0.02,
+    "min_pass_fraction": 1.0
+  },
+  "kind": "matched_nonlinear_transport_matrix_report",
+  "matrix_manifest": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix/matched_transport_matrix_manifest.json",
+  "notes": [
+    "This gate promotes only the selected matched baseline-vs-candidate matrix.",
+    "It does not by itself validate universal nonlinear transport optimization across all stellarator classes."
+  ],
+  "passed": false,
+  "rows": [
+    {
+      "alpha": 0.0,
+      "baseline_mean": 10.347004495200766,
+      "candidate_mean": 10.638882458046531,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0_ky0p1/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": false,
+      "passed": false,
+      "relative_reduction": -0.02820893360790039,
+      "sample_id": "s0p45_a0_ky0p1",
+      "surface_torflux": 0.45,
+      "uncertainty_z_score": -1.1819203315849869
+    },
+    {
+      "alpha": 0.0,
+      "baseline_mean": 10.355527771023894,
+      "candidate_mean": 10.608789141368012,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0_ky0p3/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": false,
+      "passed": false,
+      "relative_reduction": -0.024456635716122194,
+      "sample_id": "s0p45_a0_ky0p3",
+      "surface_torflux": 0.45,
+      "uncertainty_z_score": -0.9826995186437721
+    },
+    {
+      "alpha": 0.0,
+      "baseline_mean": 10.355527771023894,
+      "candidate_mean": 10.608789141368012,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0_ky0p5/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": false,
+      "passed": false,
+      "relative_reduction": -0.024456635716122194,
+      "sample_id": "s0p45_a0_ky0p5",
+      "surface_torflux": 0.45,
+      "uncertainty_z_score": -0.9826995186437721
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "baseline_mean": 11.530556368877091,
+      "candidate_mean": 10.296091531595634,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0p785398_ky0p1/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": false,
+      "passed": true,
+      "relative_reduction": 0.10706030115021037,
+      "sample_id": "s0p45_a0p785398_ky0p1",
+      "surface_torflux": 0.45,
+      "uncertainty_z_score": 5.839757010188847
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0p785398_ky0p3/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p45_a0p785398_ky0p3",
+      "surface_torflux": 0.45
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0p785398_ky0p5/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p45_a0p785398_ky0p5",
+      "surface_torflux": 0.45
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0_ky0p1/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0_ky0p1",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0_ky0p3/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0_ky0p3",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0_ky0p5/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0_ky0p5",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0p785398_ky0p1/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0p785398_ky0p1",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0p785398_ky0p3/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0p785398_ky0p3",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0p785398_ky0p5/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0p785398_ky0p5",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0_ky0p1/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0_ky0p1",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0_ky0p3/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0_ky0p3",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0_ky0p5/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0_ky0p5",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0p785398_ky0p1/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0p785398_ky0p1",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0p785398_ky0p3/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0p785398_ky0p3",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0p785398_ky0p5/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0p785398_ky0p5",
+      "surface_torflux": 0.78
+    }
+  ],
+  "summary": {
+    "alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "completed_samples": 4,
+    "ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "max_relative_reduction": 0.10706030115021037,
+    "mean_relative_reduction": 0.007484524027516398,
+    "min_relative_reduction": -0.02820893360790039,
+    "pass_fraction": 0.05555555555555555,
+    "passed_samples": 1,
+    "surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ],
+    "total_samples": 18
+  }
+}

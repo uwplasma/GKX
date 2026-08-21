@@ -1,0 +1,100 @@
+{
+  "actual_devices": 4,
+  "atol": 2e-05,
+  "claim_scope": "engineering timing for the periodic collision-free electrostatic mixed species-Hermite RHS with a separately reported exact-workload integration gate; not a GPU or general scaling claim",
+  "decomposition_axis": "species_hermite",
+  "git_revision": "1079e39410f940e3733ec8d9677c83a06cd91f3d",
+  "grid": {
+    "Nx": 1,
+    "Ny_actual": 64,
+    "Ny_requested": 64,
+    "Nz": 64
+  },
+  "identity_passed": true,
+  "integration": {
+    "claim_scope": "end-to-end explicit electrostatic mixed species-Hermite collision-free integration for this exact grid, step count, device stack, and revision",
+    "dt": 1e-07,
+    "field_history_identity": {
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0
+    },
+    "identity_passed": true,
+    "parallel_median_s": 0.5442226668819785,
+    "parallel_samples_s": [
+      0.5470349160023034,
+      0.5442226668819785,
+      0.5362037923187017,
+      0.574967207852751,
+      0.5438885828480124
+    ],
+    "repeats": 5,
+    "sample_stride": 1,
+    "serial_median_s": 0.526416499633342,
+    "serial_samples_s": [
+      0.526416499633342,
+      0.5312575828284025,
+      0.5249581253156066,
+      0.527642167173326,
+      0.521548124961555
+    ],
+    "speedup": 0.9672814670681514,
+    "speedup_passed": false,
+    "state_identity": {
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0
+    },
+    "steps": 100
+  },
+  "jax_version": "0.9.2",
+  "kind": "linear_rhs_parallel_slices_profile",
+  "max_abs_error": 1.0662403155947686e-06,
+  "max_phi_abs_error": 9.33139787662185e-10,
+  "max_rel_error": 5.5927314968510584e-08,
+  "notes": "Both routes are warmed before timing. The serial route uses the production JIT path; the mixed route uses a four-device 2x2 species-Hermite shard-map.",
+  "phi_norm": 0.06233418732881546,
+  "platform": "cpu",
+  "python_version": "3.11.14",
+  "repeats": 7,
+  "requested_devices": 4,
+  "rows": [
+    {
+      "median_s": 0.008605416864156723,
+      "route": "serial",
+      "samples_s": [
+        0.008522875141352415,
+        0.008511667139828205,
+        0.008548916783183813,
+        0.008697125129401684,
+        0.008626165799796581,
+        0.008622042369097471,
+        0.008605416864156723
+      ]
+    },
+    {
+      "median_s": 0.0027669169940054417,
+      "route": "sharded",
+      "samples_s": [
+        0.003095541149377823,
+        0.002424083650112152,
+        0.002954083029180765,
+        0.0029297498986124992,
+        0.0026259170845150948,
+        0.0025357091799378395,
+        0.0027669169940054417
+      ]
+    }
+  ],
+  "rtol": 2e-06,
+  "serial_median_s": 0.008605416864156723,
+  "sharded_median_s": 0.0027669169940054417,
+  "speedup": 3.110110235616197,
+  "state_shape": [
+    2,
+    4,
+    16,
+    64,
+    1,
+    64
+  ],
+  "warmups": 2
+}

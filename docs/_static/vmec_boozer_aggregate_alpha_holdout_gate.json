@@ -1,0 +1,397 @@
+{
+  "artifact_kind": "vmec_boozer_aggregate_alpha_holdout_gate",
+  "builder": "tools/artifacts/build_vmec_boozer_aggregate_holdout_gate.py alpha",
+  "case_name": "nfp4_QH_warm_start",
+  "claim_scope": "reduced aggregate VMEC/Boozer/GKX line-search split with a held-out field-line alpha; this is reduced growth/quasilinear objective evidence, not a nonlinear turbulent transport claim",
+  "final_delta": -1e-08,
+  "heldout_final_objective": 0.8983380392726847,
+  "heldout_final_report": {
+    "base_delta": -1e-08,
+    "base_objective_table": [
+      [
+        0.22456942438117813,
+        0.0038376143436411,
+        0.314484855124236,
+        2.256536321302274,
+        0.0,
+        1.6113623740955147
+      ],
+      [
+        0.29871797467963174,
+        -0.8879038007941109,
+        1.9836021660026295,
+        1.230554224033332,
+        0.0,
+        0.18531370444985462
+      ]
+    ],
+    "base_sample_values": [
+      1.6113623740955147,
+      0.18531370444985462
+    ],
+    "base_value": 0.8983380392726847,
+    "case_name": "nfp4_QH_warm_start",
+    "central_derivative": 6197.089697209113,
+    "claim_scope": "finite-difference sensitivity of an aggregated linear/quasilinear VMEC/Boozer/GKX objective over fixed surfaces, field lines, and ky points; not a nonlinear transport optimization claim",
+    "curvature_abs": 9.450777659603116e-05,
+    "curvature_ratio": 0.07625174171562593,
+    "finite_difference_consistent": true,
+    "finite_values": true,
+    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
+    "max_curvature_ratio": 5.0,
+    "minus_objective_table": [
+      [
+        0.22259574861482245,
+        0.006955035252263276,
+        0.31259825506727995,
+        2.2637852291134064,
+        0.0,
+        1.6120018573655206
+      ],
+      [
+        0.29823843715106335,
+        -0.8861600652301436,
+        1.999617021956528,
+        1.2292526044665415,
+        0.0,
+        0.18334029546381095
+      ]
+    ],
+    "minus_sample_values": [
+      1.6120018573655206,
+      0.18334029546381095
+    ],
+    "minus_value": 0.8976710764146658,
+    "n_samples": 2,
+    "next_action": "Use this gate before any multi-surface or multi-ky optimizer loop. Promote only after branch-continuity and held-out nonlinear-window evidence pass.",
+    "objective": "quasilinear_flux",
+    "objective_names": [
+      "gamma",
+      "omega",
+      "kperp_eff2",
+      "linear_heat_flux_weight",
+      "linear_particle_flux_weight",
+      "mixing_length_heat_flux_proxy"
+    ],
+    "options": {
+      "mboz": 21,
+      "n_hermite": 3,
+      "n_laguerre": 2,
+      "nboz": 21,
+      "ntheta": 4,
+      "nx": 1,
+      "ny": 6,
+      "surface_stencil_width": 3
+    },
+    "parameter_indices": {
+      "Rcos": [
+        17,
+        1
+      ]
+    },
+    "parameter_name": "Rcos_mid_surface_m1",
+    "passed": true,
+    "perturbation_step": 1e-07,
+    "plus_objective_table": [
+      [
+        0.2265585171809294,
+        0.0007665138830572754,
+        0.31631874953166766,
+        2.24859692091603,
+        0.0,
+        1.6105235143177559
+      ],
+      [
+        0.2991827294932233,
+        -0.8896813425012644,
+        1.9669711503542793,
+        1.2313836740653101,
+        0.0,
+        0.1872974743904594
+      ]
+    ],
+    "plus_sample_values": [
+      1.6105235143177559,
+      0.1872974743904594
+    ],
+    "plus_value": 0.8989104943541076,
+    "reduction": "mean",
+    "response_abs": 0.0012394179394418225,
+    "response_atol": 0.0,
+    "response_resolved": true,
+    "samples": [
+      {
+        "alpha": 0.5,
+        "selected_ky_index": 1,
+        "surface_index": null,
+        "weight": 0.5
+      },
+      {
+        "alpha": 0.5,
+        "selected_ky_index": 2,
+        "surface_index": null,
+        "weight": 0.5
+      }
+    ],
+    "source_scope": "mode21_vmec_boozer_state_multi_point",
+    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+  },
+  "heldout_initial_objective": 0.8983988622099819,
+  "heldout_initial_report": {
+    "base_delta": 0.0,
+    "base_objective_table": [
+      [
+        0.22476752540020017,
+        0.0035284232854893498,
+        0.3146707024191525,
+        2.255773098551883,
+        0.0,
+        1.611286126505905
+      ],
+      [
+        0.29876508650629885,
+        -0.8880799487699703,
+        1.9819670480100955,
+        1.2306587707048267,
+        0.0,
+        0.1855115979140588
+      ]
+    ],
+    "base_sample_values": [
+      1.611286126505905,
+      0.1855115979140588
+    ],
+    "base_value": 0.8983988622099819,
+    "case_name": "nfp4_QH_warm_start",
+    "central_derivative": 6104.258685873388,
+    "claim_scope": "finite-difference sensitivity of an aggregated linear/quasilinear VMEC/Boozer/GKX objective over fixed surfaces, field lines, and ky points; not a nonlinear transport optimization claim",
+    "curvature_abs": 9.043114381868111e-05,
+    "curvature_ratio": 0.07407217524050783,
+    "finite_difference_consistent": true,
+    "finite_values": true,
+    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
+    "max_curvature_ratio": 5.0,
+    "minus_objective_table": [
+      [
+        0.22279261495548067,
+        0.006641207180986519,
+        0.31278913239447154,
+        2.263092081258321,
+        0.0,
+        1.6119492349648337
+      ],
+      [
+        0.2982871089036655,
+        -0.886333056268013,
+        1.9980427415120772,
+        1.2294033917211302,
+        0.0,
+        0.1835372065741367
+      ]
+    ],
+    "minus_sample_values": [
+      1.6119492349648337,
+      0.1835372065741367
+    ],
+    "minus_value": 0.8977432207694852,
+    "n_samples": 2,
+    "next_action": "Use this gate before any multi-surface or multi-ky optimizer loop. Promote only after branch-continuity and held-out nonlinear-window evidence pass.",
+    "objective": "quasilinear_flux",
+    "objective_names": [
+      "gamma",
+      "omega",
+      "kperp_eff2",
+      "linear_heat_flux_weight",
+      "linear_particle_flux_weight",
+      "mixing_length_heat_flux_proxy"
+    ],
+    "options": {
+      "mboz": 21,
+      "n_hermite": 3,
+      "n_laguerre": 2,
+      "nboz": 21,
+      "ntheta": 4,
+      "nx": 1,
+      "ny": 6,
+      "surface_stencil_width": 3
+    },
+    "parameter_indices": {
+      "Rcos": [
+        17,
+        1
+      ]
+    },
+    "parameter_name": "Rcos_mid_surface_m1",
+    "passed": true,
+    "perturbation_step": 1e-07,
+    "plus_objective_table": [
+      [
+        0.22675854877118373,
+        0.0004619368264675401,
+        0.3164990479549851,
+        2.2477657438129923,
+        0.0,
+        1.6104316943067325
+      ],
+      [
+        0.29922845431249534,
+        -0.889861165379513,
+        1.9652736881217965,
+        1.2314398443039178,
+        0.0,
+        0.18749645070658721
+      ]
+    ],
+    "plus_sample_values": [
+      1.6104316943067325,
+      0.18749645070658721
+    ],
+    "plus_value": 0.8989640725066599,
+    "reduction": "mean",
+    "response_abs": 0.0012208517371746774,
+    "response_atol": 0.0,
+    "response_resolved": true,
+    "samples": [
+      {
+        "alpha": 0.5,
+        "selected_ky_index": 1,
+        "surface_index": null,
+        "weight": 0.5
+      },
+      {
+        "alpha": 0.5,
+        "selected_ky_index": 2,
+        "surface_index": null,
+        "weight": 0.5
+      }
+    ],
+    "source_scope": "mode21_vmec_boozer_state_multi_point",
+    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+  },
+  "heldout_passed": true,
+  "heldout_relative_reduction": 6.770148522620082e-05,
+  "heldout_samples": [
+    {
+      "alpha": 0.5,
+      "selected_ky_index": 1,
+      "surface_index": null,
+      "weight": 0.5
+    },
+    {
+      "alpha": 0.5,
+      "selected_ky_index": 2,
+      "surface_index": null,
+      "weight": 0.5
+    }
+  ],
+  "holdout_split": {
+    "holdout_alphas": [
+      0.5
+    ],
+    "holdout_selected_ky_indices": [
+      1,
+      2
+    ],
+    "holdout_surface_indices": [
+      null
+    ],
+    "training_alphas": [
+      0.0
+    ],
+    "training_selected_ky_indices": [
+      1,
+      2
+    ],
+    "training_surface_indices": [
+      null
+    ]
+  },
+  "initial_delta": 0.0,
+  "kind": "vmec_boozer_aggregate_line_search_holdout_report",
+  "min_holdout_improvement": 0.0,
+  "next_action": "Repeat on a held-out surface and at least one second equilibrium before promoting reduced optimizer figures; production nonlinear optimization still requires converged nonlinear transport audits.",
+  "objective": "quasilinear_flux",
+  "passed": true,
+  "reduction": "mean",
+  "source_scope": "mode21_vmec_boozer_state_train_holdout",
+  "training_final_objective": 0.8850873757682598,
+  "training_initial_objective": 0.8870403732948899,
+  "training_passed": true,
+  "training_relative_reduction": 0.00220170083056736,
+  "training_report": {
+    "accepted_steps": 1,
+    "case_name": "nfp4_QH_warm_start",
+    "claim_scope": "curvature-gated one-parameter line search for an aggregated VMEC/Boozer/GKX linear/quasilinear objective; not a multi-parameter or nonlinear turbulent transport optimization claim",
+    "final_delta": -1e-08,
+    "final_objective": 0.8850873757682598,
+    "history": [
+      {
+        "accepted": true,
+        "candidate_delta": -1e-08,
+        "candidate_objective": 0.8850873757682598,
+        "central_derivative": 195473.1214762512,
+        "curvature_ratio": 0.009455763808624477,
+        "delta": 0.0,
+        "finite_difference_passed": true,
+        "objective": 0.8870403732948899,
+        "step": 0
+      }
+    ],
+    "initial_delta": 0.0,
+    "initial_objective": 0.8870403732948899,
+    "kind": "vmec_boozer_aggregate_scalar_objective_line_search_report",
+    "max_steps": 1,
+    "mode_index": 1,
+    "n_samples": 2,
+    "objective": "quasilinear_flux",
+    "options": {
+      "mboz": 21,
+      "n_hermite": 3,
+      "n_laguerre": 2,
+      "nboz": 21,
+      "ntheta": 4,
+      "nx": 1,
+      "ny": 6,
+      "surface_stencil_width": 3
+    },
+    "passed": true,
+    "perturbation_step": 1e-07,
+    "radial_index": null,
+    "reduction": "mean",
+    "relative_reduction": 0.00220170083056736,
+    "samples": [
+      {
+        "alpha": 0.0,
+        "selected_ky_index": 1,
+        "surface_index": null,
+        "weight": 0.5
+      },
+      {
+        "alpha": 0.0,
+        "selected_ky_index": 2,
+        "surface_index": null,
+        "weight": 0.5
+      }
+    ],
+    "source_scope": "mode21_vmec_boozer_state_multi_point",
+    "stop_reason": "max_steps",
+    "update_step": 1e-08
+  },
+  "training_samples": [
+    {
+      "alpha": 0.0,
+      "selected_ky_index": 1,
+      "surface_index": null,
+      "weight": 0.5
+    },
+    {
+      "alpha": 0.0,
+      "selected_ky_index": 2,
+      "surface_index": null,
+      "weight": 0.5
+    }
+  ],
+  "wall_seconds": 25.690232041990384
+}

@@ -1,0 +1,20 @@
+{
+  "case": "qa_ess_zbs10_rel7p5_nonlinear_gradient_baseline_replicated_nonlinear_window",
+  "dt": 0.05,
+  "kind": "nonlinear_window_summary",
+  "nonlinear_artifact": "qa_ess_zbs10_rel7p5_nonlinear_gradient_baseline_nonlinear_t900_n64_seed32.out.nc",
+  "promotion_gate": {
+    "passed": true,
+    "source": "replicated nonlinear-window extraction; convergence gate is stored separately"
+  },
+  "seed": 32,
+  "gkx": "qa_ess_zbs10_rel7p5_nonlinear_gradient_baseline_nonlinear_t900_n64_seed32_heat_flux_trace.csv",
+  "tmax": 900.0,
+  "tmin": 450.0,
+  "variant": {
+    "seed": 32,
+    "timestep": 0.05
+  },
+  "variant_axis": "seed",
+  "variant_label": "seed32"
+}

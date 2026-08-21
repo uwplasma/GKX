@@ -1,0 +1,189 @@
+{
+  "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window_readiness",
+  "cases": [
+    {
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "ensemble_gate_runnable": false,
+      "n_observed_artifacts": 3,
+      "n_promotion_ready_artifacts": 0,
+      "observed_convergence_report_artifacts": [
+        "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed32_transport_window.convergence.json",
+        "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed33_transport_window.convergence.json",
+        "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_dt0p04_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed32_transport_window.json",
+        "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed33_transport_window.json",
+        "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_dt0p04_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        }
+      }
+    }
+  ],
+  "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+  "config": {
+    "min_replicates_per_case": 2,
+    "require_observed_windows_ready": true,
+    "required_variant_axes": [
+      "seed",
+      "timestep"
+    ]
+  },
+  "gates": [
+    {
+      "detail": "observed_artifacts=3",
+      "metric": "observed_window_artifacts_present",
+      "passed": true
+    },
+    {
+      "detail": "require_observed_windows_ready=True",
+      "metric": "observed_windows_promotion_ready",
+      "passed": false
+    },
+    {
+      "detail": "missing_artifact_groups=2",
+      "metric": "seed_and_timestep_replicates_present",
+      "passed": false
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_readiness_manifest",
+  "missing_artifacts": [
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window' with distinct seed metadata and trace provenance",
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.seed or equivalent top-level seed metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "seed"
+    },
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window' with distinct timestep metadata and trace provenance",
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.timestep or equivalent top-level timestep metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "timestep"
+    }
+  ],
+  "observed_artifacts": [
+    {
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed32_transport_window.convergence.json",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing/non-finite statistics.late_mean",
+        "missing/non-finite statistics.sem",
+        "missing/non-finite statistics.block_bootstrap_sem",
+        "missing/non-finite statistics.running_mean_rel_drift",
+        "missing/non-finite statistics.terminal_mean_rel_delta",
+        "missing/non-finite window.late_tmin",
+        "missing/non-finite window.late_tmax",
+        "window has no finite late samples",
+        "missing passed gate_report"
+      ],
+      "index": 0,
+      "late_mean": null,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": null,
+      "source_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed32_transport_window.json",
+      "variant": {
+        "seed": 32,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed33_transport_window.convergence.json",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing/non-finite statistics.late_mean",
+        "missing/non-finite statistics.sem",
+        "missing/non-finite statistics.block_bootstrap_sem",
+        "missing/non-finite statistics.running_mean_rel_drift",
+        "missing/non-finite statistics.terminal_mean_rel_delta",
+        "missing/non-finite window.late_tmin",
+        "missing/non-finite window.late_tmax",
+        "window has no finite late samples",
+        "missing passed gate_report"
+      ],
+      "index": 1,
+      "late_mean": null,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": null,
+      "source_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed33_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed33_transport_window.json",
+      "variant": {
+        "seed": 33,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_dt0p04_transport_window.convergence.json",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing/non-finite statistics.late_mean",
+        "missing/non-finite statistics.sem",
+        "missing/non-finite statistics.block_bootstrap_sem",
+        "missing/non-finite statistics.running_mean_rel_drift",
+        "missing/non-finite statistics.terminal_mean_rel_delta",
+        "missing/non-finite window.late_tmin",
+        "missing/non-finite window.late_tmax",
+        "window has no finite late samples",
+        "missing passed gate_report"
+      ],
+      "index": 2,
+      "late_mean": null,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": null,
+      "source_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_dt0p04_transport_window.json",
+      "variant": {
+        "seed": 22,
+        "timestep": 0.04
+      }
+    }
+  ],
+  "passed": false,
+  "promotion_gate": {
+    "blockers": [
+      "observed_windows_promotion_ready",
+      "seed_and_timestep_replicates_present"
+    ],
+    "passed": false,
+    "requirements": [
+      "every observed late-window report must pass convergence metadata gates",
+      "each case must include distinct passed seed-replicate artifacts",
+      "each case must include distinct passed timestep-replicate artifacts",
+      "only after this manifest passes should the replicated ensemble gate be run"
+    ]
+  }
+}

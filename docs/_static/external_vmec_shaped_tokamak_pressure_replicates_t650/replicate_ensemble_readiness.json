@@ -1,0 +1,170 @@
+{
+  "case": "shaped_tokamak_pressure_n80_t650_seed_timestep_readiness",
+  "cases": [
+    {
+      "case": "shaped_tokamak_pressure_n80_t650_seed_timestep",
+      "ensemble_gate_runnable": true,
+      "n_observed_artifacts": 5,
+      "n_promotion_ready_artifacts": 5,
+      "observed_convergence_report_artifacts": [
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04_transport_window.convergence.json",
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04_transport_window.convergence.json",
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04_transport_window.convergence.json",
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04_transport_window.convergence.json",
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04_transport_window.json",
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04_transport_window.json",
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04_transport_window.json",
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04_transport_window.json",
+        "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 0,
+          "observed_distinct_count": 4,
+          "observed_distinct_values": [
+            "22",
+            "31",
+            "32",
+            "33"
+          ],
+          "passed": true,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 0,
+          "observed_distinct_count": 2,
+          "observed_distinct_values": [
+            "0.035",
+            "0.04"
+          ],
+          "passed": true,
+          "required_distinct_count": 2
+        }
+      }
+    }
+  ],
+  "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+  "config": {
+    "min_replicates_per_case": 2,
+    "require_observed_windows_ready": true,
+    "required_variant_axes": [
+      "seed",
+      "timestep"
+    ]
+  },
+  "gates": [
+    {
+      "detail": "observed_artifacts=5",
+      "metric": "observed_window_artifacts_present",
+      "passed": true
+    },
+    {
+      "detail": "require_observed_windows_ready=True",
+      "metric": "observed_windows_promotion_ready",
+      "passed": true
+    },
+    {
+      "detail": "all required variant axes have enough passed artifacts",
+      "metric": "seed_and_timestep_replicates_present",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_readiness_manifest",
+  "missing_artifacts": [],
+  "observed_artifacts": [
+    {
+      "case": "shaped_tokamak_pressure_n80_t650_seed_timestep",
+      "convergence_report_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04_transport_window.convergence.json",
+      "failures": [],
+      "index": 0,
+      "late_mean": 7.083457648388344,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.25224160866973594,
+      "source_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04_transport_window.json",
+      "variant": {
+        "seed": 22,
+        "timestep": 0.04
+      }
+    },
+    {
+      "case": "shaped_tokamak_pressure_n80_t650_seed_timestep",
+      "convergence_report_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04_transport_window.convergence.json",
+      "failures": [],
+      "index": 1,
+      "late_mean": 7.033116873056625,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.22528239686172133,
+      "source_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04_transport_window.json",
+      "variant": {
+        "seed": 31,
+        "timestep": 0.04
+      }
+    },
+    {
+      "case": "shaped_tokamak_pressure_n80_t650_seed_timestep",
+      "convergence_report_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04_transport_window.convergence.json",
+      "failures": [],
+      "index": 2,
+      "late_mean": 6.803694423722946,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.17983304058313385,
+      "source_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04_transport_window.json",
+      "variant": {
+        "seed": 32,
+        "timestep": 0.04
+      }
+    },
+    {
+      "case": "shaped_tokamak_pressure_n80_t650_seed_timestep",
+      "convergence_report_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04_transport_window.convergence.json",
+      "failures": [],
+      "index": 3,
+      "late_mean": 7.386259748891963,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.1850038260823919,
+      "source_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04_transport_window.json",
+      "variant": {
+        "seed": 33,
+        "timestep": 0.04
+      }
+    },
+    {
+      "case": "shaped_tokamak_pressure_n80_t650_seed_timestep",
+      "convergence_report_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/nonlinear_window_convergence_reports/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035_transport_window.convergence.json",
+      "failures": [],
+      "index": 4,
+      "late_mean": 7.475841338621764,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.33116969837810245,
+      "source_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035_transport_window.json",
+      "variant": {
+        "seed": 22,
+        "timestep": 0.035
+      }
+    }
+  ],
+  "passed": true,
+  "promotion_gate": {
+    "blockers": [],
+    "passed": true,
+    "requirements": [
+      "every observed late-window report must pass convergence metadata gates",
+      "each case must include distinct passed seed-replicate artifacts",
+      "each case must include distinct passed timestep-replicate artifacts",
+      "only after this manifest passes should the replicated ensemble gate be run"
+    ]
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "candidate_families": [
+    {
+      "blockers": [
+        "pass_fraction 0.5 < 1.0"
+      ],
+      "label": "accepted_qa_ess",
+      "passed": false,
+      "source": "office:/home/rjorge/gkx_nonlinear_matrix_20260622/matrix_artifacts/qa_mode5_ess_matrix_matrix_report.json",
+      "summary": {
+        "mean_relative_reduction": 0.0918,
+        "pass_fraction": 0.5,
+        "passed_samples": 9,
+        "total_samples": 18
+      }
+    },
+    {
+      "blockers": [
+        "missing comparisons: s0p45_a0p785398_ky0p3, s0p45_a0p785398_ky0p5, s0p64_a0_ky0p1, s0p64_a0_ky0p3, s0p64_a0_ky0p5, s0p64_a0p785398_ky0p1, s0p64_a0p785398_ky0p3, s0p64_a0p785398_ky0p5 ...",
+        "pass_fraction 0.0555556 < 1",
+        "mean_relative_reduction 0.00748452 < 0.02"
+      ],
+      "label": "projected_0p001",
+      "passed": false,
+      "source": "docs/_static/projected_0p001_matrix_early_failed_matrix_report.json",
+      "summary": {
+        "alphas": [
+          0.0,
+          0.7853981633974483
+        ],
+        "completed_samples": 4,
+        "ky_values": [
+          0.1,
+          0.3,
+          0.5
+        ],
+        "max_relative_reduction": 0.10706030115021037,
+        "mean_relative_reduction": 0.007484524027516398,
+        "min_relative_reduction": -0.02820893360790039,
+        "pass_fraction": 0.05555555555555555,
+        "passed_samples": 1,
+        "surfaces": [
+          0.45,
+          0.64,
+          0.78
+        ],
+        "total_samples": 18
+      }
+    },
+    {
+      "blockers": [
+        "missing comparisons: s0p45_a0_ky0p3, s0p45_a0_ky0p5, s0p45_a0p785398_ky0p1, s0p45_a0p785398_ky0p3, s0p45_a0p785398_ky0p5, s0p64_a0_ky0p1, s0p64_a0_ky0p3, s0p64_a0_ky0p5 ...",
+        "pass_fraction 0 < 1",
+        "mean_relative_reduction -0.0299451 < 0.02"
+      ],
+      "first_sample": {
+        "passed": false,
+        "source": "docs/_static/projected_0p0005_first_sample_matched_comparison.json",
+        "statistics": {
+          "absolute_reduction": -0.31009780024224654,
+          "combined_uncertainty": 0.21830397507441554,
+          "relative_reduction": -0.02994514689149309,
+          "uncertainty_z_score": -1.420486274409526
+        }
+      },
+      "label": "projected_0p0005",
+      "passed": false,
+      "source": "docs/_static/projected_0p0005_matrix_early_failed_matrix_report.json",
+      "summary": {
+        "alphas": [
+          0.0,
+          0.7853981633974483
+        ],
+        "completed_samples": 1,
+        "ky_values": [
+          0.1,
+          0.3,
+          0.5
+        ],
+        "max_relative_reduction": -0.02994514689149309,
+        "mean_relative_reduction": -0.02994514689149309,
+        "min_relative_reduction": -0.02994514689149309,
+        "pass_fraction": 0.0,
+        "passed_samples": 0,
+        "surfaces": [
+          0.45,
+          0.64,
+          0.78
+        ],
+        "total_samples": 18
+      }
+    }
+  ],
+  "claim_level": "broad_multi_surface_multi_field_line_multi_ky_nonlinear_turbulent_flux_optimization",
+  "conclusion": "No candidate family passes the strict broad nonlinear transport matrix gate. The release may keep scoped single-point and diagnostic optimization evidence, but must not promote broad nonlinear turbulent-flux stellarator optimization.",
+  "kind": "broad_nonlinear_transport_matrix_negative_evidence",
+  "passed": false,
+  "policy": {
+    "min_mean_relative_reduction": 0.02,
+    "min_pass_fraction": 1.0,
+    "min_total_samples": 18,
+    "required_field_line_labels": [
+      0.0,
+      "pi/4"
+    ],
+    "required_ky_rhoi": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "required_surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ],
+    "window": [
+      1100.0,
+      1500.0
+    ]
+  }
+}

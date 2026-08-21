@@ -1,0 +1,159 @@
+{
+  "case_name": "nfp4_QH_warm_start",
+  "claim_scope": "full vmex state coefficient -> booz_xform_jax mode-21 equal-arc geometry -> GKX linear-RHS quasilinear heat-flux-weight gradient",
+  "eigenpair_gate": {
+    "ad_supported": true,
+    "atol": 0.05,
+    "biorthogonal_overlap_abs": 0.3602982406616078,
+    "branch_isolated": true,
+    "eigenvalue_gap": 0.2968664556565676,
+    "eigenvalue_imag": -0.1668157565097621,
+    "eigenvalue_real": 0.29676858617889174,
+    "eigenvalue_sensitivity_imag": [
+      167.2823334030733
+    ],
+    "eigenvalue_sensitivity_real": [
+      5778.084851585723
+    ],
+    "gap_floor": 1e-08,
+    "jacobian_fd": [
+      [
+        5770.61598383638
+      ],
+      [
+        166.33337017588067
+      ],
+      [
+        -15821.468170720054
+      ],
+      [
+        -608.375350819923
+      ],
+      [
+        82638.96285131734
+      ]
+    ],
+    "jacobian_implicit": [
+      [
+        5778.084851585723
+      ],
+      [
+        167.2823334030733
+      ],
+      [
+        -15832.019866777266
+      ],
+      [
+        -641.4270901447235
+      ],
+      [
+        82548.19994346345
+      ]
+    ],
+    "left_selected_index": 13,
+    "max_abs_error": 90.76290785388846,
+    "max_rel_error": 0.05432787386973482,
+    "observable_chain_rule": "split_eigenpair_and_explicit_parameter",
+    "passed": false,
+    "rtol": 0.02,
+    "selected_index": 13,
+    "selector": "max_real",
+    "sensitivity_method": "implicit_left_right_eigenpair",
+    "step": 1e-06
+  },
+  "elapsed_seconds": 59.1395278328564,
+  "grid": {
+    "Nx": 1,
+    "Ny": 4,
+    "Nz": 4,
+    "selected_ky_index": 1
+  },
+  "kind": "mode21_vmec_boozer_quasilinear_gradient_gate",
+  "linear_frequency_gradient_gate": true,
+  "linear_growth_gradient_gate": true,
+  "mboz": 21,
+  "n_hermite": 3,
+  "n_laguerre": 2,
+  "nboz": 21,
+  "next_action": "Use this as the full-chain quasilinear gradient gate for reduced linear/quasilinear stellarator objectives; keep full nonlinear-window VMEC/Boozer gradients as a separate future lane.",
+  "nonlinear_window_gradient_gate": false,
+  "objective_gates": [
+    {
+      "abs_error": 7.46886774934319,
+      "atol": 0.05,
+      "finite_difference": 5770.61598383638,
+      "implicit": 5778.084851585723,
+      "objective": "gamma",
+      "parameter": "Zsin_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.0012942929784729481,
+      "rtol": 0.02
+    },
+    {
+      "abs_error": 0.9489632271926212,
+      "atol": 0.05,
+      "finite_difference": 166.33337017588067,
+      "implicit": 167.2823334030733,
+      "objective": "omega",
+      "parameter": "Zsin_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.00570518847895157,
+      "rtol": 0.02
+    },
+    {
+      "abs_error": 10.551696057211302,
+      "atol": 0.05,
+      "finite_difference": -15821.468170720054,
+      "implicit": -15832.019866777266,
+      "objective": "kperp_eff2",
+      "parameter": "Zsin_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.0006669226865265742,
+      "rtol": 0.02
+    },
+    {
+      "abs_error": 33.05173932480045,
+      "atol": 0.05,
+      "finite_difference": -608.375350819923,
+      "implicit": -641.4270901447235,
+      "objective": "linear_heat_flux_weight",
+      "parameter": "Zsin_mid_surface_m1",
+      "passed": false,
+      "rel_error": 0.05432787386973482,
+      "rtol": 0.02
+    },
+    {
+      "abs_error": 90.76290785388846,
+      "atol": 0.05,
+      "finite_difference": 82638.96285131734,
+      "implicit": 82548.19994346345,
+      "objective": "mixing_length_heat_flux_proxy",
+      "parameter": "Zsin_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.0010983064733906158,
+      "rtol": 0.02
+    }
+  ],
+  "objective_names": [
+    "gamma",
+    "omega",
+    "kperp_eff2",
+    "linear_heat_flux_weight",
+    "mixing_length_heat_flux_proxy"
+  ],
+  "parameter_indices": {
+    "Zsin": [
+      17,
+      1
+    ]
+  },
+  "parameter_names": [
+    "Zsin_mid_surface_m1"
+  ],
+  "passed": false,
+  "quasilinear_weight_gradient_gate": false,
+  "source_scope": "mode21_vmec_boozer_state",
+  "state_size": 24,
+  "surface_index": null,
+  "surface_stencil_width": null
+}

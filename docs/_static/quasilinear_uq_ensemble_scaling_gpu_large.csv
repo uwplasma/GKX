@@ -1,0 +1,3 @@
+requested_devices,actual_workers,timed_wall_s,wall_s,strong_speedup_vs_1_device,parallel_efficiency,ensemble_mean_heat_flux_proxy,ensemble_std_heat_flux_proxy,max_heat_flux_proxy_abs_error,max_heat_flux_proxy_rel_error,max_gamma_abs_error,identity_gate_pass,error
+1,1,8.296795701840892,35.11741202464327,1.0,1.0,1.5652058168003957,0.4159667551499853,0.0,0.0,0.0,True,
+2,2,4.844465111847967,24.595067750196904,1.7126340081487348,0.8563170040743674,1.5652058168003957,0.4159667551499853,0.0,0.0,0.0,True,

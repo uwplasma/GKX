@@ -1,0 +1,148 @@
+{
+  "case": "circular_external_vmec_t450_high_grid_window",
+  "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+  "config": {
+    "block_size": null,
+    "bootstrap_samples": 256,
+    "bootstrap_seed": 0,
+    "max_running_mean_rel_drift": 0.15,
+    "max_sem_rel": 0.25,
+    "max_terminal_mean_rel_delta": 0.1,
+    "min_blocks": 4,
+    "min_samples": 24,
+    "min_terminal_samples": 8,
+    "require_all_finite": true,
+    "terminal_fraction": 0.25,
+    "tmax": 449.9636535644531,
+    "tmin": 225.0591278076172,
+    "transient_fraction": 0.5,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "circular_external_vmec_t450_high_grid_window",
+    "gates": [
+      {
+        "detail": "finite=91 nonfinite=0 late=91",
+        "metric": "finite_late_window",
+        "passed": true
+      },
+      {
+        "detail": "finite_late_samples=91 min_samples=24",
+        "metric": "finite_sample_count",
+        "passed": true
+      },
+      {
+        "detail": "n_blocks=9 min_blocks=4",
+        "metric": "minimum_block_count",
+        "passed": true
+      },
+      {
+        "detail": "running_mean_rel_drift=0.022445190313783232 gate=0.15",
+        "metric": "running_mean_drift",
+        "passed": true
+      },
+      {
+        "detail": "terminal_samples=23 min_terminal_samples=8",
+        "metric": "terminal_sample_count",
+        "passed": true
+      },
+      {
+        "detail": "terminal_mean_rel_delta=0.006563211465782677 gate=0.1 terminal_fraction=0.25",
+        "metric": "terminal_mean_agreement",
+        "passed": true
+      },
+      {
+        "detail": "sem_rel=0.03473043078398469 gate=0.25",
+        "metric": "block_bootstrap_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv"
+  },
+  "gates": [
+    {
+      "detail": "finite=91 nonfinite=0 late=91",
+      "metric": "finite_late_window",
+      "passed": true
+    },
+    {
+      "detail": "finite_late_samples=91 min_samples=24",
+      "metric": "finite_sample_count",
+      "passed": true
+    },
+    {
+      "detail": "n_blocks=9 min_blocks=4",
+      "metric": "minimum_block_count",
+      "passed": true
+    },
+    {
+      "detail": "running_mean_rel_drift=0.022445190313783232 gate=0.15",
+      "metric": "running_mean_drift",
+      "passed": true
+    },
+    {
+      "detail": "terminal_samples=23 min_terminal_samples=8",
+      "metric": "terminal_sample_count",
+      "passed": true
+    },
+    {
+      "detail": "terminal_mean_rel_delta=0.006563211465782677 gate=0.1 terminal_fraction=0.25",
+      "metric": "terminal_mean_agreement",
+      "passed": true
+    },
+    {
+      "detail": "sem_rel=0.03473043078398469 gate=0.25",
+      "metric": "block_bootstrap_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_convergence_report",
+  "observable": "heat_flux",
+  "passed": true,
+  "provenance": {
+    "observable_column": "heat_flux",
+    "source_artifact": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv",
+    "summary_artifact": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+    "time_column": "t"
+  },
+  "statistics": {
+    "block_bootstrap_sem": 0.6266839059757352,
+    "block_sem": 0.6748125773694964,
+    "block_size": 10,
+    "bootstrap_samples": 256,
+    "bootstrap_seed": 0,
+    "first_half_mean": 19.65046017964681,
+    "late_mean": 19.430008846324878,
+    "late_std": 2.5120911781559006,
+    "n_blocks": 9,
+    "running_mean_drift": 0.43611024635425366,
+    "running_mean_rel_drift": 0.022445190313783232,
+    "sample_sem": 0.26479766043294894,
+    "second_half_mean": 19.214349933292556,
+    "sem": 0.6748125773694964,
+    "sem_rel": 0.03473043078398469,
+    "terminal_mean": 19.557532103165336,
+    "terminal_mean_delta": 0.1275232568404583,
+    "terminal_mean_rel_delta": 0.006563211465782677,
+    "terminal_n_samples": 23,
+    "terminal_tmax": 449.9636535644531,
+    "terminal_tmin": 395.0270690917969
+  },
+  "window": {
+    "input_tmax": 449.9636535644531,
+    "input_tmin": 225.0591278076172,
+    "late_tmax": 449.9636535644531,
+    "late_tmin": 225.0591278076172,
+    "n_finite_late": 91,
+    "n_late": 91,
+    "n_nonfinite_late": 0,
+    "n_total": 181,
+    "selected_tmax": 449.9636535644531,
+    "selected_tmin": 225.0591278076172,
+    "transient_cutoff": 225.0591278076172,
+    "transient_fraction": 0.5
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "case": "cyclone_salpha_adiabatic_electrons_linear",
+  "claim_level": "fresh_bounded_linear_parity_check_not_runtime_speedup",
+  "date": "2026-07-10",
+  "grid": {
+    "n_laguerre": 16,
+    "n_hermite": 48,
+    "n_theta_per_segment": 32,
+    "n_period": 2,
+    "ky": 0.3
+  },
+  "time": {
+    "method": "rk4",
+    "dt": 0.004663,
+    "steps": 4290,
+    "t_final": 20.00426
+  },
+  "reference": {
+    "source_revision": "bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5",
+    "binary_revision_report": "bc2fe552-dirty",
+    "device": "NVIDIA RTX A4000",
+    "n_ky_advanced": 12,
+    "wall_seconds": 49.0,
+    "late_window_t_min": 10.0,
+    "gamma_mean": 0.09581914,
+    "gamma_std": 0.010475238,
+    "omega_mean": 0.28106183,
+    "omega_std": 0.014363426
+  },
+  "gkx": {
+    "source_revision": "a1cb71751b43fd3c0aec91c3e0c50bfb6492dc7b",
+    "device": "NVIDIA RTX A4000",
+    "n_ky_advanced": 1,
+    "wall_seconds": 16.24,
+    "diagnostic": "z_index automatic log-linear fit",
+    "gamma": 0.090759,
+    "omega": 0.278275
+  },
+  "relative_error": {
+    "gamma": 0.0528092822,
+    "omega": 0.0099153628
+  },
+  "passed": true,
+  "combined_ky_regression": {
+    "source_revision": "587a9657",
+    "device": "NVIDIA RTX A4000",
+    "ky": [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55],
+    "gamma": [-0.010466, -0.006414, 0.027006, 0.059335, 0.080364, 0.09076, 0.092837, 0.088214, 0.077345, 0.060911, 0.040348],
+    "omega": [-0.007379, 0.042541, 0.107835, 0.166568, 0.222838, 0.278275, 0.331764, 0.381231, 0.425394, 0.464449, 0.498842],
+    "cold_process_wall_seconds": 61.1,
+    "correctness_gate": {
+      "high_ky_serial_match": true,
+      "high_ky_checked": 0.4,
+      "gamma_serial": 0.08821,
+      "gamma_batch": 0.088214,
+      "omega_serial": 0.381228,
+      "omega_batch": 0.381231
+    },
+    "notes": [
+      "This regression found and fixed accidental reuse of the nonlinear two-thirds mask in a linear combined-ky scan.",
+      "The cold-process wall time includes JAX compilation and is not a speedup claim."
+    ]
+  },
+  "tolerances": {
+    "gamma_relative": 0.1,
+    "omega_relative": 0.05
+  },
+  "notes": [
+    "The wall times are not a speedup comparison because the reference run advanced 12 ky modes and the GKX run advanced one.",
+    "Projected-mode fitting gave a 23% low growth rate on the same GKX trace; the benchmark-aligned midplane observable closes that diagnostic mismatch.",
+    "The corrected combined scan retains high-ky linear modes outside the nonlinear dealias band; its cold timing remains diagnostic-only until a matched warm/cold protocol is recorded."
+  ]
+}

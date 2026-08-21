@@ -1,0 +1,35 @@
+{
+  "kind": "vmex_solved_wout_candidate_gate",
+  "passed": true,
+  "checks": {
+    "aspect": {
+      "value": 5.000154379138371,
+      "target": 5.0,
+      "absolute_error": 0.00015437913837068606,
+      "absolute_tolerance": 0.05,
+      "passed": true
+    },
+    "mean_iota": {
+      "value": 0.41019972180134634,
+      "minimum_abs": 0.41,
+      "margin": 0.0001997218013463642,
+      "passed": true
+    },
+    "quasisymmetry": {
+      "value": 0.0002600982322181188,
+      "maximum": 0.05,
+      "margin": 0.04973990176778188,
+      "source": "vmex_state",
+      "passed": true
+    },
+    "iota_profile": {
+      "minimum_iotas_excluding_axis": 0.4056702517223691,
+      "minimum_iotaf": 0.40550592917747963,
+      "floor": null,
+      "source": "vmex_state",
+      "passed": true
+    }
+  },
+  "claim_level": "solved VMEC candidate gate before expensive GKX nonlinear transport audit",
+  "next_action": "candidate may proceed to matched long-window nonlinear transport audits"
+}

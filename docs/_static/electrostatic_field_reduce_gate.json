@@ -1,0 +1,168 @@
+{
+  "actual_devices": 2,
+  "atol": 2e-06,
+  "case": "Electrostatic Hermite-sharded field-reduction identity gate",
+  "claim_scope": "single-species electrostatic phi field-reduction identity, not a full RHS or nonlinear speedup claim",
+  "grid": {
+    "Nx": 1,
+    "Ny_actual": 4,
+    "Ny_requested": 4,
+    "Nz": 16
+  },
+  "identity_passed": true,
+  "max_abs_error": 0.0,
+  "max_rel_error": 0.0,
+  "notes": "The sharded path selects the global m=0 density moment on the Hermite mesh, reduces it with lax.psum, and applies the electrostatic quasineutrality denominator.",
+  "phi_norm": 0.16790585219860077,
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 2,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 2,
+    "shard_shape": [
+      2,
+      4,
+      4,
+      1,
+      16
+    ],
+    "state_shape": [
+      2,
+      8,
+      4,
+      1,
+      16
+    ]
+  },
+  "reference_source": "gkx.linear.linear_rhs_cached production electrostatic field solve",
+  "requested_devices": 2,
+  "rows": [
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.0005424412665888667,
+      "sharded_abs": 0.0005424412665888667,
+      "z_index": 0
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.004305154550820589,
+      "sharded_abs": 0.004305154550820589,
+      "z_index": 1
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.011165891773998737,
+      "sharded_abs": 0.011165891773998737,
+      "z_index": 2
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.019922969862818718,
+      "sharded_abs": 0.019922969862818718,
+      "z_index": 3
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.03065055049955845,
+      "sharded_abs": 0.03065055049955845,
+      "z_index": 4
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.043482277542352676,
+      "sharded_abs": 0.043482277542352676,
+      "z_index": 5
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.05732801556587219,
+      "sharded_abs": 0.05732801556587219,
+      "z_index": 6
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.06885208189487457,
+      "sharded_abs": 0.06885208189487457,
+      "z_index": 7
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.07346605509519577,
+      "sharded_abs": 0.07346605509519577,
+      "z_index": 8
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.06885207444429398,
+      "sharded_abs": 0.06885207444429398,
+      "z_index": 9
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.057328011840581894,
+      "sharded_abs": 0.057328011840581894,
+      "z_index": 10
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.043482258915901184,
+      "sharded_abs": 0.043482258915901184,
+      "z_index": 11
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.030650541186332703,
+      "sharded_abs": 0.030650541186332703,
+      "z_index": 12
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.01992296800017357,
+      "sharded_abs": 0.01992296800017357,
+      "z_index": 13
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.011165887117385864,
+      "sharded_abs": 0.011165887117385864,
+      "z_index": 14
+    },
+    {
+      "abs_error": 0.0,
+      "serial_abs": 0.004305155016481876,
+      "sharded_abs": 0.004305155016481876,
+      "z_index": 15
+    }
+  ],
+  "rtol": 2e-06,
+  "source": "gkx.parallel.velocity.electrostatic_phi_shard_map",
+  "state_shape": [
+    2,
+    8,
+    4,
+    1,
+    16
+  ]
+}

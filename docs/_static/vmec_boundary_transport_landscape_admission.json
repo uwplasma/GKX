@@ -1,0 +1,89 @@
+{
+  "artifacts": {
+    "baseline_ensemble": "docs/_static/vmec_boundary_transport_landscape_replicates/landscape_rbc_0_1_0_ensemble_gate.json",
+    "candidate_ensembles": [
+      {
+        "label": "+3% RBC(0,1)",
+        "path": "docs/_static/vmec_boundary_transport_landscape_replicates/landscape_rbc_0_1_p0p03_ensemble_gate.json"
+      },
+      {
+        "label": "+6% RBC(0,1)",
+        "path": "docs/_static/vmec_boundary_transport_landscape_replicates/landscape_rbc_0_1_p0p06_ensemble_gate.json"
+      }
+    ]
+  },
+  "baseline": {
+    "case": "landscape_rbc_0_1_0_replicated_nonlinear_window_ensemble_gate",
+    "combined_sem": 0.11951503416978174,
+    "combined_sem_rel": 0.013971238188658763,
+    "ensemble_mean": 8.554362366164424,
+    "n_reports": 3,
+    "passed": true
+  },
+  "candidates": [
+    {
+      "admission_blockers": [],
+      "admitted": true,
+      "case": "landscape_rbc_0_1_p0p03_replicated_nonlinear_window_ensemble_gate",
+      "combined_sem": 0.04213243251063571,
+      "combined_sem_rel": 0.0067148199999120285,
+      "ensemble_mean": 6.274543846475065,
+      "label": "+3% RBC(0,1)",
+      "n_reports": 3,
+      "relative_reduction": 0.2665094629036129,
+      "uncertainty_z_score": 17.990416896717942
+    },
+    {
+      "admission_blockers": [],
+      "admitted": true,
+      "case": "landscape_rbc_0_1_p0p06_replicated_nonlinear_window_ensemble_gate",
+      "combined_sem": 0.04399590111876854,
+      "combined_sem_rel": 0.00684597490247632,
+      "ensemble_mean": 6.42653555490751,
+      "label": "+6% RBC(0,1)",
+      "n_reports": 3,
+      "relative_reduction": 0.248741720326606,
+      "uncertainty_z_score": 16.70774265478943
+    }
+  ],
+  "claim_scope": "selected replicated nonlinear landscape admission; not a multi-coefficient or multi-flux-tube turbulent-optimization claim",
+  "kind": "nonlinear_landscape_admission_report",
+  "next_action": "use selected direction for the next uncertainty-aware optimizer admission step",
+  "passed": true,
+  "policy": {
+    "maximum_combined_sem_rel": 0.25,
+    "minimum_alpha_count": 2,
+    "minimum_ky_count": 3,
+    "minimum_relative_reduction": 0.02,
+    "minimum_replicate_count": 3,
+    "minimum_sample_count": 12,
+    "minimum_surface_count": 3,
+    "minimum_uncertainty_z_score": 1.0,
+    "recommended_alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "recommended_ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "recommended_surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ]
+  },
+  "selected_candidate": {
+    "admission_blockers": [],
+    "admitted": true,
+    "case": "landscape_rbc_0_1_p0p03_replicated_nonlinear_window_ensemble_gate",
+    "combined_sem": 0.04213243251063571,
+    "combined_sem_rel": 0.0067148199999120285,
+    "ensemble_mean": 6.274543846475065,
+    "label": "+3% RBC(0,1)",
+    "n_reports": 3,
+    "relative_reduction": 0.2665094629036129,
+    "uncertainty_z_score": 17.990416896717942
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "actual_devices": 2,
+  "batched_elapsed_s": 0.1615999999921769,
+  "case": "Logical-CPU independent ky scan",
+  "claim_scope": "parallel interface and numerical identity gate, not a gyrokinetic physics validation",
+  "device_parallel_config": {
+    "axis": "ky",
+    "backend": "auto",
+    "batch_size": 2,
+    "num_devices": 2,
+    "profile": false,
+    "strategy": "device_batch",
+    "strict_identity": true
+  },
+  "gamma_rtol": 1e-06,
+  "identity_passed": true,
+  "ky_values": [
+    0.1,
+    0.2,
+    0.3,
+    0.4,
+    0.5,
+    0.6
+  ],
+  "max_gamma_rel_error": 6.682527422753659e-08,
+  "max_omega_abs_error": 0.0,
+  "max_ql_rel_error": 1.0112921897196283e-07,
+  "observed_speedup": 2.750761392584573,
+  "omega_atol": 1e-06,
+  "ql_rtol": 1e-06,
+  "requested_devices": 2,
+  "rows": [
+    {
+      "batched_gamma": 0.027233179658651352,
+      "batched_omega": -0.015088805928826332,
+      "batched_ql_proxy": 0.30259090662002563,
+      "gamma_rel_error": 0.0,
+      "ky": 0.1,
+      "omega_abs_error": 0.0,
+      "ql_rel_error": 0.0,
+      "serial_gamma": 0.027233179658651352,
+      "serial_omega": -0.015088805928826332,
+      "serial_ql_proxy": 0.30259090662002563
+    },
+    {
+      "batched_gamma": 0.0707269161939621,
+      "batched_omega": -0.032453201711177826,
+      "batched_ql_proxy": 0.5893909931182861,
+      "gamma_rel_error": 0.0,
+      "ky": 0.2,
+      "omega_abs_error": 0.0,
+      "ql_rel_error": 1.0112921897196283e-07,
+      "serial_gamma": 0.0707269161939621,
+      "serial_omega": -0.032453201711177826,
+      "serial_ql_proxy": 0.5893909335136414
+    },
+    {
+      "batched_gamma": 0.11149344593286514,
+      "batched_omega": -0.050417982041835785,
+      "batched_ql_proxy": 0.6558437943458557,
+      "gamma_rel_error": 6.682527422753659e-08,
+      "ky": 0.3,
+      "omega_abs_error": 0.0,
+      "ql_rel_error": 9.08823714918723e-08,
+      "serial_gamma": 0.11149345338344574,
+      "serial_omega": -0.050417982041835785,
+      "serial_ql_proxy": 0.6558438539505005
+    },
+    {
+      "batched_gamma": 0.14679548144340515,
+      "batched_omega": -0.06848134845495224,
+      "batched_ql_proxy": 0.6116478443145752,
+      "gamma_rel_error": 0.0,
+      "ky": 0.4,
+      "omega_abs_error": 0.0,
+      "ql_rel_error": 0.0,
+      "serial_gamma": 0.14679548144340515,
+      "serial_omega": -0.06848134845495224,
+      "serial_ql_proxy": 0.6116478443145752
+    },
+    {
+      "batched_gamma": 0.17477905750274658,
+      "batched_omega": -0.08650770038366318,
+      "batched_ql_proxy": 0.5296335220336914,
+      "gamma_rel_error": 0.0,
+      "ky": 0.5,
+      "omega_abs_error": 0.0,
+      "ql_rel_error": 0.0,
+      "serial_gamma": 0.17477905750274658,
+      "serial_omega": -0.08650770038366318,
+      "serial_ql_proxy": 0.5296335220336914
+    },
+    {
+      "batched_gamma": 0.19433468580245972,
+      "batched_omega": -0.10446222126483917,
+      "batched_ql_proxy": 0.4416697025299072,
+      "gamma_rel_error": 0.0,
+      "ky": 0.6,
+      "omega_abs_error": 0.0,
+      "ql_rel_error": 6.747648798645234e-08,
+      "serial_gamma": 0.19433468580245972,
+      "serial_omega": -0.10446222126483917,
+      "serial_ql_proxy": 0.4416697323322296
+    }
+  ],
+  "serial_elapsed_s": 0.4445230410201475,
+  "serial_parallel_config": {
+    "axis": "ky",
+    "backend": "auto",
+    "batch_size": 1,
+    "num_devices": 1,
+    "profile": false,
+    "strategy": "serial",
+    "strict_identity": true
+  },
+  "source": "JAX-native tiny non-Hermitian linear scan model through gkx.batch_map"
+}

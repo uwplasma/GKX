@@ -1,0 +1,547 @@
+{
+  "claim_level": "production_nonlinear_optimization_promoted_by_replicated_transport_windows",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_matched_optimized_audits": 3,
+    "min_matched_optimized_relative_reduction": 0.02,
+    "min_matched_optimized_uncertainty_sigma": 1.0,
+    "min_optimized_equilibrium_ensembles": 3,
+    "min_replicated_ensembles": 2,
+    "min_reports_per_ensemble": 2,
+    "min_seed_variants": 2,
+    "min_timestep_variants": 1,
+    "require_matched_optimized_transport_audit": true,
+    "require_optimized_equilibrium_transport": true,
+    "require_seed_timestep_provenance": true,
+    "value_floor": 1e-12
+  },
+  "evidence_gap": {
+    "claim_boundary": "Existing strict matched audits are included as negative evidence. They do not promote broad nonlinear turbulent-flux optimization unless they pass the same long-window reduction and uncertainty-separation gates.",
+    "failed_matched_optimized_transport_audits": [
+      {
+        "blockers": [
+          "matched_optimized_audit_failed",
+          "insufficient_matched_optimized_reduction",
+          "insufficient_matched_optimized_uncertainty_separation"
+        ],
+        "case": "vmec_qa_t1500_baseline_to_growth_objective",
+        "path": "docs/_static/vmec_qa_t1500_baseline_to_growth_comparison.json",
+        "relative_reduction": 0.006034750834255155,
+        "uncertainty_separation_sigma": 0.2621361576282746
+      },
+      {
+        "blockers": [
+          "matched_optimized_audit_failed",
+          "insufficient_matched_optimized_reduction",
+          "insufficient_matched_optimized_uncertainty_separation"
+        ],
+        "case": "vmec_qa_t1500_baseline_to_nonlinear_window_objective",
+        "path": "docs/_static/vmec_qa_t1500_baseline_to_nonlinear_window_comparison.json",
+        "relative_reduction": -0.0024859908013580866,
+        "uncertainty_separation_sigma": -0.09437112880589442
+      },
+      {
+        "blockers": [
+          "matched_optimized_audit_failed",
+          "insufficient_matched_optimized_reduction",
+          "insufficient_matched_optimized_uncertainty_separation"
+        ],
+        "case": "vmec_qa_t1500_baseline_to_quasilinear_comparison",
+        "path": "docs/_static/vmec_qa_t1500_baseline_to_quasilinear_comparison.json",
+        "relative_reduction": -0.004866700929227086,
+        "uncertainty_separation_sigma": -0.19069616502486395
+      }
+    ],
+    "required_additional_matched_optimized_audits": 0,
+    "required_additional_optimized_equilibrium_ensembles": 0
+  },
+  "gates": [
+    {
+      "detail": "docs/_static/stellarator_itg_optimization_comparison.json",
+      "metric": "optimization_artifact_present",
+      "passed": true
+    },
+    {
+      "detail": "rows_claiming_production=0 artifact_claims_production=False",
+      "metric": "reduced_optimizer_not_promoted",
+      "passed": true
+    },
+    {
+      "detail": "reduced_artifacts=2",
+      "metric": "startup_or_reduced_artifacts_blocked",
+      "passed": true
+    },
+    {
+      "detail": "qualifying_ensembles=3 min=2",
+      "metric": "replicated_long_window_holdouts_present",
+      "passed": true
+    },
+    {
+      "detail": "docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.json; docs/_static/vmec_qa_t1500_replicates/growth_from_strict_baseline_t1500_ensemble_gate.json; docs/_static/vmec_qa_t1500_replicates/nonlinear_window_from_strict_baseline_t1500_ensemble_gate.json; docs/_static/vmec_qa_t1500_replicates/quasilinear_from_strict_baseline_t1500_ensemble_gate.json",
+      "metric": "optimized_equilibrium_replicated_transport_window",
+      "passed": true
+    },
+    {
+      "detail": "docs/_static/qa_no_ess_to_optimized_nonlinear_audit.json; docs/_static/vmex_qa_projected_weight_0p0005_matched_comparison.json; docs/_static/vmex_qa_projected_weight_0p001_matched_comparison.json",
+      "metric": "matched_baseline_to_optimized_transport_reduction",
+      "passed": true
+    }
+  ],
+  "kind": "production_nonlinear_turbulent_flux_optimization_guard",
+  "matched_optimized_transport_artifacts": [
+    {
+      "baseline_ensemble_qualified": true,
+      "blockers": [],
+      "case": "qa_no_ess_to_optimized_nonlinear_transport_audit",
+      "claim_level": "matched_baseline_to_optimized_replicated_nonlinear_transport_audit",
+      "kind": "baseline_optimized_nonlinear_transport_audit",
+      "optimized_ensemble_qualified": true,
+      "passed": true,
+      "path": "docs/_static/qa_no_ess_to_optimized_nonlinear_audit.json",
+      "qualifies_for_production_optimization": true,
+      "relative_reduction": 0.1844401904195982,
+      "relative_reduction_ok": true,
+      "selected_optimized_audit_closed": true,
+      "uncertainty_separation_ok": true,
+      "uncertainty_separation_sigma": 7.819308425110687
+    },
+    {
+      "baseline_ensemble_qualified": true,
+      "blockers": [],
+      "case": "vmec_qa_full_sweep_projected_weight_0p0005",
+      "claim_level": "matched_replicated_late_window_transport_comparison",
+      "kind": "matched_nonlinear_transport_comparison",
+      "optimized_ensemble_qualified": true,
+      "passed": true,
+      "path": "docs/_static/vmex_qa_projected_weight_0p0005_matched_comparison.json",
+      "qualifies_for_production_optimization": true,
+      "relative_reduction": 0.0267601685844722,
+      "relative_reduction_ok": true,
+      "selected_optimized_audit_closed": true,
+      "uncertainty_separation_ok": true,
+      "uncertainty_separation_sigma": 1.3248576039294477
+    },
+    {
+      "baseline_ensemble_qualified": true,
+      "blockers": [],
+      "case": "vmec_qa_full_sweep_projected_weight_0p001",
+      "claim_level": "matched_replicated_late_window_transport_comparison",
+      "kind": "matched_nonlinear_transport_comparison",
+      "optimized_ensemble_qualified": true,
+      "passed": true,
+      "path": "docs/_static/vmex_qa_projected_weight_0p001_matched_comparison.json",
+      "qualifies_for_production_optimization": true,
+      "relative_reduction": 0.0335304210026822,
+      "relative_reduction_ok": true,
+      "selected_optimized_audit_closed": true,
+      "uncertainty_separation_ok": true,
+      "uncertainty_separation_sigma": 1.5610448390779612
+    },
+    {
+      "baseline_ensemble_qualified": true,
+      "blockers": [
+        "matched_optimized_audit_failed",
+        "insufficient_matched_optimized_reduction",
+        "insufficient_matched_optimized_uncertainty_separation"
+      ],
+      "case": "vmec_qa_t1500_baseline_to_growth_objective",
+      "claim_level": "matched_replicated_late_window_transport_comparison",
+      "kind": "matched_nonlinear_transport_comparison",
+      "optimized_ensemble_qualified": true,
+      "passed": false,
+      "path": "docs/_static/vmec_qa_t1500_baseline_to_growth_comparison.json",
+      "qualifies_for_production_optimization": false,
+      "relative_reduction": 0.006034750834255155,
+      "relative_reduction_ok": false,
+      "selected_optimized_audit_closed": true,
+      "uncertainty_separation_ok": false,
+      "uncertainty_separation_sigma": 0.2621361576282746
+    },
+    {
+      "baseline_ensemble_qualified": true,
+      "blockers": [
+        "matched_optimized_audit_failed",
+        "insufficient_matched_optimized_reduction",
+        "insufficient_matched_optimized_uncertainty_separation"
+      ],
+      "case": "vmec_qa_t1500_baseline_to_nonlinear_window_objective",
+      "claim_level": "matched_replicated_late_window_transport_comparison",
+      "kind": "matched_nonlinear_transport_comparison",
+      "optimized_ensemble_qualified": true,
+      "passed": false,
+      "path": "docs/_static/vmec_qa_t1500_baseline_to_nonlinear_window_comparison.json",
+      "qualifies_for_production_optimization": false,
+      "relative_reduction": -0.0024859908013580866,
+      "relative_reduction_ok": false,
+      "selected_optimized_audit_closed": true,
+      "uncertainty_separation_ok": false,
+      "uncertainty_separation_sigma": -0.09437112880589442
+    },
+    {
+      "baseline_ensemble_qualified": true,
+      "blockers": [
+        "matched_optimized_audit_failed",
+        "insufficient_matched_optimized_reduction",
+        "insufficient_matched_optimized_uncertainty_separation"
+      ],
+      "case": "vmec_qa_t1500_baseline_to_quasilinear_comparison",
+      "claim_level": "matched_replicated_late_window_transport_comparison",
+      "kind": "matched_nonlinear_transport_comparison",
+      "optimized_ensemble_qualified": true,
+      "passed": false,
+      "path": "docs/_static/vmec_qa_t1500_baseline_to_quasilinear_comparison.json",
+      "qualifies_for_production_optimization": false,
+      "relative_reduction": -0.004866700929227086,
+      "relative_reduction_ok": false,
+      "selected_optimized_audit_closed": true,
+      "uncertainty_separation_ok": false,
+      "uncertainty_separation_sigma": -0.19069616502486395
+    }
+  ],
+  "notes": "This guard intentionally allows release when reduced/startup nonlinear artifacts are scoped correctly. Production nonlinear turbulent-flux optimization is promoted only when optimized-equilibrium long-window replicate audits exist and pass.",
+  "optimization_artifact_path": "docs/_static/stellarator_itg_optimization_comparison.json",
+  "optimization_scope": {
+    "artifact_claims_production": false,
+    "bounded_reduced_scope": true,
+    "contains_reduced_nonlinear_window_objective": true,
+    "n_reduced_nonlinear_rows": 1,
+    "n_results": 3,
+    "n_rows_claiming_production": 0,
+    "objective_kinds": [
+      "growth",
+      "quasilinear_flux",
+      "nonlinear_heat_flux"
+    ]
+  },
+  "optimized_equilibrium_artifacts": [
+    {
+      "case": "optimized_equilibrium_post_optimization_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_scoped_as_replicated_holdout": true,
+      "combined_sem_rel": 0.020869088819709194,
+      "combined_sem_rel_ok": true,
+      "ensemble_mean": 10.19273263179093,
+      "finite_transport_mean": true,
+      "is_nonlinear_window_ensemble": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.038174615386123725,
+      "mean_rel_spread_ok": true,
+      "n_reports": 3,
+      "optimized_equilibrium_marker": true,
+      "passed": true,
+      "path": "docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.json",
+      "qualifies_as_long_post_transient_replicate": true,
+      "qualifies_for_production_optimization": true,
+      "report_count_ok": true,
+      "seed_timestep_provenance": {
+        "observed_row_count": 3,
+        "passed": true,
+        "required": true,
+        "requirements": {
+          "min_seed_variants": 2,
+          "min_timestep_variants": 1
+        },
+        "seed_gate_passed": true,
+        "seed_values": [
+          "seed31",
+          "seed32"
+        ],
+        "timestep_gate_passed": true,
+        "timestep_values": [
+          "dt0p04"
+        ]
+      },
+      "seed_timestep_provenance_ok": true
+    },
+    {
+      "case": "vmec_qa_full_sweep_growth_from_strict_baseline_t1500_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_scoped_as_replicated_holdout": true,
+      "combined_sem_rel": 0.01237563555827857,
+      "combined_sem_rel_ok": true,
+      "ensemble_mean": 11.510172783099975,
+      "finite_transport_mean": true,
+      "is_nonlinear_window_ensemble": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.042716648659487565,
+      "mean_rel_spread_ok": true,
+      "n_reports": 3,
+      "optimized_equilibrium_marker": true,
+      "passed": true,
+      "path": "docs/_static/vmec_qa_t1500_replicates/growth_from_strict_baseline_t1500_ensemble_gate.json",
+      "qualifies_as_long_post_transient_replicate": true,
+      "qualifies_for_production_optimization": true,
+      "report_count_ok": true,
+      "seed_timestep_provenance": {
+        "observed_row_count": 3,
+        "passed": true,
+        "required": true,
+        "requirements": {
+          "min_seed_variants": 2,
+          "min_timestep_variants": 1
+        },
+        "seed_gate_passed": true,
+        "seed_values": [
+          "seed32",
+          "seed33"
+        ],
+        "timestep_gate_passed": true,
+        "timestep_values": [
+          "dt0p04"
+        ]
+      },
+      "seed_timestep_provenance_ok": true
+    },
+    {
+      "case": "vmec_qa_full_sweep_nonlinear_window_from_strict_baseline_t1500_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_scoped_as_replicated_holdout": true,
+      "combined_sem_rel": 0.01771167198271938,
+      "combined_sem_rel_ok": true,
+      "ensemble_mean": 11.608843444421765,
+      "finite_transport_mean": true,
+      "is_nonlinear_window_ensemble": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.03661360974234408,
+      "mean_rel_spread_ok": true,
+      "n_reports": 3,
+      "optimized_equilibrium_marker": true,
+      "passed": true,
+      "path": "docs/_static/vmec_qa_t1500_replicates/nonlinear_window_from_strict_baseline_t1500_ensemble_gate.json",
+      "qualifies_as_long_post_transient_replicate": true,
+      "qualifies_for_production_optimization": true,
+      "report_count_ok": true,
+      "seed_timestep_provenance": {
+        "observed_row_count": 3,
+        "passed": true,
+        "required": true,
+        "requirements": {
+          "min_seed_variants": 2,
+          "min_timestep_variants": 1
+        },
+        "seed_gate_passed": true,
+        "seed_values": [
+          "seed32",
+          "seed33"
+        ],
+        "timestep_gate_passed": true,
+        "timestep_values": [
+          "dt0p04"
+        ]
+      },
+      "seed_timestep_provenance_ok": true
+    },
+    {
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_t1500_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_scoped_as_replicated_holdout": true,
+      "combined_sem_rel": 0.016431645156022693,
+      "combined_sem_rel_ok": true,
+      "ensemble_mean": 11.636412199910197,
+      "finite_transport_mean": true,
+      "is_nonlinear_window_ensemble": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.023401608225692535,
+      "mean_rel_spread_ok": true,
+      "n_reports": 3,
+      "optimized_equilibrium_marker": true,
+      "passed": true,
+      "path": "docs/_static/vmec_qa_t1500_replicates/quasilinear_from_strict_baseline_t1500_ensemble_gate.json",
+      "qualifies_as_long_post_transient_replicate": true,
+      "qualifies_for_production_optimization": true,
+      "report_count_ok": true,
+      "seed_timestep_provenance": {
+        "observed_row_count": 3,
+        "passed": true,
+        "required": true,
+        "requirements": {
+          "min_seed_variants": 2,
+          "min_timestep_variants": 1
+        },
+        "seed_gate_passed": true,
+        "seed_values": [
+          "seed32",
+          "seed33"
+        ],
+        "timestep_gate_passed": true,
+        "timestep_values": [
+          "dt0p04"
+        ]
+      },
+      "seed_timestep_provenance_ok": true
+    }
+  ],
+  "passed": true,
+  "production_nonlinear_optimization_promoted": true,
+  "promotion_gate": {
+    "blockers": [],
+    "passed": true,
+    "requirements": [
+      "optimized equilibrium must have long post-transient replicated nonlinear transport-window audits",
+      "at least three matched baseline-to-optimized nonlinear audits must show positive uncertainty-separated reductions",
+      "replicates must include independent seed/initial-condition and timestep evidence",
+      "optimized-equilibrium transport means must satisfy running-window, block/SEM, spread, and finite-flux gates"
+    ]
+  },
+  "reduced_artifacts": [
+    {
+      "blocked_by_claim_scope": true,
+      "blocked_by_production_gradient_gate": true,
+      "blocked_by_transport_average_gate": true,
+      "claim_level": "startup_transient_nonlinear_plumbing_fd_audit_not_transport_average",
+      "claims_production": false,
+      "kind": "nonlinear_startup_window_finite_difference_audit",
+      "passed": true,
+      "path": "docs/_static/nonlinear_window_fd_audit.json",
+      "production_nonlinear_window_gradient_gate": false,
+      "safely_blocked_from_production": true,
+      "transport_average_gate": false
+    },
+    {
+      "blocked_by_claim_scope": true,
+      "blocked_by_production_gradient_gate": true,
+      "blocked_by_transport_average_gate": true,
+      "claim_level": "vmec_boozer_geometry_perturbed_startup_plumbing_fd_audit_not_transport_average",
+      "claims_production": false,
+      "kind": "vmec_boozer_nonlinear_startup_finite_difference_audit",
+      "passed": true,
+      "path": "docs/_static/vmec_boozer_nonlinear_window_fd_audit.json",
+      "production_nonlinear_window_gradient_gate": false,
+      "safely_blocked_from_production": true,
+      "transport_average_gate": false
+    }
+  ],
+  "replicated_ensemble_artifacts": [
+    {
+      "case": "circular_external_vmec_t700_replicate_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_scoped_as_replicated_holdout": true,
+      "combined_sem_rel": 0.04283952221624353,
+      "combined_sem_rel_ok": true,
+      "ensemble_mean": 18.972570762461928,
+      "finite_transport_mean": true,
+      "is_nonlinear_window_ensemble": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.035473869975602645,
+      "mean_rel_spread_ok": true,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.json",
+      "qualifies_as_long_post_transient_replicate": true,
+      "report_count_ok": true,
+      "seed_timestep_provenance": {
+        "observed_row_count": 3,
+        "passed": true,
+        "required": true,
+        "requirements": {
+          "min_seed_variants": 2,
+          "min_timestep_variants": 1
+        },
+        "seed_gate_passed": true,
+        "seed_values": [
+          "seed31",
+          "seed32"
+        ],
+        "timestep_gate_passed": true,
+        "timestep_values": [
+          "dt0p04"
+        ]
+      },
+      "seed_timestep_provenance_ok": true
+    },
+    {
+      "case": "external_vmec_dshape_replicate_t250_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_scoped_as_replicated_holdout": true,
+      "combined_sem_rel": 0.05360630620607054,
+      "combined_sem_rel_ok": true,
+      "ensemble_mean": 19.246314938866664,
+      "finite_transport_mean": true,
+      "is_nonlinear_window_ensemble": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.14102885109482344,
+      "mean_rel_spread_ok": true,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.json",
+      "qualifies_as_long_post_transient_replicate": true,
+      "report_count_ok": true,
+      "seed_timestep_provenance": {
+        "observed_row_count": 3,
+        "passed": true,
+        "required": true,
+        "requirements": {
+          "min_seed_variants": 2,
+          "min_timestep_variants": 1
+        },
+        "seed_gate_passed": true,
+        "seed_values": [
+          "seed31",
+          "seed32"
+        ],
+        "timestep_gate_passed": true,
+        "timestep_values": [
+          "dt0p04"
+        ]
+      },
+      "seed_timestep_provenance_ok": true
+    },
+    {
+      "case": "vmec_boozer_qh_torflux078_alpha120_holdout_replicated_nonlinear_window_ensemble_gate",
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "claim_scoped_as_replicated_holdout": true,
+      "combined_sem_rel": 0.024192036383514054,
+      "combined_sem_rel_ok": true,
+      "ensemble_mean": 7.997779306341762,
+      "finite_transport_mean": true,
+      "is_nonlinear_window_ensemble": true,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.08365513019201286,
+      "mean_rel_spread_ok": true,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/vmec_boozer_holdout_transport/vmec_boozer_qh_torflux078_alpha120_holdout_ensemble_gate.json",
+      "qualifies_as_long_post_transient_replicate": true,
+      "report_count_ok": true,
+      "seed_timestep_provenance": {
+        "observed_row_count": 3,
+        "passed": true,
+        "required": true,
+        "requirements": {
+          "min_seed_variants": 2,
+          "min_timestep_variants": 1
+        },
+        "seed_gate_passed": true,
+        "seed_values": [
+          "seed31",
+          "seed32"
+        ],
+        "timestep_gate_passed": true,
+        "timestep_values": [
+          "dt0p04"
+        ]
+      },
+      "seed_timestep_provenance_ok": true
+    }
+  ],
+  "safe_to_release": true,
+  "safety_gate": {
+    "blockers": [],
+    "passed": true,
+    "requirements": [
+      "differentiable optimization artifacts must not claim production nonlinear turbulent transport",
+      "startup and reduced nonlinear-window artifacts must record false production/transport gates",
+      "at least two long post-transient replicated nonlinear-window holdout ensembles must pass"
+    ]
+  },
+  "summary": {
+    "best_matched_optimized_relative_reduction": 0.1844401904195982,
+    "failed_matched_optimized_transport_audits": 3,
+    "production_nonlinear_optimization_ready": 1,
+    "qualifying_matched_optimized_transport_audits": 3,
+    "qualifying_optimized_equilibrium_ensembles": 4,
+    "qualifying_replicated_holdout_ensembles": 3,
+    "total_matched_optimized_transport_audits": 6
+  }
+}

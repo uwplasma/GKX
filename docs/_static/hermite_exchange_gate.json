@@ -1,0 +1,142 @@
+{
+  "actual_devices": 2,
+  "atol": 1e-07,
+  "case": "Hermite ghost-exchange shard_map identity gate",
+  "claim_scope": "communication-kernel identity gate, not a nonlinear runtime speedup claim",
+  "identity_passed": true,
+  "max_lower_abs_error": 0.0,
+  "max_upper_abs_error": 0.0,
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 2,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 2,
+    "shard_shape": [
+      2,
+      4,
+      4,
+      1,
+      5
+    ],
+    "state_shape": [
+      2,
+      8,
+      4,
+      1,
+      5
+    ]
+  },
+  "requested_devices": 2,
+  "rows": [
+    {
+      "center_real": 0.0,
+      "lower_abs_error": 0.0,
+      "lower_real": 0.0,
+      "lower_reference_real": 0.0,
+      "m": 0,
+      "upper_abs_error": 0.0,
+      "upper_real": 20.0,
+      "upper_reference_real": 20.0
+    },
+    {
+      "center_real": 20.0,
+      "lower_abs_error": 0.0,
+      "lower_real": 0.0,
+      "lower_reference_real": 0.0,
+      "m": 1,
+      "upper_abs_error": 0.0,
+      "upper_real": 40.0,
+      "upper_reference_real": 40.0
+    },
+    {
+      "center_real": 40.0,
+      "lower_abs_error": 0.0,
+      "lower_real": 20.0,
+      "lower_reference_real": 20.0,
+      "m": 2,
+      "upper_abs_error": 0.0,
+      "upper_real": 60.0,
+      "upper_reference_real": 60.0
+    },
+    {
+      "center_real": 60.0,
+      "lower_abs_error": 0.0,
+      "lower_real": 40.0,
+      "lower_reference_real": 40.0,
+      "m": 3,
+      "upper_abs_error": 0.0,
+      "upper_real": 80.0,
+      "upper_reference_real": 80.0
+    },
+    {
+      "center_real": 80.0,
+      "lower_abs_error": 0.0,
+      "lower_real": 60.0,
+      "lower_reference_real": 60.0,
+      "m": 4,
+      "upper_abs_error": 0.0,
+      "upper_real": 100.0,
+      "upper_reference_real": 100.0
+    },
+    {
+      "center_real": 100.0,
+      "lower_abs_error": 0.0,
+      "lower_real": 80.0,
+      "lower_reference_real": 80.0,
+      "m": 5,
+      "upper_abs_error": 0.0,
+      "upper_real": 120.0,
+      "upper_reference_real": 120.0
+    },
+    {
+      "center_real": 120.0,
+      "lower_abs_error": 0.0,
+      "lower_real": 100.0,
+      "lower_reference_real": 100.0,
+      "m": 6,
+      "upper_abs_error": 0.0,
+      "upper_real": 140.0,
+      "upper_reference_real": 140.0
+    },
+    {
+      "center_real": 140.0,
+      "lower_abs_error": 0.0,
+      "lower_real": 120.0,
+      "lower_reference_real": 120.0,
+      "m": 7,
+      "upper_abs_error": 0.0,
+      "upper_real": 0.0,
+      "upper_reference_real": 0.0
+    }
+  ],
+  "source": "gkx.parallel.velocity.hermite_neighbor_shard_map",
+  "state_shape": [
+    2,
+    8,
+    4,
+    1,
+    5
+  ]
+}

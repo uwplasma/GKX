@@ -1,0 +1,150 @@
+# Linear parity matrix against the reference comparison code.
+#
+# Every case pins one reference-code output, the GKX configuration that
+# transcribes that deck's physics contract, and the velocity resolution both
+# codes use. The reference outputs are large and untracked; point
+# GX_PARITY_REF_DIR at the directory holding them. Regenerate with
+#   PYTHONPATH=src python tools/comparison/build_gx_parity_matrix.py
+#
+# reference_provenance records whether the spectrum being compared against is an
+# upstream-shipped reference or one this campaign generated. A comparison
+# against a self-generated spectrum is a cross-code check, not a check against a
+# published result.
+#
+# reference_seconds / reference_peak_host_rss_mb are wall-clock and peak
+# resident set size for the reference run that produced reference_output,
+# measured on the same GPU with /usr/bin/time -v. The reference code is compiled
+# in single precision; the GKX numbers here are float64 under JAX_ENABLE_X64.
+#
+# build_reproducibility_floor is the relative difference below which a number in
+# this matrix says nothing about either code's physics, because the reference
+# side moves by that much between two legitimate builds of the same reference
+# commit. It is OPTIONAL and per-case: a case without the key has no measured
+# floor, and its absence is not a claim that the floor is zero. Where it is set,
+# no gate on that case may be tighter than the value, and the reason for the
+# measurement belongs in a comment beside it.
+
+[[case]]
+key = "cyclone_salpha_itg"
+label = "Cyclone ITG, s-alpha"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "tools/comparison/fixtures/parity/cyclone_salpha_itg.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "upstream shipped reference, reproduced by this build"
+Nl = 16
+Nm = 48
+dt = 0.002
+steps = 75000
+method = "imex2"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "cyclone_miller_itg"
+label = "Cyclone ITG, Miller"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "Miller"
+config = "tools/comparison/fixtures/parity/cyclone_miller_itg.toml"
+reference_output = "ITG_cyclone/itg_miller_adiabatic_electrons.out.nc"
+reference_provenance = "upstream shipped reference, reproduced by this build"
+Nl = 16
+Nm = 48
+dt = 0.002
+steps = 75000
+method = "imex2"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "cyclone_miller_kinetic_electrons"
+label = "Cyclone ITG, Miller,\nkinetic electrons"
+device = "tokamak"
+drive = "ITG with kinetic electrons"
+electrons = "kinetic"
+field_model = "electromagnetic, beta = 1e-5"
+geometry = "Miller"
+config = "tools/comparison/fixtures/parity/cyclone_miller_kinetic_electrons.toml"
+reference_output = "ITG_cyclone/itg_miller_kinetic_electrons.out.nc"
+reference_provenance = "upstream shipped reference, reproduced by this build"
+Nl = 16
+Nm = 48
+dt = 0.0002
+steps = 100000
+method = "imex2"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "kbm_miller"
+label = "KBM, Miller"
+device = "tokamak"
+drive = "KBM"
+electrons = "kinetic"
+field_model = "electromagnetic, beta = 0.015"
+geometry = "Miller"
+config = "tools/comparison/fixtures/parity/kbm_miller.toml"
+reference_output = "KBM/kbm_miller.out.nc"
+reference_provenance = "upstream shipped reference, reproduced by this build"
+# The one case in this matrix whose reference number depends on how the
+# reference code was compiled. Two builds of the same reference commit
+# (3865a537), differing only in -prec-sqrt=true, move gamma by +0.163% at
+# ky = 0.2 and -0.175% at ky = 0.3, and omega by +0.204% at ky = 0.2, measured
+# against a run-to-run noise floor of exactly zero -- the same binary rerun
+# reproduces omega_kxkyt bitwise, so all of that is the flag. Every other case in this matrix is bit-identical between
+# those builds or moves by at most 0.07%. The mechanism is not mysterious: this
+# is the electromagnetic branch at finite beta with kinetic electrons and the
+# shortest integration in the matrix (t = 20 against t = 150), so it is the case
+# where single-precision sqrt rounding has the most room to accumulate.
+# 0.003 rounds 0.204% up to the next clean figure. Below it, this row measures
+# nvcc's arithmetic rather than either code's physics.
+# Not fixed by regenerating the reference: upstream itself is not uniform -- 4
+# of its 20 makefiles carry the flag and the rest do not -- so pinning one build
+# would leave the same spread against every reference taken on the others.
+# Measurement: branch-only research roadmap, plan/notes/gx_precsqrt.md, sections 4--5.
+build_reproducibility_floor = 0.003
+Nl = 16
+Nm = 48
+dt = 0.0002
+steps = 100000
+method = "imex2"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "w7x_itg"
+label = "W7-X ITG, VMEC"
+device = "stellarator"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "VMEC flux tube, s = 0.64, 6 poloidal turns"
+config = "tools/comparison/fixtures/parity/w7x_itg.toml"
+reference_output = "ITG_w7x/itg_w7x_adiabatic_electrons.out.nc"
+reference_provenance = "generated by this campaign; no upstream reference ships for this case"
+Nl = 8
+Nm = 16
+dt = 0.005
+steps = 40000
+method = "imex2"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "hsx_itg"
+label = "HSX QHS ITG, VMEC"
+device = "stellarator"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "VMEC flux tube, s = 0.64, 4 poloidal turns"
+config = "tools/comparison/fixtures/parity/hsx_itg.toml"
+reference_output = "HSX/itg_hsx_adiabatic_electrons.out.nc"
+reference_provenance = "generated by this campaign; no upstream case or reference exists"
+Nl = 8
+Nm = 16
+dt = 0.005
+steps = 40000
+method = "imex2"
+fit_start_fraction = 0.7

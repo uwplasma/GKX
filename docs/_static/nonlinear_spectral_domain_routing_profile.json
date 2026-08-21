@@ -1,0 +1,434 @@
+{
+  "atol": 5e-06,
+  "backend": "cpu",
+  "claim_scope": "diagnostic serial-vs-logical and serial-vs-pencil nonlinear spectral-domain timing; identity-gated local route only, not production distributed FFT or GPU speedup",
+  "communication_to_owned_work_ratio": 6.375,
+  "decomposed_path_enabled": true,
+  "device_count": 1,
+  "dt": 0.001,
+  "identity_passed": true,
+  "identity_report": {
+    "atol": 5e-06,
+    "blocked_reasons": [],
+    "claim_scope": "diagnostic nonlinear spectral integrator identity gate only; fixed-step serial-vs-logical-shard RHS routing with final-state and transport-proxy trace identity, no production distributed FFT routing or speedup claim",
+    "decomposed_path_enabled": true,
+    "dt": 0.001,
+    "field_energy_trace_max_abs_error": 0.0,
+    "field_energy_trace_max_rel_error": 0.0,
+    "final_state_max_abs_error": 0.0,
+    "final_state_max_rel_error": 0.0,
+    "flux_proxy_trace_max_abs_error": 0.0,
+    "flux_proxy_trace_max_rel_error": 0.0,
+    "free_energy_trace_max_abs_error": 0.0,
+    "free_energy_trace_max_rel_error": 0.0,
+    "identity_passed": true,
+    "logical_field_energy_trace": [
+      1.6720057725906372,
+      1.672005534172058,
+      1.672005534172058
+    ],
+    "logical_flux_proxy_trace": [
+      0.0009066384518519044,
+      0.0009066363563761115,
+      0.000906634028069675
+    ],
+    "logical_free_energy_drift": 1.52587890625e-05,
+    "logical_free_energy_trace": [
+      133.5522918701172,
+      133.5522918701172,
+      133.55230712890625
+    ],
+    "rtol": 5e-06,
+    "serial_field_energy_trace": [
+      1.6720057725906372,
+      1.672005534172058,
+      1.672005534172058
+    ],
+    "serial_flux_proxy_trace": [
+      0.0009066384518519044,
+      0.0009066363563761115,
+      0.000906634028069675
+    ],
+    "serial_free_energy_drift": 1.52587890625e-05,
+    "serial_free_energy_trace": [
+      133.5522918701172,
+      133.5522918701172,
+      133.55230712890625
+    ],
+    "state_shape": [
+      2,
+      4,
+      32,
+      32,
+      4
+    ],
+    "steps": 2,
+    "tile_bounds": [
+      [
+        0,
+        16,
+        0,
+        16
+      ],
+      [
+        0,
+        16,
+        16,
+        32
+      ],
+      [
+        16,
+        32,
+        0,
+        16
+      ],
+      [
+        16,
+        32,
+        16,
+        32
+      ]
+    ],
+    "x_chunks": [
+      16,
+      16
+    ],
+    "x_offsets": [
+      0,
+      16
+    ],
+    "y_chunks": [
+      16,
+      16
+    ],
+    "y_offsets": [
+      0,
+      16
+    ]
+  },
+  "kind": "nonlinear_spectral_domain_routing_profile",
+  "logical_domain_stats_s": {
+    "max": 0.0005354579770937562,
+    "mean": 0.0005055050132796168,
+    "median": 0.0005052915075793862,
+    "min": 0.00046991603448987007,
+    "std": 2.131721159494859e-05
+  },
+  "logical_domain_times_s": [
+    0.0005354579770937562,
+    0.0005331250140443444,
+    0.0005166670307517052,
+    0.00046991603448987007,
+    0.000504625029861927,
+    0.0004940410144627094,
+    0.0005059579852968454,
+    0.0004842500202357769
+  ],
+  "min_speedup": 1.5,
+  "parallel_efficiency_ceiling": 0.13559322033898305,
+  "pencil_communication_to_fft_work_ratio": 0.075,
+  "pencil_domain_stats_s": {
+    "max": 0.0008361669024452567,
+    "mean": 0.0007488543633371592,
+    "median": 0.0007239585393108428,
+    "min": 0.0006847500335425138,
+    "std": 5.707900090575826e-05
+  },
+  "pencil_domain_times_s": [
+    0.0007260830607265234,
+    0.0008361669024452567,
+    0.0007218340178951621,
+    0.0007833329727873206,
+    0.0007035419112071395,
+    0.0006999589968472719,
+    0.0006847500335425138,
+    0.0008351670112460852
+  ],
+  "pencil_parallel_efficiency_ceiling": 0.9302325581395349,
+  "pencil_predicted_speedup_ceiling": 3.7209302325581395,
+  "pencil_rtol": 1e-05,
+  "pencil_speedup_gate_passed": false,
+  "pencil_strong_speedup_vs_serial": 0.7510499888522729,
+  "pencil_timing_identity_max_abs_error": 3.725290298461914e-09,
+  "pencil_timing_identity_max_rel_error": 4.3829064125357015e-09,
+  "pencil_transport_window_report": {
+    "atol": 5e-06,
+    "blocked_reasons": [],
+    "bracket_rms_trace_max_abs_error": 1.1641532182693481e-10,
+    "bracket_rms_trace_max_rel_error": 8.826847874843224e-08,
+    "claim_scope": "diagnostic serial-vs-pencil nonlinear physical-space transport-window identity gate; includes a density-times-radial-E-field transport proxy, but is not an absolute nonlinear turbulent heat-flux claim",
+    "decomposed_path_enabled": true,
+    "dt": 0.001,
+    "field_energy_trace_max_abs_error": 0.0,
+    "field_energy_trace_max_rel_error": 0.0,
+    "final_state_max_abs_error": 4.656612873077393e-10,
+    "final_state_max_rel_error": 4.099727490824989e-08,
+    "free_energy_trace_max_abs_error": 0.0,
+    "free_energy_trace_max_rel_error": 0.0,
+    "identity_passed": true,
+    "pencil_bracket_rms_trace": [
+      0.0013188777957111597,
+      0.0013188717421144247,
+      0.0013188653392717242
+    ],
+    "pencil_field_energy_trace": [
+      1.6720057725906372,
+      1.672005534172058,
+      1.672005534172058
+    ],
+    "pencil_free_energy_drift": 1.52587890625e-05,
+    "pencil_free_energy_trace": [
+      133.5522918701172,
+      133.5522918701172,
+      133.55230712890625
+    ],
+    "pencil_physical_flux_trace": [
+      1.0905853287113132e-06,
+      1.0905823728535324e-06,
+      1.0905795306825894e-06
+    ],
+    "physical_flux_trace_max_abs_error": 0.0,
+    "physical_flux_trace_max_rel_error": 0.0,
+    "rtol": 1e-05,
+    "serial_bracket_rms_trace": [
+      0.0013188776792958379,
+      0.0013188717421144247,
+      0.0013188653392717242
+    ],
+    "serial_field_energy_trace": [
+      1.6720057725906372,
+      1.672005534172058,
+      1.672005534172058
+    ],
+    "serial_free_energy_drift": 1.52587890625e-05,
+    "serial_free_energy_trace": [
+      133.5522918701172,
+      133.5522918701172,
+      133.55230712890625
+    ],
+    "serial_physical_flux_trace": [
+      1.0905853287113132e-06,
+      1.0905823728535324e-06,
+      1.0905795306825894e-06
+    ],
+    "state_shape": [
+      2,
+      4,
+      32,
+      32,
+      4
+    ],
+    "steps": 2,
+    "work_model": {
+      "approximate_fft_work_units_per_step": 1064960.0,
+      "claim_scope": "communication/work model for a pencil-FFT nonlinear bracket route with explicit transpose stages and no global reconstruction; not a runtime speedup claim without identity and profiler artifacts",
+      "communication_to_fft_work_ratio": 0.075,
+      "feasibility_blockers": [],
+      "field_elements": 4096,
+      "global_reconstruction_elements_per_step": 0,
+      "max_communication_to_fft_work_ratio": 0.35,
+      "min_predicted_speedup": 1.5,
+      "num_tiles": 4,
+      "parallel_efficiency_ceiling": 0.9302325581395349,
+      "pencil_transpose_elements_per_step": 79872,
+      "predicted_speedup_ceiling": 3.7209302325581395,
+      "production_speedup_feasible": true,
+      "state_elements": 32768,
+      "state_shape": [
+        2,
+        4,
+        32,
+        32,
+        4
+      ],
+      "transform_payload_elements_per_step": 106496,
+      "x_chunks": [
+        16,
+        16
+      ],
+      "x_offsets": [
+        0,
+        16
+      ],
+      "y_chunks": [
+        16,
+        16
+      ],
+      "y_offsets": [
+        0,
+        16
+      ]
+    },
+    "x_chunks": [
+      16,
+      16
+    ],
+    "x_offsets": [
+      0,
+      16
+    ],
+    "y_chunks": [
+      16,
+      16
+    ],
+    "y_offsets": [
+      0,
+      16
+    ]
+  },
+  "pencil_work_model": {
+    "approximate_fft_work_units_per_step": 1064960.0,
+    "claim_scope": "communication/work model for a pencil-FFT nonlinear bracket route with explicit transpose stages and no global reconstruction; not a runtime speedup claim without identity and profiler artifacts",
+    "communication_to_fft_work_ratio": 0.075,
+    "feasibility_blockers": [],
+    "field_elements": 4096,
+    "global_reconstruction_elements_per_step": 0,
+    "max_communication_to_fft_work_ratio": 0.35,
+    "min_predicted_speedup": 1.5,
+    "num_tiles": 4,
+    "parallel_efficiency_ceiling": 0.9302325581395349,
+    "pencil_transpose_elements_per_step": 79872,
+    "predicted_speedup_ceiling": 3.7209302325581395,
+    "production_speedup_feasible": true,
+    "state_elements": 32768,
+    "state_shape": [
+      2,
+      4,
+      32,
+      32,
+      4
+    ],
+    "transform_payload_elements_per_step": 106496,
+    "x_chunks": [
+      16,
+      16
+    ],
+    "x_offsets": [
+      0,
+      16
+    ],
+    "y_chunks": [
+      16,
+      16
+    ],
+    "y_offsets": [
+      0,
+      16
+    ]
+  },
+  "pencil_work_model_blockers": [],
+  "pencil_work_model_speedup_feasible": true,
+  "production_speedup_claim_allowed": false,
+  "repeats": 8,
+  "rtol": 5e-06,
+  "serial_stats_s": {
+    "max": 0.0006374160293489695,
+    "mean": 0.0005540206329897046,
+    "median": 0.0005437290528789163,
+    "min": 0.0005097920075058937,
+    "std": 4.252769365302395e-05
+  },
+  "serial_times_s": [
+    0.0005139160202816129,
+    0.0005671249236911535,
+    0.0006374160293489695,
+    0.0005097920075058937,
+    0.0005482500419020653,
+    0.000516457948833704,
+    0.0005392080638557673,
+    0.0006000000284984708
+  ],
+  "shape": [
+    2,
+    4,
+    32,
+    32,
+    4
+  ],
+  "speedup_gate_passed": false,
+  "status": "identity_timed_no_production_speedup",
+  "steps": 2,
+  "strong_speedup_vs_serial": 1.076070040210385,
+  "timing_identity_max_abs_error": 0.0,
+  "timing_identity_max_rel_error": 0.0,
+  "warmups": 2,
+  "work_model": {
+    "bracket_allgather_elements_per_step": 98304,
+    "claim_scope": "diagnostic communication/work model for the current global-reconstruction logical spectral route; not a distributed FFT performance claim",
+    "communication_to_owned_work_ratio": 6.375,
+    "feasibility_blockers": [
+      "global_reconstruction_communication_dominates_owned_work"
+    ],
+    "field_broadcast_elements_per_step": 12288,
+    "field_elements": 4096,
+    "max_communication_to_owned_work_ratio": 0.5,
+    "num_tiles": 4,
+    "owned_state_elements_per_step": 32768,
+    "parallel_efficiency_ceiling": 0.13559322033898305,
+    "production_speedup_feasible": false,
+    "state_allgather_elements_per_step": 98304,
+    "state_elements": 32768,
+    "state_shape": [
+      2,
+      4,
+      32,
+      32,
+      4
+    ],
+    "tile_bounds": [
+      [
+        0,
+        16,
+        0,
+        16
+      ],
+      [
+        0,
+        16,
+        16,
+        32
+      ],
+      [
+        16,
+        32,
+        0,
+        16
+      ],
+      [
+        16,
+        32,
+        16,
+        32
+      ]
+    ],
+    "total_communication_elements_per_step": 208896,
+    "x_chunks": [
+      16,
+      16
+    ],
+    "x_offsets": [
+      0,
+      16
+    ],
+    "y_chunks": [
+      16,
+      16
+    ],
+    "y_offsets": [
+      0,
+      16
+    ]
+  },
+  "work_model_blockers": [
+    "global_reconstruction_communication_dominates_owned_work"
+  ],
+  "work_model_speedup_feasible": false,
+  "x_chunks": [
+    16,
+    16
+  ],
+  "y_chunks": [
+    16,
+    16
+  ]
+}

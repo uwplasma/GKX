@@ -1,0 +1,58 @@
+{
+  "case": "stellarator_runtime_modes",
+  "claim_scope": "RHS split profile for hot-path localization. Treat speedups as bounded engineering measurements; production runtime claims require matched benchmark-size CPU/GPU sweeps.",
+  "fastest_full_rhs_label": "HSX GPU",
+  "fastest_full_rhs_seconds": 0.027057467214763164,
+  "kind": "nonlinear_rhs_profile_summary",
+  "rows": {
+    "HSX CPU": {
+      "dominant_measured_kernel": "linear_rhs",
+      "field_solve_fraction_of_full_rhs": 0.00612870971793915,
+      "linear_rhs_fraction_of_full_rhs": 0.5848452223865317,
+      "nonlinear_bracket_fraction_of_full_rhs": 0.4539382751270036,
+      "seconds": {
+        "field_solve": 0.001891366601921618,
+        "full_rhs": 0.3086076334118843,
+        "linear_rhs": 0.18048769999295472,
+        "nonlinear_bracket": 0.1400888168020174
+      }
+    },
+    "HSX GPU": {
+      "dominant_measured_kernel": "nonlinear_bracket",
+      "field_solve_fraction_of_full_rhs": 0.009048036518366661,
+      "linear_rhs_fraction_of_full_rhs": 0.4172262003484684,
+      "nonlinear_bracket_fraction_of_full_rhs": 0.5990942807716872,
+      "seconds": {
+        "field_solve": 0.00024481695145368577,
+        "full_rhs": 0.027057467214763164,
+        "linear_rhs": 0.011289084237068892,
+        "nonlinear_bracket": 0.016209973860532044
+      }
+    },
+    "W7-X CPU": {
+      "dominant_measured_kernel": "linear_rhs",
+      "field_solve_fraction_of_full_rhs": 0.0035750496521375036,
+      "linear_rhs_fraction_of_full_rhs": 0.5787204334281272,
+      "nonlinear_bracket_fraction_of_full_rhs": 0.45692927762444907,
+      "seconds": {
+        "field_solve": 0.0011064584134146572,
+        "full_rhs": 0.30949455841910095,
+        "linear_rhs": 0.1791108249919489,
+        "nonlinear_bracket": 0.14141712500713766
+      }
+    },
+    "W7-X GPU": {
+      "dominant_measured_kernel": "nonlinear_bracket",
+      "field_solve_fraction_of_full_rhs": 0.008940660064418423,
+      "linear_rhs_fraction_of_full_rhs": 0.41588657666144724,
+      "nonlinear_bracket_fraction_of_full_rhs": 0.5934507943379874,
+      "seconds": {
+        "field_solve": 0.00024376837536692618,
+        "full_rhs": 0.027265143021941184,
+        "linear_rhs": 0.011339206993579865,
+        "nonlinear_bracket": 0.01618052078410983
+      }
+    }
+  },
+  "spectral_speedups": {}
+}

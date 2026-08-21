@@ -1,0 +1,126 @@
+# Gonzalez-Jerez et al., J. Plasma Phys. 88, 905880310 (2022), test 4:
+# collisionless W7-X bean-tube zonal-flow relaxation in the high-mirror
+# configuration at torflux = 0.64 with adiabatic electrons, zero gradients,
+# ky = 0, and a Gaussian electrostatic-potential initial perturbation. The
+# publication tool sweeps kx rho_i in [0.05, 0.07, 0.10, 0.30] and applies one
+# common extraction protocol to each trace.
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 0.0
+fprim = 0.0
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 6
+Ny = 4
+Nz = 256
+Lx = 125.66370614359172
+Ly = 62.8
+boundary = "linked"
+y0 = 10.0
+ntheta = 64
+nperiod = 4
+
+[time]
+# run_to must stay "t_max". This is a zero-gradient zonal-flow relaxation run:
+# tprim = fprim = 0, so the heat-flux moment is identically zero -- measured
+# 0.0 in every one of the first 512 samples, not merely small -- and there is
+# no saturated flux for the default run_to = "saturation" to find. The
+# observable this benchmark exists to produce is the zonal potential response
+# Phi_zonal(kx, t) out to t = 60, which a flux-based stop policy cannot see.
+run_to = "t_max"
+t_max = 60.0
+dt = 0.05
+method = "rk4"
+sample_stride = 4
+diagnostics_stride = 4
+use_diffrax = false
+fixed_dt = true
+diagnostics = true
+
+[geometry]
+model = "vmec"
+# Self-contained default: generate with
+#   cd examples/vmec && vmex input.nfp3_QI_fixed_resolution_final
+# For the paper-facing W7-X zonal benchmark, override this with the exact
+# W7-X high-mirror VMEC equilibrium before treating the result as validation.
+vmec_file = "../examples/vmec/wout_nfp3_QI_fixed_resolution_final.nc"
+torflux = 0.64
+alpha = 0.0
+npol = 1.0
+R0 = 5.485
+
+[init]
+init_field = "phi"
+init_amp = 1.0e-6
+gaussian_init = true
+# Width of the Gaussian electrostatic-potential perturbation along theta.
+# The arXiv source for Gonzalez-Jerez et al. writes the test-4 initializer as
+# exp[-(z-z0)^2], so width=1 is the tracked paper-facing contract. Wider
+# profiles are useful audits but should not be treated as validation defaults.
+gaussian_width = 1.0
+init_single = true
+init_electrons_only = false
+
+[physics]
+linear = false
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+adiabatic_ions = false
+tau_e = 1.0
+beta = 0.0
+collisions = false
+hypercollisions = false
+
+[collisions]
+nu_hermite = 0.0
+nu_laguerre = 0.0
+nu_hyper = 0.0
+p_hyper = 4.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 0.0
+D_hyper = 0.0
+damp_ends_amp = 0.0
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "kinetic"
+diagnostic_norm = "rho_star"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 0.0
+hypercollisions = 0.0
+hyperdiffusion = 0.0
+end_damping = 0.0
+apar = 0.0
+bpar = 0.0
+nonlinear = 0.0
+
+[expert]
+source = "default"
+phi_ext = 0.0
+
+[run]
+ky = 0.0
+kx = 0.05
+Nl = 8
+Nm = 32
+dt = 0.05
+steps = 1200
+sample_stride = 4
+diagnostics = true
+
+[output]
+path = "../tools_out/w7x_zonal_response_vmec_runtime"

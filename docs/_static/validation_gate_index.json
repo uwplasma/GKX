@@ -1,0 +1,208 @@
+{
+  "n_open": 1,
+  "n_passed": 17,
+  "n_reports": 18,
+  "patterns": [
+    "docs/_static/**/*.json"
+  ],
+  "reports": [
+    {
+      "artifact": "docs/_static/external_vmec_cth_like_modified_high_grid_admission_gate.json",
+      "case": "CTH-like external VMEC modified-protocol high-grid admission",
+      "failed_metrics": "",
+      "max_abs_error": 0.10908478493456078,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 17,
+      "passed": true,
+      "source": "external_vmec_high_grid_admission_policy"
+    },
+    {
+      "artifact": "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+      "case": "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence",
+      "failed_metrics": "",
+      "max_abs_error": 0.1394540590795482,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 8,
+      "passed": true,
+      "source": "external_vmec_nonlinear_pilot_reports"
+    },
+    {
+      "artifact": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+      "case": "ITERModel external VMEC nonlinear t350 high-grid convergence",
+      "failed_metrics": "",
+      "max_abs_error": 0.1764212371140102,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 8,
+      "passed": true,
+      "source": "external_vmec_nonlinear_pilot_reports"
+    },
+    {
+      "artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_dt0p04_high_grid_admission_gate.json",
+      "case": "Shaped tokamak pressure external VMEC dt=0.04 high-grid transport holdout admission",
+      "failed_metrics": "",
+      "max_abs_error": 0.12370906120807167,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 17,
+      "passed": true,
+      "source": "external_vmec_high_grid_admission_policy"
+    },
+    {
+      "artifact": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+      "case": "circular_external_vmec_t450",
+      "failed_metrics": "",
+      "max_abs_error": null,
+      "max_rel_error": null,
+      "n_failed": 0,
+      "n_gates": 0,
+      "passed": true,
+      "source": "external_vmec_nonlinear_pilot_reports"
+    },
+    {
+      "artifact": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+      "case": "cyclone_miller_nonlinear_window",
+      "failed_metrics": "",
+      "max_abs_error": 0.0919106981841409,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 5,
+      "passed": true,
+      "source": "GX nonlinear diagnostics"
+    },
+    {
+      "artifact": "docs/_static/nonlinear_cyclone_gate_summary.json",
+      "case": "cyclone_nonlinear_long_window",
+      "failed_metrics": "",
+      "max_abs_error": 0.0955304396196123,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 5,
+      "passed": true,
+      "source": "GX nonlinear diagnostics"
+    },
+    {
+      "artifact": "docs/_static/cyclone_resolution_observed_order.json",
+      "case": "cyclone_velocity_space_observed_order",
+      "failed_metrics": "",
+      "max_abs_error": 0.0011368721705758,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 3,
+      "passed": true,
+      "source": "office GPU Cyclone ky=0.30 time-path velocity-space sweep"
+    },
+    {
+      "artifact": "docs/_static/nonlinear_hsx_gate_summary.json",
+      "case": "hsx_nonlinear_window",
+      "failed_metrics": "",
+      "max_abs_error": 0.035790363972650306,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 5,
+      "passed": true,
+      "source": "GX nonlinear diagnostics"
+    },
+    {
+      "artifact": "docs/_static/kbm_branch_gate_summary.json",
+      "case": "kbm_linear_branch_continuity",
+      "failed_metrics": "",
+      "max_abs_error": 0.3879740373283112,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 3,
+      "passed": true,
+      "source": "selected KBM comparison rows"
+    },
+    {
+      "artifact": "docs/_static/reference_modes/kbm_eigenfunction_reference_overlay_ky0p3000.json",
+      "case": "kbm_linear_eigenfunction_ky0p3000",
+      "failed_metrics": "",
+      "max_abs_error": 0.007208594542278349,
+      "max_rel_error": 1.5458590091999014e-05,
+      "n_failed": 0,
+      "n_gates": 2,
+      "passed": true,
+      "source": "GX raw eigenfunction bundle"
+    },
+    {
+      "artifact": "docs/_static/nonlinear_kbm_gate_summary.json",
+      "case": "kbm_nonlinear_window",
+      "failed_metrics": "",
+      "max_abs_error": 0.009363342524391386,
+      "max_rel_error": null,
+      "n_failed": 0,
+      "n_gates": 5,
+      "passed": true,
+      "source": "GX nonlinear diagnostics"
+    },
+    {
+      "artifact": "docs/_static/miller_zonal_response_pilot.json",
+      "case": "merlo_case_iii_zonal_response",
+      "failed_metrics": "",
+      "max_abs_error": 0.14330304022387083,
+      "max_rel_error": 0.0005359844034632112,
+      "n_failed": 0,
+      "n_gates": 6,
+      "passed": true,
+      "source": "GKX converged Hermite baseline (Nm=144, dt=0.0025); agreement with the Merlo et al. read-off is reported under literature_comparison and is NOT asserted here"
+    },
+    {
+      "artifact": "docs/_static/quasilinear_promotion_guardrails.json",
+      "case": "quasilinear_absolute_flux_promotion_guardrails",
+      "failed_metrics": "",
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 116,
+      "passed": true,
+      "source": "tracked quasilinear JSON artifacts and documentation scope checks"
+    },
+    {
+      "artifact": "docs/_static/quasilinear_model_selection_status.json",
+      "case": "quasilinear_model_selection",
+      "failed_metrics": "dataset_sufficiency_passed,candidate_uncertainty_passed,required_candidate_accepted,required_candidate_transport_error",
+      "max_abs_error": 1.0,
+      "max_rel_error": 1.0,
+      "n_failed": 4,
+      "n_gates": 10,
+      "passed": false,
+      "source": ""
+    },
+    {
+      "artifact": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+      "case": "updown_asym_external_vmec_t450",
+      "failed_metrics": "",
+      "max_abs_error": null,
+      "max_rel_error": null,
+      "n_failed": 0,
+      "n_gates": 0,
+      "passed": true,
+      "source": "external_vmec_nonlinear_pilot_reports"
+    },
+    {
+      "artifact": "docs/_static/reference_modes/w7x_eigenfunction_reference_overlay_ky0p3000.json",
+      "case": "w7x_linear_eigenfunction_ky0p3000",
+      "failed_metrics": "",
+      "max_abs_error": 3.332895535477314e-05,
+      "max_rel_error": 5.501344935154862e-10,
+      "n_failed": 0,
+      "n_gates": 2,
+      "passed": true,
+      "source": "GX raw eigenfunction bundle"
+    },
+    {
+      "artifact": "docs/_static/nonlinear_w7x_gate_summary.json",
+      "case": "w7x_nonlinear_window",
+      "failed_metrics": "",
+      "max_abs_error": 0.0974184040271887,
+      "max_rel_error": 0.0,
+      "n_failed": 0,
+      "n_gates": 6,
+      "passed": true,
+      "source": "GX nonlinear diagnostics"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window_readiness",
+  "cases": [
+    {
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window",
+      "ensemble_gate_runnable": true,
+      "n_observed_artifacts": 3,
+      "n_promotion_ready_artifacts": 2,
+      "observed_convergence_report_artifacts": [
+        "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/nonlinear_window_convergence_reports/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed31_transport_window.convergence.json",
+        "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/nonlinear_window_convergence_reports/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed32_transport_window.convergence.json",
+        "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/nonlinear_window_convergence_reports/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_dt0p04_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed31_transport_window.json",
+        "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed32_transport_window.json",
+        "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_dt0p04_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 0,
+          "observed_distinct_count": 2,
+          "observed_distinct_values": [
+            "22",
+            "32"
+          ],
+          "passed": true,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 0,
+          "observed_distinct_count": 2,
+          "observed_distinct_values": [
+            "0.04",
+            "0.05"
+          ],
+          "passed": true,
+          "required_distinct_count": 2
+        }
+      }
+    }
+  ],
+  "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+  "config": {
+    "min_replicates_per_case": 2,
+    "require_observed_windows_ready": true,
+    "required_variant_axes": [
+      "seed",
+      "timestep"
+    ]
+  },
+  "gates": [
+    {
+      "detail": "observed_artifacts=3",
+      "metric": "observed_window_artifacts_present",
+      "passed": true
+    },
+    {
+      "detail": "require_observed_windows_ready=True",
+      "metric": "observed_windows_promotion_ready",
+      "passed": false
+    },
+    {
+      "detail": "all required variant axes have enough passed artifacts",
+      "metric": "seed_and_timestep_replicates_present",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_readiness_manifest",
+  "missing_artifacts": [],
+  "observed_artifacts": [
+    {
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/nonlinear_window_convergence_reports/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed31_transport_window.convergence.json",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing passed gate_report"
+      ],
+      "index": 0,
+      "late_mean": 14.503263399633804,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": 0.5831708511946153,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed31_transport_window.json",
+      "variant": {
+        "seed": 31,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/nonlinear_window_convergence_reports/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed32_transport_window.convergence.json",
+      "failures": [],
+      "index": 1,
+      "late_mean": 15.368063792378168,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4128972877418744,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed32_transport_window.json",
+      "variant": {
+        "seed": 32,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/nonlinear_window_convergence_reports/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_dt0p04_transport_window.convergence.json",
+      "failures": [],
+      "index": 2,
+      "late_mean": 13.446254464715908,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.32588683706811733,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_dt0p04_transport_window.json",
+      "variant": {
+        "seed": 22,
+        "timestep": 0.04
+      }
+    }
+  ],
+  "passed": false,
+  "promotion_gate": {
+    "blockers": [
+      "observed_windows_promotion_ready"
+    ],
+    "passed": false,
+    "requirements": [
+      "every observed late-window report must pass convergence metadata gates",
+      "each case must include distinct passed seed-replicate artifacts",
+      "each case must include distinct passed timestep-replicate artifacts",
+      "only after this manifest passes should the replicated ensemble gate be run"
+    ]
+  }
+}

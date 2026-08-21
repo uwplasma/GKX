@@ -1,0 +1,106 @@
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+nu = 0.0
+kinetic = true
+
+[[species]]
+name = "electron"
+charge = -1.0
+mass = 0.00027
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 32
+Ny = 32
+Nz = 96
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 10.0
+ntheta = 32
+nperiod = 2
+
+[time]
+t_max = 0.08
+dt = 0.0003
+method = "rk4"
+sample_stride = 1
+diagnostics_stride = 1
+use_diffrax = false
+compressed_real_fft = true
+laguerre_nonlinear_mode = "grid"
+fixed_dt = true
+
+[geometry]
+q = 1.4
+s_hat = 0.8
+epsilon = 0.18
+R0 = 2.77778
+
+[init]
+init_field = "all"
+init_amp = 1.0e-10
+gaussian_init = true
+gaussian_width = 0.5
+init_single = true
+init_electrons_only = true
+
+[physics]
+linear = false
+nonlinear = true
+electrostatic = false
+electromagnetic = true
+use_apar = true
+use_bpar = false
+adiabatic_electrons = false
+adiabatic_ions = false
+beta = 0.015
+collisions = false
+hypercollisions = true
+
+[collisions]
+nu_hermite = 0.0
+nu_laguerre = 0.0
+nu_hyper = 0.0
+p_hyper = 4.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
+D_hyper = 0.0
+p_hyper_kperp = 2.0
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "kbm"
+diagnostic_norm = "rho_star"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 0.0
+hypercollisions = 1.0
+hyperdiffusion = 0.0
+end_damping = 1.0
+apar = 1.0
+bpar = 0.0
+nonlinear = 1.0
+
+[run]
+ky = 0.3
+Nl = 4
+Nm = 8
+steps = 200

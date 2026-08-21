@@ -1,0 +1,65 @@
+{
+  "cosine_gate": 0.95,
+  "cosine_similarity": 0.9825396600130925,
+  "distribution_residual": [
+    0.04735346427261534,
+    -0.017108298697122715,
+    -0.021572910260696826,
+    -0.05526807488438029,
+    0.046595819569584584
+  ],
+  "kind": "quasilinear_spectrum_shape_gate",
+  "ky": [
+    0.1,
+    0.2,
+    0.3,
+    0.4,
+    0.5
+  ],
+  "nonlinear_distribution": [
+    0.06206872418837799,
+    0.16604749529158422,
+    0.1986657407493019,
+    0.3188344142254598,
+    0.25438362554527605
+  ],
+  "nonlinear_ky": [
+    0.10638298094272614,
+    0.21276596188545227,
+    0.283687949180603,
+    0.39007091522216797,
+    0.4964539110660553
+  ],
+  "nonlinear_netcdf": "tools_out/office_refresh_cyclone_miller.out.nc",
+  "nonlinear_raw": [
+    0.06905755310611321,
+    0.184744150523119,
+    0.22103515291408402,
+    0.354734607168773,
+    0.2830267733086071
+  ],
+  "nonlinear_variable": "Diagnostics/HeatFlux_kyst",
+  "passed": true,
+  "ql_column": "heat_flux_weight_total",
+  "quasilinear_distribution": [
+    0.10942218846099333,
+    0.1489391965944615,
+    0.17709283048860508,
+    0.2635663393410795,
+    0.30097944511486063
+  ],
+  "quasilinear_raw": [
+    0.21962247788906097,
+    0.29893749952316284,
+    0.3554449677467346,
+    0.5290068984031677,
+    0.6040991544723511
+  ],
+  "species_index": 0,
+  "spectrum_csv": "docs/_static/quasilinear_cyclone_miller_spectrum_scan.quasilinear_spectrum.csv",
+  "time_max": 121.9,
+  "time_min": null,
+  "time_samples": 48,
+  "total_variation_distance": 0.09394928384219987,
+  "tv_gate": 0.2
+}

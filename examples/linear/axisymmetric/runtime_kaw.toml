@@ -1,0 +1,103 @@
+# Runtime benchmark example.
+# Use JAX_ENABLE_X64=1 when reproducing tracked parity-sensitive outputs.
+# Leave it unset for faster exploratory runs with the default precision policy.
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 0.0
+fprim = 0.0
+nu = 0.0
+kinetic = true
+
+[[species]]
+name = "electron"
+charge = -1.0
+mass = 0.0005447
+density = 1.0
+temperature = 1.0
+tprim = 0.0
+fprim = 0.0
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 2
+Nz = 16
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 100.0
+ntheta = 16
+nperiod = 1
+
+[time]
+t_max = 1.25
+dt = 0.01
+method = "sspx3"
+use_diffrax = false
+fixed_dt = false
+sample_stride = 1
+
+[geometry]
+model = "slab"
+s_hat = 1.0e-8
+R0 = 1.0
+B0 = 1.0
+
+[init]
+init_field = "density"
+init_amp = 1.0e-10
+gaussian_init = false
+init_electrons_only = true
+kpar_init = 1.0
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = false
+electromagnetic = true
+use_apar = true
+use_bpar = false
+adiabatic_electrons = false
+adiabatic_ions = false
+beta = 0.010892340441486
+collisions = true
+hypercollisions = true
+
+[collisions]
+nu_hermite = 1.0
+nu_laguerre = 2.0
+nu_hyper = 0.0
+p_hyper = 4.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "kinetic"
+diagnostic_norm = "none"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 1.0
+bpar = 0.0
+nonlinear = 0.0
+
+[run]
+ky = 0.01
+Nl = 16
+Nm = 64
+solver = "explicit_time"

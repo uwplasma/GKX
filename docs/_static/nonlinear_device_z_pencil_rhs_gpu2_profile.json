@@ -1,0 +1,71 @@
+{
+  "atol": 5e-06,
+  "backend": "gpu",
+  "claim_scope": "device z-sharded shard_map fused pencil nonlinear RHS timing; FFT axes are local per z shard, no global spectral reconstruction is used, and no production speedup claim is allowed unless the speedup gate passes",
+  "device_count_available": 2,
+  "kind": "nonlinear_device_z_pencil_rhs_profile",
+  "min_speedup": 1.5,
+  "repeats": 5,
+  "rows": [
+    {
+      "active": true,
+      "blocked_reasons": [],
+      "device_count": 1,
+      "identity_passed": true,
+      "median_s": 0.010456148535013199,
+      "rhs_max_abs_error": 0.0,
+      "rhs_max_rel_error": 0.0,
+      "speedup_gate_passed": false,
+      "speedup_vs_serial": 1.0,
+      "stats": {
+        "max": 0.010540248826146126,
+        "mean": 0.010471288673579692,
+        "median": 0.010456148535013199,
+        "min": 0.010425228625535965,
+        "std": 4.585423595101991e-05
+      }
+    },
+    {
+      "active": true,
+      "blocked_reasons": [
+        "speedup_below_gate"
+      ],
+      "device_count": 2,
+      "identity_passed": true,
+      "median_s": 0.009600257501006126,
+      "rhs_max_abs_error": 5.238689482212067e-10,
+      "rhs_max_rel_error": 2.647566533346983e-07,
+      "speedup_gate_passed": false,
+      "speedup_vs_serial": 1.08915292469159,
+      "stats": {
+        "max": 0.009641527198255062,
+        "mean": 0.00927809700369835,
+        "median": 0.009600257501006126,
+        "min": 0.007967534475028515,
+        "std": 0.000655618491760915
+      }
+    }
+  ],
+  "rtol": 0.0001,
+  "serial_stats_s": {
+    "max": 0.010540248826146126,
+    "mean": 0.010471288673579692,
+    "median": 0.010456148535013199,
+    "min": 0.010425228625535965,
+    "std": 4.585423595101991e-05
+  },
+  "shape": [
+    4,
+    16,
+    96,
+    96,
+    32
+  ],
+  "summary": {
+    "all_active_identity_passed": true,
+    "max_speedup_vs_serial": 1.08915292469159,
+    "production_speedup_claim_allowed": false,
+    "status": "identity_timed_no_production_speedup"
+  },
+  "warmups": 2
+}

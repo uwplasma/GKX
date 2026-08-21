@@ -1,0 +1,53 @@
+{
+  "claim_scope": "finite_wavelength_zonal_moment_hierarchy",
+  "comparisons": [
+    {
+      "higher_resolution": [
+        24,
+        10
+      ],
+      "lower_resolution": [
+        21,
+        8
+      ],
+      "passed": true,
+      "traces": {
+        "0.1": {
+          "higher_final": 0.0027114289012971702,
+          "lower_final": 0.00271362639736267,
+          "maximum_absolute_error": 0.018767291191508856,
+          "maximum_normalized_time": 30.00025393586831,
+          "passed": true,
+          "relative_l2": 0.04933108370852712,
+          "samples": 12003
+        },
+        "0.2": {
+          "higher_final": 0.00014818876043764582,
+          "lower_final": 0.00014825046768935735,
+          "maximum_absolute_error": 0.006972852604352819,
+          "maximum_normalized_time": 30.00025393586831,
+          "passed": true,
+          "relative_l2": 0.017207056198354546,
+          "samples": 12003
+        }
+      }
+    }
+  ],
+  "gate_passed": true,
+  "notes": "Adjacent levels are compared on initial-value-normalized physical traces. A failed lower hierarchy is diagnostic evidence only; the paper protocol remains P24/J10 through t*nu=30.",
+  "resolutions": [
+    [
+      21,
+      8
+    ],
+    [
+      24,
+      10
+    ]
+  ],
+  "schema_version": 1,
+  "thresholds": {
+    "maximum_absolute_error": 0.05,
+    "maximum_relative_l2": 0.05
+  }
+}

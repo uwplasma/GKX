@@ -1,0 +1,5 @@
+requested_devices,actual_devices,backend,state_shape,best_spec,state_sharding_active,identity_gate_pass,serial_median_s,parallel_median_s,same_process_speedup,strong_speedup_vs_1_device,max_abs_state_error,max_rel_state_error,profile_json,error
+1,1,cpu,"[4, 8, 48, 24, 96]",kx,False,True,5.881879603723064,5.455672431970015,1.0781218405371065,1.0,0.0,0.0,/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_1devices.json,
+2,2,cpu,"[4, 8, 48, 24, 96]",kx,True,True,5.752688911976293,4.109496616991237,1.3998524510741943,1.3275768154700123,0.0,0.0,/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_2devices.json,
+4,4,cpu,"[4, 8, 48, 24, 96]",kx,True,True,5.818151093553752,3.918120753020048,1.4849340947619287,1.3924206975409927,0.0,0.0,/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_4devices.json,
+8,8,cpu,"[4, 8, 48, 24, 96]",kx,True,True,5.799778563901782,3.981548748910427,1.4566639590910255,1.3702387628590482,0.0,0.0,/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_8devices.json,

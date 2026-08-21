@@ -1,0 +1,111 @@
+{
+  "case": "cyclone_nonlinear_long_window",
+  "gate_mean_rel": 0.1,
+  "gate_passed": true,
+  "gate_report": {
+    "case": "cyclone_nonlinear_long_window",
+    "gates": [
+      {
+        "abs_error": 0.0955304396196123,
+        "atol": 0.1,
+        "metric": "Wg_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.0955304396196123,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.08602029156980276,
+        "atol": 0.1,
+        "metric": "Wphi_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.08602029156980276,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.1,
+        "metric": "Wapar_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.07564723781481682,
+        "atol": 0.1,
+        "metric": "HeatFlux_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.07564723781481682,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.1,
+        "metric": "ParticleFlux_mean_rel_abs",
+        "notes": "Passes when mean relative mismatch <= 0.1.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.0955304396196123,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "GX nonlinear diagnostics"
+  },
+  "gx": "tools_out/cyclone_long_audit/cyclone_salpha_adiabatic_electrons_omega_t400.out.nc",
+  "source": "GX nonlinear diagnostics",
+  "gkx": "tools_out/cyclone_long_audit/cyclone_nonlinear_diag_t400.csv",
+  "summary": [
+    {
+      "final_rel": -0.1266124885533909,
+      "max_rel_abs": 0.26332757979196786,
+      "mean_rel_abs": 0.0955304396196123,
+      "metric": "Wg"
+    },
+    {
+      "final_rel": -0.040282535242186376,
+      "max_rel_abs": 0.2400725508914539,
+      "mean_rel_abs": 0.08602029156980276,
+      "metric": "Wphi"
+    },
+    {
+      "final_rel": 0.0,
+      "max_rel_abs": 0.0,
+      "mean_rel_abs": 0.0,
+      "metric": "Wapar"
+    },
+    {
+      "final_rel": -0.05767020799848635,
+      "max_rel_abs": 0.21886673484618854,
+      "mean_rel_abs": 0.07564723781481682,
+      "metric": "HeatFlux"
+    },
+    {
+      "final_rel": 0.0,
+      "max_rel_abs": 0.0,
+      "mean_rel_abs": 0.0,
+      "metric": "ParticleFlux"
+    }
+  ],
+  "tmax": 400.0,
+  "tmin": 100.0
+}

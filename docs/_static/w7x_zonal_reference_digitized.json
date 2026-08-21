@@ -1,0 +1,229 @@
+{
+  "arxiv": "2107.06060",
+  "calibrations": [
+    {
+      "inset_box": [
+        648,
+        941,
+        74,
+        207
+      ],
+      "inset_t_range": [
+        3300.0,
+        3500.0
+      ],
+      "inset_y_range": [
+        -0.1,
+        0.2
+      ],
+      "kx_rhoi": 0.05,
+      "label": "a",
+      "main_box": [
+        216,
+        972,
+        57,
+        460
+      ],
+      "t_range": [
+        0.0,
+        3500.0
+      ],
+      "y_range": [
+        -0.5,
+        1.0
+      ]
+    },
+    {
+      "inset_box": [
+        1620,
+        1913,
+        74,
+        207
+      ],
+      "inset_t_range": [
+        1800.0,
+        2000.0
+      ],
+      "inset_y_range": [
+        -0.1,
+        0.2
+      ],
+      "kx_rhoi": 0.07,
+      "label": "b",
+      "main_box": [
+        1188,
+        1944,
+        57,
+        460
+      ],
+      "t_range": [
+        0.0,
+        2000.0
+      ],
+      "y_range": [
+        -0.5,
+        1.0
+      ]
+    },
+    {
+      "inset_box": [
+        648,
+        941,
+        627,
+        760
+      ],
+      "inset_t_range": [
+        1800.0,
+        2000.0
+      ],
+      "inset_y_range": [
+        -0.1,
+        0.2
+      ],
+      "kx_rhoi": 0.1,
+      "label": "c",
+      "main_box": [
+        216,
+        972,
+        610,
+        1013
+      ],
+      "t_range": [
+        0.0,
+        2000.0
+      ],
+      "y_range": [
+        -0.5,
+        1.0
+      ]
+    },
+    {
+      "inset_box": [
+        1620,
+        1913,
+        627,
+        760
+      ],
+      "inset_t_range": [
+        1800.0,
+        2000.0
+      ],
+      "inset_y_range": [
+        -0.1,
+        0.2
+      ],
+      "kx_rhoi": 0.3,
+      "label": "d",
+      "main_box": [
+        1188,
+        1944,
+        610,
+        1013
+      ],
+      "t_range": [
+        0.0,
+        2000.0
+      ],
+      "y_range": [
+        -0.5,
+        1.0
+      ]
+    }
+  ],
+  "digitization_method": "Color-threshold digitization of the arXiv source Figure 11 PDF rendered at 2x. Main traces exclude inset and legend boxes; residual levels are read from the insets.",
+  "figure": "Figure 11 / source figs/ZF.pdf",
+  "image_shape": [
+    1152,
+    2160
+  ],
+  "observable": "line-averaged electrostatic potential normalized to its t=0 value",
+  "paper": "Gonzalez-Jerez et al., Journal of Plasma Physics 88, 905880310 (2022)",
+  "qa_plot": "docs/_static/w7x_zonal_reference_digitized.png",
+  "residual_csv": "docs/_static/w7x_zonal_reference_digitized_residuals.csv",
+  "residual_summary": [
+    {
+      "code": "stella",
+      "kx_rhoi": 0.05,
+      "n_pixels": 267,
+      "panel": "a",
+      "residual_max": 0.015037593984962405,
+      "residual_mean": 0.008266452648475104,
+      "residual_median": 0.00827067669172929,
+      "residual_min": 0.0015037593984962294
+    },
+    {
+      "code": "GENE",
+      "kx_rhoi": 0.05,
+      "n_pixels": 206,
+      "panel": "a",
+      "residual_max": 0.01616541353383455,
+      "residual_mean": 0.008796262500912456,
+      "residual_median": 0.00939849624060149,
+      "residual_min": 0.0015037593984962294
+    },
+    {
+      "code": "stella",
+      "kx_rhoi": 0.07,
+      "n_pixels": 292,
+      "panel": "b",
+      "residual_max": 0.024060150375939837,
+      "residual_mean": 0.020908435472242227,
+      "residual_median": 0.021804511278195465,
+      "residual_min": 0.01729323308270675
+    },
+    {
+      "code": "GENE",
+      "kx_rhoi": 0.07,
+      "n_pixels": 205,
+      "panel": "b",
+      "residual_max": 0.013909774436090205,
+      "residual_mean": 0.011373555840821541,
+      "residual_median": 0.011654135338345833,
+      "residual_min": 0.00827067669172929
+    },
+    {
+      "code": "stella",
+      "kx_rhoi": 0.1,
+      "n_pixels": 292,
+      "panel": "c",
+      "residual_max": 0.03646616541353381,
+      "residual_mean": 0.03461221547018229,
+      "residual_median": 0.03533834586466164,
+      "residual_min": 0.030827067669172897
+    },
+    {
+      "code": "GENE",
+      "kx_rhoi": 0.1,
+      "n_pixels": 206,
+      "panel": "c",
+      "residual_max": 0.02631578947368418,
+      "residual_mean": 0.025281042411854852,
+      "residual_median": 0.02518796992481201,
+      "residual_min": 0.021804511278195465
+    },
+    {
+      "code": "stella",
+      "kx_rhoi": 0.3,
+      "n_pixels": 292,
+      "panel": "d",
+      "residual_max": 0.1469924812030075,
+      "residual_mean": 0.14165465032444124,
+      "residual_median": 0.14135338345864662,
+      "residual_min": 0.13796992481203008
+    },
+    {
+      "code": "GENE",
+      "kx_rhoi": 0.3,
+      "n_pixels": 206,
+      "panel": "d",
+      "residual_max": 0.1537593984962406,
+      "residual_mean": 0.15067705671946857,
+      "residual_median": 0.15150375939849625,
+      "residual_min": 0.1469924812030075
+    }
+  ],
+  "source_figure": "tools_out/w7x_jpp_2022_source/figs/ZF.pdf",
+  "test": "W7-X high-mirror bean-tube test 4 zonal-flow relaxation",
+  "trace_csv": "docs/_static/w7x_zonal_reference_digitized.csv",
+  "validation_status": "reference"
+}

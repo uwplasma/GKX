@@ -1,0 +1,7 @@
+backend,requested_devices,actual_devices,grid_label,best_spec,state_sharding_active,identity_gate_pass,parallel_median_s,strong_speedup_vs_1_device,same_process_speedup,max_rel_state_error,source,error
+cpu,1,1,"Nx=24, Ny=48, Nz=96, Nl=4, Nm=8",kx,False,True,5.455672431970015,1.0,1.0781218405371065,0.0,/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json,
+cpu,2,2,"Nx=24, Ny=48, Nz=96, Nl=4, Nm=8",kx,True,True,4.109496616991237,1.3275768154700123,1.3998524510741943,0.0,/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json,
+cpu,4,4,"Nx=24, Ny=48, Nz=96, Nl=4, Nm=8",kx,True,True,3.918120753020048,1.3924206975409927,1.4849340947619287,0.0,/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json,
+cpu,8,8,"Nx=24, Ny=48, Nz=96, Nl=4, Nm=8",kx,True,True,3.981548748910427,1.3702387628590482,1.4566639590910255,0.0,/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json,
+gpu,1,1,"Nx=48, Ny=96, Nz=128, Nl=4, Nm=8",auto,False,True,10.320638407487422,1.0,1.0769149471416644,0.0,/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json,
+gpu,2,2,"Nx=48, Ny=96, Nz=128, Nl=4, Nm=8",auto,True,True,17.6179569051601,0.5858022279793762,0.626665239810527,0.0,/Users/rogeriojorge/local/GKX/docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json,

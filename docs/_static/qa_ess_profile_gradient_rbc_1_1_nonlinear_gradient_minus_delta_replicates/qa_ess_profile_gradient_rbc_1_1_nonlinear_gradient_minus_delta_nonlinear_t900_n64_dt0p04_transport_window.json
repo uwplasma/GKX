@@ -1,0 +1,20 @@
+{
+  "case": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_minus_delta_replicated_nonlinear_window_followup",
+  "dt": 0.04,
+  "kind": "nonlinear_window_summary",
+  "nonlinear_artifact": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_minus_delta_nonlinear_t900_n64_dt0p04.out.nc",
+  "promotion_gate": {
+    "passed": true,
+    "source": "replicated nonlinear-window extraction; convergence gate is stored separately"
+  },
+  "seed": 22,
+  "gkx": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_minus_delta_nonlinear_t900_n64_dt0p04_heat_flux_trace.csv",
+  "tmax": 900.0,
+  "tmin": 450.0,
+  "variant": {
+    "seed": 22,
+    "timestep": 0.04
+  },
+  "variant_axis": "timestep",
+  "variant_label": "dt0p04"
+}

@@ -1,0 +1,209 @@
+{
+  "artifacts": {
+    "differentiable_geometry_bridge": "docs/_static/differentiable_geometry_bridge.json",
+    "finite_beta_frequency_gate": "docs/_static/vmec_boozer_shaped_pressure_solver_frequency_gradient_gate.json",
+    "finite_beta_nonlinear_window_gate": "docs/_static/vmec_boozer_shaped_pressure_nonlinear_window_gradient_gate.json",
+    "finite_beta_quasilinear_gate": "docs/_static/vmec_boozer_shaped_pressure_quasilinear_gradient_gate.json",
+    "gradient_holdout_matrix": "docs/_static/vmec_boozer_gradient_holdout_matrix.json",
+    "nonlinear_fd_audit": "docs/_static/vmec_boozer_nonlinear_window_fd_audit.json",
+    "parity_matrix": "docs/_static/vmec_boozer_parity_matrix.json"
+  },
+  "blockers": [],
+  "checks": {
+    "differentiable_geometry_bridge": {
+      "booz_xform_flux_tube_available": true,
+      "direct_interpretation_present": true,
+      "direct_production_parity_passed": false,
+      "direct_status": "diagnostic_open",
+      "direct_tensor_gap_explicitly_scoped": true,
+      "equal_arc_checks": {
+        "equal_arc_core_passed": true,
+        "equal_arc_derivative_passed": true,
+        "equal_arc_drift_passed": true,
+        "equal_arc_metric_passed": true
+      },
+      "vmex_boozer_available": true
+    },
+    "finite_beta_frequency_gate": {
+      "case_name": "shaped_tokamak_pressure",
+      "failed_objectives": [],
+      "kind": "mode21_vmec_boozer_linear_frequency_gradient_gate",
+      "linear_frequency_gradient_gate": true,
+      "linear_growth_gradient_gate": true,
+      "max_rel_error": 6.404322502902613e-11,
+      "max_rel_error_threshold": 0.05,
+      "mboz": 21,
+      "missing_objectives": [],
+      "nboz": 21,
+      "nonlinear_window_gradient_gate": false,
+      "objective_error_failures": {},
+      "passed": true,
+      "quasilinear_weight_gradient_gate": false,
+      "required_objectives": [
+        "gamma",
+        "omega"
+      ],
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": 3
+    },
+    "finite_beta_nonlinear_window_gate": {
+      "case_name": "shaped_tokamak_pressure",
+      "failed_objectives": [],
+      "kind": "mode21_vmec_boozer_nonlinear_window_gradient_gate",
+      "linear_frequency_gradient_gate": true,
+      "linear_growth_gradient_gate": true,
+      "max_rel_error": 0.00020478622264174398,
+      "max_rel_error_threshold": 0.075,
+      "mboz": 21,
+      "missing_objectives": [],
+      "nboz": 21,
+      "nonlinear_window_gradient_gate": true,
+      "objective_error_failures": {},
+      "passed": true,
+      "production_nonlinear_window_gradient_gate": false,
+      "quasilinear_weight_gradient_gate": true,
+      "required_objectives": [
+        "gamma",
+        "kperp_eff2",
+        "linear_heat_flux_weight",
+        "mixing_length_heat_flux_proxy",
+        "nonlinear_window_heat_flux_cv",
+        "nonlinear_window_heat_flux_mean",
+        "nonlinear_window_heat_flux_trend",
+        "omega"
+      ],
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": 3
+    },
+    "finite_beta_quasilinear_gate": {
+      "case_name": "shaped_tokamak_pressure",
+      "failed_objectives": [],
+      "kind": "mode21_vmec_boozer_quasilinear_gradient_gate",
+      "linear_frequency_gradient_gate": true,
+      "linear_growth_gradient_gate": true,
+      "max_rel_error": 0.00020478622264174398,
+      "max_rel_error_threshold": 0.02,
+      "mboz": 21,
+      "missing_objectives": [],
+      "nboz": 21,
+      "nonlinear_window_gradient_gate": false,
+      "objective_error_failures": {},
+      "passed": true,
+      "quasilinear_weight_gradient_gate": true,
+      "required_objectives": [
+        "gamma",
+        "kperp_eff2",
+        "linear_heat_flux_weight",
+        "mixing_length_heat_flux_proxy",
+        "omega"
+      ],
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": 3
+    },
+    "gradient_holdout_matrix": {
+      "all_gates_passed": true,
+      "all_mboz_nboz_at_least_21": true,
+      "all_mode21_source_scope": true,
+      "cases": [
+        "li383_low_res",
+        "nfp4_QH_warm_start"
+      ],
+      "claim_level": "multi_equilibrium_reduced_linear_quasilinear_and_nonlinear_window_estimator_gradient_gate_not_production_nonlinear_optimization",
+      "claim_scoped_not_production_nonlinear_optimization": true,
+      "failed_objectives": {},
+      "failed_rows": [],
+      "gate_types": [
+        "frequency",
+        "nonlinear-window estimator",
+        "quasilinear"
+      ],
+      "max_rel_error_by_gate_type": {
+        "frequency": 0.05,
+        "nonlinear-window estimator": 0.075,
+        "quasilinear": 0.02
+      },
+      "missing_gate_types": [],
+      "missing_gate_types_by_case": {},
+      "missing_objectives": {},
+      "mode_failures": [],
+      "n_cases": 2,
+      "passed": true,
+      "required_gate_types": [
+        "frequency",
+        "nonlinear-window estimator",
+        "quasilinear"
+      ],
+      "required_objectives_by_gate_type": {
+        "frequency": [
+          "gamma",
+          "omega"
+        ],
+        "nonlinear-window estimator": [
+          "gamma",
+          "kperp_eff2",
+          "linear_heat_flux_weight",
+          "mixing_length_heat_flux_proxy",
+          "nonlinear_window_heat_flux_cv",
+          "nonlinear_window_heat_flux_mean",
+          "nonlinear_window_heat_flux_trend",
+          "omega"
+        ],
+        "quasilinear": [
+          "gamma",
+          "kperp_eff2",
+          "linear_heat_flux_weight",
+          "mixing_length_heat_flux_proxy",
+          "omega"
+        ]
+      },
+      "row_error_failures": {},
+      "source_scope_failures": []
+    },
+    "nonlinear_fd_audit": {
+      "claim_level": "vmec_boozer_geometry_perturbed_startup_plumbing_fd_audit_not_transport_average",
+      "claim_scoped_not_transport_average": true,
+      "passed": true,
+      "production_nonlinear_observable_fd_path_gate": false,
+      "production_nonlinear_window_gradient_gate": false,
+      "startup_plumbing_gate": true,
+      "transport_average_gate": false
+    },
+    "parity_matrix": {
+      "all_available": true,
+      "all_equal_arc_passed": true,
+      "claim_level": "multi_equilibrium_zero_beta_equal_arc_parity_gate_not_full_transport_gradient_claim",
+      "claim_scoped_not_full_transport_gradient": true,
+      "direct_tensor_parity_hidden_failures": [],
+      "direct_tensor_parity_open_rows": [
+        "nfp3_QI_fixed_resolution_final",
+        "nfp4_QH_warm_start",
+        "shaped_tokamak_pressure"
+      ],
+      "finite_beta_pressure_equal_arc_rows": [
+        "shaped_tokamak_pressure"
+      ],
+      "minimum_boozer_mode_count": 21,
+      "missing_required_families": [],
+      "mode_floor_passed": true,
+      "n_cases": 3,
+      "n_equal_arc_passed": 3,
+      "passed_families": [
+        "axisymmetric finite-beta",
+        "quasi-helical",
+        "quasi-isodynamic"
+      ],
+      "required_families": [
+        "axisymmetric finite-beta",
+        "quasi-helical",
+        "quasi-isodynamic"
+      ]
+    }
+  },
+  "claim_level": "reduced_full_chain_differentiability_guard_not_full_nonlinear_transport_optimization",
+  "kind": "vmec_boozer_differentiability_claim_guard",
+  "minimum_boozer_mode_count": 21,
+  "minimum_gradient_cases": 2,
+  "passed": true,
+  "root": "/Users/rogeriojorge/local/GKX",
+  "scope": "Passes only the release-level reduced differentiability claim: VMEC/Boozer equal-arc parity and AD/finite-difference gradients for linear, quasilinear, and nonlinear-window estimator objectives, plus finite-beta shaped-pressure eigenfrequency, quasilinear, and reduced nonlinear-window estimator gradients. Direct VMEC tensor-vs-imported-EIK parity and converged nonlinear transport-gradient optimization remain explicitly out of scope."
+}

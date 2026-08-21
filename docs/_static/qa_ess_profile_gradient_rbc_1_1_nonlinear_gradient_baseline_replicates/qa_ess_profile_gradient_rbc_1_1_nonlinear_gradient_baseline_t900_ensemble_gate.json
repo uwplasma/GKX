@@ -1,0 +1,143 @@
+{
+  "case": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicated_nonlinear_window_followup_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicated_nonlinear_window_followup_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicated_nonlinear_window_followup_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=5 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": true
+      },
+      {
+        "detail": "finite_means=5 reports=5",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.0693683541430074 gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": true
+      },
+      {
+        "detail": "combined_sem_rel=0.030869270841209266 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=5 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": true
+    },
+    {
+      "detail": "finite_means=5 reports=5",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.0693683541430074 gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.030869270841209266 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": true,
+  "rows": [
+    {
+      "case": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 0,
+      "late_mean": 14.988613626455496,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.31753377195468363,
+      "source_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_seed31_transport_window.json"
+    },
+    {
+      "case": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 1,
+      "late_mean": 15.575302417463735,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4529575487194598,
+      "source_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 2,
+      "late_mean": 15.998016526215487,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.29475772497850056,
+      "source_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_dt0p04_transport_window.json"
+    },
+    {
+      "case": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 3,
+      "late_mean": 16.06989634691923,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4811763168706982,
+      "source_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_seed33_dt0p05_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_seed33_dt0p05_transport_window.json"
+    },
+    {
+      "case": "qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 4,
+      "late_mean": 15.30592337807747,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.341840093343067,
+      "source_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_seed34_dt0p05_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_replicates/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_baseline_nonlinear_t900_n64_seed34_dt0p05_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 0.4811763168706982,
+    "combined_sem_rel": 0.030869270841209266,
+    "ensemble_mean": 15.587550459026284,
+    "max_individual_sem": 0.4811763168706982,
+    "mean_rel_spread": 0.0693683541430074,
+    "mean_spread": 1.081282720463733,
+    "n_finite_means": 5,
+    "n_reports": 5,
+    "sample_sem": 0.20485715810495866
+  }
+}

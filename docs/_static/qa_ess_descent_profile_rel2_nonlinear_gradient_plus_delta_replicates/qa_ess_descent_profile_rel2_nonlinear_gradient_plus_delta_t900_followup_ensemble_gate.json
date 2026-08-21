@@ -1,0 +1,154 @@
+{
+  "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=6 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": true
+      },
+      {
+        "detail": "finite_means=6 reports=6",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.16597636568684226 gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": false
+      },
+      {
+        "detail": "combined_sem_rel=0.029270210137321662 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 1.0,
+    "max_rel_error": 1.0,
+    "passed": false,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=6 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": true
+    },
+    {
+      "detail": "finite_means=6 reports=6",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.16597636568684226 gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": false
+    },
+    {
+      "detail": "combined_sem_rel=0.029270210137321662 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": false,
+  "rows": [
+    {
+      "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 0,
+      "late_mean": 15.653701834628022,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4567442955865357,
+      "source_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed31_transport_window.json"
+    },
+    {
+      "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 1,
+      "late_mean": 16.95995268454725,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4651727256246778,
+      "source_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 2,
+      "late_mean": 14.322196479395132,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.2680164613325233,
+      "source_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_dt0p04_transport_window.json"
+    },
+    {
+      "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 3,
+      "late_mean": 15.785162889045601,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4292985154639674,
+      "source_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed22_dt0p05_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed22_dt0p05_transport_window.json"
+    },
+    {
+      "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 4,
+      "late_mean": 15.953021484140708,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4141747270023452,
+      "source_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed32_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed32_dt0p04_transport_window.json"
+    },
+    {
+      "case": "qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicated_nonlinear_window_followup",
+      "failures": [],
+      "index": 5,
+      "late_mean": 16.68012644170055,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.3837340854577897,
+      "source_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed33_dt0p05_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_replicates/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed33_dt0p05_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 0.4651727256246778,
+    "combined_sem_rel": 0.029270210137321662,
+    "ensemble_mean": 15.892360302242878,
+    "max_individual_sem": 0.4651727256246778,
+    "mean_rel_spread": 0.16597636568684226,
+    "mean_spread": 2.637756205152119,
+    "n_finite_means": 6,
+    "n_reports": 6,
+    "sample_sem": 0.3785002133138951
+  }
+}

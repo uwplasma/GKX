@@ -1,0 +1,56 @@
+{
+  "artifacts": {
+    "baseline": "docs/_static/vmec_qa_t1500_replicates/qa_baseline_scipy_t1500_ensemble_gate.json",
+    "candidate": "docs/_static/vmec_qa_t1500_replicates/quasilinear_from_strict_baseline_t1500_ensemble_gate.json"
+  },
+  "baseline": {
+    "combined_sem": 0.22534238020960815,
+    "combined_sem_relative": 0.01945952500569858,
+    "ensemble_mean": 11.58005553288779,
+    "failure": null,
+    "finite_mean": true,
+    "mean_relative_spread": 0.03807432198303698,
+    "passed": true,
+    "raw_passed": true
+  },
+  "candidate": {
+    "combined_sem": 0.19120539615813775,
+    "combined_sem_relative": 0.016431645156022693,
+    "ensemble_mean": 11.636412199910197,
+    "failure": null,
+    "finite_mean": true,
+    "mean_relative_spread": 0.023401608225692535,
+    "passed": true,
+    "raw_passed": true
+  },
+  "case": "vmec_qa_t1500_baseline_to_quasilinear_comparison",
+  "claim_level": "matched_replicated_late_window_transport_comparison",
+  "config": {
+    "min_relative_reduction": 0.04
+  },
+  "gates": [
+    {
+      "detail": "baseline passed=True; finite mean available",
+      "metric": "baseline_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "candidate passed=True; finite mean available",
+      "metric": "candidate_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "relative reduction -0.0048667 >= 0.04",
+      "metric": "relative_transport_reduction",
+      "passed": false
+    }
+  ],
+  "kind": "matched_nonlinear_transport_comparison",
+  "passed": false,
+  "statistics": {
+    "absolute_reduction": -0.05635666702240627,
+    "combined_uncertainty": 0.29553120281710016,
+    "relative_reduction": -0.004866700929227086,
+    "uncertainty_z_score": -0.19069616502486395
+  }
+}

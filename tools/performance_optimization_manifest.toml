@@ -1,0 +1,383 @@
+[metadata]
+schema_version = 1
+branch = "main"
+default_test_budget_seconds = 300
+target = "lower cold runtime, improve warm throughput, and reduce peak memory on CPU and GPU without changing validated physics outputs"
+
+[[lanes]]
+name = "end_to_end_runtime_memory"
+owner = "runtime/memory benchmark panel"
+status = "active"
+priority = "high"
+platforms = ["cpu", "gpu"]
+cases = [
+  "cyclone-linear",
+  "cyclone-nonlinear",
+  "kbm-linear",
+  "kbm-nonlinear",
+  "w7x-linear",
+  "w7x-nonlinear",
+  "hsx-linear",
+  "hsx-nonlinear",
+]
+profiling_tools = [
+  "benchmarks/performance/benchmark_runtime_memory.py",
+  "benchmarks/performance/benchmark_integrators.py",
+  "tools/profiling/profile_runtime_kernels.py",
+]
+metrics = [
+  "cold_runtime_s",
+  "warmup_time_s",
+  "warm_run_time_s",
+  "peak_rss_mb",
+  "status",
+  "fixed_step_integrator_median_s",
+]
+artifact_paths = [
+  "tools/runtime_memory_manifest.toml",
+  "docs/_static/runtime_memory_benchmark.png",
+  "docs/_static/runtime_memory_benchmark.pdf",
+  "docs/_static/linear_sspx3_stage_profile.json",
+]
+bottleneck_hypotheses = [
+  "short nonlinear GPU cases are dominated by JAX startup and first-integrator compilation",
+  "stellarator nonlinear CPU cases are memory and warm-throughput sensitive",
+]
+optimization_actions = [
+  "keep cold and warm timings separate in all publication panels",
+  "run CPU and GPU rows through the same manifest contract before claiming speedups",
+  "stream diagnostics and persist per-row summaries to survive interrupted long sweeps",
+]
+gates = [
+  "no optimized row may regress validated diagnostics beyond its physics gate",
+  "runtime and memory comparisons must use equivalent t_max/grid/workload settings",
+]
+
+[[lanes]]
+name = "cold_start_compile"
+owner = "startup and first-compile path"
+status = "active"
+priority = "high"
+platforms = ["cpu", "gpu"]
+cases = ["cyclone-nonlinear", "kbm-nonlinear"]
+profiling_tools = [
+  "tools/profiling/profile_startup_and_cache.py",
+]
+metrics = [
+  "startup_total_s",
+  "compile_first_integrator_run_s",
+  "build_linear_cache_s",
+  "compile_first_full_rhs_s",
+]
+artifact_paths = [
+  "docs/performance.rst",
+  "tools/profiling/profile_startup_and_cache.py",
+]
+bottleneck_hypotheses = [
+  "compile_first_integrator_run is the largest remaining cold-start cost",
+  "build_linear_cache is dominated by gyro/Bessel and Laguerre cache construction after the low-rank collision-cache pass",
+]
+optimization_actions = [
+  "decompose build_linear_cache into stable subphases before changing kernels",
+  "reduce closed-over constants and shape polymorphism in first nonlinear integrator compilation",
+  "evaluate persistent compilation cache separately from honest cold-start timings",
+]
+gates = [
+  "startup subphase totals must be written to JSON before and after each optimization tranche",
+  "optimized startup must preserve exact-state and nonlinear window-statistics gates",
+]
+
+[[lanes]]
+name = "nonlinear_warm_throughput"
+owner = "nonlinear RHS and diagnostics kernels"
+status = "active"
+priority = "high"
+platforms = ["cpu", "gpu"]
+cases = ["cyclone-nonlinear", "kbm-nonlinear", "w7x-nonlinear", "hsx-nonlinear"]
+profiling_tools = [
+  "tools/profiling/profile_runtime_kernels.py",
+  "tools/profiling/profile_nonlinear_sharding.py",
+  "tools/profiling/profile_linear_rhs_terms.py",
+  "tools/artifacts/generate_linear_rhs_parallel_gates.py",
+  "tools/artifacts/gate_laguerre_nonlinear_modes.py",
+]
+metrics = [
+  "field_solve_s",
+  "nonlinear_bracket_s",
+  "linear_rhs_s",
+  "linear_rhs_term_s",
+  "linear_rhs_zero_norm_skip_error",
+  "full_rhs_s",
+  "diagnostic_sample_s",
+  "nonlinear_state_sharding_identity_error",
+]
+artifact_paths = [
+  "docs/_static/nonlinear_window_statistics.json",
+  "docs/_static/nonlinear_rhs_profile.png",
+  "docs/_static/nonlinear_rhs_profile.json",
+  "docs/_static/nonlinear_rhs_profile_cpu.csv",
+  "docs/_static/nonlinear_rhs_profile_cpu_spectral.csv",
+  "docs/_static/nonlinear_rhs_profile_gpu.csv",
+  "docs/_static/nonlinear_rhs_profile_gpu_spectral.csv",
+  "docs/_static/nonlinear_rhs_profile_miller.png",
+  "docs/_static/nonlinear_rhs_profile_miller.json",
+  "docs/_static/nonlinear_rhs_profile_miller_cpu.csv",
+  "docs/_static/nonlinear_rhs_profile_miller_cpu_spectral.csv",
+  "docs/_static/nonlinear_rhs_profile_miller_gpu.csv",
+  "docs/_static/nonlinear_rhs_profile_miller_gpu_spectral.csv",
+  "docs/_static/nonlinear_rhs_profile_stellarator_runtime.png",
+  "docs/_static/nonlinear_rhs_profile_stellarator_runtime.json",
+  "docs/_static/nonlinear_rhs_profile_w7x_runtime_cpu.csv",
+  "docs/_static/nonlinear_rhs_profile_w7x_runtime_gpu.csv",
+  "docs/_static/nonlinear_rhs_profile_hsx_runtime_cpu.csv",
+  "docs/_static/nonlinear_rhs_profile_hsx_runtime_gpu.csv",
+  "docs/_static/full_nonlinear_rhs_trace_summary.json",
+  "docs/_static/full_nonlinear_rhs_trace_gpu_summary.json",
+  "docs/_static/linear_rhs_terms_profile.json",
+  "docs/_static/linear_rhs_terms_profile_cpu.csv",
+  "docs/_static/linear_rhs_terms_profile_z_wave_cpu.json",
+  "docs/_static/linear_rhs_terms_profile_z_wave_cpu.csv",
+  "docs/_static/linear_rhs_terms_profile_gpu.json",
+  "docs/_static/linear_rhs_terms_profile_gpu.csv",
+  "docs/_static/linear_rhs_terms_profile_z_wave_gpu.json",
+  "docs/_static/linear_rhs_terms_profile_z_wave_gpu.csv",
+  "docs/_static/linear_rhs_terms_profile_miller_cpu.json",
+  "docs/_static/linear_rhs_terms_profile_miller_cpu.csv",
+  "docs/_static/full_linear_rhs_trace_summary.json",
+  "docs/_static/full_linear_rhs_trace_z_wave_summary.json",
+  "docs/_static/full_linear_rhs_trace_gpu_summary.json",
+  "docs/_static/full_linear_rhs_trace_gpu_z_wave_summary.json",
+  "docs/_static/linear_rhs_zero_norm_state_window_gate.json",
+  "docs/_static/laguerre_mode_gate.json",
+  "docs/_static/laguerre_mode_gate.png",
+  "docs/_static/laguerre_mode_gate_gpu.json",
+  "docs/_static/laguerre_mode_gate_gpu.png",
+  "docs/_static/nonlinear_sharding_profile.json",
+  "docs/_static/nonlinear_sharding_profile_office_gpu.json",
+  "docs/_static/nonlinear_sharding_profile_office_gpu_benchmark_grid.json",
+  "docs/_static/nonlinear_sharding_profile_office_gpu_physical.json",
+  "tools/runtime_memory_manifest.toml",
+]
+bottleneck_hypotheses = [
+  "nonlinear bracket throughput depends on FFT/gradient fusion and gather/scatter density",
+  "resolved diagnostics can dominate short sampled runs if full spectral histories are materialized",
+]
+optimization_actions = [
+  "profile field solve, nonlinear bracket, linear RHS, and full RHS separately",
+  "donate buffers where safe and keep scan shapes stable",
+  "avoid materializing full-history diagnostics unless a publication artifact requires them",
+]
+gates = [
+  "windowed nonlinear transport statistics must remain within accepted parity envelopes",
+  "spectral Laguerre nonlinear mode must pass case-level scalar diagnostics before any speedup claim",
+  "mode-resolved diagnostics must remain finite and schema-compatible",
+  "two-GPU nonlinear state sharding must preserve the serial final state before any throughput claim is made",
+]
+
+[[lanes]]
+name = "memory_efficiency"
+owner = "runtime artifacts and diagnostics memory budget"
+status = "active"
+priority = "high"
+platforms = ["cpu", "gpu"]
+cases = ["cyclone-nonlinear", "kbm-nonlinear", "w7x-nonlinear", "hsx-nonlinear"]
+profiling_tools = [
+  "benchmarks/performance/benchmark_runtime_memory.py",
+  "tools/profiling/profile_startup_and_cache.py",
+  "tools/profiling/profile_runtime_kernels.py",
+]
+metrics = [
+  "peak_rss_mb",
+  "history_buffer_bytes",
+  "diagnostic_buffer_bytes",
+  "device_memory_profile",
+  "host_peak_rss_bytes",
+  "device_peak_bytes_in_use",
+]
+artifact_paths = [
+  "docs/_static/runtime_memory_benchmark.png",
+  "docs/_static/runtime_memory_benchmark.pdf",
+  "docs/_static/prepared_nonlinear_runtime_cpu_profile.json",
+  "docs/_static/prepared_nonlinear_runtime_gpu_profile.json",
+  "docs/_static/prepared_nonlinear_runtime_cpu_resolved_profile.json",
+  "docs/_static/prepared_nonlinear_runtime_gpu_resolved_profile.json",
+  "docs/outputs.rst",
+]
+bottleneck_hypotheses = [
+  "full-history diagnostic arrays and closed-over constants are the main avoidable memory risks",
+  "long nonlinear stellarator runs need streaming diagnostics and checkpointed artifact persistence",
+]
+optimization_actions = [
+  "stream diagnostics by default and keep full histories opt-in",
+  "use checkpoint chunks for long nonlinear artifacts",
+  "add explicit allocator guidance for GPU runs in docs once validated",
+]
+gates = [
+  "peak RSS must not increase on shipped benchmark rows unless accuracy improves and the tradeoff is documented",
+  "artifact schemas must remain reloadable after streaming changes",
+]
+
+[[lanes]]
+name = "parallel_scaling"
+owner = "multi-CPU and multi-GPU parallelization"
+status = "active"
+priority = "medium"
+platforms = ["multi_cpu", "multi_gpu"]
+cases = ["linear-scans", "ensemble-uq", "autodiff-sensitivities", "nonlinear-pilot"]
+profiling_tools = [
+  "tools/artifacts/plot_scaling_panels.py",
+  "tools/artifacts/generate_parallel_identity_gate.py",
+  "tools/artifacts/generate_velocity_parallel_gates.py",
+  "tools/artifacts/generate_electrostatic_parallel_gates.py",
+  "tools/artifacts/generate_linear_rhs_parallel_gates.py",
+  "tools/release/check_parallel_scaling_artifacts.py",
+  "tools/profiling/profile_linear_rhs_parallel_slices.py",
+  "tools/profiling/profile_nonlinear_sharding.py",
+  "tools/profiling/profile_device_z_pencil_transport_window.py",
+  "tools/profiling/profile_device_z_pencil_scaling_decomposition.py",
+  "tools/profiling/aggregate_device_z_pencil_granularity.py",
+]
+metrics = [
+  "strong_scaling_speedup",
+  "parallel_efficiency",
+  "memory_per_device_mb",
+  "device_parity_error",
+  "nonlinear_state_sharding_identity_error",
+  "device_z_pencil_rhs_identity_error",
+  "device_z_pencil_transport_window_identity_error",
+  "device_z_pencil_observable_gate_overhead",
+  "device_z_pencil_shard_map_route_overhead",
+  "device_z_pencil_parallel_scaling_vs_one_device",
+  "parallel_scaling_artifact_contract_status",
+  "production_parallelization_completion_percent",
+]
+artifact_paths = [
+  "docs/_static/scaling_speedup.png",
+  "docs/_static/scaling_speedup_data.csv",
+  "docs/_static/parallel_ky_scan_gate.png",
+  "docs/_static/parallel_ky_scan_gate.json",
+  "docs/_static/independent_ky_scan_scaling_large.png",
+  "docs/_static/independent_ky_scan_scaling_large.json",
+  "docs/_static/independent_ky_scan_scaling_large.csv",
+    "docs/_static/independent_ky_scan_scaling_cpu_large.json",
+  "docs/_static/independent_ky_scan_scaling_cpu_large.csv",
+  "docs/_static/independent_ky_scan_scaling_cpu_large.png",
+    "docs/_static/independent_ky_scan_scaling_gpu_large.json",
+  "docs/_static/independent_ky_scan_scaling_gpu_large.csv",
+  "docs/_static/independent_ky_scan_scaling_gpu_large.png",
+    "docs/_static/quasilinear_uq_ensemble_scaling_large.png",
+  "docs/_static/quasilinear_uq_ensemble_scaling_large.json",
+  "docs/_static/quasilinear_uq_ensemble_scaling_large.csv",
+    "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.json",
+  "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.csv",
+  "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.png",
+    "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.json",
+  "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.csv",
+  "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.png",
+    "docs/_static/parallelization_completion_status.json",
+  "docs/_static/parallelization_completion_status.png",
+    "docs/_static/logical_cpu_parallel_scan_gate.png",
+  "docs/_static/logical_cpu_parallel_scan_gate.json",
+  "docs/_static/hermite_exchange_gate.png",
+  "docs/_static/hermite_exchange_gate.json",
+  "docs/_static/velocity_field_reduce_gate.png",
+  "docs/_static/velocity_field_reduce_gate.json",
+  "docs/_static/electrostatic_field_reduce_gate.png",
+  "docs/_static/electrostatic_field_reduce_gate.json",
+  "docs/_static/hermite_streaming_ladder_gate.png",
+  "docs/_static/hermite_streaming_ladder_gate.json",
+  "docs/_static/electrostatic_drift_gate.png",
+  "docs/_static/electrostatic_drift_gate.json",
+  "docs/_static/electrostatic_diamagnetic_gate.png",
+  "docs/_static/electrostatic_diamagnetic_gate.json",
+  "docs/_static/periodic_streaming_microkernel_gate.png",
+  "docs/_static/periodic_streaming_microkernel_gate.json",
+  "docs/_static/linear_rhs_streaming_gate.png",
+  "docs/_static/linear_rhs_streaming_gate.json",
+  "docs/_static/linear_rhs_streaming_electrostatic_gate.png",
+  "docs/_static/linear_rhs_streaming_electrostatic_gate.json",
+  "docs/_static/linear_rhs_electrostatic_slices_gate.png",
+  "docs/_static/linear_rhs_electrostatic_slices_gate.json",
+  "docs/_static/linear_rhs_parallel_slices_profile.png",
+  "docs/_static/linear_rhs_parallel_slices_profile.json",
+  "docs/_static/linear_rhs_parallel_slices_profile_gpu.png",
+  "docs/_static/linear_rhs_parallel_slices_profile_gpu.json",
+  "docs/_static/linear_rhs_species_profile_gpu.json",
+  "docs/_static/linear_rhs_species_profile_cpu.json",
+  "docs/_static/linear_rhs_species_hermite_profile_cpu.json",
+  "docs/_static/linear_rhs_parallel_slices_sweep.png",
+  "docs/_static/linear_rhs_parallel_slices_sweep.json",
+  "docs/_static/linear_rhs_parallel_slices_sweep.csv",
+    "docs/_static/nonlinear_sharding_profile.json",
+  "docs/_static/nonlinear_sharding_profile_office_gpu.json",
+  "docs/_static/nonlinear_sharding_profile_office_gpu_benchmark_grid.json",
+  "docs/_static/nonlinear_sharding_profile_office_gpu_physical.json",
+  "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+  "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.csv",
+  "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png",
+    "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
+  "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.csv",
+  "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png",
+    "docs/_static/nonlinear_sharding_strong_scaling_large.json",
+  "docs/_static/nonlinear_sharding_strong_scaling_large.csv",
+  "docs/_static/nonlinear_sharding_strong_scaling_large.png",
+  "docs/_static/nonlinear_sharding_production_speedup_gate.json",
+  "docs/_static/nonlinear_sharding_production_speedup_gate.csv",
+  "docs/_static/nonlinear_device_z_pencil_rhs_cpu4_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_rhs_cpu4_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_rhs_cpu4_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_rhs_gpu2_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_rhs_gpu2_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_rhs_gpu2_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_transport_cpu4_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_transport_cpu4_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_transport_cpu4_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.png",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.json",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.csv",
+  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.png",
+  ]
+bottleneck_hypotheses = [
+  "independent ky/batch/ensemble sharding should scale before nonlinear domain sharding",
+  "nonlinear domain sharding requires explicit communication design around FFT and bracket paths",
+]
+optimization_actions = [
+  "prioritize sharded linear scans, UQ ensembles, and autodiff sensitivity batches",
+  "use tools/artifacts/generate_parallel_identity_gate.py ky-scan as the release identity gate for fixed-shape ky batching",
+  "use tools/artifacts/generate_parallel_identity_gate.py logical-cpu as the RuntimeParallelConfig/batch_map logical-CPU identity gate",
+  "use tools/artifacts/generate_velocity_parallel_gates.py hermite-exchange as the first shard_map Hermite ghost-exchange communication gate",
+  "use tools/artifacts/generate_velocity_parallel_gates.py field-reduce as the shard_map velocity field-reduction/broadcast gate",
+  "use tools/artifacts/generate_electrostatic_parallel_gates.py field-reduce as the electrostatic quasineutrality field-reduction gate",
+  "use tools/artifacts/generate_velocity_parallel_gates.py hermite-ladder as the shard_map Hermite streaming-ladder coefficient gate",
+  "use tools/artifacts/generate_electrostatic_parallel_gates.py drift as the electrostatic mirror/curvature/grad-B drift-slice identity gate",
+  "use tools/artifacts/generate_electrostatic_parallel_gates.py diamagnetic as the electrostatic diamagnetic-drive identity gate",
+  "use tools/artifacts/generate_velocity_parallel_gates.py periodic-streaming as the periodic linear streaming microkernel identity gate",
+  "use tools/artifacts/generate_linear_rhs_parallel_gates.py streaming as the streaming-only linear RHS call-graph identity gate",
+  "use tools/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic as the electrostatic field-solve-to-streaming call-graph identity gate",
+  "use tools/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices as the composed electrostatic linear-RHS identity gate",
+  "use tools/release/check_parallel_scaling_artifacts.py as the fast local contract check for tracked large-run scaling artifacts",
+  "use tools/profiling/profile_linear_rhs_parallel_slices.py as the engineering profile before making any Hermite-sharded RHS speedup claim",
+  "gate CPU sharding locally and two-GPU sharding on office",
+  "profile fixed-step nonlinear state sharding and keep local plus two-GPU identity artifacts attached to the manifest",
+  "profile the device-z fused pencil nonlinear RHS through tools/profiling/profile_device_z_pencil_transport_window.py --mode rhs and keep it diagnostic until CPU/GPU speedup gates pass",
+  "keep z-axis FFT sharding as exploratory until a dedicated communication/layout gate passes",
+  "only publish strong-scaling plots when speedup is meaningful and numerically identical",
+]
+gates = [
+  "parallel outputs must match single-device outputs within numerical-identity tolerances",
+  "fixed-step nonlinear state sharding must preserve the final state within the recorded local and two-GPU identity gates",
+  "tracked large-run scaling artifacts must pass the fast sidecar, manifest, identity, timing, and claim-scope contract checker",
+  "production parallelization closure requires CPU and GPU speedup thresholds plus serial numerical identity for independent ky and UQ ensemble workloads",
+  "publication scaling panels must show both speedup and efficiency or be kept out of the README",
+]

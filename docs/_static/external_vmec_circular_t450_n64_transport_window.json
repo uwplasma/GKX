@@ -1,0 +1,27 @@
+{
+  "case": "circular_external_vmec_t450_high_grid_window",
+  "claim_level": "passed_grid_converged_external_vmec_transport_window",
+  "convergence_gate_passed": true,
+  "gate_passed": true,
+  "gate_report": {
+    "case": "circular_external_vmec_t450",
+    "passed": true,
+    "source": "external_vmec_nonlinear_pilot_reports"
+  },
+  "heat_flux_mean": 19.430008846324878,
+  "heat_flux_std": 2.5120911781559006,
+  "kind": "external_vmec_transport_window_summary",
+  "notes": "Circular external-VMEC ITG adiabatic-electron t=450 nonlinear holdout admission window; earlier t=150 and t=250 gates failed, so only the high-grid t=450 window is admitted.",
+  "promotion_gate": {
+    "passed": true,
+    "reason": "Circular tokamak external VMEC nonlinear t450 high-grid convergence passed external-VMEC nonlinear grid-convergence gate"
+  },
+  "promotion_gate_passed": true,
+  "source_gate": "docs/_static/external_vmec_circular_t450_high_grid_convergence_gate.json",
+  "gkx": "docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv",
+  "tmax": 449.9636535644531,
+  "tmin": 225.0591278076172,
+  "window_policy": "highest_resolution_common_late_window_from_passed_external_vmec_grid_gate",
+  "wphi_mean": 7.129358239226288,
+  "wphi_std": 1.0571578399290464
+}

@@ -1,0 +1,71 @@
+{
+  "accepted_steps": 1,
+  "case_name": "nfp4_QH_warm_start",
+  "claim_scope": "curvature-gated one-parameter line search for an aggregated VMEC/Boozer/GKX linear/quasilinear objective; not a multi-parameter or nonlinear turbulent transport optimization claim",
+  "final_delta": -1e-08,
+  "final_objective": 1.0284882765018737,
+  "history": [
+    {
+      "accepted": true,
+      "candidate_delta": -1e-08,
+      "candidate_objective": 1.0284882765018737,
+      "central_derivative": 79309.20402218877,
+      "curvature_ratio": 0.0028446089424795707,
+      "delta": 0.0,
+      "finite_difference_passed": true,
+      "objective": 1.0292810942308668,
+      "step": 0
+    }
+  ],
+  "initial_delta": 0.0,
+  "initial_objective": 1.0292810942308668,
+  "kind": "vmec_boozer_aggregate_scalar_objective_line_search_report",
+  "max_steps": 1,
+  "mode_index": 1,
+  "n_samples": 4,
+  "objective": "quasilinear_flux",
+  "options": {
+    "mboz": 21,
+    "n_hermite": 3,
+    "n_laguerre": 2,
+    "nboz": 21,
+    "ntheta": 4,
+    "nx": 1,
+    "ny": 6,
+    "surface_stencil_width": 3
+  },
+  "passed": true,
+  "perturbation_step": 1e-07,
+  "radial_index": null,
+  "reduction": "mean",
+  "relative_reduction": 0.0007702635688509606,
+  "samples": [
+    {
+      "alpha": 0.0,
+      "selected_ky_index": 1,
+      "surface_index": null,
+      "weight": 0.25
+    },
+    {
+      "alpha": 0.0,
+      "selected_ky_index": 2,
+      "surface_index": null,
+      "weight": 0.25
+    },
+    {
+      "alpha": 0.7,
+      "selected_ky_index": 1,
+      "surface_index": null,
+      "weight": 0.25
+    },
+    {
+      "alpha": 0.7,
+      "selected_ky_index": 2,
+      "surface_index": null,
+      "weight": 0.25
+    }
+  ],
+  "source_scope": "mode21_vmec_boozer_state_multi_point",
+  "stop_reason": "max_steps",
+  "update_step": 1e-08
+}

@@ -1,0 +1,219 @@
+{
+  "case_name": "li383_low_res",
+  "claim_scope": "full vmex state coefficient -> booz_xform_jax mode-21 equal-arc geometry -> GKX linear-RHS eigenpair -> reduced nonlinear-window estimator gradient",
+  "eigenpair_gate": {
+    "ad_supported": true,
+    "atol": 0.05,
+    "biorthogonal_overlap_abs": 0.3070417925476817,
+    "branch_isolated": true,
+    "eigenvalue_gap": 0.612641884349212,
+    "eigenvalue_imag": -0.4474638358583421,
+    "eigenvalue_real": 0.36095625988739843,
+    "eigenvalue_sensitivity_imag": [
+      3210.1093738440372
+    ],
+    "eigenvalue_sensitivity_real": [
+      -3715.3257920720057
+    ],
+    "gap_floor": 1e-08,
+    "jacobian_fd": [
+      [
+        -3715.617870827276
+      ],
+      [
+        3210.077077133444
+      ],
+      [
+        132.66680387780116
+      ],
+      [
+        7424.992937886011
+      ],
+      [
+        -75626.77568648013
+      ],
+      [
+        -6919.936808999605
+      ],
+      [
+        501.72682626780426
+      ],
+      [
+        1689.448609654056
+      ]
+    ],
+    "jacobian_implicit": [
+      [
+        -3715.3257920720057
+      ],
+      [
+        3210.1093738440372
+      ],
+      [
+        132.65966783442525
+      ],
+      [
+        7426.393574027446
+      ],
+      [
+        -75612.29073901003
+      ],
+      [
+        -6918.269999408673
+      ],
+      [
+        501.2796757129695
+      ],
+      [
+        1687.8976772316876
+      ]
+    ],
+    "left_selected_index": 13,
+    "max_abs_error": 14.484947470104089,
+    "max_rel_error": 0.0009180110087433277,
+    "observable_chain_rule": "split_eigenpair_and_explicit_parameter",
+    "passed": true,
+    "rtol": 0.075,
+    "selected_index": 13,
+    "selector": "max_real",
+    "sensitivity_method": "implicit_left_right_eigenpair",
+    "step": 1e-06
+  },
+  "elapsed_seconds": 21.71995095803868,
+  "grid": {
+    "Nx": 1,
+    "Ny": 4,
+    "Nz": 4,
+    "selected_ky_index": 1
+  },
+  "kind": "mode21_vmec_boozer_nonlinear_window_gradient_gate",
+  "linear_frequency_gradient_gate": true,
+  "linear_growth_gradient_gate": true,
+  "mboz": 21,
+  "n_hermite": 3,
+  "n_laguerre": 2,
+  "nboz": 21,
+  "next_action": "Use this as a reduced nonlinear-window estimator-gradient gate only. Full stellarator heat-flux optimization still requires converged nonlinear GKX window gradients or robust adjoint/finite-difference audits on optimized equilibria.",
+  "nonlinear_window_config": {
+    "dt": 0.18,
+    "model": "smooth_logistic_heat_flux_envelope_from_linear_observables",
+    "steps": 64,
+    "tail_fraction": 0.3
+  },
+  "nonlinear_window_gradient_gate": true,
+  "objective_gates": [
+    {
+      "abs_error": 0.2920787552702677,
+      "atol": 0.05,
+      "finite_difference": -3715.617870827276,
+      "implicit": -3715.3257920720057,
+      "objective": "gamma",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 7.860839446475073e-05,
+      "rtol": 0.075
+    },
+    {
+      "abs_error": 0.03229671059307293,
+      "atol": 0.05,
+      "finite_difference": 3210.077077133444,
+      "implicit": 3210.1093738440372,
+      "objective": "omega",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 1.006103897726763e-05,
+      "rtol": 0.075
+    },
+    {
+      "abs_error": 0.00713604337590823,
+      "atol": 0.05,
+      "finite_difference": 132.66680387780116,
+      "implicit": 132.65966783442525,
+      "objective": "kperp_eff2",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 5.378921604594628e-05,
+      "rtol": 0.075
+    },
+    {
+      "abs_error": 1.4006361414358253,
+      "atol": 0.05,
+      "finite_difference": 7424.992937886011,
+      "implicit": 7426.393574027446,
+      "objective": "linear_heat_flux_weight",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.00018863804358507634,
+      "rtol": 0.075
+    },
+    {
+      "abs_error": 14.484947470104089,
+      "atol": 0.05,
+      "finite_difference": -75626.77568648013,
+      "implicit": -75612.29073901003,
+      "objective": "mixing_length_heat_flux_proxy",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.00019153199827205613,
+      "rtol": 0.075
+    },
+    {
+      "abs_error": 1.6668095909317344,
+      "atol": 0.05,
+      "finite_difference": -6919.936808999605,
+      "implicit": -6918.269999408673,
+      "objective": "nonlinear_window_heat_flux_mean",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.0002408706375416599,
+      "rtol": 0.075
+    },
+    {
+      "abs_error": 0.4471505548347636,
+      "atol": 0.05,
+      "finite_difference": 501.72682626780426,
+      "implicit": 501.2796757129695,
+      "objective": "nonlinear_window_heat_flux_cv",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.0008912231346308166,
+      "rtol": 0.075
+    },
+    {
+      "abs_error": 1.5509324223685326,
+      "atol": 0.05,
+      "finite_difference": 1689.448609654056,
+      "implicit": 1687.8976772316876,
+      "objective": "nonlinear_window_heat_flux_trend",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.0009180110087433277,
+      "rtol": 0.075
+    }
+  ],
+  "objective_names": [
+    "gamma",
+    "omega",
+    "kperp_eff2",
+    "linear_heat_flux_weight",
+    "mixing_length_heat_flux_proxy",
+    "nonlinear_window_heat_flux_mean",
+    "nonlinear_window_heat_flux_cv",
+    "nonlinear_window_heat_flux_trend"
+  ],
+  "parameter_indices": {
+    "Rcos": [
+      8,
+      1
+    ]
+  },
+  "parameter_names": [
+    "Rcos_mid_surface_m1"
+  ],
+  "passed": true,
+  "quasilinear_weight_gradient_gate": true,
+  "source_scope": "mode21_vmec_boozer_state",
+  "state_size": 24,
+  "surface_index": null,
+  "surface_stencil_width": null
+}

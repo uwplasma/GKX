@@ -1,0 +1,199 @@
+{
+  "claim_scope": "Release production parallelization is closed for independent ky scans and quasilinear/UQ ensembles with CPU/GPU strong-scaling and serial numerical identity. The independent ensemble provenance gate additionally verifies serial-vs-parallel ordering, worker clipping, exception metadata, and deterministic reconstruction for UQ/optimization batches. Whole-state nonlinear sharding and FFT-axis decomposition remain diagnostic until runtime distributed communication, conservation, transport-window, and profiler-backed speedup gates pass.",
+  "independent_ensemble_provenance_gate": {
+    "actual_workers": 4,
+    "exception_metadata": {
+      "actual_workers": 2,
+      "executor": "thread",
+      "index": 1,
+      "original_message": "provenance probe failure",
+      "original_type": "ValueError",
+      "passed": true,
+      "probe_workers": 16
+    },
+    "exception_metadata_passed": true,
+    "identity_passed": true,
+    "identity_report": {
+      "actual_workers": 4,
+      "atol": 0.0,
+      "backend": "python:thread",
+      "identity_passed": true,
+      "kind": "independent_ensemble_serial_identity",
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0,
+      "metadata": {
+        "executor": "thread",
+        "source": "build_parallelization_completion_status",
+        "workload": "optimization_ensemble"
+      },
+      "problem_size": 4,
+      "requested_workers": 16,
+      "rtol": 0.0
+    },
+    "kind": "independent_ensemble_provenance_gate",
+    "ordering_passed": true,
+    "parallel_indices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "passed": true,
+    "problem_size": 4,
+    "reconstructed_indices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "reconstruction_identity_passed": true,
+    "requested_workers": 16,
+    "serial_indices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "summary": "Independent UQ/optimization ensemble batching preserves serial ordering, clips oversubscribed workers, records worker-exception metadata, and reconstructs deterministically.",
+    "worker_clipping_passed": true,
+    "workload": "optimization_ensemble"
+  },
+  "kind": "parallelization_completion_status",
+  "lanes": [
+    {
+      "best_speedups": {
+        "cpu": 7.179719245656581,
+        "gpu": 1.8813495745824729
+      },
+      "claim_level": "production_parallelization",
+      "identity_passed": true,
+      "lane": "independent_ky_scan",
+      "source": "docs/_static/independent_ky_scan_scaling_large.json",
+      "source_contract": {
+        "artifact_kind": "independent_ky_scan_scaling_combined",
+        "claim_separation_passed": true,
+        "expected_input_backends": [
+          "cpu",
+          "gpu"
+        ],
+        "expected_kind": "independent_ky_scan_scaling_combined",
+        "input_backend_gate_passed": true,
+        "input_backends": [
+          "cpu",
+          "gpu"
+        ],
+        "kind_gate_passed": true,
+        "missing_scope_phrases": [],
+        "required_scope_phrases": [
+          "independent ky scan",
+          "not a nonlinear domain-decomposition speedup claim"
+        ]
+      },
+      "status": "production_closed",
+      "summary": "Production independent-work strong scaling with serial numerical identity.",
+      "threshold_passed": true,
+      "thresholds": {
+        "cpu": 5.0,
+        "gpu": 1.5
+      }
+    },
+    {
+      "best_speedups": {
+        "cpu": 5.412296635282087,
+        "gpu": 1.7126340081487348
+      },
+      "claim_level": "production_parallelization",
+      "identity_passed": true,
+      "lane": "quasilinear_uq_ensemble",
+      "source": "docs/_static/quasilinear_uq_ensemble_scaling_large.json",
+      "source_contract": {
+        "artifact_kind": "quasilinear_uq_ensemble_scaling_combined",
+        "claim_separation_passed": true,
+        "expected_input_backends": [
+          "cpu",
+          "gpu"
+        ],
+        "expected_kind": "quasilinear_uq_ensemble_scaling_combined",
+        "input_backend_gate_passed": true,
+        "input_backends": [
+          "cpu",
+          "gpu"
+        ],
+        "kind_gate_passed": true,
+        "missing_scope_phrases": [],
+        "required_scope_phrases": [
+          "quasilinear/uq ensemble",
+          "not a promoted absolute nonlinear heat-flux predictor"
+        ]
+      },
+      "status": "production_closed",
+      "summary": "Production independent-work strong scaling with serial numerical identity.",
+      "threshold_passed": true,
+      "thresholds": {
+        "cpu": 5.0,
+        "gpu": 1.5
+      }
+    },
+    {
+      "best_speedups": {
+        "cpu": 1.3924206975409927,
+        "gpu": 1.0
+      },
+      "claim_level": "diagnostic_identity_and_profiler_evidence",
+      "identity_passed": true,
+      "lane": "whole_state_nonlinear_sharding",
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_large.json",
+      "source_contract": {
+        "artifact_kind": "nonlinear_sharding_strong_scaling_combined",
+        "claim_separation_passed": true,
+        "expected_input_backends": [
+          "cpu",
+          "gpu"
+        ],
+        "expected_kind": "nonlinear_sharding_strong_scaling_combined",
+        "input_backend_gate_passed": true,
+        "input_backends": [
+          "cpu",
+          "gpu"
+        ],
+        "kind_gate_passed": true,
+        "missing_scope_phrases": [],
+        "required_scope_phrases": [
+          "whole-state sharding",
+          "not a production speedup claim"
+        ]
+      },
+      "status": "diagnostic_closed_not_production",
+      "summary": "Whole-state nonlinear sharding preserves state identity but is not promoted as production nonlinear domain-decomposition speedup.",
+      "threshold_passed": null
+    },
+    {
+      "best_speedups": {},
+      "claim_level": "diagnostic_communication_identity",
+      "identity_passed": true,
+      "lane": "fft_axis_domain",
+      "source": "docs/_static/nonlinear_spectral_communication_identity_gate.json",
+      "source_contract": {
+        "artifact_kind": "nonlinear_spectral_communication_identity_gate",
+        "claim_separation_passed": true,
+        "expected_input_backends": [],
+        "expected_kind": "nonlinear_spectral_communication_identity_gate",
+        "input_backend_gate_passed": true,
+        "input_backends": [],
+        "kind_gate_passed": true,
+        "missing_scope_phrases": [],
+        "required_scope_phrases": [
+          "pencil fused-bracket",
+          "physical transport-window identity gate",
+          "no production distributed FFT routing or speedup claim"
+        ]
+      },
+      "status": "diagnostic_identity_closed",
+      "summary": "Spectral communication, logical RHS, fixed-step integrator, pencil fused-bracket, and physical transport-window identity are closed; runtime distributed FFT routing remains out of production scope.",
+      "threshold_passed": null
+    }
+  ],
+  "overall_parallelization_percent": 87.5,
+  "passed": true,
+  "production_completion_percent": 100.0
+}

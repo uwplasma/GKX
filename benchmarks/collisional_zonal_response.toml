@@ -1,0 +1,101 @@
+# Frei, Ernst & Ricci, Phys. Plasmas 29, 093902 (2022), Figure 12.
+# Run through tools/artifacts/build_zonal_flow_artifacts.py
+# simulate-collisional-zonal-dk with a generated P24/J10 collision archive.
+# The command injects the selected Coulomb/Sugama matrix; this input fixes the
+# common geometry, initial perturbation, and time-discretization contract.
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 0.0
+fprim = 0.0
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 3
+Ny = 1
+Nz = 32
+Lx = 125.66370614359172
+Ly = 6.283185307179586
+boundary = "periodic"
+
+[time]
+t_max = 600.1
+dt = 0.005
+method = "rk2"
+sample_stride = 10
+use_diffrax = false
+fixed_dt = true
+progress_bar = true
+
+[geometry]
+model = "miller"
+# The Miller backend constructs the surface from rhoc/R0; this ratio, rather
+# than the metadata-only epsilon field, fixes the paper's inverse aspect ratio.
+rhoc = 0.277778
+q = 1.4
+s_hat = 0.5
+epsilon = 0.1
+R0 = 2.77778
+R_geo = 2.77778
+shift = 0.0
+akappa = 1.0
+akappri = 0.0
+tri = 0.0
+tripri = 0.0
+betaprim = 0.0
+
+[init]
+init_field = "density"
+init_amp = 1.0e-6
+gaussian_init = false
+init_single = true
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+tau_e = 1.0
+collisions = false
+hypercollisions = false
+
+[collisions]
+nu_hermite = 0.0
+nu_laguerre = 0.0
+nu_hyper = 0.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 0.0
+damp_ends_amp = 0.0
+
+[normalization]
+contract = "cyclone"
+diagnostic_norm = "none"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 0.0
+collisions = 1.0
+hypercollisions = 0.0
+hyperdiffusion = 0.0
+end_damping = 0.0
+apar = 0.0
+bpar = 0.0
+nonlinear = 0.0
+
+[run]
+ky = 0.0
+kx = 0.05
+Nl = 11
+Nm = 25
+dt = 0.005
+steps = 120020
+sample_stride = 10

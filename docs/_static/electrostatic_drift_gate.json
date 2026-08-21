@@ -1,0 +1,93 @@
+{
+  "actual_devices": 2,
+  "atol": 2e-05,
+  "case": "Electrostatic Hermite-sharded mirror/curvature/grad-B drift identity gate",
+  "claim_scope": "single-species periodic electrostatic drift-slice identity, not a full RHS or nonlinear speedup claim",
+  "grid": {
+    "Nx": 1,
+    "Ny_actual": 4,
+    "Ny_requested": 4,
+    "Nz": 16
+  },
+  "identity_passed": true,
+  "max_abs_error": 0.0,
+  "max_rel_error": 0.0,
+  "notes": "The sharded path uses the Hermite-sharded electrostatic field reduction, then applies mirror offset-1 and curvature offset-2 Hermite exchanges.",
+  "phi_norm": 0.12082028388977051,
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 2,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 2,
+    "shard_shape": [
+      2,
+      4,
+      4,
+      1,
+      16
+    ],
+    "state_shape": [
+      2,
+      8,
+      4,
+      1,
+      16
+    ]
+  },
+  "reference_source": "gkx.linear.linear_rhs_cached with mirror/curvature/grad-B terms only",
+  "requested_devices": 2,
+  "rows": [
+    {
+      "abs_error": 0.0,
+      "component": "mirror",
+      "rel_error": 0.0,
+      "serial_norm": 0.02848636731505394,
+      "sharded_norm": 0.02848636358976364
+    },
+    {
+      "abs_error": 0.0,
+      "component": "curvature_gradb",
+      "rel_error": 0.0,
+      "serial_norm": 1.1327379941940308,
+      "sharded_norm": 1.1327377557754517
+    },
+    {
+      "abs_error": 0.0,
+      "component": "total",
+      "rel_error": 0.0,
+      "serial_norm": 1.1310844421386719,
+      "sharded_norm": 1.1310843229293823
+    }
+  ],
+  "rtol": 2e-06,
+  "source": "gkx.parallel.velocity mirror_drift_shard_map + curvature_gradb_drift_shard_map",
+  "state_shape": [
+    2,
+    8,
+    4,
+    1,
+    16
+  ]
+}

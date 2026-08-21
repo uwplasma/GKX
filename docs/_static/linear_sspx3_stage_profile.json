@@ -1,0 +1,61 @@
+{
+  "kind": "linear_sspx3_stage_refactor_profile",
+  "generated_utc": "2026-07-14",
+  "claim_scope": "matched warm CPU profile of the compiled fixed-step Cyclone SSPX3 trajectory",
+  "workload": {
+    "backend": "cpu",
+    "devices": 1,
+    "method": "sspx3",
+    "steps": 480,
+    "dt": 0.005,
+    "Nl": 7,
+    "Nm": 14,
+    "Nx": 1,
+    "Ny": 24,
+    "Nz": 96,
+    "ky": 0.30000001192092896,
+    "warmups": 1,
+    "repeats": 5
+  },
+  "before": {
+    "revision": "bc4bd48a",
+    "median_s": 3.202332125045359,
+    "times_s": [
+      3.1025068745948374,
+      3.1816369579173625,
+      3.2204671250656247,
+      3.202332125045359,
+      3.202919999603182
+    ],
+    "final_state_norm": 0.0259705837816,
+    "field_history_norm": 0.10848496854305267,
+    "finite": true
+  },
+  "after": {
+    "revision": "18dbf513",
+    "median_s": 3.2234194171614945,
+    "times_s": [
+      3.208504125010222,
+      3.226486749947071,
+      3.2144405832514167,
+      3.2304215831682086,
+      3.2234194171614945
+    ],
+    "final_state_norm": 0.0259705837816,
+    "field_history_norm": 0.10848496854305267,
+    "finite": true
+  },
+  "identity_gate": {
+    "passed": true,
+    "final_state_norm_absolute_difference": 0.0,
+    "field_history_norm_absolute_difference": 0.0
+  },
+  "performance_gate": {
+    "minimum_reportable_relative_speedup": 0.03,
+    "relative_median_time_change": 0.00658498,
+    "measurable_speedup": false,
+    "passed": false
+  },
+  "interpretation": "The source refactor removes one eager SSPX3 RHS call and centralizes stage equations, but XLA already dead-code-eliminated the unused result in compiled execution. No end-to-end speedup is claimed.",
+  "reproduction": "PYTHONPATH=<checkout>/src python benchmarks/performance/benchmark_integrators.py --skip-diffrax --method sspx3 --steps 480 --dt 0.005 --Nl 7 --Nm 14 --ky 0.3 --warmup 1 --repeat 5 --label <label> --out-json <output.json>"
+}

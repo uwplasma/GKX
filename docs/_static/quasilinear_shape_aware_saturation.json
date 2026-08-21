@@ -1,0 +1,270 @@
+{
+  "all_case_shape_fit": {
+    "exponent": -0.3546315582623171,
+    "n_samples": 22,
+    "passed_only": false,
+    "rms_log_shape_residual": 0.32610456284436995,
+    "used_cases": [
+      "cyclone_long_window",
+      "cyclone_miller_long_window",
+      "hsx_nonlinear_window",
+      "w7x_nonlinear_window"
+    ]
+  },
+  "cases": [
+    {
+      "case": "cyclone_long_window",
+      "geometry": "cyclone",
+      "nonlinear_summary": "docs/_static/nonlinear_cyclone_gate_summary.json",
+      "observed_heat_flux": 6.6689961798985795,
+      "observed_heat_flux_std": 0.6486446261822355,
+      "shape_cosine": 0.8964299105687351,
+      "shape_cosine_gate": 0.95,
+      "shape_gate": "docs/_static/quasilinear_cyclone_spectrum_shape_gate.json",
+      "shape_gate_kind": "quasilinear_spectrum_shape_gate",
+      "shape_gate_status": "failed",
+      "shape_passed": false,
+      "shape_tv": 0.21473341652286174,
+      "shape_tv_gate": 0.2,
+      "spectrum": "docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv"
+    },
+    {
+      "case": "cyclone_miller_long_window",
+      "geometry": "cyclone_miller",
+      "nonlinear_summary": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+      "observed_heat_flux": 4.259822065746515,
+      "observed_heat_flux_std": 4.2116774700305175,
+      "shape_cosine": 0.9825396600130925,
+      "shape_cosine_gate": 0.95,
+      "shape_gate": "docs/_static/quasilinear_cyclone_miller_spectrum_shape_gate.json",
+      "shape_gate_kind": "quasilinear_spectrum_shape_gate",
+      "shape_gate_status": "passed",
+      "shape_passed": true,
+      "shape_tv": 0.09394928384219987,
+      "shape_tv_gate": 0.2,
+      "spectrum": "docs/_static/quasilinear_cyclone_miller_spectrum_scan.quasilinear_spectrum.csv"
+    },
+    {
+      "case": "hsx_nonlinear_window",
+      "geometry": "hsx",
+      "nonlinear_summary": "docs/_static/nonlinear_hsx_gate_summary.json",
+      "observed_heat_flux": 5.089605487565396,
+      "observed_heat_flux_std": 6.284535110439706,
+      "shape_cosine": 0.9709889879217466,
+      "shape_cosine_gate": 0.95,
+      "shape_gate": "docs/_static/quasilinear_hsx_spectrum_shape_gate.json",
+      "shape_gate_kind": "quasilinear_spectrum_shape_gate",
+      "shape_gate_status": "passed",
+      "shape_passed": true,
+      "shape_tv": 0.11157506481268943,
+      "shape_tv_gate": 0.2,
+      "spectrum": "docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv"
+    },
+    {
+      "case": "w7x_nonlinear_window",
+      "geometry": "w7x",
+      "nonlinear_summary": "docs/_static/nonlinear_w7x_gate_summary.json",
+      "observed_heat_flux": 5.378544112072135,
+      "observed_heat_flux_std": 3.295746205851981,
+      "shape_cosine": 0.9916731122648941,
+      "shape_cosine_gate": 0.95,
+      "shape_gate": "docs/_static/quasilinear_w7x_spectrum_shape_gate.json",
+      "shape_gate_kind": "quasilinear_spectrum_shape_gate",
+      "shape_gate_status": "passed",
+      "shape_passed": true,
+      "shape_tv": 0.05564144523893508,
+      "shape_tv_gate": 0.2,
+      "spectrum": "docs/_static/quasilinear_w7x_spectrum_scan.quasilinear_spectrum.csv"
+    }
+  ],
+  "claim_level": "leave_one_geometry_out_model_development",
+  "holdout_relative_error_gate": 0.35,
+  "input_validation": {
+    "cases": [
+      {
+        "case": "cyclone_long_window",
+        "gate_case": "cyclone_nonlinear_long_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_cyclone_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "train"
+      },
+      {
+        "case": "cyclone_miller_long_window",
+        "gate_case": "cyclone_miller_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "hsx_nonlinear_window",
+        "gate_case": "hsx_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_hsx_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "w7x_nonlinear_window",
+        "gate_case": "w7x_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_w7x_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      }
+    ],
+    "kind": "quasilinear_model_input_validation",
+    "passed": true,
+    "required_splits": [
+      "train",
+      "holdout"
+    ]
+  },
+  "kind": "quasilinear_shape_aware_saturation_report",
+  "leave_one_out": [
+    {
+      "absolute_relative_error": 0.9628273047033561,
+      "baseline_linear_weight_absolute_relative_error": 0.9630414801064947,
+      "baseline_linear_weight_predicted_heat_flux": 0.24647622798449176,
+      "exponent": -0.137472756339381,
+      "holdout_case": "cyclone_long_window",
+      "null_training_mean_absolute_relative_error": 0.2638586443850672,
+      "null_training_mean_predicted_heat_flux": 4.909323888461349,
+      "observed_heat_flux": 6.6689961798985795,
+      "predicted_heat_flux": 0.24790456292985205,
+      "scale": 3.0750325908626,
+      "shape_fit": {
+        "exponent": -0.137472756339381,
+        "n_samples": 17,
+        "passed_only": false,
+        "rms_log_shape_residual": 0.24239528591659842,
+        "used_cases": [
+          "cyclone_miller_long_window",
+          "hsx_nonlinear_window",
+          "w7x_nonlinear_window"
+        ]
+      },
+      "train_cases": [
+        "cyclone_miller_long_window",
+        "hsx_nonlinear_window",
+        "w7x_nonlinear_window"
+      ]
+    },
+    {
+      "absolute_relative_error": 1.2311897807831758,
+      "baseline_linear_weight_absolute_relative_error": 0.9343760262535095,
+      "baseline_linear_weight_predicted_heat_flux": 8.240097680085759,
+      "exponent": -0.5336436081274593,
+      "holdout_case": "cyclone_miller_long_window",
+      "null_training_mean_absolute_relative_error": 0.34099073584449524,
+      "null_training_mean_predicted_heat_flux": 5.712381926512037,
+      "observed_heat_flux": 4.259822065746515,
+      "predicted_heat_flux": 9.5044714610483,
+      "scale": 5.03580171521471,
+      "shape_fit": {
+        "exponent": -0.5336436081274593,
+        "n_samples": 17,
+        "passed_only": false,
+        "rms_log_shape_residual": 0.2653791307470821,
+        "used_cases": [
+          "cyclone_long_window",
+          "hsx_nonlinear_window",
+          "w7x_nonlinear_window"
+        ]
+      },
+      "train_cases": [
+        "cyclone_long_window",
+        "hsx_nonlinear_window",
+        "w7x_nonlinear_window"
+      ]
+    },
+    {
+      "absolute_relative_error": 0.3132819783529206,
+      "baseline_linear_weight_absolute_relative_error": 0.2688310760113941,
+      "baseline_linear_weight_predicted_heat_flux": 3.721361367869694,
+      "exponent": -0.30550489238573053,
+      "holdout_case": "hsx_nonlinear_window",
+      "null_training_mean_absolute_relative_error": 0.06801744572399246,
+      "null_training_mean_predicted_heat_flux": 5.435787452572409,
+      "observed_heat_flux": 5.089605487565396,
+      "predicted_heat_flux": 3.4951238113850276,
+      "scale": 2.9656633010259257,
+      "shape_fit": {
+        "exponent": -0.30550489238573053,
+        "n_samples": 16,
+        "passed_only": false,
+        "rms_log_shape_residual": 0.36777245218095195,
+        "used_cases": [
+          "cyclone_long_window",
+          "cyclone_miller_long_window",
+          "w7x_nonlinear_window"
+        ]
+      },
+      "train_cases": [
+        "cyclone_long_window",
+        "cyclone_miller_long_window",
+        "w7x_nonlinear_window"
+      ]
+    },
+    {
+      "absolute_relative_error": 0.39183030456943235,
+      "baseline_linear_weight_absolute_relative_error": 0.3290236303034063,
+      "baseline_linear_weight_predicted_heat_flux": 3.6088760025711504,
+      "exponent": -0.44598219275559403,
+      "holdout_case": "w7x_nonlinear_window",
+      "null_training_mean_absolute_relative_error": 0.0072639609383539005,
+      "null_training_mean_predicted_heat_flux": 5.33947457773683,
+      "observed_heat_flux": 5.378544112072135,
+      "predicted_heat_flux": 3.2710675344987834,
+      "scale": 2.9438068284437007,
+      "shape_fit": {
+        "exponent": -0.44598219275559403,
+        "n_samples": 16,
+        "passed_only": false,
+        "rms_log_shape_residual": 0.36438424598416747,
+        "used_cases": [
+          "cyclone_long_window",
+          "cyclone_miller_long_window",
+          "hsx_nonlinear_window"
+        ]
+      },
+      "train_cases": [
+        "cyclone_long_window",
+        "cyclone_miller_long_window",
+        "hsx_nonlinear_window"
+      ]
+    }
+  ],
+  "metrics": {
+    "baseline_linear_weight_all_case_gate_passed": false,
+    "baseline_linear_weight_max_abs_relative_error": 0.9630414801064947,
+    "baseline_linear_weight_mean_abs_relative_error": 0.6238180531687011,
+    "null_training_mean_all_case_gate_passed": true,
+    "null_training_mean_max_abs_relative_error": 0.34099073584449524,
+    "null_training_mean_mean_abs_relative_error": 0.17003269672297722,
+    "shape_aware_all_case_gate_passed": false,
+    "shape_aware_max_abs_relative_error": 1.2311897807831758,
+    "shape_aware_mean_abs_relative_error": 0.7247823421022213
+  },
+  "notes": "The power-law exponent is fitted from training nonlinear spectrum-shape gates only; the held-out nonlinear shape is not used for that held-out prediction. This is a model-development diagnostic, not a validated transport claim.",
+  "observed_floor": 1e-12,
+  "passed_shape_only": false,
+  "promotion_gate": {
+    "baseline_linear_weight_mean_abs_relative_error": 0.6238180531687011,
+    "null_training_mean_mean_abs_relative_error": 0.17003269672297722,
+    "passed": false,
+    "requires_beating_linear_weight_baseline": true,
+    "requires_beating_training_mean_null": true,
+    "shape_aware_mean_abs_relative_error": 0.7247823421022213,
+    "transport_mean_relative_error_gate": 0.35
+  }
+}

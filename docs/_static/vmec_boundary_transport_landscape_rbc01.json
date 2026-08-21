@@ -1,0 +1,1698 @@
+{
+  "baseline_coefficient_value": 0.19886268739730267,
+  "baseline_input": "tools_out/vmex_qa_full_sweep_20260605/runs/qa_baseline_scipy/input.final",
+  "claim_level": "coefficient_landscape_diagnostic; deterministic reduced metrics are not nonlinear turbulent-flux claims, and nonlinear heat-flux points require replicated ensemble JSON",
+  "coefficient": "RBC(0,1)",
+  "fractions": [
+    -0.5,
+    -0.45,
+    -0.4,
+    -0.35,
+    -0.3,
+    -0.25,
+    -0.2,
+    -0.15,
+    -0.1,
+    -0.05,
+    0.0,
+    0.05,
+    0.1,
+    0.15,
+    0.2,
+    0.25,
+    0.3,
+    0.35,
+    0.4,
+    0.45,
+    0.5
+  ],
+  "kind": "vmec_boundary_transport_objective_landscape",
+  "literature_context": {
+    "optimization_of_nonlinear_turbulence_in_stellarators": "Published boundary-mode scans show noisy time-averaged nonlinear heat fluxes; this artifact is the analogous pre-optimizer landscape diagnostic."
+  },
+  "nonlinear_ensemble_points": [],
+  "nonlinear_launch_manifest": {
+    "claim_level": "launch_plan_for_replicated_nonlinear_heat_flux_error_bars_not_simulation_claim",
+    "commands": [
+      {
+        "coefficient_value": 0.09943134369865134,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p5.nc",
+        "label": "m0p5",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p5",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p5.nc --case landscape_rbc_0_1_m0p5 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p5 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.10937447806851648,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p45.nc",
+        "label": "m0p45",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p45",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p45.nc --case landscape_rbc_0_1_m0p45 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p45 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.1193176124383816,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p4.nc",
+        "label": "m0p4",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p4",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p4.nc --case landscape_rbc_0_1_m0p4 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p4 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.12926074680824673,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p35.nc",
+        "label": "m0p35",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p35",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p35.nc --case landscape_rbc_0_1_m0p35 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p35 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.13920388117811186,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p3.nc",
+        "label": "m0p3",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p3",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p3.nc --case landscape_rbc_0_1_m0p3 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p3 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.149147015547977,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p25.nc",
+        "label": "m0p25",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p25",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p25.nc --case landscape_rbc_0_1_m0p25 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p25 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.15909014991784215,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p2.nc",
+        "label": "m0p2",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p2",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p2.nc --case landscape_rbc_0_1_m0p2 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p2 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.16903328428770728,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p15.nc",
+        "label": "m0p15",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p15",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p15.nc --case landscape_rbc_0_1_m0p15 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p15 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.1789764186575724,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p1.nc",
+        "label": "m0p1",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p1",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p1.nc --case landscape_rbc_0_1_m0p1 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p1 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.18891955302743754,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p05.nc",
+        "label": "m0p05",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_m0p05",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p05.nc --case landscape_rbc_0_1_m0p05 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/m0p05 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.19886268739730267,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_0.nc",
+        "label": "0",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_0",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_0.nc --case landscape_rbc_0_1_0 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/0 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.2088058217671678,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p05.nc",
+        "label": "p0p05",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p05",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p05.nc --case landscape_rbc_0_1_p0p05 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p05 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.21874895613703296,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p1.nc",
+        "label": "p0p1",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p1",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p1.nc --case landscape_rbc_0_1_p0p1 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p1 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.22869209050689807,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p15.nc",
+        "label": "p0p15",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p15",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p15.nc --case landscape_rbc_0_1_p0p15 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p15 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.2386352248767632,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p2.nc",
+        "label": "p0p2",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p2",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p2.nc --case landscape_rbc_0_1_p0p2 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p2 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.24857835924662836,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p25.nc",
+        "label": "p0p25",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p25",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p25.nc --case landscape_rbc_0_1_p0p25 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p25 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.25852149361649346,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p3.nc",
+        "label": "p0p3",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p3",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p3.nc --case landscape_rbc_0_1_p0p3 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p3 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.2684646279863586,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p35.nc",
+        "label": "p0p35",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p35",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p35.nc --case landscape_rbc_0_1_p0p35 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p35 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.2784077623562237,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p4.nc",
+        "label": "p0p4",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p4",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p4.nc --case landscape_rbc_0_1_p0p4 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p4 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.2883508967260889,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p45.nc",
+        "label": "p0p45",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p45",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p45.nc --case landscape_rbc_0_1_p0p45 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p45 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      },
+      {
+        "coefficient_value": 0.298294031095954,
+        "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p5.nc",
+        "label": "p0p5",
+        "vmec_command": "cd tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs && vmex input.rbc_0_1_p0p5",
+        "write_nonlinear_configs_command": "python tools/campaigns/write_optimized_equilibrium_transport_configs.py --vmec-file tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p5.nc --case landscape_rbc_0_1_p0p5 --out-dir tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/nonlinear_configs/p0p5 --horizons 700 --window-tmin 350 --window-tmax 700 --grid n64:64:64:40:40"
+      }
+    ],
+    "kind": "vmec_boundary_transport_landscape_nonlinear_launch_manifest",
+    "postprocess_instruction": "After running the generated nonlinear configs, build one ensemble JSON per coefficient and rerun this landscape with --nonlinear-ensemble coefficient_value:path."
+  },
+  "reduced_metric_kinds": [
+    "growth",
+    "quasilinear_flux",
+    "nonlinear_window_heat_flux"
+  ],
+  "reused_reduced_metrics_json": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+  "rows": [
+    {
+      "coefficient_value": 0.09943134369865134,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p5.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p5",
+      "label": "m0p5",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.41248768283237786,
+              "min": 0.41248768283237786,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.41248768283237786,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.345352463881768
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.8906223822887042,
+              "min": 0.8906223822887042,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.8906223822887042,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.6369060776615411
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.1524776124771048,
+              "min": 1.1524776124771048,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.1524776124771048,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.7666195565581604
+        }
+      },
+      "reduced_metrics": {
+        "growth": 0.345352463881768,
+        "nonlinear_window_heat_flux": 0.6369060776615411,
+        "quasilinear_flux": 0.7666195565581604
+      },
+      "relative_fraction": -0.5
+    },
+    {
+      "coefficient_value": 0.10937447806851648,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p45.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p45",
+      "label": "m0p45",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 6.002664984747545e-11,
+              "min": 6.002664984747545e-11,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 6.002664984747545e-11,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 6.002664984567385e-11
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.1657628524571192,
+              "min": 0.1657628524571192,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.1657628524571192,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.1533756816998769
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 3.343891061657088e-10,
+              "min": 3.343891061657088e-10,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 3.343891061657088e-10,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 3.3438910610980074e-10
+        }
+      },
+      "reduced_metrics": {
+        "growth": 6.002664984567385e-11,
+        "nonlinear_window_heat_flux": 0.1533756816998769,
+        "quasilinear_flux": 3.3438910610980074e-10
+      },
+      "relative_fraction": -0.45
+    },
+    {
+      "coefficient_value": 0.1193176124383816,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p4.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p4",
+      "label": "m0p4",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 8.881784197001252e-15,
+              "min": 8.881784197001252e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 8.881784197001252e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 8.881784197001213e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.03527596217669015,
+              "min": 0.03527596217669015,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.03527596217669015,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.03466802130024438
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.130700216768085e-14,
+              "min": 1.130700216768085e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.130700216768085e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.1307002167680785e-14
+        }
+      },
+      "reduced_metrics": {
+        "growth": 8.881784197001213e-15,
+        "nonlinear_window_heat_flux": 0.03466802130024438,
+        "quasilinear_flux": 1.1307002167680785e-14
+      },
+      "relative_fraction": -0.4
+    },
+    {
+      "coefficient_value": 0.12926074680824673,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p35.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p35",
+      "label": "m0p35",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 5.831454349509318e-15,
+              "min": 5.831454349509318e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 5.831454349509318e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 5.831454349509301e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.03170731643909116,
+              "min": 0.03170731643909116,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.03170731643909116,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.031215018733331986
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 7.163297716814754e-15,
+              "min": 7.163297716814754e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 7.163297716814754e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 7.163297716814729e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 5.831454349509301e-15,
+        "nonlinear_window_heat_flux": 0.031215018733331986,
+        "quasilinear_flux": 7.163297716814729e-15
+      },
+      "relative_fraction": -0.35
+    },
+    {
+      "coefficient_value": 0.13920388117811186,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p3.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p3",
+      "label": "m0p3",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 2.6970799497498333e-15,
+              "min": 2.6970799497498333e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 2.6970799497498333e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 2.6970799497498298e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.03346068255890152,
+              "min": 0.03346068255890152,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.03346068255890152,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.03291305641545352
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 3.423442237539256e-15,
+              "min": 3.423442237539256e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 3.423442237539256e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 3.42344223753925e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 2.6970799497498298e-15,
+        "nonlinear_window_heat_flux": 0.03291305641545352,
+        "quasilinear_flux": 3.42344223753925e-15
+      },
+      "relative_fraction": -0.3
+    },
+    {
+      "coefficient_value": 0.149147015547977,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p25.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p25",
+      "label": "m0p25",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 7.992720495643175e-15,
+              "min": 7.992720495643175e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 7.992720495643175e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 7.992720495643143e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.0307022616745484,
+              "min": 0.0307022616745484,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.0307022616745484,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.030240377367456796
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 9.644281045423458e-15,
+              "min": 9.644281045423458e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 9.644281045423458e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 9.644281045423412e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 7.992720495643143e-15,
+        "nonlinear_window_heat_flux": 0.030240377367456796,
+        "quasilinear_flux": 9.644281045423412e-15
+      },
+      "relative_fraction": -0.25
+    },
+    {
+      "coefficient_value": 0.15909014991784215,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p2.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p2",
+      "label": "m0p2",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 7.174519103070865e-15,
+              "min": 7.174519103070865e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 7.174519103070865e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 7.17451910307084e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.03166915019619219,
+              "min": 0.03166915019619219,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.03166915019619219,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.031178024763961424
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 8.863744273413662e-15,
+              "min": 8.863744273413662e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 8.863744273413662e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 8.863744273413623e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 7.17451910307084e-15,
+        "nonlinear_window_heat_flux": 0.031178024763961424,
+        "quasilinear_flux": 8.863744273413623e-15
+      },
+      "relative_fraction": -0.2
+    },
+    {
+      "coefficient_value": 0.16903328428770728,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p15.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p15",
+      "label": "m0p15",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 7.271960811294775e-15,
+              "min": 7.271960811294775e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 7.271960811294775e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 7.271960811294749e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.031554749830414036,
+              "min": 0.031554749830414036,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.031554749830414036,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.031067129997868502
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 8.963166500795541e-15,
+              "min": 8.963166500795541e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 8.963166500795541e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 8.963166500795501e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 7.271960811294749e-15,
+        "nonlinear_window_heat_flux": 0.031067129997868502,
+        "quasilinear_flux": 8.963166500795501e-15
+      },
+      "relative_fraction": -0.15
+    },
+    {
+      "coefficient_value": 0.1789764186575724,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p1.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p1",
+      "label": "m0p1",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 8.881784197001252e-15,
+              "min": 8.881784197001252e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 8.881784197001252e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 8.881784197001213e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.030404193731414873,
+              "min": 0.030404193731414873,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.030404193731414873,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.029951146362983797
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.0644890664170096e-14,
+              "min": 1.0644890664170096e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.0644890664170096e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.064489066417004e-14
+        }
+      },
+      "reduced_metrics": {
+        "growth": 8.881784197001213e-15,
+        "nonlinear_window_heat_flux": 0.029951146362983797,
+        "quasilinear_flux": 1.064489066417004e-14
+      },
+      "relative_fraction": -0.1
+    },
+    {
+      "coefficient_value": 0.18891955302743754,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_m0p05.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_m0p05",
+      "label": "m0p05",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 9.936620118824751e-15,
+              "min": 9.936620118824751e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 9.936620118824751e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 9.936620118824702e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.029485209934428103,
+              "min": 0.029485209934428103,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.029485209934428103,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.029058881121635318
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.1607040018210496e-14,
+              "min": 1.1607040018210496e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.1607040018210496e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.1607040018210428e-14
+        }
+      },
+      "reduced_metrics": {
+        "growth": 9.936620118824702e-15,
+        "nonlinear_window_heat_flux": 0.029058881121635318,
+        "quasilinear_flux": 1.1607040018210428e-14
+      },
+      "relative_fraction": -0.05
+    },
+    {
+      "coefficient_value": 0.19886268739730267,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_0.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_0",
+      "label": "0",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 8.049984290270373e-15,
+              "min": 8.049984290270373e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 8.049984290270373e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 8.04998429027034e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.02850913346667044,
+              "min": 0.02850913346667044,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.02850913346667044,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.028110310447400207
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 9.199836713882722e-15,
+              "min": 9.199836713882722e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 9.199836713882722e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 9.19983671388268e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 8.04998429027034e-15,
+        "nonlinear_window_heat_flux": 0.028110310447400207,
+        "quasilinear_flux": 9.19983671388268e-15
+      },
+      "relative_fraction": 0.0
+    },
+    {
+      "coefficient_value": 0.2088058217671678,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p05.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p05",
+      "label": "p0p05",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 5.35682609381638e-15,
+              "min": 5.35682609381638e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 5.35682609381638e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 5.356826093816366e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.02831999134680926,
+              "min": 0.02831999134680926,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.02831999134680926,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.02792639422595767
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 6.1459742175957034e-15,
+              "min": 6.1459742175957034e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 6.1459742175957034e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 6.1459742175956845e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 5.356826093816366e-15,
+        "nonlinear_window_heat_flux": 0.02792639422595767,
+        "quasilinear_flux": 6.1459742175956845e-15
+      },
+      "relative_fraction": 0.05
+    },
+    {
+      "coefficient_value": 0.21874895613703296,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p1.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p1",
+      "label": "p0p1",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 8.243307821402745e-15,
+              "min": 8.243307821402745e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 8.243307821402745e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 8.24330782140271e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.028969122261379637,
+              "min": 0.028969122261379637,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.028969122261379637,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.028557448881152768
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 9.701753986509599e-15,
+              "min": 9.701753986509599e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 9.701753986509599e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 9.701753986509551e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 8.24330782140271e-15,
+        "nonlinear_window_heat_flux": 0.028557448881152768,
+        "quasilinear_flux": 9.701753986509551e-15
+      },
+      "relative_fraction": 0.1
+    },
+    {
+      "coefficient_value": 0.22869209050689807,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p15.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p15",
+      "label": "p0p15",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.028599546475073e-14,
+              "min": 1.028599546475073e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.028599546475073e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.0285995464750676e-14
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.028233734317053543,
+              "min": 0.028233734317053543,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.028233734317053543,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.027842509201482117
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.1979944007369335e-14,
+              "min": 1.1979944007369335e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.1979944007369335e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.1979944007369264e-14
+        }
+      },
+      "reduced_metrics": {
+        "growth": 1.0285995464750676e-14,
+        "nonlinear_window_heat_flux": 0.027842509201482117,
+        "quasilinear_flux": 1.1979944007369264e-14
+      },
+      "relative_fraction": 0.15
+    },
+    {
+      "coefficient_value": 0.2386352248767632,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p2.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p2",
+      "label": "p0p2",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 8.881784197001252e-15,
+              "min": 8.881784197001252e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 8.881784197001252e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 8.881784197001213e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.02752696026164472,
+              "min": 0.02752696026164472,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.02752696026164472,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.027154905741488464
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.0236289895067507e-14,
+              "min": 1.0236289895067507e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.0236289895067507e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.0236289895067454e-14
+        }
+      },
+      "reduced_metrics": {
+        "growth": 8.881784197001213e-15,
+        "nonlinear_window_heat_flux": 0.027154905741488464,
+        "quasilinear_flux": 1.0236289895067454e-14
+      },
+      "relative_fraction": 0.2
+    },
+    {
+      "coefficient_value": 0.24857835924662836,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p25.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p25",
+      "label": "p0p25",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.0657991043850888e-14,
+              "min": 1.0657991043850888e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.0657991043850888e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.0657991043850832e-14
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.025871603228826402,
+              "min": 0.025871603228826402,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.025871603228826402,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.025542595865706622
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.1838836999543795e-14,
+              "min": 1.1838836999543795e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.1838836999543795e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.1838836999543725e-14
+        }
+      },
+      "reduced_metrics": {
+        "growth": 1.0657991043850832e-14,
+        "nonlinear_window_heat_flux": 0.025542595865706622,
+        "quasilinear_flux": 1.1838836999543725e-14
+      },
+      "relative_fraction": 0.25
+    },
+    {
+      "coefficient_value": 0.25852149361649346,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p3.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p3",
+      "label": "p0p3",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 8.412488407738415e-15,
+              "min": 8.412488407738415e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 8.412488407738415e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 8.41248840773838e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.025332703069657986,
+              "min": 0.025332703069657986,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.025332703069657986,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.025017148283608015
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 9.272107033944172e-15,
+              "min": 9.272107033944172e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 9.272107033944172e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 9.27210703394413e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 8.41248840773838e-15,
+        "nonlinear_window_heat_flux": 0.025017148283608015,
+        "quasilinear_flux": 9.27210703394413e-15
+      },
+      "relative_fraction": 0.3
+    },
+    {
+      "coefficient_value": 0.2684646279863586,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p35.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p35",
+      "label": "p0p35",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 9.190564975725124e-15,
+              "min": 9.190564975725124e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 9.190564975725124e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 9.190564975725081e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.025158659077613554,
+              "min": 0.025158659077613554,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.025158659077613554,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.02484738995575031
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 1.0126504581100043e-14,
+              "min": 1.0126504581100043e-14,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 1.0126504581100043e-14,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 1.0126504581099992e-14
+        }
+      },
+      "reduced_metrics": {
+        "growth": 9.190564975725081e-15,
+        "nonlinear_window_heat_flux": 0.02484738995575031,
+        "quasilinear_flux": 1.0126504581099992e-14
+      },
+      "relative_fraction": 0.35
+    },
+    {
+      "coefficient_value": 0.2784077623562237,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p4.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p4",
+      "label": "p0p4",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 6.217100362683568e-15,
+              "min": 6.217100362683568e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 6.217100362683568e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 6.217100362683549e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.02548789858652164,
+              "min": 0.02548789858652164,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.02548789858652164,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.025168497959961542
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 6.9212107493280256e-15,
+              "min": 6.9212107493280256e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 6.9212107493280256e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 6.921210749328002e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 6.217100362683549e-15,
+        "nonlinear_window_heat_flux": 0.025168497959961542,
+        "quasilinear_flux": 6.921210749328002e-15
+      },
+      "relative_fraction": 0.4
+    },
+    {
+      "coefficient_value": 0.2883508967260889,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p45.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p45",
+      "label": "p0p45",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 5.329070518200751e-15,
+              "min": 5.329070518200751e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 5.329070518200751e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 5.329070518200737e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.026623563962608534,
+              "min": 0.026623563962608534,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.026623563962608534,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.026275324282752786
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 6.15849740802434e-15,
+              "min": 6.15849740802434e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 6.15849740802434e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 6.158497408024321e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 5.329070518200737e-15,
+        "nonlinear_window_heat_flux": 0.026275324282752786,
+        "quasilinear_flux": 6.158497408024321e-15
+      },
+      "relative_fraction": 0.45
+    },
+    {
+      "coefficient_value": 0.298294031095954,
+      "expected_wout": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/wout_rbc_0_1_p0p5.nc",
+      "input_path": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched_replot/inputs/input.rbc_0_1_p0p5",
+      "label": "p0p5",
+      "reduced_metric_reports": {
+        "growth": {
+          "kind": "growth",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 7.993543947051674e-15,
+              "min": 7.993543947051674e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 7.993543947051674e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 7.993543947051642e-15
+        },
+        "nonlinear_window_heat_flux": {
+          "kind": "nonlinear_window_heat_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 0.02874907840231804,
+              "min": 0.02874907840231804,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 0.02874907840231804,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 0.02834357716652306
+        },
+        "quasilinear_flux": {
+          "kind": "quasilinear_flux",
+          "payload": {
+            "sample_statistics": {
+              "claim_scope": "deterministic cross-sample dispersion over the configured surface/field-line/ky grid; not stochastic uncertainty and not a nonlinear heat-flux SEM",
+              "max": 9.88509255001676e-15,
+              "min": 9.88509255001676e-15,
+              "n_samples": 1,
+              "reduction": "weighted_mean",
+              "rows_included": false,
+              "weighted_mean": 9.88509255001676e-15,
+              "weighted_standard_error": 0.0,
+              "weighted_std": 0.0
+            }
+          },
+          "returncode": 0,
+          "reused_from": "tools_out/vmec_boundary_transport_landscape_onepoint_wide_20260605_batched/landscape.json",
+          "value": 9.88509255001671e-15
+        }
+      },
+      "reduced_metrics": {
+        "growth": 7.993543947051642e-15,
+        "nonlinear_window_heat_flux": 0.02834357716652306,
+        "quasilinear_flux": 9.88509255001671e-15
+      },
+      "relative_fraction": 0.5
+    }
+  ],
+  "sample_set": {
+    "alphas": [
+      0.0
+    ],
+    "ky_values": [
+      0.3
+    ],
+    "surfaces": [
+      0.64
+    ]
+  }
+}

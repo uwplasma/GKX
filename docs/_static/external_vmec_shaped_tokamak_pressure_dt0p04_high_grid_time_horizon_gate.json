@@ -1,0 +1,114 @@
+{
+  "case": "Shaped tokamak pressure external VMEC dt=0.04 high-grid time-horizon stability",
+  "claim_level": "passed_high_grid_time_horizon_candidate_not_replicated_holdout",
+  "common_window_time_horizon_relative_change": 0.041783337619802956,
+  "compact_bundle_policy": {
+    "reason": "PNG/PDF and trace intermediates are regenerable and omitted to keep the repository small",
+    "tracked_bundle": "gate JSON and CSV only"
+  },
+  "csv": "docs/_static/external_vmec_shaped_tokamak_pressure_dt0p04_high_grid_time_horizon_gate.csv",
+  "gate_index_include": false,
+  "gate_report": {
+    "case": "Shaped tokamak pressure external VMEC dt=0.04 high-grid time-horizon stability",
+    "gates": [
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "failed_grid_gate_count",
+        "notes": "Every input high-grid gate must pass before checking horizon stability.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "gates"
+      },
+      {
+        "abs_error": 0.041783337619802956,
+        "atol": 0.15,
+        "metric": "common_window_time_horizon_relative_change",
+        "notes": "Pairwise symmetric relative change of high-grid averaged common-window means.",
+        "observed": 0.041783337619802956,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.12370906120807167,
+        "atol": 0.15,
+        "metric": "least_window_time_horizon_relative_change",
+        "notes": "Pairwise symmetric relative change of high-grid averaged least-trending means.",
+        "observed": 0.12370906120807167,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.12370906120807167,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "external_vmec_high_grid_horizon_gates"
+  },
+  "kind": "external_vmec_time_horizon_gate",
+  "least_window_time_horizon_relative_change": 0.12370906120807167,
+  "passed": true,
+  "promotion_gate": {
+    "passed": false,
+    "reason": "time-horizon stability is necessary but not sufficient; replicate/seed/timestep evidence is still required before holdout admission"
+  },
+  "rows": [
+    {
+      "common_heat_flux_half_spread": 0.2817136165315075,
+      "common_heat_flux_mean": 7.140644541883891,
+      "gate_json": "docs/_static/external_vmec_shaped_tokamak_pressure_t450_dt0p04_high_grid_convergence_gate.json",
+      "grid_common_means": [
+        7.422358158415398,
+        6.858930925352383
+      ],
+      "grid_common_relative_difference": 0.07890425433701367,
+      "grid_gate_passed": true,
+      "grid_labels": [
+        "Nx=Ny=64,Nz=40,dt=0.04",
+        "Nx=Ny=80,Nz=48,dt=0.04"
+      ],
+      "grid_least_means": [
+        7.422358158415398,
+        6.858930925352383
+      ],
+      "grid_least_relative_difference": 0.07890425433701367,
+      "horizon": 450.0,
+      "least_heat_flux_half_spread": 0.2817136165315075,
+      "least_heat_flux_mean": 7.140644541883891
+    },
+    {
+      "common_heat_flux_half_spread": 0.36606198258516276,
+      "common_heat_flux_mean": 7.445370742460576,
+      "gate_json": "docs/_static/external_vmec_shaped_tokamak_pressure_t650_dt0p04_high_grid_convergence_gate.json",
+      "grid_common_means": [
+        7.811432725045739,
+        7.079308759875413
+      ],
+      "grid_common_relative_difference": 0.09833277488722747,
+      "grid_gate_passed": true,
+      "grid_labels": [
+        "Nx=Ny=64,Nz=40,dt=0.04,t=650",
+        "Nx=Ny=80,Nz=48,dt=0.04,t=650"
+      ],
+      "grid_least_means": [
+        8.478758609656131,
+        7.6857404058629815
+      ],
+      "grid_least_relative_difference": 0.09811850067630225,
+      "horizon": 650.0,
+      "least_heat_flux_half_spread": 0.39650910189657473,
+      "least_heat_flux_mean": 8.082249507759556
+    }
+  ],
+  "thresholds": {
+    "max_relative_change": 0.15
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "actual_devices": 2,
+  "atol": 1e-05,
+  "case": "Hermite streaming-ladder shard_map identity gate",
+  "claim_scope": "Hermite streaming communication/coefficient gate, not a nonlinear runtime speedup claim",
+  "identity_passed": true,
+  "max_ladder_abs_error": 0.0,
+  "max_ladder_rel_error": 0.0,
+  "max_reduction_abs_error": 1.9073486328125e-06,
+  "notes": "This gate combines nearest-Hermite shard_map exchange with the sqrt(m+1)/sqrt(m) streaming-ladder coefficients. It also records the accompanying Hermite field-reduction error because production velocity-space sharding needs both communication primitives.",
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 2,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 2,
+    "shard_shape": [
+      2,
+      4,
+      4,
+      1,
+      5
+    ],
+    "state_shape": [
+      2,
+      8,
+      4,
+      1,
+      5
+    ]
+  },
+  "requested_devices": 2,
+  "rows": [
+    {
+      "abs_error": 0.0,
+      "ladder_real": 34.0,
+      "m": 0,
+      "reference_real": 34.0,
+      "state_real": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ladder_real": 96.1665267944336,
+      "m": 1,
+      "reference_real": 96.1665267944336,
+      "state_real": 20.0
+    },
+    {
+      "abs_error": 0.0,
+      "ladder_real": 224.75245666503906,
+      "m": 2,
+      "reference_real": 224.75245666503906,
+      "state_real": 40.0
+    },
+    {
+      "abs_error": 0.0,
+      "ladder_real": 389.7794494628906,
+      "m": 3,
+      "reference_real": 389.7794494628906,
+      "state_real": 60.0
+    },
+    {
+      "abs_error": 0.0,
+      "ladder_real": 584.131591796875,
+      "m": 4,
+      "reference_real": 584.131591796875,
+      "state_real": 80.0
+    },
+    {
+      "abs_error": 0.0,
+      "ladder_real": 803.8012084960938,
+      "m": 5,
+      "reference_real": 803.8012084960938,
+      "state_real": 100.0
+    },
+    {
+      "abs_error": 0.0,
+      "ladder_real": 1046.1021728515625,
+      "m": 6,
+      "reference_real": 1046.1021728515625,
+      "state_real": 120.0
+    },
+    {
+      "abs_error": 0.0,
+      "ladder_real": 539.7332763671875,
+      "m": 7,
+      "reference_real": 539.7332763671875,
+      "state_real": 140.0
+    }
+  ],
+  "rtol": 1e-06,
+  "source": "gkx.parallel.velocity.hermite_streaming_ladder_shard_map",
+  "state_shape": [
+    2,
+    8,
+    4,
+    1,
+    5
+  ],
+  "vth": 1.7
+}

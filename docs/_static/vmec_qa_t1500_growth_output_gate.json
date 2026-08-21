@@ -1,0 +1,92 @@
+{
+  "config": {
+    "min_abs_window_mean": 0.0001,
+    "min_samples": 200,
+    "min_window_samples": 80,
+    "tmax": 1500.0,
+    "tmax_atol": null,
+    "tmin": 1100.0
+  },
+  "heat_flux_variable": "Diagnostics/HeatFlux_st",
+  "kind": "nonlinear_runtime_output_diagnostics_gate",
+  "passed": true,
+  "rows": [
+    {
+      "failures": [],
+      "heat_flux_last": 12.03115463256836,
+      "heat_flux_max": 17.298648834228516,
+      "heat_flux_min": 1.1949514373554848e-06,
+      "heat_flux_shape": [
+        604,
+        1
+      ],
+      "passed": true,
+      "path": "tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_growth_from_strict_baseline/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed32.out.nc",
+      "samples": 604,
+      "time_max": 1499.9278564453125,
+      "time_min": 0.05000000074505806,
+      "tmax_atol": 0.625030517578125,
+      "warnings": [],
+      "window": {
+        "mean_heat_flux": 11.743955200101123,
+        "samples": 162,
+        "sem_heat_flux": 0.05898286579794424,
+        "tmax": 1500.0,
+        "tmin": 1100.0
+      }
+    },
+    {
+      "failures": [],
+      "heat_flux_last": 12.381197929382324,
+      "heat_flux_max": 19.09407615661621,
+      "heat_flux_min": 1.2255317187737091e-06,
+      "heat_flux_shape": [
+        604,
+        1
+      ],
+      "passed": true,
+      "path": "tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_growth_from_strict_baseline/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_seed33.out.nc",
+      "samples": 604,
+      "time_max": 1499.9278564453125,
+      "time_min": 0.05000000074505806,
+      "tmax_atol": 0.625030517578125,
+      "warnings": [],
+      "window": {
+        "mean_heat_flux": 11.252279193313033,
+        "samples": 162,
+        "sem_heat_flux": 0.060784584661743524,
+        "tmax": 1500.0,
+        "tmin": 1100.0
+      }
+    },
+    {
+      "failures": [],
+      "heat_flux_last": 11.98367977142334,
+      "heat_flux_max": 26.272178649902344,
+      "heat_flux_min": 1.0286446467944188e-06,
+      "heat_flux_shape": [
+        754,
+        1
+      ],
+      "passed": true,
+      "path": "tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_growth_from_strict_baseline/vmec_qa_full_sweep_growth_from_strict_baseline_nonlinear_t1500_n64_dt0p04.out.nc",
+      "samples": 754,
+      "time_max": 1500.02587890625,
+      "time_min": 0.03999999910593033,
+      "tmax_atol": 0.5000114440917969,
+      "warnings": [],
+      "window": {
+        "mean_heat_flux": 11.534283955891928,
+        "samples": 201,
+        "sem_heat_flux": 0.049923230091982476,
+        "tmax": 1500.0,
+        "tmin": 1100.0
+      }
+    }
+  ],
+  "summary": {
+    "failed": 0,
+    "outputs": 3,
+    "passed": 3
+  }
+}

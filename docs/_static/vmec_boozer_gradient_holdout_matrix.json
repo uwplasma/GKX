@@ -1,0 +1,198 @@
+{
+  "claim_level": "multi_equilibrium_reduced_linear_quasilinear_and_nonlinear_window_estimator_gradient_gate_not_production_nonlinear_optimization",
+  "kind": "vmec_boozer_gradient_holdout_matrix",
+  "notes": "This matrix checks differentiability from vmex state coefficients through booz_xform_jax mode-21 equal-arc geometry into GKX linear and quasilinear solver observables plus a reduced nonlinear-window estimator. It does not validate converged nonlinear-window turbulence gradients or optimized-equilibrium nonlinear transport.",
+  "passed": true,
+  "rows": [
+    {
+      "case_name": "nfp4_QH_warm_start",
+      "elapsed_seconds": null,
+      "gate_type": "frequency",
+      "label": "QH warm start",
+      "max_abs_error": 24.453645789556504,
+      "max_rel_error": 0.004892743510544424,
+      "mboz": 21,
+      "n_objectives": 2,
+      "nboz": 21,
+      "objective_rel_error": {
+        "gamma": 0.0,
+        "omega": 0.004892743510544424
+      },
+      "objectives": {
+        "gamma": true,
+        "omega": true
+      },
+      "passed": true,
+      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": null
+    },
+    {
+      "case_name": "nfp4_QH_warm_start",
+      "elapsed_seconds": 36.5628223340027,
+      "gate_type": "quasilinear",
+      "label": "QH warm start",
+      "max_abs_error": 650.3192862369178,
+      "max_rel_error": 0.004282152564851315,
+      "mboz": 21,
+      "n_objectives": 5,
+      "nboz": 21,
+      "objective_rel_error": {
+        "gamma": 0.003616698901232464,
+        "kperp_eff2": 0.0032565773849284395,
+        "linear_heat_flux_weight": 0.004282152564851315,
+        "mixing_length_heat_flux_proxy": 0.0023823390795556488,
+        "omega": 0.004071070193671142
+      },
+      "objectives": {
+        "gamma": true,
+        "kperp_eff2": true,
+        "linear_heat_flux_weight": true,
+        "mixing_length_heat_flux_proxy": true,
+        "omega": true
+      },
+      "passed": true,
+      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": null
+    },
+    {
+      "case_name": "nfp4_QH_warm_start",
+      "elapsed_seconds": 22.49819629197009,
+      "gate_type": "nonlinear-window estimator",
+      "label": "QH warm start",
+      "max_abs_error": 9992.451882682624,
+      "max_rel_error": 0.026774412331418387,
+      "mboz": 21,
+      "n_objectives": 8,
+      "nboz": 21,
+      "objective_rel_error": {
+        "gamma": 0.019672982559442352,
+        "kperp_eff2": 0.021020003560999284,
+        "linear_heat_flux_weight": 0.026774412331418387,
+        "mixing_length_heat_flux_proxy": 0.014642687499333557,
+        "nonlinear_window_heat_flux_cv": 0.007452779970678508,
+        "nonlinear_window_heat_flux_mean": 0.023833283265735274,
+        "nonlinear_window_heat_flux_trend": 0.008249418103697908,
+        "omega": 0.022055145328197592
+      },
+      "objectives": {
+        "gamma": true,
+        "kperp_eff2": true,
+        "linear_heat_flux_weight": true,
+        "mixing_length_heat_flux_proxy": true,
+        "nonlinear_window_heat_flux_cv": true,
+        "nonlinear_window_heat_flux_mean": true,
+        "nonlinear_window_heat_flux_trend": true,
+        "omega": true
+      },
+      "passed": true,
+      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_nonlinear_window_gradient_gate.json",
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": 3
+    },
+    {
+      "case_name": "li383_low_res",
+      "elapsed_seconds": null,
+      "gate_type": "frequency",
+      "label": "Li383",
+      "max_abs_error": 0.0002873166097288049,
+      "max_rel_error": 3.7339872970093304e-07,
+      "mboz": 21,
+      "n_objectives": 2,
+      "nboz": 21,
+      "objective_rel_error": {
+        "gamma": 0.0,
+        "omega": 3.7339872970093304e-07
+      },
+      "objectives": {
+        "gamma": true,
+        "omega": true
+      },
+      "passed": true,
+      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_li383_solver_frequency_gradient_gate.json",
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": null
+    },
+    {
+      "case_name": "li383_low_res",
+      "elapsed_seconds": 20.2818357499782,
+      "gate_type": "quasilinear",
+      "label": "Li383",
+      "max_abs_error": 14.484947470104089,
+      "max_rel_error": 0.00019153199827205613,
+      "mboz": 21,
+      "n_objectives": 5,
+      "nboz": 21,
+      "objective_rel_error": {
+        "gamma": 7.860839446475073e-05,
+        "kperp_eff2": 5.378921604594628e-05,
+        "linear_heat_flux_weight": 0.00018863804358507634,
+        "mixing_length_heat_flux_proxy": 0.00019153199827205613,
+        "omega": 1.006103897726763e-05
+      },
+      "objectives": {
+        "gamma": true,
+        "kperp_eff2": true,
+        "linear_heat_flux_weight": true,
+        "mixing_length_heat_flux_proxy": true,
+        "omega": true
+      },
+      "passed": true,
+      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_li383_quasilinear_gradient_gate.json",
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": null
+    },
+    {
+      "case_name": "li383_low_res",
+      "elapsed_seconds": 21.71995095803868,
+      "gate_type": "nonlinear-window estimator",
+      "label": "Li383",
+      "max_abs_error": 14.484947470104089,
+      "max_rel_error": 0.0009180110087433277,
+      "mboz": 21,
+      "n_objectives": 8,
+      "nboz": 21,
+      "objective_rel_error": {
+        "gamma": 7.860839446475073e-05,
+        "kperp_eff2": 5.378921604594628e-05,
+        "linear_heat_flux_weight": 0.00018863804358507634,
+        "mixing_length_heat_flux_proxy": 0.00019153199827205613,
+        "nonlinear_window_heat_flux_cv": 0.0008912231346308166,
+        "nonlinear_window_heat_flux_mean": 0.0002408706375416599,
+        "nonlinear_window_heat_flux_trend": 0.0009180110087433277,
+        "omega": 1.006103897726763e-05
+      },
+      "objectives": {
+        "gamma": true,
+        "kperp_eff2": true,
+        "linear_heat_flux_weight": true,
+        "mixing_length_heat_flux_proxy": true,
+        "nonlinear_window_heat_flux_cv": true,
+        "nonlinear_window_heat_flux_mean": true,
+        "nonlinear_window_heat_flux_trend": true,
+        "omega": true
+      },
+      "passed": true,
+      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_li383_nonlinear_window_gradient_gate.json",
+      "source_scope": "mode21_vmec_boozer_state",
+      "surface_stencil_width": null
+    }
+  ],
+  "summary": {
+    "all_gates_passed": true,
+    "all_mboz_nboz_at_least_21": true,
+    "all_mode21_source_scope": true,
+    "cases": [
+      "li383_low_res",
+      "nfp4_QH_warm_start"
+    ],
+    "gate_types": [
+      "frequency",
+      "nonlinear-window estimator",
+      "quasilinear"
+    ],
+    "max_relative_error": 0.026774412331418387,
+    "n_cases": 2
+  }
+}

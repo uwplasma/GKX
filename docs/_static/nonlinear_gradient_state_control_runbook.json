@@ -1,0 +1,165 @@
+{
+  "case": "qa_ess_nonlinear_gradient_state_control_runbook",
+  "claim_level": "state_to_input_mapping_gate_not_nonlinear_gradient_evidence",
+  "config": {
+    "default_relative_delta": 0.02,
+    "max_mapping_condition_number": 1000000.0,
+    "max_mapping_relative_residual": 0.1,
+    "min_mapped_controls": 2,
+    "require_mapping_passed": true
+  },
+  "controls": [
+    {
+      "blockers": [],
+      "condition_number": 1.0175602609935996,
+      "descent_direction_sign": 1.0,
+      "input_control_argument": "RBS(1,1):-0.0306918042441 ZBC(1,1):0.00872732414398 RBS(1,0):1.45563635656 ZBC(1,0):0.00824173444235",
+      "input_direction": {
+        "terms": [
+          {
+            "coefficient": "RBS(1,1)",
+            "weight": -0.03069180424412453
+          },
+          {
+            "coefficient": "ZBC(1,1)",
+            "weight": 0.008727324143980593
+          },
+          {
+            "coefficient": "RBS(1,0)",
+            "weight": 1.4556363565645647
+          },
+          {
+            "coefficient": "ZBC(1,0)",
+            "weight": 0.008241734442345465
+          }
+        ],
+        "type": "least_squares_boundary_coefficient_direction"
+      },
+      "input_parameter": null,
+      "mapping_ready": true,
+      "relative_residual": 2.2711134634690797e-16,
+      "short_bracket_command_fragment": "--control RBS(1,1):-0.0306918042441 ZBC(1,1):0.00872732414398 RBS(1,0):1.45563635656 ZBC(1,0):0.00824173444235 --relative-delta 0.02",
+      "state_control_argument": "Rsin_mid_surface_m1:1",
+      "state_parameter": "Rsin_mid_surface_m1"
+    },
+    {
+      "blockers": [],
+      "condition_number": 1.0175602609935996,
+      "descent_direction_sign": 1.0,
+      "input_control_argument": "RBS(1,1):-0.0475539276741 ZBC(1,1):0.0735580744532 RBS(1,0):0.0156739335766 ZBC(1,0):1.45412104861",
+      "input_direction": {
+        "terms": [
+          {
+            "coefficient": "RBS(1,1)",
+            "weight": -0.04755392767412258
+          },
+          {
+            "coefficient": "ZBC(1,1)",
+            "weight": 0.07355807445317508
+          },
+          {
+            "coefficient": "RBS(1,0)",
+            "weight": 0.015673933576633412
+          },
+          {
+            "coefficient": "ZBC(1,0)",
+            "weight": 1.4541210486145921
+          }
+        ],
+        "type": "least_squares_boundary_coefficient_direction"
+      },
+      "input_parameter": null,
+      "mapping_ready": true,
+      "relative_residual": 5.204170427930421e-18,
+      "short_bracket_command_fragment": "--control RBS(1,1):-0.0475539276741 ZBC(1,1):0.0735580744532 RBS(1,0):0.0156739335766 ZBC(1,0):1.45412104861 --relative-delta 0.02",
+      "state_control_argument": "Zcos_mid_surface_m1:1",
+      "state_parameter": "Zcos_mid_surface_m1"
+    }
+  ],
+  "kind": "nonlinear_gradient_state_control_runbook",
+  "mapped_controls": [
+    {
+      "blockers": [],
+      "condition_number": 1.0175602609935996,
+      "descent_direction_sign": 1.0,
+      "input_control_argument": "RBS(1,1):-0.0306918042441 ZBC(1,1):0.00872732414398 RBS(1,0):1.45563635656 ZBC(1,0):0.00824173444235",
+      "input_direction": {
+        "terms": [
+          {
+            "coefficient": "RBS(1,1)",
+            "weight": -0.03069180424412453
+          },
+          {
+            "coefficient": "ZBC(1,1)",
+            "weight": 0.008727324143980593
+          },
+          {
+            "coefficient": "RBS(1,0)",
+            "weight": 1.4556363565645647
+          },
+          {
+            "coefficient": "ZBC(1,0)",
+            "weight": 0.008241734442345465
+          }
+        ],
+        "type": "least_squares_boundary_coefficient_direction"
+      },
+      "input_parameter": null,
+      "mapping_ready": true,
+      "relative_residual": 2.2711134634690797e-16,
+      "short_bracket_command_fragment": "--control RBS(1,1):-0.0306918042441 ZBC(1,1):0.00872732414398 RBS(1,0):1.45563635656 ZBC(1,0):0.00824173444235 --relative-delta 0.02",
+      "state_control_argument": "Rsin_mid_surface_m1:1",
+      "state_parameter": "Rsin_mid_surface_m1"
+    },
+    {
+      "blockers": [],
+      "condition_number": 1.0175602609935996,
+      "descent_direction_sign": 1.0,
+      "input_control_argument": "RBS(1,1):-0.0475539276741 ZBC(1,1):0.0735580744532 RBS(1,0):0.0156739335766 ZBC(1,0):1.45412104861",
+      "input_direction": {
+        "terms": [
+          {
+            "coefficient": "RBS(1,1)",
+            "weight": -0.04755392767412258
+          },
+          {
+            "coefficient": "ZBC(1,1)",
+            "weight": 0.07355807445317508
+          },
+          {
+            "coefficient": "RBS(1,0)",
+            "weight": 0.015673933576633412
+          },
+          {
+            "coefficient": "ZBC(1,0)",
+            "weight": 1.4541210486145921
+          }
+        ],
+        "type": "least_squares_boundary_coefficient_direction"
+      },
+      "input_parameter": null,
+      "mapping_ready": true,
+      "relative_residual": 5.204170427930421e-18,
+      "short_bracket_command_fragment": "--control RBS(1,1):-0.0475539276741 ZBC(1,1):0.0735580744532 RBS(1,0):0.0156739335766 ZBC(1,0):1.45412104861 --relative-delta 0.02",
+      "state_control_argument": "Zcos_mid_surface_m1:1",
+      "state_parameter": "Zcos_mid_surface_m1"
+    }
+  ],
+  "mapping_protocol": [
+    "select perturbable VMEC input coefficients or profile directions",
+    "solve baseline/plus/minus equilibria with vmex",
+    "measure the induced VMEC-state response in the admitted state-control basis",
+    "accept the mapping only if the local Jacobian is conditioned and residual-bounded",
+    "only then launch checked short-bracket nonlinear-gradient screens"
+  ],
+  "next_action": "write checked short-bracket nonlinear-gradient launch manifests for mapped VMEC input directions",
+  "passed": true,
+  "scope_note": "A passed QL seed screen is upstream evidence only. This runbook requires an explicit state-to-input mapping before any long-window nonlinear turbulence-gradient or optimization claim.",
+  "summary": {
+    "admitted_state_control_count": 2,
+    "mapped_control_count": 2,
+    "mapping_artifact_count": 1,
+    "ql_seed_screen_usable": true,
+    "required_mapped_control_count": 2
+  }
+}

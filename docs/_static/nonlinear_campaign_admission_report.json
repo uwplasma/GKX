@@ -1,0 +1,99 @@
+{
+  "artifacts": {
+    "landscape_admission_report": "docs/_static/vmec_boundary_transport_landscape_admission.json",
+    "reduced_prelaunch_report": "docs/_static/vmec_boundary_transport_prelaunch_gate.json"
+  },
+  "blockers": [],
+  "campaign_admitted": true,
+  "claim_scope": "next nonlinear optimizer-campaign admission only; not a production multi-coefficient turbulent-flux optimization claim",
+  "gates": [
+    {
+      "detail": [],
+      "metric": "reduced_prelaunch_gate",
+      "passed": true
+    },
+    {
+      "detail": [],
+      "metric": "reduced_objective_sample_coverage",
+      "passed": true,
+      "value": 18
+    },
+    {
+      "detail": [
+        {
+          "available": true,
+          "blockers": [],
+          "cross_sample_sem_rel": 0.22639802467665912,
+          "passed": true,
+          "role": "baseline",
+          "weighted_mean": 0.06777885259618041,
+          "weighted_standard_error": 0.015344998342625694
+        },
+        {
+          "available": true,
+          "blockers": [],
+          "cross_sample_sem_rel": 0.22411503437345373,
+          "passed": true,
+          "role": "candidate",
+          "weighted_mean": 0.06450805792574345,
+          "weighted_standard_error": 0.014457225619392737
+        }
+      ],
+      "metric": "reduced_cross_sample_dispersion",
+      "passed": true
+    },
+    {
+      "detail": "use selected direction for the next uncertainty-aware optimizer admission step",
+      "metric": "replicated_landscape_admission",
+      "passed": true
+    },
+    {
+      "metric": "landscape_relative_reduction",
+      "passed": true,
+      "threshold": 0.1,
+      "value": 0.2665094629036129
+    },
+    {
+      "metric": "landscape_uncertainty_separation",
+      "passed": true,
+      "threshold": 3.0,
+      "value": 17.990416896717942
+    },
+    {
+      "metric": "landscape_candidate_sem_rel",
+      "passed": true,
+      "threshold": 0.05,
+      "value": 0.0067148199999120285
+    },
+    {
+      "metric": "landscape_candidate_replicates",
+      "passed": true,
+      "threshold": 3,
+      "value": 3
+    }
+  ],
+  "kind": "vmex_nonlinear_campaign_admission_report",
+  "next_action": "launch a bounded multi-control optimizer campaign from the admitted landscape direction, with matched baseline/candidate t=[350,700] replicated nonlinear audits before promotion",
+  "passed": true,
+  "policy": {
+    "maximum_landscape_sem_rel": 0.05,
+    "minimum_landscape_relative_reduction": 0.1,
+    "minimum_landscape_replicate_count": 3,
+    "minimum_landscape_uncertainty_z_score": 3.0,
+    "require_landscape_admission_passed": true,
+    "require_reduced_cross_sample_gate": true,
+    "require_reduced_prelaunch_passed": true
+  },
+  "selected_landscape_candidate": {
+    "admission_blockers": [],
+    "admitted": true,
+    "case": "landscape_rbc_0_1_p0p03_replicated_nonlinear_window_ensemble_gate",
+    "combined_sem": 0.04213243251063571,
+    "combined_sem_rel": 0.0067148199999120285,
+    "ensemble_mean": 6.274543846475065,
+    "label": "+3% RBC(0,1)",
+    "n_reports": 3,
+    "relative_reduction": 0.2665094629036129,
+    "uncertainty_z_score": 17.990416896717942
+  }
+}

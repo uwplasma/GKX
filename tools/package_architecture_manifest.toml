@@ -1,0 +1,541 @@
+[metadata]
+schema_version = 1
+title = "Package architecture policy"
+layout_authority = "README.md"
+status = "active"
+
+[root_prefix_policy]
+blocked_prefixes = [
+  "runtime_",
+  "nonlinear_",
+  "linear_",
+  "solver_",
+  "vmex_",
+  "quasilinear_",
+  "benchmark_",
+  "stellarator_",
+]
+allowed_root_prefix_modules = []
+
+[package_policy]
+required_domain_packages = [
+  "gkx.artifacts",
+  "gkx.core",
+  "gkx.diagnostics",
+  "gkx.geometry",
+  "gkx.objectives",
+  "gkx.operators",
+  "gkx.operators.linear",
+  "gkx.operators.nonlinear",
+  "gkx.parallel",
+  "gkx.solvers",
+  "gkx.solvers.linear",
+  "gkx.solvers.nonlinear",
+  "gkx.solvers.time",
+  "gkx.workflows",
+  "gkx.workflows.runtime",
+]
+required_docs = [
+  "README.md",
+]
+target_domain_packages = [
+  "gkx.physics",
+  "gkx.geometry",
+  "gkx.numerics",
+  "gkx.solve",
+  "gkx.optimize",
+  "gkx.io",
+]
+
+[topology_policy]
+mode = "no_regression_until_target"
+description = "Track the consolidation plan without breaking current CI before files are moved. Counts must not increase beyond the audited baseline; final release can pass --require-topology-targets to enforce the target ceilings."
+
+[[topology_policy.counts]]
+name = "installable_source_python_files"
+path = "src/gkx"
+pattern = "*.py"
+recursive = true
+baseline = 220
+target = 45
+
+[[topology_policy.counts]]
+name = "test_python_files"
+path = "tests"
+pattern = "*.py"
+recursive = true
+# 95 -> 96: tests/validation/physics_gates/test_objective_reports_stability.py.
+# The target is 36, so a new file needs a reason: this one pins that the linear
+# objective can report a design is stable at all. Without the closure it cannot
+# -- at zero drive the whole spectrum sits on the imaginary axis and the branch
+# selector is floored at zero -- and no existing test covered that, because
+# every other objective test runs at a drive where something is unstable.
+# 96 -> 97: tests/validation/stellarator/test_finite_beta_vmec_boozer_parity.py.
+# A new file again needs a reason: this is the only place the two VMEC geometry
+# paths are compared against each other at finite beta, and it is what shows the
+# vmex-state bridge was returning the grad-B drift labelled as the curvature
+# drift. No existing test could catch it -- every other VMEC parity fixture is a
+# vacuum or near-vacuum equilibrium, where the two drifts genuinely coincide and
+# the missing pressure term is invisible.
+# 96 -> 97: tests/unit/solvers/test_dot_precision_guard.py. The target is 36, so
+# a new file needs a reason: this one owns a hazard that has no home in any
+# existing suite, because it is not a property of a value. An unpinned dot and
+# Precision.HIGHEST are bit-identical on CPU, so nothing this repo's x64-only CI
+# executes can observe TF32 -- the evidence lives in the jaxpr, and the assertion
+# has to be about the precision request rather than the answer. It is one file
+# rather than assertions scattered across the solver and geometry suites because
+# the classifier is shared: the rule is shape-based, so a contraction that
+# becomes a matrix product when a config value moves is caught without anyone
+# editing a list of call sites. It also carries the single allowlisted unpinned
+# contraction and the test that keeps that entry honest.
+# 97 -> 98: the finite-beta A-vs-B drift parity fixture (#57). It is a new
+# file because the vacuum suites cannot express it: the two geometry paths
+# agree identically at zero beta, which is why the mislabelled drift hid.
+# 98 -> 100: the two nonlinear-autodiff coverage files. The target is 36, so
+# both need a reason.
+# tests/unit/nonlinear/test_nonlinear_window_gradient_matrix.py is a new file
+# because it is a matrix, not a case: one parametrized builder covers RK2/3/4,
+# one and two species, electrostatic and finite-beta EM, hypercollisions, a
+# custom collision operator, and all of them together, and folding ten rows
+# into test_nonlinear.py would bury them under an integration marker the
+# default suite skips -- which is how every switch but RK2 stayed unexercised
+# under grad in the first place.
+# tests/tools/profiling/test_nonlinear_gradient_evidence_contracts.py is a new
+# file because it owns a failure mode no solver test can see: the generators
+# behind the docs figure were deleted and the numbers survived as literals in
+# the plotting script. The assertions are about the tree -- generators present,
+# docs naming them, figure reading their JSON, knee matching the runtime guard
+# -- and belong with the tool contracts, not with the physics.
+baseline = 100
+target = 36
+
+[[topology_policy.counts]]
+name = "tool_python_files"
+path = "tools"
+pattern = "*.py"
+recursive = true
+baseline = 95
+target = 0
+
+[[topology_policy.counts]]
+name = "developer_script_python_files"
+path = "scripts"
+pattern = "*.py"
+recursive = true
+baseline = 15
+target = 12
+
+
+[[topology_policy.counts]]
+name = "flat_test_python_files"
+path = "tests"
+pattern = "*.py"
+recursive = false
+baseline = 1
+target = 1
+
+[[topology_policy.counts]]
+name = "flat_tool_python_files"
+path = "tools"
+pattern = "*.py"
+recursive = false
+baseline = 0
+target = 0
+
+[complexity_policy]
+mode = "no_regression_until_target"
+description = "Prevent new giant modules while named legacy hotspots are reduced to reviewed domain budgets."
+default_max_lines = 1000
+public_facade_max_lines = 500
+public_facades = [
+  "api/__init__.py",
+  "benchmarks.py",
+  "linear.py",
+  "nonlinear.py",
+  "quasilinear.py",
+  "runtime.py",
+]
+
+[[complexity_policy.exceptions]]
+path = "artifacts/nonlinear_netcdf.py"
+baseline_lines = 1069
+target_lines = 1000
+reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, restart, and final-field variables consistent; reduce helper repetition without splitting the schema again."
+
+[[complexity_policy.exceptions]]
+path = "artifacts/io.py"
+# 1088 -> 1093: carrying the fit-quality diagnostics into the linear summary
+# (#56). The summary is where a growth rate is read from, so it is where the
+# evidence that the rate is resolved has to appear: gamma_stderr, omega_stderr,
+# fit_r2, and fit_settled. Four of the five lines are those fields. The fifth
+# is _optional_float, which writes JSON null rather than NaN for a missing or
+# non-finite diagnostic, because NaN is not JSON and an eigensolver result has
+# no fit to describe. Splitting five lines of one summary into another module
+# would cost more than it saves and break the rule this exception records.
+# 1093 -> 1096: merging #56 over the run-directory and plotting work that
+# landed on main. Both sides add to the same summary writer and neither
+# subsumes the other, so the count is the sum rather than new surface.
+# 1096 -> 1099: recording which scan points were seeded from a neighbour.
+# A warm-started number that does not say so is not reproducible.
+baseline_lines = 1099
+target_lines = 1000
+reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
+
+[[complexity_policy.exceptions]]
+path = "workflows/linear.py"
+# 983 -> 1001: merging the fit-stationarity work (#56) into the linear workflow
+# that #51, #53, and #54 had already grown. Neither side is optional and neither
+# subsumes the other: main threads the run directory and auto-plot handoff
+# through the same branch dispatcher that this branch threads window_method and
+# the stderr renormalization through, so the merged module lands one line over
+# the default budget. The overage is recorded rather than absorbed by a split,
+# because the thing to remove here is the duplication between the three
+# _run_*_linear_runtime branches, not the module boundary -- splitting on the
+# boundary that is one line away would leave that duplication in place and cost
+# an import cycle back to the shared context dataclass.
+baseline_lines = 1001
+target_lines = 1000
+reason = "One linear-runtime branch dispatcher keeps the explicit, Krylov, and full-trajectory paths reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
+
+[line_budget_policy]
+mode = "no_regression_until_target"
+description = "Track real code deletion rather than file reshuffling."
+
+[[line_budget_policy.counts]]
+name = "installable_source_python_lines"
+path = "src/gkx"
+pattern = "*.py"
+recursive = true
+# 88680 -> 88819: bounding adaptive-chunk memory (#24). Per-chunk striding with
+# a carried phase, the npz spill path, and the stride offset argument. The change
+# exists to *reduce* runtime memory by a factor of the diagnostics stride; these
+# lines are what makes that possible without changing which samples are kept.
+# 88819 -> 88907: naming the gradient parameters for what the operator consumes.
+# The deprecation aliases keep R_over_L* working for external callers, which is
+# the whole cost; the rename itself is line-neutral.
+# 88907 -> 89356: making a nonlinear run report why it is slow (#33). The CFL
+# scales the adaptive step already uses were discarded inside the traced dt
+# update, so a straggler surface could only be diagnosed by a bespoke post-hoc
+# script. Recording those six run constants and inverting the dt trajectory
+# against them buys cost per unit of simulated time, the dt collapse ratio, and
+# the per-term CFL attribution in the run's own summary.
+# 89356 -> 89705: routing [parallel] into the nonlinear solver path (#35).
+# The new workflows/runtime/parallel_nonlinear.py plus the workflow rework that
+# makes one trajectory re-runnable so the sharded answer can be gated against
+# the serial one. The bulk is not mechanism but refusal: every strategy/axis/
+# backend combination the nonlinear path cannot execute raises with the reason
+# and the supported set, because the alternative is the defect this removes --
+# cfg.parallel accepted and silently ignored.
+# 89705 -> 89710: closing the Laguerre truncation in the two sharded
+# diamagnetic drives. Both built the upper gyroaverage neighbour by zero
+# padding past the retained l, dropping the analytic boundary term the serial
+# route carries; five lines buy the analytic neighbour in each route and the
+# single-species b normalization they need to compute it.
+# -> 89737: the linear objective's velocity-space closure (#30). Three
+# closure fields, an optional geometry argument for kpar_scale, and the recorded
+# reason the amplitudes must not go back to zero -- without it the objective
+# cannot report a stable design. See test_objective_reports_stability.
+# 89726 -> 89736: computing the device-z observable sums with the local fused
+# transform. The transform swap is line-neutral; the ten lines are the docstring
+# recording why axis-at-a-time staging is wrong here, which is the same reason
+# #36 gave for the bracket. Without it the next reader restores the staging on
+# the assumption that a route named "pencil" should stage its axes.
+# 89736 -> 89724: retiring the staged pencil transforms _pencil_ifft2 and
+# _pencil_fft2. #36 moved the device-z bracket to the fused transform and the
+# observable sums above took the last caller, so the pair was reachable only
+# from a round-trip assertion in tests. Deleting both drops 22 lines and returns
+# 10 of them to the _pencil_spectral_bracket docstring, which now records why the
+# staging is wrong for a z-partitioned slab and why the deleted code was not a
+# usable starting point for a route that does partition a transform axis: it
+# transposed with jnp.swapaxes, a device-local move, where that step has to be
+# a collective.
+# 89724 -> 89776: compensating the device-z transport observable reductions.
+# jnp.sum was not enough: XLA lowers a reduction over a materialized array to a
+# blocked vector reduction but lowers the same reduction fused into its
+# elementwise producer -- which is what the sharded reducer gets inside its
+# shard_map jit -- to a far longer accumulation chain. The bracket observable
+# adds ~1e7 terms each ~5e-8 of the total, so in single precision that chain
+# absorbed the whole identity budget and the sharded_reduce transport window
+# failed at Ny = Nx = 96 while both neighbouring powers of two passed. The
+# lines are the Neumaier pass and the two-stage driver that make the sums
+# independent of which chain XLA emits. See
+# test_observable_sums_survive_fused_reduction_at_a_mixed_radix_grid.
+# 89726 -> 89739: pinning Precision.HIGHEST on the contractions that carry a
+# physical invariant. XLA may satisfy an unpinned dot with TF32 on Ampere and later
+# NVIDIA GPUs, keeping 10 mantissa bits; that broke particle/momentum/energy
+# conservation in the collision operators at ~1e-4 and truncated the shearing remap
+# -- a permutation of exact zeros and ones -- to 1e-3 of the state itself. Thirteen
+# lines is the recorded reason, not mechanism: collisions.py routes its four
+# contractions through one bound _exact_einsum so the pin cannot be forgotten at a
+# call site, and the shearing remap says why a permutation must not be approximated.
+# CPU has no TF32 path and cannot observe any of it, which is why the explanation
+# lives in the source. See test_collision_contractions_pin_exact_dot_precision.
+# 89726 -> 89752: src/gkx/utils/tomlcompat.py, the repository's only
+# tomllib/tomli fallback. It has to live in the installable package because
+# src reads TOML at runtime, and because putting it anywhere else leaves the
+# per-file try/except that made twelve modules uncollectable on the declared
+# 3.10 floor while every CI job ran 3.11. Net cost is 26 lines: the shim is 30
+# and the guard it replaces in workflows/runtime/toml.py was 4. See
+# test_tomllib_fallback_lives_only_in_the_shim.
+# 89815 -> 90285: measuring whether a growth rate is resolved before reporting it (#56).
+# The stationary window selector, the AR(1)-corrected slope stderr, the
+# half-horizon settled probe, and the warning that names the horizon actually
+# needed. The shipped Cyclone deck stops at 0.93 e-foldings, where the mode is
+# still ringing; these lines are what turns that from a confident wrong number
+# into a warned one.
+# 89815 -> 91057: the production species x Hermite nonlinear decomposition
+# (plan item 4.2). Three quarters of it is one new route -- the shard_map mesh,
+# the width-2 Hermite halo, the masked field psum and the scan-carry
+# diagnostics -- inside gkx/parallel/{state,velocity_plan,velocity_hermite,
+# integrators}.py, with no new module and so no new facade to keep in sync.
+# The rest is the reason the shard-local kernels can stay the *serial* kernels:
+# a HermiteWindow carrying the global moment coordinates of a slab, threaded
+# into the five places whose coefficient is a function of the global Hermite
+# index (the field drives, the diamagnetic drive, the reflectionless closure,
+# build_H, the hypercollision normalization). Without it each shard would place
+# m = 0..3 drives at its own local rows and close the hierarchy at its own last
+# moment -- a wrong answer, not a slow one -- and the alternative, forking a
+# sharded copy of every term, is what the measured lanes show costs identity.
+# The evidence the lines buy: RHS identity at f32 rounding on two A4000s, an
+# exact final state under x64, and an HLO census with zero all-to-all. Part of
+# the count is refusal rather than mechanism, and that part is load-bearing:
+# conserving collisions read the m = 0, 1, 2 moments of the local slab, so a
+# split Hermite axis would silently evaluate a different operator on every
+# non-owning shard, and the route raises instead of returning it.
+# 89815 -> 89852: differentiating the twist-shift boundary (#49). The linked
+# flux tube refused every cache built inside a trace, so gradient work had to
+# use boundary="periodic" -- the one boundary a sheared tokamak does not have.
+# Nothing about the shear was ever traced: jnp.asarray of a host constant
+# returns a tracer inside a trace, so reading s_hat, the edge metrics, the
+# parallel spacing, and the chain index maps back off their own jnp copies
+# reported concrete geometry as traced. The lines move those four reads to the
+# buffer they already live in and spend the rest on the refusal that remains
+# real -- shear as a design variable, where the integer link index would have
+# to be rounded off a tracer -- so it names the parameter that is unsupported
+# instead of the boundary. See
+# test_linked_boundary_growth_gradient_matches_finite_difference.
+# 89852 -> 89903: differentiating the compressed real FFT. The projector that
+# keeps the nonlinear state real asked cache.ky for its sign pattern, and
+# cache.ky is rho_star * grid.ky, so it is a tracer whenever the cache is built
+# inside one. compressed_real_fft = true -- what every production nonlinear
+# TOML sets -- therefore refused jit outright on both boundaries, and every
+# gradient in the repository quietly ran the full-complex bracket instead. All
+# the projector needs is the ky axis layout, which is grid topology and which
+# the compressed bracket already reads off shapes alone. The lines are that
+# entry point, the host-side layout read that replaces the jnp round trip, and
+# the reason the conjugate kx ordering has to stay a numpy array: these
+# projectors are cached across traces, so a device constant built here belongs
+# to whichever trace built it first and escapes that scope on reuse. See
+# test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference.
+# 89815 -> 89964: finite-beta pressure in the differentiable vmex-state bridge.
+# The bridge aliased gbdrift to cvdrift and left mu0 dp/ds out of the normal
+# curvature, so it returned the grad-B drift under both names and every
+# boundary-coefficient gradient in the adjoint stack dropped finite-beta drift
+# physics -- silently, because a finite-beta wout raises nothing there. The new
+# geometry/vmec_boozer_drifts.py owns the drift assembly the pressure gradient
+# touches, which is also what keeps vmec_boozer_core.py under the per-module cap
+# it was three lines below. On two 1.9%-beta QA equilibria this takes the
+# runtime-path-vs-bridge cvdrift disagreement from 2.1e-1 to 3.3e-3 while
+# leaving every zero-beta array bit-identical. See
+# test_finite_beta_vmec_boozer_parity.
+# 89815 -> 90055: running an equilibrium file without writing a deck first (#51). The
+# wout module is the whole cost: sniffing a VMEC signature, resolving the
+# packaged default deck, forcing the geometry model when a supplied deck is not
+# VMEC-shaped, and writing the resolved deck back out so the run reproduces
+# itself.
+# 89815 -> 90216: letting a nonlinear run decide when it has converged (#54). The chunked
+# stop loop, the stationarity and autocorrelation decision, and the reporting of
+# the window that was actually measured. The alternative is what the code did
+# before: integrate to a t_max the user guessed, and average whatever came out.
+# The stop policy then moved out of transport_windows.py into
+# diagnostics/saturation.py, which costs 28 lines of module docstring and
+# imports and returns transport_windows.py to its pre-branch size. The split is
+# by question asked: transport_windows scores a finished window against
+# promotion gates, saturation answers a running solver about a trace that is
+# still growing under it.
+# 89815 -> 90926: drawing the diagnostics the solver already writes (#53). snapshots.py is
+# a move rather than new surface -- the renderers came out of the movie tool,
+# which shrinks by the same amount -- and the figure functions cover the
+# spectra and particle flux that were being written to NetCDF and never
+# plotted. The transport figures then moved out of plotting.py into
+# artifacts/transport_figures.py, which costs the ten lines of a module
+# docstring and import header and returns plotting.py to the size it had
+# before this branch; the two modules are split by what they read, benchmark
+# and scan results on one side and saved run output on the other.
+# 89815 -> 89894: failing loudly instead of reporting a confident wrong growth rate (#50).
+# The overflow and non-finite guards on both fit paths, the CFL estimate that
+# warns before a run goes unstable, and the linear_scan branch that makes the
+# existing scan figure reachable from --plot. The guards are the point: the
+# alternative is the defect this removes, a fit over a 1e102 trajectory
+# reported without comment.
+# 90936 -> 91752: plotting every run and reusing compiled kernels (#58). The auto-plot
+# orchestration, the GX output reader, and the compilation-cache install. The
+# cache is the point: a short nonlinear run spent 13.5 s compiling ~320 kernels
+# and now spends 0.9 s, because JAX's default refuses to persist anything under
+# a second and almost every GKX kernel is 20 ms.
+# 89815 -> 89890: bounding nonlinear reverse-mode memory. A checkpointed step
+# still leaves every lax.scan carry on the tape; the two-level scan retains
+# sqrt(N) block boundaries and inner carries instead. These 75 net lines reduce
+# measured N=2048 XLA temporary memory by 60x on CPU and 70x on GPU while
+# preserving the exact discrete map and device-resident execution. See
+# test_checkpointed_scan_matches_discrete_primal_and_reverse_with_tail.
+# The physical heat-flux window now lives with nonlinear state integration;
+# experimental shadowing methods and their separate module were removed. Its
+# scan accumulates one scalar instead of retaining O(N) diagnostic outputs.
+# 89815 -> 89848: finishing the TF32 sweep across the solver and geometry paths
+# #43 left. The audit measured every contraction in the package rather than
+# assuming, and the answer narrowed the fix: XLA only reaches for the tensor
+# cores when a contraction is matrix-shaped, so the Krylov vector work -- the
+# Arnoldi Gram-Schmidt vdots, the Rayleigh quotients, the Ritz lift, the overlap
+# einsums -- measured exact unpinned on an RTX A4000 and is deliberately left
+# alone. Two products were not exact and are pinned here: the propagator
+# candidate lift, which is a matvec at the default candidates=1 and a real GEMM
+# above it (returned eigenvector 1.2e-08 -> 1.8e-05), and the Gauss-Newton normal
+# equations, where squared conditioning puts 1.7e-04 into a step whose own report
+# gates at rtol 1.0e-04. Most of the 33 lines are those two measurements written
+# down, plus _damped_gauss_newton_step, which exists so the pin is reachable by a
+# jaxpr assertion at all -- the loop around it converts to host floats to build
+# its history and cannot be traced. See test_dot_precision_guard.py.
+# 89815 -> 89913: certifying the linear branch the runtime defaults to (#52). The adaptive
+# branch, the precision floor that keeps a complex64 state from being judged
+# against an f64-only tolerance, and the exact-precision pin on the one
+# matrix-shaped contraction the residual is measured through. Without these the
+# path returns an unconverged Rayleigh quotient at residual 0.999 and calls it
+# a growth rate.
+# 89815 -> 89874: giving every residual gate a precision floor. The
+# gates compared a relative residual assembled from working-dtype operator
+# applications against an absolute constant -- 1e-10 for the adaptive
+# propagator, 1e-9 for the objective's primal and adjoint solves, 1e-8 for its
+# implicit-gradient solve, 1e-6 for the shift-invert outer gate. That ratio
+# bottoms out a few eps above zero, measured between 1.8 and 12.2 eps in
+# complex64 from n=48 to n=8192, so in single precision every one of them sat
+# below anything the arithmetic can produce. Nothing could certify: the restart
+# budget burned to exhaustion on a pair already as good as float32 allows, and
+# the gradient solve, which fails closed to NaN, deleted the gradient outright.
+# x64-only CI never saw any of it. Most of the cost is the one shared helper and
+# the recorded reason a residual gate is not a free parameter; the call sites
+# are nine substitutions, four of them solves that reach solvax directly and so
+# cannot inherit the floor from the propagator wrapper. See
+# test_residual_gate_never_sits_below_the_working_dtype_noise_floor.
+# 89815 -> 89860: making fit_signal = "auto" choose a signal and nothing else.
+# Both automatic paths -- the runtime linear fit and the combined-ky scan --
+# scored their candidates through fit_growth_rate_auto_with_stats without
+# passing tmin/tmax, so a run that pinned [fit] auto_window = false with a
+# window got the automatic selector's window instead, silently, while still
+# reporting "automatic fit selected signal 'phi'". On the Cyclone linear case
+# that is gamma = 0.0951 against 0.0413 for the same trajectory. The lines are
+# the fixed-window branch in each scorer plus the fit_growth_rate_with_stats
+# seam they need, which reports the R^2 pair over the requested window so the
+# channel is still chosen on fit quality. See
+# test_auto_fit_signal_keeps_the_requested_runtime_window.
+# 89874 -> 89919: merging the auto-window signal fix (#46) under the residual
+# floor. Both land in the fit path; the count is the sum, not new surface.
+# 89919 -> 90011: certifying the default linear branch alongside the residual
+# floor it now uses (#52 over #47). The adaptive branch and its precision pin.
+# 94302 -> 94771: merging the stationary-window fit (#56) onto main. The two
+# auto-fit scorers already carry the fixed-window branch #46 added, so the
+# branch's inlined per-channel copies collapse into that seam and into the
+# shared scan candidate helper instead of standing beside them; the stationary
+# selector reaches both by threading window_method through the same argument.
+# 94771 -> 94775: the two imports the sharded Hermite route was missing. np is
+# used in five places and _make_hermitian_projector in one, so these four lines
+# turn five NameErrors into working code rather than adding surface.
+# 94775 -> 94808: naming the comparison code in one reader instead of the
+# plotting path. The dispatch is a registry so a second code's reader is a
+# row rather than another branch in the figure code.
+# 94808 -> 94966: making the gated GAM damping rate a measurement (item 2.9).
+# The old branchwise-extrema fit read four hand-picked peaks, so one shallow
+# extremum that the diagnostic output cadence happened to resolve swung it by
+# 52 percent -- more than three times its own gate tolerance -- at identical
+# physics. The lines are one estimator, period_rms_envelope: a sliding
+# one-period RMS about the trace's own running mean, amplitude-weighted in the
+# log, over a window stated in GAM periods rather than in samples or in a
+# hard-coded absolute time. Every sample enters, so refining the cadence
+# refines the quadrature of one continuum integral instead of changing which
+# points are fitted; the measured spread over a factor-8 cadence span drops
+# from 126 percent of the gate tolerance to 1 percent. The remaining lines are
+# the two window bounds carried onto ZonalFlowResponseMetrics, because a gated
+# damping rate whose window is derived rather than configured has to report the
+# window it actually used. See
+# test_period_rms_damping_is_independent_of_the_diagnostic_output_cadence.
+# 94966 -> 94978: refusing to call a dead trace saturated. The relative SEM
+# divides by a floor when the mean is zero, so every other gate passed on a
+# flux that never left zero and truncated the run in its first chunk.
+# 94978 -> 95031: reading host values with numpy instead of round-tripping
+# through jnp. Inside a trace the round trip returns a tracer, so guards
+# written that way answered yes unconditionally and the fast paths they
+# selected went dead exactly where they pay.
+# 95031 -> 95456: carrying converged state between related runs. The policy is
+# the cost -- which points may seed which, when a seed is refused, and the
+# exact rescaling that leaves a growth fit invariant.
+# 95456 -> 95504: closing two gaps in the differentiable heat-flux window.
+# Threading collision_operator through it is four lines and removes a silent
+# physics change: integrate_nonlinear took a custom operator, the window did
+# not, so a run saturated with collisions and then differentiated returned the
+# derivative of a different model with no diagnostic. The rest is the
+# divergence-knee guard -- one measured constant, one warning helper, and the
+# keyword that lets a caller remeasure it. The warning is the cost of the
+# window being usable past the point where it stops being a gradient; the
+# alternative is a large, reproducible, meaningless number.
+# 95456 -> 95478: closing the second half of the run-to-saturation defect. The
+# zero-flux guard added in #68 is an absolute threshold on a quantity whose
+# scale the deck chooses, so it covered a dead trace only when that trace
+# happened to sit below it; a flat flux a few decades higher stopped a run in
+# its first chunk at any amplitude. Two lines of that are the fix -- the
+# degenerate autocorrelation return no longer reports a resolved correlation
+# time, and "resolved" now means tau > 0 rather than tau >= 0, which is what
+# stops the derived min_window = 10 tau from collapsing to zero on exactly the
+# traces carrying no information. The rest is the comment saying why the
+# absolute threshold cannot be the protection, so it is not restored as one.
+# 95480 -> 95489: refusing to resolve a correlation time the sampling cannot
+# see. A flat trace crossed zero at lag one, which read as resolved and
+# collapsed the window floor built on it.
+# 95504 -> 95537: merging the gradient coverage work over the deck audit.
+# 95537 -> 95565: keeping the bracket out of the linear operator's fusion. The
+# lines are the measurement: which fusion, on which shard shape, and why an
+# identity is the right instrument for it.
+# 95565 -> 95612: saying what a file is when it is not the TOML the CLI
+# expected. The signature table is the cost; the alternative is a decode
+# error against a byte offset, which names neither the file nor the problem.
+# 95612 -> 96431: finishing the `gkx wout_XXX.nc` result set. Two thirds is the
+# new artifacts/run_summary.py, which owns the one page a first-time user
+# reads: it composes the existing figure functions through the ax/panels
+# arguments added to transport_figures rather than restating them, so the
+# summary cannot drift from the figures it summarizes, and it is the only
+# reader of the *.big.nc final-field companion -- including the 1/(Ny Nx) that
+# companion is written through, which is why the potential on the summary and
+# on the standalone snapshot are the same number. The rest is refusal and
+# identity: a bundle missing spectra or fields gets a panel saying which and
+# why instead of losing the page, the run header names the shipped deck and
+# the command that replaces it, and the default wout output target became the
+# NetCDF bundle -- a plain prefix silently has no spectra, no potential, and no
+# restart file, which is three quarters of the set the run then cannot draw.
+# 96431 -> 96465: saying whether the shaded window is a measurement. The stop
+# policy records a window whether or not the trace settled in it, so the
+# window alone cannot tell a converged run from a capped one.
+baseline = 96465
+target = 45000
+
+[[line_budget_policy.counts]]
+name = "test_python_lines"
+path = "tests"
+pattern = "*.py"
+recursive = true
+baseline = 96202
+target = 55000
+
+[[line_budget_policy.counts]]
+name = "tool_python_lines"
+path = "tools"
+pattern = "*.py"
+recursive = true
+baseline = 97346
+target = 0
+
+[[line_budget_policy.counts]]
+name = "developer_script_python_lines"
+path = "scripts"
+pattern = "*.py"
+recursive = true
+baseline = 25000
+target = 18000

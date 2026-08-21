@@ -1,0 +1,34 @@
+[
+  {
+    "calibration_scale": null,
+    "case": "cyclone_long_window",
+    "electron_model": "adiabatic",
+    "geometry": "cyclone",
+    "ky": null,
+    "nonlinear_artifact": "/Users/rogeriojorge/local/GKX/tools_out/cyclone_long_audit/cyclone_nonlinear_diag_t400.csv",
+    "notes": "Cyclone training point for one-constant mixing-length heat-flux scale.; ql_spectrum_method=sum; ql_spectrum_column=saturated_heat_flux_total; observed_to_predicted=3839.97",
+    "observed_heat_flux": 6.6689961798985795,
+    "observed_heat_flux_std": 0.6486446261822355,
+    "predicted_heat_flux": 0.001736733063604406,
+    "quasilinear_artifact": "docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv",
+    "raw_predicted_heat_flux": null,
+    "saturation_rule": "mixing_length",
+    "split": "train"
+  },
+  {
+    "calibration_scale": null,
+    "case": "cyclone_miller_long_window",
+    "electron_model": "adiabatic",
+    "geometry": "cyclone_miller",
+    "ky": null,
+    "nonlinear_artifact": "/Users/rogeriojorge/local/GKX/tools_out/office_refresh_cyclone_miller_t122.csv",
+    "notes": "Cyclone Miller held-out transfer test for the Cyclone-fitted scale.; ql_spectrum_method=sum; ql_spectrum_column=saturated_heat_flux_total; observed_to_predicted=6.25504",
+    "observed_heat_flux": 4.259822065746515,
+    "observed_heat_flux_std": 4.2116774700305175,
+    "predicted_heat_flux": 0.6810220831094436,
+    "quasilinear_artifact": "docs/_static/quasilinear_cyclone_miller_spectrum_scan.quasilinear_spectrum.csv",
+    "raw_predicted_heat_flux": null,
+    "saturation_rule": "mixing_length",
+    "split": "holdout"
+  }
+]

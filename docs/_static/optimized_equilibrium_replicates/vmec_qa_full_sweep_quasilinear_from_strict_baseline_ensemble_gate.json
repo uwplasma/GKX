@@ -1,0 +1,154 @@
+{
+  "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=3 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": false
+      },
+      {
+        "detail": "finite_means=0 reports=3",
+        "metric": "finite_late_means",
+        "passed": false
+      },
+      {
+        "detail": "mean_rel_spread=None gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": false
+      },
+      {
+        "detail": "combined_sem_rel=None gate=0.25",
+        "metric": "combined_sem",
+        "passed": false
+      }
+    ],
+    "max_abs_error": 1.0,
+    "max_rel_error": 1.0,
+    "passed": false,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=3 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": false
+    },
+    {
+      "detail": "finite_means=0 reports=3",
+      "metric": "finite_late_means",
+      "passed": false
+    },
+    {
+      "detail": "mean_rel_spread=None gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": false
+    },
+    {
+      "detail": "combined_sem_rel=None gate=0.25",
+      "metric": "combined_sem",
+      "passed": false
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": false,
+  "rows": [
+    {
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing/non-finite statistics.late_mean",
+        "missing/non-finite statistics.sem",
+        "missing/non-finite statistics.block_bootstrap_sem",
+        "missing/non-finite statistics.running_mean_rel_drift",
+        "missing/non-finite statistics.terminal_mean_rel_delta",
+        "missing/non-finite window.late_tmin",
+        "missing/non-finite window.late_tmax",
+        "window has no finite late samples",
+        "missing passed gate_report"
+      ],
+      "index": 0,
+      "late_mean": null,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": null,
+      "source_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing/non-finite statistics.late_mean",
+        "missing/non-finite statistics.sem",
+        "missing/non-finite statistics.block_bootstrap_sem",
+        "missing/non-finite statistics.running_mean_rel_drift",
+        "missing/non-finite statistics.terminal_mean_rel_delta",
+        "missing/non-finite window.late_tmin",
+        "missing/non-finite window.late_tmax",
+        "window has no finite late samples",
+        "missing passed gate_report"
+      ],
+      "index": 1,
+      "late_mean": null,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": null,
+      "source_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed33_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed33_transport_window.json"
+    },
+    {
+      "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing/non-finite statistics.late_mean",
+        "missing/non-finite statistics.sem",
+        "missing/non-finite statistics.block_bootstrap_sem",
+        "missing/non-finite statistics.running_mean_rel_drift",
+        "missing/non-finite statistics.terminal_mean_rel_delta",
+        "missing/non-finite window.late_tmin",
+        "missing/non-finite window.late_tmax",
+        "window has no finite late samples",
+        "missing passed gate_report"
+      ],
+      "index": 2,
+      "late_mean": null,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": null,
+      "source_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_dt0p04_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": null,
+    "combined_sem_rel": null,
+    "ensemble_mean": null,
+    "max_individual_sem": null,
+    "mean_rel_spread": null,
+    "mean_spread": null,
+    "n_finite_means": 0,
+    "n_reports": 3,
+    "sample_sem": null
+  }
+}

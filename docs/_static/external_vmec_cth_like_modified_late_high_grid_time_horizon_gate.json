@@ -1,0 +1,112 @@
+{
+  "case": "CTH-like external VMEC modified-protocol late high-grid time-horizon stability",
+  "claim_level": "passed_high_grid_time_horizon_candidate_not_replicated_holdout",
+  "common_window_time_horizon_relative_change": 0.01848306666994318,
+  "csv": "docs/_static/external_vmec_cth_like_modified_late_high_grid_time_horizon_gate.csv",
+  "gate_index_include": false,
+  "gate_report": {
+    "case": "CTH-like external VMEC modified-protocol late high-grid time-horizon stability",
+    "gates": [
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "failed_grid_gate_count",
+        "notes": "Every input high-grid gate must pass before checking horizon stability.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "gates"
+      },
+      {
+        "abs_error": 0.01848306666994318,
+        "atol": 0.15,
+        "metric": "common_window_time_horizon_relative_change",
+        "notes": "Pairwise symmetric relative change of high-grid averaged common-window means.",
+        "observed": 0.01848306666994318,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.019058319416559152,
+        "atol": 0.15,
+        "metric": "least_window_time_horizon_relative_change",
+        "notes": "Pairwise symmetric relative change of high-grid averaged least-trending means.",
+        "observed": 0.019058319416559152,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.019058319416559152,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "external_vmec_high_grid_horizon_gates"
+  },
+  "kind": "external_vmec_time_horizon_gate",
+  "least_window_time_horizon_relative_change": 0.019058319416559152,
+  "passed": true,
+  "pdf": "docs/_static/external_vmec_cth_like_modified_late_high_grid_time_horizon_gate.pdf",
+  "png": "docs/_static/external_vmec_cth_like_modified_late_high_grid_time_horizon_gate.png",
+  "promotion_gate": {
+    "passed": false,
+    "reason": "time-horizon stability is necessary but not sufficient; replicate/seed/timestep evidence is still required before holdout admission"
+  },
+  "rows": [
+    {
+      "common_heat_flux_half_spread": 0.5481590766173143,
+      "common_heat_flux_mean": 10.050147267488335,
+      "gate_json": "docs/_static/external_vmec_cth_like_modified_t250_high_grid_convergence_gate.json",
+      "grid_common_means": [
+        10.598306344105648,
+        9.50198819087102
+      ],
+      "grid_common_relative_difference": 0.10908478493456078,
+      "grid_gate_passed": true,
+      "grid_labels": [
+        "n64",
+        "n80"
+      ],
+      "grid_least_means": [
+        10.490088076818557,
+        9.50198819087102
+      ],
+      "grid_least_relative_difference": 0.09884915130545661,
+      "horizon": 250.0,
+      "least_heat_flux_half_spread": 0.4940499429737688,
+      "least_heat_flux_mean": 9.996038133844788
+    },
+    {
+      "common_heat_flux_half_spread": 0.2949453902571175,
+      "common_heat_flux_mean": 10.237637506772394,
+      "gate_json": "docs/_static/external_vmec_cth_like_modified_t350_high_grid_convergence_gate.json",
+      "grid_common_means": [
+        10.532582897029512,
+        9.942692116515277
+      ],
+      "grid_common_relative_difference": 0.0576198151305915,
+      "grid_gate_passed": true,
+      "grid_labels": [
+        "n64",
+        "n80"
+      ],
+      "grid_least_means": [
+        10.252576926658893,
+        10.124180403622715
+      ],
+      "grid_least_relative_difference": 0.012602252748563688,
+      "horizon": 350.0,
+      "least_heat_flux_half_spread": 0.06419826151808916,
+      "least_heat_flux_mean": 10.188378665140803
+    }
+  ],
+  "thresholds": {
+    "max_relative_change": 0.15
+  }
+}

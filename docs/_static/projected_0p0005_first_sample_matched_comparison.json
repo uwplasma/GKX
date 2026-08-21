@@ -1,0 +1,56 @@
+{
+  "artifacts": {
+    "baseline": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0_ky0p1/qa_projected_weight_0p0005_matrix_qa_onepoint_baseline_s0p45_a0_ky0p1_ensemble_gate.json",
+    "candidate": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0_ky0p1/qa_projected_weight_0p0005_matrix_projected_weight_0p0005_s0p45_a0_ky0p1_ensemble_gate.json"
+  },
+  "baseline": {
+    "combined_sem": 0.16702395919209495,
+    "combined_sem_relative": 0.01612896637286316,
+    "ensemble_mean": 10.355527771023894,
+    "failure": null,
+    "finite_mean": true,
+    "mean_relative_spread": 0.027508740110186506,
+    "passed": true,
+    "raw_passed": true
+  },
+  "candidate": {
+    "combined_sem": 0.1405689246920828,
+    "combined_sem_relative": 0.013179623056596345,
+    "ensemble_mean": 10.66562557126614,
+    "failure": null,
+    "finite_mean": true,
+    "mean_relative_spread": 0.017753692259048978,
+    "passed": true,
+    "raw_passed": true
+  },
+  "case": "qa_projected_weight_0p0005_matrix_s0p45_a0_ky0p1_matched_nonlinear_transport",
+  "claim_level": "matched_replicated_late_window_transport_comparison",
+  "config": {
+    "min_relative_reduction": 0.02
+  },
+  "gates": [
+    {
+      "detail": "baseline passed=True; finite mean available",
+      "metric": "baseline_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "candidate passed=True; finite mean available",
+      "metric": "candidate_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "relative reduction -0.0299451 >= 0.02",
+      "metric": "relative_transport_reduction",
+      "passed": false
+    }
+  ],
+  "kind": "matched_nonlinear_transport_comparison",
+  "passed": false,
+  "statistics": {
+    "absolute_reduction": -0.31009780024224654,
+    "combined_uncertainty": 0.21830397507441554,
+    "relative_reduction": -0.02994514689149309,
+    "uncertainty_z_score": -1.420486274409526
+  }
+}

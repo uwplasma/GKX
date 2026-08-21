@@ -1,0 +1,95 @@
+{
+  "ad_supported": true,
+  "atol": 0.002,
+  "biorthogonal_overlap_abs": 0.3619895875453949,
+  "branch_isolated": true,
+  "case": "tiny_cyclone_linear_rhs",
+  "eigenvalue_gap": 0.24305950105190277,
+  "eigenvalue_imag": -0.7298859357833862,
+  "eigenvalue_real": 0.23529668152332306,
+  "eigenvalue_sensitivity_imag": [
+    0.0750538781285286,
+    -0.041317299008369446
+  ],
+  "eigenvalue_sensitivity_real": [
+    -0.03930116072297096,
+    0.03854626789689064
+  ],
+  "gap_floor": 1e-06,
+  "jacobian_fd": [
+    [
+      -0.0392720066010952,
+      0.038996338844299316
+    ],
+    [
+      -0.07522106170654297,
+      0.0413358174264431
+    ],
+    [
+      0.009179115295410156,
+      0.03224611282348633
+    ],
+    [
+      -0.08702277392148972,
+      0.15091896057128906
+    ],
+    [
+      -0.1192539855837822,
+      0.11079012602567673
+    ]
+  ],
+  "jacobian_implicit": [
+    [
+      -0.03930116072297096,
+      0.03854626789689064
+    ],
+    [
+      -0.0750538781285286,
+      0.041317299008369446
+    ],
+    [
+      0.00924091599881649,
+      0.03236445039510727
+    ],
+    [
+      -0.08676129579544067,
+      0.1511675864458084
+    ],
+    [
+      -0.11927791684865952,
+      0.10985054075717926
+    ]
+  ],
+  "kind": "quasilinear_implicit_sensitivity_demo",
+  "left_selected_index": 16,
+  "max_abs_error": 0.000939585268497467,
+  "max_rel_error": 0.011541364157432175,
+  "observable_labels": [
+    "$\\gamma$",
+    "$\\omega$",
+    "$k_{\\perp,\\mathrm{eff}}^2$",
+    "$\\hat Q_i$",
+    "$Q_i^{ML}$"
+  ],
+  "observables": [
+    0.23529668152332306,
+    0.7298859357833862,
+    0.6666638851165771,
+    1.388624668121338,
+    0.4901101887226105
+  ],
+  "parameter_labels": [
+    "$a/L_n$",
+    "$a/L_{Ti}$"
+  ],
+  "parameters": {
+    "tprim": 6.9,
+    "fprim": 2.2
+  },
+  "passed": true,
+  "rtol": 0.05,
+  "selected_index": 17,
+  "selector": "max_real",
+  "sensitivity_method": "implicit_left_right_eigenpair",
+  "step": 0.001
+}

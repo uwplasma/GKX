@@ -1,0 +1,114 @@
+# Cyclone Miller linear quasilinear transport diagnostic example.
+# This mirrors the archived Cyclone Miller nonlinear validation geometry while
+# running a linear eigenmode scan. The saturated heat-flux estimate uses an
+# explicit uncalibrated mixing-length rule; use the calibration reports in the
+# docs before interpreting it as an absolute nonlinear transport prediction.
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 64
+Nz = 24
+Lx = 176.25000339052914
+Ly = 62.8
+boundary = "linked"
+y0 = 28.2
+ntheta = 24
+nperiod = 1
+
+[time]
+t_max = 0.2
+dt = 0.01
+method = "rk2"
+sample_stride = 1
+use_diffrax = false
+fixed_dt = true
+
+[geometry]
+model = "miller"
+rhoc = 0.5
+q = 1.4
+s_hat = 0.8
+R0 = 2.77778
+R_geo = 2.77778
+shift = 0.0
+akappa = 1.0
+akappri = 0.0
+tri = 0.0
+tripri = 0.0
+betaprim = 0.0
+
+[init]
+init_field = "density"
+init_amp = 1.0e-8
+gaussian_init = false
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+tau_e = 1.0
+collisions = true
+hypercollisions = true
+beta = 0.0
+
+[collisions]
+D_hyper = 0.05
+p_hyper_kperp = 2.0
+hypercollisions_const = false
+hypercollisions_kz = true
+p_hyper = 2
+p_hyper_m = 4
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 0.0
+bpar = 0.0
+nonlinear = 0.0
+hyperdiffusion = 1.0
+
+[normalization]
+contract = "cyclone"
+diagnostic_norm = "rho_star"
+flux_scale = 1.0
+
+[output]
+path = "tools_out/cyclone_miller_quasilinear"
+
+[quasilinear]
+enabled = true
+mode = "saturated"
+saturation_rule = "mixing_length"
+amplitude_normalization = "phi_rms"
+kperp_average = "phi_weighted"
+csat = 1.0
+gamma_floor = 0.0
+include_stable_modes = false
+channels = ["es"]
+write_spectrum = true
+
+[run]
+ky = 0.3
+Nl = 24
+Nm = 12
+solver = "krylov"

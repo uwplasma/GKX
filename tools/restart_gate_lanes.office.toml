@@ -1,0 +1,31 @@
+# Office restart/continuation gate manifest for the tracked full-GK lanes.
+#
+# These are short deterministic windows intended to catch restart regressions
+# before publication assets move. They are not replacements for the long-window
+# benchmark figures.
+
+[lane.cyclone_miller]
+config = "../examples/linear/axisymmetric/runtime_cyclone_nonlinear_miller.toml"
+steps_first = 8
+steps_second = 8
+fixed_dt = true
+
+[lane.kbm_salpha]
+config = "../examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml"
+steps_first = 8
+steps_second = 8
+fixed_dt = true
+
+[lane.w7x_vmec]
+config = "../examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml"
+steps_first = 4
+steps_second = 4
+fixed_dt = true
+env.W7X_VMEC_FILE = "$HOME/gx_refs/main_clean_20260312/nonlinear/w7x/wout_w7x.nc"
+
+[lane.hsx_vmec]
+config = "../examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml"
+steps_first = 4
+steps_second = 4
+fixed_dt = true
+env.HSX_VMEC_FILE = "$HOME/gx_refs/main_clean_20260312/nonlinear/hsx/wout_HSX_QHS_vac.nc"

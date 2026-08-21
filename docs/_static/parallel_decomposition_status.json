@@ -1,0 +1,290 @@
+{
+  "claim_scope": "Deterministic decomposition-contract status only. Independent ky and UQ portfolios are production independent-batching contracts with serial reconstruction identity. Nonlinear state-domain partitioning remains diagnostic metadata with no production routing or speedup claim.",
+  "diagnostic_nonlinear_lanes": 1,
+  "kind": "parallel_decomposition_status",
+  "lanes": [
+    {
+      "actual_shards": 2,
+      "artifact_identity_passed": true,
+      "claim_label": "production independent batching contract for independent ky scan; serial ordering and reconstruction identity only; not a nonlinear state-domain decomposition speedup claim",
+      "claim_level": "production_independent_batching",
+      "claim_separation_passed": true,
+      "contract": {
+        "actual_shards": 2,
+        "axis": null,
+        "changes_solver_layout": false,
+        "claim_label": "production independent batching contract for independent ky scan; serial ordering and reconstruction identity only; not a nonlinear state-domain decomposition speedup claim",
+        "claim_level": "production_independent_batching",
+        "independent_work": true,
+        "n_items": 4,
+        "requested_shards": 2,
+        "shards": [
+          {
+            "indices": [
+              0,
+              1
+            ],
+            "label": "independent_ky_scan:shard_000:items_000000_000002",
+            "shard_id": 0,
+            "start": 0,
+            "stop": 2
+          },
+          {
+            "indices": [
+              2,
+              3
+            ],
+            "label": "independent_ky_scan:shard_001:items_000002_000004",
+            "shard_id": 1,
+            "start": 2,
+            "stop": 4
+          }
+        ],
+        "state_shape": null,
+        "workload": "independent_ky_scan"
+      },
+      "lane": "independent_ky_scan",
+      "n_items": 4,
+      "passed": true,
+      "reconstruction": {
+        "actual_shards": 2,
+        "claim_label": "production independent batching contract for independent ky scan; serial ordering and reconstruction identity only; not a nonlinear state-domain decomposition speedup claim",
+        "claim_level": "production_independent_batching",
+        "duplicate_indices": [],
+        "expected_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "identity_passed": true,
+        "missing_indices": [],
+        "n_items": 4,
+        "out_of_order": false,
+        "out_of_range_indices": [],
+        "reconstructed_indices": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "requested_shards": 2,
+        "workload": "independent_ky_scan"
+      },
+      "reconstruction_identity_passed": true,
+      "requested_shards": 2,
+      "source": "docs/_static/parallel_ky_scan_gate.json"
+    },
+    {
+      "actual_shards": 2,
+      "artifact_identity_passed": true,
+      "claim_label": "production independent batching contract for independent UQ ensemble; serial ordering and reconstruction identity only; not a nonlinear state-domain decomposition speedup claim",
+      "claim_level": "production_independent_batching",
+      "claim_separation_passed": true,
+      "contract": {
+        "actual_shards": 2,
+        "axis": null,
+        "changes_solver_layout": false,
+        "claim_label": "production independent batching contract for independent UQ ensemble; serial ordering and reconstruction identity only; not a nonlinear state-domain decomposition speedup claim",
+        "claim_level": "production_independent_batching",
+        "independent_work": true,
+        "n_items": 2,
+        "requested_shards": 2,
+        "shards": [
+          {
+            "indices": [
+              0
+            ],
+            "label": "uq_ensemble:shard_000:items_000000_000001",
+            "shard_id": 0,
+            "start": 0,
+            "stop": 1
+          },
+          {
+            "indices": [
+              1
+            ],
+            "label": "uq_ensemble:shard_001:items_000001_000002",
+            "shard_id": 1,
+            "start": 1,
+            "stop": 2
+          }
+        ],
+        "state_shape": null,
+        "workload": "uq_ensemble"
+      },
+      "lane": "uq_ensemble",
+      "n_items": 2,
+      "passed": true,
+      "reconstruction": {
+        "actual_shards": 2,
+        "claim_label": "production independent batching contract for independent UQ ensemble; serial ordering and reconstruction identity only; not a nonlinear state-domain decomposition speedup claim",
+        "claim_level": "production_independent_batching",
+        "duplicate_indices": [],
+        "expected_indices": [
+          0,
+          1
+        ],
+        "identity_passed": true,
+        "missing_indices": [],
+        "n_items": 2,
+        "out_of_order": false,
+        "out_of_range_indices": [],
+        "reconstructed_indices": [
+          0,
+          1
+        ],
+        "requested_shards": 2,
+        "workload": "uq_ensemble"
+      },
+      "reconstruction_identity_passed": true,
+      "requested_shards": 2,
+      "source": "docs/_static/quasilinear_runtime_parallel_gate.json"
+    },
+    {
+      "actual_shards": 3,
+      "artifact_identity_passed": true,
+      "claim_label": "diagnostic nonlinear state-domain partition contract; serial split/reassemble identity only; no production routing or speedup claim",
+      "claim_level": "diagnostic_nonlinear_domain_partition",
+      "claim_separation_passed": true,
+      "contract": {
+        "actual_shards": 3,
+        "axis": 0,
+        "changes_solver_layout": true,
+        "claim_label": "diagnostic nonlinear state-domain partition contract; serial split/reassemble identity only; no production routing or speedup claim",
+        "claim_level": "diagnostic_nonlinear_domain_partition",
+        "independent_work": false,
+        "n_items": 24,
+        "requested_shards": 3,
+        "shards": [
+          {
+            "indices": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "label": "diagnostic_nonlinear_domain:axis_0:shard_000:items_000000_000008",
+            "shard_id": 0,
+            "start": 0,
+            "stop": 8
+          },
+          {
+            "indices": [
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15
+            ],
+            "label": "diagnostic_nonlinear_domain:axis_0:shard_001:items_000008_000016",
+            "shard_id": 1,
+            "start": 8,
+            "stop": 16
+          },
+          {
+            "indices": [
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23
+            ],
+            "label": "diagnostic_nonlinear_domain:axis_0:shard_002:items_000016_000024",
+            "shard_id": 2,
+            "start": 16,
+            "stop": 24
+          }
+        ],
+        "state_shape": [
+          24,
+          24
+        ],
+        "workload": "diagnostic_nonlinear_domain"
+      },
+      "lane": "diagnostic_nonlinear_domain",
+      "n_items": 24,
+      "passed": true,
+      "reconstruction": {
+        "actual_shards": 3,
+        "claim_label": "diagnostic nonlinear state-domain partition contract; serial split/reassemble identity only; no production routing or speedup claim",
+        "claim_level": "diagnostic_nonlinear_domain_partition",
+        "duplicate_indices": [],
+        "expected_indices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "identity_passed": true,
+        "missing_indices": [],
+        "n_items": 24,
+        "out_of_order": false,
+        "out_of_range_indices": [],
+        "reconstructed_indices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "requested_shards": 3,
+        "workload": "diagnostic_nonlinear_domain"
+      },
+      "reconstruction_identity_passed": true,
+      "requested_shards": 3,
+      "source": "docs/_static/nonlinear_domain_parallel_identity_gate.json"
+    }
+  ],
+  "passed": true,
+  "production_independent_lanes": 2
+}

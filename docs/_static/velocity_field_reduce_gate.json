@@ -1,0 +1,178 @@
+{
+  "actual_devices": 4,
+  "atol": 1e-05,
+  "case": "Velocity-space field-reduction shard_map identity gate",
+  "claim_scope": "communication-kernel identity gate, not a nonlinear runtime speedup claim",
+  "identity_passed": true,
+  "max_abs_error": 0.001953125,
+  "max_abs_reference": 700548.125,
+  "max_allowed_error": 0.07006481249999999,
+  "max_rel_error": 2.787995471403196e-09,
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 4,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 4,
+    "shard_shape": [
+      4,
+      2,
+      16,
+      16,
+      12
+    ],
+    "state_shape": [
+      4,
+      8,
+      16,
+      16,
+      12
+    ]
+  },
+  "reduction_axis": "hermite",
+  "requested_devices": 4,
+  "rows": [
+    {
+      "abs_error": 0.0,
+      "ky_index": 0,
+      "reduced_real": 86016.0,
+      "reference_real": 86016.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 1,
+      "reduced_real": 87552.0,
+      "reference_real": 87552.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0001220703125,
+      "ky_index": 2,
+      "reduced_real": 89088.0,
+      "reference_real": 89088.0,
+      "rel_error": 1.369947710827546e-09
+    },
+    {
+      "abs_error": 0.0001220703125,
+      "ky_index": 3,
+      "reduced_real": 90624.0,
+      "reference_real": 90624.0,
+      "rel_error": 1.3467282844459305e-09
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 4,
+      "reduced_real": 92160.0,
+      "reference_real": 92160.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 5,
+      "reduced_real": 93696.0,
+      "reference_real": 93696.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 6,
+      "reduced_real": 95232.0,
+      "reference_real": 95232.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 7,
+      "reduced_real": 96768.0,
+      "reference_real": 96768.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 8,
+      "reduced_real": 98304.0,
+      "reference_real": 98304.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 9,
+      "reduced_real": 99840.0,
+      "reference_real": 99840.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 10,
+      "reduced_real": 101376.0,
+      "reference_real": 101376.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 11,
+      "reduced_real": 102912.0,
+      "reference_real": 102912.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 12,
+      "reduced_real": 104448.0,
+      "reference_real": 104448.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 13,
+      "reduced_real": 105984.0,
+      "reference_real": 105984.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "ky_index": 14,
+      "reduced_real": 107520.0,
+      "reference_real": 107520.0,
+      "rel_error": 0.0
+    },
+    {
+      "abs_error": 0.000244140625,
+      "ky_index": 15,
+      "reduced_real": 109056.0,
+      "reference_real": 109056.0,
+      "rel_error": 2.2382244946328456e-09
+    }
+  ],
+  "rtol": 1e-07,
+  "source": "gkx.parallel.velocity.velocity_field_reduce_shard_map",
+  "state_shape": [
+    4,
+    8,
+    16,
+    16,
+    12
+  ]
+}

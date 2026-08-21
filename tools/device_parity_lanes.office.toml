@@ -1,0 +1,14 @@
+# Office CPU/GPU parity manifest for representative nonlinear lanes.
+
+[lane.cyclone_miller]
+config = "../examples/linear/axisymmetric/runtime_cyclone_nonlinear_miller.toml"
+steps = 8
+fixed_dt = true
+required_nonzero = ["state_norm", "Wphi"]
+
+[lane.w7x_vmec]
+config = "../examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml"
+steps = 4
+fixed_dt = true
+required_nonzero = ["state_norm", "Wphi"]
+env.W7X_VMEC_FILE = "$HOME/gx_refs/main_clean_20260312/nonlinear/w7x/wout_w7x.nc"

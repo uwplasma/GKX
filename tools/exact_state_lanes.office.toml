@@ -1,0 +1,81 @@
+# Office manifest for the tracked full-GK parity lanes.
+#
+# Run on office from the repo root:
+#   export HSX_VMEC_FILE="$HOME/gx_refs/main_clean_20260312/nonlinear/hsx/wout_HSX_QHS_vac.nc"
+#   python tools/comparison/build_exact_state_audit.py run \
+#     --manifest tools/exact_state_lanes.office.toml \
+#     --outdir tools_out/exact_state_audit_office
+#
+# This manifest is intentionally honest about current dump coverage:
+# - Cyclone Miller: diag-state audit available from the tracked late-state dump.
+# - Cyclone runtime dense baseline: startup + late diag-state audits available
+#   from the translated local-match GX run used for the main nonlinear parity work.
+# - KBM: startup audit re-enabled from the fresh matched call-1 dump generated
+#   from GX's tracked dense t100 nonlinear benchmark input.
+# - W7-X: startup + diag-state audits available from tracked startup/late dumps.
+# - HSX: startup audit available from the tracked startup dump.
+# Missing window/restart entries should be added only when the corresponding GX
+# dump artifacts exist.
+
+[lane.cyclone_miller]
+config = "../examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml"
+gx_out = "$HOME/gx_runs/cyclone_diag160/cyclone_diag160.out.nc"
+env.JAX_PLATFORMS = "cpu"
+
+[lane.cyclone_miller.diag_state]
+gx_dir = "$HOME/gx_runs/cyclone_diag160"
+time_index = 47
+
+[lane.cyclone_runtime_salpha]
+config = "../examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"
+gx_out = "$HOME/gx_runs/cyclone_local_match/cyclone_local_match_dense.out.nc"
+env.JAX_PLATFORMS = "cpu"
+
+[lane.cyclone_runtime_salpha.startup]
+gx_dir = "$HOME/gx_runs/cyclone_local_match_dense_call1"
+ky = 0.3
+kx_target = 0.0
+
+[lane.cyclone_runtime_salpha.diag_state]
+gx_dir = "$HOME/gx_runs/cyclone_local_match_dense_diag_t47"
+time_index = 47
+
+[lane.kbm_salpha]
+config = "../examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml"
+gx_out = "$HOME/gx_refs/main_clean_20260312/nonlinear/kbm/kbm_salpha_nonlinear.out.nc"
+env.JAX_PLATFORMS = "cpu"
+
+[lane.kbm_salpha.startup]
+gx_dir = "$HOME/gx_runs/kbm_t100_dense_call1_clean"
+ky = 0.3
+kx_target = 0.0
+
+[lane.kbm_salpha.diag_state]
+gx_dir = "$HOME/gx_runs/kbm_diag_t130"
+time_index = 130
+
+[lane.w7x_vmec]
+config = "../examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml"
+gx_out = "$HOME/gx_refs/main_clean_20260312/nonlinear/w7x/w7x_adiabatic_electrons.out.nc"
+env.JAX_PLATFORMS = "cpu"
+env.W7X_VMEC_FILE = "$HOME/gx_refs/main_clean_20260312/nonlinear/w7x/wout_w7x.nc"
+
+[lane.w7x_vmec.startup]
+gx_dir = "$HOME/gx_runs/startup/w7x_dump"
+ky = 0.047619047619047616
+kx_target = 0.0
+
+[lane.w7x_vmec.diag_state]
+gx_dir = "$HOME/gx_runs/w7x/diag_t10_clean"
+time_index = 10
+
+[lane.hsx_vmec]
+config = "../examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml"
+gx_out = "$HOME/gx_refs/main_clean_20260312/nonlinear/hsx/hsx_nonlinear.out.nc"
+env.JAX_PLATFORMS = "cpu"
+env.HSX_VMEC_FILE = "$HOME/gx_refs/main_clean_20260312/nonlinear/hsx/wout_HSX_QHS_vac.nc"
+
+[lane.hsx_vmec.startup]
+gx_dir = "$HOME/gx_runs/startup/hsx_dump"
+ky = 0.047619047619047616
+kx_target = 0.0

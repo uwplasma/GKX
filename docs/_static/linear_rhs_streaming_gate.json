@@ -1,0 +1,120 @@
+{
+  "actual_devices": 2,
+  "atol": 2e-05,
+  "case": "Full linear-RHS streaming-only shard-map identity gate",
+  "claim_scope": "linear RHS identity gate with only streaming enabled, not a full-RHS or nonlinear speedup claim",
+  "grid": {
+    "Nx": 1,
+    "Ny_actual": 4,
+    "Ny_requested": 4,
+    "Nz": 16
+  },
+  "identity_passed": true,
+  "max_abs_error": 9.62942522164667e-07,
+  "max_rel_error": 5.559545002142841e-07,
+  "notes": "All non-streaming terms and electromagnetic channels are disabled. The test state uses non-density Hermite moments so the electrostatic field solve is zero.",
+  "phi_norm": 0.0,
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 2,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 2,
+    "shard_shape": [
+      2,
+      4,
+      4,
+      1,
+      16
+    ],
+    "state_shape": [
+      2,
+      8,
+      4,
+      1,
+      16
+    ]
+  },
+  "reference_source": "gkx.linear.linear_rhs_cached with only streaming enabled",
+  "requested_devices": 2,
+  "rows": [
+    {
+      "abs_error": 0.0,
+      "m": 0,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0
+    },
+    {
+      "abs_error": 8.534086646250216e-07,
+      "m": 1,
+      "production_abs": 1.414212942123413,
+      "sharded_abs": 1.41421377658844
+    },
+    {
+      "abs_error": 0.0,
+      "m": 2,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0
+    },
+    {
+      "abs_error": 4.2981520209650625e-07,
+      "m": 3,
+      "production_abs": 1.7320506572723389,
+      "sharded_abs": 1.7320510149002075
+    },
+    {
+      "abs_error": 0.0,
+      "m": 4,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 5,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 6,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 7,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0
+    }
+  ],
+  "rtol": 2e-06,
+  "source": "gkx.parallel.velocity.periodic_streaming_shard_map",
+  "state_shape": [
+    2,
+    8,
+    4,
+    1,
+    16
+  ]
+}

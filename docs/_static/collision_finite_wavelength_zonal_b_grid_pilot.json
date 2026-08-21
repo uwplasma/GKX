@@ -1,0 +1,48 @@
+{
+  "claim_scope": "finite_wavelength_zonal_b_grid_interpolation_pilot",
+  "coarse_bessel_argument_grid": [
+    0.12,
+    0.16,
+    0.24,
+    0.32
+  ],
+  "fine_bessel_argument_grid": [
+    0.12,
+    0.14,
+    0.16,
+    0.24,
+    0.28,
+    0.32
+  ],
+  "gate_passed": true,
+  "notes": "This closes B-grid interpolation at P7/J3 through t*nu=2 only. It does not close the paper-required P24/J10 moment hierarchy or the t*nu=30 collisional-zonal trace.",
+  "resolution": [
+    7,
+    3
+  ],
+  "schema_version": 1,
+  "thresholds": {
+    "maximum_absolute_error": 0.0005,
+    "maximum_relative_l2": 0.001
+  },
+  "traces": {
+    "0.1": {
+      "coarse_final": 0.040800676191274254,
+      "fine_final": 0.040798648844817986,
+      "maximum_absolute_error": 8.160526096040455e-05,
+      "maximum_normalized_time": 2.004682857570937,
+      "passed": true,
+      "relative_l2": 0.00013992259435198268,
+      "samples": 402
+    },
+    "0.2": {
+      "coarse_final": -0.00033793455525968623,
+      "fine_final": -0.00032496587926048054,
+      "maximum_absolute_error": 0.00018989122297558003,
+      "maximum_normalized_time": 2.004682857570937,
+      "passed": true,
+      "relative_l2": 0.0003683696044742611,
+      "samples": 402
+    }
+  }
+}

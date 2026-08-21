@@ -1,0 +1,196 @@
+{
+  "kind": "vmex_transport_gradient_diagnostic",
+  "label": "vmex_transport_gradient",
+  "parameter_count": 120,
+  "residual_count": 1,
+  "objective_value": 0.0016852430491131785,
+  "residual_norm_l2": 0.05805588771370512,
+  "residual_norm_linf": 0.05805588771370512,
+  "gradient_norm_l2": 0.42135868706334234,
+  "gradient_norm_linf": 0.14261922555275386,
+  "sensitivity_atol": 1e-12,
+  "finite": true,
+  "transport_sensitivity_detected": true,
+  "classification": "sensitive_boundary_transport_objective",
+  "top_gradient_components": [
+    {
+      "name": "zs13",
+      "kind": "zs",
+      "mode_index": 18,
+      "m": 1,
+      "n": 3,
+      "rank": 1,
+      "parameter_index": 27,
+      "gradient": -0.14261922555275386,
+      "abs_gradient": 0.14261922555275386,
+      "fraction_of_l2_norm": 0.3384746296480511
+    },
+    {
+      "name": "zs1-2",
+      "kind": "zs",
+      "mode_index": 13,
+      "m": 1,
+      "n": -2,
+      "rank": 2,
+      "parameter_index": 17,
+      "gradient": -0.11999208001179743,
+      "abs_gradient": 0.11999208001179743,
+      "fraction_of_l2_norm": 0.28477419285711597
+    },
+    {
+      "name": "rc14",
+      "kind": "rc",
+      "mode_index": 19,
+      "m": 1,
+      "n": 4,
+      "rank": 3,
+      "parameter_index": 28,
+      "gradient": 0.10354209294076855,
+      "abs_gradient": 0.10354209294076855,
+      "fraction_of_l2_norm": 0.2457338512762244
+    },
+    {
+      "name": "rc15",
+      "kind": "rc",
+      "mode_index": 20,
+      "m": 1,
+      "n": 5,
+      "rank": 4,
+      "parameter_index": 30,
+      "gradient": -0.093739828802445,
+      "abs_gradient": 0.093739828802445,
+      "fraction_of_l2_norm": 0.22247038373829278
+    },
+    {
+      "name": "rc1-3",
+      "kind": "rc",
+      "mode_index": 12,
+      "m": 1,
+      "n": -3,
+      "rank": 5,
+      "parameter_index": 14,
+      "gradient": -0.08252909908449553,
+      "abs_gradient": 0.08252909908449553,
+      "fraction_of_l2_norm": 0.19586424017903073
+    },
+    {
+      "name": "zs1-4",
+      "kind": "zs",
+      "mode_index": 11,
+      "m": 1,
+      "n": -4,
+      "rank": 6,
+      "parameter_index": 13,
+      "gradient": 0.07576239426152723,
+      "abs_gradient": 0.07576239426152723,
+      "fraction_of_l2_norm": 0.1798049894011986
+    },
+    {
+      "name": "zs1-5",
+      "kind": "zs",
+      "mode_index": 10,
+      "m": 1,
+      "n": -5,
+      "rank": 7,
+      "parameter_index": 11,
+      "gradient": -0.07513942051968941,
+      "abs_gradient": 0.07513942051968941,
+      "fraction_of_l2_norm": 0.17832650145028053
+    },
+    {
+      "name": "zs31",
+      "kind": "zs",
+      "mode_index": 46,
+      "m": 3,
+      "n": 1,
+      "rank": 8,
+      "parameter_index": 67,
+      "gradient": 0.07238465921335478,
+      "abs_gradient": 0.07238465921335478,
+      "fraction_of_l2_norm": 0.17178869555968898
+    },
+    {
+      "name": "rc11",
+      "kind": "rc",
+      "mode_index": 16,
+      "m": 1,
+      "n": 1,
+      "rank": 9,
+      "parameter_index": 22,
+      "gradient": 0.06874276571227023,
+      "abs_gradient": 0.06874276571227023,
+      "fraction_of_l2_norm": 0.16314548108969262
+    },
+    {
+      "name": "rc12",
+      "kind": "rc",
+      "mode_index": 17,
+      "m": 1,
+      "n": 2,
+      "rank": 10,
+      "parameter_index": 24,
+      "gradient": -0.06799100618878462,
+      "abs_gradient": 0.06799100618878462,
+      "fraction_of_l2_norm": 0.16136134907446115
+    },
+    {
+      "name": "rc1-1",
+      "kind": "rc",
+      "mode_index": 14,
+      "m": 1,
+      "n": -1,
+      "rank": 11,
+      "parameter_index": 18,
+      "gradient": 0.06724323063746118,
+      "abs_gradient": 0.06724323063746118,
+      "fraction_of_l2_norm": 0.15958667212040317
+    },
+    {
+      "name": "rc34",
+      "kind": "rc",
+      "mode_index": 49,
+      "m": 3,
+      "n": 4,
+      "rank": 12,
+      "parameter_index": 72,
+      "gradient": -0.06469703199080401,
+      "abs_gradient": 0.06469703199080401,
+      "fraction_of_l2_norm": 0.15354384275712865
+    }
+  ],
+  "next_action": "use a constraint-preserving projected update or constrained line search along the leading transport-gradient components",
+  "setup": {
+    "input": "/home/rjorge/tmp/gkx-authoritative-qa-baseline-direct-metric-20260602151201/input.final",
+    "max_mode": 5,
+    "min_vmec_mode": 7,
+    "transport_kind": "nonlinear_window_heat_flux",
+    "transport_weight": 1.0,
+    "sample_set": {
+      "surfaces": [
+        0.64
+      ],
+      "alphas": [
+        0.0
+      ],
+      "ky_values": [
+        0.3
+      ],
+      "surface_weights": null,
+      "alpha_weights": null,
+      "ky_weights": null,
+      "reduction": "weighted_mean",
+      "n_samples": 1
+    },
+    "gkx_config": {
+      "ntheta": 24,
+      "mboz": 21,
+      "nboz": 21,
+      "n_laguerre": 2,
+      "n_hermite": 3,
+      "objective_transform": "log1p",
+      "objective_scale": 1.0,
+      "gradient_scope": "eigenvalue_growth_ad_with_geometry_transport_weights"
+    },
+    "solver_device": "gpu"
+  }
+}

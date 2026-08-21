@@ -1,0 +1,904 @@
+{
+  "calibration_reports": [
+    {
+      "artifact": "docs/_static/quasilinear_cyclone_miller_train_holdout_report.json",
+      "claim_level": "calibration_dataset",
+      "holdout_mean_abs_relative_error": 612.8992915144586,
+      "holdout_mean_rel_gate": 0.35,
+      "kind": "quasilinear_calibration_report",
+      "n_holdout": 1,
+      "n_train": 1,
+      "passed": false
+    },
+    {
+      "artifact": "docs/_static/quasilinear_hsx_train_holdout_report.json",
+      "claim_level": "calibration_dataset",
+      "holdout_mean_abs_relative_error": 306.9496457572293,
+      "holdout_mean_rel_gate": 0.35,
+      "kind": "quasilinear_calibration_report",
+      "n_holdout": 2,
+      "n_train": 1,
+      "passed": false
+    },
+    {
+      "artifact": "docs/_static/quasilinear_stellarator_train_holdout_report.json",
+      "claim_level": "calibration_dataset",
+      "holdout_mean_abs_relative_error": 6.491149442266367,
+      "holdout_mean_rel_gate": 0.35,
+      "kind": "quasilinear_calibration_report",
+      "n_holdout": 10,
+      "n_train": 2,
+      "passed": false
+    },
+    {
+      "artifact": "docs/_static/quasilinear_w7x_train_holdout_report.json",
+      "claim_level": "calibration_dataset",
+      "holdout_mean_abs_relative_error": 306.9496457572293,
+      "holdout_mean_rel_gate": 0.35,
+      "kind": "quasilinear_calibration_report",
+      "n_holdout": 2,
+      "n_train": 1,
+      "passed": false
+    }
+  ],
+  "claim_level": "validation_metadata_and_docs_guardrail_not_physics_claim",
+  "doc_checks": [
+    {
+      "doc": "README.md",
+      "has_scope_marker": true,
+      "overclaim_lines": []
+    },
+    {
+      "doc": "docs/quasilinear.rst",
+      "has_scope_marker": true,
+      "overclaim_lines": []
+    },
+    {
+      "doc": "docs/manuscript_figures.rst",
+      "has_scope_marker": true,
+      "overclaim_lines": []
+    },
+    {
+      "doc": "docs/testing.rst",
+      "has_scope_marker": true,
+      "overclaim_lines": []
+    }
+  ],
+  "gate_report": {
+    "case": "quasilinear_absolute_flux_promotion_guardrails",
+    "gates": [
+      {
+        "detail": "benchmarks/references/gkx_1_7_release_contract.json contains 'Quasilinear diagnostics and saturation-model selection'",
+        "metric": "release_contract_ql_lane_present",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=validated_diagnostics_negative_absolute_flux_promotion absolute_flux_promoted=False",
+        "metric": "release_contract_ql_not_absolute_flux",
+        "passed": true
+      },
+      {
+        "detail": "status=closed claim_level=validated_diagnostics_negative_absolute_flux_promotion",
+        "metric": "release_contract_ql_closed_scope_is_non_absolute",
+        "passed": true
+      },
+      {
+        "detail": "candidate_selected=False claim_level=validated_diagnostics_negative_absolute_flux_promotion",
+        "metric": "release_contract_ql_candidate_scope_not_runtime",
+        "passed": true
+      },
+      {
+        "detail": "release QL lane should list the promotion guardrail audit artifact",
+        "metric": "release_contract_ql_guardrail_artifact_listed",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=spectral_envelope_regularization_audit_not_runtime_flux_predictor",
+        "metric": "non_absolute_promotion_scope",
+        "passed": true
+      },
+      {
+        "detail": "12 required nonlinear summaries passed",
+        "metric": "input_validation_passed",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=candidate_model_development_not_runtime_option",
+        "metric": "non_absolute_promotion_scope",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_cyclone_miller_train_holdout_report.json points field",
+        "metric": "calibration_points_are_list",
+        "passed": true
+      },
+      {
+        "detail": "train=1 holdout=1",
+        "metric": "train_holdout_point_metadata",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=calibration_dataset passed=False",
+        "metric": "unpromoted_report_not_absolute_flux",
+        "passed": true
+      },
+      {
+        "detail": "12 required nonlinear summaries passed",
+        "metric": "input_validation_passed",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=scoped_low_parameter_candidate_promotion_not_runtime_option",
+        "metric": "non_absolute_promotion_scope",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_hsx_train_holdout_report.json points field",
+        "metric": "calibration_points_are_list",
+        "passed": true
+      },
+      {
+        "detail": "train=1 holdout=2",
+        "metric": "train_holdout_point_metadata",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=calibration_dataset passed=False",
+        "metric": "unpromoted_report_not_absolute_flux",
+        "passed": true
+      },
+      {
+        "detail": "12 required nonlinear summaries passed",
+        "metric": "input_validation_passed",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=model_comparison_not_validated_transport",
+        "metric": "non_absolute_promotion_scope",
+        "passed": true
+      },
+      {
+        "detail": "4 required nonlinear summaries passed",
+        "metric": "input_validation_passed",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=leave_one_geometry_out_model_development",
+        "metric": "non_absolute_promotion_scope",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_stellarator_train_holdout_report.json points field",
+        "metric": "calibration_points_are_list",
+        "passed": true
+      },
+      {
+        "detail": "train=2 holdout=10",
+        "metric": "train_holdout_point_metadata",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=calibration_dataset passed=False",
+        "metric": "unpromoted_report_not_absolute_flux",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_w7x_train_holdout_report.json points field",
+        "metric": "calibration_points_are_list",
+        "passed": true
+      },
+      {
+        "detail": "train=1 holdout=2",
+        "metric": "train_holdout_point_metadata",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=calibration_dataset passed=False",
+        "metric": "unpromoted_report_not_absolute_flux",
+        "passed": true
+      },
+      {
+        "detail": "contains explicit non-promotion wording",
+        "metric": "doc_scope_marker:README.md",
+        "passed": true
+      },
+      {
+        "detail": "no positive absolute-flux predictor wording found",
+        "metric": "doc_no_absolute_flux_overclaim:README.md",
+        "passed": true
+      },
+      {
+        "detail": "contains explicit non-promotion wording",
+        "metric": "doc_scope_marker:docs/quasilinear.rst",
+        "passed": true
+      },
+      {
+        "detail": "no positive absolute-flux predictor wording found",
+        "metric": "doc_no_absolute_flux_overclaim:docs/quasilinear.rst",
+        "passed": true
+      },
+      {
+        "detail": "contains explicit non-promotion wording",
+        "metric": "doc_scope_marker:docs/manuscript_figures.rst",
+        "passed": true
+      },
+      {
+        "detail": "no positive absolute-flux predictor wording found",
+        "metric": "doc_no_absolute_flux_overclaim:docs/manuscript_figures.rst",
+        "passed": true
+      },
+      {
+        "detail": "contains explicit non-promotion wording",
+        "metric": "doc_scope_marker:docs/testing.rst",
+        "passed": true
+      },
+      {
+        "detail": "no positive absolute-flux predictor wording found",
+        "metric": "doc_no_absolute_flux_overclaim:docs/testing.rst",
+        "passed": true
+      },
+      {
+        "detail": "docs/manuscript_figures.rst",
+        "metric": "manuscript_figure_index_exists",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_stellarator_train_holdout.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_stellarator_train_holdout",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_stellarator_train_holdout.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_stellarator_train_holdout",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_stellarator_train_holdout.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_stellarator_train_holdout",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_stellarator_train_holdout",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_calibration_figure",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_stellarator_train_holdout",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=calibration_dataset passed=False",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_stellarator_train_holdout",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_stellarator_train_holdout",
+        "passed": true
+      },
+      {
+        "detail": "source=docs/_static/quasilinear_stellarator_train_holdout_report.json passed=False claim_level=calibration_dataset",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_stellarator_train_holdout",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_saturation_rule_sweep.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_saturation_rule_sweep",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_saturation_rule_sweep.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_saturation_rule_sweep",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_saturation_rule_sweep.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_saturation_rule_sweep",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_saturation_rule_sweep",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_saturation_rule_sweep",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_saturation_rule_sweep",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=model_comparison_not_validated_transport passed=None",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_saturation_rule_sweep",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_saturation_rule_sweep",
+        "passed": true
+      },
+      {
+        "detail": "accepted_rules=[] best=4.418344106628153 null=1.8006877869864581",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_saturation_rule_sweep",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_shape_aware_saturation.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_shape_aware_saturation",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_shape_aware_saturation.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_shape_aware_saturation",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_shape_aware_saturation.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_shape_aware_saturation",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_shape_aware_saturation",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_shape_aware_saturation_report",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_shape_aware_saturation",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=leave_one_geometry_out_model_development passed=None",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_shape_aware_saturation",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_shape_aware_saturation",
+        "passed": true
+      },
+      {
+        "detail": "shape=0.7247823421022213 linear=0.6238180531687011 null=0.17003269672297722",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_shape_aware_saturation",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_candidate_uncertainty.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_candidate_uncertainty",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_candidate_uncertainty.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_candidate_uncertainty",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_candidate_uncertainty.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_candidate_uncertainty",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_candidate_uncertainty",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_candidate_uncertainty_report",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_candidate_uncertainty",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=candidate_model_development_not_runtime_option passed=None",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_candidate_uncertainty",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_candidate_uncertainty",
+        "passed": true
+      },
+      {
+        "detail": "accepted=[] spectral_error=0.6972871490908844 linear_weight_error=1.3199083044798832 linear_state_failures=[]",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_candidate_uncertainty",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_candidate_regularization_sweep.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_candidate_regularization_sweep",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_candidate_regularization_sweep.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_candidate_regularization_sweep",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_candidate_regularization_sweep.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_candidate_regularization_sweep",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_candidate_regularization_sweep",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_candidate_regularization_sweep",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_candidate_regularization_sweep",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=spectral_envelope_regularization_audit_not_runtime_flux_predictor passed=None",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_candidate_regularization_sweep",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_candidate_regularization_sweep",
+        "passed": true
+      },
+      {
+        "detail": "accepted_lambdas=[] best_lambda=0.5 best_error=0.6894007646285855 coverage=0.9166666666666666 blockers=['best_regularization_transport_error_above_gate']",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_candidate_regularization_sweep",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_dataset_sufficiency.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_dataset_sufficiency",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_dataset_sufficiency.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_dataset_sufficiency",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_dataset_sufficiency.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_dataset_sufficiency",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_dataset_sufficiency",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_dataset_sufficiency",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_dataset_sufficiency",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=scoped_low_parameter_candidate_promotion_not_runtime_option passed=None",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_dataset_sufficiency",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_dataset_sufficiency",
+        "passed": true
+      },
+      {
+        "detail": "linear_state_data_volume_passed=True saturation_rule_accepted=[] blockers=['downstream_candidate_skill_gates_not_passed']",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_dataset_sufficiency",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_model_selection_status.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_model_selection_status",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_model_selection_status.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_model_selection_status",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_model_selection_status.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_model_selection_status",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_model_selection_status.json",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_model_selection_status",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_model_selection_status",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_model_selection_status",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=model_selection_or_scope_incomplete passed=False",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_model_selection_status",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_model_selection_status",
+        "passed": true
+      },
+      {
+        "detail": "accepted=[] blockers=['dataset_sufficiency_passed', 'candidate_uncertainty_passed', 'required_candidate_accepted', 'required_candidate_transport_error'] absolute_flux_not_promoted=True",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_model_selection_status",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_stellarator_usefulness.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_stellarator_usefulness",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_stellarator_usefulness.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_stellarator_usefulness",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_stellarator_usefulness.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_stellarator_usefulness",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_stellarator_usefulness",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_stellarator_usefulness",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_stellarator_usefulness",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=scoped_model_skill_summary_not_runtime_absolute_flux_predictor passed=None",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_stellarator_usefulness",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_stellarator_usefulness",
+        "passed": true
+      },
+      {
+        "detail": "spectral=0.6972871490908844 positive_ml=6.491149442266367 hsx_ml=0.0 w7x_ml=0.0 qa=matched nonlinear audit only; strict QL-vs-nonlinear optimization comparison still staged qh_passed=False",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_stellarator_usefulness",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_screening_skill.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_screening_skill",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_screening_skill.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_screening_skill",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_screening_skill.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_screening_skill",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_screening_skill",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_screening_skill",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_screening_skill",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=screening_correlation_model_development_not_absolute_flux_promotion passed=None",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_screening_skill",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_screening_skill",
+        "passed": true
+      },
+      {
+        "detail": "screening=[] holdout_screening=[] mean_error=[] absolute=[] spectral_spearman=0.6363636363636365 spectral_holdout_spearman=0.6242424242424242 simple_screening=False",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_screening_skill",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_holdout_gap_report.png",
+        "metric": "ql_figure_png_exists:docs/_static/quasilinear_holdout_gap_report",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_holdout_gap_report.json",
+        "metric": "ql_figure_json_sidecar_exists:docs/_static/quasilinear_holdout_gap_report",
+        "passed": true
+      },
+      {
+        "detail": "docs/_static/quasilinear_holdout_gap_report.png",
+        "metric": "ql_figure_index_mentions_png:docs/_static/quasilinear_holdout_gap_report",
+        "passed": true
+      },
+      {
+        "detail": "nearby index text mentions JSON companion",
+        "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_holdout_gap_report",
+        "passed": true
+      },
+      {
+        "detail": "kind=quasilinear_holdout_gap_report",
+        "metric": "ql_figure_sidecar_has_kind:docs/_static/quasilinear_holdout_gap_report",
+        "passed": true
+      },
+      {
+        "detail": "claim_level=holdout_gap_report_no_absolute_flux_promotion passed=None",
+        "metric": "ql_figure_sidecar_claim_scoped:docs/_static/quasilinear_holdout_gap_report",
+        "passed": true
+      },
+      {
+        "detail": "no runtime absolute-flux overclaim in JSON sidecar",
+        "metric": "ql_figure_sidecar_no_runtime_absolute_overclaim:docs/_static/quasilinear_holdout_gap_report",
+        "passed": true
+      },
+      {
+        "detail": "blockers=['absolute_flux_predictor_not_promoted', 'absolute_requirement:absolute_train_holdout_report_passed', 'absolute_requirement:holdout_mean_abs_relative_error', 'stellarator_train_holdout_report_failed', 'holdout_mean_error_exceeds_gate', 'screening_requirement:full_portfolio_screening_correlation_passed', 'screening_requirement:heldout_screening_correlation_passed'] holdout_mean=6.491149442266367 screening=False holdout_screening=False",
+        "metric": "ql_figure_failed_baselines_explicit:docs/_static/quasilinear_holdout_gap_report",
+        "passed": true
+      },
+      {
+        "detail": "manuscript index states no runtime/TOML absolute-flux predictor and blocked runtime promotion",
+        "metric": "manuscript_index_has_non_absolute_ql_scope",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "tracked quasilinear JSON artifacts and documentation scope checks"
+  },
+  "input_validation_reports": [
+    {
+      "artifact": "docs/_static/quasilinear_candidate_uncertainty.json",
+      "failed_required_cases": [],
+      "kind": "quasilinear_candidate_uncertainty_report",
+      "required_cases": 12
+    },
+    {
+      "artifact": "docs/_static/quasilinear_dataset_sufficiency.json",
+      "failed_required_cases": [],
+      "kind": "quasilinear_dataset_sufficiency",
+      "required_cases": 12
+    },
+    {
+      "artifact": "docs/_static/quasilinear_saturation_rule_sweep.json",
+      "failed_required_cases": [],
+      "kind": "quasilinear_saturation_rule_sweep",
+      "required_cases": 12
+    },
+    {
+      "artifact": "docs/_static/quasilinear_shape_aware_saturation.json",
+      "failed_required_cases": [],
+      "kind": "quasilinear_shape_aware_saturation_report",
+      "required_cases": 4
+    }
+  ],
+  "kind": "quasilinear_promotion_guardrail_audit",
+  "manuscript_figure_provenance": [
+    {
+      "claim_level": "calibration_dataset",
+      "claim_scoped": true,
+      "failed_baseline_detail": "source=docs/_static/quasilinear_stellarator_train_holdout_report.json passed=False claim_level=calibration_dataset",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_stellarator_train_holdout.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_stellarator_train_holdout.json",
+      "kind": "quasilinear_calibration_figure",
+      "passed": false,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "model_comparison_not_validated_transport",
+      "claim_scoped": true,
+      "failed_baseline_detail": "accepted_rules=[] best=4.418344106628153 null=1.8006877869864581",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_saturation_rule_sweep.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_saturation_rule_sweep.json",
+      "kind": "quasilinear_saturation_rule_sweep",
+      "passed": null,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "leave_one_geometry_out_model_development",
+      "claim_scoped": true,
+      "failed_baseline_detail": "shape=0.7247823421022213 linear=0.6238180531687011 null=0.17003269672297722",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_shape_aware_saturation.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_shape_aware_saturation.json",
+      "kind": "quasilinear_shape_aware_saturation_report",
+      "passed": null,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "candidate_model_development_not_runtime_option",
+      "claim_scoped": true,
+      "failed_baseline_detail": "accepted=[] spectral_error=0.6972871490908844 linear_weight_error=1.3199083044798832 linear_state_failures=[]",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_candidate_uncertainty.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_candidate_uncertainty.json",
+      "kind": "quasilinear_candidate_uncertainty_report",
+      "passed": null,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "spectral_envelope_regularization_audit_not_runtime_flux_predictor",
+      "claim_scoped": true,
+      "failed_baseline_detail": "accepted_lambdas=[] best_lambda=0.5 best_error=0.6894007646285855 coverage=0.9166666666666666 blockers=['best_regularization_transport_error_above_gate']",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_candidate_regularization_sweep.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_candidate_regularization_sweep.json",
+      "kind": "quasilinear_candidate_regularization_sweep",
+      "passed": null,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "scoped_low_parameter_candidate_promotion_not_runtime_option",
+      "claim_scoped": true,
+      "failed_baseline_detail": "linear_state_data_volume_passed=True saturation_rule_accepted=[] blockers=['downstream_candidate_skill_gates_not_passed']",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_dataset_sufficiency.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_dataset_sufficiency.json",
+      "kind": "quasilinear_dataset_sufficiency",
+      "passed": null,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "model_selection_or_scope_incomplete",
+      "claim_scoped": true,
+      "failed_baseline_detail": "accepted=[] blockers=['dataset_sufficiency_passed', 'candidate_uncertainty_passed', 'required_candidate_accepted', 'required_candidate_transport_error'] absolute_flux_not_promoted=True",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_model_selection_status.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_model_selection_status.json",
+      "kind": "quasilinear_model_selection_status",
+      "passed": false,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "scoped_model_skill_summary_not_runtime_absolute_flux_predictor",
+      "claim_scoped": true,
+      "failed_baseline_detail": "spectral=0.6972871490908844 positive_ml=6.491149442266367 hsx_ml=0.0 w7x_ml=0.0 qa=matched nonlinear audit only; strict QL-vs-nonlinear optimization comparison still staged qh_passed=False",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_stellarator_usefulness.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_stellarator_usefulness.json",
+      "kind": "quasilinear_stellarator_usefulness",
+      "passed": null,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "screening_correlation_model_development_not_absolute_flux_promotion",
+      "claim_scoped": true,
+      "failed_baseline_detail": "screening=[] holdout_screening=[] mean_error=[] absolute=[] spectral_spearman=0.6363636363636365 spectral_holdout_spearman=0.6242424242424242 simple_screening=False",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_screening_skill.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_screening_skill.json",
+      "kind": "quasilinear_screening_skill",
+      "passed": null,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    },
+    {
+      "claim_level": "holdout_gap_report_no_absolute_flux_promotion",
+      "claim_scoped": true,
+      "failed_baseline_detail": "blockers=['absolute_flux_predictor_not_promoted', 'absolute_requirement:absolute_train_holdout_report_passed', 'absolute_requirement:holdout_mean_abs_relative_error', 'stellarator_train_holdout_report_failed', 'holdout_mean_error_exceeds_gate', 'screening_requirement:full_portfolio_screening_correlation_passed', 'screening_requirement:heldout_screening_correlation_passed'] holdout_mean=6.491149442266367 screening=False holdout_screening=False",
+      "failed_baselines_explicit": true,
+      "figure": "docs/_static/quasilinear_holdout_gap_report.png",
+      "index_mentions_json_sidecar": true,
+      "index_mentions_png": true,
+      "json_exists": true,
+      "json_sidecar": "docs/_static/quasilinear_holdout_gap_report.json",
+      "kind": "quasilinear_holdout_gap_report",
+      "passed": null,
+      "png_exists": true,
+      "runtime_absolute_overclaim_lines": []
+    }
+  ],
+  "notes": "Fast metadata guardrail only: it verifies finite nonlinear window statistics, train/holdout provenance, absolute-flux promotion gates, release-contract QL scope, manuscript figure JSON sidecars, explicit failed-baseline metadata, and conservative README/docs wording. It does not replace nonlinear convergence simulations.",
+  "passed": true,
+  "promotion_gate_reports": [
+    {
+      "accepted": [],
+      "artifact": "docs/_static/quasilinear_candidate_regularization_sweep.json",
+      "blockers": [
+        "best_regularization_transport_error_above_gate"
+      ],
+      "claim_level": "spectral_envelope_regularization_audit_not_runtime_flux_predictor",
+      "kind": "quasilinear_candidate_regularization_sweep",
+      "promotion_gate_passed": false
+    },
+    {
+      "accepted": [],
+      "artifact": "docs/_static/quasilinear_candidate_uncertainty.json",
+      "blockers": [],
+      "claim_level": "candidate_model_development_not_runtime_option",
+      "kind": "quasilinear_candidate_uncertainty_report",
+      "promotion_gate_passed": false
+    },
+    {
+      "accepted": [],
+      "artifact": "docs/_static/quasilinear_dataset_sufficiency.json",
+      "blockers": [
+        "downstream_candidate_skill_gates_not_passed"
+      ],
+      "claim_level": "scoped_low_parameter_candidate_promotion_not_runtime_option",
+      "kind": "quasilinear_dataset_sufficiency",
+      "promotion_gate_passed": false
+    },
+    {
+      "accepted": [],
+      "artifact": "docs/_static/quasilinear_saturation_rule_sweep.json",
+      "blockers": [],
+      "claim_level": "model_comparison_not_validated_transport",
+      "kind": "quasilinear_saturation_rule_sweep",
+      "promotion_gate_passed": false
+    },
+    {
+      "accepted": [],
+      "artifact": "docs/_static/quasilinear_shape_aware_saturation.json",
+      "blockers": [],
+      "claim_level": "leave_one_geometry_out_model_development",
+      "kind": "quasilinear_shape_aware_saturation_report",
+      "promotion_gate_passed": false
+    }
+  ],
+  "release_contracts": [
+    {
+      "absolute_flux_promoted": false,
+      "accepted_uq_candidates": [],
+      "artifact": "benchmarks/references/gkx_1_7_release_contract.json",
+      "kind": "gkx_1_7_frozen_release_contract",
+      "ql_claim_level": "validated_diagnostics_negative_absolute_flux_promotion",
+      "ql_lane_present": true,
+      "ql_status": "closed"
+    }
+  ],
+  "summary": {
+    "n_calibration_reports": 4,
+    "n_doc_checks": 4,
+    "n_failed_gates": 0,
+    "n_input_validation_reports": 4,
+    "n_manuscript_figure_checks": 10,
+    "n_promotion_gate_reports": 5,
+    "n_release_contracts": 1,
+    "n_reports_scanned": 11
+  }
+}

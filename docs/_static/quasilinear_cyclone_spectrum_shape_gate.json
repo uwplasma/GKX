@@ -1,0 +1,65 @@
+{
+  "cosine_gate": 0.95,
+  "cosine_similarity": 0.8964299105687351,
+  "distribution_residual": [
+    -0.12747460380322717,
+    -0.08725881271963451,
+    0.0025659154570299436,
+    0.09598153021468642,
+    0.11618597085114539
+  ],
+  "kind": "quasilinear_spectrum_shape_gate",
+  "ky": [
+    0.10005072504281998,
+    0.20010145008563995,
+    0.3001521825790405,
+    0.4002029001712799,
+    0.5002536177635193
+  ],
+  "nonlinear_distribution": [
+    0.18284931555883252,
+    0.25860002146961186,
+    0.2571479549259622,
+    0.18125361125240502,
+    0.12014909679318835
+  ],
+  "nonlinear_ky": [
+    0.10638298094272614,
+    0.21276596188545227,
+    0.283687949180603,
+    0.39007091522216797,
+    0.4964539110660553
+  ],
+  "nonlinear_netcdf": "tools_out/cyclone_long_audit/cyclone_salpha_adiabatic_electrons_omega_t400.out.nc",
+  "nonlinear_raw": [
+    0.3985023903262675,
+    0.5635937240405299,
+    0.5604290855140542,
+    0.39502470719454874,
+    0.2618533305486842
+  ],
+  "nonlinear_variable": "Diagnostics/HeatFlux_kyst",
+  "passed": false,
+  "ql_column": "heat_flux_weight_total",
+  "quasilinear_distribution": [
+    0.05537471175560535,
+    0.17134120874997735,
+    0.25971387038299215,
+    0.27723514146709144,
+    0.23633506764433374
+  ],
+  "quasilinear_raw": [
+    0.004588048905134201,
+    0.014196405187249184,
+    0.021518485620617867,
+    0.022970203310251236,
+    0.019581444561481476
+  ],
+  "species_index": 0,
+  "spectrum_csv": "docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv",
+  "time_max": 400.0,
+  "time_min": 100.0,
+  "time_samples": 398,
+  "total_variation_distance": 0.21473341652286174,
+  "tv_gate": 0.2
+}

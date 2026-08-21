@@ -1,0 +1,160 @@
+{
+  "acceptance": {
+    "max_condition_number": 1000000.0,
+    "max_relative_residual": 0.1,
+    "response_floor": 1e-14
+  },
+  "blockers": [
+    "zero_state_response",
+    "rank_deficient_response_matrix",
+    "mapping_condition_number_too_large"
+  ],
+  "case": "qa_lowres_state_to_input_mapping_response",
+  "claim_level": "measured_state_to_input_mapping_not_nonlinear_gradient_evidence",
+  "controls": [
+    {
+      "blockers": [
+        "zero_state_response",
+        "rank_deficient_response_matrix",
+        "state_control_not_observed",
+        "mapping_condition_number_too_large",
+        "mapping_relative_residual_too_large"
+      ],
+      "condition_number": null,
+      "condition_number_label": "infinite",
+      "dominant_response_sign": 0.0,
+      "input_control_argument": null,
+      "input_direction": {
+        "terms": [],
+        "type": "least_squares_boundary_coefficient_direction"
+      },
+      "input_parameter": null,
+      "passed": false,
+      "relative_residual": 1.0,
+      "state_parameter": "Rsin_mid_surface_m1"
+    },
+    {
+      "blockers": [
+        "zero_state_response",
+        "rank_deficient_response_matrix",
+        "state_control_not_observed",
+        "mapping_condition_number_too_large",
+        "mapping_relative_residual_too_large"
+      ],
+      "condition_number": null,
+      "condition_number_label": "infinite",
+      "dominant_response_sign": 0.0,
+      "input_control_argument": null,
+      "input_direction": {
+        "terms": [],
+        "type": "least_squares_boundary_coefficient_direction"
+      },
+      "input_parameter": null,
+      "passed": false,
+      "relative_residual": 1.0,
+      "state_parameter": "Zcos_mid_surface_m1"
+    }
+  ],
+  "input_directions": [
+    {
+      "baseline_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "central_response": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "coefficient": "RBC(1,1)",
+      "coefficient_slug": "rbc_1_1",
+      "delta_parameter": 0.002177578995826776,
+      "minus_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "plus_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      }
+    },
+    {
+      "baseline_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "central_response": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "coefficient": "ZBS(1,1)",
+      "coefficient_slug": "zbs_1_1",
+      "delta_parameter": 0.0016008404842993128,
+      "minus_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "plus_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      }
+    },
+    {
+      "baseline_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "central_response": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "coefficient": "ZBS(1,0)",
+      "coefficient_slug": "zbs_1_0",
+      "delta_parameter": 0.002507317189172904,
+      "minus_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      },
+      "plus_state": {
+        "Rsin_mid_surface_m1": 0.0,
+        "Zcos_mid_surface_m1": 0.0
+      }
+    }
+  ],
+  "jacobian": {
+    "column_order": [
+      "RBC(1,1)",
+      "ZBS(1,1)",
+      "ZBS(1,0)"
+    ],
+    "condition_number": null,
+    "condition_number_label": "infinite",
+    "matrix": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0
+      ]
+    ],
+    "rank": 0,
+    "response_floor": 1e-14,
+    "row_order": [
+      "Rsin_mid_surface_m1",
+      "Zcos_mid_surface_m1"
+    ],
+    "singular_values": [
+      0.0,
+      0.0
+    ]
+  },
+  "kind": "vmec_state_to_input_control_mapping",
+  "next_action": "the current stellarator-symmetric RBC/ZBS directions do not move the admitted Rsin/Zcos VMEC-state controls; use an explicit LASYM=true RBS/ZBC branch or choose QL-admitted controls in the stellarator-symmetric subspace before launching nonlinear-gradient campaigns",
+  "passed": false,
+  "schema_version": 1,
+  "source_campaign": "docs/_static/nonlinear_gradient_state_to_input_mapping_campaign.json",
+  "source_scope": "Re-equilibrated VMEC input perturbations mapped to vmex state_from_wout internal controls. A failed artifact is a valid negative guardrail and must not launch nonlinear-gradient campaigns."
+}

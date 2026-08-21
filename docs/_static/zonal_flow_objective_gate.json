@@ -1,0 +1,180 @@
+{
+  "axes": {
+    "alpha": [
+      0.0
+    ],
+    "kx": [
+      0.05,
+      0.07,
+      0.1,
+      0.3
+    ],
+    "surface": [
+      0.0
+    ]
+  },
+  "claim_level": "diagnostic_zonal_objective_row_producer_not_promoted_w7x_optimization_claim",
+  "gate_index_include": false,
+  "input_comparison_csv": "docs/_static/w7x_zonal_reference_compare.csv",
+  "input_summary_csv": "docs/_static/w7x_zonal_response_panel.csv",
+  "kind": "zonal_flow_objective_artifact",
+  "metrics": {
+    "damping_rate": [
+      [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    ],
+    "linear_growth_rate": [
+      [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    ],
+    "recurrence_amplitude": [
+      [
+        [
+          501.8506361142562,
+          110.03538250209692,
+          156.69105672438332,
+          47.9603856700594
+        ]
+      ]
+    ],
+    "residual_level": [
+      [
+        [
+          0.018902115221135652,
+          0.13712533795361273,
+          0.09383931876523588,
+          0.5260690983631888
+        ]
+      ]
+    ]
+  },
+  "missing_damping_count": 4,
+  "missing_damping_policy": "zero",
+  "missing_recurrence_count": 0,
+  "notes": [
+    "This artifact verifies the row-production contract for zonal-flow optimization objectives.",
+    "W7-X rows with missing GAM damping remain diagnostic and are not promoted to an optimization claim.",
+    "Use --missing-damping-policy=fail for closed QA/QH/Miller-style promotion gates."
+  ],
+  "objective_config": {
+    "damping_weight": 1.0,
+    "growth_over_residual_weight": 0.0,
+    "objective_names": [
+      "inverse_residual",
+      "damping_rate",
+      "growth_over_residual",
+      "recurrence_amplitude"
+    ],
+    "recurrence_weight": 0.25,
+    "residual_floor": 1e-06,
+    "residual_weight": 1.0
+  },
+  "objective_names": [
+    "inverse_residual",
+    "damping_rate",
+    "growth_over_residual",
+    "recurrence_amplitude"
+  ],
+  "objective_rows": [
+    [
+      [
+        [
+          52.90413284301758,
+          0.0,
+          0.0,
+          501.85064697265625
+        ],
+        [
+          7.292597770690918,
+          0.0,
+          0.0,
+          110.03538513183594
+        ],
+        [
+          10.656514167785645,
+          0.0,
+          0.0,
+          156.69105529785156
+        ],
+        [
+          1.9008909463882446,
+          0.0,
+          0.0,
+          47.960384368896484
+        ]
+      ]
+    ]
+  ],
+  "promotion_ready": false,
+  "recurrence_source": "auto",
+  "reduced_objective": 30.765390396118164,
+  "reduction": "weighted_mean",
+  "row_table": [
+    {
+      "alpha": 0.0,
+      "damping_rate": 0.0,
+      "growth_over_residual": 0.0,
+      "inverse_residual": 52.90413284301758,
+      "kx": 0.05,
+      "linear_growth_rate": 0.0,
+      "recurrence_amplitude": 501.8506361142562,
+      "residual_level": 0.018902115221135652,
+      "sample_objective": 79.27413092719183,
+      "surface": 0.0
+    },
+    {
+      "alpha": 0.0,
+      "damping_rate": 0.0,
+      "growth_over_residual": 0.0,
+      "inverse_residual": 7.292597770690918,
+      "kx": 0.07,
+      "linear_growth_rate": 0.0,
+      "recurrence_amplitude": 110.03538250209692,
+      "residual_level": 0.13712533795361273,
+      "sample_objective": 15.467308468288843,
+      "surface": 0.0
+    },
+    {
+      "alpha": 0.0,
+      "damping_rate": 0.0,
+      "growth_over_residual": 0.0,
+      "inverse_residual": 10.656514167785645,
+      "kx": 0.1,
+      "linear_growth_rate": 0.0,
+      "recurrence_amplitude": 156.69105672438332,
+      "residual_level": 0.09383931876523588,
+      "sample_objective": 22.146345774332683,
+      "surface": 0.0
+    },
+    {
+      "alpha": 0.0,
+      "damping_rate": 0.0,
+      "growth_over_residual": 0.0,
+      "inverse_residual": 1.9008909463882446,
+      "kx": 0.3,
+      "linear_growth_rate": 0.0,
+      "recurrence_amplitude": 47.9603856700594,
+      "residual_level": 0.5260690983631888,
+      "sample_objective": 6.173772017161051,
+      "surface": 0.0
+    }
+  ],
+  "sample_count": 4,
+  "source_paths": [
+    "docs/_static/w7x_zonal_response_panel.csv",
+    "docs/_static/w7x_zonal_reference_compare.csv"
+  ],
+  "validation_status": "diagnostic"
+}

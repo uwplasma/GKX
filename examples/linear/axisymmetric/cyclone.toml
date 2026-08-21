@@ -1,0 +1,124 @@
+# Benchmark-facing linear example.
+# For parity-sensitive reproduction against tracked reference outputs, run with:
+#   JAX_ENABLE_X64=1 gkx examples/linear/axisymmetric/cyclone.toml
+# For faster exploratory runs, omit JAX_ENABLE_X64 and use the default precision policy.
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 24
+Nz = 96
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 20.0
+ntheta = 32
+nperiod = 2
+
+[time]
+# Horizon, scheme and step size match the GX reference deck for this case
+# (benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in): t_max = 150
+# and rk4, whose adaptive step averages ~0.0047. At gamma ~= 0.0930 this is
+# gamma*t_max ~= 14, well clear of the transient -- the fitted growth rate is
+# 24% high at t_max = 30 and only settles beyond t_max ~= 60. dt = 0.004663 is
+# the step already used by tools/artifacts/make_tables.py and by the tracked
+# parity artifact, so t_max/dt = 32168 steps (divisible by sample_stride).
+t_max = 150.0
+dt = 0.004663
+method = "rk4"
+use_diffrax = false
+sample_stride = 2
+progress_bar = true
+
+[geometry]
+q = 1.4
+s_hat = 0.8
+epsilon = 0.18
+R0 = 2.77778
+
+[init]
+init_field = "density"
+init_amp = 1.0e-10
+gaussian_init = true
+gaussian_width = 0.5
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+tau_e = 1.0
+collisions = true
+hypercollisions = true
+
+[collisions]
+nu_hermite = 1.0
+nu_laguerre = 2.0
+nu_hyper = 0.0
+p_hyper = 4.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "cyclone"
+diagnostic_norm = "none"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 1.0
+bpar = 0.0
+nonlinear = 0.0
+
+[run]
+# Nl/Nm match the GX reference deck's nlaguerre = 16, nhermite = 48. The former
+# 24/12 is Hermite-starved for this case and reports gamma ~4.5% low.
+ky = 0.3
+Nl = 16
+Nm = 48
+solver = "krylov"
+
+[scan]
+ky = [0.1, 0.2, 0.3, 0.4, 0.5]
+Nl = 16
+Nm = 48
+solver = "krylov"
+
+[fit]
+# window_method is left at the default "stationary", which selects the longest
+# window over which the instantaneous gamma(t) is stationary and enforces a
+# two-growth-time floor. This is the analogue of what GX does -- its check.py
+# averages the instantaneous gamma over the back half of the trace -- and it is
+# what every other shipped deck uses. The former "loglinear" override scored
+# candidate windows instead and, with min_points an absolute sample count, took
+# the shortest legal window: 0.32 time units, 0.2% of this run.
+#
+# mode_method stays "z_index": GX computes its growth rate from phi at a single
+# midplane z index (growthRates in src/device_funcs.cu), so this is the
+# parity-matched observable. "project" converges faster from a short horizon but
+# measures a different quantity than the reference.
+auto_window = true
+window_fraction = 0.3
+start_fraction = 0.58
+min_points = 80
+min_amp_fraction = 0.05
+mode_method = "z_index"

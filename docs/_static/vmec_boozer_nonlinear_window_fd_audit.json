@@ -1,0 +1,419 @@
+{
+  "case": "mode21_qh_vmec_boozer_imported_geometry_compact_startup_window",
+  "case_name": "nfp4_QH_warm_start",
+  "claim_level": "vmec_boozer_geometry_perturbed_startup_plumbing_fd_audit_not_transport_average",
+  "diagnostics": {
+    "forward_backward_same_sign": false,
+    "observable_ordered_response": false
+  },
+  "gates": {
+    "finite_outputs": true,
+    "geometry_perturbation_resolved": true,
+    "repeatability": true,
+    "resolved_fd_response": true,
+    "window_cv": true,
+    "window_trend": true
+  },
+  "kind": "vmec_boozer_nonlinear_startup_finite_difference_audit",
+  "metrics": {
+    "backward_dq_dparameter": 2.934990035699126e-07,
+    "central_fd_dq_dparameter": 1.2089961827296324e-07,
+    "derivative_asymmetry": 2.8552511209300935,
+    "forward_dq_dparameter": -5.169976702398613e-08,
+    "max_window_cv": 0.10101315065705517,
+    "max_window_trend": 0.28570832196925483,
+    "min_geometry_relative_change": 0.5720913689624155,
+    "repeatability_relative_error": 0.0,
+    "response_fraction": 0.04008881189273438
+  },
+  "next_action": "Use this only as a VMEC/Boozer-perturbed startup-response plumbing FD audit. Promoted nonlinear stellarator optimization still requires long post-transient running-average heat-flux windows, optimized-equilibrium audits, and a validated gradient/adjoint strategy.",
+  "parameter_name": "Rcos_mid_surface_m1",
+  "passed": true,
+  "perturbation_step": 1e-05,
+  "production_nonlinear_window_gradient_gate": false,
+  "runs": [
+    {
+      "geometry_file_name": "minus_geometry.nc",
+      "geometry_response": {
+        "max_profile_relative_change": 2.5452793024805853,
+        "max_relative_change": 2.5452793024805853,
+        "max_scalar_relative_change": 0.23594929796636513,
+        "per_profile": {
+          "bgrad": 6.73919582281357e-05,
+          "bmag": 0.00028106391093614576,
+          "cvdrift": 0.437900248654053,
+          "cvdrift0": 0.04324012101440101,
+          "gbdrift": 0.437900248654053,
+          "gbdrift0": 0.04324012101440101,
+          "gds2": 2.4145789513906166,
+          "gds21": 2.5452793024805853,
+          "gds22": 0.6782823888480537,
+          "grho": 0.0005025382201252579,
+          "jacobian": 1.9253980742317545e-05
+        },
+        "per_scalar": {
+          "gradpar": 2.7583081347315463e-06,
+          "q": 7.684357584802903e-06,
+          "s_hat": 0.23594929796636513
+        }
+      },
+      "heat_flux": [
+        1.944674051269584e-12,
+        3.889343413180419e-12,
+        5.834002793768196e-12,
+        7.778646672567445e-12,
+        9.723269580568973e-12,
+        1.1667865903349383e-11,
+        1.3612430405518189e-11,
+        1.5556957538057585e-11,
+        1.7501441948376084e-11,
+        1.9445877998382494e-11,
+        2.139026045186076e-11,
+        2.333458360920598e-11,
+        2.527884191680265e-11,
+        2.722303028492809e-11,
+        2.916714333132501e-11,
+        3.111117549879367e-11
+      ],
+      "label": "minus",
+      "perturbation": -1e-05,
+      "time": [
+        0.0020000000949949026,
+        0.004000000189989805,
+        0.006000000052154064,
+        0.00800000037997961,
+        0.010000000707805157,
+        0.012000001035630703,
+        0.01400000136345625,
+        0.01600000075995922,
+        0.018000001087784767,
+        0.020000001415610313,
+        0.02200000174343586,
+        0.024000002071261406,
+        0.026000002399086952,
+        0.0280000027269125,
+        0.030000003054738045,
+        0.03200000151991844
+      ],
+      "window": {
+        "cv": 0.10099716255396925,
+        "last": 3.111117549879367e-11,
+        "mean": 2.722295492821108e-11,
+        "n_samples": 5,
+        "slope": 9.720742814159677e-10,
+        "start_index": 11,
+        "std": 2.7494412040839126e-12,
+        "t_max": 0.03200000151991844,
+        "t_min": 0.024000002071261406,
+        "trend": 0.28566310071367607
+      }
+    },
+    {
+      "geometry_file_name": "base_geometry.nc",
+      "geometry_response": {
+        "max_profile_relative_change": 0.0,
+        "max_relative_change": 0.0,
+        "max_scalar_relative_change": 0.0,
+        "per_profile": {
+          "bgrad": 0.0,
+          "bmag": 0.0,
+          "cvdrift": 0.0,
+          "cvdrift0": 0.0,
+          "gbdrift": 0.0,
+          "gbdrift0": 0.0,
+          "gds2": 0.0,
+          "gds21": 0.0,
+          "gds22": 0.0,
+          "grho": 0.0,
+          "jacobian": 0.0
+        },
+        "per_scalar": {
+          "gradpar": 0.0,
+          "q": 0.0,
+          "s_hat": 0.0
+        }
+      },
+      "heat_flux": [
+        2.1541663606459496e-12,
+        4.308332378366868e-12,
+        6.46249710553455e-12,
+        8.616659612418782e-12,
+        1.0770818815324467e-11,
+        1.2924974178378859e-11,
+        1.5079124324206565e-11,
+        1.7233268684611912e-11,
+        1.9387406079885245e-11,
+        2.1541535916433467e-11,
+        2.3695656567280376e-11,
+        2.5849767720967075e-11,
+        2.80038683013674e-11,
+        3.0157957444510575e-11,
+        3.231203392282038e-11,
+        3.4466097429885603e-11
+      ],
+      "label": "base",
+      "perturbation": 0.0,
+      "time": [
+        0.0020000000949949026,
+        0.004000000189989805,
+        0.006000000052154064,
+        0.00800000037997961,
+        0.010000000707805157,
+        0.012000001035630703,
+        0.01400000136345625,
+        0.01600000075995922,
+        0.018000001087784767,
+        0.020000001415610313,
+        0.02200000174343586,
+        0.024000002071261406,
+        0.026000002399086952,
+        0.0280000027269125,
+        0.030000003054738045,
+        0.03200000151991844
+      ],
+      "window": {
+        "cv": 0.10101260862403574,
+        "last": 3.4466097429885603e-11,
+        "mean": 3.0157944963910205e-11,
+        "n_samples": 5,
+        "slope": 1.0770412760387968e-09,
+        "start_index": 11,
+        "std": 3.0463326915446712e-12,
+        "t_max": 0.03200000151991844,
+        "t_min": 0.024000002071261406,
+        "trend": 0.2857067888678206
+      }
+    },
+    {
+      "geometry_file_name": "plus_geometry.nc",
+      "geometry_response": {
+        "max_profile_relative_change": 0.5720913689624155,
+        "max_relative_change": 0.5720913689624155,
+        "max_scalar_relative_change": 0.23562726766940803,
+        "per_profile": {
+          "bgrad": 3.3011324200457604e-05,
+          "bmag": 0.00012096446745336233,
+          "cvdrift": 0.43582398248570864,
+          "cvdrift0": 0.04317466600082451,
+          "gbdrift": 0.43582398248570864,
+          "gbdrift0": 0.04317466600082451,
+          "gds2": 0.5720913689624155,
+          "gds21": 0.41756365690681174,
+          "gds22": 0.02514179027799497,
+          "grho": 0.00023571844942689454,
+          "jacobian": 9.30917264094222e-06
+        },
+        "per_scalar": {
+          "gradpar": 1.5100994670558254e-06,
+          "q": 2.2895668326583518e-05,
+          "s_hat": 0.23562726766940803
+        }
+      },
+      "heat_flux": [
+        2.1172335301876493e-12,
+        4.2344663047462066e-12,
+        6.351697657638839e-12,
+        8.468926919751123e-12,
+        1.0586153248046758e-11,
+        1.2703376404088228e-11,
+        1.4820595284840227e-11,
+        1.6937809605209358e-11,
+        1.905501818165768e-11,
+        2.117222116001282e-11,
+        2.3289416760516108e-11,
+        2.5406605097314717e-11,
+        2.7523785261524676e-11,
+        2.9640956809781356e-11,
+        3.175811887529945e-11,
+        3.3875270424431504e-11
+      ],
+      "label": "plus",
+      "perturbation": 1e-05,
+      "time": [
+        0.0020000000949949026,
+        0.004000000189989805,
+        0.006000000052154064,
+        0.00800000037997961,
+        0.010000000707805157,
+        0.012000001035630703,
+        0.01400000136345625,
+        0.01600000075995922,
+        0.018000001087784767,
+        0.020000001415610313,
+        0.02200000174343586,
+        0.024000002071261406,
+        0.026000002399086952,
+        0.0280000027269125,
+        0.030000003054738045,
+        0.03200000151991844
+      ],
+      "window": {
+        "cv": 0.10101315065705517,
+        "last": 3.3875270424431504e-11,
+        "mean": 2.9640947293670344e-11,
+        "n_samples": 5,
+        "slope": 1.0585832370620123e-09,
+        "start_index": 11,
+        "std": 2.9941254745933544e-12,
+        "t_max": 0.03200000151991844,
+        "t_min": 0.024000002071261406,
+        "trend": 0.28570832196925483
+      }
+    },
+    {
+      "geometry_file_name": "base_repeat_geometry.nc",
+      "geometry_response": {
+        "max_profile_relative_change": 0.0,
+        "max_relative_change": 0.0,
+        "max_scalar_relative_change": 0.0,
+        "per_profile": {
+          "bgrad": 0.0,
+          "bmag": 0.0,
+          "cvdrift": 0.0,
+          "cvdrift0": 0.0,
+          "gbdrift": 0.0,
+          "gbdrift0": 0.0,
+          "gds2": 0.0,
+          "gds21": 0.0,
+          "gds22": 0.0,
+          "grho": 0.0,
+          "jacobian": 0.0
+        },
+        "per_scalar": {
+          "gradpar": 0.0,
+          "q": 0.0,
+          "s_hat": 0.0
+        }
+      },
+      "heat_flux": [
+        2.1541663606459496e-12,
+        4.308332378366868e-12,
+        6.46249710553455e-12,
+        8.616659612418782e-12,
+        1.0770818815324467e-11,
+        1.2924974178378859e-11,
+        1.5079124324206565e-11,
+        1.7233268684611912e-11,
+        1.9387406079885245e-11,
+        2.1541535916433467e-11,
+        2.3695656567280376e-11,
+        2.5849767720967075e-11,
+        2.80038683013674e-11,
+        3.0157957444510575e-11,
+        3.231203392282038e-11,
+        3.4466097429885603e-11
+      ],
+      "label": "base_repeat",
+      "perturbation": 0.0,
+      "time": [
+        0.0020000000949949026,
+        0.004000000189989805,
+        0.006000000052154064,
+        0.00800000037997961,
+        0.010000000707805157,
+        0.012000001035630703,
+        0.01400000136345625,
+        0.01600000075995922,
+        0.018000001087784767,
+        0.020000001415610313,
+        0.02200000174343586,
+        0.024000002071261406,
+        0.026000002399086952,
+        0.0280000027269125,
+        0.030000003054738045,
+        0.03200000151991844
+      ],
+      "window": {
+        "cv": 0.10101260862403574,
+        "last": 3.4466097429885603e-11,
+        "mean": 3.0157944963910205e-11,
+        "n_samples": 5,
+        "slope": 1.0770412760387968e-09,
+        "start_index": 11,
+        "std": 3.0463326915446712e-12,
+        "t_max": 0.03200000151991844,
+        "t_min": 0.024000002071261406,
+        "trend": 0.2857067888678206
+      }
+    }
+  ],
+  "tail_fraction": 0.3,
+  "thresholds": {
+    "max_window_cv": 0.15,
+    "max_window_trend": 0.4,
+    "min_geometry_relative_change": 1e-07,
+    "min_response_fraction": 0.03,
+    "repeatability_rtol": 1e-06
+  },
+  "transport_average_gate": false,
+  "transport_average_requirements": {
+    "passed": false,
+    "requirements": {
+      "max_running_mean_rel_change": 0.05,
+      "min_abs_mean_heat_flux": 1e-06,
+      "min_post_transient_samples": 64,
+      "min_total_time": 50.0,
+      "transient_time": 20.0
+    },
+    "runs": [
+      {
+        "gates": {
+          "mean_heat_flux_above_noise_floor": false,
+          "post_transient_samples": false,
+          "running_mean_converged": false,
+          "total_time": false
+        },
+        "label": "minus",
+        "passed": false,
+        "post_transient_mean": null,
+        "post_transient_samples": 0,
+        "running_mean_rel_change": null,
+        "total_time": 0.03000000142492354
+      },
+      {
+        "gates": {
+          "mean_heat_flux_above_noise_floor": false,
+          "post_transient_samples": false,
+          "running_mean_converged": false,
+          "total_time": false
+        },
+        "label": "base",
+        "passed": false,
+        "post_transient_mean": null,
+        "post_transient_samples": 0,
+        "running_mean_rel_change": null,
+        "total_time": 0.03000000142492354
+      },
+      {
+        "gates": {
+          "mean_heat_flux_above_noise_floor": false,
+          "post_transient_samples": false,
+          "running_mean_converged": false,
+          "total_time": false
+        },
+        "label": "plus",
+        "passed": false,
+        "post_transient_mean": null,
+        "post_transient_samples": 0,
+        "running_mean_rel_change": null,
+        "total_time": 0.03000000142492354
+      },
+      {
+        "gates": {
+          "mean_heat_flux_above_noise_floor": false,
+          "post_transient_samples": false,
+          "running_mean_converged": false,
+          "total_time": false
+        },
+        "label": "base_repeat",
+        "passed": false,
+        "post_transient_mean": null,
+        "post_transient_samples": 0,
+        "running_mean_rel_change": null,
+        "total_time": 0.03000000142492354
+      }
+    ]
+  },
+  "vmec_boozer_production_nonlinear_observable_fd_path_gate": false,
+  "vmec_boozer_startup_nonlinear_plumbing_fd_path_gate": true
+}

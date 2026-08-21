@@ -1,0 +1,527 @@
+{
+  "backend": "cpu",
+  "claim_scope": "large fixed-step nonlinear state-sharding strong-scaling artifact with numerical identity gates; speedup is a separate fail-closed field, and this artifact is profiler evidence unless speedup_passed is true, not as a broad production speedup claim",
+  "devices": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "dt": 0.02,
+  "grid": {
+    "Nl": 4,
+    "Nm": 8,
+    "Nx": 24,
+    "Ny_requested": 48,
+    "Nz": 96
+  },
+  "identity_passed": true,
+  "kind": "nonlinear_sharding_strong_scaling_sweep",
+  "laguerre_mode": "grid",
+  "method": "rk2",
+  "profiles": {
+    "1": {
+      "_profile_json": "/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_1devices.json",
+      "best_identity_preserving_candidate": {
+        "engineering_speedup_median": 1.0781218405371065,
+        "identity_gate_pass": true,
+        "spec": "kx",
+        "state_sharding_active": false
+      },
+      "case": "cyclone_nonlinear_fixed_step",
+      "claim_scope": "Profiler/identity artifact for fixed-step nonlinear state sharding and candidate state-axis decompositions. Do not use as a published runtime claim without a larger matched CPU/GPU sweep and profiler trace review.",
+      "default_backend": "cpu",
+      "device_count": 1,
+      "devices": [
+        "TFRT_CPU_0"
+      ],
+      "dt": 0.02,
+      "engineering_speedup": 1.0699053791839215,
+      "identity_gate_pass": true,
+      "laguerre_mode": "grid",
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "method": "rk2",
+      "profiler_trace": {
+        "error": null,
+        "path": null,
+        "requested": false
+      },
+      "repeats": 2,
+      "serial_stats_s": {
+        "max": 5.921293365769088,
+        "mean": 5.881879603723064,
+        "median": 5.881879603723064,
+        "min": 5.84246584167704,
+        "std": 0.0394137620460242
+      },
+      "serial_times_s": [
+        5.921293365769088,
+        5.84246584167704
+      ],
+      "serial_warm_s": 5.881879603723064,
+      "sharded_results": {
+        "auto": {
+          "engineering_speedup_median": 1.0699053791839215,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_state_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": false,
+          "stats_s": {
+            "max": 5.502461925148964,
+            "mean": 5.497569895582274,
+            "median": 5.497569895582274,
+            "min": 5.492677866015583,
+            "std": 0.004892029566690326
+          },
+          "times_s": [
+            5.502461925148964,
+            5.492677866015583
+          ]
+        },
+        "kx": {
+          "engineering_speedup_median": 1.0781218405371065,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_state_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": false,
+          "stats_s": {
+            "max": 5.492892879061401,
+            "mean": 5.455672431970015,
+            "median": 5.455672431970015,
+            "min": 5.4184519848786294,
+            "std": 0.03722044709138572
+          },
+          "times_s": [
+            5.4184519848786294,
+            5.492892879061401
+          ]
+        }
+      },
+      "sharded_warm_s": 5.497569895582274,
+      "sharding_options": [
+        "auto",
+        "kx"
+      ],
+      "state_shape": [
+        4,
+        8,
+        48,
+        24,
+        96
+      ],
+      "state_sharding_active": false,
+      "state_sharding_requested": "auto",
+      "steps": 8,
+      "warmups": 1
+    },
+    "2": {
+      "_profile_json": "/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_2devices.json",
+      "best_identity_preserving_candidate": {
+        "engineering_speedup_median": 1.3998524510741943,
+        "identity_gate_pass": true,
+        "spec": "kx",
+        "state_sharding_active": true
+      },
+      "case": "cyclone_nonlinear_fixed_step",
+      "claim_scope": "Profiler/identity artifact for fixed-step nonlinear state sharding and candidate state-axis decompositions. Do not use as a published runtime claim without a larger matched CPU/GPU sweep and profiler trace review.",
+      "default_backend": "cpu",
+      "device_count": 2,
+      "devices": [
+        "TFRT_CPU_0",
+        "TFRT_CPU_1"
+      ],
+      "dt": 0.02,
+      "engineering_speedup": 1.3094421442313902,
+      "identity_gate_pass": true,
+      "laguerre_mode": "grid",
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "method": "rk2",
+      "profiler_trace": {
+        "error": null,
+        "path": null,
+        "requested": false
+      },
+      "repeats": 2,
+      "serial_stats_s": {
+        "max": 5.779139841906726,
+        "mean": 5.752688911976293,
+        "median": 5.752688911976293,
+        "min": 5.726237982045859,
+        "std": 0.02645092993043363
+      },
+      "serial_times_s": [
+        5.779139841906726,
+        5.726237982045859
+      ],
+      "serial_warm_s": 5.752688911976293,
+      "sharded_results": {
+        "auto": {
+          "engineering_speedup_median": 1.3094421442313902,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_state_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": true,
+          "stats_s": {
+            "max": 4.4446077211759984,
+            "mean": 4.393236415460706,
+            "median": 4.393236415460706,
+            "min": 4.341865109745413,
+            "std": 0.05137130571529269
+          },
+          "times_s": [
+            4.4446077211759984,
+            4.341865109745413
+          ]
+        },
+        "kx": {
+          "engineering_speedup_median": 1.3998524510741943,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_state_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": true,
+          "stats_s": {
+            "max": 4.165884807705879,
+            "mean": 4.109496616991237,
+            "median": 4.109496616991237,
+            "min": 4.053108426276594,
+            "std": 0.056388190714642406
+          },
+          "times_s": [
+            4.053108426276594,
+            4.165884807705879
+          ]
+        }
+      },
+      "sharded_warm_s": 4.393236415460706,
+      "sharding_options": [
+        "auto",
+        "kx"
+      ],
+      "state_shape": [
+        4,
+        8,
+        48,
+        24,
+        96
+      ],
+      "state_sharding_active": true,
+      "state_sharding_requested": "auto",
+      "steps": 8,
+      "warmups": 1
+    },
+    "4": {
+      "_profile_json": "/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_4devices.json",
+      "best_identity_preserving_candidate": {
+        "engineering_speedup_median": 1.4849340947619287,
+        "identity_gate_pass": true,
+        "spec": "kx",
+        "state_sharding_active": true
+      },
+      "case": "cyclone_nonlinear_fixed_step",
+      "claim_scope": "Profiler/identity artifact for fixed-step nonlinear state sharding and candidate state-axis decompositions. Do not use as a published runtime claim without a larger matched CPU/GPU sweep and profiler trace review.",
+      "default_backend": "cpu",
+      "device_count": 4,
+      "devices": [
+        "TFRT_CPU_0",
+        "TFRT_CPU_1",
+        "TFRT_CPU_2",
+        "TFRT_CPU_3"
+      ],
+      "dt": 0.02,
+      "engineering_speedup": 1.2046128443528108,
+      "identity_gate_pass": true,
+      "laguerre_mode": "grid",
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "method": "rk2",
+      "profiler_trace": {
+        "error": null,
+        "path": null,
+        "requested": false
+      },
+      "repeats": 2,
+      "serial_stats_s": {
+        "max": 5.928876236081123,
+        "mean": 5.818151093553752,
+        "median": 5.818151093553752,
+        "min": 5.70742595102638,
+        "std": 0.11072514252737164
+      },
+      "serial_times_s": [
+        5.928876236081123,
+        5.70742595102638
+      ],
+      "serial_warm_s": 5.818151093553752,
+      "sharded_results": {
+        "auto": {
+          "engineering_speedup_median": 1.2046128443528108,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_state_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": true,
+          "stats_s": {
+            "max": 4.8299076640978456,
+            "mean": 4.82989295758307,
+            "median": 4.82989295758307,
+            "min": 4.829878251068294,
+            "std": 1.4706514775753021e-05
+          },
+          "times_s": [
+            4.8299076640978456,
+            4.829878251068294
+          ]
+        },
+        "kx": {
+          "engineering_speedup_median": 1.4849340947619287,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_state_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": true,
+          "stats_s": {
+            "max": 3.972746341023594,
+            "mean": 3.918120753020048,
+            "median": 3.918120753020048,
+            "min": 3.863495165016502,
+            "std": 0.054625588003546
+          },
+          "times_s": [
+            3.863495165016502,
+            3.972746341023594
+          ]
+        }
+      },
+      "sharded_warm_s": 4.82989295758307,
+      "sharding_options": [
+        "auto",
+        "kx"
+      ],
+      "state_shape": [
+        4,
+        8,
+        48,
+        24,
+        96
+      ],
+      "state_sharding_active": true,
+      "state_sharding_requested": "auto",
+      "steps": 8,
+      "warmups": 1
+    },
+    "8": {
+      "_profile_json": "/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_8devices.json",
+      "best_identity_preserving_candidate": {
+        "engineering_speedup_median": 1.4566639590910255,
+        "identity_gate_pass": true,
+        "spec": "kx",
+        "state_sharding_active": true
+      },
+      "case": "cyclone_nonlinear_fixed_step",
+      "claim_scope": "Profiler/identity artifact for fixed-step nonlinear state sharding and candidate state-axis decompositions. Do not use as a published runtime claim without a larger matched CPU/GPU sweep and profiler trace review.",
+      "default_backend": "cpu",
+      "device_count": 8,
+      "devices": [
+        "TFRT_CPU_0",
+        "TFRT_CPU_1",
+        "TFRT_CPU_2",
+        "TFRT_CPU_3",
+        "TFRT_CPU_4",
+        "TFRT_CPU_5",
+        "TFRT_CPU_6",
+        "TFRT_CPU_7"
+      ],
+      "dt": 0.02,
+      "engineering_speedup": 1.0767073896123065,
+      "identity_gate_pass": true,
+      "laguerre_mode": "grid",
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "method": "rk2",
+      "profiler_trace": {
+        "error": null,
+        "path": null,
+        "requested": false
+      },
+      "repeats": 2,
+      "serial_stats_s": {
+        "max": 5.899313637986779,
+        "mean": 5.799778563901782,
+        "median": 5.799778563901782,
+        "min": 5.700243489816785,
+        "std": 0.09953507408499718
+      },
+      "serial_times_s": [
+        5.899313637986779,
+        5.700243489816785
+      ],
+      "serial_warm_s": 5.799778563901782,
+      "sharded_results": {
+        "auto": {
+          "engineering_speedup_median": 1.0767073896123065,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_state_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": true,
+          "stats_s": {
+            "max": 5.430272632744163,
+            "mean": 5.3865874980110675,
+            "median": 5.3865874980110675,
+            "min": 5.342902363277972,
+            "std": 0.043685134733095765
+          },
+          "times_s": [
+            5.342902363277972,
+            5.430272632744163
+          ]
+        },
+        "kx": {
+          "engineering_speedup_median": 1.4566639590910255,
+          "error": null,
+          "identity_gate_pass": true,
+          "max_abs_state_error": 0.0,
+          "max_rel_state_error": 0.0,
+          "state_sharding_active": true,
+          "stats_s": {
+            "max": 4.032071797642857,
+            "mean": 3.981548748910427,
+            "median": 3.981548748910427,
+            "min": 3.9310257001779974,
+            "std": 0.05052304873242974
+          },
+          "times_s": [
+            3.9310257001779974,
+            4.032071797642857
+          ]
+        }
+      },
+      "sharded_warm_s": 5.3865874980110675,
+      "sharding_options": [
+        "auto",
+        "kx"
+      ],
+      "state_shape": [
+        4,
+        8,
+        48,
+        24,
+        96
+      ],
+      "state_sharding_active": true,
+      "state_sharding_requested": "auto",
+      "steps": 8,
+      "warmups": 1
+    }
+  },
+  "repeats": 2,
+  "rows": [
+    {
+      "actual_devices": 1,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "error": null,
+      "identity_gate_pass": true,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_median_s": 5.455672431970015,
+      "profile_json": "/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_1devices.json",
+      "requested_devices": 1,
+      "same_process_speedup": 1.0781218405371065,
+      "serial_median_s": 5.881879603723064,
+      "state_shape": [
+        4,
+        8,
+        48,
+        24,
+        96
+      ],
+      "state_sharding_active": false,
+      "strong_speedup_vs_1_device": 1.0
+    },
+    {
+      "actual_devices": 2,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "error": null,
+      "identity_gate_pass": true,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_median_s": 4.109496616991237,
+      "profile_json": "/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_2devices.json",
+      "requested_devices": 2,
+      "same_process_speedup": 1.3998524510741943,
+      "serial_median_s": 5.752688911976293,
+      "state_shape": [
+        4,
+        8,
+        48,
+        24,
+        96
+      ],
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 1.3275768154700123
+    },
+    {
+      "actual_devices": 4,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "error": null,
+      "identity_gate_pass": true,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_median_s": 3.918120753020048,
+      "profile_json": "/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_4devices.json",
+      "requested_devices": 4,
+      "same_process_speedup": 1.4849340947619287,
+      "serial_median_s": 5.818151093553752,
+      "state_shape": [
+        4,
+        8,
+        48,
+        24,
+        96
+      ],
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 1.3924206975409927
+    },
+    {
+      "actual_devices": 8,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "error": null,
+      "identity_gate_pass": true,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_median_s": 3.981548748910427,
+      "profile_json": "/tmp/gkx-nonlinear-scaling-bi3wq_iq/cpu_8devices.json",
+      "requested_devices": 8,
+      "same_process_speedup": 1.4566639590910255,
+      "serial_median_s": 5.799778563901782,
+      "state_shape": [
+        4,
+        8,
+        48,
+        24,
+        96
+      ],
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 1.3702387628590482
+    }
+  ],
+  "sharding": "auto",
+  "sharding_options": "auto,kx",
+  "speedup_blockers": [],
+  "speedup_passed": true,
+  "speedup_threshold_vs_1_device": 1.0,
+  "status": "identity_and_speedup",
+  "steps": 8,
+  "timeout_s": 600.0,
+  "warmups": 1
+}

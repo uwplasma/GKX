@@ -1,0 +1,121 @@
+{
+  "actual_devices": 2,
+  "atol": 2e-05,
+  "case": "Composed electrostatic linear-slices RHS identity gate",
+  "claim_scope": "single-species periodic electrostatic linear-RHS identity for the gated slices; not a linked-boundary, collision, electromagnetic, nonlinear, or speedup claim",
+  "grid": {
+    "Nx": 1,
+    "Ny_actual": 4,
+    "Ny_requested": 4,
+    "Nz": 16
+  },
+  "identity_passed": true,
+  "max_abs_error": 1.467594188397925e-07,
+  "max_phi_abs_error": 4.165001232792065e-09,
+  "max_rel_error": 3.6947963621969393e-07,
+  "notes": "This is the composed call-graph gate for streaming, mirror, curvature, grad-B, and diamagnetic-drive slices after each primitive has passed its own identity gate.",
+  "phi_norm": 0.16790585219860077,
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 2,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 2,
+    "shard_shape": [
+      2,
+      4,
+      4,
+      1,
+      16
+    ],
+    "state_shape": [
+      2,
+      8,
+      4,
+      1,
+      16
+    ]
+  },
+  "reference_source": "gkx.linear.linear_rhs_cached with streaming/mirror/curvature/gradB/diamagnetic enabled",
+  "requested_devices": 2,
+  "rows": [
+    {
+      "abs_error": 5.960464477539063e-08,
+      "m": 0,
+      "serial_norm": 1.0457605123519897,
+      "sharded_norm": 1.0457606315612793
+    },
+    {
+      "abs_error": 1.467594188397925e-07,
+      "m": 1,
+      "serial_norm": 1.30357027053833,
+      "sharded_norm": 1.3035701513290405
+    },
+    {
+      "abs_error": 6.322026990801533e-08,
+      "m": 2,
+      "serial_norm": 0.9904649257659912,
+      "sharded_norm": 0.9904648661613464
+    },
+    {
+      "abs_error": 3.564666783972825e-08,
+      "m": 3,
+      "serial_norm": 1.0597203969955444,
+      "sharded_norm": 1.0597203969955444
+    },
+    {
+      "abs_error": 0.0,
+      "m": 4,
+      "serial_norm": 0.8060530424118042,
+      "sharded_norm": 0.8060530424118042
+    },
+    {
+      "abs_error": 0.0,
+      "m": 5,
+      "serial_norm": 0.20365284383296967,
+      "sharded_norm": 0.20365284383296967
+    },
+    {
+      "abs_error": 0.0,
+      "m": 6,
+      "serial_norm": 0.0,
+      "sharded_norm": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 7,
+      "serial_norm": 0.0,
+      "sharded_norm": 0.0
+    }
+  ],
+  "rtol": 2e-06,
+  "source": "gkx.linear.linear_rhs_parallel_cached backend=electrostatic_linear_slices",
+  "state_shape": [
+    2,
+    8,
+    4,
+    1,
+    16
+  ]
+}

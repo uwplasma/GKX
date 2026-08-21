@@ -1,0 +1,134 @@
+{
+  "claim_scope": "bounded current-branch performance audit; local CPU rows are admitted, office GPU timings are retained but rejected because both devices were at 100% utilization from pre-existing processes",
+  "git_revision": "9a0c44f86b0ebfbb291e9cb2602128b06088b517",
+  "kind": "gkx_representative_performance_refresh",
+  "local_host": {
+    "platform": "macOS-14.4.1-arm64-arm-64bit",
+    "processor": "arm"
+  },
+  "summary": {
+    "correctness_passed": true,
+    "cpu_rows_admitted": 2,
+    "gpu_rows_admitted": 0,
+    "gpu_rows_blocked": 2,
+    "next_action": "repeat the same commands when one office A4000 is idle",
+    "performance_claim_updated": false
+  },
+  "workloads": [
+    {
+      "case": "Cyclone linear fixed-step",
+      "correctness": {
+        "cpu_finite": true,
+        "gpu_finite": true,
+        "max_cpu_gpu_relative_norm_difference": 5.3461812761762405e-06
+      },
+      "cpu": {
+        "admitted": true,
+        "backend": "cpu",
+        "cold_first_run_s": 10.292033708188683,
+        "python_tracemalloc_peak_mb": 9.838784,
+        "software": {
+          "jax": "0.9.2",
+          "numpy": "2.4.4",
+          "python": "3.11.14"
+        },
+        "warm_median_s": 7.219342292286456,
+        "warm_times_s": [
+          7.224715707823634,
+          7.219342292286456,
+          7.212439875118434
+        ]
+      },
+      "gpu": {
+        "admitted": false,
+        "backend": "gpu",
+        "blocker": "both office GPUs sampled at 100% utilization",
+        "cold_first_run_s": 49.135347324074246,
+        "device": "NVIDIA RTX A4000",
+        "python_tracemalloc_peak_mb": 12.766805,
+        "software": {
+          "jax": "0.6.2",
+          "numpy": "2.2.4",
+          "python": "3.10.12"
+        },
+        "warm_coefficient_of_variation": 0.8097623336693437,
+        "warm_median_s": 34.030084120924585,
+        "warm_times_s": [
+          2.0925976259168237,
+          34.030084120924585,
+          41.697165435994975
+        ]
+      },
+      "parameters": {
+        "Nl": 4,
+        "Nm": 8,
+        "Nx": 1,
+        "Ny": 24,
+        "Nz": 96,
+        "dt": 0.01,
+        "method": "rk4",
+        "steps": 1000
+      }
+    },
+    {
+      "case": "Cyclone nonlinear prepared explicit diagnostics",
+      "correctness": {
+        "cpu_finite": true,
+        "gpu_finite": true,
+        "max_cpu_gpu_relative_summary_difference": 0.00044458075951960316
+      },
+      "cpu": {
+        "admitted": true,
+        "backend": "cpu",
+        "cold_compile_and_run_s": 44.21501070773229,
+        "devices": [
+          "TFRT_CPU_0"
+        ],
+        "host_peak_rss_bytes": 2451013632,
+        "software": {
+          "jax": "0.9.2",
+          "numpy": "2.4.4",
+          "python": "3.11.14"
+        },
+        "warm_median_s": 41.44420212507248,
+        "warm_times_s": [
+          41.464119208045304,
+          41.36944549996406,
+          41.44420212507248
+        ]
+      },
+      "gpu": {
+        "admitted": false,
+        "backend": "gpu",
+        "blocker": "both office GPUs sampled at 100% utilization",
+        "cold_compile_and_run_s": 21.60944071901031,
+        "device": "NVIDIA RTX A4000",
+        "device_peak_bytes_in_use": 417609728,
+        "devices": [
+          "cuda:0"
+        ],
+        "host_peak_rss_bytes": 1597837312,
+        "software": {
+          "jax": "0.6.2",
+          "numpy": "2.2.4",
+          "python": "3.10.12"
+        },
+        "warm_median_s": 11.082574770902283,
+        "warm_times_s": [
+          11.077543384977616,
+          11.082574770902283,
+          11.083475938998163
+        ]
+      },
+      "parameters": {
+        "Nl": 4,
+        "Nm": 8,
+        "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
+        "dt": 0.01,
+        "method": "rk3",
+        "resolved_diagnostics": false,
+        "steps": 200
+      }
+    }
+  ]
+}

@@ -1,0 +1,187 @@
+{
+  "all_line_searches_passed": true,
+  "case_name": "nfp4_QH_warm_start",
+  "claim_scope": "side-by-side one-parameter line-search comparison for reduced aggregate growth and quasilinear proxy objectives on the same QH VMEC/Boozer sample set; not a nonlinear turbulent transport or optimizer-convergence claim",
+  "final_delta_spread": 2e-08,
+  "initial_update_directions": {
+    "growth": "positive_delta",
+    "quasilinear_flux": "negative_delta"
+  },
+  "kind": "vmec_boozer_aggregate_line_search_comparison",
+  "n_samples": 2,
+  "notes": "Direction agreement is recorded as a diagnostic, not a pass/fail criterion beyond requiring both underlying line-search reports to be valid on the same samples.",
+  "objectives": [
+    "growth",
+    "quasilinear_flux"
+  ],
+  "options": {
+    "mboz": 21,
+    "n_hermite": 3,
+    "n_laguerre": 2,
+    "nboz": 21,
+    "ntheta": 4,
+    "nx": 1,
+    "ny": 6,
+    "surface_stencil_width": 3
+  },
+  "passed": true,
+  "reduction": "mean",
+  "relative_reduction_spread": 0.001706626597341806,
+  "reports": {
+    "growth": {
+      "accepted_steps": 1,
+      "case_name": "nfp4_QH_warm_start",
+      "claim_scope": "curvature-gated one-parameter line search for an aggregated VMEC/Boozer/GKX linear/quasilinear objective; not a multi-parameter or nonlinear turbulent transport optimization claim",
+      "final_delta": 1e-08,
+      "final_objective": 0.3039503792073248,
+      "history": [
+        {
+          "accepted": true,
+          "candidate_delta": 1e-08,
+          "candidate_objective": 0.3039503792073248,
+          "central_derivative": -15014.542291328647,
+          "curvature_ratio": 0.021176857011847305,
+          "delta": 0.0,
+          "finite_difference_passed": true,
+          "objective": 0.3041009317429306,
+          "step": 0
+        }
+      ],
+      "initial_delta": 0.0,
+      "initial_objective": 0.3041009317429306,
+      "kind": "vmec_boozer_aggregate_scalar_objective_line_search_report",
+      "max_steps": 1,
+      "mode_index": 1,
+      "n_samples": 2,
+      "objective": "growth",
+      "options": {
+        "mboz": 21,
+        "n_hermite": 3,
+        "n_laguerre": 2,
+        "nboz": 21,
+        "ntheta": 4,
+        "nx": 1,
+        "ny": 6,
+        "surface_stencil_width": 3
+      },
+      "passed": true,
+      "perturbation_step": 1e-07,
+      "radial_index": null,
+      "reduction": "mean",
+      "relative_reduction": 0.0004950742332255541,
+      "samples": [
+        {
+          "alpha": 0.0,
+          "selected_ky_index": 1,
+          "surface_index": null,
+          "weight": 0.5
+        },
+        {
+          "alpha": 0.0,
+          "selected_ky_index": 2,
+          "surface_index": null,
+          "weight": 0.5
+        }
+      ],
+      "source_scope": "mode21_vmec_boozer_state_multi_point",
+      "stop_reason": "max_steps",
+      "update_step": 1e-08
+    },
+    "quasilinear_flux": {
+      "accepted_steps": 1,
+      "case_name": "nfp4_QH_warm_start",
+      "claim_scope": "curvature-gated one-parameter line search for an aggregated VMEC/Boozer/GKX linear/quasilinear objective; not a multi-parameter or nonlinear turbulent transport optimization claim",
+      "final_delta": -1e-08,
+      "final_objective": 0.8850873757682598,
+      "history": [
+        {
+          "accepted": true,
+          "candidate_delta": -1e-08,
+          "candidate_objective": 0.8850873757682598,
+          "central_derivative": 195473.1214762512,
+          "curvature_ratio": 0.009455763808624477,
+          "delta": 0.0,
+          "finite_difference_passed": true,
+          "objective": 0.8870403732948899,
+          "step": 0
+        }
+      ],
+      "initial_delta": 0.0,
+      "initial_objective": 0.8870403732948899,
+      "kind": "vmec_boozer_aggregate_scalar_objective_line_search_report",
+      "max_steps": 1,
+      "mode_index": 1,
+      "n_samples": 2,
+      "objective": "quasilinear_flux",
+      "options": {
+        "mboz": 21,
+        "n_hermite": 3,
+        "n_laguerre": 2,
+        "nboz": 21,
+        "ntheta": 4,
+        "nx": 1,
+        "ny": 6,
+        "surface_stencil_width": 3
+      },
+      "passed": true,
+      "perturbation_step": 1e-07,
+      "radial_index": null,
+      "reduction": "mean",
+      "relative_reduction": 0.00220170083056736,
+      "samples": [
+        {
+          "alpha": 0.0,
+          "selected_ky_index": 1,
+          "surface_index": null,
+          "weight": 0.5
+        },
+        {
+          "alpha": 0.0,
+          "selected_ky_index": 2,
+          "surface_index": null,
+          "weight": 0.5
+        }
+      ],
+      "source_scope": "mode21_vmec_boozer_state_multi_point",
+      "stop_reason": "max_steps",
+      "update_step": 1e-08
+    }
+  },
+  "rows": [
+    {
+      "absolute_reduction": 0.00015055253560580795,
+      "accepted_steps": 1,
+      "final_delta": 1e-08,
+      "final_objective": 0.3039503792073248,
+      "initial_central_derivative": -15014.542291328647,
+      "initial_delta": 0.0,
+      "initial_objective": 0.3041009317429306,
+      "initial_update_direction": "positive_delta",
+      "max_steps": 1,
+      "n_samples": 2,
+      "objective": "growth",
+      "passed": true,
+      "relative_reduction": 0.0004950742332255541,
+      "stop_reason": "max_steps"
+    },
+    {
+      "absolute_reduction": 0.0019529975266301403,
+      "accepted_steps": 1,
+      "final_delta": -1e-08,
+      "final_objective": 0.8850873757682598,
+      "initial_central_derivative": 195473.1214762512,
+      "initial_delta": 0.0,
+      "initial_objective": 0.8870403732948899,
+      "initial_update_direction": "negative_delta",
+      "max_steps": 1,
+      "n_samples": 2,
+      "objective": "quasilinear_flux",
+      "passed": true,
+      "relative_reduction": 0.00220170083056736,
+      "stop_reason": "max_steps"
+    }
+  ],
+  "same_initial_update_direction": false,
+  "same_sample_set": true,
+  "source_scope": "mode21_vmec_boozer_state_multi_point"
+}

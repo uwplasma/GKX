@@ -1,0 +1,248 @@
+{
+  "claim_scope": "actual_linear_rhs_solver_objectives; not yet a full vmex_to_booz_xform_jax_to_solver gradient claim",
+  "eigenpair_gate": {
+    "ad_supported": true,
+    "atol": 0.002,
+    "biorthogonal_overlap_abs": 0.3501344621181488,
+    "branch_isolated": true,
+    "eigenvalue_gap": 0.3852716088294983,
+    "eigenvalue_imag": -0.25294697284698486,
+    "eigenvalue_real": 0.2906063199043274,
+    "eigenvalue_sensitivity_imag": [
+      0.40875867009162903,
+      -1.8765044212341309
+    ],
+    "eigenvalue_sensitivity_real": [
+      0.2064741551876068,
+      0.7360637784004211
+    ],
+    "gap_floor": 1e-06,
+    "jacobian_fd": [
+      [
+        0.20648537576198578,
+        0.736057698726654
+      ],
+      [
+        0.4087984263896942,
+        -1.8765031099319458
+      ],
+      [
+        -0.4511624276638031,
+        7.450580142176477e-06
+      ],
+      [
+        0.7928013205528259,
+        -4.333436489105225
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        6.061076641082764,
+        0.1348257064819336
+      ]
+    ],
+    "jacobian_implicit": [
+      [
+        0.2064741551876068,
+        0.7360637784004211
+      ],
+      [
+        0.40875867009162903,
+        -1.8765044212341309
+      ],
+      [
+        -0.4511536657810211,
+        2.647782615383676e-08
+      ],
+      [
+        0.7933515310287476,
+        -4.333962440490723
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        6.0615434646606445,
+        0.13422799110412598
+      ]
+    ],
+    "left_selected_index": 2,
+    "max_abs_error": 0.0005977153778076172,
+    "max_rel_error": 0.004433244916003536,
+    "passed": true,
+    "rtol": 0.1,
+    "selected_index": 5,
+    "selector": "max_real",
+    "sensitivity_method": "implicit_left_right_eigenpair",
+    "step": 0.001
+  },
+  "grid": {
+    "Nx": 1,
+    "Ny": 6,
+    "Nz": 4,
+    "selected_ky_index": 1
+  },
+  "kind": "linear_solver_geometry_gradient_gate",
+  "linear_growth_gradient_gate": true,
+  "n_hermite": 1,
+  "n_laguerre": 2,
+  "next_action": "Promote this solver-ready geometry-gradient gate to actual mode-21 VMEC/Boozer state coefficients, then add nonlinear-window objective gradients.",
+  "nonlinear_window_gradient_gate": false,
+  "objective_gates": [
+    {
+      "abs_error": 1.1220574378967285e-05,
+      "atol": 0.002,
+      "finite_difference": 0.20648537576198578,
+      "implicit": 0.2064741551876068,
+      "objective": "gamma",
+      "parameter": "bmag_ripple",
+      "passed": true,
+      "rel_error": 5.434077032119292e-05,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 6.079673767089844e-06,
+      "atol": 0.002,
+      "finite_difference": 0.736057698726654,
+      "implicit": 0.7360637784004211,
+      "objective": "gamma",
+      "parameter": "curvature_drift_scale",
+      "passed": true,
+      "rel_error": 8.259778788547963e-06,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 3.975629806518555e-05,
+      "atol": 0.002,
+      "finite_difference": 0.4087984263896942,
+      "implicit": 0.40875867009162903,
+      "objective": "omega",
+      "parameter": "bmag_ripple",
+      "passed": true,
+      "rel_error": 9.725159271353741e-05,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 1.3113021850585938e-06,
+      "atol": 0.002,
+      "finite_difference": -1.8765031099319458,
+      "implicit": -1.8765044212341309,
+      "objective": "omega",
+      "parameter": "curvature_drift_scale",
+      "passed": true,
+      "rel_error": 6.988009655396468e-07,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 8.761882781982422e-06,
+      "atol": 0.002,
+      "finite_difference": -0.4511624276638031,
+      "implicit": -0.4511536657810211,
+      "objective": "kperp_eff2",
+      "parameter": "bmag_ripple",
+      "passed": true,
+      "rel_error": 1.9420683649019628e-05,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 7.4241023160226405e-06,
+      "atol": 0.002,
+      "finite_difference": 7.450580142176477e-06,
+      "implicit": 2.647782615383676e-08,
+      "objective": "kperp_eff2",
+      "parameter": "curvature_drift_scale",
+      "passed": true,
+      "rel_error": 0.0037120511580113202,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 0.0005502104759216309,
+      "atol": 0.002,
+      "finite_difference": 0.7928013205528259,
+      "implicit": 0.7933515310287476,
+      "objective": "linear_heat_flux_weight",
+      "parameter": "bmag_ripple",
+      "passed": true,
+      "rel_error": 0.0006940080215027457,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 0.0005259513854980469,
+      "atol": 0.002,
+      "finite_difference": -4.333436489105225,
+      "implicit": -4.333962440490723,
+      "objective": "linear_heat_flux_weight",
+      "parameter": "curvature_drift_scale",
+      "passed": true,
+      "rel_error": 0.00012137050740684703,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 0.0,
+      "atol": 0.002,
+      "finite_difference": 0.0,
+      "implicit": 0.0,
+      "objective": "linear_particle_flux_weight",
+      "parameter": "bmag_ripple",
+      "passed": true,
+      "rel_error": 0.0,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 0.0,
+      "atol": 0.002,
+      "finite_difference": 0.0,
+      "implicit": 0.0,
+      "objective": "linear_particle_flux_weight",
+      "parameter": "curvature_drift_scale",
+      "passed": true,
+      "rel_error": 0.0,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 0.0004668235778808594,
+      "atol": 0.002,
+      "finite_difference": 6.061076641082764,
+      "implicit": 6.0615434646606445,
+      "objective": "mixing_length_heat_flux_proxy",
+      "parameter": "bmag_ripple",
+      "passed": true,
+      "rel_error": 7.701991007945166e-05,
+      "rtol": 0.1
+    },
+    {
+      "abs_error": 0.0005977153778076172,
+      "atol": 0.002,
+      "finite_difference": 0.1348257064819336,
+      "implicit": 0.13422799110412598,
+      "objective": "mixing_length_heat_flux_proxy",
+      "parameter": "curvature_drift_scale",
+      "passed": true,
+      "rel_error": 0.004433244916003536,
+      "rtol": 0.1
+    }
+  ],
+  "objective_names": [
+    "gamma",
+    "omega",
+    "kperp_eff2",
+    "linear_heat_flux_weight",
+    "linear_particle_flux_weight",
+    "mixing_length_heat_flux_proxy"
+  ],
+  "parameter_names": [
+    "bmag_ripple",
+    "curvature_drift_scale"
+  ],
+  "params": [
+    0.05000000074505806,
+    0.20000000298023224
+  ],
+  "passed": true,
+  "quasilinear_weight_gradient_gate": true,
+  "source_scope": "solver_ready_geometry_contract",
+  "state_size": 8
+}

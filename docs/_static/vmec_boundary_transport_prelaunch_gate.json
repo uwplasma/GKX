@@ -1,0 +1,134 @@
+{
+  "artifacts": {
+    "landscape_json": "docs/_static/vmec_boundary_transport_landscape_rbc01.json"
+  },
+  "baseline_metric": 0.06558065223919245,
+  "blockers": [],
+  "candidate_metric": 0.06251277500404685,
+  "claim_scope": "reduced-objective prelaunch guard only; passing this gate permits a replicated nonlinear audit but does not promote a turbulence claim",
+  "gates": [
+    {
+      "metric": "reduced_margin_for_nonlinear_audit",
+      "passed": true,
+      "threshold": 0.04,
+      "value": 0.04678021840887033
+    },
+    {
+      "metric": "multi_sample_objective_coverage",
+      "passed": true,
+      "threshold": 12,
+      "value": 18
+    },
+    {
+      "metric": "reduced_cross_sample_dispersion",
+      "passed": true,
+      "threshold": 0.35,
+      "value": [
+        0.22639802467665912,
+        0.22411503437345373
+      ]
+    }
+  ],
+  "kind": "vmex_reduced_nonlinear_audit_prelaunch_report",
+  "metric_key": "nonlinear_window_heat_flux",
+  "next_action": "launch replicated long-window nonlinear audit only with baseline/candidate ensembles",
+  "nonlinear_policy": {
+    "maximum_combined_sem_rel": 0.25,
+    "minimum_alpha_count": 2,
+    "minimum_ky_count": 3,
+    "minimum_relative_reduction": 0.02,
+    "minimum_replicate_count": 3,
+    "minimum_sample_count": 12,
+    "minimum_surface_count": 3,
+    "minimum_uncertainty_z_score": 1.0,
+    "recommended_alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "recommended_ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "recommended_surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ]
+  },
+  "objective_sample_summary": {
+    "alpha_count": 2,
+    "alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "blockers": [],
+    "ky_count": 3,
+    "ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "passed": true,
+    "sample_count": 18,
+    "surface_count": 3,
+    "surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ]
+  },
+  "passed": true,
+  "policy": {
+    "failed_reference_safety_factor": 1.5,
+    "maximum_cross_sample_sem_rel": 0.35,
+    "metric_key": "nonlinear_window_heat_flux",
+    "minimum_relative_reduction": 0.04,
+    "require_sample_coverage": true
+  },
+  "reduced_cross_sample_statistics": {
+    "available": true,
+    "claim_scope": "deterministic spread over the reduced surface/field-line/ky objective grid; not stochastic nonlinear heat-flux uncertainty",
+    "passed": true,
+    "rows": [
+      {
+        "available": true,
+        "blockers": [],
+        "cross_sample_sem_rel": 0.22639802467665912,
+        "passed": true,
+        "role": "baseline",
+        "weighted_mean": 0.06777885259618041,
+        "weighted_standard_error": 0.015344998342625694
+      },
+      {
+        "available": true,
+        "blockers": [],
+        "cross_sample_sem_rel": 0.22411503437345373,
+        "passed": true,
+        "role": "candidate",
+        "weighted_mean": 0.06450805792574345,
+        "weighted_standard_error": 0.014457225619392737
+      }
+    ]
+  },
+  "relative_reduced_reduction": 0.04678021840887033,
+  "required_relative_reduced_reduction": 0.04,
+  "selected_rows": {
+    "baseline": {
+      "coefficient_value": 0.20973126251035024,
+      "label": "0",
+      "relative_fraction": 0.0
+    },
+    "candidate": {
+      "coefficient_value": 0.21602320038566075,
+      "label": "p0p03",
+      "relative_fraction": 0.03
+    }
+  },
+  "threshold_sources": {
+    "failed_reference_relative_reduction": 0.022876,
+    "failed_reference_safety_factor": 1.5,
+    "failed_reference_threshold": 0.034314,
+    "policy_minimum_relative_reduction": 0.04
+  }
+}

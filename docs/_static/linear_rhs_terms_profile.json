@@ -1,0 +1,91 @@
+{
+  "Nl": 4,
+  "Nm": 8,
+  "backend": "cpu",
+  "case": "runtime_cyclone_nonlinear",
+  "claim_scope": "Linear RHS split profile for hot-path localization. Zero-norm rows describe the profiled initial state only and must not be skipped in production unless a state-window identity gate proves the term remains inactive.",
+  "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
+  "dominant_measured_term": "hypercollisions",
+  "dominant_nonzero_norm_term": "streaming",
+  "full_linear_rhs_seconds": 0.10843218749505468,
+  "full_over_sum_independently_measured_components": 6.47136804600337,
+  "kind": "linear_rhs_terms_profile_summary",
+  "kx": null,
+  "ky": 0.3,
+  "repeats": 8,
+  "rows": {
+    "build_H": {
+      "norm": 0.1280190646648407,
+      "seconds": 0.0011842291278298944
+    },
+    "collisions": {
+      "norm": 0.0,
+      "seconds": 0.0011072968773078173
+    },
+    "curvature_gradb": {
+      "norm": 0.0525895431637764,
+      "seconds": 0.0009086354984901845
+    },
+    "diamagnetic": {
+      "norm": 0.03662170097231865,
+      "seconds": 0.0012698333739535883
+    },
+    "end_damping": {
+      "norm": 0.003601919626817107,
+      "seconds": 0.0008683542546350509
+    },
+    "field_solve": {
+      "norm": 0.053106486797332764,
+      "seconds": 0.0002293697471031919
+    },
+    "full_linear_rhs": {
+      "norm": 0.06520643085241318,
+      "seconds": 0.10843218749505468
+    },
+    "hypercollisions": {
+      "norm": 0.0,
+      "seconds": 0.002386765627306886
+    },
+    "hyperdiffusion": {
+      "norm": 0.001077004591934383,
+      "seconds": 0.0010956250043818727
+    },
+    "linked_abs_kz": {
+      "norm": 0.0,
+      "seconds": 0.0023770468833390623
+    },
+    "linked_grad_z": {
+      "norm": 0.028866907581686974,
+      "seconds": 0.0020238906145095825
+    },
+    "mirror": {
+      "norm": 0.0003229873545933515,
+      "seconds": 0.0009669062419561669
+    },
+    "streaming": {
+      "norm": 0.028866907581686974,
+      "seconds": 0.002337729121791199
+    }
+  },
+  "state": "initial",
+  "sum_independently_measured_components_seconds": 0.016755682372604497,
+  "z_variation_norm": 1.4943747572715438e-08,
+  "zero_norm_terms_by_time": [
+    {
+      "norm": 0.0,
+      "seconds": 0.002386765627306886,
+      "term": "hypercollisions"
+    },
+    {
+      "norm": 0.0,
+      "seconds": 0.0023770468833390623,
+      "term": "linked_abs_kz"
+    },
+    {
+      "norm": 0.0,
+      "seconds": 0.0011072968773078173,
+      "term": "collisions"
+    }
+  ],
+  "zero_norm_threshold": 1e-13
+}

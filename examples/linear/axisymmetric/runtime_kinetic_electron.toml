@@ -1,0 +1,123 @@
+# Reference-aligned kinetic-electron Cyclone linear case. The effective seed
+# and linked-boundary damping are explicit; no benchmark wrapper overrides it.
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+nu = 0.0
+kinetic = true
+
+[[species]]
+name = "electron"
+charge = -1.0
+mass = 0.00027
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 16
+Nz = 96
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 10.0
+ntheta = 32
+nperiod = 2
+
+[time]
+t_max = 40.0
+dt = 0.01
+method = "rk4"
+use_diffrax = true
+diffrax_solver = "Tsit5"
+diffrax_adaptive = true
+diffrax_rtol = 1.0e-4
+diffrax_atol = 1.0e-7
+diffrax_max_steps = 20000
+
+[geometry]
+q = 1.4
+s_hat = 0.8
+epsilon = 0.18
+R0 = 2.77778
+
+[init]
+init_field = "density"
+init_amp = 1.0e-3
+init_single = true
+gaussian_init = false
+init_electrons_only = true
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = false
+electromagnetic = true
+use_apar = true
+use_bpar = false
+adiabatic_electrons = false
+adiabatic_ions = false
+beta = 1.0e-5
+collisions = true
+hypercollisions = true
+
+[collisions]
+nu_hermite = 1.0
+nu_laguerre = 2.0
+nu_hyper = 0.0
+nu_hyper_l = 0.0
+nu_hyper_m = 1.0
+p_hyper_l = 6.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "kinetic"
+diagnostic_norm = "rho_star"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 1.0
+bpar = 0.0
+nonlinear = 0.0
+
+[run]
+ky = 0.3
+Nl = 12
+Nm = 32
+solver = "krylov"
+
+[scan]
+ky = [0.1, 0.2, 0.3, 0.4, 0.5]
+Nl = 12
+Nm = 32
+solver = "auto"
+
+[fit]
+fit_signal = "density"
+auto_window = true
+window_fraction = 0.4
+min_points = 40
+start_fraction = 0.2
+growth_weight = 1.0
+require_positive = true
+mode_method = "project"

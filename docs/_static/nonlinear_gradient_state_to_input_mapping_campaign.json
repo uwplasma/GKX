@@ -1,0 +1,159 @@
+{
+  "admitted_state_controls": [
+    {
+      "descent_direction_sign": 1.0,
+      "mean_abs_sensitivity": 15866.412915948646,
+      "sign_consistency_fraction": 1.0,
+      "source_case_count": 2,
+      "state_control_argument": "Rsin_mid_surface_m1:1",
+      "state_control_family": "Rsin",
+      "state_parameter": "Rsin_mid_surface_m1"
+    },
+    {
+      "descent_direction_sign": 1.0,
+      "mean_abs_sensitivity": 3127.9415563508674,
+      "sign_consistency_fraction": 1.0,
+      "source_case_count": 2,
+      "state_control_argument": "Zcos_mid_surface_m1:1",
+      "state_control_family": "Zcos",
+      "state_parameter": "Zcos_mid_surface_m1"
+    }
+  ],
+  "baseline_input": "examples/vmec/input.LandremanPaul2021_QA_lowres",
+  "blockers": [
+    "vmec_response_artifact_missing",
+    "state_to_input_jacobian_not_extracted",
+    "mapping_conditioning_not_measured"
+  ],
+  "case": "qa_lowres_state_to_input_mapping",
+  "claim_level": "state_to_input_mapping_launch_plan_not_mapping_evidence",
+  "coefficient_convention": "Candidate directions are stored exactly as they appear in the VMEC input file, for example RBC(1,1) or ZBS(1,0). Downstream mapping artifacts should also record explicit vmec_n/vmec_m fields before promoting any state-to-input direction.",
+  "input_directions": [
+    {
+      "baseline_value": -0.1088789497913388,
+      "coefficient": "RBC(1,1)",
+      "coefficient_slug": "rbc_1_1",
+      "delta_parameter": 0.002177578995826776,
+      "expected_wout_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres/rbc_1_1/wout_qa_lowres_state_to_input_mapping_rbc_1_1_baseline.nc",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres/rbc_1_1/wout_qa_lowres_state_to_input_mapping_rbc_1_1_minus_delta.nc",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres/rbc_1_1/wout_qa_lowres_state_to_input_mapping_rbc_1_1_plus_delta.nc"
+      },
+      "manifest": "tools_out/state_to_input_mapping/qa_lowres/rbc_1_1/vmec_boundary_perturbation_manifest.json",
+      "relative_delta": 0.02,
+      "state_input_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres/rbc_1_1/input.qa_lowres_state_to_input_mapping_rbc_1_1_baseline",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres/rbc_1_1/input.qa_lowres_state_to_input_mapping_rbc_1_1_minus_delta",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres/rbc_1_1/input.qa_lowres_state_to_input_mapping_rbc_1_1_plus_delta"
+      },
+      "state_values": {
+        "baseline": -0.1088789497913388,
+        "minus_delta": -0.11105652878716558,
+        "plus_delta": -0.10670137079551202
+      },
+      "vmec_run_commands": {
+        "baseline": "cd tools_out/state_to_input_mapping/qa_lowres/rbc_1_1 && vmex input.qa_lowres_state_to_input_mapping_rbc_1_1_baseline",
+        "minus_delta": "cd tools_out/state_to_input_mapping/qa_lowres/rbc_1_1 && vmex input.qa_lowres_state_to_input_mapping_rbc_1_1_minus_delta",
+        "plus_delta": "cd tools_out/state_to_input_mapping/qa_lowres/rbc_1_1 && vmex input.qa_lowres_state_to_input_mapping_rbc_1_1_plus_delta"
+      }
+    },
+    {
+      "baseline_value": 0.08004202421496563,
+      "coefficient": "ZBS(1,1)",
+      "coefficient_slug": "zbs_1_1",
+      "delta_parameter": 0.0016008404842993128,
+      "expected_wout_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_1/wout_qa_lowres_state_to_input_mapping_zbs_1_1_baseline.nc",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_1/wout_qa_lowres_state_to_input_mapping_zbs_1_1_minus_delta.nc",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_1/wout_qa_lowres_state_to_input_mapping_zbs_1_1_plus_delta.nc"
+      },
+      "manifest": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_1/vmec_boundary_perturbation_manifest.json",
+      "relative_delta": 0.02,
+      "state_input_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_1/input.qa_lowres_state_to_input_mapping_zbs_1_1_baseline",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_1/input.qa_lowres_state_to_input_mapping_zbs_1_1_minus_delta",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_1/input.qa_lowres_state_to_input_mapping_zbs_1_1_plus_delta"
+      },
+      "state_values": {
+        "baseline": 0.08004202421496563,
+        "minus_delta": 0.07844118373066632,
+        "plus_delta": 0.08164286469926495
+      },
+      "vmec_run_commands": {
+        "baseline": "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_1 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_1_baseline",
+        "minus_delta": "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_1 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_1_minus_delta",
+        "plus_delta": "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_1 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_1_plus_delta"
+      }
+    },
+    {
+      "baseline_value": -0.1253658594586452,
+      "coefficient": "ZBS(1,0)",
+      "coefficient_slug": "zbs_1_0",
+      "delta_parameter": 0.002507317189172904,
+      "expected_wout_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_0/wout_qa_lowres_state_to_input_mapping_zbs_1_0_baseline.nc",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_0/wout_qa_lowres_state_to_input_mapping_zbs_1_0_minus_delta.nc",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_0/wout_qa_lowres_state_to_input_mapping_zbs_1_0_plus_delta.nc"
+      },
+      "manifest": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_0/vmec_boundary_perturbation_manifest.json",
+      "relative_delta": 0.02,
+      "state_input_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_0/input.qa_lowres_state_to_input_mapping_zbs_1_0_baseline",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_0/input.qa_lowres_state_to_input_mapping_zbs_1_0_minus_delta",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres/zbs_1_0/input.qa_lowres_state_to_input_mapping_zbs_1_0_plus_delta"
+      },
+      "state_values": {
+        "baseline": -0.1253658594586452,
+        "minus_delta": -0.1278731766478181,
+        "plus_delta": -0.12285854226947229
+      },
+      "vmec_run_commands": {
+        "baseline": "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_0 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_0_baseline",
+        "minus_delta": "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_0 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_0_minus_delta",
+        "plus_delta": "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_0 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_0_plus_delta"
+      }
+    }
+  ],
+  "kind": "vmec_state_to_input_mapping_campaign",
+  "mapping_artifact_schema_after_vmec_runs": {
+    "controls": [
+      {
+        "condition_number": "<finite positive float>",
+        "input_control_argument": "RBC(m,n):weight or profile direction",
+        "input_direction": "<optional raw coefficient weights>",
+        "passed": "bool",
+        "relative_residual": "<finite non-negative float>",
+        "state_parameter": "<admitted VMEC-state control>"
+      }
+    ],
+    "kind": "vmec_state_to_input_control_mapping",
+    "passed": "bool"
+  },
+  "next_action": "run the VMEC perturbation solves and build a conditioned state-to-input mapping artifact; this launch plan alone must not be used as nonlinear-gradient evidence",
+  "passed": false,
+  "planned_response_matrix_shape": [
+    2,
+    3
+  ],
+  "postprocess_protocol": [
+    "run vmex for every baseline/plus/minus input deck listed in vmec_run_commands",
+    "extract the admitted VMEC-state controls from each solved equilibrium",
+    "form the central finite-difference response matrix d(state_control)/d(input_coefficient)",
+    "solve the least-squares state-to-input map and record condition number plus relative residual",
+    "use the mapping only when it is local, conditioned, and residual-bounded"
+  ],
+  "ql_seed_screen": "docs/_static/nonlinear_gradient_ql_seed_screen.json",
+  "rank_feasibility_precheck_passed": true,
+  "ready_for_nonlinear_launch": false,
+  "vmec_run_commands": [
+    "cd tools_out/state_to_input_mapping/qa_lowres/rbc_1_1 && vmex input.qa_lowres_state_to_input_mapping_rbc_1_1_baseline",
+    "cd tools_out/state_to_input_mapping/qa_lowres/rbc_1_1 && vmex input.qa_lowres_state_to_input_mapping_rbc_1_1_plus_delta",
+    "cd tools_out/state_to_input_mapping/qa_lowres/rbc_1_1 && vmex input.qa_lowres_state_to_input_mapping_rbc_1_1_minus_delta",
+    "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_1 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_1_baseline",
+    "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_1 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_1_plus_delta",
+    "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_1 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_1_minus_delta",
+    "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_0 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_0_baseline",
+    "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_0 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_0_plus_delta",
+    "cd tools_out/state_to_input_mapping/qa_lowres/zbs_1_0 && vmex input.qa_lowres_state_to_input_mapping_zbs_1_0_minus_delta"
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "claim_scope": "finite_wavelength_zonal_moment_hierarchy",
+  "comparisons": [
+    {
+      "higher_resolution": [
+        12,
+        5
+      ],
+      "lower_resolution": [
+        7,
+        3
+      ],
+      "passed": false,
+      "traces": {
+        "0.1": {
+          "higher_final": -0.09290184545512394,
+          "lower_final": 0.040800676191274254,
+          "maximum_absolute_error": 0.13924515900715695,
+          "maximum_normalized_time": 2.004682857570937,
+          "passed": false,
+          "relative_l2": 0.19242260733856717,
+          "samples": 402
+        },
+        "0.2": {
+          "higher_final": 0.011845179343964585,
+          "lower_final": -0.00033793455525968623,
+          "maximum_absolute_error": 0.08148302631656164,
+          "maximum_normalized_time": 2.004682857570937,
+          "passed": false,
+          "relative_l2": 0.11960179564039694,
+          "samples": 402
+        }
+      }
+    },
+    {
+      "higher_resolution": [
+        15,
+        6
+      ],
+      "lower_resolution": [
+        12,
+        5
+      ],
+      "passed": false,
+      "traces": {
+        "0.1": {
+          "higher_final": -0.05156834243350103,
+          "lower_final": -0.09290184545512394,
+          "maximum_absolute_error": 0.0688833548773901,
+          "maximum_normalized_time": 2.004682857570937,
+          "passed": false,
+          "relative_l2": 0.08901244648321392,
+          "samples": 402
+        },
+        "0.2": {
+          "higher_final": 0.04921140442780544,
+          "lower_final": 0.011845179343964585,
+          "maximum_absolute_error": 0.058242845353703734,
+          "maximum_normalized_time": 2.004682857570937,
+          "passed": false,
+          "relative_l2": 0.09927742591530496,
+          "samples": 402
+        }
+      }
+    },
+    {
+      "higher_resolution": [
+        18,
+        7
+      ],
+      "lower_resolution": [
+        15,
+        6
+      ],
+      "passed": false,
+      "traces": {
+        "0.1": {
+          "higher_final": -0.04021776842414104,
+          "lower_final": -0.05156834243350103,
+          "maximum_absolute_error": 0.02700869304243189,
+          "maximum_normalized_time": 2.004682857570937,
+          "passed": true,
+          "relative_l2": 0.038581589229645406,
+          "samples": 402
+        },
+        "0.2": {
+          "higher_final": 0.06368366857236504,
+          "lower_final": 0.04921140442780544,
+          "maximum_absolute_error": 0.03776284194638431,
+          "maximum_normalized_time": 2.004682857570937,
+          "passed": false,
+          "relative_l2": 0.07163079533432178,
+          "samples": 402
+        }
+      }
+    },
+    {
+      "higher_resolution": [
+        21,
+        8
+      ],
+      "lower_resolution": [
+        18,
+        7
+      ],
+      "passed": false,
+      "traces": {
+        "0.1": {
+          "higher_final": -0.0539486641214849,
+          "lower_final": -0.04021776842414104,
+          "maximum_absolute_error": 0.01576872495715939,
+          "maximum_normalized_time": 2.004682857570937,
+          "passed": true,
+          "relative_l2": 0.023672364310956893,
+          "samples": 402
+        },
+        "0.2": {
+          "higher_final": 0.045866480857384706,
+          "lower_final": 0.06368366857236504,
+          "maximum_absolute_error": 0.030868898097199386,
+          "maximum_normalized_time": 2.004682857570937,
+          "passed": false,
+          "relative_l2": 0.05598942106398677,
+          "samples": 402
+        }
+      }
+    }
+  ],
+  "gate_passed": false,
+  "notes": "Adjacent levels are compared on initial-value-normalized physical traces. A failed lower hierarchy is diagnostic evidence only; the paper protocol remains P24/J10 through t*nu=30.",
+  "resolutions": [
+    [
+      7,
+      3
+    ],
+    [
+      12,
+      5
+    ],
+    [
+      15,
+      6
+    ],
+    [
+      18,
+      7
+    ],
+    [
+      21,
+      8
+    ]
+  ],
+  "schema_version": 1,
+  "thresholds": {
+    "maximum_absolute_error": 0.05,
+    "maximum_relative_l2": 0.05
+  }
+}

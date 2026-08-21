@@ -1,0 +1,333 @@
+{
+  "case": "nonlinear_window_ensemble_readiness",
+  "cases": [
+    {
+      "case": "circular_external_vmec_t450_high_grid_window",
+      "ensemble_gate_runnable": false,
+      "n_observed_artifacts": 1,
+      "n_promotion_ready_artifacts": 1,
+      "observed_convergence_report_artifacts": [
+        "docs/_static/nonlinear_window_convergence_reports/external_vmec_circular_t450_n64_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "docs/_static/external_vmec_circular_t450_n64_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        }
+      }
+    },
+    {
+      "case": "dshape_external_vmec_t250_high_grid_window",
+      "ensemble_gate_runnable": false,
+      "n_observed_artifacts": 1,
+      "n_promotion_ready_artifacts": 1,
+      "observed_convergence_report_artifacts": [
+        "docs/_static/nonlinear_window_convergence_reports/external_vmec_dshape_t250_n64_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "docs/_static/external_vmec_dshape_t250_n64_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        }
+      }
+    },
+    {
+      "case": "itermodel_external_vmec_t350_high_grid_window",
+      "ensemble_gate_runnable": false,
+      "n_observed_artifacts": 1,
+      "n_promotion_ready_artifacts": 0,
+      "observed_convergence_report_artifacts": [
+        "docs/_static/nonlinear_window_convergence_reports/external_vmec_itermodel_t350_n64_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        }
+      }
+    },
+    {
+      "case": "updown_asym_external_vmec_t450_high_grid_window",
+      "ensemble_gate_runnable": false,
+      "n_observed_artifacts": 1,
+      "n_promotion_ready_artifacts": 1,
+      "observed_convergence_report_artifacts": [
+        "docs/_static/nonlinear_window_convergence_reports/external_vmec_updown_asym_t450_n64_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 2,
+          "observed_distinct_count": 0,
+          "observed_distinct_values": [],
+          "passed": false,
+          "required_distinct_count": 2
+        }
+      }
+    }
+  ],
+  "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+  "config": {
+    "min_replicates_per_case": 2,
+    "require_observed_windows_ready": true,
+    "required_variant_axes": [
+      "seed",
+      "timestep"
+    ]
+  },
+  "gates": [
+    {
+      "detail": "observed_artifacts=4",
+      "metric": "observed_window_artifacts_present",
+      "passed": true
+    },
+    {
+      "detail": "require_observed_windows_ready=True",
+      "metric": "observed_windows_promotion_ready",
+      "passed": false
+    },
+    {
+      "detail": "missing_artifact_groups=8",
+      "metric": "seed_and_timestep_replicates_present",
+      "passed": false
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_readiness_manifest",
+  "missing_artifacts": [
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'circular_external_vmec_t450_high_grid_window' with distinct seed metadata and trace provenance",
+      "case": "circular_external_vmec_t450_high_grid_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.seed or equivalent top-level seed metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "seed"
+    },
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'circular_external_vmec_t450_high_grid_window' with distinct timestep metadata and trace provenance",
+      "case": "circular_external_vmec_t450_high_grid_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.timestep or equivalent top-level timestep metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "timestep"
+    },
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'dshape_external_vmec_t250_high_grid_window' with distinct seed metadata and trace provenance",
+      "case": "dshape_external_vmec_t250_high_grid_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.seed or equivalent top-level seed metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "seed"
+    },
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'dshape_external_vmec_t250_high_grid_window' with distinct timestep metadata and trace provenance",
+      "case": "dshape_external_vmec_t250_high_grid_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.timestep or equivalent top-level timestep metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "timestep"
+    },
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'itermodel_external_vmec_t350_high_grid_window' with distinct seed metadata and trace provenance",
+      "case": "itermodel_external_vmec_t350_high_grid_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.seed or equivalent top-level seed metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "seed"
+    },
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'itermodel_external_vmec_t350_high_grid_window' with distinct timestep metadata and trace provenance",
+      "case": "itermodel_external_vmec_t350_high_grid_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.timestep or equivalent top-level timestep metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "timestep"
+    },
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'updown_asym_external_vmec_t450_high_grid_window' with distinct seed metadata and trace provenance",
+      "case": "updown_asym_external_vmec_t450_high_grid_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.seed or equivalent top-level seed metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "seed"
+    },
+    {
+      "artifact_hint": "add 2 passed nonlinear-window convergence report(s) for case 'updown_asym_external_vmec_t450_high_grid_window' with distinct timestep metadata and trace provenance",
+      "case": "updown_asym_external_vmec_t450_high_grid_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.timestep or equivalent top-level timestep metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 2,
+      "observed_distinct_values": [],
+      "required_distinct_count": 2,
+      "variant_axis": "timestep"
+    }
+  ],
+  "observed_artifacts": [
+    {
+      "case": "circular_external_vmec_t450_high_grid_window",
+      "convergence_report_artifact": "docs/_static/nonlinear_window_convergence_reports/external_vmec_circular_t450_n64_transport_window.convergence.json",
+      "failures": [],
+      "index": 0,
+      "late_mean": 19.430008846324878,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.6748125773694964,
+      "source_artifact": "docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv",
+      "summary_artifact": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+      "variant": {
+        "seed": null,
+        "timestep": null
+      }
+    },
+    {
+      "case": "dshape_external_vmec_t250_high_grid_window",
+      "convergence_report_artifact": "docs/_static/nonlinear_window_convergence_reports/external_vmec_dshape_t250_n64_transport_window.convergence.json",
+      "failures": [],
+      "index": 1,
+      "late_mean": 18.479456131274883,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.8004205717723741,
+      "source_artifact": "docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.traces.csv",
+      "summary_artifact": "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+      "variant": {
+        "seed": null,
+        "timestep": null
+      }
+    },
+    {
+      "case": "itermodel_external_vmec_t350_high_grid_window",
+      "convergence_report_artifact": "docs/_static/nonlinear_window_convergence_reports/external_vmec_itermodel_t350_n64_transport_window.convergence.json",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing passed gate_report"
+      ],
+      "index": 2,
+      "late_mean": 22.046746492385864,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": 1.0362095051029065,
+      "source_artifact": "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv",
+      "summary_artifact": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+      "variant": {
+        "seed": null,
+        "timestep": null
+      }
+    },
+    {
+      "case": "updown_asym_external_vmec_t450_high_grid_window",
+      "convergence_report_artifact": "docs/_static/nonlinear_window_convergence_reports/external_vmec_updown_asym_t450_n64_transport_window.convergence.json",
+      "failures": [],
+      "index": 3,
+      "late_mean": 7.76432224499282,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.185710991468661,
+      "source_artifact": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv",
+      "summary_artifact": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+      "variant": {
+        "seed": null,
+        "timestep": null
+      }
+    }
+  ],
+  "passed": false,
+  "promotion_gate": {
+    "blockers": [
+      "observed_windows_promotion_ready",
+      "seed_and_timestep_replicates_present"
+    ],
+    "passed": false,
+    "requirements": [
+      "every observed late-window report must pass convergence metadata gates",
+      "each case must include distinct passed seed-replicate artifacts",
+      "each case must include distinct passed timestep-replicate artifacts",
+      "only after this manifest passes should the replicated ensemble gate be run"
+    ]
+  }
+}

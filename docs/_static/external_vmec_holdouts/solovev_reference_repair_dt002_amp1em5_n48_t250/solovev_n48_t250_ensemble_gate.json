@@ -1,0 +1,121 @@
+{
+  "case": "solovev_reference_repair_dt002_amp1em5_n48_t250_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "solovev_reference_repair_dt002_amp1em5_n48_t250_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.2,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "solovev_reference_repair_dt002_amp1em5_n48_t250_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=3 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": true
+      },
+      {
+        "detail": "finite_means=3 reports=3",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.1598949352030753 gate=0.2",
+        "metric": "mean_relative_spread",
+        "passed": true
+      },
+      {
+        "detail": "combined_sem_rel=0.046179186123325784 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=3 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": true
+    },
+    {
+      "detail": "finite_means=3 reports=3",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.1598949352030753 gate=0.2",
+      "metric": "mean_relative_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.046179186123325784 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": true,
+  "rows": [
+    {
+      "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+      "failures": [],
+      "index": 0,
+      "late_mean": 1.41341864317625,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.019823135413333425,
+      "source_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed31_transport_window.json"
+    },
+    {
+      "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+      "failures": [],
+      "index": 1,
+      "late_mean": 1.5201435223223752,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.03177578052296512,
+      "source_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed32_transport_window.json"
+    },
+    {
+      "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+      "failures": [],
+      "index": 2,
+      "late_mean": 1.2947800222786812,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.035318459475915276,
+      "source_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 0.06508713362749292,
+    "combined_sem_rel": 0.046179186123325784,
+    "ensemble_mean": 1.4094473959257687,
+    "max_individual_sem": 0.035318459475915276,
+    "mean_rel_spread": 0.1598949352030753,
+    "mean_spread": 0.225363500043694,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.06508713362749292
+  }
+}

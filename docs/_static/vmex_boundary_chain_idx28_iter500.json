@@ -1,0 +1,140 @@
+{
+  "kind": "vmex_boundary_chain_probe",
+  "setup": {
+    "input": "tools_out/latest_vmec_stack/authoritative_qa_baseline/input.final",
+    "max_mode": 5,
+    "min_vmec_mode": 7,
+    "transport_kind": "nonlinear_window_heat_flux",
+    "transport_weight": 1.0,
+    "sample_set": {
+      "surfaces": [
+        0.64
+      ],
+      "alphas": [
+        0.0
+      ],
+      "ky_values": [
+        0.3
+      ],
+      "surface_weights": null,
+      "alpha_weights": null,
+      "ky_weights": null,
+      "reduction": "weighted_mean",
+      "n_samples": 1
+    },
+    "gkx_config": {
+      "ntheta": 24,
+      "mboz": 21,
+      "nboz": 21,
+      "n_laguerre": 2,
+      "n_hermite": 3,
+      "objective_transform": "log1p",
+      "objective_scale": 1.0,
+      "gradient_scope": "eigenvalue_growth_ad_with_geometry_transport_weights"
+    },
+    "solver_device": null
+  },
+  "index": 28,
+  "step": 0.0001,
+  "name": "rc14",
+  "base_cost": 0.0020193511367767977,
+  "plus_cost": 0.0020213289167988996,
+  "minus_cost": 0.0020168381213672318,
+  "exact_fd_cost_gradient": 0.022453977158339022,
+  "final_cot_dot_exact_final_fd": 0.020827193672037527,
+  "final_cot_dot_tape_jvp_raw_initial_fd": 0.1000726560442694,
+  "final_cot_dot_tape_jvp_frozen_axis_fd": 0.02079152740732695,
+  "final_cot_dot_tape_jvp_frozen_axis_linear": 0.0207915274055126,
+  "initial_cot_dot_raw_initial_fd": 0.1000726560438436,
+  "initial_cot_dot_frozen_axis_fd": 0.020791527407331957,
+  "initial_cot_dot_frozen_axis_linear": 0.020791527405528133,
+  "exact_final_fd_norm": 111.424223492022,
+  "tape_jvp_final_raw_initial_norm": 289.12266873368674,
+  "tape_jvp_final_frozen_axis_fd_norm": 15.59220142929133,
+  "tape_jvp_final_frozen_axis_linear_norm": 15.592201429285026,
+  "raw_initial_fd_norm": 209.0030340724512,
+  "frozen_axis_initial_fd_norm": 1.8114220932737408,
+  "frozen_axis_linear_initial_norm": 1.8114220932736789,
+  "final_cot_norm": 1063.1027702819194,
+  "initial_cot_norm": 146.5026279629715,
+  "base_tape_diagnostics": {
+    "converged": false,
+    "final_fsqz": 4.4717019879453766e-09,
+    "final_fsqr": 3.7933566928194536e-09,
+    "final_fsql": 9.373635136123485e-10,
+    "timing": {
+      "tape_solve_call_s": 3.845254959000158,
+      "tape_final_state_pack_s": 0.00010462499631103128,
+      "tape_step_trace_extract_s": 2.2500025806948543e-06,
+      "tape_dynamic_payload_build_s": 0.20921745800296776,
+      "tape_trace_stack_s": 0.0
+    }
+  },
+  "plus_tape_diagnostics": {
+    "converged": false,
+    "final_fsqz": 5.991697319856744e-09,
+    "final_fsqr": 5.539693656367009e-09,
+    "final_fsql": 1.1224287905103551e-09,
+    "timing": {
+      "tape_solve_call_s": 2.9075846250052564,
+      "tape_final_state_pack_s": 0.00011508300667628646,
+      "tape_step_trace_extract_s": 2.6249908842146397e-06,
+      "tape_dynamic_payload_build_s": 0.0029840000061085448,
+      "tape_trace_stack_s": 0.0
+    },
+    "jvp_only_basepoint_carries_enabled": false,
+    "jvp_only_fast_basepoint_scan_available": false,
+    "jvp_only_replay_path": "dynamic_whole_scan_linearize",
+    "jvp_only_replay_fallback_reason": "basepoint_carries_not_stored"
+  },
+  "minus_tape_diagnostics": {
+    "converged": false,
+    "final_fsqz": 4.446678235543272e-09,
+    "final_fsqr": 3.7863178239323265e-09,
+    "final_fsql": 9.390392209366935e-10,
+    "timing": {
+      "tape_solve_call_s": 2.9850711659964873,
+      "tape_final_state_pack_s": 9.037500421982259e-05,
+      "tape_step_trace_extract_s": 2.1669984562322497e-06,
+      "tape_dynamic_payload_build_s": 0.002498750007362105,
+      "tape_trace_stack_s": 0.0
+    },
+    "jvp_only_basepoint_carries_enabled": false,
+    "jvp_only_fast_basepoint_scan_available": false,
+    "jvp_only_replay_path": "dynamic_whole_scan_linearize",
+    "jvp_only_replay_fallback_reason": "basepoint_carries_not_stored"
+  },
+  "summary": {
+    "kind": "vmex_boundary_chain_summary",
+    "finite": true,
+    "classification": "exact_fd_and_frozen_axis_replay_consistent",
+    "exact_relative_tolerance": 0.1,
+    "internal_relative_tolerance": 1e-08,
+    "absolute_tolerance": 1e-10,
+    "metrics": {
+      "exact_fd_cost_gradient": 0.022453977158339022,
+      "final_cot_dot_exact_final_fd": 0.020827193672037527,
+      "frozen_axis_replay_cost_gradient": 0.02079152740732695,
+      "frozen_axis_vjp_cost_gradient": 0.020791527407331957,
+      "raw_initial_replay_cost_gradient": 0.1000726560442694,
+      "raw_to_frozen_initial_norm_ratio": 115.38063648916022
+    },
+    "errors": {
+      "final_state_vs_exact_fd_abs": 0.0016267834863014953,
+      "final_state_vs_exact_fd_rel": 0.07244968117807743,
+      "frozen_axis_vs_exact_fd_abs": 0.0016624497510120718,
+      "frozen_axis_vs_exact_fd_rel": 0.07403809754009064,
+      "frozen_axis_jvp_vjp_abs": 5.006411951669065e-15,
+      "frozen_axis_jvp_vjp_rel": 2.4079096516514683e-13,
+      "raw_initial_vs_exact_fd_abs": 0.07761867888593038,
+      "raw_initial_vs_exact_fd_rel": 0.775623251686195
+    },
+    "passes": {
+      "final_state_matches_exact_fd": true,
+      "frozen_axis_matches_exact_fd": true,
+      "frozen_axis_jvp_vjp_consistent": true,
+      "raw_initial_matches_exact_fd": false
+    },
+    "next_action": "use the frozen-axis derivative as an optimization diagnostic; keep sparse FD checks and solved-equilibrium gates before promotion"
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "blockers": [],
+  "candidate_name": "plus_minus_midpoint_common_mode",
+  "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_gate",
+  "claim_level": "independent_control_mean_uncertainty_gate_not_gradient_promotion",
+  "config": {
+    "min_control_mean_pairs": 21,
+    "require_state_ensembles_passed": true,
+    "target_response_uncertainty_rel": 0.5,
+    "value_floor": 1e-12
+  },
+  "kind": "nonlinear_turbulence_gradient_control_mean_gate",
+  "minus_path": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_t1100_ensemble_gate.json",
+  "pair_rows": [
+    {
+      "control_mean_sample": 15.615992266555663,
+      "label": "seed34",
+      "minus_mean": 15.540133349416253,
+      "plus_mean": 15.691851183695073,
+      "response_sample": 0.1517178342788199
+    },
+    {
+      "control_mean_sample": 16.394578229030785,
+      "label": "seed35",
+      "minus_mean": 16.63524256081576,
+      "plus_mean": 16.15391389724581,
+      "response_sample": -0.4813286635699505
+    },
+    {
+      "control_mean_sample": 16.727899210791133,
+      "label": "seed36",
+      "minus_mean": 16.589635092632513,
+      "plus_mean": 16.866163328949753,
+      "response_sample": 0.27652823631724033
+    },
+    {
+      "control_mean_sample": 16.44310915998867,
+      "label": "seed37",
+      "minus_mean": 17.04962104177734,
+      "plus_mean": 15.8365972782,
+      "response_sample": -1.2130237635773398
+    },
+    {
+      "control_mean_sample": 15.797756796400492,
+      "label": "seed38",
+      "minus_mean": 15.829207589474382,
+      "plus_mean": 15.766306003326601,
+      "response_sample": -0.06290158614778107
+    },
+    {
+      "control_mean_sample": 16.32108390507266,
+      "label": "seed39",
+      "minus_mean": 16.24146362830394,
+      "plus_mean": 16.400704181841377,
+      "response_sample": 0.15924055353743682
+    },
+    {
+      "control_mean_sample": 15.52096284904064,
+      "label": "seed40",
+      "minus_mean": 15.118286193887188,
+      "plus_mean": 15.923639504194089,
+      "response_sample": 0.8053533103069004
+    },
+    {
+      "control_mean_sample": 15.983559869194085,
+      "label": "seed41",
+      "minus_mean": 16.568114078690144,
+      "plus_mean": 15.399005659698028,
+      "response_sample": -1.1691084189921153
+    },
+    {
+      "control_mean_sample": 16.66223809049704,
+      "label": "seed42",
+      "minus_mean": 16.882385892823642,
+      "plus_mean": 16.442090288170444,
+      "response_sample": -0.4402956046531976
+    },
+    {
+      "control_mean_sample": 15.68312802338325,
+      "label": "seed43",
+      "minus_mean": 15.218292330284237,
+      "plus_mean": 16.147963716482266,
+      "response_sample": 0.929671386198029
+    },
+    {
+      "control_mean_sample": 16.44457695402069,
+      "label": "seed44",
+      "minus_mean": 16.90955773245862,
+      "plus_mean": 15.979596175582758,
+      "response_sample": -0.9299615568758615
+    },
+    {
+      "control_mean_sample": 16.069881782154187,
+      "label": "seed45",
+      "minus_mean": 16.824475048798032,
+      "plus_mean": 15.315288515510344,
+      "response_sample": -1.5091865332876875
+    },
+    {
+      "control_mean_sample": 16.251866265468227,
+      "label": "seed46",
+      "minus_mean": 16.20107106739409,
+      "plus_mean": 16.302661463542364,
+      "response_sample": 0.10159039614827492
+    },
+    {
+      "control_mean_sample": 16.597102616219708,
+      "label": "seed47",
+      "minus_mean": 17.043546972602464,
+      "plus_mean": 16.15065825983695,
+      "response_sample": -0.8928887127655152
+    },
+    {
+      "control_mean_sample": 15.751191498609852,
+      "label": "seed48",
+      "minus_mean": 15.778514331197046,
+      "plus_mean": 15.723868666022659,
+      "response_sample": -0.0546456651743874
+    },
+    {
+      "control_mean_sample": 16.27338712203473,
+      "label": "seed49",
+      "minus_mean": 15.61823829876207,
+      "plus_mean": 16.92853594530739,
+      "response_sample": 1.3102976465453224
+    },
+    {
+      "control_mean_sample": 16.151989636162316,
+      "label": "seed50",
+      "minus_mean": 16.467143852722167,
+      "plus_mean": 15.836835419602464,
+      "response_sample": -0.6303084331197031
+    },
+    {
+      "control_mean_sample": 17.122793763729803,
+      "label": "seed51",
+      "minus_mean": 17.06656341834729,
+      "plus_mean": 17.179024109112312,
+      "response_sample": 0.11246069076502252
+    },
+    {
+      "control_mean_sample": 16.099140928297043,
+      "label": "seed52",
+      "minus_mean": 17.037301711848276,
+      "plus_mean": 15.160980144745812,
+      "response_sample": -1.8763215671024636
+    },
+    {
+      "control_mean_sample": 15.90424910672143,
+      "label": "seed53",
+      "minus_mean": 16.580945550514286,
+      "plus_mean": 15.227552662928574,
+      "response_sample": -1.3533928875857129
+    },
+    {
+      "control_mean_sample": 15.509205571537686,
+      "label": "seed54",
+      "minus_mean": 15.86537511008079,
+      "plus_mean": 15.153036032994583,
+      "response_sample": -0.7123390770862059
+    }
+  ],
+  "passed": true,
+  "plus_path": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_plus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_plus_delta_t1100_ensemble_gate.json",
+  "source_variance_report_case": "qa_ess_zbs10_rel7p5_variance_reduction_plan",
+  "summary": {
+    "combined_response_sem": 0.16188405672347786,
+    "combined_response_uncertainty_rel": 0.31148835872140096,
+    "common_pair_count": 21,
+    "control_contribution_sem": 0.10473149969810783,
+    "control_mean": 16.15836636404334,
+    "control_mean_sem": 0.09408911145793634,
+    "control_variate_beta": 1.1131096688582216,
+    "independent_response_mean": -0.3561353531352798,
+    "independent_response_sem": 0.18375390554299775,
+    "paired_response_mean": -0.5197114183913016,
+    "residual_sem": 0.12344132530168103,
+    "residual_uncertainty_rel": 0.23751897867431396
+  }
+}

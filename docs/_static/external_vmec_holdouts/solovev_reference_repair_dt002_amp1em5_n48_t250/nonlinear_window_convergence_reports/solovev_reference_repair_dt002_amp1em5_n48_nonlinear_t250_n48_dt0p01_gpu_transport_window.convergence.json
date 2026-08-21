@@ -1,0 +1,148 @@
+{
+  "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+  "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
+  "config": {
+    "block_size": null,
+    "bootstrap_samples": 256,
+    "bootstrap_seed": 0,
+    "max_running_mean_rel_drift": 0.2,
+    "max_sem_rel": 0.3,
+    "max_terminal_mean_rel_delta": 0.15,
+    "min_blocks": 4,
+    "min_samples": 24,
+    "min_terminal_samples": 8,
+    "require_all_finite": true,
+    "terminal_fraction": 0.25,
+    "tmax": 250.0,
+    "tmin": 170.0,
+    "transient_fraction": 0.5,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+    "gates": [
+      {
+        "detail": "finite=160 nonfinite=0 late=160",
+        "metric": "finite_late_window",
+        "passed": true
+      },
+      {
+        "detail": "finite_late_samples=160 min_samples=24",
+        "metric": "finite_sample_count",
+        "passed": true
+      },
+      {
+        "detail": "n_blocks=12 min_blocks=4",
+        "metric": "minimum_block_count",
+        "passed": true
+      },
+      {
+        "detail": "running_mean_rel_drift=0.03894424188337885 gate=0.2",
+        "metric": "running_mean_drift",
+        "passed": true
+      },
+      {
+        "detail": "terminal_samples=40 min_terminal_samples=8",
+        "metric": "terminal_sample_count",
+        "passed": true
+      },
+      {
+        "detail": "terminal_mean_rel_delta=0.05763186178104158 gate=0.15 terminal_fraction=0.25",
+        "metric": "terminal_mean_agreement",
+        "passed": true
+      },
+      {
+        "detail": "sem_rel=0.027277575239196522 gate=0.3",
+        "metric": "block_bootstrap_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_heat_flux_trace.csv"
+  },
+  "gates": [
+    {
+      "detail": "finite=160 nonfinite=0 late=160",
+      "metric": "finite_late_window",
+      "passed": true
+    },
+    {
+      "detail": "finite_late_samples=160 min_samples=24",
+      "metric": "finite_sample_count",
+      "passed": true
+    },
+    {
+      "detail": "n_blocks=12 min_blocks=4",
+      "metric": "minimum_block_count",
+      "passed": true
+    },
+    {
+      "detail": "running_mean_rel_drift=0.03894424188337885 gate=0.2",
+      "metric": "running_mean_drift",
+      "passed": true
+    },
+    {
+      "detail": "terminal_samples=40 min_terminal_samples=8",
+      "metric": "terminal_sample_count",
+      "passed": true
+    },
+    {
+      "detail": "terminal_mean_rel_delta=0.05763186178104158 gate=0.15 terminal_fraction=0.25",
+      "metric": "terminal_mean_agreement",
+      "passed": true
+    },
+    {
+      "detail": "sem_rel=0.027277575239196522 gate=0.3",
+      "metric": "block_bootstrap_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_convergence_report",
+  "observable": "heat_flux",
+  "passed": true,
+  "provenance": {
+    "observable_column": "heat_flux",
+    "source_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_heat_flux_trace.csv",
+    "summary_artifact": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_transport_window.json",
+    "time_column": "t"
+  },
+  "statistics": {
+    "block_bootstrap_sem": 0.030759664915384774,
+    "block_sem": 0.035318459475915276,
+    "block_size": 13,
+    "bootstrap_samples": 256,
+    "bootstrap_seed": 0,
+    "first_half_mean": 1.319992135465375,
+    "late_mean": 1.2947800222786812,
+    "late_std": 0.13153446246367112,
+    "n_blocks": 12,
+    "running_mean_drift": 0.050424226373387615,
+    "running_mean_rel_drift": 0.03894424188337885,
+    "sample_sem": 0.010431361403339808,
+    "second_half_mean": 1.2695679090919874,
+    "sem": 0.035318459475915276,
+    "sem_rel": 0.027277575239196522,
+    "terminal_mean": 1.3694006055595,
+    "terminal_mean_delta": 0.07462058328081889,
+    "terminal_mean_rel_delta": 0.05763186178104158,
+    "terminal_n_samples": 40,
+    "terminal_tmax": 249.94190979,
+    "terminal_tmin": 230.462615967
+  },
+  "window": {
+    "input_tmax": 250.0,
+    "input_tmin": 170.0,
+    "late_tmax": 249.94190979,
+    "late_tmin": 170.495574951,
+    "n_finite_late": 160,
+    "n_late": 160,
+    "n_nonfinite_late": 0,
+    "n_total": 501,
+    "selected_tmax": 250.0,
+    "selected_tmin": 170.0,
+    "transient_cutoff": 170.0,
+    "transient_fraction": 0.5
+  }
+}

@@ -1,0 +1,241 @@
+[[run]]
+case = "cyclone-linear"
+label = "Cyclone ITG Linear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/linear/axisymmetric/cyclone_runtime_linear.py --ky 0.3 --Nl 16 --Nm 48 --solver auto"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "cyclone-linear"
+label = "Cyclone ITG Linear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/linear/axisymmetric/cyclone_runtime_linear.py --ky 0.3 --Nl 16 --Nm 48 --solver auto"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "cyclone-linear"
+label = "Cyclone ITG Linear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('itg_salpha_adiabatic_electrons.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 150.0', text)\np.write_text(text)\nPY\nCUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} itg_salpha_adiabatic_electrons.in"
+cwd = "${REFERENCE_GK_REPO}/benchmarks/linear/ITG_cyclone"
+
+[[run]]
+case = "cyclone-nonlinear"
+label = "Cyclone ITG Nonlinear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/nonlinear/axisymmetric/cyclone_runtime_nonlinear.py --ky 0.3 --Nl 4 --Nm 8 --steps 200 --dt 0.0377"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "cyclone-nonlinear"
+label = "Cyclone ITG Nonlinear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/nonlinear/axisymmetric/cyclone_runtime_nonlinear.py --ky 0.3 --Nl 4 --Nm 8 --steps 200 --dt 0.0377"
+profile_command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python tools/profiling/profile_runtime_kernels.py cyclone --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --ky 0.3 --Nl 4 --Nm 8 --steps 200 --dt 0.0377"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "cyclone-nonlinear"
+label = "Cyclone ITG Nonlinear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('cyclone_salpha_adiabatic_electrons.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 7.54', text)\np.write_text(text)\nPY\nCUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} cyclone_salpha_adiabatic_electrons.in"
+cwd = "${REFERENCE_GK_REPO}/benchmarks/nonlinear/cyclone"
+
+[[run]]
+case = "etg-linear"
+label = "ETG Linear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/linear/axisymmetric/etg_runtime_linear.py --ky 15.0 --Nl 24 --Nm 8 --solver krylov"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "etg-linear"
+label = "ETG Linear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/linear/axisymmetric/etg_runtime_linear.py --ky 15.0 --Nl 24 --Nm 8 --solver krylov"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "etg-linear"
+label = "ETG Linear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} ETG_runtime_ky15.in"
+cwd = "${REFERENCE_GK_REPO}/benchmarks/linear"
+
+[[run]]
+case = "kbm-linear"
+label = "KBM Linear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/linear/axisymmetric/kbm_runtime_linear.py --ky 0.3 --Nl 48 --Nm 16 --solver krylov"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "kbm-linear"
+label = "KBM Linear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/linear/axisymmetric/kbm_runtime_linear.py --ky 0.3 --Nl 48 --Nm 16 --solver krylov"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "kbm-linear"
+label = "KBM Linear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('kbm_salpha.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 4.0', text)\np.write_text(text)\nPY\nCUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} kbm_salpha.in"
+cwd = "${REFERENCE_GK_REPO}/benchmarks/linear/KBM"
+
+[[run]]
+case = "kbm-nonlinear"
+label = "KBM Nonlinear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/nonlinear/axisymmetric/kbm_runtime_nonlinear.py --ky 0.3 --Nl 4 --Nm 8 --steps 267 --dt 0.0003"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "kbm-nonlinear"
+label = "KBM Nonlinear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/nonlinear/axisymmetric/kbm_runtime_nonlinear.py --ky 0.3 --Nl 4 --Nm 8 --steps 267 --dt 0.0003"
+profile_command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python tools/profiling/profile_runtime_kernels.py cyclone --config examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml --ky 0.3 --Nl 4 --Nm 8 --steps 267 --dt 0.0003"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "kbm-nonlinear"
+label = "KBM Nonlinear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} kbm_salpha_nonlinear_short_dense.in"
+cwd = "${REFERENCE_GK_REPO}/benchmarks/nonlinear/KBM"
+
+[[run]]
+case = "w7x-linear"
+label = "W7-X Linear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/linear/non-axisymmetric/w7x_linear_imported_geometry.py --geometry-file ${REFERENCE_GK_REFS_ROOT}/linear/w7x/itg_w7x_adiabatic_electrons_t2.eik.nc --ky 0.3 --Nl 8 --Nm 16 --solver explicit_time"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "w7x-linear"
+label = "W7-X Linear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/linear/non-axisymmetric/w7x_linear_imported_geometry.py --geometry-file ${REFERENCE_GK_REFS_ROOT}/linear/w7x/itg_w7x_adiabatic_electrons_t2.eik.nc --ky 0.3 --Nl 8 --Nm 16 --solver explicit_time"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "w7x-linear"
+label = "W7-X Linear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('itg_w7x_adiabatic_electrons_t2.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*geo_option\\s*=.*$', ' geo_option = \"nc\"', text)\ntext = re.sub(r'(?m)^\\s*vmec_file\\s*=.*\\n', '', text)\nif re.search(r'(?m)^\\s*geo_file\\s*=.*$', text):\n    text = re.sub(r'(?m)^\\s*geo_file\\s*=.*$', ' geo_file = \"itg_w7x_adiabatic_electrons_t2.eik.nc\"', text)\nelse:\n    text = text.replace('[Geometry]\\n', '[Geometry]\\n geo_file = \"itg_w7x_adiabatic_electrons_t2.eik.nc\"\\n', 1)\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 2.0', text)\np.write_text(text)\nPY\nPATH=${REFERENCE_GK_PYTHON_BIN:-/home/rjorge/miniforge3/envs/qh-gpu/bin}:$PATH CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_NETCDF_LIBDIR:-/home/rjorge/local/install/netcdf-c-4.9.2/lib}:${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} itg_w7x_adiabatic_electrons_t2.in"
+cwd = "${REFERENCE_GK_REFS_ROOT}/linear/w7x"
+
+[[run]]
+case = "w7x-nonlinear"
+label = "W7-X Nonlinear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/nonlinear/non-axisymmetric/w7x_nonlinear_imported_geometry.py --geometry-file ${REFERENCE_GK_REFS_ROOT}/nonlinear/w7x/w7x_adiabatic_electrons.eik.nc --ky 0.047619047619047616 --Nl 4 --Nm 8 --steps 200 --dt 0.1"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "w7x-nonlinear"
+label = "W7-X Nonlinear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/nonlinear/non-axisymmetric/w7x_nonlinear_imported_geometry.py --geometry-file ${REFERENCE_GK_REFS_ROOT}/nonlinear/w7x/w7x_adiabatic_electrons.eik.nc --ky 0.047619047619047616 --Nl 4 --Nm 8 --steps 200 --dt 0.1"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "w7x-nonlinear"
+label = "W7-X Nonlinear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('w7x_adiabatic_electrons.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*geo_option\\s*=.*$', ' geo_option = \"nc\"', text)\ntext = re.sub(r'(?m)^\\s*vmec_file\\s*=.*\\n', '', text)\nif re.search(r'(?m)^\\s*geo_file\\s*=.*$', text):\n    text = re.sub(r'(?m)^\\s*geo_file\\s*=.*$', ' geo_file = \"w7x_adiabatic_electrons.eik.nc\"', text)\nelse:\n    text = text.replace('[Geometry]\\n', '[Geometry]\\n geo_file = \"w7x_adiabatic_electrons.eik.nc\"\\n', 1)\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 20.0', text)\np.write_text(text)\nPY\nPATH=${REFERENCE_GK_PYTHON_BIN:-/home/rjorge/miniforge3/envs/qh-gpu/bin}:$PATH CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_NETCDF_LIBDIR:-/home/rjorge/local/install/netcdf-c-4.9.2/lib}:${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} w7x_adiabatic_electrons.in"
+cwd = "${REFERENCE_GK_REPO}/benchmarks/nonlinear/w7x"
+
+[[run]]
+case = "hsx-linear"
+label = "HSX Linear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/linear/non-axisymmetric/hsx_linear_imported_geometry.py --geometry-file ${REFERENCE_GK_REFS_ROOT}/linear/hsx/hsx_linear.eik.nc --ky 0.047619047619047616 --Nl 8 --Nm 8 --solver explicit_time --dt 0.005 --t-max 2.0"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "hsx-linear"
+label = "HSX Linear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/linear/non-axisymmetric/hsx_linear_imported_geometry.py --geometry-file ${REFERENCE_GK_REFS_ROOT}/linear/hsx/hsx_linear.eik.nc --ky 0.047619047619047616 --Nl 8 --Nm 8 --solver explicit_time --dt 0.005 --t-max 2.0"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "hsx-linear"
+label = "HSX Linear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('hsx_linear.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*geo_option\\s*=.*$', ' geo_option = \"nc\"', text)\ntext = re.sub(r'(?m)^\\s*vmec_file\\s*=.*\\n', '', text)\nif re.search(r'(?m)^\\s*geo_file\\s*=.*$', text):\n    text = re.sub(r'(?m)^\\s*geo_file\\s*=.*$', ' geo_file = \"hsx_linear.eik.nc\"', text)\nelse:\n    text = text.replace('[Geometry]\\n', '[Geometry]\\n geo_file = \"hsx_linear.eik.nc\"\\n', 1)\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 2.0', text)\np.write_text(text)\nPY\nPATH=${REFERENCE_GK_PYTHON_BIN:-/home/rjorge/miniforge3/envs/qh-gpu/bin}:$PATH CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_NETCDF_LIBDIR:-/home/rjorge/local/install/netcdf-c-4.9.2/lib}:${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} hsx_linear.in"
+cwd = "${REFERENCE_GK_REFS_ROOT}/linear/hsx"
+
+[[run]]
+case = "hsx-nonlinear"
+label = "HSX Nonlinear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/nonlinear/non-axisymmetric/hsx_nonlinear_imported_geometry.py --geometry-file ${REFERENCE_GK_REFS_ROOT}/nonlinear/hsx/hsx_nonlinear.eik.nc --ky 0.047619047619047616 --Nl 4 --Nm 8 --steps 200 --dt 0.1"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "hsx-nonlinear"
+label = "HSX Nonlinear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/nonlinear/non-axisymmetric/hsx_nonlinear_imported_geometry.py --geometry-file ${REFERENCE_GK_REFS_ROOT}/nonlinear/hsx/hsx_nonlinear.eik.nc --ky 0.047619047619047616 --Nl 4 --Nm 8 --steps 200 --dt 0.1"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "hsx-nonlinear"
+label = "HSX Nonlinear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('hsx_nonlinear.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*geo_option\\s*=.*$', ' geo_option = \"nc\"', text)\ntext = re.sub(r'(?m)^\\s*vmec_file\\s*=.*\\n', '', text)\nif re.search(r'(?m)^\\s*geo_file\\s*=.*$', text):\n    text = re.sub(r'(?m)^\\s*geo_file\\s*=.*$', ' geo_file = \"hsx_nonlinear.eik.nc\"', text)\nelse:\n    text = text.replace('[Geometry]\\n', '[Geometry]\\n geo_file = \"hsx_nonlinear.eik.nc\"\\n', 1)\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 20.0', text)\np.write_text(text)\nPY\nPATH=${REFERENCE_GK_PYTHON_BIN:-/home/rjorge/miniforge3/envs/qh-gpu/bin}:$PATH CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_NETCDF_LIBDIR:-/home/rjorge/local/install/netcdf-c-4.9.2/lib}:${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} hsx_nonlinear.in"
+cwd = "${REFERENCE_GK_REFS_ROOT}/nonlinear/hsx"
+
+[[run]]
+case = "miller-nonlinear"
+label = "Cyclone Miller Nonlinear"
+backend = "gkx_cpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src JAX_PLATFORM_NAME=cpu python examples/nonlinear/axisymmetric/miller_nonlinear_runtime.py --ky 0.3 --Nl 4 --Nm 8 --steps 200 --dt 0.0377"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "miller-nonlinear"
+label = "Cyclone Miller Nonlinear"
+backend = "gkx_gpu"
+host = "office"
+command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/nonlinear/axisymmetric/miller_nonlinear_runtime.py --ky 0.3 --Nl 4 --Nm 8 --steps 200 --dt 0.0377"
+cwd = "${GKX_BENCH_ROOT}"
+
+[[run]]
+case = "miller-nonlinear"
+label = "Cyclone Miller Nonlinear"
+backend = "gx"
+host = "office"
+command = "tmpdir=$(mktemp -d) && trap 'rm -rf \"$tmpdir\"' EXIT && for f in *; do case \"$f\" in *.out.nc|*.restart.nc|*.big.nc|*.bin|rhs_terms_shape.txt) ;; *) ln -s \"$(pwd)/$f\" \"$tmpdir/$f\" ;; esac; done && cd \"$tmpdir\" && python3 - <<'PY'\nfrom pathlib import Path\nimport re\np = Path('cyclone_miller_adiabatic_electrons.in')\ntext = p.read_text()\ntext = re.sub(r'(?m)^\\s*t_max\\s*=.*$', ' t_max = 7.54', text)\np.write_text(text)\nPY\nCUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} env -u DISPLAY HDF5_DISABLE_VERSION_CHECK=1 LD_LIBRARY_PATH=${REFERENCE_GK_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH ${REFERENCE_GK_BIN} cyclone_miller_adiabatic_electrons.in"
+cwd = "${REFERENCE_GK_REPO}/benchmarks/nonlinear/cyclone"

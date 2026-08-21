@@ -1,0 +1,574 @@
+{
+  "any_rule_holdout_gate_passed": false,
+  "best_rule_by_holdout_mean_abs_relative_error": "linear_weight",
+  "cases": [
+    {
+      "case": "cyclone_long_window",
+      "geometry": "cyclone",
+      "nonlinear_summary": "docs/_static/nonlinear_cyclone_gate_summary.json",
+      "observed_heat_flux": 6.6689961798985795,
+      "observed_heat_flux_std": 0.6486446261822355,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.001736733063604406,
+        "linear_weight": 0.08285458758473396,
+        "positive_mixing_length": 0.001736733063604406
+      },
+      "shape_cosine": 0.8964299105687351,
+      "shape_cosine_gate": 0.95,
+      "shape_gate": "docs/_static/quasilinear_cyclone_spectrum_shape_gate.json",
+      "shape_gate_kind": "quasilinear_spectrum_shape_gate",
+      "shape_gate_status": "failed",
+      "shape_passed": false,
+      "shape_tv": 0.21473341652286174,
+      "shape_tv_gate": 0.2,
+      "spectrum": "docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "train"
+    },
+    {
+      "case": "cyclone_miller_long_window",
+      "geometry": "cyclone_miller",
+      "nonlinear_summary": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+      "observed_heat_flux": 4.259822065746515,
+      "observed_heat_flux_std": 4.2116774700305175,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.7702922187159693,
+        "linear_weight": 2.0071109980344772,
+        "positive_mixing_length": 0.6810220831094436
+      },
+      "shape_cosine": 0.9825396600130925,
+      "shape_cosine_gate": 0.95,
+      "shape_gate": "docs/_static/quasilinear_cyclone_miller_spectrum_shape_gate.json",
+      "shape_gate_kind": "quasilinear_spectrum_shape_gate",
+      "shape_gate_status": "passed",
+      "shape_passed": true,
+      "shape_tv": 0.09394928384219987,
+      "shape_tv_gate": 0.2,
+      "spectrum": "docs/_static/quasilinear_cyclone_miller_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "hsx_nonlinear_window",
+      "geometry": "hsx",
+      "nonlinear_summary": "docs/_static/nonlinear_hsx_gate_summary.json",
+      "observed_heat_flux": 5.089605487565396,
+      "observed_heat_flux_std": 6.284535110439706,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.4307355772676523,
+        "linear_weight": 1.3269210495054722,
+        "positive_mixing_length": 0.0
+      },
+      "shape_cosine": 0.9709889879217466,
+      "shape_cosine_gate": 0.95,
+      "shape_gate": "docs/_static/quasilinear_hsx_spectrum_shape_gate.json",
+      "shape_gate_kind": "quasilinear_spectrum_shape_gate",
+      "shape_gate_status": "passed",
+      "shape_passed": true,
+      "shape_tv": 0.11157506481268943,
+      "shape_tv_gate": 0.2,
+      "spectrum": "docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "w7x_nonlinear_window",
+      "geometry": "w7x",
+      "nonlinear_summary": "docs/_static/nonlinear_w7x_gate_summary.json",
+      "observed_heat_flux": 5.378544112072135,
+      "observed_heat_flux_std": 3.295746205851981,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.7181055834908083,
+        "linear_weight": 1.3192062399432951,
+        "positive_mixing_length": 0.0
+      },
+      "shape_cosine": 0.9916731122648941,
+      "shape_cosine_gate": 0.95,
+      "shape_gate": "docs/_static/quasilinear_w7x_spectrum_shape_gate.json",
+      "shape_gate_kind": "quasilinear_spectrum_shape_gate",
+      "shape_gate_status": "passed",
+      "shape_passed": true,
+      "shape_tv": 0.05564144523893508,
+      "shape_tv_gate": 0.2,
+      "spectrum": "docs/_static/quasilinear_w7x_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "dshape_external_vmec_t250_window",
+      "geometry": "dshape_external_vmec",
+      "nonlinear_summary": "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+      "observed_heat_flux": 18.479456131274883,
+      "observed_heat_flux_std": 2.1065149048808203,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 1.2224976297995087,
+        "linear_weight": 2.2930220564131654,
+        "positive_mixing_length": 0.909198613989148
+      },
+      "shape_cosine": null,
+      "shape_cosine_gate": null,
+      "shape_gate": null,
+      "shape_gate_kind": null,
+      "shape_gate_notes": "no shape-gate JSON configured for this case",
+      "shape_gate_status": "missing",
+      "shape_passed": null,
+      "shape_tv": null,
+      "shape_tv_gate": null,
+      "spectrum": "docs/_static/quasilinear_vmec_dshape_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "itermodel_external_vmec_t350_window",
+      "geometry": "itermodel_external_vmec",
+      "nonlinear_summary": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+      "observed_heat_flux": 22.046746492385864,
+      "observed_heat_flux_std": 3.434397669803179,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.44458230090949097,
+        "linear_weight": 1.3025812708940083,
+        "positive_mixing_length": 0.3888307697796897
+      },
+      "shape_cosine": null,
+      "shape_cosine_gate": null,
+      "shape_gate": null,
+      "shape_gate_kind": null,
+      "shape_gate_notes": "no shape-gate JSON configured for this case",
+      "shape_gate_status": "missing",
+      "shape_passed": null,
+      "shape_tv": null,
+      "shape_tv_gate": null,
+      "spectrum": "docs/_static/quasilinear_vmec_itermodel_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "train"
+    },
+    {
+      "case": "updown_asym_external_vmec_t450_window",
+      "geometry": "updown_asym_external_vmec",
+      "nonlinear_summary": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+      "observed_heat_flux": 7.76432224499282,
+      "observed_heat_flux_std": 0.6236662752268785,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.04517405095460055,
+        "linear_weight": 0.9060503900122323,
+        "positive_mixing_length": 0.04517405095460055
+      },
+      "shape_cosine": null,
+      "shape_cosine_gate": null,
+      "shape_gate": null,
+      "shape_gate_kind": null,
+      "shape_gate_notes": "no shape-gate JSON configured for this case",
+      "shape_gate_status": "missing",
+      "shape_passed": null,
+      "shape_tv": null,
+      "shape_tv_gate": null,
+      "spectrum": "docs/_static/quasilinear_vmec_updown_asym_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "circular_external_vmec_t450_window",
+      "geometry": "circular_external_vmec",
+      "nonlinear_summary": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+      "observed_heat_flux": 19.430008846324878,
+      "observed_heat_flux_std": 2.5120911781559006,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.4477122990896032,
+        "linear_weight": 1.3059193904159918,
+        "positive_mixing_length": 0.39176646407336235
+      },
+      "shape_cosine": null,
+      "shape_cosine_gate": null,
+      "shape_gate": null,
+      "shape_gate_kind": null,
+      "shape_gate_notes": "no shape-gate JSON configured for this case",
+      "shape_gate_status": "missing",
+      "shape_passed": null,
+      "shape_tv": null,
+      "shape_tv_gate": null,
+      "spectrum": "docs/_static/quasilinear_vmec_circular_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "cth_like_external_vmec_t700_high_grid_ensemble",
+      "geometry": "cth_like_external_vmec",
+      "nonlinear_summary": "docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.json",
+      "observed_heat_flux": 9.603187837312081,
+      "observed_heat_flux_std": 0.4961796804978094,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.36223519006903615,
+        "linear_weight": 1.110829005873401,
+        "positive_mixing_length": 0.2816170154580676
+      },
+      "shape_cosine": null,
+      "shape_cosine_gate": null,
+      "shape_gate": null,
+      "shape_gate_kind": null,
+      "shape_gate_notes": "no shape-gate JSON configured for this case",
+      "shape_gate_status": "missing",
+      "shape_passed": null,
+      "shape_tv": null,
+      "shape_tv_gate": null,
+      "spectrum": "docs/_static/quasilinear_vmex_cth_like_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "shaped_tokamak_pressure_external_vmec_t650_high_grid_window",
+      "geometry": "shaped_tokamak_external_vmec",
+      "nonlinear_summary": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_gate.json",
+      "observed_heat_flux": 7.156474006536328,
+      "observed_heat_flux_std": 0.33116969837810245,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 2.2913315241715453,
+        "linear_weight": 2.8542325629491794,
+        "positive_mixing_length": 1.8903249242191644
+      },
+      "shape_cosine": null,
+      "shape_cosine_gate": null,
+      "shape_gate": null,
+      "shape_gate_kind": null,
+      "shape_gate_notes": "no shape-gate JSON configured for this case",
+      "shape_gate_status": "missing",
+      "shape_passed": null,
+      "shape_tv": null,
+      "shape_tv_gate": null,
+      "spectrum": "docs/_static/quasilinear_vmex_shaped_tokamak_pressure_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "qp_diag_nfp2_m4_final_t250",
+      "geometry": "qp_diag_nfp2_m4",
+      "nonlinear_summary": "docs/_static/qp_diag_nfp2_m4_t250_replicate_ensemble_gate.json",
+      "observed_heat_flux": 16.395662425277063,
+      "observed_heat_flux_std": 0.47816980915084456,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.07571993575464353,
+        "linear_weight": 0.8158102153832001,
+        "positive_mixing_length": 0.05980013471634136
+      },
+      "shape_cosine": null,
+      "shape_cosine_gate": null,
+      "shape_gate": null,
+      "shape_gate_kind": null,
+      "shape_gate_notes": "no shape-gate JSON configured for this case",
+      "shape_gate_status": "missing",
+      "shape_passed": null,
+      "shape_tv": null,
+      "shape_tv_gate": null,
+      "spectrum": "docs/_static/quasilinear_vmec_qp_diag_nfp2_m4_final_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    },
+    {
+      "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+      "geometry": "solovev_external_vmec",
+      "nonlinear_summary": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_ensemble_gate.json",
+      "observed_heat_flux": 1.4094473959257687,
+      "observed_heat_flux_std": 0.06508713362749292,
+      "raw_estimates": {
+        "absolute_growth_mixing_length": 0.9376906651743699,
+        "linear_weight": 1.8143535895774772,
+        "positive_mixing_length": 0.9376906651743699
+      },
+      "shape_cosine": null,
+      "shape_cosine_gate": null,
+      "shape_gate": null,
+      "shape_gate_kind": null,
+      "shape_gate_notes": "no shape-gate JSON configured for this case",
+      "shape_gate_status": "missing",
+      "shape_passed": null,
+      "shape_tv": null,
+      "shape_tv_gate": null,
+      "spectrum": "docs/_static/quasilinear_vmec_solovev_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "split": "holdout"
+    }
+  ],
+  "claim_level": "model_comparison_not_validated_transport",
+  "holdout_relative_error_gate": 0.35,
+  "input_validation": {
+    "cases": [
+      {
+        "case": "cyclone_long_window",
+        "gate_case": "cyclone_nonlinear_long_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_cyclone_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "train"
+      },
+      {
+        "case": "cyclone_miller_long_window",
+        "gate_case": "cyclone_miller_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "hsx_nonlinear_window",
+        "gate_case": "hsx_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_hsx_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "w7x_nonlinear_window",
+        "gate_case": "w7x_nonlinear_window",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/nonlinear_w7x_gate_summary.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "dshape_external_vmec_t250_window",
+        "gate_case": "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "itermodel_external_vmec_t350_window",
+        "gate_case": "ITERModel external VMEC nonlinear t350 high-grid convergence",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "train"
+      },
+      {
+        "case": "updown_asym_external_vmec_t450_window",
+        "gate_case": "updown_asym_external_vmec_t450",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "circular_external_vmec_t450_window",
+        "gate_case": "circular_external_vmec_t450",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "cth_like_external_vmec_t700_high_grid_ensemble",
+        "gate_case": "cth_like_modified_n80_t700_seed_timestep_ensemble_gate",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "shaped_tokamak_pressure_external_vmec_t650_high_grid_window",
+        "gate_case": "shaped_tokamak_pressure_n80_t650_seed_timestep_ensemble_gate",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_gate.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "qp_diag_nfp2_m4_final_t250",
+        "gate_case": "qp_diag_nfp2_m4_final_t250_n64_seed_timestep_ensemble_gate",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/qp_diag_nfp2_m4_t250_replicate_ensemble_gate.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      },
+      {
+        "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+        "gate_case": "solovev_reference_repair_dt002_amp1em5_n48_t250_ensemble_gate",
+        "gate_passed": true,
+        "nonlinear_summary": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_ensemble_gate.json",
+        "passed": true,
+        "reason": "matched passed nonlinear summary gate",
+        "required": true,
+        "split": "holdout"
+      }
+    ],
+    "kind": "quasilinear_model_input_validation",
+    "passed": true,
+    "required_splits": [
+      "train",
+      "holdout"
+    ]
+  },
+  "kind": "quasilinear_saturation_rule_sweep",
+  "notes": "One scalar per rule is fitted on train cases only. The sweep is a diagnostic for saturation-model development, not a validated absolute-flux claim. Candidate rules should beat the training-mean null baseline before being promoted.",
+  "null_training_mean_baseline": {
+    "absolute_relative_error": [
+      1.1529284091388656,
+      2.3705331148910482,
+      1.8210185192586084,
+      1.6694717077649317,
+      0.22303604423494022,
+      0.34875328016762464,
+      0.8492111588234961,
+      0.26104658779617773,
+      0.4951151200392399,
+      1.0062772984333535,
+      0.12428842679715067,
+      9.186879891825637
+    ],
+    "holdout_max_abs_relative_error": 9.186879891825637,
+    "holdout_mean_abs_relative_error": 1.8006877869864581,
+    "label": "training-mean null",
+    "predicted_heat_flux": [
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221,
+      14.357871336142221
+    ]
+  },
+  "observed_floor": 1e-12,
+  "parallel": {
+    "executor": "thread",
+    "identity_contract": "parallel case rows preserve serial case ordering",
+    "workers": 1
+  },
+  "promotion_gate": {
+    "accepted_rules": [],
+    "best_rule": "linear_weight",
+    "best_rule_holdout_mean_abs_relative_error": 4.418344106628153,
+    "null_training_mean_holdout_mean_abs_relative_error": 1.8006877869864581,
+    "passed": false,
+    "requires_beating_training_mean_null": true,
+    "transport_mean_relative_error_gate": 0.35
+  },
+  "rules": {
+    "absolute_growth_mixing_length": {
+      "absolute_relative_error": [
+        0.9870708133222454,
+        7.977649671388667,
+        3.2017018001916977,
+        5.628605471681736,
+        2.2844105822343836,
+        0.0011663937234478862,
+        0.7111422075065565,
+        0.14399632420788017,
+        0.8727241759691502,
+        14.895984634528201,
+        0.7707127681339379,
+        32.03005701315105
+      ],
+      "holdout_gate_passed": false,
+      "holdout_max_abs_relative_error": 32.03005701315105,
+      "holdout_mean_abs_relative_error": 6.851698464899326,
+      "holdout_relative_error_gate": 0.35,
+      "label": "$|\\gamma|\\,\\hat Q/k_\\perp^2$",
+      "predicted_heat_flux": [
+        0.0862246965631407,
+        38.24319016872339,
+        21.385004539369067,
+        35.65224693096294,
+        60.694121271495284,
+        22.07246167911703,
+        2.2427849838963634,
+        22.227858699522255,
+        17.984122029307233,
+        113.75920084530195,
+        3.759316052102184,
+        46.55412784446542
+      ],
+      "scale": 49.6476392199216
+    },
+    "linear_weight": {
+      "absolute_relative_error": [
+        0.786538746256854,
+        7.095485447591235,
+        3.4794421076237763,
+        3.2141590889876523,
+        1.1319745272589499,
+        0.015133793802400076,
+        1.0049879392103855,
+        0.15479883386577564,
+        0.9874433225644319,
+        5.852565934674645,
+        0.1450846088124911,
+        21.117499255692177
+      ],
+      "holdout_gate_passed": false,
+      "holdout_max_abs_relative_error": 21.117499255692177,
+      "holdout_mean_abs_relative_error": 4.418344106628153,
+      "holdout_relative_error_gate": 0.35,
+      "label": "$\\hat Q$",
+      "predicted_heat_flux": [
+        1.4235722857694018,
+        34.48532754257894,
+        22.798593132193474,
+        22.66604055540981,
+        39.39772974947727,
+        22.38039740781542,
+        15.567372457353509,
+        22.437751557737673,
+        19.085791542597864,
+        49.04020998957541,
+        14.016904156084081,
+        31.173451730325468
+      ],
+      "scale": 17.18157469933139
+    },
+    "positive_mixing_length": {
+      "absolute_relative_error": [
+        0.9852145617003454,
+        8.076770096888685,
+        1.0,
+        1.0,
+        1.7933874600118,
+        0.001331126194502853,
+        0.6696707090141597,
+        0.14476372213618077,
+        0.6649648427912522,
+        13.996812510228187,
+        0.7929216032201342,
+        36.77220347837327
+      ],
+      "holdout_gate_passed": false,
+      "holdout_max_abs_relative_error": 36.77220347837327,
+      "holdout_mean_abs_relative_error": 6.491149442266367,
+      "holdout_relative_error_gate": 0.35,
+      "label": "$\\max(\\gamma,0)\\,\\hat Q/k_\\perp^2$",
+      "predicted_heat_flux": [
+        0.09860403153852253,
+        38.66542554443455,
+        0.0,
+        0.0,
+        51.62028102494143,
+        22.076093494145443,
+        2.5647830621740666,
+        22.242769248057787,
+        15.988970127845175,
+        107.32429891034684,
+        3.395187489170261,
+        53.23793383097147
+      ],
+      "scale": 56.77558261825238
+    }
+  },
+  "train_cases": [
+    "cyclone_long_window",
+    "itermodel_external_vmec_t350_window"
+  ]
+}

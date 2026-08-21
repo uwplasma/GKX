@@ -1,0 +1,143 @@
+{
+  "absolute_error": true,
+  "asymptotic_order": 4.8199230395040775,
+  "case": "cyclone_velocity_space_observed_order",
+  "csv": "docs/_static/cyclone_resolution_subset.csv",
+  "error_column": "rel_gamma",
+  "errors": [
+    0.0885702955548184,
+    0.045531179912011,
+    0.004548903571268,
+    0.0011368721705758
+  ],
+  "final_error": 0.0011368721705758,
+  "gate_passed": true,
+  "gate_report": {
+    "case": "cyclone_velocity_space_observed_order",
+    "gates": [
+      {
+        "abs_error": 0.0,
+        "atol": 1e-12,
+        "metric": "observed_order_deficit",
+        "notes": "Passes when asymptotic observed order >= 1.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 1e-12,
+        "metric": "min_pairwise_order_deficit",
+        "notes": "Passes when every pairwise observed order >= 0.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0011368721705758,
+        "atol": 0.05,
+        "metric": "final_error",
+        "notes": "Passes when final-grid error <= 0.05.",
+        "observed": 0.0011368721705758,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.0011368721705758,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "office GPU Cyclone ky=0.30 time-path velocity-space sweep"
+  },
+  "min_pairwise_order": 1.641076283548698,
+  "pairwise_orders": [
+    1.641076283548698,
+    3.3232640889037417,
+    4.8199230395040775
+  ],
+  "rows": [
+    {
+      "Nl": 4,
+      "Nm": 8,
+      "backend": "office-gpu",
+      "effective_step": 0.125,
+      "elapsed_s": 24.21481704711914,
+      "error_for_gate": 0.0885702955548184,
+      "gamma": 0.1012691611960199,
+      "gamma_ref": 0.09302951,
+      "ky": 0.3,
+      "omega": 0.2455528855184699,
+      "omega_ref": 0.28199404,
+      "protocol": "time_phi_z_index_tmax150",
+      "rel_gamma": 0.0885702955548184,
+      "rel_omega": -0.129226683236036,
+      "step_source": "1/Nm"
+    },
+    {
+      "Nl": 6,
+      "Nm": 12,
+      "backend": "office-gpu",
+      "effective_step": 0.08333333333333333,
+      "elapsed_s": 20.044712781906128,
+      "error_for_gate": 0.045531179912011,
+      "gamma": 0.0972652533569362,
+      "gamma_ref": 0.09302951,
+      "ky": 0.3,
+      "omega": 0.3015093177287616,
+      "omega_ref": 0.28199404,
+      "protocol": "time_phi_z_index_tmax150",
+      "rel_gamma": 0.045531179912011,
+      "rel_omega": 0.0692045751348562,
+      "step_source": "1/Nm"
+    },
+    {
+      "Nl": 12,
+      "Nm": 24,
+      "backend": "office-gpu",
+      "effective_step": 0.041666666666666664,
+      "elapsed_s": 26.064921617507935,
+      "error_for_gate": 0.004548903571268,
+      "gamma": 0.0934526922702723,
+      "gamma_ref": 0.09302951,
+      "ky": 0.3,
+      "omega": 0.2896629775919567,
+      "omega_ref": 0.28199404,
+      "protocol": "time_phi_z_index_tmax150",
+      "rel_gamma": 0.004548903571268,
+      "rel_omega": 0.0271953889236692,
+      "step_source": "1/Nm"
+    },
+    {
+      "Nl": 16,
+      "Nm": 32,
+      "backend": "office-gpu",
+      "effective_step": 0.03125,
+      "elapsed_s": 20.643428325653076,
+      "error_for_gate": 0.0011368721705758,
+      "gamma": 0.0929237473390386,
+      "gamma_ref": 0.09302951,
+      "ky": 0.3,
+      "omega": 0.2815655624798417,
+      "omega_ref": 0.28199404,
+      "protocol": "time_phi_z_index_tmax150",
+      "rel_gamma": -0.0011368721705758,
+      "rel_omega": -0.0015194559436725,
+      "step_source": "1/Nm"
+    }
+  ],
+  "source": "office GPU Cyclone ky=0.30 time-path velocity-space sweep",
+  "step_sizes": [
+    0.125,
+    0.08333333333333333,
+    0.041666666666666664,
+    0.03125
+  ]
+}

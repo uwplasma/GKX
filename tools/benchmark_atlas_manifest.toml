@@ -1,0 +1,31 @@
+[group.imported_linear]
+w7x = "docs/_static/w7x_linear_t2_scan.csv"
+hsx = "docs/_static/hsx_linear_t2_scan.csv"
+miller = "docs/_static/cyclone_miller_linear_mismatch.csv"
+kaw = "docs/_static/kaw_exact_growth_dump.csv"
+
+[group.extended_linear]
+kinetic = "docs/_static/kinetic_mismatch_table.csv"
+tem = "docs/_static/tem_mismatch_table.csv"
+miller = "docs/_static/kbm_miller_exact_growth_dump.csv"
+
+[group.core_linear]
+cyclone = "docs/_static/cyclone_mismatch_table.csv"
+etg = "docs/_static/etg_mismatch_table.csv"
+kbm = "docs/_static/kbm_mismatch_table.csv"
+w7x = "docs/_static/w7x_linear_t2_scan.csv"
+hsx = "docs/_static/hsx_linear_t2_scan.csv"
+miller = "docs/_static/cyclone_miller_linear_mismatch.csv"
+kaw = "docs/_static/kaw_exact_growth_dump.csv"
+kbm_miller = "docs/_static/kbm_miller_exact_growth_dump.csv"
+
+[group.core_nonlinear]
+cyclone = "docs/_static/nonlinear_cyclone_diag_compare_t400.png"
+kbm = "docs/_static/nonlinear_kbm_diag_compare_t400_stats.png"
+w7x = "docs/_static/nonlinear_w7x_diag_compare_t200.png"
+hsx = "docs/_static/hsx_nonlinear_compare_t50_true.png"
+miller = "docs/_static/nonlinear_cyclone_miller_diag_compare_t122.png"
+
+[group.convergence]
+cyclone_scan = "docs/_static/cyclone_scan_convergence.csv"
+cyclone_rhostar = "docs/_static/cyclone_rhostar_convergence.csv"

@@ -1,0 +1,218 @@
+{
+  "atol": 5e-06,
+  "auto_z_chunk_size": true,
+  "backend": "gpu",
+  "claim_scope": "device z-sharded shard_map nonlinear transport-window timing; serial-vs-sharded final-state and scalar-trace identity are required before any micro-route speedup claim, and this is not yet a full production nonlinear turbulent-transport solve",
+  "device_count_available": 2,
+  "dt": 0.0025,
+  "fft_batch_pressure_model": {
+    "chunked_fft_batch_count": 49152,
+    "chunking_active": true,
+    "chunking_required": true,
+    "claim_scope": "cuFFT batch-pressure preflight for device-z pencil profiling; suggests z chunking before launching expensive CPU/GPU runs and does not constitute a nonlinear speedup claim",
+    "device_count": 2,
+    "disable_gpu_preallocation_recommended": true,
+    "effective_z_chunk_size": 8,
+    "feasibility_blockers": [],
+    "local_z_extent": 32,
+    "max_fft_axis_extent": 96,
+    "max_fft_batch_count": 65536,
+    "profiling_candidate": true,
+    "state_shape": [
+      4,
+      16,
+      96,
+      96,
+      64
+    ],
+    "suggested_z_chunk_size": 8,
+    "unchunked_fft_batch_count": 196608
+  },
+  "hlo": {},
+  "kind": "nonlinear_device_z_pencil_transport_window_profile",
+  "max_fft_batch_count": 65536,
+  "min_speedup": 1.5,
+  "observable_repeats": 1,
+  "repeats": 2,
+  "rows": [
+    {
+      "active": true,
+      "blocked_reasons": [],
+      "device_count": 1,
+      "final_state_max_abs_error": 0.0,
+      "final_state_max_rel_error": 0.0,
+      "identity_gate_elapsed_s": null,
+      "identity_passed": true,
+      "median_s": 0.08767083007842302,
+      "observable_gate_median_s": null,
+      "observable_gate_overhead_vs_compute": null,
+      "observable_gate_stats_s": {},
+      "physical_flux_trace_max_abs_error": 0.0,
+      "physical_flux_trace_max_rel_error": 0.0,
+      "speedup_gate_passed": false,
+      "speedup_vs_serial": 1.0,
+      "stats": {
+        "max": 0.08785365428775549,
+        "mean": 0.08767083007842302,
+        "median": 0.08767083007842302,
+        "min": 0.08748800586909056,
+        "std": 0.00018282420933246613
+      },
+      "timing_scope": "compute_only_final_state_update",
+      "transport_window_identity_passed": true
+    },
+    {
+      "active": true,
+      "blocked_reasons": [
+        "speedup_below_gate"
+      ],
+      "device_count": 2,
+      "final_state_max_abs_error": 7.450580596923828e-09,
+      "final_state_max_rel_error": 8.765812825071403e-09,
+      "identity_gate_elapsed_s": 9.491569695062935,
+      "identity_passed": true,
+      "median_s": 0.07348759192973375,
+      "observable_gate_median_s": 3.13176061026752,
+      "observable_gate_overhead_vs_compute": 42.6161822428744,
+      "observable_gate_stats_s": {
+        "max": 3.13176061026752,
+        "mean": 3.13176061026752,
+        "median": 3.13176061026752,
+        "min": 3.13176061026752,
+        "std": 0.0
+      },
+      "physical_flux_trace_max_abs_error": 1.7763568394002505e-15,
+      "physical_flux_trace_max_rel_error": 3.552713678800501e-10,
+      "speedup_gate_passed": false,
+      "speedup_vs_serial": 1.1930018085536234,
+      "stats": {
+        "max": 0.08430540654808283,
+        "mean": 0.07348759192973375,
+        "median": 0.07348759192973375,
+        "min": 0.06266977731138468,
+        "std": 0.010817814618349075
+      },
+      "timing_scope": "compute_only_final_state_update",
+      "transport_window_identity_passed": true,
+      "transport_window_report": {
+        "active_device_count": 2,
+        "atol": 5e-06,
+        "axis_name": "z",
+        "blocked_reasons": [],
+        "bracket_rms_trace_max_abs_error": 7.275957614183426e-12,
+        "bracket_rms_trace_max_rel_error": 6.191358892237986e-08,
+        "claim_scope": "device z-sharded shard_map nonlinear transport-window identity gate; compares serial and sharded final state plus free-energy, field-energy, physical-flux, and bracket-RMS traces before any profiler-backed speedup claim is allowed",
+        "decomposed_path_enabled": true,
+        "device_bracket_rms_trace": [
+          0.00011751940473914146,
+          0.00011751903366530314,
+          0.00011751866986742243,
+          0.00011751831334549934,
+          0.00011751794954761863
+        ],
+        "device_field_energy_trace": [
+          3.708218574523926,
+          3.708218812942505,
+          3.708218812942505,
+          3.708218574523926,
+          3.708218574523926
+        ],
+        "device_free_energy_drift": -0.0078125,
+        "device_free_energy_trace": [
+          6384.0654296875,
+          6384.0634765625,
+          6384.0615234375,
+          6384.0595703125,
+          6384.0576171875
+        ],
+        "device_physical_flux_trace": [
+          9.465553674203875e-09,
+          9.465548345133357e-09,
+          9.465541239705999e-09,
+          9.465535022457061e-09,
+          9.465528805208123e-09
+        ],
+        "device_sharding_active": true,
+        "dt": 0.0025,
+        "field_energy_trace_max_abs_error": 0.0,
+        "field_energy_trace_max_rel_error": 0.0,
+        "final_state_max_abs_error": 2.3857080577727174e-06,
+        "final_state_max_rel_error": 0.02275712974369526,
+        "free_energy_trace_max_abs_error": 0.00048828125,
+        "free_energy_trace_max_rel_error": 7.648444722008207e-08,
+        "identity_passed": true,
+        "physical_flux_trace_max_abs_error": 1.7763568394002505e-15,
+        "physical_flux_trace_max_rel_error": 3.552713678800501e-10,
+        "requested_device_count": 2,
+        "rtol": 0.0001,
+        "serial_bracket_rms_trace": [
+          0.00011751940473914146,
+          0.00011751903366530314,
+          0.00011751866986742243,
+          0.00011751830606954172,
+          0.00011751794227166101
+        ],
+        "serial_field_energy_trace": [
+          3.708218574523926,
+          3.708218812942505,
+          3.708218812942505,
+          3.708218574523926,
+          3.708218574523926
+        ],
+        "serial_free_energy_drift": -0.0078125,
+        "serial_free_energy_trace": [
+          6384.0654296875,
+          6384.0634765625,
+          6384.0615234375,
+          6384.05908203125,
+          6384.0576171875
+        ],
+        "serial_physical_flux_trace": [
+          9.465553674203875e-09,
+          9.465547456954937e-09,
+          9.46554035152758e-09,
+          9.465534134278641e-09,
+          9.465527028851284e-09
+        ],
+        "sharded_axis": "z",
+        "state_shape": [
+          4,
+          16,
+          96,
+          96,
+          64
+        ],
+        "steps": 4
+      }
+    }
+  ],
+  "rtol": 0.0001,
+  "serial_stats_s": {
+    "max": 0.08785365428775549,
+    "mean": 0.08767083007842302,
+    "median": 0.08767083007842302,
+    "min": 0.08748800586909056,
+    "std": 0.00018282420933246613
+  },
+  "shape": [
+    4,
+    16,
+    96,
+    96,
+    64
+  ],
+  "steps": 4,
+  "summary": {
+    "all_active_identity_passed": true,
+    "full_solver_speedup_claim_allowed": false,
+    "max_speedup_vs_serial": 1.1930018085536234,
+    "status": "identity_timed_no_transport_speedup",
+    "transport_window_speedup_claim_allowed": false
+  },
+  "timing_scope": "speedup rows time compute-only fixed-step final-state updates; observable_gate_* fields optionally time the scalar identity/transport diagnostics separately and are not included in the speedup gate",
+  "trace": {
+    "requested": false
+  },
+  "warmups": 1,
+  "z_chunk_size": 8
+}

@@ -1,0 +1,121 @@
+{
+  "actual_devices": 2,
+  "atol": 2e-05,
+  "case": "Electrostatic Hermite-sharded diamagnetic-drive identity gate",
+  "claim_scope": "single-species periodic electrostatic diamagnetic-drive identity, not a full RHS or nonlinear speedup claim",
+  "grid": {
+    "Nx": 1,
+    "Ny_actual": 4,
+    "Ny_requested": 4,
+    "Nz": 16
+  },
+  "identity_passed": true,
+  "max_abs_error": 0.0,
+  "max_phi_abs_error": 0.0,
+  "max_rel_error": 0.0,
+  "notes": "The sharded path uses the Hermite-sharded electrostatic field reduction, then applies the local m=0 and m=2 diamagnetic drive masks on each Hermite shard.",
+  "phi_norm": 0.16790585219860077,
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 2,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 2,
+    "shard_shape": [
+      2,
+      4,
+      4,
+      1,
+      16
+    ],
+    "state_shape": [
+      2,
+      8,
+      4,
+      1,
+      16
+    ]
+  },
+  "reference_source": "gkx.linear.linear_rhs_cached with diamagnetic term only",
+  "requested_devices": 2,
+  "rows": [
+    {
+      "abs_error": 0.0,
+      "m": 0,
+      "serial_norm": 0.6126152276992798,
+      "sharded_norm": 0.6126152276992798
+    },
+    {
+      "abs_error": 0.0,
+      "m": 1,
+      "serial_norm": 0.0,
+      "sharded_norm": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 2,
+      "serial_norm": 0.4594228267669678,
+      "sharded_norm": 0.4594228267669678
+    },
+    {
+      "abs_error": 0.0,
+      "m": 3,
+      "serial_norm": 0.0,
+      "sharded_norm": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 4,
+      "serial_norm": 0.0,
+      "sharded_norm": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 5,
+      "serial_norm": 0.0,
+      "sharded_norm": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 6,
+      "serial_norm": 0.0,
+      "sharded_norm": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 7,
+      "serial_norm": 0.0,
+      "sharded_norm": 0.0
+    }
+  ],
+  "rtol": 2e-06,
+  "source": "gkx.parallel.velocity.diamagnetic_drive_shard_map",
+  "state_shape": [
+    2,
+    8,
+    4,
+    1,
+    16
+  ]
+}

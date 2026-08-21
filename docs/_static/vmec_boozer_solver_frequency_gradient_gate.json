@@ -1,0 +1,104 @@
+{
+  "case_name": "nfp4_QH_warm_start",
+  "claim_scope": "full vmex state coefficient -> booz_xform_jax mode-21 equal-arc geometry -> GKX linear-RHS eigenfrequency gradient",
+  "eigenpair_gate": {
+    "ad_supported": true,
+    "atol": 0.02,
+    "biorthogonal_overlap_abs": 1.0,
+    "branch_isolated": true,
+    "eigenvalue_gap": 0.07262029440787221,
+    "eigenvalue_imag": 0.6141938206452406,
+    "eigenvalue_real": 0.0,
+    "eigenvalue_sensitivity_imag": [
+      5022.395135437662
+    ],
+    "eigenvalue_sensitivity_real": [
+      -0.0
+    ],
+    "gap_floor": 1e-08,
+    "jacobian_fd": [
+      [
+        0.0
+      ],
+      [
+        4997.941489648106
+      ]
+    ],
+    "jacobian_implicit": [
+      [
+        0.0
+      ],
+      [
+        5022.395135437662
+      ]
+    ],
+    "left_selected_index": 0,
+    "max_abs_error": 24.453645789556504,
+    "max_rel_error": 0.004892743510544424,
+    "observable_chain_rule": "split_eigenpair_and_explicit_parameter",
+    "passed": true,
+    "rtol": 0.05,
+    "selected_index": 0,
+    "selector": "max_real",
+    "sensitivity_method": "implicit_left_right_eigenpair",
+    "step": 1e-06
+  },
+  "grid": {
+    "Nx": 1,
+    "Ny": 4,
+    "Nz": 4,
+    "selected_ky_index": 1
+  },
+  "kind": "mode21_vmec_boozer_linear_frequency_gradient_gate",
+  "linear_frequency_gradient_gate": true,
+  "linear_growth_gradient_gate": true,
+  "mboz": 21,
+  "n_hermite": 1,
+  "n_laguerre": 1,
+  "nboz": 21,
+  "next_action": "Promote the full-chain gate from eigenfrequency to quasilinear flux weights after the heavy Nl>=2 diagnostic is profiled and conditioned below manuscript runtime caps.",
+  "nonlinear_window_gradient_gate": false,
+  "objective_gates": [
+    {
+      "abs_error": 0.0,
+      "atol": 0.02,
+      "finite_difference": 0.0,
+      "implicit": 0.0,
+      "objective": "gamma",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.0,
+      "rtol": 0.05
+    },
+    {
+      "abs_error": 24.453645789556504,
+      "atol": 0.02,
+      "finite_difference": 4997.941489648106,
+      "implicit": 5022.395135437662,
+      "objective": "omega",
+      "parameter": "Rcos_mid_surface_m1",
+      "passed": true,
+      "rel_error": 0.004892743510544424,
+      "rtol": 0.05
+    }
+  ],
+  "objective_names": [
+    "gamma",
+    "omega"
+  ],
+  "parameter_indices": {
+    "Rcos": [
+      17,
+      1
+    ]
+  },
+  "parameter_names": [
+    "Rcos_mid_surface_m1"
+  ],
+  "passed": true,
+  "quasilinear_weight_gradient_gate": false,
+  "source_scope": "mode21_vmec_boozer_state",
+  "state_size": 4,
+  "surface_index": null,
+  "surface_stencil_width": null
+}

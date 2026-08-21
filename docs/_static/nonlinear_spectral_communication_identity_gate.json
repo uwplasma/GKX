@@ -1,0 +1,609 @@
+{
+  "case": "Nonlinear spectral decomposition identity gate",
+  "claim_scope": "diagnostic nonlinear spectral communication, RHS, fixed-step integrator, pencil fused-bracket, and physical transport-window identity gate; no production distributed FFT routing or speedup claim",
+  "communication_decomposition": {
+    "blocked_reasons": [],
+    "tile_bounds": [
+      [
+        0,
+        2,
+        0,
+        2
+      ],
+      [
+        0,
+        2,
+        2,
+        4
+      ],
+      [
+        2,
+        4,
+        0,
+        2
+      ],
+      [
+        2,
+        4,
+        2,
+        4
+      ],
+      [
+        4,
+        6,
+        0,
+        2
+      ],
+      [
+        4,
+        6,
+        2,
+        4
+      ]
+    ],
+    "x_chunks": [
+      2,
+      2
+    ],
+    "x_offsets": [
+      0,
+      2
+    ],
+    "y_chunks": [
+      2,
+      2,
+      2
+    ],
+    "y_offsets": [
+      0,
+      2,
+      4
+    ]
+  },
+  "communication_gate": {
+    "atol": 5e-06,
+    "blocked_reasons": [],
+    "bracket_max_abs_error": 0.0,
+    "bracket_max_rel_error": 0.0,
+    "claim_scope": "diagnostic spectral communication identity gate only; split/reassemble layout simulation with no production routing or speedup claim",
+    "decomposed_path_enabled": true,
+    "fft_max_abs_error": 0.0,
+    "fft_max_rel_error": 0.0,
+    "field_max_abs_error": 0.0,
+    "field_max_rel_error": 0.0,
+    "identity_passed": true,
+    "rtol": 5e-06,
+    "state_shape": [
+      2,
+      3,
+      6,
+      4,
+      2
+    ],
+    "x_chunks": [
+      2,
+      2
+    ],
+    "x_offsets": [
+      0,
+      2
+    ],
+    "y_chunks": [
+      2,
+      2,
+      2
+    ],
+    "y_offsets": [
+      0,
+      2,
+      4
+    ]
+  },
+  "gate": {
+    "atol": 5e-06,
+    "blocked_reasons": [],
+    "claim_scope": "diagnostic nonlinear spectral communication, RHS, fixed-step integrator, pencil fused-bracket, and physical transport-window identity gate; no production distributed FFT routing or speedup claim",
+    "communication_identity_passed": true,
+    "decomposed_path_enabled": true,
+    "dt": 0.005,
+    "identity_passed": true,
+    "integrator_identity_passed": true,
+    "pencil_rhs_identity_passed": true,
+    "pencil_rtol": 1e-05,
+    "pencil_transport_window_identity_passed": true,
+    "pencil_work_model_speedup_feasible": true,
+    "rhs_identity_passed": true,
+    "rtol": 5e-06,
+    "steps": 4
+  },
+  "integrator_gate": {
+    "atol": 5e-06,
+    "blocked_reasons": [],
+    "claim_scope": "diagnostic nonlinear spectral integrator identity gate only; fixed-step serial-vs-logical-shard RHS routing with final-state and transport-proxy trace identity, no production distributed FFT routing or speedup claim",
+    "decomposed_path_enabled": true,
+    "dt": 0.005,
+    "field_energy_trace_max_abs_error": 0.0,
+    "field_energy_trace_max_rel_error": 0.0,
+    "final_state_max_abs_error": 0.0,
+    "final_state_max_rel_error": 0.0,
+    "flux_proxy_trace_max_abs_error": 0.0,
+    "flux_proxy_trace_max_rel_error": 0.0,
+    "free_energy_trace_max_abs_error": 0.0,
+    "free_energy_trace_max_rel_error": 0.0,
+    "identity_passed": true,
+    "logical_field_energy_trace": [
+      1.8808730840682983,
+      1.8809016942977905,
+      1.880929708480835,
+      1.880958080291748,
+      1.8809860944747925
+    ],
+    "logical_flux_proxy_trace": [
+      0.004553433507680893,
+      0.00455341674387455,
+      0.00455339765176177,
+      0.004553380887955427,
+      0.0045533617958426476
+    ],
+    "logical_free_energy_drift": 0.0021762847900390625,
+    "logical_free_energy_trace": [
+      17.7440185546875,
+      17.74456024169922,
+      17.745101928710938,
+      17.74566078186035,
+      17.74619483947754
+    ],
+    "rtol": 5e-06,
+    "serial_field_energy_trace": [
+      1.8808730840682983,
+      1.8809016942977905,
+      1.880929708480835,
+      1.880958080291748,
+      1.8809860944747925
+    ],
+    "serial_flux_proxy_trace": [
+      0.004553433507680893,
+      0.00455341674387455,
+      0.00455339765176177,
+      0.004553380887955427,
+      0.0045533617958426476
+    ],
+    "serial_free_energy_drift": 0.0021762847900390625,
+    "serial_free_energy_trace": [
+      17.7440185546875,
+      17.74456024169922,
+      17.745101928710938,
+      17.74566078186035,
+      17.74619483947754
+    ],
+    "state_shape": [
+      2,
+      3,
+      6,
+      4,
+      2
+    ],
+    "steps": 4,
+    "tile_bounds": [
+      [
+        0,
+        2,
+        0,
+        2
+      ],
+      [
+        0,
+        2,
+        2,
+        4
+      ],
+      [
+        2,
+        4,
+        0,
+        2
+      ],
+      [
+        2,
+        4,
+        2,
+        4
+      ],
+      [
+        4,
+        6,
+        0,
+        2
+      ],
+      [
+        4,
+        6,
+        2,
+        4
+      ]
+    ],
+    "x_chunks": [
+      2,
+      2
+    ],
+    "x_offsets": [
+      0,
+      2
+    ],
+    "y_chunks": [
+      2,
+      2,
+      2
+    ],
+    "y_offsets": [
+      0,
+      2,
+      4
+    ]
+  },
+  "kind": "nonlinear_spectral_communication_identity_gate",
+  "pencil_rhs_gate": {
+    "atol": 5e-06,
+    "blocked_reasons": [],
+    "bracket_max_abs_error": 4.1191947630636605e-09,
+    "bracket_max_rel_error": 7.724565875832923e-06,
+    "claim_scope": "diagnostic pencil-FFT nonlinear spectral RHS identity gate; axis-wise FFT staging with no global reconstruction, but no production speedup claim without profiler-backed scaling",
+    "decomposed_path_enabled": true,
+    "field_max_abs_error": 0.0,
+    "field_max_rel_error": 0.0,
+    "identity_passed": true,
+    "rhs_max_abs_error": 4.1191947630636605e-09,
+    "rhs_max_rel_error": 7.724565875832923e-06,
+    "rtol": 1e-05,
+    "state_shape": [
+      2,
+      3,
+      6,
+      4,
+      2
+    ],
+    "work_model": {
+      "approximate_fft_work_units_per_step": 4401.5640006923095,
+      "claim_scope": "communication/work model for a pencil-FFT nonlinear bracket route with explicit transpose stages and no global reconstruction; not a runtime speedup claim without identity and profiler artifacts",
+      "communication_to_fft_work_ratio": 0.18175357665460964,
+      "feasibility_blockers": [],
+      "field_elements": 48,
+      "global_reconstruction_elements_per_step": 0,
+      "max_communication_to_fft_work_ratio": 0.35,
+      "min_predicted_speedup": 1.5,
+      "num_tiles": 6,
+      "parallel_efficiency_ceiling": 0.8462001044505993,
+      "pencil_transpose_elements_per_step": 800,
+      "predicted_speedup_ceiling": 5.077200626703596,
+      "production_speedup_feasible": true,
+      "state_elements": 288,
+      "state_shape": [
+        2,
+        3,
+        6,
+        4,
+        2
+      ],
+      "transform_payload_elements_per_step": 960,
+      "x_chunks": [
+        2,
+        2
+      ],
+      "x_offsets": [
+        0,
+        2
+      ],
+      "y_chunks": [
+        2,
+        2,
+        2
+      ],
+      "y_offsets": [
+        0,
+        2,
+        4
+      ]
+    },
+    "x_chunks": [
+      2,
+      2
+    ],
+    "x_offsets": [
+      0,
+      2
+    ],
+    "y_chunks": [
+      2,
+      2,
+      2
+    ],
+    "y_offsets": [
+      0,
+      2,
+      4
+    ]
+  },
+  "pencil_transport_window_gate": {
+    "atol": 5e-06,
+    "blocked_reasons": [],
+    "bracket_rms_trace_max_abs_error": 4.656612873077393e-10,
+    "bracket_rms_trace_max_rel_error": 7.811834024096243e-08,
+    "claim_scope": "diagnostic serial-vs-pencil nonlinear physical-space transport-window identity gate; includes a density-times-radial-E-field transport proxy, but is not an absolute nonlinear turbulent heat-flux claim",
+    "decomposed_path_enabled": true,
+    "dt": 0.005,
+    "field_energy_trace_max_abs_error": 0.0,
+    "field_energy_trace_max_rel_error": 0.0,
+    "final_state_max_abs_error": 1.862645149230957e-09,
+    "final_state_max_rel_error": 2.0233224873322797e-08,
+    "free_energy_trace_max_abs_error": 0.0,
+    "free_energy_trace_max_rel_error": 0.0,
+    "identity_passed": true,
+    "pencil_bracket_rms_trace": [
+      0.005961258430033922,
+      0.005961185786873102,
+      0.005961114075034857,
+      0.005961043760180473,
+      0.0059609729796648026
+    ],
+    "pencil_field_energy_trace": [
+      1.8808730840682983,
+      1.8809016942977905,
+      1.880929708480835,
+      1.880958080291748,
+      1.8809860944747925
+    ],
+    "pencil_free_energy_drift": 0.0021762847900390625,
+    "pencil_free_energy_trace": [
+      17.7440185546875,
+      17.74456024169922,
+      17.745101928710938,
+      17.74566078186035,
+      17.74619483947754
+    ],
+    "pencil_physical_flux_trace": [
+      0.0006306411232799292,
+      0.000630656024441123,
+      0.0006306701106950641,
+      0.0006306844879873097,
+      0.0006306987488642335
+    ],
+    "physical_flux_trace_max_abs_error": 0.0,
+    "physical_flux_trace_max_rel_error": 0.0,
+    "rtol": 1e-05,
+    "serial_bracket_rms_trace": [
+      0.005961258430033922,
+      0.005961185786873102,
+      0.005961114075034857,
+      0.005961043294519186,
+      0.005960972514003515
+    ],
+    "serial_field_energy_trace": [
+      1.8808730840682983,
+      1.8809016942977905,
+      1.880929708480835,
+      1.880958080291748,
+      1.8809860944747925
+    ],
+    "serial_free_energy_drift": 0.0021762847900390625,
+    "serial_free_energy_trace": [
+      17.7440185546875,
+      17.74456024169922,
+      17.745101928710938,
+      17.74566078186035,
+      17.74619483947754
+    ],
+    "serial_physical_flux_trace": [
+      0.0006306411232799292,
+      0.000630656024441123,
+      0.0006306701106950641,
+      0.0006306844879873097,
+      0.0006306987488642335
+    ],
+    "state_shape": [
+      2,
+      3,
+      6,
+      4,
+      2
+    ],
+    "steps": 4,
+    "work_model": {
+      "approximate_fft_work_units_per_step": 4401.5640006923095,
+      "claim_scope": "communication/work model for a pencil-FFT nonlinear bracket route with explicit transpose stages and no global reconstruction; not a runtime speedup claim without identity and profiler artifacts",
+      "communication_to_fft_work_ratio": 0.18175357665460964,
+      "feasibility_blockers": [],
+      "field_elements": 48,
+      "global_reconstruction_elements_per_step": 0,
+      "max_communication_to_fft_work_ratio": 0.35,
+      "min_predicted_speedup": 1.5,
+      "num_tiles": 6,
+      "parallel_efficiency_ceiling": 0.8462001044505993,
+      "pencil_transpose_elements_per_step": 800,
+      "predicted_speedup_ceiling": 5.077200626703596,
+      "production_speedup_feasible": true,
+      "state_elements": 288,
+      "state_shape": [
+        2,
+        3,
+        6,
+        4,
+        2
+      ],
+      "transform_payload_elements_per_step": 960,
+      "x_chunks": [
+        2,
+        2
+      ],
+      "x_offsets": [
+        0,
+        2
+      ],
+      "y_chunks": [
+        2,
+        2,
+        2
+      ],
+      "y_offsets": [
+        0,
+        2,
+        4
+      ]
+    },
+    "x_chunks": [
+      2,
+      2
+    ],
+    "x_offsets": [
+      0,
+      2
+    ],
+    "y_chunks": [
+      2,
+      2,
+      2
+    ],
+    "y_offsets": [
+      0,
+      2,
+      4
+    ]
+  },
+  "rhs_gate": {
+    "atol": 5e-06,
+    "blocked_reasons": [],
+    "bracket_max_abs_error": 0.0,
+    "bracket_max_rel_error": 0.0,
+    "claim_scope": "diagnostic nonlinear spectral RHS identity gate only; logical output-tile reconstruction with existing bracket contribution and no production routing or speedup claim",
+    "decomposed_path_enabled": true,
+    "field_max_abs_error": 0.0,
+    "field_max_rel_error": 0.0,
+    "identity_passed": true,
+    "reconstruction_max_abs_error": 0.0,
+    "reconstruction_max_rel_error": 0.0,
+    "rhs_max_abs_error": 0.0,
+    "rhs_max_rel_error": 0.0,
+    "rtol": 5e-06,
+    "state_shape": [
+      2,
+      3,
+      6,
+      4,
+      2
+    ],
+    "tile_bounds": [
+      [
+        0,
+        2,
+        0,
+        2
+      ],
+      [
+        0,
+        2,
+        2,
+        4
+      ],
+      [
+        2,
+        4,
+        0,
+        2
+      ],
+      [
+        2,
+        4,
+        2,
+        4
+      ],
+      [
+        4,
+        6,
+        0,
+        2
+      ],
+      [
+        4,
+        6,
+        2,
+        4
+      ]
+    ],
+    "x_chunks": [
+      2,
+      2
+    ],
+    "x_offsets": [
+      0,
+      2
+    ],
+    "y_chunks": [
+      2,
+      2,
+      2
+    ],
+    "y_offsets": [
+      0,
+      2,
+      4
+    ]
+  },
+  "rows": [
+    {
+      "identity_passed": true,
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0,
+      "operator": "fft_forward_inverse",
+      "stage": "communication"
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0,
+      "operator": "nonlinear_bracket",
+      "stage": "communication"
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0,
+      "operator": "spectral_field_solve_layout",
+      "stage": "communication"
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0,
+      "operator": "logical_sharded_rhs",
+      "stage": "rhs"
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0,
+      "operator": "logical_integrator_final_state",
+      "stage": "integrator"
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 0.0,
+      "max_rel_error": 0.0,
+      "operator": "logical_integrator_flux_proxy_trace",
+      "stage": "integrator"
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 4.1191947630636605e-09,
+      "max_rel_error": 7.724565875832923e-06,
+      "operator": "pencil_fused_rhs",
+      "stage": "pencil_rhs"
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 1.862645149230957e-09,
+      "max_rel_error": 2.0233224873322797e-08,
+      "operator": "pencil_physical_transport_window",
+      "stage": "pencil_transport"
+    }
+  ],
+  "source": "gkx.operators.nonlinear.parallel nonlinear-spectral communication utilities"
+}

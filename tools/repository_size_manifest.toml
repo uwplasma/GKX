@@ -1,0 +1,7 @@
+[policy]
+# Current tracked docs previews and validation artifacts sit near 40 MB after
+# the lightweight preview trim. Keep a buffer, but require every individual
+# tracked file to stay below 1 MB unless a future manifest entry explicitly
+# justifies the exception.
+max_tracked_total_bytes = 50000000
+max_unlisted_tracked_file_bytes = 1000000

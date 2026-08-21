@@ -1,0 +1,7 @@
+backend,requested_devices,actual_workers,timed_wall_s,strong_speedup_vs_1_device,parallel_efficiency,max_gamma_rel_error,max_omega_abs_error,identity_gate_pass,grid_label,source,error
+cpu,1,1,4.695667416504875,1.0,1.0,0.0,0.0,True,"Nx=1, Ny=128, Nz=96, Nl=4, Nm=8",/Users/rogeriojorge/local/GKX/docs/_static/independent_ky_scan_scaling_cpu_large.json,
+cpu,2,2,2.4154408750036964,1.9440208473319345,0.9720104236659672,0.0,0.0,True,"Nx=1, Ny=128, Nz=96, Nl=4, Nm=8",/Users/rogeriojorge/local/GKX/docs/_static/independent_ky_scan_scaling_cpu_large.json,
+cpu,4,4,1.242575083495467,3.778980826893432,0.944745206723358,0.0,0.0,True,"Nx=1, Ny=128, Nz=96, Nl=4, Nm=8",/Users/rogeriojorge/local/GKX/docs/_static/independent_ky_scan_scaling_cpu_large.json,
+cpu,8,8,0.6540182499957155,7.179719245656581,0.8974649057070726,0.0,0.0,True,"Nx=1, Ny=128, Nz=96, Nl=4, Nm=8",/Users/rogeriojorge/local/GKX/docs/_static/independent_ky_scan_scaling_cpu_large.json,
+gpu,1,1,4.98027725238353,1.0,1.0,0.0,0.0,True,"Nx=1, Ny=128, Nz=96, Nl=4, Nm=8",/Users/rogeriojorge/local/GKX/docs/_static/independent_ky_scan_scaling_gpu_large.json,
+gpu,2,2,2.647183340974152,1.8813495745824729,0.9406747872912364,0.0,0.0,True,"Nx=1, Ny=128, Nz=96, Nl=4, Nm=8",/Users/rogeriojorge/local/GKX/docs/_static/independent_ky_scan_scaling_gpu_large.json,

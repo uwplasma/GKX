@@ -1,0 +1,121 @@
+{
+  "case": "landscape_rbc_1_1_p0p4_replicated_nonlinear_window_t1100_1500_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "landscape_rbc_1_1_p0p4_replicated_nonlinear_window_t1100_1500_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "landscape_rbc_1_1_p0p4_replicated_nonlinear_window_t1100_1500_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=3 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": true
+      },
+      {
+        "detail": "finite_means=3 reports=3",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.03502170464528603 gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": true
+      },
+      {
+        "detail": "combined_sem_rel=0.0200924079169015 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=3 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": true
+    },
+    {
+      "detail": "finite_means=3 reports=3",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.03502170464528603 gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.0200924079169015 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": true,
+  "rows": [
+    {
+      "case": "landscape_rbc_1_1_p0p4_replicated_nonlinear_window_t1100_1500",
+      "failures": [],
+      "index": 0,
+      "late_mean": 7.14576760530475,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.13586473870471225,
+      "source_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p4/landscape_rbc_1_1_p0p4_nonlinear_t700_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p4/landscape_rbc_1_1_p0p4_nonlinear_t700_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "landscape_rbc_1_1_p0p4_replicated_nonlinear_window_t1100_1500",
+      "failures": [],
+      "index": 1,
+      "late_mean": 6.962749648093999,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.14279109245892385,
+      "source_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p4/landscape_rbc_1_1_p0p4_nonlinear_t700_n64_seed33_heat_flux_trace.csv",
+      "summary_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p4/landscape_rbc_1_1_p0p4_nonlinear_t700_n64_seed33_transport_window.json"
+    },
+    {
+      "case": "landscape_rbc_1_1_p0p4_replicated_nonlinear_window_t1100_1500",
+      "failures": [],
+      "index": 2,
+      "late_mean": 7.2116390538216,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.11728901127920145,
+      "source_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p4/landscape_rbc_1_1_p0p4_nonlinear_t700_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p4/landscape_rbc_1_1_p0p4_nonlinear_t700_n64_dt0p04_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 0.14279109245892385,
+    "combined_sem_rel": 0.0200924079169015,
+    "ensemble_mean": 7.106718769073449,
+    "max_individual_sem": 0.14279109245892385,
+    "mean_rel_spread": 0.03502170464528603,
+    "mean_spread": 0.248889405727601,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.07445377263583033
+  }
+}

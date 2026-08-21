@@ -1,0 +1,111 @@
+{
+  "kind": "vmex_boundary_chain_collection_summary",
+  "finite": true,
+  "classification": "mixed_exact_fd_consistency_with_branch_sensitive_modes",
+  "exact_relative_tolerance": 0.1,
+  "internal_relative_tolerance": 1e-08,
+  "absolute_tolerance": 1e-10,
+  "counts": {
+    "n_total": 4,
+    "n_finite": 4,
+    "n_frozen_axis_internal_pass": 4,
+    "n_exact_fd_consistent": 2,
+    "n_branch_sensitive": 2
+  },
+  "rows": [
+    {
+      "index": 22,
+      "name": "rc11",
+      "classification": "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive",
+      "finite": true,
+      "frozen_axis_jvp_vjp_consistent": true,
+      "frozen_axis_matches_exact_fd": false,
+      "final_state_matches_exact_fd": false,
+      "exact_fd_cost_gradient": -0.013532249847991815,
+      "frozen_axis_replay_cost_gradient": -0.01718742474998505,
+      "frozen_axis_vs_exact_fd_rel": 0.21266565265959425,
+      "raw_initial_vs_exact_fd_rel": 0.8599815063634417
+    },
+    {
+      "index": 24,
+      "name": "rc12",
+      "classification": "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive",
+      "finite": true,
+      "frozen_axis_jvp_vjp_consistent": true,
+      "frozen_axis_matches_exact_fd": false,
+      "final_state_matches_exact_fd": false,
+      "exact_fd_cost_gradient": 0.007927874372641586,
+      "frozen_axis_replay_cost_gradient": 0.0036284716818998954,
+      "frozen_axis_vs_exact_fd_rel": 0.5423146847001713,
+      "raw_initial_vs_exact_fd_rel": 1.1051056183686763
+    },
+    {
+      "index": 27,
+      "name": "zs13",
+      "classification": "exact_fd_and_frozen_axis_replay_consistent",
+      "finite": true,
+      "frozen_axis_jvp_vjp_consistent": true,
+      "frozen_axis_matches_exact_fd": true,
+      "final_state_matches_exact_fd": true,
+      "exact_fd_cost_gradient": -0.016052204491771513,
+      "frozen_axis_replay_cost_gradient": -0.01680665848764235,
+      "frozen_axis_vs_exact_fd_rel": 0.044890184234157735,
+      "raw_initial_vs_exact_fd_rel": 0.5315836707977011
+    },
+    {
+      "index": 28,
+      "name": "rc14",
+      "classification": "exact_fd_and_frozen_axis_replay_consistent",
+      "finite": true,
+      "frozen_axis_jvp_vjp_consistent": true,
+      "frozen_axis_matches_exact_fd": true,
+      "final_state_matches_exact_fd": true,
+      "exact_fd_cost_gradient": 0.022453977158339022,
+      "frozen_axis_replay_cost_gradient": 0.02079152740732695,
+      "frozen_axis_vs_exact_fd_rel": 0.07403809754009064,
+      "raw_initial_vs_exact_fd_rel": 0.775623251686195
+    }
+  ],
+  "next_action": "use frozen-axis derivatives only as diagnostics; exclude or regularize branch-sensitive modes before projected VMEC updates",
+  "environment": {
+    "gkx_commit": "225605b",
+    "vmex_commit": "f14787b",
+    "booz_xform_jax_commit": "1d5e8c8",
+    "python_env": "/Users/rogeriojorge/local/venvs/gkx_vmec_latest_20260603",
+    "input": "tools_out/latest_vmec_stack/authoritative_qa_baseline/input.final",
+    "mboz": 21,
+    "nboz": 21,
+    "ntheta": 24,
+    "n_laguerre": 2,
+    "n_hermite": 3,
+    "step": 0.0001,
+    "common_inner_max_iter": 500,
+    "rerun_inner_max_iter": 1000
+  },
+  "iteration_1000_rerun_rows": [
+    {
+      "index": 22,
+      "name": "rc11",
+      "classification": "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive",
+      "exact_fd_cost_gradient": -0.01623266968045836,
+      "frozen_axis_replay_cost_gradient": -0.02201146265905198,
+      "frozen_axis_vs_exact_fd_rel": 0.2625356191955354,
+      "raw_initial_vs_exact_fd_rel": 0.8296551960388292
+    },
+    {
+      "index": 24,
+      "name": "rc12",
+      "classification": "frozen_axis_replay_consistent_but_exact_fd_branch_sensitive",
+      "exact_fd_cost_gradient": 0.012755317989638238,
+      "frozen_axis_replay_cost_gradient": 0.002474016158545307,
+      "frozen_axis_vs_exact_fd_rel": 0.8060404169809745,
+      "raw_initial_vs_exact_fd_rel": 1.1809553425614323
+    }
+  ],
+  "office_gpu_probe_status": {
+    "status": "failed_oom",
+    "path": "/home/rjorge/tmp/gkx_latest_stack_20260603/boundary_chain_multicomponent_async",
+    "failure": "RESOURCE_EXHAUSTED during final-state cotangent through mode-21 Boozer transform on A4000",
+    "next_action": "use CPU for this diagnostic or implement a memory-slim cotangent path before rerunning on GPU"
+  }
+}

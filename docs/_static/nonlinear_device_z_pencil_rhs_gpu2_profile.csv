@@ -1,0 +1,3 @@
+device_count,active,identity_passed,rhs_max_abs_error,rhs_max_rel_error,median_s,speedup_vs_serial,speedup_gate_passed,blocked_reasons
+1,True,True,0.0,0.0,0.010456148535013199,1.0,False,[]
+2,True,True,5.238689482212067e-10,2.647566533346983e-07,0.009600257501006126,1.08915292469159,False,['speedup_below_gate']

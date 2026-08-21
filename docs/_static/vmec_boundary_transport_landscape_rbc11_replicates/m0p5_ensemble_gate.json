@@ -1,0 +1,124 @@
+{
+  "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=3 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": false
+      },
+      {
+        "detail": "finite_means=3 reports=3",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.13309671875672036 gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": true
+      },
+      {
+        "detail": "combined_sem_rel=0.040388047685762714 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 1.0,
+    "max_rel_error": 1.0,
+    "passed": false,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=3 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": false
+    },
+    {
+      "detail": "finite_means=3 reports=3",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.13309671875672036 gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.040388047685762714 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": false,
+  "rows": [
+    {
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window",
+      "failures": [
+        "nonlinear window convergence report did not pass",
+        "missing passed gate_report"
+      ],
+      "index": 0,
+      "late_mean": 14.503263399633804,
+      "passed": false,
+      "promotion_ready": false,
+      "sem": 0.5831708511946153,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed31_transport_window.json"
+    },
+    {
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window",
+      "failures": [],
+      "index": 1,
+      "late_mean": 15.368063792378168,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4128972877418744,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "landscape_rbc_1_1_m0p5_replicated_nonlinear_window",
+      "failures": [],
+      "index": 2,
+      "late_mean": 13.446254464715908,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.32588683706811733,
+      "source_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/vmec_boundary_transport_landscape_rbc11_replicates/landscape_rbc_1_1_m0p5_nonlinear_t700_n64_dt0p04_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 0.5831708511946153,
+    "combined_sem_rel": 0.040388047685762714,
+    "ensemble_mean": 14.43919388557596,
+    "max_individual_sem": 0.5831708511946153,
+    "mean_rel_spread": 0.13309671875672036,
+    "mean_spread": 1.9218093276622596,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.5557026932770565
+  }
+}

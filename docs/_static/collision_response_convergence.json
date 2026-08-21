@@ -1,0 +1,1357 @@
+{
+  "conductivity_normalization": {
+    "computed": "sigma_parallel / (n_e e^2 / (m_e nu_ee))",
+    "computed_value": [
+      1.3115089332234209,
+      0.773146713270458,
+      0.36698740876091823,
+      0.20004939767205704,
+      0.022219097961598728
+    ],
+    "high_charge_relative_error": 0.07452951967322183,
+    "spitzer_high_charge": "64 / (3 * 2^(3/2) * pi * Z)",
+    "spitzer_value": [
+      2.4008435097522827,
+      1.2004217548761413,
+      0.4801687019504566,
+      0.2400843509752283,
+      0.024008435097522825
+    ]
+  },
+  "field_normalization": {
+    "paper": "e E / (sqrt(m_e T_e) nu_ee)",
+    "paper_value": 0.001,
+    "solver": "e E / (m_e v_Te nu_ee)",
+    "solver_value": 0.0007071067811865475,
+    "thermal_speed": "v_Te = sqrt(2 T_e / m_e)"
+  },
+  "gate_passed": true,
+  "gates": {
+    "collision_invariants": true,
+    "driven_solve_residual": true,
+    "electric_field_linearity": true,
+    "improved_sugama_correction_hierarchy_converged": true,
+    "improved_sugama_invariants": true,
+    "improved_sugama_matches_coulomb": true,
+    "improved_sugama_nested_current_converged": true,
+    "improved_sugama_order_reached": true,
+    "nested_current_converged": true,
+    "nonpositive_spectrum": true,
+    "original_sugama_high_charge_convergence": true,
+    "original_sugama_invariants": true,
+    "original_sugama_low_charge_underprediction": true,
+    "required_resolution_reached": true,
+    "self_adjoint_symmetry": true,
+    "spitzer_high_charge_asymptote": true,
+    "stationary_current_saturated": true
+  },
+  "ion_charge": [
+    1.0,
+    2.0,
+    5.0,
+    10.0,
+    100.0
+  ],
+  "literature_equations": {
+    "collision": "Frei et al. (2021), equations (3.53)--(3.56)",
+    "conductivity": "Frei, Ernst & Ricci (2022), equations (83)--(84) and Figures 15--16",
+    "drive": "Frei, Ernst & Ricci (2022), equation (81)",
+    "improved_sugama": "Frei, Ernst & Ricci (2022), equations (45), (60), (79)--(81)",
+    "original_sugama": "Sugama, Watanabe & Nunami (2009)"
+  },
+  "normalized_field": 0.0007071067811865475,
+  "required_resolution": [
+    20,
+    5
+  ],
+  "resolutions": [
+    {
+      "conductivity_over_ne2_mnu": [
+        1.285060278075526,
+        0.7698779241535626,
+        0.36584037837983635,
+        0.19749309251906827,
+        0.021424550180711058
+      ],
+      "current": [
+        0.0009086748368606749,
+        0.0005443859008548066,
+        0.0002586882123842347,
+        0.0001396487049577354,
+        1.514944471665226e-05
+      ],
+      "generation_seconds": {
+        "electron_electron": 0.05442124977707863,
+        "electron_ion": 0.03193375002592802
+      },
+      "improved_correction_order_maximum_change": null,
+      "improved_correction_order_relative_change": null,
+      "improved_maximum_relative_change": null,
+      "improved_relative_change_from_previous": null,
+      "improved_sugama_conductivity_over_ne2_mnu": [
+        1.2857425836791232,
+        0.7714643094655257,
+        0.3666669943656301,
+        0.19781134158882502,
+        0.021429388441356244
+      ],
+      "improved_sugama_correction_order": 1,
+      "improved_sugama_current": [
+        0.0009091572997798201,
+        0.0005455076446664705,
+        0.00025927271815322667,
+        0.0001398737410330667,
+        1.5152865883563621e-05
+      ],
+      "improved_sugama_invariant_residuals": {
+        "density": 2.2920014279318722e-51,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 2.7755575615628914e-17
+      },
+      "improved_sugama_relative_gap": [
+        0.0005309522169800738,
+        0.0020605673473586233,
+        0.0022594990456071117,
+        0.001611444054561095,
+        0.00022582787523558952
+      ],
+      "invariant_residuals": {
+        "density": 2.2799892604126522e-51,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 5.551115123125783e-17
+      },
+      "maximum_eigenvalue": 1.1503881112492241e-16,
+      "maximum_hermite_order": 3,
+      "maximum_laguerre_order": 1,
+      "maximum_relative_change": null,
+      "maximum_spherical_order": 5,
+      "maximum_spherical_radial_order": 2,
+      "mode_count": 8,
+      "original_sugama_conductivity_over_ne2_mnu": [
+        1.1310599170000046,
+        0.6872270340933484,
+        0.3401488257443948,
+        0.1889489999497832,
+        0.02130917169766335
+      ],
+      "original_sugama_current": [
+        0.0007997801372389968,
+        0.00048594289602212537,
+        0.00024052154129650284,
+        0.00013360711916290832,
+        1.5067859808886208e-05
+      ],
+      "original_sugama_invariant_residuals": {
+        "density": 2.2920014279318722e-51,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 2.7755575615628914e-17
+      },
+      "original_sugama_relative_gap": [
+        0.11983901743982668,
+        0.10735583846112251,
+        0.07022612634838006,
+        0.04326274129542089,
+        0.005385339812248963
+      ],
+      "relative_change_from_previous": null,
+      "solve_residual_max": 6.505213034913027e-19,
+      "spitzer_relative_error": [
+        0.46474633900311246,
+        0.35866046993375417,
+        0.23810032412819887,
+        0.17740122704021868,
+        0.10762404572876016
+      ],
+      "symmetry_max_abs": 8.326672684688674e-17
+    },
+    {
+      "conductivity_over_ne2_mnu": [
+        1.2980095373061489,
+        0.7711628397253854,
+        0.36694306475906857,
+        0.19993419180571026,
+        0.022192439237798567
+      ],
+      "current": [
+        0.0009178313458739908,
+        0.0005452944733688946,
+        0.00025946792940051183,
+        0.0001413748228168696,
+        1.5692424276117784e-05
+      ],
+      "generation_seconds": {
+        "electron_electron": 0.26165725011378527,
+        "electron_ion": 0.2797282082028687
+      },
+      "improved_correction_order_maximum_change": null,
+      "improved_correction_order_relative_change": null,
+      "improved_maximum_relative_change": 0.034430288865235546,
+      "improved_relative_change_from_previous": [
+        0.010167574765258135,
+        0.0011492785436729286,
+        0.0018936580279202036,
+        0.011224571350576642,
+        0.034430288865235546
+      ],
+      "improved_sugama_conductivity_over_ne2_mnu": [
+        1.2989497524029943,
+        0.7723519569978672,
+        0.367362653603785,
+        0.20005689447503483,
+        0.022193517665515656
+      ],
+      "improved_sugama_correction_order": 2,
+      "improved_sugama_current": [
+        0.0009184961783447441,
+        0.0005461353062558926,
+        0.00025976462351792105,
+        0.00014146158670641867,
+        1.5693186839669557e-05
+      ],
+      "improved_sugama_invariant_residuals": {
+        "density": 4.280887570997548e-50,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "improved_sugama_relative_gap": [
+        0.0007243514549181334,
+        0.0015419794772597074,
+        0.0011434712493937755,
+        0.0006137152840960298,
+        4.859437511728418e-05
+      ],
+      "invariant_residuals": {
+        "density": 4.0127534332155556e-50,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 5.551115123125783e-17
+      },
+      "maximum_eigenvalue": 7.669338455446169e-16,
+      "maximum_hermite_order": 5,
+      "maximum_laguerre_order": 2,
+      "maximum_relative_change": 0.03460138152725585,
+      "maximum_spherical_order": 9,
+      "maximum_spherical_radial_order": 4,
+      "mode_count": 18,
+      "original_sugama_conductivity_over_ne2_mnu": [
+        1.1401621481158755,
+        0.6888069121483459,
+        0.3410402878649564,
+        0.19100569491272187,
+        0.022061193318255682
+      ],
+      "original_sugama_current": [
+        0.0008062163865849563,
+        0.0004870600385082619,
+        0.0002411519002071229,
+        0.00013506142211803447,
+        1.5599619396405945e-05
+      ],
+      "original_sugama_invariant_residuals": {
+        "density": 4.280887570997548e-50,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "original_sugama_relative_gap": [
+        0.12160726454896881,
+        0.10679447106964687,
+        0.07059072477938695,
+        0.0446571785063399,
+        0.005913992515042937
+      ],
+      "relative_change_from_previous": [
+        0.009976243516282176,
+        0.0016662052495685848,
+        0.003005061234652961,
+        0.012209513863512544,
+        0.03460138152725585
+      ],
+      "solve_residual_max": 8.673617379884035e-19,
+      "spitzer_relative_error": [
+        0.45935270998146954,
+        0.35759008315793694,
+        0.2358038679561221,
+        0.1672335535674322,
+        0.07563990957126694
+      ],
+      "symmetry_max_abs": 1.7694179454963432e-16
+    },
+    {
+      "conductivity_over_ne2_mnu": [
+        1.3060726865397279,
+        0.7726291388374766,
+        0.3669476419675152,
+        0.1999902907615124,
+        0.02221405929910459
+      ],
+      "current": [
+        0.0009235328533747735,
+        0.0005463313034143022,
+        0.0002594711659756434,
+        0.00014141449076893477,
+        1.570771196807694e-05
+      ],
+      "generation_seconds": {
+        "electron_electron": 1.1555888750590384,
+        "electron_ion": 1.25797124998644
+      },
+      "improved_correction_order_maximum_change": null,
+      "improved_correction_order_relative_change": null,
+      "improved_maximum_relative_change": 0.007426117607686877,
+      "improved_relative_change_from_previous": [
+        0.007426117607686877,
+        0.00224649045049691,
+        0.0002153863079534977,
+        5.0885297541530624e-05,
+        0.0009414081960865933
+      ],
+      "improved_sugama_conductivity_over_ne2_mnu": [
+        1.3086680754406417,
+        0.7740909449134313,
+        0.36728354575689237,
+        0.20006707494767179,
+        0.022214430512471493
+      ],
+      "improved_sugama_correction_order": 3,
+      "improved_sugama_current": [
+        0.0009253680704664261,
+        0.0005473649564033895,
+        0.0002597086858229382,
+        0.00014146878538765596,
+        1.5707974455565945e-05
+      ],
+      "improved_sugama_invariant_residuals": {
+        "density": 1.6927324184569202e-48,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "improved_sugama_relative_gap": [
+        0.001987170337196226,
+        0.0018919893160568681,
+        0.000915399776316994,
+        0.00038393956960117197,
+        1.6710739892593222e-05
+      ],
+      "invariant_residuals": {
+        "density": 1.629690023835178e-48,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 6.938893903907228e-17
+      },
+      "maximum_eigenvalue": 1.1034714649761929e-15,
+      "maximum_hermite_order": 7,
+      "maximum_laguerre_order": 3,
+      "maximum_relative_change": 0.006173583841601587,
+      "maximum_spherical_order": 13,
+      "maximum_spherical_radial_order": 6,
+      "mode_count": 32,
+      "original_sugama_conductivity_over_ne2_mnu": [
+        1.151611537449813,
+        0.6924024681997465,
+        0.3413002092673328,
+        0.19100634923701318,
+        0.022079125488927646
+      ],
+      "original_sugama_current": [
+        0.0008143123274234285,
+        0.0004896024805743436,
+        0.00024133569239331878,
+        0.00013506188479517795,
+        1.5612299355889485e-05
+      ],
+      "original_sugama_invariant_residuals": {
+        "density": 1.6927324184569202e-48,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "original_sugama_relative_gap": [
+        0.11826382304888386,
+        0.10383593706864565,
+        0.06989398422800853,
+        0.044921888409135566,
+        0.006074252722571092
+      ],
+      "relative_change_from_previous": [
+        0.006173583841601587,
+        0.0018978045719289494,
+        1.2473737185317478e-05,
+        0.00028050839662529934,
+        0.0009732602679642336
+      ],
+      "solve_residual_max": 9.215718466126788e-19,
+      "spitzer_relative_error": [
+        0.4559942448416859,
+        0.35636859653780933,
+        0.23579433545550707,
+        0.16699989004219923,
+        0.07473939018221883
+      ],
+      "symmetry_max_abs": 2.949029909160572e-16
+    },
+    {
+      "conductivity_over_ne2_mnu": [
+        1.3091988245263884,
+        0.7730136435498902,
+        0.3669550136713881,
+        0.2000185343784423,
+        0.022217686327251622
+      ],
+      "current": [
+        0.0009257433667440661,
+        0.0005466031893038481,
+        0.0002594763785574408,
+        0.00014143446202199113,
+        1.571027666427526e-05
+      ],
+      "generation_seconds": {
+        "electron_electron": 3.66293533379212,
+        "electron_ion": 4.056584249716252
+      },
+      "improved_correction_order_maximum_change": null,
+      "improved_correction_order_relative_change": null,
+      "improved_maximum_relative_change": 0.0021522817494912918,
+      "improved_relative_change_from_previous": [
+        0.0021522817494912918,
+        3.5777750400023687e-07,
+        0.0003472287359854846,
+        4.532501352765767e-05,
+        0.00015231100165915507
+      ],
+      "improved_sugama_conductivity_over_ne2_mnu": [
+        1.3114907730962029,
+        0.7740906679612043,
+        0.36715605862274736,
+        0.20005800731578388,
+        0.022217814530057244
+      ],
+      "improved_sugama_correction_order": 4,
+      "improved_sugama_current": [
+        0.0009273640191199128,
+        0.0005473647605685917,
+        0.00025961853880587023,
+        0.00014146237360365872,
+        1.5710367317348484e-05
+      ],
+      "improved_sugama_invariant_residuals": {
+        "density": 7.991302360345651e-48,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "improved_sugama_relative_gap": [
+        0.0017506497308715512,
+        0.0013932799508790058,
+        0.0005478735645217041,
+        0.00019734639824381297,
+        5.770304060251741e-06
+      ],
+      "invariant_residuals": {
+        "density": 7.802419219318562e-48,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 6.938893903907228e-17
+      },
+      "maximum_eigenvalue": 1.0756962488639478e-15,
+      "maximum_hermite_order": 9,
+      "maximum_laguerre_order": 4,
+      "maximum_relative_change": 0.002387825231810411,
+      "maximum_spherical_order": 17,
+      "maximum_spherical_radial_order": 8,
+      "mode_count": 50,
+      "original_sugama_conductivity_over_ne2_mnu": [
+        1.157651334921542,
+        0.6940216049571537,
+        0.34139306209190823,
+        0.19100738215521595,
+        0.0220818762438053
+      ],
+      "original_sugama_current": [
+        0.0008185831091726814,
+        0.0004907473831551746,
+        0.0002414013492552284,
+        0.00013506261517864354,
+        1.5614244433316856e-05
+      ],
+      "original_sugama_invariant_residuals": {
+        "density": 7.991302360345651e-48,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "original_sugama_relative_gap": [
+        0.11575590106389665,
+        0.10218712082491,
+        0.06965963299896716,
+        0.0450515861004007,
+        0.006112701450814012
+      ],
+      "relative_change_from_previous": [
+        0.002387825231810411,
+        0.0004974099947937892,
+        2.008884903660201e-05,
+        0.00014120499891502234,
+        0.00016324958835087932
+      ],
+      "solve_residual_max": 1.3010426069826053e-18,
+      "spitzer_relative_error": [
+        0.45469214498638,
+        0.3560482885203549,
+        0.23577898313486864,
+        0.16688224965116508,
+        0.07458831710593128
+      ],
+      "symmetry_max_abs": 9.107298248878237e-16
+    },
+    {
+      "conductivity_over_ne2_mnu": [
+        1.3105933294708232,
+        0.7731182360662534,
+        0.36696825868419736,
+        0.20003679345433587,
+        0.022218758634928316
+      ],
+      "current": [
+        0.0009267294306466741,
+        0.0005466771473814298,
+        0.0002594857441958151,
+        0.00014144737313837366,
+        1.571103490030497e-05
+      ],
+      "generation_seconds": {
+        "electron_electron": 9.506026457995176,
+        "electron_ion": 11.355729040689766
+      },
+      "improved_correction_order_maximum_change": null,
+      "improved_correction_order_relative_change": null,
+      "improved_maximum_relative_change": 0.0004533905106974455,
+      "improved_relative_change_from_previous": [
+        0.0004533905106974455,
+        0.0004395592232830871,
+        0.00024251610264124554,
+        2.249017181481929e-05,
+        4.4239633093715515e-05
+      ],
+      "improved_sugama_conductivity_over_ne2_mnu": [
+        1.3120856602837978,
+        0.773750558766578,
+        0.36706703895505194,
+        0.20005350807801506,
+        0.02221879748150561
+      ],
+      "improved_sugama_correction_order": 5,
+      "improved_sugama_current": [
+        0.0009277846678843021,
+        0.0005471242670507275,
+        0.0002595555923951838,
+        0.0001414591921621222,
+        1.57110623689832e-05
+      ],
+      "improved_sugama_invariant_residuals": {
+        "density": 4.124902174431108e-46,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "improved_sugama_relative_gap": [
+        0.0011386680974312597,
+        0.0008178861535357291,
+        0.0002691793323181514,
+        8.355774650535604e-05,
+        1.7483684814881135e-06
+      ],
+      "invariant_residuals": {
+        "density": 4.073582522856303e-46,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 6.938893903907228e-17
+      },
+      "maximum_eigenvalue": 1.2780218013432083e-16,
+      "maximum_hermite_order": 11,
+      "maximum_laguerre_order": 5,
+      "maximum_relative_change": 0.0010640256691965269,
+      "maximum_spherical_order": 21,
+      "maximum_spherical_radial_order": 10,
+      "mode_count": 72,
+      "original_sugama_conductivity_over_ne2_mnu": [
+        1.1608712777864856,
+        0.6947136324066391,
+        0.3414129278577847,
+        0.19100881123202385,
+        0.022082749253391626
+      ],
+      "original_sugama_current": [
+        0.0008208599526075163,
+        0.0004912367204574729,
+        0.0002414153964729931,
+        0.00013506362568854524,
+        1.5614861744315388e-05
+      ],
+      "original_sugama_invariant_residuals": {
+        "density": 4.124902174431108e-46,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "original_sugama_relative_gap": [
+        0.1142399005989071,
+        0.10141347080176155,
+        0.06963907700912313,
+        0.04513160837270128,
+        0.006121376255596905
+      ],
+      "relative_change_from_previous": [
+        0.0010640256691965269,
+        0.00013528657258859652,
+        3.609307479817752e-05,
+        9.127858719514253e-05,
+        4.826136753689423e-05
+      ],
+      "solve_residual_max": 1.3010426069826053e-18,
+      "spitzer_relative_error": [
+        0.4541113054028043,
+        0.3559611587129032,
+        0.23575139905295026,
+        0.16680619689795817,
+        0.07454365331704464
+      ],
+      "symmetry_max_abs": 2.174909558005922e-15
+    },
+    {
+      "conductivity_over_ne2_mnu": [
+        1.311291564019177,
+        0.7731446234276381,
+        0.3669813098206764,
+        0.2000466214099079,
+        0.022219047176937384
+      ],
+      "current": [
+        0.0009272231570306739,
+        0.0005466958060636026,
+        0.0002594949727429216,
+        0.00014145432255240384,
+        1.571123893031624e-05
+      ],
+      "generation_seconds": {
+        "electron_electron": 24.549898915924132,
+        "electron_ion": 26.69086966663599
+      },
+      "improved_correction_order_maximum_change": null,
+      "improved_correction_order_relative_change": null,
+      "improved_maximum_relative_change": 0.0023874563327637346,
+      "improved_relative_change_from_previous": [
+        0.0023874563327637346,
+        0.001204667507033869,
+        0.00042992136799807043,
+        0.00017875665664327306,
+        1.5351810880116497e-05
+      ],
+      "improved_sugama_conductivity_over_ne2_mnu": [
+        1.3152257042203523,
+        0.7746837951628364,
+        0.36722491679364283,
+        0.20008927536791,
+        0.022219138585519094
+      ],
+      "improved_sugama_correction_order": 5,
+      "improved_sugama_current": [
+        0.0009300050142450635,
+        0.0005477841648349719,
+        0.0002596672288854505,
+        0.0001414844834553516,
+        1.5711303565944225e-05
+      ],
+      "improved_sugama_invariant_residuals": {
+        "density": 1.3812525885626076e-44,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "improved_sugama_relative_gap": [
+        0.0030002024790862706,
+        0.001990794074689968,
+        0.0006638130238443928,
+        0.00021322008690522032,
+        4.113973969373766e-06
+      ],
+      "invariant_residuals": {
+        "density": 1.3851085669378066e-44,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 6.938893903907228e-17
+      },
+      "maximum_eigenvalue": 4.709833350675305e-16,
+      "maximum_hermite_order": 15,
+      "maximum_laguerre_order": 5,
+      "maximum_relative_change": 0.0005324784872509903,
+      "maximum_spherical_order": 25,
+      "maximum_spherical_radial_order": 12,
+      "mode_count": 96,
+      "original_sugama_conductivity_over_ne2_mnu": [
+        1.162734554970727,
+        0.6950097426680417,
+        0.341414997168077,
+        0.19101176428655725,
+        0.022083030262548275
+      ],
+      "original_sugama_current": [
+        0.0008221774885397235,
+        0.0004914461020312897,
+        0.00024141685969633316,
+        0.00013506571381343102,
+        1.561506044779563e-05
+      ],
+      "original_sugama_invariant_residuals": {
+        "density": 1.3812525885626076e-44,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "original_sugama_relative_gap": [
+        0.11329060075176192,
+        0.10106114482591297,
+        0.06966652515653249,
+        0.0451637576264668,
+        0.006121635788698044
+      ],
+      "relative_change_from_previous": [
+        0.0005324784872509903,
+        3.412991642853657e-05,
+        3.5563490918394875e-05,
+        4.912832570108798e-05,
+        1.298624584443826e-05
+      ],
+      "solve_residual_max": 2.168404344971009e-18,
+      "spitzer_relative_error": [
+        0.4538204765563937,
+        0.3559391769708384,
+        0.23572421873814417,
+        0.1667652614703382,
+        0.07453163495733502
+      ],
+      "symmetry_max_abs": 6.98760168650614e-15
+    },
+    {
+      "conductivity_over_ne2_mnu": [
+        1.3115089332234209,
+        0.773146713270458,
+        0.36698740876091823,
+        0.20004939767205704,
+        0.022219097961598728
+      ],
+      "current": [
+        0.0009273768602690158,
+        0.0005466972838056322,
+        0.00025949928534492467,
+        0.00014145628566619587,
+        1.5711274840494655e-05
+      ],
+      "generation_seconds": {
+        "electron_electron": 51.65829874994233,
+        "electron_ion": 57.31143545778468
+      },
+      "improved_correction_order_maximum_change": 0.004394249286830885,
+      "improved_correction_order_relative_change": [
+        0.004394249286830885,
+        0.0035240501585544187,
+        0.0016524069257137135,
+        0.00069511683286997,
+        2.403713980230795e-05
+      ],
+      "improved_maximum_relative_change": 0.00023731841877393215,
+      "improved_relative_change_from_previous": [
+        0.00023731841877393215,
+        1.973166205483038e-05,
+        7.557577004416356e-06,
+        8.54501315901599e-06,
+        2.089577079821934e-06
+      ],
+      "improved_sugama_conductivity_over_ne2_mnu": [
+        1.3155379055959455,
+        0.774699081263302,
+        0.36722769214520434,
+        0.2000909851480111,
+        0.022219185014218833
+      ],
+      "improved_sugama_correction_order": 5,
+      "improved_sugama_current": [
+        0.0009302257739548412,
+        0.0005477949737402691,
+        0.00025966919135535986,
+        0.0001414856924524554,
+        1.571133639599265e-05
+      ],
+      "improved_sugama_invariant_residuals": {
+        "density": 1.0758706178142086e-42,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "improved_sugama_relative_gap": [
+        0.003072012908537522,
+        0.0020078569386621837,
+        0.0006547455813196305,
+        0.00020788603433948856,
+        3.917918731715679e-06
+      ],
+      "invariant_residuals": {
+        "density": 1.0778119983571085e-42,
+        "parallel_momentum": 0.0,
+        "thermal_energy": 6.938893903907228e-17
+      },
+      "maximum_eigenvalue": 1.3945782590074021e-16,
+      "maximum_hermite_order": 20,
+      "maximum_laguerre_order": 5,
+      "maximum_relative_change": 0.00016573978166475422,
+      "maximum_spherical_order": 30,
+      "maximum_spherical_radial_order": 15,
+      "mode_count": 126,
+      "original_sugama_conductivity_over_ne2_mnu": [
+        1.163425342449866,
+        0.6950798723779008,
+        0.3414155921700749,
+        0.1910136623218076,
+        0.022083091034154904
+      ],
+      "original_sugama_current": [
+        0.0008226659490505815,
+        0.0004914956912246937,
+        0.0002414172804262807,
+        0.0001350670559270275,
+        1.561510341981078e-05
+      ],
+      "original_sugama_invariant_residuals": {
+        "density": 1.0758706178142086e-42,
+        "parallel_momentum": 6.938893903907228e-18,
+        "thermal_energy": 3.7568653482402507e-17
+      },
+      "original_sugama_relative_gap": [
+        0.11291085178474207,
+        0.10097286783038847,
+        0.06968036499449116,
+        0.04516752089932206,
+        0.00612117232116647
+      ],
+      "relative_change_from_previous": [
+        0.00016573978166475422,
+        2.703035250622219e-06,
+        1.66189359531995e-05,
+        1.387788307021246e-05,
+        2.2856311012463496e-06
+      ],
+      "solve_residual_max": 3.0357660829594124e-18,
+      "spitzer_relative_error": [
+        0.45372993787556715,
+        0.3559374360470244,
+        0.2357115170767967,
+        0.16675369777558732,
+        0.07452951967322183
+      ],
+      "symmetry_max_abs": 6.209675108099708e-14
+    }
+  ],
+  "rows": [
+    {
+      "conductivity_over_ne2_mnu": 1.285060278075526,
+      "improved_sugama_normalized_current": 0.0009091572997798201,
+      "ion_charge": 1.0,
+      "maximum_hermite_order": 3,
+      "maximum_laguerre_order": 1,
+      "mode_count": 8,
+      "normalized_current": 0.0009086748368606749,
+      "original_sugama_normalized_current": 0.0007997801372389968,
+      "relative_change_from_previous": null,
+      "spitzer_conductivity_over_ne2_mnu": 2.4008435097522827
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.7698779241535626,
+      "improved_sugama_normalized_current": 0.0005455076446664705,
+      "ion_charge": 2.0,
+      "maximum_hermite_order": 3,
+      "maximum_laguerre_order": 1,
+      "mode_count": 8,
+      "normalized_current": 0.0005443859008548066,
+      "original_sugama_normalized_current": 0.00048594289602212537,
+      "relative_change_from_previous": null,
+      "spitzer_conductivity_over_ne2_mnu": 1.2004217548761413
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.36584037837983635,
+      "improved_sugama_normalized_current": 0.00025927271815322667,
+      "ion_charge": 5.0,
+      "maximum_hermite_order": 3,
+      "maximum_laguerre_order": 1,
+      "mode_count": 8,
+      "normalized_current": 0.0002586882123842347,
+      "original_sugama_normalized_current": 0.00024052154129650284,
+      "relative_change_from_previous": null,
+      "spitzer_conductivity_over_ne2_mnu": 0.4801687019504566
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.19749309251906827,
+      "improved_sugama_normalized_current": 0.0001398737410330667,
+      "ion_charge": 10.0,
+      "maximum_hermite_order": 3,
+      "maximum_laguerre_order": 1,
+      "mode_count": 8,
+      "normalized_current": 0.0001396487049577354,
+      "original_sugama_normalized_current": 0.00013360711916290832,
+      "relative_change_from_previous": null,
+      "spitzer_conductivity_over_ne2_mnu": 0.2400843509752283
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.021424550180711058,
+      "improved_sugama_normalized_current": 1.5152865883563621e-05,
+      "ion_charge": 100.0,
+      "maximum_hermite_order": 3,
+      "maximum_laguerre_order": 1,
+      "mode_count": 8,
+      "normalized_current": 1.514944471665226e-05,
+      "original_sugama_normalized_current": 1.5067859808886208e-05,
+      "relative_change_from_previous": null,
+      "spitzer_conductivity_over_ne2_mnu": 0.024008435097522825
+    },
+    {
+      "conductivity_over_ne2_mnu": 1.2980095373061489,
+      "improved_sugama_normalized_current": 0.0009184961783447441,
+      "ion_charge": 1.0,
+      "maximum_hermite_order": 5,
+      "maximum_laguerre_order": 2,
+      "mode_count": 18,
+      "normalized_current": 0.0009178313458739908,
+      "original_sugama_normalized_current": 0.0008062163865849563,
+      "relative_change_from_previous": 0.009976243516282176,
+      "spitzer_conductivity_over_ne2_mnu": 2.4008435097522827
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.7711628397253854,
+      "improved_sugama_normalized_current": 0.0005461353062558926,
+      "ion_charge": 2.0,
+      "maximum_hermite_order": 5,
+      "maximum_laguerre_order": 2,
+      "mode_count": 18,
+      "normalized_current": 0.0005452944733688946,
+      "original_sugama_normalized_current": 0.0004870600385082619,
+      "relative_change_from_previous": 0.0016662052495685848,
+      "spitzer_conductivity_over_ne2_mnu": 1.2004217548761413
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.36694306475906857,
+      "improved_sugama_normalized_current": 0.00025976462351792105,
+      "ion_charge": 5.0,
+      "maximum_hermite_order": 5,
+      "maximum_laguerre_order": 2,
+      "mode_count": 18,
+      "normalized_current": 0.00025946792940051183,
+      "original_sugama_normalized_current": 0.0002411519002071229,
+      "relative_change_from_previous": 0.003005061234652961,
+      "spitzer_conductivity_over_ne2_mnu": 0.4801687019504566
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.19993419180571026,
+      "improved_sugama_normalized_current": 0.00014146158670641867,
+      "ion_charge": 10.0,
+      "maximum_hermite_order": 5,
+      "maximum_laguerre_order": 2,
+      "mode_count": 18,
+      "normalized_current": 0.0001413748228168696,
+      "original_sugama_normalized_current": 0.00013506142211803447,
+      "relative_change_from_previous": 0.012209513863512544,
+      "spitzer_conductivity_over_ne2_mnu": 0.2400843509752283
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.022192439237798567,
+      "improved_sugama_normalized_current": 1.5693186839669557e-05,
+      "ion_charge": 100.0,
+      "maximum_hermite_order": 5,
+      "maximum_laguerre_order": 2,
+      "mode_count": 18,
+      "normalized_current": 1.5692424276117784e-05,
+      "original_sugama_normalized_current": 1.5599619396405945e-05,
+      "relative_change_from_previous": 0.03460138152725585,
+      "spitzer_conductivity_over_ne2_mnu": 0.024008435097522825
+    },
+    {
+      "conductivity_over_ne2_mnu": 1.3060726865397279,
+      "improved_sugama_normalized_current": 0.0009253680704664261,
+      "ion_charge": 1.0,
+      "maximum_hermite_order": 7,
+      "maximum_laguerre_order": 3,
+      "mode_count": 32,
+      "normalized_current": 0.0009235328533747735,
+      "original_sugama_normalized_current": 0.0008143123274234285,
+      "relative_change_from_previous": 0.006173583841601587,
+      "spitzer_conductivity_over_ne2_mnu": 2.4008435097522827
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.7726291388374766,
+      "improved_sugama_normalized_current": 0.0005473649564033895,
+      "ion_charge": 2.0,
+      "maximum_hermite_order": 7,
+      "maximum_laguerre_order": 3,
+      "mode_count": 32,
+      "normalized_current": 0.0005463313034143022,
+      "original_sugama_normalized_current": 0.0004896024805743436,
+      "relative_change_from_previous": 0.0018978045719289494,
+      "spitzer_conductivity_over_ne2_mnu": 1.2004217548761413
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.3669476419675152,
+      "improved_sugama_normalized_current": 0.0002597086858229382,
+      "ion_charge": 5.0,
+      "maximum_hermite_order": 7,
+      "maximum_laguerre_order": 3,
+      "mode_count": 32,
+      "normalized_current": 0.0002594711659756434,
+      "original_sugama_normalized_current": 0.00024133569239331878,
+      "relative_change_from_previous": 1.2473737185317478e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.4801687019504566
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.1999902907615124,
+      "improved_sugama_normalized_current": 0.00014146878538765596,
+      "ion_charge": 10.0,
+      "maximum_hermite_order": 7,
+      "maximum_laguerre_order": 3,
+      "mode_count": 32,
+      "normalized_current": 0.00014141449076893477,
+      "original_sugama_normalized_current": 0.00013506188479517795,
+      "relative_change_from_previous": 0.00028050839662529934,
+      "spitzer_conductivity_over_ne2_mnu": 0.2400843509752283
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.02221405929910459,
+      "improved_sugama_normalized_current": 1.5707974455565945e-05,
+      "ion_charge": 100.0,
+      "maximum_hermite_order": 7,
+      "maximum_laguerre_order": 3,
+      "mode_count": 32,
+      "normalized_current": 1.570771196807694e-05,
+      "original_sugama_normalized_current": 1.5612299355889485e-05,
+      "relative_change_from_previous": 0.0009732602679642336,
+      "spitzer_conductivity_over_ne2_mnu": 0.024008435097522825
+    },
+    {
+      "conductivity_over_ne2_mnu": 1.3091988245263884,
+      "improved_sugama_normalized_current": 0.0009273640191199128,
+      "ion_charge": 1.0,
+      "maximum_hermite_order": 9,
+      "maximum_laguerre_order": 4,
+      "mode_count": 50,
+      "normalized_current": 0.0009257433667440661,
+      "original_sugama_normalized_current": 0.0008185831091726814,
+      "relative_change_from_previous": 0.002387825231810411,
+      "spitzer_conductivity_over_ne2_mnu": 2.4008435097522827
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.7730136435498902,
+      "improved_sugama_normalized_current": 0.0005473647605685917,
+      "ion_charge": 2.0,
+      "maximum_hermite_order": 9,
+      "maximum_laguerre_order": 4,
+      "mode_count": 50,
+      "normalized_current": 0.0005466031893038481,
+      "original_sugama_normalized_current": 0.0004907473831551746,
+      "relative_change_from_previous": 0.0004974099947937892,
+      "spitzer_conductivity_over_ne2_mnu": 1.2004217548761413
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.3669550136713881,
+      "improved_sugama_normalized_current": 0.00025961853880587023,
+      "ion_charge": 5.0,
+      "maximum_hermite_order": 9,
+      "maximum_laguerre_order": 4,
+      "mode_count": 50,
+      "normalized_current": 0.0002594763785574408,
+      "original_sugama_normalized_current": 0.0002414013492552284,
+      "relative_change_from_previous": 2.008884903660201e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.4801687019504566
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.2000185343784423,
+      "improved_sugama_normalized_current": 0.00014146237360365872,
+      "ion_charge": 10.0,
+      "maximum_hermite_order": 9,
+      "maximum_laguerre_order": 4,
+      "mode_count": 50,
+      "normalized_current": 0.00014143446202199113,
+      "original_sugama_normalized_current": 0.00013506261517864354,
+      "relative_change_from_previous": 0.00014120499891502234,
+      "spitzer_conductivity_over_ne2_mnu": 0.2400843509752283
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.022217686327251622,
+      "improved_sugama_normalized_current": 1.5710367317348484e-05,
+      "ion_charge": 100.0,
+      "maximum_hermite_order": 9,
+      "maximum_laguerre_order": 4,
+      "mode_count": 50,
+      "normalized_current": 1.571027666427526e-05,
+      "original_sugama_normalized_current": 1.5614244433316856e-05,
+      "relative_change_from_previous": 0.00016324958835087932,
+      "spitzer_conductivity_over_ne2_mnu": 0.024008435097522825
+    },
+    {
+      "conductivity_over_ne2_mnu": 1.3105933294708232,
+      "improved_sugama_normalized_current": 0.0009277846678843021,
+      "ion_charge": 1.0,
+      "maximum_hermite_order": 11,
+      "maximum_laguerre_order": 5,
+      "mode_count": 72,
+      "normalized_current": 0.0009267294306466741,
+      "original_sugama_normalized_current": 0.0008208599526075163,
+      "relative_change_from_previous": 0.0010640256691965269,
+      "spitzer_conductivity_over_ne2_mnu": 2.4008435097522827
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.7731182360662534,
+      "improved_sugama_normalized_current": 0.0005471242670507275,
+      "ion_charge": 2.0,
+      "maximum_hermite_order": 11,
+      "maximum_laguerre_order": 5,
+      "mode_count": 72,
+      "normalized_current": 0.0005466771473814298,
+      "original_sugama_normalized_current": 0.0004912367204574729,
+      "relative_change_from_previous": 0.00013528657258859652,
+      "spitzer_conductivity_over_ne2_mnu": 1.2004217548761413
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.36696825868419736,
+      "improved_sugama_normalized_current": 0.0002595555923951838,
+      "ion_charge": 5.0,
+      "maximum_hermite_order": 11,
+      "maximum_laguerre_order": 5,
+      "mode_count": 72,
+      "normalized_current": 0.0002594857441958151,
+      "original_sugama_normalized_current": 0.0002414153964729931,
+      "relative_change_from_previous": 3.609307479817752e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.4801687019504566
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.20003679345433587,
+      "improved_sugama_normalized_current": 0.0001414591921621222,
+      "ion_charge": 10.0,
+      "maximum_hermite_order": 11,
+      "maximum_laguerre_order": 5,
+      "mode_count": 72,
+      "normalized_current": 0.00014144737313837366,
+      "original_sugama_normalized_current": 0.00013506362568854524,
+      "relative_change_from_previous": 9.127858719514253e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.2400843509752283
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.022218758634928316,
+      "improved_sugama_normalized_current": 1.57110623689832e-05,
+      "ion_charge": 100.0,
+      "maximum_hermite_order": 11,
+      "maximum_laguerre_order": 5,
+      "mode_count": 72,
+      "normalized_current": 1.571103490030497e-05,
+      "original_sugama_normalized_current": 1.5614861744315388e-05,
+      "relative_change_from_previous": 4.826136753689423e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.024008435097522825
+    },
+    {
+      "conductivity_over_ne2_mnu": 1.311291564019177,
+      "improved_sugama_normalized_current": 0.0009300050142450635,
+      "ion_charge": 1.0,
+      "maximum_hermite_order": 15,
+      "maximum_laguerre_order": 5,
+      "mode_count": 96,
+      "normalized_current": 0.0009272231570306739,
+      "original_sugama_normalized_current": 0.0008221774885397235,
+      "relative_change_from_previous": 0.0005324784872509903,
+      "spitzer_conductivity_over_ne2_mnu": 2.4008435097522827
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.7731446234276381,
+      "improved_sugama_normalized_current": 0.0005477841648349719,
+      "ion_charge": 2.0,
+      "maximum_hermite_order": 15,
+      "maximum_laguerre_order": 5,
+      "mode_count": 96,
+      "normalized_current": 0.0005466958060636026,
+      "original_sugama_normalized_current": 0.0004914461020312897,
+      "relative_change_from_previous": 3.412991642853657e-05,
+      "spitzer_conductivity_over_ne2_mnu": 1.2004217548761413
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.3669813098206764,
+      "improved_sugama_normalized_current": 0.0002596672288854505,
+      "ion_charge": 5.0,
+      "maximum_hermite_order": 15,
+      "maximum_laguerre_order": 5,
+      "mode_count": 96,
+      "normalized_current": 0.0002594949727429216,
+      "original_sugama_normalized_current": 0.00024141685969633316,
+      "relative_change_from_previous": 3.5563490918394875e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.4801687019504566
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.2000466214099079,
+      "improved_sugama_normalized_current": 0.0001414844834553516,
+      "ion_charge": 10.0,
+      "maximum_hermite_order": 15,
+      "maximum_laguerre_order": 5,
+      "mode_count": 96,
+      "normalized_current": 0.00014145432255240384,
+      "original_sugama_normalized_current": 0.00013506571381343102,
+      "relative_change_from_previous": 4.912832570108798e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.2400843509752283
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.022219047176937384,
+      "improved_sugama_normalized_current": 1.5711303565944225e-05,
+      "ion_charge": 100.0,
+      "maximum_hermite_order": 15,
+      "maximum_laguerre_order": 5,
+      "mode_count": 96,
+      "normalized_current": 1.571123893031624e-05,
+      "original_sugama_normalized_current": 1.561506044779563e-05,
+      "relative_change_from_previous": 1.298624584443826e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.024008435097522825
+    },
+    {
+      "conductivity_over_ne2_mnu": 1.3115089332234209,
+      "improved_sugama_normalized_current": 0.0009302257739548412,
+      "ion_charge": 1.0,
+      "maximum_hermite_order": 20,
+      "maximum_laguerre_order": 5,
+      "mode_count": 126,
+      "normalized_current": 0.0009273768602690158,
+      "original_sugama_normalized_current": 0.0008226659490505815,
+      "relative_change_from_previous": 0.00016573978166475422,
+      "spitzer_conductivity_over_ne2_mnu": 2.4008435097522827
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.773146713270458,
+      "improved_sugama_normalized_current": 0.0005477949737402691,
+      "ion_charge": 2.0,
+      "maximum_hermite_order": 20,
+      "maximum_laguerre_order": 5,
+      "mode_count": 126,
+      "normalized_current": 0.0005466972838056322,
+      "original_sugama_normalized_current": 0.0004914956912246937,
+      "relative_change_from_previous": 2.703035250622219e-06,
+      "spitzer_conductivity_over_ne2_mnu": 1.2004217548761413
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.36698740876091823,
+      "improved_sugama_normalized_current": 0.00025966919135535986,
+      "ion_charge": 5.0,
+      "maximum_hermite_order": 20,
+      "maximum_laguerre_order": 5,
+      "mode_count": 126,
+      "normalized_current": 0.00025949928534492467,
+      "original_sugama_normalized_current": 0.0002414172804262807,
+      "relative_change_from_previous": 1.66189359531995e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.4801687019504566
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.20004939767205704,
+      "improved_sugama_normalized_current": 0.0001414856924524554,
+      "ion_charge": 10.0,
+      "maximum_hermite_order": 20,
+      "maximum_laguerre_order": 5,
+      "mode_count": 126,
+      "normalized_current": 0.00014145628566619587,
+      "original_sugama_normalized_current": 0.0001350670559270275,
+      "relative_change_from_previous": 1.387788307021246e-05,
+      "spitzer_conductivity_over_ne2_mnu": 0.2400843509752283
+    },
+    {
+      "conductivity_over_ne2_mnu": 0.022219097961598728,
+      "improved_sugama_normalized_current": 1.571133639599265e-05,
+      "ion_charge": 100.0,
+      "maximum_hermite_order": 20,
+      "maximum_laguerre_order": 5,
+      "mode_count": 126,
+      "normalized_current": 1.5711274840494655e-05,
+      "original_sugama_normalized_current": 1.561510341981078e-05,
+      "relative_change_from_previous": 2.2856311012463496e-06,
+      "spitzer_conductivity_over_ne2_mnu": 0.024008435097522825
+    }
+  ],
+  "saturation": {
+    "ion_charge": 1.0,
+    "maximum_field_linearity_relative_error": 2.220446049250313e-16,
+    "maximum_saturation_relative_error": 1.6195708820406405e-07,
+    "models": {
+      "coulomb": {
+        "conductivity_over_ne2_mnu": [
+          1.3115089332234202,
+          1.3115089332234204,
+          1.3115089332234204
+        ],
+        "current_over_vte": [
+          -4.599880250050122e-19,
+          -0.00045743273434321473,
+          -0.0006739868322637039,
+          -0.0008820795424031866,
+          -0.0009242103833913494,
+          -0.0009273514902352366,
+          -0.0009273768598680631
+        ],
+        "field_linearity_relative_error": 2.220446049250313e-16,
+        "saturation_relative_error": 4.3235107586976505e-10,
+        "stationary_current_over_vte": -0.0009273768602690155
+      },
+      "improved_sugama": {
+        "conductivity_over_ne2_mnu": [
+          1.3155379055959457,
+          1.315537905595946,
+          1.315537905595946
+        ],
+        "current_over_vte": [
+          -1.533293416683374e-19,
+          -0.000457050232820901,
+          -0.0006736634822386057,
+          -0.0008828307791817681,
+          -0.0009263535423853089,
+          -0.0009301148599479982,
+          -0.0009302256232981838
+        ],
+        "field_linearity_relative_error": 2.220446049250313e-16,
+        "saturation_relative_error": 1.6195708820406405e-07,
+        "stationary_current_over_vte": -0.0009302257739548415
+      },
+      "original_sugama": {
+        "conductivity_over_ne2_mnu": [
+          1.1634253424498662,
+          1.163425342449866,
+          1.163425342449866
+        ],
+        "current_over_vte": [
+          0.0,
+          -0.00044733083999704134,
+          -0.0006408868995676478,
+          -0.000798385299559246,
+          -0.000821464266351465,
+          -0.0008226576802757736,
+          -0.0008226659487988152
+        ],
+        "field_linearity_relative_error": 2.220446049250313e-16,
+        "saturation_relative_error": 3.060370652885326e-10,
+        "stationary_current_over_vte": -0.0008226659490505815
+      }
+    },
+    "paper_field_scan": [
+      0.0001,
+      0.001,
+      0.01
+    ],
+    "paper_normalized_field": 0.001,
+    "solver_normalized_field": 0.0007071067811865475,
+    "time_nu_ee": [
+      0.0,
+      1.0,
+      2.0,
+      5.0,
+      10.0,
+      20.0,
+      50.0
+    ]
+  },
+  "schema_version": 4,
+  "scope": "Converged Coulomb and arbitrary-order, equal-temperature original- and improved-Sugama conductivity, including dimensional normalization, electric-field linearity, stationary saturation, and the high-charge Spitzer asymptote.",
+  "thresholds": {
+    "algebra_atol": 2e-12,
+    "field_linearity_rtol": 2e-12,
+    "improved_sugama_correction_order": 5,
+    "improved_sugama_coulomb_gap_max": 0.01,
+    "nested_current_rtol": 0.005,
+    "original_sugama_high_charge_gap_max": 0.02,
+    "original_sugama_low_charge_gap_min": 0.08,
+    "saturation_rtol": 0.001,
+    "spitzer_high_charge_minimum": 100.0,
+    "spitzer_high_charge_rtol": 0.08
+  },
+  "title": "Drift-kinetic Coulomb and Sugama conductivity convergence"
+}

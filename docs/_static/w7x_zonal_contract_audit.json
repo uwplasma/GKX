@@ -1,0 +1,88 @@
+{
+  "all_residual_gates_pass": false,
+  "all_tail_gates_pass": false,
+  "audit_csv": "docs/_static/w7x_zonal_contract_audit.csv",
+  "audit_png": "docs/_static/w7x_zonal_contract_audit.png",
+  "case": "w7x_zonal_response_contract_audit",
+  "compare_csv": "docs/_static/w7x_zonal_reference_compare.csv",
+  "gate_index_include": false,
+  "notes": "This figure is a diagnostic audit, not a closed validation gate. It intentionally uses the paper-text line-first normalization rather than the clipped initial value visible in the published figure. The current artifact reaches the reference time windows, but the residual and late-envelope mismatches remain open physics/numerics work.",
+  "reference": "Gonzalez-Jerez et al., J. Plasma Phys. 88, 905880310 (2022), W7-X test 4",
+  "reference_contract": {
+    "kx_rhoi": [
+      0.05,
+      0.07,
+      0.1,
+      0.3
+    ],
+    "normalization": "line-averaged potential normalized to its t=0 line-average value",
+    "observable": "unweighted line-averaged electrostatic potential"
+  },
+  "reference_residuals": "docs/_static/w7x_zonal_reference_digitized_residuals.csv",
+  "reference_traces": "docs/_static/w7x_zonal_reference_digitized.csv",
+  "rows": [
+    {
+      "coverage_ratio": 0.9886104213169644,
+      "kx": 0.05,
+      "reference_max": 0.0093984962406014,
+      "reference_min": 0.0082706766917292,
+      "reference_residual": 0.0088345864661653,
+      "reference_tail_std": 0.0024066124704448,
+      "residual_abs_error": 0.0100675287549703,
+      "residual_gate_passed": true,
+      "residual_tolerance": 0.02144736842105263,
+      "gkx_residual": 0.0189021152211356,
+      "tail_gate_passed": false,
+      "tail_std": 1.2077599991732724,
+      "tail_std_ratio": 501.8506361142761
+    },
+    {
+      "coverage_ratio": 0.9900053100585936,
+      "kx": 0.07,
+      "reference_max": 0.0218045112781954,
+      "reference_min": 0.0116541353383458,
+      "reference_residual": 0.0167293233082706,
+      "reference_tail_std": 0.0025050383473938,
+      "residual_abs_error": 0.1203960146453421,
+      "residual_gate_passed": false,
+      "residual_tolerance": 0.026748120300751858,
+      "gkx_residual": 0.1371253379536127,
+      "tail_gate_passed": false,
+      "tail_std": 0.2756428527379026,
+      "tail_std_ratio": 110.03538250209894
+    },
+    {
+      "coverage_ratio": 0.9900053100585936,
+      "kx": 0.1,
+      "reference_max": 0.0353383458646616,
+      "reference_min": 0.025187969924812,
+      "reference_residual": 0.0302631578947367,
+      "reference_tail_std": 0.0023167440855597,
+      "residual_abs_error": 0.063576160870499,
+      "residual_gate_passed": false,
+      "residual_tolerance": 0.028101503759398468,
+      "gkx_residual": 0.0938393187652358,
+      "tail_gate_passed": false,
+      "tail_std": 0.3630130789263219,
+      "tail_std_ratio": 156.69105672438653
+    },
+    {
+      "coverage_ratio": 0.9900053100585936,
+      "kx": 0.3,
+      "reference_max": 0.1515037593984962,
+      "reference_min": 0.1413533834586466,
+      "reference_residual": 0.1464285714285714,
+      "reference_tail_std": 0.0027132888096743,
+      "residual_abs_error": 0.3796405269346174,
+      "residual_gate_passed": false,
+      "residual_tolerance": 0.039718045112781944,
+      "gkx_residual": 0.5260690983631888,
+      "tail_gate_passed": false,
+      "tail_std": 0.1301303777462392,
+      "tail_std_ratio": 47.96038567006064
+    }
+  ],
+  "gkx_summary": "docs/_static/w7x_zonal_response_panel.csv",
+  "gkx_traces": "docs/_static/w7x_zonal_response_panel.traces.csv",
+  "validation_status": "open"
+}

@@ -1,0 +1,121 @@
+{
+  "case": "landscape_rbc_1_1_p0p15_replicated_nonlinear_window_t1100_1500_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "landscape_rbc_1_1_p0p15_replicated_nonlinear_window_t1100_1500_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "landscape_rbc_1_1_p0p15_replicated_nonlinear_window_t1100_1500_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=3 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": true
+      },
+      {
+        "detail": "finite_means=3 reports=3",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.041953145401674025 gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": true
+      },
+      {
+        "detail": "combined_sem_rel=0.01571800169280668 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=3 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": true
+    },
+    {
+      "detail": "finite_means=3 reports=3",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.041953145401674025 gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.01571800169280668 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": true,
+  "rows": [
+    {
+      "case": "landscape_rbc_1_1_p0p15_replicated_nonlinear_window_t1100_1500",
+      "failures": [],
+      "index": 0,
+      "late_mean": 11.049488282202686,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.14496100433841172,
+      "source_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p15/landscape_rbc_1_1_p0p15_nonlinear_t700_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p15/landscape_rbc_1_1_p0p15_nonlinear_t700_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "landscape_rbc_1_1_p0p15_replicated_nonlinear_window_t1100_1500",
+      "failures": [],
+      "index": 1,
+      "late_mean": 11.066743248697563,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.167004677296441,
+      "source_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p15/landscape_rbc_1_1_p0p15_nonlinear_t700_n64_seed33_heat_flux_trace.csv",
+      "summary_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p15/landscape_rbc_1_1_p0p15_nonlinear_t700_n64_seed33_transport_window.json"
+    },
+    {
+      "case": "landscape_rbc_1_1_p0p15_replicated_nonlinear_window_t1100_1500",
+      "failures": [],
+      "index": 2,
+      "late_mean": 10.609099721908551,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.17145893734310266,
+      "source_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p15/landscape_rbc_1_1_p0p15_nonlinear_t700_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "tools_out/vmec_boundary_transport_landscape_rbc11_full_nonlinear/ensembles_t1100_1500/p0p15/landscape_rbc_1_1_p0p15_nonlinear_t700_n64_dt0p04_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 0.17145893734310266,
+    "combined_sem_rel": 0.01571800169280668,
+    "ensemble_mean": 10.908443750936266,
+    "max_individual_sem": 0.17145893734310266,
+    "mean_rel_spread": 0.041953145401674025,
+    "mean_spread": 0.45764352678901155,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.14975487666304804
+  }
+}

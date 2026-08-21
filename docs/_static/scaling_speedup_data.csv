@@ -1,0 +1,25 @@
+backend,steps,devices,elapsed_s,ny,nz,nl,nm,sample_stride,notes
+cpu,120,1,40.1717607975,64,128,6,6,1,Ny=64 Nz=128 Nl=6 Nm=6
+cpu,120,2,35.8059329987,64,128,6,6,1,Ny=64 Nz=128 Nl=6 Nm=6
+cpu,220,1,72.4922318459,64,128,6,6,1,Ny=64 Nz=128 Nl=6 Nm=6
+cpu,220,2,63.0229959488,64,128,6,6,1,Ny=64 Nz=128 Nl=6 Nm=6
+cuda,400,1,24.4536960125,64,128,6,6,5,Ny=64 Nz=128 Nl=6 Nm=6
+cuda,400,2,18.9403362274,64,128,6,6,5,Ny=64 Nz=128 Nl=6 Nm=6
+cuda,800,1,56.4328477383,64,128,6,6,5,Ny=64 Nz=128 Nl=6 Nm=6
+cuda,800,2,31.5462217331,64,128,6,6,5,Ny=64 Nz=128 Nl=6 Nm=6
+cuda,1200,1,121.1005024910,64,128,6,6,5,Ny=64 Nz=128 Nl=6 Nm=6
+cuda,1200,2,64.9097630978,64,128,6,6,5,Ny=64 Nz=128 Nl=6 Nm=6
+cpu_sharded,120,1,26.8918259144,96,192,8,8,1,sharded linear RK2
+cpu_sharded,120,2,8.5279757977,96,192,8,8,1,sharded linear RK2
+cpu_sharded,120,4,7.2303040028,96,192,8,8,1,sharded linear RK2
+cpu_sharded,120,8,6.7253699303,96,192,8,8,1,sharded linear RK2
+cpu_sharded,240,1,47.0681767464,96,192,8,8,1,sharded linear RK2
+cpu_sharded,240,2,16.5778460503,96,192,8,8,1,sharded linear RK2
+cpu_sharded,240,4,13.6866030693,96,192,8,8,1,sharded linear RK2
+cpu_sharded,240,8,12.2400219440,96,192,8,8,1,sharded linear RK2
+cpu_sharded_large,120,1,66.6312310696,128,256,8,8,1,sharded linear RK2 large
+cpu_sharded_large,120,2,25.1562080383,128,256,8,8,1,sharded linear RK2 large
+cpu_sharded_large,120,4,22.3829438686,128,256,8,8,1,sharded linear RK2 large
+cpu_sharded_large,120,8,22.4275999069,128,256,8,8,1,sharded linear RK2 large
+cuda_sharded_large,120,1,14.2556567192,128,256,8,8,1,sharded linear RK2 large
+cuda_sharded_large,120,2,20.0515837669,128,256,8,8,1,sharded linear RK2 large

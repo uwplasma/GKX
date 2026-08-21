@@ -1,0 +1,223 @@
+{
+  "artifact_kind": "vmec_boozer_multi_point_objective_gate",
+  "base_delta": 0.0,
+  "base_objective_table": [
+    [
+      0.2966178311577277,
+      -0.16693319159300474,
+      0.42077905324546383,
+      2.048667089878613,
+      0.0,
+      1.4441574129630437
+    ],
+    [
+      0.31158403232813353,
+      -1.5544764086468528,
+      0.5878794287179351,
+      0.6224810027779136,
+      0.0,
+      0.32992333362673626
+    ],
+    [
+      0.22476752540020017,
+      0.0035284232854893498,
+      0.3146707024191525,
+      2.255773098551883,
+      0.0,
+      1.611286126505905
+    ],
+    [
+      0.29876508650629885,
+      -0.8880799487699703,
+      1.9819670480100955,
+      1.2306587707048267,
+      0.0,
+      0.1855115979140588
+    ]
+  ],
+  "base_sample_values": [
+    1.4441574129630437,
+    0.32992333362673626,
+    1.611286126505905,
+    0.1855115979140588
+  ],
+  "base_value": 0.8927196177524359,
+  "bounded_runtime": {
+    "elapsed_wall_seconds": 22.134953083004802,
+    "max_samples": 8,
+    "max_wall_seconds": 120.0
+  },
+  "builder": "tools/artifacts/build_vmec_boozer_aggregate_objective_gate.py multi-point",
+  "case_name": "nfp4_QH_warm_start",
+  "central_derivative": 100788.69008106229,
+  "claim_scope": "bounded finite-difference sensitivity of a reduced linear/quasilinear VMEC/Boozer/GKX objective over multiple fixed field-line alphas and/or surfaces; not a nonlinear turbulent transport claim",
+  "curvature_abs": 0.00013961919485205865,
+  "curvature_ratio": 0.006926332445622906,
+  "finite_difference_consistent": true,
+  "finite_values": true,
+  "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+  "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
+  "max_curvature_ratio": 5.0,
+  "minus_objective_table": [
+    [
+      0.29500030549292844,
+      -0.16758672501081906,
+      0.42561605952400755,
+      2.0100701552075506,
+      0.0,
+      1.3932070855399619
+    ],
+    [
+      0.31614087428815824,
+      -1.5609961190537793,
+      0.5862963338019542,
+      0.6345289344931223,
+      0.0,
+      0.3421487062880906
+    ],
+    [
+      0.22279261495548067,
+      0.006641207180986519,
+      0.31278913239447154,
+      2.263092081258321,
+      0.0,
+      1.6119492349648337
+    ],
+    [
+      0.2982871089036655,
+      -0.886333056268013,
+      1.9980427415120772,
+      1.2294033917211302,
+      0.0,
+      0.1835372065741367
+    ]
+  ],
+  "minus_sample_values": [
+    1.3932070855399619,
+    0.3421487062880906,
+    1.6119492349648337,
+    0.1835372065741367
+  ],
+  "minus_value": 0.8827105583417557,
+  "multi_point_coverage": {
+    "alphas": [
+      0.0,
+      0.5
+    ],
+    "multi_alpha_or_surface": true,
+    "n_alphas": 2,
+    "n_samples_requested": 4,
+    "n_selected_ky": 2,
+    "n_surfaces": 1,
+    "selected_ky_indices": [
+      1,
+      2
+    ],
+    "surface_indices": [
+      null
+    ]
+  },
+  "n_samples": 4,
+  "next_action": "Use this artifact only for reduced linear/quasilinear objective plumbing across fixed VMEC/Boozer field-line or surface samples. Nonlinear transport optimization still requires separate long-window nonlinear gates.",
+  "objective": "quasilinear_flux",
+  "objective_names": [
+    "gamma",
+    "omega",
+    "kperp_eff2",
+    "linear_heat_flux_weight",
+    "linear_particle_flux_weight",
+    "mixing_length_heat_flux_proxy"
+  ],
+  "options": {
+    "mboz": 21,
+    "n_hermite": 3,
+    "n_laguerre": 2,
+    "nboz": 21,
+    "ntheta": 4,
+    "nx": 1,
+    "ny": 6,
+    "surface_stencil_width": 3
+  },
+  "parameter_indices": {
+    "Rcos": [
+      17,
+      1
+    ]
+  },
+  "parameter_name": "Rcos_mid_surface_m1",
+  "passed": true,
+  "perturbation_step": 1e-07,
+  "plus_objective_table": [
+    [
+      0.29819983192369415,
+      -0.16616491772079942,
+      0.41599687785030415,
+      2.0866897447960957,
+      0.0,
+      1.4958057723668972
+    ],
+    [
+      0.306935530940861,
+      -1.5479011340883289,
+      0.5895486158547988,
+      0.6102999711645084,
+      0.0,
+      0.31773926805165575
+    ],
+    [
+      0.22675854877118373,
+      0.0004619368264675401,
+      0.3164990479549851,
+      2.2477657438129923,
+      0.0,
+      1.6104316943067325
+    ],
+    [
+      0.29922845431249534,
+      -0.889861165379513,
+      1.9652736881217965,
+      1.2314398443039178,
+      0.0,
+      0.18749645070658721
+    ]
+  ],
+  "plus_sample_values": [
+    1.4958057723668972,
+    0.31773926805165575,
+    1.6104316943067325,
+    0.18749645070658721
+  ],
+  "plus_value": 0.9028682963579682,
+  "reduction": "mean",
+  "response_abs": 0.020157738016212456,
+  "response_atol": 0.0,
+  "response_resolved": true,
+  "samples": [
+    {
+      "alpha": 0.0,
+      "selected_ky_index": 1,
+      "surface_index": null,
+      "weight": 0.25
+    },
+    {
+      "alpha": 0.0,
+      "selected_ky_index": 2,
+      "surface_index": null,
+      "weight": 0.25
+    },
+    {
+      "alpha": 0.5,
+      "selected_ky_index": 1,
+      "surface_index": null,
+      "weight": 0.25
+    },
+    {
+      "alpha": 0.5,
+      "selected_ky_index": 2,
+      "surface_index": null,
+      "weight": 0.25
+    }
+  ],
+  "source_scope": "mode21_vmec_boozer_state_multi_point",
+  "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+}

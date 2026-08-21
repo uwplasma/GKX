@@ -1,0 +1,127 @@
+{
+  "candidate_csv": "docs/_static/comparison/kbm_reference_candidates.csv",
+  "case": "kbm_linear_branch_continuity",
+  "gate_passed": true,
+  "gate_report": {
+    "case": "kbm_linear_branch_continuity",
+    "gates": [
+      {
+        "abs_error": 0.3879740373283112,
+        "atol": 0.5,
+        "metric": "max_rel_gamma_jump",
+        "notes": "Passes when adjacent gamma jumps <= 0.5.",
+        "observed": 0.3879740373283112,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.3204739186730531,
+        "atol": 0.5,
+        "metric": "max_rel_omega_jump",
+        "notes": "Passes when adjacent omega jumps <= 0.5.",
+        "observed": 0.3204739186730531,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "successive_overlap_deficit",
+        "notes": "Passes when successive eigenfunction overlap >= 0.95.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.3879740373283112,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "selected KBM comparison rows"
+  },
+  "notes": "Selected rows are taken from the KBM comparison candidate table. The gate is intentionally a branch-identity check: adjacent gamma and omega jumps should stay smooth, and successive eigenfunction overlaps should remain high when those overlaps are available.",
+  "rows": [
+    {
+      "branch_score": 0.1352212618698056,
+      "eig_overlap_gx": 0.9882583954911904,
+      "eig_overlap_prev": null,
+      "eig_rel_l2": 0.1642461680041239,
+      "fit_window_tmax": 10.822666687369988,
+      "fit_window_tmin": 7.223709072629374,
+      "gamma": 0.1286068603585203,
+      "gamma_gx": 0.1449677189812064,
+      "ky": 0.1000000014901161,
+      "omega": 0.664195963844872,
+      "omega_gx": 0.6572156604379416,
+      "rel_gamma": 0.1128586332023825,
+      "rel_omega": 0.0106210241586134,
+      "selected": true,
+      "solver": "gx_time@project_late"
+    },
+    {
+      "branch_score": 0.3129905696934736,
+      "eig_overlap_gx": 0.992325845170364,
+      "eig_overlap_prev": 0.9971999030038216,
+      "eig_rel_l2": 0.1304711889890329,
+      "fit_window_tmax": 11.95451199716608,
+      "fit_window_tmin": 8.355296567777229,
+      "gamma": 0.2101330142876787,
+      "gamma_gx": 0.2627970809116959,
+      "ky": 0.2000000029802322,
+      "omega": 0.977439986626946,
+      "omega_gx": 0.8891330659389496,
+      "rel_gamma": 0.2003982176716538,
+      "rel_omega": 0.0993180031998269,
+      "selected": true,
+      "solver": "gx_time@project_late"
+    },
+    {
+      "branch_score": 0.1923867318905925,
+      "eig_overlap_gx": 0.9880243998423456,
+      "eig_overlap_prev": 0.999069215538325,
+      "eig_rel_l2": 0.1581617504586251,
+      "fit_window_tmax": 9.693638357204051,
+      "fit_window_tmin": 4.89458453725481,
+      "gamma": 0.2045511059306897,
+      "gamma_gx": 0.2194415875710547,
+      "ky": 0.3000000119209289,
+      "omega": 1.2669130517859095,
+      "omega_gx": 1.1406506448984146,
+      "rel_gamma": 0.0678562427714093,
+      "rel_omega": 0.1106933200381787,
+      "selected": true,
+      "solver": "gx_time@project"
+    },
+    {
+      "branch_score": 0.3260635801118903,
+      "eig_overlap_gx": 0.9660543401753154,
+      "eig_overlap_prev": 0.950146649106,
+      "eig_rel_l2": 0.2894084705791055,
+      "fit_window_tmax": 8.179792184580968,
+      "fit_window_tmin": 3.380420920737,
+      "gamma": 0.1563310316128273,
+      "gamma_gx": 0.144594460260123,
+      "ky": 0.4000000059604645,
+      "omega": 1.5519068567691383,
+      "omega_gx": 1.396551240235567,
+      "rel_gamma": 0.0811688866336263,
+      "rel_omega": 0.1112423318655792,
+      "selected": true,
+      "solver": "gx_time@svd"
+    }
+  ],
+  "selected_count": 4,
+  "thresholds": {
+    "max_rel_gamma_jump": 0.5,
+    "max_rel_omega_jump": 0.5,
+    "min_successive_overlap": 0.95
+  }
+}

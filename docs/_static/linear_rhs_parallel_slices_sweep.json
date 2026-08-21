@@ -1,0 +1,181 @@
+{
+  "atol": 2e-05,
+  "claim_scope": "engineering sweep over the opt-in electrostatic linear-slices route; not a publication speedup claim",
+  "devices": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "grid": {
+    "Nl": 4,
+    "Nx": 1,
+    "Ny_requested": 32,
+    "Nz": 128
+  },
+  "identity_passed": true,
+  "kind": "linear_rhs_parallel_slices_sweep",
+  "nms": [
+    64,
+    128
+  ],
+  "notes": "Use this plot to find useful CPU/GPU regimes before promoting any speedup claim. The release correctness gate remains the small composed identity artifact.",
+  "platform": "cpu",
+  "repeats": 2,
+  "rows": [
+    {
+      "identity_passed": true,
+      "max_abs_error": 2.4359667349926895e-06,
+      "max_phi_abs_error": 3.8399412538581146e-09,
+      "max_rel_error": 6.129818302724743e-06,
+      "nm": 64,
+      "platform": "cpu",
+      "requested_devices": 1,
+      "serial_median_s": 0.01803095854120329,
+      "sharded_median_s": 0.03279018751345575,
+      "speedup": 0.5498888511632977,
+      "state_shape": [
+        4,
+        64,
+        32,
+        1,
+        128
+      ]
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 2.366846729273675e-06,
+      "max_phi_abs_error": 7.508562660518692e-09,
+      "max_rel_error": 5.955886081210338e-06,
+      "nm": 64,
+      "platform": "cpu",
+      "requested_devices": 2,
+      "serial_median_s": 0.016771853959653527,
+      "sharded_median_s": 0.020331165986135602,
+      "speedup": 0.8249332070325297,
+      "state_shape": [
+        4,
+        64,
+        32,
+        1,
+        128
+      ]
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 2.366846729273675e-06,
+      "max_phi_abs_error": 7.508562660518692e-09,
+      "max_rel_error": 5.955886081210338e-06,
+      "nm": 64,
+      "platform": "cpu",
+      "requested_devices": 4,
+      "serial_median_s": 0.016505458450410515,
+      "sharded_median_s": 0.01639293704647571,
+      "speedup": 1.0068640173274501,
+      "state_shape": [
+        4,
+        64,
+        32,
+        1,
+        128
+      ]
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 2.366846729273675e-06,
+      "max_phi_abs_error": 7.508562660518692e-09,
+      "max_rel_error": 5.955886081210338e-06,
+      "nm": 64,
+      "platform": "cpu",
+      "requested_devices": 8,
+      "serial_median_s": 0.01809375046286732,
+      "sharded_median_s": 0.013574895507190377,
+      "speedup": 1.3328832220685152,
+      "state_shape": [
+        4,
+        64,
+        32,
+        1,
+        128
+      ]
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 2.4359667349926895e-06,
+      "max_phi_abs_error": 3.8399412538581146e-09,
+      "max_rel_error": 6.129818302724743e-06,
+      "nm": 128,
+      "platform": "cpu",
+      "requested_devices": 1,
+      "serial_median_s": 0.036627625464461744,
+      "sharded_median_s": 0.05620416649617255,
+      "speedup": 0.6516887936938991,
+      "state_shape": [
+        4,
+        128,
+        32,
+        1,
+        128
+      ]
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 2.366846729273675e-06,
+      "max_phi_abs_error": 7.508562660518692e-09,
+      "max_rel_error": 5.955886081210338e-06,
+      "nm": 128,
+      "platform": "cpu",
+      "requested_devices": 2,
+      "serial_median_s": 0.03718260448658839,
+      "sharded_median_s": 0.04180349997477606,
+      "speedup": 0.8894615165960772,
+      "state_shape": [
+        4,
+        128,
+        32,
+        1,
+        128
+      ]
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 2.366846729273675e-06,
+      "max_phi_abs_error": 7.508562660518692e-09,
+      "max_rel_error": 5.955886081210338e-06,
+      "nm": 128,
+      "platform": "cpu",
+      "requested_devices": 4,
+      "serial_median_s": 0.04255500005092472,
+      "sharded_median_s": 0.027089666458778083,
+      "speedup": 1.5708942048319416,
+      "state_shape": [
+        4,
+        128,
+        32,
+        1,
+        128
+      ]
+    },
+    {
+      "identity_passed": true,
+      "max_abs_error": 2.366846729273675e-06,
+      "max_phi_abs_error": 7.508562660518692e-09,
+      "max_rel_error": 5.955886081210338e-06,
+      "nm": 128,
+      "platform": "cpu",
+      "requested_devices": 8,
+      "serial_median_s": 0.03715704206842929,
+      "sharded_median_s": 0.029435958014801145,
+      "speedup": 1.2623010961540913,
+      "state_shape": [
+        4,
+        128,
+        32,
+        1,
+        128
+      ]
+    }
+  ],
+  "rtol": 1e-05,
+  "warmups": 1
+}

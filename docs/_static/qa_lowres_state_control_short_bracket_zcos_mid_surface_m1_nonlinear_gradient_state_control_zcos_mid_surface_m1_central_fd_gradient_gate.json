@@ -1,0 +1,379 @@
+{
+  "blockers": [
+    "fd_response_resolved",
+    "fd_asymmetry_bounded",
+    "gradient_uncertainty_bounded"
+  ],
+  "claim_level": "production_long_window_nonlinear_turbulence_gradient_candidate",
+  "claim_scope": "production_long_window nonlinear turbulence gradient from matched replicated post-transient heat-flux windows",
+  "config": {
+    "max_fd_asymmetry_rel": 0.5,
+    "max_fd_condition_number": 100000000.0,
+    "max_gradient_uncertainty_rel": 0.5,
+    "max_window_combined_sem_rel": 0.25,
+    "max_window_mean_rel_spread": 0.15,
+    "min_fd_response_fraction": 0.03,
+    "min_window_reports": 2,
+    "value_floor": 1e-12
+  },
+  "delta_parameter": 0.001,
+  "gates": [
+    {
+      "detail": "kind=nonlinear_window_ensemble_report",
+      "metric": "minus_ensemble_kind",
+      "passed": true
+    },
+    {
+      "detail": "path=docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_t150_ensemble_gate.json",
+      "metric": "minus_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "n_reports=3.0 min=2",
+      "metric": "minus_ensemble_replicated",
+      "passed": true
+    },
+    {
+      "detail": "kind=nonlinear_window_ensemble_report",
+      "metric": "baseline_ensemble_kind",
+      "passed": true
+    },
+    {
+      "detail": "path=docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_t150_ensemble_gate.json",
+      "metric": "baseline_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "n_reports=3.0 min=2",
+      "metric": "baseline_ensemble_replicated",
+      "passed": true
+    },
+    {
+      "detail": "kind=nonlinear_window_ensemble_report",
+      "metric": "plus_ensemble_kind",
+      "passed": true
+    },
+    {
+      "detail": "path=docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_t150_ensemble_gate.json",
+      "metric": "plus_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "n_reports=3.0 min=2",
+      "metric": "plus_ensemble_replicated",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.07938082343110472 max=0.15",
+      "metric": "minus_window_mean_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.0244750760060611 max=0.25",
+      "metric": "minus_window_sem",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.035593124435508605 max=0.15",
+      "metric": "baseline_window_mean_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.03386056728299225 max=0.25",
+      "metric": "baseline_window_sem",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.05583318733855544 max=0.15",
+      "metric": "plus_window_mean_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.0241882281622391 max=0.25",
+      "metric": "plus_window_sem",
+      "passed": true
+    },
+    {
+      "detail": "means={'minus': 10.04936375757316, 'baseline': 10.22712637806693, 'plus': 10.064398718711205}",
+      "metric": "finite_window_means",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem={'minus': 0.24595894177915886, 'baseline': 0.34629630083620017, 'plus': 0.24343997252393348}",
+      "metric": "finite_window_uncertainties",
+      "passed": true
+    },
+    {
+      "detail": "response_fraction=0.001470106125831155 min=0.03",
+      "metric": "fd_response_resolved",
+      "passed": false
+    },
+    {
+      "detail": "fd_asymmetry_rel=45.293137338133214 max=0.5",
+      "metric": "fd_asymmetry_bounded",
+      "passed": false
+    },
+    {
+      "detail": "fd_condition_number=1337.799432376782 max=100000000.0",
+      "metric": "fd_condition_number_bounded",
+      "passed": true
+    },
+    {
+      "detail": "gradient_uncertainty_rel=23.017144622374467 max=0.5",
+      "metric": "gradient_uncertainty_bounded",
+      "passed": false
+    }
+  ],
+  "kind": "nonlinear_turbulence_gradient_central_fd_gate",
+  "metrics": {
+    "asymmetry_rel": 45.293137338133214,
+    "backward_gradient": 177.76262049377144,
+    "baseline_window_mean": 10.22712637806693,
+    "baseline_window_sem": 0.34629630083620017,
+    "central_gradient": 7.517480569022794,
+    "condition_number": 1337.799432376782,
+    "fd_asymmetry_rel": 45.293137338133214,
+    "fd_condition_number": 1337.799432376782,
+    "forward_gradient": -162.72765935572585,
+    "gradient_relative_uncertainty": 23.017144622374467,
+    "gradient_uncertainty": 173.03093745308755,
+    "gradient_uncertainty_rel": 23.017144622374467,
+    "minus_window_mean": 10.04936375757316,
+    "minus_window_sem": 0.24595894177915886,
+    "plus_window_mean": 10.064398718711205,
+    "plus_window_sem": 0.24343997252393348,
+    "response": 0.015034961138045588,
+    "response_fraction": 0.001470106125831155
+  },
+  "nonlinear_turbulence_gradient_gate": false,
+  "paired_replicate_diagnostics": {
+    "central_gradient_mean": 7.517480569023093,
+    "central_gradient_sample_sem": 35.301118511014344,
+    "central_gradient_uncertainty_rel": 4.695870935334094,
+    "claim_level": "diagnostic_only_not_a_production_gate",
+    "common_all_state_labels": [
+      "dt0p04",
+      "seed31",
+      "seed32"
+    ],
+    "common_plus_minus_labels": [
+      "dt0p04",
+      "seed31",
+      "seed32"
+    ],
+    "mean_response": 0.01503496113804618,
+    "n_pairs": 3,
+    "paired_rows": [
+      {
+        "backward_gradient": 361.43069519131467,
+        "baseline_late_mean": 10.00729272240579,
+        "central_gradient": 75.83791331223644,
+        "fd_asymmetry_rel": 7.531662447073101,
+        "forward_gradient": -209.75486856684176,
+        "label": "dt0p04",
+        "minus_late_mean": 9.645862027214475,
+        "plus_late_mean": 9.797537853838948,
+        "response": 0.15167582662447288
+      },
+      {
+        "backward_gradient": 312.6676559423309,
+        "baseline_late_mean": 10.371308104197999,
+        "central_gradient": -11.223729455834608,
+        "fd_asymmetry_rel": 57.7154655540618,
+        "forward_gradient": -335.1151148540001,
+        "label": "seed31",
+        "minus_late_mean": 10.058640448255668,
+        "plus_late_mean": 10.036192989343999,
+        "response": -0.022447458911669216
+      },
+      {
+        "backward_gradient": -140.81048965233123,
+        "baseline_late_mean": 10.302778307597002,
+        "central_gradient": -42.06174214933256,
+        "fd_asymmetry_rel": 4.695418803738999,
+        "forward_gradient": 56.68700535366611,
+        "label": "seed32",
+        "minus_late_mean": 10.443588797249333,
+        "plus_late_mean": 10.359465312950668,
+        "response": -0.08412348429866512
+      }
+    ],
+    "same_sign_fraction": 0.6666666666666666
+  },
+  "parameter_name": "state_control_zcos_mid_surface_m1",
+  "passed": false,
+  "production_nonlinear_window_gradient_gate": false,
+  "source_ensembles": {
+    "baseline": {
+      "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window_ensemble_gate",
+      "combined_sem": 0.34629630083620017,
+      "combined_sem_rel": 0.03386056728299225,
+      "ensemble_mean": 10.22712637806693,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.035593124435508605,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_t150_ensemble_gate.json",
+      "rows": [
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window",
+          "failures": [],
+          "index": 0,
+          "late_mean": 10.371308104197999,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.3040043564942254,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_seed31_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_seed31_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window",
+          "failures": [],
+          "index": 1,
+          "late_mean": 10.302778307597002,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.2072204175663559,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_seed32_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_seed32_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window",
+          "failures": [],
+          "index": 2,
+          "late_mean": 10.00729272240579,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.34629630083620017,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_dt0p04_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_dt0p04_transport_window.json"
+        }
+      ],
+      "statistics": {
+        "combined_sem": 0.34629630083620017,
+        "combined_sem_rel": 0.03386056728299225,
+        "ensemble_mean": 10.22712637806693,
+        "max_individual_sem": 0.34629630083620017,
+        "mean_rel_spread": 0.035593124435508605,
+        "mean_spread": 0.3640153817922087,
+        "n_finite_means": 3,
+        "n_reports": 3,
+        "sample_sem": 0.11168289987959824
+      }
+    },
+    "minus": {
+      "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicated_nonlinear_window_ensemble_gate",
+      "combined_sem": 0.24595894177915886,
+      "combined_sem_rel": 0.0244750760060611,
+      "ensemble_mean": 10.04936375757316,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.07938082343110472,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_t150_ensemble_gate.json",
+      "rows": [
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 0,
+          "late_mean": 10.058640448255668,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.24595894177915886,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_seed31_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_seed31_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 1,
+          "late_mean": 10.443588797249333,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.22089719621364073,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_seed32_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_seed32_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 2,
+          "late_mean": 9.645862027214475,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.16939535552562845,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_dt0p04_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_dt0p04_transport_window.json"
+        }
+      ],
+      "statistics": {
+        "combined_sem": 0.24595894177915886,
+        "combined_sem_rel": 0.0244750760060611,
+        "ensemble_mean": 10.04936375757316,
+        "max_individual_sem": 0.24595894177915886,
+        "mean_rel_spread": 0.07938082343110472,
+        "mean_spread": 0.797726770034858,
+        "n_finite_means": 3,
+        "n_reports": 3,
+        "sample_sem": 0.23033059042028844
+      }
+    },
+    "plus": {
+      "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicated_nonlinear_window_ensemble_gate",
+      "combined_sem": 0.24343997252393348,
+      "combined_sem_rel": 0.0241882281622391,
+      "ensemble_mean": 10.064398718711205,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.05583318733855544,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_t150_ensemble_gate.json",
+      "rows": [
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 0,
+          "late_mean": 10.036192989343999,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.24343997252393348,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_seed31_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_seed31_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 1,
+          "late_mean": 10.359465312950668,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.18323928254322905,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_seed32_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_seed32_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 2,
+          "late_mean": 9.797537853838948,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.19294517358107283,
+          "source_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_dt0p04_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_dt0p04_transport_window.json"
+        }
+      ],
+      "statistics": {
+        "combined_sem": 0.24343997252393348,
+        "combined_sem_rel": 0.0241882281622391,
+        "ensemble_mean": 10.064398718711205,
+        "max_individual_sem": 0.24343997252393348,
+        "mean_rel_spread": 0.05583318733855544,
+        "mean_spread": 0.56192745911172,
+        "n_finite_means": 3,
+        "n_reports": 3,
+        "sample_sem": 0.16282637962237623
+      }
+    }
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "actual_devices": 2,
+  "atol": 1e-05,
+  "case": "Periodic streaming microkernel shard_map identity gate",
+  "claim_scope": "linear streaming microkernel identity gate, not a full RHS or nonlinear speedup claim",
+  "identity_passed": true,
+  "max_reference_abs_error": 0.0,
+  "max_sharded_abs_error": 0.0,
+  "max_sharded_rel_error": 0.0,
+  "plan": {
+    "active_axes": [
+      "m"
+    ],
+    "chunks": {
+      "kx": 1,
+      "ky": 1,
+      "l": 1,
+      "m": 2,
+      "s": 1,
+      "z": 1
+    },
+    "communication_pattern": "hermite_ghost_exchange+field_reduce_broadcast",
+    "dims": [
+      "s",
+      "l",
+      "m",
+      "ky",
+      "kx",
+      "z"
+    ],
+    "field_reduction_axes": [
+      "m"
+    ],
+    "hermite_ghost_depth": 1,
+    "load_balance": 1.0,
+    "needs_field_reduction": true,
+    "needs_hermite_exchange": true,
+    "num_devices": 2,
+    "shard_shape": [
+      1,
+      2,
+      4,
+      2,
+      1,
+      16
+    ],
+    "state_shape": [
+      1,
+      2,
+      8,
+      2,
+      1,
+      16
+    ]
+  },
+  "reference_source": "gkx.operators.linear.streaming.streaming_ladder_term",
+  "requested_devices": 2,
+  "rows": [
+    {
+      "abs_error": 0.0,
+      "m": 0,
+      "production_abs": 1.6999999284744263,
+      "sharded_abs": 1.6999999284744263,
+      "state_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 1,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0,
+      "state_abs": 1.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 2,
+      "production_abs": 2.404163122177124,
+      "sharded_abs": 2.404163122177124,
+      "state_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 3,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0,
+      "state_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 4,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0,
+      "state_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 5,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0,
+      "state_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 6,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0,
+      "state_abs": 0.0
+    },
+    {
+      "abs_error": 0.0,
+      "m": 7,
+      "production_abs": 0.0,
+      "sharded_abs": 0.0,
+      "state_abs": 0.0
+    }
+  ],
+  "rtol": 1e-06,
+  "source": "gkx.parallel.velocity.periodic_streaming_shard_map",
+  "state_shape": [
+    1,
+    2,
+    8,
+    2,
+    1,
+    16
+  ],
+  "vth": 1.7
+}

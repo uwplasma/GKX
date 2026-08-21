@@ -1,0 +1,379 @@
+{
+  "blockers": [
+    "fd_response_resolved",
+    "fd_asymmetry_bounded",
+    "gradient_uncertainty_bounded"
+  ],
+  "claim_level": "production_long_window_nonlinear_turbulence_gradient_candidate",
+  "claim_scope": "production_long_window nonlinear turbulence gradient from matched replicated post-transient heat-flux windows",
+  "config": {
+    "max_fd_asymmetry_rel": 0.5,
+    "max_fd_condition_number": 100000000.0,
+    "max_gradient_uncertainty_rel": 0.5,
+    "max_window_combined_sem_rel": 0.25,
+    "max_window_mean_rel_spread": 0.15,
+    "min_fd_response_fraction": 0.03,
+    "min_window_reports": 2,
+    "value_floor": 1e-12
+  },
+  "delta_parameter": 0.003,
+  "gates": [
+    {
+      "detail": "kind=nonlinear_window_ensemble_report",
+      "metric": "minus_ensemble_kind",
+      "passed": true
+    },
+    {
+      "detail": "path=docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_t150_ensemble_gate.json",
+      "metric": "minus_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "n_reports=3.0 min=2",
+      "metric": "minus_ensemble_replicated",
+      "passed": true
+    },
+    {
+      "detail": "kind=nonlinear_window_ensemble_report",
+      "metric": "baseline_ensemble_kind",
+      "passed": true
+    },
+    {
+      "detail": "path=docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_t150_ensemble_gate.json",
+      "metric": "baseline_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "n_reports=3.0 min=2",
+      "metric": "baseline_ensemble_replicated",
+      "passed": true
+    },
+    {
+      "detail": "kind=nonlinear_window_ensemble_report",
+      "metric": "plus_ensemble_kind",
+      "passed": true
+    },
+    {
+      "detail": "path=docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_t150_ensemble_gate.json",
+      "metric": "plus_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "n_reports=3.0 min=2",
+      "metric": "plus_ensemble_replicated",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.03606563502014689 max=0.15",
+      "metric": "minus_window_mean_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.025901677259100107 max=0.25",
+      "metric": "minus_window_sem",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.035593124435508605 max=0.15",
+      "metric": "baseline_window_mean_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.03386056728299225 max=0.25",
+      "metric": "baseline_window_sem",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.04086978107689952 max=0.15",
+      "metric": "plus_window_mean_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.026591513519335655 max=0.25",
+      "metric": "plus_window_sem",
+      "passed": true
+    },
+    {
+      "detail": "means={'minus': 9.961881067038687, 'baseline': 10.22712637806693, 'plus': 9.949124001065067}",
+      "metric": "finite_window_means",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem={'minus': 0.2580294282919759, 'baseline': 0.34629630083620017, 'plus': 0.2645622653798686}",
+      "metric": "finite_window_uncertainties",
+      "passed": true
+    },
+    {
+      "detail": "response_fraction=0.001247375411433147 min=0.03",
+      "metric": "fd_response_resolved",
+      "passed": false
+    },
+    {
+      "detail": "fd_asymmetry_rel=85.16812394848048 max=0.5",
+      "metric": "fd_asymmetry_bounded",
+      "passed": false
+    },
+    {
+      "detail": "fd_condition_number=1560.7824800214369 max=100000000.0",
+      "metric": "fd_condition_number_bounded",
+      "passed": true
+    },
+    {
+      "detail": "gradient_uncertainty_rel=28.96880860425934 max=0.5",
+      "metric": "gradient_uncertainty_bounded",
+      "passed": false
+    }
+  ],
+  "kind": "nonlinear_turbulence_gradient_central_fd_gate",
+  "metrics": {
+    "asymmetry_rel": 85.16812394848048,
+    "backward_gradient": 88.41510367608112,
+    "baseline_window_mean": 10.22712637806693,
+    "baseline_window_sem": 0.34629630083620017,
+    "central_gradient": -2.126177662270005,
+    "condition_number": 1560.7824800214369,
+    "fd_asymmetry_rel": 85.16812394848048,
+    "fd_condition_number": 1560.7824800214369,
+    "forward_gradient": -92.66745900062112,
+    "gradient_relative_uncertainty": 28.96880860425934,
+    "gradient_uncertainty": 61.59283375695133,
+    "gradient_uncertainty_rel": 28.96880860425934,
+    "minus_window_mean": 9.961881067038687,
+    "minus_window_sem": 0.2580294282919759,
+    "plus_window_mean": 9.949124001065067,
+    "plus_window_sem": 0.2645622653798686,
+    "response": 0.01275706597362003,
+    "response_fraction": 0.001247375411433147
+  },
+  "nonlinear_turbulence_gradient_gate": false,
+  "paired_replicate_diagnostics": {
+    "central_gradient_mean": -2.126177662270104,
+    "central_gradient_sample_sem": 5.03904816124523,
+    "central_gradient_uncertainty_rel": 2.370003340108971,
+    "claim_level": "diagnostic_only_not_a_production_gate",
+    "common_all_state_labels": [
+      "dt0p04",
+      "seed31",
+      "seed32"
+    ],
+    "common_plus_minus_labels": [
+      "dt0p04",
+      "seed31",
+      "seed32"
+    ],
+    "mean_response": -0.012757065973620621,
+    "n_pairs": 3,
+    "paired_rows": [
+      {
+        "backward_gradient": 86.95582339868461,
+        "baseline_late_mean": 10.00729272240579,
+        "central_gradient": -10.565920879254639,
+        "fd_asymmetry_rel": 18.45967718145904,
+        "forward_gradient": -108.08766515719388,
+        "label": "dt0p04",
+        "minus_late_mean": 9.746425252209736,
+        "plus_late_mean": 9.683029726934208,
+        "response": -0.06339552527552783
+      },
+      {
+        "backward_gradient": 112.5989913931112,
+        "baseline_late_mean": 10.371308104197999,
+        "central_gradient": 6.863816579611104,
+        "fd_asymmetry_rel": 30.809440662381725,
+        "forward_gradient": -98.871358233889,
+        "label": "seed31",
+        "minus_late_mean": 10.033511130018665,
+        "plus_late_mean": 10.074694029496332,
+        "response": 0.041182899477666624
+      },
+      {
+        "backward_gradient": 65.69049623644574,
+        "baseline_late_mean": 10.302778307597002,
+        "central_gradient": -2.6764286871667764,
+        "fd_asymmetry_rel": 51.08817227331741,
+        "forward_gradient": -71.04335361077929,
+        "label": "seed32",
+        "minus_late_mean": 10.105706818887665,
+        "plus_late_mean": 10.089648246764664,
+        "response": -0.01605857212300066
+      }
+    ],
+    "same_sign_fraction": 0.6666666666666666
+  },
+  "parameter_name": "state_control_zcos_mid_surface_m1",
+  "passed": false,
+  "production_nonlinear_window_gradient_gate": false,
+  "source_ensembles": {
+    "baseline": {
+      "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window_ensemble_gate",
+      "combined_sem": 0.34629630083620017,
+      "combined_sem_rel": 0.03386056728299225,
+      "ensemble_mean": 10.22712637806693,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.035593124435508605,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_t150_ensemble_gate.json",
+      "rows": [
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window",
+          "failures": [],
+          "index": 0,
+          "late_mean": 10.371308104197999,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.3040043564942254,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_seed31_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_seed31_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window",
+          "failures": [],
+          "index": 1,
+          "late_mean": 10.302778307597002,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.2072204175663559,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_seed32_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_seed32_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window",
+          "failures": [],
+          "index": 2,
+          "late_mean": 10.00729272240579,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.34629630083620017,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_dt0p04_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_dt0p04_transport_window.json"
+        }
+      ],
+      "statistics": {
+        "combined_sem": 0.34629630083620017,
+        "combined_sem_rel": 0.03386056728299225,
+        "ensemble_mean": 10.22712637806693,
+        "max_individual_sem": 0.34629630083620017,
+        "mean_rel_spread": 0.035593124435508605,
+        "mean_spread": 0.3640153817922087,
+        "n_finite_means": 3,
+        "n_reports": 3,
+        "sample_sem": 0.11168289987959824
+      }
+    },
+    "minus": {
+      "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicated_nonlinear_window_ensemble_gate",
+      "combined_sem": 0.2580294282919759,
+      "combined_sem_rel": 0.025901677259100107,
+      "ensemble_mean": 9.961881067038687,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.03606563502014689,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_t150_ensemble_gate.json",
+      "rows": [
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 0,
+          "late_mean": 10.033511130018665,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.2580294282919759,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_seed31_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_seed31_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 1,
+          "late_mean": 10.105706818887665,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.11066786139366891,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_seed32_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_seed32_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 2,
+          "late_mean": 9.746425252209736,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.17266021833509632,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_dt0p04_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_minus_delta_nonlinear_t150_n48_dt0p04_transport_window.json"
+        }
+      ],
+      "statistics": {
+        "combined_sem": 0.2580294282919759,
+        "combined_sem_rel": 0.025901677259100107,
+        "ensemble_mean": 9.961881067038687,
+        "max_individual_sem": 0.2580294282919759,
+        "mean_rel_spread": 0.03606563502014689,
+        "mean_spread": 0.35928156667792877,
+        "n_finite_means": 3,
+        "n_reports": 3,
+        "sample_sem": 0.10972535483427594
+      }
+    },
+    "plus": {
+      "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicated_nonlinear_window_ensemble_gate",
+      "combined_sem": 0.2645622653798686,
+      "combined_sem_rel": 0.026591513519335655,
+      "ensemble_mean": 9.949124001065067,
+      "kind": "nonlinear_window_ensemble_report",
+      "mean_rel_spread": 0.04086978107689952,
+      "n_reports": 3,
+      "passed": true,
+      "path": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_t150_ensemble_gate.json",
+      "rows": [
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 0,
+          "late_mean": 10.074694029496332,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.2645622653798686,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_seed31_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_seed31_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 1,
+          "late_mean": 10.089648246764664,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.11951335136577722,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_seed32_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_seed32_transport_window.json"
+        },
+        {
+          "case": "qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+          "failures": [],
+          "index": 2,
+          "late_mean": 9.683029726934208,
+          "passed": true,
+          "promotion_ready": true,
+          "sem": 0.17009834377861852,
+          "source_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_dt0p04_heat_flux_trace.csv",
+          "summary_artifact": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_replicates/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_plus_delta_nonlinear_t150_n48_dt0p04_transport_window.json"
+        }
+      ],
+      "statistics": {
+        "combined_sem": 0.2645622653798686,
+        "combined_sem_rel": 0.026591513519335655,
+        "ensemble_mean": 9.949124001065067,
+        "max_individual_sem": 0.2645622653798686,
+        "mean_rel_spread": 0.04086978107689952,
+        "mean_spread": 0.40661851983045594,
+        "n_finite_means": 3,
+        "n_reports": 3,
+        "sample_sem": 0.13311715291107176
+      }
+    }
+  }
+}

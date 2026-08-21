@@ -1,0 +1,94 @@
+[[job]]
+name = "cyclone-core-assets"
+description = "Regenerate the tracked Cyclone tables and figures."
+cwd = "{root}"
+command = "PYTHONPATH=src python tools/artifacts/make_tables.py --case cyclone --no-progress --refresh-minimal && PYTHONPATH=src python tools/artifacts/build_linear_validation_artifacts.py figures --case cyclone --no-progress"
+outputs = [
+  "docs/_static/cyclone_mismatch_table.csv",
+  "docs/_static/cyclone_comparison.png",
+  "docs/_static/cyclone_reference.png",
+]
+
+[[job]]
+name = "etg-core-assets"
+description = "Regenerate the tracked ETG tables and baseline figures."
+cwd = "{root}"
+command = "PYTHONPATH=src python tools/artifacts/make_tables.py --case etg --no-progress && PYTHONPATH=src python tools/artifacts/build_linear_validation_artifacts.py figures --case etg --no-progress"
+outputs = [
+  "docs/_static/etg_mismatch_table.csv",
+  "docs/_static/etg_comparison.png",
+  "docs/_static/etg_trend_table.csv",
+]
+
+[[job]]
+name = "imported-linear-w7x"
+description = "Refresh the W7-X imported linear scan using internally generated VMEC geometry."
+cwd = "{root}"
+requires_env = ["W7X_IMPORTED_ARGS"]
+command = "JAX_PLATFORMS=cpu PYTHONPATH=src W7X_VMEC_FILE=${W7X_VMEC_FILE} python tools/comparison/compare_gx_imported_linear.py fields ${W7X_IMPORTED_ARGS} --runtime-config examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml --out docs/_static/w7x_linear_t2_scan.csv && python tools/artifacts/make_tables.py --lastvalue-scan docs/_static/w7x_linear_t2_scan.csv --lastvalue-out docs/_static/w7x_linear_t2_lastvalue.csv"
+outputs = ["docs/_static/w7x_linear_t2_scan.csv", "docs/_static/w7x_linear_t2_lastvalue.csv"]
+
+[[job]]
+name = "imported-linear-hsx"
+description = "Refresh the HSX imported linear scan using internally generated VMEC geometry."
+cwd = "{root}"
+requires_env = ["HSX_IMPORTED_ARGS"]
+command = "JAX_PLATFORMS=cpu PYTHONPATH=src python tools/comparison/compare_gx_imported_linear.py fields ${HSX_IMPORTED_ARGS} --runtime-config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml --out docs/_static/hsx_linear_t2_scan.csv && python tools/artifacts/make_tables.py --lastvalue-scan docs/_static/hsx_linear_t2_scan.csv --lastvalue-out docs/_static/hsx_linear_t2_lastvalue.csv"
+outputs = ["docs/_static/hsx_linear_t2_scan.csv", "docs/_static/hsx_linear_t2_lastvalue.csv"]
+
+[[job]]
+name = "imported-linear-cyclone-miller"
+description = "Refresh the Cyclone Miller imported linear scan using internally generated Miller geometry."
+cwd = "{root}"
+requires_env = ["CYCLONE_MILLER_IMPORTED_ARGS"]
+command = "PYTHONPATH=src python tools/comparison/compare_gx_imported_linear.py fields ${CYCLONE_MILLER_IMPORTED_ARGS} --runtime-config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml --out docs/_static/cyclone_miller_linear_scan.csv && python tools/artifacts/make_tables.py --lastvalue-scan docs/_static/cyclone_miller_linear_scan.csv --lastvalue-out docs/_static/cyclone_miller_linear_mismatch.csv"
+outputs = ["docs/_static/cyclone_miller_linear_scan.csv", "docs/_static/cyclone_miller_linear_mismatch.csv"]
+
+[[job]]
+name = "kaw-exact-growth"
+description = "Refresh the KAW exact late growth diagnostic from clean same-run dumps."
+cwd = "{root}"
+requires_env = ["KAW_GROWTH_ARGS"]
+command = "PYTHONPATH=src:. python tools/comparison/compare_gx_imported_linear.py growth-dump ${KAW_GROWTH_ARGS} --out docs/_static/kaw_exact_growth_dump.csv"
+outputs = ["docs/_static/kaw_exact_growth_dump.csv"]
+
+[[job]]
+name = "kbm-miller-exact-growth"
+description = "Refresh the Miller KBM exact late growth diagnostic from clean same-trajectory dumps."
+cwd = "{root}"
+requires_env = ["KBM_MILLER_GROWTH_ARGS"]
+command = "PYTHONPATH=src:. python tools/comparison/compare_gx_imported_linear.py growth-dump ${KBM_MILLER_GROWTH_ARGS} --out docs/_static/kbm_miller_exact_growth_dump.csv"
+outputs = ["docs/_static/kbm_miller_exact_growth_dump.csv"]
+
+[[job]]
+name = "nonlinear-cyclone"
+description = "Refresh the tracked nonlinear Cyclone diagnostic comparison figure."
+cwd = "{root}"
+requires_env = ["CYCLONE_NONLINEAR_ARGS"]
+command = "python tools/comparison/compare_gx_nonlinear.py diagnostics ${CYCLONE_NONLINEAR_ARGS} --out docs/_static/nonlinear_cyclone_miller_diag_compare_t122.png"
+outputs = ["docs/_static/nonlinear_cyclone_miller_diag_compare_t122.png"]
+
+[[job]]
+name = "benchmark-atlas"
+description = "Rebuild the README/docs benchmark atlas from the refreshed tracked assets."
+cwd = "{root}"
+command = "PYTHONPATH=src python tools/artifacts/make_benchmark_atlas.py"
+outputs = [
+  "docs/_static/benchmark_imported_linear_panel.png",
+  "docs/_static/benchmark_extended_linear_panel.png",
+  "docs/_static/benchmark_core_linear_atlas.png",
+  "docs/_static/benchmark_core_nonlinear_atlas.png",
+  "docs/_static/benchmark_readme_panel.png",
+]
+
+[[job]]
+name = "reference-linear-parity-matrix"
+description = "Refresh the linear parity matrix against the reference comparison code."
+cwd = "{root}"
+requires_env = ["GX_PARITY_REF_DIR"]
+command = "JAX_ENABLE_X64=1 PYTHONPATH=src:. python tools/comparison/build_gx_parity_matrix.py"
+outputs = [
+  "docs/_static/gkx_gx_linear_parity_matrix.json",
+  "docs/_static/gkx_gx_linear_parity_matrix.csv",
+  "docs/_static/gkx_gx_linear_parity_matrix.png",
+]

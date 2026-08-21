@@ -1,0 +1,105 @@
+# Cyclone linear quasilinear transport diagnostic example.
+# This computes eigenfunction-resolved electrostatic heat/particle flux weights
+# from one linear mode, then applies an explicit uncalibrated mixing-length
+# saturation rule. Treat the saturated flux as a model output that requires
+# nonlinear calibration before making absolute transport claims.
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 12
+Nz = 32
+Lx = 62.8
+Ly = 62.8
+boundary = "periodic"
+
+[time]
+t_max = 0.2
+dt = 0.01
+method = "rk2"
+use_diffrax = false
+sample_stride = 1
+
+[geometry]
+q = 1.4
+s_hat = 0.8
+epsilon = 0.18
+R0 = 2.77778
+
+[init]
+init_field = "density"
+init_amp = 1e-8
+gaussian_init = false
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+tau_e = 1.0
+collisions = true
+hypercollisions = true
+
+[collisions]
+nu_hermite = 1.0
+nu_laguerre = 2.0
+hypercollisions_const = 1.0
+hypercollisions_kz = 0.0
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "cyclone"
+diagnostic_norm = "none"
+flux_scale = 1.0
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 0.0
+bpar = 0.0
+nonlinear = 0.0
+
+[output]
+path = "tools_out/cyclone_quasilinear"
+
+[quasilinear]
+enabled = true
+mode = "saturated"
+saturation_rule = "mixing_length"
+amplitude_normalization = "phi_rms"
+kperp_average = "phi_weighted"
+csat = 1.0
+gamma_floor = 0.0
+include_stable_modes = false
+channels = ["es"]
+write_spectrum = true
+
+[run]
+ky = 0.3
+Nl = 8
+Nm = 8
+solver = "krylov"
+
+[scan]
+ky = [0.1, 0.2, 0.3, 0.4]
+Nl = 8
+Nm = 8
+solver = "krylov"

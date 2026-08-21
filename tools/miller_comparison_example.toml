@@ -1,0 +1,82 @@
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 3.0
+fprim = 1.0
+nu = 0.01
+kinetic = true
+
+[grid]
+Nx = 32
+Ny = 32
+Nz = 16
+Lx = 62.8
+Ly = 62.8
+boundary = "fix aspect"
+y0 = 10.0
+ntheta = 32
+nperiod = 3
+
+[time]
+t_max = 10.0
+dt = 0.1
+method = "rk3"
+use_diffrax = false
+sample_stride = 10
+diagnostics_stride = 10
+fixed_dt = false
+cfl = 1.0
+
+[geometry]
+model = "miller"
+geometry_backend = "internal"
+rhoc = 0.5
+q = 2.0
+s_hat = 0.8
+R0 = 3.0
+R_geo = 3.0
+shift = 0.0
+akappa = 1.5
+akappri = 0.5
+tri = 0.2
+tripri = 0.1
+betaprim = -0.1
+alpha = 0.0
+npol = 1.0
+
+[init]
+init_field = "density"
+init_amp = 1e-3
+gaussian_init = false
+init_single = false
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+adiabatic_ions = false
+tau_e = 1.0
+beta = 0.0
+collisions = false
+hypercollisions = false
+
+[normalization]
+contract = "kinetic"
+diagnostic_norm = "rho_star"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+
+[run]
+ky = 0.5
+Nl = 2
+Nm = 4

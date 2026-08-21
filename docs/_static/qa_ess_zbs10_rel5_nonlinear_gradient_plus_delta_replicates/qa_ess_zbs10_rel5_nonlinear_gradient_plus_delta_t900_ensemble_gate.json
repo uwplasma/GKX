@@ -1,0 +1,121 @@
+{
+  "case": "qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicated_nonlinear_window_ensemble_gate",
+  "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+  "comparison": "qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicated_nonlinear_window_seed_timestep_replicates",
+  "config": {
+    "max_combined_sem_rel": 0.25,
+    "max_mean_rel_spread": 0.15,
+    "min_reports": 2,
+    "require_individual_passed": true,
+    "value_floor": 1e-12
+  },
+  "gate_report": {
+    "case": "qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicated_nonlinear_window_ensemble_gate",
+    "gates": [
+      {
+        "detail": "reports=3 min_reports=2",
+        "metric": "report_count",
+        "passed": true
+      },
+      {
+        "detail": "require_individual_passed=True",
+        "metric": "individual_windows_passed",
+        "passed": true
+      },
+      {
+        "detail": "finite_means=3 reports=3",
+        "metric": "finite_late_means",
+        "passed": true
+      },
+      {
+        "detail": "mean_rel_spread=0.0286812718951146 gate=0.15",
+        "metric": "mean_relative_spread",
+        "passed": true
+      },
+      {
+        "detail": "combined_sem_rel=0.03354120481158427 gate=0.25",
+        "metric": "combined_sem",
+        "passed": true
+      }
+    ],
+    "max_abs_error": 0.0,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "nonlinear_window_convergence_reports"
+  },
+  "gates": [
+    {
+      "detail": "reports=3 min_reports=2",
+      "metric": "report_count",
+      "passed": true
+    },
+    {
+      "detail": "require_individual_passed=True",
+      "metric": "individual_windows_passed",
+      "passed": true
+    },
+    {
+      "detail": "finite_means=3 reports=3",
+      "metric": "finite_late_means",
+      "passed": true
+    },
+    {
+      "detail": "mean_rel_spread=0.0286812718951146 gate=0.15",
+      "metric": "mean_relative_spread",
+      "passed": true
+    },
+    {
+      "detail": "combined_sem_rel=0.03354120481158427 gate=0.25",
+      "metric": "combined_sem",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_report",
+  "passed": true,
+  "rows": [
+    {
+      "case": "qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+      "failures": [],
+      "index": 0,
+      "late_mean": 15.681126143902747,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.30733130860761865,
+      "source_artifact": "docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicates/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicates/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed31_transport_window.json"
+    },
+    {
+      "case": "qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+      "failures": [],
+      "index": 1,
+      "late_mean": 16.12376753314121,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.5307871306609799,
+      "source_artifact": "docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicates/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicates/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_nonlinear_t900_n64_seed32_transport_window.json"
+    },
+    {
+      "case": "qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicated_nonlinear_window",
+      "failures": [],
+      "index": 2,
+      "late_mean": 15.669888487995596,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.43928292268435165,
+      "source_artifact": "docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicates/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_nonlinear_t900_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_replicates/qa_ess_zbs10_rel5_nonlinear_gradient_plus_delta_nonlinear_t900_n64_dt0p04_transport_window.json"
+    }
+  ],
+  "statistics": {
+    "combined_sem": 0.5307871306609799,
+    "combined_sem_rel": 0.03354120481158427,
+    "ensemble_mean": 15.824927388346518,
+    "max_individual_sem": 0.5307871306609799,
+    "mean_rel_spread": 0.0286812718951146,
+    "mean_spread": 0.4538790451456123,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.1494552835390974
+  }
+}

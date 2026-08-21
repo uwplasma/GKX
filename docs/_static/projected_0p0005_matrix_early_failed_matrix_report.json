@@ -1,0 +1,210 @@
+{
+  "blockers": [
+    "missing comparisons: s0p45_a0_ky0p3, s0p45_a0_ky0p5, s0p45_a0p785398_ky0p1, s0p45_a0p785398_ky0p3, s0p45_a0p785398_ky0p5, s0p64_a0_ky0p1, s0p64_a0_ky0p3, s0p64_a0_ky0p5 ...",
+    "pass_fraction 0 < 1",
+    "mean_relative_reduction -0.0299451 < 0.02"
+  ],
+  "claim_level": "multi_surface_alpha_ky_matched_transport_matrix_gate",
+  "config": {
+    "min_mean_relative_reduction": 0.02,
+    "min_pass_fraction": 1.0
+  },
+  "kind": "matched_nonlinear_transport_matrix_report",
+  "matrix_manifest": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix/matched_transport_matrix_manifest.json",
+  "notes": [
+    "This gate promotes only the selected matched baseline-vs-candidate matrix.",
+    "It does not by itself validate universal nonlinear transport optimization across all stellarator classes."
+  ],
+  "passed": false,
+  "rows": [
+    {
+      "alpha": 0.0,
+      "baseline_mean": 10.355527771023894,
+      "candidate_mean": 10.66562557126614,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0_ky0p1/qa_projected_weight_0p0005_matrix_s0p45_a0_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": false,
+      "passed": false,
+      "relative_reduction": -0.02994514689149309,
+      "sample_id": "s0p45_a0_ky0p1",
+      "surface_torflux": 0.45,
+      "uncertainty_z_score": -1.420486274409526
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0_ky0p3/qa_projected_weight_0p0005_matrix_s0p45_a0_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p45_a0_ky0p3",
+      "surface_torflux": 0.45
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0_ky0p5/qa_projected_weight_0p0005_matrix_s0p45_a0_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p45_a0_ky0p5",
+      "surface_torflux": 0.45
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0p785398_ky0p1/qa_projected_weight_0p0005_matrix_s0p45_a0p785398_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p45_a0p785398_ky0p1",
+      "surface_torflux": 0.45
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0p785398_ky0p3/qa_projected_weight_0p0005_matrix_s0p45_a0p785398_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p45_a0p785398_ky0p3",
+      "surface_torflux": 0.45
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0p785398_ky0p5/qa_projected_weight_0p0005_matrix_s0p45_a0p785398_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p45_a0p785398_ky0p5",
+      "surface_torflux": 0.45
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p64_a0_ky0p1/qa_projected_weight_0p0005_matrix_s0p64_a0_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0_ky0p1",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p64_a0_ky0p3/qa_projected_weight_0p0005_matrix_s0p64_a0_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0_ky0p3",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p64_a0_ky0p5/qa_projected_weight_0p0005_matrix_s0p64_a0_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0_ky0p5",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p64_a0p785398_ky0p1/qa_projected_weight_0p0005_matrix_s0p64_a0p785398_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0p785398_ky0p1",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p64_a0p785398_ky0p3/qa_projected_weight_0p0005_matrix_s0p64_a0p785398_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0p785398_ky0p3",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p64_a0p785398_ky0p5/qa_projected_weight_0p0005_matrix_s0p64_a0p785398_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p64_a0p785398_ky0p5",
+      "surface_torflux": 0.64
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p78_a0_ky0p1/qa_projected_weight_0p0005_matrix_s0p78_a0_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0_ky0p1",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p78_a0_ky0p3/qa_projected_weight_0p0005_matrix_s0p78_a0_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0_ky0p3",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.0,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p78_a0_ky0p5/qa_projected_weight_0p0005_matrix_s0p78_a0_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0_ky0p5",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p78_a0p785398_ky0p1/qa_projected_weight_0p0005_matrix_s0p78_a0p785398_ky0p1_matched_comparison.json",
+      "ky": 0.1,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0p785398_ky0p1",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p78_a0p785398_ky0p3/qa_projected_weight_0p0005_matrix_s0p78_a0p785398_ky0p3_matched_comparison.json",
+      "ky": 0.3,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0p785398_ky0p3",
+      "surface_torflux": 0.78
+    },
+    {
+      "alpha": 0.7853981633974483,
+      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p78_a0p785398_ky0p5/qa_projected_weight_0p0005_matrix_s0p78_a0p785398_ky0p5_matched_comparison.json",
+      "ky": 0.5,
+      "missing_comparison": true,
+      "passed": false,
+      "sample_id": "s0p78_a0p785398_ky0p5",
+      "surface_torflux": 0.78
+    }
+  ],
+  "summary": {
+    "alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "completed_samples": 1,
+    "ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "max_relative_reduction": -0.02994514689149309,
+    "mean_relative_reduction": -0.02994514689149309,
+    "min_relative_reduction": -0.02994514689149309,
+    "pass_fraction": 0.0,
+    "passed_samples": 0,
+    "surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ],
+    "total_samples": 18
+  }
+}

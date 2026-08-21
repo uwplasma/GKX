@@ -1,0 +1,34 @@
+# Template manifest for tools/comparison/build_exact_state_audit.py run
+#
+# Copy this file, fill in the paths for your machine, and then run:
+#   python tools/comparison/build_exact_state_audit.py run --manifest /path/to/your_lanes.toml
+#
+# Paths may be absolute or manifest-relative. Environment variables such as
+# $HOME are expanded before resolution.
+#
+# Each lane table is optional-feature driven:
+# - [lane.<name>.startup] requires GX field dump binaries (startup dump)
+# - [lane.<name>.diag_state] requires GX diag_state dump binaries
+# - [lane.<name>.window] requires GX diag_state dump binaries for two time indices
+#
+# These artifacts are typically produced by GX runs on `office` with additional
+# dump flags enabled (no GX physics changes required).
+
+[lane.cyclone_miller]
+config = "examples/linear/axisymmetric/runtime_cyclone_nonlinear_miller.toml"
+gx_out = "/ABS/PATH/TO/GX/itg_miller_adiabatic_electrons_correct.out.nc"
+
+[lane.cyclone_miller.startup]
+gx_dir = "/ABS/PATH/TO/GX/field_dumps_startup"
+ky = 0.3
+kx_target = 0.0
+
+[lane.cyclone_miller.diag_state]
+gx_dir = "/ABS/PATH/TO/GX/diag_state_dumps"
+time_index = 10
+
+[lane.cyclone_miller.window]
+gx_dir = "/ABS/PATH/TO/GX/diag_state_dumps"
+time_index_start = 10
+time_index_stop = 11
+ky = 0.3

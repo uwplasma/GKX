@@ -1,0 +1,1043 @@
+{
+  "candidates": [
+    {
+      "action": "shrink_or_replace_nonlocal_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 17,
+      "estimated_required_replicates_at_locality_limit": 20,
+      "estimated_required_replicates_no_bracket": 20,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": true,
+        "uncertainty_ok": false
+      },
+      "index": 0,
+      "label": "profile_direction_zbs_1_1_zbs_1_0_rbc_1_1:qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_followup",
+      "locality_safe_bracket_scale_limit": 0.1672936282077785,
+      "metrics": {
+        "fd_asymmetry_rel": 2.8393191365904893,
+        "gradient_uncertainty_rel": 1.222374941849731,
+        "response_fraction": 0.03600051585941988
+      },
+      "parameter_name": "profile_direction_zbs_1_1_zbs_1_0_rbc_1_1",
+      "passed": false,
+      "path": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_plus_delta_followup_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference bracket is nonlocal; shrink the bracket or replace the control before spending replicas",
+      "uncertainty_required_bracket_scale": 2.444749883699462,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [
+          "plus"
+        ],
+        "limiting_state": "plus",
+        "max_mean_rel_spread": 0.16597636568684226,
+        "recommendation": "target paired-seed or control-variate variance reduction for plus before adding blind replicas",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.032632878819822644,
+            "mean_rel_spread": 0.0267994982982098,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.029270210137321662,
+            "mean_rel_spread": 0.16597636568684226,
+            "n_reports": 6,
+            "passed": false,
+            "sem_gate_passed": true,
+            "spread_gate_passed": false,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.03129872827401187,
+            "mean_rel_spread": 0.035116758127572464,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "shrink_or_replace_nonlocal_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 14,
+      "estimated_required_replicates_at_locality_limit": 17,
+      "estimated_required_replicates_no_bracket": 17,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": true,
+        "uncertainty_ok": false
+      },
+      "index": 1,
+      "label": "profile_direction_zbs_1_1_zbs_1_0_rbc_1_1:qa_ess_descent_profile_rel2_nonlinear_gradient_profile_direction_zbs_1_1_zbs_1_0_rbc_1_1",
+      "locality_safe_bracket_scale_limit": 0.3461896333475846,
+      "metrics": {
+        "fd_asymmetry_rel": 1.3720803693826555,
+        "gradient_uncertainty_rel": 1.1281740821680801,
+        "response_fraction": 0.05166483779789478
+      },
+      "parameter_name": "profile_direction_zbs_1_1_zbs_1_0_rbc_1_1",
+      "passed": false,
+      "path": "docs/_static/qa_ess_descent_profile_rel2_nonlinear_gradient_profile_direction_zbs_1_1_zbs_1_0_rbc_1_1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference bracket is nonlocal; shrink the bracket or replace the control before spending replicas",
+      "uncertainty_required_bracket_scale": 2.2563481643361603,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [
+          "plus"
+        ],
+        "limiting_state": "plus",
+        "max_mean_rel_spread": 0.16859753146262083,
+        "recommendation": "target paired-seed or control-variate variance reduction for plus before adding blind replicas",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.032632878819822644,
+            "mean_rel_spread": 0.0267994982982098,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.04867065864463235,
+            "mean_rel_spread": 0.16859753146262083,
+            "n_reports": 3,
+            "passed": false,
+            "sem_gate_passed": true,
+            "spread_gate_passed": false,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.03129872827401187,
+            "mean_rel_spread": 0.035116758127572464,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "design_better_conditioned_control_or_variance_reduction",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 5,
+      "estimated_extra_replicates_at_locality_limit": 6,
+      "estimated_required_replicates_at_locality_limit": 11,
+      "estimated_required_replicates_no_bracket": 11,
+      "gate_status": {
+        "locality_ok": true,
+        "response_ok": true,
+        "uncertainty_ok": false
+      },
+      "index": 2,
+      "label": "rbc_1_1:qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_rbc_1_1",
+      "locality_safe_bracket_scale_limit": 0.9992560376835553,
+      "metrics": {
+        "fd_asymmetry_rel": 0.4753536451990127,
+        "gradient_uncertainty_rel": 0.6831216320977453,
+        "response_fraction": 0.07223514648647757
+      },
+      "parameter_name": "rbc_1_1",
+      "passed": false,
+      "path": "docs/_static/qa_ess_profile_gradient_rbc_1_1_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.json",
+      "recommendation": "bracket-only and bounded-replica fixes are not efficient; design a better-conditioned composite direction, variance-reduced observable, or checked response-larger bracket",
+      "uncertainty_required_bracket_scale": 1.3662432641954907,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "plus",
+        "max_mean_rel_spread": 0.11535931631561402,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.030869270841209266,
+            "mean_rel_spread": 0.0693683541430074,
+            "n_reports": 5,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.03343099700662646,
+            "mean_rel_spread": 0.11535931631561402,
+            "n_reports": 5,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.036608833768256875,
+            "mean_rel_spread": 0.02464063751367196,
+            "n_reports": 5,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "increase_checked_bracket_or_replace_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 1400,
+      "estimated_required_replicates_at_locality_limit": 1403,
+      "estimated_required_replicates_no_bracket": 1403,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": false,
+        "uncertainty_ok": false
+      },
+      "index": 3,
+      "label": "zbs_1_0:qa_ess_profile_gradient_zbs_1_0_nonlinear_gradient_zbs_1_0",
+      "locality_safe_bracket_scale_limit": 0.007806466120288959,
+      "metrics": {
+        "fd_asymmetry_rel": 60.846994360928285,
+        "gradient_uncertainty_rel": 10.306621403667384,
+        "response_fraction": 0.004514913267128275
+      },
+      "parameter_name": "zbs_1_0",
+      "passed": false,
+      "path": "docs/_static/qa_ess_profile_gradient_zbs_1_0_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference response is below the resolved-response gate; run a checked bracket sweep or replace this control before adding replicas",
+      "uncertainty_required_bracket_scale": 20.613242807334768,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "baseline",
+        "max_mean_rel_spread": 0.0650361471727721,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.029184197715839095,
+            "mean_rel_spread": 0.0650361471727721,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.025614687455461107,
+            "mean_rel_spread": 0.0385414802869404,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.035176906186089596,
+            "mean_rel_spread": 0.06467491448295161,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "shrink_or_replace_nonlocal_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 0,
+      "estimated_required_replicates_at_locality_limit": 3,
+      "estimated_required_replicates_no_bracket": 3,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": true,
+        "uncertainty_ok": true
+      },
+      "index": 4,
+      "label": "zbs_1_1:qa_ess_profile_gradient_zbs_1_1_nonlinear_gradient_zbs_1_1",
+      "locality_safe_bracket_scale_limit": 0.7853627496322433,
+      "metrics": {
+        "fd_asymmetry_rel": 0.6048160550298892,
+        "gradient_uncertainty_rel": 0.3553072122357673,
+        "response_fraction": 0.09563236430182284
+      },
+      "parameter_name": "zbs_1_1",
+      "passed": false,
+      "path": "docs/_static/qa_ess_profile_gradient_zbs_1_1_nonlinear_gradient_zbs_1_1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference bracket is nonlocal; shrink the bracket or replace the control before spending replicas",
+      "uncertainty_required_bracket_scale": 1.0,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "baseline",
+        "max_mean_rel_spread": 0.12047185129942896,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.03479146015583147,
+            "mean_rel_spread": 0.12047185129942896,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.02109796700161871,
+            "mean_rel_spread": 0.06095270282638091,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.027793259249691865,
+            "mean_rel_spread": 0.025153640124758042,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "shrink_or_replace_nonlocal_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 0,
+      "estimated_required_replicates_at_locality_limit": 3,
+      "estimated_required_replicates_no_bracket": 3,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": true,
+        "uncertainty_ok": true
+      },
+      "index": 5,
+      "label": "rbc_1_1:qa_ess_rbc11_rel5_nonlinear_gradient_rbc_1_1",
+      "locality_safe_bracket_scale_limit": 0.5296967576690381,
+      "metrics": {
+        "fd_asymmetry_rel": 0.8967394893830681,
+        "gradient_uncertainty_rel": 0.4022549849200881,
+        "response_fraction": 0.1177175188295207
+      },
+      "parameter_name": "rbc_1_1",
+      "passed": false,
+      "path": "docs/_static/qa_ess_rbc11_rel5_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference bracket is nonlocal; shrink the bracket or replace the control before spending replicas",
+      "uncertainty_required_bracket_scale": 1.0,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "plus",
+        "max_mean_rel_spread": 0.1403048927651362,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.027421666128794354,
+            "mean_rel_spread": 0.07629676130745845,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.04096343820621508,
+            "mean_rel_spread": 0.1403048927651362,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.02804046956607492,
+            "mean_rel_spread": 0.03217747471270095,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "shrink_or_replace_nonlocal_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 1,
+      "estimated_required_replicates_at_locality_limit": 4,
+      "estimated_required_replicates_no_bracket": 4,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": true,
+        "uncertainty_ok": false
+      },
+      "index": 6,
+      "label": "rbc_1_1:qa_ess_rbc11_rel8_nonlinear_gradient_rbc_1_1",
+      "locality_safe_bracket_scale_limit": 0.2507059263297396,
+      "metrics": {
+        "fd_asymmetry_rel": 1.8946500665295756,
+        "gradient_uncertainty_rel": 0.5065121189058193,
+        "response_fraction": 0.09923000947114798
+      },
+      "parameter_name": "rbc_1_1",
+      "passed": false,
+      "path": "docs/_static/qa_ess_rbc11_rel8_nonlinear_gradient_rbc_1_1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference bracket is nonlocal; shrink the bracket or replace the control before spending replicas",
+      "uncertainty_required_bracket_scale": 1.0130242378116385,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "minus",
+        "max_mean_rel_spread": 0.07491194286616172,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.035532943061142824,
+            "mean_rel_spread": 0.03224976158811012,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.045931902976901876,
+            "mean_rel_spread": 0.030943329368051588,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.028288479831583904,
+            "mean_rel_spread": 0.07491194286616172,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "add_limited_replicates_with_locality_cap",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 1,
+      "estimated_required_replicates_at_locality_limit": 4,
+      "estimated_required_replicates_no_bracket": 8,
+      "gate_status": {
+        "locality_ok": true,
+        "response_ok": true,
+        "uncertainty_ok": false
+      },
+      "index": 7,
+      "label": "zbs_1_0:qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0",
+      "locality_safe_bracket_scale_limit": 1.7319678207408582,
+      "metrics": {
+        "fd_asymmetry_rel": 0.2742545180757552,
+        "gradient_uncertainty_rel": 0.7676525476395432,
+        "response_fraction": 0.06847459658567508
+      },
+      "parameter_name": "zbs_1_0",
+      "passed": false,
+      "path": "docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.json",
+      "recommendation": "combine the largest locality-safe bracket with a bounded number of matched replicas",
+      "uncertainty_required_bracket_scale": 1.5353050952790863,
+      "usable_bracket_scale_for_estimate": 1.5,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "baseline",
+        "max_mean_rel_spread": 0.07629676130745845,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.027421666128794354,
+            "mean_rel_spread": 0.07629676130745845,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.03354120481158427,
+            "mean_rel_spread": 0.0286812718951146,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.039727111927266606,
+            "mean_rel_spread": 0.03165093455952247,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "design_variance_reduction_for_limiting_state",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 4,
+      "estimated_extra_replicates_at_locality_limit": 22,
+      "estimated_required_replicates_at_locality_limit": 26,
+      "estimated_required_replicates_no_bracket": 58,
+      "gate_status": {
+        "locality_ok": true,
+        "response_ok": true,
+        "uncertainty_ok": false
+      },
+      "index": 8,
+      "label": "zbs_1_0:qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0",
+      "locality_safe_bracket_scale_limit": 10.732315169202671,
+      "metrics": {
+        "fd_asymmetry_rel": 0.04425885678078618,
+        "gradient_uncertainty_rel": 1.8061519699775055,
+        "response_fraction": 0.03191129318661172
+      },
+      "parameter_name": "zbs_1_0",
+      "passed": false,
+      "path": "docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.json",
+      "recommendation": "target paired-seed or control-variate variance reduction for plus before adding blind replicas",
+      "uncertainty_required_bracket_scale": 3.612303939955011,
+      "usable_bracket_scale_for_estimate": 1.5,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [
+          "plus"
+        ],
+        "limiting_state": "plus",
+        "max_mean_rel_spread": 0.19599672297291024,
+        "recommendation": "target paired-seed or control-variate variance reduction for plus before adding blind replicas",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.02723033764754902,
+            "mean_rel_spread": 0.10815040295891594,
+            "n_reports": 4,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.04853950685421821,
+            "mean_rel_spread": 0.19599672297291024,
+            "n_reports": 4,
+            "passed": false,
+            "sem_gate_passed": true,
+            "spread_gate_passed": false,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.03178597142840365,
+            "mean_rel_spread": 0.0567454109575854,
+            "n_reports": 4,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "shrink_or_replace_nonlocal_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 0,
+      "estimated_required_replicates_at_locality_limit": 3,
+      "estimated_required_replicates_no_bracket": 3,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": true,
+        "uncertainty_ok": true
+      },
+      "index": 9,
+      "label": "zbs_1_1:qa_ess_zbs11_rel5_nonlinear_gradient_zbs_1_1",
+      "locality_safe_bracket_scale_limit": 0.7168678123576101,
+      "metrics": {
+        "fd_asymmetry_rel": 0.6626047254623365,
+        "gradient_uncertainty_rel": 0.2252601025502275,
+        "response_fraction": 0.1509753063627229
+      },
+      "parameter_name": "zbs_1_1",
+      "passed": false,
+      "path": "docs/_static/qa_ess_zbs11_rel5_nonlinear_gradient_zbs_1_1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference bracket is nonlocal; shrink the bracket or replace the control before spending replicas",
+      "uncertainty_required_bracket_scale": 1.0,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "baseline",
+        "max_mean_rel_spread": 0.07629676130745845,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.027421666128794354,
+            "mean_rel_spread": 0.07629676130745845,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.02818291707610637,
+            "mean_rel_spread": 0.05861346825001753,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.01860617677425483,
+            "mean_rel_spread": 0.037069035414993096,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "increase_checked_bracket_or_replace_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 1035,
+      "estimated_required_replicates_at_locality_limit": 1038,
+      "estimated_required_replicates_no_bracket": 1038,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": false,
+        "uncertainty_ok": false
+      },
+      "index": 10,
+      "label": "state_control_rsin_mid_surface_m1:qa_lowres_alpha0p003_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1",
+      "locality_safe_bracket_scale_limit": 0.6858009299045975,
+      "metrics": {
+        "fd_asymmetry_rel": 0.6926208164606568,
+        "gradient_uncertainty_rel": 8.865820385545353,
+        "response_fraction": 0.004159172848068613
+      },
+      "parameter_name": "state_control_rsin_mid_surface_m1",
+      "passed": false,
+      "path": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference response is below the resolved-response gate; run a checked bracket sweep or replace this control before adding replicas",
+      "uncertainty_required_bracket_scale": 17.731640771090706,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "baseline",
+        "max_mean_rel_spread": 0.03554992919310915,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.03381947464404109,
+            "mean_rel_spread": 0.03554992919310915,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.026372485049135256,
+            "mean_rel_spread": 0.017686347840580808,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.025807971366060254,
+            "mean_rel_spread": 0.023481595352243232,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "increase_checked_bracket_or_replace_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 11075,
+      "estimated_required_replicates_at_locality_limit": 11078,
+      "estimated_required_replicates_no_bracket": 11078,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": false,
+        "uncertainty_ok": false
+      },
+      "index": 11,
+      "label": "state_control_zcos_mid_surface_m1:qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1",
+      "locality_safe_bracket_scale_limit": 0.005577203981707227,
+      "metrics": {
+        "fd_asymmetry_rel": 85.16812394848048,
+        "gradient_uncertainty_rel": 28.96880860425934,
+        "response_fraction": 0.001247375411433147
+      },
+      "parameter_name": "state_control_zcos_mid_surface_m1",
+      "passed": false,
+      "path": "docs/_static/qa_lowres_alpha0p003_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference response is below the resolved-response gate; run a checked bracket sweep or replace this control before adding replicas",
+      "uncertainty_required_bracket_scale": 57.93761720851868,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "plus",
+        "max_mean_rel_spread": 0.04086978107689952,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.03386056728299225,
+            "mean_rel_spread": 0.035593124435508605,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.026591513519335655,
+            "mean_rel_spread": 0.04086978107689952,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.025901677259100107,
+            "mean_rel_spread": 0.03606563502014689,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "increase_checked_bracket_or_replace_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 1357,
+      "estimated_required_replicates_at_locality_limit": 1360,
+      "estimated_required_replicates_no_bracket": 1360,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": false,
+        "uncertainty_ok": false
+      },
+      "index": 12,
+      "label": "state_control_rsin_mid_surface_m1:qa_lowres_alpha0p010_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1",
+      "locality_safe_bracket_scale_limit": 0.04227945333418241,
+      "metrics": {
+        "fd_asymmetry_rel": 11.234771562572886,
+        "gradient_uncertainty_rel": 10.150197349817086,
+        "response_fraction": 0.004503396202871371
+      },
+      "parameter_name": "state_control_rsin_mid_surface_m1",
+      "passed": false,
+      "path": "docs/_static/qa_lowres_alpha0p010_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference response is below the resolved-response gate; run a checked bracket sweep or replace this control before adding replicas",
+      "uncertainty_required_bracket_scale": 20.30039469963417,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "minus",
+        "max_mean_rel_spread": 0.03807973165860214,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.03386056728299225,
+            "mean_rel_spread": 0.035593124435508605,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.031717709111905315,
+            "mean_rel_spread": 0.026883926198030223,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.0337326474529869,
+            "mean_rel_spread": 0.03807973165860214,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "increase_checked_bracket_or_replace_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 1227,
+      "estimated_required_replicates_at_locality_limit": 1230,
+      "estimated_required_replicates_no_bracket": 1230,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": false,
+        "uncertainty_ok": false
+      },
+      "index": 13,
+      "label": "state_control_zcos_mid_surface_m1:qa_lowres_alpha0p010_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1",
+      "locality_safe_bracket_scale_limit": 0.016844868939865882,
+      "metrics": {
+        "fd_asymmetry_rel": 28.19849781531051,
+        "gradient_uncertainty_rel": 9.652476970541581,
+        "response_fraction": 0.003726048769258922
+      },
+      "parameter_name": "state_control_zcos_mid_surface_m1",
+      "passed": false,
+      "path": "docs/_static/qa_lowres_alpha0p010_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference response is below the resolved-response gate; run a checked bracket sweep or replace this control before adding replicas",
+      "uncertainty_required_bracket_scale": 19.304953941083163,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "plus",
+        "max_mean_rel_spread": 0.05361156390677315,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.03386056728299225,
+            "mean_rel_spread": 0.035593124435508605,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.026056295523557867,
+            "mean_rel_spread": 0.05361156390677315,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.026178112349009654,
+            "mean_rel_spread": 0.0458009269371776,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "increase_checked_bracket_or_replace_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 786,
+      "estimated_required_replicates_at_locality_limit": 789,
+      "estimated_required_replicates_no_bracket": 789,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": false,
+        "uncertainty_ok": false
+      },
+      "index": 14,
+      "label": "state_control_rsin_mid_surface_m1:qa_lowres_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1",
+      "locality_safe_bracket_scale_limit": 0.049962016444074324,
+      "metrics": {
+        "fd_asymmetry_rel": 9.507222362245884,
+        "gradient_uncertainty_rel": 7.7270919707486065,
+        "response_fraction": 0.004490206847840755
+      },
+      "parameter_name": "state_control_rsin_mid_surface_m1",
+      "passed": false,
+      "path": "docs/_static/qa_lowres_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference response is below the resolved-response gate; run a checked bracket sweep or replace this control before adding replicas",
+      "uncertainty_required_bracket_scale": 15.454183941497213,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "minus",
+        "max_mean_rel_spread": 0.03578588211170623,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.03381947464404109,
+            "mean_rel_spread": 0.03554992919310915,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.025264679701246344,
+            "mean_rel_spread": 0.01670666161328044,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.024319100233048112,
+            "mean_rel_spread": 0.03578588211170623,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    },
+    {
+      "action": "increase_checked_bracket_or_replace_control",
+      "bracket_only_feasible": false,
+      "current_replicates_per_state": 3,
+      "estimated_extra_replicates_at_locality_limit": 6991,
+      "estimated_required_replicates_at_locality_limit": 6994,
+      "estimated_required_replicates_no_bracket": 6994,
+      "gate_status": {
+        "locality_ok": false,
+        "response_ok": false,
+        "uncertainty_ok": false
+      },
+      "index": 15,
+      "label": "state_control_zcos_mid_surface_m1:qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1",
+      "locality_safe_bracket_scale_limit": 0.01048723996427794,
+      "metrics": {
+        "fd_asymmetry_rel": 45.293137338133214,
+        "gradient_uncertainty_rel": 23.017144622374467,
+        "response_fraction": 0.001470106125831155
+      },
+      "parameter_name": "state_control_zcos_mid_surface_m1",
+      "passed": false,
+      "path": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1_central_fd_gradient_gate.json",
+      "recommendation": "the finite-difference response is below the resolved-response gate; run a checked bracket sweep or replace this control before adding replicas",
+      "uncertainty_required_bracket_scale": 46.03428924474893,
+      "usable_bracket_scale_for_estimate": 1.0,
+      "variance_reduction": {
+        "failed_sem_states": [],
+        "failed_spread_states": [],
+        "limiting_state": "minus",
+        "max_mean_rel_spread": 0.07938082343110472,
+        "recommendation": "state ensembles pass spread/SEM gates; focus on finite-difference conditioning",
+        "state_rows": [
+          {
+            "combined_sem_rel": 0.03386056728299225,
+            "mean_rel_spread": 0.035593124435508605,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "baseline"
+          },
+          {
+            "combined_sem_rel": 0.0241882281622391,
+            "mean_rel_spread": 0.05583318733855544,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "plus"
+          },
+          {
+            "combined_sem_rel": 0.0244750760060611,
+            "mean_rel_spread": 0.07938082343110472,
+            "n_reports": 3,
+            "passed": true,
+            "sem_gate_passed": true,
+            "spread_gate_passed": true,
+            "state": "minus"
+          }
+        ]
+      }
+    }
+  ],
+  "case": "qa_ess_nonlinear_gradient_next_campaign_design",
+  "claim_level": "campaign_design_not_gradient_evidence",
+  "config": {
+    "locality_safety_factor": 0.95,
+    "max_checked_bracket_scale": 1.5,
+    "max_extra_replicates_per_state": 4,
+    "max_fd_asymmetry_rel": 0.5,
+    "max_gradient_uncertainty_rel": 0.5,
+    "max_window_mean_rel_spread": 0.15,
+    "max_window_sem_rel": 0.25,
+    "min_fd_response_fraction": 0.03,
+    "sem_safety_factor": 1.1,
+    "value_floor": 1e-12
+  },
+  "kind": "nonlinear_turbulence_gradient_candidate_design_report",
+  "next_action": "target paired-seed or control-variate variance reduction for limiting states",
+  "passed": false,
+  "summary": {
+    "bracket_ready_count": 0,
+    "candidate_count": 16,
+    "promoted_candidate_count": 0,
+    "replacement_or_variance_reduction_count": 15,
+    "replica_ready_count": 1,
+    "variance_limited_count": 1
+  }
+}

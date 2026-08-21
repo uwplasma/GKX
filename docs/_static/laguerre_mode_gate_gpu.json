@@ -1,0 +1,179 @@
+{
+  "description": "Optional spectral Laguerre nonlinear mode gate against default grid-mode nonlinear bracket.",
+  "rtol": 0.15,
+  "atol": 1e-12,
+  "rows": [
+    {
+      "case": "cyclone",
+      "status": "pass",
+      "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml",
+      "geometry_file": null,
+      "ky": 0.3,
+      "Nl": 4,
+      "Nm": 8,
+      "steps": 2,
+      "dt": 0.05,
+      "rtol": 0.15,
+      "atol": 1e-12,
+      "grid": {
+        "Wg_end": 0.0001525859406683594,
+        "Wphi_end": 1.274715305044083e-05,
+        "heat_end": 1.4736817774974043e-06,
+        "particle_end": 0.0,
+        "gamma_end": 0.0026796453166753054,
+        "omega_end": 0.2404843270778656,
+        "run_s": 44.11890311399475,
+        "ky_selected": 0.283687949180603
+      },
+      "spectral": {
+        "Wg_end": 0.00015258592611644417,
+        "Wphi_end": 1.274715305044083e-05,
+        "heat_end": 1.4736808680027025e-06,
+        "particle_end": 0.0,
+        "gamma_end": 0.0026796453166753054,
+        "omega_end": 0.24047918617725372,
+        "run_s": 26.53882481600158,
+        "ky_selected": 0.283687949180603
+      },
+      "comparison": {
+        "Wg_end_rel_diff": 9.536865037909992e-08,
+        "Wphi_end_rel_diff": 0.0,
+        "heat_end_rel_diff": 6.171581379783535e-07,
+        "particle_end_rel_diff": 0.0,
+        "gamma_end_rel_diff": 0.0,
+        "omega_end_rel_diff": 2.1377279236217698e-05,
+        "max_rel_diff": 2.1377279236217698e-05,
+        "speedup_grid_over_spectral": 1.6624286651680698
+      }
+    },
+    {
+      "case": "kbm",
+      "status": "pass",
+      "config": "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml",
+      "geometry_file": null,
+      "ky": 0.3,
+      "Nl": 3,
+      "Nm": 4,
+      "steps": 2,
+      "dt": 0.0003,
+      "rtol": 0.15,
+      "atol": 1e-12,
+      "grid": {
+        "Wg_end": 4.6667323268216924e-20,
+        "Wphi_end": 2.893217673181934e-20,
+        "heat_end": 5.816530200571433e-23,
+        "particle_end": -5.509698807181194e-24,
+        "gamma_end": -0.013113046996295452,
+        "omega_end": 0.17076025903224945,
+        "run_s": 39.84051146591082,
+        "ky_selected": 0.30000001192092896
+      },
+      "spectral": {
+        "Wg_end": 4.6667323268216924e-20,
+        "Wphi_end": 2.893217673181934e-20,
+        "heat_end": 5.816530200571433e-23,
+        "particle_end": -5.509698807181194e-24,
+        "gamma_end": -0.013113046996295452,
+        "omega_end": 0.17076025903224945,
+        "run_s": 14.794546998105943,
+        "ky_selected": 0.30000001192092896
+      },
+      "comparison": {
+        "Wg_end_rel_diff": 0.0,
+        "Wphi_end_rel_diff": 0.0,
+        "heat_end_rel_diff": 0.0,
+        "particle_end_rel_diff": 0.0,
+        "gamma_end_rel_diff": 0.0,
+        "omega_end_rel_diff": 0.0,
+        "max_rel_diff": 0.0,
+        "speedup_grid_over_spectral": 2.692918645701782
+      }
+    },
+    {
+      "case": "w7x",
+      "status": "pass",
+      "config": "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml",
+      "geometry_file": "/home/rjorge/gkx-codex-speed/tools_out/pilots/w7x_linear_local.eik.nc",
+      "ky": 0.047619047619047616,
+      "Nl": 3,
+      "Nm": 4,
+      "steps": 2,
+      "dt": 0.05,
+      "rtol": 0.15,
+      "atol": 1e-12,
+      "grid": {
+        "Wg_end": 0.00032690720399841666,
+        "Wphi_end": 1.6831034372444265e-05,
+        "heat_end": 4.613887085724855e-06,
+        "particle_end": 0.0,
+        "gamma_end": -0.0001084807445295155,
+        "omega_end": -0.03894954174757004,
+        "run_s": 26.40506960498169,
+        "ky_selected": 0.0476190522313118
+      },
+      "spectral": {
+        "Wg_end": 0.00032690720399841666,
+        "Wphi_end": 1.6831036191433668e-05,
+        "heat_end": 4.6138766265357845e-06,
+        "particle_end": 0.0,
+        "gamma_end": -0.0001084807445295155,
+        "omega_end": -0.038949154317379,
+        "run_s": 16.22092544590123,
+        "ky_selected": 0.0476190522313118
+      },
+      "comparison": {
+        "Wg_end_rel_diff": 0.0,
+        "Wphi_end_rel_diff": 1.0807352458024244e-07,
+        "heat_end_rel_diff": 2.2668931588614086e-06,
+        "particle_end_rel_diff": 0.0,
+        "gamma_end_rel_diff": 0.0,
+        "omega_end_rel_diff": 9.946976874617782e-06,
+        "max_rel_diff": 9.946976874617782e-06,
+        "speedup_grid_over_spectral": 1.6278398968693757
+      }
+    },
+    {
+      "case": "hsx",
+      "status": "pass",
+      "config": "examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml",
+      "geometry_file": "/home/rjorge/gkx-codex-speed/tools_out/pilots/hsx_linear_local.eik.nc",
+      "ky": 0.047619047619047616,
+      "Nl": 3,
+      "Nm": 4,
+      "steps": 2,
+      "dt": 0.05,
+      "rtol": 0.15,
+      "atol": 1e-12,
+      "grid": {
+        "Wg_end": 0.0003268892178311944,
+        "Wphi_end": 1.7206779375555925e-05,
+        "heat_end": 4.623409495252417e-06,
+        "particle_end": 0.0,
+        "gamma_end": 8.583050657762215e-05,
+        "omega_end": -0.022374914959073067,
+        "run_s": 13.012810204876587,
+        "ky_selected": 0.0476190522313118
+      },
+      "spectral": {
+        "Wg_end": 0.0003268892178311944,
+        "Wphi_end": 1.7206779375555925e-05,
+        "heat_end": 4.623398126568645e-06,
+        "particle_end": 0.0,
+        "gamma_end": 8.583050657762215e-05,
+        "omega_end": -0.022374525666236877,
+        "run_s": 17.61921246210113,
+        "ky_selected": 0.0476190522313118
+      },
+      "comparison": {
+        "Wg_end_rel_diff": 0.0,
+        "Wphi_end_rel_diff": 0.0,
+        "heat_end_rel_diff": 2.4589394004220524e-06,
+        "particle_end_rel_diff": 0.0,
+        "gamma_end_rel_diff": 0.0,
+        "omega_end_rel_diff": 1.7398628638425778e-05,
+        "max_rel_diff": 1.7398628638425778e-05,
+        "speedup_grid_over_spectral": 0.7385579936031249
+      }
+    }
+  ]
+}

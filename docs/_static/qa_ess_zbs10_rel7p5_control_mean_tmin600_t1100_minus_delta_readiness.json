@@ -1,0 +1,492 @@
+{
+  "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window_readiness",
+  "cases": [
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "ensemble_gate_runnable": false,
+      "n_observed_artifacts": 21,
+      "n_promotion_ready_artifacts": 21,
+      "observed_convergence_report_artifacts": [
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed34_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed35_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed36_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed37_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed38_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed39_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed40_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed41_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed42_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed43_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed44_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed45_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed46_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed47_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed48_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed49_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed50_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed51_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed52_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed53_transport_window.convergence.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed54_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed34_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed35_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed36_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed37_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed38_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed39_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed40_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed41_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed42_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed43_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed44_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed45_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed46_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed47_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed48_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed49_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed50_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed51_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed52_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed53_transport_window.json",
+        "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed54_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 0,
+          "observed_distinct_count": 21,
+          "observed_distinct_values": [
+            "34",
+            "35",
+            "36",
+            "37",
+            "38",
+            "39",
+            "40",
+            "41",
+            "42",
+            "43",
+            "44",
+            "45",
+            "46",
+            "47",
+            "48",
+            "49",
+            "50",
+            "51",
+            "52",
+            "53",
+            "54"
+          ],
+          "passed": true,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 1,
+          "observed_distinct_count": 1,
+          "observed_distinct_values": [
+            "0.05"
+          ],
+          "passed": false,
+          "required_distinct_count": 2
+        }
+      }
+    }
+  ],
+  "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+  "config": {
+    "min_replicates_per_case": 2,
+    "require_observed_windows_ready": true,
+    "required_variant_axes": [
+      "seed",
+      "timestep"
+    ]
+  },
+  "gates": [
+    {
+      "detail": "observed_artifacts=21",
+      "metric": "observed_window_artifacts_present",
+      "passed": true
+    },
+    {
+      "detail": "require_observed_windows_ready=True",
+      "metric": "observed_windows_promotion_ready",
+      "passed": true
+    },
+    {
+      "detail": "missing_artifact_groups=1",
+      "metric": "seed_and_timestep_replicates_present",
+      "passed": false
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_readiness_manifest",
+  "missing_artifacts": [
+    {
+      "artifact_hint": "add 1 passed nonlinear-window convergence report(s) for case 'qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window' with distinct timestep metadata and trace provenance",
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "metadata_requirements": [
+        "summary JSON or convergence report with source_artifact provenance",
+        "variant.timestep or equivalent top-level timestep metadata",
+        "passed nonlinear_window_convergence_report gates"
+      ],
+      "missing_count": 1,
+      "observed_distinct_values": [
+        "0.05"
+      ],
+      "required_distinct_count": 2,
+      "variant_axis": "timestep"
+    }
+  ],
+  "observed_artifacts": [
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed34_transport_window.convergence.json",
+      "failures": [],
+      "index": 0,
+      "late_mean": 15.540133349416253,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.42095679627646077,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed34_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed34_transport_window.json",
+      "variant": {
+        "seed": 34,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed35_transport_window.convergence.json",
+      "failures": [],
+      "index": 1,
+      "late_mean": 16.63524256081576,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.511525053457045,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed35_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed35_transport_window.json",
+      "variant": {
+        "seed": 35,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed36_transport_window.convergence.json",
+      "failures": [],
+      "index": 2,
+      "late_mean": 16.589635092632513,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.6575519105575293,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed36_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed36_transport_window.json",
+      "variant": {
+        "seed": 36,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed37_transport_window.convergence.json",
+      "failures": [],
+      "index": 3,
+      "late_mean": 17.04962104177734,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.5486389724746178,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed37_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed37_transport_window.json",
+      "variant": {
+        "seed": 37,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed38_transport_window.convergence.json",
+      "failures": [],
+      "index": 4,
+      "late_mean": 15.829207589474382,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4248692899571625,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed38_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed38_transport_window.json",
+      "variant": {
+        "seed": 38,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed39_transport_window.convergence.json",
+      "failures": [],
+      "index": 5,
+      "late_mean": 16.24146362830394,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.39190222599075974,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed39_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed39_transport_window.json",
+      "variant": {
+        "seed": 39,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed40_transport_window.convergence.json",
+      "failures": [],
+      "index": 6,
+      "late_mean": 15.118286193887188,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.5806428595724608,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed40_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed40_transport_window.json",
+      "variant": {
+        "seed": 40,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed41_transport_window.convergence.json",
+      "failures": [],
+      "index": 7,
+      "late_mean": 16.568114078690144,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.5925695996814972,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed41_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed41_transport_window.json",
+      "variant": {
+        "seed": 41,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed42_transport_window.convergence.json",
+      "failures": [],
+      "index": 8,
+      "late_mean": 16.882385892823642,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4463658167692245,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed42_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed42_transport_window.json",
+      "variant": {
+        "seed": 42,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed43_transport_window.convergence.json",
+      "failures": [],
+      "index": 9,
+      "late_mean": 15.218292330284237,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.2714569634885412,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed43_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed43_transport_window.json",
+      "variant": {
+        "seed": 43,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed44_transport_window.convergence.json",
+      "failures": [],
+      "index": 10,
+      "late_mean": 16.90955773245862,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.5847585145124078,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed44_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed44_transport_window.json",
+      "variant": {
+        "seed": 44,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed45_transport_window.convergence.json",
+      "failures": [],
+      "index": 11,
+      "late_mean": 16.824475048798032,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.6983221426271043,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed45_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed45_transport_window.json",
+      "variant": {
+        "seed": 45,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed46_transport_window.convergence.json",
+      "failures": [],
+      "index": 12,
+      "late_mean": 16.20107106739409,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.5991608387993415,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed46_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed46_transport_window.json",
+      "variant": {
+        "seed": 46,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed47_transport_window.convergence.json",
+      "failures": [],
+      "index": 13,
+      "late_mean": 17.043546972602464,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.380465544090363,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed47_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed47_transport_window.json",
+      "variant": {
+        "seed": 47,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed48_transport_window.convergence.json",
+      "failures": [],
+      "index": 14,
+      "late_mean": 15.778514331197046,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.7083391367260022,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed48_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed48_transport_window.json",
+      "variant": {
+        "seed": 48,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed49_transport_window.convergence.json",
+      "failures": [],
+      "index": 15,
+      "late_mean": 15.61823829876207,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.40929747507813613,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed49_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed49_transport_window.json",
+      "variant": {
+        "seed": 49,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed50_transport_window.convergence.json",
+      "failures": [],
+      "index": 16,
+      "late_mean": 16.467143852722167,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.48104284489623905,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed50_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed50_transport_window.json",
+      "variant": {
+        "seed": 50,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed51_transport_window.convergence.json",
+      "failures": [],
+      "index": 17,
+      "late_mean": 17.06656341834729,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.4050917732096468,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed51_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed51_transport_window.json",
+      "variant": {
+        "seed": 51,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed52_transport_window.convergence.json",
+      "failures": [],
+      "index": 18,
+      "late_mean": 17.037301711848276,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.29473329155120986,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed52_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed52_transport_window.json",
+      "variant": {
+        "seed": 52,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed53_transport_window.convergence.json",
+      "failures": [],
+      "index": 19,
+      "late_mean": 16.580945550514286,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.3007878166782542,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed53_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed53_transport_window.json",
+      "variant": {
+        "seed": 53,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicated_nonlinear_window",
+      "convergence_report_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/nonlinear_window_convergence_reports/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed54_transport_window.convergence.json",
+      "failures": [],
+      "index": 20,
+      "late_mean": 15.86537511008079,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.3707733108760628,
+      "source_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed54_heat_flux_trace.csv",
+      "summary_artifact": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_minus_delta_nonlinear_t1100_n64_seed54_transport_window.json",
+      "variant": {
+        "seed": 54,
+        "timestep": 0.05
+      }
+    }
+  ],
+  "passed": false,
+  "promotion_gate": {
+    "blockers": [
+      "seed_and_timestep_replicates_present"
+    ],
+    "passed": false,
+    "requirements": [
+      "every observed late-window report must pass convergence metadata gates",
+      "each case must include distinct passed seed-replicate artifacts",
+      "each case must include distinct passed timestep-replicate artifacts",
+      "only after this manifest passes should the replicated ensemble gate be run"
+    ]
+  }
+}

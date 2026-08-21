@@ -1,0 +1,119 @@
+{
+  "Nl": 4,
+  "Nm": 8,
+  "activation_threshold": 1e-08,
+  "backend": "cpu",
+  "candidates": {
+    "collisions": {
+      "active_states": [],
+      "initial_relative_skip_error": 0.0,
+      "max_relative_skip_error": 0.0,
+      "max_term_norm": 0.0,
+      "safe_to_disable_over_window": true
+    },
+    "hypercollisions": {
+      "active_states": [
+        "z_wave",
+        "z_wave_linear_kick"
+      ],
+      "initial_relative_skip_error": 0.0,
+      "max_relative_skip_error": 0.003586714149381006,
+      "max_term_norm": 0.00023511411563958973,
+      "safe_to_disable_over_window": false
+    }
+  },
+  "case": "runtime_cyclone_nonlinear",
+  "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
+  "identity_threshold": 1e-10,
+  "kind": "linear_rhs_zero_norm_state_window_gate",
+  "kx": null,
+  "ky": 0.3,
+  "passed": true,
+  "policy": "A term may only be disabled by a fast path when its relative skip error stays below the identity threshold over the whole sampled state window. A profiler-zero initial state is insufficient evidence for nonlinear states with resolved parallel variation.",
+  "recommendations": {
+    "collisions": "This Cyclone window supports a zero-collision fast path only when all collision frequencies are zero and the same identity gate passes.",
+    "hypercollisions": "Do not skip kz hypercollisions based on the initial-state zero norm; the z-varying state activates the contribution."
+  },
+  "rows": [
+    {
+      "relative_skip_errors": {
+        "collisions": 0.0,
+        "hypercollisions": 0.0
+      },
+      "state": "initial",
+      "state_norm": 0.08557837456464767,
+      "term_norms": {
+        "collisions": 0.0,
+        "curvature": 0.03648737818002701,
+        "diamagnetic": 0.03662170097231865,
+        "end_damping": 0.003601919626817107,
+        "gradb": 0.02596144750714302,
+        "hypercollisions": 0.0,
+        "hyperdiffusion": 0.001077004591934383,
+        "mirror": 0.0003229873545933515,
+        "streaming": 0.028866905719041824
+      },
+      "z_variation_norm": 1.4943747572715438e-08
+    },
+    {
+      "relative_skip_errors": {
+        "collisions": 0.0,
+        "hypercollisions": 0.0
+      },
+      "state": "initial_linear_kick",
+      "state_norm": 0.08557602018117905,
+      "term_norms": {
+        "collisions": 0.0,
+        "curvature": 0.036486703902482986,
+        "diamagnetic": 0.03662091866135597,
+        "end_damping": 0.003601458389312029,
+        "gradb": 0.025960974395275116,
+        "hypercollisions": 0.0,
+        "hyperdiffusion": 0.001076958724297583,
+        "mirror": 0.0003229829599149525,
+        "streaming": 0.028865894302725792
+      },
+      "z_variation_norm": 5.669221354764886e-05
+    },
+    {
+      "relative_skip_errors": {
+        "collisions": 0.0,
+        "hypercollisions": 0.0035866967389331364
+      },
+      "state": "z_wave",
+      "state_norm": 0.08571848273277283,
+      "term_norms": {
+        "collisions": 0.0,
+        "curvature": 0.03674422577023506,
+        "diamagnetic": 0.03662170097231865,
+        "end_damping": 0.0036051818169653416,
+        "gradb": 0.025971107184886932,
+        "hypercollisions": 0.00023511411563958973,
+        "hyperdiffusion": 0.0010770052904263139,
+        "mirror": 0.0005122728180140257,
+        "streaming": 0.029249195009469986
+      },
+      "z_variation_norm": 0.004898979794234037
+    },
+    {
+      "relative_skip_errors": {
+        "collisions": 0.0,
+        "hypercollisions": 0.003586714149381006
+      },
+      "state": "z_wave_linear_kick",
+      "state_norm": 0.085716113448143,
+      "term_norms": {
+        "collisions": 0.0,
+        "curvature": 0.03674353286623955,
+        "diamagnetic": 0.03662091866135597,
+        "end_damping": 0.0036047203466296196,
+        "gradb": 0.02597063221037388,
+        "hypercollisions": 0.00023510714527219534,
+        "hyperdiffusion": 0.001076959422789514,
+        "mirror": 0.0005122592556290329,
+        "streaming": 0.029248161241412163
+      },
+      "z_variation_norm": 0.004899081774055958
+    }
+  ]
+}

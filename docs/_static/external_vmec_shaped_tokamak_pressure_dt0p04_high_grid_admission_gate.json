@@ -1,0 +1,308 @@
+{
+  "case": "Shaped tokamak pressure external VMEC dt=0.04 high-grid transport holdout admission",
+  "claim_level": "passed_high_grid_transport_holdout_admission_under_coarse_grid_exclusion",
+  "claim_scope": "The case is eligible as a high-grid nonlinear transport holdout with the listed coarse grids excluded. This is not a universal absolute-flux prediction or normal full-ladder convergence claim.",
+  "compact_bundle_policy": {
+    "claim_boundary": "scoped high-grid holdout admission under coarse-grid exclusion; not full n48/n64/n80 convergence and not absolute-flux promotion",
+    "tracked_bundle": "admission JSON plus referenced compact sidecars only"
+  },
+  "gate_index_include": true,
+  "gate_report": {
+    "case": "Shaped tokamak pressure external VMEC dt=0.04 high-grid transport holdout admission",
+    "gates": [
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "full_grid_gate_failed_before_coarse_exclusion",
+        "notes": "High-grid admission is only meaningful as an exception to a failed full-grid ladder.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "full_grid_failure_limited_to_grid_difference",
+        "notes": "The full-grid gate may fail only grid-difference metrics, not stationarity/sample gates.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "metrics"
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "excluded_coarse_grid_labels_present",
+        "notes": "Every excluded grid must be present in the failed full-grid ladder.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "labels"
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "retained_high_grid_labels_present",
+        "notes": "The retained high grids must also be present in the failed full-grid ladder.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "labels"
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "high_grid_gate_failure_count",
+        "notes": "Every retained high-grid convergence gate used for admission must pass.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "gates"
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "high_grid_label_mismatch_count",
+        "notes": "Every high-grid gate must use exactly the retained-grid labels.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "gates"
+      },
+      {
+        "abs_error": 0.09833277488722747,
+        "atol": 0.15,
+        "metric": "high_grid_common_window_pairwise_difference",
+        "notes": "Highest-grid common-window heat-flux means must agree under the production threshold.",
+        "observed": 0.09833277488722747,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.09811850067630225,
+        "atol": 0.15,
+        "metric": "high_grid_least_window_pairwise_difference",
+        "notes": "Highest-grid least-trending-window heat-flux means must agree under the production threshold.",
+        "observed": 0.09811850067630225,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "time_horizon_gate_failure_count",
+        "notes": "Late high-grid horizons must be stable before coarse-grid exclusion can be considered.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "gates"
+      },
+      {
+        "abs_error": 0.041783337619802956,
+        "atol": 0.15,
+        "metric": "time_horizon_common_window_change",
+        "notes": "High-grid averaged common-window means must be stable across late final times.",
+        "observed": 0.041783337619802956,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.12370906120807167,
+        "atol": 0.15,
+        "metric": "time_horizon_least_window_change",
+        "notes": "High-grid averaged least-window means must be stable across late final times.",
+        "observed": 0.12370906120807167,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "replicate_ensemble_gate_failure_count",
+        "notes": "A seed/timestep replicated late transport window must pass.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "gates"
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "replicate_count_shortfall",
+        "notes": "At least three replicated reports are required for this scoped exception.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "replicates"
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "finite_replicate_count_shortfall",
+        "notes": "Replicate means must be finite.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "replicates"
+      },
+      {
+        "abs_error": 0.09392151977145682,
+        "atol": 0.2,
+        "metric": "replicate_mean_relative_spread",
+        "notes": "Seed/timestep spread of late-window means.",
+        "observed": 0.09392151977145682,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.04627553989235905,
+        "atol": 0.25,
+        "metric": "replicate_combined_sem_relative",
+        "notes": "Combined uncertainty estimate normalized by the ensemble mean.",
+        "observed": 0.04627553989235905,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "nonzero_transport_mean_floor",
+        "notes": "Admission must not be based on startup/noise-floor heat flux.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.12370906120807167,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "external_vmec_high_grid_admission_policy"
+  },
+  "inputs": {
+    "full_grid_gate": "docs/_static/external_vmec_shaped_tokamak_pressure_t450_dt0p04_full_grid_convergence_gate.json",
+    "high_grid_gates": [
+      "docs/_static/external_vmec_shaped_tokamak_pressure_t450_dt0p04_high_grid_convergence_gate.json",
+      "docs/_static/external_vmec_shaped_tokamak_pressure_t650_dt0p04_high_grid_convergence_gate.json"
+    ],
+    "replicate_ensemble_gate": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_gate.json",
+    "time_horizon_gate": "docs/_static/external_vmec_shaped_tokamak_pressure_dt0p04_high_grid_time_horizon_gate.json"
+  },
+  "kind": "external_vmec_high_grid_admission_gate",
+  "literature_policy": {
+    "anchors": [
+      {
+        "name": "Dimits et al. 2000 Cyclone nonlinear heat-flux benchmark",
+        "url": "https://doi.org/10.1063/1.873896"
+      },
+      {
+        "name": "Gonzalez-Jerez et al. 2022 W7-X stella/GENE benchmark",
+        "url": "https://doi.org/10.1017/S0022377822000393"
+      },
+      {
+        "name": "Mandell et al. 2024 GX nonlinear convergence and benchmark practice",
+        "url": "https://doi.org/10.1017/S0022377822000617"
+      },
+      {
+        "name": "Hoffmann, Frei & Ricci 2023 nonlinear moment/GK convergence study",
+        "url": "https://arxiv.org/abs/2308.01016"
+      },
+      {
+        "name": "Oberparleiter et al. 2016 uncertainty and stopping rule for nonlinear gyrokinetics",
+        "url": "https://doi.org/10.1063/1.4960039"
+      }
+    ],
+    "summary": "Nonlinear gyrokinetic heat-flux admission follows the benchmark practice of comparing saturated late-time traces, resolution ladders, and uncertainty of time averages. Coarse-grid exclusion is allowed only when the retained higher grids, horizon stability, and replicated transport windows pass fail-closed gates."
+  },
+  "passed": true,
+  "policy": {
+    "allowed_full_grid_failure_metrics": [
+      "common_window_pairwise_heat_flux_symmetric_relative_difference",
+      "least_window_pairwise_heat_flux_symmetric_relative_difference"
+    ],
+    "calibration_use": "eligible_as_scoped_high_grid_holdout",
+    "excluded_grid_labels": [
+      "n48"
+    ],
+    "min_replicates": 3,
+    "restrictions": [
+      "do not describe as full n48/n64/n80 convergence",
+      "do not use for universal absolute-flux promotion without separate calibration gates",
+      "retain the coarse-grid failure sidecar with the admitted artifact",
+      "rerun if physics, dissipation, flux-tube, or resolution settings change"
+    ],
+    "retained_grid_labels": [
+      "n64",
+      "n80"
+    ],
+    "value_floor": 1e-12
+  },
+  "promotion_gate": {
+    "blockers": [],
+    "passed": true,
+    "reason": "high-grid admission policy passed; eligible for scoped holdout metadata"
+  },
+  "summary": {
+    "full_grid_failed_metrics": [
+      "common_window_pairwise_heat_flux_symmetric_relative_difference",
+      "least_window_pairwise_heat_flux_symmetric_relative_difference"
+    ],
+    "high_grid_pairwise_threshold": 0.15,
+    "max_high_grid_common_difference": 0.09833277488722747,
+    "max_high_grid_least_difference": 0.09811850067630225,
+    "missing_excluded_grid_labels": [],
+    "missing_retained_grid_labels": [],
+    "replicate_combined_sem_rel": 0.04627553989235905,
+    "replicate_combined_sem_rel_threshold": 0.25,
+    "replicate_ensemble_mean": 7.156474006536328,
+    "replicate_mean_rel_spread": 0.09392151977145682,
+    "replicate_mean_rel_spread_threshold": 0.2,
+    "replicate_n_finite_means": 5,
+    "replicate_n_reports": 5,
+    "time_horizon_common_change": 0.041783337619802956,
+    "time_horizon_least_change": 0.12370906120807167,
+    "time_horizon_threshold": 0.15,
+    "unexpected_full_grid_failed_metrics": []
+  }
+}

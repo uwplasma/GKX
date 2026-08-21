@@ -1,0 +1,51 @@
+{
+  "case": "vmec_boozer_qh_torflux078_alpha120_holdout",
+  "claim_level": "production_scope_vmec_boozer_heldout_nonlinear_transport_average",
+  "holdout_samples": [
+    {
+      "alpha": 1.2,
+      "ky": 0.2,
+      "npol": 1.0,
+      "selected_ky_index": "ky=0.2",
+      "surface": 0.78,
+      "surface_index": null,
+      "torflux": 0.78,
+      "vmec_file": "/home/rjorge/src/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+    }
+  ],
+  "kind": "vmec_boozer_production_scope_heldout_nonlinear_transport_artifact",
+  "nonlinear_ensemble_artifact": "docs/_static/vmec_boozer_holdout_transport/vmec_boozer_qh_torflux078_alpha120_holdout_ensemble_gate.json",
+  "nonlinear_ensemble_passed": true,
+  "notes": "This artifact is generated only from a concrete VMEC transport manifest and a replicated post-transient nonlinear-window ensemble. It is the surface/field-line holdout companion consumed by check_vmec_boozer_gates.py aggregate-holdout.",
+  "passed": true,
+  "promotion_gate": {
+    "blockers": [],
+    "passed": true
+  },
+  "samples": [
+    {
+      "alpha": 1.2,
+      "ky": 0.2,
+      "npol": 1.0,
+      "selected_ky_index": "ky=0.2",
+      "surface": 0.78,
+      "surface_index": null,
+      "torflux": 0.78,
+      "vmec_file": "/home/rjorge/src/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+    }
+  ],
+  "source_manifest": "tools_out/vmec_boozer_holdout_transport/qh_torflux078_alpha120/run_manifest.json",
+  "statistics": {
+    "combined_sem": 0.1934825679663357,
+    "combined_sem_rel": 0.024192036383514054,
+    "ensemble_mean": 7.997779306341762,
+    "max_individual_sem": 0.16548004323169177,
+    "mean_rel_spread": 0.08365513019201286,
+    "mean_spread": 0.6690552691190064,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.1934825679663357
+  },
+  "transport_average_gate": true,
+  "window": {}
+}

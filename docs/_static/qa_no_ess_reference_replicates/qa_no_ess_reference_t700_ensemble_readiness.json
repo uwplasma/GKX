@@ -1,0 +1,133 @@
+{
+  "case": "qa_no_ess_reference_equilibrium_replicated_nonlinear_window_readiness",
+  "cases": [
+    {
+      "case": "qa_no_ess_reference_equilibrium_replicated_nonlinear_window",
+      "ensemble_gate_runnable": true,
+      "n_observed_artifacts": 3,
+      "n_promotion_ready_artifacts": 3,
+      "observed_convergence_report_artifacts": [
+        "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed31_transport_window.convergence.json",
+        "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed32_transport_window.convergence.json",
+        "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_dt0p04_transport_window.convergence.json"
+      ],
+      "observed_summary_artifacts": [
+        "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed31_transport_window.json",
+        "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed32_transport_window.json",
+        "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_dt0p04_transport_window.json"
+      ],
+      "variant_axes": {
+        "seed": {
+          "missing_count": 0,
+          "observed_distinct_count": 3,
+          "observed_distinct_values": [
+            "22",
+            "31",
+            "32"
+          ],
+          "passed": true,
+          "required_distinct_count": 2
+        },
+        "timestep": {
+          "missing_count": 0,
+          "observed_distinct_count": 2,
+          "observed_distinct_values": [
+            "0.04",
+            "0.05"
+          ],
+          "passed": true,
+          "required_distinct_count": 2
+        }
+      }
+    }
+  ],
+  "claim_level": "replicated_seed_timestep_artifact_manifest_blocks_promotion_until_ready",
+  "config": {
+    "min_replicates_per_case": 2,
+    "require_observed_windows_ready": true,
+    "required_variant_axes": [
+      "seed",
+      "timestep"
+    ]
+  },
+  "gates": [
+    {
+      "detail": "observed_artifacts=3",
+      "metric": "observed_window_artifacts_present",
+      "passed": true
+    },
+    {
+      "detail": "require_observed_windows_ready=True",
+      "metric": "observed_windows_promotion_ready",
+      "passed": true
+    },
+    {
+      "detail": "all required variant axes have enough passed artifacts",
+      "metric": "seed_and_timestep_replicates_present",
+      "passed": true
+    }
+  ],
+  "kind": "nonlinear_window_ensemble_readiness_manifest",
+  "missing_artifacts": [],
+  "observed_artifacts": [
+    {
+      "case": "qa_no_ess_reference_equilibrium_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed31_transport_window.convergence.json",
+      "failures": [],
+      "index": 0,
+      "late_mean": 12.685240691814084,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.2041029703091087,
+      "source_artifact": "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed31_transport_window.json",
+      "variant": {
+        "seed": 31,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_no_ess_reference_equilibrium_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed32_transport_window.convergence.json",
+      "failures": [],
+      "index": 1,
+      "late_mean": 12.117723451533802,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.16070048479065824,
+      "source_artifact": "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed32_transport_window.json",
+      "variant": {
+        "seed": 32,
+        "timestep": 0.05
+      }
+    },
+    {
+      "case": "qa_no_ess_reference_equilibrium_replicated_nonlinear_window",
+      "convergence_report_artifact": "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_dt0p04_transport_window.convergence.json",
+      "failures": [],
+      "index": 2,
+      "late_mean": 12.690543427979097,
+      "passed": true,
+      "promotion_ready": true,
+      "sem": 0.18116739466516352,
+      "source_artifact": "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_dt0p04_transport_window.json",
+      "variant": {
+        "seed": 22,
+        "timestep": 0.04
+      }
+    }
+  ],
+  "passed": true,
+  "promotion_gate": {
+    "blockers": [],
+    "passed": true,
+    "requirements": [
+      "every observed late-window report must pass convergence metadata gates",
+      "each case must include distinct passed seed-replicate artifacts",
+      "each case must include distinct passed timestep-replicate artifacts",
+      "only after this manifest passes should the replicated ensemble gate be run"
+    ]
+  }
+}

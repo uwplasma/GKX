@@ -1,0 +1,29 @@
+{
+  "claim_level": "vmec_solved_and_nonlinear_campaigns_prepared_not_nonlinear_gradient_evidence",
+  "kind": "vmec_state_control_short_bracket_launch_status",
+  "next_action": "run the prepared nonlinear short-bracket campaigns, then apply runtime-output, replicated-window, central-FD, and nonlinear-gradient evidence gates before any promotion",
+  "passed": true,
+  "rows": [
+    {
+      "mapping_condition_number": 1.0175602609935996,
+      "mapping_relative_residual": 2.2711134634690797e-16,
+      "nonlinear_configs_prepared": 9,
+      "nonlinear_manifest": "tools_out/state_control_short_bracket/qa_lowres/rsin_mid_surface_m1/nonlinear_campaign/gradient_campaign_manifest.json",
+      "state_parameter": "Rsin_mid_surface_m1",
+      "vmec_completed": 3,
+      "vmec_expected": 3,
+      "vmec_normal": 3
+    },
+    {
+      "mapping_condition_number": 1.0175602609935996,
+      "mapping_relative_residual": 5.204170427930421e-18,
+      "nonlinear_configs_prepared": 9,
+      "nonlinear_manifest": "tools_out/state_control_short_bracket/qa_lowres/zcos_mid_surface_m1/nonlinear_campaign/gradient_campaign_manifest.json",
+      "state_parameter": "Zcos_mid_surface_m1",
+      "vmec_completed": 3,
+      "vmec_expected": 3,
+      "vmec_normal": 3
+    }
+  ],
+  "source_launch": "docs/_static/nonlinear_gradient_state_control_short_bracket_launch.json"
+}

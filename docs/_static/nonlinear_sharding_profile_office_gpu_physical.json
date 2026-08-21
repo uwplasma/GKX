@@ -1,0 +1,161 @@
+{
+  "allow_unsafe_cpu_state_sharding": false,
+  "backend": "gpu",
+  "best_identity_preserving_candidate": {
+    "engineering_speedup_median": null,
+    "identity_gate_pass": false,
+    "spec": null,
+    "state_sharding_active": false
+  },
+  "case": "cyclone_nonlinear_fixed_step",
+  "claim_scope": "Profiler/identity artifact for fixed-step nonlinear state sharding and candidate state-axis decompositions. Do not use as a published runtime claim without a larger matched CPU/GPU sweep and profiler trace review.",
+  "default_backend": "gpu",
+  "device_count": 2,
+  "devices": [
+    "cuda:0",
+    "cuda:1"
+  ],
+  "dt": 0.002,
+  "engineering_speedup": 0.4104739963866699,
+  "git_dirty": false,
+  "git_revision": "a16b1f5cad6c88fd7ab903add3a4a792ccee7385",
+  "identity_gate_pass": false,
+  "initial_nonlinear_rhs_max": 4.596758088651828e-10,
+  "laguerre_mode": "grid",
+  "max_abs_state_error": 0.00010700562415877357,
+  "max_rel_state_error": 1.0217399550640482,
+  "method": "rk2",
+  "profile_command": "python tools/profiling/profile_nonlinear_sharding.py --out-json docs/_static/nonlinear_sharding_profile_office_gpu_physical.json --nx 32 --ny 32 --nz 64 --nl 4 --nm 8 --dt 0.002 --steps 100 --method rk2 --sharding auto --sharding-options auto,kx --warmups 1 --repeats 3",
+  "profile_command_argv": [
+    "python",
+    "tools/profiling/profile_nonlinear_sharding.py",
+    "--out-json",
+    "docs/_static/nonlinear_sharding_profile_office_gpu_physical.json",
+    "--nx",
+    "32",
+    "--ny",
+    "32",
+    "--nz",
+    "64",
+    "--nl",
+    "4",
+    "--nm",
+    "8",
+    "--dt",
+    "0.002",
+    "--steps",
+    "100",
+    "--method",
+    "rk2",
+    "--sharding",
+    "auto",
+    "--sharding-options",
+    "auto,kx",
+    "--warmups",
+    "1",
+    "--repeats",
+    "3"
+  ],
+  "profiler_trace": {
+    "error": null,
+    "path": null,
+    "requested": false
+  },
+  "repeats": 3,
+  "serial_stats_s": {
+    "max": 3.7724072259879904,
+    "mean": 3.7669406333297957,
+    "median": 3.770567603991367,
+    "min": 3.7578470700100297,
+    "std": 0.006473830533286041
+  },
+  "serial_times_s": [
+    3.7578470700100297,
+    3.770567603991367,
+    3.7724072259879904
+  ],
+  "serial_warm_s": 3.770567603991367,
+  "sharded_results": {
+    "auto": {
+      "diagnostic_identity_gate_pass": false,
+      "engineering_speedup_median": 0.4104739963866699,
+      "error": null,
+      "identity_gate_pass": false,
+      "max_abs_phi_error": 3.551138046890559e-05,
+      "max_abs_rhs_error": 0.00017858077933973767,
+      "max_abs_state_error": 0.00010700562415877357,
+      "max_rel_phi_error": 1.0,
+      "max_rel_rhs_error": 1.0,
+      "max_rel_state_error": 1.0217399550640482,
+      "state_sharding_active": true,
+      "stats_s": {
+        "max": 9.213723901993944,
+        "mean": 9.162721864665704,
+        "median": 9.185886651001056,
+        "min": 9.08855504100211,
+        "std": 0.053661074874128314
+      },
+      "times_s": [
+        9.08855504100211,
+        9.213723901993944,
+        9.185886651001056
+      ]
+    },
+    "kx": {
+      "diagnostic_identity_gate_pass": false,
+      "engineering_speedup_median": 0.522390921515893,
+      "error": null,
+      "identity_gate_pass": false,
+      "max_abs_phi_error": 3.551138046890559e-05,
+      "max_abs_rhs_error": 0.00017858077933973767,
+      "max_abs_state_error": 2.8125,
+      "max_rel_phi_error": 1.0,
+      "max_rel_rhs_error": 1.0,
+      "max_rel_state_error": 26855.07090126179,
+      "state_sharding_active": true,
+      "stats_s": {
+        "max": 7.265620605990989,
+        "mean": 7.231879082668456,
+        "median": 7.2179041570052505,
+        "min": 7.212112485009129,
+        "std": 0.023975733054089458
+      },
+      "times_s": [
+        7.212112485009129,
+        7.265620605990989,
+        7.2179041570052505
+      ]
+    }
+  },
+  "sharded_warm_s": 9.185886651001056,
+  "sharding_axis": "auto",
+  "sharding_options": [
+    "auto",
+    "kx"
+  ],
+  "software_versions": {
+    "jax": "0.6.2",
+    "jaxlib": "0.6.2",
+    "numpy": "2.2.6",
+    "python": "3.10.12",
+    "gkx": "1.6.10"
+  },
+  "source_artifact": "docs/_static/nonlinear_sharding_profile_office_gpu_physical.json",
+  "source_contract_version": 1,
+  "state_shape": [
+    4,
+    8,
+    32,
+    32,
+    64
+  ],
+  "state_sharding_active": true,
+  "state_sharding_primary": "auto",
+  "state_sharding_requested": "auto",
+  "steps": 100,
+  "timing_warmup_repeat": {
+    "repeats": 3,
+    "warmups": 1
+  },
+  "warmups": 1
+}

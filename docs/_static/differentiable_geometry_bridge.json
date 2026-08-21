@@ -1,0 +1,1732 @@
+{
+  "backend_info": {
+    "booz_xform_jax_api_available": true,
+    "booz_xform_jax_available": true,
+    "booz_xform_jax_paths": [
+      "/Users/rogeriojorge/local/booz_xform_jax",
+      "/Users/rogeriojorge/local/booz_xform_jax/src"
+    ],
+    "vmex_available": true,
+    "vmex_boundary_api_available": true,
+    "vmex_paths": [
+      "/Users/rogeriojorge/local/vmex"
+    ]
+  },
+  "booz_xform_flux_tube": {
+    "available": true,
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "bmnc_b": [
+      1.0,
+      -2.8362497535757335e-16,
+      -2.375877272697835e-17,
+      0.050000000000000426,
+      0.020000000000000014
+    ],
+    "fd_step": 2e-05,
+    "iota_b": 0.41,
+    "ixm_b": [
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "ixn_b": [
+      0,
+      2,
+      -2,
+      0,
+      2
+    ],
+    "mboz": 2,
+    "nboz": 1,
+    "ntheta": 64,
+    "params": [
+      0.05,
+      0.02
+    ],
+    "sensitivity": {
+      "fd_step": 2e-05,
+      "jacobian_ad": [
+        [
+          -0.05155011195414615,
+          -0.05319589593815853
+        ],
+        [
+          0.6641019642133877,
+          0.2954052818610827
+        ],
+        [
+          0.21331301102490838,
+          0.003976095838508442
+        ],
+        [
+          -0.16806831160598745,
+          -0.04608116826372961
+        ],
+        [
+          0.12626687907556525,
+          0.1302980634787852
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "jacobian_fd": [
+        [
+          -0.051550111937470604,
+          -0.053195895952096166
+        ],
+        [
+          0.6641019587073221,
+          0.29540526647695714
+        ],
+        [
+          0.21331301105487196,
+          0.0039760958359114085
+        ],
+        [
+          -0.1680683116067616,
+          -0.04608116827564678
+        ],
+        [
+          0.12626687913019907,
+          0.13029806356090745
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "max_abs_ad_fd_error": 1.5384125584549935e-08,
+      "max_rel_ad_fd_error": 5.2078034247740675e-08,
+      "observable_names": [
+        "mean_bmag",
+        "relative_bmag_ripple",
+        "metric_frobenius_rms",
+        "drift_rms",
+        "mean_jacobian",
+        "mean_gradpar"
+      ],
+      "observables": [
+        0.9978796244968109,
+        0.03895338306239589,
+        1.8702522713896965,
+        1.04684237899007,
+        2.4442070269485665,
+        0.4100000000000001
+      ],
+      "params": [
+        0.05,
+        0.02
+      ],
+      "source_model": "booz_xform_jax:field-line-bmag"
+    }
+  },
+  "booz_xform_jax_api_available": true,
+  "booz_xform_spectral": {
+    "available": true,
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "bmnc_b": [
+      [
+        1.0,
+        0.050000000000000135
+      ]
+    ],
+    "fd_step": 2e-05,
+    "grad_ad": 0.10000000000000045,
+    "grad_fd": 0.10000000000287555,
+    "iota_b": [
+      0.41
+    ],
+    "ixm_b": [
+      0,
+      1
+    ],
+    "ixn_b": [
+      0,
+      0
+    ],
+    "max_abs_ad_fd_error": 2.8751029335083444e-12,
+    "mboz": 2,
+    "nboz": 0,
+    "objective": 1.0025,
+    "rmnc_b": [
+      [
+        1.0,
+        0.22000000000000008
+      ]
+    ],
+    "zmns_b": [
+      [
+        0.0,
+        0.22000000000000003
+      ]
+    ]
+  },
+  "geometry_inverse_design_report": {
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "damping": 2e-06,
+    "fd_step": 2e-05,
+    "final_observables": [
+      0.06176080850358888,
+      1.5505567586513118
+    ],
+    "final_params": [
+      0.085,
+      0.3399999999999989
+    ],
+    "final_residual": [
+      0.0,
+      0.0
+    ],
+    "final_residual_norm": 0.0,
+    "history": [
+      {
+        "objective": 0.0013942535146144563,
+        "observables": [
+          0.0300634486259408,
+          1.5083218867322947
+        ],
+        "params": [
+          0.035,
+          0.12
+        ],
+        "residual_norm": 0.05280631618688159,
+        "step": 0
+      },
+      {
+        "objective": 1.2533285049560724e-05,
+        "observables": [
+          0.06604814716165348,
+          1.5531423528441786
+        ],
+        "params": [
+          0.09137179592668995,
+          0.3450857463343012
+        ],
+        "residual_norm": 0.005006652584224458,
+        "step": 1
+      },
+      {
+        "objective": 1.1893166657852975e-10,
+        "observables": [
+          0.061774900401462766,
+          1.5505630261665666
+        ],
+        "params": [
+          0.08502101612874077,
+          0.34000023092943515
+        ],
+        "residual_norm": 1.5422818586661115e-05,
+        "step": 2
+      },
+      {
+        "objective": 2.722767285005691e-20,
+        "observables": [
+          0.06176080873549333,
+          1.5505567586773055
+        ],
+        "params": [
+          0.08500000034585782,
+          0.33999999943406356
+        ],
+        "residual_norm": 2.333566919977094e-10,
+        "step": 3
+      },
+      {
+        "objective": 4.7059038929632695e-29,
+        "observables": [
+          0.06176080850359367,
+          1.5505567586513034
+        ],
+        "params": [
+          0.08500000000000707,
+          0.3399999999999211
+        ],
+        "residual_norm": 9.701447204374479e-15,
+        "step": 4
+      },
+      {
+        "objective": 6.018531076210112e-34,
+        "observables": [
+          0.061760808503588845,
+          1.5505567586513118
+        ],
+        "params": [
+          0.08499999999999994,
+          0.339999999999999
+        ],
+        "residual_norm": 3.469446951953614e-17,
+        "step": 5
+      },
+      {
+        "objective": 2.407412430484045e-35,
+        "observables": [
+          0.06176080850358887,
+          1.5505567586513118
+        ],
+        "params": [
+          0.08499999999999999,
+          0.3399999999999989
+        ],
+        "residual_norm": 6.938893903907228e-18,
+        "step": 6
+      },
+      {
+        "objective": 0.0,
+        "observables": [
+          0.06176080850358888,
+          1.5505567586513118
+        ],
+        "params": [
+          0.085,
+          0.3399999999999989
+        ],
+        "residual_norm": 0.0,
+        "step": 7
+      },
+      {
+        "objective": 0.0,
+        "observables": [
+          0.06176080850358888,
+          1.5505567586513118
+        ],
+        "params": [
+          0.085,
+          0.3399999999999989
+        ],
+        "residual_norm": 0.0,
+        "step": 8
+      }
+    ],
+    "initial_params": [
+      0.035,
+      0.12
+    ],
+    "jacobian_ad": [
+      [
+        0.6705196412860555,
+        0.0
+      ],
+      [
+        0.2967350498572432,
+        0.1354122368343313
+      ]
+    ],
+    "jacobian_fd": [
+      [
+        0.6705196399975355,
+        0.0
+      ],
+      [
+        0.2967350498928045,
+        0.13541223684021553
+      ]
+    ],
+    "max_abs_ad_fd_error": 1.2885199573986483e-09,
+    "max_rel_ad_fd_error": 1.9216736998238924e-09,
+    "observable_names": [
+      "relative_bmag_ripple",
+      "metric_frobenius_rms"
+    ],
+    "regularization": 1e-08,
+    "source_model": "vmex:in-memory",
+    "target_observables": [
+      0.06176080850358888,
+      1.5505567586513118
+    ],
+    "uq": {
+      "covariance": [
+        [
+          2.224215874048371e-12,
+          -4.874023675916465e-12
+        ],
+        [
+          -4.874023675916465e-12,
+          6.521674858429286e-11
+        ]
+      ],
+      "covariance_correlation": [
+        [
+          1.0000000000000002,
+          -0.40468731818637144
+        ],
+        [
+          -0.40468731818637144,
+          1.0
+        ]
+      ],
+      "covariance_eigenvalues": [
+        1.8493212665354495e-12,
+        6.559164319180579e-11
+      ],
+      "covariance_std": [
+        1.491380526240158e-06,
+        8.075688737457187e-06
+      ],
+      "jacobian_condition_number": 5.955499765930326,
+      "jacobian_singular_values": [
+        0.7353495212726023,
+        0.12347402404065602
+      ],
+      "sensitivity_map_rank": 2,
+      "sigma2": 1e-12,
+      "uq_ellipse_area_1sigma": 3.460033551533961e-11
+    }
+  },
+  "initial_params": [
+    0.035,
+    0.12
+  ],
+  "inverse_final_observables": [
+    0.06176080850358888,
+    1.5505567586513118
+  ],
+  "inverse_final_params": [
+    0.085,
+    0.3399999999999989
+  ],
+  "inverse_history": [
+    {
+      "objective": 0.0013942535146144563,
+      "params": [
+        0.035,
+        0.12
+      ],
+      "residual_norm": 0.05280631618688159,
+      "step": 0
+    },
+    {
+      "objective": 1.2533285049560724e-05,
+      "params": [
+        0.09137179592668995,
+        0.3450857463343012
+      ],
+      "residual_norm": 0.005006652584224458,
+      "step": 1
+    },
+    {
+      "objective": 1.1893166657852975e-10,
+      "params": [
+        0.08502101612874077,
+        0.34000023092943515
+      ],
+      "residual_norm": 1.5422818586661115e-05,
+      "step": 2
+    },
+    {
+      "objective": 2.722767285005691e-20,
+      "params": [
+        0.08500000034585782,
+        0.33999999943406356
+      ],
+      "residual_norm": 2.333566919977094e-10,
+      "step": 3
+    },
+    {
+      "objective": 4.7059038929632695e-29,
+      "params": [
+        0.08500000000000707,
+        0.3399999999999211
+      ],
+      "residual_norm": 9.701447204374479e-15,
+      "step": 4
+    },
+    {
+      "objective": 6.018531076210112e-34,
+      "params": [
+        0.08499999999999994,
+        0.339999999999999
+      ],
+      "residual_norm": 3.469446951953614e-17,
+      "step": 5
+    },
+    {
+      "objective": 2.407412430484045e-35,
+      "params": [
+        0.08499999999999999,
+        0.3399999999999989
+      ],
+      "residual_norm": 6.938893903907228e-18,
+      "step": 6
+    },
+    {
+      "objective": 0.0,
+      "params": [
+        0.085,
+        0.3399999999999989
+      ],
+      "residual_norm": 0.0,
+      "step": 7
+    },
+    {
+      "objective": 0.0,
+      "params": [
+        0.085,
+        0.3399999999999989
+      ],
+      "residual_norm": 0.0,
+      "step": 8
+    }
+  ],
+  "inverse_observable_residual": [
+    0.0,
+    0.0
+  ],
+  "inverse_target_observables": [
+    0.06176080850358888,
+    1.5505567586513118
+  ],
+  "notes": "This is a bounded differentiable-geometry bridge validation. The high-fidelity VMEC/Boozer pipeline must provide the same solver-ready field-line arrays; this artifact validates the JAX tracing, AD-vs-FD sensitivities, inverse recovery, UQ machinery, and the first real VMEC metric-tensor, VMEC field-line tensor, VMEC tensor-to-flux-tube, Boozer-spectrum-to-flux-tube, and vmex-state-to-Boozer mapping gates at that contract boundary. The VMEC/EIK array-parity audit is intentionally recorded separately because production stellarator transport gradients must match the imported Boozer equal-arc metric and drift convention before promotion.",
+  "observable_names": [
+    "mean_bmag",
+    "relative_bmag_ripple",
+    "metric_frobenius_rms",
+    "drift_rms",
+    "mean_jacobian",
+    "mean_gradpar"
+  ],
+  "sensitivity": {
+    "fd_step": 2e-05,
+    "jacobian_ad": [
+      [
+        -0.08219542239195957,
+        0.0
+      ],
+      [
+        0.6705196412860555,
+        0.0
+      ],
+      [
+        0.2967350498572432,
+        0.1354122368343313
+      ],
+      [
+        -0.16169856644503167,
+        -0.013281426164734567
+      ],
+      [
+        0.07852390355861849,
+        0.0
+      ],
+      [
+        0.015000000000000008,
+        0.0
+      ]
+    ],
+    "jacobian_fd": [
+      [
+        -0.08219542238507849,
+        0.0
+      ],
+      [
+        0.6705196399975355,
+        0.0
+      ],
+      [
+        0.2967350498928045,
+        0.13541223684021553
+      ],
+      [
+        -0.16169856644765446,
+        -0.013281426164413189
+      ],
+      [
+        0.0785239036127372,
+        0.0
+      ],
+      [
+        0.015000000000431333,
+        0.0
+      ]
+    ],
+    "max_abs_ad_fd_error": 1.2885199573986483e-09,
+    "max_rel_ad_fd_error": 1.9216736998238924e-09,
+    "observable_names": [
+      "mean_bmag",
+      "relative_bmag_ripple",
+      "metric_frobenius_rms",
+      "drift_rms",
+      "mean_jacobian",
+      "mean_gradpar"
+    ],
+    "observables": [
+      0.9962000968738421,
+      0.06176080850358888,
+      1.5505567586513118,
+      1.0343246009092888,
+      1.2222634287747918,
+      0.821275
+    ],
+    "params": [
+      0.085,
+      0.3399999999999989
+    ],
+    "source_model": "vmex:in-memory"
+  },
+  "target_params": [
+    0.085,
+    0.34
+  ],
+  "uq": {
+    "covariance": [
+      [
+        2.224215874048371e-12,
+        -4.874023675916465e-12
+      ],
+      [
+        -4.874023675916465e-12,
+        6.521674858429286e-11
+      ]
+    ],
+    "covariance_correlation": [
+      [
+        1.0000000000000002,
+        -0.40468731818637144
+      ],
+      [
+        -0.40468731818637144,
+        1.0
+      ]
+    ],
+    "covariance_eigenvalues": [
+      1.8493212665354495e-12,
+      6.559164319180579e-11
+    ],
+    "covariance_std": [
+      1.491380526240158e-06,
+      8.075688737457187e-06
+    ],
+    "jacobian_condition_number": 5.955499765930326,
+    "jacobian_singular_values": [
+      0.7353495212726023,
+      0.12347402404065602
+    ],
+    "sensitivity_map_rank": 2,
+    "sigma2": 1e-12,
+    "uq_ellipse_area_1sigma": 3.460033551533961e-11
+  },
+  "vmec_boundary": {
+    "aspect": 3.767939406405612,
+    "available": true,
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "fd_step": 2e-05,
+    "grad_ad": [
+      -1.8071651829283506,
+      -1.4059475397035874
+    ],
+    "grad_fd": [
+      -1.8071651830986466,
+      -1.4059475399008645
+    ],
+    "max_abs_ad_fd_error": 1.9727708355787854e-10,
+    "mpol": 2,
+    "nfp": 1,
+    "nphi": 1,
+    "ntheta": 96,
+    "ntor": 0
+  },
+  "vmex_boozer_flux_tube": {
+    "available": true,
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "bmnc_b": [
+      5.444417753013283,
+      -1.2179947567757892
+    ],
+    "case_name": "circular_tokamak",
+    "fd_step": 1e-05,
+    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.circular_tokamak",
+    "iota_b": 0.5953125,
+    "ixm_b": [
+      0,
+      1
+    ],
+    "ixn_b": [
+      0,
+      0
+    ],
+    "mboz": 2,
+    "mode_index": 1,
+    "nboz": 0,
+    "ntheta": 32,
+    "param_names": [
+      "delta_Rcos",
+      "delta_Zsin"
+    ],
+    "params": [
+      0.001,
+      0.001
+    ],
+    "radial_index": 8,
+    "sensitivity": {
+      "fd_step": 1e-05,
+      "jacobian_ad": [
+        [
+          -40.174108119060286,
+          -43.36982476446881
+        ],
+        [
+          -1.5494521076394006,
+          2.356826445185399
+        ],
+        [
+          0.43253326093650163,
+          -0.6579137378763453
+        ],
+        [
+          -0.38573739647495336,
+          0.5867339122176418
+        ],
+        [
+          2.396606664535764,
+          2.587248751415602
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "jacobian_fd": [
+        [
+          -40.174108679114084,
+          -43.369825341788015
+        ],
+        [
+          -1.5494521073369791,
+          2.356826461767658
+        ],
+        [
+          0.4325332606747167,
+          -0.6579137430073878
+        ],
+        [
+          -0.3857373963689347,
+          0.5867339161191865
+        ],
+        [
+          2.396606671833945,
+          2.5872487570632874
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "max_abs_ad_fd_error": 5.773192057745291e-07,
+      "max_rel_ad_fd_error": 1.3940665202206006e-08,
+      "observable_names": [
+        "mean_bmag",
+        "relative_bmag_ripple",
+        "metric_frobenius_rms",
+        "drift_rms",
+        "mean_jacobian",
+        "mean_gradpar"
+      ],
+      "observables": [
+        5.306427559271196,
+        0.1612586398142461,
+        1.813613380749408,
+        1.0971047391437456,
+        0.3165576100839916,
+        0.5953125
+      ],
+      "params": [
+        0.001,
+        0.001
+      ],
+      "source_model": "vmex:state->booz_xform_jax:field-line-bmag"
+    },
+    "state_shape": [
+      17,
+      8
+    ],
+    "surface_index": 7,
+    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_circular_tokamak.nc"
+  },
+  "vmex_field_line_tensor": {
+    "alpha": 0.0,
+    "available": true,
+    "b2_floor": 1e-24,
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "case_name": "nfp4_QH_warm_start",
+    "fd_step": 1e-06,
+    "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
+    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "iota": -1.0562565727429847,
+    "jacobian_ad": [
+      [
+        -133.8512330315098,
+        -153.27565387468943
+      ],
+      [
+        -87.8520747083142,
+        -39.61586194265315
+      ],
+      [
+        0.0007586585747385313,
+        1.801320683113458e-19
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        2.887071764265196,
+        2.713891917190304
+      ],
+      [
+        0.29343289037395803,
+        0.2638365609657376
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "jacobian_fd": [
+      [
+        -133.85126157250406,
+        -153.27567511974615
+      ],
+      [
+        -87.849983256982,
+        -39.61533687637728
+      ],
+      [
+        0.000758658575197857,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        2.887071764434701,
+        2.713891917194289
+      ],
+      [
+        0.29343289036434794,
+        0.2638365609528015
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "max_abs_ad_fd_error": 0.0020914513322054518,
+    "max_rel_ad_fd_error": 2.380707718617408e-05,
+    "metric_grid_shape": [
+      35,
+      10,
+      8
+    ],
+    "mode_index": 1,
+    "ntheta": 32,
+    "observable_names": [
+      "mean_bmag",
+      "relative_bmag_ripple",
+      "sqrtg_rms",
+      "mean_g_tt",
+      "mean_g_pp",
+      "g_tp_rms",
+      "mean_g_ss"
+    ],
+    "observables": [
+      0.7435577805414061,
+      0.023512887782979698,
+      0.011676959894477777,
+      0.0180394617312018,
+      1.2329918150609103,
+      0.032472705096688106,
+      0.02327467716570495
+    ],
+    "param_names": [
+      "delta_Rcos",
+      "delta_Zsin"
+    ],
+    "params": [
+      0.0001,
+      0.0001
+    ],
+    "radial_index": 17,
+    "rms_epsilon": 1e-24,
+    "source_model": "vmex:state->field-line-metric-and-b",
+    "state_shape": [
+      35,
+      8
+    ],
+    "surface_index": 17,
+    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+  },
+  "vmex_flux_tube": {
+    "alpha": 0.0,
+    "available": true,
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "case_name": "nfp4_QH_warm_start",
+    "fd_step": 2e-06,
+    "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
+    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "iota": -1.0562565727429847,
+    "mode_index": 1,
+    "ntheta": 24,
+    "param_names": [
+      "delta_Rcos",
+      "delta_Zsin"
+    ],
+    "params": [
+      0.0001,
+      0.0001
+    ],
+    "radial_index": 17,
+    "reference_b": 0.7536225660026323,
+    "reference_length": 0.14238647392276876,
+    "scope": "VMEC-native metric and grad-B flux-tube mapping; full imported-VMEC/EIK drift parity and production transport-gradient gates remain separate.",
+    "sensitivity": {
+      "fd_step": 2e-06,
+      "jacobian_ad": [
+        [
+          -199.71441443081446,
+          -205.34427245879394
+        ],
+        [
+          -100.136572612515,
+          -24.921147649727864
+        ],
+        [
+          210.97882198007468,
+          -15.885283709131622
+        ],
+        [
+          533532.3363653139,
+          243558.7483423502
+        ],
+        [
+          -6.476300976980079e-17,
+          2.4395112628904986e-33
+        ],
+        [
+          2184.453692882052,
+          2705.0950414907275
+        ]
+      ],
+      "jacobian_fd": [
+        [
+          -199.71458751838477,
+          -205.34437719604838
+        ],
+        [
+          -100.12522855528186,
+          -24.91991449374547
+        ],
+        [
+          210.9788219826214,
+          -15.88528370888298
+        ],
+        [
+          533522.420093897,
+          243554.90239406665
+        ],
+        [
+          0.0,
+          0.0
+        ],
+        [
+          2184.4537536299667,
+          2705.0951170179974
+        ]
+      ],
+      "max_abs_ad_fd_error": 9.916271416819654,
+      "max_rel_ad_fd_error": 0.00011329869001865003,
+      "observable_names": [
+        "mean_bmag",
+        "relative_bmag_ripple",
+        "metric_frobenius_rms",
+        "drift_rms",
+        "mean_jacobian",
+        "mean_gradpar"
+      ],
+      "observables": [
+        0.9893311813298558,
+        0.022484758812630873,
+        228.13643872447977,
+        58.25173841574489,
+        1.0,
+        13.592297618277598
+      ],
+      "params": [
+        0.0001,
+        0.0001
+      ],
+      "source_model": "vmex:state->tensor-flux-tube"
+    },
+    "source_model": "vmex:state->tensor-flux-tube",
+    "state_shape": [
+      35,
+      8
+    ],
+    "surface_index": 17,
+    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+  },
+  "vmex_flux_tube_array_parity": {
+    "alpha": 0.0,
+    "array_metrics": {
+      "bgrad": {
+        "candidate_max": 0.7371068207394633,
+        "candidate_min": -0.7453910691806575,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.77423423667966,
+        "max_rel_pointwise": 62394064831.28758,
+        "normalized_max_abs": 11.525890960440517,
+        "reference_max": 0.0671734826693232,
+        "reference_min": -0.06717348266932299,
+        "reference_scale": 0.0671734826693232,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.4913950463729617,
+        "rms_rel_pointwise": 17530992003.37235,
+        "shape_match": true
+      },
+      "bmag": {
+        "candidate_max": 1.0751370644914642,
+        "candidate_min": 0.9646977626386197,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.27388294287879145,
+        "max_rel_pointwise": 0.21788002327286135,
+        "normalized_max_abs": 0.2105222950746191,
+        "reference_max": 1.3009688250914913,
+        "reference_min": 0.9814113236928025,
+        "reference_scale": 1.3009688250914913,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.16479387247541483,
+        "rms_rel_pointwise": 0.13515310218813598,
+        "shape_match": true
+      },
+      "cvdrift": {
+        "candidate_max": 0.2626226514679445,
+        "candidate_min": -0.34935234304709656,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.53392565637851,
+        "max_rel_pointwise": 16.609068980049628,
+        "normalized_max_abs": 1.3590735385147448,
+        "reference_max": 0.3928600191583506,
+        "reference_min": -0.07583232357588074,
+        "reference_scale": 0.3928600191583506,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.28872180904052464,
+        "rms_rel_pointwise": 5.197462261677725,
+        "shape_match": true
+      },
+      "cvdrift0": {
+        "candidate_max": -2.8920252710373537,
+        "candidate_min": -10.499187755187748,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 10.516230038294497,
+        "max_rel_pointwise": 2892025271037.354,
+        "normalized_max_abs": 268.98187776870225,
+        "reference_max": 0.03909642584671601,
+        "reference_min": -0.03909642584671597,
+        "reference_scale": 0.03909642584671601,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 5.847576792129668,
+        "rms_rel_pointwise": 723006317759.3385,
+        "shape_match": true
+      },
+      "gbdrift": {
+        "candidate_max": 0.2626226514679445,
+        "candidate_min": -0.34935234304709656,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.53392565637851,
+        "max_rel_pointwise": 16.609068980049628,
+        "normalized_max_abs": 1.3590735385147448,
+        "reference_max": 0.3928600191583506,
+        "reference_min": -0.07583232357588074,
+        "reference_scale": 0.3928600191583506,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.28872180904052464,
+        "rms_rel_pointwise": 5.197462261677725,
+        "shape_match": true
+      },
+      "gbdrift0": {
+        "candidate_max": -2.8920252710373537,
+        "candidate_min": -10.499187755187748,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 10.516230038294497,
+        "max_rel_pointwise": 2892025271037.354,
+        "normalized_max_abs": 268.98187776870225,
+        "reference_max": 0.03909642584671601,
+        "reference_min": -0.03909642584671597,
+        "reference_scale": 0.03909642584671601,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 5.847576792129668,
+        "rms_rel_pointwise": 723006317759.3385,
+        "shape_match": true
+      },
+      "gds2": {
+        "candidate_max": 4.668745517087656,
+        "candidate_min": 0.3702447025487252,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 4.136733559816551,
+        "max_rel_pointwise": 7.7756401962005866,
+        "normalized_max_abs": 0.9727376398639529,
+        "reference_max": 4.252671419597903,
+        "reference_min": 0.5320119572711047,
+        "reference_scale": 4.252671419597903,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 2.4347521162291716,
+        "rms_rel_pointwise": 2.141922141745679,
+        "shape_match": true
+      },
+      "gds21": {
+        "candidate_max": 11.885994089789316,
+        "candidate_min": -14.758663465180186,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 14.847655371048452,
+        "max_rel_pointwise": 3946728256863.612,
+        "normalized_max_abs": 36.59296585813516,
+        "reference_max": 0.4057516252880497,
+        "reference_min": -0.3842800297392541,
+        "reference_scale": 0.4057516252880497,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 8.065340454104053,
+        "rms_rel_pointwise": 986682064215.903,
+        "shape_match": true
+      },
+      "gds22": {
+        "candidate_max": 415.33887284089155,
+        "candidate_min": 50.01606469231913,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 415.2656088152249,
+        "max_rel_pointwise": 52249.87069490901,
+        "normalized_max_abs": 5668.069765980051,
+        "reference_max": 0.07326402566666756,
+        "reference_min": 0.004362757864539117,
+        "reference_scale": 0.07326402566666756,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 216.1985414604504,
+        "rms_rel_pointwise": 24705.713824834424,
+        "shape_match": true
+      },
+      "grho": {
+        "candidate_max": 186.15006228358465,
+        "candidate_min": 64.5976404576389,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 183.6761914015052,
+        "max_rel_pointwise": 234.2280152925958,
+        "normalized_max_abs": 74.2464745157251,
+        "reference_max": 2.473870882079436,
+        "reference_min": 0.6036328006112853,
+        "reference_scale": 2.473870882079436,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 125.09291445770626,
+        "rms_rel_pointwise": 135.0683294028498,
+        "shape_match": true
+      },
+      "jacobian": {
+        "candidate_max": 1.2489511296284974,
+        "candidate_min": 0.7853589411772419,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 1.1853056914620994,
+        "max_rel_pointwise": 18.623576576897392,
+        "normalized_max_abs": 14.049059891148254,
+        "reference_max": 0.08436903968278424,
+        "reference_min": 0.06364543816639791,
+        "reference_scale": 0.08436903968278424,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.9398315826322768,
+        "rms_rel_pointwise": 12.982061030595903,
+        "shape_match": true
+      },
+      "theta": {
+        "candidate_max": 2.748893571891069,
+        "candidate_min": -3.141592653589793,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 4.440892098500626e-16,
+        "max_rel_pointwise": 3.7695462891419474e-16,
+        "normalized_max_abs": 1.4135798584282297e-16,
+        "reference_max": 2.7488935718910685,
+        "reference_min": -3.141592653589793,
+        "reference_scale": 3.141592653589793,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 2.0770370905276122e-16,
+        "rms_rel_pointwise": 1.2933971507188485e-16,
+        "shape_match": true
+      }
+    },
+    "available": true,
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "boundary": "none",
+    "case_name": "nfp4_QH_warm_start",
+    "core_tolerance": 0.05,
+    "equal_arc_core_array_metrics": {
+      "bgrad": {
+        "candidate_max": 0.06826181926343795,
+        "candidate_min": -0.0682618192634379,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.0015408338178724244,
+        "max_rel_pointwise": 0.07640394795163528,
+        "normalized_max_abs": 0.02293812612720306,
+        "reference_max": 0.0671734826693232,
+        "reference_min": -0.06717348266932299,
+        "reference_scale": 0.0671734826693232,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.0009144864669565893,
+        "rms_rel_pointwise": 0.0369690665360342,
+        "shape_match": true
+      },
+      "bmag": {
+        "candidate_max": 1.3028269673639852,
+        "candidate_min": 0.9816915005540504,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.0031625563212283048,
+        "max_rel_pointwise": 0.002740389652815157,
+        "normalized_max_abs": 0.002430923985442846,
+        "reference_max": 1.3009688250914913,
+        "reference_min": 0.9814113236928025,
+        "reference_scale": 1.3009688250914913,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.0020828509008818654,
+        "rms_rel_pointwise": 0.0018115242551886039,
+        "shape_match": true
+      },
+      "jacobian": {
+        "candidate_max": 0.08414539577187703,
+        "candidate_min": 0.06340429075331705,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.0003824702477270292,
+        "max_rel_pointwise": 0.0050924891321229545,
+        "normalized_max_abs": 0.0045333009497922905,
+        "reference_max": 0.08436903968278424,
+        "reference_min": 0.06364543816639791,
+        "reference_scale": 0.08436903968278424,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.00027238146687558326,
+        "rms_rel_pointwise": 0.003693055621212814,
+        "shape_match": true
+      },
+      "theta": {
+        "candidate_max": 2.748893571891069,
+        "candidate_min": -3.141592653589793,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 4.440892098500626e-16,
+        "max_rel_pointwise": 3.7695462891419474e-16,
+        "normalized_max_abs": 1.4135798584282297e-16,
+        "reference_max": 2.7488935718910685,
+        "reference_min": -3.141592653589793,
+        "reference_scale": 3.141592653589793,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 2.0770370905276122e-16,
+        "rms_rel_pointwise": 1.2933971507188485e-16,
+        "shape_match": true
+      }
+    },
+    "equal_arc_core_error": null,
+    "equal_arc_core_passed": true,
+    "equal_arc_core_scalar_metrics": {
+      "gradpar": {
+        "abs": 0.00030945378068206186,
+        "candidate": 0.13078892750823023,
+        "reference": 0.13047947372754817,
+        "rel": 0.002371666376645776
+      },
+      "q": {
+        "abs": 4.2574117042892823e-07,
+        "candidate": 0.9452165850429713,
+        "reference": 0.9452170107841418,
+        "rel": 4.5041632299416403e-07
+      },
+      "s_hat": {
+        "abs": 5.061765630974546e-05,
+        "candidate": -0.10936223978295877,
+        "reference": -0.10941285743926851,
+        "rel": 0.0004626298727079828
+      }
+    },
+    "equal_arc_core_tolerance": 0.01,
+    "equal_arc_core_worst_normalized_max_abs": 0.0045333009497922905,
+    "equal_arc_core_worst_scalar_rel": 0.002371666376645776,
+    "equal_arc_derivative_passed": true,
+    "equal_arc_derivative_tolerance": 0.03,
+    "equal_arc_derivative_worst_normalized_max_abs": 0.02293812612720306,
+    "equal_arc_drift_array_metrics": {
+      "cvdrift": {
+        "candidate_max": 0.39593275865644567,
+        "candidate_min": -0.06756761025492881,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.013733705268405894,
+        "max_rel_pointwise": 0.4918684394839042,
+        "normalized_max_abs": 0.03495826655465857,
+        "reference_max": 0.3928600191583506,
+        "reference_min": -0.07583232357588074,
+        "reference_scale": 0.3928600191583506,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.009281186088399953,
+        "rms_rel_pointwise": 0.18945120546576963,
+        "shape_match": true
+      },
+      "cvdrift0": {
+        "candidate_max": 0.039802780410292775,
+        "candidate_min": -0.039802780410292775,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.0011857280349320334,
+        "max_rel_pointwise": 0.26405786133278175,
+        "normalized_max_abs": 0.030328297517038413,
+        "reference_max": 0.03909642584671601,
+        "reference_min": -0.03909642584671597,
+        "reference_scale": 0.03909642584671601,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.00046811428508739027,
+        "rms_rel_pointwise": 0.09644600535064494,
+        "shape_match": true
+      },
+      "gbdrift": {
+        "candidate_max": 0.39593275865644567,
+        "candidate_min": -0.06756761025492881,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.013733705268405894,
+        "max_rel_pointwise": 0.4918684394839042,
+        "normalized_max_abs": 0.03495826655465857,
+        "reference_max": 0.3928600191583506,
+        "reference_min": -0.07583232357588074,
+        "reference_scale": 0.3928600191583506,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.009281186088399953,
+        "rms_rel_pointwise": 0.18945120546576963,
+        "shape_match": true
+      },
+      "gbdrift0": {
+        "candidate_max": 0.039802780410292775,
+        "candidate_min": -0.039802780410292775,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.0011857280349320334,
+        "max_rel_pointwise": 0.26405786133278175,
+        "normalized_max_abs": 0.030328297517038413,
+        "reference_max": 0.03909642584671601,
+        "reference_min": -0.03909642584671597,
+        "reference_scale": 0.03909642584671601,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.00046811428508739027,
+        "rms_rel_pointwise": 0.09644600535064494,
+        "shape_match": true
+      }
+    },
+    "equal_arc_drift_passed": true,
+    "equal_arc_drift_tolerance": 0.08,
+    "equal_arc_drift_worst_normalized_max_abs": 0.03495826655465857,
+    "equal_arc_metric_array_metrics": {
+      "gds2": {
+        "candidate_max": 4.184904831668358,
+        "candidate_min": 0.5454369974385259,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.10568679362540578,
+        "max_rel_pointwise": 0.030734024881586587,
+        "normalized_max_abs": 0.02485185973653206,
+        "reference_max": 4.252671419597903,
+        "reference_min": 0.5320119572711047,
+        "reference_scale": 4.252671419597903,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.06041922997906681,
+        "rms_rel_pointwise": 0.020876286482856474,
+        "shape_match": true
+      },
+      "gds21": {
+        "candidate_max": 0.4197528198251178,
+        "candidate_min": -0.3910614911872063,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.014001194537068107,
+        "max_rel_pointwise": 6.759134101662735,
+        "normalized_max_abs": 0.03450681072966357,
+        "reference_max": 0.4057516252880497,
+        "reference_min": -0.3842800297392541,
+        "reference_scale": 0.4057516252880497,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.004938192979334797,
+        "rms_rel_pointwise": 2.389835310236334,
+        "shape_match": true
+      },
+      "gds22": {
+        "candidate_max": 0.07553776577144664,
+        "candidate_min": 0.004298043099749255,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.0022737401047790706,
+        "max_rel_pointwise": 0.039681775237201705,
+        "normalized_max_abs": 0.031034878087698895,
+        "reference_max": 0.07326402566666756,
+        "reference_min": 0.004362757864539117,
+        "reference_scale": 0.07326402566666756,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.0008501466131075486,
+        "rms_rel_pointwise": 0.025659065502323695,
+        "shape_match": true
+      },
+      "grho": {
+        "candidate_max": 2.5131283621464555,
+        "candidate_min": 0.5994600845837026,
+        "candidate_shape": [
+          16
+        ],
+        "max_abs": 0.03925748006701957,
+        "max_rel_pointwise": 0.021786084765099495,
+        "normalized_max_abs": 0.01586884762313113,
+        "reference_max": 2.473870882079436,
+        "reference_min": 0.6036328006112853,
+        "reference_scale": 2.473870882079436,
+        "reference_shape": [
+          16
+        ],
+        "rms_abs": 0.01772062176903559,
+        "rms_rel_pointwise": 0.013231979363197024,
+        "shape_match": true
+      }
+    },
+    "equal_arc_metric_passed": true,
+    "equal_arc_metric_tolerance": 0.08,
+    "equal_arc_metric_worst_normalized_max_abs": 0.03450681072966357,
+    "include_pressure_variation": true,
+    "include_shear_variation": true,
+    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "interpretation": "The direct VMEC tensor path proves state-level differentiability. The Boozer equal-arc core audit narrows the production gap to the full imported VMEC/EIK metric and drift convention when it passes.",
+    "mboz": 21,
+    "nboz": 21,
+    "ntheta": 16,
+    "production_parity_passed": false,
+    "scalar_metrics": {
+      "gradpar": {
+        "abs": 12.969655397894366,
+        "candidate": 13.100134871621915,
+        "reference": 0.13047947372754817,
+        "rel": 99.39996711648354
+      },
+      "q": {
+        "abs": 0.0015226600546465185,
+        "candidate": 0.9467396708387883,
+        "reference": 0.9452170107841418,
+        "rel": 0.0016109105499311066
+      },
+      "s_hat": {
+        "abs": 6.79783284473906e-05,
+        "candidate": -0.1094808357677159,
+        "reference": -0.10941285743926851,
+        "rel": 0.0006213010978634128
+      }
+    },
+    "scalar_tolerance": 0.005,
+    "source_model": "vmex:state->tensor-flux-tube vs imported-vmec-eik",
+    "status": "diagnostic_open",
+    "surface_index": 17,
+    "torflux": 0.5,
+    "worst_core_normalized_max_abs": 5668.069765980051,
+    "worst_scalar_rel": 99.39996711648354,
+    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+  },
+  "vmex_metric_tensor": {
+    "available": true,
+    "backend_info": {
+      "booz_xform_jax_api_available": true,
+      "booz_xform_jax_available": true,
+      "booz_xform_jax_paths": [
+        "/Users/rogeriojorge/local/booz_xform_jax",
+        "/Users/rogeriojorge/local/booz_xform_jax/src"
+      ],
+      "vmex_available": true,
+      "vmex_boundary_api_available": true,
+      "vmex_paths": [
+        "/Users/rogeriojorge/local/vmex"
+      ]
+    },
+    "case_name": "circular_tokamak",
+    "fd_step": 1e-05,
+    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.circular_tokamak",
+    "jacobian_ad": [
+      [
+        47.107653258623216,
+        46.16400443771231
+      ],
+      [
+        17.27967044152082,
+        17.328055661796398
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        -0.44655409775293214,
+        0.45078824891698843
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "jacobian_fd": [
+      [
+        47.10765324125176,
+        46.16400442172263
+      ],
+      [
+        17.279670441427974,
+        17.32805566174722
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        -0.4465540405430845,
+        0.4507881901046062
+      ],
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "max_abs_ad_fd_error": 5.8812382242035e-08,
+    "max_rel_ad_fd_error": 1.3046566776351664e-07,
+    "metric_grid_shape": [
+      17,
+      22,
+      1
+    ],
+    "mode_index": 1,
+    "observable_names": [
+      "sqrtg_rms",
+      "mean_g_ss",
+      "mean_g_tt",
+      "mean_g_pp",
+      "g_st_rms",
+      "g_sp_rms",
+      "g_tp_rms"
+    ],
+    "observables": [
+      12.443385967643161,
+      2.351568302918944,
+      1.7939891397719199,
+      37.97785399391237,
+      0.10500328460534353,
+      1e-12,
+      1e-12
+    ],
+    "param_names": [
+      "delta_Rcos",
+      "delta_Zsin"
+    ],
+    "params": [
+      0.001,
+      0.001
+    ],
+    "radial_index": 8,
+    "rms_epsilon": 1e-24,
+    "source_model": "vmex:state->metric-tensors",
+    "state_shape": [
+      17,
+      8
+    ],
+    "surface_index": 7,
+    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_circular_tokamak.nc"
+  }
+}

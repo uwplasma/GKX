@@ -1,0 +1,55 @@
+{
+  "kind": "vmex_qa_strict_baseline_summary",
+  "source": "office gpu strict exact SciPy run from clean GKX/vmex staging directory",
+  "method": "scipy",
+  "scipy_tr_solver": "exact",
+  "max_nfev": 40,
+  "nfev": 39,
+  "success": true,
+  "message": "`ftol` termination condition is satisfied.",
+  "total_wall_time_s": 602.8352665035054,
+  "target_aspect": 5.0,
+  "target_iota": 0.4102,
+  "admission_min_abs_mean_iota": 0.41,
+  "iota_profile_floor": null,
+  "max_mode": 5,
+  "min_vmec_mode": 7,
+  "use_simple_seed": true,
+  "use_ess": true,
+  "ess_alpha": 1.2,
+  "aspect_final": 5.000154379138371,
+  "iota_final": 0.41019972180134634,
+  "qs_final": 0.00026009823221811865,
+  "objective_final": 0.0002601228390813915,
+  "gate_passed": true,
+  "gate_checks": {
+    "aspect": {
+      "value": 5.000154379138371,
+      "target": 5.0,
+      "absolute_error": 0.00015437913837068606,
+      "absolute_tolerance": 0.05,
+      "passed": true
+    },
+    "mean_iota": {
+      "value": 0.41019972180134634,
+      "minimum_abs": 0.41,
+      "margin": 0.0001997218013463642,
+      "passed": true
+    },
+    "quasisymmetry": {
+      "value": 0.0002600982322181188,
+      "maximum": 0.05,
+      "margin": 0.04973990176778188,
+      "source": "vmex_state",
+      "passed": true
+    },
+    "iota_profile": {
+      "minimum_iotas_excluding_axis": 0.4056702517223691,
+      "minimum_iotaf": 0.40550592917747963,
+      "floor": null,
+      "source": "vmex_state",
+      "passed": true
+    }
+  },
+  "claim_scope": "strict constraints-only VMEC-JAX QA baseline; not a GKX transport optimization claim"
+}

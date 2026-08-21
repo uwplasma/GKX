@@ -1,0 +1,68 @@
+{
+  "arrays": {
+    "field_phi1": {
+      "bitwise_equal": true,
+      "maximum_absolute_error": 0.0,
+      "passed": true,
+      "relative_l2": 0.0
+    },
+    "field_phi2": {
+      "bitwise_equal": false,
+      "maximum_absolute_error": 1.3877787807814457e-17,
+      "passed": true,
+      "relative_l2": 2.868432318038423e-16
+    },
+    "field_table": {
+      "bitwise_equal": false,
+      "maximum_absolute_error": 8.881784197001252e-16,
+      "passed": true,
+      "relative_l2": 6.392497080060079e-16
+    },
+    "test_phi1": {
+      "bitwise_equal": true,
+      "maximum_absolute_error": 0.0,
+      "passed": true,
+      "relative_l2": 0.0
+    },
+    "test_phi2": {
+      "bitwise_equal": false,
+      "maximum_absolute_error": 2.0816681711721685e-17,
+      "passed": true,
+      "relative_l2": 4.942394307898232e-16
+    },
+    "test_table": {
+      "bitwise_equal": false,
+      "maximum_absolute_error": 6.217248937900877e-15,
+      "passed": true,
+      "relative_l2": 6.379841803721815e-16
+    }
+  },
+  "bessel_argument_grid": [
+    0.12,
+    0.14,
+    0.16,
+    0.24,
+    0.28,
+    0.32
+  ],
+  "claim_scope": "finite_wavelength_collision_table_final_contraction",
+  "coefficient_gate_passed": true,
+  "gate_passed": true,
+  "notes": "All collision coefficients are generated at the archive precision; only the final projection-vector contraction uses float64.",
+  "resolution": [
+    12,
+    5
+  ],
+  "schema_version": 1,
+  "speed_gate_passed": true,
+  "speedup": 2.1339495038171603,
+  "thresholds": {
+    "maximum_absolute_error": 2e-13,
+    "maximum_relative_l2": 2e-14,
+    "minimum_speedup": 1.25
+  },
+  "timing_seconds": {
+    "exact": 86.78745041694492,
+    "fast": 40.66987070767209
+  }
+}

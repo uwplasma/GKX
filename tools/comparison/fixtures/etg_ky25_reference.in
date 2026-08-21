@@ -1,0 +1,66 @@
+# GX input for ETG (CBC) at ky*rho_i = 25.
+# Matches GKX ETGBaseCase geometry/gradients with adiabatic ions.
+
+debug = false
+
+[Dimensions]
+ ntheta = 32
+ nperiod = 2
+ nky = 6
+ nkx = 1
+
+ nhermite = 48
+ nlaguerre = 16
+ nspecies = 1
+
+[Domain]
+ y0 = 0.2
+ boundary = "linked"
+
+[Physics]
+ beta = 1.0e-5
+ nonlinear_mode = false
+
+[Time]
+ t_max = 20.0
+ scheme = "rk4"
+
+[Initialization]
+ gaussian_init = true
+ init_field = "density"
+ init_amp = 1.0e-10
+
+[Geometry]
+ geo_option = "s-alpha"
+ eps = 0.18
+ Rmaj = 2.77778
+ qinp = 1.4
+ shat = 0.8
+ shift = 0.0
+
+[species]
+ z     = [ -1.0 ]
+ mass  = [ 2.7e-4 ]
+ dens  = [ 1.0 ]
+ temp  = [ 1.0 ]
+ tprim = [ 2.49 ]
+ fprim = [ 0.8 ]
+ vnewk = [ 0.0 ]
+ type  = [ "electron" ]
+
+[Boltzmann]
+ add_Boltzmann_species = true
+ Boltzmann_type = "ions"
+ tau_fac = 1.0
+
+[Dissipation]
+ closure_model = "none"
+ hypercollisions = false
+
+[Diagnostics]
+ nwrite = 1000
+ omega = true
+ free_energy = false
+ fluxes = false
+ fields = false
+ moments = false

@@ -1,0 +1,90 @@
+{
+  "kind": "eigensolver_cost_model",
+  "claim_level": "cost_measurement_and_projection_not_a_validated_speedup",
+  "ntheta": 32,
+  "measurements": [
+    {
+      "n_laguerre": 2,
+      "n_hermite": 3,
+      "n": 192,
+      "matrix_megabytes": 0.589824,
+      "build_seconds": 1.7720918655395508,
+      "dense_eig_seconds": 0.01638507843017578,
+      "dense_max_real": 0.14819918355947928,
+      "krylov_seconds": 0.5523667335510254,
+      "krylov_real": 0.5471539219999548,
+      "speedup": 0.029663405550946695,
+      "relative_disagreement": 2.6920171141182863
+    },
+    {
+      "n_laguerre": 4,
+      "n_hermite": 6,
+      "n": 768,
+      "matrix_megabytes": 9.437184,
+      "build_seconds": 1.902677059173584,
+      "dense_eig_seconds": 0.9035348892211914,
+      "dense_max_real": 0.13946702799351993,
+      "krylov_seconds": 0.6036441326141357,
+      "krylov_real": 0.06356857435861167,
+      "speedup": 1.4968005823370658,
+      "relative_disagreement": 0.5442035635722784
+    },
+    {
+      "n_laguerre": 6,
+      "n_hermite": 8,
+      "n": 1536,
+      "matrix_megabytes": 37.748736,
+      "build_seconds": 2.571160078048706,
+      "dense_eig_seconds": 5.322623014450073,
+      "dense_max_real": 0.14224075806133865,
+      "krylov_seconds": 1.7844948768615723,
+      "krylov_real": 0.13848505961433516,
+      "speedup": 2.9827056852138907,
+      "relative_disagreement": 0.026403813493344273
+    },
+    {
+      "n_laguerre": 8,
+      "n_hermite": 10,
+      "n": 2560,
+      "matrix_megabytes": 104.8576,
+      "build_seconds": 2.050020933151245,
+      "dense_eig_seconds": 12.225829839706421,
+      "dense_max_real": 0.1429399588859297,
+      "krylov_seconds": 0.9078881740570068,
+      "krylov_real": 0.1691619101062824,
+      "speedup": 13.466228759290738,
+      "relative_disagreement": 0.18344731189742816
+    }
+  ],
+  "projections": [
+    {
+      "fitted_exponent": 2.1864367284570014,
+      "fitted_scale": 4.793452963438747e-07
+    },
+    {
+      "n_laguerre": 12,
+      "n_hermite": 16,
+      "ntheta": 64,
+      "n": 12288,
+      "projected_dense_seconds": 418.83249799277786,
+      "projected_matrix_gigabytes": 2.415919104
+    },
+    {
+      "n_laguerre": 16,
+      "n_hermite": 24,
+      "ntheta": 64,
+      "n": 24576,
+      "projected_dense_seconds": 1906.4411822792931,
+      "projected_matrix_gigabytes": 9.663676416
+    },
+    {
+      "n_laguerre": 32,
+      "n_hermite": 16,
+      "ntheta": 64,
+      "n": 32768,
+      "projected_dense_seconds": 3575.9715376701083,
+      "projected_matrix_gigabytes": 17.179869184
+    }
+  ],
+  "note": "krylov and dense disagree because dominant_eigenpair selects a physical branch while the dense path takes argmax(Re lambda); matching the selection is a prerequisite to any substitution"
+}

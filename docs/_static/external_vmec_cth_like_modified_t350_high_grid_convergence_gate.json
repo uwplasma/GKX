@@ -1,0 +1,224 @@
+{
+  "case": "CTH-like external VMEC modified-protocol t=350 high-grid convergence",
+  "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
+  "common_window": {
+    "max_pairwise_heat_flux_symmetric_relative_difference": 0.0576198151305915,
+    "requested_start_fraction": 0.5,
+    "tmax": 350.0040283203125,
+    "tmin": 175.02701416052878
+  },
+  "csv": "docs/_static/external_vmec_cth_like_modified_t350_high_grid_convergence_gate.csv",
+  "gate_index_include": false,
+  "gate_report": {
+    "case": "CTH-like external VMEC modified-protocol t=350 high-grid convergence",
+    "gates": [
+      {
+        "abs_error": 0.0006364455697494923,
+        "atol": 0.002,
+        "metric": "common_window_max_relative_slope_per_time",
+        "notes": "Same physical late-time window across all grids.",
+        "observed": 0.0006364455697494923,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": "1/time"
+      },
+      {
+        "abs_error": 0.00011130191753767028,
+        "atol": 0.002,
+        "metric": "least_window_max_relative_slope_per_time",
+        "notes": "Best late-time window selected independently for each run.",
+        "observed": 0.00011130191753767028,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": "1/time"
+      },
+      {
+        "abs_error": 0.11469487105322836,
+        "atol": 0.2,
+        "metric": "common_window_max_heat_flux_cv",
+        "notes": "Standard deviation divided by absolute mean on the common window.",
+        "observed": 0.11469487105322836,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.11353310621627377,
+        "atol": 0.2,
+        "metric": "least_window_max_heat_flux_cv",
+        "notes": "Standard deviation divided by absolute mean on each least-trending window.",
+        "observed": 0.11353310621627377,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "common_window_min_samples_deficit",
+        "notes": "The common window must contain enough diagnostic samples on every grid.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "samples"
+      },
+      {
+        "abs_error": 0.0,
+        "atol": 0.0,
+        "metric": "least_window_min_samples_deficit",
+        "notes": "Each independently selected late window must contain enough diagnostic samples.",
+        "observed": 0.0,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": 0.0,
+        "rtol": 0.0,
+        "units": "samples"
+      },
+      {
+        "abs_error": 0.0576198151305915,
+        "atol": 0.15,
+        "metric": "common_window_pairwise_heat_flux_symmetric_relative_difference",
+        "notes": "Grid-refined heat-flux means on the same physical window.",
+        "observed": 0.0576198151305915,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      },
+      {
+        "abs_error": 0.012602252748563688,
+        "atol": 0.15,
+        "metric": "least_window_pairwise_heat_flux_symmetric_relative_difference",
+        "notes": "Grid-refined heat-flux means on least-trending windows.",
+        "observed": 0.012602252748563688,
+        "passed": true,
+        "reference": 0.0,
+        "rel_error": null,
+        "rtol": 0.0,
+        "units": ""
+      }
+    ],
+    "max_abs_error": 0.11469487105322836,
+    "max_rel_error": 0.0,
+    "passed": true,
+    "source": "external_vmec_nonlinear_pilot_reports"
+  },
+  "kind": "external_vmec_nonlinear_grid_convergence_gate",
+  "least_windows": {
+    "max_pairwise_heat_flux_symmetric_relative_difference": 0.012602252748563688
+  },
+  "literature_policy": {
+    "anchors": [
+      {
+        "name": "Dimits et al. 2000 Cyclone benchmark and nonlinear saturated heat-flux comparisons",
+        "url": "https://doi.org/10.1063/1.873896"
+      },
+      {
+        "name": "GX/JPP nonlinear CBC and W7-X time-trace plus velocity-space convergence practice",
+        "url": "https://doi.org/10.1017/S0022377822000617"
+      },
+      {
+        "name": "Sanchez et al. 2021 stellarator domain sensitivity and flux-tube convergence",
+        "url": "https://doi.org/10.1088/1741-4326/ac2a87"
+      },
+      {
+        "name": "Papadopoulos et al. 2023 W7-X nonlinear heat-flux time-series analysis",
+        "url": "https://doi.org/10.3390/e25060942"
+      }
+    ],
+    "summary": "Nonlinear gyrokinetic heat-flux claims require finite late-time traces, statistically interpretable saturated windows, and resolution/convergence checks before a run is admitted as a calibration holdout."
+  },
+  "passed": true,
+  "pdf": "docs/_static/external_vmec_cth_like_modified_t350_high_grid_convergence_gate.pdf",
+  "png": "docs/_static/external_vmec_cth_like_modified_t350_high_grid_convergence_gate.png",
+  "promotion_gate": {
+    "passed": true,
+    "reason": "CTH-like external VMEC modified-protocol t=350 high-grid convergence passed external-VMEC nonlinear grid-convergence gate"
+  },
+  "runs": [
+    {
+      "common_window": {
+        "heat_flux_coefficient_of_variation": 0.11469487105322836,
+        "heat_flux_mean": 10.532582897029512,
+        "heat_flux_relative_slope_per_time": -0.0006317764940986414,
+        "heat_flux_slope": -0.0066542382964886165,
+        "heat_flux_std": 1.2080332372322382,
+        "n_samples": 73,
+        "tmax": 350.0040283203125,
+        "tmin": 175.05148315429688,
+        "wphi_mean": 3.628613909629926,
+        "wphi_std": 0.4034013196196372
+      },
+      "csv": "docs/_static/external_vmec_cth_like_modified_t350_n64_pilot.traces.csv",
+      "json": "docs/_static/external_vmec_cth_like_modified_t350_n64_pilot.json",
+      "label": "n64",
+      "least_trending_window": {
+        "heat_flux_coefficient_of_variation": 0.11353310621627377,
+        "heat_flux_mean": 10.252576926658893,
+        "heat_flux_relative_slope_per_time": 9.550022722181229e-05,
+        "heat_flux_slope": 0.0009791234261050342,
+        "heat_flux_std": 1.1640069052048818,
+        "n_samples": 58,
+        "tmax": 350.0040283203125,
+        "tmin": 210.0530242919922,
+        "wphi_mean": 3.586027404357647,
+        "wphi_std": 0.4230620551043809
+      },
+      "n_trace_samples": 144,
+      "source_label": "CTH-like modified t=350 n64",
+      "tmax": 350.0040283203125,
+      "tmin": 0.05000000074505806
+    },
+    {
+      "common_window": {
+        "heat_flux_coefficient_of_variation": 0.10072298478840142,
+        "heat_flux_mean": 9.942692116515277,
+        "heat_flux_relative_slope_per_time": 0.0006364455697494923,
+        "heat_flux_slope": 0.006327982348939351,
+        "heat_flux_std": 1.0014576268075268,
+        "n_samples": 73,
+        "tmax": 350.0040283203125,
+        "tmin": 175.05148315429688,
+        "wphi_mean": 3.2206665326471198,
+        "wphi_std": 0.3572955943009788
+      },
+      "csv": "docs/_static/external_vmec_cth_like_modified_t350_n80_pilot.traces.csv",
+      "json": "docs/_static/external_vmec_cth_like_modified_t350_n80_pilot.json",
+      "label": "n80",
+      "least_trending_window": {
+        "heat_flux_coefficient_of_variation": 0.09443808481519514,
+        "heat_flux_mean": 10.124180403622715,
+        "heat_flux_relative_slope_per_time": 0.00011130191753767028,
+        "heat_flux_slope": 0.001126840692420513,
+        "heat_flux_std": 0.9561082076416585,
+        "n_samples": 44,
+        "tmax": 350.0040283203125,
+        "tmin": 245.0526123046875,
+        "wphi_mean": 3.306727707386017,
+        "wphi_std": 0.32785099887351227
+      },
+      "n_trace_samples": 144,
+      "source_label": "CTH-like modified t=350 n80",
+      "tmax": 350.0040283203125,
+      "tmin": 0.05000000074505806
+    }
+  ],
+  "thresholds": {
+    "common_start_fraction": 0.5,
+    "max_coefficient_of_variation": 0.2,
+    "max_pairwise_relative_difference": 0.15,
+    "max_relative_slope_per_time": 0.002,
+    "min_window_samples": 5
+  }
+}

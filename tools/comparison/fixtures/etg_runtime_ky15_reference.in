@@ -1,0 +1,65 @@
+# Linear electrostatic ETG runtime case aligned with the single-ky
+# examples/etg_runtime_linear.py runtime workload.
+
+debug = false
+
+[Dimensions]
+ ntheta = 32
+ nperiod = 2
+ nky = 4
+ nkx = 1
+ nhermite = 8
+ nlaguerre = 24
+ nspecies = 1
+
+[Domain]
+ y0 = 0.2
+ boundary = "linked"
+
+[Physics]
+ beta = 0.0
+ nonlinear_mode = false
+
+[Time]
+ t_max = 0.2
+ scheme = "rk4"
+
+[Initialization]
+ gaussian_init = true
+ init_field = "density"
+ init_amp = 1.0e-10
+
+[Geometry]
+ geo_option = "s-alpha"
+ eps = 0.18
+ Rmaj = 2.77778
+ qinp = 1.4
+ shat = 0.8
+ shift = 0.0
+
+[species]
+ z     = [ -1.0,     1.0 ]
+ mass  = [ 2.7e-4,   1.0 ]
+ dens  = [ 1.0,      1.0 ]
+ temp  = [ 1.0,      1.0 ]
+ tprim = [ 2.49,     0.0 ]
+ fprim = [ 0.8,      0.0 ]
+ vnewk = [ 0.0,      0.0 ]
+ type  = [ "electron", "ion" ]
+
+[Boltzmann]
+ add_Boltzmann_species = true
+ Boltzmann_type = "ions"
+ tau_fac = 1.0
+
+[Dissipation]
+ closure_model = "none"
+ hypercollisions = true
+
+[Diagnostics]
+ nwrite = 1000
+ omega = true
+ free_energy = true
+ fluxes = false
+ fields = false
+ moments = false

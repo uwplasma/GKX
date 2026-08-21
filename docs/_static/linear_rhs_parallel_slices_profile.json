@@ -1,0 +1,52 @@
+{
+  "actual_devices": 8,
+  "atol": 2e-05,
+  "claim_scope": "engineering timing for the current opt-in electrostatic linear-slices route; not a publication speedup claim",
+  "grid": {
+    "Nx": 1,
+    "Ny_actual": 32,
+    "Ny_requested": 32,
+    "Nz": 128
+  },
+  "identity_passed": true,
+  "kind": "linear_rhs_parallel_slices_profile",
+  "max_abs_error": 2.366846729273675e-06,
+  "max_phi_abs_error": 7.508562660518692e-09,
+  "max_rel_error": 5.955886081210338e-06,
+  "notes": "Both routes are warmed before timing. The serial route uses the production JIT path; the sharded route uses the cached fused Hermite shard-map callable.",
+  "phi_norm": 0.484831839799881,
+  "repeats": 3,
+  "requested_devices": 8,
+  "rows": [
+    {
+      "median_s": 0.043669458013027906,
+      "route": "serial",
+      "samples_s": [
+        0.04158270894549787,
+        0.04550529096741229,
+        0.043669458013027906
+      ]
+    },
+    {
+      "median_s": 0.031135583063587546,
+      "route": "sharded",
+      "samples_s": [
+        0.031649291049689054,
+        0.02942116593476385,
+        0.031135583063587546
+      ]
+    }
+  ],
+  "rtol": 1e-05,
+  "serial_median_s": 0.043669458013027906,
+  "sharded_median_s": 0.031135583063587546,
+  "speedup": 1.4025579005166755,
+  "state_shape": [
+    4,
+    128,
+    32,
+    1,
+    128
+  ],
+  "warmups": 1
+}

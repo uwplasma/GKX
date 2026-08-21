@@ -1,0 +1,3 @@
+device_count,active,identity_passed,transport_window_identity_passed,final_state_max_abs_error,final_state_max_rel_error,physical_flux_trace_max_abs_error,physical_flux_trace_max_rel_error,median_s,speedup_vs_serial,speedup_gate_passed,timing_scope,identity_gate_elapsed_s,observable_gate_median_s,observable_gate_overhead_vs_compute,blocked_reasons
+1,True,True,True,0.0,0.0,0.0,0.0,0.08767083007842302,1.0,False,compute_only_final_state_update,,,,[]
+2,True,True,True,7.450580596923828e-09,8.765812825071403e-09,1.7763568394002505e-15,3.552713678800501e-10,0.07348759192973375,1.1930018085536234,False,compute_only_final_state_update,9.491569695062935,3.13176061026752,42.6161822428744,['speedup_below_gate']

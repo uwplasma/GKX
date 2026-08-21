@@ -1,0 +1,197 @@
+{
+  "admitted_state_controls": [
+    {
+      "descent_direction_sign": 1.0,
+      "mean_abs_sensitivity": 15866.412915948646,
+      "sign_consistency_fraction": 1.0,
+      "source_case_count": 2,
+      "state_control_argument": "Rsin_mid_surface_m1:1",
+      "state_control_family": "Rsin",
+      "state_parameter": "Rsin_mid_surface_m1"
+    },
+    {
+      "descent_direction_sign": 1.0,
+      "mean_abs_sensitivity": 3127.9415563508674,
+      "sign_consistency_fraction": 1.0,
+      "source_case_count": 2,
+      "state_control_argument": "Zcos_mid_surface_m1:1",
+      "state_control_family": "Zcos",
+      "state_parameter": "Zcos_mid_surface_m1"
+    }
+  ],
+  "baseline_input": "examples/vmec/input.LandremanPaul2021_QA_lowres",
+  "blockers": [
+    "vmec_response_artifact_missing",
+    "state_to_input_jacobian_not_extracted",
+    "mapping_conditioning_not_measured"
+  ],
+  "case": "qa_lowres_asymmetric_state_to_input_mapping",
+  "claim_level": "lasym_true_state_to_input_mapping_launch_plan_not_mapping_evidence",
+  "coefficient_convention": "Candidate directions are explicit VMEC input coefficients. The stored vmec_m/vmec_n fields preserve the same index ordering used by vmex.namelist.",
+  "input_directions": [
+    {
+      "baseline_value": 0.0,
+      "coefficient": "RBS(1,1)",
+      "coefficient_family": "RBS",
+      "coefficient_slug": "rbs_1_1",
+      "delta_parameter": 0.001,
+      "expected_wout_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1/wout_qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_baseline.nc",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1/wout_qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_minus_delta.nc",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1/wout_qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_plus_delta.nc"
+      },
+      "generated_lasym": true,
+      "inserted_missing_coefficient": true,
+      "manifest": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1/vmec_asymmetric_boundary_perturbation_manifest.json",
+      "relative_delta": null,
+      "state_input_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1/input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_baseline",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1/input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_minus_delta",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1/input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_plus_delta"
+      },
+      "state_values": {
+        "baseline": 0.0,
+        "minus_delta": -0.001,
+        "plus_delta": 0.001
+      },
+      "vmec_m": 1,
+      "vmec_n": 1,
+      "vmec_run_commands": {
+        "baseline": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_baseline --outdir . --fast --max-iter 4200 --no-use-input-niter",
+        "minus_delta": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_minus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+        "plus_delta": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_plus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter"
+      }
+    },
+    {
+      "baseline_value": 0.0,
+      "coefficient": "ZBC(1,1)",
+      "coefficient_family": "ZBC",
+      "coefficient_slug": "zbc_1_1",
+      "delta_parameter": 0.001,
+      "expected_wout_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1/wout_qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_baseline.nc",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1/wout_qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_minus_delta.nc",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1/wout_qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_plus_delta.nc"
+      },
+      "generated_lasym": true,
+      "inserted_missing_coefficient": true,
+      "manifest": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1/vmec_asymmetric_boundary_perturbation_manifest.json",
+      "relative_delta": null,
+      "state_input_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1/input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_baseline",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1/input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_minus_delta",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1/input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_plus_delta"
+      },
+      "state_values": {
+        "baseline": 0.0,
+        "minus_delta": -0.001,
+        "plus_delta": 0.001
+      },
+      "vmec_m": 1,
+      "vmec_n": 1,
+      "vmec_run_commands": {
+        "baseline": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_baseline --outdir . --fast --max-iter 4200 --no-use-input-niter",
+        "minus_delta": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_minus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+        "plus_delta": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_plus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter"
+      }
+    },
+    {
+      "baseline_value": 0.0,
+      "coefficient": "RBS(1,0)",
+      "coefficient_family": "RBS",
+      "coefficient_slug": "rbs_1_0",
+      "delta_parameter": 0.001,
+      "expected_wout_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0/wout_qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_baseline.nc",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0/wout_qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_minus_delta.nc",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0/wout_qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_plus_delta.nc"
+      },
+      "generated_lasym": true,
+      "inserted_missing_coefficient": true,
+      "manifest": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0/vmec_asymmetric_boundary_perturbation_manifest.json",
+      "relative_delta": null,
+      "state_input_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0/input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_baseline",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0/input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_minus_delta",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0/input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_plus_delta"
+      },
+      "state_values": {
+        "baseline": 0.0,
+        "minus_delta": -0.001,
+        "plus_delta": 0.001
+      },
+      "vmec_m": 1,
+      "vmec_n": 0,
+      "vmec_run_commands": {
+        "baseline": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_baseline --outdir . --fast --max-iter 4200 --no-use-input-niter",
+        "minus_delta": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_minus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+        "plus_delta": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_plus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter"
+      }
+    },
+    {
+      "baseline_value": 0.0,
+      "coefficient": "ZBC(1,0)",
+      "coefficient_family": "ZBC",
+      "coefficient_slug": "zbc_1_0",
+      "delta_parameter": 0.001,
+      "expected_wout_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0/wout_qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_baseline.nc",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0/wout_qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_minus_delta.nc",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0/wout_qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_plus_delta.nc"
+      },
+      "generated_lasym": true,
+      "inserted_missing_coefficient": true,
+      "manifest": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0/vmec_asymmetric_boundary_perturbation_manifest.json",
+      "relative_delta": null,
+      "state_input_files": {
+        "baseline": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0/input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_baseline",
+        "minus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0/input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_minus_delta",
+        "plus_delta": "tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0/input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_plus_delta"
+      },
+      "state_values": {
+        "baseline": 0.0,
+        "minus_delta": -0.001,
+        "plus_delta": 0.001
+      },
+      "vmec_m": 1,
+      "vmec_n": 0,
+      "vmec_run_commands": {
+        "baseline": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_baseline --outdir . --fast --max-iter 4200 --no-use-input-niter",
+        "minus_delta": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_minus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+        "plus_delta": "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_plus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter"
+      }
+    }
+  ],
+  "kind": "vmec_asymmetric_state_to_input_mapping_campaign",
+  "next_action": "run the LASYM=true VMEC perturbation solves and build a conditioned state-to-input mapping artifact; this launch plan alone must not be used as nonlinear-gradient evidence",
+  "passed": false,
+  "planned_response_matrix_shape": [
+    2,
+    4
+  ],
+  "postprocess_protocol": [
+    "run vmex for every LASYM=true baseline/plus/minus input deck listed in vmec_run_commands",
+    "extract the admitted Rsin/Zcos VMEC-state controls from each solved equilibrium",
+    "form the central finite-difference response matrix d(state_control)/d(RBS/ZBC coefficient)",
+    "solve the least-squares state-to-input map and record condition number plus relative residual",
+    "use the mapping only when it is finite, full row-rank, conditioned, and residual-bounded"
+  ],
+  "ql_seed_screen": "docs/_static/nonlinear_gradient_ql_seed_screen.json",
+  "rank_feasibility_precheck_passed": true,
+  "ready_for_nonlinear_launch": false,
+  "symmetry_branch": "LASYM=true asymmetric RBS/ZBC input controls",
+  "vmec_run_commands": [
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_baseline --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_plus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_1_minus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_baseline --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_plus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_1 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_1_minus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_baseline --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_plus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/rbs_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_rbs_1_0_minus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_baseline --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_plus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter",
+    "cd tools_out/state_to_input_mapping/qa_lowres_asymmetric/zbc_1_0 && vmex input.qa_lowres_asymmetric_state_to_input_mapping_zbc_1_0_minus_delta --outdir . --fast --max-iter 4200 --no-use-input-niter"
+  ]
+}

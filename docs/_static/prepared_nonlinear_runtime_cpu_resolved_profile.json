@@ -1,0 +1,83 @@
+{
+  "backend": "cpu",
+  "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
+  "devices": [
+    "TFRT_CPU_0"
+  ],
+  "diagnostics_stride": 10,
+  "dt": 0.01,
+  "fixed_dt": false,
+  "git_dirty": false,
+  "git_revision": "d3f3aef8edfa4df33db960ea76799fa42a4aee66",
+  "memory_summary": {
+    "device": "TFRT_CPU_0",
+    "device_stats": {},
+    "host_peak_rss_bytes": 4520312832
+  },
+  "method": "rk3",
+  "nl": 4,
+  "nm": 8,
+  "resolved_diagnostics": true,
+  "result_summary": {
+    "dt": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.12653478980064392,
+      "max_abs": 0.001250803004950285,
+      "shape": [
+        1,
+        4,
+        8,
+        64,
+        64,
+        24
+      ],
+      "sum_imag": -1.291814264066382e-10,
+      "sum_real": 0.330221522938571
+    },
+    "final_state": {
+      "finite_fraction": 1.0,
+      "l2_norm": 11.751726150512695,
+      "max_abs": 4.3583245277404785,
+      "shape": [
+        21
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 46.19821972772479
+    },
+    "heat_flux": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.00010248759645037353,
+      "max_abs": 3.0474713639705442e-05,
+      "shape": [
+        21
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 0.0004278446473620079
+    },
+    "phi": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.04132673516869545,
+      "max_abs": 0.0007708911434747279,
+      "shape": [
+        64,
+        64,
+        24
+      ],
+      "sum_imag": 9.904022046924865e-13,
+      "sum_real": 0.33056641042311297
+    }
+  },
+  "reuse_prepared_simulation": true,
+  "run_median_s": 109.95106014900375,
+  "run_times_s": [
+    109.95106014900375
+  ],
+  "sample_stride": 10,
+  "software": {
+    "jax": "0.6.2",
+    "numpy": "2.2.4",
+    "python": "3.10.12"
+  },
+  "steps": 200,
+  "warmup_time_s": 117.8666490939795
+}

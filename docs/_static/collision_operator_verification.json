@@ -1,0 +1,305 @@
+{
+  "basis": {
+    "maximum_hermite_order": 3,
+    "maximum_laguerre_order": 1
+  },
+  "case": "finite_b_coulomb_operator_algebra",
+  "claim_scope": "offline_operator_algebra_not_runtime_transport",
+  "direct_projection": {
+    "labels": [
+      "$\\Pi^{0,0,0}$",
+      "$\\Pi^{1,0,1}$",
+      "$\\Pi^{2,0,0}$",
+      "$\\Pi^{2,0,2}$",
+      "$\\Pi^{3,1,1}$"
+    ],
+    "quadrature": "80-point Gauss-Hermite x 80-point Gauss-Laguerre",
+    "relative_errors": [
+      1.3694482003081231e-14,
+      6.067858832252489e-14,
+      3.0274362552581606e-13,
+      1.6543181035812855e-14,
+      3.1316539653265556e-13
+    ]
+  },
+  "eigenvalues": [
+    -2.2748636535664697,
+    -1.911763473896943,
+    -1.8705816039949466,
+    -1.2569780675772944,
+    -0.7925736354074301,
+    -1.500447059698326e-16,
+    -1.5257896690031966e-17,
+    9.00846363925679e-18
+  ],
+  "gate_passed": true,
+  "gates": {
+    "drift_kinetic_gyrocenter_density_row": true,
+    "final_bessel_relative_error": true,
+    "finite_b_gyrocenter_diffusion_nonzero": true,
+    "finite_b_matrix_relative_error_at_order_4": true,
+    "finite_b_spherical_relative_error_at_order_8": true,
+    "maximum_eigenvalue": true,
+    "maximum_invariant_residual": true,
+    "maximum_projection_relative_error": true,
+    "published_coefficient_maximum_absolute_error": true,
+    "small_b_field_gyrocenter_diffusion_quadratic": true,
+    "small_b_gyrocenter_diffusion_quadratic": true,
+    "small_b_test_gyrocenter_diffusion_quadratic": true,
+    "symmetry_maximum_absolute_error": true
+  },
+  "gyrocenter_diffusion": {
+    "density_row_infinity_norm": [
+      2.952766034654239e-17,
+      0.0010585065837858737,
+      0.004169002815804829,
+      0.015584022776236536
+    ],
+    "field_density_row_infinity_norm": [
+      2.952766034654239e-17,
+      0.005308602029999754,
+      0.021107350409682223,
+      0.08242513541783619
+    ],
+    "field_small_b_observed_order": 1.9783402280143347,
+    "interpretation": "equation-(3.5) finite-b classical gyro-diffusion in the test, field, and combined gyrocenter moments; particle-space local conservation cannot be reconstructed from the gyrophase-averaged matrix alone",
+    "bessel_argument": [
+      0.0,
+      0.1,
+      0.2,
+      0.4
+    ],
+    "small_b_observed_order": 1.939982771585923,
+    "test_density_row_infinity_norm": [
+      0.0,
+      0.005319225284028959,
+      0.021276590866070106,
+      0.0850857947777497
+    ],
+    "test_small_b_observed_order": 1.9998151230154746
+  },
+  "invariant_residuals": {
+    "density": 1.5272099054645245e-81,
+    "parallel_momentum": 0.0,
+    "thermal_energy": 5.551115123125783e-17
+  },
+  "matrix": [
+    [
+      2.5289937654577856e-97,
+      2.952766034654239e-17,
+      0.0,
+      -0.0,
+      2.087920886361325e-17,
+      -3.7582575954503845e-17,
+      0.0,
+      -0.0
+    ],
+    [
+      -0.0,
+      -0.4255384324281948,
+      -0.0,
+      0.0,
+      0.6018022224509401,
+      -0.064478809548315,
+      -0.0,
+      0.0
+    ],
+    [
+      0.0,
+      -0.0,
+      0.0,
+      -5.551115123125783e-17,
+      0.0,
+      -0.0,
+      -5.551115123125783e-17,
+      8.326672684688674e-17
+    ],
+    [
+      -0.0,
+      0.0,
+      -0.0,
+      -1.489384513498682,
+      -0.0,
+      0.0,
+      0.521176012696448,
+      0.27920143537309716
+    ],
+    [
+      2.3408381773460992e-97,
+      0.6018022224509401,
+      0.0,
+      -0.0,
+      -0.8510768648563898,
+      0.09118680694889891,
+      0.0,
+      -0.0
+    ],
+    [
+      1.5272099054645245e-81,
+      -0.064478809548315,
+      -0.0,
+      0.0,
+      0.09118680694889891,
+      -1.8921262441896523,
+      -0.0,
+      0.0
+    ],
+    [
+      0.0,
+      -0.0,
+      0.0,
+      0.521176012696448,
+      0.0,
+      -0.0,
+      -1.2766152972845846,
+      0.13678021042334837
+    ],
+    [
+      -0.0,
+      0.0,
+      -0.0,
+      0.27920143537309716,
+      -0.0,
+      0.0,
+      0.13678021042334837,
+      -2.172019082185578
+    ]
+  ],
+  "matrix_truncation": {
+    "basis": {
+      "maximum_hermite_order": 1,
+      "maximum_laguerre_order": 1
+    },
+    "bessel_argument": 0.8,
+    "orders": [
+      2,
+      4,
+      6
+    ],
+    "reference_order": 6,
+    "relative_errors": [
+      0.0006947125246722236,
+      4.499385650228523e-07,
+      0.0
+    ],
+    "spherical_cutoff": {
+      "maximum_order": 8,
+      "maximum_radial_order": 4
+    }
+  },
+  "metrics": {
+    "drift_kinetic_gyrocenter_density_row": 2.952766034654239e-17,
+    "final_bessel_relative_error": 0.0,
+    "finite_b_gyrocenter_density_row": 0.015584022776236536,
+    "finite_b_matrix_relative_error_at_order_4": 4.499385650228523e-07,
+    "finite_b_spherical_relative_error_at_order_8": 8.684895727703665e-07,
+    "maximum_eigenvalue": 9.00846363925679e-18,
+    "maximum_invariant_residual": 5.551115123125783e-17,
+    "maximum_projection_relative_error": 3.1316539653265556e-13,
+    "published_coefficient_maximum_absolute_error": 1.1102230246251565e-16,
+    "small_b_field_gyrocenter_diffusion_observed_order": 1.9783402280143347,
+    "small_b_gyrocenter_diffusion_observed_order": 1.939982771585923,
+    "small_b_test_gyrocenter_diffusion_observed_order": 1.9998151230154746,
+    "symmetry_maximum_absolute_error": 8.326672684688674e-17
+  },
+  "precision_decimal_digits": 80,
+  "references": [
+    {
+      "equations": [
+        "3.2",
+        "3.5",
+        "3.41",
+        "3.48",
+        "3.49",
+        "3.50"
+      ],
+      "title": "Frei et al. (2021), advanced gyrokinetic collision operators",
+      "url": "https://arxiv.org/abs/2104.11480"
+    },
+    {
+      "tests": [
+        "conservation",
+        "H-theorem",
+        "Maxwellian null space"
+      ],
+      "title": "Abel et al. (2008), collision-operator physical constraints",
+      "url": "https://arxiv.org/abs/0808.1300"
+    }
+  ],
+  "spherical_truncation": {
+    "basis": {
+      "maximum_hermite_order": 1,
+      "maximum_laguerre_order": 1
+    },
+    "bessel_laguerre_order": 6,
+    "bessel_argument": 0.8,
+    "maximum_spherical_orders": [
+      3,
+      8,
+      9
+    ],
+    "maximum_spherical_radial_orders": [
+      1,
+      4,
+      4
+    ],
+    "reference_cutoff": [
+      9,
+      4
+    ],
+    "relative_errors": [
+      0.2873376630856301,
+      8.684895727703665e-07,
+      0.0
+    ]
+  },
+  "thresholds": {
+    "drift_kinetic_gyrocenter_density_row": 5e-12,
+    "final_bessel_relative_error": 5e-09,
+    "finite_b_gyrocenter_density_row_minimum": 0.0001,
+    "finite_b_matrix_relative_error_at_order_4": 5e-06,
+    "finite_b_spherical_relative_error_at_order_8": 2e-06,
+    "maximum_eigenvalue": 1e-12,
+    "maximum_invariant_residual": 5e-12,
+    "maximum_projection_relative_error": 5e-09,
+    "published_coefficient_maximum_absolute_error": 5e-12,
+    "small_b_gyrocenter_diffusion_order_maximum": 2.3,
+    "small_b_gyrocenter_diffusion_order_minimum": 1.7,
+    "symmetry_maximum_absolute_error": 5e-12
+  },
+  "truncation": {
+    "coefficient": "Pi^(3,1,1)(b=1.8)",
+    "orders": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      6,
+      8,
+      12
+    ],
+    "reference_order": 24,
+    "reference_value": -0.6054733855025514,
+    "relative_errors": [
+      0.3659904457216309,
+      0.05660550806800982,
+      0.01143596323295617,
+      0.006267082368180291,
+      0.000732371595636465,
+      1.1911178297920701e-06,
+      3.516044758504394e-10,
+      0.0
+    ],
+    "values": [
+      -0.38387591126988774,
+      -0.5712002568945215,
+      -0.5985492141274107,
+      -0.6016788339238659,
+      -0.6050299539930954,
+      -0.6054726643124064,
+      -0.6054733852896642,
+      -0.6054733855025514
+    ]
+  }
+}

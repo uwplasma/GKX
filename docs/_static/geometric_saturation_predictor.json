@@ -1,0 +1,574 @@
+{
+  "points": [
+    {
+      "fraction": -0.75,
+      "coefficient": 0.031656127034592856,
+      "flux": 18.571735657056582,
+      "flux_sem": 0.237515147475319,
+      "features": {
+        "bad_curvature_mean": 0.20392053560701856,
+        "bad_curvature_max": 0.5583275378599964,
+        "bad_curvature_fraction": 0.6448872248989151,
+        "connection_length": 23.72436522923948,
+        "local_shear_rms": 19.903095269933857,
+        "local_shear_range": 87.77538194919339,
+        "flux_expansion_mean": 1.3520900854629936,
+        "flux_expansion_min": 0.43347188983198237,
+        "bmag_variation": 3.269376176043889,
+        "curvature_over_shear": 0.01024566947207786,
+        "curvature_over_expansion": 0.1508187492826637,
+        "gbdrift_bad_mean": 0.20392053560701856,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.7,
+      "coefficient": 0.037987352441511434,
+      "flux": 15.585753262044335,
+      "flux_sem": 0.645342891826938,
+      "features": {
+        "bad_curvature_mean": 0.1929828471756007,
+        "bad_curvature_max": 0.5449875292483946,
+        "bad_curvature_fraction": 0.66638490704782,
+        "connection_length": 22.577347730852164,
+        "local_shear_rms": 18.080714102388566,
+        "local_shear_range": 75.82220948561353,
+        "flux_expansion_mean": 1.3174572797116584,
+        "flux_expansion_min": 0.32680780476469606,
+        "bmag_variation": 2.9899654160304383,
+        "curvature_over_shear": 0.010673408477273947,
+        "curvature_over_expansion": 0.14648129404077329,
+        "gbdrift_bad_mean": 0.1929828471756007,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.65,
+      "coefficient": 0.04431857784843,
+      "flux": 15.227092487811793,
+      "flux_sem": 0.4440268731604115,
+      "features": {
+        "bad_curvature_mean": 0.1884628860007161,
+        "bad_curvature_max": 0.5322836522273382,
+        "bad_curvature_fraction": 0.7108204434449142,
+        "connection_length": 21.206612037720962,
+        "local_shear_rms": 18.314136992945315,
+        "local_shear_range": 81.10610041816786,
+        "flux_expansion_mean": 1.3962696031333488,
+        "flux_expansion_min": 0.23198547051626417,
+        "bmag_variation": 2.9296919319824646,
+        "curvature_over_shear": 0.010290568759713483,
+        "curvature_over_expansion": 0.13497600003451282,
+        "gbdrift_bad_mean": 0.1884628860007161,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.6,
+      "coefficient": 0.05064980325534857,
+      "flux": 16.900027563967665,
+      "flux_sem": 0.38710505576725995,
+      "features": {
+        "bad_curvature_mean": 0.17927200460988454,
+        "bad_curvature_max": 0.5079662549861811,
+        "bad_curvature_fraction": 0.7171216014326183,
+        "connection_length": 20.07134713059263,
+        "local_shear_rms": 19.20341282743231,
+        "local_shear_range": 82.15521065879703,
+        "flux_expansion_mean": 1.4562307532182126,
+        "flux_expansion_min": 0.4307014876136482,
+        "bmag_variation": 2.755336557297431,
+        "curvature_over_shear": 0.009335424188443853,
+        "curvature_over_expansion": 0.12310686628043013,
+        "gbdrift_bad_mean": 0.17927200460988454,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.55,
+      "coefficient": 0.05698102866226713,
+      "flux": 14.69577073335671,
+      "flux_sem": 0.3262986745162938,
+      "features": {
+        "bad_curvature_mean": 0.16650873833443475,
+        "bad_curvature_max": 0.48029132617403286,
+        "bad_curvature_fraction": 0.6083033608289187,
+        "connection_length": 19.273643281085377,
+        "local_shear_rms": 19.92339761806258,
+        "local_shear_range": 87.75232812003927,
+        "flux_expansion_mean": 1.4250916020149778,
+        "flux_expansion_min": 0.4155470671018867,
+        "bmag_variation": 2.537260004330145,
+        "curvature_over_shear": 0.008357446933824062,
+        "curvature_over_expansion": 0.11684072665855534,
+        "gbdrift_bad_mean": 0.16650873833443475,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.5,
+      "coefficient": 0.06331225406918571,
+      "flux": 12.515966314870541,
+      "flux_sem": 0.24250864687970408,
+      "features": {
+        "bad_curvature_mean": 0.15936144937981056,
+        "bad_curvature_max": 0.4520268463827895,
+        "bad_curvature_fraction": 0.5891152769295962,
+        "connection_length": 18.517012709143827,
+        "local_shear_rms": 20.37798509754318,
+        "local_shear_range": 86.23703078413493,
+        "flux_expansion_mean": 1.3865886448340299,
+        "flux_expansion_min": 0.3745715349808972,
+        "bmag_variation": 2.316368445544192,
+        "curvature_over_shear": 0.007820275096727966,
+        "curvature_over_expansion": 0.11493058880406856,
+        "gbdrift_bad_mean": 0.15936144937981056,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.45,
+      "coefficient": 0.06964347947610429,
+      "flux": 7.2053161970772335,
+      "flux_sem": 0.11280897495543846,
+      "features": {
+        "bad_curvature_mean": 0.15534424771190192,
+        "bad_curvature_max": 0.43547665165277544,
+        "bad_curvature_fraction": 0.6007706527006418,
+        "connection_length": 17.626702775326375,
+        "local_shear_rms": 21.14311875466071,
+        "local_shear_range": 86.48062919714823,
+        "flux_expansion_mean": 1.4268534999047602,
+        "flux_expansion_min": 0.2661994017079024,
+        "bmag_variation": 2.2097881278468265,
+        "curvature_over_shear": 0.007347272155753201,
+        "curvature_over_expansion": 0.10887189730569456,
+        "gbdrift_bad_mean": 0.15534424771190192,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.4,
+      "coefficient": 0.07597470488302285,
+      "flux": 11.721893398366376,
+      "flux_sem": 0.2301553680852536,
+      "features": {
+        "bad_curvature_mean": 0.152723475190052,
+        "bad_curvature_max": 0.4141689894767196,
+        "bad_curvature_fraction": 0.640021890782412,
+        "connection_length": 16.709123986861744,
+        "local_shear_rms": 22.200047281606007,
+        "local_shear_range": 84.5771305375895,
+        "flux_expansion_mean": 1.551659363803835,
+        "flux_expansion_min": 0.33166919276953977,
+        "bmag_variation": 2.0776612813681647,
+        "curvature_over_shear": 0.006879421167566252,
+        "curvature_over_expansion": 0.09842590374710601,
+        "gbdrift_bad_mean": 0.152723475190052,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.35,
+      "coefficient": 0.08230593028994143,
+      "flux": 10.77958378473808,
+      "flux_sem": 0.17065470471898825,
+      "features": {
+        "bad_curvature_mean": 0.14608318200601145,
+        "bad_curvature_max": 0.38966306933750205,
+        "bad_curvature_fraction": 0.6461341245414011,
+        "connection_length": 15.978030054317948,
+        "local_shear_rms": 23.13408139584974,
+        "local_shear_range": 83.1055988949455,
+        "flux_expansion_mean": 1.6273063879231418,
+        "flux_expansion_min": 0.4389911790620292,
+        "bmag_variation": 1.9315398444958198,
+        "curvature_over_shear": 0.0063146307608401,
+        "curvature_over_expansion": 0.08976993090554439,
+        "gbdrift_bad_mean": 0.14608318200601145,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.3,
+      "coefficient": 0.08863715569686,
+      "flux": 11.529562663236282,
+      "flux_sem": 0.18601815043882974,
+      "features": {
+        "bad_curvature_mean": 0.13736573182931383,
+        "bad_curvature_max": 0.3651488072422898,
+        "bad_curvature_fraction": 0.6438191830812257,
+        "connection_length": 15.438212439470352,
+        "local_shear_rms": 23.84755834931026,
+        "local_shear_range": 80.11883637215938,
+        "flux_expansion_mean": 1.628959974556091,
+        "flux_expansion_min": 0.4369853082914491,
+        "bmag_variation": 1.7811215772861557,
+        "curvature_over_shear": 0.005760159166705084,
+        "curvature_over_expansion": 0.08432726032249348,
+        "gbdrift_bad_mean": 0.13736573182931383,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.25,
+      "coefficient": 0.09496838110377856,
+      "flux": 10.50694545388174,
+      "flux_sem": 0.15191536506516262,
+      "features": {
+        "bad_curvature_mean": 0.12886587906828473,
+        "bad_curvature_max": 0.34185754161695464,
+        "bad_curvature_fraction": 0.6391099318236206,
+        "connection_length": 14.993141747228876,
+        "local_shear_rms": 25.005226257840704,
+        "local_shear_range": 97.7043990968831,
+        "flux_expansion_mean": 1.5957483176321405,
+        "flux_expansion_min": 0.45590379483533455,
+        "bmag_variation": 1.6654736712962264,
+        "curvature_over_shear": 0.005153557809854938,
+        "curvature_over_expansion": 0.08075576683640377,
+        "gbdrift_bad_mean": 0.12886587906828473,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.2,
+      "coefficient": 0.10129960651069714,
+      "flux": 9.996700754563774,
+      "flux_sem": 0.17028963055879517,
+      "features": {
+        "bad_curvature_mean": 0.12136626004782611,
+        "bad_curvature_max": 0.31943953791509455,
+        "bad_curvature_fraction": 0.6342380162273795,
+        "connection_length": 14.560904081216973,
+        "local_shear_rms": 26.937142620531805,
+        "local_shear_range": 120.7660365606919,
+        "flux_expansion_mean": 1.556455768761194,
+        "flux_expansion_min": 0.4529740959215238,
+        "bmag_variation": 1.5172586408132689,
+        "curvature_over_shear": 0.004505535785941874,
+        "curvature_over_expansion": 0.07797604177626152,
+        "gbdrift_bad_mean": 0.12136626004782611,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.15,
+      "coefficient": 0.1076308319176157,
+      "flux": 10.150795456172139,
+      "flux_sem": 0.1393522479360177,
+      "features": {
+        "bad_curvature_mean": 0.11610015013297624,
+        "bad_curvature_max": 0.2986695807019464,
+        "bad_curvature_fraction": 0.5962107936750546,
+        "connection_length": 14.088065249894177,
+        "local_shear_rms": 30.261110011362724,
+        "local_shear_range": 144.07421720014423,
+        "flux_expansion_mean": 1.550604286646864,
+        "flux_expansion_min": 0.3596618941043292,
+        "bmag_variation": 1.4094339006789411,
+        "curvature_over_shear": 0.003836612407455704,
+        "curvature_over_expansion": 0.07487413206114592,
+        "gbdrift_bad_mean": 0.11610015013297624,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.1,
+      "coefficient": 0.11396205732453428,
+      "flux": 12.04502573450325,
+      "flux_sem": 0.17592842769884576,
+      "features": {
+        "bad_curvature_mean": 0.11318689806646264,
+        "bad_curvature_max": 0.2796676878851248,
+        "bad_curvature_fraction": 0.5947832829640369,
+        "connection_length": 13.555608144112497,
+        "local_shear_rms": 34.67818415755062,
+        "local_shear_range": 165.7345038370449,
+        "flux_expansion_mean": 1.613791369992084,
+        "flux_expansion_min": 0.262602365603065,
+        "bmag_variation": 1.3037132839606527,
+        "curvature_over_shear": 0.0032639222847490996,
+        "curvature_over_expansion": 0.0701372557637471,
+        "gbdrift_bad_mean": 0.11318689806646264,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": -0.05,
+      "coefficient": 0.12029328273145284,
+      "flux": 11.002428053617473,
+      "flux_sem": 0.18257469699392806,
+      "features": {
+        "bad_curvature_mean": 0.11128234610067057,
+        "bad_curvature_max": 0.2685048524476292,
+        "bad_curvature_fraction": 0.5958123395649141,
+        "connection_length": 12.99596210103525,
+        "local_shear_rms": 39.568584386232594,
+        "local_shear_range": 184.18611104840238,
+        "flux_expansion_mean": 1.7563231901199512,
+        "flux_expansion_min": 0.2233668484864594,
+        "bmag_variation": 1.2043975338581356,
+        "curvature_over_shear": 0.0028123913914744423,
+        "curvature_over_expansion": 0.06336097292723804,
+        "gbdrift_bad_mean": 0.11128234610067057,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.0,
+      "coefficient": 0.12662450813837142,
+      "flux": 11.009004455010071,
+      "flux_sem": 0.16644554696572134,
+      "features": {
+        "bad_curvature_mean": 0.10928461568052156,
+        "bad_curvature_max": 0.2773553070682749,
+        "bad_curvature_fraction": 0.5973268592880467,
+        "connection_length": 12.469798157307045,
+        "local_shear_rms": 43.446838027677195,
+        "local_shear_range": 196.22102622090233,
+        "flux_expansion_mean": 1.9338049757723415,
+        "flux_expansion_min": 0.4319984363406591,
+        "bmag_variation": 1.1324851112913041,
+        "curvature_over_shear": 0.0025153640780694636,
+        "curvature_over_expansion": 0.056512738900609365,
+        "gbdrift_bad_mean": 0.10928461568052156,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.05,
+      "coefficient": 0.13295573354529,
+      "flux": 10.843325046699418,
+      "flux_sem": 0.20685460756513127,
+      "features": {
+        "bad_curvature_mean": 0.10675433165798343,
+        "bad_curvature_max": 0.286715782177287,
+        "bad_curvature_fraction": 0.5986861508141053,
+        "connection_length": 12.022529310450471,
+        "local_shear_rms": 45.760857088346086,
+        "local_shear_range": 193.96404185587465,
+        "flux_expansion_mean": 2.090123161218549,
+        "flux_expansion_min": 0.46970257327377496,
+        "bmag_variation": 1.1956670678113526,
+        "curvature_over_shear": 0.002332874392013312,
+        "curvature_over_expansion": 0.051075617762039095,
+        "gbdrift_bad_mean": 0.10675433165798343,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.1,
+      "coefficient": 0.13928695895220858,
+      "flux": 9.644776290257335,
+      "flux_sem": 0.17743799108381675,
+      "features": {
+        "bad_curvature_mean": 0.10379306985270038,
+        "bad_curvature_max": 0.2957951542293618,
+        "bad_curvature_fraction": 0.6311672640290222,
+        "connection_length": 11.661370895273004,
+        "local_shear_rms": 46.68556891847724,
+        "local_shear_range": 189.70752440562399,
+        "flux_expansion_mean": 2.205259932662117,
+        "flux_expansion_min": 0.46484711964516173,
+        "bmag_variation": 1.3147703193648694,
+        "curvature_over_shear": 0.0022232366929906067,
+        "curvature_over_expansion": 0.04706613869658658,
+        "gbdrift_bad_mean": 0.10379306985270038,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.15,
+      "coefficient": 0.14561818435912713,
+      "flux": 10.908443750936266,
+      "flux_sem": 0.17145893734310266,
+      "features": {
+        "bad_curvature_mean": 0.10046605959635005,
+        "bad_curvature_max": 0.3050834078722201,
+        "bad_curvature_fraction": 0.6343199966178208,
+        "connection_length": 11.3708374403263,
+        "local_shear_rms": 46.588963693195616,
+        "local_shear_range": 177.14229748486235,
+        "flux_expansion_mean": 2.282212347681737,
+        "flux_expansion_min": 0.4587986113055052,
+        "bmag_variation": 1.4551403236373857,
+        "curvature_over_shear": 0.002156434735444078,
+        "curvature_over_expansion": 0.04402134608482121,
+        "gbdrift_bad_mean": 0.10046605959635005,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.2,
+      "coefficient": 0.1519494097660457,
+      "flux": 9.254512809515218,
+      "flux_sem": 0.4138402902814722,
+      "features": {
+        "bad_curvature_mean": 0.0970099241114479,
+        "bad_curvature_max": 0.3142341830190922,
+        "bad_curvature_fraction": 0.638378703458853,
+        "connection_length": 11.128932220142861,
+        "local_shear_rms": 44.97813166975749,
+        "local_shear_range": 163.07857647252948,
+        "flux_expansion_mean": 2.3314785920199426,
+        "flux_expansion_min": 0.43772541937884457,
+        "bmag_variation": 1.6207114121432449,
+        "curvature_over_shear": 0.002156824227909753,
+        "curvature_over_expansion": 0.04160875611017325,
+        "gbdrift_bad_mean": 0.0970099241114479,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.25,
+      "coefficient": 0.15828063517296428,
+      "flux": 10.0771448854589,
+      "flux_sem": 0.24372929254990924,
+      "features": {
+        "bad_curvature_mean": 0.0938300474791742,
+        "bad_curvature_max": 0.3241678626608298,
+        "bad_curvature_fraction": 0.6080590485975732,
+        "connection_length": 10.917279545650144,
+        "local_shear_rms": 43.415105110436635,
+        "local_shear_range": 145.58509421499286,
+        "flux_expansion_mean": 2.3678461096745,
+        "flux_expansion_min": 0.413744376880589,
+        "bmag_variation": 1.8043079348808528,
+        "curvature_over_shear": 0.0021612304574754613,
+        "curvature_over_expansion": 0.03962675069794663,
+        "gbdrift_bad_mean": 0.0938300474791742,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.3,
+      "coefficient": 0.16461186057988286,
+      "flux": 9.648222098749015,
+      "flux_sem": 0.20161203831546382,
+      "features": {
+        "bad_curvature_mean": 0.0913547215905088,
+        "bad_curvature_max": 0.3345508009525491,
+        "bad_curvature_fraction": 0.611303910288055,
+        "connection_length": 10.721893527308067,
+        "local_shear_rms": 42.331277883797824,
+        "local_shear_range": 133.31306379754656,
+        "flux_expansion_mean": 2.40001087543096,
+        "flux_expansion_min": 0.3916659990426923,
+        "bmag_variation": 2.050664559824965,
+        "curvature_over_shear": 0.002158090333140511,
+        "curvature_over_expansion": 0.038064294843707575,
+        "gbdrift_bad_mean": 0.0913547215905088,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.35,
+      "coefficient": 0.17094308598680144,
+      "flux": 8.586609942714288,
+      "flux_sem": 0.17884367077336255,
+      "features": {
+        "bad_curvature_mean": 0.0904821236109469,
+        "bad_curvature_max": 0.34706646795135887,
+        "bad_curvature_fraction": 0.5736447161191036,
+        "connection_length": 10.53564933952877,
+        "local_shear_rms": 40.226412415901834,
+        "local_shear_range": 123.4268397274561,
+        "flux_expansion_mean": 2.4476636801897875,
+        "flux_expansion_min": 0.37143407904617215,
+        "bmag_variation": 2.310686525065483,
+        "curvature_over_shear": 0.002249321233905974,
+        "curvature_over_expansion": 0.03696673049621387,
+        "gbdrift_bad_mean": 0.0904821236109469,
+        "theta_extent": 6.1850105367549055
+      }
+    },
+    {
+      "fraction": 0.4,
+      "coefficient": 0.17727431139372,
+      "flux": 7.106718769073449,
+      "flux_sem": 0.14279109245892385,
+      "features": {
+        "bad_curvature_mean": 0.09067787405482028,
+        "bad_curvature_max": 0.3572241365172164,
+        "bad_curvature_fraction": 0.5313652914231959,
+        "connection_length": 10.344880474098295,
+        "local_shear_rms": 38.16787192411793,
+        "local_shear_range": 125.65991586165138,
+        "flux_expansion_mean": 2.502398272040824,
+        "flux_expansion_min": 0.3479317089834503,
+        "bmag_variation": 2.6971782037136864,
+        "curvature_over_shear": 0.002375764471100149,
+        "curvature_over_expansion": 0.036236387735701314,
+        "gbdrift_bad_mean": 0.09067787405482028,
+        "theta_extent": 6.1850105367549055
+      }
+    }
+  ],
+  "scores": {
+    "bad_curvature_mean": {
+      "pearson": 0.8109392663886823,
+      "spearman": 0.7608695652173912,
+      "loo_r2": 0.5176312317730465
+    },
+    "bad_curvature_max": {
+      "pearson": 0.7264288187461799,
+      "spearman": 0.44260869565217387,
+      "loo_r2": 0.3275106476555937
+    },
+    "bad_curvature_fraction": {
+      "pearson": 0.6512455948010709,
+      "spearman": 0.46347826086956523,
+      "loo_r2": 0.3636620225351008
+    },
+    "connection_length": {
+      "pearson": 0.8191066577991668,
+      "spearman": 0.7626086956521738,
+      "loo_r2": 0.5340306683347384
+    },
+    "local_shear_rms": {
+      "pearson": -0.5780099150287196,
+      "spearman": -0.6243478260869564,
+      "loo_r2": 0.16447980526661865
+    },
+    "local_shear_range": {
+      "pearson": -0.4220455584794707,
+      "spearman": -0.4208695652173913,
+      "loo_r2": -0.0016088737319901458
+    },
+    "flux_expansion_mean": {
+      "pearson": -0.630414059248185,
+      "spearman": -0.7078260869565216,
+      "loo_r2": 0.27909804520075154
+    },
+    "flux_expansion_min": {
+      "pearson": -0.007023441817019055,
+      "spearman": -0.15565217391304348,
+      "loo_r2": -0.20039236733563803
+    },
+    "bmag_variation": {
+      "pearson": 0.5567106989539728,
+      "spearman": 0.32260869565217387,
+      "loo_r2": 0.03146386613384988
+    },
+    "curvature_over_shear": {
+      "pearson": 0.7662903380669501,
+      "spearman": 0.6886956521739129,
+      "loo_r2": 0.43059129810751784
+    },
+    "curvature_over_expansion": {
+      "pearson": 0.7867849957919475,
+      "spearman": 0.7626086956521738,
+      "loo_r2": 0.4747146700430692
+    },
+    "gbdrift_bad_mean": {
+      "pearson": 0.8109392663886823,
+      "spearman": 0.7608695652173912,
+      "loo_r2": 0.5176312317730465
+    }
+  },
+  "collinearity": {
+    "condition_number": 1.3222904309936214e+17,
+    "note": "one-parameter scan: features are collinear by construction; single-feature signs are interpretable, multivariate exponents are not"
+  }
+}

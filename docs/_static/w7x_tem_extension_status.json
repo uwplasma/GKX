@@ -1,0 +1,81 @@
+{
+  "claim_scope": "w7x_fluctuation_tem_multi_flux_extension_tracking",
+  "kind": "w7x_tem_extension_status",
+  "notes": "This artifact is a claim-scope gate. It closes the reproducible W7-X simulation-spectrum estimator only; TEM, multi-flux-tube, and kinetic-electron W7-X validation remain open.",
+  "rows": [
+    {
+      "claim_level": "validated_simulation_spectrum_not_experimental_validation",
+      "key_metrics": {
+        "dominant_heat_flux_ky": 1.2857143878936768,
+        "dominant_phi_ky": 0.1904762089252472,
+        "time_samples": 76
+      },
+      "lane": "W7-X nonlinear fluctuation spectrum",
+      "next_action": "Keep as the released simulation-spectrum diagnostic; do not use as an experimental density-spectrum claim.",
+      "primary_artifact": "docs/_static/w7x_fluctuation_spectrum_panel.json",
+      "status": "closed"
+    },
+    {
+      "claim_level": "open_linear_mismatch_blocks_tem_extension",
+      "key_metrics": {
+        "audit_available": true,
+        "audit_claim_level": "provisional_literature_digitization_not_closed_parity",
+        "audit_status": "open",
+        "available": true,
+        "gamma_sign_mismatch_count": 1,
+        "max_abs_gamma_error": 1.815449,
+        "max_abs_omega_error": 3.976386,
+        "max_abs_rel_gamma": 4.254,
+        "max_abs_rel_omega": 3.3,
+        "max_abs_rel_omega_raw": 351.534,
+        "n_rows": 6,
+        "omega_branch_inversion": true,
+        "omega_sign_mismatch_count": 3,
+        "omega_spearman": -0.9856107606091623,
+        "source": "/Users/rogeriojorge/local/GKX/docs/_static/tem_branch_parity_audit.json"
+      },
+      "lane": "TEM / kinetic-electron linear parity",
+      "next_action": "Reconstruct the TEM case definition or obtain an independent reference dump, then fix the branch/frequency mismatch before using kinetic-electron W7-X scans for validation or optimization.",
+      "primary_artifact": "docs/_static/tem_branch_parity_audit.json",
+      "status": "open"
+    },
+    {
+      "claim_level": "untracked_required_manuscript_extension",
+      "key_metrics": {
+        "required_alpha_values": [
+          0.0,
+          "field-period displaced",
+          "bad-curvature tube"
+        ],
+        "required_torflux_values": [
+          0.25,
+          0.5,
+          0.64
+        ],
+        "requires_nonlinear_window_gates": true
+      },
+      "lane": "W7-X multi-flux-tube and multi-surface scan",
+      "next_action": "Run alpha/surface-resolved W7-X ITG scans and promote only after linear branch, nonlinear window, and resolved-spectrum gates pass.",
+      "primary_artifact": null,
+      "status": "open"
+    },
+    {
+      "claim_level": "not_started",
+      "key_metrics": {
+        "requires_density_gradient_scan": true,
+        "requires_independent_reference_or_literature_window": true,
+        "requires_kinetic_electrons": true
+      },
+      "lane": "W7-X kinetic-electron/TEM nonlinear window",
+      "next_action": "After TEM linear parity closes, run bounded kinetic-electron W7-X pilots and add matched nonlinear gates.",
+      "primary_artifact": null,
+      "status": "open"
+    }
+  ],
+  "summary": {
+    "n_closed": 1,
+    "n_open": 3,
+    "n_partial": 0,
+    "n_rows": 4
+  }
+}

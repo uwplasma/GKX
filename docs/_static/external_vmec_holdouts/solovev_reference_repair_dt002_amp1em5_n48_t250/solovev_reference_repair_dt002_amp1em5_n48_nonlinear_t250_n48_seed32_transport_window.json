@@ -1,0 +1,20 @@
+{
+  "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+  "dt": 0.02,
+  "kind": "nonlinear_window_summary",
+  "nonlinear_artifact": "solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed32.out.nc",
+  "promotion_gate": {
+    "passed": true,
+    "source": "replicated nonlinear-window extraction; convergence gate is stored separately"
+  },
+  "seed": 32,
+  "gkx": "solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed32_heat_flux_trace.csv",
+  "tmax": 250.0,
+  "tmin": 170.0,
+  "variant": {
+    "seed": 32,
+    "timestep": 0.02
+  },
+  "variant_axis": "seed",
+  "variant_label": "seed32"
+}

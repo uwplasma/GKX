@@ -1,0 +1,26 @@
+{
+  "case": "updown_asym_external_vmec_t450_high_grid_window",
+  "claim_level": "passed_grid_converged_external_vmec_transport_window",
+  "source_gate": "docs/_static/external_vmec_updown_asym_t450_high_grid_convergence_gate.json",
+  "gkx": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv",
+  "window_policy": "highest_resolution_common_late_window_from_passed_external_vmec_grid_gate",
+  "tmin": 225.05453491210938,
+  "tmax": 450.009033203125,
+  "heat_flux_mean": 7.76432224499282,
+  "heat_flux_std": 0.6236662752268785,
+  "wphi_mean": 4.988153924224197,
+  "wphi_std": 0.8837313056821503,
+  "kind": "external_vmec_transport_window_summary",
+  "gate_passed": true,
+  "promotion_gate_passed": true,
+  "convergence_gate_passed": true,
+  "promotion_gate": {
+    "passed": true,
+    "reason": "updown_asym_external_vmec_t450 passed external-VMEC nonlinear grid-convergence gate"
+  },
+  "gate_report": {
+    "case": "updown_asym_external_vmec_t450",
+    "passed": true,
+    "source": "external_vmec_nonlinear_pilot_reports"
+  }
+}

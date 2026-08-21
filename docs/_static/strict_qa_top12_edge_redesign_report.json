@@ -1,0 +1,99 @@
+{
+  "blockers": [
+    "insufficient_matched_reduction",
+    "insufficient_uncertainty_separation",
+    "matched_comparison_not_passed"
+  ],
+  "gates": [
+    {
+      "metric": "matched_replicated_late_window_reduction",
+      "passed": false,
+      "threshold": 0.02,
+      "value": 0.005796563586614165
+    },
+    {
+      "metric": "uncertainty_separated_reduction",
+      "passed": false,
+      "threshold": 1.0,
+      "value": 0.20160797694000432
+    },
+    {
+      "metric": "multi_sample_objective_coverage",
+      "passed": true,
+      "threshold": 12,
+      "value": 18
+    }
+  ],
+  "kind": "vmex_nonlinear_transport_audit_redesign_report",
+  "matched_comparison_case": "strict_qa_top12_edge_matched_nonlinear_transport",
+  "matched_comparison_passed": false,
+  "next_action": "redesign the reduced transport objective with the recommended multi-surface, multi-field-line, multi-ky sample set; rerun projected admission; then repeat the matched long-window nonlinear audit",
+  "nonlinear_audit_blockers": [
+    "insufficient_matched_reduction",
+    "insufficient_uncertainty_separation",
+    "matched_comparison_not_passed"
+  ],
+  "nonlinear_audit_promoted": false,
+  "objective_sample_summary": {
+    "alpha_count": 2,
+    "alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "blockers": [],
+    "ky_count": 3,
+    "ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "passed": true,
+    "sample_count": 18,
+    "surface_count": 3,
+    "surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ]
+  },
+  "policy": {
+    "minimum_alpha_count": 2,
+    "minimum_ky_count": 3,
+    "minimum_relative_reduction": 0.02,
+    "minimum_sample_count": 12,
+    "minimum_surface_count": 3,
+    "minimum_uncertainty_z_score": 1.0,
+    "recommended_alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "recommended_ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "recommended_surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ]
+  },
+  "recommended_sample_set": {
+    "alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "sample_count": 18,
+    "surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ]
+  },
+  "requires_objective_redesign": true
+}

@@ -1,0 +1,60 @@
+{
+  "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
+  "claim_level": "passed_replicated_external_vmec_transport_holdout_under_explicit_spread_gate",
+  "inputs": {
+    "convergence_reports": [
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/nonlinear_window_convergence_reports/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_transport_window.convergence.json",
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/nonlinear_window_convergence_reports/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed31_transport_window.convergence.json",
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/nonlinear_window_convergence_reports/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed32_transport_window.convergence.json"
+    ],
+    "heat_flux_traces": [
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_heat_flux_trace.csv",
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed31_heat_flux_trace.csv",
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed32_heat_flux_trace.csv"
+    ],
+    "output_gate": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_output_gate.json",
+    "readiness": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_readiness.json",
+    "replicate_ensemble_gate": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_ensemble_gate.json",
+    "transport_windows": [
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_dt0p01_gpu_transport_window.json",
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed31_transport_window.json",
+      "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_reference_repair_dt002_amp1em5_n48_nonlinear_t250_n48_seed32_transport_window.json"
+    ]
+  },
+  "kind": "external_vmec_replicate_admission_gate",
+  "notes": [
+    "Scoped external-VMEC admission sidecar for the repaired Solovev n48/t250 seed/timestep ensemble.",
+    "This admits the nonlinear window as negative quasilinear-transfer evidence only; it is not an absolute-flux promotion.",
+    "The relaxed 20% spread gate was explicitly approved for this low-flux independent holdout and is recorded in promotion_gate."
+  ],
+  "output_gate": {
+    "n_outputs": null,
+    "passed": true
+  },
+  "passed": true,
+  "promotion_gate": {
+    "blockers": [],
+    "combined_sem_rel": 0.046179186123325784,
+    "max_mean_rel_spread": 0.2,
+    "mean_rel_spread": 0.1598949352030753,
+    "n_finite_means": 3,
+    "passed": true,
+    "policy": "explicit_20_percent_seed_timestep_spread_gate_for_low_flux_independent_holdout"
+  },
+  "readiness": {
+    "passed": true,
+    "seed_values": null,
+    "timestep_values": null
+  },
+  "statistics": {
+    "combined_sem": 0.06508713362749292,
+    "combined_sem_rel": 0.046179186123325784,
+    "ensemble_mean": 1.4094473959257687,
+    "max_individual_sem": 0.035318459475915276,
+    "mean_rel_spread": 0.1598949352030753,
+    "mean_spread": 0.225363500043694,
+    "n_finite_means": 3,
+    "n_reports": 3,
+    "sample_sem": 0.06508713362749292
+  }
+}

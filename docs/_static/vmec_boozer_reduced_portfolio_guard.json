@@ -1,0 +1,153 @@
+{
+  "ad_fd_gradient_gate": {
+    "finite_ad_fd_values": true,
+    "has_growth_ad_fd_gate": true,
+    "has_quasilinear_ad_fd_gate": true,
+    "n_gradient_artifacts": 2,
+    "n_objective_gates": 7,
+    "n_passed_objective_gates": 7,
+    "objective_names": [
+      "gamma",
+      "kperp_eff2",
+      "linear_heat_flux_weight",
+      "mixing_length_heat_flux_proxy",
+      "omega"
+    ],
+    "passed": true
+  },
+  "claim_scope": "artifact-level guard for real VMEC/Boozer reduced growth/QL portfolio rows; not a production nonlinear turbulent-transport optimization claim",
+  "claim_scope_gate": {
+    "has_nonproduction_disclaimer": true,
+    "nonlinear_trace_absent": true,
+    "objective": "quasilinear_flux",
+    "passed": true
+  },
+  "config": {
+    "min_alphas": 2,
+    "min_boozer_mode": 21,
+    "min_ky": 2,
+    "min_objectives": 2,
+    "require_growth_objective": true,
+    "require_quasilinear_objective": true,
+    "require_vmec_paths": true,
+    "value_atol": 1e-06,
+    "value_rtol": 1e-06
+  },
+  "coverage_gate": {
+    "alphas": [
+      0.0,
+      0.7
+    ],
+    "ky_values": [
+      0.1,
+      0.2
+    ],
+    "min_alphas": 2,
+    "min_ky": 2,
+    "n_alphas": 2,
+    "n_ky": 2,
+    "n_samples": 4,
+    "n_surfaces": 1,
+    "passed": true,
+    "surface_labels": [
+      "__mid_surface__"
+    ]
+  },
+  "finite_difference_gate": {
+    "artifact_passed": true,
+    "finite_array_fields": {
+      "base_objective_table": true,
+      "base_sample_values": true,
+      "minus_objective_table": true,
+      "minus_sample_values": true,
+      "plus_objective_table": true,
+      "plus_sample_values": true
+    },
+    "finite_difference_consistent": true,
+    "finite_scalar_fields": {
+      "base_value": true,
+      "central_derivative": true,
+      "curvature_ratio": true,
+      "minus_value": true,
+      "plus_value": true,
+      "response_abs": true
+    },
+    "passed": true,
+    "response_resolved": true
+  },
+  "full_objective_table_gate": {
+    "finite": true,
+    "passed": true,
+    "shape": [
+      4,
+      6
+    ]
+  },
+  "gradient_artifacts": [
+    "docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
+    "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json"
+  ],
+  "kind": "vmec_boozer_reduced_portfolio_artifact_guard",
+  "next_action": "Use this guard to admit reduced VMEC/Boozer growth/QL portfolio artifacts. Production nonlinear claims still require held-out optimized-equilibrium nonlinear-window ensembles and transport audits.",
+  "objective_name_gate": {
+    "has_growth_objective": true,
+    "has_quasilinear_objective": true,
+    "min_objectives": 2,
+    "n_objectives": 6,
+    "objective_names": [
+      "gamma",
+      "omega",
+      "kperp_eff2",
+      "linear_heat_flux_weight",
+      "linear_particle_flux_weight",
+      "mixing_length_heat_flux_proxy"
+    ],
+    "passed": true,
+    "requires_growth_objective": true,
+    "requires_quasilinear_objective": true
+  },
+  "passed": true,
+  "portfolio_reducer_gate": {
+    "abs_error": 7.531322232523507e-10,
+    "artifact_base_value": 2.22709918097469,
+    "atol": 1e-06,
+    "contract": {
+      "n_alphas": 2,
+      "n_ky": 2,
+      "n_objectives": 1,
+      "n_samples": 4,
+      "n_surfaces": 1,
+      "reduction": "weighted_mean",
+      "row_shape": [
+        1,
+        2,
+        2,
+        1
+      ],
+      "sample_shape": [
+        1,
+        2,
+        2
+      ],
+      "uses_objective_weights": false,
+      "uses_sample_weights": true,
+      "uses_separable_sample_weights": false
+    },
+    "passed": true,
+    "reduced_base_value": 2.2270991802215576,
+    "reduction": "weighted_mean",
+    "rtol": 1e-06
+  },
+  "provenance_gate": {
+    "has_input_and_wout_paths": true,
+    "has_vmec_boozer_scope": true,
+    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "mboz": 21,
+    "min_boozer_mode": 21,
+    "nboz": 21,
+    "passed": true,
+    "requires_vmec_paths": true,
+    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+  },
+  "row_artifact": "docs/_static/vmec_boozer_aggregate_objective_gate.json"
+}

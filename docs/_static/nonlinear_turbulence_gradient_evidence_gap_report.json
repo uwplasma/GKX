@@ -1,0 +1,145 @@
+{
+  "blockers": [
+    "production_gradient_artifact"
+  ],
+  "claim_level": "fail_closed_production_candidate_gradient_gate_not_resolved",
+  "current_gradient_candidate_present": true,
+  "current_gradient_failed_gates": [
+    {
+      "detail": "kind=nonlinear_turbulence_gradient_central_fd_gate",
+      "metric": "artifact_passed"
+    },
+    {
+      "detail": "gradient_uncertainty_rel=1.8061519699775055 max=0.5",
+      "metric": "gradient_uncertainty_bounded"
+    }
+  ],
+  "current_window_evidence_passed": true,
+  "kind": "nonlinear_turbulence_gradient_evidence_gap_report",
+  "missing_evidence": [
+    {
+      "blocker": "production_gradient_artifact",
+      "current_artifact_class": "production_long_window_turbulence_gradient_candidate",
+      "current_artifact_path": "docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.json",
+      "current_failed_gates": [
+        {
+          "detail": "kind=nonlinear_turbulence_gradient_central_fd_gate",
+          "metric": "artifact_passed"
+        },
+        {
+          "detail": "gradient_uncertainty_rel=1.8061519699775055 max=0.5",
+          "metric": "gradient_uncertainty_bounded"
+        }
+      ],
+      "needed": "the current matched long-window production-candidate finite-difference artifact must pass all recorded response, asymmetry, conditioning, and propagated gradient-uncertainty gates"
+    }
+  ],
+  "notes": "Standalone passed transport windows are necessary but not sufficient: production turbulence-gradient evidence requires paired parameter perturbations tied to the same post-transient averaging protocol.",
+  "passed": false,
+  "promotion_blocked": true,
+  "qualifying_window_ensemble_count": 2,
+  "required_campaign": {
+    "case_slug": "optimized_equilibrium_turbulence_gradient",
+    "finite_difference_audit": {
+      "acceptance_gates": {
+        "fd_asymmetry_rel_max": 0.5,
+        "fd_condition_number_max": 100000000.0,
+        "gradient_uncertainty_rel_max": 0.5,
+        "production_nonlinear_window_gradient_gate": true,
+        "response_fraction_min": 0.03,
+        "window_combined_sem_rel_max": 0.25,
+        "window_mean_rel_spread_max": 0.15
+      },
+      "fallback_if_marginal": "repeat the paired campaign with a second perturbation fraction or longer analysis_tmax; do not promote if the response is not resolved above the transport-window uncertainty.",
+      "formula": "dQ/dp = (mean(Q_plus) - mean(Q_minus)) / (2 * delta_p)",
+      "required_metrics": [
+        "central_gradient",
+        "response_fraction",
+        "fd_asymmetry_rel",
+        "fd_condition_number",
+        "gradient_uncertainty_rel",
+        "baseline_window_mean",
+        "plus_window_mean",
+        "minus_window_mean",
+        "baseline_window_sem",
+        "plus_window_sem",
+        "minus_window_sem"
+      ],
+      "required_output": "docs/_static/optimized_equilibrium_turbulence_gradient_vmec_state_control_or_profile_gradient_central_fd_gradient_gate.json"
+    },
+    "parameter_name": "vmec_state_control_or_profile_gradient",
+    "perturbation_fraction": 0.05,
+    "required_runs": [
+      {
+        "parameter_multiplier": 0.95,
+        "parameter_name": "vmec_state_control_or_profile_gradient",
+        "replicates": [
+          "seed31",
+          "seed32",
+          "dt0p04"
+        ],
+        "required_output": "docs/_static/optimized_equilibrium_turbulence_gradient_minus_delta_replicates/optimized_equilibrium_turbulence_gradient_minus_delta_t700_ensemble_gate.json",
+        "run_contract": {
+          "analysis_window": [
+            350.0,
+            700.0
+          ],
+          "minimum_grid": "n64x64x64x40x40",
+          "minimum_tmax": 700.0,
+          "same_numerics_except_parameter": true,
+          "t_start": 0.0
+        },
+        "state": "minus_delta"
+      },
+      {
+        "parameter_multiplier": 1.0,
+        "parameter_name": "vmec_state_control_or_profile_gradient",
+        "replicates": [
+          "seed31",
+          "seed32",
+          "dt0p04"
+        ],
+        "required_output": "docs/_static/optimized_equilibrium_turbulence_gradient_baseline_replicates/optimized_equilibrium_turbulence_gradient_baseline_t700_ensemble_gate.json",
+        "run_contract": {
+          "analysis_window": [
+            350.0,
+            700.0
+          ],
+          "minimum_grid": "n64x64x64x40x40",
+          "minimum_tmax": 700.0,
+          "same_numerics_except_parameter": true,
+          "t_start": 0.0
+        },
+        "state": "baseline"
+      },
+      {
+        "parameter_multiplier": 1.05,
+        "parameter_name": "vmec_state_control_or_profile_gradient",
+        "replicates": [
+          "seed31",
+          "seed32",
+          "dt0p04"
+        ],
+        "required_output": "docs/_static/optimized_equilibrium_turbulence_gradient_plus_delta_replicates/optimized_equilibrium_turbulence_gradient_plus_delta_t700_ensemble_gate.json",
+        "run_contract": {
+          "analysis_window": [
+            350.0,
+            700.0
+          ],
+          "minimum_grid": "n64x64x64x40x40",
+          "minimum_tmax": 700.0,
+          "same_numerics_except_parameter": true,
+          "t_start": 0.0
+        },
+        "state": "plus_delta"
+      }
+    ]
+  },
+  "requirements": [
+    "run baseline, plus-delta, and minus-delta nonlinear simulations with identical numerical settings except the perturbed parameter",
+    "use the same seed/timestep replicate labels for all three parameter states",
+    "discard the startup transient and average only over the declared post-transient analysis window",
+    "build passed ensemble gates for baseline, plus, and minus states before computing the gradient",
+    "record finite-difference response, asymmetry, condition number, and gradient uncertainty in the production gradient artifact"
+  ]
+}

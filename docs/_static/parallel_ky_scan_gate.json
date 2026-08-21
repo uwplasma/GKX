@@ -1,0 +1,72 @@
+{
+  "batched_elapsed_s": 2.2329858339799102,
+  "case": "Cyclone ITG linear ky-batch scan",
+  "gamma_rtol": 1e-08,
+  "grid": {
+    "Nl": 3,
+    "Nm": 4,
+    "Nx": 1,
+    "Ny": 12,
+    "Nz": 16
+  },
+  "identity_passed": true,
+  "ky_values": [
+    0.1,
+    0.2,
+    0.3,
+    0.4
+  ],
+  "max_gamma_rel_error": 0.0,
+  "max_omega_abs_error": 0.0,
+  "notes": "This is a numerical-identity gate for independent ky batching. Speedup is reported for engineering tracking but is not the acceptance gate.",
+  "observed_speedup": 1.398092445327127,
+  "omega_atol": 1e-08,
+  "parallel_batch": 2,
+  "physics_anchor": "Cyclone Base Case ITG linear scan",
+  "rows": [
+    {
+      "batched_gamma": 0.048174948980368386,
+      "batched_omega": 0.07279797324112476,
+      "gamma_rel_error": 0.0,
+      "ky": 0.1,
+      "omega_abs_error": 0.0,
+      "serial_gamma": 0.048174948980368386,
+      "serial_omega": 0.07279797324112476
+    },
+    {
+      "batched_gamma": 0.053601372928824505,
+      "batched_omega": 0.16047576708453,
+      "gamma_rel_error": 0.0,
+      "ky": 0.2,
+      "omega_abs_error": 0.0,
+      "serial_gamma": 0.053601372928824505,
+      "serial_omega": 0.16047576708453
+    },
+    {
+      "batched_gamma": 0.05817545073415459,
+      "batched_omega": 0.2676976223786666,
+      "gamma_rel_error": 0.0,
+      "ky": 0.3,
+      "omega_abs_error": 0.0,
+      "serial_gamma": 0.05817545073415459,
+      "serial_omega": 0.2676976223786666
+    },
+    {
+      "batched_gamma": 0.05889590171308552,
+      "batched_omega": 0.3868827330214637,
+      "gamma_rel_error": 0.0,
+      "ky": 0.4,
+      "omega_abs_error": 0.0,
+      "serial_gamma": 0.05889590171308552,
+      "serial_omega": 0.3868827330214637
+    }
+  ],
+  "serial_batch": 1,
+  "serial_elapsed_s": 3.121920625009807,
+  "source": "GKX real linear solver; serial ky_batch=1 vs fixed-shape ky_batch>1",
+  "time": {
+    "dt": 0.02,
+    "sample_stride": 2,
+    "steps": 20
+  }
+}

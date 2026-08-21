@@ -1,0 +1,24 @@
+{
+  "arrays": {
+    "field_phi1": {"maximum_absolute_error": 0.0, "relative_l2": 0.0},
+    "field_phi2": {"maximum_absolute_error": 0.0, "relative_l2": 0.0},
+    "field_table": {"maximum_absolute_error": 7.216449660063518e-16, "relative_l2": 5.427314390341019e-16},
+    "test_phi1": {"maximum_absolute_error": 0.0, "relative_l2": 0.0},
+    "test_phi2": {"maximum_absolute_error": 0.0, "relative_l2": 0.0},
+    "test_table": {"maximum_absolute_error": 7.105427357601002e-15, "relative_l2": 5.745859579597528e-16}
+  },
+  "bessel_argument_grid": [0.12, 0.16, 0.24, 0.32],
+  "claim_scope": "finite_wavelength_collision_angular_shard_identity",
+  "gate_passed": true,
+  "maximum_absolute_error": 7.105427357601002e-15,
+  "maximum_relative_l2": 5.745859579597528e-16,
+  "monolithic_checksum": -150.239948009896,
+  "notes": "The shard workflow is retained for bounded resumability, not as a speedup claim.",
+  "resolution": [12, 5],
+  "schema_version": 1,
+  "sharded_checksum": -150.23994800989604,
+  "thresholds": {
+    "maximum_absolute_error": 2e-13,
+    "maximum_relative_l2": 2e-14
+  }
+}

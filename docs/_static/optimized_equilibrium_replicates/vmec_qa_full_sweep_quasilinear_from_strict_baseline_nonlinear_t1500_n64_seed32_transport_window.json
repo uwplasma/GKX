@@ -1,0 +1,20 @@
+{
+  "case": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_replicated_nonlinear_window",
+  "dt": 0.05,
+  "kind": "nonlinear_window_summary",
+  "nonlinear_artifact": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed32.out.nc",
+  "promotion_gate": {
+    "passed": true,
+    "source": "replicated nonlinear-window extraction; convergence gate is stored separately"
+  },
+  "seed": 32,
+  "gkx": "vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed32_heat_flux_trace.csv",
+  "tmax": 1500.0,
+  "tmin": 1100.0,
+  "variant": {
+    "seed": 32,
+    "timestep": 0.05
+  },
+  "variant_axis": "seed",
+  "variant_label": "seed32"
+}

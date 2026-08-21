@@ -1,0 +1,50 @@
+{
+  "artifacts": {
+    "baseline": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_rerun_baseline_ensemble_gate.json",
+    "candidate": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_top12_step1p25em3_candidate_ensemble_gate.json"
+  },
+  "baseline": {
+    "combined_sem": 0.2700580365668494,
+    "combined_sem_relative": 0.024055129741635765,
+    "ensemble_mean": 11.226629806923057,
+    "mean_relative_spread": 0.026731629544273387,
+    "passed": true
+  },
+  "candidate": {
+    "combined_sem": 0.176800196347449,
+    "combined_sem_relative": 0.01584010590305399,
+    "ensemble_mean": 11.16155393338385,
+    "mean_relative_spread": 0.04448569329595382,
+    "passed": true
+  },
+  "case": "strict_qa_top12_edge_matched_nonlinear_transport",
+  "claim_level": "matched_replicated_late_window_transport_comparison",
+  "config": {
+    "min_relative_reduction": 0.02
+  },
+  "gates": [
+    {
+      "detail": "baseline passed=True",
+      "metric": "baseline_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "candidate passed=True",
+      "metric": "candidate_ensemble_passed",
+      "passed": true
+    },
+    {
+      "detail": "relative reduction 0.00579656 >= 0.02",
+      "metric": "relative_transport_reduction",
+      "passed": false
+    }
+  ],
+  "kind": "matched_nonlinear_transport_comparison",
+  "passed": false,
+  "statistics": {
+    "absolute_reduction": 0.06507587353920741,
+    "combined_uncertainty": 0.3227842197859714,
+    "relative_reduction": 0.005796563586614165,
+    "uncertainty_z_score": 0.20160797694000432
+  }
+}

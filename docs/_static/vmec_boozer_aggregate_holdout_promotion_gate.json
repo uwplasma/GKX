@@ -1,0 +1,125 @@
+{
+  "claim_level": "aggregate_optimization_promotion_requires_heldout_surface_or_field_line_validation",
+  "gates": [
+    {
+      "detail": "docs/_static/vmec_boozer_aggregate_objective_gate.json",
+      "metric": "aggregate_finite_difference_artifact_passed",
+      "passed": true
+    },
+    {
+      "detail": "docs/_static/vmec_boozer_aggregate_line_search_gate.json",
+      "metric": "aggregate_line_search_artifact_passed",
+      "passed": true
+    },
+    {
+      "detail": "line-search samples must match the aggregate objective samples",
+      "metric": "line_search_reuses_aggregate_sample_set",
+      "passed": true
+    },
+    {
+      "detail": "docs/_static/vmec_boozer_holdout_transport/vmec_boozer_qh_torflux078_alpha120_holdout_production_holdout.json: held-out field-line alpha=1.2",
+      "metric": "passed_holdout_surface_or_field_line_artifact",
+      "passed": true
+    },
+    {
+      "detail": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.json; docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.json; docs/_static/vmec_boozer_holdout_transport/vmec_boozer_qh_torflux078_alpha120_holdout_ensemble_gate.json",
+      "metric": "passed_replicated_nonlinear_window_ensemble",
+      "passed": true
+    }
+  ],
+  "holdout_artifacts": [
+    {
+      "claim_scope_blockers": [
+        "not a nonlinear",
+        "reduced"
+      ],
+      "heldout_reason": "held-out field-line alpha=0.5",
+      "heldout_surface_or_field_line": true,
+      "n_samples": 2,
+      "passed": true,
+      "path": "docs/_static/vmec_boozer_aggregate_alpha_holdout_gate.json",
+      "qualifies_for_promotion": false
+    },
+    {
+      "claim_scope_blockers": [
+        "not a nonlinear",
+        "reduced"
+      ],
+      "heldout_reason": "held-out surface_index=19",
+      "heldout_surface_or_field_line": true,
+      "n_samples": 2,
+      "passed": true,
+      "path": "docs/_static/vmec_boozer_aggregate_surface_holdout_gate.json",
+      "qualifies_for_promotion": false
+    },
+    {
+      "claim_scope_blockers": [],
+      "heldout_reason": "held-out field-line alpha=1.2",
+      "heldout_surface_or_field_line": true,
+      "n_samples": 1,
+      "passed": true,
+      "path": "docs/_static/vmec_boozer_holdout_transport/vmec_boozer_qh_torflux078_alpha120_holdout_production_holdout.json",
+      "qualifies_for_promotion": true
+    }
+  ],
+  "kind": "vmec_boozer_aggregate_holdout_promotion_gate",
+  "nonlinear_ensemble_artifacts": [
+    {
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "is_nonlinear_window_ensemble": true,
+      "is_nonlinear_window_readiness_manifest": false,
+      "missing_artifacts": [],
+      "passed": true,
+      "path": "docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.json",
+      "qualifies_for_production_nonlinear_promotion": true,
+      "readiness_blockers": []
+    },
+    {
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "is_nonlinear_window_ensemble": true,
+      "is_nonlinear_window_readiness_manifest": false,
+      "missing_artifacts": [],
+      "passed": true,
+      "path": "docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.json",
+      "qualifies_for_production_nonlinear_promotion": true,
+      "readiness_blockers": []
+    },
+    {
+      "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+      "is_nonlinear_window_ensemble": true,
+      "is_nonlinear_window_readiness_manifest": false,
+      "missing_artifacts": [],
+      "passed": true,
+      "path": "docs/_static/vmec_boozer_holdout_transport/vmec_boozer_qh_torflux078_alpha120_holdout_ensemble_gate.json",
+      "qualifies_for_production_nonlinear_promotion": true,
+      "readiness_blockers": []
+    }
+  ],
+  "notes": "This check gates claim promotion only. Passing aggregate reduced-objective FD and line-search artifacts proves optimizer plumbing; it does not by itself validate optimized-equilibrium nonlinear transport. Promotion requires independent held-out surface or field-line evidence plus replicated nonlinear-window uncertainty evidence.",
+  "passed": true,
+  "promotion_gate": {
+    "blockers": [],
+    "passed": true,
+    "requirements": [
+      "aggregate finite-difference artifact passes",
+      "aggregate line-search artifact passes on the same sample set",
+      "at least one passed production-scope validation artifact covers a held-out surface_index or field-line alpha",
+      "at least one passed replicated nonlinear-window ensemble artifact supports the post-transient transport mean and uncertainty",
+      "k_y-only holdouts do not satisfy the surface/field-line requirement"
+    ]
+  },
+  "training_sample_summary": {
+    "alphas": [
+      "0",
+      "0.7"
+    ],
+    "n_samples": 4,
+    "selected_ky_indices": [
+      "1",
+      "2"
+    ],
+    "surfaces": [
+      "None"
+    ]
+  }
+}

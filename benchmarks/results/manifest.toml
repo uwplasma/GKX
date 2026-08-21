@@ -1,0 +1,93 @@
+[policy]
+location = "root-level benchmark result index"
+tracked_payload = "small pointers only"
+raw_outputs = "tools_out/ or user-selected scratch directories"
+docs_payload = "reviewed, compressed figures plus small CSV/JSON summaries in docs/_static"
+
+[[figure]]
+name = "Core linear benchmark atlas"
+path = "docs/_static/benchmark_core_linear_atlas.png"
+source_manifest = "tools/benchmark_atlas_manifest.toml"
+regenerate = "python tools/artifacts/make_benchmark_atlas.py"
+docs_page = "docs/benchmarks.rst"
+claim_scope = "headline linear validation atlas"
+
+[[figure]]
+name = "Core nonlinear benchmark atlas"
+path = "docs/_static/benchmark_core_nonlinear_atlas.png"
+source_manifest = "tools/benchmark_atlas_manifest.toml"
+regenerate = "python tools/artifacts/make_benchmark_atlas.py"
+docs_page = "docs/benchmarks.rst"
+claim_scope = "headline nonlinear validation atlas"
+
+[[figure]]
+name = "README benchmark summary panel"
+path = "docs/_static/benchmark_readme_panel.png"
+source_manifest = "tools/benchmark_atlas_manifest.toml"
+regenerate = "python tools/artifacts/make_benchmark_atlas.py"
+docs_page = "README.md"
+claim_scope = "compact publication-facing benchmark summary"
+
+[[figure]]
+name = "Extended linear stress matrix"
+path = "docs/_static/benchmark_extended_linear_panel.png"
+source_manifest = "tools/benchmark_atlas_manifest.toml"
+regenerate = "python tools/artifacts/make_benchmark_atlas.py"
+docs_page = "docs/benchmarks.rst"
+claim_scope = "stress and provisional lanes, not headline validation claims"
+
+[[figure]]
+name = "Runtime and memory comparison"
+path = "docs/_static/runtime_memory_benchmark.png"
+source_manifest = "tools/runtime_memory_manifest.toml"
+regenerate = "python benchmarks/performance/benchmark_runtime_memory.py --summary-glob docs/_static/runtime_memory_summary_ship_refresh.json --csv-out docs/_static/runtime_memory_results_ship_refresh.csv --summary-out docs/_static/runtime_memory_summary_ship_refresh.json --plot-out docs/_static/runtime_memory_benchmark.png"
+docs_page = "docs/performance.rst"
+claim_scope = "tracked wall-time and memory comparison rows"
+
+[[table]]
+name = "Runtime and memory result rows"
+path = "docs/_static/runtime_memory_results_ship_refresh.csv"
+source_manifest = "tools/runtime_memory_manifest.toml"
+regenerate = "python benchmarks/performance/benchmark_runtime_memory.py"
+docs_page = "docs/performance.rst"
+claim_scope = "machine-readable runtime/memory rows used by the tracked panel"
+
+[[table]]
+name = "Runtime and memory summary"
+path = "docs/_static/runtime_memory_summary_ship_refresh.json"
+source_manifest = "tools/runtime_memory_manifest.toml"
+regenerate = "python benchmarks/performance/benchmark_runtime_memory.py"
+docs_page = "docs/performance.rst"
+claim_scope = "machine-readable summary for runtime/memory panel generation"
+
+[[table]]
+name = "Core linear atlas inputs"
+path = "tools/benchmark_atlas_manifest.toml"
+source_manifest = "tools/benchmark_atlas_manifest.toml"
+regenerate = "python tools/artifacts/make_benchmark_atlas.py"
+docs_page = "docs/benchmarks.rst"
+claim_scope = "manifest of small tracked benchmark inputs"
+
+[[figure]]
+name = "Reference-code linear parity matrix"
+path = "docs/_static/gkx_gx_linear_parity_matrix.png"
+source_manifest = "tools/gx_parity_matrix_manifest.toml"
+regenerate = "python tools/comparison/build_gx_parity_matrix.py"
+docs_page = "docs/verification_matrix.rst"
+claim_scope = "cross-code linear growth-rate and frequency parity across tokamak and stellarator cases"
+
+[[table]]
+name = "Reference-code linear parity rows"
+path = "docs/_static/gkx_gx_linear_parity_matrix.csv"
+source_manifest = "tools/gx_parity_matrix_manifest.toml"
+regenerate = "python tools/comparison/build_gx_parity_matrix.py"
+docs_page = "docs/verification_matrix.rst"
+claim_scope = "machine-readable per-wavenumber parity rows with convergence flags"
+
+[[table]]
+name = "Reference-code linear parity summary"
+path = "docs/_static/gkx_gx_linear_parity_matrix.json"
+source_manifest = "tools/gx_parity_matrix_manifest.toml"
+regenerate = "python tools/comparison/build_gx_parity_matrix.py"
+docs_page = "docs/verification_matrix.rst"
+claim_scope = "per-case resolution, provenance and cost metadata behind the parity rows"

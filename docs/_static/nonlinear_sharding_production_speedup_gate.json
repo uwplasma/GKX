@@ -1,0 +1,349 @@
+{
+  "backend_blocker_report": {
+    "cpu": {
+      "active_identity_evidence_complete": true,
+      "candidate_blocker_counts": {
+        "parallel_efficiency_below_threshold": 2
+      },
+      "candidate_row_count": 3,
+      "claim_scope": "Backend remains diagnostic unless at least one active candidate row has complete identity evidence and passes the speedup and efficiency gates.",
+      "classification_counts": {
+        "identity_only_insufficient_speedup": 2,
+        "production_candidate": 1,
+        "reference_only": 1
+      },
+      "identity_evidence_complete": true,
+      "passing_candidate_count": 1,
+      "primary_blockers": [],
+      "production_speedup_candidate_missing": false,
+      "row_count": 4
+    },
+    "gpu": {
+      "active_identity_evidence_complete": true,
+      "candidate_blocker_counts": {
+        "parallel_efficiency_below_threshold": 1,
+        "speedup_below_threshold": 1
+      },
+      "candidate_row_count": 1,
+      "claim_scope": "Backend remains diagnostic unless at least one active candidate row has complete identity evidence and passes the speedup and efficiency gates.",
+      "classification_counts": {
+        "identity_preserving_regression": 1,
+        "reference_only": 1
+      },
+      "identity_evidence_complete": true,
+      "passing_candidate_count": 0,
+      "primary_blockers": [
+        "gpu_production_speedup_candidate_missing"
+      ],
+      "production_speedup_candidate_missing": true,
+      "row_count": 2
+    }
+  },
+  "backend_summary": {
+    "cpu": {
+      "best_identity_preserving_row": {
+        "actual_devices": 4,
+        "backend": "cpu",
+        "best_spec": "kx",
+        "blockers": [
+          "parallel_efficiency_below_threshold"
+        ],
+        "candidate_passed": false,
+        "classification": "identity_only_insufficient_speedup",
+        "identity_abs_tolerance_fraction": 0.0,
+        "identity_atol": 1e-05,
+        "identity_gate_pass": true,
+        "identity_rel_tolerance_fraction": 0.0,
+        "identity_rtol": 1e-05,
+        "max_abs_state_error": 0.0,
+        "max_rel_state_error": 0.0,
+        "parallel_efficiency": 0.3481051743852482,
+        "requested_devices": 4,
+        "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+        "state_sharding_active": true,
+        "strong_speedup_vs_1_device": 1.3924206975409927
+      },
+      "classifications": [
+        "identity_only_insufficient_speedup",
+        "production_candidate",
+        "reference_only"
+      ],
+      "production_candidate_count": 1,
+      "row_count": 4
+    },
+    "gpu": {
+      "best_identity_preserving_row": {
+        "actual_devices": 2,
+        "backend": "gpu",
+        "best_spec": "auto",
+        "blockers": [
+          "speedup_below_threshold",
+          "parallel_efficiency_below_threshold"
+        ],
+        "candidate_passed": false,
+        "classification": "identity_preserving_regression",
+        "identity_abs_tolerance_fraction": 0.0,
+        "identity_atol": 1e-05,
+        "identity_gate_pass": true,
+        "identity_rel_tolerance_fraction": 0.0,
+        "identity_rtol": 1e-05,
+        "max_abs_state_error": 0.0,
+        "max_rel_state_error": 0.0,
+        "parallel_efficiency": 0.2929011139896881,
+        "requested_devices": 2,
+        "source": "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
+        "state_sharding_active": true,
+        "strong_speedup_vs_1_device": 0.5858022279793762
+      },
+      "classifications": [
+        "identity_preserving_regression",
+        "reference_only"
+      ],
+      "production_candidate_count": 0,
+      "row_count": 2
+    }
+  },
+  "best_candidates": {
+    "cpu": {
+      "actual_devices": 2,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "blockers": [],
+      "candidate_passed": true,
+      "classification": "production_candidate",
+      "identity_abs_tolerance_fraction": 0.0,
+      "identity_atol": 1e-05,
+      "identity_gate_pass": true,
+      "identity_rel_tolerance_fraction": 0.0,
+      "identity_rtol": 1e-05,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_efficiency": 0.6637884077350061,
+      "requested_devices": 2,
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 1.3275768154700123
+    },
+    "gpu": null
+  },
+  "blockers": [
+    "gpu_production_speedup_candidate_missing"
+  ],
+  "claim_scope": "Whole-state nonlinear sharding may be described as a production speedup candidate only when this gate passes. Otherwise keep it as a diagnostic identity/profiler artifact.",
+  "gate_passed": false,
+  "identity_atol": 1e-05,
+  "identity_evidence_summary": {
+    "cpu": {
+      "active_identity_within_tolerance_count": 3,
+      "finite_error_metric_count": 4,
+      "identity_blocker_counts": {
+        "identity_abs_error_above_tolerance": 0,
+        "identity_abs_error_missing": 0,
+        "identity_gate_failed": 0,
+        "identity_rel_error_above_tolerance": 0,
+        "identity_rel_error_missing": 0
+      },
+      "identity_gate_pass_count": 4,
+      "identity_within_tolerance_count": 4,
+      "max_abs_state_error": 0.0,
+      "max_abs_tolerance_fraction": 0.0,
+      "max_rel_state_error": 0.0,
+      "max_rel_tolerance_fraction": 0.0,
+      "row_count": 4,
+      "worst_finite_error_row": {
+        "actual_devices": 1,
+        "backend": "cpu",
+        "classification": "reference_only",
+        "identity_abs_tolerance_fraction": 0.0,
+        "identity_gate_pass": true,
+        "identity_rel_tolerance_fraction": 0.0,
+        "max_abs_state_error": 0.0,
+        "max_rel_state_error": 0.0,
+        "requested_devices": 1,
+        "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+        "state_sharding_active": false
+      }
+    },
+    "gpu": {
+      "active_identity_within_tolerance_count": 1,
+      "finite_error_metric_count": 2,
+      "identity_blocker_counts": {
+        "identity_abs_error_above_tolerance": 0,
+        "identity_abs_error_missing": 0,
+        "identity_gate_failed": 0,
+        "identity_rel_error_above_tolerance": 0,
+        "identity_rel_error_missing": 0
+      },
+      "identity_gate_pass_count": 2,
+      "identity_within_tolerance_count": 2,
+      "max_abs_state_error": 0.0,
+      "max_abs_tolerance_fraction": 0.0,
+      "max_rel_state_error": 0.0,
+      "max_rel_tolerance_fraction": 0.0,
+      "row_count": 2,
+      "worst_finite_error_row": {
+        "actual_devices": 1,
+        "backend": "gpu",
+        "classification": "reference_only",
+        "identity_abs_tolerance_fraction": 0.0,
+        "identity_gate_pass": true,
+        "identity_rel_tolerance_fraction": 0.0,
+        "max_abs_state_error": 0.0,
+        "max_rel_state_error": 0.0,
+        "requested_devices": 1,
+        "source": "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
+        "state_sharding_active": false
+      }
+    }
+  },
+  "identity_rtol": 1e-05,
+  "kind": "nonlinear_sharding_production_speedup_gate",
+  "min_devices": 2,
+  "min_parallel_efficiency": 0.5,
+  "min_speedup_vs_1_device": 1.2,
+  "production_speedup_claim_allowed": false,
+  "required_backends": [
+    "cpu",
+    "gpu"
+  ],
+  "rows": [
+    {
+      "actual_devices": 1,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "blockers": [
+        "below_min_devices",
+        "actual_devices_below_min_devices",
+        "state_sharding_inactive",
+        "speedup_below_threshold"
+      ],
+      "candidate_passed": false,
+      "classification": "reference_only",
+      "identity_abs_tolerance_fraction": 0.0,
+      "identity_atol": 1e-05,
+      "identity_gate_pass": true,
+      "identity_rel_tolerance_fraction": 0.0,
+      "identity_rtol": 1e-05,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_efficiency": 1.0,
+      "requested_devices": 1,
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "state_sharding_active": false,
+      "strong_speedup_vs_1_device": 1.0
+    },
+    {
+      "actual_devices": 2,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "blockers": [],
+      "candidate_passed": true,
+      "classification": "production_candidate",
+      "identity_abs_tolerance_fraction": 0.0,
+      "identity_atol": 1e-05,
+      "identity_gate_pass": true,
+      "identity_rel_tolerance_fraction": 0.0,
+      "identity_rtol": 1e-05,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_efficiency": 0.6637884077350061,
+      "requested_devices": 2,
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 1.3275768154700123
+    },
+    {
+      "actual_devices": 4,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "blockers": [
+        "parallel_efficiency_below_threshold"
+      ],
+      "candidate_passed": false,
+      "classification": "identity_only_insufficient_speedup",
+      "identity_abs_tolerance_fraction": 0.0,
+      "identity_atol": 1e-05,
+      "identity_gate_pass": true,
+      "identity_rel_tolerance_fraction": 0.0,
+      "identity_rtol": 1e-05,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_efficiency": 0.3481051743852482,
+      "requested_devices": 4,
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 1.3924206975409927
+    },
+    {
+      "actual_devices": 8,
+      "backend": "cpu",
+      "best_spec": "kx",
+      "blockers": [
+        "parallel_efficiency_below_threshold"
+      ],
+      "candidate_passed": false,
+      "classification": "identity_only_insufficient_speedup",
+      "identity_abs_tolerance_fraction": 0.0,
+      "identity_atol": 1e-05,
+      "identity_gate_pass": true,
+      "identity_rel_tolerance_fraction": 0.0,
+      "identity_rtol": 1e-05,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_efficiency": 0.17127984535738103,
+      "requested_devices": 8,
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 1.3702387628590482
+    },
+    {
+      "actual_devices": 1,
+      "backend": "gpu",
+      "best_spec": "auto",
+      "blockers": [
+        "below_min_devices",
+        "actual_devices_below_min_devices",
+        "state_sharding_inactive",
+        "speedup_below_threshold"
+      ],
+      "candidate_passed": false,
+      "classification": "reference_only",
+      "identity_abs_tolerance_fraction": 0.0,
+      "identity_atol": 1e-05,
+      "identity_gate_pass": true,
+      "identity_rel_tolerance_fraction": 0.0,
+      "identity_rtol": 1e-05,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_efficiency": 1.0,
+      "requested_devices": 1,
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
+      "state_sharding_active": false,
+      "strong_speedup_vs_1_device": 1.0
+    },
+    {
+      "actual_devices": 2,
+      "backend": "gpu",
+      "best_spec": "auto",
+      "blockers": [
+        "speedup_below_threshold",
+        "parallel_efficiency_below_threshold"
+      ],
+      "candidate_passed": false,
+      "classification": "identity_preserving_regression",
+      "identity_abs_tolerance_fraction": 0.0,
+      "identity_atol": 1e-05,
+      "identity_gate_pass": true,
+      "identity_rel_tolerance_fraction": 0.0,
+      "identity_rtol": 1e-05,
+      "max_abs_state_error": 0.0,
+      "max_rel_state_error": 0.0,
+      "parallel_efficiency": 0.2929011139896881,
+      "requested_devices": 2,
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
+      "state_sharding_active": true,
+      "strong_speedup_vs_1_device": 0.5858022279793762
+    }
+  ],
+  "status": "diagnostic_only"
+}

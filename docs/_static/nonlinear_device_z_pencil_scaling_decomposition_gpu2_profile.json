@@ -1,0 +1,438 @@
+{
+  "atol": 5e-06,
+  "backend": "gpu",
+  "claim_scope": "diagnostic localization of the device-z pencil transport-window speedup into single-device shard_map route overhead and one-to-two-device parallel scaling; this artifact localizes a bottleneck and makes no production nonlinear domain-decomposition speedup claim",
+  "device_count_available": 2,
+  "dt": 0.0025,
+  "grids": [
+    {
+      "all_active_identity_passed": true,
+      "decomposition": {
+        "interpretation": "net_speedup_vs_serial equals parallel_scaling_vs_one_device divided by shard_map_route_overhead; a route overhead above one means the sharded route starts behind the serial baseline before any work is split",
+        "net_speedup_vs_serial": 1.4376001120103588,
+        "parallel_efficiency_vs_one_device": 1.0019520747386916,
+        "parallel_scaling_vs_one_device": 2.0039041494773833,
+        "reference_device_count": 2,
+        "shard_map_route_overhead": 1.3939232007119822
+      },
+      "rows": [
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 0.0,
+          "final_state_max_rel_error": 0.0,
+          "identity_passed": true,
+          "median_s": 0.033444734290242195,
+          "route": "serial_jit",
+          "speedup_vs_serial": 1.0,
+          "stats": {
+            "max": 0.03348455997183919,
+            "mean": 0.03343534199520946,
+            "median": 0.033444734290242195,
+            "min": 0.033357280772179365,
+            "std": 4.678081124298082e-05
+          }
+        },
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.046619391068816185,
+          "route": "shard_map",
+          "speedup_vs_serial": 0.7173996382937197,
+          "stats": {
+            "max": 0.046684587839990854,
+            "mean": 0.0466285421513021,
+            "median": 0.046619391068816185,
+            "min": 0.046596151776611805,
+            "std": 3.026053114301985e-05
+          }
+        },
+        {
+          "active": true,
+          "device_count": 2,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.023264281917363405,
+          "route": "shard_map",
+          "speedup_vs_serial": 1.4376001120103588,
+          "stats": {
+            "max": 0.023364420048892498,
+            "mean": 0.02326727584004402,
+            "median": 0.023264281917363405,
+            "min": 0.023197269067168236,
+            "std": 6.305982322344675e-05
+          }
+        }
+      ],
+      "serial_stats_s": {
+        "max": 0.03348455997183919,
+        "mean": 0.03343534199520946,
+        "median": 0.033444734290242195,
+        "min": 0.033357280772179365,
+        "std": 4.678081124298082e-05
+      },
+      "shape": [
+        4,
+        8,
+        96,
+        96,
+        48
+      ],
+      "state_dtype": "complex64",
+      "state_elements": 14155776,
+      "steps": 4,
+      "z_chunk_size": null
+    },
+    {
+      "all_active_identity_passed": true,
+      "decomposition": {
+        "interpretation": "net_speedup_vs_serial equals parallel_scaling_vs_one_device divided by shard_map_route_overhead; a route overhead above one means the sharded route starts behind the serial baseline before any work is split",
+        "net_speedup_vs_serial": 1.4660291396787133,
+        "parallel_efficiency_vs_one_device": 1.0060721875260208,
+        "parallel_scaling_vs_one_device": 2.0121443750520416,
+        "reference_device_count": 2,
+        "shard_map_route_overhead": 1.3725132199575596
+      },
+      "rows": [
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 0.0,
+          "final_state_max_rel_error": 0.0,
+          "identity_passed": true,
+          "median_s": 0.04435455612838268,
+          "route": "serial_jit",
+          "speedup_vs_serial": 1.0,
+          "stats": {
+            "max": 0.04436134081333876,
+            "mean": 0.04434915520250797,
+            "median": 0.04435455612838268,
+            "min": 0.0443255677819252,
+            "std": 1.263985414094493e-05
+          }
+        },
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.06087721465155482,
+          "route": "shard_map",
+          "speedup_vs_serial": 0.7285904321059448,
+          "stats": {
+            "max": 0.06141895707696676,
+            "mean": 0.06101274853572249,
+            "median": 0.06087721465155482,
+            "min": 0.060784047935158014,
+            "std": 0.000243246567221181
+          }
+        },
+        {
+          "active": true,
+          "device_count": 2,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.03025489393621683,
+          "route": "shard_map",
+          "speedup_vs_serial": 1.4660291396787133,
+          "stats": {
+            "max": 0.03029828518629074,
+            "mean": 0.030253282841295005,
+            "median": 0.03025489393621683,
+            "min": 0.03020475199446082,
+            "std": 3.2540057054341825e-05
+          }
+        }
+      ],
+      "serial_stats_s": {
+        "max": 0.04436134081333876,
+        "mean": 0.04434915520250797,
+        "median": 0.04435455612838268,
+        "min": 0.0443255677819252,
+        "std": 1.263985414094493e-05
+      },
+      "shape": [
+        4,
+        16,
+        96,
+        96,
+        32
+      ],
+      "state_dtype": "complex64",
+      "state_elements": 18874368,
+      "steps": 4,
+      "z_chunk_size": null
+    },
+    {
+      "all_active_identity_passed": true,
+      "decomposition": {
+        "interpretation": "net_speedup_vs_serial equals parallel_scaling_vs_one_device divided by shard_map_route_overhead; a route overhead above one means the sharded route starts behind the serial baseline before any work is split",
+        "net_speedup_vs_serial": 1.2715366729394169,
+        "parallel_efficiency_vs_one_device": 0.996089591665855,
+        "parallel_scaling_vs_one_device": 1.99217918333171,
+        "reference_device_count": 2,
+        "shard_map_route_overhead": 1.5667492929845117
+      },
+      "rows": [
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 0.0,
+          "final_state_max_rel_error": 0.0,
+          "identity_passed": true,
+          "median_s": 0.06864813389256597,
+          "route": "serial_jit",
+          "speedup_vs_serial": 1.0,
+          "stats": {
+            "max": 0.06996425101533532,
+            "mean": 0.06903203884139657,
+            "median": 0.06864813389256597,
+            "min": 0.0685850023292005,
+            "std": 0.0005535530646123118
+          }
+        },
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.10755441524088383,
+          "route": "shard_map",
+          "speedup_vs_serial": 0.6382642101564909,
+          "stats": {
+            "max": 0.10761460522189736,
+            "mean": 0.10756944790482521,
+            "median": 0.10755441524088383,
+            "min": 0.10754618840292096,
+            "std": 2.5382777449729772e-05
+          }
+        },
+        {
+          "active": true,
+          "device_count": 2,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.053988324012607336,
+          "route": "shard_map",
+          "speedup_vs_serial": 1.2715366729394169,
+          "stats": {
+            "max": 0.054036919958889484,
+            "mean": 0.053977451752871275,
+            "median": 0.053988324012607336,
+            "min": 0.053933083079755306,
+            "std": 3.8627990855305006e-05
+          }
+        }
+      ],
+      "serial_stats_s": {
+        "max": 0.06996425101533532,
+        "mean": 0.06903203884139657,
+        "median": 0.06864813389256597,
+        "min": 0.0685850023292005,
+        "std": 0.0005535530646123118
+      },
+      "shape": [
+        4,
+        16,
+        128,
+        128,
+        32
+      ],
+      "state_dtype": "complex64",
+      "state_elements": 33554432,
+      "steps": 4,
+      "z_chunk_size": null
+    },
+    {
+      "all_active_identity_passed": true,
+      "decomposition": {
+        "interpretation": "net_speedup_vs_serial equals parallel_scaling_vs_one_device divided by shard_map_route_overhead; a route overhead above one means the sharded route starts behind the serial baseline before any work is split",
+        "net_speedup_vs_serial": 1.4430051675607125,
+        "parallel_efficiency_vs_one_device": 0.9962023676162464,
+        "parallel_scaling_vs_one_device": 1.9924047352324927,
+        "reference_device_count": 2,
+        "shard_map_route_overhead": 1.3807329176793575
+      },
+      "rows": [
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 0.0,
+          "final_state_max_rel_error": 0.0,
+          "identity_passed": true,
+          "median_s": 0.08788361074402928,
+          "route": "serial_jit",
+          "speedup_vs_serial": 1.0,
+          "stats": {
+            "max": 0.08801919082179666,
+            "mean": 0.08789107492193579,
+            "median": 0.08788361074402928,
+            "min": 0.08774969214573503,
+            "std": 9.323746986176556e-05
+          }
+        },
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.12134379427880049,
+          "route": "shard_map",
+          "speedup_vs_serial": 0.7242530305431787,
+          "stats": {
+            "max": 0.12205045018345118,
+            "mean": 0.12155348854139447,
+            "median": 0.12134379427880049,
+            "min": 0.12131500663235784,
+            "std": 0.000290218677171225
+          }
+        },
+        {
+          "active": true,
+          "device_count": 2,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.06090318504720926,
+          "route": "shard_map",
+          "speedup_vs_serial": 1.4430051675607125,
+          "stats": {
+            "max": 0.06095042871311307,
+            "mean": 0.060907140467315914,
+            "median": 0.06090318504720926,
+            "min": 0.060858515091240406,
+            "std": 3.0432538158421664e-05
+          }
+        }
+      ],
+      "serial_stats_s": {
+        "max": 0.08801919082179666,
+        "mean": 0.08789107492193579,
+        "median": 0.08788361074402928,
+        "min": 0.08774969214573503,
+        "std": 9.323746986176556e-05
+      },
+      "shape": [
+        4,
+        16,
+        96,
+        96,
+        64
+      ],
+      "state_dtype": "complex64",
+      "state_elements": 37748736,
+      "steps": 4,
+      "z_chunk_size": null
+    },
+    {
+      "all_active_identity_passed": true,
+      "decomposition": {
+        "interpretation": "net_speedup_vs_serial equals parallel_scaling_vs_one_device divided by shard_map_route_overhead; a route overhead above one means the sharded route starts behind the serial baseline before any work is split",
+        "net_speedup_vs_serial": 1.2628621868330008,
+        "parallel_efficiency_vs_one_device": 1.0022611497596268,
+        "parallel_scaling_vs_one_device": 2.0045222995192535,
+        "reference_device_count": 2,
+        "shard_map_route_overhead": 1.5872850738734874
+      },
+      "rows": [
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 0.0,
+          "final_state_max_rel_error": 0.0,
+          "identity_passed": true,
+          "median_s": 0.13583477633073926,
+          "route": "serial_jit",
+          "speedup_vs_serial": 1.0,
+          "stats": {
+            "max": 0.136495356913656,
+            "mean": 0.13596618296578528,
+            "median": 0.13583477633073926,
+            "min": 0.13566601276397705,
+            "std": 0.00030087396626331345
+          }
+        },
+        {
+          "active": true,
+          "device_count": 1,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.2156085129827261,
+          "route": "shard_map",
+          "speedup_vs_serial": 0.6300065542477997,
+          "stats": {
+            "max": 0.2157425070181489,
+            "mean": 0.21563791474327446,
+            "median": 0.2156085129827261,
+            "min": 0.21555096190422773,
+            "std": 7.958647638538092e-05
+          }
+        },
+        {
+          "active": true,
+          "device_count": 2,
+          "final_state_max_abs_error": 7.450580596923828e-09,
+          "final_state_max_rel_error": 8.765812825071403e-09,
+          "identity_passed": true,
+          "median_s": 0.10756104486063123,
+          "route": "shard_map",
+          "speedup_vs_serial": 1.2628621868330008,
+          "stats": {
+            "max": 0.1076230350881815,
+            "mean": 0.10757564576342701,
+            "median": 0.10756104486063123,
+            "min": 0.10754562076181173,
+            "std": 2.743419040406384e-05
+          }
+        }
+      ],
+      "serial_stats_s": {
+        "max": 0.136495356913656,
+        "mean": 0.13596618296578528,
+        "median": 0.13583477633073926,
+        "min": 0.13566601276397705,
+        "std": 0.00030087396626331345
+      },
+      "shape": [
+        4,
+        16,
+        128,
+        128,
+        64
+      ],
+      "state_dtype": "complex64",
+      "state_elements": 67108864,
+      "steps": 4,
+      "z_chunk_size": null
+    }
+  ],
+  "kind": "nonlinear_device_z_pencil_scaling_decomposition",
+  "min_speedup": 1.5,
+  "repeats": 5,
+  "rtol": 0.0001,
+  "steps": 4,
+  "summary": {
+    "all_active_identity_passed": true,
+    "grid_count": 5,
+    "limiting_factor": "shard_map_route_overhead",
+    "max_net_speedup_vs_serial": 1.4660291396787133,
+    "max_parallel_scaling_vs_one_device": 2.0121443750520416,
+    "max_shard_map_route_overhead": 1.5872850738734874,
+    "min_parallel_scaling_vs_one_device": 1.99217918333171,
+    "min_shard_map_route_overhead": 1.3725132199575596,
+    "production_speedup_claim_allowed": false,
+    "route_overhead_needed_for_gate": 1.3414295833680276,
+    "status": "identity_timed_no_production_speedup"
+  },
+  "warmups": 2
+}

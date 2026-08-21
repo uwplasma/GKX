@@ -1,0 +1,59 @@
+{
+  "claim_level": "bounded_short_bracket_nonlinear_audit_not_production_gradient_evidence",
+  "kind": "vmec_state_control_short_bracket_nonlinear_audit_status",
+  "next_action": "increase finite-difference response before promotion: run a bracket-amplitude sweep and/or longer post-transient windows; current alpha_delta=1e-3 produces ensemble-stable heat fluxes but unresolved, asymmetric, uncertainty-dominated central differences",
+  "passed": false,
+  "rows": [
+    {
+      "baseline_mean": 10.239552934546152,
+      "blockers": [
+        "fd_response_resolved",
+        "fd_asymmetry_bounded",
+        "gradient_uncertainty_bounded"
+      ],
+      "central_fd_json": "docs/_static/qa_lowres_state_control_short_bracket_rsin_mid_surface_m1_nonlinear_gradient_state_control_rsin_mid_surface_m1_central_fd_gradient_gate.json",
+      "ensemble_gates_passed": 3,
+      "ensemble_gates_total": 3,
+      "fd_asymmetry_rel": 9.507222362245884,
+      "fd_condition_number": null,
+      "gradient_uncertainty_rel": 7.7270919707486065,
+      "minus_mean": 10.107283999347274,
+      "output_gates_passed": 3,
+      "output_gates_total": 3,
+      "passed": false,
+      "plus_mean": 10.153261710052801,
+      "response_fraction": 0.004490206847840755,
+      "state_parameter": "rsin_mid_surface_m1"
+    },
+    {
+      "baseline_mean": 10.22712637806693,
+      "blockers": [
+        "fd_response_resolved",
+        "fd_asymmetry_bounded",
+        "gradient_uncertainty_bounded"
+      ],
+      "central_fd_json": "docs/_static/qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_state_control_zcos_mid_surface_m1_central_fd_gradient_gate.json",
+      "ensemble_gates_passed": 3,
+      "ensemble_gates_total": 3,
+      "fd_asymmetry_rel": 45.293137338133214,
+      "fd_condition_number": null,
+      "gradient_uncertainty_rel": 23.017144622374467,
+      "minus_mean": 10.04936375757316,
+      "output_gates_passed": 3,
+      "output_gates_total": 3,
+      "passed": false,
+      "plus_mean": 10.064398718711205,
+      "response_fraction": 0.001470106125831155,
+      "state_parameter": "zcos_mid_surface_m1"
+    }
+  ],
+  "summary": {
+    "central_fd_gates_passed": 0,
+    "central_fd_gates_total": 2,
+    "ensemble_groups_passed": 6,
+    "ensemble_groups_total": 6,
+    "nonlinear_runs_completed": 18,
+    "output_gate_groups_passed": 6,
+    "output_gate_groups_total": 6
+  }
+}

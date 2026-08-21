@@ -1,0 +1,93 @@
+{
+  "artifacts": {
+    "landscape_json": null
+  },
+  "baseline_metric": 0.0801067029,
+  "blockers": [
+    "insufficient_reduced_margin_for_nonlinear_audit"
+  ],
+  "candidate_metric": 0.07827418221,
+  "claim_scope": "reduced-objective prelaunch guard only; passing this gate permits a replicated nonlinear audit but does not promote a turbulence claim",
+  "gates": [
+    {
+      "metric": "reduced_margin_for_nonlinear_audit",
+      "passed": false,
+      "threshold": 0.04,
+      "value": 0.022875996934833345
+    },
+    {
+      "metric": "multi_sample_objective_coverage",
+      "passed": true,
+      "threshold": 12,
+      "value": 18
+    }
+  ],
+  "kind": "vmex_reduced_nonlinear_audit_prelaunch_report",
+  "metric_key": "nonlinear_window_heat_flux",
+  "next_action": "do not launch an expensive nonlinear audit; increase reduced-objective margin or broaden the objective before spending GPU time",
+  "nonlinear_policy": {
+    "maximum_combined_sem_rel": 0.25,
+    "minimum_alpha_count": 2,
+    "minimum_ky_count": 3,
+    "minimum_relative_reduction": 0.02,
+    "minimum_replicate_count": 3,
+    "minimum_sample_count": 12,
+    "minimum_surface_count": 3,
+    "minimum_uncertainty_z_score": 1.0,
+    "recommended_alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "recommended_ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "recommended_surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ]
+  },
+  "objective_sample_summary": {
+    "alpha_count": 2,
+    "alphas": [
+      0.0,
+      0.7853981633974483
+    ],
+    "blockers": [],
+    "ky_count": 3,
+    "ky_values": [
+      0.1,
+      0.3,
+      0.5
+    ],
+    "passed": true,
+    "sample_count": 18,
+    "surface_count": 3,
+    "surfaces": [
+      0.45,
+      0.64,
+      0.78
+    ]
+  },
+  "passed": false,
+  "policy": {
+    "failed_reference_safety_factor": 1.5,
+    "metric_key": "nonlinear_window_heat_flux",
+    "minimum_relative_reduction": 0.04,
+    "require_sample_coverage": true
+  },
+  "relative_reduced_reduction": 0.022875996934833345,
+  "required_relative_reduced_reduction": 0.04,
+  "selected_rows": {
+    "baseline": null,
+    "candidate": null
+  },
+  "threshold_sources": {
+    "failed_reference_relative_reduction": 0.022876,
+    "failed_reference_safety_factor": 1.5,
+    "failed_reference_threshold": 0.034314,
+    "policy_minimum_relative_reduction": 0.04
+  }
+}

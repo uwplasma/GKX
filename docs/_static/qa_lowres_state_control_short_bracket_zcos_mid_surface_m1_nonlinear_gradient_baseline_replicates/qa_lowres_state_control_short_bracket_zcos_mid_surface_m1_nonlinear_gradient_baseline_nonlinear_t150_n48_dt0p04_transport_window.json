@@ -1,0 +1,20 @@
+{
+  "case": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_replicated_nonlinear_window",
+  "dt": 0.04,
+  "kind": "nonlinear_window_summary",
+  "nonlinear_artifact": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_dt0p04.out.nc",
+  "promotion_gate": {
+    "passed": true,
+    "source": "replicated nonlinear-window extraction; convergence gate is stored separately"
+  },
+  "seed": 22,
+  "gkx": "qa_lowres_state_control_short_bracket_zcos_mid_surface_m1_nonlinear_gradient_baseline_nonlinear_t150_n48_dt0p04_heat_flux_trace.csv",
+  "tmax": 150.0,
+  "tmin": 75.0,
+  "variant": {
+    "seed": 22,
+    "timestep": 0.04
+  },
+  "variant_axis": "timestep",
+  "variant_label": "dt0p04"
+}
