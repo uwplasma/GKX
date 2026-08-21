@@ -29,3 +29,17 @@
 - Recorded an independent pre-existing validation defect: a float32 eager/JIT
   trajectory test demands `rtol=1e-12` although its observed relative difference
   is about `8e-8` on both the PR branch and untouched `main`.
+- Opened PR #85 with a two-line nonlinear startup glossary: field model,
+  kinetic/adiabatic response, `tprim=a/LT`, `fprim=a/Ln`, and definitions of
+  `gamma`, `omega`, `Wphi`, `Wg`, and `Q`.
+- Audited all 123 tracked nonlinear heat-flux traces: 54 end near `t=150`, 6 at
+  `t=250`, 12 at `t=400`, 12 at `t=700`, and 39 at `t=900`; none reaches the
+  `t=1500` advertised in its filename. The current terminal rule accepts 87.
+  Of those, 81 also pass a loose late-tail drift gate. Retrospective sequential
+  regression/batch-mean variants still make several early estimates more than
+  10% from the late reference. Therefore no new default is promoted from these
+  heat-only traces; Wphi/Wg histories and held-out runs remain mandatory.
+- Opened PR #86 to carry VMEC `Rplot`, `Zplot`, and
+  `zeta=zeta_center+q*theta_PEST` as host-only output metadata and render the
+  actual field line. The JAX pytree is unchanged; the QA rerender uses `nfp=2`
+  and 48 aligned samples instead of a synthetic circular torus.

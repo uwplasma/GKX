@@ -314,9 +314,9 @@ coordinates and show the selected averaging interval only inside saved data.
 | GOV-1 | P0 | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
 | SAT-1 | P0 | stationary suffix + Q/Wphi/Wg gates | synthetic + held-out long traces |
-| GEO-1 | P0 | physical VMEC tube coordinates | non-axisymmetric numerical closure test |
+| GEO-1 | P0 | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test |
 | RES-1 | P0 | spectrum-tail warnings and convergence protocol | known resolved/unresolved fixtures |
-| UX-1 | P1 | startup glossary | CLI snapshots and definitions |
+| UX-1 | P1 | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | decimated x-y and 3-D movies | no physics rerun, size/time budgets |
 | VAL-1 | P1 | multi-equilibrium replicated campaign | paired CI + resolution gates |
 | AD-1 | P1 | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
