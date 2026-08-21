@@ -2289,7 +2289,7 @@ REQUIRED_PHRASES = {
         "not a runtime/TOML absolute-flux predictor",
         "declared Solovev and shaped-pressure stress outliers",
         "W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron extensions are deferred",
-        "converged post-transient heat-flux windows",
+        "Promotion requires stationary individual traces",
         "Sensitivity sweeps can use the same deterministic independent-work reconstruction, but they need a dedicated",
     ),
     "docs/performance.rst": (
