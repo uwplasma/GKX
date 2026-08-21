@@ -43,3 +43,9 @@
   `zeta=zeta_center+q*theta_PEST` as host-only output metadata and render the
   actual field line. The JAX pytree is unchanged; the QA rerender uses `nfp=2`
   and 48 aligned samples instead of a synthetic circular torus.
+- Completed a per-PR audit of all 73 merged PRs through #80. No PR had an
+  approving review. #10--#16, #49, #51, #54--#63, #71--#73 and #80 include
+  red head checks; #68 has only cancelled checks. The ledger separates 29 keep
+  decisions, 34 named-debt decisions, 9 superseded/remove decisions and 1 diff
+  whose old objects are no longer reconstructible. Validation debt in a `D` row
+  remains open even though the diff audit is complete.

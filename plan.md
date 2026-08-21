@@ -308,21 +308,21 @@ coordinates and show the selected averaging interval only inside saved data.
 
 ## Work queue
 
-| ID | Priority | Deliverable | Gate |
-| --- | --- | --- | --- |
-| CI-1 | P0 | PR #81 mypy fix | all CI green; no LOC regression |
-| GOV-1 | P0 | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
-| RUN-1 | P0 | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
-| SAT-1 | P0 | stationary suffix + Q/Wphi/Wg gates | synthetic + held-out long traces |
-| GEO-1 | P0 | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test |
-| RES-1 | P0 | spectrum-tail warnings and convergence protocol | known resolved/unresolved fixtures |
-| UX-1 | P1 | PR #85 startup glossary | CLI snapshots and definitions |
-| MOV-1 | P1 | decimated x-y and 3-D movies | no physics rerun, size/time budgets |
-| VAL-1 | P1 | multi-equilibrium replicated campaign | paired CI + resolution gates |
-| AD-1 | P1 | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
-| SLIM-1 | P1 | asset migration and rewrite rehearsal | 7.72-MiB-class pack, fsck/install/docs/tests |
-| PR-1 | P1 | independent audit of every merged PR | ledger in `plan/pr_audit.md` |
-| PERF-1 | P2 | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
+| ID | Priority | Status | Deliverable | Gate |
+| --- | --- | --- | --- | --- |
+| CI-1 | P0 | review | PR #81 mypy fix | CI green; no LOC regression |
+| GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
+| RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
+| SAT-1 | P0 | pending | stationary suffix + Q/Wphi/Wg gates | synthetic + held-out long traces |
+| GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test |
+| RES-1 | P0 | pending | spectrum-tail warnings and convergence protocol | known resolved/unresolved fixtures |
+| UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
+| MOV-1 | P1 | pending | decimated x-y and 3-D movies | no physics rerun, size/time budgets |
+| VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |
+| AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
+| SLIM-1 | P1 | rehearsal | asset migration and history rewrite | recovery bundle + 7.72-MiB pack + fsck/install/docs/tests |
+| PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
+| PERF-1 | P2 | pending | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
 
 ## Reproducibility records
 
