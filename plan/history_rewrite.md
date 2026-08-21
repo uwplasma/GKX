@@ -32,7 +32,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the eleven open PR heads (#74 and #81--#90) after the final rewrite.
+- Rebase the twelve open PR heads (#74 and #81--#91) after the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -73,7 +73,7 @@ asset addressed by SHA-256; small deterministic fixtures remain in Git.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main` and all tags from exact candidate SHAs, then rebase the eleven
+   update `main` and all tags from exact candidate SHAs, then rebase the twelve
    open PR heads with `--force-with-lease`.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
    merged heads and restore protection: required aggregate CI, one non-author

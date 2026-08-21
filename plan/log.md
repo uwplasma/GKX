@@ -109,8 +109,8 @@
   Oberparleiter 100-time burn-in plus five-correlation-time batches stopped
   earlier but was less safe on these traces. Q-only rules cannot replace fresh
   `Q`, `Wphi`, `Wg`, and spectral evidence.
-- Added compact fixed-horizon saturation-audit output on branch
-  `fix/statistical-saturation-window`: time, adaptive step, `Q`, `Wphi`, `Wg`,
+- Opened draft PR #91 with compact fixed-horizon saturation-audit output: time,
+  adaptive step, `Q`, `Wphi`, `Wg`,
   `kx`, `ky`, and resolved spectra. A local `16^2 x 16`, `t=100` CPU pilot took
   66.3 s and failed saturation with `Wg` still rising. A shared RTX A4000
   `32^2 x 32`, `t=250` pilot took 469.8 s and was also pre-saturation: mean `Q`

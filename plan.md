@@ -360,7 +360,7 @@ coordinates and show the selected averaging interval only inside saved data.
 | CI-1 | P0 | review | PR #81 mypy fix | CI green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
-| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; fixed-horizon trace capture on `fix/statistical-saturation-window` | synthetic + held-out long traces |
+| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace capture | synthetic + held-out long traces |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; source budget restored |
 | RES-1 | P0 | review | PR #87 spectrum-tail warnings; convergence protocol pending | known resolved/unresolved fixtures + paired Nx/Ny scan |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
