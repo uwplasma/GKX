@@ -124,6 +124,12 @@
   energy plateau cannot replace flux uncertainty. The final four positive
   `ky` modes carry 49.7% of late heat flux and the cutoff mode carries 13.1%,
   so the grid fails perpendicular convergence even if the trace is extended.
+- The `64^2 x 48`, `t=250` rung fails for the same reason. Recomputed with the
+  exact production policy, its `t=50.3--250` window has mean `Q=11.48` and
+  9.68% relative SEM. More importantly, the last retained positive-`ky` mode
+  is at the spectral maximum and carries 19.5% of windowed flux; the last
+  three carry 51.1%. Extending this state would reduce sampling error without
+  resolving the perpendicular cascade, so the next rung is `96^2 x 48`.
 - Audited the movie generator independently. It reruns a fixed-step RK4
   trajectory instead of sampling the production solve, stores full 3-D fields,
   and reconstructs a circular torus without VMEC coordinates. MOV-1 must record
