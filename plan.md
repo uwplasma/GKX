@@ -279,6 +279,31 @@ affected 88 tests pass and full CI is rerunning. The remaining 27.24 MB
 `docs/_static` tree must become generated previews plus hash-addressed release
 artifacts; deleting it blindly would break documented evidence and tests.
 
+The installed package baseline is 206 Python files and 96,465 lines:
+
+| Package area | Files | Lines |
+| --- | ---: | ---: |
+| diagnostics | 21 | 15,077 |
+| solvers | 30 | 14,794 |
+| objectives | 26 | 13,329 |
+| operators | 34 | 13,079 |
+| geometry | 26 | 12,905 |
+| workflows | 23 | 9,916 |
+| artifacts | 13 | 6,242 |
+| parallel, terms, core and other | 33 | 11,123 |
+
+Twenty-seven modules exceed 900 lines and 88 exceed 500; combining files to
+reduce their count would only hide complexity behind the 1,000-line gate. Slim
+in this order: remove duplicated mathematics; keep campaign/report generation
+outside hot solver paths; replace accidental facades with direct owners; then
+move offline evidence builders out of the installed wheel behind compatibility
+imports where they are public. Each cut must preserve the API manifest, CLI
+snapshots, numerical gates, wheel smoke test, and accuracy-matched CPU/GPU
+profiles. The first cut is in PR #91: one shared first-zero autocorrelation
+estimator replaces runtime/post-hoc duplication and removes 21 source lines.
+The first package target is at most 190 files and 90,000 lines; lower targets
+follow only after import/coverage evidence identifies another coherent cut.
+
 Before the coordinated force push:
 
 - publish the immutable bundle and SHA-256 checksum;

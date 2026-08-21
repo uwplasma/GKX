@@ -134,6 +134,10 @@
   report the built grid, updates `ntheta` consistently, verifies restart shape,
   keeps continuation time absolute, and removes its duplicate saturation rule
   in favour of the exact production policy.
+- PR #91 then consolidated the runtime and post-hoc first-zero Sokal estimators.
+  The exact production decision is now the only stopping method used by the
+  audit utility, 76 focused analysis/saturation tests and all 117 release tests
+  pass, and installed source decreases by 21 lines.
 - Audited authorship over the complete selected rewrite history. Seven objects
   carry AI markers: four duplicated Claude co-author trailers and three Codex
   branch/message labels. The rewrite rehearsal removes those markers and maps
