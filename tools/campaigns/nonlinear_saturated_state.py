@@ -159,7 +159,7 @@ def main() -> int:
     jax.config.update("jax_enable_x64", True)
     print(f"devices: {jax.devices()}", flush=True)
 
-    from gkx import run_runtime_nonlinear
+    from gkx import build_spectral_grid, run_runtime_nonlinear
     from gkx.workflows.runtime.toml import load_runtime_from_toml
 
     runtime, raw = load_runtime_from_toml(args.toml)
@@ -289,12 +289,17 @@ def main() -> int:
     print(f"  -> {'SATURATED' if report['saturated'] else 'NOT SATURATED'}", flush=True)
 
     if args.trace_out is not None:
+        grid = build_spectral_grid(runtime.grid)
         payload = {
             "time": times,
             "dt": steps_dt,
+            "kx": np.asarray(grid.kx),
+            "ky": np.asarray(grid.ky),
             "heat_flux": flux,
             "Wphi": wphi,
             "Wg": wg,
+            "Nl": np.asarray(n_laguerre),
+            "Nm": np.asarray(n_hermite),
             "elapsed_seconds": np.asarray(elapsed),
         }
         resolved = diagnostics.resolved
