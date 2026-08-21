@@ -3619,7 +3619,7 @@ _PARITY_BUILDER = (
 )
 # Largest relative move measured between the two builds: 0.204% in omega at
 # ky = 0.2. A floor at or below that would not cover the measurement it exists
-# to record. See plan/notes/gx_precsqrt.md.
+# to record. See the branch-only roadmap's gx_precsqrt note.
 _KBM_TWO_BUILD_SPREAD = 0.00204
 
 

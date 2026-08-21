@@ -104,7 +104,7 @@ reference_provenance = "upstream shipped reference, reproduced by this build"
 # Not fixed by regenerating the reference: upstream itself is not uniform -- 4
 # of its 20 makefiles carry the flag and the rest do not -- so pinning one build
 # would leave the same spread against every reference taken on the others.
-# Measurement: plan/notes/gx_precsqrt.md, section 4 (kbm_miller) and 5.
+# Measurement: branch-only research roadmap, plan/notes/gx_precsqrt.md, sections 4--5.
 build_reproducibility_floor = 0.003
 Nl = 16
 Nm = 48

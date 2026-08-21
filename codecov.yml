@@ -16,7 +16,6 @@ ignore:
   - "tools/**/*"
   - "tools_out/**/*"
   - "outputs/**/*"
-  - "plan.md"
   - "README.md"
 
 coverage:
