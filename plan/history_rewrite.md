@@ -235,6 +235,24 @@ Pixel comparison against the previous RGBA render gives 49.86 dB PSNR and
 `99a3ff82ac7c9e15e66635e1bb054380decb81ad`; full default regeneration retains
 the two exact-root comparisons and `1.954e-14` collisionless spectral residual.
 
+PR #104 adds the same shared deterministic palette path to the retained
+runtime/memory, linear-parity, and eigensolver-reach figures. The rewrite maps
+only these exact old-to-new blob pairs:
+
+| Artifact | Old blob | New blob |
+|---|---|---|
+| runtime/memory | `686c0aaaa7834f7780cd62aebec4780371d93f69` | `eea9d41289c1fc2f54a6335b920dcda0e9cfe14d` |
+| linear parity | `a10c72fa33c593671c34800f55720842df99d54d` | `171fd9eb00968dc93d20cda2f5b4d47c558e3129` |
+| eigensolver reach | `7b09d5f4c427c671d5f6dbde4cfa3369fabf806b` | `6cf24feddfaef50afa06727b7acfa4aec4e3d535` |
+
+All nine public/private PR-head blobs are identical and the text-only stable
+patch ID is `1e6969e0`; the binary delta disappears privately because each
+parent already contains the mapped compact blobs. Immediately before this
+record, a fresh 26-head/28-tag clone has 3,458 commits, 17,678 objects, an
+8,670,362-byte pack, 9,166,418 bytes for pack plus index, and a 9,500,429-byte
+complete `.git` file sum. Strict `fsck`, no alternates, zero reachable old
+blobs, exact roadmap payload, and the attribution scan pass.
+
 PR #95 keeps the six-second turbulence interval as a 720-pixel, 24-frame WebP
 and palette-encodes the initial/final QA equilibrium panel in their owning
 generators. The final rewrite maps both loop blobs

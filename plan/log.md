@@ -1229,7 +1229,22 @@
   49.86 dB; visual review and all six x64 Landau physics tests pass. Neither PR
   changes a numerical or physics result.
 - Clarified the repository-size contract. The private full-clone Git database
-  is below the decimal 10-MB gate, but the expanded post-#95/#103 tracked tree
-  is still 19,164,142 bytes. A sub-10-MB expanded checkout remains open and
+  is below the decimal 10-MB gate; PR #104 reduces the expanded stacked tracked
+  tree from 19,164,142 to 18,881,136 bytes. A sub-10-MB expanded checkout
+  remains open and
   must be reached through provenance-preserving artifact migration; the
   3.35-MB installed source is not the cause of the original 133.70-MiB clone.
+- Opened draft PR #104 on #103 to centralize deterministic PNG palette output
+  and compact the retained runtime/memory, linear-parity, and eigensolver-reach
+  README figures from 462,973 to 179,956 bytes. Same-environment comparison
+  preserves dimensions and gives 73.70/56.47/63.04 dB PSNR. All six Landau
+  physics tests, all three generators, the shared-helper mypy check, Ruff, the
+  size gate, and diff checks pass; the old and shared Landau helpers are
+  byte-identical under one renderer.
+- Replaced only the three exact superseded PNG blobs in a new private rewrite
+  rehearsal. Every public/private PR #104 head blob and its text patch match;
+  the public roadmap tree remains exact. A fresh ordinary clone has 26 heads
+  plus `origin/HEAD`, 28 tags, 3,458 commits, 17,678 objects, an 8,670,362-byte
+  pack, and a 9,500,429-byte complete `.git`. Strict `fsck`, no alternates,
+  zero old-blob reachability, and zero AI-attribution hits pass. No public
+  history moved.
