@@ -289,14 +289,17 @@ def replay_policy(
 
 def _load_replay_traces(
     paths: Sequence[Path],
+    summaries: Sequence[Path] | None = None,
 ) -> tuple[list[np.ndarray], list[dict[str, Any]]]:
     """Join clean, same-commit continuation traces and record their digests."""
+    if summaries is not None and len(summaries) != len(paths):
+        raise ValueError("replay summaries must match replay traces one-for-one")
     arrays: list[list[np.ndarray]] = [[], [], [], []]
     sources: list[dict[str, Any]] = []
     commit: str | None = None
     previous_time: float | None = None
     identity: dict[str, np.ndarray] | None = None
-    for path in paths:
+    for index, path in enumerate(paths):
         with path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
         with np.load(path, allow_pickle=False) as archive:
@@ -316,6 +319,54 @@ def _load_replay_traces(
                 for name in _REPLAY_IDENTITY_FIELDS
                 if name in archive
             }
+        summary_source: dict[str, Any] | None = None
+        if summaries is not None:
+            summary_path = summaries[index]
+            summary_bytes = summary_path.read_bytes()
+            summary = json.loads(summary_bytes)
+            provenance = summary.get("source_provenance", {})
+            if (
+                provenance.get("git_commit") != source_commit
+                or provenance.get("git_dirty") is not False
+                or float(summary.get("previous_t_end", float("nan")))
+                != segment_start
+            ):
+                raise ValueError(f"{summary_path}: summary provenance differs from trace")
+            if "trace_artifact" in summary:
+                if summary["trace_artifact"].get("sha256") != digest:
+                    raise ValueError(f"{summary_path}: summary digest differs from trace")
+            elif "trace" in summary:
+                for name, values_part in zip(
+                    ("t", "heat_flux", "Wphi", "Wg"), values
+                ):
+                    recorded = np.asarray(
+                        [sample[name] for sample in summary["trace"]], dtype=float
+                    )
+                    if not np.array_equal(recorded, values_part):
+                        raise ValueError(
+                            f"{summary_path}: summary scalar history differs from trace"
+                        )
+            else:
+                raise ValueError(f"{summary_path}: summary does not address its trace")
+            identity_payload = {
+                name: summary.get(name)
+                for name in (
+                    "case",
+                    "grid",
+                    "geometry_override",
+                    "random_seed",
+                    "alpha",
+                    "npol",
+                )
+            }
+            segment_identity["summary_identity"] = np.asarray(
+                json.dumps(identity_payload, sort_keys=True, separators=(",", ":"))
+            )
+            summary_source = {
+                "path": str(summary_path),
+                "bytes": len(summary_bytes),
+                "sha256": hashlib.sha256(summary_bytes).hexdigest(),
+            }
         if not source_commit or source_dirty != 0:
             raise ValueError(f"{path}: trace is not pinned to a clean GKX commit")
         if commit is not None and source_commit != commit:
@@ -325,6 +376,10 @@ def _load_replay_traces(
                 raise ValueError(f"{path}: first trace omits prior history")
             identity = segment_identity
         else:
+            if "campaign_identity_schema" not in segment_identity and summaries is None:
+                raise ValueError(
+                    f"{path}: legacy continuation replay requires matching summaries"
+                )
             if segment_start is None or not np.isclose(
                 segment_start, previous_time, rtol=0.0, atol=1.0e-9
             ):
@@ -342,19 +397,20 @@ def _load_replay_traces(
         commit, previous_time = source_commit, float(values[0][-1])
         for parts, value in zip(arrays, values):
             parts.append(value)
-        sources.append(
-            {
-                "path": str(path),
-                "bytes": path.stat().st_size,
-                "sha256": digest,
-                "gkx_git_commit": source_commit,
-            }
-        )
+        source = {
+            "path": str(path),
+            "bytes": path.stat().st_size,
+            "sha256": digest,
+            "gkx_git_commit": source_commit,
+        }
+        if summary_source is not None:
+            source["summary"] = summary_source
+        sources.append(source)
     return [np.concatenate(parts) for parts in arrays], sources
 
 
 def _run_policy_replay(args: argparse.Namespace) -> int:
-    arrays, sources = _load_replay_traces(args.replay_trace)
+    arrays, sources = _load_replay_traces(args.replay_trace, args.replay_summary)
     report = replay_policy(
         arrays[0],
         arrays[1],
@@ -544,6 +600,12 @@ def main() -> int:
         type=Path,
         nargs="+",
         help="replay the frozen policy on ordered source-pinned NPZ segments",
+    )
+    parser.add_argument(
+        "--replay-summary",
+        type=Path,
+        nargs="+",
+        help="ordered companion JSON summaries required for legacy continuations",
     )
     parser.add_argument("--replay-window", type=float, default=75.0)
     parser.add_argument("--replay-persistence", type=float, default=60.0)

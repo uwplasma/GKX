@@ -153,6 +153,7 @@ def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
             gkx_git_commit=np.asarray("abc123"),
             gkx_git_dirty=np.asarray(dirty),
             previous_t_end=np.asarray(previous_t_end),
+            campaign_identity_schema=np.asarray("gkx_nonlinear_campaign_v1"),
             case=np.asarray(case),
         )
 
@@ -177,6 +178,57 @@ def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
     write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, dirty=1)
     with pytest.raises(ValueError, match="not pinned to a clean GKX commit"):
         replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0)
+    for path in (first, second):
+        with np.load(path, allow_pickle=False) as archive:
+            legacy = {name: archive[name] for name in archive.files}
+        legacy.pop("campaign_identity_schema")
+        np.savez_compressed(path, **legacy)
+    with pytest.raises(ValueError, match="legacy continuation replay requires"):
+        replay._load_replay_traces([first, second])
+
+    def write_summary(path: Path, trace_path: Path, *, case: str = "qa") -> None:
+        with np.load(trace_path, allow_pickle=False) as archive:
+            samples = [
+                {"t": t, "heat_flux": q, "Wphi": wphi, "Wg": wg}
+                for t, q, wphi, wg in zip(
+                    archive["time"],
+                    archive["heat_flux"],
+                    archive["Wphi"],
+                    archive["Wg"],
+                )
+            ]
+            previous_t_end = float(archive["previous_t_end"])
+        path.write_text(
+            json.dumps(
+                {
+                    "source_provenance": {
+                        "git_commit": "abc123",
+                        "git_dirty": False,
+                    },
+                    "previous_t_end": previous_t_end,
+                    "case": case,
+                    "grid": {"Nx": 2, "Ny": 2, "Nz": 2},
+                    "geometry_override": {"vmec_file": "equilibrium.nc"},
+                    "random_seed": 31,
+                    "alpha": 0.0,
+                    "npol": 1.0,
+                    "trace": samples,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    first_summary = tmp_path / "first.json"
+    second_summary = tmp_path / "second.json"
+    write_summary(first_summary, first)
+    write_summary(second_summary, second)
+    replay._load_replay_traces([first, second], [first_summary, second_summary])
+
+    write_summary(second_summary, second, case="qi")
+    with pytest.raises(ValueError, match="campaign identity differs"):
+        replay._load_replay_traces([first, second], [first_summary, second_summary])
 
 
 def test_saturation_campaign_rejects_a_mixed_continuation_state(tmp_path: Path) -> None:
