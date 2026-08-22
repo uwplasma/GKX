@@ -34,7 +34,7 @@ independent replicated validation.
 | VMEC/Boozer geometry | imported and differentiable paths | selected finite-beta and state-control checks | main plot is synthetic; physical renderer is in PR #86 |
 | Linear derivatives | implicit eigenpair VJP with residual gates | AD/FD tests and selected GX comparisons | promoted on certified simple branches |
 | Nonlinear derivative | checkpointed discrete adjoint of a finite post-saturation window | reduced AD/FD and device-parity tests | local finite-window derivative only |
-| QA transport reduction | optimization scripts and preliminary paired runs | source-pinned QA Ny=128/160 seed-31 transport is compatible on the frozen stop window; Ny=160 clears the cutoff screen but not the persistence gate | 12.26% is preliminary, not statistically resolved |
+| QA transport reduction | optimization scripts and preliminary paired runs | source-pinned QA Ny=96/128/160 seed-31 rung shows a resolution-dependent stop; only Ny=160 clears the cutoff screen, and it fails persistence | 12.26% is preliminary, not statistically resolved |
 | Saturation stopping | IAT-corrected SEM and stationarity guards | implementation tests | production policy has defects below |
 | CPU/GPU | JAX CPU/GPU and experimental sharding | selected kernels/cases | no general scaling or GX-competitive claim |
 
@@ -406,11 +406,23 @@ compatibility, not convergence. Ny=160 lowers heat-flux cutoff/peak from
 13.87% to 7.55% and last-three-ky mass from 3.04% to 1.45%; outer-six-kx mass
 remains 0.11%. It clears the frozen cutoff screen, while time persistence and
 an independent seed remain open. Its exact state is queued to continue to
-absolute `t=350`; the source-pinned Ny=96 seed-31 rung is active. Ny=160
-SHA-256: NPZ
+absolute `t=350`. Ny=160 SHA-256: NPZ
 `4564fd5f9d50f441623040c9329bf22e498f4d7fbadf4ef25abbf195842ad185`, JSON
 `05af33be9bf3f4645750c42e32a32db0ab754d3a0c161537c396066c8f6784e5`, log
 `c1d0fca85be22b465b1d20e41f4cb1cdb0e06ce6152155e19ef98940f88ce49b`.
+
+The source-pinned QA `96x96x48`, seed-31 rung then reached exact `t=250` in
+2,200.7 s. It also makes no frozen stop; the longest pass island is
+`t=193.23--243.55`, only 50.33 time units. On the Ny=128 stop window
+`t=155.844--230.844`, Ny=96/128/160 give `Q=11.6622`, `10.9140`, and
+`11.0353`; Ny96 differs from Ny128 by 6.42% (1.50 combined SEM) and from Ny160
+by 5.38% (1.94 combined SEM). More decisively, its heat-flux cutoff/peak is
+41.78% and last-three-ky mass 11.53%, versus 13.87%/3.04% at Ny128 and
+7.55%/1.45% at Ny160. The frozen stop is therefore not resolution-stable, and
+Ny96 is rejected even where its mean looks statistically compatible. SHA-256:
+NPZ `41b8e641896d5830cee03c45103d52851e8d83e35a68c4340d3a7aa902d647cc`,
+JSON `6daf27302fd872a3364a6f3d6bbdae27c61dc25be6d0b573cc7cdd8dd3a8df9a`,
+log `f2c054a10b053be97eb315d26e284bc0bf9392049d1c3a92f06af7e038548f8f`.
 
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
@@ -481,11 +493,12 @@ by -3.30% (0.98 combined SEM). Seed 31 is the independent replication gate.
 At Ny=160, seed 31 gives `Q=10.962 +/- 0.282`; its 3.01% difference from seed
 22 is 0.82 combined standard errors. Its heat-flux cutoff/last-three values are
 8.05%/1.48% and its Phi2 values are 8.80%/1.37%. The environment audit makes
-these runs sizing evidence only. In the superseding source-pinned seed-31 pair,
-Ny=128/160 agree within 1.11% (0.23 combined SEM) on the frozen stop window;
-Ny=160 lowers cutoff/peak and last-three mass from 13.87%/3.04% to
-7.55%/1.45%. The terminal-window difference is 5.51% (1.14 combined SEM), so
-time continuation and another seed remain required before convergence.
+these runs sizing evidence only. In the superseding source-pinned seed-31
+triple, Ny=96/128/160 give `Q=11.6622/10.9140/11.0353` on the frozen stop
+window. Ny128/160 agree within 1.11% (0.23 combined SEM), while heat-flux
+cutoff/peak falls from 41.78% to 13.87% to 7.55%. Only Ny160 passes the screen,
+and it does not pass persistence; time continuation and another seed remain
+required before convergence.
 
 For the first QHS sizing rung (`64x96x48`, `t=150--250`), heat flux peaks at
 `ky*rho=0.333`; the `ky*rho=1.476` cutoff is 15.6% of the peak but the last
@@ -778,7 +791,7 @@ MP4 SHA-256:
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace capture | synthetic + held-out long traces |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | source-pinned QA seed replication, QHS continuation, and QI refinement pending |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed-31 Ny triple complete; QHS Ny128 and QI Ny128 continuation pending |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |

@@ -908,3 +908,21 @@
   index 9,144,022 bytes, complete `.git` 9,476,998 bytes, and current archive
   4,888,710 bytes. Strict `fsck`, exact plan tree/blob identity, zero alternates,
   and the reachable AI-attribution scan pass.
+- The source-pinned QA `96x96x48`, seed-31 rung reached exact `t=250` in
+  2,200.7 s with 547 samples. The shipped selector rejects it at 11.8% relative
+  SEM; the frozen `75+60` rule also makes no stop, with a longest pass island of
+  only `t=193.23--243.55` (50.33 time units).
+- On the Ny128 frozen-stop window, QA Ny96/128/160 give
+  `Q=11.6622/10.9140/11.0353`. Heat-flux cutoff/peak falls from
+  41.78% to 13.87% to 7.55%, and last-three-ky mass from 11.53% to 3.04% to
+  1.45%. Only Ny160 clears the necessary spatial screen, and it fails temporal
+  persistence. The stop decision is therefore not resolution-stable.
+- QA Ny96 SHA-256: NPZ
+  `41b8e641896d5830cee03c45103d52851e8d83e35a68c4340d3a7aa902d647cc`, JSON
+  `6daf27302fd872a3364a6f3d6bbdae27c61dc25be6d0b573cc7cdd8dd3a8df9a`, log
+  `f2c054a10b053be97eb315d26e284bc0bf9392049d1c3a92f06af7e038548f8f`.
+- The ad-hoc QA-to-QHS wrapper used `&&`; the fixed-horizon QA audit correctly
+  returned status 1 for NOT SATURATED after writing valid artifacts, so QHS did
+  not start. This is an orchestration error, not a solver failure. Launched the
+  source-clean QHS Ny128 `t=750` match explicitly on the now-idle GPU 0; the
+  queued QA Ny160 continuation remains gated on its report.
