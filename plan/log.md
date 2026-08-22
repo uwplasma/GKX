@@ -516,3 +516,110 @@
   includes #100: before this log commit, 22 heads and 28 tags fit in a
   9,124,252-byte pack and 9,949,649-byte logical `.git` directory; strict
   `fsck`, live-head parity, and the new patch-ID comparison pass.
+- PR #91 commit `c2b7284d` extends that fail-closed provenance rule to the
+  nonlinear-gradient evidence ladder. A state is admissible only when its
+  recorded checkout was clean and its `src/gkx` tree is identical to the
+  active solver tree; tool-only commits may differ. The JSON records both
+  source trees and commits. Sixty-one focused provenance/gradient tests and a
+  local x64 matrix over RK2/RK3/RK4, multispecies, kinetic-electron,
+  electromagnetic, collision, hypercollision, and checkpoint-parity paths
+  pass. This validates the discrete-window implementation, not a turbulent
+  invariant-measure derivative.
+- The merged #48 QA optimization example is not yet a production optimization
+  workflow. It is 255 lines versus the current 117-line VMEX reference, carries
+  a roughly 40-line warm-start mechanism disabled by `max_reuse=0`, spins up
+  with fixed `dt=0.05` for 8,000 steps at only `8x8x16`, and never evaluates
+  the production Q/Wphi/Wg saturation gate. Its 1,024-step differentiated
+  window is inherited from one Cyclone knee rather than measured for the QA
+  state, and the detached state is refreshed only between VMEX stages. The CI
+  path exercises only two steps on `4x4x8`. Refactor toward the VMEX example
+  only after a source-pinned, case-specific saturation and gradient-horizon
+  gate passes; remove the inert warm-start path and keep the claim explicitly
+  to a fixed finite-window pathwise derivative.
+- Direct inspection of the user's `96x96x48` QA NetCDF explains the apparent
+  overrun. The file has only 87 diagnostics over `t=0.065--200.620`; `t=50--55`
+  contains two samples and gives `Q=8.178`, about 25% below the
+  `t=150--200` mean `10.917`. The old summary nevertheless declares an
+  averaging interval `[29.834,238.025]`, beyond the file horizon and across the
+  nonlinear overshoot; #84 repairs the time accounting and #94 prevents a
+  rejected interval from being presented as an average. Over `t=100--200`,
+  first-zero IAT gives `Q=11.101 +/- 0.320`, `Wphi=1.649 +/- 0.029`, and
+  `Wg=249.5 +/- 5.1`; the final half still trends lower, so independent
+  continuation is required before a stop claim.
+- That same file ends at `ky*rho_i=1.476`. Over `t=100--200`, the cutoff
+  heat-flux bin is 49.4% of the spectral peak and the last three positive-ky
+  bins carry 12.9% of their summed flux; over `t=150--200` the values worsen
+  to 68.3% and 14.6%. `Phi2` is less edge-loaded (29.7% and 5.5% over the
+  first late window), explaining why its plot looks better. This run is not
+  Ny-converged. At fixed `Ly=62.8`, increasing `Ny` extends `ky_max` and raises
+  FFT/state cost; #87 makes the failure visible, while matched Ny=128/160
+  transport and edge-mass convergence decide the production resolution.
+- Causal prefix replay of the fixed 75-time-unit candidate window shows why a
+  persistence hold is needed: all Q/Wphi/Wg gates pass briefly at
+  `t=113.9--120.6`, then fail again through `t=147.5`; the durable pass begins
+  near `t=149.8`. A frozen 60-time-unit persistence requirement therefore
+  cannot stop this trace before about `t=210`, beyond the available `t=200.6`
+  data but far below an unconditional `t=400--750`. Score this rule unchanged
+  on the source-pinned QA/QHS/QI holdouts before making it a default.
+- PR #85 commit `4c1ae7ee` tightens the startup glossary after an independent
+  physics review: it prints `a/L_T=-a d ln(T)/dr` and
+  `a/L_n=-a d ln(n)/dr`, identifies gamma/omega with the selected potential
+  mode, distinguishes electrostatic field energy Wphi from distribution free
+  energy Wg, and labels Q as radial heat flux in gyro-Bohm units. Focused
+  runtime output, Ruff, mypy, diff, and architecture gates pass; installed
+  source remains one line below the main baseline.
+- JSON inventory on the post-#95 slim tree finds 553 files under
+  `docs/_static`, 5.09 MB total. Although 248 are not named outside static
+  JSON, all 553 are transitively reachable through report provenance, so a
+  flat unreferenced-file deletion would silently break the evidence graph.
+  The slimming plan now requires a versioned URI+SHA-256 provenance edge and
+  one-family-at-a-time migration: compact verdicts stay tracked; raw objective
+  histories, profiles, and replicate reports move to verified release assets.
+- The clean-source QHS Ny=160 and QI campaigns were extended without changing
+  their frozen `f7da8c49` checkout. Exact-state jobs are queued to absolute
+  `t=750` for QHS and `t=500` for QI after the already-running `t=250`, QHS
+  `t=500`, and QA Ny=128 jobs release their GPUs. Intermediate diagnostics are
+  not interpreted as convergence evidence.
+- For the user's one-species `(Nl,Nm,Nx,Nz)=(4,8,96,48)` layout at fixed
+  `Ly=62.8`, Ny=96/128/160 retain `ky_max*rho_i=1.476/2.000/2.524`.
+  A single complex64 distribution state is 108/144/180 MiB, while the
+  `Ny log Ny` factor is 1/1.42/1.85. These are sizing estimates only; matched
+  GPU wall time, CFL, peak memory, transport, and tail mass determine the
+  production choice.
+- Re-audited SOLVAX against the actual GKX operator rather than the recurrence
+  analogy alone. Streaming is Hermite-neighbor local but contains a spectral
+  or twist-linked parallel derivative; mirror couples a two-dimensional
+  `(l,m)` stencil; curvature/grad-B reaches `m+/-2` and `l+/-1`; the shipped
+  finite-wavelength Coulomb test/field matrices are about 49% nonzero; and the
+  nonlinear bracket couples perpendicular modes through FFTs. A SOLVAX direct
+  solve is therefore not an exact nonlinear GKX algorithm. The bounded next
+  experiment is a frozen-linear banded preconditioner: measure discarded-term
+  norm, Krylov iterations, residual, CPU/GPU wall and memory, and transpose-VJP
+  parity before adding a SOLVAX dependency or changing the production solver.
+- The first clean-source holdout completed on the frozen `f7da8c49` checkout:
+  QHS `64x160x48`, seed 22 reached exact `t=250` in 2,906.9 s. Over
+  `t=150--250`, `Q=6.5083 +/- 0.0937` (1.44% corrected SEM), and Q/Wphi/Wg
+  all pass the half-window gates. The heat-flux cutoff/peak is 4.79%, the
+  last-three-bin mass 0.93%, and the Phi2 values 0.010%/0.030%. The frozen
+  75-time-unit window plus 60-time-unit persistence rule makes no stop: its
+  three pass islands last only 11.7, 6.6, and 5.0 time units. The exact
+  continuation remains required. Trace SHA-256:
+  `928289d9e14d585a0dcb70b0b57939d556bb4030f71df6c2098fd4d5d6363911`.
+  The shipped median-crossing selector begins at `t=31.84`, retains the
+  overshoot, and therefore reports `Q=8.591 +/- 1.481` (17.2%) with Wg still
+  failing. This source-pinned trace confirms that the present burn-in selector
+  can prolong a run after a stationary late window exists.
+- The same campaign exposed a small but systematic JSON duplication: with an
+  NPZ trace requested, all 662 scalar samples are also embedded in the summary,
+  making its JSON 98,879 bytes. A bounded generator change should replace that
+  duplicate with the NPZ URI/path, schema, and SHA-256 while retaining inline
+  samples only for explicitly JSON-only runs.
+- The untouched clean-source QI `96x96x48`, seed-22 holdout reached exact
+  `t=250` in 3,462.3 s. On `t=150--250`, `Q=4.1641 +/- 0.0922` (2.21%) and
+  Q/Wphi/Wg pass, but Q and Wg fail on `t=200--250`. The frozen 75+60 rule
+  correctly makes no stop: its longest pass island lasts 58.85 time units and
+  fails again at `t=246.72`. Ny=96 is not resolved for transport: heat-flux
+  cutoff/peak is 15.50% and last-three-bin mass 3.71%; Phi2 is only
+  0.076%/0.241%. Exact continuation and a matched Ny refinement remain; the
+  frozen threshold is unchanged. Trace SHA-256:
+  `d7b511db5065e405f2a7511e0f335a8bc9b3cc12dcdf47af2fa9c4166e34ea55`.

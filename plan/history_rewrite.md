@@ -96,6 +96,25 @@ their duplicate serializers/forwarders, then lower each exception below 1,000
 lines. Likewise, moving report code from `src` to `tools` does not count as a
 line reduction; functionality must be deleted, generated, or delegated.
 
+The post-#95 slim tree still has 553 `docs/_static` JSON files (5,094,324
+bytes). A direct reference scan finds 248 leaf-looking reports (1,470,629
+bytes), but a transitive scan finds every one reachable through another
+tracked report: for example, the release-facing horizon audit points to the
+423-kB reduced-optimization trace. Do not delete these as allegedly unused or
+replace them with one opaque aggregate JSON. First version the evidence schema
+so a provenance edge may be a SHA-256-addressed release asset, teach consumers
+to verify/fetch it explicitly, and migrate one evidence family per PR. Keep
+small verdict/threshold summaries in Git; move raw objective histories,
+replicate reports, and profiles behind the hash. This reduces JSON count while
+preserving auditable provenance instead of leaving dangling filenames.
+
+The saturation campaign also duplicates every scalar sample in its summary
+JSON when a compressed NPZ trace is requested. The clean 662-sample QHS run
+produced a 98,879-byte JSON plus a 984,418-byte spectral NPZ. In a separate
+tool-only PR, keep the inline trace only when no trace artifact was requested;
+otherwise write a compact NPZ path/URI, SHA-256, schema, and report. This
+removes repeated JSON histories without weakening standalone use or provenance.
+
 ## Identity contract
 
 - Normalize Rogerio's historical Wisc and case variants to

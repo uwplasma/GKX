@@ -272,6 +272,40 @@ source path, Git commit, and dirty state in NPZ/state/JSON outputs. QHS Ny=160
 and QI restarted from zero with a logged clean `f7da8c49` source; QA seed 31
 and its Ny=128 match must also be repeated. The frozen rule is not retuned.
 
+The first source-pinned rerun, QHS `64x160x48` seed 22, reached exactly
+`t=250` in 2,906.9 s from the clean `f7da8c49` tree. On `t=150--250`,
+
+\[
+ Q=6.5083\pm0.0937\;(1.44\%),\qquad
+ \bar Q_1=6.6380,\quad \bar Q_2=6.3795,
+\]
+
+and Q, Wphi, and Wg pass the two-SEM half-window gates. The heat-flux
+cutoff/peak is 4.79% and the last three positive-`ky` bins carry 0.93% of
+spectral magnitude; the Phi2 values are 0.010% and 0.030%. The frozen `75+60`
+rule does not stop: admissible windows persist for only 11.7, 6.6, and 5.0
+time units, never the required 60. Continue the exact state before comparing
+the mean with the late Ny=128 result. Trace SHA-256:
+`928289d9e14d585a0dcb70b0b57939d556bb4030f71df6c2098fd4d5d6363911`.
+The current production selector instead retains `t=31.84--250`, including the
+overshoot, and reports `Q=8.591 +/- 1.481` (17.2%) plus a failing Wg guard.
+This is direct evidence that burn-in selection, not an excessively long
+stationary average, causes unnecessary continuation on this case; it is not
+evidence that an arbitrary short late window is safe.
+
+The untouched source-pinned QI `96x96x48` seed-22 holdout reached exactly
+`t=250` in 3,462.3 s from the same clean solver tree. Over `t=150--250`,
+`Q=4.1641 +/- 0.0922` (2.21%) and Q/Wphi/Wg pass the half-window gates, but
+the shorter `t=200--250` suffix fails Q and Wg stationarity. The frozen rule
+makes no stop: its longest admissible interval is `t=187.88--246.72`, only
+58.85 time units, after which drift returns. This is a narrowly correct
+non-stop under the predeclared 60-unit hold, not permission to shorten the
+threshold. Ny=96 also fails the necessary spatial screen: heat-flux
+cutoff/peak is 15.50% and the last three bins carry 3.71% of magnitude, while
+Phi2 is much better resolved at 0.076%/0.241%. Continue the exact state and
+add a matched Ny refinement. Trace SHA-256:
+`d7b511db5065e405f2a7511e0f335a8bc9b3cc12dcdf47af2fa9c4166e34ea55`.
+
 The matched QA `96x128x48` rung completed at `t=250` in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
 Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is
@@ -621,7 +655,7 @@ MP4 SHA-256:
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace capture | synthetic + held-out long traces |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; source budget restored |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS Ny scan | source-pinned QA seed replication and stationary QHS Ny=160 continuation pending |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | source-pinned QA seed replication, QHS continuation, and QI refinement pending |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |

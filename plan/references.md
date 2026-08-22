@@ -141,6 +141,8 @@ cannot validate cross-configuration transport.
   https://arxiv.org/abs/1204.0159
 - Ni & Talnikar, non-intrusive least-squares adjoint shadowing,
   https://arxiv.org/abs/1801.08674
+- Thakur & Nadarajah, stabilized-march adjoint shadowing,
+  https://arxiv.org/abs/2505.00838
 - Ni, fast adjoint algorithm for linear response of hyperbolic chaos,
   https://doi.org/10.1137/22M1522383
 - Hickling et al., online gradient flow for statistical steady-state turbulent
@@ -162,6 +164,16 @@ adjoints can also require prohibitive sample counts. Measure GKX's unstable
 dimension on reduced resolved grids before implementing shadowing. Online
 gradient flow is a current scalable comparator, but it uses finite-difference
 updates and therefore is not the selected autodiff API.
+
+Stabilized march replaces the NILSAS least-squares problem by segmented QR
+propagation and triangular substitutions. Its paper proves convergence under
+uniform hyperbolicity and demonstrates only Lorenz-63 and
+Kuramoto--Sivashinsky. It still evolves one homogeneous adjoint per retained
+unstable direction, requires the unstable dimension/Lyapunov spectrum, and
+stores or checkpoints the primal path. For GKX it is therefore a worthwhile
+reduced-grid experiment only after measuring the positive Lyapunov count; it
+does not displace the finite-window discrete adjoint without a gyrokinetic
+cost, bias, and matched-transport result.
 
 Acton et al. provide an independent linear-adjoint benchmark and warn that
 nearly degenerate dominant modes can make a growth-rate gradient ambiguous;
@@ -193,3 +205,15 @@ SOLVAX's banded/block solves are promising where Hermite/Laguerre recurrences
 produce a true banded implicit operator. They do not remove the nonlinear FFT
 cost. A GKX adoption requires an operator-structure derivation, a residual gate,
 and CPU/GPU wall/memory comparison against the present matrix-free route.
+
+The present GKX operator is not globally block tridiagonal. Streaming couples
+Hermite neighbors only after a spectral or twist-linked parallel derivative;
+the mirror term is a sparse two-dimensional Hermite--Laguerre stencil, and
+curvature/grad-B reaches `m+/-2` and `l+/-1`. Finite-wavelength Coulomb tables
+couple about half of the flattened moment pairs, while the nonlinear
+pseudospectral bracket couples perpendicular Fourier modes after the Laguerre
+grid transform. SOLVAX is therefore a candidate for a frozen-linear
+streaming/mirror/drift preconditioner, batched over the remaining modes, not an
+exact nonlinear solve. Promote it only if an assembled-term audit has small
+discarded-operator norm and preconditioned Krylov reduces iterations, wall
+time, and peak memory on both CPU and GPU; test the transpose/VJP separately.
