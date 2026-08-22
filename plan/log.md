@@ -260,12 +260,33 @@
   cutoff/peak is 15.6% and last-three-bin/summed-absolute-tail fraction is
   3.18%; Phi2 gives 10.4% and 2.32%. The trace SHA-256 is
   `da0a87a17b31fc762de3c89fde033d8f2464c622028953807d09ec81b4021ba4`.
-  The `64x128x48` refinement is running on GPU 0, while the QA `96x128x48`
-  refinement continues on GPU 1. Neither is yet a resolution or transport
-  claim.
+  The `64x128x48` QHS and `96x128x48` QA refinements were then launched on
+  separate GPUs. Neither launch by itself is a resolution or transport claim;
+  the completed QA result is recorded below.
 - A line-by-line stop-policy audit found that the standalone autocorrelation
   campaign still reported `n_eff=n/(1+2 tau/dt)` while the runtime and validated
   window statistics use `min(n,n dt/(2 tau))`. PR #91 commit `f1ad010e` removes
   that 41% independent-sample-floor discrepancy and adds a correlated-trace
   regression; it changes post-processing uncertainty only, not the solver or
   stop thresholds.
+- Required CI is green on both PR #91 and PR #95, including all 24 wide shards,
+  aggregate `ci-required`, docs/packaging, mypy, Python-floor, and Codecov.
+- The matched QA `96x128x48`, seed-22 run completed exactly at `t=250` with 658
+  samples in 3,648.2 s on one RTX A4000. On `t=150--250`, `Q=11.00584` with
+  2.21% corrected relative SEM and stationary Q/Wphi/Wg, versus `Q=10.85954`
+  at `Ny=96` (1.35% difference). The new cutoff remains 18.2% of the spectral
+  peak and 16.3% of summed absolute heat-flux magnitude lies beyond the old
+  cutoff, so `Ny=160` is running. Trace SHA-256:
+  `d24c88a8c58f1614a082887bb5b85b63f6887cce6b17d7374b64677041ec37a9`.
+- Opened draft PR #96 on #86. The movie snapshot schema now stores only the xy
+  and yz cuts consumed by rendering, plus physical VMEC coordinates and box
+  extent; full-volume legacy snapshots still replay. The README hero import
+  failure is fixed and 60 lines of duplicate surface construction are removed.
+  All 47 plotting tests, Ruff, the source-line budget, two CLI import smokes,
+  and a physical two-frame render pass. Installable source decreases by two
+  lines. Production-trajectory sampling remains explicitly unresolved.
+- The remote-ref audit found 63 advertised branch heads and 17 open PR heads.
+  A sub-10-MB single-branch rehearsal is therefore not a cutover proof. The
+  final frozen rewrite must replay all open heads onto the reviewed slim base
+  and remove closed heads only after their tips are in the verified bundle and
+  published ref map; no force-push has occurred.

@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the fifteen open PR heads (#74 and #81--#94) after the final rewrite.
+- Rebase the seventeen open PR heads (#74 and #81--#96) after the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -125,7 +125,7 @@ marker remains. The other human identities are unchanged.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main` and all tags from exact candidate SHAs, then rebase the fifteen
+   update `main` and all tags from exact candidate SHAs, then rebase the seventeen
    open PR heads with `--force-with-lease`.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
    merged heads and restore protection: required aggregate CI, one non-author
@@ -168,7 +168,11 @@ single-branch clone of the combined rehearsal has one 9,464,119-byte pack
 
 Repository hygiene, strict Sphinx, sdist/wheel build, installed-wheel import,
 CLI startup, strict `fsck`, and all 2,554 collected x64 tests pass in that fresh
-clone. Remaining blockers are representative examples, CPU/GPU checks, the
-remote-ref map, and a real GitHub network clone after every reviewed PR head is
-replayed. The stricter decimal 10-MB ceiling leaves only 535,881 bytes of pack
-margin; do not add another tracked render without removing equivalent payload.
+clone. GitHub currently advertises 63 branch heads but only 17 open PR heads;
+closed heads cannot remain attached to their old object graph under the 10-MB
+contract. The final frozen ref map must classify each one, replay every open
+head onto the reviewed slim base, and delete a closed head only after its old
+tip is in the verified bundle and published map. Remaining blockers are that
+replay, representative CPU/GPU examples, and a real GitHub network clone. The
+decimal ceiling leaves only 535,881 bytes of single-branch pack margin; do not
+add another tracked render without removing equivalent payload.

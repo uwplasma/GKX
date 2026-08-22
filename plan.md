@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-21 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#95.
+and open PRs #74 and #81--#96.
 
 ## Rules
 
@@ -175,6 +175,14 @@ and Wg half-window checks. This does not promote that hand-selected interval;
 it shows why SAT-1 must select and validate a stationary suffix instead of
 averaging every point after the first median crossing.
 
+The matched QA `96x128x48` rung completed at `t=250` in 3,648.2 s. On the
+fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
+Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is
+`Q=10.860`, a 1.35% change. This is transport convergence evidence, not yet a
+spectral pass: 16.3% of the `Ny=128` heat-flux spectral magnitude lies above
+the old cutoff and the new cutoff remains 18.2% of the peak. `Ny=160` is
+running with every other control fixed.
+
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
 out of 48; the `dt=0.04`, perpendicular 24, and velocity `(6,12)` refinements
@@ -234,7 +242,9 @@ absolute positive-`ky` flux. At `96x96x48`, the physical `t=150--250` spectrum
 peaks at `ky*rho=1.333`; its `ky*rho=1.476` cutoff is 54.2% of the peak and the
 last three bins carry 14.0%. The outer three `kx` shells carry only about 0.1%,
 so the controlled next QA rung holds `Nx=96`, `Nz=48`, seed, and horizon fixed
-and raises only `Ny` to 128. That run is in progress.
+and raises only `Ny`. At `Ny=128`, the late mean changes by 1.35%, but the
+new `ky*rho=2.0` endpoint is still 18.2% of the heat-flux peak and the last
+three bins carry 2.96% of summed absolute flux. The `Ny=160` rung is running.
 
 For the first QHS sizing rung (`64x96x48`, `t=150--250`), heat flux peaks at
 `ky*rho=0.333`; the `ky*rho=1.476` cutoff is 15.6% of the peak but the last
@@ -412,12 +422,14 @@ Movies must reuse lightweight decimated runtime cuts rather than rerun the
 physics. Store only an `x-y` cut and a `(y,z)` tube skin for about 60 frames;
 encode a small WebP/MP4. Both the still and movie must use physical VMEC
 coordinates and show the selected averaging interval only inside saved data.
-The present `build_turbulence_movie.py` violates this contract: it launches a
-new fixed-step RK4 trajectory, retains a full `phi(x,y,z)` volume per frame,
-and reconstructs a circular torus from only `q`, `epsilon`, `R0`, and `nfp`.
-Existing scalar/spectral NetCDF output cannot reconstruct field phases, so a
-physical movie requires opt-in decimated cuts during the original run (or a
-restart continuation), not post-hoc animation of the inspected file.
+PR #96 removes two of the three defects: snapshots retain only the rendered
+`phi(x,y,z_mid)` and `phi(x_mid,y,z)` cuts (32x fewer values per `96x96x48`
+frame), persist VMEC `R`, `Z`, and toroidal angle, and share one physical tube
+renderer. It also fixes the README hero's import failure. The compute path still
+launches a new fixed-step RK4 trajectory. Existing scalar/spectral NetCDF
+output cannot reconstruct field phases, so completion still requires opt-in
+decimated cuts during the original run (or an explicitly labelled restart
+continuation), not post-hoc animation of the inspected file.
 
 ## Work queue
 
@@ -431,7 +443,7 @@ restart continuation), not post-hoc animation of the inspected file.
 | RES-1 | P0 | review | PR #87 spectrum-tail warnings; convergence protocol pending | known resolved/unresolved fixtures + paired Nx/Ny scan |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
-| MOV-1 | P1 | pending | decimated x-y and 3-D movies | no physics rerun, size/time budgets |
+| MOV-1 | P1 | active/review | PR #96 cut-only physical artifacts; production sampling remains | no physics rerun, size/time budgets |
 | VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |
 | AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
 | SLIM-1 | P1 | review/blocked | corrected PR #88 removes 7.70 MB; artifact migration and rewrite remain | 5.93-MiB rehearsal; remove `_static` test dependencies, then fsck/install/docs/tests |
