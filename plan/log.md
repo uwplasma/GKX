@@ -507,3 +507,12 @@
   stores source path, commit, and dirty state in every artifact. QHS Ny=160 and
   QI restarted from zero; both logs begin with the clean in-checkout source
   `f7da8c49b803c738de67971bbab343a196f8f44e`.
+- Re-auditing merged PR #48 found that its shipped gradient-window JSON passes
+  the declared `1e-6` AD/FD gate through 1024 steps (`2.69e-9`) but fails at
+  2048 (`2.48e-5`), contrary to one documentation claim. Its memory-profile
+  replay command also requested 2048 steps while the published CPU/GPU JSON
+  and README use 1024. PR #100 corrects only those statements and preserves the
+  single block-checkpointed discrete adjoint. The private rewrite rehearsal now
+  includes #100: before this log commit, 22 heads and 28 tags fit in a
+  9,124,252-byte pack and 9,949,649-byte logical `.git` directory; strict
+  `fsck`, live-head parity, and the new patch-ID comparison pass.

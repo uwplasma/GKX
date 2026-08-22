@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#99.
+and open PRs #74 and #81--#100.
 
 ## Rules
 
@@ -422,7 +422,7 @@ history. Keeping every historical generated plot/test/tool blob is incompatible
 with that target.
 
 The source-complete public-ref rehearsal also passes. The refreshed candidate
-maps `main` plus every open PR head through #99, retains all 28 remote tags,
+maps `main` plus every open PR head through #100, retains all 28 remote tags,
 passes
 strict `fsck`, and contains no AI attribution marker. Closed topic heads still
 require a frozen delete/retain map, and no remote history has moved.
@@ -626,7 +626,7 @@ MP4 SHA-256:
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
-| AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
+| AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
 | SLIM-1 | P1 | active/review | corrected PR #88 removes 7.70 MB; public-ref rewrite rehearsal passes | freeze closed-head map, publish recovery records, then network-clone gate |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |

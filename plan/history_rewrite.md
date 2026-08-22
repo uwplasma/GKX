@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the twenty open PR heads (#74 and #81--#99) after the final rewrite.
+- Rebase the twenty-one open PR heads (#74 and #81--#100) after the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -143,7 +143,7 @@ marker remains. The other human identities are unchanged.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main` and all tags from exact candidate SHAs, then rebase the twenty
+   update `main` and all tags from exact candidate SHAs, then rebase the twenty-one
    open PR heads with `--force-with-lease`.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
    merged heads and restore protection: required aggregate CI, one non-author
@@ -195,13 +195,13 @@ match for every textual patch; PR #90 alone omits a generated PNG that PR #95
 intentionally removes. No replayed head reaches the old `main` object graph.
 
 Immediately before the present measurement-recording commit, the refreshed
-ordinary clone advertises 21 heads (`main` plus the 20 PR heads through #99)
-and all 28 remote tags, with 3,450 reachable commits and 17,522 objects. Its
-one pack is 9,128,917 bytes; pack plus index is 9,620,605 bytes, the complete
-`.git` directory is 9,953,481 logical bytes, and the compressed current-tree
-archive is 5,363,108 bytes. Strict `fsck` passes. All 30 recent replayed commits
-have exact stable patch-ID matches, the clone has no object alternate, and the
-reachable commit metadata has no AI attribution marker. This closes the local
+ordinary clone advertises 22 heads (`main` plus the 21 PR heads through #100)
+and all 28 remote tags, with 3,454 reachable commits and 17,545 objects. Its
+one pack is 9,124,252 bytes; pack plus index is 9,616,584 bytes, the complete
+`.git` directory is 9,949,649 logical bytes, and the compressed current-tree
+archive is 5,363,108 bytes. Strict `fsck` passes. All current replayed head
+patches have exact stable patch-ID matches, the clone has no object alternate,
+and the reachable commit metadata has no AI attribution marker. This closes the local
 public-ref size gate. The unpacked checkout remains 19,558,568 logical bytes;
 that is a separate source-slimming target, not transferred Git history. The
 user's 2026-08-21 request authorizes a
