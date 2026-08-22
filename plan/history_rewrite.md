@@ -241,17 +241,21 @@ only these exact old-to-new blob pairs:
 
 | Artifact | Old blob | New blob |
 |---|---|---|
-| runtime/memory | `686c0aaaa7834f7780cd62aebec4780371d93f69` | `eea9d41289c1fc2f54a6335b920dcda0e9cfe14d` |
-| linear parity | `a10c72fa33c593671c34800f55720842df99d54d` | `171fd9eb00968dc93d20cda2f5b4d47c558e3129` |
-| eigensolver reach | `7b09d5f4c427c671d5f6dbde4cfa3369fabf806b` | `6cf24feddfaef50afa06727b7acfa4aec4e3d535` |
+| runtime/memory | `686c0aaaa7834f7780cd62aebec4780371d93f69` | `da5e5148fcf40dea6dd3ab1f146901066d59344c` |
+| linear parity | `a10c72fa33c593671c34800f55720842df99d54d` | `3fce1247198d095e91f55fe5411862341b4abdf1` |
+| eigensolver reach | `7b09d5f4c427c671d5f6dbde4cfa3369fabf806b` | `2cce16e1776cd14a2b59fa427d76b7fe162ca8fb` |
 
-All nine public/private PR-head blobs are identical and the text-only stable
-patch ID is `1e6969e0`; the binary delta disappears privately because each
-parent already contains the mapped compact blobs. Immediately before this
-record, a fresh 26-head/28-tag clone has 3,458 commits, 17,678 objects, an
-8,670,362-byte pack, 9,166,418 bytes for pack plus index, and a 9,500,429-byte
-complete `.git` file sum. Strict `fsck`, no alternates, zero reachable old
-blobs, exact roadmap payload, and the attribution scan pass.
+The public/private aggregate text patch has stable ID `72e21a1c`. All
+generator/source/image/physics-test head blobs are exact; the large release
+gate differs only at its intentional rewritten roadmap-reference comment. The
+binary deltas disappear privately because each parent already contains the
+mapped compact blobs; the dimension-preservation commit is retained empty via
+`--prune-empty never`. PR #105's exact public/private stable patch ID is
+`0bd73578`. Immediately before this record, a fresh 27-head/28-tag clone has
+3,463 commits, 17,704 objects, an 8,808,008-byte pack, 9,304,792 bytes for pack
+plus index, and a 9,639,011-byte complete `.git` file sum. Strict `fsck`, no
+alternates, zero reachable original/intermediate blobs, exact roadmap payload,
+and the attribution scan pass.
 
 PR #95 keeps the six-second turbulence interval as a 720-pixel, 24-frame WebP
 and palette-encodes the initial/final QA equilibrium panel in their owning

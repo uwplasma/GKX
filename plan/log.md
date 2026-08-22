@@ -1230,21 +1230,34 @@
   changes a numerical or physics result.
 - Clarified the repository-size contract. The private full-clone Git database
   is below the decimal 10-MB gate; PR #104 reduces the expanded stacked tracked
-  tree from 19,164,142 to 18,881,136 bytes. A sub-10-MB expanded checkout
+  tree from 19,162,255 to 18,904,270 bytes. A sub-10-MB expanded checkout
   remains open and
   must be reached through provenance-preserving artifact migration; the
   3.35-MB installed source is not the cause of the original 133.70-MiB clone.
 - Opened draft PR #104 on #103 to centralize deterministic PNG palette output
   and compact the retained runtime/memory, linear-parity, and eigensolver-reach
-  README figures from 462,973 to 179,956 bytes. Same-environment comparison
-  preserves dimensions and gives 73.70/56.47/63.04 dB PSNR. All six Landau
-  physics tests, all three generators, the shared-helper mypy check, Ruff, the
-  size gate, and diff checks pass; the old and shared Landau helpers are
-  byte-identical under one renderer.
+  README figures from 462,973 to 205,273 bytes. A final audit rejected locally
+  regenerated canvases that differed from the tracked parent by 2--7 pixels;
+  commit `885729f8` instead palette-encodes the exact parent canvases. Their
+  same-canvas PSNR is 72.15/56.06/62.38 dB. CI caught the first helper version's
+  16-line source-budget regression; `673e5da5` trims prose rather than raising
+  the baseline, leaving `src/gkx` two lines smaller. Commit `5a74bbea` gates all
+  four tracked palettes. Six Landau physics tests, all three generators, mypy,
+  architecture, Ruff, size, release, and diff gates pass locally; the old and
+  shared Landau helpers are byte-identical under one renderer.
 - Replaced only the three exact superseded PNG blobs in a new private rewrite
-  rehearsal. Every public/private PR #104 head blob and its text patch match;
-  the public roadmap tree remains exact. A fresh ordinary clone has 26 heads
-  plus `origin/HEAD`, 28 tags, 3,458 commits, 17,678 objects, an 8,670,362-byte
-  pack, and a 9,500,429-byte complete `.git`. Strict `fsck`, no alternates,
-  zero old-blob reachability, and zero AI-attribution hits pass. No public
-  history moved.
+  rehearsal. PR #104's aggregate text patch and every generator/source/image/
+  physics-test head blob match; the release-gate file differs only in its
+  intentional branch-only-roadmap comment. PR #105's patch is exact. A fresh
+  ordinary clone has 27 heads plus `origin/HEAD`, 28 tags, 3,463 commits,
+  17,704 objects, an 8,808,008-byte pack, and a 9,639,011-byte complete `.git`.
+  Strict `fsck`, exact roadmap payload, no alternates, zero original/intermediate
+  PNG reachability, and zero AI-attribution hits pass. No public history moved.
+- Opened draft PR #105 on #81 after the exact-function audit found duplicate
+  linear sampling validation and 5D/6D cache resolution. One canonical helper
+  now takes each caller's local cache builder explicitly, preserving the
+  monkeypatch seam exposed by the first test run. The patch removes 23 source
+  lines; 131 linear, 30 runner/runtime, and 69 four-device parallel tests pass,
+  together with Ruff, mypy, architecture, and diff checks.
+- PR #102's follow-up audit/fix is fully green: all 41 required GitHub checks
+  pass at `51b55741`; the nightly job is intentionally skipped.

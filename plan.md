@@ -765,7 +765,7 @@ The user's sub-10-MB target is tracked in two distinct units. The hard clone
 gate is the complete Git object database for an ordinary full clone, including
 all live heads and tags; that private rehearsal is below 10,000,000 bytes. The
 expanded checkout is a separate target and is **not** yet below 10 MB: the
-post-#104 stacked tree is 18,881,136 tracked bytes. The installed `src/gkx`
+post-#104 stacked tree is 18,904,270 tracked bytes. The installed `src/gkx`
 tree is about 3.35 MB. Reaching a sub-10-MB expanded checkout therefore requires
 moving more reproducible documentation/evidence payloads to hash-addressed
 release assets, not deleting physics, tests, or provenance blindly.
@@ -805,7 +805,7 @@ history. Keeping every historical generated plot/test/tool blob is incompatible
 with that target.
 
 The source-complete public-ref rehearsal also passes. The refreshed candidate
-maps `main` plus every open PR head through #104, retains all 28 remote tags,
+maps `main` plus every open PR head through #105, retains all 28 remote tags,
 passes strict `fsck`, and contains no AI attribution marker. PR #102 fixes an
 asymmetric artifact writer: comparison JSON already summarized deterministic
 LCFS/Boozer grids, while each single-result JSON retained the full arrays after
@@ -832,14 +832,22 @@ only Git blob `99a3ff82ac7c9e15e66635e1bb054380decb81ad`.
 
 PR #104 centralizes that deterministic palette path and applies it to three
 more retained README figures. Runtime/memory, linear parity, and eigensolver
-reach fall from 194,469/174,972/93,532 to 76,267/69,494/34,195 bytes. Their
-same-environment PSNR is 73.70/56.47/63.04 dB; full dimensions and plotted
-content remain. The rewrite maps only the three exact old PNG blobs to the
-generator-owned compact blobs. Immediately before this record, a fresh clone
-has 26 heads plus `origin/HEAD`, 28 tags, 3,458 commits, and 17,678 objects:
-pack 8,670,362 bytes, pack plus index 9,166,418 bytes, and complete `.git`
-9,500,429 bytes. Strict `fsck`, exact head payloads, exact roadmap payload,
-no alternates, zero old-blob reachability, and zero AI-attribution hits pass.
+reach fall from 194,469/174,972/93,532 to 87,930/81,064/36,279 bytes. Their
+same-canvas PSNR is 72.15/56.06/62.38 dB; every parent pixel coordinate and
+dimension remains fixed. CI caught an initial 16-line source-budget regression;
+the correction leaves `src/gkx` two lines below its frozen baseline and adds a
+four-preview palette gate. PR #105 then removes 23 duplicate linear sampling
+and cache-policy lines while retaining module-local cache-builder injection.
+
+The rewrite maps only the three exact old PNG blobs to those final compact
+blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
+patch are exact; its large release-gate file differs only in the intentional
+rewrite comment that points to the branch-only roadmap. PR #105 has an exact
+public/private patch ID. Immediately before this record, a fresh clone has 27
+heads plus `origin/HEAD`, 28 tags, 3,463 commits, and 17,704 objects: pack
+8,808,008 bytes, pack plus index 9,304,792 bytes, and complete `.git` 9,639,011
+bytes. Strict `fsck`, exact roadmap payload, no alternates, zero superseded-blob
+reachability, and zero AI-attribution hits pass.
 
 After replaying the matched-CFL roadmap result, a fresh no-local clone of the
 candidate through roadmap commit `7afdcc3d` has 25 heads, 28 tags, 3,443
@@ -1099,7 +1107,7 @@ unverified rather than silently promoted.
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103/#104 remove redundant renders/grids/traces; latest pre-record rehearsal `.git` is below 9.51 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103/#104/#105 remove redundant renders/grids/traces/policies; latest pre-record rehearsal `.git` is below 9.64 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
