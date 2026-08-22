@@ -809,3 +809,11 @@
   contour, or surface structure. A palette/100-kB gate, 179 affected
   release/optimization/benchmark tests, and Ruff pass; PR #103 carries the same
   compact panel and retains its six passing x64 Landau tests.
+- Rewrote both preview blobs across the private rehearsal and replayed the
+  preceding exact roadmap tree. The fresh no-alternates clone has all 25
+  selected heads, 28 tags, 3,422 commits, and 17,433 objects; its pack is
+  8,641,725 bytes and
+  complete `.git` file sum is 9,463,873 bytes. Strict `fsck`, exact roadmap
+  source neutrality/tree identity, and the attribution scan pass. The old
+  828,066/346,234-byte loop and 192,557-byte QA panel are unreachable. No public
+  ref moved.
