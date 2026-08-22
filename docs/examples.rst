@@ -460,6 +460,12 @@ so its per-frame payload is :math:`N_xN_y+N_yN_z`, rather than
 :math:`N_xN_yN_z`. At ``96x96x48`` this is a 32-fold reduction. Schema 3 also
 records the source path and saturation flag, method, fixed/adaptive policy,
 resolution, VMEC field-line coordinates, and physical perpendicular extent.
+Imported-geometry movies require finite ``R(z)``, ``Z(z)``, and
+``zeta(z)`` profiles and fail instead of drawing an analytic torus when they
+are absent. A finite stellarator flux-tube segment is generally open in
+three-dimensional space: its endpoints need not coincide. The linked boundary
+identifies the gyrokinetic fields through twist-and-shift, not by closing the
+centreline in Cartesian coordinates.
 Rendering never holds a GPU allocation. A seed-only movie is allowed but is
 labelled ``seeded continuation`` and is not saturation evidence.
 
