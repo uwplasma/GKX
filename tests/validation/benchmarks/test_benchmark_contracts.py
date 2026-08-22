@@ -480,7 +480,7 @@ def test_benchmark_results_manifest_is_root_level_and_small() -> None:
     assert readme.stat().st_size < 20_000
 
 
-def test_benchmark_results_manifest_points_to_tracked_docs_outputs() -> None:
+def test_benchmark_results_manifest_points_to_tracked_or_regenerable_outputs() -> None:
     manifest = _load_results_manifest()
     entries = [*manifest.get("figure", []), *manifest.get("table", [])]
     assert {entry["name"] for entry in entries} >= {
@@ -492,11 +492,15 @@ def test_benchmark_results_manifest_points_to_tracked_docs_outputs() -> None:
 
     for entry in entries:
         path = ROOT / entry["path"]
-        assert path.exists(), entry["path"]
-        assert path.is_file(), entry["path"]
+        action = entry.get("action", "keep_in_repo")
+        assert action in {"keep_in_repo", "regenerate_on_demand"}
+        if action == "keep_in_repo":
+            assert path.exists(), entry["path"]
+        if path.exists():
+            assert path.is_file(), entry["path"]
+            assert path.stat().st_size <= MAX_TRACKED_RESULT_BYTES, entry["path"]
         assert ROOT / "tools_out" not in path.parents
         assert ROOT / "docs" / "_build" not in path.parents
-        assert path.stat().st_size <= MAX_TRACKED_RESULT_BYTES, entry["path"]
 
         source_manifest = ROOT / entry["source_manifest"]
         assert source_manifest.exists(), entry["source_manifest"]
