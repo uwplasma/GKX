@@ -34,7 +34,7 @@ def write_result_artifacts(result: Any, out_base: Path, *, title: str) -> None:
 
     out_base.parent.mkdir(parents=True, exist_ok=True)
     payload = _sanitize_artifact_payload(_augment_result_payload(result.to_dict()))
-    _write_json(payload, out_base.with_suffix(".json"))
+    _write_json(_compact_result_json_payload(payload), out_base.with_suffix(".json"))
     _write_history_csv(payload, out_base.with_suffix(".history.csv"))
     _plot_result(payload, out_base.with_suffix(".png"), title=title)
     _plot_result(payload, out_base.with_suffix(".pdf"), title=title)
@@ -267,6 +267,16 @@ def _compact_comparison_json_payload(payload: dict[str, Any]) -> dict[str, Any]:
         row["reduced_diagnostics"] = _compact_reduced_diagnostics(row["reduced_diagnostics"])
         rows.append(row)
     compact["results"] = rows
+    return compact
+
+
+def _compact_result_json_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Summarize reproducible grids after rendering the result figures."""
+
+    compact = dict(payload)
+    compact["reduced_diagnostics"] = _compact_reduced_diagnostics(
+        payload["reduced_diagnostics"]
+    )
     return compact
 
 

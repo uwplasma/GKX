@@ -2801,7 +2801,7 @@ def test_stellarator_itg_density_gradient_scan_rejects_invalid_axes(
         )
 
 
-def test_stellarator_itg_plotting_artifact_includes_reduced_diagnostics(
+def test_stellarator_itg_plotting_artifact_compacts_reproducible_grids(
     tmp_path: Path,
 ) -> None:
     plotting = _load_stellarator_itg_plotting_module()
@@ -2873,13 +2873,16 @@ def test_stellarator_itg_plotting_artifact_includes_reduced_diagnostics(
     assert diagnostics["final"]["fixed_gradient_trace"]["trace_kind"] == (
         "smooth_reduced_nonlinear_envelope_not_full_turbulent_gk"
     )
-    assert diagnostics["final"]["surface"]["scope"].endswith(
+    assert diagnostics["final"]["surface_summary"]["scope"].endswith(
         "not_solved_vmec_equilibrium"
     )
-    assert diagnostics["final"]["lcfs_bmag"]["scope"].startswith(
+    assert diagnostics["final"]["lcfs_bmag_summary"]["scope"].startswith(
         "synthetic_reduced_lcfs_bmag"
     )
-    assert len(diagnostics["final"]["lcfs_bmag"]["theta"]) >= 64
+    assert diagnostics["final"]["surface_summary"]["theta_count"] == 72
+    assert diagnostics["final"]["lcfs_bmag_summary"]["theta_count"] == 72
+    assert "surface" not in diagnostics["final"]
+    assert "lcfs_bmag" not in diagnostics["final"]
 
 
 def test_stellarator_itg_comparison_artifact_has_publication_lcfs_diagnostics(
