@@ -1261,3 +1261,7 @@
   together with Ruff, mypy, architecture, and diff checks.
 - PR #102's follow-up audit/fix is fully green: all 41 required GitHub checks
   pass at `51b55741`; the nightly job is intentionally skipped.
+- Refreshed the public inventory: `main` remains at merged PR #80 and 26 PRs
+  are open (#74 and #81--#105). PR #74's apparent 39-check failure is a
+  cancelled duplicate run on the same head; its later authoritative run has
+  all 41 required checks passing. No PR has merged since #80.
