@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the twenty-nine open PR heads (#74, #82--#105, and #107--#110) after
+- Rebase the thirty open PR heads (#74, #82--#105, and #107--#111) after
   the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
@@ -165,8 +165,8 @@ marker remains. The other human identities are unchanged.
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
    update `main` and all tags from exact candidate SHAs, then rebase the
-   twenty-nine open PR heads with `--force-with-lease`. Do not merely retarget
-   the eighteen direct #81-base PRs: the squash merge left equal base trees but
+   thirty open PR heads with `--force-with-lease`. Do not merely retarget the
+   nineteen direct #81-base PRs: the squash merge left equal base trees but
    divergent ancestry, so each head must be replayed onto rewritten `main` and
    pass exact tree/patch checks before retargeting.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
@@ -362,3 +362,12 @@ remote refs and 28 tags, with 3,486 commits and 17,871 objects. Its pack is
 sum is 9,360,868 bytes. Strict `fsck`, no alternates, and zero reachable
 AI-attribution matches pass, leaving 639,132 bytes of strict decimal margin.
 No public history was force-pushed.
+
+Draft PR #111 commit `116ff191` is replayed as `b792c5d1`. The exact
+public/private stable patch ID is `d7b8bc76`, and its sole changed source blob
+is byte-identical. A garbage-collected ordinary clone now advertises 33 remote
+refs and 28 tags, with 3,490 commits and 17,897 objects. Its pack is 8,525,677
+bytes, pack plus index is 9,027,865 bytes, and complete `.git` file sum is
+9,363,391 bytes. Strict `fsck`, no alternates, and zero reachable
+AI-attribution matches pass, leaving 636,609 bytes of strict decimal margin.
+No public history moved.

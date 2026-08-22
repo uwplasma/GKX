@@ -1471,3 +1471,20 @@
   have exceeded the former 15-minute wrapper and directly validates #81's
   nonlinear-only 20-minute cleanup budget. This closes the progress-display
   implementation gate; the source-pinned QI run remains active and unchanged.
+- PR #110 is fully green at `adf3234b`: all 41 required checks pass and nightly
+  is intentionally skipped.
+- Opened draft PR #111 at `116ff191` after the duplicate-code audit found 15
+  identical host facade bindings in explicit and IMEX nonlinear diagnostics.
+  One dynamic common mapping now serves both constructors, preserving their
+  signatures and every callable identity with exact digest `3891ec1d`. The
+  one-file patch removes six installed-source lines (`96,465 -> 96,459`) and
+  changes no traced input or numerical policy. All 219 owned x64 tests, 117
+  release gates, Ruff, mypy, architecture, and size checks pass. The lone
+  float32 adaptive eager/JIT failure reproduces unchanged on the base and
+  passes under x64. CI is active.
+- Replayed #111 privately as `b792c5d1`; stable patch ID `d7b8bc76` and the
+  changed blob match exactly. A fresh no-local clone has 33 remote refs, 28
+  tags, 3,490 commits, and 17,897 objects: pack 8,525,677 bytes, pack plus
+  index 9,027,865 bytes, and complete `.git` 9,363,391 bytes. Strict `fsck`,
+  no alternates, and zero AI-attribution hits pass, leaving 636,609 bytes of
+  decimal margin. No public history moved.

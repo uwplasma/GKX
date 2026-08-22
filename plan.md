@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `0ff569c3` (merged PR #81)
-and 29 open PRs: #74, #82--#105, and #107--#110. PR #106 was closed as a
+and 30 open PRs: #74, #82--#105, and #107--#111. PR #106 was closed as a
 duplicate. The post-merge `main` workflow passes.
 
 ## Rules
@@ -814,8 +814,8 @@ asks for one review, but every merged PR reports `REVIEW_REQUIRED`, no checks ar
 required, force pushes are allowed, and administrator bypass was used. Require
 the aggregate CI check and one non-author approval after the recovery rewrite.
 
-Eighteen open PRs still target #81's `fix/main-ci-mypy` branch: #74, #82--#89,
-#93, #98, #100, #101, #105, and #107--#110. That base and `main` have the same
+Nineteen open PRs still target #81's `fix/main-ci-mypy` branch: #74, #82--#89,
+#93, #98, #100, #101, #105, and #107--#111. That base and `main` have the same
 tree, but their merge base is pre-#81 `5f3ab32e` because #81 was squash-merged.
 A base-only retarget would therefore make GitHub's three-dot review diff include
 #81 again. Keep the old base alive until coordinated replay. For each direct
@@ -964,7 +964,19 @@ signatures, defaults, schemas, thresholds, and results are unchanged. The patch
 removes 14 installed-source lines (`96,465 -> 96,451`). Base/head digests of
 both policies and every public signature match in float32 and x64. All 122
 owning tests pass locally and under office JAX 0.11.1; 117 release tests, Ruff,
-architecture, size, and diff gates pass locally. CI is active.
+architecture, size, and diff gates pass locally. All 41 required checks pass.
+
+PR #111 gives explicit and IMEX nonlinear diagnostics one host-side owner for
+their 15 identical facade bindings. Both dependency dataclass signatures and
+every injected callable identity have the same base/head digest `3891ec1d`;
+scan kernels, traced arguments, timestep/CFL, collision split, restart,
+sampling, progress, and the resolved schema are untouched. The one-file patch
+removes six installed-source lines (`96,465 -> 96,459`). All 219 owned x64
+nonlinear/explicit/IMEX/operator tests and 117 release tests pass, together with
+Ruff, mypy, architecture, and size gates. The one local float32 adaptive
+eager/JIT failure reproduces unchanged on the base and passes under CI's x64
+contract. Dependency construction changes by only +57/+116 ns per explicit/
+IMEX host setup and never enters a traced loop. CI is active.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
@@ -1235,7 +1247,7 @@ unverified rather than silently promoted.
 | --- | --- | --- | --- | --- |
 | CI-1 | P0 | closed | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 PR checks and post-merge `main` CI pass |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
-| GOV-2 | P0 | cutover | rebase 18 direct #81-base heads onto rewritten `main`, then retarget | exact old/new head-tree and patch map; force-with-lease; fresh CI |
+| GOV-2 | P0 | cutover | rebase 19 direct #81-base heads onto rewritten `main`, then retarget | exact old/new head-tree and patch map; force-with-lease; fresh CI |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QHS seed-31 makes no stop and differs from seed 22 by 8.76 combined SEM; QI clean repeat active |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
@@ -1245,7 +1257,7 @@ unverified rather than silently promoted.
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#110 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#111 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
