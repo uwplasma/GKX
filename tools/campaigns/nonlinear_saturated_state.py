@@ -16,7 +16,9 @@ Rather than reimplement any of that, this tool drives ``run_runtime_nonlinear``
 Saturation is judged by the production stop policy on the heat-flux trace,
 with ``Wphi`` and ``Wg`` as stationarity guards. A state that fails is written
 out anyway, flagged, so the failure is inspectable rather than silent. A
-continuation segment cannot claim full-history saturation by itself.
+continuation segment cannot claim full-history saturation by itself. The same
+tool can replay a frozen trailing-window/persistence policy on source-pinned
+NPZ segments without rerunning GKX.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -120,6 +122,225 @@ def _scope_saturation_report(
     reasons.append("prior_history_not_in_report")
     scoped["reasons"] = reasons
     return scoped
+
+
+@dataclasses.dataclass(frozen=True)
+class ReplayPolicy:
+    window: float = 75.0
+    persistence: float = 60.0
+    rel_sem: float = 0.05
+    min_tau_multiples: float = 10.0
+    min_samples: int = 16
+
+
+def replay_policy(
+    time_axis: np.ndarray | Sequence[float],
+    heat_flux: np.ndarray | Sequence[float],
+    wphi: np.ndarray | Sequence[float],
+    wg: np.ndarray | Sequence[float],
+    *,
+    policy: ReplayPolicy | None = None,
+) -> dict[str, Any]:
+    """Replay one causal trailing-window decision with a persistence hold."""
+    from gkx.diagnostics.saturation import (
+        _halves_stationary,
+        _sokal_window_mean_sem,
+    )
+
+    cfg = ReplayPolicy() if policy is None else policy
+    if cfg.window <= 0.0 or cfg.persistence < 0.0:
+        raise ValueError("window must be positive and persistence non-negative")
+    if cfg.rel_sem <= 0.0 or cfg.min_tau_multiples <= 0.0:
+        raise ValueError("rel_sem and min_tau_multiples must be positive")
+    arrays = [
+        np.asarray(values, dtype=float).reshape(-1)
+        for values in (time_axis, heat_flux, wphi, wg)
+    ]
+    time, flux, field_energy, free_energy = arrays
+    if not time.size or any(values.size != time.size for values in arrays):
+        raise ValueError("time and diagnostics must have one equal nonzero length")
+    if not all(np.all(np.isfinite(values)) for values in arrays):
+        raise ValueError("time and diagnostics must be finite")
+    if np.any(np.diff(time) <= 0.0):
+        raise ValueError("time must be strictly increasing")
+
+    def score(end: int) -> dict[str, Any]:
+        if time[end] - time[0] < cfg.window:
+            return {"passed": False, "reasons": ["trace_shorter_than_window"]}
+        start = int(np.searchsorted(time, time[end] - cfg.window, side="left"))
+        window_time = time[start : end + 1]
+        if window_time.size < max(cfg.min_samples, 8):
+            return {"passed": False, "reasons": ["window_shorter_than_min_samples"]}
+        dt = float(np.median(np.diff(window_time)))
+        if not np.isfinite(dt) or dt <= 0.0:
+            return {"passed": False, "reasons": ["degenerate_window_time_axis"]}
+        statistics: dict[str, dict[str, Any]] = {}
+        for name, signal in (
+            ("heat_flux", flux),
+            ("Wphi", field_energy),
+            ("Wg", free_energy),
+        ):
+            values = signal[start : end + 1]
+            mean, sem, tau, resolved = _sokal_window_mean_sem(values, dt)
+            first, second, halves_sem, stationary = _halves_stationary(values, dt)
+            statistics[name] = {
+                "mean": mean,
+                "sem": sem,
+                "tau_ac": tau,
+                "tau_ac_resolved": resolved,
+                "first_half_mean": first,
+                "second_half_mean": second,
+                "halves_sem": halves_sem,
+                "stationary": stationary,
+            }
+        flux_stats = statistics["heat_flux"]
+        span = float(window_time[-1] - window_time[0])
+        relative_sem = float(flux_stats["sem"] / max(abs(flux_stats["mean"]), 1.0e-12))
+        gates = {
+            "tau_ac_unresolved": bool(flux_stats["tau_ac_resolved"]),
+            "window_below_min_tau_multiples": bool(
+                span >= cfg.min_tau_multiples * flux_stats["tau_ac"]
+            ),
+            "rel_sem_above_threshold": relative_sem <= cfg.rel_sem,
+            **{
+                f"{name}_not_stationary": bool(stats["stationary"])
+                for name, stats in statistics.items()
+            },
+        }
+        return {
+            "passed": all(gates.values()),
+            "reasons": [name for name, passed in gates.items() if not passed],
+            "window_tmin": float(window_time[0]),
+            "window_tmax": float(window_time[-1]),
+            "window_span": span,
+            "n_window": int(window_time.size),
+            "output_dt": dt,
+            "relative_sem": relative_sem,
+            "statistics": statistics,
+        }
+
+    pass_start: int | None = None
+    first_stop: dict[str, Any] | None = None
+    islands: list[dict[str, float]] = []
+    terminal: dict[str, Any] = {}
+    for end in range(time.size):
+        terminal = score(end)
+        if terminal["passed"]:
+            if pass_start is None:
+                pass_start = end
+            if first_stop is None and time[end] - time[pass_start] >= cfg.persistence:
+                first_stop = {
+                    "checkpoint_index": end,
+                    "checkpoint_time": float(time[end]),
+                    "persistence_start": float(time[pass_start]),
+                    "persistence_observed": float(time[end] - time[pass_start]),
+                    "decision": terminal,
+                }
+        elif pass_start is not None:
+            previous = end - 1
+            islands.append(
+                {
+                    "tmin": float(time[pass_start]),
+                    "tmax": float(time[previous]),
+                    "duration": float(time[previous] - time[pass_start]),
+                }
+            )
+            pass_start = None
+    if pass_start is not None:
+        islands.append(
+            {
+                "tmin": float(time[pass_start]),
+                "tmax": float(time[-1]),
+                "duration": float(time[-1] - time[pass_start]),
+            }
+        )
+    return {
+        "kind": "nonlinear_saturation_policy_replay",
+        "claim_level": "causal_post_processing_of_source_pinned_traces",
+        "policy": dataclasses.asdict(cfg),
+        "stopped": first_stop is not None,
+        "first_stop": first_stop,
+        "pass_islands": islands,
+        "samples": int(time.size),
+        "tmin": float(time[0]),
+        "tmax": float(time[-1]),
+        "terminal_decision": terminal,
+    }
+
+
+def _load_replay_traces(
+    paths: Sequence[Path],
+) -> tuple[list[np.ndarray], list[dict[str, Any]]]:
+    """Join clean, same-commit continuation traces and record their digests."""
+    arrays: list[list[np.ndarray]] = [[], [], [], []]
+    sources: list[dict[str, Any]] = []
+    commit: str | None = None
+    previous_time: float | None = None
+    for path in paths:
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        with np.load(path, allow_pickle=False) as archive:
+            values = [
+                np.asarray(archive[name], dtype=float).reshape(-1)
+                for name in ("time", "heat_flux", "Wphi", "Wg")
+            ]
+            source_commit = str(np.asarray(archive["gkx_git_commit"]).item())
+            source_dirty = int(np.asarray(archive["gkx_git_dirty"]).item())
+        if not source_commit or source_dirty != 0:
+            raise ValueError(f"{path}: trace is not pinned to a clean GKX commit")
+        if commit is not None and source_commit != commit:
+            raise ValueError(f"{path}: GKX commit differs from preceding trace")
+        if previous_time is not None and values[0][0] <= previous_time:
+            raise ValueError(f"{path}: trace does not continue after preceding trace")
+        commit, previous_time = source_commit, float(values[0][-1])
+        for parts, value in zip(arrays, values):
+            parts.append(value)
+        sources.append(
+            {
+                "path": str(path),
+                "bytes": path.stat().st_size,
+                "sha256": digest,
+                "gkx_git_commit": source_commit,
+            }
+        )
+    return [np.concatenate(parts) for parts in arrays], sources
+
+
+def _run_policy_replay(args: argparse.Namespace) -> int:
+    arrays, sources = _load_replay_traces(args.replay_trace)
+    report = replay_policy(
+        arrays[0],
+        arrays[1],
+        arrays[2],
+        arrays[3],
+        policy=ReplayPolicy(
+            window=args.replay_window,
+            persistence=args.replay_persistence,
+            rel_sem=args.replay_rel_sem,
+            min_tau_multiples=args.replay_min_tau_multiples,
+        ),
+    )
+    from gkx.diagnostics.saturation import _sokal_window_mean_sem
+
+    implementation = [
+        Path(__file__).resolve(),
+        Path(_sokal_window_mean_sem.__code__.co_filename).resolve(),
+    ]
+    report["source_traces"] = sources
+    report["policy_implementation"] = [
+        {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        for path in implementation
+    ]
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    stop = report["first_stop"]
+    print(
+        f"stop={stop['checkpoint_time']:.6g}" if stop is not None else "stop=none",
+        f"islands={len(report['pass_islands'])}",
+        f"tmax={report['tmax']:.6g}",
+    )
+    return 0
 
 
 def _gkx_source_tree_matches(repository: str | Path, left: str, right: str) -> bool:
@@ -223,7 +444,19 @@ def main() -> int:
         help="compact npz with scalar traces and available kx/ky spectra",
     )
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument(
+        "--replay-trace",
+        type=Path,
+        nargs="+",
+        help="replay the frozen policy on ordered source-pinned NPZ segments",
+    )
+    parser.add_argument("--replay-window", type=float, default=75.0)
+    parser.add_argument("--replay-persistence", type=float, default=60.0)
+    parser.add_argument("--replay-rel-sem", type=float, default=0.05)
+    parser.add_argument("--replay-min-tau-multiples", type=float, default=10.0)
     args = parser.parse_args()
+    if args.replay_trace is not None:
+        return _run_policy_replay(args)
 
     import gkx
 

@@ -113,7 +113,7 @@ def test_saturation_campaign_cannot_promote_a_continuation_segment() -> None:
 
 
 def test_saturation_policy_replay_requires_a_persistent_fixed_window() -> None:
-    replay = load_tool_script("campaigns", "replay_saturation_policy")
+    replay = load_tool_script("campaigns", "nonlinear_saturated_state")
     time = np.arange(0.0, 201.0, 0.5)
     phase = 2.0 * np.pi * time / 10.0
     report = replay.replay_policy(
@@ -134,7 +134,7 @@ def test_saturation_policy_replay_requires_a_persistent_fixed_window() -> None:
 def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
     tmp_path: Path,
 ) -> None:
-    replay = load_tool_script("campaigns", "replay_saturation_policy")
+    replay = load_tool_script("campaigns", "nonlinear_saturated_state")
 
     def write_trace(path: Path, time: np.ndarray, *, dirty: int = 0) -> None:
         np.savez_compressed(
@@ -152,14 +152,14 @@ def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
     write_trace(first, np.arange(0.0, 10.0))
     write_trace(second, np.arange(10.0, 20.0))
 
-    arrays, sources = replay._load_traces([first, second])
+    arrays, sources = replay._load_replay_traces([first, second])
     assert arrays[0].tolist() == list(np.arange(20.0))
     assert len(sources) == 2
     assert sources[0]["sha256"] == hashlib.sha256(first.read_bytes()).hexdigest()
 
     write_trace(second, np.arange(10.0, 20.0), dirty=1)
     with pytest.raises(ValueError, match="not pinned to a clean GKX commit"):
-        replay._load_traces([first, second])
+        replay._load_replay_traces([first, second])
 
 
 def _touch_bundle(output: Path) -> None:
