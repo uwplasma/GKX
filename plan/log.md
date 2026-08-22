@@ -147,6 +147,11 @@
 - PR #91 exposes random seed, `dt`, `dt_max`, and CFL controls for matched
   ensembles without deck copies. A real `8^3` CPU smoke confirmed seed 31,
   `dt_max=0.04`, `cfl=0.8`, the built state shape, and persisted metadata.
+- Opened draft PR #92 on #88 to decouple generated renders from release
+  evidence. Numeric JSON/CSV/TOML remains mandatory; absent rendered media is
+  counted but does not fail. In the rewrite rehearsal, restoring only current
+  JSON/CSV evidence gives 121/121 release tests and a 7.36 MiB packed repo
+  (3.5 MiB archive), still below the 10 MiB target.
 - Audited authorship over the complete selected rewrite history. Seven objects
   carry AI markers: four duplicated Claude co-author trailers and three Codex
   branch/message labels. The rewrite rehearsal removes those markers and maps

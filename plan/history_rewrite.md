@@ -17,6 +17,7 @@ all core-source history in the hosted repository.
 | rewritten pack | 5.93 MiB |
 | rewritten current-tree archive | 2,269,659 bytes |
 | integrity | `git fsck --full --strict` clean |
+| candidate + current JSON/CSV evidence + PR #92 | 7.36 MiB pack; 3.5 MiB archive; 121 release tests pass |
 
 `git bundle verify` reports that the bundle records a complete SHA-1 history.
 It is the lossless recovery source; the hosted rewrite deliberately drops old
@@ -32,7 +33,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the twelve open PR heads (#74 and #81--#91) after the final rewrite.
+- Rebase the thirteen open PR heads (#74 and #81--#92) after the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -89,7 +90,7 @@ marker remains. The other human identities are unchanged.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main` and all tags from exact candidate SHAs, then rebase the twelve
+   update `main` and all tags from exact candidate SHAs, then rebase the thirteen
    open PR heads with `--force-with-lease`.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
    merged heads and restore protection: required aggregate CI, one non-author
@@ -97,19 +98,23 @@ marker remains. The other human identities are unchanged.
 
 ## Current blocker
 
-The 5.93-MiB candidate is a proof, not a publishable repository. Running the
-complete release-gate file against its asset-free tree gives 110 passes and
-seven failures in three dependency classes:
+The initial 5.93-MiB asset-free candidate is a proof, not a publishable
+repository. Its release-gate file gave 110 passes and seven failures in three
+dependency classes:
 
 1. a test reads four generated quasilinear train/holdout reports from
    `docs/_static`;
 2. the performance manifest requires local rendered result files; and
 3. the validation-coverage manifest requires local rendered/result files.
 
-Schema and source coverage must stay in CI, but bulky result availability must
-move to a hash-verified release manifest or be regenerated in an explicit
-artifact job. Small deterministic numerical fixtures belong under
-`benchmarks/references`, not a documentation image directory. PR #88 safely
-removes 153 unreferenced assets after restoring 44 files consumed outside the
-documentation tree, but deliberately retains these dependencies; it is tree
-slimming, not yet dependency decoupling.
+PR #92 keeps machine-readable JSON/CSV/TOML evidence fail-closed while treating
+PNG/PDF/SVG/WebP/GIF/MP4 files as reproducible renders. Restoring only the
+current JSON/CSV snapshot to the rehearsal makes all 121 release tests pass;
+after aggressive packing the complete candidate is 7.36 MiB and its source
+archive is 3.5 MiB. PR #88 safely removes 153 unreferenced assets after
+restoring 44 files consumed outside the documentation tree.
+
+The remaining blockers are strict documentation and the scientific selection
+of the small rendered set: keep only concise README/docs figures, verify every
+reference, then run install/import, full tests, Sphinx, examples, CPU/GPU,
+strict fsck, and network-equivalent clone gates before any force push.
