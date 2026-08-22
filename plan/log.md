@@ -1336,3 +1336,25 @@
   bytes, and complete `.git` file sum 9,520,481 bytes. Strict `fsck`, no
   alternates, and zero reachable AI-attribution matches pass, leaving 479,519
   bytes below the decimal 10-MB gate. No public history moved.
+- PR #93 is fully green at `b309a0af`: all 41 required checks pass and nightly
+  is intentionally skipped. PR #107 is likewise fully green at `96911c3b`.
+- Opened draft PR #108 at `f7634a03` after the resolved nonlinear diagnostic
+  audit found that heat and particle channel kernels each ran twice per sampled
+  state. Totals now reuse the one ES/Apar/Bpar reduction. The 58-field schema
+  and every channel array are unchanged; float64 total differences are at
+  `6.34e-16` relative and float32's worst max-scaled difference is `2.52e-6`
+  from reassociation. A warmed `2x4x8x32x32x24` CPU kernel falls from 0.742 to
+  0.603 ms (-18.8%), with XLA FLOPs -7.6%, bytes accessed -4.5%, and JAXPR
+  equations -46.4%. This is not an end-to-end solver timing claim. The patch
+  removes ten installed-source lines and 34 test lines. All 102 owned
+  diagnostic/runtime tests, 117 release tests, Ruff, changed-module mypy,
+  architecture, size, and diff gates pass. Two broader local failures reproduce
+  identically on the untouched base under unsupported local JAX 0.9.2; CI is
+  active on the supported matrix, and the GPU benchmark waits for a free device.
+- Replayed #108 privately as `8f2444d8`. Its exact public/private stable patch
+  ID is `62fef1c4`, and all four affected head blobs match. A fresh ordinary
+  clone has 30 remote refs, 28 tags, 3,475 commits, and 17,798 objects: pack
+  8,690,625 bytes, pack plus index 9,190,041 bytes, and complete `.git` file
+  sum 9,524,832 bytes. Strict `fsck`, no alternates, and zero reachable
+  AI-attribution matches pass, leaving 475,168 bytes below the decimal 10-MB
+  gate. No public history moved.

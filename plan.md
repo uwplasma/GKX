@@ -5,7 +5,8 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74, #81--#105, and #107. PR #106 was closed as a duplicate.
+and open PRs #74, #81--#105, and #107--#108. PR #106 was closed as a
+duplicate.
 
 ## Rules
 
@@ -885,6 +886,20 @@ or result schema changes. The patch removes 19 installed-source lines
 tests, 117 release tests, four exact public-signature comparisons, Ruff,
 changed-module mypy, and the architecture and repository-size gates pass
 locally. GitHub CI is active; the PR is draft and must not be merged here.
+
+PR #108 removes a duplicate resolved-diagnostic hot path. Heat and particle
+ES/Apar/Bpar kernels were each evaluated twice per sampled state: once for
+totals and again for channel spectra. The channel evaluation is now the sole
+owner, and aligned reductions form the totals in the unchanged 58-field
+schema. The patch removes ten installed-source lines and two dependency slots.
+At `(Ns,Nl,Nm,Ny,Nx,Nz)=(2,4,8,32,32,24)`, the warmed CPU diagnostic kernel is
+18.8% faster (0.742 to 0.603 ms), with 7.6% fewer XLA-estimated FLOPs, 4.5%
+fewer accessed bytes, and 46.4% fewer JAXPR equations. Float64 differs from the
+old totals by at most `6.34e-16` relatively; float32's worst max-scaled error is
+`2.52e-6` from reduction reassociation. This is a diagnostic-kernel result, not
+an end-to-end saturation-speedup claim. All 102 owned nonlinear diagnostic
+tests and 117 release tests pass locally; CI and a noninterfering GPU benchmark
+remain open.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
