@@ -350,3 +350,16 @@
   median-crossing burn-in selector; `t_max` remains the fail-safe horizon.
   Forty-one focused statistics/chunk tests, 102 runtime-runner tests, Ruff,
   mypy, and the no-source-growth architecture gate pass.
+- The stopping survey now includes fixed-width correlated-output theory,
+  consistent batch/spectral variance, multivariate effective sample size, and
+  offline/online change-point methods. It corrects the plan's stale description
+  of production: GKX currently uses median crossing, first-zero Sokal IAT,
+  `10*tau_ac`, 5% relative SEM, and Q/Wphi/Wg half-window gates. The research
+  target is causal change-point burn-in plus a held-out persistence batch and a
+  consistent long-run covariance estimate; no paper makes that safe on GKX
+  without the ongoing prefix-replay campaign.
+- A fresh 206-file/96,465-line source inventory and eight-line clone scan found
+  immediate one-owner cuts in spectral layout, Diffrax packing, growth fits,
+  transport reductions, nonlinear diagnostic setup, and runtime option
+  forwarding. `plan/history_rewrite.md` now assigns the owner and CPU/GPU/JIT/
+  AD gate for each; moving lines between source and tools is explicitly barred.

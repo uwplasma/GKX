@@ -78,6 +78,24 @@ JIT/AD semantics, CPU/GPU numerics, runtime, and peak memory through focused
 tests plus the architecture gate. The manifest's 45-file/45,000-line values
 remain a long-range aspiration, not permission for a mega-refactor.
 
+An AST inventory plus Pylint's eight-line clone scan gives the next bounded
+cuts. Order them by risk, and merge none into the roadmap PR:
+
+| Cut | One owner | Required gate |
+| --- | --- | --- |
+| Remove duplicate `_dealiased_*` helpers from `artifacts/io.py` | `artifacts/spectral_layout.py` | odd/even/singleton restart round trips and NetCDF layout identity |
+| Share linear/nonlinear Diffrax shape packing and solve options | `solvers/time/diffrax_core.py` | eager/JIT, donation, checkpoint, adaptive, CPU/GPU identity and compile count |
+| Remove the second growth-fit input/least-squares path | `diagnostics/growth_windows.py` + one public wrapper | all fit-window modes, uncertainty, nonfinite and monkeypatch contracts |
+| Share scalar/resolved heat, particle and heating reductions | `diagnostics/moments.py` for kernels; `diagnostics/transport.py` for public totals | per-species/channel sums, dealiased spectra, JIT/VJP and normalization identity |
+| Share explicit/IMEX nonlinear diagnostic setup | `solvers/nonlinear/diagnostics.py` | fixed/adaptive CFL, restart, stride, exact horizon, memory and wall-time non-regression |
+| Collapse repeated runtime fit-option records/forwarding | one frozen options record under `workflows/runtime` | CLI/TOML signatures, scan semantics and no extra traced arguments |
+
+Do not start by merging `io.py`, `nonlinear_netcdf.py`, or `workflows/linear.py`
+into larger files: all three already exceed the module budget. First remove
+their duplicate serializers/forwarders, then lower each exception below 1,000
+lines. Likewise, moving report code from `src` to `tools` does not count as a
+line reduction; functionality must be deleted, generated, or delegated.
+
 ## Identity contract
 
 - Normalize Rogerio's historical Wisc and case variants to

@@ -58,15 +58,34 @@ tests its rising ion-scale tail, not kinetic-electron or multiscale convergence.
   https://arxiv.org/abs/2310.08676
 - Papadopoulos et al., statistical analysis of stellarator gyrokinetic
   turbulence, https://arxiv.org/abs/2212.14219
+- Jones et al., fixed-width output analysis for correlated Monte Carlo output,
+  https://arxiv.org/abs/math/0601446
+- Flegal & Jones, consistent batch-means and spectral-variance estimators,
+  https://arxiv.org/abs/0811.1729
+- Vats, Flegal & Jones, multivariate effective sample size and fixed-volume
+  stopping, https://arxiv.org/abs/1512.07713
+- Killick, Fearnhead & Eckley, exact penalized change-point detection with
+  expected linear cost, https://arxiv.org/abs/1101.1438
+- Yu et al., online change-point detection with false-alarm control,
+  https://arxiv.org/abs/2006.03283
 
 Leverage: remove burn-in by stationarity testing; account for autocorrelation;
 use batches of several correlation times; guard late drift; quote uncertainty,
 not raw output count. GKX should compare its IAT estimator against the paper's
-five-correlation-time batch means. The executable contract is: regression
-stationarity first, estimate the 1/e correlation time, use non-overlapping
-batches of length `5*tau_c`, target 5--10% corrected relative SEM, and require
-the final-window drift to remain within 20% of the mean. Manual review remains
-necessary when stationarity fails.
+five-correlation-time batch means.
+
+The current executable is narrower: discard samples before the first crossing
+of the full-prefix median, estimate first-zero Sokal IAT, require a window of at
+least `10*tau_ac`, target 5% corrected relative SEM, and require half-window
+stationarity in Q, Wphi, and Wg. Held-out replay rejects this burn-in selector,
+so it is not yet a validated contract. Fixed-width theory supports sequential
+termination only after a consistent long-run variance estimate; multivariate
+fixed-volume theory motivates treating the three correlated diagnostics
+together. A change-point detector is only a candidate burn-in estimator:
+offline PELT has look-ahead, while online CUSUM assumptions and false-alarm
+calibration must be tested on causal prefixes. Require persistence for at least
+one additional independent batch and score every candidate against held-out
+future data before changing the default.
 Vaezi--Holland specifically warns that gyrokinetic flux uncertainty becomes
 harder near the critical gradient, so SAT-1 must be checked across drive, not
 only on the present `tprim=3` case. The low-memory in-situ ACF update is a
