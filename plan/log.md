@@ -1488,3 +1488,41 @@
   index 9,027,865 bytes, and complete `.git` 9,363,391 bytes. Strict `fsck`,
   no alternates, and zero AI-attribution hits pass, leaving 636,609 bytes of
   decimal margin. No public history moved.
+- PR #111 is fully green at `116ff191`: all 41 GitHub checks and
+  `ci-required` pass, the nonlinear shard completed in 15m11s, and nightly is
+  intentionally skipped. Its public description now records that terminal
+  evidence; the draft head is unchanged.
+- Completed PR #108's deferred same-GPU audit on one RTX A4000 under JAX
+  0.11.1. Three native-float32 exact-base and three exact-head processes each
+  ran 11 warmed batches of 200 full resolved-diagnostic calls. JAXPR equations
+  fall 1,233 to 884, XLA FLOPs 1.42%, bytes 2.29%, and median lowering time
+  13.0%. Median execution is 0.4231/0.4099 ms, but paired changes span -7.1%
+  to +0.6% and temporary memory is unchanged. All 70 outputs pass
+  `rtol=1e-5, atol=1e-7`; direct base/head variation `2.48e-7` is below
+  base/base GPU reduction variability `3.49e-5`. Corrected the PR body to
+  retain the earlier 18.8% transport-only microkernel result while rejecting
+  a production runtime or memory speedup claim.
+- The locked source-pinned QI Ny160 seed-22 clean repeat reached exact `t=500`
+  in 13,661.8 s with 2,068 samples. The full-suffix selector rejects 12.50%
+  relative SEM; frozen `75+60` replay also makes no stop, with a 49.89-unit
+  longest island. Its terminal 75 units pass Q/Wphi/Wg at
+  `Q=3.3168 +/- 0.0523`, `tau_int=4.479`, and heat spectral ratios
+  1.59%/0.394%/2.99%. Over `t=400--500`, Ny160 is 4.67% below Ny128, 2.40
+  combined SEM, while one long-window guard fails at each resolution. Ny160
+  is spectrally adequate but not a convergence declaration. Remote/local
+  hashes match: JSON `f0c694d5`, NPZ `bd334dd9`, state `956ecdfd`, log
+  `b73b9183`; analyses `8346580f` and `2dcd4455`.
+- The accepted VMEX QA candidate reached exact `t=350`, seed 31, in 7,277.0 s.
+  Its terminal window passes Q/Wphi/Wg, corrected SEM and spectra at
+  `Q=6.8370 +/- 0.1246`, and the frozen rule first stops at `t=341.629`.
+  The matched baseline is `8.0466 +/- 0.1739`: a -15.03% change, 5.66
+  combined SEM. Candidate heat cutoff/peak, last-three-ky and outer-six-kx
+  ratios are 0.997%, 0.198%, and 3.93%. Remote/local hashes match: JSON
+  `5a6e5895`, NPZ `31c82340`, state `b8e17d48`, log `43216407`; matched
+  analysis `004a9575`. This is one-seed sizing evidence, not promotion.
+- Launched matched seed-22 queues at exact source `f7da8c49`: baseline PID
+  1256420 on GPU 0 and candidate PID 1256421 on GPU 1. Each design then runs
+  seed 33, seed-31 `cfl=0.5`, and seed-31 Ny192 with disjoint locks and outputs.
+  The first wrapper attempt failed closed because an inherited `PYTHONPATH`
+  imported another checkout; it wrote no artifact. The corrected wrapper pins
+  `PYTHONPATH=src`, and both active logs report the intended clean source.

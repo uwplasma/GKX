@@ -35,7 +35,7 @@ independent replicated validation.
 | VMEC/Boozer geometry | imported and differentiable paths | selected finite-beta and state-control checks | main plot is synthetic; physical renderer is in PR #86 |
 | Linear derivatives | implicit eigenpair VJP with residual gates | AD/FD tests and selected GX comparisons | promoted on certified simple branches |
 | Nonlinear derivative | checkpointed discrete adjoint of a finite post-saturation window | reduced AD/FD and device-parity tests | local finite-window derivative only |
-| QA transport reduction | optimization scripts and preliminary paired runs | source-pinned QA Ny=96/128/160 seed-31 rung shows a resolution-dependent stop; only Ny=160 clears the cutoff screen, and it fails persistence | 12.26% is preliminary, not statistically resolved |
+| QA transport reduction | optimization scripts and preliminary paired runs | the first source-pinned production pair passes terminal statistics and spectra with a 15.03% seed-31 reduction; seed-22/33, CFL, and Ny=192 pairs are active | one-seed sizing evidence, not statistically resolved |
 | Saturation stopping | IAT-corrected SEM and stationarity guards | implementation tests | production policy has defects below |
 | CPU/GPU | JAX CPU/GPU and experimental sharding | selected kernels/cases | no general scaling or GX-competitive claim |
 
@@ -426,6 +426,22 @@ SHA-256: NPZ
 `ef89e389591c1e286754bd4708707eb46dca408571d6c19523a9cd24f5d5fa9e`, log
 `01f66c52ae2c5e97bb5732570489a4d387c9f4af001f057fbc4f71ff30d9438b`.
 
+The lock-protected Ny=160 clean repeat reached exact `t=500` from zero in
+13,661.8 s with 2,068 samples at source `eebff63b`. The production
+median-crossing selector rejects its transient-contaminated full suffix at
+12.50% relative SEM. The frozen `75+60` replay also makes no causal stop: its
+longest pass island is 49.89 time units and its terminal island is 25.02.
+Nevertheless the exact terminal `t=425.09--500` window passes Q/Wphi/Wg and
+gives `Q=3.3168 +/- 0.0523`, `tau_int=4.479`. Heat cutoff/peak,
+last-three-`ky`, and outer-six-`kx` masses are 1.59%, 0.394%, and 2.99%.
+Over `t=400--500`, Ny=128 and Ny=160 give `Q=3.4194 +/- 0.0333` and
+`3.2596 +/- 0.0576`: a -4.67% change, 2.40 combined SEM. Ny=128 Wphi and
+Ny=160 Wg fail the 100-unit half-window check. Thus Ny=160 resolves the
+spectral cutoff but does not close time/resolution convergence; a Ny=192 rung
+remains required. Remote/local hashes match: JSON `f0c694d5`, NPZ `bd334dd9`,
+state `956ecdfd`, log `b73b9183`; frozen analysis `8346580f` and the matched
+Ny128/Ny160 comparison `2dcd4455`.
+
 The earlier environment-contaminated QA `96x128x48` rung completed at `t=250`
 in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
@@ -714,11 +730,24 @@ terminal-75 means by 4.46%, 66.5%, and 31.0%. On the full history available at
 certify a transport mean.
 
 Remote/local SHA-256 agree: JSON `49ca6d7e`, NPZ `205dafd0`, state `050cadea`,
-and log `6e399265`; the source-pinned replay is `754f5d85`. The matched candidate
-is now active on GPU 1. Its first waiter failed because `pgrep` matched the
-waiter's own command line; output locks prevented a duplicate, and the one
-candidate was started only after an anchored Python-process check. This remains
-a one-seed sizing pair, not a transport-reduction claim.
+and log `6e399265`; the source-pinned replay is `754f5d85`. The matched
+candidate reached exact `t=350` in 7,277.0 s with 1,085 samples. Its terminal
+75-unit window and frozen stop both pass: first causal stop `t=341.629`,
+terminal `Q=6.8370 +/- 0.1246`, `tau_int=5.227`, with Q/Wphi/Wg stationary.
+Heat cutoff/peak, last-three-`ky`, and outer-six-`kx` masses are 0.997%,
+0.198%, and 3.93%. Against the baseline,
+
+\[
+ \frac{Q_{cand}-Q_{base}}{Q_{base}}=-15.03\%,\qquad
+ \frac{|Q_{cand}-Q_{base}|}{\sqrt{SEM_{base}^2+SEM_{cand}^2}}=5.66.
+\]
+
+Candidate hashes are JSON `5a6e5895`, NPZ `31c82340`, state `b8e17d48`, and
+log `43216407`; matched analysis is `004a9575`. This is still one-seed sizing
+evidence. Exact seed-22 then seed-33 pairs, a seed-31 `cfl=0.5` pair, and a
+seed-31 Ny=192 pair now run in source-pinned per-design queues on the two GPUs.
+The first queue launch failed closed on an inherited `PYTHONPATH`; it wrote no
+artifact, and the corrected queue pins `PYTHONPATH=src` before either solver.
 
 ### R3 — the plotted stellarator tube is a synthetic torus
 
@@ -934,16 +963,17 @@ ES/Apar/Bpar kernels were each evaluated twice per sampled state: once for
 totals and again for channel spectra. The channel evaluation is now the sole
 owner, and aligned reductions form the totals in the unchanged 58-field
 schema. The patch removes ten installed-source lines and two dependency slots.
-At `(Ns,Nl,Nm,Ny,Nx,Nz)=(2,4,8,32,32,24)`, the warmed CPU diagnostic kernel is
-18.8% faster (0.742 to 0.603 ms), with 7.6% fewer XLA-estimated FLOPs, 4.5%
-fewer accessed bytes, and 46.4% fewer JAXPR equations. Float64 differs from the
-old totals by at most `6.34e-16` relatively; float32's worst max-scaled error is
-`2.52e-6` from reduction reassociation. This is a diagnostic-kernel result, not
-an end-to-end saturation-speedup claim. All 102 owned nonlinear diagnostic
-tests and 117 release tests pass locally. The two broader float32-only failures
-also reproduce on the untouched base; both pass on office JAX 0.11.1 under the
-actual CI `JAX_ENABLE_X64=true` contract. All 41 required GitHub checks now
-pass; only the noninterfering GPU benchmark remains open.
+Its original changed-hotpath CPU microbenchmark is 18.8% faster, but an
+independent full-diagnostic audit is deliberately narrower. Three exact-base
+and three exact-head native-float32 processes on one RTX A4000 reduce JAXPR
+equations 1,233 to 884 (-28.3%), XLA FLOPs 1.42%, bytes 2.29%, and median
+lowering time 13.0%. Median process execution is 0.4231/0.4099 ms, but paired
+changes span -7.1% to +0.6%; the distributions overlap, and temporary memory
+is unchanged. All 70 outputs pass `rtol=1e-5, atol=1e-7`; the direct base/head
+scaled difference `2.48e-7` is below base/base GPU reduction variability
+`3.49e-5`. The audit supports a smaller traced graph, not a production runtime
+or memory speedup. All 41 GitHub checks, owned/release tests, and the independent
+same-GPU accuracy gate pass; the PR remains draft.
 
 PR #109 makes `diffrax_core` the single owner of velocity-shape inference,
 state sharding, and packed complex-state placement for both linear and
@@ -976,7 +1006,8 @@ nonlinear/explicit/IMEX/operator tests and 117 release tests pass, together with
 Ruff, mypy, architecture, and size gates. The one local float32 adaptive
 eager/JIT failure reproduces unchanged on the base and passes under CI's x64
 contract. Dependency construction changes by only +57/+116 ns per explicit/
-IMEX host setup and never enters a traced loop. CI is active.
+IMEX host setup and never enters a traced loop. All 41 GitHub checks now pass;
+the nonlinear shard completed in 15m11s and nightly is intentionally skipped.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
@@ -1249,9 +1280,9 @@ unverified rather than silently promoted.
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | GOV-2 | P0 | cutover | rebase 19 direct #81-base heads onto rewritten `main`, then retarget | exact old/new head-tree and patch map; force-with-lease; fresh CI |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
-| SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QHS seed-31 makes no stop and differs from seed 22 by 8.76 combined SEM; QI clean repeat active |
+| SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QHS is seed-sensitive; QI Ny160 makes no causal stop; first matched QA pair passes and replicated queues are active |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QHS Ny160 clears spectral tails but fails seed robustness; collided QI sizing is excluded and its clean locked repeat is active |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QI Ny160 clears tails but shifts 4.67% from Ny128; QA Ny192 pair and later QI Ny192 are required |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | definitions pass; fixed horizon retained until SAT-1 passes |
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
