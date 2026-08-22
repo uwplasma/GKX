@@ -184,12 +184,28 @@ def annotate_reference(ax: plt.Axes, text: str, *, loc: str = "lower left") -> N
     )
 
 
-def save_figure(fig: plt.Figure, path: str | Path, *, close: bool = True) -> Path:
+def save_figure(
+    fig: plt.Figure,
+    path: str | Path,
+    *,
+    close: bool = True,
+    palette_colors: int | None = None,
+) -> Path:
     """Write a figure to ``path``, creating parent directories."""
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(target)
+    if palette_colors is not None and target.suffix.lower() == ".png":
+        from PIL import Image
+
+        with Image.open(target) as image:
+            preview = image.convert("RGB").quantize(
+                colors=palette_colors,
+                method=Image.Quantize.MEDIANCUT,
+                dither=Image.Dither.NONE,
+            )
+            preview.save(target, optimize=True)
     if close:
         plt.close(fig)
     return target
