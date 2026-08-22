@@ -342,3 +342,11 @@
   `Q~9.96`, before its later `Q~6.5` regime. On 16 existing four-diagnostic VMEC
   traces, sequential current-policy replay with both energy guards accepts
   seven; four are over 5% and one 10.4% from the final tail. No default changes.
+- PR #91 commit `91ccf3e7` fixes a narrower production defect exposed by that
+  audit: runtime saturation stopping now requires Wg, as well as Wphi, to pass
+  the same half-window stationarity gate. The campaign previously computed Wg
+  only after integration and could still report a production stop while free
+  energy drifted. This is a conservative guard, not validation of the current
+  median-crossing burn-in selector; `t_max` remains the fail-safe horizon.
+  Forty-one focused statistics/chunk tests, 102 runtime-runner tests, Ruff,
+  mypy, and the no-source-growth architecture gate pass.
