@@ -126,7 +126,15 @@ def test_parallel_manifests_track_current_cpu_gpu_scaling_artifacts() -> None:
 
     assert required <= set(parallel_lane["artifact_paths"])
     assert required <= validation_paths
+    parallel_checker = _load_parallel_checker()
+    validation_checker = load_release_tool("check_validation_coverage_manifest")
+    assert (
+        parallel_checker.RENDERED_ARTIFACT_SUFFIXES
+        == validation_checker.RENDERED_ARTIFACT_SUFFIXES
+    )
     for artifact in required:
+        if Path(artifact).suffix in parallel_checker.RENDERED_ARTIFACT_SUFFIXES:
+            continue
         assert (ROOT / artifact).exists(), artifact
 
 
