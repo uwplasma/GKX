@@ -1526,3 +1526,11 @@
   The first wrapper attempt failed closed because an inherited `PYTHONPATH`
   imported another checkout; it wrote no artifact. The corrected wrapper pins
   `PYTHONPATH=src`, and both active logs report the intended clean source.
+- Replayed roadmap commit `db732752` privately as `bd0be4b8`. Their stable
+  patch ID is `70f557dc`, both changed roadmap blobs are exact, and the replay
+  changes only `plan.md` and `plan/log.md` on the slim parent. A fresh no-local
+  clone has 33 remote refs, 28 tags, 3,492 commits, and 17,908 objects: pack
+  8,606,227 bytes, pack plus index 9,108,723 bytes, and complete `.git`
+  9,444,265 bytes. Strict `fsck`, no alternates, and zero reachable
+  AI-attribution hits pass, leaving 555,735 bytes of decimal margin. No public
+  history ref moved.
