@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 import numpy as np
+import pytest
 
 from support.paths import REPO_ROOT, load_release_tool, load_tool_script
 from gkx.diagnostics.transport_windows import (
@@ -49,6 +50,23 @@ def test_saturation_campaign_trace_omits_dealiased_zero_modes() -> None:
     assert payload["HeatFlux_kxst"].shape == (2, 2, 7)
     assert payload["Phi2_kyt"].shape == (2, 4)
     assert payload["HeatFlux_kyst"].shape == (2, 2, 4)
+
+
+def test_saturation_campaign_requires_and_records_its_checkout_source(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    encoded = campaign._npz_source_provenance(provenance)
+
+    assert provenance["repository_root"] == str(ROOT)
+    assert provenance["git_commit"]
+    assert encoded["gkx_git_commit"].dtype.kind == "U"
+    assert encoded["gkx_git_dirty"].dtype.kind in "iu"
+    with pytest.raises(SystemExit, match="PYTHONPATH=src"):
+        campaign._campaign_source_provenance(tmp_path / "gkx" / "__init__.py")
 
 
 def _touch_bundle(output: Path) -> None:

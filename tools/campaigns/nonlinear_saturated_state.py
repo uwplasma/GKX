@@ -13,11 +13,9 @@ projector enforcing the reality and fixed-mode constraints, and a dealias mask.
 Rather than reimplement any of that, this tool drives ``run_runtime_nonlinear``
 -- the same entry point the CLI uses -- and saves the final state.
 
-Saturation is judged by the production stop policy on the production heat-flux
-trace, with ``Wphi`` as its stationarity guard. ``Wg`` is reported as an
-additional audit guard without changing the runtime decision. A state that
-fails is written out anyway, flagged, so the failure is inspectable rather than
-silent.
+Saturation is judged by the production stop policy on the heat-flux trace,
+with ``Wphi`` and ``Wg`` as stationarity guards. A state that fails is written
+out anyway, flagged, so the failure is inspectable rather than silent.
 """
 
 from __future__ import annotations
@@ -25,11 +23,56 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import subprocess
 import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
+
+
+def _git_output(repository: Path, *args: str) -> str | None:
+    """Return one Git query without making the campaign depend on Git."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repository), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _campaign_source_provenance(package_file: str | Path) -> dict[str, object]:
+    """Require and describe the checkout source used by this campaign."""
+    repository = Path(__file__).resolve().parents[2]
+    source_file = Path(package_file).resolve()
+    expected_package = (repository / "src" / "gkx").resolve()
+    if not source_file.is_relative_to(expected_package):
+        raise SystemExit(
+            f"campaign imported GKX from {source_file}, expected {expected_package}; "
+            "run from this checkout with PYTHONPATH=src"
+        )
+    dirty = _git_output(repository, "status", "--porcelain", "--untracked-files=no")
+    return {
+        "source_file": str(source_file),
+        "repository_root": str(repository),
+        "git_commit": _git_output(repository, "rev-parse", "HEAD"),
+        "git_dirty": None if dirty is None else bool(dirty),
+    }
+
+
+def _npz_source_provenance(provenance: dict[str, object]) -> dict[str, np.ndarray]:
+    """Encode source provenance without object arrays or pickle."""
+    dirty = provenance["git_dirty"]
+    return {
+        "gkx_source_file": np.asarray(str(provenance["source_file"])),
+        "gkx_repository_root": np.asarray(str(provenance["repository_root"])),
+        "gkx_git_commit": np.asarray(str(provenance["git_commit"] or "")),
+        "gkx_git_dirty": np.asarray(-1 if dirty is None else int(bool(dirty))),
+    }
 
 
 def _trace_spectral_payload(resolved, *, kx_full, ky_full) -> dict[str, np.ndarray]:
@@ -114,6 +157,15 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
+    import gkx
+
+    source_provenance = _campaign_source_provenance(gkx.__file__)
+    print(
+        f"GKX source: {source_provenance['source_file']} "
+        f"commit={source_provenance['git_commit']} "
+        f"dirty={source_provenance['git_dirty']}",
+        flush=True,
+    )
     from gkx.utils.compilation_cache import enable_persistent_compilation_cache
 
     cache_dir = enable_persistent_compilation_cache()
@@ -328,6 +380,7 @@ def main() -> int:
                 ky_full=spectral_grid.ky,
             )
         )
+        payload.update(_npz_source_provenance(source_provenance))
         args.trace_out.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(args.trace_out, **payload)  # type: ignore[arg-type]
         print(f"trace written: {args.trace_out}", flush=True)
@@ -356,12 +409,14 @@ def main() -> int:
                 if report.get("tau_ac") is not None
                 else float("nan")
             ),
+            **_npz_source_provenance(source_provenance),
         )
         print(f"state written: {args.state_out}", flush=True)
 
     summary = {
         "kind": "nonlinear_saturated_state",
         "claim_level": "production_saturation_stop_policy_audit",
+        "source_provenance": source_provenance,
         "case": args.toml.name,
         "initial_state": None
         if args.initial_state is None
