@@ -496,6 +496,28 @@ SHA-256: NPZ
 `29b96bf8d1fc0d9e9b6a6fdbe42da0cf2c5b3763ff7ab28f2883d511d4167f42`, log
 `b9f56670afdf3f05e89509bba93d415063c9dae0332b5ed4f50bba491bc29ed9`.
 
+The matched Ny=192 seed-31 rung reached exact `t=250` in 6,594.6 s with 843
+samples. Its frozen rule stops at `t=218.783` after 60.17 time units of
+persistence, while Ny=160 at the same seed still makes no stop. The causal
+decision therefore remains resolution-sensitive. On the predeclared
+`t=150--250` audit window,
+
+\[
+ Q_{160}=11.2606\pm0.4042,\qquad Q_{192}=11.1314\pm0.2702.
+\]
+
+The -1.15% change is only 0.27 combined SEM. Q and Wphi pass the half-window
+gate at Ny=192, but Wg does not over the full 100 units; all three pass only on
+the terminal 75-unit window. Spatial evidence improves monotonically:
+heat-flux cutoff/peak falls from 9.46% to 6.12%, last-three-`ky` mass from
+1.49% to 1.06%, Phi2 cutoff/peak from 11.61% to 7.37%, and outer-six-`kx` heat
+mass stays small at 0.12%. Ny=160 and Ny=192 thus support a compatible
+long-window transport mean and a resolved Ny=192 spectrum, not a promoted
+temporal stop or observed-order convergence claim. SHA-256: NPZ
+`289c2f30076e4aa4c4bbec0496b1a058db9834e91f649b17cf17c372f95fff73`, JSON
+`645b323c7f0df02a161e35cd20abadabb0538887161109be2a2c0cf3cace4904`, log
+`e0ce2d906f1517ab1f824fb13f954cc3be3d8479f1c17a3e517fc3a26e44d769`.
+
 The source-pinned QA `96x96x48`, seed-31 rung then reached exact `t=250` in
 2,200.7 s. It also makes no frozen stop; the longest pass island is
 `t=193.23--243.55`, only 50.33 time units. On the Ny=128 stop window
@@ -534,6 +556,7 @@ or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
 | QA Ny=160 seed 31, t=350 | `5542c67c774afb349393f2682c4c98ac38cb45dace4e56be36f0bf21486e9a06` |
 | QA Ny=160 seed 22, t=250 | `78164cafda9f90f17541172b9658776677f9a179647aecf3cee4ca21bacfe5e0` |
 | QA Ny=160 seed 22, t=350 | `607b327130c436f037f44fa7761c83f861ec41e2ef6bace42189a44a2d4042b4` |
+| QA Ny=192 | `2996d20f0934990fb31de6f8863ebda6189ec0d51fc337e64d3f9d445be76ab5` |
 | QI Ny=96 | `3cd1d3e7f1debddfadfbbed6b14ffb2912e465bd73025c6ba59eb022d14996ea` |
 | QI Ny=128 | `c8133f3c1de07c430bbef20c4a19629253fe447ca0031d18f9627f5dcbff4ff3` |
 | QHS Ny=160 | `8159e162b4cda45fd0d82c16f1c42a89a87326946aaf88d4502cd9aa5b257d5e` |
@@ -541,6 +564,14 @@ or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
 
 These are policy-replay records, not solver outputs or a claim that the shadow
 rule is ready to become the default.
+
+Independent review found that the campaign accepted timestep/CFL overrides but
+did not put the resolved policy in its machine-readable identity. PR #91 commit
+`35aa7d29` introduces schema v2 with `fixed_dt`, requested `dt`, `dt_max`,
+`cfl`, and method in JSON, trace, and restart state. A real VMEC write/restart
+smoke reaches absolute `t=0.2` and replays both segments; changing only CFL
+rejects the restart before integration. The active source-pinned controls stay
+on frozen schema-v1 source and retain their exact command and log hashes.
 
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
@@ -918,7 +949,7 @@ MP4 SHA-256:
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS make no accepted stop |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA Ny160 long-window seeds agree; Ny192 and CFL controls active; stop is not seed-robust |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA Ny160/192 means agree; CFL control active; stop changes with seed/resolution |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | definitions pass; fixed horizon retained until SAT-1 passes |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |

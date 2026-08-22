@@ -1101,3 +1101,23 @@
   traces. The frozen `75+60` rule remains unchanged; QA seed 33 is queued as an
   untouched holdout after Ny192, and a QI Ny160 resolution rung is queued after
   the half-CFL control.
+- The source-pinned QA `96x192x48`, seed-31 rung reached exact `t=250` in
+  6,594.6 s with 843 samples. Remote/local SHA-256 values match: NPZ
+  `289c2f30`, JSON `645b323c`, and log `e0ce2d90`; the bound frozen replay is
+  `2996d20f`.
+- The Ny192 frozen rule stops at `t=218.783` after 60.17 time units of
+  persistence, while Ny160 at the same seed makes no stop. On `t=150--250`,
+  Ny160/Ny192 give `Q=11.2606 +/- 0.4042` and `11.1314 +/- 0.2702`, a -1.15%
+  change or 0.27 combined SEM. Ny192 Wg fails the full-window half gate, though
+  the terminal 75-unit Q/Wphi/Wg window passes.
+- Heat cutoff/peak improves from 9.46% at Ny160 to 6.12% at Ny192;
+  last-three-`ky` mass falls 1.49% to 1.06%, Phi2 cutoff/peak 11.61% to 7.37%,
+  and outer-six-`kx` heat mass remains 0.12%. This supports spatial mean
+  compatibility, not a resolution-robust temporal stop.
+- Independent review of PR #91 found that timestep overrides were absent from
+  machine-readable artifact identity. Commit `35aa7d29` records resolved
+  fixed/adaptive mode, requested dt, dt_max, CFL, and method in schema v2. A
+  clean VMEC CPU write/restart/replay smoke reaches absolute `t=0.2`; changing
+  only CFL rejects before integration. The 174 focused/release tests, Ruff,
+  and `git diff --check` pass. Private replay `1dbc39bd` has the same stable
+  patch ID `7c96fb49c64e9c6091185b7000f4d820fda5c975`.
