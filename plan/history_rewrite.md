@@ -143,15 +143,15 @@ marker remains. The other human identities are unchanged.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main` and all tags from exact candidate SHAs, then rebase the nineteen
+   update `main` and all tags from exact candidate SHAs, then rebase the twenty
    open PR heads with `--force-with-lease`.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
    merged heads and restore protection: required aggregate CI, one non-author
    approval, and no force pushes.
 
-## Current blocker
+## Resolved preparation and remaining cutover gates
 
-The initial 5.93-MiB asset-free candidate is a proof, not a publishable
+The initial 5.93-MiB asset-free candidate was a proof, not a publishable
 repository. Its release-gate file gave 110 passes and seven failures in three
 dependency classes:
 
@@ -202,9 +202,14 @@ pack plus index is 9,601,953 bytes, and the current-tree archive is 5,363,108
 bytes. Strict `fsck`
 passes. All 19 recent replayed commits have exact stable patch-ID matches, and
 the reachable commit metadata has no AI attribution marker. This closes the
-local public-ref size gate, but
-not cutover authorization: the frozen remote map, representative CPU/GPU
-examples, published recovery material, and a real GitHub network clone remain.
+local public-ref size gate. The user's 2026-08-21 request authorizes a
+coordinated forced rewrite, but authorization does not replace the remaining
+safety gates: land only reviewed slimming prerequisites in the intended main
+tree, freeze and publish the remote ref map, publish the recovery material, run
+representative CPU/GPU examples, and verify a real GitHub network clone before
+restoring branch protection. Until those prerequisite PRs are reviewed, moving
+the rehearsal's `main` ref would merge their contents by force push and is not
+an admissible substitute for review.
 The margin forbids another tracked render without removing equivalent payload.
 
 PR #95 subsequently replaced the README loop from the primary 120-frame MP4,

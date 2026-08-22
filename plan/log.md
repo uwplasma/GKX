@@ -455,3 +455,36 @@
   heads, all 28 tags, a 9,112,197-byte pack (9,601,953 with index), and a
   5,363,108-byte archive. Strict `fsck`, all 19 recent patch IDs, ref-name
   parity, and the AI-marker scan pass. No public ref moved.
+- The untouched QHS `64x160x48`, seed-22 holdout reached `t=250.320` in
+  3,219.4 s. The frozen 75-time-unit window plus 60-time-unit persistence rule
+  makes no stop, so it avoids a false acceptance but saves no time. On
+  `t=150--250`, `Q=5.6619 +/- 0.1263` (2.23% corrected SEM), but Q halves
+  5.8460/5.4793 fail and Wg halves 130.37/124.16 fail; Wphi passes. The heat
+  cutoff/peak is 4.88%, last-three-bin mass 0.97%, Phi2 cutoff/last-three
+  1.93%/0.45%, and outer-six-kx heat-flux mass 3.54%. This is a Ny-tail pass,
+  not a transport-convergence result; exact continuation to `t=500` is
+  running. Trace SHA-256:
+  `09d67e8679713aa4d872ed76a0ecabcd8001c8a79f05e46f24e70e98bc16f81e`.
+
+## 2026-08-22 — held-out replication and physical movie
+
+- The untouched QA `96x160x48`, seed-31 holdout reached `t=250.186` in
+  5,315.5 s. Its fixed `t=150--250` result is `Q=10.9623 +/- 0.2817` and all
+  three stationarity gates pass. Seed 22 gives `10.6374 +/- 0.2761`: 3.01%
+  spread, 0.82 combined standard errors, and conservative ensemble
+  `10.7999 +/- 0.2817`. The frozen 75+60 rule stops at `t=215.947`, saves
+  13.7%, and misses its own final mean by -1.09%. Q/Phi2 cutoff-to-peak values
+  are 8.05%/8.80%, last-three-bin masses 1.48%/1.37%, and outer-six-kx masses
+  0.12%/0.38%. This is one successful fresh stop and a replicated Ny=160
+  result; matched Ny=128 seed 31 and QI remain. Trace SHA-256:
+  `eb8541d337504d94579f60bcc4f3288ee6c9ff7c7fdec5297d14ce9526bfdc6f`.
+- The corrected PR #97 GPU continuation produced 30 finite QA frames from the
+  exact Ny=160 saturated state with deck moments `(Nl,Nm)=(4,8)`, `nfp=2`,
+  absolute times `250.150--253.949`, and 48-point VMEC `R/Z/zeta` profiles.
+  Its schema-3 NPZ is 2.5 MB and the off-device H.264 render is 218,799 bytes
+  at 900x472, 10 fps. First/middle/final-frame inspection shows an evolving
+  physical two-field-period open tube, with neither the synthetic-torus nor
+  disconnected-end artifact. NPZ SHA-256:
+  `b5bd4e0a61ecd29885757c69cb882ff053cafa5aaf9793025bc7a99e615712a2`;
+  MP4 SHA-256:
+  `628b1cff237b5b5f77816579463b78585ab94eb82448598b0757cc41bb53e7a7`.
