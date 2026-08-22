@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#101.
+and open PRs #74 and #81--#103.
 
 ## Rules
 
@@ -34,7 +34,7 @@ independent replicated validation.
 | VMEC/Boozer geometry | imported and differentiable paths | selected finite-beta and state-control checks | main plot is synthetic; physical renderer is in PR #86 |
 | Linear derivatives | implicit eigenpair VJP with residual gates | AD/FD tests and selected GX comparisons | promoted on certified simple branches |
 | Nonlinear derivative | checkpointed discrete adjoint of a finite post-saturation window | reduced AD/FD and device-parity tests | local finite-window derivative only |
-| QA transport reduction | optimization scripts and preliminary paired runs | 44/48 nominal traces pass the per-trace drift gate; spectra absent | 12.26% is preliminary, not statistically resolved |
+| QA transport reduction | optimization scripts and preliminary paired runs | source-pinned QA Ny=128/160 seed-31 transport is compatible on the frozen stop window; Ny=160 clears the cutoff screen but not the persistence gate | 12.26% is preliminary, not statistically resolved |
 | Saturation stopping | IAT-corrected SEM and stationarity guards | implementation tests | production policy has defects below |
 | CPU/GPU | JAX CPU/GPU and experimental sharding | selected kernels/cases | no general scaling or GX-competitive claim |
 
@@ -242,7 +242,8 @@ and Q fails the two-SEM half-window gate. `Wphi` passes, while `Wg` falls from
 `Phi2` values are 1.93% and 0.45%; the outer six `kx` bins carry 3.54% of heat
 flux. Thus Ny=160 clears the necessary perpendicular-tail screen, but the
 drifting transport cannot yet be compared with Ny=128. An exact-state
-continuation to absolute `t=500` is running. The compact trace SHA-256 is
+continuation to absolute `t=500` was then launched; the environment audit below
+excludes this nominal campaign from acceptance. The compact trace SHA-256 is
 `09d67e8679713aa4d872ed76a0ecabcd8001c8a79f05e46f24e70e98bc16f81e`.
 
 The second nominal holdout, QA `96x160x48` seed 31, reached `t=250.186` in
@@ -259,8 +260,9 @@ allowed.
 The seed-31 heat-flux cutoff/peak is 8.05%, its last-three-bin mass is 1.48%,
 and the corresponding `Phi2` values are 8.80% and 1.37%; outer-six-`kx` masses
 are 0.12% and 0.38%. Both independent Ny=160 seeds pass the necessary spatial
-screen and agree statistically. A matched Ny=128 seed-31 rung is still needed
-before calling the Ny convergence seed-independent. Trace SHA-256:
+screen and agree statistically. At this stage a matched Ny=128 seed-31 rung was
+still needed; the source-pinned pair below supersedes the nominal result. Trace
+SHA-256:
 `eb8541d337504d94579f60bcc4f3288ee6c9ff7c7fdec5297d14ce9526bfdc6f`.
 
 A subsequent environment audit found that every office campaign above used
@@ -348,21 +350,37 @@ Phi2 is much better resolved at 0.076%/0.241%. Continue the exact state and
 add a matched Ny refinement. Trace SHA-256:
 `d7b511db5065e405f2a7511e0f335a8bc9b3cc12dcdf47af2fa9c4166e34ea55`.
 
+The matched source-pinned QI `96x128x48`, seed-22 rung reached exact `t=250`
+in 4,959.3 s. The frozen rule again makes no stop: its only late pass island is
+`t=235.03--250`, 14.97 time units. Over `t=175--250`, both resolutions pass
+Q/Wphi/Wg half-window stationarity, but Ny=96 and Ny=128 give
+`Q=4.1379 +/- 0.1213` and `3.5087 +/- 0.0446`. The 15.21% reduction is 4.87
+combined SEM, so Ny=96 transport was not converged. Raising `ky*rho_i|max`
+from 1.476 to 2.0 lowers heat-flux cutoff/peak from 14.80% to 4.20% and
+last-three-ky mass from 3.71% to 0.95%; Phi2 is already small at both
+resolutions. Ny=128 clears the necessary spectral screen, but `t=200--250`
+fails every Ny=128 half-window guard. Its exact-state continuation to absolute
+`t=500` is active; no transport value is promoted before the complete-history
+frozen decision and late-window comparison. SHA-256: NPZ
+`9d8f3062389780536ce4df7497b03905b2038ad2f64d75895f7891afaedbc52b`, JSON
+`1724347485b1996cc4d0ec1f66e68473d1f6c601cebf0e3bfe6ba4289bd60933`, log
+`730c377f3b57fdf57ad96c45e3d98ef57487e44173d72f36696b617dab298168`.
+
 The earlier environment-contaminated QA `96x128x48` rung completed at `t=250`
 in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
 Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is
-`Q=10.860`, a 1.35% change. This is transport convergence evidence, not yet a
-spectral pass: 16.3% of the `Ny=128` heat-flux spectral magnitude lies above
+`Q=10.860`, a 1.35% change. This apparent compatibility is not a spectral
+pass: 16.3% of the `Ny=128` heat-flux spectral magnitude lies above
 the old cutoff and the new cutoff remains 18.2% of the peak. The matched
 `96x160x48` seed-22 rung completed in 5,327.5 s. Its fixed `t=150--250` suffix
 has `Q=10.643 +/- 0.278` (2.61% corrected relative SEM), with Q/Wphi/Wg all
 stationary. The change from Ny=128 is -3.30%, only 0.98 combined SEM. Its
 heat-flux cutoff/peak falls to 7.59%, the last three bins carry 1.50%, and the
 outer six signed kx shells carry 0.12%. The completed independent seed-31 rung
-agrees statistically and passes the same tail screen, as recorded above. A
-matched Ny=128 seed-31 rung remains before promoting seed-independent Ny
-convergence.
+agrees statistically and passes the same tail screen. Because the imported
+source was not the recorded checkout, all values in this paragraph are sizing
+evidence only; the source-pinned seed-31 pair below supersedes them.
 
 That clean-source QA `96x128x48`, seed-31 rung now reaches exact `t=250` from
 commit `f7da8c49` in 3,397.1 s. The fixed `t=150--250` result is
@@ -374,10 +392,25 @@ horizon. The current selector instead keeps `t=26.00--250` and narrowly fails
 at 5.61% relative SEM. This is a held-out temporal success without threshold
 retuning, not a resolution pass: over `t=150--250`, heat-flux cutoff/peak is
 15.69% and last-three-bin mass is 3.11%; Phi2 is better at 1.13%/1.45%, and
-outer-six-kx heat mass is 0.11%. The source-pinned Ny=160 seed-31 rung is queued
-behind QHS `t=750`; a source-pinned Ny=96 match is still required. Trace
-SHA-256:
+outer-six-kx heat mass is 0.11%. Trace SHA-256:
 `91f6768849caa8a315594d7f3bac256cc46a9203829ae0affae65d20ab6b5c45`.
+
+The matched source-pinned Ny=160 seed-31 rung reached exact `t=250` in
+5,108.6 s. The frozen rule still makes no stop: its terminal pass island is
+only `t=220.54--249.67`, not the required 60 time units. On the Ny=128 stop
+window `t=155.844--230.844`, Ny=128 and Ny=160 give
+`Q=10.9140 +/- 0.4563` and `11.0353 +/- 0.2539`; the 1.11% difference is only
+0.23 combined SEM and Q/Wphi/Wg pass at both resolutions. The terminal
+`t=175--250` comparison differs by 5.51% (1.14 combined SEM), so this is
+compatibility, not convergence. Ny=160 lowers heat-flux cutoff/peak from
+13.87% to 7.55% and last-three-ky mass from 3.04% to 1.45%; outer-six-kx mass
+remains 0.11%. It clears the frozen cutoff screen, while time persistence and
+an independent seed remain open. Its exact state is queued to continue to
+absolute `t=350`; the source-pinned Ny=96 seed-31 rung is active. Ny=160
+SHA-256: NPZ
+`4564fd5f9d50f441623040c9329bf22e498f4d7fbadf4ef25abbf195842ad185`, JSON
+`05af33be9bf3f4645750c42e32a32db0ab754d3a0c161537c396066c8f6784e5`, log
+`c1d0fca85be22b465b1d20e41f4cb1cdb0e06ce6152155e19ef98940f88ce49b`.
 
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
@@ -447,9 +480,12 @@ three bins carry 2.96% of summed absolute flux. At `Ny=160`, the endpoint is
 by -3.30% (0.98 combined SEM). Seed 31 is the independent replication gate.
 At Ny=160, seed 31 gives `Q=10.962 +/- 0.282`; its 3.01% difference from seed
 22 is 0.82 combined standard errors. Its heat-flux cutoff/last-three values are
-8.05%/1.48% and its Phi2 values are 8.80%/1.37%. This resolves the seed spread
-at Ny=160, while a Ny=128 seed-31 rung remains the clean seed-independent
-resolution check.
+8.05%/1.48% and its Phi2 values are 8.80%/1.37%. The environment audit makes
+these runs sizing evidence only. In the superseding source-pinned seed-31 pair,
+Ny=128/160 agree within 1.11% (0.23 combined SEM) on the frozen stop window;
+Ny=160 lowers cutoff/peak and last-three mass from 13.87%/3.04% to
+7.55%/1.45%. The terminal-window difference is 5.51% (1.14 combined SEM), so
+time continuation and another seed remain required before convergence.
 
 For the first QHS sizing rung (`64x96x48`, `t=150--250`), heat flux peaks at
 `ky*rho=0.333`; the `ky*rho=1.476` cutoff is 15.6% of the peak but the last
@@ -534,9 +570,9 @@ end-to-end regeneration preserve the published roots. The rewrite substitutes
 only Git blob `99a3ff82ac7c9e15e66635e1bb054380decb81ad`.
 
 Immediately before recording this measurement, a fresh no-alternates clone has
-25 heads, 28 tags, 3,415 commits, and 17,375 objects. Its transfer pack is
-8,836,982 bytes; pack plus index is 9,324,554 bytes; the complete `.git` file
-sum is 9,657,226 bytes; and the current archive is 5,122,028 bytes. Closed topic
+25 heads, 28 tags, 3,424 commits, and 17,445 objects. Its transfer pack is
+8,648,640 bytes; pack plus index is 9,138,172 bytes; the complete `.git` file
+sum is 9,471,172 bytes; and the current archive is 4,888,710 bytes. Closed topic
 heads still require a frozen delete/retain map, and no remote history has moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
@@ -546,9 +582,11 @@ PR #88 is the first non-destructive tree cut. After CI exposed one missed
 tool/test dependency, a repository-wide reachability audit restored 44 consumed
 artifacts. The corrected cut deletes 153 generated assets: 7,696,596 bytes and
 5,882 text lines. It reduces the tracked tree from 45.98 to 38.28 MB; the
-affected 88 tests pass and full CI is rerunning. The remaining 27.24 MB
-`docs/_static` tree must become generated previews plus hash-addressed release
-artifacts; deleting it blindly would break documented evidence and tests.
+affected 88 tests and all 41 current CI checks pass. PR #95 then retains only
+the 12 README/core-physics visuals while making optional renders explicitly
+regenerable. The remaining machine-readable evidence must migrate one schema
+family at a time to hash-addressed release assets; deleting it blindly would
+break documented provenance and tests.
 
 The installed package baseline is 206 Python files and 96,465 lines:
 
@@ -602,16 +640,15 @@ Before the coordinated force push:
 
 Do not force-push until those checks and the recovery bundle are reviewable.
 
-PR #95 now re-encodes the six-second README loop from its primary release MP4:
-`828,066 -> 346,234` bytes at 900 px and 5 fps. Immediately before this
-measurement-recording commit, the
-refreshed 21-head rehearsal (`main` plus all 20 open PRs through #99) retains
-all 28 remote tags and has a 9,112,197-byte pack, 9,601,953 bytes including its
-index, and a 5,363,108-byte current-tree archive. It has 3,438 commits and
-17,453 reachable objects. Strict
-`fsck`, stable patch IDs for all 19 recent replayed commits, exact live-head
-parity, and the AI-attribution scan pass. This is still not force-push
-authorization; recovery publication and the coordinated cutover gates remain.
+PR #95 keeps the six-second README loop as a 720-pixel, 24-frame, 4-fps WebP:
+`828,066 -> 224,766` bytes, with 36.49 dB PSNR against its rendered source
+frames. Its generator also palette-encodes the 1,561-by-1,189 QA initial/final
+LCFS and Boozer panel to 74,390 bytes at 48.24 dB PSNR. PR #103 applies the
+same generator-owned rule to the retained Landau panel (`371,750 -> 151,626`
+bytes, 49.86 dB PSNR) while preserving its physics gates. The latest all-live-
+head rehearsal metrics are recorded above. Strict `fsck`, exact live-head
+parity, and the attribution scan pass; this remains evidence, not force-push
+authorization.
 
 ## Validation campaign
 
@@ -736,18 +773,19 @@ MP4 SHA-256:
 
 | ID | Priority | Status | Deliverable | Gate |
 | --- | --- | --- | --- | --- |
-| CI-1 | P0 | ready for review | PR #81 mypy fix + nonlinear-only 20-minute budget | full CI green; no LOC regression |
+| CI-1 | P0 | ready for review | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 checks green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
-| RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
+| RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace capture | synthetic + held-out long traces |
-| GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; source budget restored |
+| GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
 | RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | source-pinned QA seed replication, QHS continuation, and QI refinement pending |
-| VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
+| VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#102/#103 remove redundant renders/grids; 8,836,982-byte all-live-ref pack passes | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids; 8,648,640-byte all-live-ref pack passes | freeze closed-head map, publish recovery records, then real network-clone gate |
+| OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
 

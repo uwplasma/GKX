@@ -877,3 +877,25 @@
   Ny=128 exact `t=750` match; GPU 1 runs QI Ny=128 seed 22. Exact-state QI
   continuation to `t=500` and QA Ny=160 continuation to `t=350` are queued
   behind those jobs, with unique output names and no artifact overwrite.
+- PR #94 is fully green after the one-page-summary correction: all 41 current
+  checks pass, with only the intended nightly job skipped. PR #74's current run
+  is also fully green; its GitHub rollup retains a cancelled pre-rebase run, but
+  the later run and `ci-required` both pass. No CI defect remains hidden there.
+- Reconciled the top-level roadmap with the current 24 open PRs through #103,
+  the source-pinned QA Ny=128/160 evidence, and the latest 8,648,640-byte
+  all-live-ref rehearsal. Older 20-head measurements are now explicitly
+  historical; no solver source or public ref changed.
+- The source-pinned QI `96x128x48`, seed-22 rung reached exact `t=250` in
+  4,959.3 s with 968 samples. The frozen `75+60` rule makes no stop; its only
+  late pass island is `t=235.03--250`. The shipped selector also rejects the
+  run at 24.3% relative SEM with Wg nonstationary.
+- On `t=175--250`, Ny=96 and Ny=128 both pass Q/Wphi/Wg half-window gates but
+  give `Q=4.1379 +/- 0.1213` and `3.5087 +/- 0.0446`: a 15.21% reduction, 4.87
+  combined SEM. Heat-flux cutoff/peak falls from 14.80% to 4.20% and
+  last-three-ky mass from 3.71% to 0.95%. Thus Ny=128 clears the necessary
+  spectral screen while proving Ny=96 transport unconverged; the exact-state
+  Ny=128 continuation to `t=500` started automatically without overlap.
+- QI Ny=128 SHA-256: NPZ
+  `9d8f3062389780536ce4df7497b03905b2038ad2f64d75895f7891afaedbc52b`, JSON
+  `1724347485b1996cc4d0ec1f66e68473d1f6c601cebf0e3bfe6ba4289bd60933`, log
+  `730c377f3b57fdf57ad96c45e3d98ef57487e44173d72f36696b617dab298168`.

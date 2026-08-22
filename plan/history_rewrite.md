@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the twenty-two open PR heads (#74 and #81--#101) after the final rewrite.
+- Rebase the twenty-four open PR heads (#74 and #81--#103) after the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -206,13 +206,14 @@ single-branch clone of the combined rehearsal has one 9,464,119-byte pack
 
 Repository hygiene, strict Sphinx, sdist/wheel build, installed-wheel import,
 CLI startup, strict `fsck`, and all 2,554 collected x64 tests pass in that fresh
-clone. GitHub currently advertises 68 branch heads but only 20 open PR heads;
-closed heads cannot remain attached to their old object graph under the 10-MB
-contract. A no-alternates rehearsal now maps all 20 open heads: four reviewed
-slimming heads already represented in the candidate point at slim `main`, and
-the other sixteen are replayed from their true PR bases. Aggregate patch IDs
-match for every textual patch; PR #90 alone omits a generated PNG that PR #95
-intentionally removes. No replayed head reaches the old `main` object graph.
+clone. At the 20-head rehearsal, GitHub advertised 68 branch heads but only 20
+open PR heads; closed heads cannot remain attached to their old object graph
+under the 10-MB contract. That no-alternates rehearsal mapped all 20 open heads:
+four reviewed slimming heads already represented in the candidate pointed at
+slim `main`, and the other sixteen were replayed from their true PR bases.
+Aggregate patch IDs matched for every textual patch; PR #90 alone omitted a
+generated PNG that PR #95 intentionally removes. No replayed head reached the
+old `main` object graph. The current 24-head inventory is recorded below.
 
 The refreshed ordinary clone now advertises 25 heads (`main` plus every open PR
 head through #103) and all 28 remote tags, with 3,424 reachable commits and
