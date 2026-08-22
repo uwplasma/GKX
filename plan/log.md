@@ -683,3 +683,9 @@
   gyaradax contributes a bounded performance experiment: pure-JAX two-for-one
   derivative packing and mixed-precision bracket FFTs. Its custom cuFFT FFI has
   no exposed VJP/JVP and is not a candidate for GKX's autodiff path as shipped.
+- A temporary pure-JAX packed-bracket prototype on an Apple M3 Max/JAX 0.10.2
+  reduced warm CPU time from 0.590 to 0.450 ms at `2x4x32x48x8` and matched the
+  forward bracket/real-physical gradient within `3.2e-7`/`3.5e-7` relative L2.
+  Its unconstrained complex-state VJP differs by 26.8% because Hermitian
+  completion changes the off-manifold derivative. No source PR: first prove
+  projected full-step VJP/FD parity, then measure GPU, memory, and transport.

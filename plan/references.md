@@ -213,6 +213,15 @@ derivative: its public implementation exposes FFI calls but no custom VJP/JVP.
 The paper's 400-step inverse problem is linear, not evidence for nonlinear
 transport gradients.
 
+A first local feasibility screen on an Apple M3 Max, JAX 0.10.2, complex64,
+`(Nl,Nm,Nx,Ny,Nz)=(2,4,32,48,8)` gives a 0.764 packed/current warm-wall ratio.
+Forward relative L2 error is `3.16e-7`, and the gradient with respect to a real
+physical-space state agrees to `3.49e-7`. The unconstrained full-complex-state
+VJP differs by 26.8%, however: explicit Hermitian completion changes the
+off-physical-manifold derivative even when forward values agree. Treat this as
+a blocker, not a speedup claim. A checked-in experiment must show projected
+full-step VJP/FD parity before GPU or transport benchmarking.
+
 The paper describes roughly 3,000 lines for its core integrator/field solver;
 the audited checkout contains about 12,100 Python lines plus CUDA. Its physics
 scope is much narrower than GKX's collision, geometry, eigensolver, artifact,
