@@ -215,8 +215,8 @@ match for every textual patch; PR #90 alone omits a generated PNG that PR #95
 intentionally removes. No replayed head reaches the old `main` object graph.
 
 The refreshed ordinary clone now advertises 25 heads (`main` plus every open PR
-head through #103) and all 28 remote tags, with 3,415 reachable commits and
-17,375 objects. PR #82 is represented by one exact-current-tree snapshot; its
+head through #103) and all 28 remote tags, with 3,417 reachable commits and
+17,404 objects. PR #82 is represented by one exact-current-tree snapshot; its
 incremental roadmap history remains in the recovery bundle and ref map. PR #102
 also corrects the single-result artifact writer so deterministic rendered grids
 are summarized like the comparison sidecar. The tracked nonlinear optimization
@@ -233,12 +233,12 @@ Pixel comparison against the previous RGBA render gives 49.86 dB PSNR and
 the two exact-root comparisons and `1.954e-14` collisionless spectral residual.
 
 Immediately before this record, a fresh no-alternates clone has an
-8,836,982-byte network-equivalent pack, a 487,572-byte index, 9,324,554 bytes
-for pack plus index, a 9,657,226-byte complete `.git` file sum, and a
+8,863,687-byte network-equivalent pack, a 488,384-byte index, 9,352,071 bytes
+for pack plus index, a 9,684,887-byte complete `.git` file sum, and a
 5,122,028-byte current-tree archive. Strict
 `fsck` passes, the clone has no object alternate, and reachable commit metadata
 has no AI attribution marker. This closes the local public-ref size gate with
-1,163,018 bytes of transfer-pack margin and 342,774 bytes under the stricter
+1,136,313 bytes of transfer-pack margin and 315,113 bytes under the stricter
 complete-`.git` decimal gate. The user's 2026-08-21 request authorizes a
 coordinated forced rewrite, but authorization does not replace the remaining
 safety gates: land only reviewed slimming prerequisites in the intended main

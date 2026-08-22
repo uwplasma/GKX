@@ -762,3 +762,9 @@
   and explicitly marked `regenerate_on_demand`; the 46-test benchmark-contract
   suite passes. PR #103 carries the self-contained contract, and all six x64
   Landau physics tests plus the same benchmark suite pass before its CI rerun.
+- Replayed that self-contained #95/#103 stack and this exact roadmap tree into
+  the private public-ref rehearsal. A fresh no-alternates clone advertises all
+  25 selected heads and 28 tags: 3,417 commits, 17,404 objects, an 8,863,687-byte
+  pack, and a 9,684,887-byte complete `.git` file sum. Strict `fsck`, exact
+  non-plan neutrality, exact plan-tree identity, and the reachable-metadata
+  attribution scan pass. No public ref moved.
