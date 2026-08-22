@@ -114,6 +114,10 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
+    from gkx.utils.compilation_cache import enable_persistent_compilation_cache
+
+    cache_dir = enable_persistent_compilation_cache()
+    print(f"compilation cache: {cache_dir or 'off'}", flush=True)
     import jax
 
     jax.config.update("jax_enable_x64", True)
