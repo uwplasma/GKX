@@ -214,9 +214,9 @@ the other sixteen are replayed from their true PR bases. Aggregate patch IDs
 match for every textual patch; PR #90 alone omits a generated PNG that PR #95
 intentionally removes. No replayed head reaches the old `main` object graph.
 
-The refreshed ordinary clone now advertises 24 heads (`main` plus every open PR
-head through #102) and all 28 remote tags, with 3,414 reachable commits and
-17,366 objects. PR #82 is represented by one exact-current-tree snapshot; its
+The refreshed ordinary clone now advertises 25 heads (`main` plus every open PR
+head through #103) and all 28 remote tags, with 3,415 reachable commits and
+17,375 objects. PR #82 is represented by one exact-current-tree snapshot; its
 incremental roadmap history remains in the recovery bundle and ref map. PR #102
 also corrects the single-result artifact writer so deterministic rendered grids
 are summarized like the comparison sidecar. The tracked nonlinear optimization
@@ -224,12 +224,21 @@ JSON is 113,526 bytes instead of 423,062 bytes. During rewriting, only Git blob
 `45a40017c94bee2b6cca8e5a2b35573457c2db55` is substituted; earlier
 compact/placeholder revisions remain unchanged.
 
-A fresh no-alternates clone has a 9,067,221-byte network-equivalent pack, a
-487,320-byte index, 9,554,541 bytes for pack plus index, a 9,887,091-byte
-complete `.git` file sum, and a 5,332,787-byte current-tree archive. Strict
+PR #103 adds a generator-owned palette encoding for the retained Landau
+validation panel. It preserves the 3,028-by-822 pixel grid and every curve,
+annotation, and numerical result while changing 371,750 bytes to 151,626.
+Pixel comparison against the previous RGBA render gives 49.86 dB PSNR and
+0.066 mean absolute channel error. The rewrite replaces only Git blob
+`99a3ff82ac7c9e15e66635e1bb054380decb81ad`; full default regeneration retains
+the two exact-root comparisons and `1.954e-14` collisionless spectral residual.
+
+Immediately before this record, a fresh no-alternates clone has an
+8,836,982-byte network-equivalent pack, a 487,572-byte index, 9,324,554 bytes
+for pack plus index, a 9,657,226-byte complete `.git` file sum, and a
+5,122,028-byte current-tree archive. Strict
 `fsck` passes, the clone has no object alternate, and reachable commit metadata
 has no AI attribution marker. This closes the local public-ref size gate with
-932,779 bytes of transfer-pack margin and 112,909 bytes under the stricter
+1,163,018 bytes of transfer-pack margin and 342,774 bytes under the stricter
 complete-`.git` decimal gate. The user's 2026-08-21 request authorizes a
 coordinated forced rewrite, but authorization does not replace the remaining
 safety gates: land only reviewed slimming prerequisites in the intended main

@@ -725,3 +725,19 @@
 - The source-pinned QHS `t=500--750` and QI `t=250--500` continuations remain
   active on separate office GPUs. Their queued Ny=160 QA and Ny=128 QI rungs
   have not started, and no partial output has been interpreted.
+- Ranked reachable blobs by compressed pack cost rather than working-tree size.
+  The largest retained object was the 371,750-byte Landau PNG, costing 360,267
+  packed bytes. Opened draft PR #103 on the minimal-render PR #95: its generator
+  now writes a deterministic 256-color median-cut PNG, and the tracked panel is
+  151,626 bytes at the same 3,028-by-822 resolution. The previous-pixel PSNR is
+  49.86 dB with 0.066 mean absolute channel error; full-width visual inspection
+  found no readable difference.
+- All six Landau physics tests pass. A fresh default figure regeneration
+  recovers `T_e/T_i=1` gamma/omega within 0.2462%/0.0643%, `T_e/T_i=10` within
+  0.0041%/0.0043%, and keeps the collisionless spectral real-part residual at
+  `1.954e-14`. Ruff, the size gate, and diff checks pass.
+- Replaced only Git blob `99a3ff82ac7c9e15e66635e1bb054380decb81ad` in the
+  private rehearsal and replayed PR #103's source/test patch. Before this log
+  entry, a fresh no-alternates clone has 25 heads, 28 tags, 3,415 commits, and
+  17,375 objects; pack 8,836,982 bytes, complete `.git` 9,657,226, archive
+  5,122,028. Strict `fsck` and attribution scans pass; no public ref moved.
