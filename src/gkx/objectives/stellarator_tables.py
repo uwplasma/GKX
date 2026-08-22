@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Sequence, cast
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -23,6 +22,7 @@ from gkx.objectives.stellarator_contracts import (
     StellaratorITGSampleSet,
 )
 from gkx.objectives.stellarator_reduced import (
+    _precision_gate_tolerances,
     _sampled_qa_itg_fields,
     _validate_params,
     default_stellarator_initial_params,
@@ -31,14 +31,6 @@ from gkx.objectives.stellarator_reduced import (
 from gkx.objectives.vmec_boozer import (
     vmec_boozer_solver_objective_table_with_metadata_from_state,
 )
-
-
-def _precision_gate_tolerances(fd_step: float) -> tuple[float, float, float]:
-    """Return FD tolerances that are strict in x64 and stable in float32."""
-
-    if bool(getattr(jax.config, "jax_enable_x64", False)):
-        return float(fd_step), 5.0e-3, 6.0e-4
-    return max(float(fd_step), 5.0e-3), 5.0e-2, 6.0e-3
 
 
 def stellarator_itg_sample_objective_table(
