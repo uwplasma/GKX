@@ -322,7 +322,8 @@ Phi2 is much better resolved at 0.076%/0.241%. Continue the exact state and
 add a matched Ny refinement. Trace SHA-256:
 `d7b511db5065e405f2a7511e0f335a8bc9b3cc12dcdf47af2fa9c4166e34ea55`.
 
-The matched QA `96x128x48` rung completed at `t=250` in 3,648.2 s. On the
+The earlier environment-contaminated QA `96x128x48` rung completed at `t=250`
+in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
 Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is
 `Q=10.860`, a 1.35% change. This is transport convergence evidence, not yet a
@@ -336,6 +337,21 @@ outer six signed kx shells carry 0.12%. The completed independent seed-31 rung
 agrees statistically and passes the same tail screen, as recorded above. A
 matched Ny=128 seed-31 rung remains before promoting seed-independent Ny
 convergence.
+
+That clean-source QA `96x128x48`, seed-31 rung now reaches exact `t=250` from
+commit `f7da8c49` in 3,397.1 s. The fixed `t=150--250` result is
+`Q=10.8522 +/- 0.3675` (3.39% corrected SEM); Q/Wphi/Wg pass their half-window
+gates. The frozen `75+60` rule ignores a first 49.02-time-unit pass island, then
+stops at the first sampled checkpoint `t=230.99`. Its trailing-window
+`Q=10.9089` is 0.52% above the fixed final-window mean and saves 7.6% of the
+horizon. The current selector instead keeps `t=26.00--250` and narrowly fails
+at 5.61% relative SEM. This is a held-out temporal success without threshold
+retuning, not a resolution pass: over `t=150--250`, heat-flux cutoff/peak is
+15.69% and last-three-bin mass is 3.11%; Phi2 is better at 1.13%/1.45%, and
+outer-six-kx heat mass is 0.11%. The source-pinned Ny=160 seed-31 rung is queued
+behind QHS `t=750`; a source-pinned Ny=96 match is still required. Trace
+SHA-256:
+`91f6768849caa8a315594d7f3bac256cc46a9203829ae0affae65d20ab6b5c45`.
 
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces

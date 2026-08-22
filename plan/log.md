@@ -689,3 +689,15 @@
   Its unconstrained complex-state VJP differs by 26.8% because Hermitian
   completion changes the off-manifold derivative. No source PR: first prove
   projected full-step VJP/FD parity, then measure GPU, memory, and transport.
+- The clean `f7da8c49` QA `96x128x48`, seed-31 holdout reached exact `t=250`
+  in 3,397.1 s. Over `t=150--250`, `Q=10.8522 +/- 0.3675` and Q/Wphi/Wg pass.
+  The frozen rule stops at `t=230.99`; `Q=10.9089` differs by 0.52% and saves
+  7.6%. The current selector fails narrowly at 5.61% SEM because it retains
+  `t=26--250`. Ny=128 still fails the heat-spectrum screen at 15.69% cutoff/peak
+  and 3.11% last-three mass. The Ny=160 seed-31 source-pinned match is queued;
+  trace SHA-256:
+  `91f6768849caa8a315594d7f3bac256cc46a9203829ae0affae65d20ab6b5c45`.
+- With 319 GB free and no overlap added, queued clean QA Ny=160 seed 31 behind
+  QHS `t=750` on GPU 0 and QI Ny=128 seed 22 behind the QI `t=500`
+  continuation on GPU 1. These close independent-seed and failed-Ny screens;
+  partial outputs are not evidence.
