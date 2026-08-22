@@ -31,8 +31,18 @@ no GIF fit the repository's 1 MB per-file limit at a resolution worth showing.
 The
 **[full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)**
 (1.8 MB, 120 frames at 20 fps) is a release asset. Regenerate the physics with
-[`build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py), and
-re-encode the loop from its output with:
+[`build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py). For a
+physics run, continue its saved saturated state with the same method and CFL
+policy; only the two displayed cuts are retained:
+
+```bash
+python tools/artifacts/build_turbulence_movie.py CASE.toml \
+  --initial-state saturated_state.npz --snapshots movie_cuts.npz
+python tools/artifacts/build_turbulence_movie.py --render-from movie_cuts.npz \
+  --output turbulence.mp4
+```
+
+Re-encode the compact README loop from that MP4 with:
 
 ```bash
 mkdir -p frames

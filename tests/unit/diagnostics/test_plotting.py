@@ -681,6 +681,34 @@ def test_movie_snapshot_replays_lightweight_physical_cuts(tmp_path, monkeypatch)
     assert rendered[0][1]["extent"] == (20.0, 30.0)
 
 
+def test_movie_restores_campaign_state_and_absolute_time(tmp_path):
+    root = pathlib.Path(__file__).parents[3]
+    script = root / "tools" / "artifacts" / "build_turbulence_movie.py"
+    spec = importlib.util.spec_from_file_location("gkx_movie_state_test", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    shape = (1, 2, 2, 4, 4, 4)
+    state = np.arange(np.prod(shape), dtype=np.float32).reshape(shape).astype(complex)
+    archive = tmp_path / "state.npz"
+    np.savez_compressed(archive, state=state, t_end=250.0, saturated=True)
+    restored, t_start, saturated, label = module._movie_initial_state(
+        archive, shape=shape, dtype=np.complex64, seed=0, amplitude=1e-3
+    )
+
+    np.testing.assert_allclose(restored, state)
+    assert (t_start, saturated, label) == (250.0, True, str(archive))
+    with pytest.raises(ValueError, match="movie grid shape"):
+        module._movie_initial_state(
+            archive,
+            shape=shape[:-1] + (5,),
+            dtype=np.complex64,
+            seed=0,
+            amplitude=1e-3,
+        )
+
+
 def test_turbulence_hero_imports_promoted_geometry_helpers():
     root = pathlib.Path(__file__).parents[3]
     runpy.run_path(str(root / "tools" / "artifacts" / "build_turbulence_hero.py"))
