@@ -223,8 +223,9 @@ a 75-time-unit trailing window and 60-time-unit persistence. It accepts only
 3/18 training traces, with 4.2% worst error and 29% median saved runtime; the
 QA and QHS savings are 22% and 56%. This selection is explicitly exposed to
 training bias. It was frozen before QA seed 31, QHS Ny=160, and QI finished.
-The first two fresh scores are now recorded below; QI decides the remaining
-holdout without further threshold tuning.
+The source-pinned QA, QHS, and QI scores are recorded below. Only QA Ny=128
+stops, while that resolution fails the frozen spectral screen and Ny=160 does
+not persist. The rule therefore remains a shadow policy, without retuning.
 
 The first nominal holdout, QHS `64x160x48` seed 22, reached
 `t=250.320` in 3,219.4 s. The frozen `75+60` rule makes no stop, so it avoids a
@@ -423,6 +424,33 @@ Ny96 is rejected even where its mean looks statistically compatible. SHA-256:
 NPZ `41b8e641896d5830cee03c45103d52851e8d83e35a68c4340d3a7aa902d647cc`,
 JSON `6daf27302fd872a3364a6f3d6bbdae27c61dc25be6d0b573cc7cdd8dd3a8df9a`,
 log `f2c054a10b053be97eb315d26e284bc0bf9392049d1c3a92f06af7e038548f8f`.
+
+The frozen decision is now reproducible from the compact traces, not an ad-hoc
+notebook calculation. PR #91 commit `067788f0` keeps simulation and replay in
+one campaign tool:
+
+```bash
+PYTHONPATH=src python tools/campaigns/nonlinear_saturated_state.py \
+  --replay-trace TRACE.npz --replay-window 75 --replay-persistence 60 \
+  --replay-rel-sem 0.05 --replay-min-tau-multiples 10 --output REPORT.json
+```
+
+The report records ordered source and implementation SHA-256 digests, every
+causal pass island, and the first persistence-qualified stop. Replaying the
+six accepted histories gives no stop for QA Ny=96/Ny=160, QI Ny=96/Ny=128,
+or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
+
+| trace | replay report |
+| --- | --- |
+| QA Ny=96 | `9820207af5a039f4e1bed13371873fdc94183dcbe44030f4f90eee53db337ea6` |
+| QA Ny=128 | `267d68000da016269f062b4dbd0a92741d9ac3af562fc46d1e63e6f870a07eb8` |
+| QA Ny=160 | `7b478f818709fd1d3c3552c90564353704f837c8805130d799ca9e5f10372481` |
+| QI Ny=96 | `069fdeaff3ec880f9f98d522cc9fd2f337720499cf0c638caf45c27986c502ea` |
+| QI Ny=128 | `88fca1ff4871b17228b66655ba3c3d25fba342bb5a6241e39e1c10425a1825c5` |
+| QHS Ny=160 | `3210a3c971401ecbe975e2878ac04d8b171db156d91ed9338555669be024bc69` |
+
+These are policy-replay records, not solver outputs or a claim that the shadow
+rule is ready to become the default.
 
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
@@ -626,7 +654,10 @@ estimator replaces runtime/post-hoc duplication and removes 21 source lines.
 The same campaign now enables GKX's existing persistent JAX cache before the
 runtime import. An identical two-process `4x4x4` CPU smoke fell from 7.11 s
 cold to 2.61 s warm; this compile-dominated 63% reduction is a workflow check,
-not a production-resolution timing claim. The running QA/QHS jobs predate it.
+not a production-resolution timing claim. Commit `067788f0` also folds frozen
+policy replay into that campaign owner and deletes the temporary standalone
+tool, a net 45-line reduction from the first reproducible implementation. The
+running QA/QHS/QI jobs remain pinned to the earlier solver tree.
 The first package target is at most 190 files and 90,000 lines; lower targets
 follow only after import/coverage evidence identifies another coherent cut.
 PR #98 is the next measured cut: artifact I/O now imports the canonical
@@ -789,9 +820,9 @@ MP4 SHA-256:
 | CI-1 | P0 | ready for review | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 checks green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
-| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace capture | synthetic + held-out long traces |
+| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS continue |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed-31 Ny triple complete; QHS Ny128 and QI Ny128 continuation pending |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed-31 Ny triple complete; QHS Ny128 t=750 and QI Ny128 t=500 active |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |

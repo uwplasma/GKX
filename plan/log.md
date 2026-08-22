@@ -926,3 +926,23 @@
   not start. This is an orchestration error, not a solver failure. Launched the
   source-clean QHS Ny128 `t=750` match explicitly on the now-idle GPU 0; the
   queued QA Ny160 continuation remains gated on its report.
+- PR #91 commit `067788f0` makes the frozen `75+60` policy replay reproducible
+  without adding another campaign file. It folds source-pinned continuation
+  loading, causal pass islands, persistence, and implementation/input digests
+  into `nonlinear_saturated_state.py`, then deletes the temporary standalone
+  replay tool. The follow-up is 239 additions and 284 deletions relative to its
+  parent. Ruff, 95 nonlinear validation tests, architecture, size, and diff
+  checks pass; the standard local mypy run reaches one unrelated JAX-stub
+  mismatch in `objectives/core.py`, so the pinned GitHub job remains the type
+  authority.
+- Regenerated every frozen-policy record against that committed owner. Only QA
+  Ny128 stops (`t=230.9865`); QA Ny96/Ny160, QI Ny96/Ny128, and QHS Ny160 do
+  not. SHA-256 prefixes are QA `9820207a/267d6800/7b478f81`, QI
+  `069fdeaf/88fca1ff`, and QHS `3210a3c9`; the full report digests are in
+  `plan.md`, with source/implementation digests inside each JSON artifact.
+- Rechecked GitHub after the replay push: `main` remains `5f3ab32e`, no PR has
+  merged since #80, and the living roadmap remains open. PR #91 is rerunning
+  all required checks at `067788f0`; no result is inferred from queued jobs.
+  GPU 1 continues the clean QI Ny128 state toward absolute `t=500`, then runs
+  QA Ny160 seed 22 and the `cfl=0.5` seed-31 timestep check. GPU 0 runs the clean
+  QHS Ny128 match to `t=750`, then continues QA Ny160 seed 31 to `t=350`.
