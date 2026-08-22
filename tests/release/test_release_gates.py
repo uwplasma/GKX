@@ -13,6 +13,21 @@ import json
 from pathlib import Path
 
 
+def test_retained_readme_pngs_use_bounded_palettes() -> None:
+    from PIL import Image
+
+    static = Path(__file__).parents[2] / "docs" / "_static"
+    for name in (
+        "benchmark_linear_parity.png",
+        "eigensolver_reach.png",
+        "landau_damping_validation.png",
+        "runtime_memory_benchmark.png",
+    ):
+        with Image.open(static / name) as image:
+            assert image.mode == "P"
+            assert len(image.getcolors() or []) <= 256
+
+
 def _load_quasilinear_tool_module():
     return load_release_tool("check_quasilinear_promotion_guardrails")
 
