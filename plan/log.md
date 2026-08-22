@@ -1278,3 +1278,20 @@
   are open (#74 and #81--#105). PR #74's apparent 39-check failure is a
   cancelled duplicate run on the same head; its later authoritative run has
   all 41 required checks passing. No PR has merged since #80.
+- The untouched source-pinned QHS `64x160x48`, seed-31 run reached exact
+  `t=750` in 8,469.3 s with 1,920 samples. Remote/local hashes match: NPZ
+  `64d51d48`, JSON `742f2c01`, log `910b6a4b`; the remote 51-MB state is
+  `914048a6`. The PR #91 frozen replay (`852d2da7`) makes no stop: 11 pass
+  islands last at most 28.55 time units.
+- Over `t=650--750`, QHS seed 22 and seed 31 give
+  `Q=6.1947 +/- 0.0768` and `5.2766 +/- 0.0714`, a -14.82% change or 8.76
+  combined SEM. Seed 31 passes the heat spectral screen at 7.10% cutoff/peak,
+  1.02% last-three-`ky` mass, and 3.77% outer-six-`kx` mass. Initial Wphi/Wg
+  agree within 0.23%, but late zonal-`Phi2` fractions are 94.76% and 88.42%.
+  This is an unresolved seed/zonal-state dependence, not permission to average
+  the seeds or shorten the window; no QHS transport value is promoted.
+- Auditing the QHS-to-QI waiter before handoff found its cwd was `/home/rjorge`,
+  so the relative `tools/campaigns/...` command would have failed after QHS.
+  Stopped only the idle waiter and replaced it with absolute paths rooted at
+  clean PR #91 commit `eebff63b`. The clean QI Ny160 run is active on GPU 0,
+  imports that exact checkout, and holds all three output locks.

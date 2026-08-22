@@ -359,6 +359,30 @@ NPZ `8b32d886d7ae75d01fa4dc290ac2410d5d15eb4ed109547428ae2f8d615f0785`,
 JSON `a698489ae24df0114b228a090758b850cf0d9ccd1e76cbaed7537834c720fd29`,
 log `db3870bcce370ad9ce8e99249a98bbc44a4936030fdc085fd8de73fbe75af92d`.
 
+The untouched Ny=160 seed-31 replicate then reached exact `t=750` in
+8,469.3 s. The frozen rule again makes no stop: 11 pass islands last at most
+28.55 time units. On the matched `t=650--750` suffix,
+
+\[
+ Q_{22}=6.1947\pm0.0768,\qquad Q_{31}=5.2766\pm0.0714.
+\]
+
+Seed 31 is 14.82% lower, separated by 8.76 combined SEM. Its heat-flux
+cutoff/peak, last-three-`ky` mass, and outer-six-`kx` mass pass at 7.10%,
+1.02%, and 3.77%; this is not a perpendicular-resolution failure. Initial
+`Wphi` and `Wg` agree between seeds within 0.23%, while the late zonal-`Phi2`
+fractions differ, 94.76% versus 88.42%. The terminal 75-unit seed-31 window
+passes the three half-window checks but covers only 7.82 of its longest guard
+autocorrelation time, below the frozen ten-IAT gate. QHS is therefore
+spectrally resolved at Ny=160 but not seed-robust or causally saturated. Do not
+average the two seeds into a promoted value; extend independent states and
+resolve the slow zonal-regime dependence first. SHA-256: NPZ
+`64d51d485da74e96949f07a2efdb2b165d8b42d5ca0bcd0bc9c7d742ff057176`,
+JSON `742f2c01883c3a27ac8d9080c23d37cc8f2337df6f2adef382794d24ecc36996`,
+log `910b6a4b407adf09de086ade7e0c812690e55c35fe032a34860a72a0211dc579`,
+state `914048a6201ba20d7b097c4b2af9839fa6e733b56a96c48c2b46fbf8f176d6ce`,
+and bound replay `852d2da7547f93b631013715cb787765162d2e459a53cadcf5bc7ddda2734f65`.
+
 The untouched source-pinned QI `96x96x48` seed-22 holdout reached exactly
 `t=250` in 3,462.3 s from the same clean solver tree. Over `t=150--250`,
 `Q=4.1641 +/- 0.0922` (2.21%) and Q/Wphi/Wg pass the half-window gates, but
@@ -1101,9 +1125,9 @@ unverified rather than silently promoted.
 | CI-1 | P0 | ready for review | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 checks green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
-| SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QA shortcut fails unseen Wphi/Wg; QI clean repeat required; QHS active |
+| SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QHS seed-31 makes no stop and differs from seed 22 by 8.76 combined SEM; QI clean repeat active |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | three QA Ny160 means agree; collided QI sizing stopped and clean repeat is queued after QHS |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QHS Ny160 clears spectral tails but fails seed robustness; collided QI sizing is excluded and its clean locked repeat is active |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | definitions pass; fixed horizon retained until SAT-1 passes |
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
