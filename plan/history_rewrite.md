@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the thirty open PR heads (#74, #82--#105, and #107--#111) after
+- Rebase the 31 open PR heads (#74, #82--#105, and #107--#112) after
   the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
@@ -165,7 +165,7 @@ marker remains. The other human identities are unchanged.
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
    update `main` and all tags from exact candidate SHAs, then rebase the
-   thirty open PR heads with `--force-with-lease`. Do not merely retarget the
+   31 open PR heads with `--force-with-lease`. Do not merely retarget the
    nineteen direct #81-base PRs: the squash merge left equal base trees but
    divergent ancestry, so each head must be replayed onto rewritten `main` and
    pass exact tree/patch checks before retargeting.
@@ -371,3 +371,11 @@ bytes, pack plus index is 9,027,865 bytes, and complete `.git` file sum is
 9,363,391 bytes. Strict `fsck`, no alternates, and zero reachable
 AI-attribution matches pass, leaving 636,609 bytes of strict decimal margin.
 No public history moved.
+
+Draft PR #112 commit `a2000c70` is replayed on private #109 as `7a46b7cb`.
+Its stable patch ID `16743481` and all 12 changed blobs are exact. A fresh
+no-local clone has 34 remote refs (33 heads plus `origin/HEAD`), 28 tags, 3,496
+commits, and 17,947 objects. Its pack is 8,662,536 bytes, pack plus index is
+9,166,124 bytes, and complete `.git` file sum is 9,501,911 bytes. Strict
+`fsck`, no alternates, and zero reachable AI-attribution matches pass, leaving
+498,089 bytes below the strict decimal 10-MB gate. No public history moved.

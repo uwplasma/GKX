@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `0ff569c3` (merged PR #81)
-and 30 open PRs: #74, #82--#105, and #107--#111. PR #106 was closed as a
+and 31 open PRs: #74, #82--#105, and #107--#112. PR #106 was closed as a
 duplicate. The post-merge `main` workflow passes.
 
 ## Rules
@@ -838,10 +838,12 @@ gives only `nonlinear-core` 20 minutes while every other quick shard retains 15.
 PR #81's own nonlinear shard then passed in 14m22s under that targeted budget;
 the extra five minutes cover runner cleanup variance without relaxing any test.
 All 41 PR checks and the resulting `main` push passed, but #81 was merged
-externally on 2026-08-22 with no approving review. Branch protection nominally
-asks for one review, but every merged PR reports `REVIEW_REQUIRED`, no checks are
-required, force pushes are allowed, and administrator bypass was used. Require
-the aggregate CI check and one non-author approval after the recovery rewrite.
+externally on 2026-08-22 with no approving review. The audit found an active
+one-approval ruleset but no required status check. Classic branch protection
+now strictly requires the green `ci-required` check from GitHub Actions app
+15368, while the independent-approval ruleset and admin enforcement remain
+active. Force pushes remain allowed only for the coordinated recovery rewrite;
+restore that prohibition after cutover.
 
 Nineteen open PRs still target #81's `fix/main-ci-mypy` branch: #74, #82--#89,
 #93, #98, #100, #101, #105, and #107--#111. That base and `main` have the same
@@ -1008,6 +1010,14 @@ eager/JIT failure reproduces unchanged on the base and passes under CI's x64
 contract. Dependency construction changes by only +57/+116 ns per explicit/
 IMEX host setup and never enters a traced loop. All 41 GitHub checks now pass;
 the nonlinear shard completed in 15m11s and nightly is intentionally skipped.
+
+Draft PR #112, stacked on #109, makes the optional leading species axis one
+owner when cache/setup paths infer `(Nl,Nm)`. Eleven linear, nonlinear,
+Diffrax, streaming, sheared, and sharded source paths now use the core helper;
+caller-specific `G`/`G0` errors remain exact. It removes 56 installed-source
+lines (`96,446 -> 96,390`) without changing files, arrays, traced arguments,
+or compiled operations. All 502 selected x64 and release tests, Ruff, and mypy
+on the 11 changed source files pass locally; GitHub CI is pending.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
@@ -1288,7 +1298,7 @@ unverified rather than silently promoted.
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#111 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#112 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |

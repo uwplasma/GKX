@@ -1546,3 +1546,10 @@
   falls from 96,465 to 96,242 lines (-223); 352 owning x64 tests and Ruff pass.
   This validates composition but is still far from the 190-file/90,000-line
   milestone, so file-count and source-budget debt remain open.
+- Opened draft PR #112 at `a2000c70`, stacked on #109. One core helper replaces
+  nine repeated optional-species-axis branches across 11 source files, removing
+  56 installed-source lines. The 502 selected x64/release tests, Ruff, and
+  changed-source mypy pass. Its private replay `7a46b7cb` has exact patch and
+  blobs. A strict fresh clone remains below 10 MB at 9,501,911 bytes with
+  498,089 bytes of margin, 34 remote refs, 28 tags, and zero AI-attribution
+  hits. GitHub CI is pending; no public history moved.
