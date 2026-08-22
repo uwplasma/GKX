@@ -309,6 +309,32 @@ and the Phi2 values are 0.0094%/0.028%. Continue to `t=750` without retuning.
 Continuation-trace SHA-256:
 `4c757301c2b3aa289e73f82a18d956ee977101017c2667a2d4ebeb5a6edc5407`.
 
+The same clean state now reaches exact `t=750` after another 2,841.2 s. The
+combined 1,955-sample trace still gives the frozen `75+60` rule no stop. Every
+new pass island is short; the longest after `t=500` is 14.28 time units, far
+below the predeclared 60. The complete-history production selector also fails:
+it retains `t=31.43--750`, including the overshoot, and reports
+`Q=6.9979 +/- 0.6603` (9.44%). Conversely, the segment-local report declares
+the continuation saturated by averaging `t=501.22--750`; that label has not
+evaluated the prior history and is not a causal whole-run decision.
+
+The terminal `t=650--750` audit is stationary:
+
+\[
+ Q=6.1947\pm0.0768,\qquad
+ W_\phi=1.9000\pm0.0216,\qquad
+ W_g=136.16\pm1.70,
+\]
+
+and all three half-window gates pass. The immediately shorter `t=675--750`
+and `t=700--750` windows fail again, so this endpoint is evidence of resolved
+low-frequency modulation, not permission to shorten the averaging rule. The
+same `t=650--750` heat-flux cutoff/peak is 6.46%, last-three-bin mass 0.94%,
+and outer-six-`kx` mass 3.23%; the Phi2 values are 2.70%, 0.46%, and 0.63%.
+Ny=160 therefore remains spectrally adequate. A clean-source Ny=128 `t=750`
+rerun is queued after the two source-pinned QA resolution rungs. Trace SHA-256:
+`e3d1152ce4b679cdb32119a7c59ad7452a51dc024cd2fab9f68391850e05d2c9`.
+
 The untouched source-pinned QI `96x96x48` seed-22 holdout reached exactly
 `t=250` in 3,462.3 s from the same clean solver tree. Over `t=150--250`,
 `Q=4.1641 +/- 0.0922` (2.21%) and Q/Wphi/Wg pass the half-window gates, but

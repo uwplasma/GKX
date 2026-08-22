@@ -741,3 +741,18 @@
   entry, a fresh no-alternates clone has 25 heads, 28 tags, 3,415 commits, and
   17,375 objects; pack 8,836,982 bytes, complete `.git` 9,657,226, archive
   5,122,028. Strict `fsck` and attribution scans pass; no public ref moved.
+- The clean QHS Ny=160 continuation reached exact `t=750` in 2,841.2 s.
+  Concatenating all 1,955 samples preserves the frozen decisions and still
+  yields no stop; the longest new pass island is only 14.28 time units. The
+  complete-history current selector retains `t=31.43--750` and fails at 9.44%
+  relative SEM, while the continuation-only JSON incorrectly promotes its
+  `t=501.22--750` segment without seeing the earlier overshoot.
+- Over `t=650--750`, `Q=6.1947 +/- 0.0768`, `Wphi=1.9000 +/- 0.0216`, and
+  `Wg=136.16 +/- 1.70`; all half-window gates pass, but the shorter terminal
+  75- and 50-time-unit windows fail again. Heat-flux cutoff/peak, last-three-ky
+  mass, and outer-six-kx mass are 6.46%, 0.94%, and 3.23%; Phi2 is
+  2.70%/0.46%/0.63%. Trace SHA-256:
+  `e3d1152ce4b679cdb32119a7c59ad7452a51dc024cd2fab9f68391850e05d2c9`.
+- The queued QA Ny=160 source-pinned run started on GPU 0. After it finishes,
+  a new wrapper runs QA Ny=96 seed 31 and then a clean QHS Ny=128 `t=750`
+  match; output names are unique and no existing artifact is overwritten.
