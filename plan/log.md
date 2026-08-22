@@ -189,3 +189,33 @@
   interval. The summary retains the attempted window with its explicit
   `NOT saturated` verdict. All 116 plotting/CLI tests pass and installed source
   decreases by five lines relative to the architecture baseline.
+- The asset-free full-suite rehearsal found three unit-level PNG existence
+  assertions outside PR #92's release gates. Commits `09b1adc1` and `adc9d497`
+  put the parallel-artifact tests under the same numeric-required,
+  render-optional suffix policy; all 25 parallel and 121 release tests pass.
+  A repository-wide search finds no other existence assertion for a tracked
+  render; remaining PNG checks generate their own temporary outputs.
+- A fresh `96 x 96 x 48`, seed-22, `t=250` QA solve on one RTX A4000 took
+  2,959.5 s and retained 540 samples. The unchanged production rule still
+  rejects it: its selected `t=29.9--250` window includes the nonlinear
+  overshoot, has mean `Q=12.03`, 9.64% autocorrelation-corrected relative SEM,
+  and first/second-half means 12.97/11.09. Both energy guards pass, but late
+  50-time means remain 10.76, 11.35, 11.14, and 10.58. This confirms that
+  `Wphi`/`Wg` stationarity alone cannot define the averaging window.
+- On the physical `t=150--250` spectrum, heat flux peaks at
+  `ky*rho=1.333`; the `ky*rho=1.476` cutoff is 54.2% of that peak and the last
+  three retained bins carry 14.0% of summed absolute positive-`ky` flux. By
+  contrast, the outer three `kx` shells carry about 0.1%. The controlled next
+  rung therefore holds `Nx=96`, `Nz=48`, seed, and horizon fixed and raises
+  only `Ny` to 128 before a joint `Nx`/`Ny` confirmation.
+- That analysis exposed a campaign-artifact defect: PR #91 initially wrote all
+  FFT slots, including structural dealiased zeros, beside full `kx`/`ky` axes.
+  A generic tail check could therefore report false convergence. Commit
+  `48043360` now uses the canonical NetCDF dealiased layout and tests the
+  physical `(63, 32)` axes for a `96 x 96` grid. The completed raw trace is
+  recoverable by the same canonical indices; no solver result changed.
+- The asset-free full suite then found the remaining source of PR #92's PNG
+  coupling: the aggregate parallel validator still classified renders as
+  required sidecars. Commit `5ddfce88` restricts required sidecars to JSON and
+  CSV (24 current artifacts); PNGs remain registered and reported by the
+  manifest but are reproducible, optional outputs.

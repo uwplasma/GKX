@@ -4,6 +4,18 @@ Target: an ordinary full clone whose Git pack is below 10 MiB, while preserving
 the complete pre-rewrite repository in a verified recovery bundle and retaining
 all core-source history in the hosted repository.
 
+## Why the clone is large
+
+The audited local clone has 44,217 packed objects in 160.60 MiB; a fresh
+network clone reports 133.70 MiB transferred. Summing unique historical blob
+payloads before compression attributes 324 MB to `docs/`, 247 MB to root files
+(mostly successive large plan snapshots), 169 MB to `tools/`, 115 MB to
+`tests/`, and 101 MB to `src/`. The largest individual blobs are a 3.92-MB
+historical HSX WOUT, 2.88/2.47-MB versions of a generated benchmark panel,
+1.87/1.61-MB nonlinear-atlas renders, and a 1.73-MB synthetic optimization
+plot. Repeated PNG/PDF/JSON/plan revisions, not the current solver source, are
+the dominant removable history.
+
 ## Evidence from the rehearsal
 
 | Object | Result |
@@ -42,6 +54,29 @@ Historical `docs`, `tests`, `tools`, `examples`, `benchmarks`, `scripts`,
 `plan`, and NetCDF blobs are removed from hosted history. Their current compact
 text is restored by the snapshot. Large reproducible results move to a release
 asset addressed by SHA-256; small deterministic fixtures remain in Git.
+
+## Source slimming contract
+
+The pre-slimming installed tree has 206 Python files and 96,465 lines:
+
+| Package group | Files | Lines |
+| --- | ---: | ---: |
+| diagnostics | 21 | 15,077 |
+| solvers | 30 | 14,794 |
+| objectives | 26 | 13,329 |
+| operators | 34 | 13,079 |
+| geometry | 26 | 12,905 |
+| workflows | 23 | 9,916 |
+| artifacts | 13 | 6,242 |
+| package root and remaining groups | 33 | 11,123 |
+
+The first enforced milestone is at most 190 files and 90,000 lines. Reach it
+through dead-path removal, one-owner contracts, and proven delegation such as
+PR #93; do not concatenate unrelated modules or abstract compiled hot kernels
+merely to lower counts. Each source cut must preserve public signatures,
+JIT/AD semantics, CPU/GPU numerics, runtime, and peak memory through focused
+tests plus the architecture gate. The manifest's 45-file/45,000-line values
+remain a long-range aspiration, not permission for a mega-refactor.
 
 ## Identity contract
 
@@ -113,6 +148,14 @@ current JSON/CSV snapshot to the rehearsal makes all 121 release tests pass;
 after aggressive packing the complete candidate is 7.36 MiB and its source
 archive is 3.5 MiB. PR #88 safely removes 153 unreferenced assets after
 restoring 44 files consumed outside the documentation tree.
+
+A literal documentation scan finds 118 embedded local renders totalling
+10,861,085 bytes; the README alone embeds 12 totalling 2,354,028 bytes. They
+cannot all be restored on top of the 7.36-MiB numeric-evidence pack. Keep a
+small physics/algorithm/QA figure set whose network-clone pack still passes the
+10-MiB gate, re-encode oversized animations, and replace the remaining local
+directives only with real generator instructions or published release links --
+never suppress broken-image warnings.
 
 The remaining blockers are strict documentation and the scientific selection
 of the small rendered set: keep only concise README/docs figures, verify every
