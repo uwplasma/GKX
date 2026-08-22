@@ -112,6 +112,34 @@ def test_saturation_campaign_cannot_promote_a_continuation_segment() -> None:
     assert report == {"saturated": True, "reasons": []}
 
 
+def test_saturation_campaign_records_resolved_timestep_policy() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    time_cfg = type(
+        "TimeConfig",
+        (),
+        {
+            "fixed_dt": False,
+            "dt": 0.1,
+            "dt_max": None,
+            "cfl": 0.5,
+            "method": "rk3",
+        },
+    )()
+
+    policy = campaign._resolved_timestep_policy(time_cfg)
+    encoded = campaign._npz_timestep_identity(policy)
+
+    assert policy == {
+        "fixed_dt": False,
+        "dt": 0.1,
+        "dt_max": None,
+        "cfl": 0.5,
+        "method": "rk3",
+    }
+    assert encoded["time_dt_max"].item() == "None"
+    assert encoded["time_cfl"].item() == pytest.approx(0.5)
+
+
 def test_saturation_policy_replay_requires_a_persistent_fixed_window() -> None:
     replay = load_tool_script("campaigns", "nonlinear_saturated_state")
     time = np.arange(0.0, 201.0, 0.5)
@@ -272,12 +300,78 @@ def test_saturation_campaign_rejects_a_mixed_continuation_state(tmp_path: Path) 
     assert loaded.shape == (1, 1, 1, 2, 2, 2)
     assert t_end == 10.0
 
+    v2_expected = dict(identity)
+    v2_expected.update(
+        campaign_identity_schema=np.asarray("gkx_nonlinear_campaign_v2"),
+        time_fixed_dt=np.asarray(False),
+        time_dt=np.asarray(0.1),
+        time_dt_max=np.asarray("None"),
+        time_cfl=np.asarray(1.0),
+        time_method=np.asarray("rk3"),
+    )
+    campaign._load_continuation_state(
+        state,
+        expected_shape=(1, 1, 1, 2, 2, 2),
+        expected_identity=v2_expected,
+        source_provenance=provenance,
+    )
+
     identity["case"] = np.asarray("qi.toml")
     with pytest.raises(SystemExit, match="campaign identity does not match"):
         campaign._load_continuation_state(
             state,
             expected_shape=(1, 1, 1, 2, 2, 2),
             expected_identity=identity,
+            source_provenance=provenance,
+        )
+
+
+def test_saturation_campaign_rejects_a_timestep_mismatched_state(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    provenance["git_dirty"] = False
+    identity = {
+        name: np.asarray(value)
+        for name, value in {
+            "campaign_identity_schema": "gkx_nonlinear_campaign_v2",
+            "case": "qa.toml",
+            "input_sha256": "deck",
+            "vmec_sha256": "equilibrium",
+            "Nx": 2,
+            "Ny": 2,
+            "Nz": 2,
+            "Nl": 1,
+            "Nm": 1,
+            "random_seed": 31,
+            "alpha": "0.0",
+            "npol": "1.0",
+            "time_fixed_dt": False,
+            "time_dt": 0.1,
+            "time_dt_max": "None",
+            "time_cfl": 1.0,
+            "time_method": "rk3",
+        }.items()
+    }
+    state = tmp_path / "state.npz"
+    np.savez_compressed(
+        state,
+        state=np.zeros((1, 1, 1, 2, 2, 2)),
+        t_end=10.0,
+        **identity,
+        **campaign._npz_source_provenance(provenance),
+    )
+
+    expected = dict(identity)
+    expected["time_cfl"] = np.asarray(0.5)
+    with pytest.raises(SystemExit, match="campaign identity does not match"):
+        campaign._load_continuation_state(
+            state,
+            expected_shape=(1, 1, 1, 2, 2, 2),
+            expected_identity=expected,
             source_provenance=provenance,
         )
 

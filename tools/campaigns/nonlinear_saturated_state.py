@@ -133,7 +133,7 @@ class ReplayPolicy:
     min_samples: int = 16
 
 
-_REPLAY_IDENTITY_FIELDS = (
+_REPLAY_IDENTITY_FIELDS_V1 = (
     "campaign_identity_schema",
     "case",
     "input_sha256",
@@ -149,7 +149,42 @@ _REPLAY_IDENTITY_FIELDS = (
     "kx",
     "ky",
 )
+# A v2 campaign may continue a source-compatible v1 state. The schema has
+# already been checked here; compare the physical v1 fields but not the version
+# string or the timestep fields that v1 could not record.
+_STATE_IDENTITY_FIELDS_V1 = _REPLAY_IDENTITY_FIELDS_V1[1:-2]
+_REPLAY_IDENTITY_FIELDS = _REPLAY_IDENTITY_FIELDS_V1[:-2] + (
+    "time_fixed_dt",
+    "time_dt",
+    "time_dt_max",
+    "time_cfl",
+    "time_method",
+    "kx",
+    "ky",
+)
 _STATE_IDENTITY_FIELDS = _REPLAY_IDENTITY_FIELDS[:-2]
+
+
+def _resolved_timestep_policy(time_cfg: Any) -> dict[str, object]:
+    """Return the resolved integration policy in JSON-native types."""
+    return {
+        "fixed_dt": bool(time_cfg.fixed_dt),
+        "dt": float(time_cfg.dt),
+        "dt_max": None if time_cfg.dt_max is None else float(time_cfg.dt_max),
+        "cfl": float(time_cfg.cfl),
+        "method": str(time_cfg.method),
+    }
+
+
+def _npz_timestep_identity(policy: dict[str, object]) -> dict[str, np.ndarray]:
+    """Encode the timestep policy without object arrays or pickle."""
+    return {
+        "time_fixed_dt": np.asarray(policy["fixed_dt"]),
+        "time_dt": np.asarray(policy["dt"]),
+        "time_dt_max": np.asarray(str(policy["dt_max"])),
+        "time_cfl": np.asarray(policy["cfl"]),
+        "time_method": np.asarray(policy["method"]),
+    }
 
 
 def replay_policy(
@@ -357,6 +392,7 @@ def _load_replay_traces(
                     "random_seed",
                     "alpha",
                     "npol",
+                    "timestep_policy",
                 )
             }
             segment_identity["summary_identity"] = np.asarray(
@@ -498,11 +534,19 @@ def _load_continuation_state(
             str(source_provenance["git_commit"]),
         ):
             raise SystemExit("continuation state is not pinned to compatible GKX source")
-        fields = (
-            _STATE_IDENTITY_FIELDS
+        schema = (
+            str(np.asarray(archive["campaign_identity_schema"]).item())
             if "campaign_identity_schema" in archive
-            else ("Nx", "Ny", "Nz", "Nl", "Nm", "random_seed")
+            else None
         )
+        if schema == "gkx_nonlinear_campaign_v1":
+            fields = _STATE_IDENTITY_FIELDS_V1
+        elif schema == "gkx_nonlinear_campaign_v2":
+            fields = _STATE_IDENTITY_FIELDS
+        elif schema is None:
+            fields = ("Nx", "Ny", "Nz", "Nl", "Nm", "random_seed")
+        else:
+            raise SystemExit(f"unsupported continuation identity schema {schema!r}")
         if any(
             name not in archive
             or not np.array_equal(np.asarray(archive[name]), expected_identity[name])
@@ -705,6 +749,7 @@ def main() -> int:
         )
 
     time_cfg = runtime.time
+    timestep_policy = _resolved_timestep_policy(time_cfg)
     spectral_grid = build_spectral_grid(runtime.grid)
     grid_shape = {
         "Nx": int(spectral_grid.kx.size),
@@ -730,7 +775,7 @@ def main() -> int:
     vmec_file = getattr(runtime.geometry, "vmec_file", None)
     vmec_path = None if vmec_file is None else Path(str(vmec_file)).expanduser()
     replay_identity = {
-        "campaign_identity_schema": np.asarray("gkx_nonlinear_campaign_v1"),
+        "campaign_identity_schema": np.asarray("gkx_nonlinear_campaign_v2"),
         "case": np.asarray(args.toml.name),
         "input_sha256": np.asarray(hashlib.sha256(args.toml.read_bytes()).hexdigest()),
         "vmec_sha256": np.asarray(
@@ -744,6 +789,7 @@ def main() -> int:
         "random_seed": np.asarray(int(runtime.init.random_seed)),
         "alpha": np.asarray(str(runtime.geometry.alpha)),
         "npol": np.asarray(str(runtime.geometry.npol)),
+        **_npz_timestep_identity(timestep_policy),
     }
     previous_t_end = 0.0
 
@@ -920,6 +966,7 @@ def main() -> int:
         "random_seed": int(runtime.init.random_seed),
         "t_max": float(time_cfg.t_max),
         "fixed_dt": bool(time_cfg.fixed_dt),
+        "timestep_policy": timestep_policy,
         "adaptive_dt": {
             "min": float(np.nanmin(steps_dt)),
             "median": float(np.nanmedian(steps_dt)),
