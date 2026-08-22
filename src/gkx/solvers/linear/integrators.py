@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from functools import partial
 from typing import Any, Callable
 
 import jax
@@ -304,83 +303,55 @@ def _integrate_linear_cached_impl(
     return jax.lax.scan(sample_step, G0, sample_indices)
 
 
-@partial(
-    jax.jit,
-    static_argnames=(
-        "steps",
-        "method",
-        "checkpoint",
-        "sample_stride",
-        "show_progress",
-        "force_electrostatic_fields",
-    ),
+_LINEAR_INTEGRATOR_STATIC_ARGS = (
+    "steps",
+    "method",
+    "checkpoint",
+    "sample_stride",
+    "show_progress",
+    "force_electrostatic_fields",
 )
-def _integrate_linear_cached(
-    G0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    dt: float,
-    steps: int,
-    method: str = "rk4",
-    checkpoint: bool = False,
-    terms: LinearTerms | None = None,
-    sample_stride: int = 1,
-    show_progress: bool = False,
-    force_electrostatic_fields: bool = False,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    return _integrate_linear_cached_impl(
-        G0,
-        cache,
-        params,
-        dt,
-        steps,
-        method=method,
-        checkpoint=checkpoint,
-        terms=terms,
-        sample_stride=sample_stride,
-        show_progress=show_progress,
-        force_electrostatic_fields=force_electrostatic_fields,
+
+
+def _bind_cached_linear_integrator(
+    *, donate: bool
+) -> Callable[..., tuple[jnp.ndarray, jnp.ndarray]]:
+    def integrate(
+        G0: jnp.ndarray,
+        cache: LinearCache,
+        params: LinearParams,
+        dt: float,
+        steps: int,
+        method: str = "rk4",
+        checkpoint: bool = False,
+        terms: LinearTerms | None = None,
+        sample_stride: int = 1,
+        show_progress: bool = False,
+        force_electrostatic_fields: bool = False,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        return _integrate_linear_cached_impl(
+            G0,
+            cache,
+            params,
+            dt,
+            steps,
+            method=method,
+            checkpoint=checkpoint,
+            terms=terms,
+            sample_stride=sample_stride,
+            show_progress=show_progress,
+            force_electrostatic_fields=force_electrostatic_fields,
+        )
+
+    return jax.jit(
+        integrate,
+        static_argnames=_LINEAR_INTEGRATOR_STATIC_ARGS,
+        donate_argnums=(0,) if donate else (),
     )
 
 
-@partial(
-    jax.jit,
-    static_argnames=(
-        "steps",
-        "method",
-        "checkpoint",
-        "sample_stride",
-        "show_progress",
-        "force_electrostatic_fields",
-    ),
-    donate_argnums=(0,),
-)
-def _integrate_linear_cached_donate(
-    G0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    dt: float,
-    steps: int,
-    method: str = "rk4",
-    checkpoint: bool = False,
-    terms: LinearTerms | None = None,
-    sample_stride: int = 1,
-    show_progress: bool = False,
-    force_electrostatic_fields: bool = False,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    return _integrate_linear_cached_impl(
-        G0,
-        cache,
-        params,
-        dt,
-        steps,
-        method=method,
-        checkpoint=checkpoint,
-        terms=terms,
-        sample_stride=sample_stride,
-        show_progress=show_progress,
-        force_electrostatic_fields=force_electrostatic_fields,
-    )
+_integrate_linear_cached = _bind_cached_linear_integrator(donate=False)
+_integrate_linear_cached_donate = _bind_cached_linear_integrator(donate=True)
 
 
 def _dispatch_parallel_linear(

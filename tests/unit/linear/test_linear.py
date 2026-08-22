@@ -1429,6 +1429,36 @@ def test_integrate_linear_with_cache():
     assert phi_t.shape[0] == 2
 
 
+def test_integrate_linear_donation_matches_nondonated():
+    """Donating the initial state must not change the trajectory."""
+    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams()
+    shape = (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    G = jnp.arange(np.prod(shape), dtype=jnp.float32).reshape(shape).astype(jnp.complex64)
+    cache = build_linear_cache(grid, geom, params, shape[0], shape[1])
+
+    state, phi = integrate_linear(
+        G, grid, geom, params, dt=0.01, steps=2, method="rk2", cache=cache
+    )
+    state_donated, phi_donated = integrate_linear(
+        jnp.array(G),
+        grid,
+        geom,
+        params,
+        dt=0.01,
+        steps=2,
+        method="rk2",
+        cache=cache,
+        donate=True,
+    )
+
+    np.testing.assert_allclose(state_donated, state, rtol=1.0e-6, atol=1.0e-6)
+    np.testing.assert_allclose(phi_donated, phi, rtol=1.0e-6, atol=1.0e-6)
+
+
 def test_integrate_linear_checkpoint_runs():
     """Checkpointed integration should run on a tiny grid."""
     grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
