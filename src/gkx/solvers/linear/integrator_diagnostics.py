@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -20,19 +20,21 @@ from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.solvers.time.explicit_steps import _linear_explicit_stage_update
 
 
-def _validate_sampling(steps: int, sample_stride: int) -> None:
+def _validate_linear_sampling(*, steps: int, sample_stride: int) -> None:
     if sample_stride < 1:
         raise ValueError("sample_stride must be >= 1")
     if steps % sample_stride != 0:
         raise ValueError("steps must be divisible by sample_stride")
 
 
-def _resolve_cache(
+def _linear_cache_or_build(
     G0: jnp.ndarray,
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
     params: LinearParams,
     cache: LinearCache | None,
+    *,
+    cache_builder: Callable[..., LinearCache],
 ) -> LinearCache:
     if cache is not None:
         return cache
@@ -44,7 +46,7 @@ def _resolve_cache(
         raise ValueError(
             "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
         )
-    return build_linear_cache(grid, geom, params, Nl, Nm)
+    return cache_builder(grid, geom, params, Nl, Nm)
 
 
 def _initial_state(G0: jnp.ndarray) -> tuple[jnp.ndarray, Any]:
@@ -339,8 +341,10 @@ def integrate_linear_diagnostics(
     """Integrate and return (G_out, phi_t, density_t) for diagnostics."""
 
     terms_use = terms or LinearTerms()
-    _validate_sampling(steps, sample_stride)
-    cache_use = _resolve_cache(G0, grid, geom, params, cache)
+    _validate_linear_sampling(steps=steps, sample_stride=sample_stride)
+    cache_use = _linear_cache_or_build(
+        G0, grid, geom, params, cache, cache_builder=build_linear_cache
+    )
     G, real_dtype = _initial_state(G0)
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     damping = _linear_damping(
