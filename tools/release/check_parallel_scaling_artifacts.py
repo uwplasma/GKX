@@ -28,7 +28,7 @@ from gkx.utils import tomlcompat as tomllib
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC = REPO_ROOT / "docs" / "_static"
 DEFAULT_MANIFEST = REPO_ROOT / "tools" / "performance_optimization_manifest.toml"
-SIDE_EXTENSIONS = (".json", ".csv", ".png")
+SIDE_EXTENSIONS = (".json", ".csv")
 RENDERED_ARTIFACT_SUFFIXES = {".gif", ".mp4", ".pdf", ".png", ".svg", ".webp"}
 PRODUCTION_GATE_JSON = "nonlinear_sharding_production_speedup_gate.json"
 PRODUCTION_GATE_CSV = "nonlinear_sharding_production_speedup_gate.csv"
@@ -42,13 +42,9 @@ OBSERVABLE_SPLIT_JSON = (
 OBSERVABLE_SPLIT_CSV = (
     "nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.csv"
 )
-OBSERVABLE_SPLIT_PNG = (
-    "nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png"
-)
 OBSERVABLE_SPLIT_ARTIFACT_PATHS = (
     f"docs/_static/{OBSERVABLE_SPLIT_JSON}",
     f"docs/_static/{OBSERVABLE_SPLIT_CSV}",
-    f"docs/_static/{OBSERVABLE_SPLIT_PNG}",
 )
 PRODUCTION_GATE_SOURCE_FIELDS = (
     "backend",

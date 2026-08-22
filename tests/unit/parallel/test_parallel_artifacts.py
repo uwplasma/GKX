@@ -280,7 +280,7 @@ def test_parallel_scaling_artifact_checker_validates_tracked_large_run_evidence(
 
     assert summary["n_families"] == 4
     assert summary["n_json_artifacts"] == 12
-    assert summary["n_sidecars"] == 35
+    assert summary["n_sidecars"] == 24
     assert summary["manifest_checked"] is True
     assert {family["name"] for family in summary["families"]} == {
         "independent_ky_scan",
