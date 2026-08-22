@@ -96,6 +96,21 @@ def test_saturation_campaign_does_not_duplicate_requested_npz_trace(
     assert len(inline["trace"]) == 3
 
 
+def test_saturation_campaign_cannot_promote_a_continuation_segment() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    report = {"saturated": True, "reasons": []}
+
+    full = campaign._scope_saturation_report(report, continuation=False)
+    segment = campaign._scope_saturation_report(report, continuation=True)
+
+    assert full == {**report, "history_scope": "full_run"}
+    assert segment["history_scope"] == "continuation_segment"
+    assert segment["segment_saturated"] is True
+    assert segment["saturated"] is False
+    assert segment["reasons"] == ["prior_history_not_in_report"]
+    assert report == {"saturated": True, "reasons": []}
+
+
 def _touch_bundle(output: Path) -> None:
     stem = (
         output.name[: -len(".out.nc")]

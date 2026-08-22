@@ -15,7 +15,8 @@ Rather than reimplement any of that, this tool drives ``run_runtime_nonlinear``
 
 Saturation is judged by the production stop policy on the heat-flux trace,
 with ``Wphi`` and ``Wg`` as stationarity guards. A state that fails is written
-out anyway, flagged, so the failure is inspectable rather than silent.
+out anyway, flagged, so the failure is inspectable rather than silent. A
+continuation segment cannot claim full-history saturation by itself.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -102,6 +104,22 @@ def _summary_trace_payload(
             for t, q, phi, g in zip(time_axis, heat_flux, wphi, wg)
         ]
     }
+
+
+def _scope_saturation_report(
+    report: dict[str, Any], *, continuation: bool
+) -> dict[str, Any]:
+    """Prevent a continuation segment from claiming full-history saturation."""
+    scoped = dict(report)
+    scoped["history_scope"] = "continuation_segment" if continuation else "full_run"
+    if not continuation:
+        return scoped
+    scoped["segment_saturated"] = bool(scoped["saturated"])
+    scoped["saturated"] = False
+    reasons = list(scoped.get("reasons", []))
+    reasons.append("prior_history_not_in_report")
+    scoped["reasons"] = reasons
+    return scoped
 
 
 def _gkx_source_tree_matches(repository: str | Path, left: str, right: str) -> bool:
@@ -193,8 +211,8 @@ def main() -> int:
         "--initial-state",
         type=Path,
         default=None,
-        help="optional npz continuation state; unlike the gradient campaign, "
-        "this may be marked unsaturated because the purpose is to finish it",
+        help="optional npz continuation state; the segment cannot claim "
+        "full-history saturation without the preceding scalar trace",
     )
     parser.add_argument("--state-out", type=Path, default=None)
     parser.add_argument("--progress", action="store_true")
@@ -382,12 +400,15 @@ def main() -> int:
         rel_sem=float(time_cfg.saturation_rel_sem),
         min_window=time_cfg.saturation_min_window,
     )
-    report = saturation_stop_decision(
-        absolute_times,
-        flux,
-        guard=wphi,
-        free_energy_guard=wg,
-        config=stop_config,
+    report = _scope_saturation_report(
+        saturation_stop_decision(
+            absolute_times,
+            flux,
+            guard=wphi,
+            free_energy_guard=wg,
+            config=stop_config,
+        ),
+        continuation=args.initial_state is not None,
     )
     print(
         f"\nran {times.size} samples to t={absolute_times[-1]:.6g} in {elapsed:.1f}s",
