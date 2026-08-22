@@ -1291,6 +1291,44 @@ def test_release_artifact_manifest_accepts_kept_preview_action(tmp_path: Path) -
     assert report["artifacts"][0]["action"] == "keep_preview_in_repo"
 
 
+def test_release_artifact_manifest_accepts_missing_regenerable_artifact(
+    tmp_path: Path,
+) -> None:
+    mod = load_release_tool("check_repository_size_manifest")
+    payload = b"preview"
+    manifest = _release_artifact_manifest(
+        tmp_path,
+        sha=hashlib.sha256(payload).hexdigest(),
+        size=len(payload),
+        action="regenerate_on_demand",
+    )
+
+    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
+
+    assert report["passed"] is True
+    assert report["artifacts"][0]["exists"] is False
+    assert report["artifacts"][0]["replay_command"] == "python make_panel.py"
+
+
+def test_release_artifact_manifest_checks_present_regenerable_artifact(
+    tmp_path: Path,
+) -> None:
+    mod = load_release_tool("check_repository_size_manifest")
+    payload = b"preview"
+    (tmp_path / "panel.png").write_bytes(payload + b"changed")
+    manifest = _release_artifact_manifest(
+        tmp_path,
+        sha=hashlib.sha256(payload).hexdigest(),
+        size=len(payload),
+        action="regenerate_on_demand",
+    )
+
+    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
+
+    assert report["passed"] is False
+    assert any("size" in failure for failure in report["failures"])
+
+
 def test_release_artifact_manifest_fails_on_sha_mismatch(tmp_path: Path) -> None:
     mod = load_release_tool("check_repository_size_manifest")
     payload = b"panel"
