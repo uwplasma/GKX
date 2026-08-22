@@ -756,3 +756,9 @@
 - The queued QA Ny=160 source-pinned run started on GPU 0. After it finishes,
   a new wrapper runs QA Ny=96 seed 31 and then a clean QHS Ny=128 `t=750`
   match; output names are unique and no existing artifact is overwritten.
+- PR #103 exposed a stacked-branch false green in PR #95: five manifest entries
+  existed only in GitHub's synthetic merge with the newer #92 base. PR #95 now
+  merges that base and requires every absent output to be both a rendered file
+  and explicitly marked `regenerate_on_demand`; the 46-test benchmark-contract
+  suite passes. PR #103 carries the self-contained contract, and all six x64
+  Landau physics tests plus the same benchmark suite pass before its CI rerun.
