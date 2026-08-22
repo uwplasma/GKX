@@ -345,6 +345,10 @@ imports where they are public. Each cut must preserve the API manifest, CLI
 snapshots, numerical gates, wheel smoke test, and accuracy-matched CPU/GPU
 profiles. The first cut is in PR #91: one shared first-zero autocorrelation
 estimator replaces runtime/post-hoc duplication and removes 21 source lines.
+The same campaign now enables GKX's existing persistent JAX cache before the
+runtime import. An identical two-process `4x4x4` CPU smoke fell from 7.11 s
+cold to 2.61 s warm; this compile-dominated 63% reduction is a workflow check,
+not a production-resolution timing claim. The running QA/QHS jobs predate it.
 The first package target is at most 190 files and 90,000 lines; lower targets
 follow only after import/coverage evidence identifies another coherent cut.
 

@@ -319,3 +319,9 @@
   no-alternates clone has 19 heads, 23 tags, 3,170 commits, 16,885 objects, a
   9,506,509-byte pack, 473,852-byte index, and 5,884,245-byte archive; strict
   `fsck` passes and no public ref was changed.
+- PR #91 commit `a067995b` enables the existing persistent JAX compilation
+  cache in the saturation campaign, which previously bypassed CLI setup. Two
+  identical `4x4x4` CPU processes took 7.11 s cold and 2.61 s warm (63% less
+  end-to-end); lint and the eight nonlinear artifact-contract tests pass. This
+  is compile-dominated workflow evidence only, and the running QA `Ny=160` and
+  QHS `t=500` jobs use the earlier revision.
