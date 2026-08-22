@@ -29,8 +29,7 @@ ntheta = 48
 nperiod = 1
 
 [time]
-# Stop only on the diagnosed saturation rule; t_max remains the hard cap.
-run_to = "saturation"
+# Use a fixed horizon until the saturation rule passes independent validation.
 t_max = 200.0
 dt = 0.1
 method = "rk3"

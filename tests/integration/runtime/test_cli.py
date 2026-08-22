@@ -2581,7 +2581,6 @@ def test_wout_default_deck_is_single_sourced_from_examples() -> None:
     assert data["species"][0]["fprim"] == 1.0
     assert data["grid"]["boundary"] == "fix aspect"
     assert data["geometry"]["torflux"] == 0.64
-    assert data["time"]["run_to"] == "saturation"
 
 
 def test_direct_config_shorthand_wout_positional_uses_default_deck(
