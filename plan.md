@@ -612,6 +612,17 @@ in the release contract: promotion requires hashed raw sources, observed time
 limits and averaging windows, and explicit stationarity, autocorrelation,
 timestep, perpendicular, parallel, velocity, and spectral gates.
 
+The accepted vacuum baseline/candidate boundaries have now been solved
+independently with VMEX commit `0362f701` at `ns=101`, `ftol=1e-10`,
+and `niter_max=15000`. Both return `ier_flag=0`: baseline/candidate need
+1,224/1,209 iterations, have aspect 5.00641/5.00698, and WOUT SHA-256
+`323dd3ef`/`58da1b89`. A compact TOML manifest binds the boundary-input
+hashes, VMEX commit, residuals, WOUTs, and figure generator. Regenerating the
+3D-LCFS/Boozer panel gives SHA-256 `f4cd87ab`, byte-identical to the tracked
+documentation asset. A matched `96x160x48`, `t=350`, seed-31 production
+pilot is queued behind the QI spatial rung; it is a sizing test, not a transport
+reduction claim.
+
 ### R3 — the plotted stellarator tube is a synthetic torus
 
 `gkx.flux_tube_3d` uses
@@ -769,6 +780,15 @@ index is 9,264,455 bytes; and the complete `.git` file sum is 9,597,923 bytes,
 alternates, and zero reachable AI-attribution matches pass. The candidate head
 names are exactly `main` plus all 24 open public PR branches. Closed topic heads
 still require a frozen delete/retain map, and no remote history has moved.
+
+PR #84 commit `55d41c09` adds the real-bug regression
+`t_window,max=t_diag,last` under output striding. All 41 CI checks pass. Its
+aggregate stable patch ID `d35a7a70` exactly matches private replay
+`bf8d5429`. A new ordinary no-local clone of the 25-head/28-tag candidate has
+3,446 commits and 17,582 objects: pack 8,778,044 bytes, pack plus index
+9,271,412 bytes, and complete `.git` file sum 9,604,932 bytes. Strict
+`fsck`, no alternates, and zero reachable AI-attribution matches pass, leaving
+395,068 bytes below the strict decimal gate. No public history moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.

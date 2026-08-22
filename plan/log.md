@@ -1146,3 +1146,20 @@
 - GPU 0 now runs the untouched QA Ny160 seed-33 holdout to `t=350`; GPU 1 runs
   the QI Ny160 spatial rung to `t=500`. Both use the same clean source-pinned
   `f7da8c49` checkout and frozen diagnostics policy.
+- The supplied QA artifact demonstrates the pre-#84 horizon defect exactly:
+  saved diagnostics end at `t=200.620`, while the rejected decision uses a
+  window through `t=238.025`. PR #84 commit `55d41c09` now asserts that a
+  rejected decision ends at the final saved diagnostic even under output
+  striding. All 15 chunk-loop tests, Ruff, and all 41 CI checks pass.
+- Replayed that regression privately as `bf8d5429`. The complete public and
+  candidate PR #84 patches share stable ID `d35a7a70`. A fresh no-local
+  candidate clone advertises 25 heads and 28 tags, with 3,446 commits, 17,582
+  objects, an 8,778,044-byte pack, and a 9,604,932-byte complete `.git`.
+  Strict `fsck`, no alternates, and zero AI-attribution hits pass; no public
+  history moved.
+- Solved the accepted QA baseline/candidate vacuum boundaries from exact GKX
+  inputs using clean VMEX `0362f701`, `ns=101`, `ftol=1e-10`. Both
+  converge with `ier_flag=0`; WOUT hashes are `323dd3ef` and `58da1b89`.
+  The hashed TOML manifest records inputs, residuals, geometry scalars, and
+  sources. Its regenerated 3D-LCFS/Boozer panel (`f4cd87ab`) exactly matches
+  the tracked figure. A matched production seed-31 pair is queued after QI.
