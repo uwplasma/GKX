@@ -325,3 +325,8 @@
   end-to-end); lint and the eight nonlinear artifact-contract tests pass. This
   is compile-dominated workflow evidence only, and the running QA `Ny=160` and
   QHS `t=500` jobs use the earlier revision.
+- A second literature/code pass added the 2025--2026 W7-X multiscale result and
+  the stellarator turbulence SSA analysis. The former makes the scope boundary
+  explicit: the current adiabatic-electron `ky*rho_i ~ 2` refinement is an
+  ion-scale tail test, not kinetic-electron/ETG convergence. SSA remains a
+  reviewer diagnostic for avalanches, not a production stopping dependency.

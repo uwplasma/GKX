@@ -32,6 +32,8 @@ operators and converged observables.
   https://arxiv.org/abs/0806.1069
 - Morel et al., dynamic gyrokinetic large-eddy procedure,
   https://arxiv.org/abs/1110.0747
+- Merlo et al., multiscale turbulence in stellarators,
+  https://arxiv.org/abs/2508.06116
 
 Leverage: boundary-condition tests must use real stellarator geometry;
 perpendicular pile-up can be numerical and must be resolved before transport is
@@ -39,7 +41,11 @@ trusted. Sánchez et al. show that required flux-tube length is
 configuration-dependent and that short W7-X tubes can disagree even between
 field-line labels; scan both `alpha` and `npol` rather than treating `Nz` on one
 tube as a complete parallel convergence test. LES-style closures are research
-options only after direct-resolution baselines exist.
+options only after direct-resolution baselines exist. Merlo et al. resolve
+separate ion/electron scales to `ky*rho_s < 46` and find cross-scale changes to
+zonal flows and transport. The present adiabatic-electron QA/QHS campaign is
+therefore an ion-scale validation only; extending `Ny` through `ky*rho_i ~ 2`
+tests its rising ion-scale tail, not kinetic-electron or multiscale convergence.
 
 ## Stochastic averages and stopping
 
@@ -50,6 +56,8 @@ options only after direct-resolution baselines exist.
   simulations, https://arxiv.org/abs/1902.10879
 - Rezaeiravesh et al., in-situ estimation of time-averaging uncertainties,
   https://arxiv.org/abs/2310.08676
+- Papadopoulos et al., statistical analysis of stellarator gyrokinetic
+  turbulence, https://arxiv.org/abs/2212.14219
 
 Leverage: remove burn-in by stationarity testing; account for autocorrelation;
 use batches of several correlation times; guard late drift; quote uncertainty,
@@ -63,7 +71,10 @@ Vaezi--Holland specifically warns that gyrokinetic flux uncertainty becomes
 harder near the critical gradient, so SAT-1 must be checked across drive, not
 only on the present `tprim=3` case. The low-memory in-situ ACF update is a
 future bounded-memory option; adopt it only if it reproduces offline batch/IAT
-uncertainties on GKX traces.
+uncertainties on GKX traces. Singular-spectrum/cluster analysis can flag
+avalanches and regime changes in difficult held-out traces, but it is a review
+diagnostic rather than the default stop rule until its added cost and false-stop
+rate beat the stationary-suffix gate.
 
 ## Nonlinear convergence and validation hierarchy
 
