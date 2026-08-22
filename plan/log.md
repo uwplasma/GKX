@@ -1200,3 +1200,25 @@
   A fresh 25-head/28-tag no-local clone has 3,451 commits, 17,614 objects, an
   8,700,585-byte pack, and a 9,528,529-byte complete `.git`; strict `fsck`,
   no alternates, and zero AI-attribution matches pass.
+- Independently audited open PRs #98 and #99. PR #98 removes only three exact
+  duplicates of the canonical dealiased spectral-layout helpers; array order
+  and every call site are unchanged, and 37 runtime-artifact tests, Ruff, and
+  mypy pass. PR #99 matches its parent bit-for-bit across randomized
+  float32/float64, complex64/complex128, nonfinite-signal, and four bounded-fit
+  windows, including R-squared and autocorrelation-corrected uncertainties;
+  all 52 diagnostic tests and static checks pass. No defect was found in either
+  small source-slimming patch.
+- Independently audited open PRs #102 and #103. PR #102 renders figures from
+  full deterministic LCFS/Boozer grids before replacing only the tracked JSON
+  copies with shapes, extrema, scope, parameters, configuration, histories,
+  scans, and traces; its sidecar falls from 423,062 to 113,526 bytes and both
+  regeneration tests pass. PR #103 preserves the Landau panel at 3,028 by 822
+  pixels with 255 colors and shrinks it from 371,750 to 151,626 bytes. Against
+  the prior RGBA render, mean absolute channel error is 0.066 and PSNR is
+  49.86 dB; visual review and all six x64 Landau physics tests pass. Neither PR
+  changes a numerical or physics result.
+- Clarified the repository-size contract. The private full-clone Git database
+  is below the decimal 10-MB gate, but the expanded post-#95/#103 tracked tree
+  is still 19,164,142 bytes. A sub-10-MB expanded checkout remains open and
+  must be reached through provenance-preserving artifact migration; the
+  3.35-MB installed source is not the cause of the original 133.70-MiB clone.

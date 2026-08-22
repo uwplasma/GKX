@@ -580,8 +580,11 @@ default. SHA-256: NPZ
 `bc3b7b47f39615ee9a5d8c6597805e58ca02ae205fc6080c57171bf98d4021d3`, JSON
 `d33d01e845d66b237fb1a240cc841983ac80306cc5e02907d6624bac90c4df50`, log
 `fe3de89cf3a3db34f27d0d45d887ab1e9fc52848f2d9e92acf0ca7f299e02024`.
-The untouched seed-33 QA holdout and the QI Ny=160 spatial rung are active on
-the two GPUs from the same clean source-pinned checkout.
+The untouched seed-33 QA holdout is complete. The independent QHS Ny=160
+seed-31 horizon run and the original QI Ny=160 seed-22 sizing run are active on
+the two GPUs. Because the QI log was collided, its lock-protected clean repeat
+is queued from PR #91 commit `eebff63b`; the original trace cannot be acceptance
+evidence.
 
 The source-pinned QA `96x96x48`, seed-31 rung then reached exact `t=250` in
 2,200.7 s. It also makes no frozen stop; the longest pass island is
@@ -758,6 +761,15 @@ the aggregate CI check and one non-author approval after the recovery rewrite.
 
 ## Repository recovery and slimming
 
+The user's sub-10-MB target is tracked in two distinct units. The hard clone
+gate is the complete Git object database for an ordinary full clone, including
+all live heads and tags; that private rehearsal is below 10,000,000 bytes. The
+expanded checkout is a separate target and is **not** yet below 10 MB: the
+post-#95/#103 slim tree is 19,164,142 tracked bytes. The installed `src/gkx`
+tree is about 3.35 MB. Reaching a sub-10-MB expanded checkout therefore requires
+moving more reproducible documentation/evidence payloads to hash-addressed
+release assets, not deleting physics, tests, or provenance blindly.
+
 Measured before rewrite:
 
 | Quantity | Value |
@@ -827,10 +839,10 @@ merge `14442da2` carries that contract into the reproducible saturation replay;
 commit `eebff63b` adds atomic output locks after a real duplicate-writer event.
 Private replays `bf8d5429`, `0b1d6ced`, and `eab1327d` have exact stable patch
 IDs; the complete public/candidate PR #91 patch shares ID `4c2b67d8`. A new
-ordinary no-local clone of the 25-head/28-tag candidate has 3,451 commits and
-17,614 objects: pack 8,700,585 bytes, pack plus index 9,194,849 bytes, and
-complete `.git` file sum 9,528,529 bytes. Strict `fsck`, no alternates, and zero
-reachable AI-attribution matches pass, leaving 471,471 bytes below the strict
+ordinary no-local clone of the 25-head/28-tag candidate has 3,452 commits and
+17,620 objects: pack 8,702,296 bytes, pack plus index 9,196,728 bytes, and
+complete `.git` file sum 9,530,432 bytes. Strict `fsck`, no alternates, and zero
+reachable AI-attribution matches pass, leaving 469,568 bytes below the strict
 decimal gate. No public history moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and

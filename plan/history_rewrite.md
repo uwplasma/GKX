@@ -266,8 +266,9 @@ The current rehearsal additionally replays PR #84 commit `55d41c09` as
 output-lock commit `eebff63b` are replayed as `0b1d6ced` and `eab1327d`; the
 complete public/candidate PR #91 patches share stable ID
 `4c2b67d88380fdd8805deea2832bd9020f78a19e`. A fresh ordinary `--no-local`
-clone advertises 25 heads and 28 tags, with 3,451 commits and 17,614 objects.
-Its pack is 8,700,585 bytes, pack plus index is 9,194,849, and the complete
-`.git` file sum is 9,528,529 bytes. Strict `fsck`, no object alternate, and the
-reachable-attribution scan all pass; the strict decimal margin is 471,471
-bytes. This remains a private rehearsal.
+clone after replaying the output-lock and roadmap commits advertises 25 heads
+and 28 tags, with 3,452 commits and 17,620 objects. Its pack is 8,702,296 bytes,
+pack plus index is 9,196,728, and the complete `.git` file sum is 9,530,432
+bytes. Strict `fsck`, no object alternate, and the reachable-attribution scan
+all pass; the strict decimal margin is 469,568 bytes. This remains a private
+rehearsal.
