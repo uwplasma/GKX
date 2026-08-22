@@ -946,3 +946,12 @@
   GPU 1 continues the clean QI Ny128 state toward absolute `t=500`, then runs
   QA Ny160 seed 22 and the `cfl=0.5` seed-31 timestep check. GPU 0 runs the clean
   QHS Ny128 match to `t=750`, then continues QA Ny160 seed 31 to `t=350`.
+- Replayed both new PR #91 commits and the exact preceding roadmap tree into
+  the private rewrite candidate. The public/candidate stable patch IDs match
+  (`0f1a8dff` and `aa037281`); the public and candidate `plan.md` blob and
+  `plan/` tree IDs are exact, and non-plan roadmap paths are unchanged from the
+  rewritten CI base. A fresh no-local clone has 25 heads, 28 tags, 3,427
+  commits, 17,469 objects, an 8,723,042-byte pack, a 490,204-byte index, and a
+  9,546,342-byte complete `.git` file sum. Strict `fsck`, zero alternates, and
+  the reachable-metadata attribution scan pass. The rehearsal ref map and
+  bundle remain stale by design; no public ref moved.

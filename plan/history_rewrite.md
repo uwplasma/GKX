@@ -243,13 +243,14 @@ generators. The final rewrite maps both loop blobs
 `8be00988b25d0ed1218dd14e6cc56e3a004e16a9`. No obsolete rendering remains
 reachable in the rehearsal.
 
-Immediately before this record, a fresh no-alternates clone has an
-8,654,462-byte network-equivalent pack, a 489,560-byte index, 9,144,022 bytes
-for pack plus index, a 9,476,998-byte complete `.git` file sum, and a
+Immediately before this record, a fresh no-alternates clone of all 25 heads and
+28 tags has 3,427 commits and 17,469 objects: an 8,723,042-byte
+network-equivalent pack, a 490,204-byte index, 9,213,246 bytes for pack plus
+index, a 9,546,342-byte complete `.git` file sum, and the unchanged
 4,888,710-byte current-tree archive. Strict
 `fsck` passes, the clone has no object alternate, and reachable commit metadata
 has no AI attribution marker. This closes the local public-ref size gate with
-1,345,538 bytes of transfer-pack margin and 523,002 bytes under the stricter
+1,276,958 bytes of transfer-pack margin and 453,658 bytes under the stricter
 complete-`.git` decimal gate. The user's 2026-08-21 request authorizes a
 coordinated forced rewrite, but authorization does not replace the remaining
 safety gates: land only reviewed slimming prerequisites in the intended main
