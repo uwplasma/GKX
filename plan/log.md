@@ -497,3 +497,13 @@
   bytes, and the compressed tree archive is 5,363,108 bytes. Strict `fsck`,
   30 recent stable patch-ID comparisons, and the AI-attribution scan pass. No
   public ref moved.
+- Auditing the live office processes exposed an editable-install leak: the PR
+  #91 campaign scripts imported GKX from `/home/rjorge/gkx-wt/main` at
+  `c749abfa`, not their own checkout. The intended branch changes exact-horizon
+  plumbing in three nonlinear solver modules, so all preceding office traces
+  are retained as sizing/negative-design evidence but removed from acceptance
+  status. Partial continuation/QI jobs were stopped without deleting their
+  logs. PR #91 commit `f7da8c49` now fails closed on a mismatched source and
+  stores source path, commit, and dirty state in every artifact. QHS Ny=160 and
+  QI restarted from zero; both logs begin with the clean in-checkout source
+  `f7da8c49b803c738de67971bbab343a196f8f44e`.

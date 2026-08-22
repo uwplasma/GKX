@@ -224,7 +224,7 @@ training bias. It was frozen before QA seed 31, QHS Ny=160, and QI finished.
 The first two fresh scores are now recorded below; QI decides the remaining
 holdout without further threshold tuning.
 
-The first untouched holdout, QHS `64x160x48` seed 22, reached
+The first nominal holdout, QHS `64x160x48` seed 22, reached
 `t=250.320` in 3,219.4 s. The frozen `75+60` rule makes no stop, so it avoids a
 false acceptance but saves no time on this case. Over the declared
 `t=150--250` audit window,
@@ -243,15 +243,16 @@ drifting transport cannot yet be compared with Ny=128. An exact-state
 continuation to absolute `t=500` is running. The compact trace SHA-256 is
 `09d67e8679713aa4d872ed76a0ecabcd8001c8a79f05e46f24e70e98bc16f81e`.
 
-The second untouched holdout, QA `96x160x48` seed 31, reached `t=250.186` in
+The second nominal holdout, QA `96x160x48` seed 31, reached `t=250.186` in
 5,315.5 s. Its `t=150--250` window passes Q/Wphi/Wg stationarity with
 `Q=10.9623 +/- 0.2817` (2.57%). Seed 22 gives `10.6374 +/- 0.2761` under the
 same calculation: the 3.01% spread is 0.82 combined standard errors, and the
 conservative replicated result is `Q=10.7999 +/- 0.2817` (2.61%). The frozen
 rule stops at `t=215.947`, saves 13.7% of the fixed horizon, and reports
-`Q=10.8424`, 1.09% below the seed-31 final-window mean. Its first two fresh
-scores therefore contain no false stop: one useful QA stop and one QHS
-non-stop. QI remains untouched and no retuning is allowed.
+`Q=10.8424`, 1.09% below the seed-31 final-window mean. Numerically, the first
+two nominal scores contain no false stop: one useful QA stop and one QHS
+non-stop. QI was not scored before its source-pinned rerun, and no retuning is
+allowed.
 
 The seed-31 heat-flux cutoff/peak is 8.05%, its last-three-bin mass is 1.48%,
 and the corresponding `Phi2` values are 8.80% and 1.37%; outer-six-`kx` masses
@@ -259,6 +260,17 @@ are 0.12% and 0.38%. Both independent Ny=160 seeds pass the necessary spatial
 screen and agree statistically. A matched Ny=128 seed-31 rung is still needed
 before calling the Ny convergence seed-independent. Trace SHA-256:
 `eb8541d337504d94579f60bcc4f3288ee6c9ff7c7fdec5297d14ce9526bfdc6f`.
+
+A subsequent environment audit found that every office campaign above used
+the PR #91 tool checkout but imported GKX from the older editable worktree at
+`c749abfa`. The intended branch differs in exact-horizon plumbing in three
+nonlinear solver modules; its operators and geometry are unchanged, but a
+research-grade holdout cannot rely on that inference. These runs remain useful
+for sizing and hypothesis rejection, not acceptance. PR #91 commit `f7da8c49`
+now fails closed unless the campaign imports its own checkout and embeds the
+source path, Git commit, and dirty state in NPZ/state/JSON outputs. QHS Ny=160
+and QI restarted from zero with a logged clean `f7da8c49` source; QA seed 31
+and its Ny=128 match must also be repeated. The frozen rule is not retuned.
 
 The matched QA `96x128x48` rung completed at `t=250` in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
@@ -609,7 +621,7 @@ MP4 SHA-256:
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace capture | synthetic + held-out long traces |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; source budget restored |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS Ny scan | QA Ny=128 seed-31 match and stationary QHS Ny=160 continuation pending |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS Ny scan | source-pinned QA seed replication and stationary QHS Ny=160 continuation pending |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
