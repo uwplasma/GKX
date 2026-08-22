@@ -1143,9 +1143,9 @@
   stabilized-march, online-gradient-flow, and wall-turbulence studies. The
   finite-window discrete adjoint therefore remains the one supported GKX API;
   no inaccessible paper is presently blocking the audit.
-- GPU 0 now runs the untouched QA Ny160 seed-33 holdout to `t=350`; GPU 1 runs
-  the QI Ny160 spatial rung to `t=500`. Both use the same clean source-pinned
-  `f7da8c49` checkout and frozen diagnostics policy.
+- The untouched QA Ny160 seed-33 holdout completed exact `t=350`; GPU 0 advanced
+  to the queued QHS Ny160 run while GPU 1 continues the QI Ny160 rung. All
+  use the same clean source-pinned `f7da8c49` checkout and frozen policy.
 - The supplied QA artifact demonstrates the pre-#84 horizon defect exactly:
   saved diagnostics end at `t=200.620`, while the rejected decision uses a
   window through `t=238.025`. PR #84 commit `55d41c09` now asserts that a
@@ -1166,8 +1166,23 @@
 - PR #91 became conflicting only because its base gained PR #84's exact-horizon
   regression. Merge `14442da2` resolves the overlap by testing the saved-horizon
   identity together with the Q/Wphi/Wg callback. All 42 focused contract tests,
-  Ruff, and diff checks pass; the full CI matrix is running. Private replay
+  Ruff, diff checks, and all 41 CI checks pass. Private replay
   `0b1d6ced` has the exact full-PR stable patch ID `5f92a366`. A fresh
   no-local 25-head/28-tag clone has 3,448 commits, 17,594 objects, an
   8,749,159-byte pack, and a 9,576,463-byte complete `.git`; strict `fsck`,
   zero alternates, and zero AI-attribution matches pass. No public history moved.
+- Re-reviewed PRs #86/#96/#97 and the source-pinned QA movie. The 122 focused
+  geometry/artifact tests and Ruff pass; 48-point finite VMEC coordinates,
+  `nfp=2`, open-tube topology, evolving cuts, and the 218,799-byte encoding are
+  correct. Schema 3 nevertheless copies only the source path and saturation
+  flag, not the source-state hash or full campaign identity. The artifact is
+  accepted as a rendering/continuation test, not transport evidence. MOV-1 now
+  requires PR #91 identity agreement plus a persisted source-state hash.
+- Froze the untouched QA Ny160 seed-33 artifacts at exact `t=350`: NPZ/JSON/log
+  hashes start `57a9736b/e891acdc/35d5c050`, wall time is 7,106.8 s, and all
+  1,055 scalar samples are finite. The standard `75+60` replay makes no stop.
+  The preregistered `125+30` rule stops at `t=184.186`; Q/Wphi/Wg pass there,
+  heat-tail ratio is 9.924%, and its Q is within 1.39% or 0.31 combined SEM of
+  the unseen final mean. The hypothesis still fails its frozen fifth criterion:
+  final `t=250--350` Wphi and Wg are nonstationary. No threshold was retuned.
+  Seed-33 terminal Q agrees with seeds 22/31 within 0.015/0.46 combined SEM.

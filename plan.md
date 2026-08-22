@@ -496,6 +496,36 @@ Continuation SHA-256: NPZ
 `29b96bf8d1fc0d9e9b6a6fdbe42da0cf2c5b3763ff7ab28f2883d511d4167f42`, log
 `b9f56670afdf3f05e89509bba93d415063c9dae0332b5ed4f50bba491bc29ed9`.
 
+The untouched Ny=160 seed-33 holdout then reached exact `t=350` in 7,106.8 s
+with 1,055 samples. The standard `75+60` replay makes no stop; its longest pass
+island is 48.59 time units. The preregistered `125+30` hypothesis would stop at
+`t=184.186` on `t=59.330--184.186`, with
+
+\[
+ Q_{stop}=10.8984\pm0.2445,
+\]
+
+and passing Q/Wphi/Wg autocorrelation and half-window gates. Its heat-tail ratio
+is 9.924%, just below the fixed 10% limit; last-three-`ky` and outer-six-`kx`
+heat masses are 1.531% and 0.118%. The unseen terminal `t=250.181--350` mean is
+
+\[
+ Q_{33}=10.7489\pm0.4246.
+\]
+
+The stop differs by only 1.39%, or 0.31 combined SEM, and the terminal heat
+spectrum passes at 9.237% tail, 1.540% last-three-`ky` mass, and 0.117%
+outer-six-`kx` mass. Criterion 5 nevertheless fails: terminal Wphi falls from
+1.6345 to 1.5021 between halves and Wg from 235.05 to 212.11, so both are
+nonstationary even though Q passes. Seed 33 agrees with seed 22 to 0.015
+combined SEM and seed 31 to 0.46 SEM on the same terminal window. Thus three
+seeds support the long-window transport mean, but the held-out shortcut is
+rejected exactly as preregistered and is not retuned. NPZ/JSON/log SHA-256:
+`57a9736b744280b869fd642af945a1e18e9baadd0889729b6225baea7a2d2436`,
+`e891acdcc69a566d942c0305a3e74d6af8043d78e4824f5b01723cee596d0e86`,
+`35d5c0509bbab0266cd0c607788f27140dbe08b4f9c058aea5c01c27fe5dfb97`;
+preregistered replay `c2fb94a9`, standard replay `f152057c`.
+
 The matched Ny=192 seed-31 rung reached exact `t=250` in 6,594.6 s with 843
 samples. Its frozen rule stops at `t=218.783` after 60.17 time units of
 persistence, while Ny=160 at the same seed still makes no stop. The causal
@@ -994,6 +1024,15 @@ artifact. Snapshot SHA-256:
 MP4 SHA-256:
 `628b1cff237b5b5f77816579463b78585ab94eb82448598b0757cc41bb53e7a7`.
 
+Independent re-review narrows that result: schema 3 records the source-state
+path and copied `saturated` flag, but not the source-state content hash or the
+campaign's input/VMEC/source identity. The hashes above bind the rendered cuts
+and movie, not the restart that produced them. Treat this as physical-rendering
+and continuation acceptance only. Before citing a movie as transport evidence,
+compose PR #97 with PR #91's state-identity contract, require exact identity
+agreement, and persist the source-state hash; legacy states must be labelled
+unverified rather than silently promoted.
+
 ## Work queue
 
 | ID | Priority | Status | Deliverable | Gate |
@@ -1001,12 +1040,12 @@ MP4 SHA-256:
 | CI-1 | P0 | ready for review | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 checks green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
-| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS make no accepted stop |
+| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | preregistered QA shortcut fails unseen Wphi/Wg; QI/QHS make no accepted stop |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA Ny160/192 and CFL means agree; QI Ny160 active; stop changes with seed/resolution/timestep |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | three QA Ny160 means agree; QI Ny160 active; stop changes with seed/resolution/timestep |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | definitions pass; fixed horizon retained until SAT-1 passes |
-| MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
+| MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
 | SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids; latest pre-record rehearsal `.git` is below 9.59 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
