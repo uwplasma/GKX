@@ -97,6 +97,27 @@ def test_saturation_campaign_does_not_duplicate_requested_npz_trace(
     assert len(inline["trace"]) == 3
 
 
+def test_saturation_campaign_locks_output_paths_between_processes(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    target = tmp_path / "campaign.npz"
+
+    first = campaign._campaign_output_locks((target, None, target))
+    try:
+        assert len(first) == 1
+        assert "pid=" in (tmp_path / "campaign.npz.lock").read_text()
+        with pytest.raises(SystemExit, match="campaign output is locked"):
+            campaign._campaign_output_locks((target,))
+    finally:
+        for handle in first:
+            handle.close()
+
+    second = campaign._campaign_output_locks((target,))
+    for handle in second:
+        handle.close()
+
+
 def test_saturation_campaign_cannot_promote_a_continuation_segment() -> None:
     campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
     report = {"saturated": True, "reasons": []}

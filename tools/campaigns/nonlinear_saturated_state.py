@@ -25,8 +25,10 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import fcntl
 import hashlib
 import json
+import os
 import subprocess
 import tempfile
 import time
@@ -34,6 +36,37 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
+
+
+def _campaign_output_locks(paths: Sequence[Path | None]) -> list[Any]:
+    """Lock requested artifacts so two campaigns cannot share output paths."""
+    handles: list[Any] = []
+    targets = sorted({path.resolve() for path in paths if path is not None})
+    try:
+        for target in targets:
+            lock_path = Path(f"{target}.lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            handle = lock_path.open("a+", encoding="utf-8")
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                handle.seek(0)
+                owner = handle.read().strip() or "another process"
+                handle.close()
+                raise SystemExit(f"campaign output is locked by {owner}: {target}")
+            handle.seek(0)
+            handle.truncate()
+            handle.write(
+                f"pid={os.getpid()} host={os.uname().nodename} "
+                f"started_unix={time.time():.6f}\n"
+            )
+            handle.flush()
+            handles.append(handle)
+    except BaseException:
+        for handle in handles:
+            handle.close()
+        raise
+    return handles
 
 
 def _git_output(repository: Path, *args: str) -> str | None:
@@ -656,6 +689,9 @@ def main() -> int:
     parser.add_argument("--replay-rel-sem", type=float, default=0.05)
     parser.add_argument("--replay-min-tau-multiples", type=float, default=10.0)
     args = parser.parse_args()
+    args._output_locks = _campaign_output_locks(
+        (args.output, args.trace_out, args.state_out)
+    )
     if args.replay_trace is not None:
         return _run_policy_replay(args)
 
