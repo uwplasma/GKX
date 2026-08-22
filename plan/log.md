@@ -384,3 +384,10 @@
   quick-test shards retain 15 minutes. Workflow parsing, five repository gates,
   and release readiness pass locally. This is a runner-budget repair, not a
   test or physics failure.
+- Refreshed the non-destructive history rehearsal through PR #98 and the latest
+  saturation/roadmap/CI commits. Its 20 heads exactly equal `main` plus all 19
+  open PR heads; all 23 tags survive. A fresh no-alternates clone has 3,184
+  commits, 16,981 objects, a 9,042,520-byte pack, 9,519,060 bytes with its
+  index, and a 5,408,247-byte source archive. Strict `fsck`, 14 stable patch-ID
+  comparisons, and the commit-metadata AI-marker scan pass. No public ref was
+  changed.

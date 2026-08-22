@@ -390,11 +390,12 @@ Before the coordinated force push:
 Do not force-push until those checks and the recovery bundle are reviewable.
 
 PR #95 now re-encodes the six-second README loop from its primary release MP4:
-`828,066 -> 346,234` bytes at 900 px and 5 fps. Substituting that blob in the
-19-head rehearsal lowers its pack from 9,506,509 to 9,030,044 bytes and
-pack-plus-index to 9,503,896 bytes. This creates useful margin, but it is not
-the final cutover measurement because PR #91, PR #95, and roadmap heads have
-advanced since the preceding public-ref replay.
+`828,066 -> 346,234` bytes at 900 px and 5 fps. The refreshed 20-head rehearsal
+(`main` plus all 19 open PRs through #98) has a 9,042,520-byte pack,
+9,519,060 bytes including its index, and a 5,408,247-byte current-tree archive.
+Strict `fsck`, stable patch IDs for all 14 new replayed commits, exact live-head
+parity, and the AI-attribution scan pass. This is still not force-push
+authorization; recovery publication and the coordinated cutover gates remain.
 
 ## Validation campaign
 
