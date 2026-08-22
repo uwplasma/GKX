@@ -1295,3 +1295,12 @@
   Stopped only the idle waiter and replaced it with absolute paths rooted at
   clean PR #91 commit `eebff63b`. The clean QI Ny160 run is active on GPU 0,
   imports that exact checkout, and holds all three output locks.
+- PR #105 is fully green at `9204d1a8`: all 41 required checks pass and the
+  nightly job is intentionally skipped.
+- Replayed the QHS evidence as private commit `1be3af15`; its stable patch ID
+  and both changed roadmap blobs exactly match public commit `baa35d70`. A
+  fresh ordinary clone of all current candidate refs has 28 remote refs, 28
+  tags, 3,469 commits, and 17,744 objects; pack 8,835,722 bytes, pack plus
+  index 9,333,626 bytes, and complete `.git` 9,668,005 bytes. Strict `fsck`,
+  no alternates, and zero AI-attribution metadata pass. This measurement
+  precedes this record; no public history moved.
