@@ -124,7 +124,15 @@ class _RuntimeLinearFitOptions:
     growth_weight: float
     require_positive: bool
     min_amp_fraction: float
-    window_method: str = "stationary"
+    window_method: str
+
+    def fit_fields(self) -> dict[str, Any]:
+        """Return only the shared fit keywords, including from subclasses."""
+
+        return {
+            name: getattr(self, name)
+            for name in _RuntimeLinearFitOptions.__annotations__
+        }
 
 
 @dataclass(frozen=True)

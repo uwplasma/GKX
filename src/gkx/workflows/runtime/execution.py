@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.workflows.runtime.diagnostics import _RuntimeLinearFitOptions
 from gkx.workflows.runtime.results import RuntimeLinearResult, RuntimeNonlinearResult
 
 
@@ -19,7 +20,7 @@ class RuntimeLinearDispatchDeps:
 
 
 @dataclass(frozen=True)
-class _RuntimeLinearRequest:
+class _RuntimeLinearRequest(_RuntimeLinearFitOptions):
     cfg: RuntimeConfig
     ky_target: float
     Nl: int | None
@@ -29,18 +30,7 @@ class _RuntimeLinearRequest:
     dt: float | None
     steps: int | None
     sample_stride: int | None
-    auto_window: bool
-    tmin: float | None
-    tmax: float | None
-    window_fraction: float
-    min_points: int
-    start_fraction: float
-    growth_weight: float
-    require_positive: bool
-    min_amp_fraction: float
-    window_method: str
     krylov_cfg: Any
-    mode_method: str
     fit_signal: str
     return_state: bool
     initial_state: Any | None
@@ -116,18 +106,8 @@ def _run_full_linear_request(
         dt=request.dt,
         steps=request.steps,
         sample_stride=request.sample_stride,
-        auto_window=request.auto_window,
-        tmin=request.tmin,
-        tmax=request.tmax,
-        window_fraction=request.window_fraction,
-        min_points=request.min_points,
-        start_fraction=request.start_fraction,
-        growth_weight=request.growth_weight,
-        require_positive=request.require_positive,
-        min_amp_fraction=request.min_amp_fraction,
-        window_method=request.window_method,
+        **request.fit_fields(),
         krylov_cfg=request.krylov_cfg,
-        mode_method=request.mode_method,
         fit_signal=request.fit_signal,
         return_state=request.return_state,
         initial_state=request.initial_state,

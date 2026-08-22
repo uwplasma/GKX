@@ -10,7 +10,10 @@ import numpy as np
 
 from gkx.diagnostics.modes import ModeSelection
 from gkx.workflows.runtime.config import RuntimeConfig
-from gkx.workflows.runtime.diagnostics import ensure_finite_linear_history
+from gkx.workflows.runtime.diagnostics import (
+    _RuntimeLinearFitOptions,
+    ensure_finite_linear_history,
+)
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,
     RuntimeLinearScanResult,
@@ -23,6 +26,7 @@ from gkx.workflows.runtime.warm_start import (
     relative_change,
     scan_visit_order,
 )
+
 
 class RuntimeScanBatchDeps(Protocol):
     """Dependency surface needed by the combined-ky scan batch helper."""
@@ -75,22 +79,11 @@ class _BatchDiagnostics:
 
 
 @dataclass(frozen=True)
-class _RuntimeScanOptions:
+class _RuntimeScanOptions(_RuntimeLinearFitOptions):
     method: str | None
     dt: float | None
     steps: int | None
     sample_stride: int | None
-    auto_window: bool
-    tmin: float | None
-    tmax: float | None
-    window_fraction: float
-    min_points: int
-    start_fraction: float
-    growth_weight: float
-    require_positive: bool
-    min_amp_fraction: float
-    window_method: str
-    mode_method: str
     fit_signal: str
     show_progress: bool
 
