@@ -701,3 +701,27 @@
   QHS `t=750` on GPU 0 and QI Ny=128 seed 22 behind the QI `t=500`
   continuation on GPU 1. These close independent-seed and failed-Ny screens;
   partial outputs are not evidence.
+- Corrected the roadmap replay after finding that its pre-#81 ancestry restored
+  the old 15-minute nonlinear CI timeout. Commit `dd2e6b4c` makes every
+  non-plan file exactly match the CI-fix base; the roadmap branch is again a
+  source-neutral living record.
+- Audited the largest remaining current JSON by field and literal consumer.
+  Of 423,062 bytes, 344,449 were deterministic reduced diagnostics, chiefly
+  the artifact's 44-by-44 LCFS and Boozer grids; the comparison writer already
+  retained only shapes, extrema, and scope. Opened draft PR #102 on #92 to
+  apply that same contract to single-result sidecars after rendering. The
+  nonlinear JSON is now 113,526 bytes (73.2% smaller), while histories,
+  nonlinear traces, scans, summaries, and rendered figures remain. Focused tests, Ruff, the
+  repository-size gate, and diff checks pass locally.
+- Rebuilt the private rehearsal with the corrected roadmap tree and one hosted
+  exact-tree roadmap snapshot. Full roadmap commit history remains in the
+  verified recovery bundle. Replacing only the exact 423,062-byte raw-grid
+  blob with PR #102's compact form leaves older sidecar revisions unchanged.
+  A fresh no-alternates clone now has 24 heads, 28 tags, 3,414 commits, and
+  17,366 objects; its pack is 9,067,221 bytes, pack plus index 9,554,541,
+  complete `.git` 9,887,091, and current archive 5,332,787 bytes. Strict
+  `fsck` and the AI-attribution scan pass. This is a rehearsal, not permission
+  to force-push before review, recovery publication, and a real network clone.
+- The source-pinned QHS `t=500--750` and QI `t=250--500` continuations remain
+  active on separate office GPUs. Their queued Ny=160 QA and Ny=128 QI rungs
+  have not started, and no partial output has been interpreted.

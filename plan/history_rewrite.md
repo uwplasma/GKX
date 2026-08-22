@@ -214,17 +214,23 @@ the other sixteen are replayed from their true PR bases. Aggregate patch IDs
 match for every textual patch; PR #90 alone omits a generated PNG that PR #95
 intentionally removes. No replayed head reaches the old `main` object graph.
 
-Immediately before the present measurement-recording commit, the refreshed
-ordinary clone advertises 22 heads (`main` plus the 21 PR heads through #100)
-and all 28 remote tags, with 3,458 reachable commits and 17,584 objects. Its
-network-equivalent pack is 9,133,421 bytes; pack plus index is 9,626,845 bytes,
-the complete `.git` directory is 9,960,094 logical bytes, and the compressed current-tree
-archive is 5,363,108 bytes. Strict `fsck` passes. All current replayed head
-patches have exact stable patch-ID matches, the clone has no object alternate,
-and the reachable commit metadata has no AI attribution marker. This closes the local
-public-ref size gate. The unpacked checkout remains 19,558,568 logical bytes;
-that is a separate source-slimming target, not transferred Git history. The
-user's 2026-08-21 request authorizes a
+The refreshed ordinary clone now advertises 24 heads (`main` plus every open PR
+head through #102) and all 28 remote tags, with 3,414 reachable commits and
+17,366 objects. PR #82 is represented by one exact-current-tree snapshot; its
+incremental roadmap history remains in the recovery bundle and ref map. PR #102
+also corrects the single-result artifact writer so deterministic rendered grids
+are summarized like the comparison sidecar. The tracked nonlinear optimization
+JSON is 113,526 bytes instead of 423,062 bytes. During rewriting, only Git blob
+`45a40017c94bee2b6cca8e5a2b35573457c2db55` is substituted; earlier
+compact/placeholder revisions remain unchanged.
+
+A fresh no-alternates clone has a 9,067,221-byte network-equivalent pack, a
+487,320-byte index, 9,554,541 bytes for pack plus index, a 9,887,091-byte
+complete `.git` file sum, and a 5,332,787-byte current-tree archive. Strict
+`fsck` passes, the clone has no object alternate, and reachable commit metadata
+has no AI attribution marker. This closes the local public-ref size gate with
+932,779 bytes of transfer-pack margin and 112,909 bytes under the stricter
+complete-`.git` decimal gate. The user's 2026-08-21 request authorizes a
 coordinated forced rewrite, but authorization does not replace the remaining
 safety gates: land only reviewed slimming prerequisites in the intended main
 tree, freeze and publish the remote ref map, publish the recovery material, run
@@ -232,8 +238,6 @@ representative CPU/GPU examples, and verify a real GitHub network clone before
 restoring branch protection. Until those prerequisite PRs are reviewed, moving
 the rehearsal's `main` ref would merge their contents by force push and is not
 an admissible substitute for review.
-Only 39,906 decimal bytes remain in the complete-`.git` gate, so the margin
-forbids another tracked render or raw report without removing equivalent payload.
 
 PR #95 subsequently replaced the README loop from the primary 120-frame MP4,
 keeping the same six-second interval as 30 WebP frames at 900 px: 828,066 bytes

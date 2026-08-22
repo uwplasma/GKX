@@ -488,10 +488,25 @@ history. Keeping every historical generated plot/test/tool blob is incompatible
 with that target.
 
 The source-complete public-ref rehearsal also passes. The refreshed candidate
-maps `main` plus every open PR head through #101, retains all 28 remote tags,
-passes
-strict `fsck`, and contains no AI attribution marker. Closed topic heads still
-require a frozen delete/retain map, and no remote history has moved.
+maps `main` plus every open PR head through #102, retains all 28 remote tags,
+passes strict `fsck`, and contains no AI attribution marker. PR #102 fixes an
+asymmetric artifact writer: comparison JSON already summarized deterministic
+LCFS/Boozer grids, while each single-result JSON retained the full arrays after
+rendering. The nonlinear sidecar falls from 423,062 to 113,526 bytes without
+changing the figure, history, trace, scans, grid shapes/ranges, or scope labels.
+
+The rewrite replaces only Git blob `45a40017c94bee2b6cca8e5a2b35573457c2db55`
+(423,062 bytes) with its faithful compact representation; older 38-kB and
+placeholder revisions remain untouched. PR #82 is hosted as one
+exact-current-tree roadmap snapshot whose
+parent is the rewritten CI-fix head. Its full incremental history remains in
+the verified recovery bundle and old-to-new ref map. This avoids making a
+living log consume most of the size margin while preserving its recoverability.
+A fresh no-alternates clone has 24 heads, 28 tags, 3,414 commits, and 17,366
+objects. Its transfer pack is 9,067,221 bytes; pack plus index is 9,554,541
+bytes; the complete `.git` file sum is 9,887,091 bytes; and the current archive
+is 5,332,787 bytes. Closed topic heads still require a frozen delete/retain map,
+and no remote history has moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
@@ -701,7 +716,7 @@ MP4 SHA-256:
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | corrected PR #88 removes 7.70 MB; public-ref rewrite rehearsal passes | freeze closed-head map, publish recovery records, then network-clone gate |
+| SLIM-1 | P1 | active/review | corrected PR #88 removes 7.70 MB; PR #102 compacts deterministic grids; 9,067,221-byte all-live-ref pack passes | freeze closed-head map, publish recovery records, then real network-clone gate |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
 
