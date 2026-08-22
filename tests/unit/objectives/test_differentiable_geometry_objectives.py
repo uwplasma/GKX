@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-
+import inspect
 
 # ---- test_differentiable_geometry_bridge.py ----
 
@@ -352,6 +352,12 @@ def test_boozer_field_line_derivative_helpers_match_circular_surface() -> None:
 def test_flux_tube_geometry_from_vmec_boozer_state_wraps_in_memory_bridge(
     monkeypatch,
 ) -> None:
+    assert inspect.signature(flux_tube_geometry_from_vmec_boozer_state) == (
+        inspect.signature(vmec_boozer_core.flux_tube_geometry_from_vmec_boozer_state)
+    )
+    assert getattr(flux_tube_geometry_from_vmec_boozer_state, "__wrapped__") is (
+        vmec_boozer_core.flux_tube_geometry_from_vmec_boozer_state
+    )
     calls: list[dict[str, object]] = []
 
     def fake_core_profiles(state, static, indata, wout, **kwargs):  # noqa: ANN001, ANN202

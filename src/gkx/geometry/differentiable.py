@@ -57,7 +57,6 @@ from gkx.geometry.sensitivity import (
 )
 
 
-_VMEC_BOOZER_PARITY_MIN_MODE_COUNT = 21
 _DEFAULT_DISCOVER_DIFFERENTIABLE_GEOMETRY_BACKENDS = (
     discover_differentiable_geometry_backends
 )
