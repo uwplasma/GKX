@@ -825,3 +825,11 @@
   `cfb73f915a6cd959c7b6f0c279210f9942caecbe96c4e93ddf4d0f09192de294`.
   These are local rehearsal artifacts, not a cutover manifest: re-freeze and
   revalidate every GitHub SHA immediately before any coordinated ref move.
+- Merged PR #81's CI-only cleanup margin into PR #91 after every nonlinear
+  assertion passed but the old 15-minute wrapper killed that branch during
+  teardown. The public rerun is pending; the continuation logic is unchanged.
+  Replaying the same merge in the private candidate gives 25 heads, 28 tags,
+  3,423 commits, and 17,435 objects. A fresh no-alternates clone has an
+  8,632,357-byte pack and 9,454,569-byte complete `.git`; strict `fsck` and the
+  reachable-attribution scan pass. The earlier ref map and bundle remain
+  rehearsal snapshots and must not be used as the final cutover manifest.
