@@ -102,6 +102,12 @@ def _campaign_source_provenance(package_file: str | Path) -> dict[str, object]:
     }
 
 
+def _campaign_progress(message: str) -> None:
+    """Print one host-side, cumulative runtime progress update."""
+
+    print(f"[gkx] {message}", flush=True)
+
+
 def _npz_source_provenance(provenance: dict[str, object]) -> dict[str, np.ndarray]:
     """Encode source provenance without object arrays or pickle."""
     dirty = provenance["git_dirty"]
@@ -839,6 +845,7 @@ def main() -> int:
             return_state=True,
             diagnostics=True,
             show_progress=args.progress,
+            status_callback=_campaign_progress if args.progress else None,
         )
 
     started = time.time()

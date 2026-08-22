@@ -26,6 +26,19 @@ window_readiness = window_ensemble
 FLOW_SHEAR_GATE = ROOT / "docs" / "_static" / "flow_shear_fixed_step_response_gate.json"
 
 
+def test_saturation_campaign_prints_cumulative_runtime_progress(capsys) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+
+    campaign._campaign_progress(
+        "completed nonlinear chunk 2: t=25/100 progress= 25.0% elapsed=01:00"
+    )
+
+    assert capsys.readouterr().out == (
+        "[gkx] completed nonlinear chunk 2: "
+        "t=25/100 progress= 25.0% elapsed=01:00\n"
+    )
+
+
 def test_saturation_campaign_trace_omits_dealiased_zero_modes() -> None:
     campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
     full_kx = np.arange(12, dtype=float)
