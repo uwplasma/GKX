@@ -137,6 +137,17 @@ def _movie_initial_state(
     return state, 0.0, False, "seeded continuation"
 
 
+def _movie_moment_dims(
+    raw: dict[str, Any], laguerre: int | None, hermite: int | None
+) -> tuple[int, int]:
+    """Resolve movie moments from CLI overrides or the production deck."""
+
+    run = raw.get("run", {})
+    nl = int(run.get("Nl", 4) if laguerre is None else laguerre)
+    nm = int(run.get("Nm", 8) if hermite is None else hermite)
+    return nl, nm
+
+
 def render_frame(
     phi_xy: np.ndarray,
     phi_yz: np.ndarray,
@@ -198,7 +209,7 @@ def run(
     # 137.7 at 16^3), with room for a nonlinear overshoot.
     ceiling: float = 1.0e3,
 ) -> int:
-    cfg, _ = load_runtime_from_toml(config)
+    cfg, raw = load_runtime_from_toml(config)
     overrides = {
         key: value
         for key, value in (("Nx", nx), ("Ny", ny), ("Nz", nz))
@@ -238,6 +249,7 @@ def run(
     # shared GPU can spare; a visualization does not. Any override is recorded
     # in the snapshot so a frame can never be mistaken for a production run.
     grid = build_spectral_grid(apply_geometry_grid_defaults(geometry, cfg.grid))
+    laguerre, hermite = _movie_moment_dims(raw, laguerre, hermite)
     nl, nm = _resolve_runtime_hl_dims(cfg, Nl=laguerre, Nm=hermite)
     cache = build_linear_cache(grid, geometry, params, nl, nm)
     step = float(dt if dt is not None else cfg.time.dt)

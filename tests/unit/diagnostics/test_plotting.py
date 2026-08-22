@@ -732,6 +732,15 @@ def test_movie_restores_campaign_state_and_absolute_time(tmp_path):
         )
 
 
+def test_movie_uses_deck_moment_resolution_unless_overridden():
+    module = _movie_tool("gkx_movie_moments_test")
+
+    raw = {"run": {"Nl": 6, "Nm": 10}}
+    assert module._movie_moment_dims(raw, None, None) == (6, 10)
+    assert module._movie_moment_dims(raw, 3, 5) == (3, 5)
+    assert module._movie_moment_dims({}, None, None) == (4, 8)
+
+
 def test_turbulence_hero_imports_promoted_geometry_helpers():
     root = pathlib.Path(__file__).parents[3]
     runpy.run_path(str(root / "tools" / "artifacts" / "build_turbulence_hero.py"))
