@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from support.paths import REPO_ROOT, load_release_tool
+from support.paths import REPO_ROOT, load_release_tool, load_tool_script
 import subprocess
 import sys
 
@@ -29,6 +29,36 @@ from gkx.diagnostics.transport_windows import (
 
 def _load_tool_module():
     return load_release_tool("check_nonlinear_transport_gates")
+
+
+def test_autocorrelation_campaign_uses_runtime_effective_sample_count(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "heat_flux_autocorrelation")
+    rng = np.random.default_rng(31)
+    time = np.arange(400, dtype=float) * 0.2
+    flux = np.empty(time.size)
+    flux[0] = 4.0
+    for index in range(1, flux.size):
+        flux[index] = 4.0 + 0.9 * (flux[index - 1] - 4.0) + rng.normal(0.0, 0.1)
+    trace = tmp_path / "trace.csv"
+    np.savetxt(
+        trace,
+        np.column_stack((time, flux)),
+        delimiter=",",
+        header="t,heat_flux",
+        comments="",
+    )
+
+    report = campaign.analyse(trace)
+
+    assert report is not None
+    n = report["samples_in_window"]
+    expected = min(
+        float(n),
+        n * report["output_dt"] / (2.0 * report["tau_ac"]),
+    )
+    assert report["independent_samples"] == pytest.approx(expected)
 
 
 def _saturated_trace() -> tuple[np.ndarray, np.ndarray]:
