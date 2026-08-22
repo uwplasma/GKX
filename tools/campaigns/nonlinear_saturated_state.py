@@ -51,6 +51,8 @@ def main() -> int:
     parser.add_argument("--dt-max", type=float, default=None)
     parser.add_argument("--cfl", type=float, default=None)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--alpha", type=float, default=None)
+    parser.add_argument("--npol", type=float, default=None)
     parser.add_argument("--sample-stride", type=int, default=None)
     parser.add_argument("--diagnostics-stride", type=int, default=None)
     parser.add_argument(
@@ -134,12 +136,17 @@ def main() -> int:
         runtime = dataclasses.replace(
             runtime, time=dataclasses.replace(runtime.time, **time_override)
         )
+    geometry_override = {}
     if args.vmec_file is not None:
+        geometry_override["vmec_file"] = str(args.vmec_file.resolve())
+    if args.alpha is not None:
+        geometry_override["alpha"] = args.alpha
+    if args.npol is not None:
+        geometry_override["npol"] = args.npol
+    if geometry_override:
         runtime = dataclasses.replace(
             runtime,
-            geometry=dataclasses.replace(
-                runtime.geometry, vmec_file=str(args.vmec_file.resolve())
-            ),
+            geometry=dataclasses.replace(runtime.geometry, **geometry_override),
         )
     if args.seed is not None:
         runtime = dataclasses.replace(
@@ -155,6 +162,7 @@ def main() -> int:
     }
     print(
         f"case: {args.toml.name}  grid={grid_shape}  "
+        f"alpha={runtime.geometry.alpha} npol={runtime.geometry.npol}  "
         f"t_max={time_cfg.t_max}  fixed_dt={time_cfg.fixed_dt}  "
         f"dt={time_cfg.dt} dt_max={time_cfg.dt_max} cfl={time_cfg.cfl}",
         flush=True,
@@ -240,7 +248,7 @@ def main() -> int:
     wg_report = saturation_stop_decision(times, flux, guard=wg, config=stop_config)
     report["Wg_guard_stationary"] = wg_report["guard_stationary"]
     print(
-        f"\nran {times.size} samples to t={absolute_times[-1]:.1f} in {elapsed:.1f}s",
+        f"\nran {times.size} samples to t={absolute_times[-1]:.6g} in {elapsed:.1f}s",
         flush=True,
     )
     print(
@@ -332,6 +340,9 @@ def main() -> int:
         "previous_t_end": previous_t_end,
         "grid": grid_shape,
         "grid_override": grid_override,
+        "geometry_override": geometry_override,
+        "alpha": float(runtime.geometry.alpha),
+        "npol": None if runtime.geometry.npol is None else float(runtime.geometry.npol),
         "random_seed": int(runtime.init.random_seed),
         "t_max": float(time_cfg.t_max),
         "fixed_dt": bool(time_cfg.fixed_dt),
