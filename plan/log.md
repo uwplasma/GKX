@@ -426,6 +426,13 @@
   its means differ by 2.7% and 1.3% from the selected late audit means. This is
   post-hoc design evidence only; the independent seed, QHS Ny=160, QI, and 16
   legacy VMEC traces are the held-out score set.
+- The 16-trace legacy score rejected that 100+20 hypothesis: 6 stops, four
+  errors above 5%, one at 12.5%, and 9.2% median absolute error versus the
+  final 100-time-unit mean. A declared training scan over those traces plus QA
+  and QHS seed 22 freezes a 75-time-unit window with 60-time-unit persistence:
+  3/18 stops, 4.2% worst error, 29% median runtime saved. It is training-biased
+  by construction; QA seed 31, QHS Ny=160, and QI are untouched holdouts and
+  will reject or retain it without retuning.
 - PR #81's nonlinear CI shard passed in 14m22s under its targeted 20-minute
   budget. This confirms that the former 15-minute wall-clock limit was too
   tight for runner cleanup while leaving every other shard at 15 minutes.

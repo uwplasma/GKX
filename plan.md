@@ -213,6 +213,16 @@ savings are post-hoc design evidence, not validation. Freeze the rule and score
 it without retuning on QA seed 31, QHS Ny=160, QI, and the 16 legacy VMEC
 traces before considering a default change.
 
+That prescribed legacy score rejects the rule: it accepts 6/16 traces, with
+four errors above 5%, one at 12.5%, and 9.2% median absolute error against each
+run's final 100-time-unit mean. A training-only grid over the 16 legacy traces
+plus QA seed 22 and QHS seed 22 selects a more conservative second hypothesis:
+a 75-time-unit trailing window and 60-time-unit persistence. It accepts only
+3/18 training traces, with 4.2% worst error and 29% median saved runtime; the
+QA and QHS savings are 22% and 56%. This selection is explicitly exposed to
+training bias. It is now frozen before QA seed 31, QHS Ny=160, and QI finish;
+those fresh runs decide whether it survives, with no further threshold tuning.
+
 The matched QA `96x128x48` rung completed at `t=250` in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
 Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is
