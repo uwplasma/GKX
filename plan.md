@@ -922,8 +922,8 @@ old totals by at most `6.34e-16` relatively; float32's worst max-scaled error is
 an end-to-end saturation-speedup claim. All 102 owned nonlinear diagnostic
 tests and 117 release tests pass locally. The two broader float32-only failures
 also reproduce on the untouched base; both pass on office JAX 0.11.1 under the
-actual CI `JAX_ENABLE_X64=true` contract. CI and a noninterfering GPU benchmark
-remain open.
+actual CI `JAX_ENABLE_X64=true` contract. All 41 required GitHub checks now
+pass; only the noninterfering GPU benchmark remains open.
 
 PR #109 makes `diffrax_core` the single owner of velocity-shape inference,
 state sharding, and packed complex-state placement for both linear and

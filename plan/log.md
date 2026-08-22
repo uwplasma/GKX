@@ -1397,3 +1397,13 @@
   on every 128-step campaign chunk. The solver state is continuous. A future
   host-only fix must show cumulative time and one wall clock without changing
   traced arguments, diagnostic cadence, or compile reuse.
+- PR #108 is fully green at `f7634a03`: all 41 required checks pass and nightly
+  is intentionally skipped. Its noninterfering GPU diagnostic benchmark still
+  waits for a free device; no end-to-end speedup claim is promoted.
+- Replayed roadmap commit `d52afb2f` privately as `aede71a7`. Their stable
+  patch ID is `7f53b322`, and both changed blobs match exactly. After garbage
+  collection, a fresh no-local clone has 31 remote refs, 28 tags, 3,480
+  commits, and 17,829 objects: pack 8,699,674 bytes, pack plus index 9,199,958
+  bytes, and complete `.git` file sum 9,534,975 bytes. Strict `fsck`, no
+  alternates, and zero reachable AI-attribution matches pass, leaving 465,025
+  bytes below the decimal 10-MB gate. No public history moved.
