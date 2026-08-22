@@ -68,12 +68,7 @@ def _pair_from(value: Any) -> tuple[float, float] | None:
 
 
 def measured_average_window(summary: Mapping[str, Any] | None) -> tuple[float, float] | None:
-    """Return the averaging window a run measured, when its summary records one.
-
-    Shading a window the run did not measure would invent a claim about where
-    the trace saturated, so the absence of any of these keys means no shading
-    rather than a guessed default.
-    """
+    """Return a recorded averaging window without inventing a default."""
 
     if not summary:
         return None
@@ -89,13 +84,7 @@ def measured_average_window(summary: Mapping[str, Any] | None) -> tuple[float, f
 
 
 def measured_window_is_saturated(summary: Mapping[str, Any] | None) -> bool | None:
-    """Return whether the run that produced ``summary`` actually saturated.
-
-    The stop policy records the window it evaluated whether or not the trace
-    converged in it, so the window alone cannot say. A run that reached its
-    cap still carries a window, and calling that a measured saturation would
-    tell a reader the flux converged when it was still climbing.
-    """
+    """Return the stop policy's explicit saturation verdict, when present."""
 
     if not summary:
         return None
@@ -157,10 +146,12 @@ def write_nonlinear_run_figures(
     stem = Path(base) if base is not None else _artifact_base(source_path)
     name = label if label is not None else run_label(stem)
     spectra_available = _is_netcdf_source(source_path)
+    plot_window = None if saturated is False else window
+    scope = " (not saturated; diagnostic only)" if saturated is False else ""
 
     def _draw(figure: Callable[..., Any], title: str) -> Callable[[Path], Any]:
         return lambda out: figure(
-            str(source_path), window=window, title=title, out=out
+            str(source_path), window=plot_window, title=f"{title}{scope}", out=out
         )
 
     plan: list[tuple[str, Callable[[Path], Any]]] = [
@@ -170,7 +161,7 @@ def write_nonlinear_run_figures(
         )
     ]
     if spectra_available:
-        for message in spectrum_cutoff_warnings(source_path, window=window):
+        for message in spectrum_cutoff_warnings(source_path, window=plot_window):
             _warn(message)
         plan += [
             (
@@ -298,11 +289,17 @@ def auto_plot_saved_run(
         return []
     if kind != "nonlinear":
         return [str(path) for path in write_panel_run_figure(source)]
+    summary = _read_summary(paths.get("summary"))
     resolved = window
     if resolved is None:
-        resolved = measured_average_window(_read_summary(paths.get("summary")))
+        resolved = measured_average_window(summary)
     return [
-        str(path) for path in write_nonlinear_run_figures(source, window=resolved)
+        str(path)
+        for path in write_nonlinear_run_figures(
+            source,
+            window=resolved,
+            saturated=measured_window_is_saturated(summary),
+        )
     ]
 
 
