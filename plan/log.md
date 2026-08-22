@@ -817,3 +817,11 @@
   source neutrality/tree identity, and the attribution scan pass. The old
   828,066/346,234-byte loop and 192,557-byte QA panel are unreachable. No public
   ref moved.
+- Wrote and mechanically validated a local 53-row public-to-candidate ref map
+  for the 25 selected branches and 28 tags, then built and verified an
+  8,635,427-byte complete candidate bundle. Ref-map SHA-256:
+  `c2fe14c1f07ed0b3ada00a021c7d89ab4a22853cc0157cc4a41f26d2d8f1bb35`;
+  candidate-bundle SHA-256:
+  `cfb73f915a6cd959c7b6f0c279210f9942caecbe96c4e93ddf4d0f09192de294`.
+  These are local rehearsal artifacts, not a cutover manifest: re-freeze and
+  revalidate every GitHub SHA immediately before any coordinated ref move.
