@@ -22,11 +22,14 @@ wrong thing, and each is gated explicitly below:
 from __future__ import annotations
 
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
 import pytest
 
 from tools.artifacts.build_landau_damping_figure import (
     _NU_SCAN,
+    _save_compact_preview,
     evolve,
     exact_root,
     fit_standing_wave,
@@ -37,6 +40,18 @@ pytestmark = pytest.mark.skipif(
     jnp.zeros(1).dtype != jnp.float64,
     reason="Landau roots need float64; CI runs JAX_ENABLE_X64",
 )
+
+
+def test_landau_preview_uses_a_bounded_palette(tmp_path) -> None:
+    fig, ax = plt.subplots()
+    ax.plot(np.linspace(0.0, 1.0, 32), np.linspace(0.0, 1.0, 32) ** 2)
+    output = tmp_path / "preview.png"
+
+    _save_compact_preview(fig, output)
+
+    with Image.open(output) as image:
+        assert image.mode == "P"
+        assert len(image.getcolors()) <= 256
 
 
 def test_collisionless_hermite_spectrum_is_purely_real() -> None:
