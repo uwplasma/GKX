@@ -220,10 +220,12 @@ head through #103) and all 28 remote tags, with 3,424 reachable commits and
 17,446 objects. PR #82 is represented by one source-neutral plan snapshot; its
 incremental roadmap history remains in the recovery bundle and ref map. PR #102
 also corrects the single-result artifact writer so deterministic rendered grids
-are summarized like the comparison sidecar. The tracked nonlinear optimization
-JSON is 113,526 bytes instead of 423,062 bytes. During rewriting, only Git blob
-`45a40017c94bee2b6cca8e5a2b35573457c2db55` is substituted; earlier
-compact/placeholder revisions remain unchanged.
+are summarized like the comparison sidecar, validates and references the
+duplicate nonlinear trace, and fixes clean-checkout root resolution in all five
+reduced-ITG scripts. The regenerated nonlinear optimization JSON is 87,377
+bytes instead of 423,062 bytes; the comparison JSON is 247,507 instead of
+273,704 bytes. The replay must substitute the exact compacted blobs while
+leaving earlier compact/placeholder revisions unchanged.
 
 PR #103 adds a generator-owned palette encoding for the retained Landau
 validation panel. It preserves the 3,028-by-822 pixel grid and every curve,

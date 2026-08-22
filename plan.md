@@ -809,8 +809,14 @@ maps `main` plus every open PR head through #103, retains all 28 remote tags,
 passes strict `fsck`, and contains no AI attribution marker. PR #102 fixes an
 asymmetric artifact writer: comparison JSON already summarized deterministic
 LCFS/Boozer grids, while each single-result JSON retained the full arrays after
-rendering. The nonlinear sidecar falls from 423,062 to 113,526 bytes without
-changing the figure, history, trace, scans, grid shapes/ranges, or scope labels.
+rendering. A follow-up audit also found that all five reduced-ITG scripts
+resolved `examples/` as the repository root, so clean-checkout imports and
+default output paths were wrong, and that the tracked nonlinear grid/backend
+provenance was stale. The fix resolves the real root, regenerates current
+72-by-72 metadata, and replaces a second copy of the nonlinear trace with a
+checked reference. The nonlinear sidecar falls from 423,062 to 87,377 bytes;
+the comparison sidecar falls from 273,704 to 247,507 bytes. Histories, scans,
+retained traces, figures, numerical values, and physics results are unchanged.
 
 The rewrite replaces only Git blob `45a40017c94bee2b6cca8e5a2b35573457c2db55`
 (423,062 bytes) with its faithful compact representation; older 38-kB and
@@ -1073,7 +1079,7 @@ unverified rather than silently promoted.
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids; latest pre-record rehearsal `.git` is below 9.59 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids/traces; latest pre-record rehearsal `.git` is below 9.61 MB | replay PR #102 follow-up, freeze closed-head map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |

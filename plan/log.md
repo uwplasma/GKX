@@ -1208,11 +1208,17 @@
   windows, including R-squared and autocorrelation-corrected uncertainties;
   all 52 diagnostic tests and static checks pass. No defect was found in either
   small source-slimming patch.
-- Independently audited open PRs #102 and #103. PR #102 renders figures from
-  full deterministic LCFS/Boozer grids before replacing only the tracked JSON
-  copies with shapes, extrema, scope, parameters, configuration, histories,
-  scans, and traces; its sidecar falls from 423,062 to 113,526 bytes and both
-  regeneration tests pass. PR #103 preserves the Landau panel at 3,028 by 822
+- Independently audited open PRs #102 and #103. The initial PR #102 grid
+  compaction is faithful, but full regeneration exposed two defects missed by
+  its original focused tests: all five scripts used `parents[2]` and therefore
+  treated `examples/` as the repository root, and tracked grid/backend
+  provenance was stale. Commit `51b55741` fixes the root, regenerates current
+  72-by-72 metadata, and replaces the second full nonlinear trace with a
+  value-checked reference. The nonlinear JSON is now 87,377 bytes instead of
+  423,062; the comparison JSON is 247,507 instead of 273,704. Five focused
+  tests, isolated clean-checkout `--help` runs, full x64 regeneration, Ruff,
+  the size gate, and diff checks pass. Histories, density scans, retained
+  traces, and physics values match. PR #103 preserves the Landau panel at 3,028 by 822
   pixels with 255 colors and shrinks it from 371,750 to 151,626 bytes. Against
   the prior RGBA render, mean absolute channel error is 0.066 and PSNR is
   49.86 dB; visual review and all six x64 Landau physics tests pass. Neither PR
