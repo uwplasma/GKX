@@ -1186,3 +1186,17 @@
   the unseen final mean. The hypothesis still fails its frozen fifth criterion:
   final `t=250--350` Wphi and Wg are nonstationary. No threshold was retuned.
   Seed-33 terminal Q agrees with seeds 22/31 within 0.015/0.46 combined SEM.
+- Found two live QI Ny160 processes with identical output paths: the original
+  began at 10:06 and the accidental duplicate at 11:47. The younger writer had
+  already truncated the shared log. Terminated only PIDs 1144813/1144812/
+  1144811; original PID 1141048 remains healthy and is now the sole GPU-1
+  writer. Its eventual trace is sizing-only; log/wall evidence is invalid and
+  acceptance requires a clean repeat.
+- PR #91 commit `eebff63b` prevents recurrence with POSIX advisory locks on
+  every requested summary/trace/state path. Conflicts fail before simulation
+  with owner PID/host; stale files do not retain kernel locks. All 43 focused
+  tests, Ruff, and diff checks pass. Private replay `eab1327d` has identical
+  patch ID `1243ab2c`; the full PR #91 public/candidate patch ID is `4c2b67d8`.
+  A fresh 25-head/28-tag no-local clone has 3,451 commits, 17,614 objects, an
+  8,700,585-byte pack, and a 9,528,529-byte complete `.git`; strict `fsck`,
+  no alternates, and zero AI-attribution matches pass.

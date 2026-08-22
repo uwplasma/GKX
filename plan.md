@@ -526,6 +526,16 @@ rejected exactly as preregistered and is not retuned. NPZ/JSON/log SHA-256:
 `35d5c0509bbab0266cd0c607788f27140dbe08b4f9c058aea5c01c27fe5dfb97`;
 preregistered replay `c2fb94a9`, standard replay `f152057c`.
 
+The concurrent QI audit exposed a separate orchestration fault: a second
+same-name campaign could start before the first wrote its final NPZ/JSON. The
+younger process truncated the shared log and would later race every output. It
+was terminated by exact PID; the older trajectory may size physics, but its log
+and wall time are rejected and a clean repeat is required for acceptance. PR
+#91 commit `eebff63b` now takes nonblocking advisory locks on every requested
+summary, trace, and state path before importing or running GKX. Stale lock files
+are harmless because the kernel releases the lock on crash/exit. The 43 focused
+campaign/chunk/gradient tests, Ruff, and diff checks pass.
+
 The matched Ny=192 seed-31 rung reached exact `t=250` in 6,594.6 s with 843
 samples. Its frozen rule stops at `t=218.783` after 60.17 time units of
 persistence, while Ny=160 at the same seed still makes no stop. The causal
@@ -814,13 +824,14 @@ still require a frozen delete/retain map, and no remote history has moved.
 PR #84 commit `55d41c09` adds the real-bug regression
 `t_window,max=t_diag,last` under output striding. All 41 CI checks pass. PR #91
 merge `14442da2` carries that contract into the reproducible saturation replay;
-its 42 focused tests, Ruff, and diff checks pass. Private replays `bf8d5429`
-and `0b1d6ced` have exact aggregate stable patch IDs for both PRs. A new ordinary
-no-local clone of the 25-head/28-tag candidate has 3,448 commits and 17,594
-objects: pack 8,749,159 bytes, pack plus index 9,242,863 bytes, and complete
-`.git` file sum 9,576,463 bytes. Strict `fsck`, no alternates, and zero reachable
-AI-attribution matches pass, leaving 423,537 bytes below the strict decimal
-gate. No public history moved.
+commit `eebff63b` adds atomic output locks after a real duplicate-writer event.
+Private replays `bf8d5429`, `0b1d6ced`, and `eab1327d` have exact stable patch
+IDs; the complete public/candidate PR #91 patch shares ID `4c2b67d8`. A new
+ordinary no-local clone of the 25-head/28-tag candidate has 3,451 commits and
+17,614 objects: pack 8,700,585 bytes, pack plus index 9,194,849 bytes, and
+complete `.git` file sum 9,528,529 bytes. Strict `fsck`, no alternates, and zero
+reachable AI-attribution matches pass, leaving 471,471 bytes below the strict
+decimal gate. No public history moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
@@ -1040,9 +1051,9 @@ unverified rather than silently promoted.
 | CI-1 | P0 | ready for review | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 checks green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
-| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | preregistered QA shortcut fails unseen Wphi/Wg; QI/QHS make no accepted stop |
+| SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QA shortcut fails unseen Wphi/Wg; QI clean repeat required; QHS active |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | three QA Ny160 means agree; QI Ny160 active; stop changes with seed/resolution/timestep |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | three QA Ny160 means agree; current QI is sizing-only after log collision |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | definitions pass; fixed horizon retained until SAT-1 passes |
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
