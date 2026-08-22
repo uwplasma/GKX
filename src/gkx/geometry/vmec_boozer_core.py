@@ -907,7 +907,14 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
     source_model: str = "mode21_vmec_boozer_state",
     validate_finite: bool = True,
 ) -> FluxTubeGeometryData:
-    """Build solver-ready geometry directly from an in-memory vmex/Boozer state."""
+    """Build solver-ready geometry directly from an in-memory vmex/Boozer state.
+
+    This production bridge stays inside JAX-compatible objects:
+    ``SpectralState -> Boozer tables -> booz_xform_jax -> FluxTubeGeometryData``.
+    Runtime file generation can still use NetCDF/EIK, but differentiable
+    optimization should use this function or a higher-level objective so its
+    gradient never passes through filesystem artifacts.
+    """
 
     mapping = vmex_boozer_equal_arc_core_profiles_from_state(
         state,
