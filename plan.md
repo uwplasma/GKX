@@ -410,12 +410,13 @@ Before the coordinated force push:
 Do not force-push until those checks and the recovery bundle are reviewable.
 
 PR #95 now re-encodes the six-second README loop from its primary release MP4:
-`828,066 -> 346,234` bytes at 900 px and 5 fps. Before this log-only update, the
+`828,066 -> 346,234` bytes at 900 px and 5 fps. Immediately before this
+measurement-recording commit, the
 refreshed 21-head rehearsal (`main` plus all 20 open PRs through #99) retains
-all 28 remote tags and has a 9,107,008-byte pack, 9,596,344 bytes including its
-index, and a 5,363,108-byte current-tree archive. It has 3,436 commits and
-17,438 reachable objects. Strict
-`fsck`, stable patch IDs for all 17 recent replayed commits, exact live-head
+all 28 remote tags and has a 9,112,197-byte pack, 9,601,953 bytes including its
+index, and a 5,363,108-byte current-tree archive. It has 3,438 commits and
+17,453 reachable objects. Strict
+`fsck`, stable patch IDs for all 19 recent replayed commits, exact live-head
 parity, and the AI-attribution scan pass. This is still not force-push
 authorization; recovery publication and the coordinated cutover gates remain.
 

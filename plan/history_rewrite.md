@@ -194,12 +194,13 @@ the other sixteen are replayed from their true PR bases. Aggregate patch IDs
 match for every textual patch; PR #90 alone omits a generated PNG that PR #95
 intentionally removes. No replayed head reaches the old `main` object graph.
 
-Before the present log-only update, the refreshed ordinary clone advertises 21
+Immediately before the present measurement-recording commit, the refreshed
+ordinary clone advertises 21
 heads (`main` plus the 20 PR heads through #99) and all 28 remote tags, with
-3,436 reachable commits and 17,438 objects. Its one pack is 9,107,008 bytes;
-pack plus index is 9,596,344 bytes, and the current-tree archive is 5,363,108
+3,438 reachable commits and 17,453 objects. Its one pack is 9,112,197 bytes;
+pack plus index is 9,601,953 bytes, and the current-tree archive is 5,363,108
 bytes. Strict `fsck`
-passes. All 17 recent replayed commits have exact stable patch-ID matches, and
+passes. All 19 recent replayed commits have exact stable patch-ID matches, and
 the reachable commit metadata has no AI attribution marker. This closes the
 local public-ref size gate, but
 not cutover authorization: the frozen remote map, representative CPU/GPU

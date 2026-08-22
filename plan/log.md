@@ -428,3 +428,9 @@
   `v0.0.1`) and restored their rewritten targets before this measurement.
   Strict `fsck`, exact patch IDs for all 17 recent commits, and the AI-marker
   scan pass. No public ref moved.
+- Replayed PR #97 commit `f114d13f` and this roadmap update onto the slim
+  candidate without changing their patches. Immediately before this log commit,
+  the fresh no-alternates clone has 3,438 commits, 17,453 objects, all 21 live
+  heads, all 28 tags, a 9,112,197-byte pack (9,601,953 with index), and a
+  5,363,108-byte archive. Strict `fsck`, all 19 recent patch IDs, ref-name
+  parity, and the AI-marker scan pass. No public ref moved.
