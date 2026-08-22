@@ -1534,3 +1534,9 @@
   9,444,265 bytes. Strict `fsck`, no alternates, and zero reachable
   AI-attribution hits pass, leaving 555,735 bytes of decimal margin. No public
   history ref moved.
+- Read back repository protection after main became green. The active ruleset
+  requires one approval, but classic branch protection required no status
+  check. Enabled strict `ci-required` from GitHub Actions app 15368 while
+  preserving admin enforcement, Rogerio-only push restriction, allowed force
+  pushes, and disabled deletion. The API read-back shows both the review rule
+  and aggregate-CI gate active.
