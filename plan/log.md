@@ -147,6 +147,9 @@
 - PR #91 exposes random seed, `dt`, `dt_max`, and CFL controls for matched
   ensembles without deck copies. A real `8^3` CPU smoke confirmed seed 31,
   `dt_max=0.04`, `cfl=0.8`, the built state shape, and persisted metadata.
+- The same audit tool now exposes stellarator field-line label `alpha` and tube
+  length `npol`. A real VMEC `8^3` smoke at `alpha=0.25`, `npol=1.5` preserved
+  both values and the exact `t=0.05` state/trace horizon.
 - Opened draft PR #92 on #88 to decouple generated renders from release
   evidence. Numeric JSON/CSV/TOML remains mandatory; absent rendered media is
   counted but does not fail. In the rewrite rehearsal, restoring only current
