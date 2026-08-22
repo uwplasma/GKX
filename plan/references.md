@@ -100,17 +100,37 @@ convergence proof.
   https://docs.jax.dev/en/latest/gradient-checkpointing.html
 - Wang, Hu & Blonigan, least-squares shadowing,
   https://arxiv.org/abs/1204.0159
+- Ni & Talnikar, non-intrusive least-squares adjoint shadowing,
+  https://arxiv.org/abs/1801.08674
+- Ni, fast adjoint algorithm for linear response of hyperbolic chaos,
+  https://doi.org/10.1137/22M1522383
+- Hickling et al., online gradient flow for statistical steady-state turbulent
+  objectives, https://doi.org/10.1016/j.jcp.2025.114610
+- Wang & Zaki, mitigating adjoint chaos in wall turbulence,
+  https://arxiv.org/abs/2606.25399
 - Acton et al., adjoint optimization of linear gyrokinetic microstability,
   https://doi.org/10.1017/S0022377824000709
 
 Leverage: retain the finite discrete adjoint with rematerialization as GKX's one
-production nonlinear derivative. Validate its useful window for each physics
-class. Acton et al. provide an independent linear-adjoint benchmark and warn
-that nearly degenerate dominant modes can make a growth-rate gradient
-ambiguous; GKX's eigenpair residual/overlap/conditioning gates remain required.
-That linear result does not justify an implicit fixed-point adjoint for chaotic
-saturated turbulence. Shadowing remains research-only until it passes sign,
-conditioning, and cost gates on GKX trajectories.
+production derivative of a declared finite window, not yet as a derivative of
+the invariant-measure transport. Validate its useful horizon and ensemble
+variance for each physics class. Ordinary tangent/adjoint sensitivities grow
+exponentially beyond the Lyapunov time even when the long-time statistical
+response is finite. NILSAS removes that divergence and is independent of the
+number of design parameters, but its work scales with the number of positive
+Lyapunov exponents; the 2026 wall-turbulence study shows why direct ensemble
+adjoints can also require prohibitive sample counts. Measure GKX's unstable
+dimension on reduced resolved grids before implementing shadowing. Online
+gradient flow is a current scalable comparator, but it uses finite-difference
+updates and therefore is not the selected autodiff API.
+
+Acton et al. provide an independent linear-adjoint benchmark and warn that
+nearly degenerate dominant modes can make a growth-rate gradient ambiguous;
+GKX's eigenpair residual/overlap/conditioning gates remain required. That
+linear result does not justify an implicit fixed-point adjoint for chaotic
+saturated turbulence. No surveyed source demonstrates shadowing or a stationary
+adjoint for nonlinear gyrokinetics, so promotion requires GKX-specific sign,
+conditioning, cost, and held-out transport gates.
 
 ## Stellarator optimization chain
 

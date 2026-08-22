@@ -219,3 +219,12 @@
   required sidecars. Commit `5ddfce88` restricts required sidecars to JSON and
   CSV (24 current artifacts); PNGs remain registered and reported by the
   manifest but are reproducible, optional outputs.
+- The refreshed sensitivity survey adds NILSAS, fast adjoint linear response,
+  2026 online gradient flow, and the July 2026 wall-turbulence adjoint study.
+  They sharpen the public claim: checkpointed reverse mode is the one
+  production derivative of a declared finite GKX window, not yet a derivative
+  of invariant-measure heat flux. Shadowing is mathematically better matched
+  to the latter but scales with the unstable dimension; online gradient flow
+  avoids a long adjoint but is finite-difference based. No source demonstrates
+  either method for nonlinear gyrokinetics, and all cited papers were
+  accessible for this audit.
