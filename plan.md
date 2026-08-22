@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#105.
+and open PRs #74, #81--#105, and #107. PR #106 was closed as a duplicate.
 
 ## Rules
 
@@ -875,6 +875,16 @@ direct geometry tests, 117 release gates, Ruff, changed-module mypy, and the
 architecture gate pass locally; the restarted GitHub matrix is still active.
 A separately opened #106 was closed once this existing owner was discovered;
 it is not a second implementation or a promotion candidate.
+
+PR #107 makes the runtime diagnostic fit policy the single frozen owner for
+the eleven shared window/mode fields. The one-point request and ky-scan options
+inherit that host-side record, and dispatch forwards only its canonical
+mapping. No public signature, default, traced argument, JAX kernel, fit rule,
+or result schema changes. The patch removes 19 installed-source lines
+(`96,465 -> 96,446`) without adding a file. All 239 runtime helper/runner/CLI
+tests, 117 release tests, four exact public-signature comparisons, Ruff,
+changed-module mypy, and the architecture and repository-size gates pass
+locally. GitHub CI is active; the PR is draft and must not be merged here.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text

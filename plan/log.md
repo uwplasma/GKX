@@ -1320,3 +1320,19 @@
   sum 9,568,911 bytes. It has no alternates and zero reachable AI-attribution
   matches, leaving 431,089 bytes below the decimal 10-MB gate. No public
   history moved.
+- Opened draft PR #107 at `96911c3b` for the next non-overlapping source cut.
+  One frozen runtime fit-option record now owns the eleven fields previously
+  redeclared by both single-run dispatch and ky-scan orchestration. Its mapping
+  excludes subclass-only run/scan fields. Public signatures, defaults, JAX
+  arguments, kernels, fit policy, and schemas are unchanged. The patch removes
+  19 installed-source lines (`96,465 -> 96,446`) and adds no file. All 239
+  runtime helper/runner/CLI tests, 117 release tests, four exact base/head
+  signature comparisons, Ruff, changed-module mypy, architecture, repository
+  size, and diff gates pass locally. GitHub CI is active.
+- Replayed #107 privately as `168dc834`. Its exact public/private stable patch
+  ID is `df901451`, and all four affected head blobs match. After garbage
+  collection, a fresh ordinary clone has 29 remote refs, 28 tags, 3,473
+  commits, and 17,777 objects: pack 8,687,046 bytes, pack plus index 9,185,874
+  bytes, and complete `.git` file sum 9,520,481 bytes. Strict `fsck`, no
+  alternates, and zero reachable AI-attribution matches pass, leaving 479,519
+  bytes below the decimal 10-MB gate. No public history moved.

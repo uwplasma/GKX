@@ -317,3 +317,12 @@ the complete `.git` file sum is 9,568,911 bytes. Strict `fsck`, no alternates,
 and zero reachable AI-attribution matches pass, leaving 431,089 bytes of
 strict decimal margin. The redundant draft #106 is closed and is not retained
 as a live rewrite head. No public history moved.
+
+Draft PR #107 commit `96911c3b` is replayed as `168dc834`. The exact
+public/private stable patch ID is `df901451`, and all four affected head blobs
+are byte-identical. A garbage-collected ordinary clone now advertises 29 remote
+refs and 28 tags, with 3,473 commits and 17,777 objects. Its pack is 8,687,046
+bytes, pack plus index is 9,185,874 bytes, and complete `.git` file sum is
+9,520,481 bytes. Strict `fsck`, no alternates, and zero reachable
+AI-attribution matches pass, leaving 479,519 bytes of strict decimal margin.
+No public history moved.
