@@ -827,7 +827,9 @@
   revalidate every GitHub SHA immediately before any coordinated ref move.
 - Merged PR #81's CI-only cleanup margin into PR #91 after every nonlinear
   assertion passed but the old 15-minute wrapper killed that branch during
-  teardown. The public rerun is pending; the continuation logic is unchanged.
+  teardown. The public nonlinear rerun passes in 15m08s, eight seconds beyond
+  the old wrapper, and all 41 checks including `ci-required` are green. The
+  continuation logic is unchanged.
   Replaying the same merge in the private candidate gives 25 heads, 28 tags,
   3,423 commits, and 17,435 objects. A fresh no-alternates clone has an
   8,632,357-byte pack and 9,454,569-byte complete `.git`; strict `fsck` and the
