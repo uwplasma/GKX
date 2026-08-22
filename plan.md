@@ -502,12 +502,13 @@ explicit restart alternative: load the saturation campaign's exact state,
 continue with the deck's production explicit method and CFL policy, retain
 absolute time and source verdict, then render off-device. Existing
 scalar/spectral NetCDF output still cannot reconstruct field phases; a movie
-without a saved state remains impossible rather than fabricated. The first
-production acceptance used the exact QA `96x160x48`, `(Nl,Nm)=(4,8)`, `t=250`
-state: an RTX A4000 wrote 30 cut pairs in 49.1 s (2,567,592-byte NPZ), and CPU
-rendering produced a six-second, 900x472, 5-fps H.264 movie in 296,235 bytes.
-A deck with `(Nl,Nm)=(24,12)` failed closed before integration; state and movie
-velocity grids must match explicitly.
+without a saved state remains impossible rather than fabricated. An RTX A4000
+continued the exact QA `96x160x48`, `(Nl,Nm)=(4,8)`, `t=250` state for 30 frames
+in 49.1 s, but that first command imported an older installed GKX and omitted
+the VMEC coordinate profiles. It is solver/timing evidence, not physical-movie
+acceptance. PR #97 now reads `Nl` and `Nm` from `[run]`; a clean
+`PYTHONPATH=src` rerun must show nonempty `R`, `Z`, and toroidal profiles before
+the movie can be accepted.
 
 ## Work queue
 
