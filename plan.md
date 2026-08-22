@@ -298,6 +298,12 @@ sub-10-MiB clone target while preserving every commit and all core source
 history. Keeping every historical generated plot/test/tool blob is incompatible
 with that target.
 
+The source-complete public-ref rehearsal also passes. Replaying all 17 open PR
+heads yields an ordinary 18-head clone with a 9,517,768-byte pack and a
+5,883,633-byte current-tree archive; strict `fsck` passes and no replayed head
+reaches old `main`. Closed topic heads still require a frozen delete/retain map,
+and no remote history has moved.
+
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
 
@@ -446,7 +452,7 @@ continuation), not post-hoc animation of the inspected file.
 | MOV-1 | P1 | active/review | PR #96 cut-only physical artifacts; production sampling remains | no physics rerun, size/time budgets |
 | VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |
 | AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
-| SLIM-1 | P1 | review/blocked | corrected PR #88 removes 7.70 MB; artifact migration and rewrite remain | 5.93-MiB rehearsal; remove `_static` test dependencies, then fsck/install/docs/tests |
+| SLIM-1 | P1 | active/review | corrected PR #88 removes 7.70 MB; public-ref rewrite rehearsal passes | freeze closed-head map, publish recovery records, then network-clone gate |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | pending | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
 

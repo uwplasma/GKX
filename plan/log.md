@@ -290,3 +290,12 @@
   final frozen rewrite must replay all open heads onto the reviewed slim base
   and remove closed heads only after their tips are in the verified bundle and
   published ref map; no force-push has occurred.
+- The public-ref rehearsal is now complete locally. All 17 open PR heads were
+  mapped onto the source-complete slim history: five reviewed slimming heads
+  alias candidate `main`, and twelve were replayed from their actual PR bases
+  with matching aggregate patch IDs and no old-`main` ancestry. PR #90's sole
+  excluded path is the generated promotion-guard PNG deliberately removed by
+  PR #95; its remaining patch is identical. A fresh no-alternates clone has 18
+  remote heads, 23 tags, 3,169 commits, 16,873 objects, a 9,517,768-byte pack,
+  473,516-byte index, and 5,883,633-byte source archive; strict `fsck` passes.
+  No public ref was changed.

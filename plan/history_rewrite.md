@@ -170,9 +170,17 @@ Repository hygiene, strict Sphinx, sdist/wheel build, installed-wheel import,
 CLI startup, strict `fsck`, and all 2,554 collected x64 tests pass in that fresh
 clone. GitHub currently advertises 63 branch heads but only 17 open PR heads;
 closed heads cannot remain attached to their old object graph under the 10-MB
-contract. The final frozen ref map must classify each one, replay every open
-head onto the reviewed slim base, and delete a closed head only after its old
-tip is in the verified bundle and published map. Remaining blockers are that
-replay, representative CPU/GPU examples, and a real GitHub network clone. The
-decimal ceiling leaves only 535,881 bytes of single-branch pack margin; do not
-add another tracked render without removing equivalent payload.
+contract. A no-alternates rehearsal now maps all 17 open heads: five reviewed
+slimming heads already represented in the candidate point at slim `main`, and
+the other twelve are replayed from their true PR bases. Aggregate patch IDs
+match for every textual patch; PR #90 alone omits a generated PNG that PR #95
+intentionally removes. No replayed head reaches the old `main` object graph.
+
+The resulting ordinary clone advertises 18 heads (`main` plus the 17 PR heads)
+and 23 tags, with 3,169 reachable commits and 16,873 objects. Its one pack is
+9,517,768 bytes; pack plus index is 9,991,284 bytes, and the current-tree archive
+is 5,883,633 bytes. Strict `fsck` passes. This closes the local public-ref size
+gate, but not cutover authorization: the frozen remote map, representative
+CPU/GPU examples, published recovery material, and a real GitHub network clone
+remain. The margin forbids another tracked render without removing equivalent
+payload.
