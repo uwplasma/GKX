@@ -836,6 +836,27 @@ def test_run_summary_figure_draws_every_panel_from_a_bundle(tmp_path):
         plt.close(fig)
 
 
+def test_run_summary_does_not_plot_a_rejected_window(tmp_path):
+    """Keep a failed stop-policy window in metadata, not in plotted averages."""
+
+    from gkx.artifacts.run_summary import nonlinear_summary_figure
+
+    _write_synthetic_out_nc(tmp_path / "capped.out.nc")
+    _write_final_field_bundle(tmp_path / "capped")
+
+    fig, axes = nonlinear_summary_figure(
+        tmp_path / "capped.out.nc", window=(6.0, 12.0), saturated=False
+    )
+    try:
+        assert not axes["heat_flux"].patches
+        assert not axes["particle_flux"].patches
+        text = " ".join(item.get_text() for item in axes["metadata"].texts)
+        assert "NOT saturated" in text
+        assert "[6, 12]" in text
+    finally:
+        plt.close(fig)
+
+
 def test_run_summary_figure_survives_a_bundle_without_spectra(tmp_path):
     """A CSV sidecar still gets a page; the panels it cannot draw say why."""
 

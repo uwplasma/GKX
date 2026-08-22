@@ -393,15 +393,16 @@ def nonlinear_summary_figure(
     """Compose the whole-run summary page for one nonlinear output bundle.
 
     ``source`` names any file of the bundle. ``window`` is the averaging window
-    to shade and average over; pass the window the run measured, or leave it
-    ``None`` to fall back to the second half of the trace, which the metadata
-    panel then says out loud rather than presenting as a measurement.
+    the stop policy evaluated. A rejected window remains in the metadata but is
+    not shaded or reported as an average on the time trace; spectra retain their
+    labelled second-half diagnostic average.
     """
 
     from gkx.artifacts.transport_figures import _coerce_nonlinear_source
 
     diag, _ky, _kx, _kind = _coerce_nonlinear_source(str(source))
     heading = title if title is not None else f"GKX nonlinear run: {run_label(source)}"
+    plot_window = None if saturated is False else window
 
     with figure_style():
         # Two rows of three: the traces stacked in one column so they share a
@@ -419,7 +420,7 @@ def nonlinear_summary_figure(
 
         _panel_or_note(
             lambda: heat_flux_time_figure(
-                str(source), window=window, title="", axes=(ax_q, ax_g)
+                str(source), window=plot_window, title="", axes=(ax_q, ax_g)
             ),
             ax_q,
             ax_g,
@@ -427,13 +428,13 @@ def nonlinear_summary_figure(
         plt.setp(ax_q.get_xticklabels(), visible=False)
         _panel_or_note(
             lambda: flux_spectra_figure(
-                str(source), window=window, panels=("ky",), axes=(ax_qky,)
+                str(source), window=plot_window, panels=("ky",), axes=(ax_qky,)
             ),
             ax_qky,
         )
         _panel_or_note(
             lambda: phi2_spectra_figure(
-                str(source), window=window, panels=("ky",), axes=(ax_phiky,)
+                str(source), window=plot_window, panels=("ky",), axes=(ax_phiky,)
             ),
             ax_phiky,
         )
