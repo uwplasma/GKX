@@ -215,9 +215,9 @@ intentionally removes. No replayed head reaches the old `main` object graph.
 
 Immediately before the present measurement-recording commit, the refreshed
 ordinary clone advertises 22 heads (`main` plus the 21 PR heads through #100)
-and all 28 remote tags, with 3,454 reachable commits and 17,545 objects. Its
-one pack is 9,124,252 bytes; pack plus index is 9,616,584 bytes, the complete
-`.git` directory is 9,949,649 logical bytes, and the compressed current-tree
+and all 28 remote tags, with 3,458 reachable commits and 17,584 objects. Its
+network-equivalent pack is 9,133,421 bytes; pack plus index is 9,626,845 bytes,
+the complete `.git` directory is 9,960,094 logical bytes, and the compressed current-tree
 archive is 5,363,108 bytes. Strict `fsck` passes. All current replayed head
 patches have exact stable patch-ID matches, the clone has no object alternate,
 and the reachable commit metadata has no AI attribution marker. This closes the local
@@ -231,7 +231,8 @@ representative CPU/GPU examples, and verify a real GitHub network clone before
 restoring branch protection. Until those prerequisite PRs are reviewed, moving
 the rehearsal's `main` ref would merge their contents by force push and is not
 an admissible substitute for review.
-The margin forbids another tracked render without removing equivalent payload.
+Only 39,906 decimal bytes remain in the complete-`.git` gate, so the margin
+forbids another tracked render or raw report without removing equivalent payload.
 
 PR #95 subsequently replaced the README loop from the primary 120-frame MP4,
 keeping the same six-second interval as 30 WebP frames at 900 px: 828,066 bytes

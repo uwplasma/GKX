@@ -623,3 +623,10 @@
   0.076%/0.241%. Exact continuation and a matched Ny refinement remain; the
   frozen threshold is unchanged. Trace SHA-256:
   `d7b511db5065e405f2a7511e0f335a8bc9b3cc12dcdf47af2fa9c4166e34ea55`.
+- Replayed the latest #85 glossary and this source-pinned roadmap batch onto
+  the private public-ref rehearsal with exact stable patch IDs. A forced
+  upload-pack clone contains all 22 heads and 28 tags, 3,458 commits, and
+  17,584 objects; its pack is 9,133,421 bytes, complete `.git` 9,960,094
+  bytes, and current-tree archive 5,363,108 bytes. Strict `fsck` and the
+  AI-attribution scan pass. The decimal size margin is only 39,906 bytes, and
+  no public ref moves before reviewed prerequisites and a real GitHub clone.
