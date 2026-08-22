@@ -515,7 +515,7 @@ def _encode(
             "-crf",
             "23",
             "-vf",
-            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "scale=900:-2",
             str(output),
         ],
         capture_output=True,
