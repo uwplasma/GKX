@@ -425,6 +425,50 @@ With that configuration, rerunning the same nonlinear command resumes from
 continued history to ``tools_out/cyclone_release.out.nc``. This is the
 recommended user-facing workflow for long nonlinear turbulence jobs.
 
+Lightweight turbulence movies
+-----------------------------
+
+First persist the production state and its saturation verdict:
+
+.. code-block:: bash
+
+   python tools/campaigns/nonlinear_saturated_state.py \
+     --toml CASE.toml --state-out saturated_state.npz \
+     --output saturation.json
+
+Then run a short production-policy continuation and render it off-device:
+
+.. code-block:: bash
+
+   python tools/artifacts/build_turbulence_movie.py CASE.toml \
+     --initial-state saturated_state.npz --frames 60 \
+     --steps-per-frame 40 --snapshots movie_cuts.npz
+   python tools/artifacts/build_turbulence_movie.py \
+     --render-from movie_cuts.npz --output turbulence.mp4 --fps 10
+
+Each chunk uses the deck's explicit method and timestep policy,
+:math:`\Delta t_n=P_{\rm CFL}(\phi_n;\Delta t_{\min},\Delta t_{\max},c_{\rm CFL})`.
+Frame times remain absolute,
+:math:`t_k=t_{\rm state}+\sum_{n=1}^{kN_f}\Delta t_n`.
+The snapshot stores only
+
+.. math::
+
+   \phi(x,y,z_{\rm mid}),\qquad \phi(x_{\rm mid},y,z),
+
+so its per-frame payload is :math:`N_xN_y+N_yN_z`, rather than
+:math:`N_xN_yN_z`. At ``96x96x48`` this is a 32-fold reduction. Schema 3 also
+records the source path and saturation flag, method, fixed/adaptive policy,
+resolution, VMEC field-line coordinates, and physical perpendicular extent.
+Imported-geometry movies require finite ``R(z)``, ``Z(z)``, and
+``zeta(z)`` profiles and fail instead of drawing an analytic torus when they
+are absent. A finite stellarator flux-tube segment is generally open in
+three-dimensional space: its endpoints need not coincide. The linked boundary
+identifies the gyrokinetic fields through twist-and-shift, not by closing the
+centreline in Cartesian coordinates.
+Rendering never holds a GPU allocation. A seed-only movie is allowed but is
+labelled ``seeded continuation`` and is not saturation evidence.
+
 Geometry generation workflows
 -----------------------------
 
