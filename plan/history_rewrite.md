@@ -335,3 +335,12 @@ bytes, pack plus index is 9,190,041 bytes, and complete `.git` file sum is
 9,524,832 bytes. Strict `fsck`, no alternates, and zero reachable
 AI-attribution matches pass, leaving 475,168 bytes of strict decimal margin.
 No public history moved.
+
+Draft PR #109 commit `0561e5dc` is replayed as `90656d0c`. The exact
+public/private stable patch ID is `b094d3f5`, and all three affected head blobs
+are byte-identical. A garbage-collected ordinary clone now advertises 31 remote
+refs and 28 tags, with 3,478 commits and 17,818 objects. Its pack is 8,696,888
+bytes, pack plus index is 9,196,864 bytes, and complete `.git` file sum is
+9,531,837 bytes. Strict `fsck`, no alternates, and zero reachable
+AI-attribution matches pass, leaving 468,163 bytes of strict decimal margin.
+No public history moved.

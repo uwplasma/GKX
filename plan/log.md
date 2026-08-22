@@ -1360,3 +1360,20 @@
   sum 9,524,832 bytes. Strict `fsck`, no alternates, and zero reachable
   AI-attribution matches pass, leaving 475,168 bytes below the decimal 10-MB
   gate. No public history moved.
+- Opened draft PR #109 at `0561e5dc` after an AST audit found exact copies of
+  velocity-shape inference, state sharding, and packed-state placement in the
+  linear and nonlinear Diffrax paths. Their existing core now owns that setup.
+  Public signatures and the invalid-shape error are exact; solver, cache,
+  physics-term, packed-layout, differentiation, and traced-arithmetic contracts
+  are unchanged. Base/head two-step linear and nonlinear outputs, including
+  single-device sharding, have byte-identical state and field-history hashes.
+  The patch removes 19 installed-source lines and adds no file. All 14 focused
+  Diffrax tests, 117 release tests, Ruff, mypy, architecture, size, and diff
+  gates pass locally. CI is active.
+- Replayed #109 privately as `90656d0c`. Its exact public/private stable patch
+  ID is `b094d3f5`, and all three affected head blobs match. A fresh ordinary
+  clone has 31 remote refs, 28 tags, 3,478 commits, and 17,818 objects: pack
+  8,696,888 bytes, pack plus index 9,196,864 bytes, and complete `.git` file
+  sum 9,531,837 bytes. Strict `fsck`, no alternates, and zero reachable
+  AI-attribution matches pass, leaving 468,163 bytes below the decimal 10-MB
+  gate. No public history moved.
