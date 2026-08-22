@@ -257,6 +257,39 @@ def _compact_reduced_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
+def _compact_duplicate_nonlinear_trace(
+    trace: Any, diagnostics: dict[str, Any]
+) -> Any:
+    """Replace a duplicate top-level trace with a checked sidecar reference."""
+
+    if not isinstance(trace, dict):
+        return trace
+    times = np.asarray(trace["times"], dtype=float)
+    for phase in ("initial", "final"):
+        reduced = diagnostics[phase]["fixed_gradient_trace"]
+        if not np.array_equal(
+            times, np.asarray(reduced["times"], dtype=float), equal_nan=True
+        ):
+            raise ValueError(f"{phase} nonlinear trace has a different time axis")
+        if not np.array_equal(
+            np.asarray(trace[f"{phase}_heat_flux"], dtype=float),
+            np.asarray(reduced["heat_flux"], dtype=float),
+            equal_nan=True,
+        ):
+            raise ValueError(f"{phase} nonlinear heat-flux trace is not reproducible")
+        window = trace[f"{phase}_window"]
+        if any(window[key] != reduced["window"][key] for key in window):
+            raise ValueError(f"{phase} nonlinear trace window is inconsistent")
+    return {
+        "storage": "reduced_diagnostics.{initial,final}.fixed_gradient_trace",
+        "sample_count": int(times.size),
+        "time_min": float(np.min(times)),
+        "time_max": float(np.max(times)),
+        "initial_window": trace["initial_window"],
+        "final_window": trace["final_window"],
+    }
+
+
 def _compact_comparison_json_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Return a compact sidecar; full LCFS grids live in the rendered figure."""
 
@@ -264,7 +297,14 @@ def _compact_comparison_json_payload(payload: dict[str, Any]) -> dict[str, Any]:
     rows = []
     for result in compact["results"]:
         row = dict(result)
-        row["reduced_diagnostics"] = _compact_reduced_diagnostics(row["reduced_diagnostics"])
+        diagnostics = row["reduced_diagnostics"]
+        if row.get("nonlinear_trace") is None:
+            row.pop("nonlinear_trace", None)
+        else:
+            row["nonlinear_trace"] = _compact_duplicate_nonlinear_trace(
+                row["nonlinear_trace"], diagnostics
+            )
+        row["reduced_diagnostics"] = _compact_reduced_diagnostics(diagnostics)
         rows.append(row)
     compact["results"] = rows
     return compact
@@ -274,6 +314,12 @@ def _compact_result_json_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Summarize reproducible grids after rendering the result figures."""
 
     compact = dict(payload)
+    if payload.get("nonlinear_trace") is None:
+        compact.pop("nonlinear_trace", None)
+    else:
+        compact["nonlinear_trace"] = _compact_duplicate_nonlinear_trace(
+            payload["nonlinear_trace"], payload["reduced_diagnostics"]
+        )
     compact["reduced_diagnostics"] = _compact_reduced_diagnostics(
         payload["reduced_diagnostics"]
     )
