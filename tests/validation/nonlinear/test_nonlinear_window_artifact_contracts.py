@@ -90,9 +90,10 @@ def test_saturation_campaign_does_not_duplicate_requested_npz_trace(
 
     assert "trace" not in addressed
     assert addressed["trace_artifact"]["bytes"] == trace.stat().st_size
-    assert addressed["trace_artifact"]["sha256"] == hashlib.sha256(
-        trace.read_bytes()
-    ).hexdigest()
+    assert (
+        addressed["trace_artifact"]["sha256"]
+        == hashlib.sha256(trace.read_bytes()).hexdigest()
+    )
     assert len(inline["trace"]) == 3
 
 
@@ -109,6 +110,56 @@ def test_saturation_campaign_cannot_promote_a_continuation_segment() -> None:
     assert segment["saturated"] is False
     assert segment["reasons"] == ["prior_history_not_in_report"]
     assert report == {"saturated": True, "reasons": []}
+
+
+def test_saturation_policy_replay_requires_a_persistent_fixed_window() -> None:
+    replay = load_tool_script("campaigns", "replay_saturation_policy")
+    time = np.arange(0.0, 201.0, 0.5)
+    phase = 2.0 * np.pi * time / 10.0
+    report = replay.replay_policy(
+        time,
+        10.0 + 0.15 * np.sin(phase),
+        2.0 + 0.03 * np.sin(phase + 0.3),
+        100.0 + np.sin(phase + 0.7),
+        policy=replay.ReplayPolicy(window=50.0, persistence=20.0),
+    )
+
+    assert report["stopped"] is True
+    assert report["first_stop"]["persistence_start"] == pytest.approx(50.0)
+    assert report["first_stop"]["checkpoint_time"] == pytest.approx(70.0)
+    assert report["first_stop"]["decision"]["window_tmin"] == pytest.approx(20.0)
+    assert report["first_stop"]["decision"]["statistics"]["heat_flux"]["stationary"]
+
+
+def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
+    tmp_path: Path,
+) -> None:
+    replay = load_tool_script("campaigns", "replay_saturation_policy")
+
+    def write_trace(path: Path, time: np.ndarray, *, dirty: int = 0) -> None:
+        np.savez_compressed(
+            path,
+            time=time,
+            heat_flux=np.ones(time.size),
+            Wphi=np.ones(time.size),
+            Wg=np.ones(time.size),
+            gkx_git_commit=np.asarray("abc123"),
+            gkx_git_dirty=np.asarray(dirty),
+        )
+
+    first = tmp_path / "first.npz"
+    second = tmp_path / "second.npz"
+    write_trace(first, np.arange(0.0, 10.0))
+    write_trace(second, np.arange(10.0, 20.0))
+
+    arrays, sources = replay._load_traces([first, second])
+    assert arrays[0].tolist() == list(np.arange(20.0))
+    assert len(sources) == 2
+    assert sources[0]["sha256"] == hashlib.sha256(first.read_bytes()).hexdigest()
+
+    write_trace(second, np.arange(10.0, 20.0), dirty=1)
+    with pytest.raises(ValueError, match="not pinned to a clean GKX commit"):
+        replay._load_traces([first, second])
 
 
 def _touch_bundle(output: Path) -> None:
