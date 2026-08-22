@@ -1045,3 +1045,10 @@
 - GPU 0 automatically advanced to the exact QA Ny160 seed-31 continuation from
   `t=250` to `350`; GPU 1 continues the independent Ny160 seed-22 run, followed
   by the predeclared seed-31 `cfl=0.5` timestep check. Output names are disjoint.
+- Replayed roadmap commit `a51115de` into the private all-live-ref candidate.
+  Its stable patch ID and exact `plan.md`/`plan/` objects match the public tree.
+  A fresh no-local, no-alternates clone has 25 heads, 28 tags, 3,435 commits,
+  and 17,525 objects; pack 8,758,866 bytes, pack plus index 9,250,638 bytes,
+  and complete `.git` file sum 9,583,930 bytes. Strict `fsck` and the reachable
+  AI-metadata scan pass with zero hits. This measurement precedes this record;
+  no public history moved.

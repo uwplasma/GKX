@@ -648,9 +648,9 @@ end-to-end regeneration preserve the published roots. The rewrite substitutes
 only Git blob `99a3ff82ac7c9e15e66635e1bb054380decb81ad`.
 
 Immediately before recording this measurement, the candidate through roadmap
-commit `b6085a4a` has 25 heads, 28 tags, 3,432 commits, and 17,508 objects. Its
-transfer pack is 8,746,756 bytes; pack plus index is 9,238,052 bytes; and the
-complete `.git` file sum is 9,571,276 bytes. Strict `fsck`, zero alternates,
+commit `a51115de` has 25 heads, 28 tags, 3,435 commits, and 17,525 objects. Its
+transfer pack is 8,758,866 bytes; pack plus index is 9,250,638 bytes; and the
+complete `.git` file sum is 9,583,930 bytes. Strict `fsck`, zero alternates,
 and the reachable-metadata attribution scan pass. Closed topic heads still
 require a frozen delete/retain map, and no remote history has moved.
 
