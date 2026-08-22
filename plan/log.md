@@ -1304,3 +1304,19 @@
   index 9,333,626 bytes, and complete `.git` 9,668,005 bytes. Strict `fsck`,
   no alternates, and zero AI-attribution metadata pass. This measurement
   precedes this record; no public history moved.
+- A fresh source-deduplication attempt reproduced work already owned by draft
+  PR #93. Closed the redundant draft #106 immediately and retained #93 as the
+  sole review path. The independent #93 audit found one unused facade constant
+  and no direct gate for the canonical signature/`__wrapped__` owner. Commit
+  `b309a0af` removes the constant and adds that contract. The complete patch
+  removes 29 installed lines and 23 Python lines overall; 55 direct geometry
+  tests, all 117 release tests, Ruff, changed-module mypy, diff, and the
+  96,436-line architecture gate pass. GitHub CI is active.
+- Replayed #93 commit `b309a0af` privately as `1fe08146`. The complete public
+  and private patches share stable ID `f214864b`; all three affected head blobs
+  are identical. After strict `fsck` and garbage collection, a fresh ordinary
+  clone has 28 remote refs, 28 tags, 3,471 commits, and 17,758 objects: pack
+  8,736,180 bytes, pack plus index 9,234,476 bytes, and complete `.git` file
+  sum 9,568,911 bytes. It has no alternates and zero reachable AI-attribution
+  matches, leaving 431,089 bytes below the decimal 10-MB gate. No public
+  history moved.

@@ -307,3 +307,13 @@ tags, 3,456 commits, and 17,656 objects. Pack, pack-plus-index, and complete
 zero alternates, and the reachable-attribution scan pass, leaving 210,609 bytes
 of strict decimal margin. The following roadmap record again requires replay
 and independent measurement before any coordinated cutover.
+
+PR #93 follow-up `b309a0af` is replayed as `1fe08146`. Its complete aggregate
+patch has the same public/private stable ID `f214864b`, and the three affected
+head blobs are byte-identical. A garbage-collected, ordinary no-local clone of
+the current candidate has 28 remote refs, 28 tags, 3,471 commits, and 17,758
+objects. Its pack is 8,736,180 bytes, pack plus index is 9,234,476 bytes, and
+the complete `.git` file sum is 9,568,911 bytes. Strict `fsck`, no alternates,
+and zero reachable AI-attribution matches pass, leaving 431,089 bytes of
+strict decimal margin. The redundant draft #106 is closed and is not retained
+as a live rewrite head. No public history moved.

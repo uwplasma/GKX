@@ -864,6 +864,18 @@ four-preview palette gate. PR #105 then removes 52 source lines by sharing
 linear sampling/cache policy and the donated/nondonated JIT-wrapper body. It
 retains module-local cache-builder and trace-time implementation injection.
 
+PR #93 is the first geometry-owner cut. The differentiable facade delegates
+its in-memory VMEC/Boozer bridge to the canonical core implementation while
+retaining the facade's monkeypatch hooks. An independent follow-up removed an
+unused parity constant and gates the public signature and `__wrapped__` owner,
+so future core API changes cannot silently leave the facade stale. At
+`b309a0af` the branch has 96,436 installed Python lines (-29 from the frozen
+baseline) and removes 23 Python lines across the complete patch. Fifty-five
+direct geometry tests, 117 release gates, Ruff, changed-module mypy, and the
+architecture gate pass locally; the restarted GitHub matrix is still active.
+A separately opened #106 was closed once this existing owner was discovered;
+it is not a second implementation or a promotion candidate.
+
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
 patch are exact; its large release-gate file differs only in the intentional
