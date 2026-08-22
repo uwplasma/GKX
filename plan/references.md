@@ -234,13 +234,25 @@ slimming comparators, not its line count as an accuracy-independent target.
   https://doi.org/10.1063/1.864116
 - Kim et al., nonlinear stellarator turbulence optimization with GX/DESC,
   https://arxiv.org/abs/2310.18842
+- Wei et al., low-dimensional geometry learning for turbulence prediction in
+  optimized stellarators, https://arxiv.org/abs/2603.17366
 - VMEC/VMEX and GKX must expose the chain
   `boundary -> equilibrium -> Boozer/field line -> gyrokinetic window -> Q` with
   every local derivative checked against finite differences before composition.
   Kim et al. are the direct nonlinear comparator: their noisy objective used
   two-evaluation SPSA. GKX's finite-window adjoint should be compared against
   matched SPSA/finite-difference cost and final independent saturated transport,
-  not against a noiseless optimization trace.
+  not against a noiseless optimization trace. Their post-processing raises the
+  perpendicular grid to `128x128`, velocity resolution to `(Nl,Nm)=(8,16)`,
+  and tube length to two poloidal turns; their field-line scan still finds about
+  50% heat-flux variation. This supports independent `alpha`, `npol`, spatial,
+  and velocity gates rather than validating GKX's current single-tube result.
+
+Wei et al. identify a low-dimensional latent space for optimized QH geometry
+and a correlation between linear zonal residue and axis excursion. This is a
+useful later design-of-experiments/surrogate coordinate, not a replacement for
+nonlinear labels: train it only on source-pinned, resolution-qualified GKX/GX
+transport and reserve complete geometries as held-out tests.
 
 ## SOLVAX relevance
 

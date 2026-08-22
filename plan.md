@@ -360,12 +360,25 @@ combined SEM, so Ny=96 transport was not converged. Raising `ky*rho_i|max`
 from 1.476 to 2.0 lowers heat-flux cutoff/peak from 14.80% to 4.20% and
 last-three-ky mass from 3.71% to 0.95%; Phi2 is already small at both
 resolutions. Ny=128 clears the necessary spectral screen, but `t=200--250`
-fails every Ny=128 half-window guard. Its exact-state continuation to absolute
-`t=500` is active; no transport value is promoted before the complete-history
-frozen decision and late-window comparison. SHA-256: NPZ
+fails every Ny=128 half-window guard. SHA-256: NPZ
 `9d8f3062389780536ce4df7497b03905b2038ad2f64d75895f7891afaedbc52b`, JSON
 `1724347485b1996cc4d0ec1f66e68473d1f6c601cebf0e3bfe6ba4289bd60933`, log
 `730c377f3b57fdf57ad96c45e3d98ef57487e44173d72f36696b617dab298168`.
+
+The exact Ny=128 continuation now reaches absolute `t=500` after another
+4,902.5 s. The combined 1,925-sample history still makes no frozen stop: its
+six pass islands last 11.51, 19.45, 14.13, 0.52, 27.48, and 8.19 time units.
+The terminal `t=425.09--500` window passes Q/Wphi/Wg with
+`Q=3.4484 +/- 0.0224`, but has not persisted for the predeclared 60 units.
+Over the matched `t=400--500` suffix, Ny=96 and Ny=128 give
+`Q=4.1869 +/- 0.0822` and `3.4194 +/- 0.0333`: Ny=96 is 18.33% higher, or
+8.65 combined SEM. Ny=128 retains its spectral pass (4.38% cutoff/peak, 0.97%
+last-three-ky mass, and 3.19% outer-six-kx mass). QI therefore rejects Ny=96
+for transport while withholding a causal saturation claim. Continuation
+SHA-256: NPZ
+`46627a0d9e5256119a80debd0827864481d033c844ecc64b173f3d188689285b`, JSON
+`ef89e389591c1e286754bd4708707eb46dca408571d6c19523a9cd24f5d5fa9e`, log
+`01f66c52ae2c5e97bb5732570489a4d387c9f4af001f057fbc4f71ff30d9438b`.
 
 The earlier environment-contaminated QA `96x128x48` rung completed at `t=250`
 in 3,648.2 s. On the
@@ -431,23 +444,25 @@ one campaign tool:
 
 ```bash
 PYTHONPATH=src python tools/campaigns/nonlinear_saturated_state.py \
-  --replay-trace TRACE.npz --replay-window 75 --replay-persistence 60 \
+  --replay-trace TRACE.npz --replay-summary SUMMARY.json \
+  --replay-window 75 --replay-persistence 60 \
   --replay-rel-sem 0.05 --replay-min-tau-multiples 10 --output REPORT.json
 ```
 
-The report records ordered source and implementation SHA-256 digests, every
-causal pass island, and the first persistence-qualified stop. Replaying the
-six accepted histories gives no stop for QA Ny=96/Ny=160, QI Ny=96/Ny=128,
+The report records ordered trace, summary, and implementation SHA-256 digests,
+every causal pass island, and the first persistence-qualified stop. Legacy
+multi-segment traces fail closed without one bound summary per segment.
+Replaying the six accepted histories gives no stop for QA Ny=96/Ny=160, QI Ny=96/Ny=128,
 or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
 
 | trace | replay report |
 | --- | --- |
-| QA Ny=96 | `9820207af5a039f4e1bed13371873fdc94183dcbe44030f4f90eee53db337ea6` |
-| QA Ny=128 | `267d68000da016269f062b4dbd0a92741d9ac3af562fc46d1e63e6f870a07eb8` |
-| QA Ny=160 | `7b478f818709fd1d3c3552c90564353704f837c8805130d799ca9e5f10372481` |
-| QI Ny=96 | `069fdeaff3ec880f9f98d522cc9fd2f337720499cf0c638caf45c27986c502ea` |
-| QI Ny=128 | `88fca1ff4871b17228b66655ba3c3d25fba342bb5a6241e39e1c10425a1825c5` |
-| QHS Ny=160 | `3210a3c971401ecbe975e2878ac04d8b171db156d91ed9338555669be024bc69` |
+| QA Ny=96 | `0b7957abc291bcd3dac55f32c58535c627097dae7158d29dc31c43c6f623d9ef` |
+| QA Ny=128 | `f9db9ee5b0c2a39db2fb46025884f812e938016b8c10bb943b06b4d2af3001a7` |
+| QA Ny=160 | `6b5263302b60c2cd4a42e278f94a03866b72e7788b41095af0abf98f739892c8` |
+| QI Ny=96 | `3cd1d3e7f1debddfadfbbed6b14ffb2912e465bd73025c6ba59eb022d14996ea` |
+| QI Ny=128 | `c8133f3c1de07c430bbef20c4a19629253fe447ca0031d18f9627f5dcbff4ff3` |
+| QHS Ny=160 | `8159e162b4cda45fd0d82c16f1c42a89a87326946aaf88d4502cd9aa5b257d5e` |
 
 These are policy-replay records, not solver outputs or a claim that the shadow
 rule is ready to become the default.
@@ -822,7 +837,7 @@ MP4 SHA-256:
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS continue |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed-31 Ny triple complete; QHS Ny128 t=750 and QI Ny128 t=500 active |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed-31 triple and QI Ny128 t=500 complete; QHS Ny128 t=750 active |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |

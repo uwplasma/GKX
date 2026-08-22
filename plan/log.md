@@ -955,3 +955,51 @@
   9,546,342-byte complete `.git` file sum. Strict `fsck`, zero alternates, and
   the reachable-metadata attribution scan pass. The rehearsal ref map and
   bundle remain stale by design; no public ref moved.
+- Independent review then found that replay accepted any increasing same-commit
+  trace pair, even from different physics cases, and that same-shaped restart
+  states could likewise cross case boundaries. PR #91 commits `4cdc8fb6` and
+  `85026529` fail closed on both paths. New artifacts fingerprint the deck and
+  VMEC file and record case, grid, moments, seed, `alpha`, `npol`, and spectral
+  axes; legacy continuation traces must at least form an exact declared endpoint
+  chain with matching recorded identity. Compatible tool-only commits still
+  pass through exact `src/gkx` tree comparison.
+- All 96 nonlinear validation tests, Ruff, architecture, size, and diff checks
+  pass locally. Replayed accepted legacy QI/QHS continuations retain every pass
+  island and stop verdict. Mixed-case, mismatched-endpoint, incomplete-source,
+  and incompatible-state tests reject. The regenerated replay-report SHA-256
+  values are recorded in `plan.md`; full required CI restarted at `85026529`.
+- A clean `4x4x4`, `(Nl,Nm)=(1,2)` CPU write/restart/replay smoke then exercised
+  the real path at `85026529`. The first segment reached `t=0.1`, the accepted
+  restart reached absolute `t=0.2`, and the joined four-sample trace replayed
+  without identity loss. Both trace files and the continuation state contain
+  the same schema, deck digest, grid, moments, seed, `alpha`, and `npol`.
+- Adversarial replay of the real legacy files found that QA Ny96 `t=250` plus
+  the QI Ny96 continuation still shared every old NPZ identity field and was
+  accepted. PR #91 commit `0de845c2` now requires one ordered companion summary
+  per legacy segment. It verifies clean matching source provenance and either
+  the addressed NPZ digest or every scalar sample, then compares canonical
+  case/grid/geometry/seed/field-line identity. The genuine QI and QHS histories
+  reproduce unchanged; the mixed QA/QI history rejects. The report hashes in
+  `plan.md` now bind both NPZ and JSON inputs.
+- A 2026 primary-source refresh adds Wei et al.'s low-dimensional QH geometry
+  result as a future surrogate/design-of-experiments option. It does not replace
+  nonlinear labels. Re-reading Kim et al. also strengthens the present gates:
+  their post-processing used `128x128`, `(Nl,Nm)=(8,16)`, two poloidal turns,
+  and still found about 50% variation across field-line label.
+- The source-pinned QI Ny128 exact-state continuation reached absolute `t=500`
+  in 4,902.5 s. The frozen replay over both segments still makes no stop: six
+  pass islands last at most 27.48 time units, and the terminal island lasts
+  only 8.19. Its trailing 75-unit window passes Q/Wphi/Wg and gives
+  `Q=3.4484 +/- 0.0224`, so the non-stop is a causal-persistence result rather
+  than a high-SEM failure.
+- On the matched `t=400--500` suffix, QI Ny96 and Ny128 give
+  `Q=4.1869 +/- 0.0822` and `3.4194 +/- 0.0333`; the 18.33% change is 8.65
+  combined SEM. Ny128 also passes the necessary heat-flux spectral screen at
+  4.38% cutoff/peak, 0.97% last-three-ky mass, and 3.19% outer-six-kx mass.
+  Ny96 is therefore rejected for QI transport, while no causal saturation
+  value is promoted. Continuation SHA-256: NPZ
+  `46627a0d9e5256119a80debd0827864481d033c844ecc64b173f3d188689285b`, JSON
+  `ef89e389591c1e286754bd4708707eb46dca408571d6c19523a9cd24f5d5fa9e`, log
+  `01f66c52ae2c5e97bb5732570489a4d387c9f4af001f057fbc4f71ff30d9438b`.
+  The bound frozen-replay report SHA-256 is
+  `c8133f3c1de07c430bbef20c4a19629253fe447ca0031d18f9627f5dcbff4ff3`.
