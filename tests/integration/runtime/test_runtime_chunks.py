@@ -232,10 +232,11 @@ def test_run_adaptive_runtime_chunk_loop_stops_early_on_stop_condition() -> None
     )
     seen: list[int] = []
 
-    def stop_condition(t, heat_flux, wphi):
+    def stop_condition(t, heat_flux, wphi, wg):
         # The check sees the accumulated unstrided traces on the global axis.
         np.testing.assert_allclose(t, 0.5 + 0.5 * np.arange(t.size))
         assert heat_flux.shape == t.shape and wphi.shape == t.shape
+        assert wg.shape == t.shape
         seen.append(int(t.size))
         return {"stop": t.size >= 4, "saturated": t.size >= 4, "mean": 0.0}
 
@@ -266,7 +267,10 @@ def test_run_adaptive_runtime_chunk_loop_reports_last_decision_without_stop() ->
         t_max=1.0,
         chunk_steps=8,
         label="test",
-        stop_condition=lambda t, heat_flux, wphi: {"stop": False, "saturated": False},
+        stop_condition=lambda t, heat_flux, wphi, wg: {
+            "stop": False,
+            "saturated": False,
+        },
     )
 
     assert result.stop_decision == {"stop": False, "saturated": False}
@@ -306,7 +310,11 @@ def test_saturation_stop_condition_defaults_on_for_diagnosed_nonlinear_runs() ->
     cfg, ctx, policy = _stop_policy_inputs(steps=4000)
 
     assert cfg.time.run_to == "saturation"
-    assert _saturation_stop_condition(cfg, ctx, policy) is not None
+    stop = _saturation_stop_condition(cfg, ctx, policy)
+    assert stop is not None
+    time = np.arange(16.0)
+    with pytest.raises(ValueError, match="free_energy_guard"):
+        stop(time, np.ones_like(time), np.ones_like(time), np.ones(15))
 
 
 @pytest.mark.parametrize(

@@ -66,6 +66,7 @@ _SATURATION_DECISION_FIELDS = (
     "halves_sem",
     "stationary",
     "guard_stationary",
+    "Wg_guard_stationary",
 )
 
 
@@ -151,6 +152,7 @@ def saturation_stop_decision(
     values: Sequence[float] | np.ndarray,
     *,
     guard: Sequence[float] | np.ndarray | None = None,
+    free_energy_guard: Sequence[float] | np.ndarray | None = None,
     config: SaturationStopConfig | None = None,
 ) -> dict[str, Any]:
     """Decide whether a nonlinear trace has saturated well enough to stop.
@@ -167,9 +169,10 @@ def saturation_stop_decision(
     only noise), window span at least ``min_window``
     (default ``10 tau_ac``), IAT-corrected relative SEM at most ``rel_sem``,
     first/second half-window means within twice their combined SEM, and --
-    when a ``guard`` trace (Phi^2) is given -- the same half-window
-    stationarity on the guard over the same window. The guard has no relative-SEM gate: it only
-    protects against a flat-looking flux while the field energy still drifts.
+    when ``guard`` (Wphi) or ``free_energy_guard`` (Wg) is given -- the same
+    half-window stationarity on each guard over the same window. Guards have no
+    relative-SEM gate: they protect against a flat-looking flux while either
+    energy still drifts.
     The trace is assumed finite; the runtime validates each chunk before this.
     """
 
@@ -185,6 +188,13 @@ def saturation_stop_decision(
     g = None if guard is None else np.asarray(guard, dtype=float).reshape(-1)
     if g is not None and g.size != t.size:
         raise ValueError("guard must match the time axis")
+    wg = (
+        None
+        if free_energy_guard is None
+        else np.asarray(free_energy_guard, float).ravel()
+    )
+    if wg is not None and wg.size != t.size:
+        raise ValueError("free_energy_guard must match the time axis")
     min_samples = max(int(cfg.min_samples), 8)
     if t.size < min_samples:
         return _empty_saturation_decision(cfg, reason="trace_shorter_than_min_samples")
@@ -203,6 +213,7 @@ def saturation_stop_decision(
     rel_sem = float(sem / max(abs(mean), _SATURATION_VALUE_FLOOR))
     first_mean, second_mean, halves_sem, stationary = _halves_stationary(wy, dt)
     guard_stationary = None if g is None else _halves_stationary(g[start:], dt)[3]
+    wg_stationary = None if wg is None else _halves_stationary(wg[start:], dt)[3]
     # A trace that never left zero has nothing to converge: the relative SEM
     # divides by a floor rather than a mean, so every gate below passes on a
     # dead signal and the run stops in its first chunk. A zonal-response case,
@@ -217,6 +228,7 @@ def saturation_stop_decision(
         "rel_sem_above_threshold": rel_sem <= float(cfg.rel_sem),
         "window_not_stationary": bool(stationary),
         "guard_not_stationary": guard_stationary is None or bool(guard_stationary),
+        "Wg_guard_not_stationary": wg_stationary is None or bool(wg_stationary),
     }
     return {
         "kind": "nonlinear_saturation_stop_decision",
@@ -237,6 +249,7 @@ def saturation_stop_decision(
         "halves_sem": halves_sem,
         "stationary": bool(stationary),
         "guard_stationary": guard_stationary,
+        "Wg_guard_stationary": wg_stationary,
         "config": asdict(cfg),
     }
 

@@ -279,10 +279,9 @@ def main() -> int:
         times,
         flux,
         guard=wphi,
+        free_energy_guard=wg,
         config=stop_config,
     )
-    wg_report = saturation_stop_decision(times, flux, guard=wg, config=stop_config)
-    report["Wg_guard_stationary"] = wg_report["guard_stationary"]
     print(
         f"\nran {times.size} samples to t={absolute_times[-1]:.6g} in {elapsed:.1f}s",
         flush=True,

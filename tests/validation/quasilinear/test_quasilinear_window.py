@@ -649,6 +649,17 @@ def test_saturation_stop_decision_guard_blocks_drifting_field_energy() -> None:
     assert decision["guard_stationary"] is False
 
 
+def test_saturation_stop_decision_guard_blocks_drifting_free_energy() -> None:
+    t, heat = _spinup_then_plateau()
+    _, drifting_wg = _spinup_then_plateau(drift_per_time=0.05, seed=11)
+
+    decision = saturation_stop_decision(t, heat, free_energy_guard=drifting_wg)
+
+    assert decision["saturated"] is False
+    assert "Wg_guard_not_stationary" in decision["reasons"]
+    assert decision["Wg_guard_stationary"] is False
+
+
 def test_saturation_stop_decision_honors_min_window_override() -> None:
     t, heat = _spinup_then_plateau()
 

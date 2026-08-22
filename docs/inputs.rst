@@ -318,8 +318,9 @@ the accumulated heat-flux trace with spin-up excluded. It stops once the
 autocorrelation-corrected relative SEM of the windowed mean is at or below
 ``saturation_rel_sem``, the window is at least ``saturation_min_window`` long,
 and the first and second halves of the window agree within twice their combined
-SEM (with the same stationarity test applied to ``Wphi`` as a guard). ``t_max``
-remains the hard cap, so a run that never saturates behaves exactly as before.
+SEM. The same stationarity test guards the electrostatic field energy ``Wphi``
+and gyrokinetic free energy ``Wg``. ``t_max`` remains the hard cap, so a run
+that never saturates behaves exactly as before.
 The chosen window and its ``mean +/- SEM`` are printed in the run summary and
 recorded under ``saturation`` in the summary JSON. Pass
 ``--no-until-saturated`` (or set ``run_to = "t_max"``) for a fixed horizon.
