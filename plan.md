@@ -761,12 +761,14 @@ its generator (`371,750 -> 151,626` bytes); the six physics tests and a default
 end-to-end regeneration preserve the published roots. The rewrite substitutes
 only Git blob `99a3ff82ac7c9e15e66635e1bb054380decb81ad`.
 
-Immediately before recording this measurement, the candidate through roadmap
-commit `a51115de` has 25 heads, 28 tags, 3,435 commits, and 17,525 objects. Its
-transfer pack is 8,758,866 bytes; pack plus index is 9,250,638 bytes; and the
-complete `.git` file sum is 9,583,930 bytes. Strict `fsck`, zero alternates,
-and the reachable-metadata attribution scan pass. Closed topic heads still
-require a frozen delete/retain map, and no remote history has moved.
+After replaying the matched-CFL roadmap result, a fresh no-local clone of the
+candidate through roadmap commit `7afdcc3d` has 25 heads, 28 tags, 3,443
+commits, and 17,569 objects. Its transfer pack is 8,771,451 bytes; pack plus
+index is 9,264,455 bytes; and the complete `.git` file sum is 9,597,923 bytes,
+402,077 bytes below the strict decimal 10-MB gate. Strict `fsck`, zero
+alternates, and zero reachable AI-attribution matches pass. The candidate head
+names are exactly `main` plus all 24 open public PR branches. Closed topic heads
+still require a frozen delete/retain map, and no remote history has moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
