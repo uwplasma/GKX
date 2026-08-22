@@ -440,11 +440,42 @@ window `t=155.844--230.844`, Ny=128 and Ny=160 give
 compatibility, not convergence. Ny=160 lowers heat-flux cutoff/peak from
 13.87% to 7.55% and last-three-ky mass from 3.04% to 1.45%; outer-six-kx mass
 remains 0.11%. It clears the frozen cutoff screen, while time persistence and
-an independent seed remain open. Its exact state is queued to continue to
-absolute `t=350`. Ny=160 SHA-256: NPZ
+an independent seed remain open. Ny=160 SHA-256: NPZ
 `4564fd5f9d50f441623040c9329bf22e498f4d7fbadf4ef25abbf195842ad185`, JSON
 `05af33be9bf3f4645750c42e32a32db0ab754d3a0c161537c396066c8f6784e5`, log
 `c1d0fca85be22b465b1d20e41f4cb1cdb0e06ce6152155e19ef98940f88ce49b`.
+
+The exact seed-31 state now continues to absolute `t=350` in 2,100.3 s. The
+joined 1,066-sample history still makes no frozen stop: seven pass islands last
+at most 29.13 time units, and the terminal island lasts only 6.31. Over
+`t=250--350`, `Q=10.9902 +/- 0.3072` and Q/Wphi/Wg pass their half-window
+checks; heat cutoff/peak is 9.98%, last-three-`ky` mass 1.51%, and outer-six-
+`kx` mass 0.12%. The shipped full-history selector now passes by averaging
+`t=24.95--350`, with `Q=11.3449 +/- 0.3128`; this explains current runtime
+behavior but does not satisfy the frozen causal-persistence hold. Continuation
+SHA-256: NPZ
+`d16582748f84080d3a86137657d00fb9846f479103956896bfee0032c1058c62`, JSON
+`45917775003d9d7de3ae107333e85f55378a842cb5bc45a303480dce69f646ee`, log
+`bf70889c3da4865114a31e7e49bb7d12c085ff9a02926e2e2ea42d14aaa1f5c1`.
+
+The independent source-pinned Ny=160 seed-22 run reached exact `t=250` in
+5,007.6 s. Its frozen rule also makes no stop: three pass islands last 42.23,
+18.60, and 24.57 time units, while terminal Wphi and Wg drift. On the matched
+`t=150--250` window, seed 22 and seed 31 give
+
+\[
+ Q_{22}=10.4833\pm0.1734,\qquad Q_{31}=11.2606\pm0.4042.
+\]
+
+The -6.90% difference is 1.77 combined SEM, so the means are not statistically
+separated at two SEM. The spatial gate is less robust: heat cutoff/peak is
+12.24% for seed 22 versus 9.46% for seed 31, crossing the fixed 10% screen;
+last-three-`ky` mass is 1.52% versus 1.49%. Ny=160 is therefore not yet a
+seed-robust accepted QA rung. The exact seed-22 state is continuing to `t=350`
+on GPU 0 while the seed-31 `cfl=0.5` run executes on GPU 1. SHA-256: NPZ
+`0f31911b8723c6f006d0c3cc921f6958507fed6f9e4df04986071e45c73d06ea`, JSON
+`14715807b6faae2c122f1d17632f5a744bea2d81b4342a26a2b01099140e3d5a`, log
+`6747c8f51827b4454d932037956354ea3d5514df8f7cbff14568ecb855d29807`.
 
 The source-pinned QA `96x96x48`, seed-31 rung then reached exact `t=250` in
 2,200.7 s. It also makes no frozen stop; the longest pass island is
@@ -481,6 +512,8 @@ or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
 | QA Ny=96 | `0b7957abc291bcd3dac55f32c58535c627097dae7158d29dc31c43c6f623d9ef` |
 | QA Ny=128 | `f9db9ee5b0c2a39db2fb46025884f812e938016b8c10bb943b06b4d2af3001a7` |
 | QA Ny=160 | `6b5263302b60c2cd4a42e278f94a03866b72e7788b41095af0abf98f739892c8` |
+| QA Ny=160 seed 31, t=350 | `5542c67c774afb349393f2682c4c98ac38cb45dace4e56be36f0bf21486e9a06` |
+| QA Ny=160 seed 22, t=250 | `78164cafda9f90f17541172b9658776677f9a179647aecf3cee4ca21bacfe5e0` |
 | QI Ny=96 | `3cd1d3e7f1debddfadfbbed6b14ffb2912e465bd73025c6ba59eb022d14996ea` |
 | QI Ny=128 | `c8133f3c1de07c430bbef20c4a19629253fe447ca0031d18f9627f5dcbff4ff3` |
 | QHS Ny=160 | `8159e162b4cda45fd0d82c16f1c42a89a87326946aaf88d4502cd9aa5b257d5e` |
@@ -860,7 +893,7 @@ MP4 SHA-256:
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS make no accepted stop |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed-31 triple, QI Ny128, and QHS Ny128/Ny160 complete; QA seed/timestep checks active |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed 22 crosses the Ny160 spectral screen; exact continuation and CFL check active |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |

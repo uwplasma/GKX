@@ -1052,3 +1052,23 @@
   and complete `.git` file sum 9,583,930 bytes. Strict `fsck` and the reachable
   AI-metadata scan pass with zero hits. This measurement precedes this record;
   no public history moved.
+- PR #94 commit `2d5f3cc8` is fully green after the independent documentation
+  correction: all 24 wide shards, long quick-test jobs, coverage, and aggregate
+  gate pass. The PR remains open and unmerged.
+- The exact QA Ny160 seed-31 continuation reached absolute `t=350` in another
+  2,100.3 s. The joined history makes no frozen stop; its longest pass island is
+  29.13 and terminal persistence only 6.31. Over `t=250--350`,
+  `Q=10.9902 +/- 0.3072`, all three stationarity guards pass, and heat
+  cutoff/peak is 9.98%. The shipped selector passes only after retaining
+  `t=24.95--350`, with `Q=11.3449 +/- 0.3128`. NPZ/JSON/log SHA-256 prefixes
+  are `d1658274/45917775/bf70889c`; bound replay is `5542c67c`.
+- The independent source-pinned QA Ny160 seed-22 run reached exact `t=250` in
+  5,007.6 s. It makes no frozen stop; pass islands last at most 42.23, and its
+  terminal Wphi/Wg fail stationarity. Over `t=150--250`, seed 22 and seed 31
+  give `Q=10.4833 +/- 0.1734` and `11.2606 +/- 0.4042`, a -6.90% difference or
+  1.77 combined SEM. Heat cutoff/peak is 12.24% versus 9.46%, so Ny160 is not
+  yet a seed-robust accepted QA rung. NPZ/JSON/log prefixes are
+  `0f31911b/14715807/6747c8f5`; bound replay is `78164caf`.
+- GPU 0 now continues the exact seed-22 state to `t=350`; GPU 1 runs the
+  predeclared seed-31 `cfl=0.5` check. Thresholds, deck, source, and output
+  cadence remain frozen.
