@@ -833,3 +833,22 @@
   8,632,357-byte pack and 9,454,569-byte complete `.git`; strict `fsck` and the
   reachable-attribution scan pass. The earlier ref map and bundle remain
   rehearsal snapshots and must not be used as the final cutover manifest.
+- Replotted the user's saved `96x96x48` QA bundle without rerunning it. The old
+  summary and NetCDF both stop at `t=200.6201`, but the rejected saturation
+  report reaches `t=238.0251`: the pre-#84 terminal 1,024-step chunk was checked
+  before its saved diagnostics were truncated. PR #84's exact remaining-time
+  terminal chunk therefore fixes a demonstrated state/trace/statistics defect,
+  not only a synthetic edge case.
+- The same replot found that PR #94 removed the rejected window only from the
+  standalone figures; the one-page summary still shaded and averaged it.
+  Commit `b7807032` applies the fail-closed window to all embedded data panels
+  while retaining the rejected interval and verdict in metadata. Four summary
+  tests, the CLI regression, and a real-bundle render pass. The actual
+  second-half view (`t=100.3--200.6`) reports heat-flux and potential
+  `ky` tail/peak ratios 0.65 and 0.36, so both need Ny refinement.
+- PRs #95 and #103 are fully green after their compact-render and self-contained
+  manifest reruns. The clean no-alternates candidate also completes all 2,554
+  collected x64 CPU tests and configured mypy. Replaying the new #94 commit
+  leaves 25 heads, 28 tags, 3,424 commits, and 17,445 objects; a fresh clone has
+  an 8,648,640-byte pack and 9,471,172-byte complete `.git`, with strict `fsck`
+  and the reachable-attribution scan passing.

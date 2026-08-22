@@ -215,8 +215,8 @@ match for every textual patch; PR #90 alone omits a generated PNG that PR #95
 intentionally removes. No replayed head reaches the old `main` object graph.
 
 The refreshed ordinary clone now advertises 25 heads (`main` plus every open PR
-head through #103) and all 28 remote tags, with 3,423 reachable commits and
-17,435 objects. PR #82 is represented by one source-neutral plan snapshot; its
+head through #103) and all 28 remote tags, with 3,424 reachable commits and
+17,445 objects. PR #82 is represented by one source-neutral plan snapshot; its
 incremental roadmap history remains in the recovery bundle and ref map. PR #102
 also corrects the single-result artifact writer so deterministic rendered grids
 are summarized like the comparison sidecar. The tracked nonlinear optimization
@@ -243,12 +243,12 @@ generators. The final rewrite maps both loop blobs
 reachable in the rehearsal.
 
 Immediately before this record, a fresh no-alternates clone has an
-8,632,357-byte network-equivalent pack, a 489,252-byte index, 9,121,609 bytes
-for pack plus index, a 9,454,569-byte complete `.git` file sum, and a
+8,648,640-byte network-equivalent pack, a 489,532-byte index, 9,138,172 bytes
+for pack plus index, a 9,471,172-byte complete `.git` file sum, and a
 4,888,710-byte current-tree archive. Strict
 `fsck` passes, the clone has no object alternate, and reachable commit metadata
 has no AI attribution marker. This closes the local public-ref size gate with
-1,367,643 bytes of transfer-pack margin and 545,431 bytes under the stricter
+1,351,360 bytes of transfer-pack margin and 528,828 bytes under the stricter
 complete-`.git` decimal gate. The user's 2026-08-21 request authorizes a
 coordinated forced rewrite, but authorization does not replace the remaining
 safety gates: land only reviewed slimming prerequisites in the intended main
