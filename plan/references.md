@@ -236,6 +236,11 @@ slimming comparators, not its line count as an accuracy-independent target.
   https://arxiv.org/abs/2310.18842
 - Wei et al., low-dimensional geometry learning for turbulence prediction in
   optimized stellarators, https://arxiv.org/abs/2603.17366
+- Paischer et al., GyroSwin nonlinear gyrokinetic surrogate,
+  https://arxiv.org/abs/2510.07314; code and weights:
+  https://github.com/ml-jku/neural-gyrokinetics
+- Galletti et al., physics-informed neural compression of gyrokinetic data,
+  https://arxiv.org/abs/2602.04758
 - VMEC/VMEX and GKX must expose the chain
   `boundary -> equilibrium -> Boozer/field line -> gyrokinetic window -> Q` with
   every local derivative checked against finite differences before composition.
@@ -253,6 +258,16 @@ and a correlation between linear zonal residue and axis excursion. This is a
 useful later design-of-experiments/surrogate coordinate, not a replacement for
 nonlinear labels: train it only on source-pinned, resolution-qualified GKX/GX
 transport and reserve complete geometries as held-out tests.
+
+GyroSwin is a useful learned-rollout comparator, not a transport or derivative
+oracle. Its present adiabatic-electron GKW data cover 241 training simulations;
+the paper reports long rollouts but also accumulated error, smoothed zonal
+profiles, and weaker high-`ky` spectra. Admission to GKX therefore requires
+held-out geometry, `alpha`, `npol`, resolution, timestep, seed, invariant, and
+long-window transport gates. Neural compression is likewise optional storage
+research: lossless compact traces and exact hashes remain the regression source
+of truth; no lossy artifact may support acceptance until it preserves Q,
+`Wphi`, `Wg`, spectra, autocorrelation/SEM, restart, and derivative quantities.
 
 ## SOLVAX relevance
 

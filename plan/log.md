@@ -1011,3 +1011,37 @@
   `.git` file sum 9,571,276 bytes. Strict `fsck` and the reachable AI-metadata
   scan pass with zero hits. No public ref moved; the recovery bundle and ref
   map remain intentionally stale until the coordinated freeze.
+- PR #91 is fully green at `0de845c2`: all required checks, 24 wide shards,
+  coverage, packaging, mypy, Python floor, and the aggregate gate pass. An
+  independent PR #94 audit found one remaining documentation mismatch: rejected
+  runs suppress the time-domain mean and shading, while spectra deliberately use
+  a labelled second-half diagnostic window. Commit `2d5f3cc8` states that
+  behavior exactly; its restarted CI is still in progress.
+- The private all-live-ref rewrite rehearsal now also replays roadmap commit
+  `c9e9cfce` and PR #94 commit `2d5f3cc8`. A fresh no-local, no-alternates clone
+  has 3,434 commits and 17,519 objects; pack 8,755,505 bytes, pack plus index
+  9,247,109 bytes, and complete `.git` file sum 9,580,377 bytes. Strict `fsck`
+  and the reachable AI-metadata scan pass with zero hits. These measurements
+  precede this record and remain private; no public ref moved.
+- The 2026 source refresh adds GyroSwin and physics-informed neural compression.
+  GyroSwin's 241-simulation adiabatic-electron GKW training set and stable learned
+  rollouts make it a useful future comparator, but accumulated rollout error,
+  smoothed zonal structure, and weak high-`ky` behavior exclude it from current
+  transport or derivative evidence. Neural compression is relevant only after
+  lossless compact traces; lossy data cannot support regression acceptance
+  without preserving every statistical, spectral, restart, and AD observable.
+- The source-pinned QHS `64x128x48`, seed-22 match reached exact `t=750` in
+  6,224.6 s with 1,740 samples and clean `f7da8c49` provenance. Remote/local
+  SHA-256 values match: NPZ `8b32d886`, JSON `a698489a`, log `db3870bc`.
+  The bound frozen replay has 14 pass islands, no stop, and a longest duration
+  of 48.39 time units; its report SHA-256 is `eb660d56`.
+- Over the matched `t=650--750` suffix, QHS Ny128 and Ny160 give
+  `Q=6.1130 +/- 0.1260` and `6.1947 +/- 0.0768`: a -1.32% difference, or 0.55
+  combined SEM. Ny128 nevertheless fails every Q/Wphi/Wg half-window guard and
+  has 10.57% heat-flux cutoff/peak versus 6.46% at Ny160; last-three-`ky` mass
+  is 1.78% versus 0.94%. The means are compatible, but Ny128 is not an accepted
+  spatial or temporal rung. Ny160 remains the minimum QHS resolution, and no
+  causal saturated QHS value is promoted.
+- GPU 0 automatically advanced to the exact QA Ny160 seed-31 continuation from
+  `t=250` to `350`; GPU 1 continues the independent Ny160 seed-22 run, followed
+  by the predeclared seed-31 `cfl=0.5` timestep check. Output names are disjoint.

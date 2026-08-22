@@ -335,8 +335,29 @@ low-frequency modulation, not permission to shorten the averaging rule. The
 same `t=650--750` heat-flux cutoff/peak is 6.46%, last-three-bin mass 0.94%,
 and outer-six-`kx` mass 3.23%; the Phi2 values are 2.70%, 0.46%, and 0.63%.
 Ny=160 therefore remains spectrally adequate. A clean-source Ny=128 `t=750`
-rerun is queued after the two source-pinned QA resolution rungs. Trace SHA-256:
+match is evaluated below. Trace SHA-256:
 `e3d1152ce4b679cdb32119a7c59ad7452a51dc024cd2fab9f68391850e05d2c9`.
+
+The matched source-pinned QHS `64x128x48`, seed-22 run reached exact `t=750`
+in 6,224.6 s with 1,740 samples. The frozen rule again makes no stop: 14 pass
+islands last at most 48.39 time units. The terminal `t=675.38--750` decision
+passes only at the final sample, so its persistence is 0.044 rather than the
+fixed 60. Over the matched `t=650--750` suffix,
+
+\[
+ Q_{128}=6.1130\pm0.1260,\qquad Q_{160}=6.1947\pm0.0768.
+\]
+
+The Ny=128 value is 1.32% lower, only 0.55 combined SEM, but Q, Wphi, and Wg
+all fail its half-window stationarity gates. Its heat-flux cutoff/peak,
+last-three-`ky` mass, and outer-six-`kx` mass are 10.57%, 1.78%, and 3.20%,
+versus 6.46%, 0.94%, and 3.23% at Ny=160. Thus the means are statistically
+compatible while Ny=128 narrowly fails the necessary spectral screen and is
+not a valid acceptance rung. Ny=160 remains the minimum accepted QHS spatial
+resolution; no causal saturated QHS transport value is promoted. SHA-256:
+NPZ `8b32d886d7ae75d01fa4dc290ac2410d5d15eb4ed109547428ae2f8d615f0785`,
+JSON `a698489ae24df0114b228a090758b850cf0d9ccd1e76cbaed7537834c720fd29`,
+log `db3870bcce370ad9ce8e99249a98bbc44a4936030fdc085fd8de73fbe75af92d`.
 
 The untouched source-pinned QI `96x96x48` seed-22 holdout reached exactly
 `t=250` in 3,462.3 s from the same clean solver tree. Over `t=150--250`,
@@ -463,6 +484,7 @@ or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
 | QI Ny=96 | `3cd1d3e7f1debddfadfbbed6b14ffb2912e465bd73025c6ba59eb022d14996ea` |
 | QI Ny=128 | `c8133f3c1de07c430bbef20c4a19629253fe447ca0031d18f9627f5dcbff4ff3` |
 | QHS Ny=160 | `8159e162b4cda45fd0d82c16f1c42a89a87326946aaf88d4502cd9aa5b257d5e` |
+| QHS Ny=128 | `eb660d5618c3b1298fb78260cd62caad342e76481c43258097ea8c019bc57240` |
 
 These are policy-replay records, not solver outputs or a claim that the shadow
 rule is ready to become the default.
@@ -836,15 +858,15 @@ MP4 SHA-256:
 | CI-1 | P0 | ready for review | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 checks green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
-| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS continue |
+| SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS make no accepted stop |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed-31 triple and QI Ny128 t=500 complete; QHS Ny128 t=750 active |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed-31 triple, QI Ny128, and QHS Ny128/Ny160 complete; QA seed/timestep checks active |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids; b608 rehearsal pack is 8,746,756 bytes | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids; latest pre-record rehearsal `.git` is below 9.59 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
