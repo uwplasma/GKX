@@ -172,3 +172,10 @@
   branch/message labels. The rewrite rehearsal removes those markers and maps
   164 Rogerio Wisc-address commits to the IST identity; its reachable history
   has 3,355 Rogerio commits and preserves the four non-Rogerio human commits.
+- Opened draft PR #93 as the first source-slimming cut. The public
+  differentiable-geometry facade now delegates to the canonical VMEC/Boozer
+  core while preserving its monkeypatch hooks and signature metadata: 28
+  installed Python lines removed, 263 focused tests pass under JAX 0.10.2, and
+  mypy passes on both touched modules. A GitHub API scan of all fourteen open
+  PR heads finds only Rogerio's IST author/committer identity and no AI
+  attribution markers.
