@@ -149,6 +149,7 @@ _REPLAY_IDENTITY_FIELDS = (
     "kx",
     "ky",
 )
+_STATE_IDENTITY_FIELDS = _REPLAY_IDENTITY_FIELDS[:-2]
 
 
 def replay_policy(
@@ -410,6 +411,54 @@ def _gkx_source_tree_matches(repository: str | Path, left: str, right: str) -> b
     return result.returncode == 0
 
 
+def _load_continuation_state(
+    path: Path,
+    *,
+    expected_shape: tuple[int, ...],
+    expected_identity: dict[str, np.ndarray],
+    source_provenance: dict[str, object],
+) -> tuple[np.ndarray, float]:
+    """Load only a clean, source-compatible, same-campaign restart state."""
+    with np.load(path, allow_pickle=False) as archive:
+        state = np.asarray(archive["state"])
+        required = {
+            "gkx_git_commit",
+            "gkx_git_dirty",
+            "Nx",
+            "Ny",
+            "Nz",
+            "Nl",
+            "Nm",
+            "random_seed",
+        }
+        missing = required.difference(archive.files)
+        if missing:
+            raise SystemExit(f"continuation state lacks {', '.join(sorted(missing))}")
+        commit = str(np.asarray(archive["gkx_git_commit"]).item())
+        dirty = int(np.asarray(archive["gkx_git_dirty"]).item())
+        if dirty != 0 or not commit or not _gkx_source_tree_matches(
+            str(source_provenance["repository_root"]),
+            commit,
+            str(source_provenance["git_commit"]),
+        ):
+            raise SystemExit("continuation state is not pinned to compatible GKX source")
+        fields = (
+            _STATE_IDENTITY_FIELDS
+            if "campaign_identity_schema" in archive
+            else ("Nx", "Ny", "Nz", "Nl", "Nm", "random_seed")
+        )
+        if any(
+            name not in archive
+            or not np.array_equal(np.asarray(archive[name]), expected_identity[name])
+            for name in fields
+        ):
+            raise SystemExit("continuation state campaign identity does not match")
+        previous_t_end = float(archive["t_end"]) if "t_end" in archive else 0.0
+    if state.shape != expected_shape:
+        raise SystemExit(f"continuation shape {state.shape} != {expected_shape}")
+    return state, previous_t_end
+
+
 def _trace_spectral_payload(resolved, *, kx_full, ky_full) -> dict[str, np.ndarray]:
     """Return resolved diagnostics on GKX's physical dealiased output axes."""
     from gkx.artifacts.spectral_layout import (
@@ -652,8 +701,6 @@ def main() -> int:
     if args.initial_state is None:
         result = run(runtime)
     else:
-        archive = np.load(args.initial_state)
-        continuation_state = np.asarray(archive["state"])
         expected_shape = (
             len(runtime.species),
             n_laguerre,
@@ -662,11 +709,12 @@ def main() -> int:
             grid_shape["Nx"],
             grid_shape["Nz"],
         )
-        if continuation_state.shape != expected_shape:
-            raise SystemExit(
-                f"continuation shape {continuation_state.shape} != {expected_shape}"
-            )
-        previous_t_end = float(archive["t_end"]) if "t_end" in archive else 0.0
+        continuation_state, previous_t_end = _load_continuation_state(
+            args.initial_state,
+            expected_shape=expected_shape,
+            expected_identity=replay_identity,
+            source_provenance=source_provenance,
+        )
         with tempfile.TemporaryDirectory(prefix="gkx-saturation-continuation-") as temp:
             restart_file = Path(temp) / "restart.bin"
             np.asarray(continuation_state, dtype=np.complex64).tofile(restart_file)
@@ -783,6 +831,12 @@ def main() -> int:
                 if report.get("tau_ac") is not None
                 else float("nan")
             ),
+            **{
+                name: replay_identity[name]
+                for name in _STATE_IDENTITY_FIELDS
+                if name
+                not in {"Nx", "Ny", "Nz", "Nl", "Nm", "random_seed"}
+            },
             **_npz_source_provenance(source_provenance),
         )
         print(f"state written: {args.state_out}", flush=True)

@@ -179,6 +179,57 @@ def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
         replay._load_replay_traces([first, second])
 
 
+def test_saturation_campaign_rejects_a_mixed_continuation_state(tmp_path: Path) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    provenance["git_dirty"] = False
+    identity = {
+        name: np.asarray(value)
+        for name, value in {
+            "campaign_identity_schema": "gkx_nonlinear_campaign_v1",
+            "case": "qa.toml",
+            "input_sha256": "deck",
+            "vmec_sha256": "equilibrium",
+            "Nx": 2,
+            "Ny": 2,
+            "Nz": 2,
+            "Nl": 1,
+            "Nm": 1,
+            "random_seed": 31,
+            "alpha": "0.0",
+            "npol": "1.0",
+        }.items()
+    }
+    state = tmp_path / "state.npz"
+    np.savez_compressed(
+        state,
+        state=np.zeros((1, 1, 1, 2, 2, 2)),
+        t_end=10.0,
+        **identity,
+        **campaign._npz_source_provenance(provenance),
+    )
+
+    loaded, t_end = campaign._load_continuation_state(
+        state,
+        expected_shape=(1, 1, 1, 2, 2, 2),
+        expected_identity=identity,
+        source_provenance=provenance,
+    )
+    assert loaded.shape == (1, 1, 1, 2, 2, 2)
+    assert t_end == 10.0
+
+    identity["case"] = np.asarray("qi.toml")
+    with pytest.raises(SystemExit, match="campaign identity does not match"):
+        campaign._load_continuation_state(
+            state,
+            expected_shape=(1, 1, 1, 2, 2, 2),
+            expected_identity=identity,
+            source_provenance=provenance,
+        )
+
+
 def _touch_bundle(output: Path) -> None:
     stem = (
         output.name[: -len(".out.nc")]
