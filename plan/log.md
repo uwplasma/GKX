@@ -228,3 +228,17 @@
   avoids a long adjoint but is finite-difference based. No source demonstrates
   either method for nonlinear gyrokinetics, and all cited papers were
   accessible for this audit.
+- Opened draft PR #95 on #92 for the final render budget. It keeps the 12
+  README/core-physics visuals requested for public use (2,354,028 bytes),
+  including the lightweight turbulence loop, QA equilibrium/Boozer panel,
+  transport trace, and nonlinear-adjoint validation. It removes 226 generated
+  PNG/PDF/SVG outputs (18,170,355 bytes) and 121 optional RST image directives;
+  useful captions remain explicit generated-figure notes. Strict Sphinx and
+  all 146 release/parallel tests pass without suppressing missing-image
+  warnings.
+- A fresh single-branch clone of the combined rewrite rehearsal plus PR #95
+  packs to 9.49 MiB; its source archive is 5.6 MiB. The asset-free full suite
+  subsequently found one generic benchmark-manifest existence loop at 84%.
+  PR #92 commit `e33813cf` now requires every numeric table while allowing a
+  missing render only when its regeneration contract is complete. The full
+  suite was restarted; this is validation progress, not rewrite authorization.

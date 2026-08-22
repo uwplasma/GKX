@@ -157,7 +157,13 @@ small physics/algorithm/QA figure set whose network-clone pack still passes the
 directives only with real generator instructions or published release links --
 never suppress broken-image warnings.
 
-The remaining blockers are strict documentation and the scientific selection
-of the small rendered set: keep only concise README/docs figures, verify every
-reference, then run install/import, full tests, Sphinx, examples, CPU/GPU,
-strict fsck, and network-equivalent clone gates before any force push.
+PR #95 implements that selection: retain exactly the 12 README/core-physics
+visuals (2,354,028 bytes), remove 226 reproducible renders (18,170,355 bytes),
+and replace 121 optional RST directives with explicit generated-figure notes.
+Strict Sphinx passes without warning suppression. A fresh single-branch clone
+of the combined rehearsal has one 9.49-MiB pack and a 5.6-MiB source archive.
+
+The remaining blockers are the final full suite, install/import, examples,
+CPU/GPU checks, strict fsck, remote-ref map, and a real GitHub network clone
+after all reviewed PR heads are replayed. Preserve at least 0.5 MiB of pack
+margin; do not add another tracked render without removing equivalent payload.
