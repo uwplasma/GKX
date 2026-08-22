@@ -35,10 +35,8 @@ class NonlinearDiagnosticKernels:
     magnetic_vector_potential_energy: Callable[..., Any]
     magnetic_vector_potential_energy_resolved: Callable[..., Any]
     heat_flux_species: Callable[..., Any]
-    heat_flux_resolved_species: Callable[..., Any]
     heat_flux_channel_resolved_species: Callable[..., Any]
     particle_flux_species: Callable[..., Any]
-    particle_flux_resolved_species: Callable[..., Any]
     particle_flux_channel_resolved_species: Callable[..., Any]
     turbulent_heating_species: Callable[..., Any]
     turbulent_heating_resolved_species: Callable[..., Any]
@@ -366,13 +364,21 @@ def _compute_resolved_field_groups(
     )
 
 
-def _as_three_channel_tuple(
+def _resolved_channel_groups(
     channels: Any,
-) -> tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]:
-    """Normalize ES/Apar/Bpar kernel output to a typed tuple."""
+) -> tuple[
+    tuple[Any, ...],
+    tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]],
+]:
+    """Return total and split reductions from one ES/Apar/Bpar evaluation."""
 
     es, apar, bpar = channels
-    return tuple(es), tuple(apar), tuple(bpar)
+    split = tuple(es), tuple(apar), tuple(bpar)
+    total = tuple(
+        es_value + apar_value + bpar_value
+        for es_value, apar_value, bpar_value in zip(es, apar, bpar, strict=True)
+    )
+    return total, split
 
 
 def _resolved_transport_kernel_args(
@@ -407,17 +413,11 @@ def _compute_resolved_heat_groups(
 ) -> tuple[tuple[Any, ...], tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]]:
     """Evaluate resolved heat-flux totals and ES/Apar/Bpar channels."""
 
-    heat_flux = kernels.heat_flux_resolved_species(
-        *common_args,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
+    return _resolved_channel_groups(
+        kernels.heat_flux_channel_resolved_species(
+            *common_args, use_dealias=use_dealias, flux_scale=flux_scale
+        )
     )
-    heat_channels = kernels.heat_flux_channel_resolved_species(
-        *common_args,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    return tuple(heat_flux), _as_three_channel_tuple(heat_channels)
 
 
 def _compute_resolved_particle_groups(
@@ -429,17 +429,11 @@ def _compute_resolved_particle_groups(
 ) -> tuple[tuple[Any, ...], tuple[tuple[Any, ...], tuple[Any, ...], tuple[Any, ...]]]:
     """Evaluate resolved particle-flux totals and ES/Apar/Bpar channels."""
 
-    particle_flux = kernels.particle_flux_resolved_species(
-        *common_args,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
+    return _resolved_channel_groups(
+        kernels.particle_flux_channel_resolved_species(
+            *common_args, use_dealias=use_dealias, flux_scale=flux_scale
+        )
     )
-    particle_channels = kernels.particle_flux_channel_resolved_species(
-        *common_args,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    return tuple(particle_flux), _as_three_channel_tuple(particle_channels)
 
 
 def _compute_resolved_turbulent_heating(

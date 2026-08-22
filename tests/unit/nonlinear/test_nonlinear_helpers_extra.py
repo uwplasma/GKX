@@ -2193,31 +2193,11 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.heat_flux_resolved_species",
-        lambda *args, **kwargs: (
-            jnp.ones((1,), dtype=jnp.float32),
-            jnp.ones((1, 1), dtype=jnp.float32),
-            jnp.ones((1, 1), dtype=jnp.float32),
-            jnp.ones((1, 1), dtype=jnp.float32),
-            jnp.ones((1, 1), dtype=jnp.float32),
-        ),
-    )
-    monkeypatch.setattr(
         "gkx.solvers.nonlinear.diagnostic_integration.heat_flux_channel_resolved_species",
         lambda *args, **kwargs: (
             _split_flux_tuple(),
             _split_flux_tuple(),
             _split_flux_tuple(),
-        ),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.particle_flux_resolved_species",
-        lambda *args, **kwargs: (
-            jnp.ones((1,), dtype=jnp.float32),
-            jnp.ones((1, 1), dtype=jnp.float32),
-            jnp.ones((1, 1), dtype=jnp.float32),
-            jnp.ones((1, 1), dtype=jnp.float32),
-            jnp.ones((1, 1), dtype=jnp.float32),
         ),
     )
     monkeypatch.setattr(
@@ -2411,20 +2391,12 @@ def test_explicit_diagnostics_resolved_schema_and_sample_axis(monkeypatch) -> No
         lambda *args, **kwargs: tuple(_marker(v) for v in range(121, 126)),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.heat_flux_resolved_species",
-        lambda *args, **kwargs: tuple(_marker(v) for v in range(126, 131)),
-    )
-    monkeypatch.setattr(
         "gkx.solvers.nonlinear.diagnostic_integration.heat_flux_channel_resolved_species",
         lambda *args, **kwargs: (
             _split_flux_tuple(130),
             _split_flux_tuple(134),
             _split_flux_tuple(138),
         ),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.particle_flux_resolved_species",
-        lambda *args, **kwargs: tuple(_marker(v) for v in range(143, 148)),
     )
     monkeypatch.setattr(
         "gkx.solvers.nonlinear.diagnostic_integration.particle_flux_channel_resolved_species",
