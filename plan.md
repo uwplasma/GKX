@@ -434,6 +434,12 @@ level fails a gate.
 | randomness | 2 pilot seeds | at least 4 independent seeds | add until CI resolves sign |
 | window | stationary suffix | >=10 IAT and >=4 batches | double duration |
 
+For each stellarator rung, retain zonal/nonzonal `Phi2` and the zonal-flow
+frequency/residual with `Q`, `Wphi`, and `Wg`. Recent global gyrokinetic studies
+find substantially different nonlinear zonal suppression in QA, QH, and QI
+configurations; linear growth and a stationary total flux do not establish the
+same nonlinear state.
+
 Equilibria: circular tokamak control; Landreman--Paul QA vacuum and beta 2.5%;
 Landreman--Paul QH; Nuhrenberg--Zille QHS/HSX; one QI; one non-stellarator VMEC
 control. Start with positive finite `tprim` and `fprim` so every case has a

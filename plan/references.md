@@ -108,6 +108,10 @@ rate beat the stationary-suffix gate.
   https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA
 - Faber et al., stellarator microinstabilities and turbulence at low magnetic
   shear, https://doi.org/10.1017/S0022377818001022
+- Chen et al., geometry effects on zonal-flow dynamics in optimized
+  stellarators, https://arxiv.org/abs/2505.21886
+- Tiwari et al., zonal-flow suppression in W7-X and QSTK,
+  https://arxiv.org/abs/2501.12722
 
 Leverage: a converged mean alone does not establish moment convergence or
 dynamics; retain spectra and refine the Hermite--Laguerre tail around the
@@ -121,6 +125,11 @@ not an invisible fixed constant. Low-shear stellarators can require multiple
 field-line turns to resolve saturation structures, so `npol=1`/`nperiod=1`
 must be scanned with `Nz`; a one-turn `Nz` refinement alone is not a parallel
 convergence proof.
+The 2025 global studies independently find configuration-dependent nonlinear
+zonal-flow suppression, especially in QH/QI cases. The QA/QHS/QI campaign must
+therefore retain zonal/nonzonal `Phi2`, zonal-flow frequency, and residual
+alongside total heat flux. Similar linear growth rates or stationary `Q` alone
+cannot validate cross-configuration transport.
 
 ## Discrete adjoints and chaotic sensitivity
 
