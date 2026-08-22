@@ -1540,3 +1540,9 @@
   preserving admin enforcement, Rogerio-only push restriction, allowed force
   pushes, and disabled deletion. The API read-back shows both the review rule
   and aggregate-CI gate active.
+- Privately composed source-slimming PRs #93, #98, #99, #105, and #107--#111
+  onto their common `d910ac56` base in dependency order. All 12 commits apply
+  without conflict. The combined installed tree remains 206 Python files and
+  falls from 96,465 to 96,242 lines (-223); 352 owning x64 tests and Ruff pass.
+  This validates composition but is still far from the 190-file/90,000-line
+  milestone, so file-count and source-budget debt remain open.
