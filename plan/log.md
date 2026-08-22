@@ -1121,3 +1121,28 @@
   only CFL rejects before integration. The 174 focused/release tests, Ruff,
   and `git diff --check` pass. Private replay `1dbc39bd` has the same stable
   patch ID `7c96fb49c64e9c6091185b7000f4d820fda5c975`.
+- The source-pinned QA Ny160 seed-31 `cfl=0.5` control reached exact `t=250`
+  in 9,997.4 s with 1,505 samples. Against `cfl=1`, median adaptive dt halves
+  from 0.03255 to 0.01636 and wall time rises by 1.96x. On `t=150--250`,
+  `Q=10.6370 +/- 0.2368`, a -5.54% change or 1.33 combined SEM; Q/Wphi/Wg and
+  the spatial screens remain compatible. The frozen rule still makes no stop:
+  its terminal pass island lasts 59.43 rather than 60 time units. NPZ/JSON/log
+  SHA-256 prefixes are `bc3b7b47/d33d01e8/fe3de89c`; the bound replay is
+  `6ece6ecf`.
+- PR #85 and PR #91 are fully green at `33d24d6d` and `35aa7d29`. The former
+  retains the validated fixed-horizon default; the latter records timestep
+  identity and rejects cross-policy restarts. Neither PR is merged.
+- Replayed the matched-CFL evidence and current roadmap into the private
+  rewrite through `bc61d222`. A fresh no-local, no-alternates clone of main,
+  all 24 open PR heads, and 28 tags has 3,444 commits and 17,572 objects; pack
+  8,793,975 bytes, pack plus index 9,287,063 bytes, and complete `.git` file
+  sum 9,620,543 bytes. Strict `fsck` and the reachable AI-attribution scan pass
+  with zero hits. No public history moved.
+- A July/August 2026 primary-source refresh found no nonlinear gyrokinetic
+  shadowing or stationary-adjoint result beyond the already audited iGENE,
+  stabilized-march, online-gradient-flow, and wall-turbulence studies. The
+  finite-window discrete adjoint therefore remains the one supported GKX API;
+  no inaccessible paper is presently blocking the audit.
+- GPU 0 now runs the untouched QA Ny160 seed-33 holdout to `t=350`; GPU 1 runs
+  the QI Ny160 spatial rung to `t=500`. Both use the same clean source-pinned
+  `f7da8c49` checkout and frozen diagnostics policy.
