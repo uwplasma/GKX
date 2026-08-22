@@ -257,6 +257,13 @@ def test_run_adaptive_runtime_chunk_loop_stops_early_on_stop_condition() -> None
 
 
 def test_run_adaptive_runtime_chunk_loop_reports_last_decision_without_stop() -> None:
+    def stop_condition(t, heat_flux, wphi, wg):
+        return {
+            "stop": False,
+            "saturated": False,
+            "window_tmax": float(t[-1]),
+        }
+
     result = run_adaptive_runtime_chunk_loop(
         integrate_chunk=lambda _show_progress, _remaining_time: (
             np.asarray([0.5, 1.0]),
@@ -267,13 +274,18 @@ def test_run_adaptive_runtime_chunk_loop_reports_last_decision_without_stop() ->
         t_max=1.0,
         chunk_steps=8,
         label="test",
-        stop_condition=lambda t, heat_flux, wphi, wg: {
-            "stop": False,
-            "saturated": False,
-        },
+        diagnostics_stride=3,
+        stop_condition=stop_condition,
     )
 
-    assert result.stop_decision == {"stop": False, "saturated": False}
+    assert result.stop_decision == {
+        "stop": False,
+        "saturated": False,
+        "window_tmax": 1.0,
+    }
+    assert result.diagnostics.t[-1] == pytest.approx(
+        result.stop_decision["window_tmax"]
+    )
 
 
 def _stop_policy_inputs(*, steps: int, diagnostics_on: bool = True):
