@@ -26,8 +26,8 @@ shows the perpendicular plane hides the parallel elongation that defines the
 turbulence. Amplitude is steady across the whole loop, not growing.
 
 The loop is an animated image rather than a `<video>`, which GitHub strips from
-Markdown: 60 frames at 10 fps, 828 kB of animated WebP, chosen over GIF because
-no GIF fit the repository's 1 MB per-file limit at a resolution worth showing.
+Markdown: 30 frames at 5 fps, 346 kB of animated WebP, chosen over GIF because
+no GIF fit the repository's size target at a resolution worth showing.
 The
 **[full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)**
 (1.8 MB, 120 frames at 20 fps) is a release asset. Regenerate the physics with
@@ -37,8 +37,8 @@ re-encode the loop from its output with:
 ```bash
 mkdir -p frames
 ffmpeg -i gkx-cyclone-itg-turbulence.mp4 \
-  -vf "fps=10,scale=1100:-1:flags=lanczos" frames/f_%04d.png
-img2webp -loop 0 -lossy -q 60 -m 6 -d 100 frames/f_*.png \
+  -vf "fps=5,scale=900:-1:flags=lanczos" frames/f_%04d.png
+img2webp -loop 0 -lossy -q 65 -m 6 -d 200 frames/f_*.png \
   -o docs/_static/turbulence_loop.webp
 ```
 
