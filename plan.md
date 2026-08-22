@@ -869,6 +869,11 @@ At nonlinear startup print three compact lines defining the run:
 3. mode trace: `phi ~ exp[(gamma-i omega)t]`, so `gamma` is growth/decay and
    `omega` is the signed frequency.
 
+PR #85 implements these definitions. Independent review removed its unrelated
+attempt to make `run_to = "saturation"` the shipped default: the source-pinned
+QA/QHS/QI evidence above does not support that promotion. Fixed `t_max` remains
+the fail-safe default until SAT-1 is seed-, timestep-, and resolution-robust.
+
 Movies must reuse lightweight decimated runtime cuts rather than rerun the
 physics. Store only an `x-y` cut and a `(y,z)` tube skin for about 60 frames;
 encode a small WebP/MP4. Both the still and movie must use physical VMEC
@@ -915,7 +920,7 @@ MP4 SHA-256:
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
 | RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA Ny160 long-window seeds agree; Ny192 and CFL controls active; stop is not seed-robust |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
-| UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
+| UX-1 | P1 | review | PR #85 startup glossary | definitions pass; fixed horizon retained until SAT-1 passes |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |

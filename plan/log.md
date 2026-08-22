@@ -1087,3 +1087,17 @@
   finest-grid comparison beyond the borderline Ny160 tail. GPU 1 continues the
   Ny160 seed-31 `cfl=0.5` control. No threshold was changed after observing the
   seed histories.
+- Independent review of PR #85 found that a glossary branch also changed the
+  shipped wout deck to `run_to = "saturation"`. That default is unsupported by
+  the seed/resolution failures above. Commit `33d24d6d` removes the default
+  flip, keeps the three-line glossary, and passes the two focused runtime tests,
+  Ruff, and `git diff --check`.
+- Replayed that correction into private rewrite commit `79109d8c`. Its stable
+  patch ID `db5c853a960ef9d73ebd8d257b6200e76fa19316` exactly matches the
+  public correction; no rewritten public ref moved.
+- A post-hoc QA Ny160 window scan is design evidence only. A 125-time-unit
+  trailing window plus 30-time-unit persistence would stop seed 22 at
+  `t=269.5` and seed 31 at `t=304.2`, but it was selected after seeing both
+  traces. The frozen `75+60` rule remains unchanged; QA seed 33 is queued as an
+  untouched holdout after Ny192, and a QI Ny160 resolution rung is queued after
+  the half-CFL control.
