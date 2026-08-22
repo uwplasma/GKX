@@ -394,7 +394,8 @@ def nonlinear_summary_figure(
 
     ``source`` names any file of the bundle. ``window`` is the averaging window
     the stop policy evaluated. A rejected window remains in the metadata but is
-    not shaded or averaged in the data panels.
+    not shaded or reported as an average on the time trace; spectra retain their
+    labelled second-half diagnostic average.
     """
 
     from gkx.artifacts.transport_figures import _coerce_nonlinear_source
