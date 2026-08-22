@@ -105,6 +105,34 @@ def _unpack_complex_state(G_packed: jnp.ndarray) -> jnp.ndarray:
     return G_packed[..., 0] + 1j * G_packed[..., 1]
 
 
+def _infer_velocity_shape(G0: jnp.ndarray) -> tuple[int, int]:
+    if G0.ndim == 5:
+        return int(G0.shape[0]), int(G0.shape[1])
+    if G0.ndim == 6:
+        return int(G0.shape[1]), int(G0.shape[2])
+    raise ValueError(
+        "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+    )
+
+
+def _apply_state_sharding(
+    state: jnp.ndarray, state_sharding: Any | None
+) -> jnp.ndarray:
+    if state_sharding is None:
+        return state
+    return jax.lax.with_sharding_constraint(state, state_sharding)
+
+
+def _prepare_packed_state(
+    G0: jnp.ndarray,
+    state_sharding: Any | None,
+) -> jnp.ndarray:
+    packed = _pack_complex_state(G0)
+    if state_sharding is not None:
+        packed = jax.device_put(packed, state_sharding)
+    return _apply_state_sharding(packed, state_sharding)
+
+
 def _assemble_rhs(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -153,12 +181,15 @@ def _density_from_G_cached(
 
 __all__ = [
     "_adjoint",
+    "_apply_state_sharding",
     "_assemble_rhs",
     "_base_complex_dtype",
     "_density_from_G_cached",
+    "_infer_velocity_shape",
     "_is_imex_solver",
     "_is_implicit_solver",
     "_pack_complex_state",
+    "_prepare_packed_state",
     "_progress_meter",
     "_require_diffrax",
     "_save_with_phi",
