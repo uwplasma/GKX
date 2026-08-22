@@ -429,6 +429,10 @@
 - PR #81's nonlinear CI shard passed in 14m22s under its targeted 20-minute
   budget. This confirms that the former 15-minute wall-clock limit was too
   tight for runner cleanup while leaving every other shard at 15 minutes.
+- A real QA VMEC CPU movie smoke exposed a 49-coordinate/48-field-plane
+  mismatch: the EIK interval is closed while the solver grid is open. PR #97
+  now aligns geometry through the production trim before rendering. The rerun
+  records 48 finite `R/Z/zeta` samples, `nfp=2`, and deck moments `(4,8)`.
 - Added PR #99 to the non-destructive public-ref rehearsal. Before this log
   commit, all 21 retained heads (`main` plus 20 open PRs) and all 28 remote tags
   fit in a 9,107,008-byte pack (9,596,344 with index); the archive is 5,363,108

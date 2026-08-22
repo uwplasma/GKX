@@ -252,8 +252,10 @@ evidence of a solver boundary defect.
 
 Fix: artifact generation, outside the JAX solver PyTree, must read the resolved
 VMEC/EIK `Rplot`, `Zplot`, and toroidal coordinate, then map the saved field onto
-that centreline. Tests must use a non-axisymmetric boundary and verify field-line
-closure/twist numerically before visual comparison.
+that centreline. Tests must use a non-axisymmetric boundary and verify
+field-line/grid alignment and twist numerically before visual comparison. A
+finite linked flux tube need not close in Cartesian space; its spectral
+twist-and-shift identification is not a centreline-closure condition.
 
 ### R4 — perpendicular spectrum is unresolved
 
@@ -527,26 +529,30 @@ the VMEC coordinate profiles. It is solver/timing evidence, not physical-movie
 acceptance. PR #97 now reads `Nl` and `Nm` from `[run]`; a clean
 `PYTHONPATH=src` rerun must show nonempty `R`, `Z`, and toroidal profiles before
 the movie can be accepted. The tool now fails closed instead of drawing its
-analytic fallback when any imported-geometry profile is absent.
+analytic fallback when any imported-geometry profile is absent. A real CPU
+smoke also caught the EIK's closed 49-point coordinate interval being paired
+with the solver's open 48-point field grid; PR #97 now applies the same terminal
+trim as production NetCDF output. The corrected smoke records 48 profiles for
+48 field planes, `nfp=2`, and `(Nl,Nm)=(4,8)`.
 
 ## Work queue
 
 | ID | Priority | Status | Deliverable | Gate |
 | --- | --- | --- | --- | --- |
-| CI-1 | P0 | review | PR #81 mypy fix + nonlinear-only 20-minute budget | CI green; no LOC regression |
+| CI-1 | P0 | ready for review | PR #81 mypy fix + nonlinear-only 20-minute budget | full CI green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace capture | synthetic + held-out long traces |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; source budget restored |
-| RES-1 | P0 | review | PR #87 spectrum-tail warnings; convergence protocol pending | known resolved/unresolved fixtures + paired Nx/Ny scan |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS Ny scan | independent QA seed and QHS Ny=160 pending |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
-| MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | no saturation rerun; provenance, size, and time gates |
-| VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |
+| MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | corrected physical-profile GPU artifact pending |
+| VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
 | SLIM-1 | P1 | active/review | corrected PR #88 removes 7.70 MB; public-ref rewrite rehearsal passes | freeze closed-head map, publish recovery records, then network-clone gate |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
-| PERF-1 | P2 | pending | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
+| PERF-1 | P2 | active | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
 
 ## Reproducibility records
 
