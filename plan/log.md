@@ -1377,3 +1377,23 @@
   sum 9,531,837 bytes. Strict `fsck`, no alternates, and zero reachable
   AI-attribution matches pass, leaving 468,163 bytes below the decimal 10-MB
   gate. No public history moved.
+- The accepted VMEX QA baseline reached exact `t=350` at `96x160x48`, seed 31,
+  in 7,429.7 s. Its production median-crossing interval starts at `t=22.67`
+  and is correctly rejected at 9.97% corrected relative SEM. The fixed
+  terminal 75 units instead give `Q=8.0466 +/- 0.1739`, `tau_int=2.532`, and
+  passing Q/Wphi/Wg half-window gates. Heat cutoff/peak, last-three-ky, and
+  outer-six-kx masses are 1.96%, 0.375%, and 2.19%. The frozen `75+60` replay
+  first stops at `t=244.341` with `Q=8.4230 +/- 0.2759`; the terminal mean is
+  4.47% lower. This is one baseline sizing trace, not a stop-rule or transport-
+  reduction claim. Remote/local hashes match: JSON `49ca6d7e`, NPZ `205dafd0`,
+  state `050cadea`, log `6e399265`; replay `754f5d85`.
+- The baseline returned the intended not-saturated verdict, but its candidate
+  waiter used an unanchored `pgrep` that matched the waiter's own command line
+  and exited. Output locks prevented duplicate writers. After an anchored
+  exact-Python-process check showed no candidate and no artifact, started one
+  candidate at source `f7da8c49` on GPU 1. Record the orchestration defect;
+  partial candidate output is not evidence.
+- Confirmed a separate progress-display defect: low-level step/time/ETA resets
+  on every 128-step campaign chunk. The solver state is continuous. A future
+  host-only fix must show cumulative time and one wall clock without changing
+  traced arguments, diagnostic cadence, or compile reuse.

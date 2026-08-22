@@ -687,9 +687,30 @@ and `niter_max=15000`. Both return `ier_flag=0`: baseline/candidate need
 `323dd3ef`/`58da1b89`. A compact TOML manifest binds the boundary-input
 hashes, VMEX commit, residuals, WOUTs, and figure generator. Regenerating the
 3D-LCFS/Boozer panel gives SHA-256 `f4cd87ab`, byte-identical to the tracked
-documentation asset. A matched `96x160x48`, `t=350`, seed-31 production
-pilot is active on GPU 1. It is a one-seed sizing test, not a transport-reduction
-claim.
+documentation asset. The matched `96x160x48`, `t=350`, seed-31 baseline reached
+exact `t=350` in 7,429.7 s. The production median-crossing interval starts at
+`t=22.67`, includes the transient, and is correctly rejected at 9.97% corrected
+relative SEM even though `Wphi` and `Wg` pass their half-window gates. The fixed
+terminal 75-unit audit is stationary instead:
+
+\[
+ Q_{base}=8.0466\pm0.1739,\qquad \tau_{int}=2.532,
+\]
+
+with `Wphi=3.1432 +/- 0.0855`, `Wg=191.22 +/- 2.94`, and all three half-window
+gates passing. Its heat-flux cutoff/peak, last-three-`ky` mass, and outer-six-
+`kx` mass are 1.96%, 0.375%, and 2.19%; the corresponding `Phi2` `ky` values
+are 1.28% and 0.288%. The frozen `75+60` shadow rule would stop causally at
+`t=244.341` with `Q=8.4230 +/- 0.2759`; its terminal-75 mean is 4.47% lower.
+This one baseline therefore passes the fixed terminal-window and spatial
+screens but does not validate the shadow rule across configurations.
+
+Remote/local SHA-256 agree: JSON `49ca6d7e`, NPZ `205dafd0`, state `050cadea`,
+and log `6e399265`; the source-pinned replay is `754f5d85`. The matched candidate
+is now active on GPU 1. Its first waiter failed because `pgrep` matched the
+waiter's own command line; output locks prevented a duplicate, and the one
+candidate was started only after an anchored Python-process check. This remains
+a one-seed sizing pair, not a transport-reduction claim.
 
 ### R3 — the plotted stellarator tube is a synthetic torus
 
@@ -1123,6 +1144,15 @@ PR #85 implements these definitions. Independent review removed its unrelated
 attempt to make `run_to = "saturation"` the shipped default: the source-pinned
 QA/QHS/QI evidence above does not support that promotion. Fixed `t_max` remains
 the fail-safe default until SAT-1 is seed-, timestep-, and resolution-robust.
+
+The low-level `[gkx] step/t/progress/eta` line is chunk-local and resets every
+128 or 1,024 steps. The trajectory is continuous, but campaign logs without a
+runtime status callback look as if the run restarted and their ETA is not the
+total-run ETA. Fix this in host-only orchestration: print cumulative accepted
+steps/time/wall/ETA or label the inner line `chunk`; do not add a changing
+static JAX argument, retrace each chunk, or alter the diagnostic cadence. A
+test must concatenate two fake chunks and verify monotone displayed time and
+one total-run clock.
 
 Movies must reuse lightweight decimated runtime cuts rather than rerun the
 physics. Store only an `x-y` cut and a `(y,z)` tube skin for about 60 frames;
