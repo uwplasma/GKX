@@ -130,6 +130,18 @@
   is at the spectral maximum and carries 19.5% of windowed flux; the last
   three carry 51.1%. Extending this state would reduce sampling error without
   resolving the perpendicular cascade, so the next rung is `96^2 x 48`.
+- Re-read the user's original `96^2 x 48` NetCDF rather than inferring from its
+  plot. The proposed `t=50--55` window contains only two saved points: mean
+  `Q=8.18`, `Wphi=1.30`, and `Wg=180.2`, versus `Q=10.92`, `Wphi=1.64`, and
+  `Wg=246.1` over `t=150--200`. It is shorter than one measured correlation
+  time and precedes continued free-energy evolution. The late heat-flux
+  spectrum peaks at `ky*rho=1.19`; its `ky*rho=1.48` cutoff remains 68% of the
+  peak and the last three bins carry 14.6% of positive flux. This run is
+  neither statistically nor perpendicularly resolved. Increasing `Ny` extends
+  the retained `ky` range, but `Nx` and `Ny` must be converged together because
+  the nonlinear bracket transfers both coordinates. The NetCDF records
+  `nfp=2`; the apparently axisymmetric 3-D tube is therefore a renderer bug,
+  not an equilibrium property.
 - Audited the movie generator independently. It reruns a fixed-step RK4
   trajectory instead of sampling the production solve, stores full 3-D fields,
   and reconstructs a circular torus without VMEC coordinates. MOV-1 must record
