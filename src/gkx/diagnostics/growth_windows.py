@@ -52,17 +52,16 @@ def _r2_score(y: np.ndarray, yfit: np.ndarray) -> float:
     return 1.0 - ss_res / ss_tot
 
 
-def _least_squares_coefficients(tt: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+def _least_squares_coefficients(tt: np.ndarray, y: np.ndarray) -> np.ndarray:
     A = np.vstack([tt, np.ones_like(tt)]).T
-    slope, offset = np.linalg.lstsq(A, y, rcond=None)[0]
-    return float(slope), float(offset)
+    return np.linalg.lstsq(A, y, rcond=None)[0]
 
 
 def _least_squares_line(
     tt: np.ndarray, y: np.ndarray
 ) -> tuple[float, float, np.ndarray]:
     slope, offset = _least_squares_coefficients(tt, y)
-    return slope, offset, slope * tt + offset
+    return float(slope), float(offset), slope * tt + offset
 
 
 @dataclass(frozen=True)

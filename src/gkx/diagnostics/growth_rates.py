@@ -53,7 +53,7 @@ def fit_growth_rate(
     tt, log_amp, phase = _windowed_fit_inputs(t, signal, tmin=tmin, tmax=tmax)
     gamma, _offset = _least_squares_coefficients(tt, log_amp)
     phase_slope, _phase_offset = _least_squares_coefficients(tt, phase)
-    return gamma, -phase_slope
+    return float(gamma), float(-phase_slope)
 
 
 def fit_growth_rate_with_stats(
