@@ -9,7 +9,7 @@ from gkx.config import TimeConfig
 from gkx.solvers.time.diffrax_linear import integrate_linear_diffrax
 from gkx.solvers.time.diffrax_nonlinear import integrate_nonlinear_diffrax
 from gkx.geometry import FluxTubeGeometryLike
-from gkx.core.grid import SpectralGrid
+from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.solvers.linear.integrators import integrate_linear
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
@@ -265,13 +265,8 @@ def integrate_nonlinear_from_config(
     if state_sharding is not None:
         _reject_unsupported_config_collision_operator(time_cfg, "sharded nonlinear")
         if cache is None:
-            if G0.ndim == 5:
-                nl, nm = G0.shape[0], G0.shape[1]
-            elif G0.ndim == 6:
-                nl, nm = G0.shape[1], G0.shape[2]
-            else:
-                raise ValueError("G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
-            cache = build_linear_cache(grid, geom, params, int(nl), int(nm))
+            nl, nm = _gyrokinetic_moment_shape(G0)
+            cache = build_linear_cache(grid, geom, params, nl, nm)
         return cast(
             tuple,
             integrate_nonlinear_sharded(

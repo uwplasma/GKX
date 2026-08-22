@@ -12,7 +12,7 @@ import numpy as np
 
 from gkx.config import resolve_cfl_fac
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from gkx.core.grid import SpectralGrid
+from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.operators.collision import CollisionOperator
 from gkx.diagnostics.transport import heat_flux_species, heat_flux_total
 from gkx.diagnostics.moments import fieldline_quadrature_weights
@@ -251,14 +251,7 @@ def integrate_nonlinear(
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
-        if G0.ndim == 5:
-            Nl, Nm = G0.shape[0], G0.shape[1]
-        elif G0.ndim == 6:
-            Nl, Nm = G0.shape[1], G0.shape[2]
-        else:
-            raise ValueError(
-                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-            )
+        Nl, Nm = _gyrokinetic_moment_shape(G0)
         cache = build_linear_cache(grid, geom_eff, params, Nl, Nm)
     return integrate_nonlinear_cached(
         G0,
@@ -451,15 +444,8 @@ def _integrate_nonlinear_sheared_scan(
         )
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
-        if G0.ndim == 5:
-            nl, nm = G0.shape[:2]
-        elif G0.ndim == 6:
-            nl, nm = G0.shape[1:3]
-        else:
-            raise ValueError(
-                "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-            )
-        cache = build_linear_cache(grid, geom_eff, params, int(nl), int(nm))
+        nl, nm = _gyrokinetic_moment_shape(G0)
+        cache = build_linear_cache(grid, geom_eff, params, nl, nm)
 
     term_cfg = terms or TermConfig()
     linear_cfg = replace(term_cfg, nonlinear=0.0)

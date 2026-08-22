@@ -7,7 +7,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from gkx.core.grid import SpectralGrid
+from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
@@ -36,14 +36,7 @@ def _resolve_cache(
 ) -> LinearCache:
     if cache is not None:
         return cache
-    if G0.ndim == 5:
-        Nl, Nm = G0.shape[0], G0.shape[1]
-    elif G0.ndim == 6:
-        Nl, Nm = G0.shape[1], G0.shape[2]
-    else:
-        raise ValueError(
-            "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-        )
+    Nl, Nm = _gyrokinetic_moment_shape(G0)
     return build_linear_cache(grid, geom, params, Nl, Nm)
 
 
