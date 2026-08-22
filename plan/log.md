@@ -363,3 +363,24 @@
   transport reductions, nonlinear diagnostic setup, and runtime option
   forwarding. `plan/history_rewrite.md` now assigns the owner and CPU/GPU/JIT/
   AD gate for each; moving lines between source and tools is explicitly barred.
+- The QHS `64x128x48` continuation reached absolute `t=500` in another
+  2,127.0 s. Over `t=250--500`, `Q=6.25381` with 1.93% corrected relative SEM
+  and broad Q/Wphi/Wg half-window agreement. That verdict is not persistent:
+  over `t=350--500`, Q changes from 6.580 to 5.994 and Wg from 145.2 to 134.3,
+  so both gates fail. The heat-flux cutoff/peak remains about 10% and the final
+  three positive-ky bins about 1.7% of magnitude. The exact state is therefore
+  continuing to `t=750`; `t=500` is not promoted as saturated.
+- Continuation analysis exposed that the PR #91 JSON report used segment-local
+  times while the NPZ trace correctly stored absolute times. Commit `37a7cf77`
+  passes the absolute axis to the shared report function; eight artifact
+  contract tests and Ruff pass. This changes reporting only, not integration.
+- Opened draft PR #98 as the second source-slimming cut. Artifact I/O imports
+  the canonical dealiased spectral layout and deletes its three private copies:
+  17 installed lines removed (`96,465 -> 96,448`), with 45 focused tests, Ruff,
+  mypy, and the architecture gate passing locally.
+- PR #97's nonlinear CI shard completed every assertion at 14m11s, printed
+  100%, and was then canceled at the job's 15-minute limit. PR #81 commit
+  `d910ac56` gives only `nonlinear-core` a 20-minute budget; the six other
+  quick-test shards retain 15 minutes. Workflow parsing, five repository gates,
+  and release readiness pass locally. This is a runner-budget repair, not a
+  test or physics failure.

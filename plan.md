@@ -180,8 +180,16 @@ The matched QHS `64x128x48` rung reached `t=250` in 2,192.3 s. Its fixed
 Wphi, and Wg all fail the half-window stationarity test; the `Ny=96` value was
 `Q=8.382`. The new spectral endpoint passes the necessary screen narrowly
 (heat-flux cutoff/peak 9.91%, last-three-bin mass 1.69%), but a 22.7% moving
-mean is not a resolution result. A same-state continuation to absolute `t=500`
-is running on GPU 0.
+mean is not a resolution result.
+
+The exact continuation to `t=500` gives `Q=6.254` with 1.93% corrected relative
+SEM over `t=250--500`, and all three broad half-window gates pass. That apparent
+acceptance is not persistent: over `t=350--500`, Q changes from 6.580 to 5.994
+and Wg from 145.2 to 134.3, so both fail their half-window gates. The late
+spectrum is stable (heat-flux cutoff/peak about 10%, last-three-bin mass about
+1.7%), separating time-stationarity debt from perpendicular-tail debt. The
+same state is continuing to `t=750`; no QHS transport or runtime-stop claim is
+promoted from `t=500`.
 
 A causal stationary-suffix shortcut also fails on this trace. Scanning at most
 32 suffixes and requiring 5% corrected SEM, `10 tau_ac`, half-window agreement,
@@ -362,6 +370,10 @@ cold to 2.61 s warm; this compile-dominated 63% reduction is a workflow check,
 not a production-resolution timing claim. The running QA/QHS jobs predate it.
 The first package target is at most 190 files and 90,000 lines; lower targets
 follow only after import/coverage evidence identifies another coherent cut.
+PR #98 is the next measured cut: artifact I/O now imports the canonical
+dealiased spectral layout instead of carrying three private copies. It removes
+17 installed lines (`96,465 -> 96,448`) with 45 restart/layout tests, Ruff,
+mypy, and the architecture gate passing locally.
 
 Before the coordinated force push:
 
@@ -472,7 +484,7 @@ without a saved state remains impossible rather than fabricated.
 
 | ID | Priority | Status | Deliverable | Gate |
 | --- | --- | --- | --- | --- |
-| CI-1 | P0 | review | PR #81 mypy fix | CI green; no LOC regression |
+| CI-1 | P0 | review | PR #81 mypy fix + nonlinear-only 20-minute budget | CI green; no LOC regression |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | R1 equations above; CI and review pending |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace capture | synthetic + held-out long traces |
