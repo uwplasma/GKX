@@ -768,3 +768,9 @@
   pack, and a 9,684,887-byte complete `.git` file sum. Strict `fsck`, exact
   non-plan neutrality, exact plan-tree identity, and the reachable-metadata
   attribution scan pass. No public ref moved.
+- PR #91 commit `53b47e99` closes the continuation-report defect exposed by the
+  QHS horizon. A segment still records whether its local statistic passed, but
+  `--initial-state` now sets the full-history claim false and records
+  `prior_history_not_in_report`. Ruff and all 11 nonlinear-window artifact
+  contract tests pass; the solver and active source-pinned trajectories are
+  unchanged.
