@@ -1798,7 +1798,7 @@ The implicit linear solver exposes several preconditioner policies, with shape,
 finite-value, linked-boundary, and shift-invert contracts covered by the solver
 test suite rather than by an untracked ad-hoc profiling harness:
 
-- ``diag``: full diagonal (damping + drift + mirror)
+- ``diag``: damping plus the curvature/grad-B diagonal
 - ``pas``: PAS line preconditioner (streaming + diagonal damping/drifts)
 - ``pas-coarse``: line + kx-coarse additive correction (Schur-style)
 - ``hermite-line``: Hermite streaming line solve (tridiagonal in ``m`` at fixed :math:`k_z`)
