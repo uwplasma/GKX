@@ -782,13 +782,15 @@ names are exactly `main` plus all 24 open public PR branches. Closed topic heads
 still require a frozen delete/retain map, and no remote history has moved.
 
 PR #84 commit `55d41c09` adds the real-bug regression
-`t_window,max=t_diag,last` under output striding. All 41 CI checks pass. Its
-aggregate stable patch ID `d35a7a70` exactly matches private replay
-`bf8d5429`. A new ordinary no-local clone of the 25-head/28-tag candidate has
-3,446 commits and 17,582 objects: pack 8,778,044 bytes, pack plus index
-9,271,412 bytes, and complete `.git` file sum 9,604,932 bytes. Strict
-`fsck`, no alternates, and zero reachable AI-attribution matches pass, leaving
-395,068 bytes below the strict decimal gate. No public history moved.
+`t_window,max=t_diag,last` under output striding. All 41 CI checks pass. PR #91
+merge `14442da2` carries that contract into the reproducible saturation replay;
+its 42 focused tests, Ruff, and diff checks pass. Private replays `bf8d5429`
+and `0b1d6ced` have exact aggregate stable patch IDs for both PRs. A new ordinary
+no-local clone of the 25-head/28-tag candidate has 3,448 commits and 17,594
+objects: pack 8,749,159 bytes, pack plus index 9,242,863 bytes, and complete
+`.git` file sum 9,576,463 bytes. Strict `fsck`, no alternates, and zero reachable
+AI-attribution matches pass, leaving 423,537 bytes below the strict decimal
+gate. No public history moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.

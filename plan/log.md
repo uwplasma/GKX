@@ -1163,3 +1163,11 @@
   The hashed TOML manifest records inputs, residuals, geometry scalars, and
   sources. Its regenerated 3D-LCFS/Boozer panel (`f4cd87ab`) exactly matches
   the tracked figure. A matched production seed-31 pair is queued after QI.
+- PR #91 became conflicting only because its base gained PR #84's exact-horizon
+  regression. Merge `14442da2` resolves the overlap by testing the saved-horizon
+  identity together with the Q/Wphi/Wg callback. All 42 focused contract tests,
+  Ruff, and diff checks pass; the full CI matrix is running. Private replay
+  `0b1d6ced` has the exact full-PR stable patch ID `5f92a366`. A fresh
+  no-local 25-head/28-tag clone has 3,448 commits, 17,594 objects, an
+  8,749,159-byte pack, and a 9,576,463-byte complete `.git`; strict `fsck`,
+  zero alternates, and zero AI-attribution matches pass. No public history moved.

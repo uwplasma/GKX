@@ -262,9 +262,11 @@ an admissible substitute for review.
 
 The current rehearsal additionally replays PR #84 commit `55d41c09` as
 `bf8d5429`; both aggregate patches have stable ID
-`d35a7a70430902d9408caba26dd53d6463b8d0a6`. A fresh ordinary
-`--no-local` clone advertises 25 heads and 28 tags, with 3,446 commits and
-17,582 objects. Its pack is 8,778,044 bytes, pack plus index is 9,271,412, and
-the complete `.git` file sum is 9,604,932 bytes. Strict `fsck`, no object
+`d35a7a70430902d9408caba26dd53d6463b8d0a6`. PR #91 merge `14442da2` is
+replayed as `0b1d6ced`; the complete public/candidate PR #91 patches share
+stable ID `5f92a366b5f23332016dd0e721533a7a60c423d6`. A fresh ordinary
+`--no-local` clone advertises 25 heads and 28 tags, with 3,448 commits and
+17,594 objects. Its pack is 8,749,159 bytes, pack plus index is 9,242,863, and
+the complete `.git` file sum is 9,576,463 bytes. Strict `fsck`, no object
 alternate, and the reachable-attribution scan all pass; the strict decimal
-margin is 395,068 bytes. This remains a private rehearsal.
+margin is 423,537 bytes. This remains a private rehearsal.
