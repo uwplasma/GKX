@@ -35,7 +35,10 @@ import numpy as np  # noqa: E402
 
 from gkx.artifacts import snapshots  # noqa: E402
 from gkx.artifacts.figure_style import figure_style, save_figure  # noqa: E402
-from gkx.geometry import apply_geometry_grid_defaults  # noqa: E402
+from gkx.geometry import (  # noqa: E402
+    apply_geometry_grid_defaults,
+    ensure_flux_tube_geometry_data,
+)
 from gkx.solvers.nonlinear.diagnostic_integration import (  # noqa: E402
     prepare_nonlinear_explicit_diagnostics,
 )
@@ -252,7 +255,6 @@ def run(
         cfg = dataclasses.replace(cfg, grid=dataclasses.replace(cfg.grid, **overrides))
         print(f"grid override: {overrides}", flush=True)
     geometry = build_runtime_geometry(cfg)
-    _require_movie_geometry_profiles(geometry, model=cfg.geometry.model)
     params = build_runtime_linear_params(cfg, geom=geometry)
     # Must come from the config. TermConfig() defaults to nonlinear = 0.0 and
     # hyperdiffusion = 0.0, so omitting this runs a LINEAR case with no
@@ -274,6 +276,8 @@ def run(
     # shared GPU can spare; a visualization does not. Any override is recorded
     # in the snapshot so a frame can never be mistaken for a production run.
     grid = build_spectral_grid(apply_geometry_grid_defaults(geometry, cfg.grid))
+    geometry = ensure_flux_tube_geometry_data(geometry, grid.z)
+    _require_movie_geometry_profiles(geometry, model=cfg.geometry.model)
     laguerre, hermite = _movie_moment_dims(raw, laguerre, hermite)
     nl, nm = _resolve_runtime_hl_dims(cfg, Nl=laguerre, Nm=hermite)
     cache = build_linear_cache(grid, geometry, params, nl, nm)
