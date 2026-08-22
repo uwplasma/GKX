@@ -1455,3 +1455,7 @@
   8,524,088 bytes, pack plus index 9,025,548 bytes, and complete `.git`
   9,360,868 bytes. Strict `fsck`, no alternates, and zero reachable AI markers
   pass. No public ref was force-pushed.
+- The post-merge `main` workflow at `0ff569c3` completed successfully: 38 push
+  jobs and the aggregate `ci-required` gate passed; nightly was intentionally
+  skipped. CI-1 is closed. PR #91 still has only its nonlinear and four-device
+  shards running, and #110 remains active; neither has a failure.

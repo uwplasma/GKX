@@ -6,7 +6,7 @@ current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `0ff569c3` (merged PR #81)
 and 29 open PRs: #74, #82--#105, and #107--#110. PR #106 was closed as a
-duplicate. The post-merge `main` workflow is still running.
+duplicate. The post-merge `main` workflow passes.
 
 ## Rules
 
@@ -808,9 +808,8 @@ passed in 14m51s, nine seconds below the old 15-minute limit. PR #81 therefore
 gives only `nonlinear-core` 20 minutes while every other quick shard retains 15.
 PR #81's own nonlinear shard then passed in 14m22s under that targeted budget;
 the extra five minutes cover runner cleanup variance without relaxing any test.
-All 41 PR checks passed, but #81 was merged externally on 2026-08-22 with no
-approving review; the resulting `main` push remains in progress. Branch
-protection nominally
+All 41 PR checks and the resulting `main` push passed, but #81 was merged
+externally on 2026-08-22 with no approving review. Branch protection nominally
 asks for one review, but every merged PR reports `REVIEW_REQUIRED`, no checks are
 required, force pushes are allowed, and administrator bypass was used. Require
 the aggregate CI check and one non-author approval after the recovery rewrite.
@@ -1222,7 +1221,7 @@ unverified rather than silently promoted.
 
 | ID | Priority | Status | Deliverable | Gate |
 | --- | --- | --- | --- | --- |
-| CI-1 | P0 | merged/verify | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 PR checks green; post-merge `main` workflow must pass |
+| CI-1 | P0 | closed | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 PR checks and post-merge `main` CI pass |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QHS seed-31 makes no stop and differs from seed 22 by 8.76 combined SEM; QI clean repeat active |
