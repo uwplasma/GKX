@@ -1248,17 +1248,24 @@
 - Replaced only the three exact superseded PNG blobs in a new private rewrite
   rehearsal. PR #104's aggregate text patch and every generator/source/image/
   physics-test head blob match; the release-gate file differs only in its
-  intentional branch-only-roadmap comment. PR #105's patch is exact. A fresh
-  ordinary clone has 27 heads plus `origin/HEAD`, 28 tags, 3,463 commits,
-  17,704 objects, an 8,808,008-byte pack, and a 9,639,011-byte complete `.git`.
+  intentional branch-only-roadmap comment. PR #105's aggregate patch is exact.
+  A fresh ordinary clone has 27 heads plus `origin/HEAD`, 28 tags, 3,466
+  commits, 17,728 objects, an 8,912,462-byte pack, and a 9,744,233-byte complete
+  `.git`.
   Strict `fsck`, exact roadmap payload, no alternates, zero original/intermediate
   PNG reachability, and zero AI-attribution hits pass. No public history moved.
 - Opened draft PR #105 on #81 after the exact-function audit found duplicate
   linear sampling validation and 5D/6D cache resolution. One canonical helper
   now takes each caller's local cache builder explicitly, preserving the
-  monkeypatch seam exposed by the first test run. The patch removes 23 source
-  lines; 131 linear, 30 runner/runtime, and 69 four-device parallel tests pass,
-  together with Ruff, mypy, architecture, and diff checks.
+  monkeypatch seam exposed by the first test run. Commit `9204d1a8` also binds
+  donated/nondonated integration through one wrapper factory while retaining
+  trace-time implementation lookup. The full patch removes 52 source lines and
+  is net four Python lines smaller after its two regressions; 133 linear, 74
+  runner/runtime, and 69 four-device parallel tests pass. A reconstructed old
+  wrapper is bitwise equal with identical JAX cost analysis. Ruff, mypy,
+  architecture, and diff checks pass.
+- PR #104 is fully green at `885729f8`: all 41 required checks pass and the
+  nightly job is intentionally skipped.
 - PR #102's follow-up audit/fix is fully green: all 41 required GitHub checks
   pass at `51b55741`; the nightly job is intentionally skipped.
 - Refreshed the public inventory: `main` remains at merged PR #80 and 26 PRs

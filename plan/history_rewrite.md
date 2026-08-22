@@ -250,10 +250,10 @@ generator/source/image/physics-test head blobs are exact; the large release
 gate differs only at its intentional rewritten roadmap-reference comment. The
 binary deltas disappear privately because each parent already contains the
 mapped compact blobs; the dimension-preservation commit is retained empty via
-`--prune-empty never`. PR #105's exact public/private stable patch ID is
-`0bd73578`. Immediately before this record, a fresh 27-head/28-tag clone has
-3,463 commits, 17,704 objects, an 8,808,008-byte pack, 9,304,792 bytes for pack
-plus index, and a 9,639,011-byte complete `.git` file sum. Strict `fsck`, no
+`--prune-empty never`. PR #105's exact public/private aggregate stable patch ID
+is `3992710b`. Immediately before this record, a fresh 27-head/28-tag clone has
+3,466 commits, 17,728 objects, an 8,912,462-byte pack, 9,409,918 bytes for pack
+plus index, and a 9,744,233-byte complete `.git` file sum. Strict `fsck`, no
 alternates, zero reachable original/intermediate blobs, exact roadmap payload,
 and the attribution scan pass.
 
