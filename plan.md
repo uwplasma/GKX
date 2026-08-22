@@ -839,11 +839,13 @@ merge `14442da2` carries that contract into the reproducible saturation replay;
 commit `eebff63b` adds atomic output locks after a real duplicate-writer event.
 Private replays `bf8d5429`, `0b1d6ced`, and `eab1327d` have exact stable patch
 IDs; the complete public/candidate PR #91 patch shares ID `4c2b67d8`. A new
-ordinary no-local clone of the 25-head/28-tag candidate has 3,452 commits and
-17,620 objects: pack 8,702,296 bytes, pack plus index 9,196,728 bytes, and
-complete `.git` file sum 9,530,432 bytes. Strict `fsck`, no alternates, and zero
-reachable AI-attribution matches pass, leaving 469,568 bytes below the strict
-decimal gate. No public history moved.
+ordinary no-local clone after exact plan replay `fc4c8d5a` has 25 heads, 28
+tags, 3,453 commits, and 17,626 objects: pack 8,771,159 bytes, pack plus index
+9,265,759 bytes, and complete `.git` file sum 9,599,487 bytes. Strict `fsck`,
+no alternates, and zero reachable AI-attribution matches pass, leaving 400,513
+bytes below the strict decimal gate. This is the measured pre-record candidate;
+the next roadmap record must be replayed and remeasured rather than silently
+assuming identical compression. No public history moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
