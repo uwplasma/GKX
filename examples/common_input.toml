@@ -29,8 +29,7 @@ ntheta = 48
 nperiod = 1
 
 [time]
-# t_max bounds the default run; it will be superseded by run_to = "saturation"
-# once the saturation stop rule lands.
+# Use a fixed horizon until the saturation rule passes independent validation.
 t_max = 200.0
 dt = 0.1
 method = "rk3"

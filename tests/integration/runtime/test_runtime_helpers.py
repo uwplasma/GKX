@@ -430,6 +430,7 @@ def test_runtime_nonlinear_command_print_helpers(
 ) -> None:
     runtime_commands.print_nonlinear_run_header(
         config_path="case.toml",
+        runtime_config=_base_cfg(),
         ky=0.2,
         Nl=4,
         Nm=6,
@@ -469,6 +470,13 @@ def test_runtime_nonlinear_command_print_helpers(
     assert "starting runtime nonlinear run" in out
     assert "steps=auto" in out
     assert "diagnostics=on progress=off" in out
+    assert "physics=electrostatic kinetic=ion(a/L_T=2.49,a/L_n=0.8)" in out
+    assert "adiabatic=electrons" in out
+    assert "a/L_T=-a d(ln T)/dr" in out
+    assert "gamma=d ln|phi_k|/dt" in out
+    assert "selected-mode diagnostics" in out
+    assert "Wg=distribution free energy; Q=radial heat flux/Q_gB" in out
+    assert "saturation uses Q/Wphi/Wg" in out
     assert "nonlinear: t=0.2" in out
     assert "ky_sel=0.2" in out
     assert "Wphi=2.1" in out

@@ -683,6 +683,7 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
 
     print_nonlinear_run_header(
         config_path=str(args.config),
+        runtime_config=cfg,
         ky=opts.ky,
         Nl=opts.Nl,
         Nm=opts.Nm,
