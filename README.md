@@ -17,7 +17,7 @@ or from Python.
 pip install gkx && gkx
 ```
 
-<img src="docs/_static/turbulence_loop.webp" width="900" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
+<img src="docs/_static/turbulence_loop.webp" width="720" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
 
 **Saturated ITG turbulence on a Cyclone flux tube** (32×32×24, `t ≈ 300–376`),
 shown as the perpendicular cut a gyrokineticist reads and as the field-aligned
@@ -26,7 +26,7 @@ shows the perpendicular plane hides the parallel elongation that defines the
 turbulence. Amplitude is steady across the whole loop, not growing.
 
 The loop is an animated image rather than a `<video>`, which GitHub strips from
-Markdown: 30 frames at 5 fps, 346 kB of animated WebP, chosen over GIF because
+Markdown: 24 frames at 4 fps, 225 kB of animated WebP, chosen over GIF because
 no GIF fit the repository's size target at a resolution worth showing.
 The
 **[full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)**
@@ -37,8 +37,8 @@ re-encode the loop from its output with:
 ```bash
 mkdir -p frames
 ffmpeg -i gkx-cyclone-itg-turbulence.mp4 \
-  -vf "fps=5,scale=900:-1:flags=lanczos" frames/f_%04d.png
-img2webp -loop 0 -lossy -q 65 -m 6 -d 200 frames/f_*.png \
+  -vf "fps=4,scale=720:-2:flags=lanczos" frames/f_%04d.png
+img2webp -loop 0 -lossy -q 58 -m 6 -d 250 frames/f_*.png \
   -o docs/_static/turbulence_loop.webp
 ```
 
