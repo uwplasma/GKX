@@ -1,6 +1,6 @@
 # Pull-request audit
 
-GitHub reports 73 merged PRs through #80. None has an approving review. The
+GitHub reports 74 merged PRs through #81. None has an approving review. The
 2026-08-21 pass inspected each surviving parent-to-merge diff, its tests, its
 head checks, later fixes to the same contract, and the current code. A green
 head is evidence that tests ran, not evidence that the physics is right.
@@ -84,12 +84,13 @@ objects. `red` describes the PR head at merge, not today's main branch.
 | 78 | plan-only wave | S | Move audit log to #82; remove from main. |
 | 79 | binary input error | K | Focused TOML-vs-binary classification and regression test. |
 | 80 | run summary/output | D | Useful summary/NetCDF integration, merged with red mypy/`ci-required`; emitted an impossible saturation interval, lost the exact final horizon/diagnostic and rendered a synthetic tube. #81/#84/#86 are the required repairs. |
+| 81 | main CI repair | K | One-line run-summary typing repair plus a nonlinear-only 20-minute wrapper budget. All 41 PR checks passed and no test was weakened. It was merged externally with no approving review; the post-merge `main` run must still pass. |
 
 Missing PR numbers were never merged; #74 remains open.
 
 ## Merge-control findings
 
-- Approving reviews: **0/73**.
+- Approving reviews: **0/74**.
 - Red heads merged: #10--#16 (coverage), #49/#60/#62 (mypy),
   #51/#54--#59/#61/#63 (release artifact), #71--#73 (docs), and #80
   (mypy plus aggregate CI).

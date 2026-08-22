@@ -45,7 +45,8 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the twenty-six open PR heads (#74 and #81--#105) after the final rewrite.
+- Rebase the twenty-nine open PR heads (#74, #82--#105, and #107--#110) after
+  the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -163,8 +164,8 @@ marker remains. The other human identities are unchanged.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main` and all tags from exact candidate SHAs, then rebase the twenty-one
-   open PR heads with `--force-with-lease`.
+   update `main` and all tags from exact candidate SHAs, then rebase the
+   twenty-nine open PR heads with `--force-with-lease`.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
    merged heads and restore protection: required aggregate CI, one non-author
    approval, and no force pushes.
@@ -344,3 +345,17 @@ bytes, pack plus index is 9,196,864 bytes, and complete `.git` file sum is
 9,531,837 bytes. Strict `fsck`, no alternates, and zero reachable
 AI-attribution matches pass, leaving 468,163 bytes of strict decimal margin.
 No public history moved.
+
+Public PR #81 was squash-merged externally as `0ff569c3` on 2026-08-22 after
+all 41 PR checks passed but without an approving review. Its public tree equals
+topic head `d910ac56`; the private candidate already carried the one-line
+run-summary typing repair on `main`, so only the reviewed CI workflow delta was
+missing. Private commit `00fb4dae` preserves the public squash subject, body,
+timestamp, one-parent topology, Rogerio author, and GitHub committer while using
+the exact private topic tree `b1c356ee`; its parent is the prior private main
+`2f8521ab`. A garbage-collected ordinary no-local clone now advertises 32
+remote refs and 28 tags, with 3,486 commits and 17,871 objects. Its pack is
+8,524,088 bytes, pack plus index is 9,025,548 bytes, and complete `.git` file
+sum is 9,360,868 bytes. Strict `fsck`, no alternates, and zero reachable
+AI-attribution matches pass, leaving 639,132 bytes of strict decimal margin.
+No public history was force-pushed.

@@ -1441,3 +1441,17 @@
   9,206,247 bytes, and complete `.git` file sum 9,541,515 bytes. Strict `fsck`,
   no alternates, and zero reachable AI-attribution matches pass, leaving
   458,485 bytes below the decimal 10-MB gate. No public history moved.
+- GitHub squash-merged PR #81 externally as `0ff569c3` on 2026-08-22. It had
+  all 41 required PR checks green and no approving review; `main`'s post-merge
+  workflow is still running. The public inventory is now 74 merged and 29 open
+  PRs (#74, #82--#105, and #107--#110). The living roadmap remains open.
+- Mapped that squash into the private rewrite without pointing `main` at the
+  topic branch. Private `00fb4dae` has parent `2f8521ab`, tree `b1c356ee`
+  exactly equal to private topic `0701f268`, and the public squash message,
+  timestamp, Rogerio author, and GitHub committer. Because private `main`
+  already contained the one-line run-summary typing repair, this commit adds
+  only the four-addition/five-deletion CI workflow delta. A fresh no-local
+  clone has 32 remote refs, 28 tags, 3,486 commits, and 17,871 objects: pack
+  8,524,088 bytes, pack plus index 9,025,548 bytes, and complete `.git`
+  9,360,868 bytes. Strict `fsck`, no alternates, and zero reachable AI markers
+  pass. No public ref was force-pushed.
