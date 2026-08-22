@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.colors import Normalize
 import numpy as np
+from PIL import Image
 from scipy.stats import t as student_t
 
 from gkx.diagnostics.analysis import integrated_autocorrelation_time
@@ -443,13 +444,19 @@ def plot_equilibria(input_dir: Path, output_dir: Path) -> None:
     scalar = cm.ScalarMappable(norm=norm, cmap="viridis")
     colorbar = figure.colorbar(scalar, ax=figure.axes, location="right", shrink=0.72, pad=0.02)
     colorbar.set_label(r"$|B|/\langle |B|\rangle$")
+    output = output_dir / "qa_transport_equilibria.png"
     figure.savefig(
-        output_dir / "qa_transport_equilibria.png",
+        output,
         dpi=170,
         bbox_inches="tight",
         pad_inches=0.04,
     )
     plt.close(figure)
+    with Image.open(output) as rendered:
+        palette = rendered.convert("RGB").quantize(
+            colors=256, method=Image.Quantize.MEDIANCUT
+        )
+    palette.save(output, optimize=True)
 
 
 def main() -> None:
