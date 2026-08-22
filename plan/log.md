@@ -774,3 +774,18 @@
   `prior_history_not_in_report`. Ruff and all 11 nonlinear-window artifact
   contract tests pass; the solver and active source-pinned trajectories are
   unchanged.
+- The clean QI Ny=96 continuation reached exact `t=500` in 3,450.7 s. Its
+  segment-only JSON promotes `t=257.67--500`, but the concatenated 1,773-sample
+  history makes no frozen `75+60` stop. The complete-history selector keeps
+  `t=30.30--500`, with `Q=4.6556 +/- 0.3991` and 8.57% relative SEM. The longest
+  new pass island is `t=279.17--302.09` (22.92 time units).
+- Over `t=400--500`, `Q=4.1869 +/- 0.0822`, `Wphi=2.4313 +/- 0.0237`, and
+  `Wg=124.08 +/- 1.94`; Q and Wg fail half-window stationarity. The terminal
+  75- and 50-time-unit windows also fail at least one Q/Wphi/Wg guard. Heat-flux
+  cutoff/peak, last-three-ky mass, and outer-six-kx mass are 15.15%, 3.77%, and
+  2.61%; Phi2 is 0.083%/0.259%/0.435%. Thus QI is still unresolved in Ny as well
+  as time; the source-pinned Ny=128 rung has started on GPU 1.
+- QI continuation SHA-256: NPZ
+  `644be269e37d7b5cab838be94ba1748ba94ec3d332f9da44190cb46083520480`, JSON
+  `5543fbaf0ceb7842d7d726c8558a343791a66bd2e156c5e4111df721f17073a4`, log
+  `62c549b17943f045ce038a40a7816e352d3134db61a859565cf20c3e8a488490`.
