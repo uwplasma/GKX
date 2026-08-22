@@ -167,7 +167,7 @@ generators; the figure builder reads their JSON rather than carrying literals.
 
    # (ii) checkpoint memory profile (left panel), once per device
    python tools/profiling/profile_nonlinear_adjoint_checkpointing.py \
-       --nx 16 --ny 16 --nz 16 --steps 2048 --precision 32 \
+       --nx 16 --ny 16 --nz 16 --steps 1024 --precision 32 \
        --output docs/_static/nonlinear_adjoint_checkpointing_gpu32.json
 
    # (iii) CPU/GPU parity on one fixed case, once per device, then compare
@@ -186,10 +186,13 @@ the step-checkpoint policy, so run it on a card with a free 16 GB or drop to
 Evidence and scope
 ------------------
 
-The physical Cyclone heat-flux gradient matches centered finite differences
-through 2048 RK3 steps; the worst relative discrepancy is
-:math:`2.5\times10^{-5}`. A VMEX--Boozer--GKX state-control test matches finite
-differences to :math:`5.7\times10^{-6}` and lowers the local heat flux by 1.25%.
+The physical Cyclone heat-flux gradient passes the declared
+:math:`10^{-6}` centered-finite-difference gate through 1024 RK3 steps; the
+1024-step relative discrepancy is :math:`2.7\times10^{-9}`. At 2048 steps the
+discrepancy is :math:`2.5\times10^{-5}` and fails that gate, which brackets the
+trajectory-specific divergence knee. A VMEX--Boozer--GKX state-control test
+matches finite differences to :math:`5.7\times10^{-6}` and lowers the local
+heat flux by 1.25%.
 
 These results establish a finite-window derivative and local descent. They do
 not establish an infinite-time turbulent derivative. Independent matched runs
