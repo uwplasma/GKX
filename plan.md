@@ -898,7 +898,9 @@ fewer accessed bytes, and 46.4% fewer JAXPR equations. Float64 differs from the
 old totals by at most `6.34e-16` relatively; float32's worst max-scaled error is
 `2.52e-6` from reduction reassociation. This is a diagnostic-kernel result, not
 an end-to-end saturation-speedup claim. All 102 owned nonlinear diagnostic
-tests and 117 release tests pass locally; CI and a noninterfering GPU benchmark
+tests and 117 release tests pass locally. The two broader float32-only failures
+also reproduce on the untouched base; both pass on office JAX 0.11.1 under the
+actual CI `JAX_ENABLE_X64=true` contract. CI and a noninterfering GPU benchmark
 remain open.
 
 The rewrite maps only the three exact old PNG blobs to those final compact

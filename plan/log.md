@@ -1348,9 +1348,11 @@
   equations -46.4%. This is not an end-to-end solver timing claim. The patch
   removes ten installed-source lines and 34 test lines. All 102 owned
   diagnostic/runtime tests, 117 release tests, Ruff, changed-module mypy,
-  architecture, size, and diff gates pass. Two broader local failures reproduce
-  identically on the untouched base under unsupported local JAX 0.9.2; CI is
-  active on the supported matrix, and the GPU benchmark waits for a free device.
+  architecture, size, and diff gates pass. Two broader float32-only failures
+  reproduce identically on the untouched base under local JAX 0.9.2 and office
+  JAX 0.11.1. Both pass on office under the actual CI
+  `JAX_ENABLE_X64=true` contract, together with the three direct diagnostic
+  state tests. CI is active, and the GPU benchmark waits for a free device.
 - Replayed #108 privately as `8f2444d8`. Its exact public/private stable patch
   ID is `62fef1c4`, and all four affected head blobs match. A fresh ordinary
   clone has 30 remote refs, 28 tags, 3,475 commits, and 17,798 objects: pack
