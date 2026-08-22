@@ -1424,3 +1424,20 @@
   index 9,203,794 bytes, and complete `.git` file sum 9,538,907 bytes. Strict
   `fsck`, no alternates, and zero reachable AI-attribution matches pass, leaving
   461,093 bytes below the decimal 10-MB gate. No public history moved.
+- PR #109 is fully green at `0561e5dc`: all 41 required checks pass and nightly
+  is intentionally skipped.
+- Opened draft PR #110 at `adf3234b` after the exact-AST audit found duplicate
+  float32/x64 finite-difference tolerances and finite scalar parsing in the
+  objective layer. Existing owners now serve both callers. Public signatures,
+  defaults, table/report schemas, thresholds, and policy outputs are unchanged;
+  float32/x64 base/head parity digests match. The patch removes 14 installed
+  lines (`96,465 -> 96,451`) and adds no file. All 122 owning tests pass locally
+  and on office JAX 0.11.1; 117 release tests, Ruff, architecture, size, and
+  diff gates pass locally. CI is active. The office runtime environment lacks
+  PyYAML, Ruff, and mypy, so their authoritative rerun remains GitHub CI.
+- Replayed #110 privately as `9c0626f6`; stable patch ID `0f6549b3` and both
+  changed blobs match. A fresh no-local clone has 32 remote refs, 28 tags,
+  3,484 commits, and 17,865 objects: pack 8,704,955 bytes, pack plus index
+  9,206,247 bytes, and complete `.git` file sum 9,541,515 bytes. Strict `fsck`,
+  no alternates, and zero reachable AI-attribution matches pass, leaving
+  458,485 bytes below the decimal 10-MB gate. No public history moved.

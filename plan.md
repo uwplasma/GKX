@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74, #81--#105, and #107--#109. PR #106 was closed as a
+and open PRs #74, #81--#105, and #107--#110. PR #106 was closed as a
 duplicate.
 
 ## Rules
@@ -941,7 +941,18 @@ are unchanged. The same two-step linear/nonlinear base and head runs, including
 single-device sharding, have byte-identical final-state and field-history
 hashes. The patch removes 19 installed-source lines (`96,465 -> 96,446`) and
 adds no file. All 14 focused Diffrax tests, 117 release tests, Ruff, mypy,
-architecture, repository-size, and diff gates pass locally. CI is active.
+architecture, repository-size, and diff gates pass locally. All 41 required
+GitHub checks pass.
+
+PR #110 removes two more exact objective-policy copies without adding a file.
+`stellarator_reduced` now solely owns the float32/x64 finite-difference
+tolerances already consumed by the table layer, and `vmec_transport_admission`
+solely owns finite scalar parsing for the VMEC transport reports. Public
+signatures, defaults, schemas, thresholds, and results are unchanged. The patch
+removes 14 installed-source lines (`96,465 -> 96,451`). Base/head digests of
+both policies and every public signature match in float32 and x64. All 122
+owning tests pass locally and under office JAX 0.11.1; 117 release tests, Ruff,
+architecture, size, and diff gates pass locally. CI is active.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
@@ -1220,7 +1231,7 @@ unverified rather than silently promoted.
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#109 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#110 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
