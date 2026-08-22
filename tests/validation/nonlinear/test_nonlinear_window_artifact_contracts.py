@@ -136,7 +136,14 @@ def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
 ) -> None:
     replay = load_tool_script("campaigns", "nonlinear_saturated_state")
 
-    def write_trace(path: Path, time: np.ndarray, *, dirty: int = 0) -> None:
+    def write_trace(
+        path: Path,
+        time: np.ndarray,
+        *,
+        previous_t_end: float,
+        case: str = "qa",
+        dirty: int = 0,
+    ) -> None:
         np.savez_compressed(
             path,
             time=time,
@@ -145,19 +152,29 @@ def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
             Wg=np.ones(time.size),
             gkx_git_commit=np.asarray("abc123"),
             gkx_git_dirty=np.asarray(dirty),
+            previous_t_end=np.asarray(previous_t_end),
+            case=np.asarray(case),
         )
 
     first = tmp_path / "first.npz"
     second = tmp_path / "second.npz"
-    write_trace(first, np.arange(0.0, 10.0))
-    write_trace(second, np.arange(10.0, 20.0))
+    write_trace(first, np.arange(0.0, 10.0), previous_t_end=0.0)
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0)
 
     arrays, sources = replay._load_replay_traces([first, second])
     assert arrays[0].tolist() == list(np.arange(20.0))
     assert len(sources) == 2
     assert sources[0]["sha256"] == hashlib.sha256(first.read_bytes()).hexdigest()
 
-    write_trace(second, np.arange(10.0, 20.0), dirty=1)
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, case="qi")
+    with pytest.raises(ValueError, match="campaign identity differs"):
+        replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=8.0)
+    with pytest.raises(ValueError, match="not a contiguous continuation"):
+        replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, dirty=1)
     with pytest.raises(ValueError, match="not pinned to a clean GKX commit"):
         replay._load_replay_traces([first, second])
 

@@ -133,6 +133,24 @@ class ReplayPolicy:
     min_samples: int = 16
 
 
+_REPLAY_IDENTITY_FIELDS = (
+    "campaign_identity_schema",
+    "case",
+    "input_sha256",
+    "vmec_sha256",
+    "Nx",
+    "Ny",
+    "Nz",
+    "Nl",
+    "Nm",
+    "random_seed",
+    "alpha",
+    "npol",
+    "kx",
+    "ky",
+)
+
+
 def replay_policy(
     time_axis: np.ndarray | Sequence[float],
     heat_flux: np.ndarray | Sequence[float],
@@ -276,6 +294,7 @@ def _load_replay_traces(
     sources: list[dict[str, Any]] = []
     commit: str | None = None
     previous_time: float | None = None
+    identity: dict[str, np.ndarray] | None = None
     for path in paths:
         with path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
@@ -286,12 +305,39 @@ def _load_replay_traces(
             ]
             source_commit = str(np.asarray(archive["gkx_git_commit"]).item())
             source_dirty = int(np.asarray(archive["gkx_git_dirty"]).item())
+            segment_start = (
+                float(np.asarray(archive["previous_t_end"]).item())
+                if "previous_t_end" in archive
+                else None
+            )
+            segment_identity = {
+                name: np.asarray(archive[name])
+                for name in _REPLAY_IDENTITY_FIELDS
+                if name in archive
+            }
         if not source_commit or source_dirty != 0:
             raise ValueError(f"{path}: trace is not pinned to a clean GKX commit")
         if commit is not None and source_commit != commit:
             raise ValueError(f"{path}: GKX commit differs from preceding trace")
-        if previous_time is not None and values[0][0] <= previous_time:
-            raise ValueError(f"{path}: trace does not continue after preceding trace")
+        if previous_time is None:
+            if segment_start not in (None, 0.0):
+                raise ValueError(f"{path}: first trace omits prior history")
+            identity = segment_identity
+        else:
+            if segment_start is None or not np.isclose(
+                segment_start, previous_time, rtol=0.0, atol=1.0e-9
+            ):
+                raise ValueError(f"{path}: trace is not a contiguous continuation")
+            assert identity is not None
+            if segment_identity.keys() != identity.keys() or any(
+                not np.array_equal(segment_identity[name], value)
+                for name, value in identity.items()
+            ):
+                raise ValueError(f"{path}: campaign identity differs from first trace")
+        if not values[0].size or np.any(np.diff(values[0]) <= 0.0):
+            raise ValueError(f"{path}: segment time must be strictly increasing")
+        if previous_time is not None and values[0][0] <= segment_start:
+            raise ValueError(f"{path}: segment does not advance its declared start")
         commit, previous_time = source_commit, float(values[0][-1])
         for parts, value in zip(arrays, values):
             parts.append(value)
@@ -570,6 +616,24 @@ def main() -> int:
 
     n_laguerre = int(args.nl or raw.get("run", {}).get("Nl", 4))
     n_hermite = int(args.nm or raw.get("run", {}).get("Nm", 8))
+    vmec_file = getattr(runtime.geometry, "vmec_file", None)
+    vmec_path = None if vmec_file is None else Path(str(vmec_file)).expanduser()
+    replay_identity = {
+        "campaign_identity_schema": np.asarray("gkx_nonlinear_campaign_v1"),
+        "case": np.asarray(args.toml.name),
+        "input_sha256": np.asarray(hashlib.sha256(args.toml.read_bytes()).hexdigest()),
+        "vmec_sha256": np.asarray(
+            hashlib.sha256(vmec_path.read_bytes()).hexdigest()
+            if vmec_path is not None and vmec_path.is_file()
+            else ""
+        ),
+        **{name: np.asarray(value) for name, value in grid_shape.items()},
+        "Nl": np.asarray(n_laguerre),
+        "Nm": np.asarray(n_hermite),
+        "random_seed": np.asarray(int(runtime.init.random_seed)),
+        "alpha": np.asarray(str(runtime.geometry.alpha)),
+        "npol": np.asarray(str(runtime.geometry.npol)),
+    }
     previous_t_end = 0.0
 
     def run(config):
@@ -681,6 +745,7 @@ def main() -> int:
             "Nm": np.asarray(n_hermite),
             "elapsed_seconds": np.asarray(elapsed),
             "previous_t_end": np.asarray(previous_t_end),
+            **replay_identity,
         }
         payload.update(
             _trace_spectral_payload(
