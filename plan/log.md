@@ -134,7 +134,10 @@
   plot. The proposed `t=50--55` window contains only two saved points: mean
   `Q=8.18`, `Wphi=1.30`, and `Wg=180.2`, versus `Q=10.92`, `Wphi=1.64`, and
   `Wg=246.1` over `t=150--200`. It is shorter than one measured correlation
-  time and precedes continued free-energy evolution. The late heat-flux
+  time and precedes continued free-energy evolution. The rendered averaging
+  window starts at `t=29.83` inside the `Q≈42` nonlinear overshoot and ends at
+  `t=238`, beyond the saved trace at `t=200.62`; the spectrum panel inherits
+  that invalid window. The late heat-flux
   spectrum peaks at `ky*rho=1.19`; its `ky*rho=1.48` cutoff remains 68% of the
   peak and the last three bins carry 14.6% of positive flux. This run is
   neither statistically nor perpendicularly resolved. Increasing `Ny` extends
@@ -176,6 +179,13 @@
   differentiable-geometry facade now delegates to the canonical VMEC/Boozer
   core while preserving its monkeypatch hooks and signature metadata: 28
   installed Python lines removed, 263 focused tests pass under JAX 0.10.2, and
-  mypy passes on both touched modules. A GitHub API scan of all fourteen open
+  mypy passes on both touched modules. A GitHub API scan of all fifteen open
   PR heads finds only Rogerio's IST author/committer identity and no AI
   attribution markers.
+- Opened draft PR #94 on #87 after visually reproducing the supplied QA plots.
+  Automatic plotting now propagates `saturated=false`, removes the rejected
+  `t=29.83--238` window from standalone averages, labels the result diagnostic,
+  and computes the plotted spectrum and cutoff warning over the same late-half
+  interval. The summary retains the attempted window with its explicit
+  `NOT saturated` verdict. All 116 plotting/CLI tests pass and installed source
+  decreases by five lines relative to the architecture baseline.
