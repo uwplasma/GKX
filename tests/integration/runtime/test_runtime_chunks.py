@@ -96,7 +96,7 @@ def test_run_adaptive_runtime_chunk_loop_reports_wall_eta(
     )
 
     result = run_adaptive_runtime_chunk_loop(
-        integrate_chunk=lambda _show_progress: next(chunks),
+        integrate_chunk=lambda _show_progress, _remaining_time: next(chunks),
         t_max=1.5,
         chunk_steps=16,
         label="nonlinear",
@@ -121,7 +121,7 @@ def test_run_adaptive_runtime_chunk_loop_reports_wall_eta(
     np.testing.assert_allclose(np.asarray(result.fields.phi), np.asarray([2.0 + 0.0j]))
 
 
-def test_run_adaptive_runtime_chunk_loop_truncates_before_applying_stride() -> None:
+def test_run_adaptive_runtime_chunk_loop_keeps_exact_terminal_sample_with_stride() -> None:
     chunks = iter(
         [
             (
@@ -131,16 +131,21 @@ def test_run_adaptive_runtime_chunk_loop_truncates_before_applying_stride() -> N
                 FieldState(phi=np.asarray([1.0 + 0.0j])),
             ),
             (
-                np.asarray([0.4, 0.8]),
-                _diag([0.4, 0.8]),
+                np.asarray([0.4]),
+                _diag([0.4]),
                 np.asarray([2.0]),
                 FieldState(phi=np.asarray([2.0 + 0.0j])),
             ),
         ]
     )
+    remaining: list[float] = []
+
+    def integrate_chunk(_show_progress, remaining_time):
+        remaining.append(remaining_time)
+        return next(chunks)
 
     result = run_adaptive_runtime_chunk_loop(
-        integrate_chunk=lambda _show_progress: next(chunks),
+        integrate_chunk=integrate_chunk,
         t_max=1.2,
         chunk_steps=8,
         label="test",
@@ -148,14 +153,30 @@ def test_run_adaptive_runtime_chunk_loop_truncates_before_applying_stride() -> N
     )
 
     np.testing.assert_allclose(np.asarray(result.diagnostics.t), [0.4, 1.2])
+    np.testing.assert_allclose(remaining, [1.2, 0.4])
     np.testing.assert_allclose(np.asarray(result.state), [2.0])
     np.testing.assert_allclose(np.asarray(result.fields.phi), [2.0 + 0.0j])
+
+
+def test_run_adaptive_runtime_chunk_loop_rejects_horizon_overshoot() -> None:
+    with pytest.raises(RuntimeError, match="must honor remaining_time"):
+        run_adaptive_runtime_chunk_loop(
+            integrate_chunk=lambda _show_progress, _remaining_time: (
+                np.asarray([0.8]),
+                _diag([0.8]),
+                np.asarray([1.0]),
+                FieldState(phi=np.asarray([1.0 + 0.0j])),
+            ),
+            t_max=1.2,
+            chunk_steps=8,
+            label="test",
+        )
 
 
 def test_run_adaptive_runtime_chunk_loop_rejects_stalled_time_progress() -> None:
     with pytest.raises(RuntimeError, match="made no time-step progress"):
         run_adaptive_runtime_chunk_loop(
-            integrate_chunk=lambda _show_progress: (
+            integrate_chunk=lambda _show_progress, _remaining_time: (
                 np.asarray([0.0]),
                 _diag([0.0]),
                 np.asarray([0.0]),
@@ -174,7 +195,7 @@ def test_run_adaptive_runtime_chunk_loop_rejects_nonfinite_diagnostics() -> None
         RuntimeError, match=r"non-finite diagnostics in Wphi_t at sample 0"
     ):
         run_adaptive_runtime_chunk_loop(
-            integrate_chunk=lambda _show_progress: (
+            integrate_chunk=lambda _show_progress, _remaining_time: (
                 np.asarray([0.5]),
                 bad,
                 np.asarray([0.0]),
@@ -219,7 +240,7 @@ def test_run_adaptive_runtime_chunk_loop_stops_early_on_stop_condition() -> None
         return {"stop": t.size >= 4, "saturated": t.size >= 4, "mean": 0.0}
 
     result = run_adaptive_runtime_chunk_loop(
-        integrate_chunk=lambda _show_progress: next(chunks),
+        integrate_chunk=lambda _show_progress, _remaining_time: next(chunks),
         t_max=3.0,
         chunk_steps=8,
         label="test",
@@ -235,8 +256,15 @@ def test_run_adaptive_runtime_chunk_loop_stops_early_on_stop_condition() -> None
 
 
 def test_run_adaptive_runtime_chunk_loop_reports_last_decision_without_stop() -> None:
+    def stop_condition(t, heat_flux, wphi):
+        return {
+            "stop": False,
+            "saturated": False,
+            "window_tmax": float(t[-1]),
+        }
+
     result = run_adaptive_runtime_chunk_loop(
-        integrate_chunk=lambda _show_progress: (
+        integrate_chunk=lambda _show_progress, _remaining_time: (
             np.asarray([0.5, 1.0]),
             _diag([0.5, 1.0]),
             np.asarray([1.0]),
@@ -245,10 +273,18 @@ def test_run_adaptive_runtime_chunk_loop_reports_last_decision_without_stop() ->
         t_max=1.0,
         chunk_steps=8,
         label="test",
-        stop_condition=lambda t, heat_flux, wphi: {"stop": False, "saturated": False},
+        diagnostics_stride=3,
+        stop_condition=stop_condition,
     )
 
-    assert result.stop_decision == {"stop": False, "saturated": False}
+    assert result.stop_decision == {
+        "stop": False,
+        "saturated": False,
+        "window_tmax": 1.0,
+    }
+    assert result.diagnostics.t[-1] == pytest.approx(
+        result.stop_decision["window_tmax"]
+    )
 
 
 def _stop_policy_inputs(*, steps: int, diagnostics_on: bool = True):

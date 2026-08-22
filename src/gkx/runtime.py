@@ -47,7 +47,6 @@ from gkx.workflows.runtime.diagnostic_arrays import (
     concat_runtime_diagnostics,
     slice_runtime_diagnostics,
     stride_runtime_diagnostics,
-    truncate_runtime_diagnostics,
 )
 from gkx.workflows.runtime.diagnostics import (
     finalize_runtime_linear_quasilinear,
@@ -174,7 +173,7 @@ __all__ = [
     "_runtime_independent_parallel_plan", "_runtime_model_key",
     "_select_nonlinear_mode_indices", "_slice_runtime_diagnostics",
     "_species_to_linear", "_stride_runtime_diagnostics",
-    "_truncate_runtime_diagnostics", "_zero_kx_index",
+    "_zero_kx_index",
     "build_runtime_geometry", "build_runtime_linear_params",
     "build_runtime_linear_terms", "build_runtime_term_config",
     "run_runtime_linear", "run_runtime_nonlinear",
@@ -262,7 +261,6 @@ def _load_initial_state_from_file(
 
 
 _slice_runtime_diagnostics = slice_runtime_diagnostics
-_truncate_runtime_diagnostics = truncate_runtime_diagnostics
 _stride_runtime_diagnostics = stride_runtime_diagnostics
 _concat_runtime_diagnostics = concat_runtime_diagnostics
 

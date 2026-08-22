@@ -70,7 +70,7 @@ def _chunk(index: int) -> SimulationDiagnostics:
 def _run(*, stride: int, spill_dir: Path | None = None):
     remaining = iter(range(CHUNK_COUNT))
 
-    def integrate_chunk(_show_progress):
+    def integrate_chunk(_show_progress, _remaining_time):
         return None, _chunk(next(remaining)), object(), object()
 
     return run_adaptive_runtime_chunk_loop(
@@ -104,6 +104,8 @@ def _chunk_arrays(diag: SimulationDiagnostics) -> Iterator[tuple[str, np.ndarray
 def test_per_chunk_stride_keeps_the_post_concatenation_samples(stride: int) -> None:
     kept = np.asarray(_run(stride=stride).diagnostics.gamma_t)
     expected = np.arange(CHUNK_SAMPLES * CHUNK_COUNT, dtype=float)[::stride]
+    if expected[-1] != CHUNK_SAMPLES * CHUNK_COUNT - 1:
+        expected = np.append(expected, CHUNK_SAMPLES * CHUNK_COUNT - 1)
 
     assert np.array_equal(kept, expected), (
         f"stride {stride} kept global samples {kept[:12]} but striding after "

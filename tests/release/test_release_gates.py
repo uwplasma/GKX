@@ -3400,7 +3400,7 @@ deck reaching the nonlinear runtime fails here until somebody measures it,
 which is the step that was skipped when the default changed.
 
 Measurement protocol for the cleared decks: run the deck's own configuration
-through ``run_runtime_nonlinear`` for its first saturation chunk -- 512 steps or
+through ``run_runtime_nonlinear`` for its first saturation chunk -- 128 steps or
 the deck's whole budget, whichever is smaller, one diagnostic sample per step,
 which is what ``_run_chunked_diagnostics`` does -- and evaluate
 ``saturation_stop_decision`` on the resulting trace. That reproduces the first

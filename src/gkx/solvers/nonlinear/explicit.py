@@ -452,11 +452,14 @@ def _advance_explicit_diagnostic_state(
     damping: Any | None,
     collision_scheme: str,
     apply_collision_split_fn: CollisionSplitFn | None,
+    max_dt: jnp.ndarray | None = None,
 ) -> tuple[jnp.ndarray, Any, jnp.ndarray]:
     """Advance one explicit diagnostic state and compute its new fields."""
 
     dG, fields = rhs_fn(G)
     dt_local = jnp.asarray(time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype)
+    if max_dt is not None:
+        dt_local = jnp.minimum(dt_local, jnp.maximum(max_dt, 0.0))
     G_new = advance_explicit_nonlinear_state(
         G,
         dG,
@@ -532,6 +535,7 @@ def make_explicit_diagnostic_step(
     damping: Any | None = None,
     collision_scheme: str = "implicit",
     apply_collision_split_fn: CollisionSplitFn | None = None,
+    time_horizon: float | None = None,
 ) -> DiagnosticStepFn:
     """Build one explicit diagnostic scan step with injected runtime seams."""
 
@@ -540,51 +544,62 @@ def make_explicit_diagnostic_step(
         idx: Any,
     ) -> tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]]:
         G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
-        G_new, fields_new, dt_local = _advance_explicit_diagnostic_state(
-            G,
-            dt_prev,
-            rhs_fn=rhs_fn,
-            method=method,
-            project_state=project_state,
-            state_dtype=state_dtype,
-            real_dtype=real_dtype,
-            time_step_policy=time_step_policy,
-            compute_fields_fn=compute_fields_fn,
-            cache=cache,
-            params=params,
-            term_cfg=term_cfg,
-            external_phi=external_phi,
-            use_collision_split=use_collision_split,
-            damping=damping,
-            collision_scheme=collision_scheme,
-            apply_collision_split_fn=apply_collision_split_fn,
-        )
-        diag = _select_explicit_diagnostic(
-            idx,
-            diagnostics_stride=diagnostics_stride,
-            diag_prev=diag_prev,
-            G_new=G_new,
-            fields_new=fields_new,
-            G_prev_step=G_prev_step,
-            fields_prev_step=fields_prev_step,
-            dt_local=dt_local,
-            compute_diag_from_state=compute_diag_from_state,
-            select_diagnostics_fn=select_diagnostics_fn,
-        )
-        t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
-        G_new = emit_progress_fn(
-            G_new,
-            show_progress=show_progress,
-            diag=diag,
-            idx=idx,
-            steps=steps,
-            t_new=t_new,
-            progress_total=time_step_policy.progress_total,
-        )
-        return (G_new, G_new, fields_new, diag, t_new, dt_local), (
-            diag,
-            t_new,
-            dt_local,
+        def advance(max_dt: jnp.ndarray | None):
+            G_new, fields_new, dt_local = _advance_explicit_diagnostic_state(
+                G,
+                dt_prev,
+                rhs_fn=rhs_fn,
+                method=method,
+                project_state=project_state,
+                state_dtype=state_dtype,
+                real_dtype=real_dtype,
+                time_step_policy=time_step_policy,
+                compute_fields_fn=compute_fields_fn,
+                cache=cache,
+                params=params,
+                term_cfg=term_cfg,
+                external_phi=external_phi,
+                use_collision_split=use_collision_split,
+                damping=damping,
+                collision_scheme=collision_scheme,
+                apply_collision_split_fn=apply_collision_split_fn,
+                max_dt=max_dt,
+            )
+            diag = _select_explicit_diagnostic(
+                idx,
+                diagnostics_stride=diagnostics_stride,
+                diag_prev=diag_prev,
+                G_new=G_new,
+                fields_new=fields_new,
+                G_prev_step=G_prev_step,
+                fields_prev_step=fields_prev_step,
+                dt_local=dt_local,
+                compute_diag_from_state=compute_diag_from_state,
+                select_diagnostics_fn=select_diagnostics_fn,
+            )
+            t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
+            G_new = emit_progress_fn(
+                G_new,
+                show_progress=show_progress,
+                diag=diag,
+                idx=idx,
+                steps=steps,
+                t_new=t_new,
+                progress_total=time_step_policy.progress_total,
+            )
+            return (G_new, G_new, fields_new, diag, t_new, dt_local), (
+                diag,
+                t_new,
+                dt_local,
+            )
+        if time_horizon is None:
+            return advance(None)
+        remaining = jnp.maximum(jnp.asarray(time_horizon) - t_prev, 0.0)
+        return jax.lax.cond(
+            remaining > 0.0,
+            advance,
+            lambda _remaining: (carry, (diag_prev, t_prev, jnp.zeros_like(dt_prev))),
+            remaining,
         )
 
     return step

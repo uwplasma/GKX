@@ -234,6 +234,51 @@ def test_make_explicit_diagnostic_step_forwards_runtime_policies() -> None:
     assert seen["progress"]["steps"] == 4
 
 
+def test_explicit_diagnostic_step_caps_and_holds_at_time_horizon() -> None:
+    step = make_explicit_diagnostic_step(
+        rhs_fn=lambda G: (jnp.ones_like(G), G),
+        method="euler",
+        project_state=lambda G: G,
+        state_dtype=jnp.float32,
+        real_dtype=jnp.float32,
+        time_step_policy=SimpleNamespace(
+            update_dt=lambda _fields, _dt_prev: jnp.asarray(0.5, dtype=jnp.float32),
+            progress_total=jnp.asarray(1.0, dtype=jnp.float32),
+        ),
+        compute_fields_fn=lambda G, *_args, **_kwargs: G,
+        cache=None,
+        params=None,
+        term_cfg=None,
+        external_phi=None,
+        compute_diag_from_state=lambda G, *_args: G[0],
+        diagnostics_stride=1,
+        select_diagnostics_fn=lambda _idx, **kwargs: kwargs["compute_diag_fn"](),
+        show_progress=False,
+        steps=2,
+        emit_progress_fn=lambda G, **_kwargs: G,
+        time_horizon=0.75,
+    )
+    carry = (
+        jnp.asarray([1.0], dtype=jnp.float32),
+        jnp.asarray([1.0], dtype=jnp.float32),
+        jnp.asarray([1.0], dtype=jnp.float32),
+        jnp.asarray(1.0, dtype=jnp.float32),
+        jnp.asarray(0.5, dtype=jnp.float32),
+        jnp.asarray(0.5, dtype=jnp.float32),
+    )
+
+    carry, first = step(carry, jnp.asarray(0))
+    np.testing.assert_allclose(np.asarray(carry[0]), [1.25])
+    np.testing.assert_allclose(np.asarray(carry[4]), 0.75)
+    np.testing.assert_allclose(np.asarray(first[2]), 0.25)
+
+    held, second = step(carry, jnp.asarray(1))
+    np.testing.assert_allclose(np.asarray(held[0]), [1.25])
+    np.testing.assert_allclose(np.asarray(held[4]), 0.75)
+    np.testing.assert_allclose(np.asarray(second[2]), 0.0)
+    np.testing.assert_allclose(np.asarray(second[0]), np.asarray(first[0]))
+
+
 def test_make_explicit_diagnostic_step_requires_collision_split_policy() -> None:
     step = make_explicit_diagnostic_step(
         rhs_fn=lambda G: (jnp.zeros_like(G), "fields"),

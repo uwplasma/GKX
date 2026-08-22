@@ -297,11 +297,11 @@ def _run_chunked_diagnostics(
     """
 
     step_capped = not ctx.adaptive_chunked
-    chunk_steps = min(ctx.steps, 512 if step_capped else 1024)
+    chunk_steps = min(ctx.steps, 128)
     G_chunk = ctx.G0
     steps_left = ctx.steps
 
-    def run_chunk(chunk_show_progress: bool):
+    def run_chunk(chunk_show_progress: bool, remaining_time: float):
         nonlocal G_chunk, steps_left
         steps_now = min(chunk_steps, steps_left) if step_capped else chunk_steps
         kwargs = _diagnostic_kwargs(
@@ -316,6 +316,9 @@ def _run_chunked_diagnostics(
             fixed_dt=bool(cfg.time.fixed_dt),
             show_progress=chunk_show_progress,
         )
+        dt_cap = float(cfg.time.dt_max or ctx.dt)
+        if remaining_time <= steps_now * dt_cap:
+            kwargs["time_horizon"] = remaining_time
         t_chunk, diag_chunk, G_next, fields_next = (
             deps.integrate_nonlinear_explicit_diagnostics_state(
                 G_chunk,

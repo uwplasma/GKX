@@ -92,6 +92,7 @@ class _ExplicitDiagnosticOptions:
     fixed_dt: bool
     dt_min: float
     dt_max: float | None
+    time_horizon: float | None
     cfl: float
     cfl_fac: float | None
     collision_split: bool
@@ -394,6 +395,7 @@ def _make_explicit_scan_step(
     steps: int,
     external_phi: jnp.ndarray | float | None,
     collision_scheme: str,
+    time_horizon: float | None,
 ) -> Callable[..., Any]:
     """Build the explicit scan-step closure from prepared policies."""
 
@@ -419,6 +421,7 @@ def _make_explicit_scan_step(
         damping=policies.collision_policy.damping,
         collision_scheme=collision_scheme,
         apply_collision_split_fn=deps.apply_collision_split_fn,
+        time_horizon=time_horizon,
     )
 
 
@@ -572,6 +575,7 @@ def _build_explicit_scan_closures(
         steps=options.steps,
         external_phi=options.external_phi,
         collision_scheme=options.collision_scheme,
+        time_horizon=options.time_horizon,
     )
     return step, compute_diag_from_state
 
@@ -687,6 +691,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     fixed_dt: bool = True,
     dt_min: float = 1.0e-7,
     dt_max: float | None = None,
+    time_horizon: float | None = None,
     cfl: float = 0.9,
     cfl_fac: float | None = None,
     collision_split: bool = False,
@@ -852,6 +857,7 @@ def integrate_explicit_nonlinear_diagnostics_impl(
     fixed_dt: bool = True,
     dt_min: float = 1.0e-7,
     dt_max: float | None = None,
+    time_horizon: float | None = None,
     cfl: float = 0.9,
     cfl_fac: float | None = None,
     collision_split: bool = False,
