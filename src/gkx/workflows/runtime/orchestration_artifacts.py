@@ -163,7 +163,7 @@ def print_nonlinear_run_header(
     model = "electromagnetic" if runtime_config.physics.electromagnetic else "electrostatic"
     print(f"physics={model} kinetic={kinetic} adiabatic={adiabatic}")
     print("profiles: a/L_T=-a d(ln T)/dr; a/L_n=-a d(ln n)/dr")
-    print("signals: gamma=d ln|phi_k|/dt; omega=-d arg(phi_k)/dt (selected mode); Wphi=electrostatic field energy; Wg=distribution free energy; Q=radial heat flux/Q_gB")
+    print("signals: gamma=d ln|phi_k|/dt; omega=-d arg(phi_k)/dt (selected-mode diagnostics); Wphi=electrostatic field energy; Wg=distribution free energy; Q=radial heat flux/Q_gB (saturation uses Q/Wphi/Wg)")
 
 
 def print_nonlinear_run_summary(result: Any) -> bool:

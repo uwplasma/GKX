@@ -474,7 +474,9 @@ def test_runtime_nonlinear_command_print_helpers(
     assert "adiabatic=electrons" in out
     assert "a/L_T=-a d(ln T)/dr" in out
     assert "gamma=d ln|phi_k|/dt" in out
+    assert "selected-mode diagnostics" in out
     assert "Wg=distribution free energy; Q=radial heat flux/Q_gB" in out
+    assert "saturation uses Q/Wphi/Wg" in out
     assert "nonlinear: t=0.2" in out
     assert "ky_sel=0.2" in out
     assert "Wphi=2.1" in out
