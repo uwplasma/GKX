@@ -63,6 +63,9 @@ def test_saturation_campaign_requires_and_records_its_checkout_source(
 
     assert provenance["repository_root"] == str(ROOT)
     assert provenance["git_commit"]
+    assert campaign._gkx_source_tree_matches(
+        ROOT, provenance["git_commit"], provenance["git_commit"]
+    )
     assert encoded["gkx_git_commit"].dtype.kind == "U"
     assert encoded["gkx_git_dirty"].dtype.kind in "iu"
     with pytest.raises(SystemExit, match="PYTHONPATH=src"):

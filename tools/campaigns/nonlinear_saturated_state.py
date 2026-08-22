@@ -75,6 +75,27 @@ def _npz_source_provenance(provenance: dict[str, object]) -> dict[str, np.ndarra
     }
 
 
+def _gkx_source_tree_matches(repository: str | Path, left: str, right: str) -> bool:
+    """Return whether two commits contain the same installable GKX source."""
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "diff",
+                "--quiet",
+                f"{left}..{right}",
+                "--",
+                "src/gkx",
+            ],
+            check=False,
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
 def _trace_spectral_payload(resolved, *, kx_full, ky_full) -> dict[str, np.ndarray]:
     """Return resolved diagnostics on GKX's physical dealiased output axes."""
     from gkx.artifacts.spectral_layout import (
@@ -160,6 +181,11 @@ def main() -> int:
     import gkx
 
     source_provenance = _campaign_source_provenance(gkx.__file__)
+    if source_provenance["git_dirty"] is not False:
+        raise SystemExit(
+            "campaign checkout has tracked changes or unknown Git state; commit "
+            "the exact source before producing acceptance evidence"
+        )
     print(
         f"GKX source: {source_provenance['source_file']} "
         f"commit={source_provenance['git_commit']} "
