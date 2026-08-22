@@ -417,9 +417,9 @@
   The exact QA Ny=160 production state continued for 30 frames on an RTX A4000
   in 49.1 s, but the command imported an older installed GKX: its coordinate
   profiles were empty and the render used the fallback tube. The result is
-  timing evidence only. The corrected branch passes all 50 plotting tests; a
-  clean `PYTHONPATH=src` rerun must verify nonempty VMEC profiles before the
-  physical movie is accepted.
+  timing evidence only. The corrected branch passes all 51 plotting tests and
+  fails closed on missing imported profiles; a clean `PYTHONPATH=src` rerun
+  must verify nonempty VMEC profiles before the physical movie is accepted.
 - Added PR #99 to the non-destructive public-ref rehearsal. Before this log
   commit, all 21 retained heads (`main` plus 20 open PRs) and all 28 remote tags
   fit in a 9,107,008-byte pack (9,596,344 with index); the archive is 5,363,108

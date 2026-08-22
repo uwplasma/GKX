@@ -514,7 +514,8 @@ in 49.1 s, but that first command imported an older installed GKX and omitted
 the VMEC coordinate profiles. It is solver/timing evidence, not physical-movie
 acceptance. PR #97 now reads `Nl` and `Nm` from `[run]`; a clean
 `PYTHONPATH=src` rerun must show nonempty `R`, `Z`, and toroidal profiles before
-the movie can be accepted.
+the movie can be accepted. The tool now fails closed instead of drawing its
+analytic fallback when any imported-geometry profile is absent.
 
 ## Work queue
 
