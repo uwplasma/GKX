@@ -853,6 +853,15 @@ bytes below the strict decimal gate. This is the measured pre-record candidate;
 the next roadmap record must be replayed and remeasured rather than silently
 assuming identical compression. No public history moved.
 
+The PR #102 follow-up is replayed privately as `eed7eee3`; its stable patch ID
+exactly matches public commit `51b55741`. Roadmap replay `8349f25d` has the
+same patch ID and byte-identical `plan/` plus `plan.md` payload as public commit
+`f38b4c69`. Immediately before this record, a fresh ordinary clone advertises
+25 heads plus `origin/HEAD` and 28 tags, with 3,456 commits and 17,656 objects.
+Its pack is 8,960,103 bytes, pack plus index is 9,455,543 bytes, and complete
+`.git` file sum is 9,789,391 bytes. Strict `fsck`, no alternates, and zero
+reachable AI-attribution matches pass; the decimal margin is 210,609 bytes.
+
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
 
@@ -1079,7 +1088,7 @@ unverified rather than silently promoted.
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids/traces; latest pre-record rehearsal `.git` is below 9.61 MB | replay PR #102 follow-up, freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids/traces; latest pre-record rehearsal `.git` is below 9.79 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |

@@ -1218,7 +1218,12 @@
   423,062; the comparison JSON is 247,507 instead of 273,704. Five focused
   tests, isolated clean-checkout `--help` runs, full x64 regeneration, Ruff,
   the size gate, and diff checks pass. Histories, density scans, retained
-  traces, and physics values match. PR #103 preserves the Landau panel at 3,028 by 822
+  traces, and physics values match. Private replay `eed7eee3` has the exact
+  public patch ID; roadmap replay `8349f25d` has the exact public patch ID and
+  roadmap payload. A fresh pre-record clone has 3,456 commits, 17,656 objects,
+  an 8,960,103-byte pack, and a 9,789,391-byte complete `.git`; strict `fsck`,
+  no alternates, and the attribution scan pass. PR #103 preserves the Landau
+  panel at 3,028 by 822
   pixels with 255 colors and shrinks it from 371,750 to 151,626 bytes. Against
   the prior RGBA render, mean absolute channel error is 0.066 and PSNR is
   49.86 dB; visual review and all six x64 Landau physics tests pass. Neither PR

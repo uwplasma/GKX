@@ -275,3 +275,13 @@ is 9,265,759, and the complete `.git` file sum is 9,599,487 bytes. Strict
 strict decimal margin is 400,513 bytes. This is a commit-pinned pre-record
 measurement, not an assumption that the following log commit compresses to the
 same size. The following commit must be replayed and measured independently.
+
+PR #102 follow-up commit `51b55741` is replayed as `eed7eee3` with exact stable
+patch ID `e6f87004`; roadmap commit `f38b4c69` is replayed as `8349f25d` with
+exact stable patch ID `3526b11c` and byte-identical roadmap payload. Immediately
+before this record, a fresh no-local clone has 25 heads plus `origin/HEAD`, 28
+tags, 3,456 commits, and 17,656 objects. Pack, pack-plus-index, and complete
+`.git` file sums are 8,960,103, 9,455,543, and 9,789,391 bytes. Strict `fsck`,
+zero alternates, and the reachable-attribution scan pass, leaving 210,609 bytes
+of strict decimal margin. The following roadmap record again requires replay
+and independent measurement before any coordinated cutover.
