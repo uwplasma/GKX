@@ -158,12 +158,12 @@ def print_nonlinear_run_header(
         f"diagnostics={'on' if diagnostics else 'off'} "
         f"progress={'on' if show_progress else 'off'}"
     )
-    kinetic = ",".join(f"{s.name}(tprim=a/LT={s.tprim:g},fprim=a/Ln={s.fprim:g})"
-                       for s in runtime_config.species if s.kinetic) or "none"
+    kinetic = ",".join(f"{s.name}(a/L_T={s.tprim:g},a/L_n={s.fprim:g})" for s in runtime_config.species if s.kinetic) or "none"
     adiabatic = "electrons" if runtime_config.physics.adiabatic_electrons else "ions" if runtime_config.physics.adiabatic_ions else "none"
-    print(f"physics={'electromagnetic' if runtime_config.physics.electromagnetic else 'electrostatic'} kinetic={kinetic} adiabatic={adiabatic}")
-    print("diagnostics: gamma=d ln|phi_k|/dt; omega=-d arg(phi_k)/dt; "
-          "Wphi=field energy; Wg=distribution free energy; Q=heat flux")
+    model = "electromagnetic" if runtime_config.physics.electromagnetic else "electrostatic"
+    print(f"physics={model} kinetic={kinetic} adiabatic={adiabatic}")
+    print("profiles: a/L_T=-a d(ln T)/dr; a/L_n=-a d(ln n)/dr")
+    print("signals: gamma=d ln|phi_k|/dt; omega=-d arg(phi_k)/dt (selected mode); Wphi=electrostatic field energy; Wg=distribution free energy; Q=radial heat flux/Q_gB")
 
 
 def print_nonlinear_run_summary(result: Any) -> bool:
@@ -594,7 +594,6 @@ def _run_artifact_checkpoint_loop(
 
     result_final: RuntimeNonlinearResult | None = None
     paths: dict[str, str] = {}
-    # Accumulate cost with the diagnostics, rather than report only the last chunk.
     wall_total = 0.0
     while True:
         chunk_steps = _next_runtime_chunk_steps(
