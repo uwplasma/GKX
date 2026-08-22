@@ -2091,6 +2091,55 @@ def test_performance_manifest_accepts_benchmark_performance_driver(
     assert summary["rows"][0]["n_tools"] == 1
 
 
+def test_performance_manifest_reports_missing_render_without_requiring_it(
+    tmp_path: Path,
+) -> None:
+    mod = _load_performance_manifest_tool()
+    tool = tmp_path / "tools" / "profile.py"
+    tool.parent.mkdir(parents=True)
+    tool.write_text("# tool\n", encoding="utf-8")
+    manifest = tmp_path / "manifest.toml"
+    manifest.write_text(
+        _performance_manifest_text(
+            tool="tools/profile.py", artifact="docs/_static/runtime.png"
+        ),
+        encoding="utf-8",
+    )
+    old_root = mod.REPO_ROOT
+    try:
+        mod.REPO_ROOT = tmp_path
+        summary = mod.validate_manifest(mod.load_manifest(manifest))
+    finally:
+        mod.REPO_ROOT = old_root
+
+    row = summary["rows"][0]
+    assert row["n_required_artifacts"] == 0
+    assert row["n_missing_rendered_artifacts"] == 1
+
+
+def test_performance_manifest_still_requires_machine_readable_evidence(
+    tmp_path: Path,
+) -> None:
+    mod = _load_performance_manifest_tool()
+    tool = tmp_path / "tools" / "profile.py"
+    tool.parent.mkdir(parents=True)
+    tool.write_text("# tool\n", encoding="utf-8")
+    manifest = tmp_path / "manifest.toml"
+    manifest.write_text(
+        _performance_manifest_text(
+            tool="tools/profile.py", artifact="benchmarks/results/runtime.json"
+        ),
+        encoding="utf-8",
+    )
+    old_root = mod.REPO_ROOT
+    try:
+        mod.REPO_ROOT = tmp_path
+        with pytest.raises(ValueError, match="artifact path does not exist"):
+            mod.validate_manifest(mod.load_manifest(manifest))
+    finally:
+        mod.REPO_ROOT = old_root
+
+
 def test_performance_manifest_rejects_unowned_driver_path(tmp_path: Path) -> None:
     mod = _load_performance_manifest_tool()
     tool = tmp_path / "scripts" / "benchmark.py"
@@ -2999,6 +3048,59 @@ def test_validation_manifest_accepts_nested_fast_test_seen_by_wide_gate(
         mod.REPO_ROOT = tmp_path
         summary = mod.validate_manifest(mod.load_manifest(manifest))
         assert summary["n_modules"] == 1
+    finally:
+        mod.REPO_ROOT = old_root
+
+
+def test_validation_manifest_reports_missing_render_without_requiring_it(
+    tmp_path: Path,
+) -> None:
+    mod = _load_validation_tool_module()
+    _write_minimal_package(tmp_path, "gkx.runtime")
+    test = tmp_path / "tests" / "test_runtime.py"
+    test.parent.mkdir()
+    test.write_text("def test_placeholder():\n    assert True\n")
+    manifest = tmp_path / "manifest.toml"
+    manifest.write_text(
+        _manifest_text(
+            source="src/gkx/runtime.py",
+            test="tests/test_runtime.py",
+            artifact="docs/_static/gate.png",
+        )
+    )
+    old_root = mod.REPO_ROOT
+    try:
+        mod.REPO_ROOT = tmp_path
+        summary = mod.validate_manifest(mod.load_manifest(manifest))
+    finally:
+        mod.REPO_ROOT = old_root
+
+    row = summary["rows"][0]
+    assert row["n_required_artifacts"] == 0
+    assert row["n_missing_rendered_artifacts"] == 1
+
+
+def test_validation_manifest_still_requires_machine_readable_evidence(
+    tmp_path: Path,
+) -> None:
+    mod = _load_validation_tool_module()
+    _write_minimal_package(tmp_path, "gkx.runtime")
+    test = tmp_path / "tests" / "test_runtime.py"
+    test.parent.mkdir()
+    test.write_text("def test_placeholder():\n    assert True\n")
+    manifest = tmp_path / "manifest.toml"
+    manifest.write_text(
+        _manifest_text(
+            source="src/gkx/runtime.py",
+            test="tests/test_runtime.py",
+            artifact="benchmarks/results/gate.json",
+        )
+    )
+    old_root = mod.REPO_ROOT
+    try:
+        mod.REPO_ROOT = tmp_path
+        with pytest.raises(ValueError, match="artifact path does not exist"):
+            mod.validate_manifest(mod.load_manifest(manifest))
     finally:
         mod.REPO_ROOT = old_root
 

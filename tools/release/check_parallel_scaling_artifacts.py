@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Check tracked parallel scaling artifacts and their performance manifest.
+"""Check parallel scaling evidence and its performance manifest.
 
-This checker validates the large-run evidence that is already checked into
-``docs/_static``. It intentionally does not rerun profilers or assert any
-minimum speedup; it verifies artifact completeness, numerical identity gates,
-positive timing payloads, and manifest registration.
+Machine-readable evidence remains required. Rendered media are reproducible
+outputs: the manifest records them and reports missing renders without making
+Git storage a release condition. The checker does not rerun profilers or assert
+minimum speedup; it verifies numerical identity gates, positive timing payloads,
+and manifest registration.
 """
 
 from __future__ import annotations
@@ -27,7 +28,8 @@ from gkx.utils import tomlcompat as tomllib
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC = REPO_ROOT / "docs" / "_static"
 DEFAULT_MANIFEST = REPO_ROOT / "tools" / "performance_optimization_manifest.toml"
-SIDE_EXTENSIONS = (".json", ".csv", ".png")
+SIDE_EXTENSIONS = (".json", ".csv")
+RENDERED_ARTIFACT_SUFFIXES = {".gif", ".mp4", ".pdf", ".png", ".svg", ".webp"}
 PRODUCTION_GATE_JSON = "nonlinear_sharding_production_speedup_gate.json"
 PRODUCTION_GATE_CSV = "nonlinear_sharding_production_speedup_gate.csv"
 PRODUCTION_GATE_ARTIFACT_PATHS = (
@@ -40,13 +42,9 @@ OBSERVABLE_SPLIT_JSON = (
 OBSERVABLE_SPLIT_CSV = (
     "nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.csv"
 )
-OBSERVABLE_SPLIT_PNG = (
-    "nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png"
-)
 OBSERVABLE_SPLIT_ARTIFACT_PATHS = (
     f"docs/_static/{OBSERVABLE_SPLIT_JSON}",
     f"docs/_static/{OBSERVABLE_SPLIT_CSV}",
-    f"docs/_static/{OBSERVABLE_SPLIT_PNG}",
 )
 PRODUCTION_GATE_SOURCE_FIELDS = (
     "backend",
@@ -1284,9 +1282,20 @@ def validate_manifest(
                     f"benchmarks/performance/: {tool}"
                 )
 
+        rendered = [
+            artifact
+            for artifact in lists["artifact_paths"]
+            if Path(artifact).suffix.lower() in RENDERED_ARTIFACT_SUFFIXES
+        ]
+        required = [
+            artifact for artifact in lists["artifact_paths"] if artifact not in rendered
+        ]
+        missing_rendered = [
+            artifact for artifact in rendered if not _repo_path(artifact).is_file()
+        ]
         if check_artifacts:
-            for artifact in lists["artifact_paths"]:
-                if not _repo_path(artifact).exists():
+            for artifact in required:
+                if not _repo_path(artifact).is_file():
                     raise ValueError(
                         f"{name}: artifact path does not exist: {artifact}"
                     )
@@ -1302,6 +1311,9 @@ def validate_manifest(
                 "n_tools": len(lists["profiling_tools"]),
                 "n_metrics": len(lists["metrics"]),
                 "n_artifacts": len(lists["artifact_paths"]),
+                "n_required_artifacts": len(required),
+                "n_rendered_artifacts": len(rendered),
+                "n_missing_rendered_artifacts": len(missing_rendered),
                 "n_hypotheses": len(lists["bottleneck_hypotheses"]),
                 "n_actions": len(lists["optimization_actions"]),
                 "n_gates": len(lists["gates"]),
@@ -1328,7 +1340,7 @@ def build_performance_manifest_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-artifact-check",
         action="store_true",
-        help="Validate schema and tools without requiring artifact files to exist.",
+        help="Validate schema and tools without requiring machine-readable evidence.",
     )
     return parser
 

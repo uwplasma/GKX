@@ -126,7 +126,15 @@ def test_parallel_manifests_track_current_cpu_gpu_scaling_artifacts() -> None:
 
     assert required <= set(parallel_lane["artifact_paths"])
     assert required <= validation_paths
+    parallel_checker = _load_parallel_checker()
+    validation_checker = load_release_tool("check_validation_coverage_manifest")
+    assert (
+        parallel_checker.RENDERED_ARTIFACT_SUFFIXES
+        == validation_checker.RENDERED_ARTIFACT_SUFFIXES
+    )
     for artifact in required:
+        if Path(artifact).suffix in parallel_checker.RENDERED_ARTIFACT_SUFFIXES:
+            continue
         assert (ROOT / artifact).exists(), artifact
 
 
@@ -206,7 +214,6 @@ def test_nonlinear_domain_parallel_identity_gate_is_scoped_and_fail_closed() -> 
         row["identity_passed"] is True for row in payload["transport_window"]["metrics"]
     )
     assert "no production routing or speedup claim" in payload["claim_scope"]
-    assert (STATIC / "nonlinear_domain_parallel_identity_gate.png").exists()
 
 
 def test_nonlinear_spectral_communication_identity_gate_is_scoped_and_fail_closed() -> (
@@ -262,7 +269,6 @@ def test_nonlinear_spectral_communication_identity_gate_is_scoped_and_fail_close
         "no production distributed FFT routing or speedup claim"
         in payload["claim_scope"]
     )
-    assert (STATIC / "nonlinear_spectral_communication_identity_gate.png").exists()
 
 
 def test_parallel_scaling_artifact_checker_validates_tracked_large_run_evidence() -> (
@@ -274,7 +280,7 @@ def test_parallel_scaling_artifact_checker_validates_tracked_large_run_evidence(
 
     assert summary["n_families"] == 4
     assert summary["n_json_artifacts"] == 12
-    assert summary["n_sidecars"] == 35
+    assert summary["n_sidecars"] == 24
     assert summary["manifest_checked"] is True
     assert {family["name"] for family in summary["families"]} == {
         "independent_ky_scan",

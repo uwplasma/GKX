@@ -2,7 +2,7 @@
 location = "root-level benchmark result index"
 tracked_payload = "small pointers only"
 raw_outputs = "tools_out/ or user-selected scratch directories"
-docs_payload = "reviewed, compressed figures plus small CSV/JSON summaries in docs/_static"
+docs_payload = "numeric evidence plus selected figures in docs/_static; other renders regenerate on demand"
 
 [[figure]]
 name = "Core linear benchmark atlas"
