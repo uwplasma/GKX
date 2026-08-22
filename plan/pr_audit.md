@@ -46,7 +46,7 @@ objects. `red` describes the PR head at merge, not today's main branch.
 | 39 | remove staged pencil transforms | K | Deletes dead transforms after call-site search and adds nonlinear test coverage. |
 | 40 | device-z compensated reductions | D | Compensated summation and identity tests reduce reduction-order error; still no demonstrated two-GPU production win. |
 | 41 | Python floor | K | Packaging/typing compatibility sweep; current Python-floor check is green. Its parent object is absent locally after earlier history surgery, so the original diff is not reconstructible there. |
-| 42 | README movie | S | Documentation pointed to a pre-rendered synthetic circular-torus movie. PR #96 makes snapshots cut-only and physical after #86; original-runtime sampling remains. |
+| 42 | README movie | S | Documentation pointed to a pre-rendered synthetic circular-torus movie. PR #96 makes snapshots cut-only and physical after #86; PR #97 adds a provenance-labelled production-state continuation. |
 | 43 | contraction precision | K | Pins precision on conserved contractions with focused tests; #44 completes shape guards. |
 | 44 | TF32 completion | K | Adds the remaining precision pins and shape guard tests; keep. |
 | 45 | six-case GX parity/scaling | D | Scripts are useful, but several tracked rows are transient or resolution-mismatched and generated assets dominate the diff. Regenerate matched, converged CPU/GPU/GX evidence. |

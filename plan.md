@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-21 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#96.
+and open PRs #74 and #81--#97.
 
 ## Rules
 
@@ -175,6 +175,14 @@ and Wg half-window checks. This does not promote that hand-selected interval;
 it shows why SAT-1 must select and validate a stationary suffix instead of
 averaging every point after the first median crossing.
 
+The matched QHS `64x128x48` rung reached `t=250` in 2,192.3 s. Its fixed
+`t=150--250` suffix has `Q=6.476` and 2.96% corrected relative SEM, but Q,
+Wphi, and Wg all fail the half-window stationarity test; the `Ny=96` value was
+`Q=8.382`. The new spectral endpoint passes the necessary screen narrowly
+(heat-flux cutoff/peak 9.91%, last-three-bin mass 1.69%), but a 22.7% moving
+mean is not a resolution result. A same-state continuation to absolute `t=500`
+is running on GPU 0.
+
 The matched QA `96x128x48` rung completed at `t=250` in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
 Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is
@@ -298,9 +306,9 @@ sub-10-MiB clone target while preserving every commit and all core source
 history. Keeping every historical generated plot/test/tool blob is incompatible
 with that target.
 
-The source-complete public-ref rehearsal also passes. Replaying all 17 open PR
-heads yields an ordinary 18-head clone with a 9,517,768-byte pack and a
-5,883,633-byte current-tree archive; strict `fsck` passes and no replayed head
+The source-complete public-ref rehearsal also passes. Replaying all 18 open PR
+heads yields an ordinary 19-head clone with a 9,506,509-byte pack and a
+5,884,245-byte current-tree archive; strict `fsck` passes and no replayed head
 reaches old `main`. Closed topic heads still require a frozen delete/retain map,
 and no remote history has moved.
 
@@ -431,11 +439,12 @@ coordinates and show the selected averaging interval only inside saved data.
 PR #96 removes two of the three defects: snapshots retain only the rendered
 `phi(x,y,z_mid)` and `phi(x_mid,y,z)` cuts (32x fewer values per `96x96x48`
 frame), persist VMEC `R`, `Z`, and toroidal angle, and share one physical tube
-renderer. It also fixes the README hero's import failure. The compute path still
-launches a new fixed-step RK4 trajectory. Existing scalar/spectral NetCDF
-output cannot reconstruct field phases, so completion still requires opt-in
-decimated cuts during the original run (or an explicitly labelled restart
-continuation), not post-hoc animation of the inspected file.
+renderer. It also fixes the README hero's import failure. PR #97 implements the
+explicit restart alternative: load the saturation campaign's exact state,
+continue with the deck's production explicit method and CFL policy, retain
+absolute time and source verdict, then render off-device. Existing
+scalar/spectral NetCDF output still cannot reconstruct field phases; a movie
+without a saved state remains impossible rather than fabricated.
 
 ## Work queue
 
@@ -449,7 +458,7 @@ continuation), not post-hoc animation of the inspected file.
 | RES-1 | P0 | review | PR #87 spectrum-tail warnings; convergence protocol pending | known resolved/unresolved fixtures + paired Nx/Ny scan |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | local gates green; GitHub CI/review pending; promotion false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
-| MOV-1 | P1 | active/review | PR #96 cut-only physical artifacts; production sampling remains | no physics rerun, size/time budgets |
+| MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | no saturation rerun; provenance, size, and time gates |
 | VAL-1 | P1 | pending | multi-equilibrium replicated campaign | paired CI + resolution gates |
 | AD-1 | P1 | pending | re-audit nonlinear adjoint evidence/claims | AD/FD, Lyapunov-window, CPU/GPU |
 | SLIM-1 | P1 | active/review | corrected PR #88 removes 7.70 MB; public-ref rewrite rehearsal passes | freeze closed-head map, publish recovery records, then network-clone gate |

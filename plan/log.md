@@ -299,3 +299,23 @@
   remote heads, 23 tags, 3,169 commits, 16,873 objects, a 9,517,768-byte pack,
   473,516-byte index, and 5,883,633-byte source archive; strict `fsck` passes.
   No public ref was changed.
+- The QHS `64x128x48`, seed-22 rung completed to `t=250` with 587 samples in
+  2,192.3 s. On the fixed `t=150--250` suffix, `Q=6.47593` with 2.96% corrected
+  relative SEM, but Q, Wphi, and Wg all fail half-window stationarity; the mean
+  is 22.7% below the matched `Ny=96` result. The heat-flux cutoff/positive-peak
+  ratio improves to 9.91% and the final three bins carry 1.69% of positive-ky
+  magnitude. The spectral screen is necessary but cannot rescue a moving mean,
+  so the exact state is continuing to absolute `t=500` on GPU 0. Trace SHA-256:
+  `a0550f46a5eb6bd8ec1e1eaeb9d9ad315bbdfced25e4217506fd393ace701325`.
+- Opened draft PR #97 on #96. The movie tool now restores the exact saturation
+  campaign NPZ, advances it with the deck's production explicit method and CFL
+  policy, preserves absolute time and source saturation status, and renders the
+  cut-only artifact off-device. A real `4x4x4` CPU continuation resumed at
+  `t=10` and wrote its first frame at `t=10.05`; 48 plotting tests, Ruff, strict
+  Sphinx, and the architecture gate pass. The tool itself decreases by two
+  lines and installed source is unchanged.
+- PR #97 raised the live inventory to 66 advertised branches and 18 open PRs.
+  Its aggregate patch ID survives replay on the slim #96 head. The refreshed
+  no-alternates clone has 19 heads, 23 tags, 3,170 commits, 16,885 objects, a
+  9,506,509-byte pack, 473,852-byte index, and 5,884,245-byte archive; strict
+  `fsck` passes and no public ref was changed.

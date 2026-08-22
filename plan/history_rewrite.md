@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the seventeen open PR heads (#74 and #81--#96) after the final rewrite.
+- Rebase the eighteen open PR heads (#74 and #81--#97) after the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -125,7 +125,7 @@ marker remains. The other human identities are unchanged.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main` and all tags from exact candidate SHAs, then rebase the seventeen
+   update `main` and all tags from exact candidate SHAs, then rebase the eighteen
    open PR heads with `--force-with-lease`.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
    merged heads and restore protection: required aggregate CI, one non-author
@@ -168,18 +168,18 @@ single-branch clone of the combined rehearsal has one 9,464,119-byte pack
 
 Repository hygiene, strict Sphinx, sdist/wheel build, installed-wheel import,
 CLI startup, strict `fsck`, and all 2,554 collected x64 tests pass in that fresh
-clone. GitHub currently advertises 63 branch heads but only 17 open PR heads;
+clone. GitHub currently advertises 66 branch heads but only 18 open PR heads;
 closed heads cannot remain attached to their old object graph under the 10-MB
-contract. A no-alternates rehearsal now maps all 17 open heads: five reviewed
+contract. A no-alternates rehearsal now maps all 18 open heads: five reviewed
 slimming heads already represented in the candidate point at slim `main`, and
-the other twelve are replayed from their true PR bases. Aggregate patch IDs
+the other thirteen are replayed from their true PR bases. Aggregate patch IDs
 match for every textual patch; PR #90 alone omits a generated PNG that PR #95
 intentionally removes. No replayed head reaches the old `main` object graph.
 
-The resulting ordinary clone advertises 18 heads (`main` plus the 17 PR heads)
-and 23 tags, with 3,169 reachable commits and 16,873 objects. Its one pack is
-9,517,768 bytes; pack plus index is 9,991,284 bytes, and the current-tree archive
-is 5,883,633 bytes. Strict `fsck` passes. This closes the local public-ref size
+The resulting ordinary clone advertises 19 heads (`main` plus the 18 PR heads)
+and 23 tags, with 3,170 reachable commits and 16,885 objects. Its one pack is
+9,506,509 bytes; pack plus index is 9,980,361 bytes, and the current-tree archive
+is 5,884,245 bytes. Strict `fsck` passes. This closes the local public-ref size
 gate, but not cutover authorization: the frozen remote map, representative
 CPU/GPU examples, published recovery material, and a real GitHub network clone
 remain. The margin forbids another tracked render without removing equivalent
