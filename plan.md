@@ -183,6 +183,17 @@ Wphi, and Wg all fail the half-window stationarity test; the `Ny=96` value was
 mean is not a resolution result. A same-state continuation to absolute `t=500`
 is running on GPU 0.
 
+A causal stationary-suffix shortcut also fails on this trace. Scanning at most
+32 suffixes and requiring 5% corrected SEM, `10 tau_ac`, half-window agreement,
+and bounded Q/Wphi/Wg regression drift would first stop near `t=56` at
+`Q=9.96`; the later level is about 6.5. A 100-time-unit floor delays that false
+confidence but is not transferable: on 16 existing VMEC traces with all four
+diagnostics, the current rule evaluated sequentially with both energy guards
+accepts seven, four differ by more than 5% from the final tail, and one differs
+by 10.4%. SAT-1 therefore needs a held-out, causal shadow-stop campaign with
+change-point/persistence tests; selecting a favorable suffix after seeing the
+endpoint is not an admissible production algorithm.
+
 The matched QA `96x128x48` rung completed at `t=250` in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
 Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is

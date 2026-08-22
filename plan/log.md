@@ -336,3 +336,9 @@
   and 46 benchmark tests on the synthetic advanced base pass. Replacing it in
   the prior 19-head rehearsal gives a 9,030,044-byte pack and 9,503,896 bytes
   with its index; strict `fsck` passes and the old movie blob is unreachable.
+- Rejected a tempting SAT-1 shortcut with causal prefix replay. A 32-suffix
+  selector using corrected SEM, `10 tau_ac`, half-window agreement, and linear
+  drift gates on Q/Wphi/Wg would stop the QHS `64x128x48` trace at `t~56` with
+  `Q~9.96`, before its later `Q~6.5` regime. On 16 existing four-diagnostic VMEC
+  traces, sequential current-policy replay with both energy guards accepts
+  seven; four are over 5% and one 10.4% from the final tail. No default changes.
