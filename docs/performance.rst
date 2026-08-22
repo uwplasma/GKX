@@ -454,9 +454,6 @@ full RHS kernels after compilation:
      --repeats 10 \
      --out docs/_static/nonlinear_rhs_profile_gpu.csv
 
-.. image:: _static/nonlinear_rhs_profile.png
-   :alt: GKX nonlinear RHS kernel profile
-   :align: center
 
 The current bounded Cyclone profile separates CPU and ``office`` GPU timings
 for default grid-mode and optional spectral-mode nonlinear brackets. The
@@ -513,9 +510,6 @@ short Cyclone case.
      --repeats 5 \
      --out docs/_static/nonlinear_rhs_profile_miller_cpu.csv
 
-.. image:: _static/nonlinear_rhs_profile_miller.png
-   :alt: GKX nonlinear RHS kernel profile on the Cyclone Miller benchmark-size case
-   :align: center
 
 The May 10, 2026 local CPU refresh after the independent-worker
 parallelization tranche measured CPU full-RHS timings of ``3.48e-1 s`` in grid
@@ -570,9 +564,6 @@ transport-average timings; they are single-state RHS split profiles used to
 verify that the optimized grid-Laguerre path, VMEC/EIK geometry inputs, and
 CPU/GPU hot-path accounting remain consistent on non-axisymmetric cases.
 
-.. image:: _static/nonlinear_rhs_profile_stellarator_runtime.png
-   :alt: GKX nonlinear RHS kernel profile on W7-X and HSX runtime-mode stellarator cases
-   :align: center
 
 The tracked artifact
 ``docs/_static/nonlinear_rhs_profile_stellarator_runtime.json`` reports W7-X
@@ -716,9 +707,6 @@ claims should point to the independent ``k_y`` scan and quasilinear/UQ ensemble
 figures below, because those paths preserve serial ordering and have explicit
 solver-observable identity gates.
 
-.. image:: _static/scaling_speedup.png
-   :alt: GKX scaling speedup
-   :align: center
 
 The raw sweep data lives in ``docs/_static/scaling_speedup_data.csv`` and can
 be replotted with:
@@ -756,9 +744,6 @@ promotion gates.
 The first release-grade gate for this policy is a real Cyclone linear
 ``k_y``-scan comparison:
 
-.. image:: _static/parallel_ky_scan_gate.png
-   :alt: GKX ky-batch parallelization identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -778,9 +763,6 @@ pytree output. It is not a gyrokinetic physics validation; it verifies that the
 parallel API preserves serial numerical identity for independent scan/UQ-style
 workloads before those workloads are connected to heavier solver paths.
 
-.. image:: _static/logical_cpu_parallel_scan_gate.png
-   :alt: GKX logical CPU parallel scan identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -801,9 +783,6 @@ steps per mode. Each worker performs one warmup scan before the timed repeats,
 and every multi-worker result is compared against the one-worker reference for
 ``gamma`` and ``omega`` identity:
 
-.. image:: _static/independent_ky_scan_scaling_large.png
-   :alt: GKX independent ky scan CPU/GPU strong-scaling artifact
-   :align: center
 
 It is regenerated with:
 
@@ -839,9 +818,6 @@ before any speedup claim is promoted.
 The release closure status is machine-readable and separates production claims
 from diagnostic decomposition work:
 
-.. image:: _static/parallelization_completion_status.png
-   :alt: GKX parallelization closure status
-   :align: center
 
 The tracked ``docs/_static/parallelization_completion_status.json`` reports
 ``production_completion_percent = 100`` for independent ``k_y`` scans and
@@ -876,9 +852,6 @@ reduced mixing-length feature observable. The observable is useful for
 parallelization and UQ plumbing, but it is not promoted as an absolute
 nonlinear heat-flux predictor.
 
-.. image:: _static/quasilinear_uq_ensemble_scaling_large.png
-   :alt: GKX quasilinear UQ ensemble CPU/GPU strong-scaling artifact
-   :align: center
 
 It is regenerated with:
 
@@ -916,9 +889,6 @@ It uses ``jax.shard_map`` to exchange nearest-neighbor Hermite moments across a
 two-device logical CPU mesh and compares the result against the full-array
 reference shift with zero physical boundaries:
 
-.. image:: _static/hermite_exchange_gate.png
-   :alt: GKX Hermite ghost-exchange identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -936,9 +906,6 @@ The matching velocity-space field-reduction gate validates the second required
 communication primitive. It reduces the Hermite-sharded local contributions
 with ``lax.psum`` and compares against the full-array reference sum:
 
-.. image:: _static/velocity_field_reduce_gate.png
-   :alt: GKX velocity field-reduction identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -956,9 +923,6 @@ The electrostatic field-reduction gate applies the same ``lax.psum`` pattern
 to the actual ``m=0`` density moment used by quasineutrality and compares the
 resulting ``phi`` against the production field solve:
 
-.. image:: _static/electrostatic_field_reduce_gate.png
-   :alt: GKX electrostatic field-reduction identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -977,9 +941,6 @@ That coefficient gate is now tracked separately. It applies the
 ladder on top of the shard-map exchange and records the paired field-reduction
 error:
 
-.. image:: _static/hermite_streaming_ladder_gate.png
-   :alt: GKX Hermite streaming-ladder identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -997,9 +958,6 @@ The electrostatic drift-slice gate then uses offset-1 and offset-2 Hermite
 exchanges for mirror and curvature terms, together with the electrostatic
 field-reduction gate:
 
-.. image:: _static/electrostatic_drift_gate.png
-   :alt: GKX electrostatic drift-slice identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -1021,9 +979,6 @@ electrostatic drive slice. It uses the Hermite-sharded electrostatic field
 reduction, then applies the local ``m=0`` and ``m=2`` density/temperature
 gradient masks on each Hermite shard:
 
-.. image:: _static/electrostatic_diamagnetic_gate.png
-   :alt: GKX electrostatic diamagnetic-drive identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -1043,9 +998,6 @@ parallel derivative along the field-line direction and compares the resulting
 ``shard_map`` path directly against the production
 ``gkx.operators.linear.streaming.streaming_ladder_term``:
 
-.. image:: _static/periodic_streaming_microkernel_gate.png
-   :alt: GKX periodic streaming microkernel identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -1062,9 +1014,6 @@ production ``linear_rhs_cached`` call graph. The artifact disables all
 non-streaming terms, keeps electromagnetic channels off, and uses non-density
 Hermite moments so that the electrostatic field solve is exactly zero:
 
-.. image:: _static/linear_rhs_streaming_gate.png
-   :alt: GKX streaming-only linear RHS identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -1091,9 +1040,6 @@ electrostatic field solve produces nonzero ``phi``. It then compares
 ``linear_rhs_cached`` against the explicit
 ``backend="streaming_electrostatic"`` route:
 
-.. image:: _static/linear_rhs_streaming_electrostatic_gate.png
-   :alt: GKX electrostatic streaming linear RHS identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -1112,9 +1058,6 @@ The current composed electrostatic linear-RHS gate then exercises the opt-in
 ``backend="electrostatic_linear_slices"`` route against the serial production
 RHS with streaming, mirror, curvature, grad-B, and diamagnetic drive enabled:
 
-.. image:: _static/linear_rhs_electrostatic_slices_gate.png
-   :alt: GKX composed electrostatic linear-slices identity gate
-   :align: center
 
 It is regenerated with:
 
@@ -1132,9 +1075,6 @@ claim.
 The matching engineering profile intentionally stays separate from the
 identity gate:
 
-.. image:: _static/linear_rhs_parallel_slices_profile.png
-   :alt: GKX electrostatic linear-slices parallelization profile
-   :align: center
 
 It is regenerated with:
 
@@ -1155,9 +1095,6 @@ identity gate above is the release correctness gate.
 A compact CPU sweep maps the same opt-in route across Hermite resolution and
 logical device count:
 
-.. image:: _static/linear_rhs_parallel_slices_sweep.png
-   :alt: GKX electrostatic linear-slices parallelization sweep
-   :align: center
 
 It is regenerated with:
 
@@ -1448,9 +1385,6 @@ each device count gets a clean JAX runtime:
 
    python tools/artifacts/generate_nonlinear_sharding_production_gate.py
 
-.. image:: _static/nonlinear_sharding_strong_scaling_large.png
-   :alt: GKX large nonlinear whole-state sharding strong-scaling artifact
-   :align: center
 
 The refreshed large sweep remains engineering evidence rather than a speedup
 claim: it passed the final-state identity gate at every tracked point, the CPU
@@ -1516,13 +1450,6 @@ For W7-X/HSX runs, pass ``--w7x-geometry-file`` and
 ``--hsx-geometry-file`` if the local pre-generated ``*.eik.nc`` files live
 outside the default cache paths.
 
-.. image:: _static/laguerre_mode_gate.png
-   :alt: GKX spectral Laguerre nonlinear mode gate on CPU
-   :align: center
-
-.. image:: _static/laguerre_mode_gate_gpu.png
-   :alt: GKX spectral Laguerre nonlinear mode gate on GPU
-   :align: center
 
 On the bounded local CPU gate, Cyclone, KBM, W7-X, and HSX all passed the
 scalar-diagnostic parity threshold with maximum relative differences below

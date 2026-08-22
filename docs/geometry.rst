@@ -366,26 +366,23 @@ observables; production stellarator optimization still requires the VMEC/Boozer
 array parity, solver-objective gradient, and nonlinear transport gates
 described below.
 
-.. figure:: _static/differentiable_geometry_bridge.png
-   :width: 95%
-   :align: center
-   :alt: Differentiable geometry bridge validation
+**Generated figure.** Differentiable geometry bridge validation. The panel checks
+boundary-control
+sensitivities, geometry-observable Jacobians, a two-parameter inverse design,
+and local UQ covariance at the in-memory flux-tube contract boundary. When
+``vmex`` is available, the panel/JSON also includes a real VMEC
+boundary-aspect derivative check and sampled VMEC metric-tensor derivative
+check, plus a real VMEC field-line tensor check for a non-axisymmetric
+fixture, a direct VMEC tensor-derived flux-tube mapping check, and a
+Boozer equal-arc core/metric parity check against the imported VMEC/EIK
+geometry; when
+``booz_xform_jax`` is available, it runs a bounded JAX-native
+Boozer spectral transform, samples that spectrum onto a field-line
+flux-tube mapping, checks both autodiff derivative paths against central
+finite differences, and, when both optional backends are available, starts
+from a real ``vmex`` ``VMECState`` before converting through
+``booz_xform_jax`` into the GKX field-line contract.
 
-   Differentiable geometry bridge validation. The panel checks boundary-control
-   sensitivities, geometry-observable Jacobians, a two-parameter inverse design,
-   and local UQ covariance at the in-memory flux-tube contract boundary. When
-   ``vmex`` is available, the panel/JSON also includes a real VMEC
-   boundary-aspect derivative check and sampled VMEC metric-tensor derivative
-   check, plus a real VMEC field-line tensor check for a non-axisymmetric
-   fixture, a direct VMEC tensor-derived flux-tube mapping check, and a
-   Boozer equal-arc core/metric parity check against the imported VMEC/EIK
-   geometry; when
-   ``booz_xform_jax`` is available, it runs a bounded JAX-native
-   Boozer spectral transform, samples that spectrum onto a field-line
-   flux-tube mapping, checks both autodiff derivative paths against central
-   finite differences, and, when both optional backends are available, starts
-   from a real ``vmex`` ``VMECState`` before converting through
-   ``booz_xform_jax`` into the GKX field-line contract.
 
 Multi-Equilibrium Boozer Parity Matrix
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -416,16 +413,13 @@ solver-objective geometry gradients, broader production-runtime
 pressure-correction drift audits, and nonlinear transport optimization remain
 explicitly scoped as follow-up work.
 
-.. figure:: _static/vmec_boozer_parity_matrix.png
-   :width: 95%
-   :align: center
-   :alt: VMEC/Boozer equal-arc parity matrix
+**Generated figure.** VMEC/Boozer equal-arc parity matrix. Each cell reports the
+absolute
+mismatch for one subgate, while the color shows mismatch divided by the
+relevant tolerance. The matrix is generated from the actual optional
+``vmex`` and ``booz_xform_jax`` bridge path and rejects Boozer mode
+counts below 21.
 
-   VMEC/Boozer equal-arc parity matrix. Each cell reports the absolute
-   mismatch for one subgate, while the color shows mismatch divided by the
-   relevant tolerance. The matrix is generated from the actual optional
-   ``vmex`` and ``booz_xform_jax`` bridge path and rejects Boozer mode
-   counts below 21.
 
 The next implementation step is to extend the same equal-arc path to
 finite-beta/production-runtime curvature and drift reconstruction, then replace

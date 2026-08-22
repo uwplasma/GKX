@@ -884,15 +884,13 @@ self-adjointness, non-positive-spectrum, and driven-solve residuals all pass a
 :math:`2\times10^{-12}` algebra gate. The figure is regenerated from equations
 (3.53)--(3.56), not from stored coefficient arrays:
 
-.. figure:: _static/collision_response_convergence.png
-   :alt: Nested Hermite--Laguerre convergence of the Coulomb driven response
-   :width: 96%
+**Generated figure.** Drift-kinetic Coulomb and Sugama response hierarchies. Panel (a)
+compares
+Coulomb with the arbitrary-order original and improved models, panel (b) is
+the nested velocity-space error, panel (c) records the conservation and
+dissipation gates, and panel (d) reproduces stationary-current saturation at
+the paper's applied-field normalization.
 
-   Drift-kinetic Coulomb and Sugama response hierarchies. Panel (a) compares
-   Coulomb with the arbitrary-order original and improved models, panel (b) is
-   the nested velocity-space error, panel (c) records the conservation and
-   dissipation gates, and panel (d) reproduces stationary-current saturation at
-   the paper's applied-field normalization.
 
 The machine-readable JSON and CSV use the same prospectively fixed 0.5%
 current and :math:`2\times10^{-12}` algebra thresholds. At equal temperature,

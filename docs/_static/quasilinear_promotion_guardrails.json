@@ -243,8 +243,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_stellarator_train_holdout.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_stellarator_train_holdout",
+        "detail": "docs/_static/quasilinear_stellarator_train_holdout.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_stellarator_train_holdout",
         "passed": true
       },
       {
@@ -283,8 +283,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_saturation_rule_sweep.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_saturation_rule_sweep",
+        "detail": "docs/_static/quasilinear_saturation_rule_sweep.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_saturation_rule_sweep",
         "passed": true
       },
       {
@@ -323,8 +323,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_shape_aware_saturation.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_shape_aware_saturation",
+        "detail": "docs/_static/quasilinear_shape_aware_saturation.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_shape_aware_saturation",
         "passed": true
       },
       {
@@ -363,8 +363,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_candidate_uncertainty.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_candidate_uncertainty",
+        "detail": "docs/_static/quasilinear_candidate_uncertainty.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_candidate_uncertainty",
         "passed": true
       },
       {
@@ -403,8 +403,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_candidate_regularization_sweep.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_candidate_regularization_sweep",
+        "detail": "docs/_static/quasilinear_candidate_regularization_sweep.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_candidate_regularization_sweep",
         "passed": true
       },
       {
@@ -443,8 +443,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_dataset_sufficiency.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_dataset_sufficiency",
+        "detail": "docs/_static/quasilinear_dataset_sufficiency.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_dataset_sufficiency",
         "passed": true
       },
       {
@@ -483,8 +483,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_model_selection_status.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_model_selection_status",
+        "detail": "docs/_static/quasilinear_model_selection_status.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_model_selection_status",
         "passed": true
       },
       {
@@ -523,8 +523,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_stellarator_usefulness.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_stellarator_usefulness",
+        "detail": "docs/_static/quasilinear_stellarator_usefulness.png: tracked",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_stellarator_usefulness",
         "passed": true
       },
       {
@@ -563,8 +563,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_screening_skill.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_screening_skill",
+        "detail": "docs/_static/quasilinear_screening_skill.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_screening_skill",
         "passed": true
       },
       {
@@ -603,8 +603,8 @@
         "passed": true
       },
       {
-        "detail": "docs/_static/quasilinear_holdout_gap_report.png",
-        "metric": "ql_figure_png_exists:docs/_static/quasilinear_holdout_gap_report",
+        "detail": "docs/_static/quasilinear_holdout_gap_report.png: regenerate on demand",
+        "metric": "ql_figure_render_optional:docs/_static/quasilinear_holdout_gap_report",
         "passed": true
       },
       {
@@ -693,7 +693,7 @@
       "json_sidecar": "docs/_static/quasilinear_stellarator_train_holdout.json",
       "kind": "quasilinear_calibration_figure",
       "passed": false,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     },
     {
@@ -708,7 +708,7 @@
       "json_sidecar": "docs/_static/quasilinear_saturation_rule_sweep.json",
       "kind": "quasilinear_saturation_rule_sweep",
       "passed": null,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     },
     {
@@ -723,7 +723,7 @@
       "json_sidecar": "docs/_static/quasilinear_shape_aware_saturation.json",
       "kind": "quasilinear_shape_aware_saturation_report",
       "passed": null,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     },
     {
@@ -738,7 +738,7 @@
       "json_sidecar": "docs/_static/quasilinear_candidate_uncertainty.json",
       "kind": "quasilinear_candidate_uncertainty_report",
       "passed": null,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     },
     {
@@ -753,7 +753,7 @@
       "json_sidecar": "docs/_static/quasilinear_candidate_regularization_sweep.json",
       "kind": "quasilinear_candidate_regularization_sweep",
       "passed": null,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     },
     {
@@ -768,7 +768,7 @@
       "json_sidecar": "docs/_static/quasilinear_dataset_sufficiency.json",
       "kind": "quasilinear_dataset_sufficiency",
       "passed": null,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     },
     {
@@ -783,7 +783,7 @@
       "json_sidecar": "docs/_static/quasilinear_model_selection_status.json",
       "kind": "quasilinear_model_selection_status",
       "passed": false,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     },
     {
@@ -813,7 +813,7 @@
       "json_sidecar": "docs/_static/quasilinear_screening_skill.json",
       "kind": "quasilinear_screening_skill",
       "passed": null,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     },
     {
@@ -828,7 +828,7 @@
       "json_sidecar": "docs/_static/quasilinear_holdout_gap_report.json",
       "kind": "quasilinear_holdout_gap_report",
       "passed": null,
-      "png_exists": true,
+      "png_exists": false,
       "runtime_absolute_overclaim_lines": []
     }
   ],

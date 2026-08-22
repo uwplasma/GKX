@@ -27,6 +27,7 @@ VALID_RELEASE_ARTIFACT_ACTIONS = {
     "keep_in_repo",
     "keep_preview_in_repo",
     "move_to_release",
+    "regenerate_on_demand",
 }
 LOCAL_ARTIFACT_ROOTS = (
     ".git",
@@ -212,6 +213,13 @@ def _load_release_artifact_manifest(path: Path) -> dict[str, Any]:
                     raise ValueError(
                         f"{path} artifacts[{idx}] {item['action']} entries need {key!r}"
                     )
+        if item["action"] == "regenerate_on_demand":
+            replay_command = item.get("replay_command")
+            if not isinstance(replay_command, str) or not replay_command.strip():
+                raise ValueError(
+                    f"{path} artifacts[{idx}] regenerate_on_demand entries need "
+                    "a non-empty 'replay_command'"
+                )
     return data
 
 
@@ -325,9 +333,12 @@ def check_release_artifact_manifest(
             "preview_strategy": item.get("preview_strategy"),
             "release_tag": item.get("release_tag"),
             "release_url": item.get("release_url"),
+            "replay_command": item.get("replay_command"),
         }
         rows.append(row)
         if not exists:
+            if action == "regenerate_on_demand":
+                continue
             release_url = item.get("release_url")
             release_tag = item.get("release_tag")
             if (
@@ -364,7 +375,9 @@ def check_release_artifact_manifest(
         "notes": (
             "This validates provenance for large tracked assets. Existing files are "
             "checked against size and sha256. move_to_release entries may be absent "
-            "from Git only when the manifest records release_tag and release_url."
+            "from Git only when the manifest records release_tag and release_url; "
+            "regenerate_on_demand entries may be absent when their replay command is "
+            "recorded."
         ),
     }
 

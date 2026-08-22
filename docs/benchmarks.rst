@@ -311,23 +311,17 @@ the primary validation claim:
 - Cyclone kinetic electrons
 - TEM
 
-.. figure:: _static/benchmark_core_linear_atlas.png
-   :width: 100%
-   :align: center
-   :alt: Core linear benchmark atlas
+**Generated figure.** Linear benchmark master panel. This panel keeps the headline
+linear
+coverage on one page: Cyclone ITG, ETG, KBM, W7-X, HSX, Cyclone Miller,
+KAW, and the KBM Miller late-growth replay.
 
-   Linear benchmark master panel. This panel keeps the headline linear
-   coverage on one page: Cyclone ITG, ETG, KBM, W7-X, HSX, Cyclone Miller,
-   KAW, and the KBM Miller late-growth replay.
 
-.. figure:: _static/benchmark_core_nonlinear_atlas.png
-   :width: 100%
-   :align: center
-   :alt: Core nonlinear benchmark atlas
+**Generated figure.** Nonlinear benchmark master panel. This panel groups the tracked
+nonlinear
+overlays used in the public benchmark set: Cyclone, KBM, W7-X, HSX, and
+Cyclone Miller.
 
-   Nonlinear benchmark master panel. This panel groups the tracked nonlinear
-   overlays used in the public benchmark set: Cyclone, KBM, W7-X, HSX, and
-   Cyclone Miller.
 
 For the current release pass, Cyclone, KBM, W7-X, HSX, and Cyclone Miller are
 treated as the acceptable nonlinear validation set in the main atlas. The
@@ -393,16 +387,13 @@ also be read asymmetrically:
 README summary panel
 --------------------
 
-.. figure:: _static/benchmark_readme_panel.png
-   :width: 100%
-   :align: center
-   :alt: README benchmark atlas
+**Generated figure.** Publication-facing benchmark summary. The shipped
+summary/publication stack
+now includes the closed short-window full-GK ETG nonlinear pilot alongside
+the tokamak and stellarator headline lanes, while the top-level README atlas
+remains compact with one validation image and one separate runtime/memory
+image.
 
-   Publication-facing benchmark summary. The shipped summary/publication stack
-   now includes the closed short-window full-GK ETG nonlinear pilot alongside
-   the tokamak and stellarator headline lanes, while the top-level README atlas
-   remains compact with one validation image and one separate runtime/memory
-   image.
 
 Supplementary closure figures
 -----------------------------
@@ -450,14 +441,11 @@ the unified runtime API. Its effective reference seed, linked-boundary damping,
 species, and electromagnetic toggles are explicit in that file rather than
 being applied by a hidden benchmark wrapper.
 
-.. figure:: _static/benchmark_extended_linear_panel.png
-   :width: 90%
-   :align: center
-   :alt: Extended linear stress matrix
+**Generated figure.** Extended linear stress matrix. These lanes remain visible for
+solver stress
+testing, but they are intentionally separated from the main publication
+panel.
 
-   Extended linear stress matrix. These lanes remain visible for solver stress
-   testing, but they are intentionally separated from the main publication
-   panel.
 
 The TEM row is provisional. The shipped ``tem_reference.csv`` is digitized from
 the literature rather than sourced from a GX benchmark dump, and the exact case

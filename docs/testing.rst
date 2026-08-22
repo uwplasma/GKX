@@ -716,92 +716,81 @@ closure probes can be launched from the tracked benchmark tool rather than from
 unrecorded local TOML edits. Non-unit Gaussian widths remain initializer
 audits, not validation defaults.
 
-.. figure:: _static/w7x_zonal_response_panel.png
-   :alt: W7-X high-mirror bean-tube zonal-flow response panel
+**Generated figure.** W7-X high-mirror bean-tube zonal-flow response for the stella/GENE
+test-4
+target ``k_x rho_i`` values. The response is normalized to the first
+nonzero line-average sample, following the paper text. The red dashed line
+is the late-window residual estimate and the shaded band is the common
+initial-GAM extraction window.
 
-   W7-X high-mirror bean-tube zonal-flow response for the stella/GENE test-4
-   target ``k_x rho_i`` values. The response is normalized to the first
-   nonzero line-average sample, following the paper text. The red dashed line
-   is the late-window residual estimate and the shaded band is the common
-   initial-GAM extraction window.
 
-.. figure:: _static/w7x_zonal_reference_digitized.png
-   :alt: Digitized W7-X test-4 stella and GENE zonal-flow reference traces
+**Generated figure.** Digitized stella/GENE reference traces from the W7-X benchmark
+paper's
+Fig. 11. The horizontal lines are residual levels read from the figure
+insets and are the reference targets for the next long-window GKX
+zonal-response gate.
 
-   Digitized stella/GENE reference traces from the W7-X benchmark paper's
-   Fig. 11. The horizontal lines are residual levels read from the figure
-   insets and are the reference targets for the next long-window GKX
-   zonal-response gate.
 
-.. figure:: _static/w7x_zonal_reference_compare.png
-   :alt: Current W7-X zonal GKX comparison against digitized references
+**Generated figure.** Current W7-X zonal comparison gate. Time coverage passes for all
+four
+wavelengths, but the paper-normalized residuals and late-window envelopes
+remain open validation issues.
 
-   Current W7-X zonal comparison gate. Time coverage passes for all four
-   wavelengths, but the paper-normalized residuals and late-window envelopes
-   remain open validation issues.
 
-.. figure:: _static/w7x_zonal_contract_audit.png
-   :alt: W7-X zonal-response literature-contract audit
+**Generated figure.** Publication-facing audit of the open W7-X test-4 zonal-response
+lane. The
+top row separates residual and late-envelope discrepancies; the bottom row
+overlays representative paper-normalized traces against the digitized
+stella/GENE mean. This figure is intended to localize the remaining
+velocity-space recurrence / closure problem, not to claim validation closure.
 
-   Publication-facing audit of the open W7-X test-4 zonal-response lane. The
-   top row separates residual and late-envelope discrepancies; the bottom row
-   overlays representative paper-normalized traces against the digitized
-   stella/GENE mean. This figure is intended to localize the remaining
-   velocity-space recurrence / closure problem, not to claim validation closure.
 
-.. figure:: _static/w7x_zonal_moment_tail_audit.png
-   :alt: W7-X zonal-response velocity-space tail audit
+**Generated figure.** Velocity-space tail audit for existing W7-X test-4 outputs. The
+long
+``Nl=8``, ``Nm=32`` traces have large late normalized-trace variance and
+visible Hermite/Laguerre tail content. The short ``Nl=16``, ``Nm=64`` run
+reduces the early trace envelope but does not by itself close the
+long-window recurrence question.
 
-   Velocity-space tail audit for existing W7-X test-4 outputs. The long
-   ``Nl=8``, ``Nm=32`` traces have large late normalized-trace variance and
-   visible Hermite/Laguerre tail content. The short ``Nl=16``, ``Nm=64`` run
-   reduces the early trace envelope but does not by itself close the
-   long-window recurrence question.
 
-.. figure:: _static/w7x_zonal_closure_ladder_kx070.png
-   :alt: W7-X zonal-response closure ladder at kx rho_i 0.07
+**Generated figure.** Bounded closure ladder for ``k_x rho_i=0.07``. Constant Hermite,
+``k_z``-weighted Hermite, mixed Laguerre-Hermite, Laguerre-only, and
+isotropic hypercollision families are compared with the no-closure baseline.
+Some variants reduce mean trace error or velocity-space tails, but none
+improves the trace and late-envelope recurrence metrics together.
 
-   Bounded closure ladder for ``k_x rho_i=0.07``. Constant Hermite,
-   ``k_z``-weighted Hermite, mixed Laguerre-Hermite, Laguerre-only, and
-   isotropic hypercollision families are compared with the no-closure baseline.
-   Some variants reduce mean trace error or velocity-space tails, but none
-   improves the trace and late-envelope recurrence metrics together.
 
-.. figure:: _static/w7x_zonal_state_convention_audit.png
-   :alt: W7-X zonal-response state convention audit at kx rho_i 0.07
+**Generated figure.** State-level W7-X test-4 convention audit. The runtime path
+recovers the
+paper Gaussian potential initializer, selects only the requested zonal
+spectral mode, and verifies that the signed line-average and
+volume-weighted zonal observables are intentionally distinct but internally
+consistent.
 
-   State-level W7-X test-4 convention audit. The runtime path recovers the
-   paper Gaussian potential initializer, selects only the requested zonal
-   spectral mode, and verifies that the signed line-average and
-   volume-weighted zonal observables are intentionally distinct but internally
-   consistent.
 
-.. figure:: _static/w7x_zonal_recurrence_sweep_kx070.png
-   :alt: W7-X zonal-response recurrence sweep at kx rho_i 0.07
+**Generated figure.** Bounded W7-X test-4 recurrence sweep at ``k_x rho_i=0.07``. The
+left trace
+panel varies moment resolution with no closure; the right trace panel varies
+closure source at fixed high resolution. The bottom panels show that tail
+suppression alone does not yet close the literature-trace mismatch.
 
-   Bounded W7-X test-4 recurrence sweep at ``k_x rho_i=0.07``. The left trace
-   panel varies moment resolution with no closure; the right trace panel varies
-   closure source at fixed high resolution. The bottom panels show that tail
-   suppression alone does not yet close the literature-trace mismatch.
 
-.. figure:: _static/w7x_zonal_hypercollision_probe_kx070.png
-   :alt: W7-X zonal-response constant hypercollision probe at kx rho_i 0.07
+**Generated figure.** Constant-Hermite-hypercollision follow-up for ``k_x rho_i=0.07``.
+Stronger
+constant damping reduces Hermite-tail and free-energy metrics but does not
+reduce the long-window trace error or recurrence envelope enough to match
+the digitized stella/GENE reference. This is a documented negative result
+that motivates a more physical closure/operator study.
 
-   Constant-Hermite-hypercollision follow-up for ``k_x rho_i=0.07``. Stronger
-   constant damping reduces Hermite-tail and free-energy metrics but does not
-   reduce the long-window trace error or recurrence envelope enough to match
-   the digitized stella/GENE reference. This is a documented negative result
-   that motivates a more physical closure/operator study.
 
-.. figure:: _static/w7x_zonal_mixedlm_resolution_kx070.png
-   :alt: W7-X zonal-response mixed Laguerre-Hermite resolution audit at kx rho_i 0.07
+**Generated figure.** Mixed Laguerre-Hermite closure resolution audit for ``k_x
+rho_i=0.07``. The
+``Nl=24,Nm=96`` run is finite only with the smaller ``dt=0.025`` and lowers
+the late-window variability modestly, but it does not improve the trace
+error relative to ``Nl=16,Nm=64``. The omitted ``Nl=32,Nm=128`` point is a
+tracked non-finite result under the same closure family, so this remains an
+open physics/numerics lane rather than a closed W7-X zonal validation.
 
-   Mixed Laguerre-Hermite closure resolution audit for ``k_x rho_i=0.07``. The
-   ``Nl=24,Nm=96`` run is finite only with the smaller ``dt=0.025`` and lowers
-   the late-window variability modestly, but it does not improve the trace
-   error relative to ``Nl=16,Nm=64``. The omitted ``Nl=32,Nm=128`` point is a
-   tracked non-finite result under the same closure family, so this remains an
-   open physics/numerics lane rather than a closed W7-X zonal validation.
 
 Diffrax and nonlinear smoke tests
 ---------------------------------
@@ -1045,30 +1034,24 @@ Recent GX parity spot checks are tracked outside the automated test suite:
   roughly ``9.3e-3`` mean-relative error across
   ``Wg/Wphi/Wapar/HeatFlux/ParticleFlux``.
 
-.. figure:: _static/w7x_fluctuation_spectrum_panel.png
-   :alt: W7-X nonlinear fluctuation-spectrum diagnostic panel
-   :width: 100%
+**Generated figure.** W7-X nonlinear fluctuation-spectrum diagnostic from the gated
+``t≈200``
+VMEC-backed run. The panel summarizes resolved simulation spectra and is
+intentionally scoped below an experimental Doppler-reflectometry comparison.
 
-   W7-X nonlinear fluctuation-spectrum diagnostic from the gated ``t≈200``
-   VMEC-backed run. The panel summarizes resolved simulation spectra and is
-   intentionally scoped below an experimental Doppler-reflectometry comparison.
 
-.. figure:: _static/tem_branch_parity_audit.png
-   :alt: TEM branch parity audit
-   :width: 100%
+**Generated figure.** Executable TEM branch audit. The growth-rate and frequency
+branches fail
+simultaneously, with the frequency branch ordered oppositely to the
+digitized reference over the tracked low-``k_y`` interval.
 
-   Executable TEM branch audit. The growth-rate and frequency branches fail
-   simultaneously, with the frequency branch ordered oppositely to the
-   digitized reference over the tracked low-``k_y`` interval.
 
-.. figure:: _static/w7x_tem_extension_status.png
-   :alt: W7-X fluctuation/TEM extension validation status
-   :width: 100%
+**Generated figure.** Executable status of the W7-X fluctuation/TEM extension lane. The
+released
+simulation-spectrum diagnostic is closed, but TEM linear parity,
+alpha/surface-resolved W7-X scans, and kinetic-electron nonlinear windows
+remain open before broad W7-X/TEM validation claims.
 
-   Executable status of the W7-X fluctuation/TEM extension lane. The released
-   simulation-spectrum diagnostic is closed, but TEM linear parity,
-   alpha/surface-resolved W7-X scans, and kinetic-electron nonlinear windows
-   remain open before broad W7-X/TEM validation claims.
 
 Linear physics checks
 ---------------------
@@ -1411,13 +1394,12 @@ not a replacement for the open W7-X zonal-response literature lane; it rules
 out the geometry/diagnostic convention layer as the source of that separate
 recurrence/damping-envelope mismatch.
 
-.. figure:: _static/w7x_exact_state_audit.png
-   :alt: W7-X nonlinear exact-state convention audit against GX
+**Generated figure.** W7-X nonlinear exact-state convention audit. Startup state, late
+dumped
+geometry/field arrays, and re-evaluated scalar diagnostics are compared
+directly against GX dumps from the same VMEC equilibrium and nonlinear
+runtime contract.
 
-   W7-X nonlinear exact-state convention audit. Startup state, late dumped
-   geometry/field arrays, and re-evaluated scalar diagnostics are compared
-   directly against GX dumps from the same VMEC equilibrium and nonlinear
-   runtime contract.
 
 For KBM specifically, the startup audit, late dumped-state audit, nonlinear
 term replay, and first RK4 partial-step replay now all close on the shipped

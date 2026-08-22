@@ -196,16 +196,13 @@ The shipped worker-identity gate for this path is generated with:
      --ky 0.1 0.2 \
      --out-prefix docs/_static/quasilinear_runtime_parallel_gate
 
-.. figure:: _static/quasilinear_runtime_parallel_gate.png
-   :width: 100%
-   :align: center
-   :alt: Quasilinear runtime scan worker identity gate
+**Generated figure.** Serial and worker-parallel ``scan-runtime-linear`` quasilinear
+spectra from
+the same runtime configuration. The gate checks ordered state-extraction
+identity for the linear heat-flux weight and the saturated heat-flux
+estimate; any timing metadata is reported for engineering tracking only,
+not as a production speedup claim.
 
-   Serial and worker-parallel ``scan-runtime-linear`` quasilinear spectra from
-   the same runtime configuration. The gate checks ordered state-extraction
-   identity for the linear heat-flux weight and the saturated heat-flux
-   estimate; any timing metadata is reported for engineering tracking only,
-   not as a production speedup claim.
 
 The shaped-tokamak Miller companion uses the same pattern, with the positive
 ``ky`` range resolved by the nonlinear run's ``Ny=64`` grid:
@@ -218,9 +215,6 @@ The shaped-tokamak Miller companion uses the same pattern, with the positive
      --quasilinear \
      --out docs/_static/quasilinear_cyclone_miller_spectrum_scan
 
-.. image:: _static/quasilinear_cyclone_miller_spectrum.png
-   :alt: Cyclone Miller quasilinear spectrum
-   :width: 100%
 
 Model details
 -------------
@@ -567,9 +561,6 @@ without relying on unsupported JAX eigenvector derivatives.
    python examples/theory_and_demos/quasilinear_implicit_sensitivity.py \
      --outdir docs/_static
 
-.. image:: _static/quasilinear_implicit_sensitivity.png
-   :alt: Implicit quasilinear eigenpair sensitivity validation
-   :width: 100%
 
 The lower panels compare the implicit left/right derivative against central
 finite differences that follow the nearest isolated eigenvalue branch. The
@@ -636,9 +627,6 @@ against the ``0.25`` gate. This strengthens the D-shaped holdout as nonlinear
 model-development evidence; it still does not promote the current quasilinear
 model to an absolute saturated-flux predictor.
 
-.. image:: _static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.png
-   :alt: D-shaped external-VMEC nonlinear heat-flux replicate gate
-   :width: 100%
 
 The next independent external-VMEC replicate campaign uses the admitted
 circular tokamak holdout. The first ``t=450`` pass was intentionally not
@@ -653,9 +641,6 @@ and timestep variants, with ensemble mean ``18.97``, mean-relative spread
 replicated nonlinear-window artifact; the failed ``t=450`` readiness result is
 retained as convergence-history evidence rather than a promoted figure.
 
-.. image:: _static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.png
-   :alt: Circular external-VMEC nonlinear heat-flux replicate gate
-   :width: 100%
 
 The report builder is intentionally strict. Every point in one report must use
 the report's named ``saturation_rule``; predicted fluxes, observed nonlinear
@@ -690,9 +675,6 @@ README/docs wording that does not promote a runtime/TOML absolute-flux
 predictor. The current tracked reports are therefore not a calibrated
 absolute-flux claim.
 
-.. image:: _static/quasilinear_validated_calibration_inputs.png
-   :alt: Quasilinear calibration inputs matched to passed nonlinear gates
-   :width: 100%
 
 Existing nonlinear window summaries can be converted into calibration points
 with ``calibration_point_from_nonlinear_window_summary`` when the summary points
@@ -719,9 +701,6 @@ The first tracked audit point maps the Cyclone quasilinear spectrum above to
 the long-window nonlinear Cyclone heat-flux diagnostic. It is intentionally an
 ``audit`` point, not a calibrated transport claim:
 
-.. image:: _static/quasilinear_cyclone_calibration_audit.png
-   :alt: Cyclone quasilinear calibration audit against nonlinear heat flux
-   :width: 100%
 
 With ``C_sat = 1`` the simple mixing-length rule underpredicts the absolute
 nonlinear heat flux by orders of magnitude. This is the expected outcome for an
@@ -757,9 +736,6 @@ Miller nonlinear window. This is the minimal one-constant calibration expected
 of a simple mixing-length saturation rule: if it fails, the missing ingredient
 is not just a constant ``C_sat``.
 
-.. image:: _static/quasilinear_cyclone_miller_train_holdout.png
-   :alt: Quasilinear train/holdout calibration from Cyclone to Cyclone Miller
-   :width: 100%
 
 The tracked report is ``calibration_dataset`` and ``passed = false``. The
 Cyclone-fitted scale is ``C_sat = 3839.966`` for the current normalization, but
@@ -821,9 +797,6 @@ machine-specific benchmark WOUT:
      --out docs/_static/quasilinear_hsx_spectrum_scan \
      --no-progress
 
-.. image:: _static/quasilinear_hsx_spectrum.png
-   :alt: HSX quasilinear spectrum
-   :width: 100%
 
 All scanned HSX branches in this short linear spectrum are stable under the
 current ``gamma_floor = 0`` mixing-length rule, so the uncalibrated saturated
@@ -853,9 +826,6 @@ generated with:
      --report docs/_static/quasilinear_hsx_train_holdout_report.json \
      --out docs/_static/quasilinear_hsx_train_holdout.png
 
-.. image:: _static/quasilinear_hsx_train_holdout.png
-   :alt: Quasilinear train/holdout calibration including HSX
-   :width: 100%
 
 The report remains ``calibration_dataset`` and ``passed = false``. In the
 absolute-flux panel, open markers denote non-positive quasilinear estimates that
@@ -892,9 +862,6 @@ validation should use the same TOML with ``--vmec-file`` pointing to the
 machine-specific benchmark WOUT; the benchmark WOUT itself is not shipped in
 Git.
 
-.. image:: _static/quasilinear_w7x_spectrum.png
-   :alt: W7-X quasilinear spectrum
-   :width: 100%
 
 All six short-window W7-X linear branches in the tracked electrostatic
 adiabatic-electron scan are stable under the current ``gamma_floor = 0`` rule.
@@ -915,9 +882,6 @@ window is added to the same train/holdout report with:
      --fit-train-scale \
      --out docs/_static/quasilinear_w7x_train_holdout_report.json
 
-.. image:: _static/quasilinear_w7x_train_holdout.png
-   :alt: Quasilinear train/holdout calibration including W7-X
-   :width: 100%
 
 The report remains ``calibration_dataset`` and ``passed = false``. The
 Cyclone-fitted one-constant rule overpredicts Cyclone Miller, while the W7-X
@@ -933,9 +897,6 @@ admitted circular external-VMEC case, the CTH-like and shaped-pressure
 external-VMEC cases admitted only by high-grid policies, the replicated QP
 external-VMEC case, and the replicated Solovev external-VMEC case.
 
-.. image:: _static/quasilinear_stellarator_train_holdout.png
-   :alt: Combined quasilinear train/holdout calibration including stellarator and external VMEC holdouts
-   :width: 100%
 
 This combined report is also ``calibration_dataset`` and ``passed = false``.
 It is the clearest current figure for the absolute-flux story: one-constant
@@ -966,9 +927,6 @@ weight, and an absolute-growth mixing-length diagnostic that gives stable
 branches nonzero intensity. The last rule is included only as a diagnostic
 stress test; it is not a validated physical saturation rule.
 
-.. image:: _static/quasilinear_saturation_rule_sweep.png
-   :alt: Quasilinear saturation-rule sweep across Cyclone, Cyclone Miller, HSX, W7-X, and D-shaped external VMEC
-   :width: 100%
 
 All tested one-scalar rules fail the held-out absolute-flux gate. On the
 current 12-case sweep, the raw linear-weight rule is the least-bad simple rule
@@ -1013,9 +971,6 @@ tracked figure uses ``--passed-shape-only`` for the exponent fit, so the
 failed Cyclone shape gate does not contaminate the shape correction used for
 the other geometries.
 
-.. image:: _static/quasilinear_shape_aware_saturation.png
-   :alt: Shape-aware quasilinear saturation diagnostic
-   :width: 100%
 
 This is a useful negative result. The shape-aware power law gives mean
 leave-one-geometry-out absolute relative error about ``0.664``, while the
@@ -1048,9 +1003,6 @@ nonlinear heat-flux window. A candidate is promoted only if it:
 * passes candidate-specific eligibility checks such as minimum training-set
   size relative to the number of fitted parameters and matrix conditioning.
 
-.. image:: _static/quasilinear_candidate_uncertainty.png
-   :alt: Quasilinear candidate uncertainty gate
-   :width: 100%
 
 The stricter expanded ledger now includes the high-grid CTH-like,
 shaped-pressure external-VMEC, replicated QP external-VMEC, and replicated
@@ -1075,9 +1027,6 @@ coming from one geometry class or from the full portfolio? It consumes only the
 tracked uncertainty, screening, and saturation-rule JSON sidecars. It does not
 refit or promote a new model.
 
-.. image:: _static/quasilinear_error_anatomy.png
-   :alt: Quasilinear residual-anatomy gate
-   :width: 100%
 
 The current anatomy is specific enough to guide the next model-development
 step. The replicated Solovev external-VMEC holdout is the largest residual, and
@@ -1099,9 +1048,6 @@ show it is not an artifact of one arbitrary ridge penalty. The regularization
 audit below reruns the same leave-one-geometry-out ``spectral_envelope_ridge``
 fit across a ridge-penalty sweep and records the best admissible setting.
 
-.. image:: _static/quasilinear_candidate_regularization_sweep.png
-   :alt: Quasilinear candidate regularization audit
-   :width: 100%
 
 The best tracked penalty is ``lambda = 0.5``. It gives full-ledger mean
 relative error about ``0.689``, held-out mean relative error about ``0.764``,
@@ -1160,9 +1106,6 @@ with both absolute-error and rank/correlation metrics, while keeping absolute
 flux promotion disabled unless the stricter holdout-promotion requirements
 also pass.
 
-.. image:: _static/quasilinear_screening_skill.png
-   :alt: Quasilinear screening and rank-correlation skill
-   :width: 100%
 
 The current result is stronger than the simple one-constant story but still
 properly scoped. On the expanded 12-case electrostatic portfolio, no model
@@ -1204,9 +1147,6 @@ model fit is attempted. It requires:
   candidates;
 * passed downstream saturation-rule and uncertainty/skill gates.
 
-.. image:: _static/quasilinear_dataset_sufficiency.png
-   :alt: Quasilinear dataset-sufficiency promotion gate
-   :width: 100%
 
 The tracked gate now fails closed on downstream candidate skill for the
 expanded candidate-model dataset. There are now twelve admitted
@@ -1230,9 +1170,6 @@ claim-boundary artifact. It is intentionally not another fit. It answers the
 reviewer-facing question: is there a positive scoped model-selection result,
 and are we still avoiding an absolute-flux overclaim?
 
-.. image:: _static/quasilinear_model_selection_status.png
-   :alt: Quasilinear model-selection status and claim-boundary guardrails
-   :width: 100%
 
 The current status does not pass after the CTH-like and shaped-pressure
 holdouts are admitted. The ``spectral_envelope_ridge`` candidate has
@@ -1268,9 +1205,6 @@ status. It answers a different question: which currently tracked nonlinear
 windows are admitted, which candidate windows are excluded, and what exact
 data product is needed before absolute-flux promotion can be reconsidered?
 
-.. image:: _static/quasilinear_holdout_gap_report.png
-   :alt: Quasilinear holdout gap report and absolute-flux promotion blocker
-   :width: 100%
 
 The current report admits ten holdouts and two training references, but it
 keeps ``absolute_flux_promoted = false`` because the aggregate held-out
@@ -1357,9 +1291,6 @@ GKX repository. The inventory tool records file sizes, checksums,
 ``nfp``, resolution, aspect ratio, edge rotational transform, beta, and a
 selection score for follow-up cases.
 
-.. image:: _static/vmex_equilibrium_inventory.png
-   :alt: vmex equilibrium inventory for future validation holdouts
-   :width: 100%
 
 The current inventory finds ``11`` local VMEC equilibria. The best immediate
 linear/nonlinear holdout candidates are ``wout_li383_low_res.nc``,
@@ -1415,13 +1346,6 @@ CTH-like reaches ``gamma = 0.0488`` at the same sampled ``ky``. The figures
 below are still linear-feasibility artifacts only; they motivate matched
 nonlinear windows but do not validate an absolute quasilinear saturation rule.
 
-.. image:: _static/quasilinear_vmex_qh_linear_spectrum.png
-   :alt: External nfp4 QH VMEC linear quasilinear feasibility spectrum
-   :width: 100%
-
-.. image:: _static/quasilinear_vmex_cth_like_linear_spectrum.png
-   :alt: External CTH-like VMEC linear quasilinear feasibility spectrum
-   :width: 100%
 
 The QH convergence failure triggered a broader candidate screen before any
 additional nonlinear promotion. The five-point screen uses
@@ -1445,9 +1369,6 @@ not as a nonlinear transport launch target. A separate
 cut contract before time integration, so it is tracked as a geometry-contract
 failure rather than a physics result.
 
-.. image:: _static/quasilinear_vmec_qi_seed_linear_spectrum.png
-   :alt: QI seed VMEC near-marginal linear quasilinear spectrum
-   :width: 100%
 
 The companion branch-refinement gate compares the same time-propagated branch
 with a Krylov check at the lowest unstable sampled mode. Finite rows,
@@ -1457,9 +1378,6 @@ launch-growth subgate fails because ``max(gamma)≈3.8e-3`` is below the
 is useful QI branch-continuation evidence, not a nonlinear transport validation
 or absolute-flux calibration point.
 
-.. image:: _static/quasilinear_vmec_qi_seed_branch_refinement_gate.png
-   :alt: QI seed branch-refinement gate
-   :width: 100%
 
 Solved VMEC optimization outputs use the same launch discipline. The screen
 consumes runtime linear-scan spectra from solved ``vmex`` WOUTs and
@@ -1472,9 +1390,6 @@ The current four-case CPU screen is fail-closed: ``qa_nfp2`` is marginal,
 fitted growth because sampled effective ``k_perp^2`` is non-positive. This is
 candidate triage, not nonlinear transport validation.
 
-.. image:: _static/quasilinear_vmec_dshape_linear_spectrum.png
-   :alt: External D-shaped tokamak VMEC linear quasilinear feasibility spectrum
-   :width: 100%
 
 D-shaped tokamak nonlinear pilots were then run on the office GPUs with the
 same ITG/adiabatic-electron physics as the QH and CTH-like pilots. The
@@ -1496,13 +1411,6 @@ quasilinear calibration report. Admission does not promote the current
 absolute-flux model: the Cyclone-trained one-constant mixing-length estimate
 overpredicts this D-shaped holdout by about two orders of magnitude.
 
-.. image:: _static/external_vmec_dshape_grid_convergence_gate.png
-   :alt: External D-shaped tokamak VMEC nonlinear low-to-mid-grid convergence gate
-   :width: 100%
-
-.. image:: _static/external_vmec_dshape_t250_high_grid_convergence_gate.png
-   :alt: External D-shaped tokamak VMEC nonlinear t250 high-grid convergence gate
-   :width: 100%
 
 The circular-tokamak follow-up is now a useful example of why bounded
 extension ladders must be explicit. At ``t = 150`` the ``48x48x32`` to
@@ -1519,17 +1427,6 @@ gates pass. Circular tokamak is therefore admitted as an independent held-out
 external-VMEC transport window, while the failed shorter gates remain tracked
 as useful convergence-history artifacts.
 
-.. image:: _static/quasilinear_vmec_circular_linear_spectrum.png
-   :alt: External circular tokamak VMEC linear quasilinear feasibility spectrum
-   :width: 100%
-
-.. image:: _static/external_vmec_circular_t450_high_grid_convergence_gate.png
-   :alt: External circular tokamak VMEC nonlinear t450 high-grid convergence gate
-   :width: 100%
-
-.. image:: _static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.png
-   :alt: External circular tokamak VMEC seed/timestep replicate gate
-   :width: 100%
 
 The shaped-tokamak pressure candidate was then repaired with a materially
 changed high-grid protocol. The same-protocol full-grid sidecar intentionally
@@ -1560,13 +1457,6 @@ evidence for the current one-constant mixing-length model rather than rescuing
 it: the observed heat flux is about ``22.0`` while the uncalibrated
 quasilinear prediction is only about ``0.389``.
 
-.. image:: _static/quasilinear_vmec_itermodel_linear_spectrum.png
-   :alt: External ITERModel VMEC linear quasilinear feasibility spectrum
-   :width: 100%
-
-.. image:: _static/external_vmec_itermodel_t350_high_grid_convergence_gate.png
-   :alt: External ITERModel VMEC nonlinear t350 high-grid convergence gate
-   :width: 100%
 
 The same ITERModel family was then rerun as an independent ``t = 450`` audit
 using the corrected restart ladder. The audit passes the high-grid gate: the
@@ -1576,9 +1466,6 @@ and ``20.14``, with common-window and least-window symmetric grid differences
 training reference, but it is not admitted as a new quasilinear holdout because
 it is not independent of the training-family geometry.
 
-.. image:: _static/external_vmec_itermodel_independent_audit_t450_high_grid_convergence_gate.png
-   :alt: External ITERModel VMEC same-family audit t450 high-grid convergence gate
-   :width: 100%
 
 The external-VMEC runbook is now deliberately fail-closed. It requires a
 screened linear growth rate of at least ``gamma = 0.02`` before it writes any
@@ -1613,13 +1500,6 @@ common and least-window trend/CV/sample-count gates pass. This case is now the
 third admitted external-VMEC nonlinear transport holdout in the tracked
 stellarator/tokamak calibration portfolio.
 
-.. image:: _static/quasilinear_vmec_updown_asym_linear_spectrum.png
-   :alt: External up-down asymmetric tokamak VMEC linear quasilinear feasibility spectrum
-   :width: 100%
-
-.. image:: _static/external_vmec_updown_asym_t450_high_grid_convergence_gate.png
-   :alt: External up-down asymmetric tokamak VMEC nonlinear t450 high-grid convergence gate
-   :width: 100%
 
 A reduced-grid nonlinear QH pilot has also been run locally at
 ``Nx = Ny = 32``, ``Nz = 24``, ``Nl = 4``, ``Nm = 8``, and ``dt = 0.05`` using
@@ -1634,9 +1514,6 @@ the QH pilot was only measuring a startup/noise-floor heat flux. It is still a
 reduced-grid feasibility result, not a calibrated transport holdout, until a
 grid/window convergence gate passes.
 
-.. image:: _static/external_vmec_qh_nonlinear_t150_pilot.png
-   :alt: External nfp4 QH VMEC nonlinear feasibility pilot
-   :width: 100%
 
 A higher-grid QH companion run at ``Nx = Ny = 48`` and ``Nz = 32`` was then
 run on the office GPU to the same ``t = 150`` horizon. It is finite and has a
@@ -1654,21 +1531,6 @@ least-trending mean is about ``5.8``. The mid-to-high-grid symmetric relative
 differences are about ``0.630`` and ``0.704``. QH is therefore a useful
 negative convergence result, not a new quasilinear calibration holdout.
 
-.. image:: _static/external_vmec_qh_nonlinear_t150_n48_pilot.png
-   :alt: Higher-grid external nfp4 QH VMEC nonlinear feasibility pilot
-   :width: 100%
-
-.. image:: _static/external_vmec_qh_grid_convergence_gate.png
-   :alt: External nfp4 QH VMEC nonlinear grid convergence gate
-   :width: 100%
-
-.. image:: _static/external_vmec_qh_nonlinear_t150_n64_pilot.png
-   :alt: High-grid external nfp4 QH VMEC nonlinear feasibility pilot
-   :width: 100%
-
-.. image:: _static/external_vmec_qh_high_grid_convergence_gate.png
-   :alt: External nfp4 QH VMEC nonlinear high-grid convergence gate
-   :width: 100%
 
 The same reduced-grid protocol was then applied to the CTH-like fixture and
 extended on the office GPU to ``t = 150``. The run remains finite and develops a
@@ -1681,9 +1543,6 @@ no external-VMEC nonlinear acceptance gate has been defined for this fixture
 and no independent reference or production-resolution convergence check has
 passed yet.
 
-.. image:: _static/external_vmec_cth_like_nonlinear_t150_pilot.png
-   :alt: External CTH-like VMEC nonlinear feasibility pilot
-   :width: 100%
 
 The first bounded grid check repeats the same run at ``Nx = Ny = 48`` and
 ``Nz = 32``. It is also finite to ``t = 150`` and has a flatter late trace, but
@@ -1694,9 +1553,6 @@ least-trending ``t = 120.05`` to ``150.00`` window has mean heat flux about
 evidence that the original reduced-grid protocol was not sufficient for
 calibration.
 
-.. image:: _static/external_vmec_cth_like_nonlinear_t150_n48_pilot.png
-   :alt: Higher-grid external CTH-like VMEC nonlinear feasibility pilot
-   :width: 100%
 
 The explicit convergence gate follows the same evidence chain used in
 nonlinear gyrokinetic benchmark papers: time traces and saturated heat-flux
@@ -1739,13 +1595,6 @@ same admission policy: full-grid failure is retained as a coarse-grid warning,
 while the ``n64/n80`` high-grid, time-horizon, and replicate gates define the
 scoped holdout evidence.
 
-.. image:: _static/external_vmec_cth_like_grid_convergence_gate.png
-   :alt: External CTH-like VMEC nonlinear grid convergence gate
-   :width: 100%
-
-.. image:: _static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.png
-   :alt: CTH-like external VMEC high-grid replicate ensemble gate
-   :width: 100%
 
 The nonlinear time-horizon audit below is a guardrail for the manuscript and
 documentation. It classifies archived heat-flux artifacts by their actual time
@@ -1761,9 +1610,6 @@ remain startup plumbing checks, and the differentiable nonlinear-window
 optimization examples remain reduced-envelope estimators rather than
 production nonlinear transport averages.
 
-.. image:: _static/nonlinear_transport_time_horizon_audit.png
-   :alt: Nonlinear transport time-horizon audit
-   :width: 100%
 
 The normalized W7-X spectrum-shape gate does pass when the linear
 heat-flux-weight distribution is compared with the resolved nonlinear
@@ -1781,9 +1627,6 @@ heat-flux-weight distribution is compared with the resolved nonlinear
      --cosine-gate 0.95 \
      --title "W7-X quasilinear/nonlinear ky-spectrum shape gate"
 
-.. image:: _static/quasilinear_w7x_spectrum_shape_gate.png
-   :alt: W7-X quasilinear and nonlinear ky-spectrum shape gate
-   :width: 100%
 
 The tracked W7-X shape gate passes with total-variation distance about
 ``0.056`` and cosine similarity about ``0.992``. This supports the
@@ -1809,9 +1652,6 @@ linear heat-flux-weight spectrum against the normalized nonlinear
      --cosine-gate 0.95 \
      --title "HSX quasilinear/nonlinear ky-spectrum shape gate"
 
-.. image:: _static/quasilinear_hsx_spectrum_shape_gate.png
-   :alt: HSX quasilinear and nonlinear ky-spectrum shape gate
-   :width: 100%
 
 The tracked HSX shape gate passes with total-variation distance about ``0.11``
 and cosine similarity about ``0.97``. This supports the linear spectrum-shape
@@ -1827,9 +1667,6 @@ normalized ``ky`` distribution of the linear heat-flux weight against the
 resolved nonlinear ``HeatFlux_kyst`` spectrum. They do not test the absolute
 mixing-length heat-flux level.
 
-.. image:: _static/quasilinear_cyclone_miller_spectrum_shape_gate.png
-   :alt: Cyclone Miller quasilinear and nonlinear ky-spectrum shape gate
-   :width: 100%
 
 Cyclone Miller passes the initial shape gate with total-variation distance
 about ``0.094`` and cosine similarity about ``0.983``. This is a useful positive
@@ -1837,9 +1674,6 @@ gate: the linear heat-flux-weight spectrum and the resolved nonlinear heat-flux
 spectrum place comparable weight across the scanned ``ky`` range under the
 current window.
 
-.. image:: _static/quasilinear_cyclone_spectrum_shape_gate.png
-   :alt: Cyclone quasilinear and nonlinear ky-spectrum shape gate
-   :width: 100%
 
 The long-window Cyclone shape gate is intentionally retained as a failed gate:
 it gives total-variation distance about ``0.215`` and cosine similarity about

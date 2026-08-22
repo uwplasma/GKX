@@ -478,7 +478,6 @@ def test_manuscript_figure_audit_accepts_scoped_candidate_sidecar(
     _write_doc(doc)
     figure_base = tmp_path / "docs/_static/quasilinear_candidate_uncertainty"
     figure_base.parent.mkdir(parents=True)
-    figure_base.with_suffix(".png").write_bytes(b"not a real png for metadata test")
     figure_base.with_suffix(".json").write_text(
         json.dumps(_candidate_uncertainty_sidecar()),
         encoding="utf-8",
@@ -503,6 +502,7 @@ def test_manuscript_figure_audit_accepts_scoped_candidate_sidecar(
 
     assert audit["passed"] is True
     assert audit["summary"]["n_manuscript_figure_checks"] == 1
+    assert audit["manuscript_figure_provenance"][0]["png_exists"] is False
     assert audit["manuscript_figure_provenance"][0]["claim_scoped"] is True
     assert audit["manuscript_figure_provenance"][0]["failed_baselines_explicit"] is True
 

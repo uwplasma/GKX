@@ -20,11 +20,11 @@ replay_command = "pytest -q tests/integration/examples/test_examples.py tests/un
 path = "docs/_static/benchmark_readme_panel.png"
 size_bytes = 246482
 sha256 = "8605e77d44e126c68998d99b736cb404c6665fa8402ff3f429f4ce61ac08e498"
-action = "keep_preview_in_repo"
+action = "regenerate_on_demand"
 artifact_type = "documentation_preview"
 release_asset_name = "benchmark_readme_panel.png"
-reason = "Compressed README benchmark preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
-preview_strategy = "compressed docs/_static preview below 500 kB"
+reason = "Optional README benchmark panel is reproducible and omitted from Git; generate it only when needed."
+preview_strategy = "regenerated locally when requested"
 replay_command = "python tools/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
@@ -44,11 +44,11 @@ replay_command = "python tools/artifacts/make_benchmark_atlas.py"
 path = "docs/_static/benchmark_core_nonlinear_atlas.png"
 size_bytes = 171443
 sha256 = "c9789906b11dfa6f0e1c3057c31ae69c0c28ba1e2d9989d97db806be6d75be5c"
-action = "keep_preview_in_repo"
+action = "regenerate_on_demand"
 artifact_type = "documentation_preview"
 release_asset_name = "benchmark_core_nonlinear_atlas.png"
-reason = "Compressed nonlinear atlas preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
-preview_strategy = "compressed docs/_static preview below 500 kB"
+reason = "Optional nonlinear atlas is reproducible and omitted from Git; generate it only when needed."
+preview_strategy = "regenerated locally when requested"
 replay_command = "python tools/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
@@ -68,22 +68,22 @@ replay_command = "python tools/artifacts/make_benchmark_atlas.py"
 path = "docs/_static/benchmark_core_linear_atlas.png"
 size_bytes = 142351
 sha256 = "fb9b967b6a8450f0fd2d98982e7d75dfa6047eb4a35e1cdb07ba72afd742d99f"
-action = "keep_preview_in_repo"
+action = "regenerate_on_demand"
 artifact_type = "documentation_preview"
 release_asset_name = "benchmark_core_linear_atlas.png"
-reason = "Compressed linear atlas preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
-preview_strategy = "compressed docs/_static preview below 500 kB"
+reason = "Optional linear atlas is reproducible and omitted from Git; generate it only when needed."
+preview_strategy = "regenerated locally when requested"
 replay_command = "python tools/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/comparison/reference_publication_panel.png"
 size_bytes = 142940
 sha256 = "f0efa3af8a11b316c43bafece659616dce70953adcedd7b64fe1aab8edd7aced"
-action = "keep_preview_in_repo"
+action = "regenerate_on_demand"
 artifact_type = "comparison_panel"
 release_asset_name = "reference_publication_panel.png"
-reason = "Compressed comparison preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
-preview_strategy = "compressed docs/_static preview below 500 kB"
+reason = "Optional publication panel is reproducible and omitted from Git; generate it only when needed."
+preview_strategy = "regenerated locally when requested"
 replay_command = "python tools/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
@@ -103,20 +103,20 @@ replay_command = "python tools/artifacts/make_benchmark_atlas.py"
 path = "docs/_static/comparison/reference_summary_panel.png"
 size_bytes = 142910
 sha256 = "6635d367da28dd1fe725fa162df9e30931ecc59247d6a82ac9bd06ff2c0a4ac5"
-action = "keep_preview_in_repo"
+action = "regenerate_on_demand"
 artifact_type = "comparison_panel"
 release_asset_name = "reference_summary_panel.png"
-reason = "Compressed comparison summary kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
-preview_strategy = "compressed docs/_static preview below 500 kB"
+reason = "Optional comparison summary is reproducible and omitted from Git; generate it only when needed."
+preview_strategy = "regenerated locally when requested"
 replay_command = "python tools/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/comparison/reference_cyclone_kbm_panel.png"
 size_bytes = 112474
 sha256 = "c477ed140de98335efc559fa642a65774de93aa2e2a59fec8f13140b9a5bf690"
-action = "keep_preview_in_repo"
+action = "regenerate_on_demand"
 artifact_type = "comparison_panel"
 release_asset_name = "reference_cyclone_kbm_panel.png"
-reason = "Compressed comparison preview kept in Git for documentation rendering; high-resolution exports should be regenerated or release-hosted."
-preview_strategy = "compressed docs/_static preview below 500 kB"
+reason = "Optional Cyclone KBM panel is reproducible and omitted from Git; generate it only when needed."
+preview_strategy = "regenerated locally when requested"
 replay_command = "python tools/artifacts/make_benchmark_atlas.py"

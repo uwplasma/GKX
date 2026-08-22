@@ -102,9 +102,6 @@ Production closure status
 The release status artifact combines the production scaling evidence and the
 diagnostic decomposition gates into one machine-readable claim boundary:
 
-.. image:: _static/parallelization_completion_status.png
-   :alt: GKX parallelization closure status
-   :align: center
 
 ``docs/_static/parallelization_completion_status.json`` reports the release
 production-completion percentage and the status of each lane. For the current
@@ -121,9 +118,6 @@ The lower-level decomposition-contract status checks deterministic shard
 assignment, serial reconstruction identity, and claim-level separation without
 rerunning large profiles.
 
-.. image:: _static/parallel_decomposition_status.png
-   :alt: Parallel decomposition contract status
-   :align: center
 
 This status passes for production independent ``k_y`` and UQ portfolios and
 for a diagnostic nonlinear state-domain partition. Passing the diagnostic row
@@ -374,9 +368,6 @@ sixty-four-step windows give ``1.480x``, ``1.485x`` and ``1.486x``: sixteen
 times more work per timed call moves the result by less than one percent, so
 per-call dispatch overhead is not the limiter either.
 
-.. image:: _static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.png
-   :alt: Two-GPU device-z pencil speedup against workload granularity
-   :align: center
 
 The reason is isolated by
 ``tools/profiling/profile_device_z_pencil_scaling_decomposition.py``, which
@@ -442,9 +433,6 @@ route improves from ``0.59 ns`` to ``0.50 ns`` as the perpendicular FFT shape
 gets friendlier. The pencil route does not capture that improvement, so the
 gap it must overcome widens exactly where the serial route gets better.
 
-.. image:: _static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.png
-   :alt: Device-z pencil speedup split into route overhead and parallel scaling
-   :align: center
 
 This answers the promotion question directly, and the answer is not a number
 scraped over the line. With parallel scaling already at ``2.0x``, the ``1.5x``
