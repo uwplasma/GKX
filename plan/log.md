@@ -899,3 +899,12 @@
   `9d8f3062389780536ce4df7497b03905b2038ad2f64d75895f7891afaedbc52b`, JSON
   `1724347485b1996cc4d0ec1f66e68473d1f6c601cebf0e3bfe6ba4289bd60933`, log
   `730c377f3b57fdf57ad96c45e3d98ef57487e44173d72f36696b617dab298168`.
+- Auditing the private PR #82 replay found that its source-neutral snapshot
+  contained `plan/` but omitted the root `plan.md`. Rebuilt that one candidate
+  ref atomically on the slim CI base with both exact public trees; all non-plan
+  paths remain byte-identical to the candidate CI head. No public ref moved.
+- A fresh no-alternates clone of the corrected candidate has 25 heads, 28 tags,
+  3,424 commits, and 17,446 objects. Its pack is 8,654,462 bytes, pack plus
+  index 9,144,022 bytes, complete `.git` 9,476,998 bytes, and current archive
+  4,888,710 bytes. Strict `fsck`, exact plan tree/blob identity, zero alternates,
+  and the reachable AI-attribution scan pass.
