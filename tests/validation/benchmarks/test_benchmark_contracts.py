@@ -12,7 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from support.paths import REPO_ROOT
+from support.paths import REPO_ROOT, load_release_tool
 from benchmarks import cyclone_linear_benchmark
 from benchmarks.performance.benchmark_runtime_memory import (
     RuntimeBenchRun,
@@ -482,6 +482,9 @@ def test_benchmark_results_manifest_is_root_level_and_small() -> None:
 
 def test_benchmark_results_manifest_points_to_tracked_or_regenerable_outputs() -> None:
     manifest = _load_results_manifest()
+    rendered_suffixes = load_release_tool(
+        "check_validation_coverage_manifest"
+    ).RENDERED_ARTIFACT_SUFFIXES
     entries = [*manifest.get("figure", []), *manifest.get("table", [])]
     assert {entry["name"] for entry in entries} >= {
         "Core linear benchmark atlas",
@@ -493,14 +496,16 @@ def test_benchmark_results_manifest_points_to_tracked_or_regenerable_outputs() -
     for entry in entries:
         path = ROOT / entry["path"]
         action = entry.get("action", "keep_in_repo")
+        rendered = path.suffix.lower() in rendered_suffixes
         assert action in {"keep_in_repo", "regenerate_on_demand"}
-        if action == "keep_in_repo":
-            assert path.exists(), entry["path"]
+        assert ROOT / "tools_out" not in path.parents
+        assert ROOT / "docs" / "_build" not in path.parents
         if path.exists():
             assert path.is_file(), entry["path"]
             assert path.stat().st_size <= MAX_TRACKED_RESULT_BYTES, entry["path"]
-        assert ROOT / "tools_out" not in path.parents
-        assert ROOT / "docs" / "_build" not in path.parents
+        else:
+            assert action == "regenerate_on_demand", entry["path"]
+            assert rendered, entry["path"]
 
         source_manifest = ROOT / entry["source_manifest"]
         assert source_manifest.exists(), entry["source_manifest"]
