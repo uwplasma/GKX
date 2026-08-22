@@ -27,6 +27,8 @@ from gkx.operators.linear.params import (
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.solvers.linear.implicit import _integrate_linear_implicit_cached
 from gkx.solvers.linear.integrator_diagnostics import (
+    _linear_cache_or_build,
+    _validate_linear_sampling,
     integrate_linear_diagnostics,
 )
 from gkx.solvers.linear.parallel import (
@@ -381,37 +383,6 @@ def _integrate_linear_cached_donate(
     )
 
 
-def _validate_linear_sampling(*, steps: int, sample_stride: int) -> None:
-    """Validate fixed-step sampling before JIT dispatch."""
-
-    if sample_stride < 1:
-        raise ValueError("sample_stride must be >= 1")
-    if steps % sample_stride != 0:
-        raise ValueError("steps must be divisible by sample_stride")
-
-
-def _linear_cache_or_build(
-    G0: jnp.ndarray,
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    cache: LinearCache | None,
-) -> LinearCache:
-    """Return a supplied linear cache or build one from the state dimensions."""
-
-    if cache is not None:
-        return cache
-    if G0.ndim == 5:
-        Nl, Nm = G0.shape[0], G0.shape[1]
-    elif G0.ndim == 6:
-        Nl, Nm = G0.shape[1], G0.shape[2]
-    else:
-        raise ValueError(
-            "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-        )
-    return build_linear_cache(grid, geom, params, Nl, Nm)
-
-
 def _dispatch_parallel_linear(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -719,7 +690,9 @@ def integrate_linear(
     """Time integrate the linear system using a fixed-step scheme."""
     terms = LinearTerms() if terms is None else terms
     _validate_linear_sampling(steps=steps, sample_stride=sample_stride)
-    cache = _linear_cache_or_build(G0, grid, geom, params, cache)
+    cache = _linear_cache_or_build(
+        G0, grid, geom, params, cache, cache_builder=build_linear_cache
+    )
     method = "imex" if method == "semi-implicit" else method
     parallel_strategy = _linear_parallel_strategy(parallel)
     force_electrostatic_fields = _is_electrostatic_field_terms(terms)
