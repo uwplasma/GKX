@@ -471,11 +471,30 @@ The -6.90% difference is 1.77 combined SEM, so the means are not statistically
 separated at two SEM. The spatial gate is less robust: heat cutoff/peak is
 12.24% for seed 22 versus 9.46% for seed 31, crossing the fixed 10% screen;
 last-three-`ky` mass is 1.52% versus 1.49%. Ny=160 is therefore not yet a
-seed-robust accepted QA rung. The exact seed-22 state is continuing to `t=350`
-on GPU 0 while the seed-31 `cfl=0.5` run executes on GPU 1. SHA-256: NPZ
+seed-robust accepted QA rung. SHA-256: NPZ
 `0f31911b8723c6f006d0c3cc921f6958507fed6f9e4df04986071e45c73d06ea`, JSON
 `14715807b6faae2c122f1d17632f5a744bea2d81b4342a26a2b01099140e3d5a`, log
 `6747c8f51827b4454d932037956354ea3d5514df8f7cbff14568ecb855d29807`.
+
+Its exact state now continues to absolute `t=350` in another 2,065.1 s. The
+frozen rule stops causally at `t=312.194`: the `t=237.436--312.194` window has
+`Q=10.5986 +/- 0.2300`, all Q/Wphi/Wg gates pass, and the pass island has
+persisted for 60.16 time units. That island lasts until `t=345.839`, but the
+terminal window fails again by `t=350`; a stop decision cannot see that future
+failure. Seed 31 still makes no stop through the same horizon, so this held-out
+success does not establish a seed-robust fast rule.
+
+On the matched `t=250--350` suffix, seed 22 and seed 31 give
+`Q=10.7420 +/- 0.2200` and `10.9902 +/- 0.3072`, a -2.26% difference or only
+0.66 combined SEM. Both spatial screens now pass: heat cutoff/peak is 8.77%
+and 9.98%, last-three-`ky` mass 1.55% and 1.51%, and outer-six-`kx` mass is
+0.12% for both. The two seeds therefore support a common long-window Ny=160
+mean, but not a common causal stop. The Ny=192 seed-31 resolution rung and the
+Ny=160 seed-31 `cfl=0.5` control are active on separate GPUs. Continuation
+SHA-256: NPZ
+`4954bac97ed8cad9f93093d6c7b13c11fc1635734b795058169303adbdb82385`, JSON
+`29b96bf8d1fc0d9e9b6a6fdbe42da0cf2c5b3763ff7ab28f2883d511d4167f42`, log
+`b9f56670afdf3f05e89509bba93d415063c9dae0332b5ed4f50bba491bc29ed9`.
 
 The source-pinned QA `96x96x48`, seed-31 rung then reached exact `t=250` in
 2,200.7 s. It also makes no frozen stop; the longest pass island is
@@ -514,6 +533,7 @@ or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
 | QA Ny=160 | `6b5263302b60c2cd4a42e278f94a03866b72e7788b41095af0abf98f739892c8` |
 | QA Ny=160 seed 31, t=350 | `5542c67c774afb349393f2682c4c98ac38cb45dace4e56be36f0bf21486e9a06` |
 | QA Ny=160 seed 22, t=250 | `78164cafda9f90f17541172b9658776677f9a179647aecf3cee4ca21bacfe5e0` |
+| QA Ny=160 seed 22, t=350 | `607b327130c436f037f44fa7761c83f861ec41e2ef6bace42189a44a2d4042b4` |
 | QI Ny=96 | `3cd1d3e7f1debddfadfbbed6b14ffb2912e465bd73025c6ba59eb022d14996ea` |
 | QI Ny=128 | `c8133f3c1de07c430bbef20c4a19629253fe447ca0031d18f9627f5dcbff4ff3` |
 | QHS Ny=160 | `8159e162b4cda45fd0d82c16f1c42a89a87326946aaf88d4502cd9aa5b257d5e` |
@@ -893,7 +913,7 @@ MP4 SHA-256:
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS make no accepted stop |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA seed 22 crosses the Ny160 spectral screen; exact continuation and CFL check active |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA Ny160 long-window seeds agree; Ny192 and CFL controls active; stop is not seed-robust |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | CLI snapshots and definitions |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |

@@ -1072,3 +1072,18 @@
 - GPU 0 now continues the exact seed-22 state to `t=350`; GPU 1 runs the
   predeclared seed-31 `cfl=0.5` check. Thresholds, deck, source, and output
   cadence remain frozen.
+- The exact QA Ny160 seed-22 continuation reached absolute `t=350` in another
+  2,065.1 s. The frozen policy stops at `t=312.194` with
+  `Q=10.5986 +/- 0.2300` after 60.16 time units of persistence, but the same
+  island ends at `t=345.839` and the terminal window fails again. Seed 31 still
+  makes no stop through `t=350`, so the rule is not seed-robust and is not
+  promoted. Continuation NPZ/JSON/log prefixes are
+  `4954bac9/29b96bf8/b9f56670`; bound replay is `607b3271`.
+- Over the matched `t=250--350` suffix, seed 22 and seed 31 give
+  `Q=10.7420 +/- 0.2200` and `10.9902 +/- 0.3072`, a -2.26% difference or 0.66
+  combined SEM. Both heat cutoff/peak values now pass at 8.77% and 9.98%; the
+  long-window mean is seed-compatible, while the causal stop is not.
+- GPU 0 now runs the source-pinned Ny192 seed-31 rung to `t=250`, providing a
+  finest-grid comparison beyond the borderline Ny160 tail. GPU 1 continues the
+  Ny160 seed-31 `cfl=0.5` control. No threshold was changed after observing the
+  seed histories.
