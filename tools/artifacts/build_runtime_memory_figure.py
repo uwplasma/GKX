@@ -120,7 +120,7 @@ def build_figure(results: Path, output: Path) -> dict[str, object]:
             "Runtime and memory across the tracked benchmark cases", fontsize=13
         )
         fig.tight_layout(rect=(0, 0, 1, 0.95))
-        save_figure(fig, output)
+        save_figure(fig, output, palette_colors=256)
 
     return {
         "cases": order,

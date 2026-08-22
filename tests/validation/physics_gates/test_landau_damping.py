@@ -27,9 +27,9 @@ import numpy as np
 from PIL import Image
 import pytest
 
+from gkx.artifacts.figure_style import save_figure
 from tools.artifacts.build_landau_damping_figure import (
     _NU_SCAN,
-    _save_compact_preview,
     evolve,
     exact_root,
     fit_standing_wave,
@@ -47,7 +47,7 @@ def test_landau_preview_uses_a_bounded_palette(tmp_path) -> None:
     ax.plot(np.linspace(0.0, 1.0, 32), np.linspace(0.0, 1.0, 32) ** 2)
     output = tmp_path / "preview.png"
 
-    _save_compact_preview(fig, output)
+    save_figure(fig, output, palette_colors=256)
 
     with Image.open(output) as image:
         assert image.mode == "P"

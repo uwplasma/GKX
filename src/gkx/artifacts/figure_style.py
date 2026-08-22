@@ -1,14 +1,4 @@
-"""One house style for every generated figure.
-
-Figures that ship in the README and documentation are read side by side, so a
-per-script style is worse than a shared one even when each individual choice is
-defensible. This module is the single place that decides typography, palette,
-sizing and export settings.
-
-The palette is colour-blind safe (Okabe-Ito, Okabe & Ito 2008) and stays legible
-in greyscale: the ordering below is also monotone in luminance, so a printed or
-photocopied panel keeps its series distinguishable. Reviewers print things.
-"""
+"""Shared color-blind-safe style and deterministic export for GKX figures."""
 
 from __future__ import annotations
 
@@ -121,11 +111,7 @@ _RC: dict[str, Any] = {
 
 @contextmanager
 def figure_style(**overrides: Any) -> Iterator[None]:
-    """Apply the house style for the duration of a ``with`` block.
-
-    Scoped rather than global so importing this module never changes the look of
-    a user's own plots.
-    """
+    """Apply the house style without changing process-global defaults."""
 
     # matplotlib types rc_context against a Literal of every valid key, which a
     # plain dict cannot satisfy; the keys are validated by matplotlib at runtime.
@@ -151,11 +137,7 @@ def panel_label(
 
 
 def annotate_reference(ax: plt.Axes, text: str, *, loc: str = "lower left") -> None:
-    """Attach the literature/physics anchor a panel is being judged against.
-
-    Every shipped figure states what it is compared with, in the figure itself,
-    so a panel lifted out of the README into a slide still carries its source.
-    """
+    """Attach the literature or physics anchor to a panel."""
 
     positions = {
         "lower left": (0.02, 0.03, "left", "bottom"),
@@ -184,12 +166,28 @@ def annotate_reference(ax: plt.Axes, text: str, *, loc: str = "lower left") -> N
     )
 
 
-def save_figure(fig: plt.Figure, path: str | Path, *, close: bool = True) -> Path:
+def save_figure(
+    fig: plt.Figure,
+    path: str | Path,
+    *,
+    close: bool = True,
+    palette_colors: int | None = None,
+) -> Path:
     """Write a figure to ``path``, creating parent directories."""
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(target)
+    if palette_colors is not None and target.suffix.lower() == ".png":
+        from PIL import Image
+
+        with Image.open(target) as image:
+            preview = image.convert("RGB").quantize(
+                colors=palette_colors,
+                method=Image.Quantize.MEDIANCUT,
+                dither=Image.Dither.NONE,
+            )
+            preview.save(target, optimize=True)
     if close:
         plt.close(fig)
     return target

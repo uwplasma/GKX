@@ -120,7 +120,7 @@ def main() -> int:
         memory_panel(ax)
         annotate_reference(ax, "docs/differentiable_eigensolver.rst", loc="lower right")
         fig.tight_layout()
-        written = save_figure(fig, args.output)
+        written = save_figure(fig, args.output, palette_colors=256)
 
     print(f"written: {written}")
     return 0

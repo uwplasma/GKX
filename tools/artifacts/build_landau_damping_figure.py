@@ -46,7 +46,6 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
 from scipy.optimize import curve_fit, fsolve
 from scipy.signal import hilbert
 from scipy.special import wofz
@@ -245,22 +244,6 @@ def measure(te_over_ti: float, guess: complex, *, hermite: int) -> dict[str, obj
     }
 
 
-def _save_compact_preview(fig: plt.Figure, output: Path) -> Path:
-    """Write a full-resolution figure with a compact deterministic PNG palette."""
-
-    target = save_figure(fig, output)
-    if target.suffix.lower() != ".png":
-        return target
-    with Image.open(target) as image:
-        preview = image.convert("RGB").quantize(
-            colors=256,
-            method=Image.Quantize.MEDIANCUT,
-            dither=Image.Dither.NONE,
-        )
-        preview.save(target, optimize=True)
-    return target
-
-
 def build_figure(output: Path, *, hermite: int = 96) -> dict[str, object]:
     unity = measure(1.0, complex(1.4, -0.6), hermite=hermite)
     hot_electrons = measure(10.0, complex(2.6, -0.04), hermite=hermite)
@@ -428,7 +411,7 @@ def build_figure(output: Path, *, hermite: int = 96) -> dict[str, object]:
             fontsize=13,
         )
         fig.tight_layout(rect=(0, 0, 1, 0.94))
-        _save_compact_preview(fig, output)
+        save_figure(fig, output, palette_colors=256)
 
     return {
         "unity": unity,
