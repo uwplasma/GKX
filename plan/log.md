@@ -420,6 +420,15 @@
   timing evidence only. The corrected branch passes all 51 plotting tests and
   fails closed on missing imported profiles; a clean `PYTHONPATH=src` rerun
   must verify nonempty VMEC profiles before the physical movie is accepted.
+- Replayed a frozen trailing-window/persistence hypothesis on the completed QA
+  Ny=160 and QHS Ny=128 histories. A 100-time-unit window that passes Q/Wphi/Wg
+  continuously for 20 further time units stops at `t=149.7` and `t=299.2`;
+  its means differ by 2.7% and 1.3% from the selected late audit means. This is
+  post-hoc design evidence only; the independent seed, QHS Ny=160, QI, and 16
+  legacy VMEC traces are the held-out score set.
+- PR #81's nonlinear CI shard passed in 14m22s under its targeted 20-minute
+  budget. This confirms that the former 15-minute wall-clock limit was too
+  tight for runner cleanup while leaving every other shard at 15 minutes.
 - Added PR #99 to the non-destructive public-ref rehearsal. Before this log
   commit, all 21 retained heads (`main` plus 20 open PRs) and all 28 remote tags
   fit in a 9,107,008-byte pack (9,596,344 with index); the archive is 5,363,108

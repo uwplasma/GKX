@@ -203,6 +203,16 @@ by 10.4%. SAT-1 therefore needs a held-out, causal shadow-stop campaign with
 change-point/persistence tests; selecting a favorable suffix after seeing the
 endpoint is not an admissible production algorithm.
 
+A bounded replay gives SAT-1 a concrete next hypothesis. At each checkpoint,
+test only the trailing 100 time units, require the Q/Wphi/Wg gates above, and
+require the complete decision to remain true for 20 additional time units. On
+the two traces used to formulate it, this would stop QA at `t=149.7` with
+`Q=10.935` (2.7% above the fixed `t=150--250` mean) and QHS at `t=299.2` with
+`Q=6.189` (1.3% above the later `t=500--750` mean). Those apparent 40--60%
+savings are post-hoc design evidence, not validation. Freeze the rule and score
+it without retuning on QA seed 31, QHS Ny=160, QI, and the 16 legacy VMEC
+traces before considering a default change.
+
 The matched QA `96x128x48` rung completed at `t=250` in 3,648.2 s. On the
 fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
 Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is
@@ -299,6 +309,8 @@ fixes it with a one-line source-neutral change. The PR #97 nonlinear shard also
 showed a runner-budget failure after all tests printed 100%: its clean rerun
 passed in 14m51s, nine seconds below the old 15-minute limit. PR #81 therefore
 gives only `nonlinear-core` 20 minutes while every other quick shard retains 15.
+PR #81's own nonlinear shard then passed in 14m22s under that targeted budget;
+the extra five minutes cover runner cleanup variance without relaxing any test.
 Branch protection nominally
 asks for one review, but every merged PR reports `REVIEW_REQUIRED`, no checks are
 required, force pushes are allowed, and administrator bypass was used. Require
