@@ -789,3 +789,8 @@
   `644be269e37d7b5cab838be94ba1748ba94ec3d332f9da44190cb46083520480`, JSON
   `5543fbaf0ceb7842d7d726c8558a343791a66bd2e156c5e4111df721f17073a4`, log
   `62c549b17943f045ce038a40a7816e352d3134db61a859565cf20c3e8a488490`.
+- Replayed PR #91's continuation fix and the preceding exact roadmap tree into
+  the private rehearsal. Its fresh no-alternates clone now has 3,418 commits,
+  17,413 objects, an 8,860,670-byte pack, and a 9,682,158-byte complete `.git`
+  file sum. All 25 selected heads and 28 tags remain strict-`fsck` clean,
+  source-neutral where required, and free of reachable AI attribution markers.
