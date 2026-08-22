@@ -60,6 +60,8 @@ from gkx.geometry.sensitivity import (
 _DEFAULT_DISCOVER_DIFFERENTIABLE_GEOMETRY_BACKENDS = (
     discover_differentiable_geometry_backends
 )
+_CORE_FLUX_TUBE_FROM_STATE = _vmec_boozer_core.flux_tube_geometry_from_vmec_boozer_state
+_CORE_PROFILES_FROM_STATE = _vmec_boozer_core.vmex_boozer_equal_arc_core_profiles_from_state
 
 
 @contextmanager
@@ -195,6 +197,10 @@ def _call_with_vmec_boozer_core_facade_hooks(
             "_interp_radial": _interp_radial,
             "_radial_derivative_array": _radial_derivative_array,
             "_radial_derivative_profile": _radial_derivative_profile,
+            "flux_tube_geometry_from_mapping": flux_tube_geometry_from_mapping,
+            "vmex_boozer_equal_arc_core_profiles_from_state": (
+                vmex_boozer_equal_arc_core_profiles_from_state
+            ),
         },
     ):
         return func(*args, **kwargs)
@@ -207,30 +213,25 @@ def prewarm_vmec_boozer_equal_arc_cache(*args: Any, **kwargs: Any) -> Any:
     )
 
 
-@wraps(_vmec_boozer_core.vmex_boozer_equal_arc_core_profiles_from_state)
+@wraps(_CORE_PROFILES_FROM_STATE)
 def vmex_boozer_equal_arc_core_profiles_from_state(
     *args: Any, **kwargs: Any
 ) -> Any:
     return _call_with_vmec_boozer_core_facade_hooks(
-        _vmec_boozer_core.vmex_boozer_equal_arc_core_profiles_from_state,
+        _CORE_PROFILES_FROM_STATE,
         *args,
         **kwargs,
     )
 
 
-@wraps(_vmec_boozer_core.flux_tube_geometry_from_vmec_boozer_state)
+@wraps(_CORE_FLUX_TUBE_FROM_STATE)
 def flux_tube_geometry_from_vmec_boozer_state(
     *args: Any, **kwargs: Any
 ) -> FluxTubeGeometryData:
-    """Build solver geometry through the façade's patchable mapping hooks."""
-
-    source_model = kwargs.pop("source_model", "mode21_vmec_boozer_state")
-    validate_finite = kwargs.pop("validate_finite", True)
-    mapping = vmex_boozer_equal_arc_core_profiles_from_state(*args, **kwargs)
-    return flux_tube_geometry_from_mapping(
-        mapping,
-        source_model=source_model,
-        validate_finite=validate_finite,
+    return _call_with_vmec_boozer_core_facade_hooks(
+        _CORE_FLUX_TUBE_FROM_STATE,
+        *args,
+        **kwargs,
     )
 
 
