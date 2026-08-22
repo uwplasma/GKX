@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the twenty-one open PR heads (#74 and #81--#100) after the final rewrite.
+- Rebase the twenty-two open PR heads (#74 and #81--#101) after the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -110,10 +110,11 @@ preserving auditable provenance instead of leaving dangling filenames.
 
 The saturation campaign also duplicates every scalar sample in its summary
 JSON when a compressed NPZ trace is requested. The clean 662-sample QHS run
-produced a 98,879-byte JSON plus a 984,418-byte spectral NPZ. In a separate
-tool-only PR, keep the inline trace only when no trace artifact was requested;
-otherwise write a compact NPZ path/URI, SHA-256, schema, and report. This
-removes repeated JSON histories without weakening standalone use or provenance.
+produced a 98,879-byte JSON plus a 984,418-byte spectral NPZ. PR #91 commit
+`4ef05fb9` keeps the inline trace only when no trace artifact was requested;
+otherwise it writes the NPZ path, SHA-256, byte count, schema, and report. The
+same summary becomes 2,128 bytes (97.8% smaller) without weakening standalone
+use or provenance.
 
 ## Identity contract
 

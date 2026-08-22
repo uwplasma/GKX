@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#100.
+and open PRs #74 and #81--#101.
 
 ## Rules
 
@@ -59,10 +59,12 @@ system is
 
 Hermite streaming is nearest-neighbour in `m`; magnetic and FLR terms are sparse
 or structured in `(m,ell)`; the nonlinear `E x B` bracket is pseudo-spectral in
-`(kx,ky)`. These structures are candidates for block/banded solves only after
-profiling shows the dense or matrix-free operation is limiting. SOLVAX's block
-tridiagonal ideas are relevant to implicit moment solves, not automatically to
-the nonlinear Fourier convolution.
+`(kx,ky)`. GKX already uses SOLVAX's batched tridiagonal solve in opt-in
+Hermite-line and linked/coarse preconditioners for implicit matrix-free GMRES;
+the default `auto` preconditioner remains diagonal. That structured solve
+approximates selected linear terms and does not invert the nonlinear Fourier
+convolution. Promotion requires residual- and accuracy-matched iteration,
+wall-time, memory, and VJP evidence on CPU and GPU.
 
 The drive inputs are
 
@@ -456,7 +458,7 @@ history. Keeping every historical generated plot/test/tool blob is incompatible
 with that target.
 
 The source-complete public-ref rehearsal also passes. The refreshed candidate
-maps `main` plus every open PR head through #100, retains all 28 remote tags,
+maps `main` plus every open PR head through #101, retains all 28 remote tags,
 passes
 strict `fsck`, and contains no AI attribution marker. Closed topic heads still
 require a frozen delete/retain map, and no remote history has moved.
@@ -591,6 +593,10 @@ artifact and are not silently discarded.
 
 - Profile compile, geometry/cache setup, RHS, diagnostics, host transfer, I/O,
   and rendering separately.
+- Scan `sample_stride=diagnostics_stride` at 10/25/50 on the same trajectory;
+  compare diagnostic wall/storage cost and stability of IAT/SEM. The user's
+  stride-50 file has median diagnostic spacing 2.31 and only two samples in
+  `t=50--55`, so that interval cannot support an uncertainty estimate.
 - Compare chunk sizes 32/64/128/256 on CPU and each GPU; select the smallest
   interval with <=5% warm-throughput penalty and bounded stop latency.
 - Reuse prepared scans across chunks and optimization evaluations; changing only
@@ -600,6 +606,10 @@ artifact and are not silently discarded.
   chunk plus solver workspace.
 - Sharding claims require speedup >1 on both CPU and GPU at a problem size that
   passes the same physics gates. Otherwise keep serial as the default.
+- Compare existing implicit preconditioners `auto`, `pas`, `hermite-line`, and
+  `hermite-line-coarse` on resolved linear and nonlinear IMEX cases. Report
+  Krylov iterations/residual, compile and warm wall time, peak memory, and VJP
+  parity before changing the diagonal default.
 
 ## Output and user experience
 
@@ -663,7 +673,7 @@ MP4 SHA-256:
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
 | SLIM-1 | P1 | active/review | corrected PR #88 removes 7.70 MB; public-ref rewrite rehearsal passes | freeze closed-head map, publish recovery records, then network-clone gate |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
-| PERF-1 | P2 | active | CPU/GPU chunk/cache/sharding campaign | accuracy-matched wall/memory results |
+| PERF-1 | P2 | active/review | existing SOLVAX line preconditioners; PR #101 corrects their diagonal-factor description | matched residual/iteration/wall/memory/VJP comparison before any default change |
 
 ## Reproducibility records
 

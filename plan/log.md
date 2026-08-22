@@ -596,6 +596,13 @@
   experiment is a frozen-linear banded preconditioner: measure discarded-term
   norm, Krylov iterations, residual, CPU/GPU wall and memory, and transpose-VJP
   parity before adding a SOLVAX dependency or changing the production solver.
+- A deeper implicit-solver pass corrected that last sentence: GKX already
+  depends on SOLVAX and calls its backend-aware batched tridiagonal solve from
+  `hermite-line` and linked/coarse GMRES preconditioners. The default `auto`
+  alias selects the diagonal `full` factor, and existing direct tests largely
+  check shape/finite output. Do not add another solver path. Benchmark the
+  existing `auto`/`pas`/Hermite-line choices on matched residual, iterations,
+  compile/warm wall, memory, and VJP on CPU/GPU before changing the default.
 - The first clean-source holdout completed on the frozen `f7da8c49` checkout:
   QHS `64x160x48`, seed 22 reached exact `t=250` in 2,906.9 s. Over
   `t=150--250`, `Q=6.5083 +/- 0.0937` (1.44% corrected SEM), and Q/Wphi/Wg
@@ -630,3 +637,27 @@
   bytes, and current-tree archive 5,363,108 bytes. Strict `fsck` and the
   AI-attribution scan pass. The decimal size margin is only 39,906 bytes, and
   no public ref moves before reviewed prerequisites and a real GitHub clone.
+- PR #91 commit `4ef05fb9` implements the campaign JSON deduplication. A
+  requested NPZ is now addressed by schema, path, bytes, and streaming SHA-256;
+  JSON-only output retains inline samples. On the clean QHS artifact the
+  companion JSON falls from 98,879 to 2,128 bytes (97.8%). Fifty-five focused
+  artifact/gradient tests, Ruff, and diff checks pass; `src/gkx` is unchanged,
+  so the running source-pinned continuations keep exact solver-tree parity.
+- PR #85 commit `87f69a9d` removes a stale promise from the shipped shorthand
+  deck: it now explicitly sets `run_to = "saturation"` and names `t_max` as the
+  hard cap, matching the runtime users already execute. The default-deck,
+  shorthand, and three release `run_to` audit tests pass. Stride 50 remains
+  unchanged pending a measured 10/25/50 diagnostic-cost and IAT-stability scan.
+- Opened PR #101 after tracing the implicit factor construction instead of
+  copying its prose description. The `diag` factor contains damping and the
+  curvature/grad-B diagonal; the mirror stencil is off-diagonal and was never
+  included in that factor. The one-line documentation correction passes strict
+  Sphinx and leaves all solver defaults and performance claims unchanged.
+- Replayed PR #91 commit `4ef05fb9`, PR #85 commit `87f69a9d`, and PR #101 onto
+  the private public-ref rehearsal with exact stable patch IDs. Immediately
+  before this roadmap commit, a fresh no-alternates clone advertises all 23
+  heads and 28 tags, with 3,462 commits and 17,610 objects. Its pack is
+  9,137,778 bytes, complete `.git` is 9,965,379 logical bytes, and the current
+  archive is 5,363,108 bytes. Strict `fsck` passes. The remaining decimal margin
+  is 34,621 bytes; no public ref moves before the recovery/ref-map and real
+  GitHub clone gates.

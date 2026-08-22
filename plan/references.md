@@ -201,10 +201,11 @@ conditioning, cost, and held-out transport gates.
 
 - Upstream code: https://github.com/uwplasma/SOLVAX
 
-SOLVAX's banded/block solves are promising where Hermite/Laguerre recurrences
-produce a true banded implicit operator. They do not remove the nonlinear FFT
-cost. A GKX adoption requires an operator-structure derivation, a residual gate,
-and CPU/GPU wall/memory comparison against the present matrix-free route.
+SOLVAX's banded/block solves are useful where Hermite/Laguerre recurrences
+produce a banded implicit approximation. GKX already adopts that capability as
+preconditioning inside matrix-free GMRES; it does not remove the nonlinear FFT
+cost. Changing the default requires an operator-structure audit, a residual
+gate, and CPU/GPU wall/memory comparison against the present diagonal route.
 
 The present GKX operator is not globally block tridiagonal. Streaming couples
 Hermite neighbors only after a spectral or twist-linked parallel derivative;
@@ -212,8 +213,17 @@ the mirror term is a sparse two-dimensional Hermite--Laguerre stencil, and
 curvature/grad-B reaches `m+/-2` and `l+/-1`. Finite-wavelength Coulomb tables
 couple about half of the flattened moment pairs, while the nonlinear
 pseudospectral bracket couples perpendicular Fourier modes after the Laguerre
-grid transform. SOLVAX is therefore a candidate for a frozen-linear
-streaming/mirror/drift preconditioner, batched over the remaining modes, not an
-exact nonlinear solve. Promote it only if an assembled-term audit has small
-discarded-operator norm and preconditioned Krylov reduces iterations, wall
-time, and peak memory on both CPU and GPU; test the transpose/VJP separately.
+grid transform.
+
+GKX already uses SOLVAX's backend-aware `tridiagonal_solve` in its opt-in
+`hermite-line` and linked/coarse implicit preconditioners, batched over the
+remaining modes; `auto` still selects a diagonal factor. Current direct tests
+mostly establish shape and finite output, not iteration or device advantage.
+Treat the existing line solve as a frozen-linear preconditioner, never an exact
+nonlinear solve. Compare `auto`, `pas`, `hermite-line`, and
+`hermite-line-coarse` with matched residuals: Krylov iterations, compile/warm
+wall time, peak memory, and transpose/VJP parity on CPU and GPU. Change the
+default only if resolved linear and nonlinear IMEX cases win without changing
+the solution. PR #101 corrects the performance guide: the `diag` factor contains
+damping plus the curvature/grad-B diagonal, not the off-diagonal mirror
+stencil.
