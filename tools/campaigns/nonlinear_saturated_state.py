@@ -276,7 +276,7 @@ def main() -> int:
         min_window=time_cfg.saturation_min_window,
     )
     report = saturation_stop_decision(
-        times,
+        absolute_times,
         flux,
         guard=wphi,
         free_energy_guard=wg,
