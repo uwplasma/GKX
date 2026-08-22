@@ -625,11 +625,12 @@ its generator (`371,750 -> 151,626` bytes); the six physics tests and a default
 end-to-end regeneration preserve the published roots. The rewrite substitutes
 only Git blob `99a3ff82ac7c9e15e66635e1bb054380decb81ad`.
 
-Immediately before recording this measurement, a fresh no-alternates clone has
-25 heads, 28 tags, 3,424 commits, and 17,446 objects. Its transfer pack is
-8,654,462 bytes; pack plus index is 9,144,022 bytes; the complete `.git` file
-sum is 9,476,998 bytes; and the current archive is 4,888,710 bytes. Closed topic
-heads still require a frozen delete/retain map, and no remote history has moved.
+Immediately before recording this measurement, the candidate through roadmap
+commit `b6085a4a` has 25 heads, 28 tags, 3,432 commits, and 17,508 objects. Its
+transfer pack is 8,746,756 bytes; pack plus index is 9,238,052 bytes; and the
+complete `.git` file sum is 9,571,276 bytes. Strict `fsck`, zero alternates,
+and the reachable-metadata attribution scan pass. Closed topic heads still
+require a frozen delete/retain map, and no remote history has moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
@@ -843,7 +844,7 @@ MP4 SHA-256:
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids; 8,723,042-byte all-live-ref pack passes | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102/#103 remove redundant renders/grids; b608 rehearsal pack is 8,746,756 bytes | freeze closed-head map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |

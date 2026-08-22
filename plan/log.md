@@ -1003,3 +1003,11 @@
   `01f66c52ae2c5e97bb5732570489a4d387c9f4af001f057fbc4f71ff30d9438b`.
   The bound frozen-replay report SHA-256 is
   `c8133f3c1de07c430bbef20c4a19629253fe447ca0031d18f9627f5dcbff4ff3`.
+- Replayed PR #91 through `0de845c2` and roadmap commit `b6085a4a` into the
+  private rewrite rehearsal. The roadmap patch IDs match, and its public and
+  candidate `plan.md` blob and `plan/` tree IDs are exact. A fresh no-local,
+  no-alternates clone now has 25 heads, 28 tags, 3,432 commits, and 17,508
+  objects; pack 8,746,756 bytes, pack plus index 9,238,052 bytes, and complete
+  `.git` file sum 9,571,276 bytes. Strict `fsck` and the reachable AI-metadata
+  scan pass with zero hits. No public ref moved; the recovery bundle and ref
+  map remain intentionally stale until the coordinated freeze.
