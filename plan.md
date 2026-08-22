@@ -663,8 +663,8 @@ and `niter_max=15000`. Both return `ier_flag=0`: baseline/candidate need
 hashes, VMEX commit, residuals, WOUTs, and figure generator. Regenerating the
 3D-LCFS/Boozer panel gives SHA-256 `f4cd87ab`, byte-identical to the tracked
 documentation asset. A matched `96x160x48`, `t=350`, seed-31 production
-pilot is queued behind the QI spatial rung; it is a sizing test, not a transport
-reduction claim.
+pilot is active on GPU 1. It is a one-seed sizing test, not a transport-reduction
+claim.
 
 ### R3 — the plotted stellarator tube is a synthetic torus
 
@@ -1103,7 +1103,7 @@ unverified rather than silently promoted.
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QA shortcut fails unseen Wphi/Wg; QI clean repeat required; QHS active |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | three QA Ny160 means agree; current QI is sizing-only after log collision |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | three QA Ny160 means agree; collided QI sizing stopped and clean repeat is queued after QHS |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | definitions pass; fixed horizon retained until SAT-1 passes |
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |

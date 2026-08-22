@@ -1190,8 +1190,14 @@
   began at 10:06 and the accidental duplicate at 11:47. The younger writer had
   already truncated the shared log. Terminated only PIDs 1144813/1144812/
   1144811; original PID 1141048 remains healthy and is now the sole GPU-1
-  writer. Its eventual trace is sizing-only; log/wall evidence is invalid and
+  writer. Its partial trace is sizing-only; log/wall evidence is invalid and
   acceptance requires a clean repeat.
+- At `t~=274.4/500`, the inadmissible QI sizing run still needed about three
+  GPU-hours. Preserved its partial log, stopped only PID 1141048 and its waiting
+  QA wrapper, and launched the accepted VMEX baseline/candidate seed-31 pair on
+  GPU 1. QHS seed 31 was at `t~=667.5/750`; its wrapper will start the clean,
+  uniquely named QI repeat on GPU 0 after completion. No partial trace is used
+  as physics evidence.
 - PR #91 commit `eebff63b` prevents recurrence with POSIX advisory locks on
   every requested summary/trace/state path. Conflicts fail before simulation
   with owner PID/host; stale files do not retain kernel locks. All 43 focused
