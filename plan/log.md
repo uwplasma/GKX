@@ -852,3 +852,26 @@
   leaves 25 heads, 28 tags, 3,424 commits, and 17,445 objects; a fresh clone has
   an 8,648,640-byte pack and 9,471,172-byte complete `.git`, with strict `fsck`
   and the reachable-attribution scan passing.
+- The source-pinned QA `96x160x48`, seed-31 holdout reached exact `t=250` in
+  5,108.6 s with 756 samples. The current full-suffix selector says saturated
+  (`Q=11.5032 +/- 0.4196`, 3.65%), but the frozen `75+60` rule makes no stop:
+  its final pass island is only `t=220.54--249.67`. A continuation to absolute
+  `t=350` is queued without changing source or thresholds.
+- On the matched `t=155.844--230.844` window, Ny=128 and Ny=160 give
+  `Q=10.9140 +/- 0.4563` and `11.0353 +/- 0.2539`: a 1.11% difference, only
+  0.23 combined SEM, with Q/Wphi/Wg half-window stationarity at both
+  resolutions. Over the terminal `t=175--250` window the difference grows to
+  5.51% (1.14 combined SEM), so this is compatibility, not a convergence
+  declaration.
+- Raising `ky*rho_i|max` from 2.0 to 2.524 lowers the `t=175--250` heat-flux
+  cutoff/peak from 13.87% to 7.55% and last-three-ky mass from 3.04% to 1.45%;
+  outer-six-kx mass stays 0.11%. Phi2 cutoff/peak is 1.12%/1.18%. Thus Ny=160
+  clears the frozen 10% cutoff screen, but time persistence and an independent
+  seed remain open. SHA-256: NPZ
+  `4564fd5f9d50f441623040c9329bf22e498f4d7fbadf4ef25abbf195842ad185`, JSON
+  `05af33be9bf3f4645750c42e32a32db0ab754d3a0c161537c396066c8f6784e5`, log
+  `c1d0fca85be22b465b1d20e41f4cb1cdb0e06ce6152155e19ef98940f88ce49b`.
+- GPU 0 now runs the independent QA Ny=96 seed-31 rung and then the clean QHS
+  Ny=128 exact `t=750` match; GPU 1 runs QI Ny=128 seed 22. Exact-state QI
+  continuation to `t=500` and QA Ny=160 continuation to `t=350` are queued
+  behind those jobs, with unique output names and no artifact overwrite.
