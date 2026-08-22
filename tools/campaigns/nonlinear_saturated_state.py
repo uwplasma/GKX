@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -72,6 +73,34 @@ def _npz_source_provenance(provenance: dict[str, object]) -> dict[str, np.ndarra
         "gkx_repository_root": np.asarray(str(provenance["repository_root"])),
         "gkx_git_commit": np.asarray(str(provenance["git_commit"] or "")),
         "gkx_git_dirty": np.asarray(-1 if dirty is None else int(bool(dirty))),
+    }
+
+
+def _summary_trace_payload(
+    time_axis: np.ndarray,
+    heat_flux: np.ndarray,
+    wphi: np.ndarray,
+    wg: np.ndarray,
+    *,
+    trace_path: Path | None,
+) -> dict[str, object]:
+    """Inline a JSON-only trace or address the requested NPZ by digest."""
+    if trace_path is not None:
+        with trace_path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        return {
+            "trace_artifact": {
+                "schema": "nonlinear_saturation_trace_npz_v1",
+                "path": str(trace_path),
+                "bytes": trace_path.stat().st_size,
+                "sha256": digest,
+            }
+        }
+    return {
+        "trace": [
+            {"t": float(t), "heat_flux": float(q), "Wphi": float(phi), "Wg": float(g)}
+            for t, q, phi, g in zip(time_axis, heat_flux, wphi, wg)
+        ]
     }
 
 
@@ -464,16 +493,12 @@ def main() -> int:
         "wall_seconds": elapsed,
         "samples": int(times.size),
         "report": report,
-        "trace": [
-            {
-                "t": float(t),
-                "heat_flux": float(q),
-                "Wphi": float(phi),
-                "Wg": float(g),
-            }
-            for t, q, phi, g in zip(absolute_times, flux, wphi, wg)
-        ],
     }
+    summary.update(
+        _summary_trace_payload(
+            absolute_times, flux, wphi, wg, trace_path=args.trace_out
+        )
+    )
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(summary, indent=2) + "\n")

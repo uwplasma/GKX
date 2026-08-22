@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -70,6 +71,29 @@ def test_saturation_campaign_requires_and_records_its_checkout_source(
     assert encoded["gkx_git_dirty"].dtype.kind in "iu"
     with pytest.raises(SystemExit, match="PYTHONPATH=src"):
         campaign._campaign_source_provenance(tmp_path / "gkx" / "__init__.py")
+
+
+def test_saturation_campaign_does_not_duplicate_requested_npz_trace(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    values = np.arange(3, dtype=float)
+    trace = tmp_path / "trace.npz"
+    np.savez_compressed(trace, time=values)
+
+    addressed = campaign._summary_trace_payload(
+        values, values + 1, values + 2, values + 3, trace_path=trace
+    )
+    inline = campaign._summary_trace_payload(
+        values, values + 1, values + 2, values + 3, trace_path=None
+    )
+
+    assert "trace" not in addressed
+    assert addressed["trace_artifact"]["bytes"] == trace.stat().st_size
+    assert addressed["trace_artifact"]["sha256"] == hashlib.sha256(
+        trace.read_bytes()
+    ).hexdigest()
+    assert len(inline["trace"]) == 3
 
 
 def _touch_bundle(output: Path) -> None:
