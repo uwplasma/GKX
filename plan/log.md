@@ -794,3 +794,11 @@
   17,413 objects, an 8,860,670-byte pack, and a 9,682,158-byte complete `.git`
   file sum. All 25 selected heads and 28 tags remain strict-`fsck` clean,
   source-neutral where required, and free of reachable AI attribution markers.
+- The remaining largest packed blob was the README turbulence loop. PR #95 now
+  keeps the full six-second interval and both physical views as a 720-pixel,
+  24-frame, 4-fps WebP: 346,234 becomes 224,766 bytes. Against the rendered
+  source frames it has 36.49 dB PSNR and 1.93 mean absolute channel error;
+  direct visual inspection keeps all labels and structures readable, and the
+  full-rate release MP4 remains linked. The 123 release gates and 46 benchmark
+  contracts pass; PR #103 carries the same preview plus six passing x64 Landau
+  physics tests.
