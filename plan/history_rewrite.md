@@ -160,10 +160,15 @@ never suppress broken-image warnings.
 PR #95 implements that selection: retain exactly the 12 README/core-physics
 visuals (2,354,028 bytes), remove 226 reproducible renders (18,170,355 bytes),
 and replace 121 optional RST directives with explicit generated-figure notes.
-Strict Sphinx passes without warning suppression. A fresh single-branch clone
-of the combined rehearsal has one 9.49-MiB pack and a 5.6-MiB source archive.
+Missing optional renders now carry an explicit `regenerate_on_demand` manifest
+action; numeric sidecars stay mandatory and a present regenerated file is still
+hash-checked. Strict Sphinx passes without warning suppression. A fresh
+single-branch clone of the combined rehearsal has one 9,464,119-byte pack
+(9.46 MB, 9.03 MiB) and a 5,883,089-byte source archive (5.88 MB, 5.61 MiB).
 
-The remaining blockers are the final full suite, install/import, examples,
-CPU/GPU checks, strict fsck, remote-ref map, and a real GitHub network clone
-after all reviewed PR heads are replayed. Preserve at least 0.5 MiB of pack
+Repository hygiene, strict Sphinx, sdist/wheel build, installed-wheel import,
+CLI startup, strict `fsck`, and all 2,554 collected x64 tests pass in that fresh
+clone. Remaining blockers are representative examples, CPU/GPU checks, the
+remote-ref map, and a real GitHub network clone after every reviewed PR head is
+replayed. The stricter decimal 10-MB ceiling leaves only 535,881 bytes of pack
 margin; do not add another tracked render without removing equivalent payload.

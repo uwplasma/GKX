@@ -237,8 +237,35 @@
   all 146 release/parallel tests pass without suppressing missing-image
   warnings.
 - A fresh single-branch clone of the combined rewrite rehearsal plus PR #95
-  packs to 9.49 MiB; its source archive is 5.6 MiB. The asset-free full suite
-  subsequently found one generic benchmark-manifest existence loop at 84%.
+  initially packed to 9.49 MB; its source archive was 5.6 MB. The asset-free
+  full suite subsequently found one generic benchmark-manifest existence loop
+  at 84%.
   PR #92 commit `e33813cf` now requires every numeric table while allowing a
   missing render only when its regeneration contract is complete. The full
   suite was restarted; this is validation progress, not rewrite authorization.
+- That restarted suite found the final stale PNG requirement at 95%: the
+  quasilinear promotion guard treated an absent optional plot as failed physics
+  despite a valid numerical sidecar. PR #95 commit `7c68dba2` adds the explicit
+  `regenerate_on_demand` release-manifest state, keeps hash checking for any
+  present render, and makes quasilinear render presence informational. All 137
+  focused release/quasilinear tests and strict Sphinx pass.
+- Replaying the reviewed render and numeric-evidence commits into a fresh
+  source-complete single-branch rehearsal produces one 9,464,119-byte pack and
+  a 5,883,089-byte source archive. Repository hygiene, strict Sphinx, strict
+  `fsck`, sdist/wheel build, installed-wheel import, CLI startup, and all 2,554
+  collected x64 tests pass. No rewrite has been pushed.
+- The Nuhrenberg--Zille QHS `64x96x48`, seed-22 sizing run completed exactly at
+  `t=250` with 528 samples in 1,617.0 s on one RTX A4000. The production window
+  fails at 9.64% corrected relative SEM. Its physical `t=150--250` heat-flux
+  cutoff/peak is 15.6% and last-three-bin/summed-absolute-tail fraction is
+  3.18%; Phi2 gives 10.4% and 2.32%. The trace SHA-256 is
+  `da0a87a17b31fc762de3c89fde033d8f2464c622028953807d09ec81b4021ba4`.
+  The `64x128x48` refinement is running on GPU 0, while the QA `96x128x48`
+  refinement continues on GPU 1. Neither is yet a resolution or transport
+  claim.
+- A line-by-line stop-policy audit found that the standalone autocorrelation
+  campaign still reported `n_eff=n/(1+2 tau/dt)` while the runtime and validated
+  window statistics use `min(n,n dt/(2 tau))`. PR #91 commit `f1ad010e` removes
+  that 41% independent-sample-floor discrepancy and adds a correlated-trace
+  regression; it changes post-processing uncertainty only, not the solver or
+  stop thresholds.

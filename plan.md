@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-21 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#91.
+and open PRs #74 and #81--#95.
 
 ## Rules
 
@@ -167,6 +167,14 @@ over `t=80.3--250` still reports 17.7% corrected relative SEM. `Wphi` and `Wg`
 pass the same half-window stationarity check, but that does not override the
 flux uncertainty. Both runs used shared GPUs and are not performance baselines.
 
+The first QHS sizing run shows the converse failure mode. At `64x96x48` and
+`t=250`, the median-crossing window begins at `t=33.05`, retains the overshoot,
+and fails with `Q=9.108`, 9.64% corrected relative SEM. The direct `t=75--250`
+suffix gives `Q=8.352`, 2.38% corrected relative SEM and passes the Q, Wphi,
+and Wg half-window checks. This does not promote that hand-selected interval;
+it shows why SAT-1 must select and validate a stationary suffix instead of
+averaging every point after the first median crossing.
+
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
 out of 48; the `dt=0.04`, perpendicular 24, and velocity `(6,12)` refinements
@@ -220,9 +228,21 @@ warning threshold must be calibrated against those refinements.
 The fresh `48x48x48` pilot extends the positive retained range from
 `ky*rho=0.476` to `0.714`, but the last four modes still carry 49.7% of the
 late positive-`ky` heat flux and the cutoff mode carries 13.1%. The `32x32x32`
-cutoff mode carries 36.5%. Neither rung is a converged transport calculation;
-continue to `64x64`, then `96x96` if the tail still fails, preserving restarts
-so statistical duration can be extended without repeating spin-up.
+cutoff mode carries 36.5%. At `64x64x48`, the `t=250` run still has 9.68%
+corrected relative SEM and the last three retained `ky` bins carry 51.1% of the
+absolute positive-`ky` flux. At `96x96x48`, the physical `t=150--250` spectrum
+peaks at `ky*rho=1.333`; its `ky*rho=1.476` cutoff is 54.2% of the peak and the
+last three bins carry 14.0%. The outer three `kx` shells carry only about 0.1%,
+so the controlled next QA rung holds `Nx=96`, `Nz=48`, seed, and horizon fixed
+and raises only `Ny` to 128. That run is in progress.
+
+For the first QHS sizing rung (`64x96x48`, `t=150--250`), heat flux peaks at
+`ky*rho=0.333`; the `ky*rho=1.476` cutoff is 15.6% of the peak but the last
+three bins carry only 3.18% of summed absolute positive-`ky` flux. The Phi2
+cutoff is 10.4% and its last three bins carry 2.32%; the outer six signed `kx`
+bins carry 2.14% of heat-flux magnitude. This is close to, but does not pass,
+the conservative cutoff screen. A controlled `64x128x48` run is in progress;
+no QHS resolution claim is made from the single rung.
 
 ### R5 — CI and review governance
 
