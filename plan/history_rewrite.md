@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the nineteen open PR heads (#74 and #81--#98) after the final rewrite.
+- Rebase the twenty open PR heads (#74 and #81--#99) after the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Delete merged topic heads only after their exact old tips appear in the
   published ref map and complete bundle.
@@ -186,20 +186,22 @@ single-branch clone of the combined rehearsal has one 9,464,119-byte pack
 
 Repository hygiene, strict Sphinx, sdist/wheel build, installed-wheel import,
 CLI startup, strict `fsck`, and all 2,554 collected x64 tests pass in that fresh
-clone. GitHub currently advertises 67 branch heads but only 19 open PR heads;
+clone. GitHub currently advertises 68 branch heads but only 20 open PR heads;
 closed heads cannot remain attached to their old object graph under the 10-MB
-contract. A no-alternates rehearsal now maps all 19 open heads: four reviewed
+contract. A no-alternates rehearsal now maps all 20 open heads: four reviewed
 slimming heads already represented in the candidate point at slim `main`, and
-the other fifteen are replayed from their true PR bases. Aggregate patch IDs
+the other sixteen are replayed from their true PR bases. Aggregate patch IDs
 match for every textual patch; PR #90 alone omits a generated PNG that PR #95
 intentionally removes. No replayed head reaches the old `main` object graph.
 
-The refreshed ordinary clone advertises 20 heads (`main` plus the 19 PR heads)
-and 23 tags, with 3,184 reachable commits and 16,981 objects. Its one pack is
-9,042,520 bytes; pack plus index is 9,519,060 bytes, and the current-tree archive
-is 5,408,247 bytes. Strict `fsck` passes. The 14 commits added since the prior
-rehearsal have exact stable patch-ID matches, and the reachable commit metadata
-has no AI attribution marker. This closes the local public-ref size gate, but
+Before the present log-only update, the refreshed ordinary clone advertises 21
+heads (`main` plus the 20 PR heads through #99) and all 28 remote tags, with
+3,436 reachable commits and 17,438 objects. Its one pack is 9,107,008 bytes;
+pack plus index is 9,596,344 bytes, and the current-tree archive is 5,363,108
+bytes. Strict `fsck`
+passes. All 17 recent replayed commits have exact stable patch-ID matches, and
+the reachable commit metadata has no AI attribution marker. This closes the
+local public-ref size gate, but
 not cutover authorization: the frozen remote map, representative CPU/GPU
 examples, published recovery material, and a real GitHub network clone remain.
 The margin forbids another tracked render without removing equivalent payload.

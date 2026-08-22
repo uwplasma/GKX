@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-21 against `main` at `5f3ab32e` (merged PR #80)
-and open PRs #74 and #81--#97.
+and open PRs #74 and #81--#99.
 
 ## Rules
 
@@ -182,14 +182,15 @@ Wphi, and Wg all fail the half-window stationarity test; the `Ny=96` value was
 (heat-flux cutoff/peak 9.91%, last-three-bin mass 1.69%), but a 22.7% moving
 mean is not a resolution result.
 
-The exact continuation to `t=500` gives `Q=6.254` with 1.93% corrected relative
-SEM over `t=250--500`, and all three broad half-window gates pass. That apparent
-acceptance is not persistent: over `t=350--500`, Q changes from 6.580 to 5.994
-and Wg from 145.2 to 134.3, so both fail their half-window gates. The late
-spectrum is stable (heat-flux cutoff/peak about 10%, last-three-bin mass about
-1.7%), separating time-stationarity debt from perpendicular-tail debt. The
-same state is continuing to `t=750`; no QHS transport or runtime-stop claim is
-promoted from `t=500`.
+The exact continuations now reach `t=750`. Over `t=500--750`,
+`Q=6.113 +/- 0.076` with 1.24% corrected relative SEM; Q, Wphi, and Wg pass
+their half-window gates. The independent late suffixes `t=600--750` and
+`t=650--750` also pass all three gates. The transient is nevertheless long:
+the earlier `t=350--500` suffix changes from `Q=6.580` to `5.994` and Wg from
+145.2 to 134.3, so both fail. The `t=600--750` heat-flux cutoff/peak is 9.43%
+and the last three positive-ky bins carry 1.78% of magnitude. This establishes
+a late Ny=128 state; it does not validate the causal stop rule or perpendicular
+convergence. Ny=160 is the controlled next QHS rung.
 
 A causal stationary-suffix shortcut also fails on this trace. Scanning at most
 32 suffixes and requiring 5% corrected SEM, `10 tau_ac`, half-window agreement,
@@ -207,8 +208,14 @@ fixed audit suffix `t=150--250`, `Q=11.006` with 2.21% corrected relative SEM;
 Q, Wphi, and Wg pass the half-window checks. The matched `Ny=96` value is
 `Q=10.860`, a 1.35% change. This is transport convergence evidence, not yet a
 spectral pass: 16.3% of the `Ny=128` heat-flux spectral magnitude lies above
-the old cutoff and the new cutoff remains 18.2% of the peak. `Ny=160` is
-running with every other control fixed.
+the old cutoff and the new cutoff remains 18.2% of the peak. The matched
+`96x160x48` seed-22 rung completed in 5,327.5 s. Its fixed `t=150--250` suffix
+has `Q=10.643 +/- 0.278` (2.61% corrected relative SEM), with Q/Wphi/Wg all
+stationary. The change from Ny=128 is -3.30%, only 0.98 combined SEM. Its
+heat-flux cutoff/peak falls to 7.59%, the last three bins carry 1.50%, and the
+outer six signed kx shells carry 0.12%. This is a conditional single-seed
+resolution pass. Independent seed 31 is running; no replicated transport claim
+is promoted yet.
 
 PR #89 applies the Oberparleiter final-drift gate to each raw trajectory rather
 than to a signed ensemble mean. The nominal campaign has 44 stationary traces
@@ -271,20 +278,28 @@ last three bins carry 14.0%. The outer three `kx` shells carry only about 0.1%,
 so the controlled next QA rung holds `Nx=96`, `Nz=48`, seed, and horizon fixed
 and raises only `Ny`. At `Ny=128`, the late mean changes by 1.35%, but the
 new `ky*rho=2.0` endpoint is still 18.2% of the heat-flux peak and the last
-three bins carry 2.96% of summed absolute flux. The `Ny=160` rung is running.
+three bins carry 2.96% of summed absolute flux. At `Ny=160`, the endpoint is
+7.59%, the last three bins carry 1.50%, and the late mean differs from Ny=128
+by -3.30% (0.98 combined SEM). Seed 31 is the independent replication gate.
 
 For the first QHS sizing rung (`64x96x48`, `t=150--250`), heat flux peaks at
 `ky*rho=0.333`; the `ky*rho=1.476` cutoff is 15.6% of the peak but the last
 three bins carry only 3.18% of summed absolute positive-`ky` flux. The Phi2
 cutoff is 10.4% and its last three bins carry 2.32%; the outer six signed `kx`
 bins carry 2.14% of heat-flux magnitude. This is close to, but does not pass,
-the conservative cutoff screen. A controlled `64x128x48` run is in progress;
-no QHS resolution claim is made from the single rung.
+the conservative cutoff screen. The controlled `64x128x48` late state now
+passes narrowly at 9.43% cutoff/peak and 1.78% last-three-bin mass. Its heat
+flux is about 27% below Ny=96, so a controlled Ny=160 rung is required before
+a QHS resolution claim.
 
 ### R5 — CI and review governance
 
-Main's only observed CI failure was a mypy error introduced by #80. PR #81
-fixes it with a one-line source-neutral change. Branch protection nominally
+Main's only observed source failure was a mypy error introduced by #80. PR #81
+fixes it with a one-line source-neutral change. The PR #97 nonlinear shard also
+showed a runner-budget failure after all tests printed 100%: its clean rerun
+passed in 14m51s, nine seconds below the old 15-minute limit. PR #81 therefore
+gives only `nonlinear-core` 20 minutes while every other quick shard retains 15.
+Branch protection nominally
 asks for one review, but every merged PR reports `REVIEW_REQUIRED`, no checks are
 required, force pushes are allowed, and administrator bypass was used. Require
 the aggregate CI check and one non-author approval after the recovery rewrite.
@@ -325,11 +340,11 @@ sub-10-MiB clone target while preserving every commit and all core source
 history. Keeping every historical generated plot/test/tool blob is incompatible
 with that target.
 
-The source-complete public-ref rehearsal also passes. Replaying all 18 open PR
-heads yields an ordinary 19-head clone with a 9,506,509-byte pack and a
-5,884,245-byte current-tree archive; strict `fsck` passes and no replayed head
-reaches old `main`. Closed topic heads still require a frozen delete/retain map,
-and no remote history has moved.
+The source-complete public-ref rehearsal also passes. The refreshed candidate
+maps `main` plus every open PR head through #99, retains all 28 remote tags,
+passes
+strict `fsck`, and contains no AI attribution marker. Closed topic heads still
+require a frozen delete/retain map, and no remote history has moved.
 
 The verified backup, exact retention contract, identity policy, blockers, and
 coordinated cutover sequence are in `plan/history_rewrite.md`.
@@ -373,7 +388,12 @@ follow only after import/coverage evidence identifies another coherent cut.
 PR #98 is the next measured cut: artifact I/O now imports the canonical
 dealiased spectral layout instead of carrying three private copies. It removes
 17 installed lines (`96,465 -> 96,448`) with 45 restart/layout tests, Ruff,
-mypy, and the architecture gate passing locally.
+mypy, and the architecture gate passing locally. PR #99 builds on #98 and
+removes the duplicate growth-fit validation/window/least-squares path. Exact
+legacy parity holds for complex64/complex128, nonfinite filtering, and all four
+windows; 52 diagnostic tests, 201 benchmark/runtime tests, Ruff, mypy, and the
+architecture gate pass. The stacked source is 96,391 lines, 74 below baseline,
+and a 10,000-point fit microbenchmark is unchanged (478 us versus 476 us).
 
 Before the coordinated force push:
 
@@ -390,10 +410,12 @@ Before the coordinated force push:
 Do not force-push until those checks and the recovery bundle are reviewable.
 
 PR #95 now re-encodes the six-second README loop from its primary release MP4:
-`828,066 -> 346,234` bytes at 900 px and 5 fps. The refreshed 20-head rehearsal
-(`main` plus all 19 open PRs through #98) has a 9,042,520-byte pack,
-9,519,060 bytes including its index, and a 5,408,247-byte current-tree archive.
-Strict `fsck`, stable patch IDs for all 14 new replayed commits, exact live-head
+`828,066 -> 346,234` bytes at 900 px and 5 fps. Before this log-only update, the
+refreshed 21-head rehearsal (`main` plus all 20 open PRs through #99) retains
+all 28 remote tags and has a 9,107,008-byte pack, 9,596,344 bytes including its
+index, and a 5,363,108-byte current-tree archive. It has 3,436 commits and
+17,438 reachable objects. Strict
+`fsck`, stable patch IDs for all 17 recent replayed commits, exact live-head
 parity, and the AI-attribution scan pass. This is still not force-push
 authorization; recovery publication and the coordinated cutover gates remain.
 
@@ -404,7 +426,7 @@ level fails a gate.
 
 | Axis | Pilot | Production | Refinement |
 | --- | --- | --- | --- |
-| perpendicular | 32x32 | 64x64 | 96x96, then 128 only if tail fails |
+| perpendicular | 32x32 | 64x64 | 96x96, then Ny=128/160 while tails fail |
 | parallel | Nz=24 | Nz=32 | Nz=48/64 |
 | velocity | `(Nl,Nm)=(2,4)` | `(4,8)` | `(6,12)` and `(8,16)` as needed |
 | timestep | nominal adaptive | independent `dt_max`/CFL | half-step matched run |
@@ -479,7 +501,12 @@ explicit restart alternative: load the saturation campaign's exact state,
 continue with the deck's production explicit method and CFL policy, retain
 absolute time and source verdict, then render off-device. Existing
 scalar/spectral NetCDF output still cannot reconstruct field phases; a movie
-without a saved state remains impossible rather than fabricated.
+without a saved state remains impossible rather than fabricated. The first
+production acceptance used the exact QA `96x160x48`, `(Nl,Nm)=(4,8)`, `t=250`
+state: an RTX A4000 wrote 30 cut pairs in 49.1 s (2,567,592-byte NPZ), and CPU
+rendering produced a six-second, 900x472, 5-fps H.264 movie in 296,235 bytes.
+A deck with `(Nl,Nm)=(24,12)` failed closed before integration; state and movie
+velocity grids must match explicitly.
 
 ## Work queue
 

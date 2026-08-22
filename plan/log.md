@@ -391,3 +391,40 @@
   index, and a 5,408,247-byte source archive. Strict `fsck`, 14 stable patch-ID
   comparisons, and the commit-metadata AI-marker scan pass. No public ref was
   changed.
+- Opened draft PR #99 on #98. It delegates the second growth-fit input and
+  least-squares path to the canonical window fit, preserving exact legacy
+  outputs for complex64/complex128, nonfinite filtering, and four window
+  modes. The stacked source is 96,391 lines (`-74`); 52 diagnostic tests, 201
+  benchmark/runtime tests, Ruff, mypy, and the architecture gate pass. A
+  10,000-point fit is unchanged within noise (478 us before, 476 us after).
+- PR #97's clean rerun is green. `nonlinear-core` passed in 14m51s, only nine
+  seconds below its old timeout, and the aggregate `ci-required` gate passed.
+  This confirms runner jitter/capacity as the failure mode and supports PR
+  #81's targeted 20-minute budget.
+- The QHS seed-22 continuation reached absolute `t=750` in a third 2,122.5-s
+  segment. Over `t=500--750`, `Q=6.113 +/- 0.076` (1.24% corrected SEM), and
+  Q/Wphi/Wg pass half-window stationarity; `t=600--750` and `650--750` pass as
+  independent late suffix checks. The late cutoff/peak is 9.43% and the last
+  three positive-ky bins carry 1.78%. The causal policy still falsely accepts
+  near `t=56`, and Ny=96 differs by about 27%, so this is a late-state result,
+  not a stop-policy or resolution promotion.
+- The matched QA `96x160x48`, seed-22 run completed at `t=250` in 5,327.5 s.
+  On the fixed `t=150--250` suffix, `Q=10.643 +/- 0.278`, Q/Wphi/Wg are
+  stationary, the Ny=128 difference is -3.30% (0.98 combined SEM), the cutoff
+  is 7.59%, and the last three bins carry 1.50%. Seed 31 is running as the
+  independent replication; no multi-seed claim is made.
+- PR #97 now caps H.264 output at 900 px. The exact QA Ny=160 production state
+  produced 30 physical cut pairs on an RTX A4000 in 49.1 s; the snapshot is
+  2,567,592 bytes and the off-device six-second movie is 296,235 bytes. An
+  attempted `(Nl,Nm)=(24,12)` deck against the `(4,8)` saved state failed before
+  integration, as required; the corrected exact-grid run passed all 49 plotting
+  tests and its provenance hashes are recorded in the PR.
+- Added PR #99 to the non-destructive public-ref rehearsal. Before this log
+  commit, all 21 retained heads (`main` plus 20 open PRs) and all 28 remote tags
+  fit in a 9,107,008-byte pack (9,596,344 with index); the archive is 5,363,108
+  bytes, with 3,436 commits and 17,438 objects.
+  The final parity audit caught five tags omitted by the earlier refresh
+  (`archive/pre-gkx2-condescending-buck`, three `baseline-*` tags, and
+  `v0.0.1`) and restored their rewritten targets before this measurement.
+  Strict `fsck`, exact patch IDs for all 17 recent commits, and the AI-marker
+  scan pass. No public ref moved.
