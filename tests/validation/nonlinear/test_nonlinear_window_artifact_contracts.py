@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from support.paths import REPO_ROOT, load_release_tool
+from support.paths import REPO_ROOT, load_release_tool, load_tool_script
 from gkx.diagnostics.transport_windows import (
     NonlinearWindowConvergenceConfig,
     nonlinear_window_convergence_report,
@@ -22,6 +22,33 @@ output_target = load_release_tool("check_nonlinear_transport_gates")
 window_ensemble = load_release_tool("check_nonlinear_transport_gates")
 window_readiness = window_ensemble
 FLOW_SHEAR_GATE = ROOT / "docs" / "_static" / "flow_shear_fixed_step_response_gate.json"
+
+
+def test_saturation_campaign_trace_omits_dealiased_zero_modes() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    full_kx = np.arange(12, dtype=float)
+    full_ky = np.arange(12, dtype=float)
+    resolved = type(
+        "Resolved",
+        (),
+        {
+            "Phi2_kxt": np.arange(24).reshape(2, 12),
+            "HeatFlux_kxst": np.arange(48).reshape(2, 2, 12),
+            "Phi2_kyt": np.arange(24).reshape(2, 12),
+            "HeatFlux_kyst": np.arange(48).reshape(2, 2, 12),
+        },
+    )()
+
+    payload = campaign._trace_spectral_payload(
+        resolved, kx_full=full_kx, ky_full=full_ky
+    )
+
+    assert payload["kx"].shape == (7,)
+    assert payload["ky"].shape == (4,)
+    assert payload["Phi2_kxt"].shape == (2, 7)
+    assert payload["HeatFlux_kxst"].shape == (2, 2, 7)
+    assert payload["Phi2_kyt"].shape == (2, 4)
+    assert payload["HeatFlux_kyst"].shape == (2, 2, 4)
 
 
 def _touch_bundle(output: Path) -> None:

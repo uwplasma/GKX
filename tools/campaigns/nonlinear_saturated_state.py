@@ -32,6 +32,35 @@ from pathlib import Path
 import numpy as np
 
 
+def _trace_spectral_payload(resolved, *, kx_full, ky_full) -> dict[str, np.ndarray]:
+    """Return resolved diagnostics on GKX's physical dealiased output axes."""
+    from gkx.artifacts.spectral_layout import (
+        _condense_kx_for_output,
+        _condense_ky_for_output,
+        _dealiased_kx_values,
+        _dealiased_ky_values,
+    )
+
+    kx = _dealiased_kx_values(np.asarray(kx_full))
+    ky = _dealiased_ky_values(np.asarray(ky_full))
+    payload = {"kx": kx, "ky": ky}
+    if resolved is None:
+        return payload
+    for name in ("Phi2_kxt", "HeatFlux_kxst"):
+        value = getattr(resolved, name)
+        if value is not None:
+            payload[name] = _condense_kx_for_output(
+                value, full_nx=np.size(kx_full), active_nx=kx.size
+            )
+    for name in ("Phi2_kyt", "HeatFlux_kyst"):
+        value = getattr(resolved, name)
+        if value is not None:
+            payload[name] = _condense_ky_for_output(
+                value, full_ny=np.size(ky_full), active_ny=ky.size
+            )
+    return payload
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -146,7 +175,10 @@ def main() -> int:
     if geometry_override:
         runtime = dataclasses.replace(
             runtime,
-            geometry=dataclasses.replace(runtime.geometry, **geometry_override),
+            geometry=dataclasses.replace(
+                runtime.geometry,
+                **geometry_override,  # type: ignore[arg-type]
+            ),
         )
     if args.seed is not None:
         runtime = dataclasses.replace(
@@ -278,8 +310,6 @@ def main() -> int:
         payload = {
             "time": absolute_times,
             "dt": steps_dt,
-            "kx": np.asarray(spectral_grid.kx),
-            "ky": np.asarray(spectral_grid.ky),
             "heat_flux": flux,
             "Wphi": wphi,
             "Wg": wg,
@@ -288,19 +318,15 @@ def main() -> int:
             "elapsed_seconds": np.asarray(elapsed),
             "previous_t_end": np.asarray(previous_t_end),
         }
-        resolved = diagnostics.resolved
-        if resolved is not None:
-            for name in (
-                "Phi2_kxt",
-                "Phi2_kyt",
-                "HeatFlux_kxst",
-                "HeatFlux_kyst",
-            ):
-                value = getattr(resolved, name)
-                if value is not None:
-                    payload[name] = np.asarray(value)
+        payload.update(
+            _trace_spectral_payload(
+                diagnostics.resolved,
+                kx_full=spectral_grid.kx,
+                ky_full=spectral_grid.ky,
+            )
+        )
         args.trace_out.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(args.trace_out, **payload)
+        np.savez_compressed(args.trace_out, **payload)  # type: ignore[arg-type]
         print(f"trace written: {args.trace_out}", flush=True)
 
     if args.state_out is not None and result.state is not None:
