@@ -184,3 +184,10 @@ gate, but not cutover authorization: the frozen remote map, representative
 CPU/GPU examples, published recovery material, and a real GitHub network clone
 remain. The margin forbids another tracked render without removing equivalent
 payload.
+
+PR #95 subsequently replaced the README loop from the primary 120-frame MP4,
+keeping the same six-second interval as 30 WebP frames at 900 px: 828,066 bytes
+became 346,234. Applying that exact blob substitution to the rehearsal removes
+the old blob completely and produces a 9,030,044-byte pack, 473,852-byte index,
+5,363,108-byte source archive, and strict `fsck`. The final replay must still
+refresh every live head; these figures establish margin, not cutover identity.

@@ -330,3 +330,9 @@
   explicit: the current adiabatic-electron `ky*rho_i ~ 2` refinement is an
   ion-scale tail test, not kinetic-electron/ETG convergence. SSA remains a
   reviewer diagnostic for avalanches, not a production stopping dependency.
+- PR #95 commit `a4866b23` re-encodes the README turbulence loop from its primary
+  release MP4 at 900 px and 5 fps, preserving the six-second interval while
+  reducing 828,066 to 346,234 bytes. Strict Sphinx, 142 release/parallel tests,
+  and 46 benchmark tests on the synthetic advanced base pass. Replacing it in
+  the prior 19-head rehearsal gives a 9,030,044-byte pack and 9,503,896 bytes
+  with its index; strict `fsck` passes and the old movie blob is unreachable.

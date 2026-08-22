@@ -366,6 +366,13 @@ Before the coordinated force push:
 
 Do not force-push until those checks and the recovery bundle are reviewable.
 
+PR #95 now re-encodes the six-second README loop from its primary release MP4:
+`828,066 -> 346,234` bytes at 900 px and 5 fps. Substituting that blob in the
+19-head rehearsal lowers its pack from 9,506,509 to 9,030,044 bytes and
+pack-plus-index to 9,503,896 bytes. This creates useful margin, but it is not
+the final cutover measurement because PR #91, PR #95, and roadmap heads have
+advanced since the preceding public-ref replay.
+
 ## Validation campaign
 
 Run cheap pilots only after R1--R4 are fixed. Escalate a case when the cheaper
