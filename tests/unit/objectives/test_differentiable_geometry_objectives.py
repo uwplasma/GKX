@@ -405,6 +405,43 @@ def test_flux_tube_geometry_from_vmec_boozer_state_wraps_in_memory_bridge(
     assert calls[0]["reference_b"] == 2.3
 
 
+def test_vmec_boozer_geometry_facade_retains_signature_and_finalizer_hook(
+    monkeypatch,
+) -> None:
+    import inspect
+
+    mapping = _sample_mapping()
+    finalized: list[tuple[object, str, bool]] = []
+
+    monkeypatch.setattr(
+        diff_geom,
+        "vmex_boozer_equal_arc_core_profiles_from_state",
+        lambda *_args, **_kwargs: mapping,
+    )
+
+    def fake_finalize(value, *, source_model, validate_finite):  # noqa: ANN001, ANN202
+        finalized.append((value, source_model, validate_finite))
+        return "geometry"
+
+    monkeypatch.setattr(diff_geom, "flux_tube_geometry_from_mapping", fake_finalize)
+    result = diff_geom.flux_tube_geometry_from_vmec_boozer_state(
+        "state",
+        "runtime",
+        "input",
+        "wout",
+        source_model="test-source",
+        validate_finite=False,
+    )
+
+    assert result == "geometry"
+    assert finalized == [(mapping, "test-source", False)]
+    assert inspect.signature(diff_geom.flux_tube_geometry_from_vmec_boozer_state) == (
+        inspect.signature(
+            vmec_boozer_core.flux_tube_geometry_from_vmec_boozer_state
+        )
+    )
+
+
 def test_flux_tube_geometry_from_mapping_rejects_bad_contracts() -> None:
     bad = _sample_mapping()
     bad.pop("bmag")

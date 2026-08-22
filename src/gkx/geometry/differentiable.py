@@ -57,7 +57,6 @@ from gkx.geometry.sensitivity import (
 )
 
 
-_VMEC_BOOZER_PARITY_MIN_MODE_COUNT = 21
 _DEFAULT_DISCOVER_DIFFERENTIABLE_GEOMETRY_BACKENDS = (
     discover_differentiable_geometry_backends
 )
@@ -219,55 +218,15 @@ def vmex_boozer_equal_arc_core_profiles_from_state(
     )
 
 
-def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
-    state: Any,
-    runtime: Any,
-    inp: Any,
-    wout: Any,
-    *,
-    surface_index: int | None = None,
-    torflux: float | None = None,
-    alpha: float = 0.0,
-    ntheta: int = 32,
-    mboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
-    nboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
-    jit: bool = False,
-    surface_stencil_width: int | None = None,
-    reference_length: float | None = None,
-    reference_b: float | None = None,
-    source_model: str = "mode21_vmec_boozer_state",
-    validate_finite: bool = True,
+@wraps(_vmec_boozer_core.flux_tube_geometry_from_vmec_boozer_state)
+def flux_tube_geometry_from_vmec_boozer_state(
+    *args: Any, **kwargs: Any
 ) -> FluxTubeGeometryData:
-    """Build solver-ready geometry directly from a solved ``vmex`` state.
+    """Build solver geometry through the façade's patchable mapping hooks."""
 
-    This is the production-facing in-memory bridge for differentiable
-    optimization workflows. It keeps the path inside JAX-compatible objects:
-
-    ``SpectralState -> boozer_input_tables -> booz_xform_jax ->
-    FluxTubeGeometryData``.
-
-    Runtime VMEC file generation can still use the NetCDF/EIK route, but
-    differentiable stellarator optimization should call this function or a
-    higher-level objective wrapper around it so gradients never pass through
-    filesystem artifacts.
-    """
-
-    mapping = vmex_boozer_equal_arc_core_profiles_from_state(
-        state,
-        runtime,
-        inp,
-        wout,
-        surface_index=surface_index,
-        torflux=torflux,
-        alpha=alpha,
-        ntheta=ntheta,
-        mboz=mboz,
-        nboz=nboz,
-        jit=jit,
-        surface_stencil_width=surface_stencil_width,
-        reference_length=reference_length,
-        reference_b=reference_b,
-    )
+    source_model = kwargs.pop("source_model", "mode21_vmec_boozer_state")
+    validate_finite = kwargs.pop("validate_finite", True)
+    mapping = vmex_boozer_equal_arc_core_profiles_from_state(*args, **kwargs)
     return flux_tube_geometry_from_mapping(
         mapping,
         source_model=source_model,
