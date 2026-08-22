@@ -136,7 +136,8 @@ def potential_real_space(state, cache, params, cfg) -> np.ndarray:
 
 
 def render_frame(
-    phi: np.ndarray,
+    phi_xy: np.ndarray,
+    phi_yz: np.ndarray,
     geometry,
     *,
     output: Path,
@@ -147,21 +148,23 @@ def render_frame(
 ) -> None:
     """Draw one frame: perpendicular cut plus the field-aligned tube."""
 
-    nz = phi.shape[2]
-
     with figure_style():
         fig = plt.figure(figsize=(11.6, 5.0))
         grid = fig.add_gridspec(1, 2, width_ratios=(1.0, 1.25), wspace=0.18)
 
         # ---- perpendicular cut -------------------------------------------
         ax = fig.add_subplot(grid[0, 0])
-        snapshots.draw_phi_xy_cut(ax, phi[:, :, nz // 2], scale=scale, extent=extent)
+        snapshots.draw_phi_xy_cut(ax, phi_xy, scale=scale, extent=extent)
         ax.set_title("Perpendicular cut at the outboard midplane")
 
         # ---- field-aligned tube -------------------------------------------
         ax3d = fig.add_subplot(grid[0, 1], projection="3d")
         snapshots.draw_flux_tube_3d(
-            ax3d, phi, geometry, scale=scale, azim=(-60.0 + time * 2.0) % 360.0
+            ax3d,
+            phi_yz[None, :, :],
+            geometry,
+            scale=scale,
+            azim=(-60.0 + time * 2.0) % 360.0,
         )
         ax3d.set_title(r"Flux tube along $\mathbf{B}$", y=0.94)
 
@@ -308,8 +311,10 @@ def run(
         # Compute-only pass. Rendering is matplotlib on the CPU and takes far
         # longer than the physics, so holding a GPU allocation through it wastes
         # a shared device -- measured 0% utilization against 12.9 GB reserved.
-        # Dump the potential and exit; render anywhere afterwards.
-        frames_out = []
+        # Store only the xy and yz cuts the renderer consumes, then release the
+        # GPU. A 96x96x48 frame is 32 times smaller in this representation.
+        xy_frames = []
+        yz_frames = []
         for index in range(frames):
             result = integrate_nonlinear_cached(
                 state,
@@ -324,7 +329,10 @@ def run(
             state = project_state(result[0] if isinstance(result, tuple) else result)
             phi = potential_real_space(state, cache, params, cfg)
             _check_healthy(phi, f"frame {index + 1}", ceiling)
-            frames_out.append(phi.astype(np.float32))
+            phi_xy = phi[:, :, phi.shape[2] // 2]
+            phi_yz = phi[phi.shape[0] // 2]
+            xy_frames.append(phi_xy.astype(np.float32))
+            yz_frames.append(phi_yz.astype(np.float32))
             print(
                 f"frame {index + 1}/{frames}  max|phi| = {np.abs(phi).max():.4e}",
                 flush=True,
@@ -332,13 +340,21 @@ def run(
         snapshots.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
             snapshots,
-            phi=np.stack(frames_out),
+            phi_xy=np.stack(xy_frames),
+            phi_yz=np.stack(yz_frames),
             times=(spinup_steps + np.arange(1, frames + 1) * steps_per_frame) * step,
             label=config.stem.replace("_", " "),
             q=float(getattr(geometry, "q", 1.4) or 1.4),
             epsilon=float(getattr(geometry, "epsilon", 0.18) or 0.18),
             major_radius=float(getattr(geometry, "R0", 3.0) or 3.0),
             nfp=int(getattr(geometry, "nfp", 1) or 1),
+            cylindrical_R_profile=_geometry_profile(geometry, "cylindrical_R_profile"),
+            cylindrical_Z_profile=_geometry_profile(geometry, "cylindrical_Z_profile"),
+            toroidal_angle_profile=_geometry_profile(geometry, "toroidal_angle_profile"),
+            extent=np.array(
+                [2.0 * np.pi * float(grid.x0), 2.0 * np.pi * float(grid.y0)]
+            ),
+            snapshot_schema=np.array(2, dtype=np.int32),
             resolution=np.array(
                 [grid.kx.size, grid.ky.size, grid.z.size, nl, nm], dtype=np.int32
             ),
@@ -367,14 +383,17 @@ def run(
         state = project_state(result[0] if isinstance(result, tuple) else result)
         phi = potential_real_space(state, cache, params, cfg)
         _check_healthy(phi, f"frame {index + 1}", ceiling)
+        phi_xy = phi[:, :, phi.shape[2] // 2]
+        phi_yz = phi[phi.shape[0] // 2]
 
-        magnitude = float(np.abs(phi).max())
+        magnitude = max(float(np.abs(phi_xy).max()), float(np.abs(phi_yz).max()))
         if scale is None or index < frames // 4:
             scale = max(magnitude, 1e-12)
 
         frame_path = frame_dir / f"frame_{index:04d}.png"
         render_frame(
-            phi,
+            phi_xy,
+            phi_yz,
             geometry,
             output=frame_path,
             time=(index + 1) * steps_per_frame * step,
@@ -388,14 +407,38 @@ def run(
     return _encode(frame_dir, written, output, fps, frames_only, keep_frames)
 
 
+def _geometry_profile(geometry, name: str) -> np.ndarray:
+    value = getattr(geometry, name, None)
+    return np.empty(0, dtype=float) if value is None else np.asarray(value, dtype=float)
+
+
 class _SnapshotGeometry:
     """Minimal geometry stand-in reconstructed from a snapshot file."""
 
-    def __init__(self, q: float, epsilon: float, major_radius: float, nfp: int) -> None:
+    def __init__(
+        self,
+        q: float,
+        epsilon: float,
+        major_radius: float,
+        nfp: int,
+        cylindrical_R_profile: np.ndarray | None = None,
+        cylindrical_Z_profile: np.ndarray | None = None,
+        toroidal_angle_profile: np.ndarray | None = None,
+    ) -> None:
         self.q = q
         self.epsilon = epsilon
         self.R0 = major_radius
         self.nfp = nfp
+        self.cylindrical_R_profile = cylindrical_R_profile
+        self.cylindrical_Z_profile = cylindrical_Z_profile
+        self.toroidal_angle_profile = toroidal_angle_profile
+
+
+def _snapshot_profile(data, name: str) -> np.ndarray | None:
+    if name not in data:
+        return None
+    values = np.asarray(data[name], dtype=float)
+    return values if values.size else None
 
 
 def render_snapshots(
@@ -403,38 +446,56 @@ def render_snapshots(
 ) -> int:
     """Render frames from a snapshot file written by the compute-only pass."""
 
-    data = np.load(snapshots, allow_pickle=False)
-    phi_series = data["phi"]
-    times = data["times"]
-    label = str(data["label"])
-    geometry = _SnapshotGeometry(
-        float(data["q"]),
-        float(data["epsilon"]),
-        float(data["major_radius"]),
-        int(data["nfp"]),
-    )
+    with np.load(snapshots, allow_pickle=False) as data:
+        if "phi_xy" in data and "phi_yz" in data:
+            phi_xy_series = data["phi_xy"]
+            phi_yz_series = data["phi_yz"]
+        else:
+            phi_series = data["phi"]
+            phi_xy_series = phi_series[:, :, :, phi_series.shape[3] // 2]
+            phi_yz_series = phi_series[:, phi_series.shape[1] // 2, :, :]
+        times = data["times"]
+        label = str(data["label"])
+        extent = tuple(data["extent"]) if "extent" in data else None
+        geometry = _SnapshotGeometry(
+            float(data["q"]),
+            float(data["epsilon"]),
+            float(data["major_radius"]),
+            int(data["nfp"]),
+            _snapshot_profile(data, "cylindrical_R_profile"),
+            _snapshot_profile(data, "cylindrical_Z_profile"),
+            _snapshot_profile(data, "toroidal_angle_profile"),
+        )
 
     frame_dir = output.parent / f"{output.stem}_frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
 
     # Lock the colour scale on the first quarter, once, so the movie does not
     # silently renormalize while the amplitude is still growing.
-    quarter = max(len(phi_series) // 4, 1)
-    scale = max(float(np.abs(phi_series[:quarter]).max()), 1e-12)
+    quarter = max(len(phi_xy_series) // 4, 1)
+    scale = max(
+        float(np.abs(phi_xy_series[:quarter]).max()),
+        float(np.abs(phi_yz_series[:quarter]).max()),
+        1e-12,
+    )
 
     written: list[Path] = []
-    for index, (phi, time) in enumerate(zip(phi_series, times)):
+    for index, (phi_xy, phi_yz, time) in enumerate(
+        zip(phi_xy_series, phi_yz_series, times)
+    ):
         frame_path = frame_dir / f"frame_{index:04d}.png"
         render_frame(
-            np.asarray(phi, dtype=float),
+            np.asarray(phi_xy, dtype=float),
+            np.asarray(phi_yz, dtype=float),
             geometry,
             output=frame_path,
             time=float(time),
             scale=scale,
             label=label,
+            extent=extent,
         )
         written.append(frame_path)
-        print(f"rendered {index + 1}/{len(phi_series)}", flush=True)
+        print(f"rendered {index + 1}/{len(phi_xy_series)}", flush=True)
 
     return _encode(frame_dir, written, output, fps, frames_only, keep_frames)
 
@@ -518,7 +579,7 @@ def main() -> int:
         "--snapshots",
         type=Path,
         default=None,
-        help="compute only: write phi snapshots to this .npz and exit (frees the GPU)",
+        help="compute only: write lightweight phi cuts to this .npz and exit",
     )
     parser.add_argument(
         "--render-from",

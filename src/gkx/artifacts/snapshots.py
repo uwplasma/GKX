@@ -140,19 +140,7 @@ def _decade_factor(scale: float) -> tuple[float, str]:
 
 
 def label_amplitude_colorbar(bar: Any, scale: float, phi_label: str) -> None:
-    """Label a ``phi`` colorbar, folding any power of ten into the label text.
-
-    Left to itself matplotlib renders the exponent of a small-amplitude field
-    as *offset text* floating above the colorbar -- and that corner is also
-    where a left-aligned axes title ends up once a time stamp is appended to
-    it. On a saturated run whose amplitude is order ``1e-5`` the two collide
-    outright: the ``1e-5`` prints on top of the ``t c_s/a = 12.0``.
-
-    Stating the decade in the colorbar label instead is collision-proof
-    regardless of how long the title runs, and is what a published figure does
-    anyway -- the reader gets the units in the one place they are looking for
-    them rather than as a superscript hovering elsewhere.
-    """
+    """Put scientific notation in the label, away from the figure title."""
 
     factor, factor_label = _decade_factor(scale)
     axis = bar.ax.yaxis if bar.orientation == "vertical" else bar.ax.xaxis
@@ -277,11 +265,21 @@ def draw_flux_tube_3d(
         antialiased=False,
         shade=False,
     )
-    span = (major + minor) * 1.02
-    ax3d.set_xlim(-span, span)
-    ax3d.set_ylim(-span, span)
-    ax3d.set_zlim(-span, span)
-    ax3d.set_box_aspect((1, 1, 1))
+    if physical:
+        lower = np.min(surface, axis=(0, 1))
+        upper = np.max(surface, axis=(0, 1))
+        width = np.maximum(upper - lower, 1.0e-6)
+        pad = 0.04 * width
+        ax3d.set_xlim(lower[0] - pad[0], upper[0] + pad[0])
+        ax3d.set_ylim(lower[1] - pad[1], upper[1] + pad[1])
+        ax3d.set_zlim(lower[2] - pad[2], upper[2] + pad[2])
+        ax3d.set_box_aspect(width)
+    else:
+        span = (major + minor) * 1.02
+        ax3d.set_xlim(-span, span)
+        ax3d.set_ylim(-span, span)
+        ax3d.set_zlim(-span, span)
+        ax3d.set_box_aspect((1, 1, 1))
     ax3d.set_axis_off()
     ax3d.view_init(elev=elev, azim=azim)
 

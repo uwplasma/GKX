@@ -5,6 +5,8 @@ import matplotlib
 matplotlib.use("Agg")
 
 import pathlib
+import importlib.util
+import runpy
 
 import numpy as np
 
@@ -640,6 +642,48 @@ def test_potential_real_space_round_trip():
 
     with pytest.raises(ValueError):
         snapshots.potential_real_space(spectral[:2], ny_full=ny)
+
+
+def test_movie_snapshot_replays_lightweight_physical_cuts(tmp_path, monkeypatch):
+    root = pathlib.Path(__file__).parents[3]
+    script = root / "tools" / "artifacts" / "build_turbulence_movie.py"
+    spec = importlib.util.spec_from_file_location("gkx_movie_test", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    snapshot = tmp_path / "cuts.npz"
+    np.savez_compressed(
+        snapshot,
+        phi_xy=np.zeros((2, 6, 8)),
+        phi_yz=np.zeros((2, 8, 10)),
+        times=np.array([1.0, 2.0]),
+        label="QHS",
+        q=1.2,
+        epsilon=0.1,
+        major_radius=10.0,
+        nfp=6,
+        extent=np.array([20.0, 30.0]),
+        cylindrical_R_profile=np.array([10.0, 10.1]),
+        cylindrical_Z_profile=np.array([0.0, 0.1]),
+        toroidal_angle_profile=np.array([0.0, 0.2]),
+    )
+    rendered = []
+    monkeypatch.setattr(module, "render_frame", lambda *args, **kwargs: rendered.append((args, kwargs)))
+    monkeypatch.setattr(module, "_encode", lambda *args, **kwargs: 0)
+
+    assert module.render_snapshots(snapshot, tmp_path / "movie.mp4", fps=2, frames_only=True, keep_frames=True) == 0
+    assert len(rendered) == 2
+    assert rendered[0][0][0].shape == (6, 8)
+    assert rendered[0][0][1].shape == (8, 10)
+    assert rendered[0][0][2].nfp == 6
+    np.testing.assert_allclose(rendered[0][0][2].cylindrical_R_profile, [10.0, 10.1])
+    assert rendered[0][1]["extent"] == (20.0, 30.0)
+
+
+def test_turbulence_hero_imports_promoted_geometry_helpers():
+    root = pathlib.Path(__file__).parents[3]
+    runpy.run_path(str(root / "tools" / "artifacts" / "build_turbulence_hero.py"))
 
 
 def test_phi_xy_snapshot_figure_renders(tmp_path):

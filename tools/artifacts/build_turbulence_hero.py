@@ -31,8 +31,7 @@ import numpy as np  # noqa: E402
 
 from gkx.artifacts.figure_style import figure_style, save_figure  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_turbulence_movie import _field_line_tube, _torus_wireframe  # noqa: E402
+from gkx.artifacts.snapshots import draw_flux_tube_3d  # noqa: E402
 
 
 class _Device:
@@ -40,16 +39,27 @@ class _Device:
 
     def __init__(self, path: Path, title: str) -> None:
         data = np.load(path, allow_pickle=False)
-        self.phi = data["phi"]
+        if "phi_yz" in data:
+            self.phi_yz = data["phi_yz"]
+        else:
+            phi = data["phi"]
+            self.phi_yz = phi[:, phi.shape[1] // 2, :, :]
         self.times = data["times"]
         self.title = title
         self.q = float(data["q"])
         self.epsilon = float(data["epsilon"])
         self.R0 = float(data["major_radius"])
         self.nfp = int(data["nfp"])
+        for name in (
+            "cylindrical_R_profile",
+            "cylindrical_Z_profile",
+            "toroidal_angle_profile",
+        ):
+            values = np.asarray(data[name], dtype=float) if name in data else None
+            setattr(self, name, values if values is not None and values.size else None)
         # Lock the scale on the saturated tail, not the growth phase, or the
         # movie spends most of its length nearly blank.
-        tail = self.phi[len(self.phi) // 2 :]
+        tail = self.phi_yz[len(self.phi_yz) // 2 :]
         # 99th percentile, not the max: a single hot cell sets the max and
         # washes every structure in the tube to pale grey. The reported number
         # below is still the true peak.
@@ -58,7 +68,7 @@ class _Device:
 
 
 def render(devices: list[_Device], output: Path, *, fps: int, gif: Path | None) -> int:
-    frames = min(len(device.phi) for device in devices)
+    frames = min(len(device.phi_yz) for device in devices)
     frame_dir = output.parent / f"{output.stem}_frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
 
@@ -67,65 +77,19 @@ def render(devices: list[_Device], output: Path, *, fps: int, gif: Path | None) 
         with figure_style():
             fig = plt.figure(figsize=(4.4 * len(devices), 3.9))
             for column, device in enumerate(devices):
-                phi = np.asarray(device.phi[index], dtype=float)
-                nx, ny, nz = phi.shape
+                slab = np.asarray(device.phi_yz[index], dtype=float)
 
                 ax = fig.add_subplot(1, len(devices), column + 1, projection="3d")
-                samples = max(4 * nz, 160)
-                centre, outward, binormal, minor, major = _field_line_tube(
-                    device, samples
+                draw_flux_tube_3d(
+                    ax,
+                    slab[None, :, :],
+                    device,
+                    scale=device.scale,
+                    elev=30.0,
+                    azim=(-60.0 + index * 1.6) % 360.0,
                 )
-                source = np.linspace(0.0, 1.0, nz)
-                target = np.linspace(0.0, 1.0, samples)
-                slab = phi[nx // 2]
-                resampled = np.stack(
-                    [np.interp(target, source, slab[row]) for row in range(ny)], axis=0
-                )
-
-                angle = np.linspace(0.0, 2.0 * np.pi, ny, endpoint=False)
-                radius = 0.85 * minor
-                surface = (
-                    centre[None, :, :]
-                    + radius * np.cos(angle)[:, None, None] * outward[None, :, :]
-                    + radius * np.sin(angle)[:, None, None] * binormal[None, :, :]
-                )
-                normed = 0.5 + 0.5 * np.clip(resampled / device.scale, -1.0, 1.0)
-
-                wire = _torus_wireframe(major, minor)
-                ax.plot_wireframe(
-                    *wire,
-                    rstride=6,
-                    cstride=3,
-                    color="#BBBBBB",
-                    linewidth=0.3,
-                    alpha=0.45,
-                )
-                ax.plot_surface(
-                    surface[..., 0],
-                    surface[..., 1],
-                    surface[..., 2],
-                    facecolors=plt.cm.RdBu_r(normed),
-                    rstride=1,
-                    cstride=1,
-                    linewidth=0.0,
-                    antialiased=False,
-                    shade=False,
-                )
-                # The tube is wide and flat: equal limits on all three axes
-                # would spend most of the panel on empty space above and below
-                # it. Match the box aspect to the actual extents instead.
-                span = (major + minor) * 1.02
-                height = max(minor * 2.2, span * 0.28)
-                ax.set_xlim(-span, span)
-                ax.set_ylim(-span, span)
-                ax.set_zlim(-height, height)
-                # zoom fills the panel: matplotlib keeps generous internal
-                # padding around a 3D axes even with the frame switched off.
-                ax.set_box_aspect((1, 1, height / span), zoom=1.42)
-                ax.set_axis_off()
-                ax.view_init(elev=30, azim=(-60.0 + index * 1.6) % 360.0)
                 ax.set_title(
-                    f"{device.title}\n$|e\\phi/T_i|_{{\\max}}$ = {device.peak:.3f}",
+                    f"{device.title}\n$|(e\\phi/T_i)/\\rho_*|_{{\\max}}$ = {device.peak:.3f}",
                     y=0.99,
                     fontsize=11,
                 )
