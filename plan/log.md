@@ -661,3 +661,17 @@
   archive is 5,363,108 bytes. Strict `fsck` passes. The remaining decimal margin
   is 34,621 bytes; no public ref moves before the recovery/ref-map and real
   GitHub clone gates.
+- The source-pinned QHS exact-state continuation reached absolute `t=500` in
+  another 2,846.4 s and preserved clean commit `f7da8c49`. The combined 1,309
+  samples reproduce every previously frozen `75+60` decision and still make no
+  stop: the longest new pass island is `t=245.04--284.85` (39.81 time units),
+  and no candidate window passes after `t=367.76`. The apparently settled
+  `t=400--500` mean is `Q=6.2927 +/- 0.1493`, but Q/Wphi/Wg all fail again over
+  `t=450--500`. Its heat-flux cutoff/peak and last-three-bin mass remain
+  resolved at 5.28%/0.94%, isolating temporal modulation from the Ny question.
+  The unchanged `t=750` continuation started automatically. Trace SHA-256:
+  `4c757301c2b3aa289e73f82a18d956ee977101017c2667a2d4ebeb5a6edc5407`.
+- PR #85 commit `110b10aa` responds to a concrete nonlinear-log ambiguity:
+  gamma/omega are now labelled selected-mode diagnostics, while the same line
+  says saturation uses Q/Wphi/Wg. The focused header test and Ruff pass; no
+  additional runtime work or stored diagnostics were added.

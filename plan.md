@@ -295,6 +295,20 @@ This is direct evidence that burn-in selection, not an excessively long
 stationary average, causes unnecessary continuation on this case; it is not
 evidence that an arbitrary short late window is safe.
 
+The exact-state continuation now reaches absolute `t=500` on the same clean
+source. The frozen rule still makes no stop. Its `t=245.04--284.85` pass island
+lasts 39.81 time units; later islands last 6.28, 22.34, and 7.47, with no pass
+after `t=367.76`. Although `t=400--500` has `Q=6.2927 +/- 0.1493` (2.37%) and
+Q/Wphi/Wg all pass their half-window gates, the terminal `t=450--500` window
+fails all three. The complete-history shipped selector still includes the
+overshoot (`t=31.43--500`) and fails its SEM gate at 12.9%. This is direct
+low-frequency-modulation evidence against both the current burn-in and an
+unpersisted late-window shortcut. Perpendicular resolution remains adequate:
+over `t=400--500`, heat-flux cutoff/peak is 5.28%, last-three-bin mass is 0.94%,
+and the Phi2 values are 0.0094%/0.028%. Continue to `t=750` without retuning.
+Continuation-trace SHA-256:
+`4c757301c2b3aa289e73f82a18d956ee977101017c2667a2d4ebeb5a6edc5407`.
+
 The untouched source-pinned QI `96x96x48` seed-22 holdout reached exactly
 `t=250` in 3,462.3 s from the same clean solver tree. Over `t=150--250`,
 `Q=4.1641 +/- 0.0922` (2.21%) and Q/Wphi/Wg pass the half-window gates, but
