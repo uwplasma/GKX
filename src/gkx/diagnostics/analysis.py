@@ -32,6 +32,7 @@ from gkx.diagnostics.modes import (
     select_ky_index,
 )
 
+
 @dataclass(frozen=True)
 class LateTimeLinearMetrics:
     """Late-time growth/frequency metrics for a linear run."""
@@ -46,6 +47,7 @@ class LateTimeLinearMetrics:
     tmax: float | None
     nsamples: int
     signal_source: str
+
 
 @dataclass(frozen=True)
 class NonlinearWindowMetrics:
@@ -73,6 +75,7 @@ class NonlinearWindowMetrics:
     heat_flux_n_eff: float = 0.0
     heat_flux_stderr: float = float("inf")
 
+
 @dataclass(frozen=True)
 class NonlinearHeatFluxConvergenceMetrics:
     """Post-transient heat-flux averaging convergence summary."""
@@ -97,6 +100,7 @@ class NonlinearHeatFluxConvergenceMetrics:
     tau_ac: float = 0.0
     n_eff: float = 0.0
 
+
 @dataclass(frozen=True)
 class ObservedOrderMetrics:
     """Observed-order convergence summary from step sizes and errors."""
@@ -105,6 +109,7 @@ class ObservedOrderMetrics:
     errors: np.ndarray
     orders: np.ndarray
     asymptotic_order: float
+
 
 @dataclass(frozen=True)
 class BranchContinuationMetrics:
@@ -252,6 +257,26 @@ def late_time_linear_metrics(
     )
 
 
+def sokal_autocorrelation_time(
+    signal: np.ndarray, dt: float
+) -> tuple[float, int, np.ndarray]:
+    """Return the first-zero IAT, crossing index, and autocorrelation."""
+
+    x = np.asarray(signal, dtype=float)
+    x = x - x.mean()
+    variance = float(x @ x)
+    if x.size < 4 or variance <= 0.0 or dt <= 0.0:
+        return 0.0, 1, np.zeros(1)
+    size = int(2 ** np.ceil(np.log2(2 * x.size)))
+    spectrum = np.fft.rfft(x, n=size)
+    correlation = np.fft.irfft(spectrum * np.conj(spectrum), n=size)[: x.size]
+    rho = correlation / correlation[0]
+    negative = np.nonzero(rho < 0.0)[0]
+    cut = int(negative[0]) if negative.size else rho.size
+    tau = float(np.trapezoid(rho[:cut], dx=dt)) if cut > 1 else 0.0
+    return tau, cut, rho
+
+
 def integrated_autocorrelation_time(signal: np.ndarray, dt: float) -> float:
     """Integrated autocorrelation time, truncated at the first zero crossing.
 
@@ -262,22 +287,12 @@ def integrated_autocorrelation_time(signal: np.ndarray, dt: float) -> float:
     summing farther into a noisy tail adds variance with little signal.
     """
 
-    x = np.asarray(signal, dtype=float)
-    x = x - x.mean()
-    if x.size < 4 or not np.any(x) or dt <= 0.0:
-        return 0.0
-    size = int(2 ** np.ceil(np.log2(2 * x.size)))
-    spectrum = np.fft.rfft(x, n=size)
-    correlation = np.fft.irfft(spectrum * np.conj(spectrum), n=size)[: x.size]
-    if correlation[0] <= 0.0:
-        return 0.0
-    rho = correlation / correlation[0]
-    negative = np.nonzero(rho < 0.0)[0]
-    cut = int(negative[0]) if negative.size else rho.size
-    return float(np.trapezoid(rho[:cut], dx=dt)) if cut > 1 else 0.0
+    return sokal_autocorrelation_time(signal, dt)[0]
 
 
-def _correlated_sample_stats(t: np.ndarray, q: np.ndarray) -> tuple[float, float, float]:
+def _correlated_sample_stats(
+    t: np.ndarray, q: np.ndarray
+) -> tuple[float, float, float]:
     """Return ``(tau_ac, n_eff, span)`` for a windowed series.
 
     ``n_eff = n dt / (2 tau)``, capped at ``n``. The estimator integrates the
@@ -428,9 +443,7 @@ def _terminal_heat_flux_window(
     *,
     terminal_fraction: float,
 ) -> _HeatFluxWindow:
-    terminal_start = max(
-        0, int(np.floor((1.0 - terminal_fraction) * window.q.size))
-    )
+    terminal_start = max(0, int(np.floor((1.0 - terminal_fraction) * window.q.size)))
     t_terminal = window.t[terminal_start:]
     q_terminal = window.q[terminal_start:]
     if q_terminal.size == 0:

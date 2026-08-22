@@ -50,6 +50,34 @@ from typing import Any
 
 import numpy as np
 
+from nonlinear_saturated_state import (
+    _campaign_source_provenance,
+    _gkx_source_tree_matches,
+)
+
+
+def _require_compatible_state_source(archive, provenance: dict[str, object]) -> str:
+    """Require a clean state produced by the same installable GKX source."""
+    if "gkx_git_commit" not in archive or "gkx_git_dirty" not in archive:
+        raise SystemExit(
+            "state has no GKX source provenance; regenerate it with "
+            "nonlinear_saturated_state.py"
+        )
+    recorded = str(archive["gkx_git_commit"])
+    recorded_dirty = int(archive["gkx_git_dirty"])
+    current = str(provenance["git_commit"] or "")
+    if recorded_dirty != 0 or provenance["git_dirty"] is not False:
+        raise SystemExit("state and gradient campaign must both use clean Git sources")
+    if not recorded or not current:
+        raise SystemExit("state or gradient campaign has no Git commit identity")
+    if recorded != current and not _gkx_source_tree_matches(
+        provenance["repository_root"], recorded, current
+    ):
+        raise SystemExit(
+            f"state GKX source {recorded} differs from current source {current}"
+        )
+    return recorded
+
 
 def build_window_case(
     toml_path: Path, grid_override: dict | None = None
@@ -322,9 +350,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
 
+    import gkx
     import jax
     import jax.numpy as jnp
 
+    source_provenance = _campaign_source_provenance(gkx.__file__)
+    print(
+        f"GKX source: {source_provenance['source_file']} "
+        f"commit={source_provenance['git_commit']} "
+        f"dirty={source_provenance['git_dirty']}",
+        flush=True,
+    )
     jax.config.update("jax_enable_x64", True)
     print(f"devices: {jax.devices()}", flush=True)
 
@@ -341,6 +377,7 @@ def main() -> int:
     )
 
     archive = np.load(args.saturated_state)
+    state_source_commit = _require_compatible_state_source(archive, source_provenance)
     state = jnp.asarray(archive["state"])
     saturated = bool(archive["saturated"])
     recorded_dt = float(archive["adaptive_dt"]) if "adaptive_dt" in archive else None
@@ -369,7 +406,11 @@ def main() -> int:
             "state file records no adaptive_dt and --dt was not given; pass the "
             "step that trajectory was produced with"
         )
-    if args.dt is not None and recorded_dt is not None and abs(dt - recorded_dt) > 1e-12:
+    if (
+        args.dt is not None
+        and recorded_dt is not None
+        and abs(dt - recorded_dt) > 1e-12
+    ):
         print(
             f"  WARNING: --dt {dt:g} differs from the state's recorded "
             f"{recorded_dt:g}; the window is integrated on a different step "
@@ -412,11 +453,12 @@ def main() -> int:
     summary = {
         "kind": "nonlinear_gradient_window",
         "claim_level": (
-            "production_heat_flux_windowed_discrete_adjoint_"
-            "not_infinite_time_gradient"
+            "production_heat_flux_windowed_discrete_adjoint_not_infinite_time_gradient"
         ),
         "objective": "post_saturation_production_heat_flux_window_mean",
         "entry_point": "gkx.nonlinear_heat_flux_window",
+        "source_provenance": source_provenance,
+        "saturated_state_source_commit": state_source_commit,
         "case": case["case"],
         "grid_override": override,
         "dissipation": case["dissipation"],

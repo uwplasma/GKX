@@ -83,7 +83,7 @@ def _emit_progress(
         else:
             sim_text = f" t={sim_time_f:.6g}"
     print(
-        f"[gkx] step={idx_i + 1}/{steps_i} "
+        f"[gkx:segment] step={idx_i + 1}/{steps_i} "
         f"progress={pct:5.1f}%{sim_text} elapsed={_format_duration(elapsed)} "
         f"eta={_format_duration(eta) if eta != float('inf') else '--:--'} "
         f"gamma={gamma_f:.6g} omega={omega_f:.6g} "

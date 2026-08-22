@@ -170,11 +170,10 @@ jobs:
     # tests are independent signals; both are required by the ci-required gate
     # at the bottom of this file, and neither may stand in for the other.
     #
-    # Budget: 8 -> 15 minutes. The linear, nonlinear, and runtime shards below
-    # name files that pytest.ini used to deselect entirely, so they now run
-    # test_linear.py (~5 min), test_nonlinear.py (~8 min), and
-    # test_runtime_runner.py (~5 min) on a hosted runner for the first time.
-    timeout-minutes: 15
+    # Most shards retain a 15-minute budget. nonlinear-core has completed all
+    # assertions after 14 minutes on hosted runners, so reserve five minutes
+    # of setup and cleanup margin for that shard without relaxing the others.
+    timeout-minutes: ${{ matrix.shard.name == 'nonlinear-core' && 20 || 15 }}
     strategy:
       fail-fast: false
       max-parallel: 2

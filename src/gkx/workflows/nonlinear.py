@@ -245,7 +245,7 @@ _RUN_TO_VALUES = ("saturation", "t_max")
 
 def _saturation_stop_condition(
     cfg: RuntimeConfig, ctx: _RunContext, policy: _DiagnosticPolicy
-) -> Callable[[Any, Any, Any], dict[str, Any]] | None:
+) -> Callable[[Any, Any, Any, Any], dict[str, Any]] | None:
     """Build the run-to-saturation stop check, or ``None`` to run to t_max.
 
     Saturation stopping needs the streamed heat-flux trace, so a run with
@@ -272,8 +272,10 @@ def _saturation_stop_condition(
     if int(ctx.steps) < max(int(stop_cfg.min_samples), 8):
         return None
 
-    def check(t: Any, heat_flux: Any, wphi: Any) -> dict[str, Any]:
-        return saturation_stop_decision(t, heat_flux, guard=wphi, config=stop_cfg)
+    def check(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
+        return saturation_stop_decision(
+            t, heat_flux, guard=wphi, free_energy_guard=wg, config=stop_cfg
+        )
 
     return check
 
@@ -286,7 +288,7 @@ def _run_chunked_diagnostics(
     deps: FullNonlinearRuntimeDeps,
     method: str | None,
     status: Callable[[str], None],
-    stop_condition: Callable[[Any, Any, Any], dict[str, Any]] | None,
+    stop_condition: Callable[[Any, Any, Any, Any], dict[str, Any]] | None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
     """Run chunked nonlinear diagnostics for the adaptive and saturation routes.
 
@@ -332,9 +334,9 @@ def _run_chunked_diagnostics(
         steps_left -= steps_now
         return t_chunk, diag_chunk, G_next, fields_next
 
-    def loop_stop(t: Any, heat_flux: Any, wphi: Any) -> dict[str, Any]:
+    def loop_stop(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
         assert stop_condition is not None
-        decision = stop_condition(t, heat_flux, wphi)
+        decision = stop_condition(t, heat_flux, wphi, wg)
         # "stop" ends the loop; "saturated" is the physics verdict. The step
         # budget running out stops the loop without claiming saturation.
         stop = bool(decision.get("saturated")) or (step_capped and steps_left <= 0)
@@ -394,7 +396,7 @@ def _run_diagnostics(
     if ctx.adaptive_chunked or stop_condition is not None:
         if stop_condition is not None:
             status(
-                "run_to=saturation: stopping on the converged heat-flux window "
+                "run_to=saturation: heat-flux convergence with stationary Wphi/Wg "
                 f"(rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
             )
         return _run_chunked_diagnostics(
