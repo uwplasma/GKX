@@ -1459,3 +1459,15 @@
   jobs and the aggregate `ci-required` gate passed; nightly was intentionally
   skipped. CI-1 is closed. PR #91 still has only its nonlinear and four-device
   shards running, and #110 remains active; neither has a failure.
+- Audited the 18 open PRs still based directly on `fix/main-ci-mypy`. Its tree
+  equals `main` at `0ff569c3`, but their merge base is pre-#81 `5f3ab32e`:
+  changing only the base would make GitHub's three-dot diff show #81 again.
+  Keep the base branch until coordinated cutover. Rebase each direct head from
+  `d910ac56` onto rewritten main, prove exact head-tree and intended patch
+  identity, push with `--force-with-lease`, then retarget and rerun CI. This
+  avoids both misleading review diffs and a redundant pre-cutover force-push.
+- PR #91 is fully green at `cd2a30f5`: all 41 required checks pass and nightly
+  is intentionally skipped. Its nonlinear shard passed in 16m13s, which would
+  have exceeded the former 15-minute wrapper and directly validates #81's
+  nonlinear-only 20-minute cleanup budget. This closes the progress-display
+  implementation gate; the source-pinned QI run remains active and unchanged.

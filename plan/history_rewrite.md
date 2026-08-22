@@ -165,7 +165,10 @@ marker remains. The other human identities are unchanged.
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
    update `main` and all tags from exact candidate SHAs, then rebase the
-   twenty-nine open PR heads with `--force-with-lease`.
+   twenty-nine open PR heads with `--force-with-lease`. Do not merely retarget
+   the eighteen direct #81-base PRs: the squash merge left equal base trees but
+   divergent ancestry, so each head must be replayed onto rewritten `main` and
+   pass exact tree/patch checks before retargeting.
 9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
    merged heads and restore protection: required aggregate CI, one non-author
    approval, and no force pushes.

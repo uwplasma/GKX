@@ -814,6 +814,17 @@ asks for one review, but every merged PR reports `REVIEW_REQUIRED`, no checks ar
 required, force pushes are allowed, and administrator bypass was used. Require
 the aggregate CI check and one non-author approval after the recovery rewrite.
 
+Eighteen open PRs still target #81's `fix/main-ci-mypy` branch: #74, #82--#89,
+#93, #98, #100, #101, #105, and #107--#110. That base and `main` have the same
+tree, but their merge base is pre-#81 `5f3ab32e` because #81 was squash-merged.
+A base-only retarget would therefore make GitHub's three-dot review diff include
+#81 again. Keep the old base alive until coordinated replay. For each direct
+head, record its old SHA/tree/patch, rebase its own commits from `d910ac56` onto
+`0ff569c3`, require byte-identical head trees and intended two-dot/stable patches,
+push with `--force-with-lease`, retarget to `main`, and rerun all checks. Replay
+stacked PRs in topological order. Do this once during cutover, not as an extra
+round of branch churn now.
+
 ## Repository recovery and slimming
 
 The user's sub-10-MB target is tracked in two distinct units. The hard clone
@@ -1171,7 +1182,8 @@ looked restarted and their inner ETA was not the total-run ETA. PR #91 commit
 `cd2a30f5` labels compiled updates `[gkx:segment]` and forwards the existing
 host-side cumulative chunk status in the campaign. It adds no traced argument,
 retrace, or diagnostic-cadence change. A two-chunk test locks monotone total
-time and one wall clock; CI is active.
+time and one wall clock. All 41 required checks pass; the nonlinear shard took
+16m13s, directly exercising #81's targeted 20-minute budget.
 
 Movies must reuse lightweight decimated runtime cuts rather than rerun the
 physics. Store only an `x-y` cut and a `(y,z)` tube skin for about 60 frames;
@@ -1223,6 +1235,7 @@ unverified rather than silently promoted.
 | --- | --- | --- | --- | --- |
 | CI-1 | P0 | closed | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 PR checks and post-merge `main` CI pass |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
+| GOV-2 | P0 | cutover | rebase 18 direct #81-base heads onto rewritten `main`, then retarget | exact old/new head-tree and patch map; force-with-lease; fresh CI |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QHS seed-31 makes no stop and differs from seed 22 by 8.76 combined SEM; QI clean repeat active |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
