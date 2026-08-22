@@ -14,6 +14,9 @@ from gkx.artifacts.spectral_layout import (
     _condense_kx,
     _condense_ky,
     _condense_kykx,
+    _dealiased_kx_count,
+    _dealiased_kx_indices,
+    _dealiased_ky_count,
     _require_netcdf4,
 )
 from gkx.diagnostics import (
@@ -646,26 +649,6 @@ def write_runtime_nonlinear_table_artifacts(
     if state_path is not None:
         paths["state"] = str(state_path)
     return paths
-
-
-
-def _dealiased_kx_count(nx_full: int) -> int:
-    return 1 + 2 * ((int(nx_full) - 1) // 3)
-
-
-def _dealiased_ky_count(ny_full: int) -> int:
-    return 1 + ((int(ny_full) - 1) // 3)
-
-
-def _dealiased_kx_indices(nx_full: int) -> np.ndarray:
-    nx = int(nx_full)
-    split = 1 + ((nx - 1) // 3)
-    if nx <= 1:
-        return np.array([0], dtype=np.int32)
-    neg = np.arange(2 * nx // 3 + 1, nx, dtype=np.int32)
-    pos = np.arange(0, split, dtype=np.int32)
-    return np.concatenate([neg, pos], axis=0)
-
 
 def _expand_positive_ky_to_full(
     state_positive_ky: np.ndarray, *, ny_full: int
