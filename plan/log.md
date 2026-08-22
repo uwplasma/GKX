@@ -488,3 +488,12 @@
   `b5bd4e0a61ecd29885757c69cb882ff053cafa5aaf9793025bc7a99e615712a2`;
   MP4 SHA-256:
   `628b1cff237b5b5f77816579463b78585ab94eb82448598b0757cc41bb53e7a7`.
+- Replayed all four post-`f114d13f` PR #97 commits and all seven
+  post-`f3655acc` roadmap commits onto the private slim candidate. Before this
+  log commit, its 21 heads exactly match `main` plus the 20 open PR heads and
+  its 28 tags exactly match the remote. A fresh no-alternates clone contains
+  3,450 commits and 17,522 objects; its pack is 9,128,917 bytes, pack plus
+  index is 9,620,605 bytes, the complete `.git` directory is 9,953,481 logical
+  bytes, and the compressed tree archive is 5,363,108 bytes. Strict `fsck`,
+  30 recent stable patch-ID comparisons, and the AI-attribution scan pass. No
+  public ref moved.
