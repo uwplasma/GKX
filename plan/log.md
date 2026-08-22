@@ -802,3 +802,10 @@
   full-rate release MP4 remains linked. The 123 release gates and 46 benchmark
   contracts pass; PR #103 carries the same preview plus six passing x64 Landau
   physics tests.
+- PR #95 now also makes the QA equilibrium generator own a deterministic
+  256-color median-cut PNG. The 1,561-by-1,189 initial/final LCFS and Boozer
+  panel falls from 192,557 to 74,390 bytes with 48.24 dB PSNR and 0.129 mean
+  absolute channel error. Full-size visual inspection found no lost label,
+  contour, or surface structure. A palette/100-kB gate, 179 affected
+  release/optimization/benchmark tests, and Ruff pass; PR #103 carries the same
+  compact panel and retains its six passing x64 Landau tests.
