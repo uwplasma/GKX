@@ -741,6 +741,24 @@ def test_movie_uses_deck_moment_resolution_unless_overridden():
     assert module._movie_moment_dims({}, None, None) == (4, 8)
 
 
+def test_movie_imported_geometry_requires_physical_profiles():
+    module = _movie_tool("gkx_movie_geometry_test")
+
+    with pytest.raises(RuntimeError, match="require physical R, Z"):
+        module._require_movie_geometry_profiles(object(), model="vmec")
+    geometry = type(
+        "Geometry",
+        (),
+        {
+            "cylindrical_R_profile": np.array([1.0, 1.1]),
+            "cylindrical_Z_profile": np.array([0.0, 0.1]),
+            "toroidal_angle_profile": np.array([0.0, 0.2]),
+        },
+    )()
+    module._require_movie_geometry_profiles(geometry, model="vmec")
+    module._require_movie_geometry_profiles(object(), model="s-alpha")
+
+
 def test_turbulence_hero_imports_promoted_geometry_helpers():
     root = pathlib.Path(__file__).parents[3]
     runpy.run_path(str(root / "tools" / "artifacts" / "build_turbulence_hero.py"))

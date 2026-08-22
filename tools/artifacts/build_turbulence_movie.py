@@ -7,10 +7,9 @@ the field-aligned tube in real space that shows why the cut looks the way it
 does. The turbulence is elongated along ``B``, and a flux-tube movie that only
 ever shows the perpendicular plane hides exactly that.
 
-The tube is drawn by mapping the field-aligned coordinate ``z`` onto the actual
-field line: for an axisymmetric equilibrium that is a helix on a torus of
-aspect ratio ``R0/a``; for a stellarator the same construction is used with the
-device's field periods, so the twist shown is the geometry's own.
+The tube maps the field-aligned coordinate ``z`` onto imported VMEC ``R``,
+``Z``, and toroidal-angle profiles. Analytic decks use a labelled analytic
+helix; imported geometry never silently falls back to it.
 
 Pass ``--initial-state`` from ``nonlinear_saturated_state.py`` to film a
 verified saturated trajectory. Chunked integration is deliberate: the cache,
@@ -148,6 +147,31 @@ def _movie_moment_dims(
     return nl, nm
 
 
+def _require_movie_geometry_profiles(geometry: Any, *, model: str) -> None:
+    """Fail closed when an imported-geometry movie lacks physical coordinates."""
+
+    normalized = model.strip().lower().replace("_", "-")
+    if normalized in {"s-alpha", "salpha", "analytic", "slab"}:
+        return
+    names = (
+        "cylindrical_R_profile",
+        "cylindrical_Z_profile",
+        "toroidal_angle_profile",
+    )
+    profiles = [getattr(geometry, name, None) for name in names]
+    missing = [name for name, value in zip(names, profiles) if value is None]
+    if missing:
+        raise RuntimeError(
+            "imported-geometry movies require physical R, Z, and toroidal-angle "
+            f"profiles; missing {', '.join(missing)}"
+        )
+    arrays = [np.asarray(value, dtype=float).reshape(-1) for value in profiles]
+    if len({array.size for array in arrays}) != 1 or arrays[0].size < 2:
+        raise RuntimeError("physical movie coordinate profiles must have equal length >= 2")
+    if not all(np.isfinite(array).all() for array in arrays):
+        raise RuntimeError("physical movie coordinate profiles contain non-finite values")
+
+
 def render_frame(
     phi_xy: np.ndarray,
     phi_yz: np.ndarray,
@@ -228,6 +252,7 @@ def run(
         cfg = dataclasses.replace(cfg, grid=dataclasses.replace(cfg.grid, **overrides))
         print(f"grid override: {overrides}", flush=True)
     geometry = build_runtime_geometry(cfg)
+    _require_movie_geometry_profiles(geometry, model=cfg.geometry.model)
     params = build_runtime_linear_params(cfg, geom=geometry)
     # Must come from the config. TermConfig() defaults to nonlinear = 0.0 and
     # hyperdiffusion = 0.0, so omitting this runs a LINEAR case with no
