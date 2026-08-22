@@ -490,8 +490,8 @@ On the matched `t=250--350` suffix, seed 22 and seed 31 give
 and 9.98%, last-three-`ky` mass 1.55% and 1.51%, and outer-six-`kx` mass is
 0.12% for both. The two seeds therefore support a common long-window Ny=160
 mean, but not a common causal stop. The Ny=192 seed-31 resolution rung and the
-Ny=160 seed-31 `cfl=0.5` control are active on separate GPUs. Continuation
-SHA-256: NPZ
+Ny=160 seed-31 `cfl=0.5` control were then run independently on separate GPUs.
+Continuation SHA-256: NPZ
 `4954bac97ed8cad9f93093d6c7b13c11fc1635734b795058169303adbdb82385`, JSON
 `29b96bf8d1fc0d9e9b6a6fdbe42da0cf2c5b3763ff7ab28f2883d511d4167f42`, log
 `b9f56670afdf3f05e89509bba93d415063c9dae0332b5ed4f50bba491bc29ed9`.
@@ -517,6 +517,31 @@ temporal stop or observed-order convergence claim. SHA-256: NPZ
 `289c2f30076e4aa4c4bbec0496b1a058db9834e91f649b17cf17c372f95fff73`, JSON
 `645b323c7f0df02a161e35cd20abadabb0538887161109be2a2c0cf3cace4904`, log
 `e0ce2d906f1517ab1f824fb13f954cc3be3d8479f1c17a3e517fc3a26e44d769`.
+
+The matched seed-31 Ny=160 `cfl=0.5` control reached exact `t=250` in
+9,997.4 s with 1,505 samples, versus 5,108.6 s and 756 samples at `cfl=1`.
+The median adaptive step falls from 0.03255 to 0.01636 and wall time rises by
+1.96x. On the predeclared `t=150--250` window,
+
+\[
+ Q_{cfl=1}=11.2606\pm0.4042,\qquad
+ Q_{cfl=0.5}=10.6370\pm0.2368.
+\]
+
+The -5.54% change is 1.33 combined SEM, so the means are not separated by the
+two-SEM gate. Both controls pass Q/Wphi/Wg half-window stationarity. Heat-flux
+cutoff/peak is 9.46% versus 9.89%, last-three-`ky` mass 1.49% versus 1.57%,
+Phi2 cutoff/peak 11.61% versus 10.77%, and outer-six-`kx` heat mass 0.114%
+versus 0.119%. The refined run also makes no frozen stop: its terminal pass
+island is `t=190.565--250`, lasting only 59.43 of the required 60 time units.
+Timestep refinement therefore supports the late-time mean and spatial screens,
+but neither promotes the stop nor justifies paying about twice the runtime by
+default. SHA-256: NPZ
+`bc3b7b47f39615ee9a5d8c6597805e58ca02ae205fc6080c57171bf98d4021d3`, JSON
+`d33d01e845d66b237fb1a240cc841983ac80306cc5e02907d6624bac90c4df50`, log
+`fe3de89cf3a3db34f27d0d45d887ab1e9fc52848f2d9e92acf0ca7f299e02024`.
+The untouched seed-33 QA holdout and the QI Ny=160 spatial rung are active on
+the two GPUs from the same clean source-pinned checkout.
 
 The source-pinned QA `96x96x48`, seed-31 rung then reached exact `t=250` in
 2,200.7 s. It also makes no frozen stop; the longest pass island is
@@ -544,9 +569,13 @@ PYTHONPATH=src python tools/campaigns/nonlinear_saturated_state.py \
 
 The report records ordered trace, summary, and implementation SHA-256 digests,
 every causal pass island, and the first persistence-qualified stop. Legacy
-multi-segment traces fail closed without one bound summary per segment.
-Replaying the six accepted histories gives no stop for QA Ny=96/Ny=160, QI Ny=96/Ny=128,
-or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
+multi-segment traces fail closed without one bound summary per segment. The
+source-pinned replays give no stop for QA Ny=96, QA Ny=160 seed 31 through
+`t=350`, QA Ny=160 seed 22 through `t=250`, the `cfl=0.5` control, either QI
+rung, or either QHS rung. QA Ny=128 stops at `t=230.987`, QA Ny=192 at
+`t=218.783`, and QA Ny=160 seed 22 only after continuation to `t=312.194`.
+These mutually inconsistent decisions are why the rule remains unpromoted.
+Report SHA-256:
 
 | trace | replay report |
 | --- | --- |
@@ -557,6 +586,7 @@ or QHS Ny=160; only QA Ny=128 stops at `t=230.9865`. Report SHA-256:
 | QA Ny=160 seed 22, t=250 | `78164cafda9f90f17541172b9658776677f9a179647aecf3cee4ca21bacfe5e0` |
 | QA Ny=160 seed 22, t=350 | `607b327130c436f037f44fa7761c83f861ec41e2ef6bace42189a44a2d4042b4` |
 | QA Ny=192 | `2996d20f0934990fb31de6f8863ebda6189ec0d51fc337e64d3f9d445be76ab5` |
+| QA Ny=160 seed 31, `cfl=0.5` | `6ece6ecf61102060b637c13f34a55a7667072e9df025f4cf95e82e39b3b95f53` |
 | QI Ny=96 | `3cd1d3e7f1debddfadfbbed6b14ffb2912e465bd73025c6ba59eb022d14996ea` |
 | QI Ny=128 | `c8133f3c1de07c430bbef20c4a19629253fe447ca0031d18f9627f5dcbff4ff3` |
 | QHS Ny=160 | `8159e162b4cda45fd0d82c16f1c42a89a87326946aaf88d4502cd9aa5b257d5e` |
@@ -949,7 +979,7 @@ MP4 SHA-256:
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | stationary suffix + Q/Wphi/Wg gates; PR #91 fixed-horizon trace and reproducible replay | QA stop fails cross-resolution persistence/spectral gates; QI/QHS make no accepted stop |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |
-| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA Ny160/192 means agree; CFL control active; stop changes with seed/resolution |
+| RES-1 | P0 | active/review | PR #87 spectrum-tail warnings + QA/QHS/QI Ny scan | QA Ny160/192 and CFL means agree; QI Ny160 active; stop changes with seed/resolution/timestep |
 | VAL-0 | P0 | review | PR #89 per-trace QA audit; PR #90 promotion evidence contract | all 41 checks green on each; promotion remains false |
 | UX-1 | P1 | review | PR #85 startup glossary | definitions pass; fixed horizon retained until SAT-1 passes |
 | MOV-1 | P1 | review | PR #96 physical cuts + PR #97 production-state continuation | physical QA GPU artifact, metadata, hashes, and visual inspection pass |
