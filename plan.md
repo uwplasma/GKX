@@ -705,6 +705,14 @@ are 1.28% and 0.288%. The frozen `75+60` shadow rule would stop causally at
 This one baseline therefore passes the fixed terminal-window and spatial
 screens but does not validate the shadow rule across configurations.
 
+An isolated `t=50--55` window from this source-pinned baseline is not an
+acceptable shortcut: it has 18 samples over 4.78 time units, shorter than
+`10 tau_int=7.88`, with 8.68% corrected relative SEM, and its Q, Wphi, and Wg
+half-window gates all fail. Its Q/Wphi/Wg means exceed the stationary
+terminal-75 means by 4.46%, 66.5%, and 31.0%. On the full history available at
+`t=55`, the production window still has 22.1% relative SEM. Wphi alone cannot
+certify a transport mean.
+
 Remote/local SHA-256 agree: JSON `49ca6d7e`, NPZ `205dafd0`, state `050cadea`,
 and log `6e399265`; the source-pinned replay is `754f5d85`. The matched candidate
 is now active on GPU 1. Its first waiter failed because `pgrep` matched the
@@ -1145,14 +1153,13 @@ attempt to make `run_to = "saturation"` the shipped default: the source-pinned
 QA/QHS/QI evidence above does not support that promotion. Fixed `t_max` remains
 the fail-safe default until SAT-1 is seed-, timestep-, and resolution-robust.
 
-The low-level `[gkx] step/t/progress/eta` line is chunk-local and resets every
-128 or 1,024 steps. The trajectory is continuous, but campaign logs without a
-runtime status callback look as if the run restarted and their ETA is not the
-total-run ETA. Fix this in host-only orchestration: print cumulative accepted
-steps/time/wall/ETA or label the inner line `chunk`; do not add a changing
-static JAX argument, retrace each chunk, or alter the diagnostic cadence. A
-test must concatenate two fake chunks and verify monotone displayed time and
-one total-run clock.
+The old low-level `[gkx] step/t/progress/eta` line was chunk-local and reset
+every 128 or 1,024 steps. The trajectory was continuous, but campaign logs
+looked restarted and their inner ETA was not the total-run ETA. PR #91 commit
+`cd2a30f5` labels compiled updates `[gkx:segment]` and forwards the existing
+host-side cumulative chunk status in the campaign. It adds no traced argument,
+retrace, or diagnostic-cadence change. A two-chunk test locks monotone total
+time and one wall clock; CI is active.
 
 Movies must reuse lightweight decimated runtime cuts rather than rerun the
 physics. Store only an `x-y` cut and a `(y,z)` tube skin for about 60 frames;

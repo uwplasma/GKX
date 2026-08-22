@@ -1407,3 +1407,20 @@
   bytes, and complete `.git` file sum 9,534,975 bytes. Strict `fsck`, no
   alternates, and zero reachable AI-attribution matches pass, leaving 465,025
   bytes below the decimal 10-MB gate. No public history moved.
+- The source-pinned QA baseline's isolated `t=50--55` window has 18 samples,
+  span 4.78 below `10 tau_int=7.88`, 8.68% corrected relative SEM, and failing
+  Q/Wphi/Wg half-window gates. Its Q/Wphi/Wg means exceed the stationary
+  terminal-75 means by 4.46%, 66.5%, and 31.0%. The full trace at `t=55` still
+  has 22.1% relative SEM. A short Wphi average cannot certify heat transport.
+- PR #91 commit `cd2a30f5` now labels compiled inner lines `[gkx:segment]` and
+  forwards host-only cumulative chunk time/wall/ETA in the saturation campaign.
+  It changes no traced argument, integration, diagnostic cadence, or physics.
+  Owning tests, 117 release contracts, Ruff, mypy, architecture, size, and diff
+  checks pass locally; CI is active. The running clean QI artifact remains
+  source-pinned to `eebff63b` and retains its old labels.
+- Replayed that PR #91 commit privately as `e2a36d0b`; stable patch ID
+  `6100a7b1` and all five blobs match. A fresh no-local clone has 31 remote refs,
+  28 tags, 3,482 commits, and 17,853 objects: pack 8,702,838 bytes, pack plus
+  index 9,203,794 bytes, and complete `.git` file sum 9,538,907 bytes. Strict
+  `fsck`, no alternates, and zero reachable AI-attribution matches pass, leaving
+  461,093 bytes below the decimal 10-MB gate. No public history moved.
