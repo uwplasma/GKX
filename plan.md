@@ -687,7 +687,7 @@ MP4 SHA-256:
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
 | SLIM-1 | P1 | active/review | corrected PR #88 removes 7.70 MB; public-ref rewrite rehearsal passes | freeze closed-head map, publish recovery records, then network-clone gate |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
-| PERF-1 | P2 | active/review | existing SOLVAX line preconditioners; PR #101 corrects their diagonal-factor description | matched residual/iteration/wall/memory/VJP comparison before any default change |
+| PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
 
 ## Reproducibility records
 

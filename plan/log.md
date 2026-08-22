@@ -675,3 +675,11 @@
   gamma/omega are now labelled selected-mode diagnostics, while the same line
   says saturation uses Q/Wphi/Wg. The focused header test and Ruff pass; no
   additional runtime work or stored diagnostics were added.
+- The refreshed primary-source survey found two 2026 differentiable
+  gyrokinetic comparators. iGENE independently observes nonlinear adjoint
+  divergence beyond roughly one heat-flux correlation time and optimizes with
+  clipped, averaged 16-step gradients plus independent final validation; it
+  strengthens the finite-window choice but not an exact-gradient claim.
+  gyaradax contributes a bounded performance experiment: pure-JAX two-for-one
+  derivative packing and mixed-precision bracket FFTs. Its custom cuFFT FFI has
+  no exposed VJP/JVP and is not a candidate for GKX's autodiff path as shipped.

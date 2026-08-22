@@ -151,6 +151,8 @@ cannot validate cross-configuration transport.
   https://arxiv.org/abs/2606.25399
 - Acton et al., adjoint optimization of linear gyrokinetic microstability,
   https://doi.org/10.1017/S0022377824000709
+- Artigues, Merlo & Jenko, iGENE: differentiable flux-tube gyrokinetics,
+  https://arxiv.org/abs/2605.03086
 
 Leverage: retain the finite discrete adjoint with rematerialization as GKX's one
 production derivative of a declared finite window, not yet as a derivative of
@@ -182,6 +184,40 @@ linear result does not justify an implicit fixed-point adjoint for chaotic
 saturated turbulence. No surveyed source demonstrates shadowing or a stationary
 adjoint for nonlinear gyrokinetics, so promotion requires GKX-specific sign,
 conditioning, cost, and held-out transport gates.
+
+iGENE is the closest nonlinear-AD comparator found. It also backpropagates only
+from a separately saturated state. In its Cyclone case, nonlinear gradients
+diverge beyond about 512 RK4 steps while the heat-flux correlation time is
+500--1000 steps; at the apparent best horizon their magnitudes reach only
+15--50% of finite-difference estimates. Its successful profile workflow uses
+16-step gradients, clips them, averages six evaluations, and validates the
+final state independently. This supports GKX's finite-window choice but rejects
+an “exact turbulent-transport gradient” claim. Compare sign/descent probability,
+variance, wall time, and final held-out transport against FD/SPSA; do not infer a
+useful horizon from step count rather than measured correlation/Lyapunov time.
+
+## Differentiable-code and FFT performance comparators
+
+- gyaradax paper, https://arxiv.org/abs/2604.06085
+- gyaradax upstream source, https://github.com/gerkone/gyaradax
+
+gyaradax's pure-JAX nonlinear bracket packs the x/y derivatives of each operand
+into the real/imaginary parts of one complex field, reducing four inverse real
+FFTs to two inverse complex FFTs. It also runs the bracket FFTs in float32 while
+retaining float64 linear terms and field solves. GKX already batches derivative
+transforms and has a compressed-real path, but not this two-for-one packing.
+Benchmark a pure-JAX packed prototype against GKX's current bracket with exact
+forward, JVP/VJP, conservation, dealiased-spectrum, CPU/GPU wall, and peak-memory
+gates. Do not adopt gyaradax's optional cuFFT FFI path without an explicit custom
+derivative: its public implementation exposes FFI calls but no custom VJP/JVP.
+The paper's 400-step inverse problem is linear, not evidence for nonlinear
+transport gradients.
+
+The paper describes roughly 3,000 lines for its core integrator/field solver;
+the audited checkout contains about 12,100 Python lines plus CUDA. Its physics
+scope is much narrower than GKX's collision, geometry, eigensolver, artifact,
+and validation surface. Use its functional boundaries and measured kernels as
+slimming comparators, not its line count as an accuracy-independent target.
 
 ## Stellarator optimization chain
 
