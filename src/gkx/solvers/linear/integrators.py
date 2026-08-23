@@ -22,6 +22,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     PreconditionerSpec,
+    _SPECIES_PARAM_NAMES,
     _x64_enabled,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
@@ -535,22 +536,9 @@ def _integrate_species_sharded_explicit(
     ns = int(state.shape[0])
     if len(devices) != ns:
         raise ValueError("species integration requires one device per species")
-    species_names = (
-        "charge_sign",
-        "density",
-        "mass",
-        "temp",
-        "vth",
-        "rho",
-        "fprim",
-        "tprim",
-        "tprim_e",
-        "nu",
-        "tz",
-    )
     species_values = tuple(
         _as_species_array(getattr(params, name), ns, name).astype(real_dtype)
-        for name in species_names
+        for name in _SPECIES_PARAM_NAMES
     )
     term_config = linear_terms_to_term_config(terms)
     electrostatic_fields = force_electrostatic_fields or _is_electrostatic_field_terms(
@@ -566,7 +554,7 @@ def _integrate_species_sharded_explicit(
             b=local_b[None, ...],
         )
         local_params = replace(
-            params, **dict(zip(species_names, local_species, strict=True))
+            params, **dict(zip(_SPECIES_PARAM_NAMES, local_species, strict=True))
         )
 
         def local_fields(value):
