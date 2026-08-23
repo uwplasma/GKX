@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
-"""Plot saved GKX runtime outputs."""
+"""Plot a saved GKX runtime artifact bundle.
+
+Loads the summary written by a runtime case (the directory or file passed to
+``[output].path``) and writes the standard overview figure next to it, or to
+``OUT`` when set.  Plotting only -- finishes in seconds.
+"""
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 from gkx.artifacts.plotting import plot_saved_output
 
+# Path to a saved runtime artifact bundle; point this at the [output].path of a
+# completed run (e.g. tools_out/cyclone_nonlinear_runtime).
+RUN_PATH = Path("tools_out/cyclone_nonlinear_runtime")
+OUT = None  # optional output figure path; None picks a default next to RUN_PATH
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("path", type=Path, help="Path to a saved runtime artifact bundle")
-    parser.add_argument("--out", type=Path, default=None, help="Optional output figure path")
-    return parser
-
-
-def main() -> None:
-    args = build_parser().parse_args()
-    out = plot_saved_output(args.path, out=args.out)
-    print(f"Wrote {out}")
-
-
-if __name__ == "__main__":
-    main()
+out = plot_saved_output(RUN_PATH, out=OUT)
+print(f"Wrote {out}")

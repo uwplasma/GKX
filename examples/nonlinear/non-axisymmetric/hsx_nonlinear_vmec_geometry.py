@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
-"""Run a nonlinear ITG case on HSX using a VMEC ``wout`` file."""
+"""HSX nonlinear ITG turbulence from a VMEC ``wout`` file.
+
+With ``VMEC_FILE = None`` (the default) the config-backed wrapper runs the
+tracked ``runtime_hsx_nonlinear_vmec_geometry.toml`` case, which samples the
+flux-tube geometry from the tracked HSX ``wout`` and caches the generated
+``*.eik.nc`` file.  Point ``VMEC_FILE`` at a VMEC ``wout`` to build the same
+runtime configuration explicitly in this file instead.  Either path prints the
+final energies and fluxes; expect on the order of ten minutes on a CPU for a
+200-step window, about a minute on a GPU.
+
+``build_hsx_nonlinear_cfg`` and ``main`` are imported by the integration
+tests, so the run itself stays under the ``__main__`` guard.
+"""
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 from gkx.config import (
@@ -23,6 +34,20 @@ from gkx.workflows.runtime.config import (
 )
 
 CONFIG = Path(__file__).resolve().parent / "runtime_hsx_nonlinear_vmec_geometry.toml"
+
+VMEC_FILE = None  # VMEC wout path for the manual builder path; None runs CONFIG
+GEOMETRY_FILE = None  # optional output/reuse path for the generated *.eik.nc file
+GEOMETRY_HELPER_REPO = None  # optional helper repository for geometry generation
+GEOMETRY_HELPER_PYTHON = None  # optional interpreter for geometry generation
+TORFLUX = 0.64  # normalized toroidal flux surface label
+ALPHA = 0.0  # field-line alpha label
+NPOL = 1.0  # number of poloidal turns
+KY = 1.0 / 21.0  # target ky*rho_i mode for the streamed diagnostics
+NL = 4  # Laguerre moments
+NM = 8  # Hermite moments
+DT = 0.1  # maximum time step; the runtime applies adaptive CFL control
+T_MAX = 200.0  # final time
+STEPS = None  # optional explicit step-count override
 
 
 def build_hsx_nonlinear_cfg(
@@ -120,92 +145,34 @@ def build_hsx_nonlinear_cfg(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Run the HSX nonlinear ITG VMEC example."
-    )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=CONFIG,
-        help="Runtime TOML used by the config-backed wrapper path",
-    )
-    parser.add_argument(
-        "--vmec-file",
-        default=None,
-        help="Path to the VMEC wout file for the manual builder path",
-    )
-    parser.add_argument(
-        "--geometry-file",
-        default=None,
-        help="Optional output/reuse path for the generated *.eik.nc file",
-    )
-    parser.add_argument(
-        "--geometry-helper-repo",
-        "--gx-repo",
-        dest="geometry_helper_repo",
-        default=None,
-        help="Optional helper repository path for VMEC geometry generation",
-    )
-    parser.add_argument(
-        "--geometry-helper-python",
-        "--gx-python",
-        dest="geometry_helper_python",
-        default=None,
-        help="Optional Python interpreter used for VMEC geometry generation",
-    )
-    parser.add_argument(
-        "--torflux",
-        type=float,
-        default=0.64,
-        help="Normalized toroidal flux surface label",
-    )
-    parser.add_argument(
-        "--alpha", type=float, default=0.0, help="Field-line alpha label"
-    )
-    parser.add_argument(
-        "--npol", type=float, default=1.0, help="Number of poloidal turns"
-    )
-    parser.add_argument(
-        "--ky", type=float, default=1.0 / 21.0, help="Target ky mode for diagnostics"
-    )
-    parser.add_argument("--Nl", type=int, default=4)
-    parser.add_argument("--Nm", type=int, default=8)
-    parser.add_argument("--dt", type=float, default=0.1, help="Maximum time step")
-    parser.add_argument("--t-max", type=float, default=200.0, help="Final time")
-    parser.add_argument(
-        "--steps", type=int, default=None, help="Optional explicit step-count override"
-    )
-    args = parser.parse_args()
-
-    if args.vmec_file is None:
+    if VMEC_FILE is None:
         return run_nonlinear_case(
-            args.config,
-            ky=args.ky,
-            Nl=args.Nl,
-            Nm=args.Nm,
-            steps=args.steps,
-            dt=args.dt,
+            CONFIG,
+            ky=KY,
+            Nl=NL,
+            Nm=NM,
+            steps=STEPS,
+            dt=DT,
         )
 
     cfg = build_hsx_nonlinear_cfg(
-        args.vmec_file,
-        geometry_file=args.geometry_file,
-        geometry_helper_repo=args.geometry_helper_repo,
-        geometry_helper_python=args.geometry_helper_python,
-        torflux=float(args.torflux),
-        alpha=float(args.alpha),
-        npol=float(args.npol),
-        dt=float(args.dt),
-        t_max=float(args.t_max),
+        VMEC_FILE,
+        geometry_file=GEOMETRY_FILE,
+        geometry_helper_repo=GEOMETRY_HELPER_REPO,
+        geometry_helper_python=GEOMETRY_HELPER_PYTHON,
+        torflux=float(TORFLUX),
+        alpha=float(ALPHA),
+        npol=float(NPOL),
+        dt=float(DT),
+        t_max=float(T_MAX),
     )
-    steps = int(args.steps) if args.steps is not None else None
     result = run_runtime_nonlinear(
         cfg,
-        ky_target=float(args.ky),
-        Nl=int(args.Nl),
-        Nm=int(args.Nm),
-        dt=float(args.dt),
-        steps=steps,
+        ky_target=float(KY),
+        Nl=int(NL),
+        Nm=int(NM),
+        dt=float(DT),
+        steps=None if STEPS is None else int(STEPS),
         resolved_diagnostics=False,
     )
     if result.diagnostics is None or result.ky_selected is None:

@@ -558,8 +558,7 @@ without relying on unsupported JAX eigenvector derivatives.
 
 .. code-block:: bash
 
-   python examples/theory_and_demos/quasilinear_implicit_sensitivity.py \
-     --outdir docs/_static
+   python examples/theory_and_demos/quasilinear_implicit_sensitivity.py
 
 
 The lower panels compare the implicit left/right derivative against central

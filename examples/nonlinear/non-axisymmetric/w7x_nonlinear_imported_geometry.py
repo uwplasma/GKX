@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-"""Run the W7-X nonlinear ITG case from an imported sampled geometry file."""
+"""W7-X nonlinear ITG turbulence from an imported sampled geometry file.
+
+Builds the runtime configuration for the adiabatic-electron W7-X flux tube
+explicitly in this file, reads the field-line geometry from an imported
+``*.eik.nc`` file, integrates the nonlinear case with adaptive CFL control,
+and prints the final energies and fluxes.  Expect on the order of ten minutes
+on a CPU for a 200-step window, about a minute on a GPU.
+
+``build_w7x_nonlinear_cfg`` is imported by the integration tests, so the run
+itself stays under the ``__main__`` guard.
+"""
 
 from __future__ import annotations
-
-import argparse
 
 from gkx.config import (
     GeometryConfig,
@@ -20,6 +28,15 @@ from gkx.workflows.runtime.config import (
     RuntimeSpeciesConfig,
     RuntimeTermsConfig,
 )
+
+# Path to the imported *.eik.nc geometry file (edit to point at your file).
+GEOMETRY_FILE = "w7x_adiabatic_electrons.eik.nc"
+KY = 1.0 / 21.0  # target ky*rho_i mode for the streamed diagnostics
+NL = 4  # Laguerre moments
+NM = 8  # Hermite moments
+DT = 0.1  # maximum time step; the runtime applies adaptive CFL control
+T_MAX = 200.0  # final time
+STEPS = None  # optional explicit step-count override (None derives from T_MAX)
 
 
 def build_w7x_nonlinear_cfg(
@@ -98,43 +115,15 @@ def build_w7x_nonlinear_cfg(
     )
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Run the imported-geometry W7-X nonlinear ITG example."
-    )
-    parser.add_argument(
-        "--geometry-file",
-        required=True,
-        help="Path to the imported *.eik.nc geometry file",
-    )
-    parser.add_argument(
-        "--ky", type=float, default=1.0 / 21.0, help="Target ky mode for diagnostics"
-    )
-    parser.add_argument("--Nl", type=int, default=4)
-    parser.add_argument("--Nm", type=int, default=8)
-    parser.add_argument(
-        "--dt",
-        type=float,
-        default=0.1,
-        help="Maximum time step. The runtime uses adaptive CFL control by default.",
-    )
-    parser.add_argument("--t-max", type=float, default=200.0, help="Final time")
-    parser.add_argument(
-        "--steps", type=int, default=None, help="Optional explicit step count override"
-    )
-    args = parser.parse_args()
-
-    cfg = build_w7x_nonlinear_cfg(
-        args.geometry_file, dt=float(args.dt), t_max=float(args.t_max)
-    )
-    steps = int(args.steps) if args.steps is not None else None
+if __name__ == "__main__":
+    cfg = build_w7x_nonlinear_cfg(GEOMETRY_FILE, dt=float(DT), t_max=float(T_MAX))
     result = run_runtime_nonlinear(
         cfg,
-        ky_target=float(args.ky),
-        Nl=int(args.Nl),
-        Nm=int(args.Nm),
-        dt=float(args.dt),
-        steps=steps,
+        ky_target=float(KY),
+        Nl=int(NL),
+        Nm=int(NM),
+        dt=float(DT),
+        steps=None if STEPS is None else int(STEPS),
         resolved_diagnostics=False,
     )
     if result.diagnostics is None or result.ky_selected is None:
@@ -148,8 +137,3 @@ def main() -> int:
             float(result.diagnostics.particle_flux_t[-1]),
         )
     )
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
