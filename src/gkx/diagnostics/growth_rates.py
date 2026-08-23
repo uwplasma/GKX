@@ -9,6 +9,7 @@ import warnings
 import numpy as np
 
 from gkx.diagnostics.growth_windows import (
+    _least_squares_coefficients,
     _least_squares_line,
     _log_amp_phase,
     _r2_score,
@@ -21,6 +22,26 @@ from gkx.diagnostics.normalization import apply_diagnostic_normalization
 from gkx.operators.linear.params import LinearParams
 
 
+def _windowed_fit_inputs(
+    t: np.ndarray,
+    signal: np.ndarray,
+    *,
+    tmin: float | None,
+    tmax: float | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    t, signal = _validated_fit_inputs(t, signal)
+    mask = np.ones_like(t, dtype=bool)
+    if tmin is not None:
+        mask &= t >= tmin
+    if tmax is not None:
+        mask &= t <= tmax
+    tt = t[mask]
+    if tt.size < 2:
+        raise ValueError("not enough points to fit")
+    log_amp, phase = _log_amp_phase(signal[mask])
+    return tt, log_amp, phase
+
+
 def fit_growth_rate(
     t: np.ndarray,
     signal: np.ndarray,
@@ -29,37 +50,10 @@ def fit_growth_rate(
 ) -> Tuple[float, float]:
     """Fit gamma and omega from a complex signal ~ exp((gamma - i*omega) t)."""
 
-    if t.ndim != 1:
-        raise ValueError("t must be 1D")
-    if signal.ndim != 1:
-        raise ValueError("signal must be 1D")
-    if t.shape[0] != signal.shape[0]:
-        raise ValueError("t and signal must have same length")
-
-    finite = np.isfinite(signal)
-    if not np.all(finite):
-        t = t[finite]
-        signal = signal[finite]
-        if t.size < 2:
-            raise ValueError("not enough finite points to fit")
-
-    mask = np.ones_like(t, dtype=bool)
-    if tmin is not None:
-        mask &= t >= tmin
-    if tmax is not None:
-        mask &= t <= tmax
-
-    tt = t[mask]
-    yy = signal[mask]
-    if tt.size < 2:
-        raise ValueError("not enough points to fit")
-
-    log_amp, phase = _log_amp_phase(yy)
-
-    A = np.vstack([tt, np.ones_like(tt)]).T
-    gamma, _ = np.linalg.lstsq(A, log_amp, rcond=None)[0]
-    omega, _ = np.linalg.lstsq(A, phase, rcond=None)[0]
-    return float(gamma), float(-omega)
+    tt, log_amp, phase = _windowed_fit_inputs(t, signal, tmin=tmin, tmax=tmax)
+    gamma, _offset = _least_squares_coefficients(tt, log_amp)
+    phase_slope, _phase_offset = _least_squares_coefficients(tt, phase)
+    return float(gamma), float(-phase_slope)
 
 
 def fit_growth_rate_with_stats(
@@ -70,48 +64,15 @@ def fit_growth_rate_with_stats(
 ) -> Tuple[float, float, float, float]:
     """Fit gamma/omega and return (gamma, omega, r2_log_amp, r2_phase)."""
 
-    if t.ndim != 1:
-        raise ValueError("t must be 1D")
-    if signal.ndim != 1:
-        raise ValueError("signal must be 1D")
-    if t.shape[0] != signal.shape[0]:
-        raise ValueError("t and signal must have same length")
-
-    finite = np.isfinite(signal)
-    if not np.all(finite):
-        t = t[finite]
-        signal = signal[finite]
-        if t.size < 2:
-            raise ValueError("not enough finite points to fit")
-
-    mask = np.ones_like(t, dtype=bool)
-    if tmin is not None:
-        mask &= t >= tmin
-    if tmax is not None:
-        mask &= t <= tmax
-
-    tt = t[mask]
-    yy = signal[mask]
-    if tt.size < 2:
-        raise ValueError("not enough points to fit")
-
-    log_amp, phase = _log_amp_phase(yy)
-    A = np.vstack([tt, np.ones_like(tt)]).T
-    gamma, offset = np.linalg.lstsq(A, log_amp, rcond=None)[0]
-    phase_slope, phase_off = np.linalg.lstsq(A, phase, rcond=None)[0]
-    log_fit = gamma * tt + offset
-    phase_fit = phase_slope * tt + phase_off
-
-    def r2_score(y: np.ndarray, yfit: np.ndarray) -> float:
-        ss_res = float(np.sum((y - yfit) ** 2))
-        ss_tot = float(np.sum((y - np.mean(y)) ** 2))
-        if ss_tot <= 0.0:
-            return -np.inf
-        return 1.0 - ss_res / ss_tot
-
-    r2_log = r2_score(log_amp, log_fit)
-    r2_phase = r2_score(phase, phase_fit)
-    return float(gamma), float(-phase_slope), r2_log, r2_phase
+    tt, log_amp, phase = _windowed_fit_inputs(t, signal, tmin=tmin, tmax=tmax)
+    gamma, _offset, log_fit = _least_squares_line(tt, log_amp)
+    phase_slope, _phase_offset, phase_fit = _least_squares_line(tt, phase)
+    return (
+        gamma,
+        -phase_slope,
+        _r2_score(log_amp, log_fit),
+        _r2_score(phase, phase_fit),
+    )
 
 
 __all__ = [
@@ -176,25 +137,7 @@ def fit_growth_rate_uncertainty(
 ) -> GrowthRateFitStats:
     """Fit gamma/omega over a window and report stderr and R^2 diagnostics."""
 
-    if t.ndim != 1 or signal.ndim != 1:
-        raise ValueError("t and signal must be 1D")
-    if t.shape[0] != signal.shape[0]:
-        raise ValueError("t and signal must have same length")
-
-    finite = np.isfinite(signal)
-    t = t[finite]
-    signal = signal[finite]
-    mask = np.ones_like(t, dtype=bool)
-    if tmin is not None:
-        mask &= t >= tmin
-    if tmax is not None:
-        mask &= t <= tmax
-    tt = t[mask]
-    yy = signal[mask]
-    if tt.size < 2:
-        raise ValueError("not enough points to fit")
-
-    log_amp, phase = _log_amp_phase(yy)
+    tt, log_amp, phase = _windowed_fit_inputs(t, signal, tmin=tmin, tmax=tmax)
     gamma, _offset, log_fit = _least_squares_line(tt, log_amp)
     phase_slope, _phase_off, phase_fit = _least_squares_line(tt, phase)
     return GrowthRateFitStats(
@@ -474,14 +417,10 @@ def fit_growth_rate_auto(
             return 0.0, 0.0, 0.0, 0.0
 
     if window_method not in {"stationary", "loglinear", "fixed"}:
-        raise ValueError(
-            "window_method must be 'stationary', 'loglinear', or 'fixed'"
-        )
+        raise ValueError("window_method must be 'stationary', 'loglinear', or 'fixed'")
     if tmin is None and tmax is None:
         if window_method == "stationary":
-            window = select_fit_window_stationary(
-                t, signal, min_points=min_points
-            )
+            window = select_fit_window_stationary(t, signal, min_points=min_points)
             if window is not None:
                 tmin, tmax = window
             else:
