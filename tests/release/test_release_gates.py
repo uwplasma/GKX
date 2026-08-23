@@ -3759,7 +3759,6 @@ _CFL_MARGIN_MEASURED: dict[str, float] = {
     # over the linear bound and is covered by the linear runtime's own warning.
     "benchmarks/runtime_secondary_slab.toml": 0.13,
     "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml": 1.33,
-    "examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml": 2.77,
     "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear.toml": 0.18,
     "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_seed.toml": 0.18,
     "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml": 0.18,
@@ -3772,15 +3771,7 @@ _CFL_MARGIN_MEASURED: dict[str, float] = {
 # was measured to produce. This is debt, not clearance: empty it by fixing the
 # deck, not by moving the number. A deck may only sit here with evidence that
 # somebody ran it and saw what happens.
-_CFL_MARGIN_OVER_BOUND: dict[str, str] = {
-    "examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml": (
-        "2.77x: non-finite Wg_t at t=0.021 of t_max=0.5 at the shipped "
-        "dt=0.001; clean through the same window at dt=0.0002. The bound is "
-        "69% binormal drift at ky=5.0, so Nm is not the lever and dt is. "
-        "Fixing it costs 5x the steps, or a switch to fixed_dt = false to "
-        "match the Cyclone examples beside it; that is a deck-owner decision."
-    ),
-}
+_CFL_MARGIN_OVER_BOUND: dict[str, str] = {}
 
 # Decks reaching the nonlinear runtime that do not need a recorded margin,
 # and why. Adaptive runs recompute dt against this same bound every step, so
@@ -3788,6 +3779,9 @@ _CFL_MARGIN_OVER_BOUND: dict[str, str] = {
 _CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = {
     "examples/common_input.toml": "fixed_dt = false: adaptive dt",
     "examples/nonlinear/axisymmetric/runtime_circular_vmec_nonlinear.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml": (
         "fixed_dt = false: adaptive dt"
     ),
     "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml": (
