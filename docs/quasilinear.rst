@@ -692,8 +692,8 @@ observable.
 .. code-block:: bash
 
    python tools/artifacts/plot_quasilinear_calibration.py report \
-     --points docs/_static/quasilinear_calibration_points.json \
-     --out docs/_static/quasilinear_calibration_report.json \
+     --points tools_out/quasilinear_calibration_points.json \
+     --out tools_out/quasilinear_calibration_report.json \
      --saturation-rule mixing_length
 
 The first tracked audit point maps the Cyclone quasilinear spectrum above to
@@ -1258,8 +1258,10 @@ but the postprocess requested the strict ``t=[1100,1500]`` admission window
 while every harvested trace ends near ``t=400``. The replicated ensemble
 artifacts
 ``docs/_static/optimized_equilibrium_replicates/vmec_qa_full_sweep_*_ensemble_gate.json``
-therefore have ``n_finite_means = 0``, and the matched comparison artifacts
-``docs/_static/qa_strict_baseline_to_*_strict_baseline.json`` are
+therefore have ``n_finite_means = 0``, and the matched baseline-to-candidate
+comparison summaries (formerly tracked as
+``docs/_static/qa_strict_baseline_to_*_strict_baseline.json``; since retired
+from the tracked set) were
 ``passed = false`` with no computable relative reduction. These outputs are
 useful negative audit evidence and a command-generation regression test; they
 are not nonlinear holdouts, are not used to refit the quasilinear calibration,

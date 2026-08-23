@@ -132,7 +132,14 @@ def distribution_free_energy(
     *,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
-    """Distribution free-energy diagnostic (free energy in g)."""
+    """Distribution free-energy diagnostic (free energy in g).
+
+    ``Wg + Wphi`` is not a discretely conserved functional of the
+    dissipation-free discretization: the curvature/grad-B measure weights
+    drive bounded transient excursions of order 30-40 per cent with no secular
+    production (a zero-drive configuration has exactly ``gamma = 0``). Drift
+    in ``Wg + Wphi`` is therefore not a solver-error meter.
+    """
 
     fac = _hermitian_mode_weight(grid, use_dealias=use_dealias)
     fac = fac[None, None, None, :, :, None]
@@ -196,6 +203,15 @@ def magnetic_vector_potential_energy(
 
 
 def total_energy(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
+    """Return ``Wg + Wphi + Wapar``.
+
+    This sum is not a discretely conserved invariant of the dissipation-free
+    discretization: the curvature/grad-B measure weights produce bounded
+    transient excursions of order 30-40 per cent with no secular production,
+    and a zero-drive configuration has exactly ``gamma = 0``. Do not read its
+    drift as a solver-error meter.
+    """
+
     return Wg + Wphi + Wapar
 
 

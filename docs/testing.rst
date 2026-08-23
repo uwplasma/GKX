@@ -267,8 +267,10 @@ and relative ``L^2`` mismatch ``0.00721`` against the frozen GX raw mode.
 ``tools/artifacts/generate_linear_reference_overlays.py w7x`` applies the same raw-mode policy to
 the imported W7-X linear benchmark at ``k_y rho_i = 0.3``. It refreshes the
 frozen finite GX raw-mode bundle when a matching ``.big.nc`` file is supplied
-and writes ``docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png``
-plus JSON/CSV companions. The current artifact passes with overlap
+and writes the ``w7x_eigenfunction_reference_overlay_ky0p3000`` overlay render
+(a regenerable figure, not tracked in git) plus the tracked JSON/CSV
+companions under ``docs/_static/reference_modes/``. The current artifact
+passes with overlap
 ``0.9999999994`` and relative ``L^2`` mismatch ``3.33e-5``.
 ``tools/comparison/compare_gx_nonlinear.py diagnostics --summary-json`` now emits a
 matching gate report for nonlinear diagnostic comparison figures, using the
@@ -286,8 +288,9 @@ same JSON-ready acceptance convention.
 CSV-backed convergence studies: it reads either an explicit step column or a
 resolution column, writes an observed-order JSON gate report, and can generate
 a log-log convergence figure. The tracked Cyclone velocity-space convergence
-artifact lives at ``docs/_static/cyclone_resolution_observed_order.json`` and
-``docs/_static/cyclone_resolution_observed_order.png``. It uses an office/GPU
+artifact lives at ``docs/_static/cyclone_resolution_observed_order.json``; the
+companion convergence figure is a regenerable render and is not tracked in
+git. It uses an office/GPU
 ``ky=0.30`` time-path sweep through ``(Nl,Nm)=(4,8),(6,12),(12,24),(16,32)``
 with ``tmax=150`` and passes the strict pairwise-order and final-error gates.
 ``tools/comparison/compare_gx_kbm.py --branch-summary-json`` wires that convention into
@@ -471,8 +474,9 @@ observable for the final paper lane.
 The case-specific shaped-Miller lane for this benchmark is reproducible
 through ``benchmarks/runtime_miller_zonal_response.toml`` and
 ``tools/artifacts/build_zonal_flow_artifacts.py miller-panel``, and its frozen
-artifact lives in ``docs/_static/miller_zonal_response_pilot.png`` with the
-gate in the companion ``.json``. The physics contract is Merlo et al. Case III:
+gate artifact lives in ``docs/_static/miller_zonal_response_pilot.json``; the
+companion panel render is regenerated on demand by the same command and is
+not tracked in git. The physics contract is Merlo et al. Case III:
 adiabatic electrons, zero gradients, ``k_xρ_i≈0.05``, ``k_y=0``, and an initial
 ion-density perturbation.
 
@@ -603,10 +607,11 @@ aspect-ratio override that is appropriate for drift-wave flux-tube runs but
 wrong for this radial zonal scan.
 
 The current frozen VMEC-backed artifact lives at
-``docs/_static/w7x_zonal_response_panel.png`` with strict JSON metadata at
-``docs/_static/w7x_zonal_response_panel.json``. The tracked combined trace CSV
+``docs/_static/w7x_zonal_response_panel.json``; the panel render itself is a
+regenerable figure written by the response-panel command and is not tracked
+in git. The tracked combined trace CSV
 ``docs/_static/w7x_zonal_response_panel.traces.csv`` is written next to the
-figure so comparison and audit scripts can be rerun without office-only
+metadata so comparison and audit scripts can be rerun without office-only
 per-``k_x`` directories. It is a long-window run: ``k_x rho_i=0.05`` reaches
 ``t≈3460`` and the other three wavelengths reach ``t≈1980``. After the
 paper-faithful line-first normalization, the late residuals are about
@@ -616,12 +621,13 @@ paper-faithful line-first normalization, the late residuals are about
 main traces and inset residual levels from the arXiv source ``figs/ZF.pdf``.
 The resulting reference artifacts are
 ``docs/_static/w7x_zonal_reference_digitized.csv``,
-``docs/_static/w7x_zonal_reference_digitized_residuals.csv``,
-``docs/_static/w7x_zonal_reference_digitized.json``, and
-``docs/_static/w7x_zonal_reference_digitized.png``. The comparison contract is
+``docs/_static/w7x_zonal_reference_digitized_residuals.csv``, and
+``docs/_static/w7x_zonal_reference_digitized.json`` (the digitization
+preview figure is a regenerable render). The comparison contract is
 implemented in ``tools/artifacts/build_w7x_zonal_reference_artifacts.py compare`` and materialized at
-``docs/_static/w7x_zonal_reference_compare.png`` with JSON metadata in
-``docs/_static/w7x_zonal_reference_compare.json``. The current long-window
+``docs/_static/w7x_zonal_reference_compare.json`` with row-level data in
+``docs/_static/w7x_zonal_reference_compare.csv``; the comparison figure is a
+regenerable render and is not tracked in git. The current long-window
 artifact passes the time-coverage gate for all four wavelengths, but the
 residual gate only passes at ``k_x rho_i=0.05`` and the late-envelope gate
 fails by orders of magnitude. A previous ``init_amp``-normalized audit happened
@@ -662,7 +668,9 @@ therefore not restart diagnostic continuity; it is the W7-X zonal damping,
 closure, and velocity-space recurrence behavior under the paper-facing
 line-first normalization.
 ``tools/artifacts/build_w7x_zonal_validation_artifacts.py contract`` turns the same tracked CSV/JSON
-artifacts into ``docs/_static/w7x_zonal_contract_audit.png``. That panel is a
+artifacts into the ``w7x_zonal_contract_audit`` panel (a regenerable render;
+the tracked record is ``docs/_static/w7x_zonal_contract_audit.json``). That
+panel is a
 publication-facing diagnostic of the open mismatch rather than a release gate;
 its JSON metadata has ``gate_index_include=false`` so the validation index does
 not count it as closed.
@@ -984,8 +992,10 @@ Recent GX parity spot checks are tracked outside the automated test suite:
   needed ``p_hyper = 2`` and no end damping to match the public GX short input.
   With that contract restored, the tracked comparison improves to
   ``mean_rel_abs(Wphi) ~= 2.11e-1`` and
-  ``mean_rel_abs(HeatFlux) ~= 2.51e-1``. The resolved audit remains in
-  ``docs/_static/nonlinear_cyclone_short_resolved_audit_t5.{png,csv}``, where
+  ``mean_rel_abs(HeatFlux) ~= 2.51e-1``. The resolved audit remains tracked in
+  ``docs/_static/nonlinear_cyclone_short_gate_summary.json`` (the
+  ``nonlinear_cyclone_short_resolved_audit_t5`` panel and CSV are regenerable
+  companions, not tracked in git), where
   ``Wphi_kyst`` is still the dominant residual mismatch.
 - **Secondary (`kh01a`)**: the tracked secondary comparison now uses a dense
   real GX run (`kh01a_shortdense.out.nc`, 10 samples in ``omega_kxkyt``) and

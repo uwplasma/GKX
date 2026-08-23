@@ -69,6 +69,13 @@ The diagnostic group includes the main history series:
 It also carries resolved reductions used by the parity tooling, including
 ``*_kxst``, ``*_kyst``, ``*_kxkyst``, ``*_zst``, and ``Wg_lmst``.
 
+``Wg + Wphi`` (plus ``Wapar`` when electromagnetic) is not a discretely
+conserved functional of the dissipation-free discretization: the
+curvature/grad-B measure weights drive bounded transient excursions of order
+30--40 per cent, with no secular production — a zero-drive configuration has
+exactly ``gamma = 0``. Drift in ``Wg + Wphi`` is therefore not a solver-error
+meter.
+
 ``*.big.nc``
 ^^^^^^^^^^^^
 

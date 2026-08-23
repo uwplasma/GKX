@@ -24,6 +24,42 @@ coefficients, drift components, mirror term, and zero-mode masks) in a ``LinearC
 avoid recomputing them at each time step. This cache is reused inside the JIT
 compiled integrator.
 
+Running on CPU
+--------------
+
+Measured on an Apple M3 Max (10 performance + 4 efficiency cores, JAX CPU,
+float32) with the shipped default deck at ``96x96x48``:
+
+- A full ``t_max = 200`` run takes roughly 1.0--1.6 hours, of which about
+  97 per cent is time stepping. Cost is linear in degrees of freedom at
+  72--80 ns per ``Nx*Ny*Nz*Nl*Nm`` element per step across every grid measured,
+  so a 4-core laptop extrapolates to several hours.
+- Within one step, about 59 per cent of the time is data movement (dealias
+  padding, twist-shift and linked-``z`` gathers, real-FFT packing copies),
+  about 31 per cent is the FFTs themselves, and under 10 per cent is physics
+  arithmetic. Reducing that movement is the largest available lever and is
+  tracked on the roadmap.
+- Geometry construction, compilation, plotting, and I/O are seconds each and
+  are not worth optimizing against the stepping cost.
+
+The supported CPU mode is ordinary serial execution with XLA threading its own
+kernels; ``[parallel] strategy = "serial"`` is the default. Two anti-patterns
+are measured, not theoretical:
+
+- Do **not** set ``XLA_FLAGS=--xla_force_host_platform_device_count=N`` for a
+  CPU run. It splits one thread pool into ``N`` virtual devices; a serial run
+  measured 34 per cent slower at ``48x48x32`` (105.9 s against 79.2 s,
+  back to back).
+- ``[parallel] strategy = "shard_map"`` is a GPU route. The routing and
+  identity gates pass on virtual CPU devices, but a production nonlinear run
+  aborts mid-chunk inside XLA's CPU FFT thunk
+  (``fft_thunk.cc`` ``RET_CHECK IsMonotonicWithDim0Major``) at both two and
+  four devices.
+
+XLA's own threading uses roughly 3 of 14 cores during stepping, because the
+dominant copy kernels do not parallelize; that headroom is a known limitation
+of the current kernel mix rather than a configuration mistake.
+
 Persistent compilation cache
 ----------------------------
 
@@ -1567,7 +1603,8 @@ The assembled figure is generated from the collected per-case summaries with
 ``benchmarks/performance/benchmark_runtime_memory.py --summary-glob ...`` and written to:
 
 - ``docs/_static/runtime_memory_benchmark.png``
-- ``docs/_static/runtime_memory_benchmark.pdf``
+- ``docs/_static/runtime_memory_benchmark.pdf`` (emitted for manuscript
+  workflows; not tracked in git)
 
 For the shipped refresh shown here, use the successful release summary rather
 than the older interrupted summary that contains failed W7-X/HSX nonlinear

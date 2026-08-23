@@ -300,11 +300,11 @@ Executable usage
 .. code-block:: bash
 
   cd examples/linear/axisymmetric && gkx cyclone.toml
-  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --out docs/_static/runtime_etg_scan
-  gkx --plot docs/_static/runtime_etg_scan.scan.csv
+  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --out tools_out/runtime_etg_scan
+  gkx --plot tools_out/runtime_etg_scan.scan.csv
   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out tools_out/cyclone_runtime
    gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --batch-ky
-   gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --sample-stride 5 --out docs/_static/nonlinear_cyclone_diag.csv
+   gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --sample-stride 5 --out tools_out/nonlinear_cyclone_diag.csv
 
 For ``run-runtime-nonlinear``, omit ``--steps`` when ``fixed_dt = false`` unless
 you explicitly want a capped step count. The executable now preserves ``steps = None``
@@ -435,7 +435,7 @@ Notable runtime-only keys:
 * ``[normalization] flux_scale``: multiplicative factor applied to
   heat/particle flux diagnostics (tracked comparison default ``1.0``).
 * ``[normalization] wphi_scale``: multiplicative factor applied to ``Wphi``
-  diagnostics (the Cyclone nonlinear comparison config uses ``1.155``).
+  diagnostics (default ``1.0``; no shipped configuration overrides it).
 * ``[normalization] rho_star``: rescales the operator wavenumbers before
   building the drift/Bessel terms.
 * ``[normalization] omega_d_scale`` / ``omega_star_scale``: multiplicative
