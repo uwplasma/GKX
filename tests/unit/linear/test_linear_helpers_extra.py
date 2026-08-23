@@ -37,6 +37,7 @@ from gkx.operators.linear.linked import (
     _signed_to_index,
 )
 from gkx.operators.linear.params import (
+    _SPECIES_PARAM_NAMES,
     _as_species_array,
     _check_nonnegative,
     _check_positive,
@@ -55,6 +56,22 @@ from gkx.solvers.linear.parallel import (
     _resolve_parallel_devices,
 )
 from gkx.terms.config import FieldState, TermConfig
+
+
+def test_species_parameter_order_has_one_sharding_contract() -> None:
+    assert _SPECIES_PARAM_NAMES == (
+        "charge_sign",
+        "density",
+        "mass",
+        "temp",
+        "vth",
+        "rho",
+        "fprim",
+        "tprim",
+        "tprim_e",
+        "nu",
+        "tz",
+    )
 
 
 def test_linear_validation_helpers_scalar_and_array() -> None:

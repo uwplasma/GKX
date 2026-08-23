@@ -12,7 +12,11 @@ import numpy as np
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.moments import build_H
-from gkx.operators.linear.params import LinearParams, LinearTerms
+from gkx.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    _SPECIES_PARAM_NAMES,
+)
 from gkx.solvers.linear.parallel_common import (
     _is_electrostatic_slice_terms,
     _resolve_parallel_devices,
@@ -791,22 +795,9 @@ def linear_rhs_electrostatic_species_sharded(
     plan = build_velocity_sharding_plan(arr.shape, num_devices=ns, axes=("species",))
     real_dtype = jnp.real(arr).dtype
 
-    species_names = (
-        "charge_sign",
-        "density",
-        "mass",
-        "temp",
-        "vth",
-        "rho",
-        "fprim",
-        "tprim",
-        "tprim_e",
-        "nu",
-        "tz",
-    )
     species_values = tuple(
         _as_species_array(getattr(params, name), ns, name).astype(real_dtype)
-        for name in species_names
+        for name in _SPECIES_PARAM_NAMES
     )
     phi = electrostatic_phi_shard_map(
         arr,
@@ -836,7 +827,7 @@ def linear_rhs_electrostatic_species_sharded(
     def local_rhs(local_state, local_jl, local_jlb, local_b, local_phi, *local_species):
         local_cache = replace(cache, Jl=local_jl, JlB=local_jlb, b=local_b)
         local_params = replace(
-            params, **dict(zip(species_names, local_species, strict=True))
+            params, **dict(zip(_SPECIES_PARAM_NAMES, local_species, strict=True))
         )
         zero = jnp.zeros_like(local_phi)
         return assemble_rhs_cached_with_fields(
@@ -853,7 +844,7 @@ def linear_rhs_electrostatic_species_sharded(
         local_rhs,
         mesh=mesh,
         in_specs=(state_spec, jl_spec, jl_spec, b_spec, phi_spec)
-        + (vector_spec,) * len(species_names),
+        + (vector_spec,) * len(_SPECIES_PARAM_NAMES),
         out_specs=state_spec,
         axis_names={"species"},
     )
@@ -918,24 +909,11 @@ def prepare_electrostatic_species_inputs(
         JlB=from_host(cache.JlB, jl_sharding),
         b=from_host(cache.b, b_sharding),
     )
-    species_names = (
-        "charge_sign",
-        "density",
-        "mass",
-        "temp",
-        "vth",
-        "rho",
-        "fprim",
-        "tprim",
-        "tprim_e",
-        "nu",
-        "tz",
-    )
     prepared_values: dict[str, Any] = {
         name: from_host(
             _as_species_array(getattr(params, name), ns, name), vector_sharding
         )
-        for name in species_names
+        for name in _SPECIES_PARAM_NAMES
     }
     prepared_params = replace(params, **prepared_values)
     return from_host(arr, state_sharding), prepared_cache, prepared_params
