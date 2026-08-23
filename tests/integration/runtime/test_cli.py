@@ -2406,6 +2406,49 @@ def test_cli_nonlinear_run_shades_a_measured_average_window(
     ) == (3.05, 6.0)
 
 
+def test_cli_nonlinear_run_does_not_shade_a_rejected_window(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A capped run gets an explicit diagnostic view, not a saturation claim."""
+
+    bundle = _write_grouped_out_nc(tmp_path / "capped.out.nc")
+    summary = tmp_path / "capped.summary.json"
+    summary.write_text(
+        '{"kind":"nonlinear","saturation":'
+        '{"window_tmin":3.0,"window_tmax":6.0,"saturated":false}}',
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def _spy(source, *, window=None, title="", out=None):
+        captured.update(window=window, title=title)
+        import matplotlib.pyplot as plt
+
+        return plt.subplots(1, 1)
+
+    def _warnings(source, *, window=None):
+        captured["warning_window"] = window
+        return ()
+
+    monkeypatch.setattr(
+        "gkx.artifacts.transport_figures.heat_flux_time_figure", _spy, raising=True
+    )
+    monkeypatch.setattr(
+        "gkx.artifacts.transport_figures.spectrum_cutoff_warnings",
+        _warnings,
+        raising=True,
+    )
+    _stub_nonlinear_run(
+        monkeypatch, {"out": str(bundle), "summary": str(summary)}
+    )
+
+    assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(bundle))) == 0
+
+    assert captured["window"] is None
+    assert captured["warning_window"] is None
+    assert "not saturated; diagnostic only" in str(captured["title"])
+
+
 def test_cli_global_plot_renders_a_gx_netcdf_bundle(
     capsys, monkeypatch, tmp_path: Path
 ) -> None:
