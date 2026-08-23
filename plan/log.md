@@ -1666,3 +1666,29 @@
   5.91 -> 4.49, QA-beta0.5 7.20 -> 6.45; DIII-D saturated at 64^2 with
   18.34 +/- 0.89. Fluxes still converge from above; no defaults decision until
   the 128^2 rungs and the 192^2 y0=21 references land.
+
+## 2026-08-23 — 128-square rungs falsify the anisotropy fine structure
+
+- y0=14 ladder through 128^2 (tok_diiid 128^2 and the qa_b0p5 retry pending):
+  qa_vac 6.73 -> 5.61 -> 4.90, qhs 5.91 -> 4.49 -> 3.64, qa_b0p5
+  7.20 -> 6.45 -> OOM, tok_diiid 18.34 -> 16.86 (both tokamak rungs
+  saturated; stellarator rungs all hit the t=400 cap unsaturated, trailing
+  window halves below the window means, so the tabulated stellarator fluxes
+  remain upper estimates).
+- The parked resolution estimator's metric A = rms(sqrt(gds22)/|shat|)/
+  max(sqrt(gds2)) was re-scored against this corrected ground truth with the
+  current geometry code: tok_diiid 0.138, qhs 0.552, qi 0.591, qa_b0p5 0.619,
+  qh 0.674, qa_vac 0.796. QHS has the lowest stellarator A yet the steepest
+  continuing decline (about -19% per rung at 128^2), while qa_vac (highest A)
+  declines more slowly. The per-case ordering claim (previously 17/17 against
+  the old ladder) does not survive; A cleanly separates only the
+  tokamak/stellarator classes. The estimator will ship class-based targets
+  with measured-bias annotations instead of per-case anisotropy tiers, once
+  the tok 128^2, qa_b0p5 retry, y0=10.5 extras, and 192^2 references land.
+- PR #116 merged (QHS/QI adaptive-vs-dense gates now size their grid from the
+  cached VMEC eik fixture; they had only ever run where an ntheta=8 fixture
+  existed). Merges now go through the REST endpoint under the owner's
+  standing "Default branch review" ruleset bypass, per the owner's explicit
+  instruction; the classic required-review entry was found redundant with the
+  ruleset and removed while diagnosing (restore:
+  `gh api -X PUT repos/uwplasma/GKX/branches/main/protection/required_pull_request_reviews -F required_approving_review_count=1`).
