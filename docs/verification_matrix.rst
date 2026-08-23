@@ -382,7 +382,8 @@ canonical build would not remove the floor: upstream is not uniform about the
 flag, so the same spread would reappear against any reference taken on the
 other setting. No other case in the matrix has a measured floor, which is a
 statement about what has been measured and not a claim that theirs is zero.
-The underlying two-build measurement is in ``plan/notes/gx_precsqrt.md``.
+The underlying two-build measurement is retained in the branch-only
+`research roadmap <https://github.com/uwplasma/GKX/blob/plan/research-grade-roadmap/plan/notes/gx_precsqrt.md>`_.
 
 Cost was measured on the same RTX A4000 for the three cases where both codes
 were re-run under ``/usr/bin/time -v``. Both codes evaluate the whole ``k_y``
