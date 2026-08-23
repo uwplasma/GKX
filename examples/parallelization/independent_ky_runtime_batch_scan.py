@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Run a runtime-configured independent ky scan with [parallel] strategy="batch".
+"""Runtime-configured independent ky scan with ``[parallel] strategy="batch"``.
 
-This example intentionally uses the independent-worker runtime path: each ky
-point is solved by the normal single-ky runtime solver, and results are gathered
-in input order. It does not request the combined-ky solver layout and does not
-change solver defaults.
+Each ky point in the TOML's ``[scan].ky`` list is solved by the normal
+single-ky runtime solver in an independent worker, and results are gathered in
+input order; the combined-ky solver layout is never requested and solver
+defaults are unchanged.  Prints one ``gamma``/``omega`` line per ky point plus
+the parallel-execution summary.  The shipped config is tiny -- the scan
+finishes in well under a minute.
+
+``run_example`` is imported by the integration tests, so the run itself stays
+under the ``__main__`` guard.
 """
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 import numpy as np
@@ -17,8 +21,10 @@ import numpy as np
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from gkx.runtime import run_runtime_scan
 
+CONFIG = Path(__file__).with_name("runtime_batch_ky_scan.toml")
+WORKERS = 1  # 1 lets the TOML [parallel].num_devices select the worker count
+EXECUTOR = "thread"  # fallback executor ("thread" or "process") when WORKERS > 1
 
-_DEFAULT_CONFIG = Path(__file__).with_name("runtime_batch_ky_scan.toml")
 _FIT_KEYS = {
     "auto_window",
     "tmin",
@@ -35,7 +41,7 @@ _FIT_KEYS = {
 
 
 def run_example(
-    config: str | Path = _DEFAULT_CONFIG,
+    config: str | Path = CONFIG,
     *,
     workers: int = 1,
     executor: str = "thread",
@@ -70,27 +76,8 @@ def run_example(
     )
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default=str(_DEFAULT_CONFIG))
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help="Override [parallel].num_devices; default lets the TOML select workers.",
-    )
-    parser.add_argument(
-        "--executor",
-        choices=("thread", "process"),
-        default="thread",
-        help=(
-            "Fallback executor when --workers overrides the TOML; the TOML "
-            "[parallel].backend still applies when --workers is left at 1."
-        ),
-    )
-    args = parser.parse_args()
-
-    scan = run_example(args.config, workers=args.workers, executor=args.executor)
+if __name__ == "__main__":
+    scan = run_example(CONFIG, workers=WORKERS, executor=EXECUTOR)
     for ky, gamma, omega in zip(scan.ky, scan.gamma, scan.omega, strict=True):
         print(f"ky={ky:.4f} gamma={gamma:.6f} omega={omega:.6f}")
     if scan.parallel is not None:
@@ -100,8 +87,3 @@ def main() -> int:
             f"requested_workers={scan.parallel['requested_workers']} "
             f"effective_workers={scan.parallel['effective_workers']}"
         )
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

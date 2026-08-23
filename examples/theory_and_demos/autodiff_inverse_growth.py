@@ -1,8 +1,19 @@
-"""Autodiff inverse/sensitivity demo for a linear ITG growth proxy."""
+"""Autodiff inverse/sensitivity demo for a linear ITG growth proxy.
+
+Differentiates the fitted growth rate and frequency of a single Cyclone-like
+ITG mode with respect to the driving gradients ``a/L_Ti`` and ``a/L_n``,
+checks the autodiff Jacobian against finite differences, then runs a small
+gradient-descent inverse solve that recovers the gradients from the
+observables (non-unique with one mode) and reports the local UQ covariance.
+Writes a JSON summary and a four-panel figure to ``OUTDIR``.  A minute or two
+on a laptop CPU.
+
+``run_demo`` is imported by the integration tests, so the run itself stays
+under the ``__main__`` guard.
+"""
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
 
@@ -346,40 +357,34 @@ def run_demo(
     return summary
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Autodiff inverse growth demo.")
-    parser.add_argument("--outdir", type=Path, default=Path("docs/_static"))
-    parser.add_argument("--steps", type=int, default=120)
-    parser.add_argument("--dt", type=float, default=0.05)
-    parser.add_argument("--ky-index", type=int, default=1)
-    parser.add_argument("--kx-index", type=int, default=0)
-    parser.add_argument("--z-index", type=int, default=0)
-    parser.add_argument("--tprim-true", type=float, default=2.8)
-    parser.add_argument("--fprim-true", type=float, default=0.8)
-    parser.add_argument("--tprim-init", type=float, default=2.4)
-    parser.add_argument("--fprim-init", type=float, default=0.95)
-    parser.add_argument("--gd-steps", type=int, default=18)
-    parser.add_argument("--gd-lr", type=float, default=0.7)
-    args = parser.parse_args()
+OUTDIR = Path("docs/_static")  # where the JSON summary and figure are written
+STEPS = 120  # forward-integration steps per observable evaluation
+DT = 0.05  # time step
+KY_INDEX = 1  # ky index of the probed mode
+KX_INDEX = 0  # kx index of the probed mode
+Z_INDEX = 0  # z index of the probed potential sample
+TPRIM_TRUE = 2.8  # a/L_Ti used to synthesize the target observables
+FPRIM_TRUE = 0.8  # a/L_n used to synthesize the target observables
+TPRIM_INIT = 2.4  # a/L_Ti starting guess for the inverse solve
+FPRIM_INIT = 0.95  # a/L_n starting guess for the inverse solve
+GD_STEPS = 18  # gradient-descent steps
+GD_LR = 0.7  # gradient-descent learning rate
 
+if __name__ == "__main__":
     summary = run_demo(
-        outdir=args.outdir,
-        steps=args.steps,
-        dt=args.dt,
-        ky_index=args.ky_index,
-        kx_index=args.kx_index,
-        z_index=args.z_index,
-        tprim_true=args.tprim_true,
-        fprim_true=args.fprim_true,
-        tprim_init=args.tprim_init,
-        fprim_init=args.fprim_init,
-        gd_steps=args.gd_steps,
-        gd_lr=args.gd_lr,
+        outdir=OUTDIR,
+        steps=STEPS,
+        dt=DT,
+        ky_index=KY_INDEX,
+        kx_index=KX_INDEX,
+        z_index=Z_INDEX,
+        tprim_true=TPRIM_TRUE,
+        fprim_true=FPRIM_TRUE,
+        tprim_init=TPRIM_INIT,
+        fprim_init=FPRIM_INIT,
+        gd_steps=GD_STEPS,
+        gd_lr=GD_LR,
         plot=True,
         write_files=True,
     )
     print("summary:", json.dumps(summary, indent=2))
-
-
-if __name__ == "__main__":
-    main()
