@@ -1023,8 +1023,8 @@ composition after PR #105, only `integrator_diagnostics.py` and
 functions resolves both mechanically. The composed #112 cut then changes ten
 source files, removes 49 more lines, and brings the 12-cut installed tree to
 96,193 lines (-272 from 96,465). All 398 directly changed-file x64 tests, 117
-release tests, Ruff, and mypy on those ten files pass in that topology; GitHub
-CI is pending.
+release tests, Ruff, and mypy on those ten files pass in that topology. All 41
+required GitHub checks pass; nightly is intentionally skipped.
 
 The hosted-ref audit now covers deletion as well as retention. GitHub
 advertises 81 branch heads and 28 tags. The candidate retains `main`, every one
