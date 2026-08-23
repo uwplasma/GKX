@@ -480,7 +480,7 @@ def test_benchmark_results_manifest_is_root_level_and_small() -> None:
     assert readme.stat().st_size < 20_000
 
 
-def test_benchmark_results_manifest_points_to_tracked_docs_outputs() -> None:
+def test_benchmark_results_manifest_points_to_tracked_or_regenerable_outputs() -> None:
     manifest = _load_results_manifest()
     rendered_suffixes = load_release_tool(
         "check_validation_coverage_manifest"
@@ -495,13 +495,16 @@ def test_benchmark_results_manifest_points_to_tracked_docs_outputs() -> None:
 
     for entry in entries:
         path = ROOT / entry["path"]
+        action = entry.get("action", "keep_in_repo")
         rendered = path.suffix.lower() in rendered_suffixes
+        assert action in {"keep_in_repo", "regenerate_on_demand"}
         assert ROOT / "tools_out" not in path.parents
         assert ROOT / "docs" / "_build" not in path.parents
         if path.exists():
             assert path.is_file(), entry["path"]
             assert path.stat().st_size <= MAX_TRACKED_RESULT_BYTES, entry["path"]
         else:
+            assert action == "regenerate_on_demand", entry["path"]
             assert rendered, entry["path"]
 
         source_manifest = ROOT / entry["source_manifest"]

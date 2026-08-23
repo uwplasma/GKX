@@ -779,14 +779,11 @@ Machine-readable values and every gate are retained in
 :download:`collision_finite_wavelength_itg_convergence.json
 <_static/collision_finite_wavelength_itg_convergence.json>`.
 
-.. figure:: _static/collision_finite_wavelength_itg_convergence.png
-   :alt: Finite-wavelength Coulomb slab ITG growth and velocity-space convergence
-   :width: 86%
-   :align: center
+**Generated figure.** Exact paper-wavelength slab-ITG hierarchy. The :math:`(15,6)`
+finite-
+collision scan and independent :math:`(18,6)` collisionless endpoint pass
+the fixed equivalent-convergence gates.
 
-   Exact paper-wavelength slab-ITG hierarchy. The :math:`(15,6)` finite-
-   collision scan and independent :math:`(18,6)` collisionless endpoint pass
-   the fixed equivalent-convergence gates.
 
 The panel is regenerated with the existing artifact owner after exact table
 archives are built with ``build_finite_wavelength_coulomb_pair_tables``::
@@ -1205,16 +1202,13 @@ over :math:`t\nu\leq10`, and both velocity sections. Missing data fail closed;
 the tool does not infer a pass from a lower-resolution or collisionless trace,
 and the command exits nonzero while any gate remains open.
 
-.. figure:: _static/collision_finite_wavelength_zonal_response.png
-   :alt: Paper-resolution Coulomb and Sugama collisional zonal responses
-   :width: 100%
+**Generated figure.** Complete Figures 12--14 protocol at :math:`(P,J)=(24,10)`. The
+finite-wavelength late responses obey original Sugama < improved Sugama <
+Coulomb at :math:`k_x\rho_i=0.1` and 0.2; the improved model has the smaller
+early-window error relative to Coulomb at both wavenumbers. Both
+:math:`t\nu=5` velocity sections and the drift-kinetic Xiao-residual gate
+pass.
 
-   Complete Figures 12--14 protocol at :math:`(P,J)=(24,10)`. The
-   finite-wavelength late responses obey original Sugama < improved Sugama <
-   Coulomb at :math:`k_x\rho_i=0.1` and 0.2; the improved model has the smaller
-   early-window error relative to Coulomb at both wavenumbers. Both
-   :math:`t\nu=5` velocity sections and the drift-kinetic Xiao-residual gate
-   pass.
 
 The full-resolution campaign contains 73,824 trace rows. Its exact verdict is
 retained in :download:`the JSON report
@@ -1506,11 +1500,9 @@ rather than numerical: it carries no free parameter, and it is confined to
 :math:`m = M`, so it cannot bias resolved moments the way a band operator can.
 It is not a drop-in improvement on a well-tuned hypercollision.
 
-.. figure:: _static/recurrence_hermite_closure.png
-   :width: 100%
+**Generated figure.** Recurrence and the two absorbing treatments. Panel (d) shows
+:math:`R_{M+1}\to1`, i.e. absorption that becomes exact with resolution.
 
-   Recurrence and the two absorbing treatments. Panel (d) shows
-   :math:`R_{M+1}\to1`, i.e. absorption that becomes exact with resolution.
 
 The closure is selected through the Python API,
 ``linked_streaming_contribution(..., hermite_closure="reflectionless")``;
