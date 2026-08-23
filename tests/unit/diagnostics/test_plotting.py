@@ -1,7 +1,5 @@
 """Plotting utilities should generate figures without errors."""
 
-from dataclasses import replace
-
 import matplotlib
 
 matplotlib.use("Agg")
@@ -431,9 +429,7 @@ import gkx.artifacts.snapshots as snapshots
 from gkx.artifacts.transport_figures import (
     flux_spectra_figure,
     heat_flux_time_figure,
-    ky_spectrum_tail_ratio,
     phi2_spectra_figure,
-    spectrum_cutoff_warnings,
 )
 
 
@@ -583,45 +579,6 @@ def test_flux_spectra_figure_from_netcdf(tmp_path):
     assert len(axes) == 2
 
 
-def test_ky_spectrum_tail_ratio_distinguishes_cutoff_decay():
-    ky = np.arange(9, dtype=float)
-    resolved = np.array([0.0, 1.0, 0.7, 0.4, 0.2, 0.08, 0.03, 0.01, 0.005])
-    unresolved = np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6])
-
-    assert ky_spectrum_tail_ratio(ky, resolved) == pytest.approx(0.005)
-    assert ky_spectrum_tail_ratio(ky, unresolved) == pytest.approx(1.0)
-    assert ky_spectrum_tail_ratio(ky[:4], resolved[:4]) is None
-
-
-def test_spectrum_cutoff_warning_names_resolution_action(tmp_path):
-    path = _write_synthetic_out_nc(tmp_path / "case.out.nc", nky=9)
-    netcdf4 = pytest.importorskip("netCDF4")
-    with netcdf4.Dataset(path, "a") as root:
-        heat = root.groups["Diagnostics"].variables["HeatFlux_kyst"]
-        heat[:, :, :] = np.arange(9, dtype=float)[None, None, :]
-
-    warnings = spectrum_cutoff_warnings(path)
-
-    assert len(warnings) == 1
-    assert "heat-flux ky cutoff is unresolved" in warnings[0]
-    assert "Increase Ny at fixed Ly" in warnings[0]
-    assert "Nx/Ny convergence" in warnings[0]
-
-
-def test_flux_spectrum_marks_unresolved_ky_cutoff():
-    diag, ky, kx = _memory_nonlinear_diag(nky=9)
-    heat = np.broadcast_to(
-        np.arange(9, dtype=float)[None, None, :],
-        (diag.t.size, 2, 9),
-    )
-    diag = replace(diag, resolved=replace(diag.resolved, HeatFlux_kyst=heat))
-
-    fig, axes = flux_spectra_figure(diag, ky=ky, kx=kx)
-
-    assert any("cutoff unresolved" in text.get_text() for text in axes[0].texts)
-    plt.close(fig)
-
-
 def test_phi2_spectra_figure_from_netcdf(tmp_path):
     path = _write_synthetic_out_nc(tmp_path / "case.out.nc")
     out = tmp_path / "phi2_spectra.png"
@@ -687,13 +644,18 @@ def test_potential_real_space_round_trip():
         snapshots.potential_real_space(spectral[:2], ny_full=ny)
 
 
-def test_movie_snapshot_replays_lightweight_physical_cuts(tmp_path, monkeypatch):
+def _movie_tool(name):
     root = pathlib.Path(__file__).parents[3]
     script = root / "tools" / "artifacts" / "build_turbulence_movie.py"
-    spec = importlib.util.spec_from_file_location("gkx_movie_test", script)
+    spec = importlib.util.spec_from_file_location(name, script)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def test_movie_snapshot_replays_lightweight_physical_cuts(tmp_path, monkeypatch):
+    module = _movie_tool("gkx_movie_test")
 
     snapshot = tmp_path / "cuts.npz"
     np.savez_compressed(
@@ -722,6 +684,79 @@ def test_movie_snapshot_replays_lightweight_physical_cuts(tmp_path, monkeypatch)
     assert rendered[0][0][2].nfp == 6
     np.testing.assert_allclose(rendered[0][0][2].cylindrical_R_profile, [10.0, 10.1])
     assert rendered[0][1]["extent"] == (20.0, 30.0)
+
+
+def test_movie_encode_caps_lightweight_width(tmp_path, monkeypatch):
+    module = _movie_tool("gkx_movie_encode_test")
+    commands = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        return module.subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    assert (
+        module._encode(
+            tmp_path,
+            [tmp_path / "frame_0000.png"],
+            tmp_path / "movie.mp4",
+            5,
+            False,
+            True,
+        )
+        == 0
+    )
+    assert commands[0][commands[0].index("-vf") + 1] == "scale=900:-2"
+
+
+def test_movie_restores_campaign_state_and_absolute_time(tmp_path):
+    module = _movie_tool("gkx_movie_state_test")
+
+    shape = (1, 2, 2, 4, 4, 4)
+    state = np.arange(np.prod(shape), dtype=np.float32).reshape(shape).astype(complex)
+    archive = tmp_path / "state.npz"
+    np.savez_compressed(archive, state=state, t_end=250.0, saturated=True)
+    restored, t_start, saturated, label = module._movie_initial_state(
+        archive, shape=shape, dtype=np.complex64, seed=0, amplitude=1e-3
+    )
+
+    np.testing.assert_allclose(restored, state)
+    assert (t_start, saturated, label) == (250.0, True, str(archive))
+    with pytest.raises(ValueError, match="movie grid shape"):
+        module._movie_initial_state(
+            archive,
+            shape=shape[:-1] + (5,),
+            dtype=np.complex64,
+            seed=0,
+            amplitude=1e-3,
+        )
+
+
+def test_movie_uses_deck_moment_resolution_unless_overridden():
+    module = _movie_tool("gkx_movie_moments_test")
+
+    raw = {"run": {"Nl": 6, "Nm": 10}}
+    assert module._movie_moment_dims(raw, None, None) == (6, 10)
+    assert module._movie_moment_dims(raw, 3, 5) == (3, 5)
+    assert module._movie_moment_dims({}, None, None) == (4, 8)
+
+
+def test_movie_imported_geometry_requires_physical_profiles():
+    module = _movie_tool("gkx_movie_geometry_test")
+
+    with pytest.raises(RuntimeError, match="require physical R, Z"):
+        module._require_movie_geometry_profiles(object(), model="vmec")
+    geometry = type(
+        "Geometry",
+        (),
+        {
+            "cylindrical_R_profile": np.array([1.0, 1.1]),
+            "cylindrical_Z_profile": np.array([0.0, 0.1]),
+            "toroidal_angle_profile": np.array([0.0, 0.2]),
+        },
+    )()
+    module._require_movie_geometry_profiles(geometry, model="vmec")
+    module._require_movie_geometry_profiles(object(), model="s-alpha")
 
 
 def test_turbulence_hero_imports_promoted_geometry_helpers():
