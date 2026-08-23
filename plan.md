@@ -891,8 +891,8 @@ dry run instead:
    `_static` assets and NetCDF data;
 5. stores large reproducible artifacts in a release with hashes and a fetch
    manifest; and
-6. deletes merged remote topic branches after preserving the original refs in
-   an offline `git bundle --all`.
+6. rewrites every current branch head onto the filtered object graph while an
+   offline `git bundle --all` preserves every original ref and object.
 
 Dry-run result after aggressive garbage collection: 3,359 commits including
 the snapshot, `git fsck --full --strict` clean, a 5.93 MiB pack, and a 2.27 MB
@@ -1026,14 +1026,13 @@ source files, removes 49 more lines, and brings the 12-cut installed tree to
 release tests, Ruff, and mypy on those ten files pass in that topology. All 41
 required GitHub checks pass; nightly is intentionally skipped.
 
-The hosted-ref audit now covers deletion as well as retention. GitHub
-advertises 81 branch heads and 28 tags. The candidate retains `main`, every one
-of the 31 open PR heads, and the temporary #81 dependency base; a complete
-109-row disposition ledger marks those 61 head/tag refs `REWRITE` and the 48
-remaining topic heads `DELETE_AFTER_BUNDLE`. The latter are 46 merged heads
-plus closed PRs #25 and #106. GitHub's 141 server-managed pull refs must also be
-captured by the final lossless mirror bundle. No ref may disappear from the
-ledger or recovery bundle merely because its PR is closed.
+The hosted-ref audit now covers every branch. GitHub advertises 81 branch heads
+and 28 tags: 31 open-PR heads, `main`, the temporary #81 dependency base, 46
+merged heads, and closed PRs #25/#106. Replaying the exact validated history
+filter and attribution callbacks for the latter 48 shows that all 109 head/tag
+refs fit and can be marked `REWRITE`; none needs deletion. GitHub's 141
+server-managed pull refs must also be captured by the final lossless mirror
+bundle. No ref may disappear merely because its PR is closed.
 
 The private roadmap is now represented by one source-neutral snapshot rather
 than repeated log snapshots. Its 20 roadmap blobs exactly match public
@@ -1043,6 +1042,13 @@ bytes, pack plus index 9,056,304 bytes, and complete `.git` 9,605,735 bytes.
 Strict `fsck`, no alternates, and the attribution scan pass, leaving 394,265
 bytes below the decimal 10-MB gate. This closes the discovered ref-accounting
 gap in the rehearsal protocol, not the final freeze or network cutover gate.
+
+Retaining the 48 filtered closed/merged heads still passes: a fresh all-head
+clone has 82 remote refs, 28 tags, 3,538 commits, and 17,967 objects. Its pack
+is 8,646,760 bytes, pack plus index is 9,150,908 bytes, and complete `.git` is
+9,715,173 bytes, leaving 284,827 bytes of decimal margin. Strict `fsck`, no
+alternates, and zero AI-attribution hits pass. The cutover now rewrites every
+current branch and deletes none.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text

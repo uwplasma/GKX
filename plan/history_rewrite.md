@@ -48,9 +48,10 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
 - Rebase the 31 open PR heads (#74, #82--#105, and #107--#112) after
   the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
-- Delete merged or closed topic heads only after their exact old names and tips
-  appear with a `DELETE_AFTER_BUNDLE` disposition in the published ref map and
-  the re-frozen complete bundle contains them.
+- Retain and rewrite all 81 current branch heads. Publish every old and new tip
+  in the 109-row head/tag map. Any later deletion requires a separate explicit
+  decision after the re-frozen complete bundle is verified; deletion is not
+  part of the planned cutover.
 
 Historical `docs`, `tests`, `tools`, `examples`, `benchmarks`, `scripts`,
 `plan`, and NetCDF blobs are removed from hosted history. Their current compact
@@ -165,14 +166,14 @@ marker remains. The other human identities are unchanged.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main` and all tags from exact candidate SHAs, then rebase the
-   31 open PR heads with `--force-with-lease`. Do not merely retarget the
+   update `main`, all tags, and the 48 non-open heads from exact candidate SHAs,
+   then rebase the 31 open PR heads with `--force-with-lease`. Do not merely retarget the
    nineteen direct #81-base PRs: the squash merge left equal base trees but
    divergent ancestry, so each head must be replayed onto rewritten `main` and
    pass exact tree/patch checks before retargeting.
-9. Verify GitHub Actions on the rewritten refs, then delete only the enumerated
-   merged heads and restore protection: required aggregate CI, one non-author
-   approval, and no force pushes.
+9. Verify GitHub Actions on the rewritten refs, then restore protection:
+   required aggregate CI, one non-author approval, and no force pushes. Do not
+   delete a branch as part of this cutover.
 
 ## Resolved preparation and remaining cutover gates
 
@@ -212,8 +213,8 @@ single-branch clone of the combined rehearsal has one 9,464,119-byte pack
 Repository hygiene, strict Sphinx, sdist/wheel build, installed-wheel import,
 CLI startup, strict `fsck`, and all 2,554 collected x64 tests pass in that fresh
 clone. At the 20-head rehearsal, GitHub advertised 68 branch heads but only 20
-open PR heads; closed heads cannot remain attached to their old object graph
-under the 10-MB contract. That no-alternates rehearsal mapped all 20 open heads:
+open PR heads; closed heads could not remain attached to their old unfiltered
+object graph under the 10-MB contract. That no-alternates rehearsal mapped all 20 open heads:
 four reviewed slimming heads already represented in the candidate pointed at
 slim `main`, and the other sixteen were replayed from their true PR bases.
 Aggregate patch IDs matched for every textual patch; PR #90 alone omitted a
@@ -382,15 +383,12 @@ commits, and 17,947 objects. Its pack is 8,662,536 bytes, pack plus index is
 498,089 bytes below the strict decimal 10-MB gate. No public history moved.
 
 A full hosted-ref refresh found 81 branch heads and 28 tags, not only the 33
-heads intentionally retained by the rewrite candidate. All 31 open PR heads
-are retained; the other retained heads are `main` and the temporary
-`fix/main-ci-mypy` dependency base. The 48 omitted heads belong to 46 merged
-PRs and two closed, unmerged PRs (#25 and duplicate #106). They are therefore
-deletion candidates, not silently absent refs. The rehearsal disposition map
-must contain all 109 head/tag names and old tips: 61 `REWRITE` rows and 48
-`DELETE_AFTER_BUNDLE` rows. GitHub also advertises 141 server-managed pull refs;
-the final mirror and lossless bundle must capture them even though the cutover
-does not update them directly.
+heads in the first candidate. The extra 48 belong to 46 merged PRs and two
+closed, unmerged PRs (#25 and duplicate #106). The exact path and identity
+callbacks reproduce every one of the earlier 29 main/tag targets, so the 48
+heads can be filtered onto the same object graph rather than deleted. GitHub
+also advertises 141 server-managed pull refs; the final mirror and lossless
+bundle must capture them even though the cutover does not update them directly.
 
 Repeated roadmap-log replays had also made the private size gate depend on
 incremental documentation history. Replaced that private branch only with one
@@ -402,3 +400,11 @@ refs, 28 tags, 3,451 commits, and 17,709 objects: pack 8,559,380 bytes, pack
 plus index 9,056,304 bytes, and complete `.git` 9,605,735 bytes. Strict `fsck`,
 no alternates, and zero AI-attribution hits pass, leaving 394,265 bytes of
 strict decimal margin. No public history moved.
+
+The all-head candidate retains all 81 branch heads and 28 tags. A fresh
+ordinary clone has 82 remote refs, 3,538 commits, and 17,967 objects: pack
+8,646,760 bytes, pack plus index 9,150,908 bytes, and complete `.git` 9,715,173
+bytes. Strict `fsck`, no alternates, and zero AI-attribution hits pass, leaving
+284,827 bytes of strict decimal margin. Preserving all current hosted branch
+history therefore fits the size gate and supersedes the deletion disposition.
+No public history moved.

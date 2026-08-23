@@ -1579,3 +1579,17 @@
   9,056,304 bytes, and complete `.git` 9,605,735 bytes. Strict `fsck`, zero
   alternates, and zero AI-attribution hits pass, leaving 394,265 bytes of
   decimal margin. No public history moved.
+- Recovered and independently reproduced the exact two-stage rewrite recipe:
+  remove historical `docs`, `tests`, `tools`, `examples`, `benchmarks`,
+  `scripts`, `plan`, `plan.md`, and `*.nc` paths while preserving empty and
+  degenerate commits; then apply the Rogerio mailmap, remove the four Claude
+  co-author trailers and `[codex]` prefix, and rewrite `codex/` branch labels.
+  All 29 earlier main/tag targets reproduce byte-for-byte. Applying it to the
+  48 previously omitted heads permits retention rather than deletion.
+- The resulting all-head candidate has all 81 current branch heads and 28 tags.
+  A fresh ordinary clone has 82 remote refs, 3,538 commits, and 17,967 objects:
+  pack 8,646,760 bytes, pack plus index 9,150,908 bytes, and complete `.git`
+  9,715,173 bytes. Strict `fsck`, no alternates, and zero AI-attribution hits
+  pass, leaving 284,827 bytes of decimal margin. This supersedes the preceding
+  48-row delete disposition; the planned cutover now deletes no branch. No
+  public history moved.
