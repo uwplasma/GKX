@@ -105,16 +105,6 @@ def _unpack_complex_state(G_packed: jnp.ndarray) -> jnp.ndarray:
     return G_packed[..., 0] + 1j * G_packed[..., 1]
 
 
-def _infer_velocity_shape(G0: jnp.ndarray) -> tuple[int, int]:
-    if G0.ndim == 5:
-        return int(G0.shape[0]), int(G0.shape[1])
-    if G0.ndim == 6:
-        return int(G0.shape[1]), int(G0.shape[2])
-    raise ValueError(
-        "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-    )
-
-
 def _apply_state_sharding(
     state: jnp.ndarray, state_sharding: Any | None
 ) -> jnp.ndarray:
@@ -185,7 +175,6 @@ __all__ = [
     "_assemble_rhs",
     "_base_complex_dtype",
     "_density_from_G_cached",
-    "_infer_velocity_shape",
     "_is_imex_solver",
     "_is_implicit_solver",
     "_pack_complex_state",

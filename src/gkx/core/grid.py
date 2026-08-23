@@ -117,6 +117,21 @@ def real_fft_mesh(
     return kx, ky, kx_mesh, ky_mesh
 
 
+def _gyrokinetic_moment_shape(
+    state: jnp.ndarray, *, name: str = "G0"
+) -> tuple[int, int]:
+    """Return ``(Nl, Nm)`` with or without a leading species axis."""
+
+    if state.ndim == 5:
+        return int(state.shape[0]), int(state.shape[1])
+    if state.ndim == 6:
+        return int(state.shape[1]), int(state.shape[2])
+    raise ValueError(
+        f"{name} must have shape (Nl, Nm, Ny, Nx, Nz) or "
+        "(Ns, Nl, Nm, Ny, Nx, Nz)"
+    )
+
+
 def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
     Lx = cfg.Lx
     Ly = 2.0 * jnp.pi * cfg.y0 if cfg.y0 is not None else cfg.Ly

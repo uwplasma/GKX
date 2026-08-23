@@ -31,6 +31,7 @@ from gkx.operators.collision import (
 )
 from gkx.core.grid import (
     SpectralGrid,
+    _gyrokinetic_moment_shape,
     build_spectral_grid,
     real_fft_ordered_kx,
     real_fft_unique_ky,
@@ -73,6 +74,24 @@ def test_solver_facade_exposes_only_supported_public_names(facade, required) -> 
     assert facade.__all__
     assert not any(name.startswith("_") for name in facade.__all__)
     assert required <= set(facade.__all__)
+
+
+@pytest.mark.parametrize(
+    ("shape", "expected"),
+    [
+        ((2, 3, 4, 5, 6), (2, 3)),
+        ((7, 2, 3, 4, 5, 6), (2, 3)),
+    ],
+)
+def test_gyrokinetic_moment_shape_handles_optional_species_axis(
+    shape: tuple[int, ...], expected: tuple[int, int]
+) -> None:
+    assert _gyrokinetic_moment_shape(jnp.empty(shape)) == expected
+
+
+def test_gyrokinetic_moment_shape_preserves_caller_label() -> None:
+    with pytest.raises(ValueError, match="G must have shape"):
+        _gyrokinetic_moment_shape(jnp.empty((2, 3, 4, 5)), name="G")
 
 
 def test_collision_protocols_accept_structural_implementations() -> None:

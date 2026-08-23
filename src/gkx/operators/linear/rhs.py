@@ -6,7 +6,7 @@ import jax.numpy as jnp
 
 from gkx.operators.collision import CollisionOperator
 from gkx.geometry import FluxTubeGeometryLike
-from gkx.core.grid import SpectralGrid
+from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
@@ -32,14 +32,7 @@ def linear_rhs(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS and electrostatic potential from grid/geometry inputs."""
 
-    if G.ndim == 5:
-        Nl, Nm = G.shape[0], G.shape[1]
-    elif G.ndim == 6:
-        Nl, Nm = G.shape[1], G.shape[2]
-    else:
-        raise ValueError(
-            "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-        )
+    Nl, Nm = _gyrokinetic_moment_shape(G, name="G")
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
     return linear_rhs_cached(
         G,
