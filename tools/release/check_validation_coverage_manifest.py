@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Validate the refactor/validation coverage traceability manifest.
 
-The manifest is intentionally stricter than a planning document.  Each critical
-module must map to reference anchors, physics/numerics contracts, fast tests,
-artifacts, and next tests so the 95% coverage target remains tied to useful
-scientific and numerical checks.
+Each critical module maps to references, physics/numerics contracts, fast
+tests, machine-readable evidence, and next tests. Rendered media stay declared
+but may be regenerated outside Git; missing numeric evidence still fails.
 """
 
 from __future__ import annotations
@@ -68,6 +67,7 @@ REQUIRED_LIST_FIELDS = (
     "next_tests",
 )
 OPTIONAL_LIST_FIELDS = ("owned_modules",)
+RENDERED_ARTIFACT_SUFFIXES = {".gif", ".mp4", ".pdf", ".png", ".svg", ".webp"}
 
 
 def _stable_repo_path(path: Path) -> str:
@@ -501,8 +501,17 @@ def validate_manifest(
             entry.get("artifact_paths"), "artifact_paths", module
         )
         _reject_duplicate_values(artifacts, "artifact_paths", module)
+        rendered = [
+            artifact
+            for artifact in artifacts
+            if Path(artifact).suffix.lower() in RENDERED_ARTIFACT_SUFFIXES
+        ]
+        required = [artifact for artifact in artifacts if artifact not in rendered]
+        missing_rendered = [
+            artifact for artifact in rendered if not _repo_path(artifact).is_file()
+        ]
         if check_artifacts:
-            for artifact in artifacts:
+            for artifact in required:
                 resolved_artifact = _repo_path(artifact)
                 if not resolved_artifact.exists():
                     raise ValueError(
@@ -525,6 +534,9 @@ def validate_manifest(
                 "n_numerics_contracts": len(lists["numerics_contracts"]),
                 "n_fast_tests": len(lists["fast_tests"]),
                 "n_artifacts": len(artifacts),
+                "n_required_artifacts": len(required),
+                "n_rendered_artifacts": len(rendered),
+                "n_missing_rendered_artifacts": len(missing_rendered),
                 "n_next_tests": len(lists["next_tests"]),
                 "n_owned_modules": len(owned_modules),
             }
