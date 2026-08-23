@@ -1135,6 +1135,7 @@ def test_auto_fit_signal_keeps_the_requested_window_in_a_batched_scan() -> None:
         show_progress=False,
         **options,
     )
+    assert scan_options.fit_fields() == options
 
     gamma_auto, omega_auto = _fit_batch_scan_point(
         diagnostics,
