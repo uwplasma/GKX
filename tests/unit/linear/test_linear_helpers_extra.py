@@ -15,6 +15,7 @@ from gkx.geometry import FluxTubeGeometryData, SAlphaGeometry
 from gkx.core.grid import build_spectral_grid
 from gkx.core.velocity import _gyro_bessel_factors, J_l_all
 import gkx.operators.linear as linear_cache
+import gkx.solvers.linear.integrators as linear_integrators
 import gkx.solvers.linear.implicit as linear_implicit
 import gkx.operators.linear.dissipation as linear_dissipation
 import gkx.terms.linear_terms as linear_terms
@@ -1043,6 +1044,23 @@ def test_integrate_linear_wrapper_routes_methods(monkeypatch) -> None:
         integrate_linear(G0, grid, geom, params, dt=0.1, steps=3, sample_stride=2)
     with pytest.raises(ValueError):
         integrate_linear(jnp.zeros((2, 2)), grid, geom, params, dt=0.1, steps=2)
+
+
+def test_cached_linear_binding_resolves_impl_at_trace(monkeypatch) -> None:
+    bound = linear_integrators._bind_cached_linear_integrator(donate=False)
+    calls: list[bool] = []
+
+    def _fake_impl(G0, *args, **kwargs):
+        calls.append(True)
+        return G0 + 1.0, G0 + 2.0
+
+    monkeypatch.setattr(linear_integrators, "_integrate_linear_cached_impl", _fake_impl)
+    G = jnp.zeros((2,), dtype=jnp.float32)
+    state, field = bound(G, G, G, 0.1, 1)
+
+    assert calls == [True]
+    np.testing.assert_array_equal(state, jnp.ones_like(G))
+    np.testing.assert_array_equal(field, 2.0 * jnp.ones_like(G))
 
 
 def test_integrate_linear_wrapper_routes_nonserial_parallel(monkeypatch) -> None:
