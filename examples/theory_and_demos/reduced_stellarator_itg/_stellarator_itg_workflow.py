@@ -9,8 +9,7 @@ AD/finite-difference parity, then write diagnostic artifacts explicitly.
 
 from __future__ import annotations
 
-import argparse
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -40,84 +39,6 @@ from gkx import (
 from _stellarator_itg_plotting import write_portfolio_gate_artifacts
 
 PORTFOLIO_OBJECTIVES = ("growth", "quasilinear_flux")
-
-
-def add_common_stellarator_itg_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add shared editable controls to an optimization example parser."""
-
-    parser.add_argument("--target-aspect", type=float, default=None, help="QA aspect-ratio target.")
-    parser.add_argument("--target-iota", type=float, default=None, help="Mean rotational-transform target.")
-    parser.add_argument("--aspect-weight", type=float, default=None, help="Aspect residual weight.")
-    parser.add_argument("--iota-weight", type=float, default=None, help="Mean-iota residual weight.")
-    parser.add_argument("--qa-weight", type=float, default=None, help="Quasisymmetry residual weight.")
-    parser.add_argument("--turbulence-weight", type=float, default=None, help="Transport objective residual weight.")
-    parser.add_argument("--regularization", type=float, default=None, help="Control-vector regularization weight.")
-    parser.add_argument("--learning-rate", type=float, default=None, help="Adam learning rate.")
-    parser.add_argument("--steps", type=int, default=None, help="Adam optimizer steps.")
-    parser.add_argument("--nonlinear-dt", type=float, default=None, help="Reduced nonlinear-envelope timestep.")
-    parser.add_argument("--nonlinear-steps", type=int, default=None, help="Reduced nonlinear-envelope steps.")
-    parser.add_argument("--nonlinear-tail-fraction", type=float, default=None, help="Late-window fraction for Q metrics.")
-    parser.add_argument("--quasilinear-csat", type=float, default=None, help="Mixing-length saturation coefficient.")
-    parser.add_argument("--reference-density-gradient", type=float, default=None, help="Reference a/Ln.")
-    parser.add_argument("--reference-temperature-gradient", type=float, default=None, help="Reference a/LTi.")
-    parser.add_argument("--fd-step", type=float, default=None, help="Central finite-difference step for AD gates.")
-    parser.add_argument(
-        "--finite-difference-workers",
-        type=int,
-        default=1,
-        help="Thread workers for finite-difference gradient-gate columns.",
-    )
-    parser.add_argument(
-        "--finite-difference-executor",
-        choices=("thread", "process"),
-        default="thread",
-        help="Executor used by finite-difference gradient gates.",
-    )
-
-
-def add_portfolio_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add the optional reduced multi-surface/field-line portfolio gate controls."""
-
-    parser.add_argument(
-        "--portfolio",
-        action="store_true",
-        help="Also write a reduced multi-surface/alpha/ky growth+QL portfolio gate at the optimized point.",
-    )
-    parser.add_argument("--surfaces", type=float_tuple, default=None, help="Comma-separated normalized flux surfaces.")
-    parser.add_argument("--alphas", type=float_tuple, default=None, help="Comma-separated field-line alpha values.")
-    parser.add_argument("--ky-values", type=float_tuple, default=None, help="Comma-separated ky*rho_i values.")
-    parser.add_argument(
-        "--objective-weights",
-        type=float_tuple,
-        default=None,
-        help="Optional comma-separated portfolio weights: growth,quasilinear_flux.",
-    )
-
-
-def float_tuple(raw: str) -> tuple[float, ...]:
-    """Parse a non-empty comma-separated vector."""
-
-    values = tuple(float(item.strip()) for item in raw.split(",") if item.strip())
-    if not values:
-        raise argparse.ArgumentTypeError("expected at least one comma-separated value")
-    return values
-
-
-def config_from_args(
-    args: argparse.Namespace,
-    *,
-    base_config: StellaratorITGOptimizationConfig,
-    objective_kind: StellaratorObjectiveKind,
-) -> StellaratorITGOptimizationConfig:
-    """Apply CLI overrides to the editable script-level default configuration."""
-
-    cfg = base_config.with_kind_defaults(objective_kind)
-    overrides: dict[str, Any] = {}
-    for field in asdict(cfg):
-        value = getattr(args, field, None)
-        if value is not None:
-            overrides[field] = value
-    return replace(cfg, **overrides) if overrides else cfg
 
 
 def precision_gate_tolerances(fd_step: float) -> tuple[float, float, float]:
@@ -262,30 +183,30 @@ def run_stellarator_itg_adam(
     )
 
 
-def sample_set_from_args(args: argparse.Namespace) -> StellaratorITGSampleSet:
-    """Build the optional portfolio sample set from CLI values."""
-
-    defaults = StellaratorITGSampleSet()
-    return StellaratorITGSampleSet(
-        surfaces=defaults.surfaces if args.surfaces is None else args.surfaces,
-        alphas=defaults.alphas if args.alphas is None else args.alphas,
-        ky_values=defaults.ky_values if args.ky_values is None else args.ky_values,
-    )
-
-
 def write_optional_portfolio_artifacts(
     *,
-    args: argparse.Namespace,
     result: StellaratorITGOptimizationResult,
     out_base: Path,
+    portfolio: bool = False,
+    surfaces: tuple[float, ...] | None = None,
+    alphas: tuple[float, ...] | None = None,
+    ky_values: tuple[float, ...] | None = None,
+    objective_weights: tuple[float, ...] | None = None,
+    finite_difference_workers: int = 1,
+    finite_difference_executor: str = "thread",
 ) -> Path | None:
     """Write the optional reduced multi-surface/field-line gate for linear/QL objectives."""
 
-    if not getattr(args, "portfolio", False):
+    if not portfolio:
         return None
-    if args.objective_weights is not None and len(args.objective_weights) != len(PORTFOLIO_OBJECTIVES):
-        raise ValueError("--objective-weights must provide two values: growth,quasilinear_flux")
-    sample_set = sample_set_from_args(args)
+    if objective_weights is not None and len(objective_weights) != len(PORTFOLIO_OBJECTIVES):
+        raise ValueError("objective_weights must provide two values: growth,quasilinear_flux")
+    defaults = StellaratorITGSampleSet()
+    sample_set = StellaratorITGSampleSet(
+        surfaces=defaults.surfaces if surfaces is None else surfaces,
+        alphas=defaults.alphas if alphas is None else alphas,
+        ky_values=defaults.ky_values if ky_values is None else ky_values,
+    )
     params = np.asarray(result.final_params, dtype=float)
     cfg = StellaratorITGOptimizationConfig(**result.config)
     payload = stellarator_itg_portfolio_gate_payload(
@@ -293,9 +214,9 @@ def write_optional_portfolio_artifacts(
         PORTFOLIO_OBJECTIVES,
         cfg,
         sample_set,
-        objective_weights=args.objective_weights,
-        finite_difference_workers=args.finite_difference_workers,
-        finite_difference_executor=args.finite_difference_executor,
+        objective_weights=objective_weights,
+        finite_difference_workers=finite_difference_workers,
+        finite_difference_executor=finite_difference_executor,
     )
     payload["optimization_objective_kind"] = result.objective_kind
     payload["optimized_params"] = params.tolist()

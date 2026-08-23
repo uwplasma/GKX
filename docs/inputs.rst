@@ -363,7 +363,8 @@ Python driver
 
 .. code-block:: bash
 
-  python examples/utilities/runtime_from_toml.py --config examples/linear/axisymmetric/etg.toml
+  # point CONFIG at the top of the script at examples/linear/axisymmetric/runtime_etg.toml
+  python examples/utilities/runtime_from_toml.py
 
 The canonical KBM TOML is currently a controlled comparison input rather than
 a promoted standalone solve: its experimental shift-invert branch raises when

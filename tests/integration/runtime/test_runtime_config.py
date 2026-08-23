@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import sys
 
 from support.paths import REPO_ROOT, load_repo_script
 
@@ -545,11 +544,7 @@ def test_hsx_nonlinear_vmec_wrapper_defaults_to_config_path(
         return 0
 
     monkeypatch.setattr(mod, "run_nonlinear_case", fake_run_nonlinear_case)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["hsx_nonlinear_vmec_geometry.py", "--steps", "200"],
-    )
+    monkeypatch.setattr(mod, "STEPS", 200)
 
     rc = mod.main()
 
