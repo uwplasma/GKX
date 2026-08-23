@@ -3716,6 +3716,177 @@ def test_decks_cleared_for_the_default_carry_their_measurement() -> None:
         )
 
 
+# ---- explicit CFL margin audit for shipped fixed_dt nonlinear decks ----
+
+"""Every fixed-step deck reaching the nonlinear runtime records its CFL margin.
+
+``fixed_dt = true`` means nothing reduces the step at run time: the nonlinear
+policy builder short-circuits before the CFL bound is even computed, so the
+deck's dt is checked against its own geometry by nobody. Two shipped decks were
+over their bound when this audit was written. The W7-X zonal benchmark ran at
+1.60x and produced 404 NaN samples of a 512-sample trace without raising; the
+ETG nonlinear example runs at 2.77x and goes non-finite at t=0.021 of 0.5.
+
+This is a completeness gate, not a recomputation. CI cannot recompute these
+numbers: the bound needs the deck's equilibrium, ``*.nc`` is gitignored, and no
+wout exists in a clean checkout. So the tables below record measurements a
+human took, exactly as ``_RUN_TO_DEFAULT_CLEARED`` records a stop decision, and
+the gate's real work is that a new fixed_dt deck fails here until somebody
+measures it.
+
+Measurement protocol: build the deck's geometry, grid and params the way
+``_prepare_context`` does, sample the geometry onto ``grid.z`` with
+``ensure_flux_tube_geometry_data``, and evaluate
+
+    omega = _linear_frequency_bound(grid, geom, params, Nl, Nm,
+                                    include_diamagnetic_drive=False)
+    bound = resolve_cfl_fac(method, cfl_fac) * cfl / sum(omega)
+    margin = dt / bound
+
+``include_diamagnetic_drive=False`` is the convention the nonlinear adaptive
+step itself uses; the drive term is not a step-size constraint, and including it
+reports a margin the runtime never applies. Use the dt that actually runs: for a
+driver-promoted deck that is the promoted value, not the deck's own.
+"""
+
+# Measured dt / CFL-bound for each fixed_dt deck reaching the nonlinear runtime.
+_CFL_MARGIN_MEASURED: dict[str, float] = {
+    "benchmarks/runtime_miller_zonal_response.toml": 0.46,
+    "benchmarks/runtime_w7x_zonal_response_vmec.toml": 0.65,
+    # Promoted: build_secondary_stage2_config replaces the deck's dt = 1.0 with
+    # dt = 0.01 before the nonlinear stage, so the deck's own dt is the linear
+    # seed stage's and is not what this audit is about. The seed stage is 13.08x
+    # over the linear bound and is covered by the linear runtime's own warning.
+    "benchmarks/runtime_secondary_slab.toml": 0.13,
+    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml": 1.33,
+    "examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml": 2.77,
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear.toml": 0.18,
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_seed.toml": 0.18,
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml": 0.18,
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short_lockin.toml": 0.18,
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml": 0.90,
+    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100_nx4ny8_dt9e4.toml": 0.65,
+}
+
+# Decks over FIXED_DT_CFL_WARN_RATIO that ship anyway, and the failure each one
+# was measured to produce. This is debt, not clearance: empty it by fixing the
+# deck, not by moving the number. A deck may only sit here with evidence that
+# somebody ran it and saw what happens.
+_CFL_MARGIN_OVER_BOUND: dict[str, str] = {
+    "examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml": (
+        "2.77x: non-finite Wg_t at t=0.021 of t_max=0.5 at the shipped "
+        "dt=0.001; clean through the same window at dt=0.0002. The bound is "
+        "69% binormal drift at ky=5.0, so Nm is not the lever and dt is. "
+        "Fixing it costs 5x the steps, or a switch to fixed_dt = false to "
+        "match the Cyclone examples beside it; that is a deck-owner decision."
+    ),
+}
+
+# Decks reaching the nonlinear runtime that do not need a recorded margin,
+# and why. Adaptive runs recompute dt against this same bound every step, so
+# their configured dt is a starting guess and being over it means nothing.
+_CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = {
+    "examples/common_input.toml": "fixed_dt = false: adaptive dt",
+    "examples/nonlinear/axisymmetric/runtime_circular_vmec_nonlinear.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_t400.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+}
+
+
+def _deck_uses_fixed_dt(relative: str) -> bool:
+    """Whether the loaded deck integrates at a fixed step.
+
+    Read from the loaded config, not the raw TOML: ``fixed_dt`` defaults to
+    True, so a deck that says nothing is a fixed-step deck and has to be in
+    the audit.
+    """
+
+    from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+    cfg, _raw = load_runtime_from_toml(RUN_TO_REPO_ROOT / relative)
+    return bool(cfg.time.fixed_dt)
+
+
+def test_every_fixed_dt_nonlinear_deck_records_a_cfl_margin() -> None:
+    """No fixed-step deck reaches the nonlinear runtime unmeasured."""
+
+    reaches, _unparseable = _decks_reaching_the_nonlinear_runtime()
+    audited = set(_CFL_MARGIN_MEASURED) | set(_CFL_MARGIN_NOT_APPLICABLE)
+
+    assert reaches - audited == set(), (
+        "these decks reach the nonlinear runtime and have no recorded CFL "
+        "margin. Measure dt / bound (see this module's protocol) and add them "
+        f"to _CFL_MARGIN_MEASURED: {sorted(reaches - audited)}"
+    )
+    assert audited - reaches == set(), (
+        "these decks carry a CFL margin but no longer reach the nonlinear "
+        f"runtime; drop them from the audit: {sorted(audited - reaches)}"
+    )
+    for relative in sorted(_CFL_MARGIN_MEASURED):
+        assert _deck_uses_fixed_dt(relative), (
+            f"{relative} records a fixed-step CFL margin but sets "
+            "fixed_dt = false; the adaptive step recomputes the bound every "
+            "step, so move it to _CFL_MARGIN_NOT_APPLICABLE"
+        )
+
+
+def test_recorded_cfl_margins_are_under_the_warn_ratio() -> None:
+    """A deck over its CFL bound is a bug, and has to be named as one.
+
+    This is the check that was missing. Both decks that shipped over their
+    bound would have failed here on the commit that introduced them.
+    """
+
+    from gkx.solvers.time.explicit_cfl import FIXED_DT_CFL_WARN_RATIO
+
+    for relative, margin in sorted(_CFL_MARGIN_MEASURED.items()):
+        if margin <= FIXED_DT_CFL_WARN_RATIO:
+            assert relative not in _CFL_MARGIN_OVER_BOUND, (
+                f"{relative} is recorded at {margin}x, under the "
+                f"{FIXED_DT_CFL_WARN_RATIO}x warn ratio, but is still listed as "
+                "over the bound; drop it from _CFL_MARGIN_OVER_BOUND"
+            )
+            continue
+        assert relative in _CFL_MARGIN_OVER_BOUND, (
+            f"{relative} runs at {margin}x its explicit CFL bound with "
+            "fixed_dt = true. Nothing reduces the step, so the trajectory is "
+            "expected to overflow. Reduce dt below the bound, or -- if it "
+            "ships broken on purpose -- record in _CFL_MARGIN_OVER_BOUND what "
+            "running it actually produces"
+        )
+
+
+def test_the_cfl_warn_ratio_sits_between_the_measured_good_and_bad_decks() -> None:
+    """The threshold is a measurement, not a preference.
+
+    1.33x runs clean for 500 steps; 1.60x produced the W7-X zonal NaN trace.
+    A threshold outside that gap either misses a known failure or fires on a
+    deck known to be fine, so moving it needs new measurements, not an edit.
+    """
+
+    from gkx.solvers.time.explicit_cfl import FIXED_DT_CFL_WARN_RATIO
+
+    assert 1.33 < FIXED_DT_CFL_WARN_RATIO < 1.60
+
+
 def test_run_to_audit_discovery_sees_a_deck_that_only_the_flags_reveal() -> None:
     """The classifier catches the relaxation shape, not just nonlinear = true.
 
