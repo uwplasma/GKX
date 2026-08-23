@@ -108,6 +108,17 @@ def test_adaptive_observables_match_dense_across_physics(
         ),
     )
     runtime = _use_cached_vmec_eik(runtime)
+    if runtime.geometry.model == "imported-eik":
+        from gkx.geometry import load_imported_geometry_netcdf
+
+        imported = load_imported_geometry_netcdf(runtime.geometry.geometry_file)
+        if imported.theta_closed_interval:
+            imported = imported.trim_terminal_theta_point()
+        nz = int(imported.theta.size)
+        runtime = replace(
+            runtime,
+            grid=replace(runtime.grid, Nz=nz, ntheta=nz),
+        )
     if enable_bpar:
         runtime = replace(
             runtime,
