@@ -10,13 +10,7 @@ from typing import Any
 
 import numpy as np
 
-
-def _finite_float(value: Any) -> float | None:
-    try:
-        out = float(value)
-    except Exception:
-        return None
-    return out if np.isfinite(out) else None
+from gkx.objectives.vmec_transport_admission import _finite_float_or_none
 
 
 @dataclass(frozen=True)
@@ -135,7 +129,7 @@ def _evaluate_boundary_transport_gradient(
     objective_value_raw, gradient_raw = optimizer.objective_and_gradient_fun(
         params_array
     )
-    objective_value = _finite_float(objective_value_raw)
+    objective_value = _finite_float_or_none(objective_value_raw)
     gradient = np.asarray(gradient_raw, dtype=float).reshape(-1)
     if gradient.size != params_array.size:
         raise ValueError(
@@ -366,7 +360,7 @@ def sparse_descent_direction_from_gradient_report(
             )
         if allowed_indices is not None and index not in allowed_indices:
             continue
-        value = _finite_float(row.get("gradient"))
+        value = _finite_float_or_none(row.get("gradient"))
         if value is None:
             raise ValueError(f"gradient component {index} is not finite")
         direction[index] = -value
@@ -481,7 +475,7 @@ def _candidate_metric(row: Mapping[str, Any]) -> float | None:
         "transport_objective_final",
         "gkx_objective_final",
     ):
-        value = _finite_float(row.get(key))
+        value = _finite_float_or_none(row.get(key))
         if value is not None:
             return value
     return None
