@@ -1553,3 +1553,12 @@
   blobs. A strict fresh clone remains below 10 MB at 9,501,911 bytes with
   498,089 bytes of margin, 34 remote refs, 28 tags, and zero AI-attribution
   hits. GitHub CI is pending; no public history moved.
+- Composed PR #112 after all 11 earlier source-slimming commits on the private
+  `d910ac56` integration line. It overlaps PR #105 in exactly two linear files:
+  preserving #105's injected cache builder and bound JIT functions removes the
+  already-subsumed helper without changing behavior. The resolved commit
+  `a91ec656` has stable patch `b0390de7`, changes ten source files plus the core
+  tests, and removes 49 more installed-source lines. The full 12-cut tree stays
+  at 206 files and falls from 96,465 to 96,193 lines (-272). All 398 directly
+  changed-file x64 tests, 117 release tests, Ruff, mypy on the ten changed
+  source files, and `git diff --check` pass.

@@ -1017,7 +1017,14 @@ Diffrax, streaming, sheared, and sharded source paths now use the core helper;
 caller-specific `G`/`G0` errors remain exact. It removes 56 installed-source
 lines (`96,446 -> 96,390`) without changing files, arrays, traced arguments,
 or compiled operations. All 502 selected x64 and release tests, Ruff, and mypy
-on the 11 changed source files pass locally; GitHub CI is pending.
+on the 11 changed source files pass locally. In the private dependency-order
+composition after PR #105, only `integrator_diagnostics.py` and
+`integrators.py` overlap: retaining #105's injected cache builder and bound JIT
+functions resolves both mechanically. The composed #112 cut then changes ten
+source files, removes 49 more lines, and brings the 12-cut installed tree to
+96,193 lines (-272 from 96,465). All 398 directly changed-file x64 tests, 117
+release tests, Ruff, and mypy on those ten files pass in that topology; GitHub
+CI is pending.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
