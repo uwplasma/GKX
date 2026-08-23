@@ -32,11 +32,11 @@ noise rather than signal). ``tau_ac`` is reported in code time units, and the
 window is reported as a multiple of it.
 
 The effective independent-sample count for a window of ``n`` samples at spacing
-``dt`` follows the standard correlated-data result,
+``dt`` is
 
-    n_eff = n / (1 + 2 tau_ac / dt),
+    n_eff = min(n, n dt / (2 tau_ac)),
 
-which is what the mean's error bar should have been divided by.
+which returns ``n`` at the independent-sample floor ``tau_ac=dt/2``.
 
 This tool only reads committed trace CSVs. It runs no simulation.
 """
@@ -86,7 +86,11 @@ def analyse(path: Path) -> dict[str, Any] | None:
     span = float(time[-1] - time[0])
     resolved = cut < rho.size
 
-    n_eff = flux.size / (1.0 + 2.0 * tau / dt) if tau > 0 else float(flux.size)
+    n_eff = (
+        min(float(flux.size), flux.size * dt / (2.0 * tau))
+        if tau > 0.0 and dt > 0.0
+        else float(flux.size)
+    )
     mean = float(flux.mean())
     naive_error = float(flux.std(ddof=1) / np.sqrt(flux.size))
     corrected_error = float(flux.std(ddof=1) / np.sqrt(max(n_eff, 1.0)))
@@ -155,7 +159,7 @@ def main() -> int:
         "definition": (
             "integrated normalized autocorrelation of the post-transient heat "
             "flux, trapezoid rule truncated at the first zero crossing; "
-            "n_eff = n / (1 + 2 tau_ac / dt)"
+            "n_eff = min(n, n dt / (2 tau_ac))"
         ),
         "min_tau_multiples": args.min_tau_multiples,
         "windows_shorter_than_threshold": len(short),
