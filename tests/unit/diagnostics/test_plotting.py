@@ -663,6 +663,26 @@ def test_flux_tube_3d_figure_renders(tmp_path):
     assert out.exists()
 
 
+def test_flux_tube_uses_imported_cylindrical_field_line() -> None:
+    R = np.asarray([4.0, 5.0, 4.5])
+    Z = np.asarray([-0.2, 0.1, 0.4])
+    zeta = np.asarray([-0.5, 0.0, 0.7])
+    geom = SimpleNamespace(
+        q=1.4,
+        epsilon=0.18,
+        R0=2.78,
+        cylindrical_R_profile=R,
+        cylindrical_Z_profile=Z,
+        toroidal_angle_profile=zeta,
+    )
+
+    centre, *_ = snapshots._field_line_tube(geom, samples=3)
+
+    np.testing.assert_allclose(centre[:, 0], R * np.cos(zeta))
+    np.testing.assert_allclose(centre[:, 1], R * np.sin(zeta))
+    np.testing.assert_allclose(centre[:, 2], Z)
+
+
 def _colorbar_axes(fig, main_ax):
     extra = [ax for ax in fig.axes if ax is not main_ax]
     assert extra, "expected a colorbar axes"
