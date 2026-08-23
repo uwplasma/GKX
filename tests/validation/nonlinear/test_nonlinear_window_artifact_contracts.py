@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import subprocess
 import sys
 
 import numpy as np
+import pytest
 
-from support.paths import REPO_ROOT, load_release_tool
+from support.paths import REPO_ROOT, load_release_tool, load_tool_script
 from gkx.diagnostics.transport_windows import (
     NonlinearWindowConvergenceConfig,
     nonlinear_window_convergence_report,
@@ -22,6 +24,390 @@ output_target = load_release_tool("check_nonlinear_transport_gates")
 window_ensemble = load_release_tool("check_nonlinear_transport_gates")
 window_readiness = window_ensemble
 FLOW_SHEAR_GATE = ROOT / "docs" / "_static" / "flow_shear_fixed_step_response_gate.json"
+
+
+def test_saturation_campaign_prints_cumulative_runtime_progress(capsys) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+
+    campaign._campaign_progress(
+        "completed nonlinear chunk 2: t=25/100 progress= 25.0% elapsed=01:00"
+    )
+
+    assert capsys.readouterr().out == (
+        "[gkx] completed nonlinear chunk 2: "
+        "t=25/100 progress= 25.0% elapsed=01:00\n"
+    )
+
+
+def test_saturation_campaign_trace_omits_dealiased_zero_modes() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    full_kx = np.arange(12, dtype=float)
+    full_ky = np.arange(12, dtype=float)
+    resolved = type(
+        "Resolved",
+        (),
+        {
+            "Phi2_kxt": np.arange(24).reshape(2, 12),
+            "HeatFlux_kxst": np.arange(48).reshape(2, 2, 12),
+            "Phi2_kyt": np.arange(24).reshape(2, 12),
+            "HeatFlux_kyst": np.arange(48).reshape(2, 2, 12),
+        },
+    )()
+
+    payload = campaign._trace_spectral_payload(
+        resolved, kx_full=full_kx, ky_full=full_ky
+    )
+
+    assert payload["kx"].shape == (7,)
+    assert payload["ky"].shape == (4,)
+    assert payload["Phi2_kxt"].shape == (2, 7)
+    assert payload["HeatFlux_kxst"].shape == (2, 2, 7)
+    assert payload["Phi2_kyt"].shape == (2, 4)
+    assert payload["HeatFlux_kyst"].shape == (2, 2, 4)
+
+
+def test_saturation_campaign_requires_and_records_its_checkout_source(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    encoded = campaign._npz_source_provenance(provenance)
+
+    assert provenance["repository_root"] == str(ROOT)
+    assert provenance["git_commit"]
+    assert campaign._gkx_source_tree_matches(
+        ROOT, provenance["git_commit"], provenance["git_commit"]
+    )
+    assert encoded["gkx_git_commit"].dtype.kind == "U"
+    assert encoded["gkx_git_dirty"].dtype.kind in "iu"
+    with pytest.raises(SystemExit, match="PYTHONPATH=src"):
+        campaign._campaign_source_provenance(tmp_path / "gkx" / "__init__.py")
+
+
+def test_saturation_campaign_does_not_duplicate_requested_npz_trace(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    values = np.arange(3, dtype=float)
+    trace = tmp_path / "trace.npz"
+    np.savez_compressed(trace, time=values)
+
+    addressed = campaign._summary_trace_payload(
+        values, values + 1, values + 2, values + 3, trace_path=trace
+    )
+    inline = campaign._summary_trace_payload(
+        values, values + 1, values + 2, values + 3, trace_path=None
+    )
+
+    assert "trace" not in addressed
+    assert addressed["trace_artifact"]["bytes"] == trace.stat().st_size
+    assert (
+        addressed["trace_artifact"]["sha256"]
+        == hashlib.sha256(trace.read_bytes()).hexdigest()
+    )
+    assert len(inline["trace"]) == 3
+
+
+def test_saturation_campaign_locks_output_paths_between_processes(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    target = tmp_path / "campaign.npz"
+
+    first = campaign._campaign_output_locks((target, None, target))
+    try:
+        assert len(first) == 1
+        assert "pid=" in (tmp_path / "campaign.npz.lock").read_text()
+        with pytest.raises(SystemExit, match="campaign output is locked"):
+            campaign._campaign_output_locks((target,))
+    finally:
+        for handle in first:
+            handle.close()
+
+    second = campaign._campaign_output_locks((target,))
+    for handle in second:
+        handle.close()
+
+
+def test_saturation_campaign_cannot_promote_a_continuation_segment() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    report = {"saturated": True, "reasons": []}
+
+    full = campaign._scope_saturation_report(report, continuation=False)
+    segment = campaign._scope_saturation_report(report, continuation=True)
+
+    assert full == {**report, "history_scope": "full_run"}
+    assert segment["history_scope"] == "continuation_segment"
+    assert segment["segment_saturated"] is True
+    assert segment["saturated"] is False
+    assert segment["reasons"] == ["prior_history_not_in_report"]
+    assert report == {"saturated": True, "reasons": []}
+
+
+def test_saturation_campaign_records_resolved_timestep_policy() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    time_cfg = type(
+        "TimeConfig",
+        (),
+        {
+            "fixed_dt": False,
+            "dt": 0.1,
+            "dt_max": None,
+            "cfl": 0.5,
+            "method": "rk3",
+        },
+    )()
+
+    policy = campaign._resolved_timestep_policy(time_cfg)
+    encoded = campaign._npz_timestep_identity(policy)
+
+    assert policy == {
+        "fixed_dt": False,
+        "dt": 0.1,
+        "dt_max": None,
+        "cfl": 0.5,
+        "method": "rk3",
+    }
+    assert encoded["time_dt_max"].item() == "None"
+    assert encoded["time_cfl"].item() == pytest.approx(0.5)
+
+
+def test_saturation_policy_replay_requires_a_persistent_fixed_window() -> None:
+    replay = load_tool_script("campaigns", "nonlinear_saturated_state")
+    time = np.arange(0.0, 201.0, 0.5)
+    phase = 2.0 * np.pi * time / 10.0
+    report = replay.replay_policy(
+        time,
+        10.0 + 0.15 * np.sin(phase),
+        2.0 + 0.03 * np.sin(phase + 0.3),
+        100.0 + np.sin(phase + 0.7),
+        policy=replay.ReplayPolicy(window=50.0, persistence=20.0),
+    )
+
+    assert report["stopped"] is True
+    assert report["first_stop"]["persistence_start"] == pytest.approx(50.0)
+    assert report["first_stop"]["checkpoint_time"] == pytest.approx(70.0)
+    assert report["first_stop"]["decision"]["window_tmin"] == pytest.approx(20.0)
+    assert report["first_stop"]["decision"]["statistics"]["heat_flux"]["stationary"]
+
+
+def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
+    tmp_path: Path,
+) -> None:
+    replay = load_tool_script("campaigns", "nonlinear_saturated_state")
+
+    def write_trace(
+        path: Path,
+        time: np.ndarray,
+        *,
+        previous_t_end: float,
+        case: str = "qa",
+        dirty: int = 0,
+    ) -> None:
+        np.savez_compressed(
+            path,
+            time=time,
+            heat_flux=np.ones(time.size),
+            Wphi=np.ones(time.size),
+            Wg=np.ones(time.size),
+            gkx_git_commit=np.asarray("abc123"),
+            gkx_git_dirty=np.asarray(dirty),
+            previous_t_end=np.asarray(previous_t_end),
+            campaign_identity_schema=np.asarray("gkx_nonlinear_campaign_v1"),
+            case=np.asarray(case),
+        )
+
+    first = tmp_path / "first.npz"
+    second = tmp_path / "second.npz"
+    write_trace(first, np.arange(0.0, 10.0), previous_t_end=0.0)
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0)
+
+    arrays, sources = replay._load_replay_traces([first, second])
+    assert arrays[0].tolist() == list(np.arange(20.0))
+    assert len(sources) == 2
+    assert sources[0]["sha256"] == hashlib.sha256(first.read_bytes()).hexdigest()
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, case="qi")
+    with pytest.raises(ValueError, match="campaign identity differs"):
+        replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=8.0)
+    with pytest.raises(ValueError, match="not a contiguous continuation"):
+        replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, dirty=1)
+    with pytest.raises(ValueError, match="not pinned to a clean GKX commit"):
+        replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0)
+    for path in (first, second):
+        with np.load(path, allow_pickle=False) as archive:
+            legacy = {name: archive[name] for name in archive.files}
+        legacy.pop("campaign_identity_schema")
+        np.savez_compressed(path, **legacy)
+    with pytest.raises(ValueError, match="legacy continuation replay requires"):
+        replay._load_replay_traces([first, second])
+
+    def write_summary(path: Path, trace_path: Path, *, case: str = "qa") -> None:
+        with np.load(trace_path, allow_pickle=False) as archive:
+            samples = [
+                {"t": t, "heat_flux": q, "Wphi": wphi, "Wg": wg}
+                for t, q, wphi, wg in zip(
+                    archive["time"],
+                    archive["heat_flux"],
+                    archive["Wphi"],
+                    archive["Wg"],
+                )
+            ]
+            previous_t_end = float(archive["previous_t_end"])
+        path.write_text(
+            json.dumps(
+                {
+                    "source_provenance": {
+                        "git_commit": "abc123",
+                        "git_dirty": False,
+                    },
+                    "previous_t_end": previous_t_end,
+                    "case": case,
+                    "grid": {"Nx": 2, "Ny": 2, "Nz": 2},
+                    "geometry_override": {"vmec_file": "equilibrium.nc"},
+                    "random_seed": 31,
+                    "alpha": 0.0,
+                    "npol": 1.0,
+                    "trace": samples,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    first_summary = tmp_path / "first.json"
+    second_summary = tmp_path / "second.json"
+    write_summary(first_summary, first)
+    write_summary(second_summary, second)
+    replay._load_replay_traces([first, second], [first_summary, second_summary])
+
+    write_summary(second_summary, second, case="qi")
+    with pytest.raises(ValueError, match="campaign identity differs"):
+        replay._load_replay_traces([first, second], [first_summary, second_summary])
+
+
+def test_saturation_campaign_rejects_a_mixed_continuation_state(tmp_path: Path) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    provenance["git_dirty"] = False
+    identity = {
+        name: np.asarray(value)
+        for name, value in {
+            "campaign_identity_schema": "gkx_nonlinear_campaign_v1",
+            "case": "qa.toml",
+            "input_sha256": "deck",
+            "vmec_sha256": "equilibrium",
+            "Nx": 2,
+            "Ny": 2,
+            "Nz": 2,
+            "Nl": 1,
+            "Nm": 1,
+            "random_seed": 31,
+            "alpha": "0.0",
+            "npol": "1.0",
+        }.items()
+    }
+    state = tmp_path / "state.npz"
+    np.savez_compressed(
+        state,
+        state=np.zeros((1, 1, 1, 2, 2, 2)),
+        t_end=10.0,
+        **identity,
+        **campaign._npz_source_provenance(provenance),
+    )
+
+    loaded, t_end = campaign._load_continuation_state(
+        state,
+        expected_shape=(1, 1, 1, 2, 2, 2),
+        expected_identity=identity,
+        source_provenance=provenance,
+    )
+    assert loaded.shape == (1, 1, 1, 2, 2, 2)
+    assert t_end == 10.0
+
+    v2_expected = dict(identity)
+    v2_expected.update(
+        campaign_identity_schema=np.asarray("gkx_nonlinear_campaign_v2"),
+        time_fixed_dt=np.asarray(False),
+        time_dt=np.asarray(0.1),
+        time_dt_max=np.asarray("None"),
+        time_cfl=np.asarray(1.0),
+        time_method=np.asarray("rk3"),
+    )
+    campaign._load_continuation_state(
+        state,
+        expected_shape=(1, 1, 1, 2, 2, 2),
+        expected_identity=v2_expected,
+        source_provenance=provenance,
+    )
+
+    identity["case"] = np.asarray("qi.toml")
+    with pytest.raises(SystemExit, match="campaign identity does not match"):
+        campaign._load_continuation_state(
+            state,
+            expected_shape=(1, 1, 1, 2, 2, 2),
+            expected_identity=identity,
+            source_provenance=provenance,
+        )
+
+
+def test_saturation_campaign_rejects_a_timestep_mismatched_state(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    provenance["git_dirty"] = False
+    identity = {
+        name: np.asarray(value)
+        for name, value in {
+            "campaign_identity_schema": "gkx_nonlinear_campaign_v2",
+            "case": "qa.toml",
+            "input_sha256": "deck",
+            "vmec_sha256": "equilibrium",
+            "Nx": 2,
+            "Ny": 2,
+            "Nz": 2,
+            "Nl": 1,
+            "Nm": 1,
+            "random_seed": 31,
+            "alpha": "0.0",
+            "npol": "1.0",
+            "time_fixed_dt": False,
+            "time_dt": 0.1,
+            "time_dt_max": "None",
+            "time_cfl": 1.0,
+            "time_method": "rk3",
+        }.items()
+    }
+    state = tmp_path / "state.npz"
+    np.savez_compressed(
+        state,
+        state=np.zeros((1, 1, 1, 2, 2, 2)),
+        t_end=10.0,
+        **identity,
+        **campaign._npz_source_provenance(provenance),
+    )
+
+    expected = dict(identity)
+    expected["time_cfl"] = np.asarray(0.5)
+    with pytest.raises(SystemExit, match="campaign identity does not match"):
+        campaign._load_continuation_state(
+            state,
+            expected_shape=(1, 1, 1, 2, 2, 2),
+            expected_identity=expected,
+            source_provenance=provenance,
+        )
 
 
 def _touch_bundle(output: Path) -> None:

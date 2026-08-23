@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 from support.paths import REPO_ROOT, load_artifact_tool, load_tool_script
 
@@ -34,6 +35,39 @@ GENERATORS = (
 
 def _ladder_tool():
     return load_tool_script("campaigns", "nonlinear_gradient_window")
+
+
+def test_gradient_ladder_requires_compatible_clean_state_source(
+    monkeypatch,
+) -> None:
+    tool = _ladder_tool()
+    provenance = {
+        "repository_root": str(REPO_ROOT),
+        "git_commit": "current",
+        "git_dirty": False,
+    }
+
+    assert (
+        tool._require_compatible_state_source(
+            {
+                "gkx_git_commit": np.asarray("current"),
+                "gkx_git_dirty": np.asarray(0),
+            },
+            provenance,
+        )
+        == "current"
+    )
+    with pytest.raises(SystemExit, match="no GKX source provenance"):
+        tool._require_compatible_state_source({}, provenance)
+    monkeypatch.setattr(tool, "_gkx_source_tree_matches", lambda *_args: False)
+    with pytest.raises(SystemExit, match="differs from current source"):
+        tool._require_compatible_state_source(
+            {
+                "gkx_git_commit": np.asarray("old"),
+                "gkx_git_dirty": np.asarray(0),
+            },
+            provenance,
+        )
 
 
 @pytest.mark.parametrize("relative", GENERATORS)
@@ -104,9 +138,7 @@ def test_device_parity_artifact_compares_one_identical_case() -> None:
     assert len(parity["runs"]) >= 2
     backends = {run["default_backend"] for run in parity["runs"].values()}
     assert {"cpu", "gpu"} <= backends
-    comparisons = {
-        (row["left"], row["right"]): row for row in parity["comparisons"]
-    }
+    comparisons = {(row["left"], row["right"]): row for row in parity["comparisons"]}
     assert comparisons
     for row in comparisons.values():
         assert row["gradient_relative_difference"] < 1.0e-12

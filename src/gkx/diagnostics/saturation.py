@@ -12,11 +12,8 @@ That module scores a window after the fact against promotion gates; this one is
 asked the same question repeatedly by a running solver, on a trace that grows
 under it, and has to answer "not yet" with a reason the runtime can record.
 
-The Sokal estimator here was promoted from
-``tools/campaigns/heat_flux_autocorrelation.py`` so the runtime stop check and
-the post-hoc campaign tooling share one definition. It duplicates
-``integrated_autocorrelation_time`` in ``gkx.diagnostics.analysis``, which is on
-a validated gate path; consolidating the two is deliberately left alone here.
+The Sokal estimator is shared with post-hoc analysis, so runtime and campaign
+uncertainties use one definition.
 """
 
 from __future__ import annotations
@@ -27,39 +24,7 @@ import math
 
 import numpy as np
 
-
-def sokal_autocorrelation_time(
-    signal: np.ndarray, dt: float
-) -> tuple[float, int, np.ndarray]:
-    """Integrated autocorrelation time, truncated at the first zero crossing.
-
-    Returns ``(tau_ac, lag_index_of_crossing, rho)``. ``tau_ac`` is in the same
-    units as ``dt``. A trace that never crosses zero is truncated at its end and
-    the caller is told, because that means the trace is too short to resolve its
-    own correlation time -- the one case where a number here would be a lie.
-
-    A trace with no fluctuation at all is told the same way. Callers read
-    "resolved" as ``cut < rho.size``, so the degenerate return has to place the
-    cut at the end rather than at lag zero: a constant signal has no correlation
-    time to resolve, and reporting one resolved is the same lie in the other
-    direction.
-    """
-
-    fluctuation = signal - signal.mean()
-    variance = float(fluctuation @ fluctuation)
-    if variance <= 0.0:
-        return 0.0, 1, np.zeros(1)
-
-    # Full unbiased-by-count autocorrelation via FFT (O(n log n)).
-    size = int(2 ** np.ceil(np.log2(2 * fluctuation.size)))
-    spectrum = np.fft.rfft(fluctuation, n=size)
-    correlation = np.fft.irfft(spectrum * np.conj(spectrum), n=size)[: fluctuation.size]
-    rho = correlation / correlation[0]
-
-    negative = np.nonzero(rho < 0.0)[0]
-    cut = int(negative[0]) if negative.size else rho.size
-    tau = float(np.trapezoid(rho[:cut], dx=dt)) if cut > 1 else 0.0
-    return tau, cut, rho
+from gkx.diagnostics.analysis import sokal_autocorrelation_time
 
 
 @dataclass(frozen=True)
@@ -101,6 +66,7 @@ _SATURATION_DECISION_FIELDS = (
     "halves_sem",
     "stationary",
     "guard_stationary",
+    "Wg_guard_stationary",
 )
 
 
@@ -186,6 +152,7 @@ def saturation_stop_decision(
     values: Sequence[float] | np.ndarray,
     *,
     guard: Sequence[float] | np.ndarray | None = None,
+    free_energy_guard: Sequence[float] | np.ndarray | None = None,
     config: SaturationStopConfig | None = None,
 ) -> dict[str, Any]:
     """Decide whether a nonlinear trace has saturated well enough to stop.
@@ -202,9 +169,10 @@ def saturation_stop_decision(
     only noise), window span at least ``min_window``
     (default ``10 tau_ac``), IAT-corrected relative SEM at most ``rel_sem``,
     first/second half-window means within twice their combined SEM, and --
-    when a ``guard`` trace (Phi^2) is given -- the same half-window
-    stationarity on the guard over the same window. The guard has no relative-SEM gate: it only
-    protects against a flat-looking flux while the field energy still drifts.
+    when ``guard`` (Wphi) or ``free_energy_guard`` (Wg) is given -- the same
+    half-window stationarity on each guard over the same window. Guards have no
+    relative-SEM gate: they protect against a flat-looking flux while either
+    energy still drifts.
     The trace is assumed finite; the runtime validates each chunk before this.
     """
 
@@ -220,6 +188,13 @@ def saturation_stop_decision(
     g = None if guard is None else np.asarray(guard, dtype=float).reshape(-1)
     if g is not None and g.size != t.size:
         raise ValueError("guard must match the time axis")
+    wg = (
+        None
+        if free_energy_guard is None
+        else np.asarray(free_energy_guard, float).ravel()
+    )
+    if wg is not None and wg.size != t.size:
+        raise ValueError("free_energy_guard must match the time axis")
     min_samples = max(int(cfg.min_samples), 8)
     if t.size < min_samples:
         return _empty_saturation_decision(cfg, reason="trace_shorter_than_min_samples")
@@ -238,6 +213,7 @@ def saturation_stop_decision(
     rel_sem = float(sem / max(abs(mean), _SATURATION_VALUE_FLOOR))
     first_mean, second_mean, halves_sem, stationary = _halves_stationary(wy, dt)
     guard_stationary = None if g is None else _halves_stationary(g[start:], dt)[3]
+    wg_stationary = None if wg is None else _halves_stationary(wg[start:], dt)[3]
     # A trace that never left zero has nothing to converge: the relative SEM
     # divides by a floor rather than a mean, so every gate below passes on a
     # dead signal and the run stops in its first chunk. A zonal-response case,
@@ -252,6 +228,7 @@ def saturation_stop_decision(
         "rel_sem_above_threshold": rel_sem <= float(cfg.rel_sem),
         "window_not_stationary": bool(stationary),
         "guard_not_stationary": guard_stationary is None or bool(guard_stationary),
+        "Wg_guard_not_stationary": wg_stationary is None or bool(wg_stationary),
     }
     return {
         "kind": "nonlinear_saturation_stop_decision",
@@ -272,8 +249,10 @@ def saturation_stop_decision(
         "halves_sem": halves_sem,
         "stationary": bool(stationary),
         "guard_stationary": guard_stationary,
+        "Wg_guard_stationary": wg_stationary,
         "config": asdict(cfg),
     }
+
 
 __all__ = [
     "SaturationStopConfig",

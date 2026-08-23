@@ -219,7 +219,9 @@ def run_adaptive_runtime_chunk_loop(
     diagnostics_stride: int = 1,
     max_chunks: int = 100000,
     spill_dir: Path | None = None,
-    stop_condition: Callable[[np.ndarray, np.ndarray, np.ndarray], dict[str, Any]]
+    stop_condition: Callable[
+        [np.ndarray, np.ndarray, np.ndarray, np.ndarray], dict[str, Any]
+    ]
     | None = None,
 ) -> AdaptiveChunkResult:
     """Run to a stop or ``t_max``; check unstrided traces between chunks."""
@@ -235,7 +237,7 @@ def run_adaptive_runtime_chunk_loop(
     samples_seen = 0
     diag_chunks: list[SimulationDiagnostics] = []
     # Stop checks retain the unstrided scalar traces.
-    trace_chunks: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+    trace_chunks: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
     stop_decision: dict[str, Any] | None = None
     spill_paths: list[Path] = []
     if spill_dir is not None:
@@ -284,6 +286,7 @@ def run_adaptive_runtime_chunk_loop(
                     np.asarray(diag_chunk.t, dtype=float),
                     np.asarray(diag_chunk.heat_flux_t, dtype=float),
                     np.asarray(diag_chunk.Wphi_t, dtype=float),
+                    np.asarray(diag_chunk.Wg_t, dtype=float),
                 )
             )
         stop_now = False
@@ -292,6 +295,7 @@ def run_adaptive_runtime_chunk_loop(
                 np.concatenate([chunk[0] for chunk in trace_chunks]),
                 np.concatenate([chunk[1] for chunk in trace_chunks]),
                 np.concatenate([chunk[2] for chunk in trace_chunks]),
+                np.concatenate([chunk[3] for chunk in trace_chunks]),
             )
             stop_now = bool(stop_decision.get("stop"))
         reached_horizon = t_elapsed >= float(t_max) - time_tol
