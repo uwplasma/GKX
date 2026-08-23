@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import jax
 import jax.numpy as jnp
 
 from gkx.core.grid import SpectralGrid
@@ -20,12 +19,15 @@ from gkx.operators.linear.params import (
 )
 from gkx.solvers.time.diffrax_core import (
     _adjoint,
+    _apply_state_sharding,
     _assemble_rhs,
     _base_complex_dtype,
     _density_from_G_cached,
+    _infer_velocity_shape,
     _is_imex_solver,
     _is_implicit_solver,
     _pack_complex_state,
+    _prepare_packed_state,
     _progress_meter,
     _require_diffrax,
     _solver_from_name,
@@ -47,16 +49,6 @@ class _LinearDiffraxRunBundle:
     adaptive_eff: bool
 
 
-def _infer_linear_velocity_shape(G0: jnp.ndarray) -> tuple[int, int]:
-    if G0.ndim == 5:
-        return int(G0.shape[0]), int(G0.shape[1])
-    if G0.ndim == 6:
-        return int(G0.shape[1]), int(G0.shape[2])
-    raise ValueError(
-        "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-    )
-
-
 def _prepare_linear_state_and_cache(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -68,27 +60,9 @@ def _prepare_linear_state_and_cache(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     if cache is None:
-        Nl, Nm = _infer_linear_velocity_shape(G0)
+        Nl, Nm = _infer_velocity_shape(G0)
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
     return G0, real_dtype, cache
-
-
-def _apply_state_sharding(
-    state: jnp.ndarray, state_sharding: Any | None
-) -> jnp.ndarray:
-    if state_sharding is None:
-        return state
-    return jax.lax.with_sharding_constraint(state, state_sharding)
-
-
-def _prepare_packed_linear_state(
-    G0: jnp.ndarray,
-    state_sharding: Any | None,
-) -> jnp.ndarray:
-    G0_packed = _pack_complex_state(G0)
-    if state_sharding is not None:
-        G0_packed = jax.device_put(G0_packed, state_sharding)
-    return _apply_state_sharding(G0_packed, state_sharding)
 
 
 def _extract_linear_saved_mode(
@@ -367,7 +341,7 @@ def _linear_diffrax_run_bundle(
         real_dtype=real_dtype,
     )
     return _LinearDiffraxRunBundle(
-        G0_packed=_prepare_packed_linear_state(G0, state_sharding),
+        G0_packed=_prepare_packed_state(G0, state_sharding),
         cache=cache,
         term_cfg=term_cfg,
         rhs=_make_linear_diffrax_rhs(
