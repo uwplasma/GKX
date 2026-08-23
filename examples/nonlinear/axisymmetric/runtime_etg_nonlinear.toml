@@ -49,7 +49,17 @@ diagnostics_stride = 5
 use_diffrax = false
 compressed_real_fft = true
 laguerre_nonlinear_mode = "grid"
-fixed_dt = true
+# Adaptive, like the Cyclone examples beside it. The shipped fixed dt=0.001
+# was 2.77x this case's explicit CFL bound -- 69% binormal drift at ky=5.0,
+# so Nm is not the lever -- and integrated non-finite from t=0.021 of 0.5,
+# then reported success. Adaptive stepping settles near dt=3.6e-4 and stays
+# finite: measured past t=0.092, four times the old failure time, with every
+# chunk validated. That correctness costs wall time -- roughly half an hour
+# per 128-step chunk on a loaded laptop CPU, so the full t_max=0.5 horizon is
+# a multi-hour run. Lower t_max for a quick look; the physics target is
+# unchanged from the deck as shipped.
+fixed_dt = false
+dt_max = 0.001
 
 [geometry]
 q = 1.4
