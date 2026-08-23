@@ -1634,3 +1634,35 @@
   plus index 9,071,567 bytes, and complete `.git` 9,636,442 bytes. Strict
   `fsck`, no alternates, and zero attribution hits pass, leaving 363,558 bytes
   of decimal margin. No branch is deleted and no public history moved.
+
+## 2026-08-23 — merge-train drain, local-CI protocol, box-size scan
+
+- GitHub Actions ran out of minutes; the owner directed that every CI signal be
+  reproduced locally with the same or more coverage before any merge. Protocol
+  used per PR: clean merge onto `origin/main`, Ruff, full mypy (baseline of
+  exactly one known environment error at `objectives/core.py` from local jax
+  0.9.2 vs required >=0.10.1), both `tools/release/check_*_manifest.py`, the
+  117 release-gate tests, then targeted suites mapped from the diff with
+  `JAX_ENABLE_X64=1`. The branch-protection `required_status_checks` entry was
+  removed to unblock merging and must be restored when minutes return:
+  `gh api -X PATCH repos/uwplasma/GKX/branches/main/protection/required_status_checks -f strict=true -f 'contexts[]=ci-required'`.
+- The open queue (33 PRs, entirely stacked — none based on `main`) was drained
+  one PR at a time to a single survivor, #82 (this roadmap, open by design).
+  Every PR was retargeted to `main` before merging (two phantom merges into
+  sibling branches were caught, one of them mine). Per-PR verification rows are
+  in the session log (`pr_verification.tsv`). Stacked-squash conflicts were
+  resolved against `origin/main` diffs; this caught #91's `--theirs` resolution
+  silently reverting #84's `time_tol` exact-horizon fix before it landed.
+- Full local integration suite on merged `main` (unit+integration+release+
+  validation, x64): 2,345 passed, 48 skipped, 14 failed in 37 min. The two
+  named failures are the known local-jax-0.9.2 class
+  (`test_objective_reports_stability.py` needs `enable_eigvec_derivs`); a
+  rerun is capturing the full failure list to confirm the remaining 12 are the
+  same environment class and not merge regressions.
+- Box-size scan (office, 2x A4000): the y0=14 ladder is 7/12 complete with the
+  remaining runs and both y0=21 192^2 references in flight or gated on GPU
+  memory. Interim reading: at y0=14 (delta-ky rho = 0.071, the published
+  stella/GENE W7-X band), QA-vacuum fell 6.73 -> 5.61 (64^2 -> 96^2), QHS
+  5.91 -> 4.49, QA-beta0.5 7.20 -> 6.45; DIII-D saturated at 64^2 with
+  18.34 +/- 0.89. Fluxes still converge from above; no defaults decision until
+  the 128^2 rungs and the 192^2 y0=21 references land.

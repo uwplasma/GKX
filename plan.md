@@ -1386,6 +1386,12 @@ unverified rather than silently promoted.
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
+| VAL-KE | P1 | open | kinetic-electron/TEM validation lane vs GX/stella (literature: (Nl,Nm)=(4,8) adequate only with hypercollisions; Nm>=16 for kinetic-electron drive) | matched linear TEM growth rates and one nonlinear flux point against a comparator code |
+| VAL-EM | P1 | open | electromagnetic finite-beta validation (KBM onset, shear-Alfven benchmarks) vs GX and stella master (EM) | beta scan reproduces comparator KBM threshold within stated tolerance |
+| RES-TUBE | P1 | open | parallel-domain convergence: npol/alpha/tube-count scan; reconcile single-tube 12--15% scatter claim with Kim et al. 2024 ~50% tube-to-tube scatter | flux vs npol and vs field-line label converged and documented; scatter claim re-stated with evidence |
+| AD-CMP | P2 | open | adjoint vs matched-cost SPSA/FD comparison on the QA transport objective (plan/references.md survey) | same-budget optimizer traces and final held-out saturated transport reported side by side |
+| PROF-1 | P2 | open | flux-tube -> profile prediction pathway (transport-solver coupling; GKFieldFlow-style reference) | documented design with one radially-coupled demonstration case |
+| DATA-1 | P2 | open | public dataset release of validation runs (decks, wouts, traces, summaries) with regeneration scripts | archived, hash-pinned dataset cited from docs/verification pages |
 
 ## Reproducibility records
 
