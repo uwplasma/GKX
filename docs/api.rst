@@ -770,6 +770,13 @@ Runtime Phi Initializer
    :members:
    :private-members:
 
+Runtime Resolution Estimator
+----------------------------
+
+.. automodule:: gkx.workflows.runtime.resolution
+   :members:
+   :private-members:
+
 Runtime Chunks
 --------------
 

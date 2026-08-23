@@ -24,7 +24,7 @@ Nz = 48
 Lx = 62.8
 Ly = 62.8
 boundary = "fix aspect"
-y0 = 21.0
+y0 = 14.0  # dky*rho = 0.071, the published W7-X spacing; scan-calibrated
 ntheta = 48
 nperiod = 1
 
@@ -94,6 +94,6 @@ bpar = 0.0
 nonlinear = 1.0
 
 [run]
-ky = 0.047619047619047616
+ky = 0.07142857142857142  # 1/y0: the first finite ky of the y0 = 14 box
 Nl = 4
 Nm = 8

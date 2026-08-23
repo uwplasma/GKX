@@ -56,7 +56,13 @@ name = "installable_source_python_files"
 path = "src/gkx"
 pattern = "*.py"
 recursive = true
-baseline = 220
+# 220 -> 221: workflows/runtime/resolution.py, the deterministic minimum-grid
+# estimator behind `gkx wout.nc --estimate`. It is a new file because it is a
+# calibration owner, not more orchestration: the module carries the measured
+# anisotropy->ky_max map from the 2026-08 resolution scan, and folding those
+# constants into wout.py or startup.py would bury a fitted physics contract
+# inside CLI plumbing that changes for unrelated reasons.
+baseline = 221
 target = 45
 
 [[topology_policy.counts]]
@@ -106,7 +112,13 @@ recursive = true
 # the plotting script. The assertions are about the tree -- generators present,
 # docs naming them, figure reading their JSON, knee matching the runtime guard
 # -- and belong with the tool contracts, not with the physics.
-baseline = 100
+# 100 -> 101: tests/integration/runtime/test_resolution_estimator.py. The
+# target is 36, so a new file needs a reason: this one pins the estimator's
+# calibration against the overnight scan's measured minima (7 equilibria,
+# recorded anisotropy values), a ground-truth table no existing runtime suite
+# carries, plus the --estimate short-circuit contract (prints and exits with
+# no deck or output directory written).
+baseline = 101
 target = 36
 
 [[topology_policy.counts]]
@@ -513,7 +525,14 @@ recursive = true
 # 96431 -> 96465: saying whether the shaded window is a measurement. The stop
 # policy records a window whether or not the trace settled in it, so the
 # window alone cannot tell a converged run from a capped one.
-baseline = 96465
+# 96465 -> 96769: predicting the minimum adequate grid before a run instead of
+# after a ladder. workflows/runtime/resolution.py (250 lines) carries the
+# anisotropy->ky_max calibration measured by the 2026-08 seven-equilibrium
+# resolution scan plus the dt bound reused from the solver's own CFL
+# estimator; wout.py gains the --estimate short-circuit and the printed
+# table. The scan it encodes cost two GPU-nights; the estimate costs one
+# geometry generation, and choosing one rung too low inflated flux 18-132%.
+baseline = 96769
 target = 45000
 
 [[line_budget_policy.counts]]

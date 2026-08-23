@@ -46,6 +46,46 @@ def is_wout_file(path: str | Path) -> bool:
         return False
 
 
+def _wout_nfp(path: Path) -> int | None:
+    """Field periods from the wout header, or ``None`` when unreadable."""
+
+    from netCDF4 import Dataset
+
+    try:
+        with Dataset(path, "r") as ds:
+            return int(ds.variables["nfp"][()])
+    except (OSError, KeyError, ValueError):
+        return None
+
+
+def _apply_class_resolution_defaults(data: dict[str, Any], wout_path: Path) -> None:
+    """Shipped-deck preview grid per equilibrium class (2026-08 y0=14 ladder).
+
+    Tokamaks (nfp = 1) saturated at every rung with 64^2 only ~8% above the
+    converged 96/128 plateau, so their preview drops to 64^2. Stellarators
+    keep the deck's 96^2, which the ladder measured as an upper estimate
+    (flux still falling at 128^2). Never applied to a user-supplied deck.
+    """
+
+    nfp = _wout_nfp(wout_path)
+    grid = dict(data.get("grid", {}))
+    if nfp == 1:
+        grid["Nx"], grid["Ny"] = 64, 64
+        data["grid"] = grid
+        print(
+            "tokamak equilibrium (nfp = 1): preview grid 64x64 "
+            "(measured ~+8% vs the converged 96/128 flux; run with "
+            "--estimate for the standard/cautious tiers)"
+        )
+    elif nfp is not None:
+        print(
+            "stellarator equilibrium: preview grid "
+            f"{grid.get('Nx', '?')}x{grid.get('Ny', '?')} -- an upper "
+            "estimate (the calibration ladder was still falling at 128^2); "
+            "run with --estimate for the standard/cautious tiers"
+        )
+
+
 def default_wout_deck_path() -> Path:
     """Return the single-source default deck used for bare equilibrium runs."""
 
@@ -229,6 +269,53 @@ def _print_deck_header(
     print(f"wrote resolved input: {resolved_path}", flush=True)
 
 
+def _pop_estimate_flag(args: list[str]) -> str | None:
+    """Pop ``--estimate[=TARGET]``, returning the target-error tier if present."""
+
+    value: str | None = None
+    for index, arg in enumerate(args):
+        if arg == "--estimate":
+            value = "standard"
+        elif arg.startswith("--estimate="):
+            value = arg.split("=", 1)[1]
+        else:
+            continue
+        args.pop(index)
+        return value
+    return None
+
+
+def format_estimate_table(est: dict[str, Any]) -> str:
+    """Render one resolution estimate as the table ``--estimate`` prints."""
+
+    f = est["features"]
+    lines = [
+        f"geometry: shat={f.shat:+.4f} q={f.q:.3f} nfp={f.nfp} "
+        f"|B| wells={f.bmag_wells} anisotropy={f.anisotropy:.3f} "
+        f"-> ky_max*rho >= {est['ky_max_target']:g}",
+    ]
+    for key in ("nx", "ny", "nz", "nl", "nm", "dt", "t_max"):
+        value = est[key]
+        rendered = f"{value:.4g}" if isinstance(value, float) else str(value)
+        lines.append(f"{key:>6} = {rendered:<8} {est['rationale'][key]}")
+    lines.extend(f"note: {note}" for note in est["notes"])
+    return "\n".join(lines)
+
+
+def _print_resolution_estimate(
+    wout_path: Path, config_arg: str | None, *, target_error: str
+) -> None:
+    """Print the minimum-grid estimate table for one equilibrium."""
+
+    from gkx.workflows.runtime.resolution import estimate_resolution
+
+    estimate = estimate_resolution(
+        wout_path, target_error=target_error, deck_path=config_arg
+    )
+    print(f"equilibrium: {wout_path}", flush=True)
+    print(format_estimate_table(estimate), flush=True)
+
+
 def wout_shorthand_args(
     wout_arg: str,
     config_arg: str | None,
@@ -241,11 +328,19 @@ def wout_shorthand_args(
     wout_path = Path(wout_arg).resolve()
     extra = [arg for arg in extra_args if arg != "--linear"]
     linear = len(extra) != len(extra_args)
+    estimate_tier = _pop_estimate_flag(extra)
+    if estimate_tier is not None:
+        # Advisory mode: print the table and stop before any deck or output
+        # directory is written; nothing about the eventual run is changed.
+        _print_resolution_estimate(wout_path, config_arg, target_error=estimate_tier)
+        raise SystemExit(0)
 
     deck_path = Path(config_arg) if config_arg is not None else default_wout_deck_path()
     data = dict(load_toml_func(deck_path))
     _resolve_deck_paths(data, base_dir=deck_path.resolve().parent)
     _force_vmec_geometry(data, wout_path)
+    if config_arg is None:
+        _apply_class_resolution_defaults(data, wout_path)
     if linear:
         _apply_linear_scan_defaults(data)
 

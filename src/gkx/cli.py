@@ -375,7 +375,8 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Run without arguments for the self-contained linear demo. "
             "Run a VMEC/VMEX equilibrium with: %(prog)s wout_XXX.nc [deck.toml] "
-            "[--linear] (aliases: --vmec/--vmex FILE). "
+            "[--linear] (aliases: --vmec/--vmex FILE); add --estimate to print "
+            "the minimum-grid estimate and exit without running. "
             "Plot a saved result with: %(prog)s --plot OUTPUT_FILE [--out FIGURE.png]"
         ),
     )
