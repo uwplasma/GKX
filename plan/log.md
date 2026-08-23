@@ -1802,3 +1802,28 @@ media that costs the clone nothing.
   GKX capability, which must be recorded with the capability that required
   it. DOC-1 and SLIM-4 were reworded so the VMEX/ESSOS comparisons read as
   style and scale references, not as work items in those repositories.
+
+## 2026-08-23 — hosted branch heads reduced from 88 to 4
+
+- The owner authorized deleting the 84 branches whose pull requests were
+  merged. Executed after the safety gate: a fresh complete mirror bundle
+  `GKX-pre-rewrite-2026-08-23.bundle` (286,768,136 bytes) verifies as "a
+  complete history", carries all 88 heads and 28 tags, and every one of the
+  84 branches was confirmed present in it at its exact tip before any ref
+  was removed. 84 deleted, 0 failures.
+- Remaining hosted heads: `main`, `plan/research-grade-roadmap` (PR #82,
+  verified still OPEN afterwards), and the two closed-unmerged heads
+  `fix/shift-preconditioner-unknown-mode` (#25) and
+  `refactor/deduplicate-vmec-geometry-facade` (#106), which were NOT part of
+  the authorization and were left alone.
+- Two classification traps are recorded so the cutover does not repeat them.
+  First, `plan/research-grade-roadmap` carries TWO pull requests -- #49
+  (merged) and #82 (open) -- so a merged-first classifier marks the living
+  roadmap branch deletable; open status must take precedence, and the delete
+  script asserts that `main` and the roadmap never appear in its list.
+  Second, every merged branch tip is a NON-ancestor of `main` because the
+  campaign squash-merged: ancestry is the wrong test for a squash, and
+  GitHub's merge record is the authoritative signal.
+- This collapses the cutover: instead of replaying 84 heads onto rewritten
+  history with exact tree and patch checks for each, the force-push is
+  `main` plus tags, with one open roadmap head to rebase.
