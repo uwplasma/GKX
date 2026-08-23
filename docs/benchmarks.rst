@@ -196,23 +196,27 @@ duplicating large run products. The current tracked result set is:
    :widths: 22 30 18 30
 
    * - Result
-     - Tracked artifact
+     - Artifact (tracked, or regenerable render)
      - Claim scope
      - Regeneration path
    * - Core linear benchmark atlas
-     - ``docs/_static/benchmark_core_linear_atlas.png``
+     - ``docs/_static/benchmark_core_linear_atlas.png`` (regenerable render;
+       not tracked in git)
      - headline linear validation atlas
      - ``python tools/artifacts/make_benchmark_atlas.py``
    * - Core nonlinear benchmark atlas
-     - ``docs/_static/benchmark_core_nonlinear_atlas.png``
+     - ``docs/_static/benchmark_core_nonlinear_atlas.png`` (regenerable
+       render; not tracked in git)
      - headline nonlinear validation atlas
      - ``python tools/artifacts/make_benchmark_atlas.py``
    * - README benchmark summary panel
-     - ``docs/_static/benchmark_readme_panel.png``
+     - ``docs/_static/benchmark_readme_panel.png`` (regenerable render; not
+       tracked in git)
      - compact publication-facing benchmark summary
      - ``python tools/artifacts/make_benchmark_atlas.py``
    * - Extended linear stress matrix
-     - ``docs/_static/benchmark_extended_linear_panel.png``
+     - ``docs/_static/benchmark_extended_linear_panel.png`` (regenerable
+       render; not tracked in git)
      - stress and provisional lanes, not headline validation claims
      - ``python tools/artifacts/make_benchmark_atlas.py``
    * - Runtime and memory comparison
@@ -232,7 +236,8 @@ duplicating large run products. The current tracked result set is:
      - manifest of small tracked benchmark inputs
      - ``python tools/artifacts/make_benchmark_atlas.py``
    * - Reference-code linear parity matrix
-     - ``docs/_static/gkx_gx_linear_parity_matrix.png``
+     - ``docs/_static/gkx_gx_linear_parity_matrix.png`` (regenerable render;
+       not tracked in git)
      - cross-code linear growth-rate and frequency parity across tokamak and stellarator cases
      - ``python tools/comparison/build_gx_parity_matrix.py``
    * - Reference-code linear parity rows
@@ -253,14 +258,18 @@ The manifest above is the docs-facing source of truth for promoted benchmark
 results. If a new result is added to ``benchmarks/results/manifest.toml``, it
 must either appear in this table or remain unpromoted in scratch storage.
 
-This produces the tracked atlas panels:
+This regenerates the atlas panels on demand:
 
 - ``docs/_static/benchmark_core_linear_atlas.png``
 - ``docs/_static/benchmark_core_nonlinear_atlas.png``
 - ``docs/_static/benchmark_readme_panel.png``
 - ``docs/_static/benchmark_extended_linear_panel.png``
 
-PDF copies are emitted alongside each PNG for manuscript workflows.
+The panels are regenerable renders, not git-tracked artifacts: the
+repository-slimming passes removed reproducible figures from git, and the
+checksummed panels are recorded under the ``regenerate_on_demand`` action in
+``tools/release_artifact_manifest.toml``. PDF copies are emitted alongside
+each PNG for manuscript workflows.
 
 Tracked benchmark metrics
 -------------------------
@@ -399,28 +408,41 @@ Supplementary closure figures
 -----------------------------
 
 Some parity lanes are tracked as supplementary closure artifacts rather than as
-headline atlas tiles. Current examples include:
+headline atlas tiles. The tracked evidence is machine-readable; the companion
+comparison figures are regenerable renders that the repository-slimming passes
+removed from git. Current examples include:
 
-- ``docs/_static/nonlinear_cyclone_short_resolved_audit_t5.png`` for the
+- ``docs/_static/nonlinear_cyclone_short_gate_summary.json`` for the
   corrected short nonlinear Cyclone replay, which now uses the explicit
   short-reference dissipation contract and localizes the remaining mismatch in
-  resolved ``k_y`` field-energy diagnostics.
+  resolved ``k_y`` field-energy diagnostics (the
+  ``nonlinear_cyclone_short_resolved_audit_t5`` panel is a regenerable
+  render).
 - ``docs/_static/comparison/secondary_reference_out_compare.csv`` for the refreshed secondary
   stage-2 mode table built from the dense ``kh01a`` GX replay.
-- ``docs/_static/nonlinear_w7x_diag_compare_t200.png``,
-  ``docs/_static/hsx_nonlinear_compare_t50_true.png``, and
-  ``docs/_static/nonlinear_kbm_diag_compare_t100_refresh.png`` for the
-  refreshed long-window nonlinear publication figures.
-- ``docs/_static/etg_fullgk_pilot_compare_dt1e4_gaussian_match.png`` for the
-  closed short-window full-GK ETG nonlinear pilot that now appears in the
-  shipped summary/publication panels.
-- ``docs/_static/kbm_eigenfunction_overlap_summary.png`` for the current
-  eigenfunction-overlap summary on the tracked KBM GX candidate table. This is
-  the first compact overlap artifact in the manuscript-facing stack and should
-  be read as a branch-identity diagnostic. The raw mode-shape overlays are now
-  tracked separately as ``docs/_static/kbm_eigenfunction_reference_overlay_ky0p3000.png``
-  and ``docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png`` with
-  JSON gate reports under ``docs/_static/reference_modes/``.
+- ``docs/_static/nonlinear_w7x_gate_summary.json``,
+  ``docs/_static/nonlinear_hsx_gate_summary.json``, and
+  ``docs/_static/nonlinear_kbm_gate_summary.json`` for the refreshed
+  long-window nonlinear publication lanes (the
+  ``nonlinear_w7x_diag_compare_t200``, ``hsx_nonlinear_compare_t50_true``,
+  and ``nonlinear_kbm_diag_compare_t100_refresh`` figures are regenerable
+  renders from ``tools/comparison/make_reference_panels.py``).
+- the closed short-window full-GK ETG nonlinear pilot that now appears in the
+  regenerated summary/publication panels (its
+  ``etg_fullgk_pilot_compare_dt1e4_gaussian_match`` comparison figure is a
+  regenerable render and is no longer tracked in git).
+- the current eigenfunction-overlap summary on the tracked KBM GX candidate
+  table (the ``kbm_eigenfunction_overlap_summary`` panel is a regenerable
+  render from
+  ``tools/artifacts/generate_linear_reference_overlays.py overlap-summary``).
+  This is the first compact overlap artifact in the manuscript-facing stack
+  and should be read as a branch-identity diagnostic. The raw mode-shape
+  overlay evidence is tracked as JSON gate reports and GKX traces under
+  ``docs/_static/reference_modes/`` with frozen GX raw-mode bundles under
+  ``docs/_static/comparison/reference_modes/``; the overlay figures
+  (``kbm_eigenfunction_reference_overlay_ky0p3000.png`` and
+  ``w7x_eigenfunction_reference_overlay_ky0p3000.png``) are regenerable
+  renders.
 
 Extended stress matrix
 ----------------------
@@ -451,7 +473,9 @@ The TEM row is provisional. The shipped ``tem_reference.csv`` is digitized from
 the literature rather than sourced from a GX benchmark dump, and the exact case
 definition behind that digitized curve is still being reassembled. It should be
 read as a tracked stress lane, not as a closed parity result. The executable
-audit ``docs/_static/tem_branch_parity_audit.{png,pdf,json,csv}`` records the
+audit ``docs/_static/tem_branch_parity_audit.json`` (its ``png``/``pdf``/``csv``
+companions are regenerable renders of the same audit and are not tracked in
+git) records the
 open branch mismatch explicitly: maximum absolute relative growth-rate
 mismatch ``4.25``, maximum absolute relative frequency mismatch ``3.3`` after
 excluding the near-zero reference denominator, one growth-rate sign mismatch,

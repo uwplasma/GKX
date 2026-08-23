@@ -82,7 +82,7 @@ class GeometryFeatures:
 
 
 def _count_bmag_wells(bmag: np.ndarray) -> int:
-    """Count |B| wells deeper than ``_WELL_PROMINENCE`` of the |B| range."""
+    """Count ``|B|`` wells deeper than ``_WELL_PROMINENCE`` of the ``|B|`` range."""
 
     n, b_range = int(bmag.size), float(bmag.max() - bmag.min()) if bmag.size else 0.0
     if n < 4 or b_range <= 0.0:
