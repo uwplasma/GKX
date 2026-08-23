@@ -124,6 +124,15 @@ use or provenance.
 - Normalize Rogerio's historical Wisc and case variants to
   `Rogerio Jorge <rogerio.jorge@ist.utl.pt>`.
 - Remove Claude/Codex co-author trailers and generated-by footers.
+- Scrub the former project name from rewritten metadata: 34 reachable commit
+  messages and 18 annotated tag messages still say `SPECTRAX-GK`/`spectraxgk`.
+  Rewrite them to `GKX`/`gkx` with the same token map used for the GitHub
+  releases (`SPECTRAX-GK`/`SPECTRAX_GK` -> `GKX`, `spectraxgk`/`spectrax-gk`
+  -> `gkx`, bare `SPECTRAX` -> `GKX`), preserving each message's remaining
+  wording, and gate the candidate on a case-insensitive `spectrax` scan of
+  author, committer, subject, and body returning zero hits. The 22 hosted
+  releases were retitled and their bodies scrubbed on 2026-08-23; tracked
+  source already contains no occurrence.
 - Relabel AI-authored commits created on Rogerio's machine to Rogerio while
   retaining their original timestamp, parent topology, and message content
   except AI branch labels such as `codex/` or `[codex]`.

@@ -1747,3 +1747,34 @@ directories, plus 83 doc, 49 test and 13 tool directories; README 615 lines
 with 12 tracked media files at 1.10 MB. The README already serves one movie
 as a v1.7.0 release asset, which is the pattern MOV-1b generalizes: engaging
 media that costs the clone nothing.
+
+## 2026-08-23 — the project name, the source layout, and what a good README is
+
+- Renamed the project's public release history: all 22 GitHub releases went
+  from `SPECTRAX-GK vX.Y` to `GKX vX.Y`, and their bodies were scrubbed with
+  the token map SPECTRAX-GK/SPECTRAX_GK -> GKX, spectraxgk/spectrax-gk -> gkx,
+  bare SPECTRAX -> GKX. A case-insensitive scan of every release title and
+  body now returns zero hits, and tracked source never contained the string.
+  Note for the record that this rewrites historical install lines: old notes
+  that said `pip install spectraxgk` now say `pip install gkx`, which is the
+  package that exists today but is not what those versions shipped under.
+  The owner asked for every instance removed; the tradeoff is named here
+  rather than hidden.
+- What survives is metadata only reachable by the history rewrite: 34 commit
+  messages and 18 annotated tag messages. Added to the rewrite's identity
+  contract with the same token map and a zero-hit gate, alongside the
+  AI-attribution scrub.
+- REL-1 records the release decision: **GKX v1.8.0**, cut after the size
+  cutover so the tag is born on rewritten history.
+- SLIM-4 raised to P0 and restated as what the owner actually asked for --
+  organizing the source, minimizing files AND folders, not only lines. It now
+  carries the comparison that makes the target concrete (ESSOS: 17 flat
+  modules, no subpackages; VMEX solver core: 46 files; GKX: 207 files in 41
+  directories) and is sequenced behind SLIM-2/SLIM-3, whose ~15k lines of
+  removal are what make collapsing the tree safe rather than cosmetic.
+- DOC-1 corrected: the README does NOT need to be much smaller. The model is
+  the VMEX README (332 lines): one sentence of identity, a hero figure, an
+  install block whose commands run, task-titled sections, and every
+  quantitative claim carrying its reproduction command, the pinned revisions
+  of everything compared, and explicit scoping of what is and is not claimed.
+  GKX's 615 lines may stay 615 if every section earns its place.
