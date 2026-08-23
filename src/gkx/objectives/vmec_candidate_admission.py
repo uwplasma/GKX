@@ -145,7 +145,7 @@ def _final_quasisymmetry_from_vmec_result(result: Any) -> float | None:
 
     if state is not None and runtime is not None:
         try:
-            import vmex as vj  # type: ignore[import-not-found]
+            import vmex as vj  # type: ignore[import-untyped, import-not-found]
 
             qs = vj.optimize.QuasisymmetryRatioResidual(
                 surfaces,
@@ -166,7 +166,7 @@ def _final_quasisymmetry_from_vmec_result(result: Any) -> float | None:
             wout = None
     if wout is not None:
         try:
-            import vmex as vj  # type: ignore[import-not-found]
+            import vmex as vj  # type: ignore[import-untyped, import-not-found]
 
             qs = vj.optimize.QuasisymmetryRatioResidual(
                 surfaces,
@@ -247,7 +247,7 @@ def _wout_quasisymmetry(
         value = _finite_float_or_none(source.get("qs_residual", source.get("quasisymmetry")))
         return value, str(source.get("qs_source", "mapping")), None if value is not None else "missing_qs_residual"
     try:
-        import vmex as vj  # type: ignore[import-not-found]
+        import vmex as vj  # type: ignore[import-untyped, import-not-found]
 
         wout = vj.read_wout(source)
         qs = vj.optimize.QuasisymmetryRatioResidual(

@@ -80,7 +80,15 @@ def hermite_streaming(G: jnp.ndarray, kpar: jnp.ndarray, vth: float) -> jnp.ndar
 def energy_operator(
     G: jnp.ndarray, coeff_const: float, coeff_par: float, coeff_perp: float
 ) -> jnp.ndarray:
-    """Apply the energy operator (1 + v_par^2 + mu) in Hermite-Laguerre space."""
+    """Apply the energy operator (1 + v_par^2 + mu) in Hermite-Laguerre space.
+
+    The perpendicular part uses ``apply_laguerre_x`` and therefore assumes the
+    plain Laguerre basis with negative ``l +/- 1`` couplings, while the runtime
+    state uses the alternating ``(-1)**l`` basis of
+    ``gkx.core.velocity.J_l_all``. Composing with runtime states requires the
+    alternating-basis counterparts in ``gkx.terms.linear_terms`` (sign-flipped
+    ``l +/- 1`` couplings); this helper is not used by the production RHS.
+    """
 
     return (
         coeff_const * G
@@ -97,7 +105,16 @@ def diamagnetic_drive_coeffs(
     coeff_par: float,
     coeff_perp: float,
 ) -> jnp.ndarray:
-    """Return velocity-space coefficients for (1 + eta_i(E - 3/2))."""
+    """Return velocity-space coefficients for (1 + eta_i(E - 3/2)).
+
+    Built from ``energy_operator`` and therefore expressed in the plain
+    Laguerre basis, whose off-diagonal ``l +/- 1`` signs differ from the
+    alternating ``(-1)**l`` basis carried by the runtime state (see
+    ``gkx.core.velocity.J_l_all``). Applying these coefficients to runtime
+    states requires the alternating-basis diamagnetic-drive path in
+    ``gkx.terms.linear_terms`` instead; this helper is not used by the
+    production RHS.
+    """
 
     e00 = jnp.zeros((Nl, Nm, 1, 1, 1))
     e00 = e00.at[0, 0, 0, 0, 0].set(1.0)
