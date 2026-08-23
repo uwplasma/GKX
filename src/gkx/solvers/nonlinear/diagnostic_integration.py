@@ -134,34 +134,42 @@ def _nonlinear_diagnostic_kernels() -> NonlinearDiagnosticKernels:
     )
 
 
+def _common_nonlinear_diagnostics_deps() -> dict[str, Any]:
+    """Return facade bindings shared by explicit and IMEX diagnostics."""
+
+    return {
+        "ensure_geometry_fn": ensure_flux_tube_geometry_data,
+        "build_cache_fn": build_linear_cache,
+        "quadrature_weights_fn": fieldline_quadrature_weights,
+        "omega_mask_fn": _diagnostic_omega_mode_mask,
+        "midplane_index_fn": _diagnostic_midplane_index,
+        "collision_damping_fn": _collision_damping,
+        "compute_fields_fn": compute_fields_cached,
+        "diagnostic_kernels_fn": _nonlinear_diagnostic_kernels,
+        "build_diagnostic_setup_fn": build_nonlinear_diagnostic_setup,
+        "build_collision_split_policy_fn": build_nonlinear_collision_split_policy,
+        "make_diagnostic_tuple_fn": make_nonlinear_diagnostic_tuple_fn,
+        "finalize_scan_diagnostics_fn": finalize_nonlinear_scan_diagnostics,
+        "select_step_diagnostics_fn": select_nonlinear_step_diagnostics,
+        "emit_progress_fn": maybe_emit_nonlinear_progress,
+        "apply_collision_split_fn": _apply_collision_split,
+    }
+
+
 def _explicit_nonlinear_diagnostics_deps() -> ExplicitNonlinearDiagnosticsDeps:
     """Collect dependencies for explicit diagnostic integration."""
 
     return ExplicitNonlinearDiagnosticsDeps(
-        ensure_geometry_fn=ensure_flux_tube_geometry_data,
-        build_cache_fn=build_linear_cache,
-        quadrature_weights_fn=fieldline_quadrature_weights,
-        omega_mask_fn=_diagnostic_omega_mode_mask,
-        midplane_index_fn=_diagnostic_midplane_index,
+        **_common_nonlinear_diagnostics_deps(),
         resolve_cfl_fac_fn=resolve_cfl_fac,
         linear_frequency_bound_fn=_linear_frequency_bound,
         laguerre_velocity_max_fn=_laguerre_velocity_max,
         cfl_frequency_components_fn=_nonlinear_cfl_frequency_components,
-        collision_damping_fn=_collision_damping,
         nonlinear_rhs_fn=nonlinear_rhs_cached,
-        compute_fields_fn=compute_fields_cached,
-        diagnostic_kernels_fn=_nonlinear_diagnostic_kernels,
-        build_diagnostic_setup_fn=build_nonlinear_diagnostic_setup,
         build_time_step_policy_fn=build_nonlinear_time_step_policy,
-        build_collision_split_policy_fn=build_nonlinear_collision_split_policy,
-        make_diagnostic_tuple_fn=make_nonlinear_diagnostic_tuple_fn,
         make_explicit_step_fn=make_explicit_diagnostic_step,
         run_explicit_scan_fn=run_explicit_diagnostic_scan,
         run_sampled_explicit_scan_fn=run_sampled_explicit_diagnostic_scan,
-        finalize_scan_diagnostics_fn=finalize_nonlinear_scan_diagnostics,
-        select_step_diagnostics_fn=select_nonlinear_step_diagnostics,
-        emit_progress_fn=maybe_emit_nonlinear_progress,
-        apply_collision_split_fn=_apply_collision_split,
     )
 
 
@@ -380,30 +388,16 @@ def _imex_nonlinear_diagnostics_deps() -> IMEXNonlinearDiagnosticsDeps:
     """Collect dependencies for IMEX diagnostic integration."""
 
     return IMEXNonlinearDiagnosticsDeps(
-        ensure_geometry_fn=ensure_flux_tube_geometry_data,
-        build_cache_fn=build_linear_cache,
-        quadrature_weights_fn=fieldline_quadrature_weights,
-        omega_mask_fn=_diagnostic_omega_mode_mask,
-        midplane_index_fn=_diagnostic_midplane_index,
+        **_common_nonlinear_diagnostics_deps(),
         linear_rhs_for_terms_fn=_linear_rhs_jit_for_terms,
-        build_diagnostic_setup_fn=build_nonlinear_diagnostic_setup,
         build_imex_operator_fn=build_nonlinear_imex_operator,
-        build_collision_split_policy_fn=build_nonlinear_collision_split_policy,
-        collision_damping_fn=_collision_damping,
         make_imex_nonlinear_term_fn=make_imex_nonlinear_term,
         make_imex_solve_step_fn=make_imex_solve_step,
         solve_imex_step_fn=solve_imex_step,
-        make_diagnostic_tuple_fn=make_nonlinear_diagnostic_tuple_fn,
         make_imex_step_fn=make_imex_diagnostic_step,
         run_imex_scan_fn=run_imex_diagnostic_scan,
-        finalize_scan_diagnostics_fn=finalize_nonlinear_scan_diagnostics,
-        select_step_diagnostics_fn=select_nonlinear_step_diagnostics,
-        emit_progress_fn=maybe_emit_nonlinear_progress,
-        apply_collision_split_fn=_apply_collision_split,
-        compute_fields_fn=compute_fields_cached,
         nonlinear_term_fn=nonlinear_em_term_cached_impl,
         nonlinear_contribution_fn=nonlinear_em_contribution,
-        diagnostic_kernels_fn=_nonlinear_diagnostic_kernels,
     )
 
 
