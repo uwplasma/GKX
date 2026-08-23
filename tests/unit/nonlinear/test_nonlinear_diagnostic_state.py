@@ -65,10 +65,8 @@ def test_compute_nonlinear_diagnostic_tuple_unresolved_uses_scalar_kernels() -> 
         magnetic_vector_potential_energy=lambda *_args, **_kwargs: _array(30),
         magnetic_vector_potential_energy_resolved=_unused,
         heat_flux_species=lambda *_args, **_kwargs: jnp.asarray([4.0, 5.0]),
-        heat_flux_resolved_species=_unused,
         heat_flux_channel_resolved_species=_unused,
         particle_flux_species=lambda *_args, **_kwargs: jnp.asarray([6.0]),
-        particle_flux_resolved_species=_unused,
         particle_flux_channel_resolved_species=_unused,
         turbulent_heating_species=lambda *_args, **_kwargs: jnp.asarray([7.0]),
         turbulent_heating_resolved_species=_unused,
@@ -103,10 +101,8 @@ def test_make_nonlinear_diagnostic_tuple_fn_preserves_scalar_contract() -> None:
         magnetic_vector_potential_energy=lambda *_args, **_kwargs: _array(30),
         magnetic_vector_potential_energy_resolved=_unused,
         heat_flux_species=lambda *_args, **_kwargs: jnp.asarray([4.0, 5.0]),
-        heat_flux_resolved_species=_unused,
         heat_flux_channel_resolved_species=_unused,
         particle_flux_species=lambda *_args, **_kwargs: jnp.asarray([6.0]),
-        particle_flux_resolved_species=_unused,
         particle_flux_channel_resolved_species=_unused,
         turbulent_heating_species=lambda *_args, **_kwargs: jnp.asarray([7.0]),
         turbulent_heating_resolved_species=_unused,
@@ -145,10 +141,13 @@ def test_make_nonlinear_diagnostic_tuple_fn_preserves_scalar_contract() -> None:
 
 
 def test_compute_nonlinear_diagnostic_tuple_resolved_packs_marker_order() -> None:
+    calls = {"heat": 0, "particle": 0}
+
     def _resolved_tuple(start: int, count: int):
         return tuple(_array(start + idx) for idx in range(count))
 
-    def _channel_tuple(start: int):
+    def _channel_tuple(name: str, start: int):
+        calls[name] += 1
         return (
             _resolved_tuple(start, 5),
             _resolved_tuple(start + 5, 5),
@@ -172,17 +171,11 @@ def test_compute_nonlinear_diagnostic_tuple_resolved_packs_marker_order() -> Non
         magnetic_vector_potential_energy_resolved=lambda *_args,
         **_kwargs: _resolved_tuple(121, 5),
         heat_flux_species=lambda *_args, **_kwargs: _unused(),
-        heat_flux_resolved_species=lambda *_args, **_kwargs: _resolved_tuple(126, 5),
-        heat_flux_channel_resolved_species=lambda *_args, **_kwargs: _channel_tuple(
-            131
-        ),
+        heat_flux_channel_resolved_species=lambda *_args,
+        **_kwargs: _channel_tuple("heat", 131),
         particle_flux_species=lambda *_args, **_kwargs: _unused(),
-        particle_flux_resolved_species=lambda *_args, **_kwargs: _resolved_tuple(
-            146, 5
-        ),
-        particle_flux_channel_resolved_species=lambda *_args, **_kwargs: _channel_tuple(
-            151
-        ),
+        particle_flux_channel_resolved_species=lambda *_args,
+        **_kwargs: _channel_tuple("particle", 151),
         turbulent_heating_species=lambda *_args, **_kwargs: _unused(),
         turbulent_heating_resolved_species=lambda *_args, **_kwargs: _resolved_tuple(
             166, 5
@@ -197,8 +190,9 @@ def test_compute_nonlinear_diagnostic_tuple_resolved_packs_marker_order() -> Non
 
     resolved = out[-1]
     assert len(resolved) == 58
+    assert calls == {"heat": 1, "particle": 1}
     np.testing.assert_allclose(np.asarray(out[2]), [110.0])
-    np.testing.assert_allclose(np.asarray(out[5]), [126.0])
+    np.testing.assert_allclose(np.asarray(out[5]), [408.0])
     np.testing.assert_allclose(np.asarray(resolved[0]), [101.0])
     np.testing.assert_allclose(np.asarray(resolved[7]), [108.0])
     np.testing.assert_allclose(np.asarray(resolved[26]), [132.0])
