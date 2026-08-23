@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `0ff569c3` (merged PR #81)
-and 32 open PRs: #74, #82--#105, and #107--#113. PR #106 was closed as a
+and 33 open PRs: #74, #82--#105, and #107--#114. PR #106 was closed as a
 duplicate. The post-merge `main` workflow passes.
 
 ## Rules
@@ -35,7 +35,7 @@ independent replicated validation.
 | VMEC/Boozer geometry | imported and differentiable paths | selected finite-beta and state-control checks | main plot is synthetic; physical renderer is in PR #86 |
 | Linear derivatives | implicit eigenpair VJP with residual gates | AD/FD tests and selected GX comparisons | promoted on certified simple branches |
 | Nonlinear derivative | checkpointed discrete adjoint of a finite post-saturation window | reduced AD/FD and device-parity tests | local finite-window derivative only |
-| QA transport reduction | optimization scripts and preliminary paired runs | the first source-pinned production pair passes terminal statistics and spectra with a 15.03% seed-31 reduction; seed-22/33, CFL, and Ny=192 pairs are active | one-seed sizing evidence, not statistically resolved |
+| QA transport reduction | optimization scripts and preliminary paired runs | seed 31 passes with a 15.03% reduction; seed 22 gives an apparent 11.77% reduction but fails candidate-Wg stationarity; seed 33, CFL, Ny=192, and exact seed-22 continuations are active | no statistically resolved claim |
 | Saturation stopping | IAT-corrected SEM and stationarity guards | implementation tests | production policy has defects below |
 | CPU/GPU | JAX CPU/GPU and experimental sharding | selected kernels/cases | no general scaling or GX-competitive claim |
 
@@ -749,6 +749,27 @@ seed-31 Ny=192 pair now run in source-pinned per-design queues on the two GPUs.
 The first queue launch failed closed on an inherited `PYTHONPATH`; it wrote no
 artifact, and the corrected queue pins `PYTHONPATH=src` before either solver.
 
+The independent seed-22 pair then reached exact `t=350` at the same
+`96x160x48` resolution. The baseline terminal 75-unit window passes every
+stationarity, corrected-SEM, and spectral gate at
+
+\[
+ Q_{base}=8.5355\pm0.1459,
+\]
+
+while the candidate gives `Q=7.5305 +/- 0.1356`. The apparent change is
+`-11.77%`, or 5.05 combined within-window SEM. It is not accepted: candidate
+`Wg` falls from 191.86 to 182.66 between half-windows, so the frozen gate
+returns `Wg_not_stationary`. Its heat-flux cutoff/peak, last-three-`ky`, and
+outer-six-`kx` fractions nevertheless pass at 1.14%, 0.215%, and 3.63%; the
+baseline values are 1.95%, 0.378%, and 2.11%. The 50-, 100-, 125-, and
+150-unit post-hoc windows do not replace the preregistered 75-unit decision.
+Both exact states are queued for matched continuation to absolute `t=500`
+after the four-case per-design queues finish. Remote/local hashes pass;
+baseline/candidate trace hashes are `d7c2be39`/`8ea763e0` and the immutable
+matched analysis is `82cda377`. Seed 33 is active on both GPUs without a
+threshold change.
+
 ### R3 — the plotted stellarator tube is a synthetic torus
 
 `gkx.flux_tube_3d` uses
@@ -1033,15 +1054,28 @@ species-Hermite integration now consume the same immutable tuple. It removes
 arrays, sharding specifications, collectives, or traced operations. All 256
 x64 linear/parallel tests with eight CPU devices, 117 release tests, Ruff, and
 mypy on the four changed source files pass locally. Its private replay
-`7cc91489` has exact patch `4b131242` and all five changed blobs; GitHub CI is
-pending.
+`7cc91489` has exact patch `4b131242` and all five changed blobs. All 41
+required GitHub checks pass; nightly is intentionally skipped.
 
-The hosted-ref audit now covers every branch. GitHub advertises 82 branch heads
-and 28 tags: 32 open-PR heads, `main`, the temporary #81 dependency base, 46
+Draft PR #114, stacked on #113, makes analytic s-alpha and sampled/VMEC
+flux-tube geometries share one implementation of the identical
+`k_perp2`, drift-component, and `omega_d` contractions. It removes 18
+installed-source lines (`96,361 -> 96,343`) without changing public classes,
+PyTree layouts, arithmetic order, shapes, or solver routes. Exact-base/head
+float32 and x64 audits give bit-identical eager outputs, JIT outputs, and all
+12 JAXPRs per precision. All 392 selected geometry/operator/runtime/release
+tests, Ruff, and mypy pass. The 14-cut composition applies cleanly and reaches
+206 files and 96,146 lines (-319 from 96,465), with the same 392 tests and
+static gates passing. Private replay `001499b2` has exact patch `6271260e` and
+both changed blobs. All 41 required GitHub checks pass; nightly is
+intentionally skipped.
+
+The hosted-ref audit now covers every branch. GitHub advertises 83 branch heads
+and 28 tags: 33 open-PR heads, `main`, the temporary #81 dependency base, 46
 merged heads, and closed PRs #25/#106. Replaying the exact validated history
 filter and attribution callbacks for the latter 48 shows that every head/tag
 ref present at that audit fits and can be marked `REWRITE`; none needs
-deletion. GitHub's 141 server-managed pull refs must also be captured by the
+deletion. GitHub's 145 server-managed pull refs must also be captured by the
 final lossless mirror bundle. No ref may disappear merely because its PR is
 closed.
 
@@ -1060,6 +1094,14 @@ is 8,646,760 bytes, pack plus index is 9,150,908 bytes, and complete `.git` is
 9,715,173 bytes, leaving 284,827 bytes of decimal margin. Strict `fsck`, no
 alternates, and zero AI-attribution hits pass. The cutover now rewrites every
 current branch and deletes none.
+
+After replaying #114, the pre-record all-head clone has 84 remote refs
+(83 heads plus `origin/HEAD`), 28 tags, 3,540 commits, and 17,991 objects. Its
+pack is 8,566,747 bytes, pack plus index is 9,071,567 bytes, and complete
+`.git` is 9,636,442 bytes, leaving 363,558 bytes of strict decimal margin.
+Strict `fsck`, no alternates, and zero AI-attribution hits pass. This includes
+every hosted branch and tag present before this roadmap record; no public
+history moved.
 
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
@@ -1340,7 +1382,7 @@ unverified rather than silently promoted.
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#113 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze the complete 110-ref map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#114 remove redundant renders/grids/traces/policies/setup/formulas; latest pre-record rehearsal `.git` is below 9.75 MB | freeze the complete 111-ref map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |

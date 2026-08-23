@@ -1604,3 +1604,33 @@
   `.git` 9,636,669 bytes. Strict `fsck`, no alternates, and zero AI-attribution
   hits pass, leaving 363,331 bytes of margin. GitHub CI is pending; no public
   history moved.
+- PR #113 is fully green at `fbe6b5eb`: all 41 required checks pass, including
+  nonlinear and four-device parallel/autodiff; nightly is intentionally
+  skipped. Its full-stack composition comment and final CI evidence are public.
+- The independent accepted-VMEX QA seed-22 pair reached exact `t=350` at
+  `96x160x48`. The baseline terminal 75-unit window passes Q/Wphi/Wg and all
+  spectral gates at `Q=8.5355 +/- 0.1459`. The candidate gives
+  `Q=7.5305 +/- 0.1356`, an apparent -11.77% change at 5.05 combined SEM, but
+  fails because Wg falls from 191.86 to 182.66 between half-windows. Both heat
+  spectra pass. Hash-verified baseline/candidate traces are `d7c2be39` and
+  `8ea763e0`; matched analysis is `82cda377`. The pair is rejected pending an
+  exact matched continuation, not counted as transport-reduction evidence.
+- Both per-design queues advanced unchanged to seed 33. Added dependent
+  continuation wrappers 1293332/1293333: only after the preregistered seed-33,
+  CFL, and Ny192 queues finish, they continue both exact seed-22 states by 150
+  time units to absolute `t=500` on their original GPUs. The frozen 75+60 rule
+  and every threshold remain unchanged.
+- Opened draft PR #114 at `8005bcbb`, stacked on #113. One typed mixin replaces
+  the duplicated spectral contractions in analytic and sampled geometries,
+  removing 18 installed lines (`96,361 -> 96,343`). Float32/x64 eager, JIT, and
+  12-per-precision JAXPR comparisons are byte-identical. All 392 selected tests,
+  Ruff, mypy, and diff checks pass; the 14-cut composed tree is 206 files and
+  96,146 lines (-319). Private replay `001499b2` has exact patch `6271260e` and
+  both blobs. All 41 required GitHub checks pass, including nonlinear and
+  four-device parallel/autodiff; nightly is intentionally skipped.
+- The hosted inventory now has 83 branch heads, 28 tags, 33 open PRs, and 145
+  server-managed pull refs. A fresh all-head clone through private #114 has 84
+  remote refs, 3,540 commits, and 17,991 objects: pack 8,566,747 bytes, pack
+  plus index 9,071,567 bytes, and complete `.git` 9,636,442 bytes. Strict
+  `fsck`, no alternates, and zero attribution hits pass, leaving 363,558 bytes
+  of decimal margin. No branch is deleted and no public history moved.

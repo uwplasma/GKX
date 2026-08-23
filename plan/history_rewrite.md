@@ -45,7 +45,7 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the 32 open PR heads (#74, #82--#105, and #107--#113) after
+- Rebase the 33 open PR heads (#74, #82--#105, and #107--#114) after
   the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
 - Retain and rewrite every current branch head. Publish every old and new tip
@@ -167,7 +167,7 @@ marker remains. The other human identities are unchanged.
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
    update `main`, all tags, and the 49 non-open topic heads from exact candidate
-   SHAs, then rebase the 32 open PR heads with `--force-with-lease`. Do not merely retarget the
+   SHAs, then rebase the 33 open PR heads with `--force-with-lease`. Do not merely retarget the
    nineteen direct #81-base PRs: the squash merge left equal base trees but
    divergent ancestry, so each head must be replayed onto rewritten `main` and
    pass exact tree/patch checks before retargeting.
@@ -390,13 +390,23 @@ plus `origin/HEAD`), 28 tags, 3,539 commits, and 17,984 objects. Its pack is
 9,636,669 bytes. Strict `fsck`, no alternates, and zero AI-attribution hits
 pass, leaving 363,331 bytes of strict decimal margin. No public history moved.
 
-A full hosted-ref refresh found 81 branch heads and 28 tags, not only the 33
-heads in the first candidate. The extra 48 belong to 46 merged PRs and two
-closed, unmerged PRs (#25 and duplicate #106). The exact path and identity
+Draft PR #114 commit `8005bcbb` is replayed on private #113 as `001499b2`.
+Its stable patch ID `6271260e` and both changed source blobs are exact. Before
+the following roadmap record, a fresh all-head clone has 84 remote refs
+(83 heads plus `origin/HEAD`), 28 tags, 3,540 commits, and 17,991 objects. Its
+pack is 8,566,747 bytes, pack plus index is 9,071,567 bytes, and complete
+`.git` is 9,636,442 bytes. Strict `fsck`, no alternates, and zero
+AI-attribution hits pass, leaving 363,558 bytes of strict decimal margin. No
+public history moved.
+
+A full hosted-ref refresh now finds 83 branch heads and 28 tags. The retained
+non-open set includes 46 merged PRs, two closed unmerged PRs (#25 and duplicate
+#106), and the temporary #81 dependency base. The exact path and identity
 callbacks reproduce every one of the earlier 29 main/tag targets, so the 48
-heads can be filtered onto the same object graph rather than deleted. GitHub
-also advertises 141 server-managed pull refs; the final mirror and lossless
-bundle must capture them even though the cutover does not update them directly.
+non-open heads can be filtered onto the same object graph rather than deleted.
+GitHub now advertises 145 server-managed pull refs; the final mirror and
+lossless bundle must capture them even though the cutover does not update them
+directly.
 
 Repeated roadmap-log replays had also made the private size gate depend on
 incremental documentation history. Replaced that private branch only with one
