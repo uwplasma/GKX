@@ -7,6 +7,7 @@ Boozer, and imported field-line data live in :mod:`gkx.geometry.flux_tube`.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol, cast
 
 import jax
 import jax.numpy as jnp
@@ -40,6 +41,64 @@ def effective_boundary(
     if zero_shear_enabled(s_hat, zero_shat=zero_shat, threshold=threshold):
         return "periodic"
     return str(boundary)
+
+
+class _SpectralGeometry(Protocol):
+    """Methods and coefficients shared by analytic and sampled geometries."""
+
+    s_hat: float
+    kperp2_bmag: bool
+
+    def bmag(self, theta: jnp.ndarray) -> jnp.ndarray: ...
+
+    def metric_coeffs(
+        self, theta: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]: ...
+
+    def drift_coeffs(
+        self, theta: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]: ...
+
+
+class _SpectralGeometryMixin:
+    """Shared Fourier-space geometry contractions."""
+
+    def k_perp2(
+        self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
+    ) -> jnp.ndarray:
+        geometry = cast(_SpectralGeometry, self)
+        gds2, gds21, gds22 = geometry.metric_coeffs(theta)
+        s_hat = jnp.asarray(geometry.s_hat)
+        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
+        kx_hat = kx0 / s_hat_safe
+        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
+        kperp2 = (
+            ky * (ky * gds2 + 2.0 * kx_hat * gds21)
+            + (kx_hat * kx_hat) * gds22
+        )
+        if geometry.kperp2_bmag:
+            bmag_inv = 1.0 / geometry.bmag(theta)
+            return kperp2 * (bmag_inv * bmag_inv)
+        return kperp2
+
+    def drift_components(
+        self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        geometry = cast(_SpectralGeometry, self)
+        kx0 = kx[None, :, None]
+        ky0 = ky[:, None, None]
+        cv, gb, cv0, gb0 = geometry.drift_coeffs(theta[None, None, :])
+        s_hat = jnp.asarray(geometry.s_hat)
+        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
+        kx_hat = kx0 / s_hat_safe
+        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
+        return ky0 * cv + kx_hat * cv0, ky0 * gb + kx_hat * gb0
+
+    def omega_d(
+        self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
+    ) -> jnp.ndarray:
+        cv_d, gb_d = self.drift_components(kx, ky, theta)
+        return cv_d + gb_d
 
 
 @dataclass(frozen=True)
@@ -132,7 +191,7 @@ def build_collocation_surfaces(
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class SAlphaGeometry:
+class SAlphaGeometry(_SpectralGeometryMixin):
     """Simple s-alpha geometry with circular concentric flux surfaces."""
 
     q: float
@@ -222,22 +281,6 @@ class SAlphaGeometry:
             gds22 = jnp.asarray(self.s_hat) * jnp.asarray(self.s_hat)
         return gds2, gds21, gds22
 
-    def k_perp2(
-        self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
-    ) -> jnp.ndarray:
-        """Perpendicular wave-number squared for s-alpha geometry."""
-
-        gds2, gds21, gds22 = self.metric_coeffs(theta)
-        s_hat = jnp.asarray(self.s_hat)
-        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
-        kx_hat = kx0 / s_hat_safe
-        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
-        kperp2 = ky * (ky * gds2 + 2.0 * kx_hat * gds21) + (kx_hat * kx_hat) * gds22
-        if self.kperp2_bmag:
-            bmag_inv = 1.0 / self.bmag(theta)
-            return kperp2 * (bmag_inv * bmag_inv)
-        return kperp2
-
     def drift_coeffs(
         self, theta: jnp.ndarray
     ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
@@ -251,32 +294,6 @@ class SAlphaGeometry:
         cv0 = scale * (-self.s_hat * jnp.sin(theta)) / self.R0
         gb0 = cv0
         return cv, gb, cv0, gb0
-
-    def drift_components(
-        self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Return cv_d and gb_d drift components in (ky, kx, theta)."""
-
-        kx0 = kx[None, :, None]
-        ky0 = ky[:, None, None]
-        theta0 = theta[None, None, :]
-        cv, gb, cv0, gb0 = self.drift_coeffs(theta0)
-        s_hat = jnp.asarray(self.s_hat)
-        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
-        kx_hat = kx0 / s_hat_safe
-        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
-        cv_d = ky0 * cv + kx_hat * cv0
-        gb_d = ky0 * gb + kx_hat * gb0
-        return cv_d, gb_d
-
-    def omega_d(
-        self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
-    ) -> jnp.ndarray:
-        """Magnetic drift frequency for s-alpha geometry."""
-
-        cv_d, gb_d = self.drift_components(kx, ky, theta)
-        return cv_d + gb_d
-
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)

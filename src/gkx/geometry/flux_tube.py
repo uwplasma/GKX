@@ -14,12 +14,16 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.geometry.analytic import SAlphaGeometry, SlabGeometry
+from gkx.geometry.analytic import (
+    SAlphaGeometry,
+    SlabGeometry,
+    _SpectralGeometryMixin,
+)
 
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class FluxTubeGeometryData:
+class FluxTubeGeometryData(_SpectralGeometryMixin):
     """Sampled flux-tube geometry contract for solver-ready metric profiles."""
 
     theta: jnp.ndarray
@@ -189,45 +193,6 @@ class FluxTubeGeometryData:
 
     def grho(self, theta: jnp.ndarray) -> jnp.ndarray:
         return self._broadcast_profile(theta, self.grho_profile)
-
-    def k_perp2(
-        self, kx0: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
-    ) -> jnp.ndarray:
-        gds2, gds21, gds22 = self.metric_coeffs(theta)
-        s_hat = jnp.asarray(self.s_hat)
-        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
-        kx_hat = kx0 / s_hat_safe
-        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
-        kperp2 = ky * (ky * gds2 + 2.0 * kx_hat * gds21) + (kx_hat * kx_hat) * gds22
-        if self.kperp2_bmag:
-            bmag_inv = 1.0 / self.bmag(theta)
-            return kperp2 * (bmag_inv * bmag_inv)
-        return kperp2
-
-    def drift_components(
-        self,
-        kx: jnp.ndarray,
-        ky: jnp.ndarray,
-        theta: jnp.ndarray,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        kx0 = kx[None, :, None]
-        ky0 = ky[:, None, None]
-        theta0 = theta[None, None, :]
-        cv, gb, cv0, gb0 = self.drift_coeffs(theta0)
-        s_hat = jnp.asarray(self.s_hat)
-        s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
-        kx_hat = kx0 / s_hat_safe
-        kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
-        cv_d = ky0 * cv + kx_hat * cv0
-        gb_d = ky0 * gb + kx_hat * gb0
-        return cv_d, gb_d
-
-    def omega_d(
-        self, kx: jnp.ndarray, ky: jnp.ndarray, theta: jnp.ndarray
-    ) -> jnp.ndarray:
-        cv_d, gb_d = self.drift_components(kx, ky, theta)
-        return cv_d + gb_d
-
 
 def sample_flux_tube_geometry(
     geom: SAlphaGeometry | SlabGeometry, theta: jnp.ndarray
