@@ -109,6 +109,9 @@ def test_runtime_artifacts_facade_reexports_split_helper_contracts() -> None:
     assert (
         runtime_artifacts._dealiased_kx_indices is spectral_layout._dealiased_kx_indices
     )
+    assert artifact_io._dealiased_kx_count is spectral_layout._dealiased_kx_count
+    assert artifact_io._dealiased_kx_indices is spectral_layout._dealiased_kx_indices
+    assert artifact_io._dealiased_ky_count is spectral_layout._dealiased_ky_count
     assert (
         runtime_artifacts._dealiased_ky_indices is spectral_layout._dealiased_ky_indices
     )
