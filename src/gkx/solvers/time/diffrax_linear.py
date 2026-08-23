@@ -7,7 +7,7 @@ from typing import Any
 
 import jax.numpy as jnp
 
-from gkx.core.grid import SpectralGrid
+from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.diagnostics.modes import ModeSelection, ModeSelectionBatch
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.cache_model import LinearCache
@@ -23,7 +23,6 @@ from gkx.solvers.time.diffrax_core import (
     _assemble_rhs,
     _base_complex_dtype,
     _density_from_G_cached,
-    _infer_velocity_shape,
     _is_imex_solver,
     _is_implicit_solver,
     _pack_complex_state,
@@ -60,7 +59,7 @@ def _prepare_linear_state_and_cache(
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     if cache is None:
-        Nl, Nm = _infer_velocity_shape(G0)
+        Nl, Nm = _gyrokinetic_moment_shape(G0)
         cache = build_linear_cache(grid, geom, params, Nl, Nm)
     return G0, real_dtype, cache
 

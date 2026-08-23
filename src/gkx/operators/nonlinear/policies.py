@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
-from gkx.core.grid import SpectralGrid, real_fft_mesh
+from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape, real_fft_mesh
 from gkx.solvers.linear.implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
@@ -101,16 +101,6 @@ class _NonlinearCFLBounds:
     linear_omega: jnp.ndarray
 
 
-def _nonlinear_moment_counts(G0: jnp.ndarray) -> tuple[int, int]:
-    if G0.ndim == 5:
-        return int(G0.shape[0]), int(G0.shape[1])
-    if G0.ndim == 6:
-        return int(G0.shape[1]), int(G0.shape[2])
-    raise ValueError(
-        "G0 must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-    )
-
-
 def build_nonlinear_diagnostic_setup(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -133,7 +123,7 @@ def build_nonlinear_diagnostic_setup(
 
     geom_eff = ensure_geometry_fn(geom, grid.z)
     if cache is None:
-        nl, nm = _nonlinear_moment_counts(G0)
+        nl, nm = _gyrokinetic_moment_shape(G0)
         cache = build_cache_fn(grid, geom_eff, params, nl, nm)
 
     vol_fac, flux_fac = quadrature_weights_fn(geom_eff, grid)
