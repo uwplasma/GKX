@@ -1392,6 +1392,10 @@ unverified rather than silently promoted.
 | AD-CMP | P2 | open | adjoint vs matched-cost SPSA/FD comparison on the QA transport objective (plan/references.md survey) | same-budget optimizer traces and final held-out saturated transport reported side by side |
 | PROF-1 | P2 | open | flux-tube -> profile prediction pathway (transport-solver coupling; GKFieldFlow-style reference) | documented design with one radially-coupled demonstration case |
 | DATA-1 | P2 | open | public dataset release of validation runs (decks, wouts, traces, summaries) with regeneration scripts | archived, hash-pinned dataset cited from docs/verification pages |
+| PERF-2 | P1 | open | cut RHS data movement (59% of a CPU step, measured): fuse dealias pad into FFT plans, precomputed twist-shift index maps, packing-concat audit | bitwise identity gates pass; >=20% measured step-time reduction at 96^2x48 |
+| PERF-3 | P2 | open | validate and raise the static CFL frequency bound (fixed dt=0.1 ran stably where the bound imposes 0.0846) | saturated-phase stability campaign across the scan cases; ~15% fewer steps |
+| SLIM-2 | P1 | open | remove the Deps-injection layer (14 records, 212 _fn= sites); direct imports + monkeypatch in tests | ~1.5-2.5k lines removed; no JIT/AD surface touched; full suite green |
+| SLIM-3 | P1 | open | evict research-campaign governance (~13k lines: admission/guard/evidence/report modules) from the installable package to tools/campaigns/ | package under 190 files / 90k lines; api registry pruned |
 
 ## Reproducibility records
 

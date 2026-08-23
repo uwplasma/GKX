@@ -1692,3 +1692,37 @@
   instruction; the classic required-review entry was found redundant with the
   ruleset and removed while diagnosing (restore:
   `gh api -X PUT repos/uwplasma/GKX/branches/main/protection/required_pull_request_reviews -F required_approving_review_count=1`).
+
+## 2026-08-23 — release review campaign: physics sign-off, structure and performance verdicts
+
+- Independent physics/math referee review at origin/main: RELEASE-READY, zero
+  blockers. Re-derived and matched to machine precision: the probabilists'
+  Hermite ladder and its v^2 square, the reflectionless closure coefficient
+  (Hammett-Perkins R_3 = 0.9213177 reproduced), the full diamagnetic drive
+  ladder with the analytic Laguerre truncation boundary, (-1)^l gyroaverage
+  kernels and Gamma_0 resummation, multi-species quasineutrality, the
+  zonal-safe adiabatic response, LB/Dougherty conservation at long wavelength
+  (<= 3e-17), and s-alpha drift signs (bad-curvature drive collapses gamma
+  8x when flipped). CBC growth pinned to the comparison GPU code at +0.02%.
+  Production CLI runs completed end-to-end on Mac CPU (48^2x32, ~3 min) and
+  office GPU (64^2x48, 5:46, peak 2.0 GB) with full artifact sets, exact
+  ambipolarity, and honest not-saturated labeling. Findings were doc-integrity
+  only (missing frozen-figure references in verification_matrix.rst, a stale
+  normalization table, a basis-convention trap in unused exported helpers,
+  Wg+Wphi non-conservation needing documentation) — fix PR in flight.
+- ESSOS-structure review: kernels meet the concise/deliberate bar; the
+  orchestration superstructure does not. Largest moves: remove the 14-record
+  Deps injection layer (~1.5-2.5k lines), evict ~13k lines of research-
+  campaign governance from the installable package, move the ~2.6k-line
+  operators/nonlinear contracts cluster consumed by one test file, prune the
+  369-name public API. Examples restyle (29 argparse scripts -> vmex-style
+  direct-parameter scripts, -292 lines) merged as #119.
+- Performance review (measured, M3 Max CPU): default 96^2x48 run ~1.1-1.6 h,
+  ~97% stepping; per-step time is 59% data movement (dealias pad, twist-shift
+  gathers, real-FFT packing concats), 31% FFT, <10% physics arithmetic;
+  72-80 ns per DOF-step at every size. CPU sharding verdict: shard_map
+  CRASHES on CPU (XLA fft_thunk layout RET_CHECK); forcing
+  xla_force_host_platform_device_count=4 without it is 34% SLOWER; XLA
+  intra-op threading (using only ~3.2 of 14 cores — the copy kernels don't
+  parallelize) is the best available CPU mode. Quick-wins PR in flight
+  (CPU-sharding guard + compiled-chunk-scan reuse + documented guidance).
