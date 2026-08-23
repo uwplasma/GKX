@@ -1,19 +1,20 @@
 """Render a 3D turbulence movie of the electrostatic potential on a flux tube.
 
-Runs GKX's nonlinear solver in chunks, capturing ``phi`` after each chunk, and
+Continues GKX's production nonlinear solver in chunks, capturing ``phi`` after
+each chunk, and
 draws each frame twice: as the perpendicular cut a gyrokineticist reads, and as
 the field-aligned tube in real space that shows why the cut looks the way it
 does. The turbulence is elongated along ``B``, and a flux-tube movie that only
 ever shows the perpendicular plane hides exactly that.
 
-The tube is drawn by mapping the field-aligned coordinate ``z`` onto the actual
-field line: for an axisymmetric equilibrium that is a helix on a torus of
-aspect ratio ``R0/a``; for a stellarator the same construction is used with the
-device's field periods, so the twist shown is the geometry's own.
+The tube maps the field-aligned coordinate ``z`` onto imported VMEC ``R``,
+``Z``, and toroidal-angle profiles. Analytic decks use a labelled analytic
+helix; imported geometry never silently falls back to it.
 
-Chunked integration is deliberate: the cache and parameters are fixed, so JAX
-compiles the chunk once and replays it, which is far cheaper than one long scan
-with a snapshot callback inside it.
+Pass ``--initial-state`` from ``nonlinear_saturated_state.py`` to film a
+verified saturated trajectory. Chunked integration is deliberate: the cache,
+parameters, CFL policy, and chunk shape are fixed, so JAX compiles once and
+replays it without retaining a full state history.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ import dataclasses
 from pathlib import Path
 import subprocess
 import sys
+from typing import Any
 
 import jax.numpy as jnp
 import matplotlib
@@ -33,13 +35,18 @@ import numpy as np  # noqa: E402
 
 from gkx.artifacts import snapshots  # noqa: E402
 from gkx.artifacts.figure_style import figure_style, save_figure  # noqa: E402
-from gkx.solvers.nonlinear.state_integration import (  # noqa: E402
-    integrate_nonlinear_cached,
+from gkx.geometry import (  # noqa: E402
+    apply_geometry_grid_defaults,
+    ensure_flux_tube_geometry_data,
 )
-from gkx.operators.nonlinear.projection import (  # noqa: E402
-    _make_nonlinear_state_projector,
+from gkx.solvers.nonlinear.diagnostic_integration import (  # noqa: E402
+    prepare_nonlinear_explicit_diagnostics,
 )
-from gkx.terms.fields import solve_fields  # noqa: E402
+from gkx.workflows.runtime.policies import (  # noqa: E402
+    _runtime_external_phi,
+    _select_nonlinear_mode_indices,
+    build_runtime_nonlinear_diagnostics_kwargs,
+)
 from gkx.workflows.runtime.startup import (  # noqa: E402
     build_runtime_geometry,
     build_runtime_linear_params,
@@ -51,11 +58,9 @@ from gkx.workflows.runtime.toml import load_runtime_from_toml  # noqa: E402
 def _check_healthy(phi: np.ndarray, where: str, ceiling: float) -> None:
     """Abort on a run that has gone numerically unstable.
 
-    ``integrate_nonlinear_cached`` takes a fixed dt and does not enforce the CFL
-    condition the adaptive runtime path applies, so a dt that is fine during the
-    linear phase can go unstable once the nonlinearity bites. Without this check
-    the failure surfaces as a movie of amplified noise, or as NaN written to a
-    snapshot file 40 minutes later.
+    This is a last-resort artifact guard. The integration path itself uses the
+    production runtime's CFL policy, so non-finite output indicates a genuine
+    numerical failure rather than an expected fixed-step limitation.
 
     The ceiling is calibrated against a measurement, not an assumption. An
     earlier version asserted that "saturated ITG turbulence is order 0.1-1" and
@@ -75,10 +80,8 @@ def _check_healthy(phi: np.ndarray, where: str, ceiling: float) -> None:
     peak = float(np.abs(phi).max()) if phi.size else 0.0
     if not np.isfinite(phi).all():
         raise RuntimeError(
-            f"{where}: solution contains non-finite values -- the timestep "
-            "violates the CFL condition for this grid. Reduce --dt."
-            " If the run was merely approaching saturation, raise --ceiling "
-            "instead: measure the saturated amplitude rather than assuming it."
+            f"{where}: solution contains non-finite values under the runtime "
+            "CFL policy; inspect the deck and solver diagnostics"
         )
     if peak > ceiling:
         raise RuntimeError(
@@ -87,9 +90,7 @@ def _check_healthy(phi: np.ndarray, where: str, ceiling: float) -> None:
             "higher -- measure it with "
             "tools/campaigns/nonlinear_saturated_state.py rather than guessing. "
             "A verified-saturated Cyclone state has max|phi| = 137.7, so a "
-            "ceiling near 50 aborts healthy runs. Reducing --dt is usually the "
-            "wrong lever: this case ran stably under the adaptive stepper at "
-            "dt = 0.031, larger than fixed steps that appeared to fail."
+            "ceiling near 50 aborts healthy runs."
         )
 
 
@@ -98,41 +99,80 @@ def _check_healthy(phi: np.ndarray, where: str, ceiling: float) -> None:
 _SPINUP_CHUNK = 100
 
 
-def _species_arrays(cfg) -> dict[str, jnp.ndarray]:
-    """Per-species arrays ``solve_fields`` needs, in config order."""
+def potential_real_space(fields, *, ny_full: int) -> np.ndarray:
+    """Return ``phi(x, y, z)`` from the production integrator's field state."""
 
-    species = list(cfg.species)
-    pull = lambda name, default: jnp.asarray(  # noqa: E731
-        [float(getattr(s, name, default)) for s in species]
+    return snapshots.potential_real_space(np.asarray(fields.phi), ny_full=ny_full)
+
+
+def _movie_initial_state(
+    path: Path | None,
+    *,
+    shape: tuple[int, ...],
+    dtype: Any,
+    seed: int,
+    amplitude: float,
+) -> tuple[Any, float, bool, str]:
+    """Restore a campaign state, or build the labelled seed fallback."""
+
+    if path is not None:
+        with np.load(path, allow_pickle=False) as archive:
+            if "state" not in archive:
+                raise ValueError(f"{path} has no 'state' array")
+            restored = np.asarray(archive["state"])
+            elapsed = float(archive["t_end"]) if "t_end" in archive else 0.0
+            saturated = bool(archive["saturated"]) if "saturated" in archive else False
+        if restored.shape != shape:
+            raise ValueError(
+                f"state shape {restored.shape} != movie grid shape {shape}"
+            )
+        return jnp.asarray(restored, dtype=dtype), elapsed, saturated, str(path)
+
+    generator = np.random.default_rng(seed)
+    spectral_seed = np.fft.fft2(generator.normal(size=shape[-3:]), axes=(0, 1))
+    spectral_seed *= amplitude / (np.abs(spectral_seed).max() + 1e-30)
+    state = (
+        jnp.zeros(shape, dtype=dtype)
+        .at[:, 0, 0]
+        .set(jnp.asarray(spectral_seed, dtype=dtype))
     )
-    charge = pull("charge", 1.0)
-    density = pull("density", 1.0)
-    temp = pull("temperature", 1.0)
-    mass = pull("mass", 1.0)
-    return {
-        "charge": charge,
-        "density": density,
-        "temp": temp,
-        "mass": mass,
-        "tz": temp / charge,
-        "vth": jnp.sqrt(2.0 * temp / mass),
-    }
+    return state, 0.0, False, "seeded continuation"
 
 
-def potential_real_space(state, cache, params, cfg) -> np.ndarray:
-    """Return ``phi(x, y, z)`` in real space from the spectral state."""
+def _movie_moment_dims(
+    raw: dict[str, Any], laguerre: int | None, hermite: int | None
+) -> tuple[int, int]:
+    """Resolve movie moments from CLI overrides or the production deck."""
 
-    fields = solve_fields(
-        state,
-        cache,
-        params,
-        fapar=jnp.asarray(0.0),
-        w_bpar=jnp.asarray(0.0),
-        **_species_arrays(cfg),
+    run = raw.get("run", {})
+    nl = int(run.get("Nl", 4) if laguerre is None else laguerre)
+    nm = int(run.get("Nm", 8) if hermite is None else hermite)
+    return nl, nm
+
+
+def _require_movie_geometry_profiles(geometry: Any, *, model: str) -> None:
+    """Fail closed when an imported-geometry movie lacks physical coordinates."""
+
+    normalized = model.strip().lower().replace("_", "-")
+    if normalized in {"s-alpha", "salpha", "analytic", "slab"}:
+        return
+    names = (
+        "cylindrical_R_profile",
+        "cylindrical_Z_profile",
+        "toroidal_angle_profile",
     )
-    # The compressed-real-FFT ky handling lives in gkx.artifacts.snapshots so
-    # every renderer applies the same transform the nonlinear bracket uses.
-    return snapshots.potential_real_space(np.asarray(fields.phi))
+    profiles = [getattr(geometry, name, None) for name in names]
+    missing = [name for name, value in zip(names, profiles) if value is None]
+    if missing:
+        raise RuntimeError(
+            "imported-geometry movies require physical R, Z, and toroidal-angle "
+            f"profiles; missing {', '.join(missing)}"
+        )
+    arrays = [np.asarray(value, dtype=float).reshape(-1) for value in profiles]
+    if len({array.size for array in arrays}) != 1 or arrays[0].size < 2:
+        raise RuntimeError("physical movie coordinate profiles must have equal length >= 2")
+    if not all(np.isfinite(array).all() for array in arrays):
+        raise RuntimeError("physical movie coordinate profiles contain non-finite values")
 
 
 def render_frame(
@@ -174,7 +214,7 @@ def render_frame(
 
 def run(
     config: Path,
-    output: Path,
+    output: Path | None,
     *,
     frames: int,
     steps_per_frame: int,
@@ -187,16 +227,33 @@ def run(
     hermite: int | None = None,
     frames_only: bool = False,
     snapshots: Path | None = None,
+    initial_state: Path | None = None,
     spinup_steps: int = 0,
     nx: int | None = None,
     ny: int | None = None,
     nz: int | None = None,
     # Measured against a state that passes every saturation check (max|phi| =
-    # 137.7 at 16^3), with room for the overshoot a fixed-step run shows on the
-    # way into saturation. A genuine numerical blow-up leaves this far behind.
+    # 137.7 at 16^3), with room for a nonlinear overshoot.
     ceiling: float = 1.0e3,
 ) -> int:
-    cfg, _ = load_runtime_from_toml(config)
+    cfg, raw = load_runtime_from_toml(config)
+    overrides = {
+        key: value
+        for key, value in (("Nx", nx), ("Ny", ny), ("Nz", nz))
+        if value is not None
+    }
+    if nz is not None and cfg.grid.ntheta is not None:
+        zp = cfg.grid.zp
+        if zp is None:
+            zp = 2 * cfg.grid.nperiod - 1 if cfg.grid.nperiod is not None else 1
+        if nz % zp:
+            raise ValueError(
+                f"--nz={nz} is not divisible by parallel multiplier zp={zp}"
+            )
+        overrides["ntheta"] = nz // zp
+    if overrides:
+        cfg = dataclasses.replace(cfg, grid=dataclasses.replace(cfg.grid, **overrides))
+        print(f"grid override: {overrides}", flush=True)
     geometry = build_runtime_geometry(cfg)
     params = build_runtime_linear_params(cfg, geom=geometry)
     # Must come from the config. TermConfig() defaults to nonlinear = 0.0 and
@@ -218,56 +275,68 @@ def run(
     # which is a production transport resolution and needs more memory than a
     # shared GPU can spare; a visualization does not. Any override is recorded
     # in the snapshot so a frame can never be mistaken for a production run.
-    grid_cfg = cfg.grid
-    overrides = {
-        key: value
-        for key, value in (("Nx", nx), ("Ny", ny), ("Nz", nz))
-        if value is not None
-    }
-    if overrides:
-        grid_cfg = dataclasses.replace(grid_cfg, **overrides)
-        print(f"grid override: {overrides}", flush=True)
-    grid = build_spectral_grid(grid_cfg)
+    grid = build_spectral_grid(apply_geometry_grid_defaults(geometry, cfg.grid))
+    geometry = ensure_flux_tube_geometry_data(geometry, grid.z)
+    _require_movie_geometry_profiles(geometry, model=cfg.geometry.model)
+    laguerre, hermite = _movie_moment_dims(raw, laguerre, hermite)
     nl, nm = _resolve_runtime_hl_dims(cfg, Nl=laguerre, Nm=hermite)
     cache = build_linear_cache(grid, geometry, params, nl, nm)
     step = float(dt if dt is not None else cfg.time.dt)
 
-    # A small broadband seed in the density moment. Generated in REAL space and
-    # transformed forward, so the spectrum is Hermitian by construction: the
-    # solver's projector only enforces ky <-> -ky, and a spectrum-side random
-    # seed leaves the ky = 0 row not self-conjugate in kx, which shows up later
-    # as a complex "real-space" potential. The movie is about the saturated
-    # state, which forgets the seed; the fixed generator only keeps successive
-    # renders of the same case comparable.
-    generator = np.random.default_rng(seed)
     perp = (grid.ky.size, grid.kx.size, grid.z.size)
-    spectral_seed = np.fft.fft2(generator.normal(size=perp), axes=(0, 1))
-    spectral_seed *= amplitude / (np.abs(spectral_seed).max() + 1e-30)
-
     complex_dtype = (
         jnp.complex64 if jnp.zeros(1).dtype == jnp.float32 else jnp.complex128
     )
     shape = (len(cfg.species), nl, nm, *perp)
-    state = (
-        jnp.zeros(shape, dtype=complex_dtype)
-        .at[:, 0, 0]
-        .set(jnp.asarray(spectral_seed, dtype=complex_dtype))
+    state, elapsed, saturated_source, source_label = _movie_initial_state(
+        initial_state,
+        shape=shape,
+        dtype=complex_dtype,
+        seed=seed,
+        amplitude=amplitude,
     )
 
-    # The production runtime applies this after every step; integrate_nonlinear_cached
-    # does not. It is nearly a no-op here because the seed is generated in real
-    # space and is already Hermitian, so it was not what fixed the blow-up -- but
-    # production applies it and a run that drifts off the constraint should be
-    # corrected rather than left to grow.
-    project_state = _make_nonlinear_state_projector(
-        state,
-        ky_vals=np.asarray(grid.ky),
-        nx=int(grid.kx.size),
-        compressed_real_fft=bool(cfg.time.compressed_real_fft),
-        fixed_mode_ky_index=None,
-        fixed_mode_kx_index=None,
+    ky_index, kx_index = _select_nonlinear_mode_indices(
+        grid,
+        ky_target=0.3,
+        kx_target=0.0,
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
     )
-    state = project_state(state)
+    fixed_ky = int(cfg.expert.iky_fixed) if cfg.expert.fixed_mode else None
+    fixed_kx = int(cfg.expert.ikx_fixed) if cfg.expert.fixed_mode else None
+    prepared: dict[int, Any] = {}
+
+    def advance(count: int):
+        nonlocal state, elapsed
+        simulation = prepared.get(count)
+        if simulation is None:
+            kwargs = build_runtime_nonlinear_diagnostics_kwargs(
+                cfg,
+                dt=step,
+                steps=count,
+                method=None,
+                term_config=terms,
+                sample_stride=count,
+                diagnostics_stride=count,
+                laguerre_mode=cfg.time.laguerre_nonlinear_mode,
+                ky_index=ky_index,
+                kx_index=kx_index,
+                fixed_dt=bool(cfg.time.fixed_dt),
+                fixed_mode_ky_index=fixed_ky,
+                fixed_mode_kx_index=fixed_kx,
+                external_phi=_runtime_external_phi(cfg),
+                resolved_diagnostics=False,
+                show_progress=False,
+            )
+            kwargs.pop("dt")
+            kwargs.pop("steps")
+            simulation = prepare_nonlinear_explicit_diagnostics(
+                state, grid, geometry, params, step, count, cache=cache, **kwargs
+            )
+            prepared[count] = simulation
+        time_chunk, _diag, state, fields = simulation.run(state)
+        elapsed += float(np.asarray(time_chunk)[-1])
+        return fields
 
     if spinup_steps > 0:
         # Advance through the linear growth phase without recording. A movie
@@ -276,30 +345,14 @@ def run(
         # time either way, so recording only afterwards spends every frame
         # where the physics is.
         #
-        # Chunked, because integrate_nonlinear_cached scans over steps and
-        # stacks the per-step field history: one 12000-step call asked for
-        # 9.4 GB and died. Memory is bounded by the chunk, not the spin-up.
-        print(
-            f"spin-up: {spinup_steps} steps to t = {spinup_steps * step:.1f}",
-            flush=True,
-        )
+        print(f"spin-up: {spinup_steps} production steps", flush=True)
         done = 0
         while done < spinup_steps:
             chunk = min(_SPINUP_CHUNK, spinup_steps - done)
-            result = integrate_nonlinear_cached(
-                state,
-                cache,
-                params,
-                step,
-                chunk,
-                method="rk4",
-                terms=terms,
-                return_fields=False,
-            )
-            state = project_state(result[0] if isinstance(result, tuple) else result)
+            fields = advance(chunk)
             done += chunk
             if done % (10 * _SPINUP_CHUNK) == 0 or done == spinup_steps:
-                probe = potential_real_space(state, cache, params, cfg)
+                probe = potential_real_space(fields, ny_full=int(grid.ky.size))
                 _check_healthy(probe, f"spin-up step {done}", ceiling)
                 print(
                     f"  spin-up {done}/{spinup_steps}  "
@@ -307,54 +360,71 @@ def run(
                     flush=True,
                 )
 
-    if snapshots is not None:
-        # Compute-only pass. Rendering is matplotlib on the CPU and takes far
-        # longer than the physics, so holding a GPU allocation through it wastes
-        # a shared device -- measured 0% utilization against 12.9 GB reserved.
-        # Store only the xy and yz cuts the renderer consumes, then release the
-        # GPU. A 96x96x48 frame is 32 times smaller in this representation.
-        xy_frames = []
-        yz_frames = []
-        for index in range(frames):
-            result = integrate_nonlinear_cached(
-                state,
-                cache,
-                params,
-                step,
-                steps_per_frame,
-                method="rk4",
-                terms=terms,
-                return_fields=False,
-            )
-            state = project_state(result[0] if isinstance(result, tuple) else result)
-            phi = potential_real_space(state, cache, params, cfg)
-            _check_healthy(phi, f"frame {index + 1}", ceiling)
-            phi_xy = phi[:, :, phi.shape[2] // 2]
-            phi_yz = phi[phi.shape[0] // 2]
+    label = config.stem.replace("_", " ")
+    extent = (2.0 * np.pi * float(grid.x0), 2.0 * np.pi * float(grid.y0))
+    xy_frames: list[np.ndarray] = []
+    yz_frames: list[np.ndarray] = []
+    times: list[float] = []
+    scale = None
+    written: list[Path] = []
+    frame_dir = None
+    if snapshots is None:
+        assert output is not None
+        frame_dir = output.parent / f"{output.stem}_frames"
+        frame_dir.mkdir(parents=True, exist_ok=True)
+    for index in range(frames):
+        fields = advance(steps_per_frame)
+        phi = potential_real_space(fields, ny_full=int(grid.ky.size))
+        _check_healthy(phi, f"frame {index + 1}", ceiling)
+        phi_xy = phi[:, :, phi.shape[2] // 2]
+        phi_yz = phi[phi.shape[0] // 2]
+        magnitude = max(float(np.abs(phi_xy).max()), float(np.abs(phi_yz).max()))
+        times.append(elapsed)
+        if snapshots is not None:
             xy_frames.append(phi_xy.astype(np.float32))
             yz_frames.append(phi_yz.astype(np.float32))
-            print(
-                f"frame {index + 1}/{frames}  max|phi| = {np.abs(phi).max():.4e}",
-                flush=True,
+        else:
+            if scale is None or index < frames // 4:
+                scale = max(magnitude, 1e-12)
+            assert frame_dir is not None and scale is not None
+            frame_path = frame_dir / f"frame_{index:04d}.png"
+            render_frame(
+                phi_xy,
+                phi_yz,
+                geometry,
+                output=frame_path,
+                time=elapsed,
+                scale=scale,
+                label=label,
+                extent=extent,
             )
+            written.append(frame_path)
+        print(f"frame {index + 1}/{frames}  max|phi| = {magnitude:.4e}", flush=True)
+
+    if snapshots is not None:
         snapshots.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(
             snapshots,
             phi_xy=np.stack(xy_frames),
             phi_yz=np.stack(yz_frames),
-            times=(spinup_steps + np.arange(1, frames + 1) * steps_per_frame) * step,
-            label=config.stem.replace("_", " "),
+            times=np.asarray(times),
+            label=label,
             q=float(getattr(geometry, "q", 1.4) or 1.4),
             epsilon=float(getattr(geometry, "epsilon", 0.18) or 0.18),
             major_radius=float(getattr(geometry, "R0", 3.0) or 3.0),
             nfp=int(getattr(geometry, "nfp", 1) or 1),
             cylindrical_R_profile=_geometry_profile(geometry, "cylindrical_R_profile"),
             cylindrical_Z_profile=_geometry_profile(geometry, "cylindrical_Z_profile"),
-            toroidal_angle_profile=_geometry_profile(geometry, "toroidal_angle_profile"),
-            extent=np.array(
-                [2.0 * np.pi * float(grid.x0), 2.0 * np.pi * float(grid.y0)]
+            toroidal_angle_profile=_geometry_profile(
+                geometry, "toroidal_angle_profile"
             ),
-            snapshot_schema=np.array(2, dtype=np.int32),
+            extent=np.asarray(extent),
+            snapshot_schema=np.array(3, dtype=np.int32),
+            trajectory=np.array("production_runtime_continuation"),
+            source_state=np.array(source_label),
+            source_saturated=np.array(saturated_source),
+            fixed_dt=np.array(bool(cfg.time.fixed_dt)),
+            method=np.array(str(cfg.time.method)),
             resolution=np.array(
                 [grid.kx.size, grid.ky.size, grid.z.size, nl, nm], dtype=np.int32
             ),
@@ -362,48 +432,7 @@ def run(
         print(f"wrote {snapshots}")
         return 0
 
-    frame_dir = output.parent / f"{output.stem}_frames"
-    frame_dir.mkdir(parents=True, exist_ok=True)
-
-    label = config.stem.replace("_", " ")
-    extent = (2.0 * np.pi * float(grid.x0), 2.0 * np.pi * float(grid.y0))
-    scale = None
-    written: list[Path] = []
-    for index in range(frames):
-        result = integrate_nonlinear_cached(
-            state,
-            cache,
-            params,
-            step,
-            steps_per_frame,
-            method="rk4",
-            terms=terms,
-            return_fields=False,
-        )
-        state = project_state(result[0] if isinstance(result, tuple) else result)
-        phi = potential_real_space(state, cache, params, cfg)
-        _check_healthy(phi, f"frame {index + 1}", ceiling)
-        phi_xy = phi[:, :, phi.shape[2] // 2]
-        phi_yz = phi[phi.shape[0] // 2]
-
-        magnitude = max(float(np.abs(phi_xy).max()), float(np.abs(phi_yz).max()))
-        if scale is None or index < frames // 4:
-            scale = max(magnitude, 1e-12)
-
-        frame_path = frame_dir / f"frame_{index:04d}.png"
-        render_frame(
-            phi_xy,
-            phi_yz,
-            geometry,
-            output=frame_path,
-            time=(index + 1) * steps_per_frame * step,
-            scale=scale,
-            label=label,
-            extent=extent,
-        )
-        written.append(frame_path)
-        print(f"frame {index + 1}/{frames}  max|phi| = {magnitude:.4e}", flush=True)
-
+    assert output is not None and frame_dir is not None
     return _encode(frame_dir, written, output, fps, frames_only, keep_frames)
 
 
@@ -527,7 +556,7 @@ def _encode(
             "-crf",
             "23",
             "-vf",
-            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "scale=900:-2",
             str(output),
         ],
         capture_output=True,
@@ -576,6 +605,13 @@ def main() -> int:
         help="integrate this many steps before recording, to reach saturation",
     )
     parser.add_argument(
+        "--initial-state",
+        type=Path,
+        default=None,
+        help="state .npz from nonlinear_saturated_state.py; continue it with "
+        "the deck's production method and CFL policy",
+    )
+    parser.add_argument(
         "--snapshots",
         type=Path,
         default=None,
@@ -605,6 +641,8 @@ def main() -> int:
             frames_only=args.frames_only,
             keep_frames=args.keep_frames,
         )
+    if args.config is None:
+        parser.error("config is required unless --render-from is used")
 
     return run(
         args.config,
@@ -620,6 +658,7 @@ def main() -> int:
         hermite=args.hermite,
         frames_only=args.frames_only,
         snapshots=args.snapshots,
+        initial_state=args.initial_state,
         spinup_steps=args.spinup_steps,
         nx=args.nx,
         ny=args.ny,
