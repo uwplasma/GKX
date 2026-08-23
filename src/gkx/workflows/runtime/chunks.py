@@ -1,9 +1,4 @@
-"""Adaptive runtime chunk execution helpers.
-
-These helpers own the repeated adaptive runtime chunk loop used by the runtime
-drivers. Keeping the loop outside ``runtime.py`` makes the execution layer
-smaller without changing the accepted diagnostics truncation/stride behavior.
-"""
+"""Bounded-memory adaptive runtime chunks."""
 
 from __future__ import annotations
 
@@ -18,8 +13,8 @@ from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.metadata import ResolvedDiagnostics
 from gkx.workflows.runtime.diagnostic_arrays import (
     concat_runtime_diagnostics,
+    slice_runtime_diagnostics,
     stride_runtime_diagnostics,
-    truncate_runtime_diagnostics,
     validate_finite_runtime_diagnostics,
 )
 from gkx.terms.config import FieldState
@@ -102,15 +97,7 @@ _TIME_PROGRESS_EPS = 1.0e-12
 
 
 def _chunk_diagnostics_to_host(diag: SimulationDiagnostics) -> SimulationDiagnostics:
-    """Move one chunk's diagnostic arrays to host memory.
-
-    The chunk list lives until the final concatenation, so leaving each
-    chunk's arrays on the accelerator makes device memory grow linearly with
-    ``t_max`` — long adaptive runs then fail inside a later chunk whose
-    workspace no longer fits. ``concat_runtime_diagnostics`` converts to
-    numpy anyway; doing it per chunk releases the device buffers as soon as
-    the chunk completes and bounds device residency at one chunk.
-    """
+    """Move a completed chunk to host so device residency stays bounded."""
 
     def _host(value):
         return None if value is None else np.asarray(value)
@@ -135,17 +122,7 @@ def _chunk_diagnostics_to_host(diag: SimulationDiagnostics) -> SimulationDiagnos
 def _spill_chunk(
     diag: SimulationDiagnostics, spill_dir: Path, chunk_index: int
 ) -> Path:
-    """Write one chunk's diagnostics to disk and return the path.
-
-    Striding per chunk already cuts the accumulated payload by the stride
-    factor, but a long enough run still outgrows host RAM -- the chunk list and
-    the concatenated result are both live at the end, so the peak is roughly
-    twice the final series. Spilling holds one chunk at a time instead, which
-    trades wall time for a peak that does not grow with ``t_max``.
-
-    ``np.savez`` rather than pickle: the payload is plain arrays, the format is
-    portable and inspectable, and a truncated file fails loudly on load.
-    """
+    """Spill plain arrays so host memory also stays bounded."""
 
     payload: dict[str, np.ndarray] = {}
     for field in dataclass_fields(SimulationDiagnostics):
@@ -232,7 +209,7 @@ def _effective_diagnostics_stride(diagnostics_stride: int) -> int:
 def run_adaptive_runtime_chunk_loop(
     *,
     integrate_chunk: Callable[
-        [bool], tuple[Any, SimulationDiagnostics, Any, FieldState | None]
+        [bool, float], tuple[Any, SimulationDiagnostics, Any, FieldState | None]
     ],
     t_max: float,
     chunk_steps: int,
@@ -245,16 +222,7 @@ def run_adaptive_runtime_chunk_loop(
     stop_condition: Callable[[np.ndarray, np.ndarray, np.ndarray], dict[str, Any]]
     | None = None,
 ) -> AdaptiveChunkResult:
-    """Run repeated diagnostic chunks until ``t_max`` is reached.
-
-    ``integrate_chunk`` must return ``(t_chunk, diag_chunk, state, fields)`` in
-    the same contract used by the runtime integrators.
-
-    ``stop_condition`` is evaluated after every chunk on the accumulated
-    *unstrided* ``(t, heat_flux, Wphi)`` traces and returns a decision dict;
-    a truthy ``"stop"`` key ends the loop before ``t_max``. The last decision
-    is returned on the result either way.
-    """
+    """Run to a stop or ``t_max``; check unstrided traces between chunks."""
 
     def _status(message: str) -> None:
         if status_callback is not None:
@@ -263,12 +231,10 @@ def run_adaptive_runtime_chunk_loop(
     state_chunk = None
     t_elapsed = 0.0
     stride = _effective_diagnostics_stride(diagnostics_stride)
-    # Samples seen before the current chunk, so the stride can keep the same
-    # global indices it would have kept after concatenation.
+    # Preserve the global stride phase across chunks.
     samples_seen = 0
     diag_chunks: list[SimulationDiagnostics] = []
-    # Accumulated unstrided stop-check traces: three floats per sample, so the
-    # stop check sees the full-resolution series even when output is strided.
+    # Stop checks retain the unstrided scalar traces.
     trace_chunks: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
     stop_decision: dict[str, Any] | None = None
     spill_paths: list[Path] = []
@@ -282,10 +248,18 @@ def run_adaptive_runtime_chunk_loop(
 
     for chunk in range(max_chunks):
         chunk_start = time.perf_counter()
-        _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(show_progress)
+        remaining_time = max(float(t_max) - t_elapsed, 0.0)
+        _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(
+            show_progress, remaining_time
+        )
         chunk_index = chunk + 1
         diag_chunk = _chunk_diagnostics_to_host(diag_chunk)
         diag_chunk = _offset_chunk_diagnostics_time(diag_chunk, offset=t_elapsed)
+        time_dtype = np.asarray(diag_chunk.t).dtype
+        time_tol = max(_TIME_PROGRESS_EPS, 8.0 * np.finfo(time_dtype).eps * max(float(t_max), 1.0))
+        terminal = np.flatnonzero(np.asarray(diag_chunk.t) >= float(t_max) - time_tol)
+        if terminal.size:
+            diag_chunk = slice_runtime_diagnostics(diag_chunk, int(terminal[0]) + 1)
         validate_finite_runtime_diagnostics(
             diag_chunk, label=f"adaptive {label} chunk {chunk_index}"
         )
@@ -298,6 +272,11 @@ def run_adaptive_runtime_chunk_loop(
             label=label,
             chunk_index=chunk_index,
         )
+        if t_next > float(t_max) + time_tol:
+            raise RuntimeError(
+                f"adaptive {label} chunk {chunk_index} crossed t_max; "
+                "integrate_chunk must honor remaining_time"
+            )
         t_elapsed = t_next
         if stop_condition is not None:
             trace_chunks.append(
@@ -307,10 +286,22 @@ def run_adaptive_runtime_chunk_loop(
                     np.asarray(diag_chunk.Wphi_t, dtype=float),
                 )
             )
+        stop_now = False
+        if stop_condition is not None:
+            stop_decision = stop_condition(
+                np.concatenate([chunk[0] for chunk in trace_chunks]),
+                np.concatenate([chunk[1] for chunk in trace_chunks]),
+                np.concatenate([chunk[2] for chunk in trace_chunks]),
+            )
+            stop_now = bool(stop_decision.get("stop"))
+        reached_horizon = t_elapsed >= float(t_max) - time_tol
         chunk_samples = int(np.asarray(diag_chunk.t).shape[0])
         if stride > 1:
             diag_chunk = stride_runtime_diagnostics(
-                diag_chunk, stride=stride, offset=(-samples_seen) % stride
+                diag_chunk,
+                stride=stride,
+                offset=(-samples_seen) % stride,
+                keep_last=stop_now or reached_horizon,
             )
         samples_seen += chunk_samples
         if spill_dir is None:
@@ -328,16 +319,10 @@ def run_adaptive_runtime_chunk_loop(
             elapsed_seconds=wall_elapsed,
         )
         _status(message)
-        if stop_condition is not None:
-            stop_decision = stop_condition(
-                np.concatenate([chunk[0] for chunk in trace_chunks]),
-                np.concatenate([chunk[1] for chunk in trace_chunks]),
-                np.concatenate([chunk[2] for chunk in trace_chunks]),
-            )
-            if bool(stop_decision.get("stop")):
-                _status(f"stopping {label} integration at t={t_elapsed:.6g}")
-                break
-        if t_elapsed >= float(t_max):
+        if stop_now:
+            _status(f"stopping {label} integration at t={t_elapsed:.6g}")
+            break
+        if reached_horizon:
             break
     else:
         raise RuntimeError(
@@ -347,8 +332,6 @@ def run_adaptive_runtime_chunk_loop(
     if spill_dir is not None:
         diag_chunks = [_load_spilled_chunk(path) for path in spill_paths]
     diag = concat_runtime_diagnostics(diag_chunks)
-    # Already strided per chunk above; striding again would decimate twice.
-    diag = truncate_runtime_diagnostics(diag, t_max=float(t_max))
     if fields_final is None:
         raise RuntimeError(f"adaptive {label} runtime did not produce final fields")
     return AdaptiveChunkResult(

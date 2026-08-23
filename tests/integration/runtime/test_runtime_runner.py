@@ -2064,7 +2064,10 @@ def test_runtime_nonlinear_adaptive_default_steps_chunk_until_tmax(monkeypatch) 
         calls.append((int(steps), int(sample_stride), int(diagnostics_stride)))
         input_means.append(float(np.mean(np.real(np.asarray(G0)))))
         t = np.asarray([0.04, 0.08, 0.12], dtype=float)
-        dt_t = np.asarray([0.04, 0.04, 0.04], dtype=float)
+        horizon = kwargs.get("time_horizon")
+        if horizon is not None:
+            t = np.minimum(t, float(horizon))
+        dt_t = np.diff(np.insert(t, 0, 0.0))
         gamma_t = np.asarray([1.0, 2.0, 3.0], dtype=float) + 3.0 * (len(calls) - 1)
         zeros = np.zeros_like(t)
         diag = SimulationDiagnostics(
@@ -2099,12 +2102,12 @@ def test_runtime_nonlinear_adaptive_default_steps_chunk_until_tmax(monkeypatch) 
     assert input_means[1] > input_means[0] + 0.5
     assert input_means[2] > input_means[1] + 0.5
     assert np.allclose(
-        np.asarray(res.diagnostics.t), np.asarray([0.04, 0.12, 0.20, 0.28])
+        np.asarray(res.diagnostics.t), np.asarray([0.04, 0.12, 0.20, 0.25])
     )
     assert np.allclose(
         np.asarray(res.diagnostics.gamma_t), np.asarray([1.0, 3.0, 5.0, 7.0])
     )
-    assert float(np.asarray(res.diagnostics.t)[-1]) >= float(cfg.time.t_max)
+    assert float(np.asarray(res.diagnostics.t)[-1]) == pytest.approx(cfg.time.t_max)
 
 
 def test_runtime_gaussian_init_populates_multiple_modes_when_not_single() -> None:
