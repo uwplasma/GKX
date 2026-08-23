@@ -18,6 +18,14 @@ kinetic = true
 [grid]
 Nx = 6
 Ny = 4
+# Nz and nperiod below are inert for this deck and are kept only to record the
+# intent. model = "vmec" builds the parallel grid from ntheta and
+# [geometry] npol, and apply_geometry_grid_defaults then overwrites Nz, z_min,
+# z_max from the sampled theta and sets ntheta = nperiod = zp = None. The run is
+# therefore 64 parallel points over one poloidal turn, not 256 over four:
+# Nz = 64, 128, 256, 512 give bit-identical traces, as do nperiod = 1 and 4.
+# The reference the panel is compared against uses 512 points over nperiod = 4,
+# so closing that gap means raising ntheta and npol, not Nz.
 Nz = 256
 Lx = 125.66370614359172
 Ly = 62.8
@@ -35,7 +43,21 @@ nperiod = 4
 # Phi_zonal(kx, t) out to t = 60, which a flux-based stop policy cannot see.
 run_to = "t_max"
 t_max = 60.0
-dt = 0.05
+# dt must stay under the parallel-streaming CFL of the equilibrium this deck
+# loads. That limit is omega_streaming = |gradpar| * kz_max * 2*sqrt(Nm), and it
+# is the term that dominates here: at Nm = 32 the runtime's own bound
+# (gkx.solvers.time.explicit_cfl) reads omega = 75.0 of a total 81.5, giving a
+# stable dt of 0.0311 for rk4, near-constant across the four kx of the sweep.
+# The deck shipped dt = 0.05 -- 1.6x over -- and blew up: Wphi grew from 5.4e-16
+# to 3.2e+42 and went NaN at t = 5.65, then integrated NaN to t_max. Measured
+# at dt = 0.05: unstable; 0.025, 0.0125, 0.00625: stable. dt = 0.02 is 0.66x the
+# tightest bound in the sweep (kx rho_i = 0.30) and reaches t = 60 finite at
+# both ends of it; halving to 0.01 moves Wphi(t) by at most 0.3%.
+# fixed_dt = true means none of this is checked at run time, so re-derive the
+# bound before changing dt, Nm, ntheta, or vmec_file. Overriding the equilibrium
+# changes it directly: |gradpar| = 0.207 here, 0.113 for the QHS example wout,
+# whose bound is 0.058 and which is therefore stable at the old dt = 0.05.
+dt = 0.02
 method = "rk4"
 sample_stride = 4
 diagnostics_stride = 4
@@ -117,8 +139,10 @@ ky = 0.0
 kx = 0.05
 Nl = 8
 Nm = 32
-dt = 0.05
-steps = 1200
+# Mirrors [time] dt above; steps = t_max / dt. The publication tool reads these,
+# the CLI reads [time], and both have to stay under the same CFL bound.
+dt = 0.02
+steps = 3000
 sample_stride = 4
 diagnostics = true
 

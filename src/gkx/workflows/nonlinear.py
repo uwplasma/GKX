@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -20,7 +21,11 @@ from gkx.diagnostics.saturation import (
     saturation_stop_decision,
 )
 from gkx.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry
+from gkx.solvers.time.explicit_cfl import FIXED_DT_CFL_WARN_RATIO
 from gkx.workflows.runtime.config import RuntimeConfig, RuntimeExpertConfig
+from gkx.workflows.runtime.diagnostic_arrays import (
+    validate_finite_runtime_diagnostics,
+)
 from gkx.workflows.runtime.parallel_nonlinear import (
     NonlinearParallelPlan,
     assert_nonlinear_parallel_identity,
@@ -144,7 +149,7 @@ def _prepare_context(
     dt_val = float(cfg.time.dt if dt is None else dt)
     if dt_val <= 0.0:
         raise ValueError("dt must be > 0")
-    return _RunContext(
+    ctx = _RunContext(
         geom=geom,
         grid=grid,
         params=params,
@@ -156,6 +161,10 @@ def _prepare_context(
         steps=int(deps.infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)),
         adaptive_chunked=steps is None and not bool(cfg.time.fixed_dt),
     )
+    # Before the first step, not after the last: an over-CFL run that is going
+    # to overflow should say so while the step is still cheap to change.
+    _report_nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm, status=status)
+    return ctx
 
 
 def _diagnostic_policy(
@@ -278,6 +287,88 @@ def _saturation_stop_condition(
         )
 
     return check
+
+
+def _nonlinear_cfl_margin(
+    cfg: RuntimeConfig, ctx: _RunContext, *, Nl: int, Nm: int
+) -> tuple[float, float, np.ndarray] | None:
+    """Return ``(bound, dt / bound, omega components)``, or None if unavailable.
+
+    ``include_diamagnetic_drive=False`` is deliberate: it is the convention the
+    nonlinear adaptive step itself uses, and the drive term is not a step-size
+    constraint. Using the linear convention here would tighten the bound on any
+    deck with finite gradients -- for the Cyclone short example it is the
+    difference between 1.33x and 2.96x -- and report a margin the runtime never
+    applies.
+
+    Returns None rather than raising. The bound is advisory, and computing it
+    can fail on inputs a run is otherwise happy with: geometry that has not
+    been sampled onto this grid, or an analytic geometry that arrives traced.
+    A diagnostic that can abort a working run is worse than no diagnostic.
+    """
+
+    from gkx.config import resolve_cfl_fac
+    from gkx.geometry import ensure_flux_tube_geometry_data
+    from gkx.solvers.time.explicit_cfl import _linear_frequency_bound
+
+    try:
+        geom = ensure_flux_tube_geometry_data(ctx.geom, ctx.grid.z)
+        omega = np.asarray(
+            _linear_frequency_bound(
+                ctx.grid, geom, ctx.params, Nl, Nm, include_diamagnetic_drive=False
+            ),
+            dtype=float,
+        )
+    except Exception:
+        return None
+    wmax = float(np.sum(omega))
+    if not np.isfinite(wmax) or wmax <= 0.0:
+        return None
+    cfl_fac = resolve_cfl_fac(str(cfg.time.method), cfg.time.cfl_fac)
+    bound = cfl_fac * float(cfg.time.cfl) / wmax
+    return bound, float(ctx.dt) / bound, omega
+
+
+def _report_nonlinear_cfl_margin(
+    cfg: RuntimeConfig,
+    ctx: _RunContext,
+    *,
+    Nl: int,
+    Nm: int,
+    status: Callable[[str], None],
+) -> None:
+    """Report the run's CFL margin, and warn when a fixed step is over it.
+
+    ``fixed_dt`` runs never consult the CFL machinery -- the policy builder
+    short-circuits before the bound is even computed -- so a deck's dt is
+    checked against its own geometry by nobody. That is how a benchmark shipped
+    at 1.6x its bound, produced 404 NaN samples, and was not noticed for a
+    release. The margin is reported unconditionally so it reaches run logs and
+    artifact metadata, which is what makes an after-the-fact provenance
+    question answerable.
+    """
+
+    margin = _nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm)
+    if margin is None:
+        return
+    bound, ratio, omega = margin
+    total = float(np.sum(omega))
+    status(
+        f"CFL margin: dt={ctx.dt:.4g} bound={bound:.4g} ratio={ratio:.2f}x "
+        f"(streaming {100.0 * float(omega[2]) / total:.0f}% of the bound)"
+    )
+    if not bool(cfg.time.fixed_dt) or ratio <= FIXED_DT_CFL_WARN_RATIO:
+        return
+    warnings.warn(
+        f"fixed dt={ctx.dt:.4g} is {ratio:.2f}x the explicit CFL bound "
+        f"{bound:.4g} for this case (max linear frequency {total:.4g}, of which "
+        f"parallel streaming is {float(omega[2]):.4g}). fixed_dt = true means "
+        "nothing reduces the step, so the trajectory is expected to overflow "
+        f"and the run to fail on non-finite diagnostics. Reduce dt below "
+        f"{bound:.3g}, or lower Nm: the streaming bound scales as sqrt(Nm)",
+        RuntimeWarning,
+        stacklevel=2,
+    )
 
 
 def _run_chunked_diagnostics(
@@ -432,6 +523,13 @@ def _run_diagnostics(
             **kwargs,
         )
     )
+    # The chunked routes above validate every chunk before returning it. This
+    # one is a single scan, so nothing has looked at the trace yet: an unstable
+    # step runs to the last step and hands back a diagnostics array whose tail
+    # is NaN, and every caller that is not the artifact writer -- the library
+    # API, and the CLI whenever [output] path is unset -- reports that as a
+    # successful run. Refuse the trace instead of returning it.
+    validate_finite_runtime_diagnostics(diag, label="fixed-step nonlinear run")
     return t, diag, G_final, fields_final, None
 
 

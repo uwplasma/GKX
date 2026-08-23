@@ -804,7 +804,14 @@ def test_w7x_zonal_response_vmec_example_uses_test4_contract() -> None:
     assert data["run"]["kx"] == pytest.approx(0.05)
     assert data["run"]["Nl"] == 8
     assert data["run"]["Nm"] == 32
-    assert data["run"]["dt"] == pytest.approx(0.05)
+    # dt is set by the parallel-streaming CFL of the equilibrium the deck loads,
+    # not by taste: at Nm = 32 the runtime's own bound is 0.0311, and the 0.05
+    # this deck used to ship went non-finite at t = 5.65 of a requested 60.
+    # Raising it, or raising Nm, needs the bound re-derived first.
+    assert data["run"]["dt"] == pytest.approx(0.02)
+    assert data["run"]["steps"] == 3000
+    assert cfg.time.dt == pytest.approx(data["run"]["dt"])
+    assert data["run"]["steps"] * data["run"]["dt"] == pytest.approx(cfg.time.t_max)
 
 
 def test_output_warm_start_is_opt_in_and_round_trips(tmp_path: Path) -> None:

@@ -1214,7 +1214,12 @@ def _write_combined_trace_csv(cases: list[dict[str, object]], out_csv: Path) -> 
 
 
 def run_response_panel(argv: list[str] | None = None) -> int:
-    args = _parse_response_args()
+    # Forward argv, the way run_contract already does. Parsing sys.argv here
+    # instead re-reads the mode token main() already consumed, so the second
+    # parser rejects "response-panel" as an unrecognized argument and every
+    # override this mode documents -- --dt, --steps, --Nm, --kx-values,
+    # --out-dir, the closure knobs -- is unreachable from the command line.
+    args = _parse_response_args(argv)
     cfg, raw = load_runtime_from_toml(args.config)
     cfg = _apply_audit_overrides(cfg, args)
     audit_overrides = _closure_overrides(args)
