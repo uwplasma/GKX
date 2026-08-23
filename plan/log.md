@@ -1593,3 +1593,14 @@
   pass, leaving 284,827 bytes of decimal margin. This supersedes the preceding
   48-row delete disposition; the planned cutover now deletes no branch. No
   public history moved.
+- Opened draft PR #113 at `fbe6b5eb`, stacked on #112. One immutable
+  `LinearParams` field-order tuple replaces four copies across species pmap,
+  species shard-map, host placement, and species-Hermite integration, removing
+  29 installed-source lines. All 256 x64 owning tests with eight forced CPU
+  devices, 117 release tests, Ruff, changed-source mypy, and the diff gate pass.
+  Private replay `7cc91489` has exact stable patch `4b131242` and all five blobs.
+  A fresh all-head clone has 83 remote refs, 28 tags, 3,539 commits, and 17,984
+  objects: pack 8,567,464 bytes, pack plus index 9,072,088 bytes, and complete
+  `.git` 9,636,669 bytes. Strict `fsck`, no alternates, and zero AI-attribution
+  hits pass, leaving 363,331 bytes of margin. GitHub CI is pending; no public
+  history moved.

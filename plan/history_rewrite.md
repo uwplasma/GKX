@@ -45,11 +45,11 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
   tests and documentation stop requiring generated artifacts.
 - Keep all 28 existing tags. Rewrite their targets and publish an old-to-new
   tag map; do not silently retarget a release without the map.
-- Rebase the 31 open PR heads (#74, #82--#105, and #107--#112) after
+- Rebase the 32 open PR heads (#74, #82--#105, and #107--#113) after
   the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
-- Retain and rewrite all 81 current branch heads. Publish every old and new tip
-  in the 109-row head/tag map. Any later deletion requires a separate explicit
+- Retain and rewrite every current branch head. Publish every old and new tip
+  in the complete head/tag map. Any later deletion requires a separate explicit
   decision after the re-frozen complete bundle is verified; deletion is not
   part of the planned cutover.
 
@@ -166,8 +166,8 @@ marker remains. The other human identities are unchanged.
 7. Publish the bundle, checksum, old-to-new ref map, artifact manifest, and
    re-clone instructions before moving any public ref.
 8. Temporarily relax only the rules needed for the coordinated force push;
-   update `main`, all tags, and the 48 non-open heads from exact candidate SHAs,
-   then rebase the 31 open PR heads with `--force-with-lease`. Do not merely retarget the
+   update `main`, all tags, and the 49 non-open topic heads from exact candidate
+   SHAs, then rebase the 32 open PR heads with `--force-with-lease`. Do not merely retarget the
    nineteen direct #81-base PRs: the squash merge left equal base trees but
    divergent ancestry, so each head must be replayed onto rewritten `main` and
    pass exact tree/patch checks before retargeting.
@@ -381,6 +381,14 @@ commits, and 17,947 objects. Its pack is 8,662,536 bytes, pack plus index is
 9,166,124 bytes, and complete `.git` file sum is 9,501,911 bytes. Strict
 `fsck`, no alternates, and zero reachable AI-attribution matches pass, leaving
 498,089 bytes below the strict decimal 10-MB gate. No public history moved.
+
+Draft PR #113 commit `fbe6b5eb` is replayed on private #112 as `7cc91489`.
+Its stable patch ID `4b131242` and all five changed blobs are exact. Before the
+following roadmap record, a fresh all-head clone has 83 remote refs (82 heads
+plus `origin/HEAD`), 28 tags, 3,539 commits, and 17,984 objects. Its pack is
+8,567,464 bytes, pack plus index is 9,072,088 bytes, and complete `.git` is
+9,636,669 bytes. Strict `fsck`, no alternates, and zero AI-attribution hits
+pass, leaving 363,331 bytes of strict decimal margin. No public history moved.
 
 A full hosted-ref refresh found 81 branch heads and 28 tags, not only the 33
 heads in the first candidate. The extra 48 belong to 46 merged PRs and two

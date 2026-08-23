@@ -5,7 +5,7 @@ This branch is the living plan and audit log. It is intentionally not part of
 current evidence, open defects, and next decisions.
 
 Last reconciled: 2026-08-22 against `main` at `0ff569c3` (merged PR #81)
-and 31 open PRs: #74, #82--#105, and #107--#112. PR #106 was closed as a
+and 32 open PRs: #74, #82--#105, and #107--#113. PR #106 was closed as a
 duplicate. The post-merge `main` workflow passes.
 
 ## Rules
@@ -1026,13 +1026,24 @@ source files, removes 49 more lines, and brings the 12-cut installed tree to
 release tests, Ruff, and mypy on those ten files pass in that topology. All 41
 required GitHub checks pass; nightly is intentionally skipped.
 
-The hosted-ref audit now covers every branch. GitHub advertises 81 branch heads
-and 28 tags: 31 open-PR heads, `main`, the temporary #81 dependency base, 46
+Draft PR #113, stacked on #112, gives the species-dependent `LinearParams`
+field order one owner. Species pmap, species shard-map, host placement, and
+species-Hermite integration now consume the same immutable tuple. It removes
+29 installed-source lines (`96,390 -> 96,361`) without changing values,
+arrays, sharding specifications, collectives, or traced operations. All 256
+x64 linear/parallel tests with eight CPU devices, 117 release tests, Ruff, and
+mypy on the four changed source files pass locally. Its private replay
+`7cc91489` has exact patch `4b131242` and all five changed blobs; GitHub CI is
+pending.
+
+The hosted-ref audit now covers every branch. GitHub advertises 82 branch heads
+and 28 tags: 32 open-PR heads, `main`, the temporary #81 dependency base, 46
 merged heads, and closed PRs #25/#106. Replaying the exact validated history
-filter and attribution callbacks for the latter 48 shows that all 109 head/tag
-refs fit and can be marked `REWRITE`; none needs deletion. GitHub's 141
-server-managed pull refs must also be captured by the final lossless mirror
-bundle. No ref may disappear merely because its PR is closed.
+filter and attribution callbacks for the latter 48 shows that every head/tag
+ref present at that audit fits and can be marked `REWRITE`; none needs
+deletion. GitHub's 141 server-managed pull refs must also be captured by the
+final lossless mirror bundle. No ref may disappear merely because its PR is
+closed.
 
 The private roadmap is now represented by one source-neutral snapshot rather
 than repeated log snapshots. Its 20 roadmap blobs exactly match public
@@ -1329,7 +1340,7 @@ unverified rather than silently promoted.
 | MOV-1 | P1 | active/review | PR #96 physical cuts + PR #97 production-state continuation | rendering passes; hash-bind source state and PR #91 identity before evidence use |
 | VAL-1 | P1 | active | QA, QHS, and QI fixed-horizon campaign | paired CI + resolution + zonal gates |
 | AD-1 | P1 | active/review | PR #100 narrows the finite-window adjoint claim | repeat source-pinned AD/FD knee, CPU/GPU, and optimized-equilibrium gates |
-| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#112 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze closed-head map, publish recovery records, then real network-clone gate |
+| SLIM-1 | P1 | active/review | PRs #88/#95/#102--#105/#107--#113 remove redundant renders/grids/traces/policies/setup; latest pre-record rehearsal `.git` is below 9.75 MB | freeze the complete 110-ref map, publish recovery records, then real network-clone gate |
 | OUT-1 | P1 | review | PR #94 fails closed on rejected plot windows, including the one-page summary | supplied QA replot, focused tests, and all 41 CI checks pass |
 | PR-1 | P1 | audited | every merged PR | dispositions in `plan/pr_audit.md`; named debt stays open |
 | PERF-1 | P2 | active/review | existing SOLVAX line preconditioners + pure-JAX packed-FFT prototype | matched residual/forward/VJP/wall/memory comparison before any default change |
