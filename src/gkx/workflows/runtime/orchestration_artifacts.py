@@ -134,6 +134,7 @@ def print_linear_run_header(
 def print_nonlinear_run_header(
     *,
     config_path: str,
+    runtime_config: Any,
     ky: float,
     Nl: int,
     Nm: int,
@@ -157,6 +158,12 @@ def print_nonlinear_run_header(
         f"diagnostics={'on' if diagnostics else 'off'} "
         f"progress={'on' if show_progress else 'off'}"
     )
+    kinetic = ",".join(f"{s.name}(a/L_T={s.tprim:g},a/L_n={s.fprim:g})" for s in runtime_config.species if s.kinetic) or "none"
+    adiabatic = "electrons" if runtime_config.physics.adiabatic_electrons else "ions" if runtime_config.physics.adiabatic_ions else "none"
+    model = "electromagnetic" if runtime_config.physics.electromagnetic else "electrostatic"
+    print(f"physics={model} kinetic={kinetic} adiabatic={adiabatic}")
+    print("profiles: a/L_T=-a d(ln T)/dr; a/L_n=-a d(ln n)/dr")
+    print("signals: gamma=d ln|phi_k|/dt; omega=-d arg(phi_k)/dt (selected-mode diagnostics); Wphi=electrostatic field energy; Wg=distribution free energy; Q=radial heat flux/Q_gB (saturation uses Q/Wphi/Wg)")
 
 
 def print_nonlinear_run_summary(result: Any) -> bool:
@@ -502,13 +509,7 @@ def _run_runtime_nonlinear_chunk(
     chunk_steps: int | None,
     deps: RuntimeArtifactHandoffDeps,
 ) -> RuntimeNonlinearResult:
-    """Run and validate one nonlinear artifact/checkpoint chunk.
-
-    The elapsed wall clock is attached to the chunk result. It is measured
-    around the whole call, so it includes compilation: that is what the user
-    actually waited for, and it is the number that makes two surfaces of the
-    same campaign comparable once divided by simulated time.
-    """
+    """Run one chunk and include compilation in its measured wall time."""
 
     wall_start = time.perf_counter()
     result_chunk = deps.run_runtime_nonlinear(
@@ -593,9 +594,6 @@ def _run_artifact_checkpoint_loop(
 
     result_final: RuntimeNonlinearResult | None = None
     paths: dict[str, str] = {}
-    # The merged result carries diagnostics accumulated over every checkpoint,
-    # so its wall clock has to accumulate the same way or the reported cost per
-    # unit of simulated time would only cover the final chunk.
     wall_total = 0.0
     while True:
         chunk_steps = _next_runtime_chunk_steps(
