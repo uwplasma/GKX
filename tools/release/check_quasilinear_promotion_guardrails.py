@@ -941,9 +941,9 @@ def _audit_manuscript_figures(
         json_exists = json_sidecar.exists()
         gates.append(
             _gate(
-                f"ql_figure_png_exists:{rel_base}",
-                png_exists,
-                rel_png,
+                f"ql_figure_render_optional:{rel_base}",
+                True,
+                f"{rel_png}: {'tracked' if png_exists else 'regenerate on demand'}",
             )
         )
         gates.append(

@@ -166,13 +166,11 @@ For a solver-backed identity gate, run the Cyclone ``k_y``-batch scan artifact:
 
    python tools/artifacts/generate_parallel_identity_gate.py ky-scan
 
-.. figure:: _static/parallel_ky_scan_gate.png
-   :alt: GKX ky-batch parallelization identity gate
-   :width: 100%
+**Generated figure.** Real Cyclone linear solver comparison between serial and
+fixed-shape
+``k_y``-batched scans. The figure verifies that ``gamma`` and ``omega``
+are identical while reporting the observed batch speedup separately.
 
-   Real Cyclone linear solver comparison between serial and fixed-shape
-   ``k_y``-batched scans. The figure verifies that ``gamma`` and ``omega``
-   are identical while reporting the observed batch speedup separately.
 
 For a logical-CPU API gate that exercises ``RuntimeParallelConfig`` and pytree
 outputs, run:
@@ -181,13 +179,11 @@ outputs, run:
 
    python tools/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2
 
-.. figure:: _static/logical_cpu_parallel_scan_gate.png
-   :alt: GKX logical CPU parallel scan identity gate
-   :width: 100%
+**Generated figure.** Independent-scan interface gate for structured outputs. This
+validates the
+parallel API used by UQ and sensitivity ensembles; it is not a nonlinear
+performance claim.
 
-   Independent-scan interface gate for structured outputs. This validates the
-   parallel API used by UQ and sensitivity ensembles; it is not a nonlinear
-   performance claim.
 
 The first lower-level communication gate for velocity-space decomposition is
 the Hermite ghost exchange:
@@ -196,13 +192,11 @@ the Hermite ghost exchange:
 
    python tools/artifacts/generate_velocity_parallel_gates.py hermite-exchange --logical-devices 2
 
-.. figure:: _static/hermite_exchange_gate.png
-   :alt: GKX Hermite ghost-exchange identity gate
-   :width: 100%
+**Generated figure.** ``shard_map`` nearest-neighbor exchange for Hermite moments. This
+validates
+the communication primitive that a future nonlinear velocity-space sharding
+path needs before field reductions and full-RHS identity gates are added.
 
-   ``shard_map`` nearest-neighbor exchange for Hermite moments. This validates
-   the communication primitive that a future nonlinear velocity-space sharding
-   path needs before field reductions and full-RHS identity gates are added.
 
 The paired field-reduction gate is:
 
@@ -210,13 +204,11 @@ The paired field-reduction gate is:
 
    python tools/artifacts/generate_velocity_parallel_gates.py field-reduce --logical-devices 2
 
-.. figure:: _static/velocity_field_reduce_gate.png
-   :alt: GKX velocity field-reduction identity gate
-   :width: 100%
+**Generated figure.** ``shard_map`` reduction/broadcast over a Hermite mesh. This
+establishes the
+field-solve communication primitive before streaming-ladder and nonlinear
+RHS identity gates are attempted.
 
-   ``shard_map`` reduction/broadcast over a Hermite mesh. This establishes the
-   field-solve communication primitive before streaming-ladder and nonlinear
-   RHS identity gates are attempted.
 
 The first production-field-solve reduction gate is:
 
@@ -224,12 +216,9 @@ The first production-field-solve reduction gate is:
 
    python tools/artifacts/generate_electrostatic_parallel_gates.py field-reduce --logical-devices 2
 
-.. figure:: _static/electrostatic_field_reduce_gate.png
-   :alt: GKX electrostatic field-reduction identity gate
-   :width: 100%
+**Generated figure.** Hermite-sharded ``m=0`` density reduction for the electrostatic
+quasineutrality solve, compared against the production field solve.
 
-   Hermite-sharded ``m=0`` density reduction for the electrostatic
-   quasineutrality solve, compared against the production field solve.
 
 The Hermite streaming-ladder coefficient gate is:
 
@@ -237,14 +226,12 @@ The Hermite streaming-ladder coefficient gate is:
 
    python tools/artifacts/generate_velocity_parallel_gates.py hermite-ladder --logical-devices 2
 
-.. figure:: _static/hermite_streaming_ladder_gate.png
-   :alt: GKX Hermite streaming-ladder identity gate
-   :width: 100%
+**Generated figure.** ``shard_map`` Hermite exchange plus the ``sqrt(m+1)`` /
+``sqrt(m)``
+streaming-ladder coefficients. This is still a communication/coefficient
+gate; full linear streaming also needs the parallel derivative identity
+gate before production runtime wiring.
 
-   ``shard_map`` Hermite exchange plus the ``sqrt(m+1)`` / ``sqrt(m)``
-   streaming-ladder coefficients. This is still a communication/coefficient
-   gate; full linear streaming also needs the parallel derivative identity
-   gate before production runtime wiring.
 
 The first electrostatic drift-slice gate is:
 
@@ -252,13 +239,11 @@ The first electrostatic drift-slice gate is:
 
    python tools/artifacts/generate_electrostatic_parallel_gates.py drift --logical-devices 2
 
-.. figure:: _static/electrostatic_drift_gate.png
-   :alt: GKX electrostatic drift-slice identity gate
-   :width: 100%
+**Generated figure.** Hermite-sharded mirror and curvature/grad-B drift slices,
+including
+offset-1 and offset-2 Hermite exchanges, compared against the production
+linear RHS with only those terms enabled.
 
-   Hermite-sharded mirror and curvature/grad-B drift slices, including
-   offset-1 and offset-2 Hermite exchanges, compared against the production
-   linear RHS with only those terms enabled.
 
 The matching electrostatic diamagnetic-drive gate is:
 
@@ -266,14 +251,12 @@ The matching electrostatic diamagnetic-drive gate is:
 
    python tools/artifacts/generate_electrostatic_parallel_gates.py diamagnetic --logical-devices 2
 
-.. figure:: _static/electrostatic_diamagnetic_gate.png
-   :alt: GKX electrostatic diamagnetic-drive identity gate
-   :width: 100%
+**Generated figure.** Hermite-sharded electrostatic diamagnetic drive. The sharded route
+first
+uses the electrostatic field-reduction gate, then applies the local
+``m=0`` and ``m=2`` drive masks on each Hermite shard. This closes the
+diamagnetic slice for the opt-in electrostatic linear-slices backend.
 
-   Hermite-sharded electrostatic diamagnetic drive. The sharded route first
-   uses the electrostatic field-reduction gate, then applies the local
-   ``m=0`` and ``m=2`` drive masks on each Hermite shard. This closes the
-   diamagnetic slice for the opt-in electrostatic linear-slices backend.
 
 The periodic streaming microkernel gate adds that field-line derivative:
 
@@ -281,13 +264,11 @@ The periodic streaming microkernel gate adds that field-line derivative:
 
    python tools/artifacts/generate_velocity_parallel_gates.py periodic-streaming --logical-devices 2
 
-.. figure:: _static/periodic_streaming_microkernel_gate.png
-   :alt: GKX periodic streaming microkernel identity gate
-   :width: 100%
+**Generated figure.** Periodic spectral parallel derivative plus Hermite streaming
+ladder through
+the ``shard_map`` path, compared directly against the production streaming
+operator.
 
-   Periodic spectral parallel derivative plus Hermite streaming ladder through
-   the ``shard_map`` path, compared directly against the production streaming
-   operator.
 
 The next gate places that same sharded streaming kernel under the production
 linear-RHS call graph with every non-streaming contribution disabled:
@@ -296,14 +277,12 @@ linear-RHS call graph with every non-streaming contribution disabled:
 
    python tools/artifacts/generate_linear_rhs_parallel_gates.py streaming --logical-devices 2
 
-.. figure:: _static/linear_rhs_streaming_gate.png
-   :alt: GKX streaming-only linear RHS identity gate
-   :width: 100%
+**Generated figure.** Streaming-only ``linear_rhs_cached`` comparison against the
+velocity-sharded
+periodic streaming path. This closes the first full-RHS call-graph identity
+gate for the streaming term only; it is not yet a full linear scan or
+nonlinear speedup claim.
 
-   Streaming-only ``linear_rhs_cached`` comparison against the velocity-sharded
-   periodic streaming path. This closes the first full-RHS call-graph identity
-   gate for the streaming term only; it is not yet a full linear scan or
-   nonlinear speedup claim.
 
 With a nonzero electrostatic response, use:
 
@@ -311,14 +290,12 @@ With a nonzero electrostatic response, use:
 
    python tools/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic --logical-devices 2
 
-.. figure:: _static/linear_rhs_streaming_electrostatic_gate.png
-   :alt: GKX electrostatic streaming linear RHS identity gate
-   :width: 100%
+**Generated figure.** Streaming plus electrostatic ``phi`` call-graph comparison. The
+field solve
+uses the Hermite-sharded electrostatic reduction gate; this validates the
+next velocity-sharded streaming slice before drift, diamagnetic-drive, and
+nonlinear terms are introduced.
 
-   Streaming plus electrostatic ``phi`` call-graph comparison. The field solve
-   uses the Hermite-sharded electrostatic reduction gate; this validates the
-   next velocity-sharded streaming slice before drift, diamagnetic-drive, and
-   nonlinear terms are introduced.
 
 For the composed electrostatic linear-slices backend, use:
 
@@ -326,15 +303,12 @@ For the composed electrostatic linear-slices backend, use:
 
    python tools/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices --logical-devices 2
 
-.. figure:: _static/linear_rhs_electrostatic_slices_gate.png
-   :alt: GKX composed electrostatic linear-slices identity gate
-   :width: 100%
+**Generated figure.** Full opt-in electrostatic linear-slices call-graph comparison for
+streaming, mirror, curvature, grad-B, and diamagnetic drive. This is an
+opt-in electrostatic linear-RHS identity artifact for the single-species
+periodic electrostatic RHS path; collisions, linked boundaries,
+electromagnetic terms, and nonlinear brackets remain separate gates.
 
-   Full opt-in electrostatic linear-slices call-graph comparison for
-   streaming, mirror, curvature, grad-B, and diamagnetic drive. This is an
-   opt-in electrostatic linear-RHS identity artifact for the single-species
-   periodic electrostatic RHS path; collisions, linked boundaries,
-   electromagnetic terms, and nonlinear brackets remain separate gates.
 
 Use the strong-scaling sweep helper to collect parallelization timings for the
 distributed linear RK2 loop:
@@ -361,14 +335,12 @@ engineering sweep helper:
      --platform cpu --devices 1,2,4,8 --nms 64,128 \
      --nl 4 --ny 32 --nz 128 --rtol 1e-5
 
-.. figure:: _static/linear_rhs_parallel_slices_sweep.png
-   :alt: GKX electrostatic linear-slices parallelization sweep
-   :width: 100%
+**Generated figure.** Device-count and Hermite-resolution sweep for the opt-in
+electrostatic
+linear-slices backend. The right panel is the identity gate; the left panel
+is engineering timing only and should not be promoted as a nonlinear or
+publication speedup claim.
 
-   Device-count and Hermite-resolution sweep for the opt-in electrostatic
-   linear-slices backend. The right panel is the identity gate; the left panel
-   is engineering timing only and should not be promoted as a nonlinear or
-   publication speedup claim.
 
 Plotting outputs
 ----------------
@@ -545,16 +517,14 @@ the chosen output directory alongside the publication-ready plots. The
 single-mode figure is a local inverse/sensitivity example; the two-mode figure
 is the release-grade parameter-recovery validation.
 
-.. figure:: _static/autodiff_inverse_growth.png
-   :width: 90%
-   :align: center
+**Generated figure.** Single-mode inverse/sensitivity demo. The goal is to verify the
+autodiff
+Jacobian and show what one measured mode constrains locally; the expected
+outcome is small observable and derivative error, not unique recovery of
+both gradients. The shipped result matches that expectation: `(gamma, omega)`
+are reproduced closely while the recovered `(a/L_Ti, a/L_n)` remains offset
+because the one-mode inverse is not globally identifiable.
 
-   Single-mode inverse/sensitivity demo. The goal is to verify the autodiff
-   Jacobian and show what one measured mode constrains locally; the expected
-   outcome is small observable and derivative error, not unique recovery of
-   both gradients. The shipped result matches that expectation: `(gamma, omega)`
-   are reproduced closely while the recovered `(a/L_Ti, a/L_n)` remains offset
-   because the one-mode inverse is not globally identifiable.
 
 .. figure:: _static/autodiff_inverse_twomode.png
    :width: 90%
