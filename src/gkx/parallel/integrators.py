@@ -12,7 +12,11 @@ import numpy as np
 
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.operators.linear.cache_model import LinearCache
-from gkx.operators.linear.params import LinearParams, LinearTerms
+from gkx.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    _SPECIES_PARAM_NAMES,
+)
 from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
@@ -333,20 +337,6 @@ def integrate_nonlinear_sharded(
 #              and m+-2 (curvature) in a single exchange, only when m is split
 #   C5  psum   scalar diagnostics, accumulated in the scan carry
 # Any all-to-all in the HLO of this route is a bug, not a cost.
-
-_SPECIES_PARAM_NAMES = (
-    "charge_sign",
-    "density",
-    "mass",
-    "temp",
-    "vth",
-    "rho",
-    "fprim",
-    "tprim",
-    "tprim_e",
-    "nu",
-    "tz",
-)
 
 # Cache arrays carrying a species axis at dimension 0.
 _SPECIES_CACHE_NAMES = ("Jl", "JlB", "b", "laguerre_j0", "laguerre_j1_over_alpha")
