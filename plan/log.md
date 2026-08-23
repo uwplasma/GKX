@@ -1778,3 +1778,27 @@ media that costs the clone nothing.
   quantitative claim carrying its reproduction command, the pinned revisions
   of everything compared, and explicit scoping of what is and is not claimed.
   GKX's 615 lines may stay 615 if every section earns its place.
+
+## 2026-08-23 — historical commands restored; scope fixed to this repository
+
+- Restored the historical commands in the 22 renamed GitHub releases while
+  keeping every title as `GKX vX.Y`. The rename commit `e0817914` is dated
+  2026-07-19 and the last release (v1.7.0) 2026-07-17, so every release
+  predates the rename and every `gkx` token in those bodies came from the
+  scrub -- the reverse was therefore unambiguous. Install lines, `git clone`
+  URLs, executable invocations, module attributes, and factual PyPI records
+  now read `spectraxgk`/`SPECTRAX-GK` again; prose, headings, titles, and
+  changelog links stay GKX.
+- The scrub had silently destroyed information the reverse recovered: three
+  releases documented TWO entry points (`spectraxgk` and `spectrax-gk`) and
+  the global replacement had collapsed both to one token, producing lines
+  reading "both `gkx` and `gkx`". Those are restored to the distinct names.
+  Recorded as a caution for the history rewrite's own SPECTRAX scrub: a blind
+  token map over commit and tag messages can collapse distinctions the same
+  way, so that pass must preserve both entry-point names where they appear.
+- Added a scope rule: all work from this plan lands in GKX. VMEX, ESSOS and
+  SOLVAX belong to other developers and are read-only references here; the
+  only exception is a targeted change one of them must make for a specific
+  GKX capability, which must be recorded with the capability that required
+  it. DOC-1 and SLIM-4 were reworded so the VMEX/ESSOS comparisons read as
+  style and scale references, not as work items in those repositories.
