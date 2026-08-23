@@ -14,7 +14,19 @@ from gkx.core.grid import SpectralGrid
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.params import LinearParams
 
+# Ratio of dt to the explicit CFL bound above which a fixed-step nonlinear run
+# is warned about. Not 1.0: the bound is deliberately conservative -- it takes
+# maxima over the whole grid and carries the 0.9 cfl safety factor -- so decks
+# sit above it and still integrate. Measured on the shipped decks: 1.33x runs
+# clean over 500 steps, 1.60x (the W7-X zonal benchmark) goes non-finite at
+# t=5.65 of 60, and 2.77x (the ETG nonlinear example) at t=0.021 of 0.5. 1.5
+# sits in that gap, so it fires on both known failures and on neither known
+# good deck. The linear path's equivalent warning uses 1.0 and predates this
+# measurement; the two are not reconciled.
+FIXED_DT_CFL_WARN_RATIO = 1.5
+
 __all__ = [
+    "FIXED_DT_CFL_WARN_RATIO",
     "_cfl_wavenumber_arrays",
     "_geometry_frequency_maxima",
     "_gradient_ratio_max",
