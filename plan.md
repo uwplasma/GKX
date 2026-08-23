@@ -879,6 +879,16 @@ round of branch churn now.
 
 ## Repository recovery and slimming
 
+Measured baseline at `29e32b4d` (2026-08-23), so every target below has a
+number to move: an ordinary network clone of the public repository is
+**146 MB** (`.git` alone), against the owner's 20 MB bound and this plan's
+stricter 10 MB gate; the verified rewrite candidate stands at 9,148,556 bytes.
+The installed package is 207 files and 96,671 lines across 41 directories;
+`docs` adds 83 directories, `tests` 49, `tools` 13. `README.md` is 615 lines
+and embeds 12 tracked media files totalling 1.10 MB, plus one movie already
+served as a release asset rather than a tracked blob.
+
+
 The user's sub-10-MB target is tracked in two distinct units. The hard clone
 gate is the complete Git object database for an ordinary full clone, including
 all live heads and tags; that private rehearsal is below 10,000,000 bytes. The
@@ -1372,7 +1382,10 @@ unverified rather than silently promoted.
 | --- | --- | --- | --- | --- |
 | CI-1 | P0 | closed | PR #81 mypy fix + nonlinear-only 20-minute budget | all 41 PR checks and post-merge `main` CI pass |
 | GOV-1 | P0 | review | PR #83 removes plan from main; PR #82 stays open | plan absent from main, branch recoverable |
-| GOV-2 | P0 | cutover | rebase 19 direct #81-base heads onto rewritten `main`, then retarget | exact old/new head-tree and patch map; force-with-lease; fresh CI |
+| GOV-2 | P0 | cutover | publish the size cutover: the candidate is rebuilt to public `main` and verified (complete `.git` 9,148,556 B, source tree byte-identical, zero attribution hits, 124 release gates + 1,187 unit tests green in a fresh clone). Remaining: decide the 85 non-open branch heads (recommend deleting merged/closed heads, which the lossless bundle preserves), re-freeze the recovery bundle from a fresh `--all` mirror, run the full pre-cutover battery, then force-push | a real network clone measures under 10 MB (owner's outer bound 20 MB); bundle + ref map published first; protection restored after |
+| SLIM-4 | P1 | open | too many DIRECTORIES, not only files: 41 under `src/gkx`, 83 under `docs`, 49 under `tests`, 13 under `tools` (186 total). Collapse the 20-subpackage tree toward the manifest's six target domains and flatten single-owner leaf directories; ESSOS ships 17 flat modules with no subpackages | directory counts recorded per tree in the architecture manifest and falling; no module moved merely to lower a count |
+| DOC-1 | P1 | open | reorganize `README.md` (615 lines): lead with what GKX is, one install block, one `gkx wout_XXX.nc` quickstart with its real output, then results; move campaign/provenance narration into `docs/` | a first-time reader reaches a running command within one screen; length falls without losing a claim |
+| MOV-1b | P1 | open | more user-engaging movies in the README without bloating the clone: host them as GitHub **release assets** (the pattern the v1.7.0 Cyclone ITG mp4 already uses) rather than tracked blobs, and keep the in-git media budget at or below today's 1.10 MB across 12 files | each movie is a release-asset URL; tracked media bytes do not grow; the clone gate still passes |
 | RUN-1 | P0 | review | PR #84 exact horizon and 128-step checks | demonstrated on the supplied QA artifact; all 41 checks green |
 | SAT-1 | P0 | active | PR #91 fixed-horizon replay, Q/Wphi/Wg gates, and output locks | QHS is seed-sensitive; QI Ny160 makes no causal stop; first matched QA pair passes and replicated queues are active |
 | GEO-1 | P0 | review | PR #86 physical VMEC tube coordinates | NetCDF round trip + Cartesian coordinate test; all 41 checks green |

@@ -1726,3 +1726,24 @@
   intra-op threading (using only ~3.2 of 14 cores — the copy kernels don't
   parallelize) is the best available CPU mode. Quick-wins PR in flight
   (CPU-sharding guard + compiled-chunk-scan reuse + documented guidance).
+
+## 2026-08-23 — owner scope check: folders, README, movies, clone size
+
+The owner asked whether four things were in the plan: too many folders/files/
+lines, an unorganized README, more engaging README movies that do not bloat
+the repository, and a smaller full clone. Audit result: files and lines were
+tracked (SLIM-1/2/3) but DIRECTORIES were not tracked at all, the README had
+no deliverable of its own, movies appeared only as constraints on rendering
+rather than as a goal, and the clone-size cutover lived only in prose and in
+plan/history_rewrite.md with no work-queue row. All four are now explicit:
+SLIM-4 (directory counts), DOC-1 (README reorganization), MOV-1b (movies as
+release assets under a fixed in-git media budget), and a rewritten GOV-2
+carrying the real cutover state.
+
+Baseline measured at `29e32b4d` so the targets are falsifiable: public clone
+146 MB against the 10 MB gate and the owner's 20 MB bound, with the verified
+candidate at 9,148,556 bytes; 207 installed files and 96,671 lines across 41
+directories, plus 83 doc, 49 test and 13 tool directories; README 615 lines
+with 12 tracked media files at 1.10 MB. The README already serves one movie
+as a v1.7.0 release asset, which is the pattern MOV-1b generalizes: engaging
+media that costs the clone nothing.
