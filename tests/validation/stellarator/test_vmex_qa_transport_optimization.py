@@ -102,6 +102,9 @@ def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
         path = ROOT / "docs" / "_static" / filename
         assert f"docs/_static/{filename}" in readme
         assert path.stat().st_size > 0
+    equilibria = ROOT / "docs" / "_static" / "qa_transport_equilibria.png"
+    assert equilibria.stat().st_size < 100_000
+    assert equilibria.read_bytes()[25] == 3  # indexed-color PNG
 
     for filename in (
         "input.qa_transport_baseline",
