@@ -261,14 +261,17 @@ The reported interval is deliberately conservative,
    \sigma=\max(\sigma_{pair},\sigma_{IAT}),\qquad
    \mathrm{CI}_{95}=\bar r\pm t_{0.975,M-1}\sigma.
 
-Stationarity is checked with the half-window shift and linear trend,
+Stationarity is checked on every trace with the half-window shift and linear
+trend,
 
 .. math::
 
    H=100\frac{\bar Q_2-\bar Q_1}{\bar Q},\qquad
    S=100\frac{\hat\beta(t_{max}-t_{min})}{\bar Q},
 
-where :math:`\hat\beta` is the least-squares slope. Heat flux is in gyro-Bohm
+where :math:`\hat\beta` is the least-squares slope. The final-drift test is
+:math:`|S|\leq20\%`, following [Oberparleiter16]_. The gate is conjunctive over
+traces; signed drifts may not cancel across seeds. Heat flux is in gyro-Bohm
 units.
 
 .. list-table:: Matched post-saturation transport
@@ -279,87 +282,95 @@ units.
      - :math:`\bar Q_b`
      - :math:`\bar Q_c`
      - reduction [95% CI]
+     - stationary traces
    * - nominal
      - 24
      - 11.16
      - 9.78
      - 12.26% [10.64, 13.88]
+     - 44/48
    * - :math:`\Delta t=0.04`
      - 8
      - 11.27
      - 9.58
      - 14.79% [10.52, 19.05]
+     - 13/16
    * - :math:`\Delta t=0.025`
      - 4
      - 10.76
      - 9.40
      - 12.57% [6.51, 18.64]
+     - 7/8
    * - :math:`N_x=N_y=12` (coarse)
      - 4
      - 18.73
      - 14.38
      - 23.13% [14.22, 32.04]
+     - 7/8
    * - :math:`N_x=N_y=20`
      - 16
      - 10.05
      - 9.53
      - 4.95% [2.12, 7.78]
+     - 27/32
    * - :math:`N_x=N_y=24` (short, rejected)
      - 4
      - 9.27
      - 9.24
      - 0.04% [-14.87, 14.96]
+     - 6/8
    * - :math:`N_x=N_y=24` (long)
      - 16
      - 9.92
      - 9.07
      - 8.50% [6.34, 10.66]
+     - 30/32
    * - :math:`N_z=16`
      - 4
      - 10.74
      - 9.76
      - 9.06% [2.37, 15.74]
+     - 6/8
    * - :math:`N_z=32`
      - 4
      - 11.60
      - 10.15
      - 12.51% [5.76, 19.25]
+     - 8/8
    * - :math:`(N_l,N_m)=(3,6)` (coarse)
      - 4
      - 13.78
      - 11.33
      - 17.12% [0.42, 33.81]
+     - 6/8
    * - :math:`(N_l,N_m)=(6,12)`
      - 16
      - 10.93
      - 9.56
      - 12.32% [9.62, 15.03]
+     - 30/32
 
-The first :math:`24\times24` horizon failed its stationarity check: the
-baseline half-window shift was :math:`6.94\pm2.43\%` and its interval included
-zero. The replacement runs to :math:`t=2500` and averages
-:math:`1900\leq t\leq2500`; its half-window shifts are
-:math:`1.03\pm1.82\%` and :math:`1.54\pm1.58\%`. Its shortest trace still spans
-14.0 autocorrelation times.
+The intervals above are conditional summaries, not validation intervals.
+The old gate averaged signed half-window shifts across seeds; opposing drifts
+cancelled. Applying the published final-drift test independently rejects 4 of
+48 nominal traces. Every case except :math:`N_z=32` has at least one drift
+failure, including 2 of 32 long-24x24 and 2 of 32
+:math:`(N_l,N_m)=(6,12)` traces.
 
-The 20x20 and long 24x24 intervals overlap. Their absolute baseline and
-candidate means differ by 1.3% and 4.9%, respectively, while both reductions
-remain resolved above zero. Timestep and :math:`N_z`-refinement intervals also
-remain positive. At :math:`(N_l,N_m)=(6,12)`, all 16 pairs reduce transport,
-the interval overlaps nominal, and the absolute means agree with nominal to
-2.3%. Its half-window shifts are :math:`0.75\pm1.24\%` and
-:math:`-0.92\pm1.72\%`. The coarse 12x12 and :math:`(N_l,N_m)=(3,6)` cases are
-controls, not converged estimates. In total, the campaign contains 104 matched
-pairs (208 traces) and 15.32 measured GPU integration hours on one RTX A4000.
+The compact raw files contain only :math:`Q_i(t)`, so neither the increasing
+high-:math:`k_y` tail nor spectral convergence can be tested. Thus none of the
+104 matched pairs is promotion-ready. The numbers remain useful preliminary
+evidence and a reproducible cost baseline (15.32 measured GPU integration
+hours on one RTX A4000).
 
 .. figure:: _static/qa_transport_reduction.svg
    :width: 900px
    :alt: matched QA heat-flux traces and transport-reduction convergence
 
    Initial and optimized nominal ensemble means with seed SEM; the shaded
-   interval is the measured window. Paired-seed reductions use the conservative
-   autocorrelation-corrected 95% interval. The orange short-24x24 result is a
-   failed-horizon control.
+   interval is the measured window. Error bars are autocorrelation-corrected
+   conditional summaries. Per-trace stationarity and spectral gates remain
+   open.
 
 Reproduce
 ---------
@@ -394,7 +405,9 @@ For example,
 Use the case names and pair counts in the table for the timestep, perpendicular,
 parallel, and velocity-space scans. Each ``.npz`` stores only ``time``,
 ``heat_flux``, and elapsed seconds. The 208 raw traces stay outside git; their
-complete sufficient statistics and the plotted nominal mean/SEM are committed.
+per-trace summary statistics and the plotted nominal mean/SEM are committed.
+Future promotion runs must also retain content hashes plus :math:`W_\phi(t)`,
+:math:`W_g(t)`, and resolved flux/field spectra.
 
 Download the :download:`case summary <_static/qa_transport_summary.csv>`,
 :download:`per-trace statistics <_static/qa_transport_traces.csv>`, or
