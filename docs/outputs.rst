@@ -69,6 +69,13 @@ The diagnostic group includes the main history series:
 It also carries resolved reductions used by the parity tooling, including
 ``*_kxst``, ``*_kyst``, ``*_kxkyst``, ``*_zst``, and ``Wg_lmst``.
 
+``Wg + Wphi`` (plus ``Wapar`` when electromagnetic) is not a discretely
+conserved functional of the dissipation-free discretization: the
+curvature/grad-B measure weights drive bounded transient excursions of order
+30--40 per cent, with no secular production — a zero-drive configuration has
+exactly ``gamma = 0``. Drift in ``Wg + Wphi`` is therefore not a solver-error
+meter.
+
 ``*.big.nc``
 ^^^^^^^^^^^^
 
@@ -192,8 +199,8 @@ Use the plotting helper to visualize nonlinear diagnostic histories from
 
 .. code-block:: bash
 
-   python examples/utilities/plot_runtime_outputs.py tools_out/cyclone_release.out.nc \
-     --out tools_out/cyclone_release_diagnostics.png
+   # point RUN_PATH (and optionally OUT) at the top of the script at the bundle
+   python examples/utilities/plot_runtime_outputs.py
 
 The script reads ``Diagnostics/t`` together with ``Phi2_t``, ``Wg_st``,
 ``Wphi_st``, and ``HeatFlux_st`` (when present) and produces a 2x2 panel.

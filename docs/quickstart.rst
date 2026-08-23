@@ -171,7 +171,7 @@ Run from TOML
 
 .. code-block:: bash
 
-   python examples/utilities/runtime_from_toml.py --config examples/linear/axisymmetric/cyclone.toml
+   python examples/utilities/runtime_from_toml.py  # CONFIG defaults to cyclone.toml
 
 Figure generation
 -----------------

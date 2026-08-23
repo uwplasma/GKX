@@ -480,7 +480,18 @@ def apply_hermite_v2(G: jnp.ndarray) -> jnp.ndarray:
 
 
 def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
-    """Multiply Laguerre coefficients by the perpendicular energy variable."""
+    """Multiply Laguerre coefficients by the perpendicular energy variable.
+
+    This helper acts in the plain Laguerre basis, where
+    ``x L_l = (2l+1) L_l - (l+1) L_{l+1} - l L_{l-1}`` gives negative
+    off-diagonal couplings. The runtime state stores Laguerre coefficients in
+    the alternating ``(-1)**l`` basis (the convention of
+    ``gkx.core.velocity.J_l_all``), which flips the sign of both off-diagonal
+    terms; composing with runtime states requires the alternating-basis
+    counterparts used by the production RHS (see the positive-neighbor
+    couplings in ``gkx.terms.linear_terms``, e.g.
+    ``curvature_gradb_contribution``). It is not used by the production RHS.
+    """
 
     axis_l = -5
     Nl = G.shape[axis_l]

@@ -18,12 +18,13 @@ the full linearized Coulomb operator with finite-Larmor-radius effects:
 Run::
 
     JAX_ENABLE_X64=1 python examples/theory_and_demos/collision_operator_comparison.py
-    JAX_ENABLE_X64=1 python examples/theory_and_demos/collision_operator_comparison.py --nu-scan
+
+With the default parameters the single-``NU`` table takes a couple of minutes
+on a CPU; the full ``NU_SCAN`` sweep multiplies that by the six scan points.
 """
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import json
 from pathlib import Path
@@ -150,39 +151,27 @@ def plot_scan(rows: list[dict], output: Path) -> None:
     print(f"wrote {output}")
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--nu", type=float, default=0.05)
-    parser.add_argument(
-        "--nu-scan",
-        action="store_true",
-        help="scan collisionality and plot the damping of each model",
-    )
-    parser.add_argument("--out", type=Path, default=Path("collision_comparison.png"))
-    parser.add_argument("--json", type=Path, default=None)
-    arguments = parser.parse_args(argv)
+NU = 0.05  # collisionality for the single-point comparison table
+NU_SCAN = False  # True: scan collisionality and plot the damping of each model
+OUT = Path("collision_comparison.png")  # figure path for the scan plot
+JSON_OUT = None  # optional path for a JSON dump of the rows
 
-    if arguments.nu_scan:
-        values = (0.005, 0.01, 0.02, 0.05, 0.1, 0.2)
-        rows = collisionality_scan(values)
-        plot_scan(rows, arguments.out)
-    else:
-        rows = [run_case(model, arguments.nu) for model in MODELS]
-        width = max(len(model) for model in MODELS)
-        print(f"Cyclone ITG, nu = {arguments.nu}, (Nl, Nm) = "
-              f"({HERMITE_COUNT}, {LAGUERRE_COUNT})\n")
-        print(f"{'collision_operator':<{width}}  {'growth rate':>12}  {'|G|':>14}")
-        for row in rows:
-            print(
-                f"{row['collision_operator']:<{width}}  "
-                f"{row['growth_rate']:>+12.6f}  {row['final_state_norm']:>14.6e}"
-            )
+if NU_SCAN:
+    values = (0.005, 0.01, 0.02, 0.05, 0.1, 0.2)
+    rows = collisionality_scan(values)
+    plot_scan(rows, OUT)
+else:
+    rows = [run_case(model, NU) for model in MODELS]
+    width = max(len(model) for model in MODELS)
+    print(f"Cyclone ITG, nu = {NU}, (Nl, Nm) = "
+          f"({HERMITE_COUNT}, {LAGUERRE_COUNT})\n")
+    print(f"{'collision_operator':<{width}}  {'growth rate':>12}  {'|G|':>14}")
+    for row in rows:
+        print(
+            f"{row['collision_operator']:<{width}}  "
+            f"{row['growth_rate']:>+12.6f}  {row['final_state_norm']:>14.6e}"
+        )
 
-    if arguments.json is not None:
-        arguments.json.write_text(json.dumps(rows, indent=2) + "\n")
-        print(f"wrote {arguments.json}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if JSON_OUT is not None:
+    JSON_OUT.write_text(json.dumps(rows, indent=2) + "\n")
+    print(f"wrote {JSON_OUT}")

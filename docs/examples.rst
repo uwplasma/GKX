@@ -19,12 +19,12 @@ Tokamak cases
 .. code-block:: bash
 
    python examples/linear/axisymmetric/cyclone_runtime_linear.py
-   python examples/nonlinear/axisymmetric/cyclone_runtime_nonlinear.py --steps 200
+   python examples/nonlinear/axisymmetric/cyclone_runtime_nonlinear.py
    python examples/linear/axisymmetric/etg_runtime_linear.py
    python examples/linear/axisymmetric/kaw_runtime_linear.py
    python examples/linear/axisymmetric/kbm_runtime_linear.py
-   python examples/nonlinear/axisymmetric/kbm_runtime_nonlinear.py --steps 200
-   python examples/nonlinear/axisymmetric/miller_nonlinear_runtime.py --steps 200
+   python examples/nonlinear/axisymmetric/kbm_runtime_nonlinear.py
+   python examples/nonlinear/axisymmetric/miller_nonlinear_runtime.py
 
 VMEC-backed tokamak and stellarator cases
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -41,12 +41,12 @@ VMEC-backed tokamak and stellarator cases
 
    gkx run --config examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml
    gkx run --config examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml
-   python examples/nonlinear/non-axisymmetric/w7x_nonlinear_vmec_geometry.py --steps 200
-   python examples/nonlinear/non-axisymmetric/hsx_nonlinear_vmec_geometry.py --steps 200
+   python examples/nonlinear/non-axisymmetric/w7x_nonlinear_vmec_geometry.py
+   python examples/nonlinear/non-axisymmetric/hsx_nonlinear_vmec_geometry.py
 
-For the VMEC-backed stellarator examples, omit ``--steps`` when you want the
-default adaptive horizon. Set ``--steps`` only when you intentionally want a
-short profiling or diagnostic window. For longer W7-X nonlinear runs, keep
+For the VMEC-backed stellarator examples, keep ``STEPS = None`` in the script
+when you want the default adaptive horizon. Set ``STEPS`` (e.g. ``STEPS = 200``)
+only when you intentionally want a short profiling or diagnostic window. For longer W7-X nonlinear runs, keep
 adaptive timesteps enabled (the default for the examples) or reduce ``dt`` if
 you need a fixed-step stability study.
 
@@ -80,8 +80,8 @@ lanes:
 
 .. code-block:: bash
 
-   python examples/utilities/runtime_from_toml.py --config examples/linear/axisymmetric/cyclone.toml
-   python examples/utilities/runtime_from_toml.py --config examples/linear/axisymmetric/runtime_etg.toml
+   # point CONFIG at the top of the script at cyclone.toml or runtime_etg.toml
+   python examples/utilities/runtime_from_toml.py
    python benchmarks/etg_linear_benchmark.py --outdir tools_out/etg
    python benchmarks/kbm_linear_comparison.py --output tools_out/kbm_linear_comparison.png
 
@@ -315,16 +315,14 @@ distributed linear RK2 loop:
 
 .. code-block:: bash
 
-   python examples/utilities/strong_scaling_sweep.py \
-     --ny 128 --nz 256 --nl 8 --nm 8 --steps 120 \
-     --devices 1,2,4,8 \
-     --backend cpu_parallel_large \
-     --out tools_out/strong_scaling_cpu.csv
+   python examples/utilities/strong_scaling_sweep.py
 
-On multi-GPU systems, point ``--devices`` at the available accelerators and
-update ``--backend`` accordingly (for example ``cuda_parallel_large``). The
-backend labels are just sweep names for the output table; they do not change
-the runtime physics or solver path.
+The grid, step count, device list, backend label, and output CSV are the
+``NY``/``NZ``/``NL``/``NM``/``STEPS``/``DEVICES``/``BACKEND``/``OUT``
+constants at the top of the script. On multi-GPU systems, point ``DEVICES``
+at the available accelerators and update ``BACKEND`` accordingly (for example
+``cuda_parallel_large``). The backend labels are just sweep names for the
+output table; they do not change the runtime physics or solver path.
 
 For the current opt-in Hermite-sharded electrostatic linear RHS path, use the
 engineering sweep helper:
@@ -349,8 +347,8 @@ To visualize nonlinear diagnostic histories from ``*.out.nc`` files:
 
 .. code-block:: bash
 
-   python examples/utilities/plot_runtime_outputs.py tools_out/cyclone_release.out.nc \
-     --out tools_out/cyclone_release_diagnostics.png
+   # point RUN_PATH (and optionally OUT) at the top of the script at the bundle
+   python examples/utilities/plot_runtime_outputs.py
 
 Geometry examples
 -----------------
@@ -536,7 +534,7 @@ development diagnostics only:
    python examples/theory_and_demos/reduced_stellarator_itg/stellarator_itg_quasilinear_flux_optimization.py
    python examples/theory_and_demos/reduced_stellarator_itg/stellarator_itg_nonlinear_heat_flux_optimization.py
    python examples/theory_and_demos/reduced_stellarator_itg/compare_stellarator_itg_optimizations.py
-   python examples/theory_and_demos/reduced_stellarator_itg/stellarator_itg_portfolio_gate.py --finite-difference-workers 2
+   python examples/theory_and_demos/reduced_stellarator_itg/stellarator_itg_portfolio_gate.py
 
 The portfolio gate writes JSON/PNG/PDF artifacts and checks scalar plus
 row-wise AD/finite-difference agreement for the same surface/alpha/``k_y``
@@ -600,7 +598,7 @@ Full-GK ETG nonlinear pilot
 
 .. code-block:: bash
 
-   python examples/nonlinear/axisymmetric/etg_runtime_nonlinear.py --steps 200
+   python examples/nonlinear/axisymmetric/etg_runtime_nonlinear.py  # set STEPS = 200 for the short window
    JAX_ENABLE_X64=1 gkx examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml --steps 200
 
 This is the full-GK two-species ETG nonlinear pilot lane. The shipped

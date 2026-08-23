@@ -2,12 +2,16 @@
 
 This demo keeps the production linear solve matrix-free in normal use, but
 builds a tiny dense RHS fixture so the isolated-branch implicit sensitivity
-formula can be checked against central finite differences.
+formula can be checked against central finite differences.  It writes a JSON
+report and a four-panel figure to ``OUTDIR`` and prints the report; the fixture
+is tiny, so the run takes well under a minute.
+
+``run_demo`` is imported by the integration tests, so the run itself stays
+under the ``__main__`` guard.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
 
@@ -248,14 +252,9 @@ def run_demo(*, outdir: Path, plot: bool = True, write_files: bool = True) -> di
     return report
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--outdir", type=Path, default=Path("docs/_static"))
-    parser.add_argument("--no-plot", action="store_true", help="Skip PNG/PDF figure generation")
-    args = parser.parse_args()
-    report = run_demo(outdir=args.outdir, plot=not args.no_plot, write_files=True)
-    print(json.dumps(report, indent=2, sort_keys=True))
-
+OUTDIR = Path("docs/_static")  # where the JSON report and figure are written
+PLOT = True  # False skips PNG/PDF figure generation
 
 if __name__ == "__main__":
-    main()
+    report = run_demo(outdir=OUTDIR, plot=PLOT, write_files=True)
+    print(json.dumps(report, indent=2, sort_keys=True))

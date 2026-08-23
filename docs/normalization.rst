@@ -27,8 +27,8 @@ This is the single source of truth for case defaults:
      - ``none``
    * - ``etg``
      - ``1.0``
-     - ``0.4``
-     - ``0.8``
+     - ``1.0``
+     - ``1.0``
      - ``none``
    * - ``kinetic`` (``kinetic_itg`` alias)
      - ``1.0``
@@ -43,8 +43,12 @@ This is the single source of truth for case defaults:
    * - ``kbm``
      - ``1.0``
      - ``1.0``
-     - ``0.8``
+     - ``1.0``
      - ``none``
+
+Every shipped case contract uses unit scale factors: no non-unity
+``omega_d_scale`` or ``omega_star_scale`` calibration factors ship with GKX
+(see ``src/gkx/diagnostics/normalization.py``).
 
 These contracts are consumed by benchmark constants for the stable script API
 (``CYCLONE_OMEGA_D_SCALE``, etc.), so existing scripts keep working while all
@@ -225,7 +229,7 @@ runtime schema therefore exposes light-weight diagnostic scale factors:
 - ``flux_scale``: multiplicative factor applied to the reported heat/particle
   fluxes (default ``1.0`` for the tracked comparison convention).
 - ``wphi_scale``: multiplicative factor applied to ``Wphi`` (default ``1.0``;
-  the Cyclone nonlinear comparison config uses ``1.155``).
+  no shipped configuration overrides it).
 
 These are reporting-only knobs; they do not alter the RHS/operator. They are
 intended to document exact comparison settings used for benchmark plots.

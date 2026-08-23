@@ -21,14 +21,15 @@ functional API. A final optional gate starts from a real ``vmex``
 ``VMECState`` and differentiates VMEC Fourier coefficients through
 both ``vmex -> booz_xform_jax -> GKX`` and the direct
 VMEC-tensor-to-GKX flux-tube contract.
+
+Writes the gate payload JSON and a summary figure to ``OUT_JSON``/``OUT_PNG``.
+A few minutes on a laptop CPU (longer when the optional vmex/booz gates run).
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
-import sys
 from typing import Any
 
 import jax
@@ -301,83 +302,75 @@ def make_figure(payload: dict[str, Any], out_png: Path) -> None:
     plt.close(fig)
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out-png", type=Path, default=DEFAULT_PNG)
-    parser.add_argument("--out-json", type=Path, default=DEFAULT_JSON)
-    args = parser.parse_args(argv)
+OUT_PNG = DEFAULT_PNG  # output path for the summary figure
+OUT_JSON = DEFAULT_JSON  # output path for the gate payload JSON
 
-    initial = jnp.asarray([0.035, 0.12], dtype=jnp.float64)
-    target_params = jnp.asarray([0.085, 0.34], dtype=jnp.float64)
-    final_params, history = _inverse_design(initial, target_params)
+initial = jnp.asarray([0.035, 0.12], dtype=jnp.float64)
+target_params = jnp.asarray([0.085, 0.34], dtype=jnp.float64)
+final_params, history = _inverse_design(initial, target_params)
 
-    sensitivity = geometry_sensitivity_report(_mapping_from_boundary_params, final_params, fd_step=2.0e-5)
-    target_obs = np.asarray(_observable_fn(target_params))[[1, 2]]
-    final_obs = np.asarray(_observable_fn(jnp.asarray(final_params)))[[1, 2]]
-    residual = final_obs - target_obs
-    jac = np.asarray(jax.jacfwd(lambda p: _observable_fn(p)[jnp.asarray([1, 2])])(jnp.asarray(final_params)))
-    uq = covariance_diagnostics(jac, residual, regularization=1.0e-8)
-    workflow_report = geometry_inverse_design_report(
-        _mapping_from_boundary_params,
-        initial,
-        jnp.asarray(target_obs),
-        observable_indices=(1, 2),
-        max_steps=8,
-        damping=2.0e-6,
-        fd_step=2.0e-5,
-    )
-    backend_info = discover_differentiable_geometry_backends()
-    vmec_boundary = vmec_boundary_aspect_sensitivity_report(jnp.asarray(final_params))
-    vmec_metric_tensor = vmex_metric_tensor_sensitivity_report()
-    vmec_field_line_tensor = vmex_field_line_tensor_sensitivity_report()
-    vmec_flux_tube = vmex_flux_tube_sensitivity_report()
-    vmec_flux_tube_array_parity = vmex_flux_tube_array_parity_report()
-    booz_spectral = booz_xform_spectral_sensitivity_report()
-    booz_flux_tube = booz_xform_flux_tube_sensitivity_report()
-    vmec_state_boozer_flux_tube = vmex_boozer_flux_tube_sensitivity_report()
+sensitivity = geometry_sensitivity_report(_mapping_from_boundary_params, final_params, fd_step=2.0e-5)
+target_obs = np.asarray(_observable_fn(target_params))[[1, 2]]
+final_obs = np.asarray(_observable_fn(jnp.asarray(final_params)))[[1, 2]]
+residual = final_obs - target_obs
+jac = np.asarray(jax.jacfwd(lambda p: _observable_fn(p)[jnp.asarray([1, 2])])(jnp.asarray(final_params)))
+uq = covariance_diagnostics(jac, residual, regularization=1.0e-8)
+workflow_report = geometry_inverse_design_report(
+    _mapping_from_boundary_params,
+    initial,
+    jnp.asarray(target_obs),
+    observable_indices=(1, 2),
+    max_steps=8,
+    damping=2.0e-6,
+    fd_step=2.0e-5,
+)
+backend_info = discover_differentiable_geometry_backends()
+vmec_boundary = vmec_boundary_aspect_sensitivity_report(jnp.asarray(final_params))
+vmec_metric_tensor = vmex_metric_tensor_sensitivity_report()
+vmec_field_line_tensor = vmex_field_line_tensor_sensitivity_report()
+vmec_flux_tube = vmex_flux_tube_sensitivity_report()
+vmec_flux_tube_array_parity = vmex_flux_tube_array_parity_report()
+booz_spectral = booz_xform_spectral_sensitivity_report()
+booz_flux_tube = booz_xform_flux_tube_sensitivity_report()
+vmec_state_boozer_flux_tube = vmex_boozer_flux_tube_sensitivity_report()
 
-    payload: dict[str, Any] = {
-        "backend_info": backend_info,
-        "booz_xform_jax_api_available": bool(backend_info.get("booz_xform_jax_api_available", False)),
-        "booz_xform_flux_tube": booz_flux_tube,
-        "booz_xform_spectral": booz_spectral,
-        "vmex_boozer_flux_tube": vmec_state_boozer_flux_tube,
-        "vmex_field_line_tensor": vmec_field_line_tensor,
-        "vmex_flux_tube": vmec_flux_tube,
-        "vmex_flux_tube_array_parity": vmec_flux_tube_array_parity,
-        "vmex_metric_tensor": vmec_metric_tensor,
-        "vmec_boundary": vmec_boundary,
-        "observable_names": list(geometry_observable_names()),
-        "initial_params": np.asarray(initial).tolist(),
-        "target_params": np.asarray(target_params).tolist(),
-        "inverse_final_params": np.asarray(final_params).tolist(),
-        "inverse_history": history,
-        "inverse_target_observables": target_obs.tolist(),
-        "inverse_final_observables": final_obs.tolist(),
-        "inverse_observable_residual": residual.tolist(),
-        "sensitivity": sensitivity,
-        "uq": uq,
-        "geometry_inverse_design_report": workflow_report,
-        "notes": (
-            "This is a bounded differentiable-geometry bridge validation. The high-fidelity VMEC/Boozer "
-            "pipeline must provide the same solver-ready field-line arrays; this artifact validates the "
-            "JAX tracing, AD-vs-FD sensitivities, inverse recovery, UQ machinery, and the first real "
-            "VMEC metric-tensor, VMEC field-line tensor, VMEC tensor-to-flux-tube, Boozer-spectrum-to-flux-tube, and "
-            "vmex-state-to-Boozer mapping gates at that contract boundary. The VMEC/EIK array-parity "
-            "audit is intentionally recorded separately because production stellarator transport gradients "
-            "must match the imported Boozer equal-arc metric and drift convention before promotion."
-        ),
-    }
+payload: dict[str, Any] = {
+    "backend_info": backend_info,
+    "booz_xform_jax_api_available": bool(backend_info.get("booz_xform_jax_api_available", False)),
+    "booz_xform_flux_tube": booz_flux_tube,
+    "booz_xform_spectral": booz_spectral,
+    "vmex_boozer_flux_tube": vmec_state_boozer_flux_tube,
+    "vmex_field_line_tensor": vmec_field_line_tensor,
+    "vmex_flux_tube": vmec_flux_tube,
+    "vmex_flux_tube_array_parity": vmec_flux_tube_array_parity,
+    "vmex_metric_tensor": vmec_metric_tensor,
+    "vmec_boundary": vmec_boundary,
+    "observable_names": list(geometry_observable_names()),
+    "initial_params": np.asarray(initial).tolist(),
+    "target_params": np.asarray(target_params).tolist(),
+    "inverse_final_params": np.asarray(final_params).tolist(),
+    "inverse_history": history,
+    "inverse_target_observables": target_obs.tolist(),
+    "inverse_final_observables": final_obs.tolist(),
+    "inverse_observable_residual": residual.tolist(),
+    "sensitivity": sensitivity,
+    "uq": uq,
+    "geometry_inverse_design_report": workflow_report,
+    "notes": (
+        "This is a bounded differentiable-geometry bridge validation. The high-fidelity VMEC/Boozer "
+        "pipeline must provide the same solver-ready field-line arrays; this artifact validates the "
+        "JAX tracing, AD-vs-FD sensitivities, inverse recovery, UQ machinery, and the first real "
+        "VMEC metric-tensor, VMEC field-line tensor, VMEC tensor-to-flux-tube, Boozer-spectrum-to-flux-tube, and "
+        "vmex-state-to-Boozer mapping gates at that contract boundary. The VMEC/EIK array-parity "
+        "audit is intentionally recorded separately because production stellarator transport gradients "
+        "must match the imported Boozer equal-arc metric and drift convention before promotion."
+    ),
+}
 
-    args.out_json.parent.mkdir(parents=True, exist_ok=True)
-    args.out_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    make_figure(payload, args.out_png)
-    print(f"Wrote {args.out_png}")
-    print(f"Wrote {args.out_json}")
-    print(f"max AD/FD relative error: {sensitivity['max_rel_ad_fd_error']:.3e}")
-    print(f"final residual norm: {history[-1]['residual_norm']:.3e}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+OUT_JSON.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+make_figure(payload, OUT_PNG)
+print(f"Wrote {OUT_PNG}")
+print(f"Wrote {OUT_JSON}")
+print(f"max AD/FD relative error: {sensitivity['max_rel_ad_fd_error']:.3e}")
+print(f"final residual norm: {history[-1]['residual_norm']:.3e}")

@@ -5,12 +5,12 @@ This script runs the same explicit reduced objective workflow used by the three
 single-objective examples, mirrors the VMEC-JAX ``QA_optimization.py`` teaching
 style, then assembles one publication-style panel with objective histories,
 nonlinear-window comparisons, reduced LCFS |B| surfaces, and Boozer-coordinate
-LCFS |B| maps.
+LCFS |B| maps.  Writes the comparison artifacts under ``OUT``.  Roughly half an
+hour on a laptop CPU (three optimizations run back to back).
 """
 
 from __future__ import annotations
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -21,16 +21,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _stellarator_itg_plotting import write_comparison_artifacts  # noqa: E402
 from _stellarator_itg_workflow import (  # noqa: E402
-    add_common_stellarator_itg_arguments,
     compare_scripted_stellarator_itg_objectives,
-    config_from_args,
 )
 from gkx import StellaratorITGOptimizationConfig  # noqa: E402
 
 
 OBJECTIVE_KINDS = ("growth", "quasilinear_flux", "nonlinear_heat_flux")
-OUTPUT_BASE = ROOT / "docs" / "_static" / "stellarator_itg_optimization_comparison"
+OUT = ROOT / "docs" / "_static" / "stellarator_itg_optimization_comparison"
 
+# Shared editable baseline; each objective applies its own conservative
+# default step count and learning rate through ``with_kind_defaults``.
 BASE_CONFIG = StellaratorITGOptimizationConfig(
     target_aspect=7.0,
     target_iota=0.41,
@@ -48,37 +48,19 @@ BASE_CONFIG = StellaratorITGOptimizationConfig(
     reference_temperature_gradient=6.0,
 )
 
+WORKERS = 1  # independent objective workers; preserves ordering
+PARALLEL_EXECUTOR = "thread"  # "thread" or "process"
+FINITE_DIFFERENCE_WORKERS = 1  # thread workers for the FD gradient-gate columns
+FINITE_DIFFERENCE_EXECUTOR = "thread"  # "thread" or "process"
 
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=OUTPUT_BASE, help="Output base path without extension.")
-    parser.add_argument("--workers", type=int, default=1, help="Independent objective workers; preserves ordering.")
-    parser.add_argument(
-        "--parallel-executor",
-        choices=("thread", "process"),
-        default="thread",
-        help="Executor for independent objective workers.",
-    )
-    add_common_stellarator_itg_arguments(parser)
-    return parser.parse_args()
-
-
-def main() -> None:
-    args = _parse_args()
-    # Shared editable baseline; each objective applies its own conservative
-    # default step count and learning rate unless overridden on the CLI.
-    cfg = config_from_args(args, base_config=BASE_CONFIG, objective_kind="growth")
-    payload = compare_scripted_stellarator_itg_objectives(
-        OBJECTIVE_KINDS,
-        config=cfg,
-        workers=args.workers,
-        parallel_executor=args.parallel_executor,
-        finite_difference_workers=args.finite_difference_workers,
-        finite_difference_executor=args.finite_difference_executor,
-    )
-    write_comparison_artifacts(payload, args.out)
-    print(f"comparison artifacts={args.out}")
-
-
-if __name__ == "__main__":
-    main()
+cfg = BASE_CONFIG.with_kind_defaults("growth")
+payload = compare_scripted_stellarator_itg_objectives(
+    OBJECTIVE_KINDS,
+    config=cfg,
+    workers=WORKERS,
+    parallel_executor=PARALLEL_EXECUTOR,
+    finite_difference_workers=FINITE_DIFFERENCE_WORKERS,
+    finite_difference_executor=FINITE_DIFFERENCE_EXECUTOR,
+)
+write_comparison_artifacts(payload, OUT)
+print(f"comparison artifacts={OUT}")

@@ -95,23 +95,37 @@ Tokamak Linear
      - residual level, damping rate, GAM envelope
      - Merlo et al. + analytical Rosenbluth-Hinton estimates where applicable
      - Open
-     - residual and damping must match literature/code-backed references before publication use; signed ``Phi_zonal_mode_kxt`` is now available. The current artifact is ``docs/_static/miller_zonal_response_pilot.png`` from ``tools/artifacts/build_zonal_flow_artifacts.py miller-panel`` using Merlo Case-III Table-III parameters, an initial density perturbation, a common pre-recurrence fit window ``t≈30``, separate positive/negative-extrema damping fits, and a Hilbert-phase frequency extraction on that same window. It gives ``residual≈0.192`` against a paper-scale target of about ``0.19``, ``ω_GAM R0 / v_i≈2.20`` against a figure read-off near ``2.24``, and ``γ_GAM R0 / v_i≈-0.176`` against a figure read-off near ``-0.17``. The remaining explicit follow-up item is the later finite-moment recurrence rather than the benchmark-scale Merlo gate
+     - residual and damping must match literature/code-backed references before publication use; signed ``Phi_zonal_mode_kxt`` is now available. The current artifact is ``docs/_static/miller_zonal_response_pilot.json`` from ``tools/artifacts/build_zonal_flow_artifacts.py miller-panel`` (the companion panel render is a regenerable figure written by the same command and is not tracked in git) using Merlo Case-III Table-III parameters, an initial density perturbation, a common pre-recurrence fit window ``t≈30``, separate positive/negative-extrema damping fits, and a Hilbert-phase frequency extraction on that same window. It gives ``residual≈0.192`` against a paper-scale target of about ``0.19``, ``ω_GAM R0 / v_i≈2.20`` against a figure read-off near ``2.24``, and ``γ_GAM R0 / v_i≈-0.176`` against a figure read-off near ``-0.17``. The remaining explicit follow-up item is the later finite-moment recurrence rather than the benchmark-scale Merlo gate
 
-Frozen artifact paths for the currently closed tokamak linear lanes:
+Frozen machine-readable evidence for the currently closed tokamak linear
+lanes:
 
-- ``docs/_static/cyclone_comparison.png``
-- ``docs/_static/etg_comparison.png``
-- ``docs/_static/kbm_comparison.png``
-- ``docs/_static/kbm_eigenfunction_overlap_summary.png``
+- ``docs/_static/cyclone_mismatch_table.csv`` with the scan tables
+  ``docs/_static/cyclone_scan_table_highres.csv`` and
+  ``docs/_static/cyclone_scan_table_lowres.csv``
+- ``docs/_static/etg_mismatch_table.csv`` and
+  ``docs/_static/etg_trend_table.csv``
+- ``docs/_static/kbm_mismatch_table.csv`` and
+  ``docs/_static/kbm_branch_gate_summary.json``
 - ``docs/_static/comparison/reference_modes/kbm_linear_reference_ky0p3000.npz``
-- ``docs/_static/benchmark_core_linear_atlas.png``
+
+The comparison panels previously frozen alongside these tables
+(``cyclone_comparison.png``, ``etg_comparison.png``, ``kbm_comparison.png``,
+``kbm_eigenfunction_overlap_summary.png``, and the shared
+``benchmark_core_linear_atlas.png``) are regenerable renders: the
+repository-slimming passes removed reproducible figures from git, and the
+atlas panel is recorded under the ``regenerate_on_demand`` action in
+``tools/release_artifact_manifest.toml`` with replay command
+``python tools/artifacts/make_benchmark_atlas.py``.
 
 Closed raw-overlay diagnostic artifacts for the KBM lane:
 
 - ``docs/_static/reference_modes/kbm_linear_gkx_ky0p3000.csv``
-- ``docs/_static/kbm_eigenfunction_reference_overlay_ky0p3000.png``
 - ``docs/_static/reference_modes/kbm_eigenfunction_reference_overlay_ky0p3000.json``
-- ``tools/artifacts/generate_linear_reference_overlays.py kbm``
+- ``tools/artifacts/generate_linear_reference_overlays.py kbm`` (also
+  regenerates the overlay render
+  ``kbm_eigenfunction_reference_overlay_ky0p3000.png`` on demand; the render
+  is not tracked in git)
 
 The refreshed bounded-cost extraction produces normalized overlap
 ``0.999985`` and relative ``L^2`` mismatch ``0.00721`` against the frozen GX
@@ -148,7 +162,9 @@ about ``1.1e-3``.
 The current materialized gate reports are indexed by
 ``tools/release/check_validation_coverage_manifest.py gate-index`` in
 ``docs/_static/validation_gate_index.json`` and
-``docs/_static/validation_gate_index.png``. Exploratory diagnostics can set
+``docs/_static/validation_gate_index.csv`` (the index panel render is
+regenerated on demand by the same command and is not tracked in git).
+Exploratory diagnostics can set
 ``gate_index_include=false`` so they remain documented but do not count as
 release blockers. The current release-gate index has ``17/18`` tracked reports
 passing. The sole open row is the quasilinear model-selection status, which is
@@ -186,12 +202,12 @@ Stellarator Linear
      - residual level, damping envelope
      - stella/GENE benchmark paper + zonal-flow literature
      - Open; time coverage closed, residual and late-envelope gates open
-     - a case-specific runtime/tool path exists through ``benchmarks/runtime_w7x_zonal_response_vmec.toml`` and ``tools/artifacts/build_w7x_zonal_validation_artifacts.py response-panel``. The runtime now supports the paper-facing ``init_field="phi"`` Gaussian potential initializer and writes both the older volume-weighted ``Phi_zonal_mode_kxt`` diagnostic and the W7-X line-average ``Phi_zonal_line_kxt`` observable. The frozen VMEC-backed artifact now lives at ``docs/_static/w7x_zonal_response_panel.png`` with metadata in ``docs/_static/w7x_zonal_response_panel.json`` and replayable traces in ``docs/_static/w7x_zonal_response_panel.traces.csv``; it uses line-first normalization, following the paper text. The stella/GENE Fig. 11 reference traces and inset residuals are digitized by ``tools/artifacts/build_w7x_zonal_reference_artifacts.py digitize`` into ``docs/_static/w7x_zonal_reference_digitized.csv`` and ``docs/_static/w7x_zonal_reference_digitized_residuals.csv``. ``tools/artifacts/build_w7x_zonal_reference_artifacts.py compare`` writes the residual/time-coverage/envelope artifact ``docs/_static/w7x_zonal_reference_compare.json`` and can now replay the comparison from the tracked combined trace CSV. ``tools/artifacts/build_w7x_zonal_validation_artifacts.py contract`` writes ``docs/_static/w7x_zonal_contract_audit.png`` as a publication-facing open-lane diagnostic, and ``tools/artifacts/build_w7x_zonal_validation_artifacts.py state-convention`` writes ``docs/_static/w7x_zonal_state_convention_audit.png`` to close the initializer/observable convention layer. The current GKX artifact enforces the intended test-4 ``k_x rho_i`` values ``[0.05, 0.07, 0.10, 0.30]`` with a periodic radial box for the ``k_y=0`` zonal run and reaches ``t≈3460`` for ``k_x rho_i=0.05`` and ``t≈1980`` for the other three wavelengths. Under the paper-facing normalization, residuals fail at ``k_x rho_i=0.07``, ``0.10``, and ``0.30`` and late envelopes fail for all wavelengths. The state-level audit closes the convention question with Gaussian-profile relative ``L2`` error ``1.85e-6`` and helper/manual observable agreement near ``2e-16``. The bounded recurrence sweep shows that ``Nl=12,Nm=48`` has the best no-closure trace error on ``t v_t/a <= 100`` and that constant-source closure suppresses the final Hermite tail but worsens the trace error. The remaining closure step is therefore a physical velocity-space recurrence / damping fix rather than a documentation or normalization change. Two provenance defects are open against this row. First, the deck shipped a CFL-unstable ``dt``: at ``Nm=32`` the runtime's own parallel-streaming bound for the equilibrium the deck loads is ``dt=0.0311``, the deck carried ``0.05``, and a run at the shipped values went non-finite at ``t=5.65`` of a requested ``60`` and then integrated ``NaN`` to the horizon. The deck now pins ``dt=0.02``/``steps=3000``, measured stable and time-step converged to ``t=60`` at both ends of the ``k_x`` sweep, and ``tests/release/test_release_gates.py`` now requires every fixed-step deck reaching the nonlinear runtime to record its measured ``dt``/CFL-bound margin. Second, the tracked artifact is not regenerable from the tracked inputs: its metadata records ``dt=0.1``/``35000`` steps, which is ``3.3x`` over that same bound and goes non-finite at ``t≈3.7`` in float64 and ``t≈2.5`` in float32 against the deck's default ``examples/vmec/wout_nfp3_QI_fixed_resolution_final.nc``. The ``t≈3460`` and ``t≈1980`` reaches above therefore came from an equilibrium the artifact does not name -- most likely the real W7-X high-mirror wout the deck's own comment asks for, whose ``|gradpar|`` would have to be about ``3x`` smaller to make ``dt=0.1`` stable. The panel must be regenerated with its equilibrium recorded before the reaches above can be replayed
+     - a case-specific runtime/tool path exists through ``benchmarks/runtime_w7x_zonal_response_vmec.toml`` and ``tools/artifacts/build_w7x_zonal_validation_artifacts.py response-panel``. The runtime now supports the paper-facing ``init_field="phi"`` Gaussian potential initializer and writes both the older volume-weighted ``Phi_zonal_mode_kxt`` diagnostic and the W7-X line-average ``Phi_zonal_line_kxt`` observable. The frozen VMEC-backed evidence now lives at ``docs/_static/w7x_zonal_response_panel.json`` with replayable traces in ``docs/_static/w7x_zonal_response_panel.traces.csv``; the panel render itself is regenerated on demand by the response-panel command and is not tracked in git. It uses line-first normalization, following the paper text. The stella/GENE Fig. 11 reference traces and inset residuals are digitized by ``tools/artifacts/build_w7x_zonal_reference_artifacts.py digitize`` into ``docs/_static/w7x_zonal_reference_digitized.csv`` and ``docs/_static/w7x_zonal_reference_digitized_residuals.csv``. ``tools/artifacts/build_w7x_zonal_reference_artifacts.py compare`` writes the residual/time-coverage/envelope artifact ``docs/_static/w7x_zonal_reference_compare.json`` and can now replay the comparison from the tracked combined trace CSV. ``tools/artifacts/build_w7x_zonal_validation_artifacts.py contract`` records the publication-facing open-lane diagnostic in ``docs/_static/w7x_zonal_contract_audit.json``, and ``tools/artifacts/build_w7x_zonal_validation_artifacts.py state-convention`` closes the initializer/observable convention layer in ``docs/_static/w7x_zonal_state_convention_audit.json``; both commands also regenerate their panel renders on demand (the renders are not tracked in git). The current GKX artifact enforces the intended test-4 ``k_x rho_i`` values ``[0.05, 0.07, 0.10, 0.30]`` with a periodic radial box for the ``k_y=0`` zonal run and reaches ``t≈3460`` for ``k_x rho_i=0.05`` and ``t≈1980`` for the other three wavelengths. Under the paper-facing normalization, residuals fail at ``k_x rho_i=0.07``, ``0.10``, and ``0.30`` and late envelopes fail for all wavelengths. The state-level audit closes the convention question with Gaussian-profile relative ``L2`` error ``1.85e-6`` and helper/manual observable agreement near ``2e-16``. The bounded recurrence sweep shows that ``Nl=12,Nm=48`` has the best no-closure trace error on ``t v_t/a <= 100`` and that constant-source closure suppresses the final Hermite tail but worsens the trace error. The remaining closure step is therefore a physical velocity-space recurrence / damping fix rather than a documentation or normalization change. Two provenance defects are open against this row. First, the deck shipped a CFL-unstable ``dt``: at ``Nm=32`` the runtime's own parallel-streaming bound for the equilibrium the deck loads is ``dt=0.0311``, the deck carried ``0.05``, and a run at the shipped values went non-finite at ``t=5.65`` of a requested ``60`` and then integrated ``NaN`` to the horizon. The deck now pins ``dt=0.02``/``steps=3000``, measured stable and time-step converged to ``t=60`` at both ends of the ``k_x`` sweep, and ``tests/release/test_release_gates.py`` now requires every fixed-step deck reaching the nonlinear runtime to record its measured ``dt``/CFL-bound margin. Second, the tracked artifact is not regenerable from the tracked inputs: its metadata records ``dt=0.1``/``35000`` steps, which is ``3.3x`` over that same bound and goes non-finite at ``t≈3.7`` in float64 and ``t≈2.5`` in float32 against the deck's default ``examples/vmec/wout_nfp3_QI_fixed_resolution_final.nc``. The ``t≈3460`` and ``t≈1980`` reaches above therefore came from an equilibrium the artifact does not name -- most likely the real W7-X high-mirror wout the deck's own comment asks for, whose ``|gradpar|`` would have to be about ``3x`` smaller to make ``dt=0.1`` stable. The panel must be regenerated with its equilibrium recorded before the reaches above can be replayed
    * - W7-X fluctuation spectra
      - resolved ``k_y`` spectra, ``k_x``-``k_y`` fluctuation power, and temporal spectra
      - W7-X nonlinear gate plus Doppler-reflectometry comparison conventions
      - Initial simulation diagnostic closed; experimental transfer-function validation deferred
-     - ``tools/artifacts/plot_w7x_fluctuation_spectrum_panel.py`` writes ``docs/_static/w7x_fluctuation_spectrum_panel.png`` with CSV/JSON/PDF companions from the gated W7-X ``t≈200`` nonlinear NetCDF output. The script refuses failed nonlinear gate summaries by default and marks the JSON with ``claim_level = "validated_nonlinear_simulation_spectrum_not_experimental_validation"`` and ``gate_index_include = false``. It therefore closes the reproducible spectrum-estimator layer while leaving density/zonal-frequency comparison through a Doppler-reflectometry transfer function as a future manuscript extension
+     - ``tools/artifacts/plot_w7x_fluctuation_spectrum_panel.py`` records the tracked evidence in ``docs/_static/w7x_fluctuation_spectrum_panel.json`` from the gated W7-X ``t≈200`` nonlinear NetCDF output; the panel render and its CSV/PDF companions are regenerated on demand by the same command and are not tracked in git. The script refuses failed nonlinear gate summaries by default and marks the JSON with ``claim_level = "validated_nonlinear_simulation_spectrum_not_experimental_validation"`` and ``gate_index_include = false``. It therefore closes the reproducible spectrum-estimator layer while leaving density/zonal-frequency comparison through a Doppler-reflectometry transfer function as a future manuscript extension
    * - HSX
      - ``gamma(k_y)``, ``omega(k_y)``
      - GX / internal frozen references
@@ -203,7 +219,8 @@ Stellarator Linear
      - Open
      - close heavy-electron EM lane before realistic-mass claims
 
-Frozen artifact paths for the currently closed stellarator linear lanes:
+Frozen machine-readable evidence for the currently closed stellarator linear
+lanes:
 
 - ``docs/_static/w7x_linear_t2_scan.csv``
 - ``docs/_static/hsx_linear_t2_scan.csv``
@@ -211,9 +228,12 @@ Frozen artifact paths for the currently closed stellarator linear lanes:
 - ``docs/_static/hsx_linear_t2_lastvalue.csv``
 - ``docs/_static/comparison/reference_modes/w7x_linear_reference_ky0p3000.npz``
 - ``docs/_static/reference_modes/w7x_linear_gkx_ky0p3000.csv``
-- ``docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png``
 - ``docs/_static/reference_modes/w7x_eigenfunction_reference_overlay_ky0p3000.json``
-- ``docs/_static/benchmark_core_linear_atlas.png``
+
+The companion renders (``w7x_eigenfunction_reference_overlay_ky0p3000.png``
+from ``tools/artifacts/generate_linear_reference_overlays.py w7x`` and the
+shared ``benchmark_core_linear_atlas.png`` under the ``regenerate_on_demand``
+manifest action) are regenerated on demand and are not tracked in git.
 
 For W7-X, the whole-window scan and the late-time last-value reduction tell the
 same story. For HSX, the whole-window ``mean_rel_gamma`` metric is kept as an
@@ -472,7 +492,7 @@ Nonlinear Validation
      - heat-flux windows, saturation trend
      - GX + W7-X benchmark conventions
      - Closed
-     - release gate ``<= 1e-1``; manuscript target tighter where feasible. The exact-state convention audit at ``docs/_static/w7x_exact_state_audit.png`` separately closes startup state, late geometry/field arrays, and scalar diagnostic reconstruction against GX dumps with maximum finite pointwise relative error ``4.62e-5`` under a ``1e-4`` gate and scalar diagnostics below ``1.8e-7``.
+     - release gate ``<= 1e-1``; manuscript target tighter where feasible. The exact-state convention audit at ``docs/_static/w7x_exact_state_audit.json`` (its panel render is regenerated on demand by ``tools/comparison/build_exact_state_audit.py report`` and is not tracked in git) separately closes startup state, late geometry/field arrays, and scalar diagnostic reconstruction against GX dumps with maximum finite pointwise relative error ``4.62e-5`` under a ``1e-4`` gate and scalar diagnostics below ``1.8e-7``.
    * - HSX
      - heat-flux windows, saturation trend
      - GX / internal frozen references
@@ -489,20 +509,27 @@ Nonlinear Validation
      - Deferred
      - keep out of the paper until branch identity and runtime cost are closed
 
-Frozen artifact paths for the currently closed nonlinear lanes:
-
-- ``docs/_static/nonlinear_cyclone_diag_compare_t400.png``
-- ``docs/_static/nonlinear_cyclone_miller_diag_compare_t122.png``
-- ``docs/_static/nonlinear_kbm_diag_compare_t400_stats.png``
-- ``docs/_static/nonlinear_w7x_diag_compare_t200.png``
-- ``docs/_static/hsx_nonlinear_compare_t50_true.png``
-- ``docs/_static/benchmark_core_nonlinear_atlas.png``
+Frozen machine-readable evidence for the currently closed nonlinear lanes is
+the set of gate-summary JSON files listed below. The comparison renders that
+previously accompanied them (``nonlinear_cyclone_diag_compare_t400.png``,
+``nonlinear_cyclone_miller_diag_compare_t122.png``,
+``nonlinear_kbm_diag_compare_t400_stats.png``,
+``nonlinear_w7x_diag_compare_t200.png``,
+``hsx_nonlinear_compare_t50_true.png``, and the shared
+``benchmark_core_nonlinear_atlas.png``) are regenerable renders removed from
+git by the repository-slimming passes; the atlas panel is recorded under the
+``regenerate_on_demand`` action in ``tools/release_artifact_manifest.toml``
+with replay command ``python tools/artifacts/make_benchmark_atlas.py``, and
+the per-case comparison figures are regenerated by
+``tools/comparison/make_reference_panels.py``.
 
 Machine-readable nonlinear window gates are now tracked for the first refreshed
 subset:
 
 
-The summary panel above is generated by
+The windowed-statistics summary panel (a regenerable render whose tracked
+metadata lives in ``docs/_static/nonlinear_window_statistics.json``) is
+generated by
 ``tools/artifacts/build_nonlinear_validation_panels.py window-statistics`` from the frozen gate-summary JSON
 files. It plots the gate statistic (windowed mean relative mismatch) and the
 maximum relative mismatch for each diagnostic, excluding exploratory summaries
@@ -603,8 +630,11 @@ as a promoted runtime predictor.
      - Baseline gate
    * - Electrostatic quasilinear weights and spectra
      - heat/particle weights, growth/frequency spectra, and channel metadata
-     - ``docs/_static/quasilinear_*_spectrum.*`` and
-       ``docs/_static/quasilinear_validated_calibration_inputs.json``
+     - ``docs/_static/quasilinear_*_spectrum_scan.quasilinear_spectrum.csv``,
+       ``docs/_static/quasilinear_*_spectrum_shape_gate.json``, and
+       ``docs/_static/quasilinear_validated_calibration_inputs.json`` (the
+       spectrum panel renders are regenerated on demand and not tracked in
+       git)
      - Closed as diagnostics
      - electrostatic channel validation and reproducible spectrum generation;
        this is not calibrated absolute-flux prediction
@@ -877,8 +907,10 @@ Parallelization Validation
 
 Independent ``k_y`` and ensemble parallelization is accepted only when a
 serial numerical-identity gate accompanies the timing data. The current closed
-artifact is ``docs/_static/parallel_ky_scan_gate.png`` with metadata in
-``docs/_static/parallel_ky_scan_gate.json``. It runs the real Cyclone linear
+artifact is ``docs/_static/parallel_ky_scan_gate.json`` (the companion panel
+render is regenerated on demand by
+``tools/artifacts/generate_parallel_identity_gate.py ky-scan`` and is not
+tracked in git). It runs the real Cyclone linear
 solver with ``ky_batch=1`` and a fixed-shape batched scan, then requires
 ``max_gamma_rel_error <= 1e-8`` and ``max_omega_abs_error <= 1e-8``. The
 observed speedup is reported as an engineering metric, not as the gate itself.
