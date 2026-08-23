@@ -10,7 +10,7 @@
         {
           "array_count": 0,
           "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-          "content_sha256": "111fd81afa2635624acff6510f4b3bc3576889b7a3f7a02d27fbaa4e53ab10fe",
+          "content_sha256": "e884e80dff9e789b0ac53d5f948df895ae5814be318bf1723307c3dab374c88a",
           "label": "Cyclone nonlinear transport",
           "passed": true,
           "path": "docs/_static/nonlinear_cyclone_gate_summary.json",
@@ -20,7 +20,7 @@
         {
           "array_count": 0,
           "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-          "content_sha256": "9167f43d8141769d884ac05159f69def12f9fcf42696c74cb3c66dd14a385755",
+          "content_sha256": "f11f261e19cf60ab8d8a0402d8a6db2c8c98ff74c32e11d41c12c1896007f0d2",
           "label": "Cyclone Miller nonlinear transport",
           "passed": true,
           "path": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
@@ -40,7 +40,7 @@
         {
           "array_count": 0,
           "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-          "content_sha256": "ab66d23fddbe19e8a8ca3700cd30d476514301da3d156c7bfa71a80f37b24b00",
+          "content_sha256": "c7c7c119484deb30b239c4bae7a1b8b190058dc712c0e475b50cba833354887b",
           "label": "KBM nonlinear transport",
           "passed": true,
           "path": "docs/_static/nonlinear_kbm_gate_summary.json",
@@ -50,7 +50,7 @@
         {
           "array_count": 0,
           "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-          "content_sha256": "813ccc5be4916cc1678c2b5382784d6d276e8a03e05f9796ab1be3b3305f4f85",
+          "content_sha256": "aac519ddc860eded8a3af86d088e99ebecf8c46bf020409a2a1ab97d5cede239",
           "label": "W7-X nonlinear transport",
           "passed": true,
           "path": "docs/_static/nonlinear_w7x_gate_summary.json",
@@ -60,7 +60,7 @@
         {
           "array_count": 0,
           "array_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-          "content_sha256": "ed9518e3f9c20c05605a1b392d32b676bd16bc7fe0eb2be840cb5622ee8f1d09",
+          "content_sha256": "7250a774e0e7e5815cc33ffbdd17ef1b09cd458439dee5119027e71c9dc684f1",
           "label": "HSX nonlinear transport",
           "passed": true,
           "path": "docs/_static/nonlinear_hsx_gate_summary.json",
@@ -89,18 +89,18 @@
         },
         {
           "array_count": 145,
-          "array_sha256": "a23b1cea554c79e8172d4688d7c242c5a81d30d966bf94bc711c233112a7fc06",
-          "content_sha256": "1c4585575c72f19cd19dabf146a06a1a0a1a1c8804686220e6faa575ea375aa3",
+          "array_sha256": "e8ccc2a36380e8dfedf78a412044d7b721732667c0343120c8a04374949fe702",
+          "content_sha256": "b53f172178d5334ecbfb66cabb29cf60cc45578eace4939bce3e5b8cbdc4511c",
           "label": "VMEC/Boozer geometry bridge",
           "passed": true,
           "path": "docs/_static/differentiable_geometry_bridge.json",
           "scalar_count": 418,
-          "scalar_sha256": "941b3d2517439a4bde6ab7755bd72142689c27e4420286bb7c62c554ddba83d6"
+          "scalar_sha256": "81bc9b5145317f64ec610ced9fd19d49268f0a42065b6054756fa8467d282557"
         },
         {
           "array_count": 5,
           "array_sha256": "da0405020935abbf2863591449488a7aa5b9e5cc83f56c59fcb6c899f2469c7e",
-          "content_sha256": "7981d19a31a25b93f3aa843f27b0870dfd766ef1f4677d7ef699910adf1991c1",
+          "content_sha256": "f90541506f04d633cdb74c970a86ab883b5d78ec01f0da604e3af726c63623fa",
           "label": "solver objective derivatives",
           "passed": true,
           "path": "docs/_static/solver_objective_gradient_gate.json",
@@ -110,7 +110,7 @@
         {
           "array_count": 24,
           "array_sha256": "786a6efb9d6d8f05376bebfbd6a39976c39ad3fb843ab068916cc0d8a7c23607",
-          "content_sha256": "1029086e191a9d54f57c5ded44a47a3ca0ed33b15c30ca75fed06d9b437f4f4b",
+          "content_sha256": "608296c1e0a98ae5cc14b623b351b2b96932e3c5908d89832e81bfa46837ea55",
           "label": "stellarator ITG objective portfolio",
           "passed": true,
           "path": "docs/_static/stellarator_itg_portfolio_gate.json",
@@ -118,14 +118,14 @@
           "scalar_sha256": "07d1a0630b426b0c5c7861ae5bd667e527f79b89df042926788cf67b96bc5564"
         },
         {
-          "array_count": 5,
-          "array_sha256": "0e0356407780c89ad32d6147d726954f4131af1605978148bd77f0b36bab6523",
-          "content_sha256": "efa5bcab21450cf3fcd1387070216ab1ef3f542ce9365ca195b5a1341321a568",
+          "array_count": 1,
+          "array_sha256": "4c3909ea73348e3f1ee63269c74dc9c9286d741551e6622bd6970e1bda925faf",
+          "content_sha256": "fdbe3e1b82380b5b4e58a6f2bb5d4f91ad57143dfc08d99ed6e2651c8701784c",
           "label": "nonlinear optimization claim guard",
           "passed": true,
           "path": "docs/_static/production_nonlinear_optimization_guard.json",
-          "scalar_count": 90,
-          "scalar_sha256": "c2875a13c5cd0dbdfa0e001d6cc5cf57f6ccfa85e7b09c50911c84e05596a504"
+          "scalar_count": 126,
+          "scalar_sha256": "8429124196d4328430cc08b36d21dc39219ba48441ee1befa733f3a12dfd4cc0"
         }
       ]
     },
@@ -219,14 +219,15 @@
               "matched_qa_no_ess_uncertainty_separation_sigma": 7.819308425110687,
               "n_objectives": 3,
               "production_nonlinear_optimization_guard_safe": true,
-              "production_nonlinear_optimization_promoted": true,
-              "production_nonlinear_optimized_equilibrium_ensembles": 4,
+              "production_nonlinear_optimization_promoted": false,
+              "production_nonlinear_optimized_equilibrium_ensembles": 0,
+              "production_nonlinear_promotion_evidence_complete": false,
               "production_nonlinear_replicated_holdout_ensembles": 3,
               "weighted_residual_uq_gate_passed": true,
               "worst_reduction_factor": 0.14944986630532714
             },
             "lane": "Reduced differentiable stellarator ITG optimization",
-            "next_action": "Use the UQ, production-guard, replicated-ensemble, and matched-audit artifacts as the current optimization-evidence figures. Do not use the reduced synthetic surface comparison as the solved-geometry optimization figure. The matched QA no-ESS to optimized QA/ESS audit is closed, but nonlinear-window VMEC/Boozer/GK gradients and matched audits across broader geometry families remain future requirements before claiming broad end-to-end stellarator heat-flux optimization.",
+            "next_action": "Keep the UQ and derivative artifacts as reduced-objective evidence. Re-run optimized and matched transport with hashed raw outputs, observed windows, per-trace stationarity, autocorrelation-aware uncertainty, resolution convergence, and resolved spectra before production promotion.",
             "primary_artifacts": [
               "docs/_static/stellarator_itg_optimization_uq.json",
               "docs/_static/stellarator_itg_optimization_uq.png",
@@ -256,10 +257,11 @@
               "multi_equilibrium_gradient_max_rel_error": 0.026774412331418387,
               "multi_equilibrium_reduced_nonlinear_window_gradient_gate": true,
               "nonlinear_transport_average_gate": false,
-              "optimized_equilibrium_replicated_transport_ensembles": 4,
+              "optimized_equilibrium_replicated_transport_ensembles": 0,
               "production_nonlinear_observable_fd_path_gate": false,
               "production_nonlinear_optimization_guard_safe": true,
-              "production_nonlinear_optimization_promoted": true,
+              "production_nonlinear_optimization_promoted": false,
+              "production_nonlinear_promotion_evidence_complete": false,
               "production_nonlinear_window_gradient_gate": false,
               "quasilinear_weight_gradient_gate": true,
               "reduced_nonlinear_window_gradient_gate": true,
@@ -285,7 +287,7 @@
               "vmec_boozer_startup_nonlinear_response_fraction": 0.04008881189273438
             },
             "lane": "Production solver-objective geometry gradients",
-            "next_action": "Full VMEC/Boozer eigenfrequency, quasilinear, and multi-equilibrium reduced nonlinear-window estimator gradients are closed. The compact nonlinear FD audits are tracked only as startup plumbing checks; they do not validate transport heat-flux averages. The selected optimized-equilibrium long-window audit is closed; VMEC/Boozer turbulence gradients, local-gradient conditioning, and broader multi-surface baseline-to-optimized audits remain required before full nonlinear stellarator-optimization claims.",
+            "next_action": "Full VMEC/Boozer eigenfrequency, quasilinear, and multi-equilibrium reduced nonlinear-window estimator gradients are closed. Compact nonlinear FD audits remain startup plumbing checks. Re-run optimized and matched transport under the auditable promotion contract before any full nonlinear stellarator-optimization claim.",
             "primary_artifacts": [
               "docs/_static/solver_objective_gradient_gate.json",
               "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
@@ -362,6 +364,13 @@
         ],
         "performance_row_count": 30,
         "public_api_count": 362,
+        "representative_performance_refresh": {
+          "correctness_passed": true,
+          "cpu_rows_admitted": 2,
+          "gpu_rows_admitted": 0,
+          "gpu_rows_blocked": 2,
+          "performance_claim_updated": false
+        },
         "status_counts": {
           "closed": 5,
           "deferred": 2
@@ -442,10 +451,9 @@
   "project": {
     "name": "gkx",
     "scripts": [
-      "gkx",
       "gkx"
     ],
-    "version": "1.7.0"
+    "version": "1.7.1"
   },
   "release_target": {
     "status_source": "benchmarks/references/gkx_1_7_release_contract.json:release_lanes",
@@ -463,7 +471,6 @@
     "tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only",
     "tools/release/check_quasilinear_promotion_guardrails.py",
     "tools/release/check_vmec_boozer_gates.py differentiability-claim",
-    "tools/artifacts/build_parallelization_completion_status.py",
     "tools/release/check_release_readiness.py technical-status",
     "tools/release/check_release_readiness.py",
     "rm -rf build dist"
@@ -490,7 +497,6 @@
     "tools/release/check_parallel_scaling_artifacts.py",
     "tools/release/check_quasilinear_promotion_guardrails.py",
     "tools/release/check_vmec_boozer_gates.py differentiability-claim",
-    "tools/artifacts/build_parallelization_completion_status.py",
     "tools/release/check_release_readiness.py technical-status",
     "tools/release/check_release_readiness.py",
     "rm -rf build dist"
@@ -532,9 +538,9 @@
     "checked_pypi": false,
     "duplicate_on_pypi": false,
     "package": "gkx",
-    "project_version": "1.7.0",
+    "project_version": "1.7.1",
     "require_tag": false,
-    "source_version": "1.7.0",
+    "source_version": "1.7.1",
     "tag": null
   }
 }
