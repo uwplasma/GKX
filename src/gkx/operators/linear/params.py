@@ -216,6 +216,21 @@ class LinearParams:
         return cls(*children)
 
 
+_SPECIES_PARAM_NAMES = (
+    "charge_sign",
+    "density",
+    "mass",
+    "temp",
+    "vth",
+    "rho",
+    "fprim",
+    "tprim",
+    "tprim_e",
+    "nu",
+    "tz",
+)
+
+
 def linear_params_for_geometry(geometry, **overrides) -> LinearParams:
     r"""Build :class:`LinearParams` whose parallel scale matches the geometry.
 
