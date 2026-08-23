@@ -1396,6 +1396,8 @@ unverified rather than silently promoted.
 | PERF-3 | P2 | open | validate and raise the static CFL frequency bound (fixed dt=0.1 ran stably where the bound imposes 0.0846) | saturated-phase stability campaign across the scan cases; ~15% fewer steps |
 | SLIM-2 | P1 | open | remove the Deps-injection layer (14 records, 212 _fn= sites); direct imports + monkeypatch in tests | ~1.5-2.5k lines removed; no JIT/AD surface touched; full suite green |
 | SLIM-3 | P1 | open | evict research-campaign governance (~13k lines: admission/guard/evidence/report modules) from the installable package to tools/campaigns/ | package under 190 files / 90k lines; api registry pruned |
+| PERF-4 | P1 | open | CPU shard_map aborts in production nonlinear runs: XLA CPU `fft_thunk.cc:167 RET_CHECK IsMonotonicWithDim0Major` mid-chunk at 48^2 and 96^2 (2 and 4 forced host devices). The routing/identity gates pass on 4 CPU devices, so a blanket CPU ban is wrong -- characterize the layout trigger, then either force a monotonic layout at the sharded FFT call or gate exactly the failing shapes | reproducer promoted to a test; the 4-device CPU CI lane stays green |
+| PERF-5 | P2 | open | reuse the compiled chunk scan across chunks (`_run_chunked_diagnostics` re-traces per 128-step chunk: ~0.3-0.5 s trace + ~0.4 s deserialize on CPU, ~23 s compile on GPU). The existing `prepare_nonlinear_explicit_diagnostics` API does NOT satisfy byte-identity (outer-jit fusion differences plus a cfl_scales gap), so the route is hoisting the closure out of the loop | bitwise-identical traces and final state vs the current path |
 
 ## Reproducibility records
 
