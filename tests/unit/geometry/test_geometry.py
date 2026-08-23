@@ -1,5 +1,7 @@
 """Geometry helper tests."""
 
+from dataclasses import replace
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -335,7 +337,12 @@ def test_ensure_flux_tube_geometry_data_trims_closed_theta_interval():
     geom = SAlphaGeometry(q=1.7, s_hat=0.9, epsilon=0.1)
     theta_closed = jnp.linspace(-jnp.pi, jnp.pi, 17)
     theta_solver = theta_closed[:-1]
-    sampled = sample_flux_tube_geometry(geom, theta_closed)
+    sampled = replace(
+        sample_flux_tube_geometry(geom, theta_closed),
+        cylindrical_R_profile=np.linspace(4.0, 5.0, theta_closed.size),
+        cylindrical_Z_profile=np.linspace(-1.0, 1.0, theta_closed.size),
+        toroidal_angle_profile=np.linspace(-2.0, 2.0, theta_closed.size),
+    )
 
     ensured = ensure_flux_tube_geometry_data(sampled, theta_solver)
 
@@ -343,6 +350,7 @@ def test_ensure_flux_tube_geometry_data_trims_closed_theta_interval():
     assert ensured.theta.shape == theta_solver.shape
     assert jnp.allclose(ensured.theta, theta_solver)
     assert jnp.allclose(ensured.bmag_profile, sampled.bmag_profile[:-1])
+    np.testing.assert_allclose(ensured.cylindrical_R_profile, sampled.cylindrical_R_profile[:-1])
 
 
 def test_sampled_geometry_rejects_mismatched_theta_and_trim_too_short() -> None:
@@ -478,6 +486,10 @@ def test_load_imported_geometry_netcdf_reads_root_level_eik_layout(tmp_path):
         root.createVariable("scale", "f8", ())[:] = 2.0
         root.createVariable("nfp", "f8", ())[:] = 5.0
         root.createVariable("alpha", "f8", ())[:] = 0.2
+        root.createVariable("Rplot", "f8", ("z",))[:] = np.linspace(4.0, 6.0, theta.size)
+        root.createVariable("Zplot", "f8", ("z",))[:] = np.linspace(-1.0, 1.0, theta.size)
+        root.createVariable("theta_PEST", "f8", ("z",))[:] = theta + 0.1
+        root.createVariable("zeta_center", "f8", ())[:] = 0.3
 
     loaded = load_imported_geometry_netcdf(path)
 
@@ -493,6 +505,8 @@ def test_load_imported_geometry_netcdf_reads_root_level_eik_layout(tmp_path):
     assert loaded.theta_scale == pytest.approx(2.0)
     assert loaded.nfp == 5
     assert loaded.R0 == pytest.approx(5.0)
+    np.testing.assert_allclose(loaded.cylindrical_R_profile, np.linspace(4.0, 6.0, theta.size))
+    np.testing.assert_allclose(loaded.toroidal_angle_profile, 0.3 + 1.7 * (theta + 0.1))
     assert np.all(np.isfinite(np.asarray(loaded.bgrad_profile)))
 
 
