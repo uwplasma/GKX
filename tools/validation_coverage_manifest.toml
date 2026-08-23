@@ -108,6 +108,7 @@ owned_modules = [
   "gkx.solvers.time.explicit_steps",
   "gkx.workflows.runtime.toml",
   "gkx.workflows.runtime.wout",
+  "gkx.workflows.runtime.resolution",
   "gkx.utils.tomlcompat",
   "gkx.utils.compilation_cache",
   "gkx.solvers.time.runners",
@@ -145,6 +146,7 @@ fast_tests = [
   "tests/integration/runtime/test_runtime_runner.py",
   "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/integration/runtime/test_restart.py",
+  "tests/integration/runtime/test_resolution_estimator.py",
 ]
 artifact_paths = [
   "docs/_static/validation_gate_index.json",
