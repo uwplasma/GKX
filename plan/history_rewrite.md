@@ -48,8 +48,9 @@ generated and auxiliary blobs that cannot coexist with a sub-10-MiB clone.
 - Rebase the 31 open PR heads (#74, #82--#105, and #107--#112) after
   the final rewrite.
   PR #82 remains open and unmerged as the living roadmap.
-- Delete merged topic heads only after their exact old tips appear in the
-  published ref map and complete bundle.
+- Delete merged or closed topic heads only after their exact old names and tips
+  appear with a `DELETE_AFTER_BUNDLE` disposition in the published ref map and
+  the re-frozen complete bundle contains them.
 
 Historical `docs`, `tests`, `tools`, `examples`, `benchmarks`, `scripts`,
 `plan`, and NetCDF blobs are removed from hosted history. Their current compact
@@ -379,3 +380,25 @@ commits, and 17,947 objects. Its pack is 8,662,536 bytes, pack plus index is
 9,166,124 bytes, and complete `.git` file sum is 9,501,911 bytes. Strict
 `fsck`, no alternates, and zero reachable AI-attribution matches pass, leaving
 498,089 bytes below the strict decimal 10-MB gate. No public history moved.
+
+A full hosted-ref refresh found 81 branch heads and 28 tags, not only the 33
+heads intentionally retained by the rewrite candidate. All 31 open PR heads
+are retained; the other retained heads are `main` and the temporary
+`fix/main-ci-mypy` dependency base. The 48 omitted heads belong to 46 merged
+PRs and two closed, unmerged PRs (#25 and duplicate #106). They are therefore
+deletion candidates, not silently absent refs. The rehearsal disposition map
+must contain all 109 head/tag names and old tips: 61 `REWRITE` rows and 48
+`DELETE_AFTER_BUNDLE` rows. GitHub also advertises 141 server-managed pull refs;
+the final mirror and lossless bundle must capture them even though the cutover
+does not update them directly.
+
+Repeated roadmap-log replays had also made the private size gate depend on
+incremental documentation history. Replaced that private branch only with one
+source-neutral snapshot parented by rewritten `main`; all 20 public roadmap
+blobs at `1f615f41` remain exact, while the recovery bundle retains the public
+incremental history. Immediately before this record, snapshot `c14ec1f9`
+reduces the fresh clone by 47 commits and 249 objects. The clone has 34 remote
+refs, 28 tags, 3,451 commits, and 17,709 objects: pack 8,559,380 bytes, pack
+plus index 9,056,304 bytes, and complete `.git` 9,605,735 bytes. Strict `fsck`,
+no alternates, and zero AI-attribution hits pass, leaving 394,265 bytes of
+strict decimal margin. No public history moved.

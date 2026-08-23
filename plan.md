@@ -1026,6 +1026,24 @@ source files, removes 49 more lines, and brings the 12-cut installed tree to
 release tests, Ruff, and mypy on those ten files pass in that topology; GitHub
 CI is pending.
 
+The hosted-ref audit now covers deletion as well as retention. GitHub
+advertises 81 branch heads and 28 tags. The candidate retains `main`, every one
+of the 31 open PR heads, and the temporary #81 dependency base; a complete
+109-row disposition ledger marks those 61 head/tag refs `REWRITE` and the 48
+remaining topic heads `DELETE_AFTER_BUNDLE`. The latter are 46 merged heads
+plus closed PRs #25 and #106. GitHub's 141 server-managed pull refs must also be
+captured by the final lossless mirror bundle. No ref may disappear from the
+ledger or recovery bundle merely because its PR is closed.
+
+The private roadmap is now represented by one source-neutral snapshot rather
+than repeated log snapshots. Its 20 roadmap blobs exactly match public
+`1f615f41`; the incremental public history remains in the recovery bundle. The
+pre-record fresh clone has 3,451 commits and 17,709 objects: pack 8,559,380
+bytes, pack plus index 9,056,304 bytes, and complete `.git` 9,605,735 bytes.
+Strict `fsck`, no alternates, and the attribution scan pass, leaving 394,265
+bytes below the decimal 10-MB gate. This closes the discovered ref-accounting
+gap in the rehearsal protocol, not the final freeze or network cutover gate.
+
 The rewrite maps only the three exact old PNG blobs to those final compact
 blobs. PR #104's generator/source/image/physics-test blobs and aggregate text
 patch are exact; its large release-gate file differs only in the intentional

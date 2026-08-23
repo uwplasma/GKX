@@ -1562,3 +1562,19 @@
   at 206 files and falls from 96,465 to 96,193 lines (-272). All 398 directly
   changed-file x64 tests, 117 release tests, Ruff, mypy on the ten changed
   source files, and `git diff --check` pass.
+- Refreshed the complete hosted head/tag inventory. GitHub has 81 heads and 28
+  tags; the earlier candidate/map intentionally retained 33 heads and all tags
+  but did not state dispositions for the other 48 heads. All 31 open PR heads
+  are retained. Classified the remainder as 46 merged heads and two closed,
+  unmerged heads (#25 and duplicate #106), and changed the rehearsal map schema
+  to enumerate all 109 refs as 61 `REWRITE` plus 48
+  `DELETE_AFTER_BUNDLE`. The final lossless mirror bundle must additionally
+  capture all 141 advertised pull refs.
+- Collapsed only the private roadmap replay chain to one source-neutral
+  snapshot `c14ec1f9` parented by rewritten `main`. All 20 roadmap blobs match
+  public `1f615f41` exactly; public incremental history remains reserved for
+  the lossless bundle. A fresh no-local clone has 34 remote refs, 28 tags,
+  3,451 commits, and 17,709 objects: pack 8,559,380 bytes, pack plus index
+  9,056,304 bytes, and complete `.git` 9,605,735 bytes. Strict `fsck`, zero
+  alternates, and zero AI-attribution hits pass, leaving 394,265 bytes of
+  decimal margin. No public history moved.
