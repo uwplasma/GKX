@@ -58,7 +58,10 @@ release = [
 dev = [
   "pytest",
   "pytest-cov",
-  "ruff",
+  # Pinned: ruff's default rule set is not stable across releases, so an
+  # unpinned dev install lints this tree against whatever rules the newest
+  # ruff happens to default to. See [tool.ruff.lint] below.
+  "ruff==0.16.4",
   "mypy",
   "mpmath",
   "gmpy2",
@@ -95,6 +98,16 @@ markers = [
   "integration: broader end-to-end or workflow tests",
   "slow: long-running literature or artifact validation tests kept out of bounded release coverage shards",
 ]
+
+[tool.ruff.lint]
+# State the rule set explicitly instead of inheriting ruff's default, which is
+# not stable across ruff releases: ruff <= 0.15 defaulted to exactly the
+# selection below, while ruff 0.16 widened the default and reports 1371
+# findings on this tree (`ruff check . --statistics`: 357 I001, 195 RUF100,
+# 92 UP035, ...) that the code has never been written against. This selection
+# is what the source is written to and is clean on both ruff 0.15.12 and the
+# pinned ruff 0.16.4; widening it is a deliberate, separate change.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["E402"]
