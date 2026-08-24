@@ -459,8 +459,9 @@ Completed extractions:
   Explicit finite comparison metrics take precedence over fallback
   statistics, including a physical zero; zero uncertainty separation can
   therefore never be replaced by a stale positive fallback and accidentally
-  promote an audit. Replicate-spread diagnostics now live in
-  ``diagnostics/nonlinear_replicates.py`` and stage ensemble row normalization,
+  promote an audit. Replicate-spread diagnostics live outside the
+  installable package in ``tools/campaigns/nonlinear_replicates.py`` and stage
+  ensemble row normalization,
   high/low variant selection, state classification, replicate-row packing, and
   summary assembly. The same owner builds seed/timestep artifact-readiness
   manifests, while ``diagnostics/transport_windows.py`` owns individual-window
@@ -469,8 +470,8 @@ Completed extractions:
 - quasilinear nonlinear-window convergence metadata is consolidated in
   ``diagnostics/transport_windows.py`` for statistics, CSV/summary IO,
   promotion readiness, and ensemble uncertainty; replicate readiness belongs
-  to ``diagnostics/nonlinear_replicates.py``. The public API re-exports the
-  documented transport-window helpers directly from these diagnostics owners.
+  to ``tools/campaigns/nonlinear_replicates.py``. The public API re-exports the
+  documented transport-window helpers directly from the diagnostics owners.
   Persisted report, gate, and row pass flags must be explicit booleans; strings
   and numeric lookalikes fail closed. The statistics owner stages validated
   late-window selection, finite-sample counts, drift/terminal-window metrics,
@@ -603,16 +604,16 @@ Completed extractions:
 - nonlinear turbulence-gradient paired-seed statistics, control-variate
   construction, uncertainty propagation, and independent control-mean gates
   live in ``diagnostics/nonlinear_gradient_statistics.py`` as pure reusable
-  functions. Historical candidate selection and launch policy remains in a
-  temporary campaign owner pending deletion; it no longer owns scientific
-  uncertainty arithmetic.
+  functions. Candidate selection and launch policy is campaign governance and
+  now lives in ``tools/campaigns/``; it never owned scientific uncertainty
+  arithmetic.
 - nonlinear turbulence-gradient evidence scope markers, acceptance config
   dataclasses, JSON-safe parsing, finite-difference conditioning gates, and
   artifact classification live in ``diagnostics/metadata.py``. Replicated
-  window summaries live in ``diagnostics/nonlinear_replicates.py`` and central
-  finite-difference transport response/uncertainty lives in
+  window summaries live in ``tools/campaigns/nonlinear_replicates.py`` and
+  central finite-difference transport response/uncertainty lives in
   ``diagnostics/transport.py``. The compact
-  ``diagnostics/nonlinear_gradient_evidence.py`` facade owns bracket and
+  ``tools/campaigns/nonlinear_gradient_evidence.py`` facade owns bracket and
   candidate report orchestration plus production evidence-gap reports. It has
   one final export contract; ``diagnostics/metadata.py`` and
   ``diagnostics/transport.py`` likewise each have one complete owner contract

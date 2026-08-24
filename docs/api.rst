@@ -468,23 +468,10 @@ Runtime Execution Dispatch
    :members:
    :private-members:
 
-Nonlinear Replicate Diagnostics
--------------------------------
-
-.. automodule:: gkx.diagnostics.nonlinear_replicates
-   :members:
-
 Nonlinear Transport Optimization Diagnostics
 --------------------------------------------
 
 .. automodule:: gkx.diagnostics.nonlinear_transport_optimization
-   :members:
-   :private-members:
-
-Nonlinear Gradient Evidence Diagnostics
----------------------------------------
-
-.. automodule:: gkx.diagnostics.nonlinear_gradient_evidence
    :members:
    :private-members:
 

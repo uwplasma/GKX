@@ -1117,39 +1117,6 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.diagnostics.nonlinear_replicates"
-path = "src/gkx/diagnostics/nonlinear_replicates.py"
-owner_lane = "replicated nonlinear-window spread and ensemble artifact readiness"
-status = "active"
-coverage_priority = "medium"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "seed and timestep replicate windows for post-transient nonlinear transport audits",
-  "fail-closed nonlinear turbulence-gradient evidence gates",
-]
-physics_contracts = [
-  "a nonlinear-gradient claim stays blocked when any baseline/plus/minus state fails the replicate-spread gate",
-  "mixed seed/timestep spread is classified as a campaign-design problem rather than hidden by adding blind replicas",
-  "ensemble promotion remains blocked until distinct seed and timestep artifacts pass late-window convergence gates",
-]
-numerics_contracts = [
-  "relative deviations are normalized by the finite ensemble mean with a positive value floor",
-  "seed and timestep variant labels are inferred deterministically from ensemble rows when explicit metadata is absent",
-]
-fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_replicate_diagnostics.py",
-  "tests/validation/nonlinear/test_nonlinear_window_artifact_contracts.py",
-]
-artifact_paths = [
-  "docs/_static/qa_ess_descent_profile_rel2_replicate_spread_diagnostic.json",
-  "docs/_static/qa_ess_descent_profile_rel2_replicate_spread_diagnostic.png",
-]
-next_tests = [
-  "add paired-replicate sign-stability classification once another matched long-window gradient campaign finishes",
-  "connect spread-diagnostic recommendations to the nonlinear-gradient campaign planner",
-]
-
-[[modules]]
 module = "gkx.diagnostics.quasilinear_transport"
 path = "src/gkx/diagnostics/quasilinear_transport.py"
 owned_modules = [
@@ -1856,47 +1823,6 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.diagnostics.nonlinear_gradient_evidence"
-path = "src/gkx/diagnostics/nonlinear_gradient_evidence.py"
-owned_modules = [
-  "gkx.diagnostics.nonlinear_gradient_statistics",
-]
-owner_lane = "fail-closed nonlinear turbulence-gradient claim-boundary evidence"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "post-transient nonlinear transport-window uncertainty gates",
-  "central finite-difference conditioning for turbulent transport-gradient claims",
-  "campaign-planning screens that never promote failed production evidence",
-]
-physics_contracts = [
-  "startup, pilot, reduced-window, and estimator artifacts are recorded but never promoted as production nonlinear turbulent-gradient evidence",
-  "production nonlinear turbulence-gradient claims require explicit long-window scope plus replicated post-transient transport-window uncertainty evidence",
-  "candidate rankings and bracket sweeps remain planning reports unless the production long-window finite-difference gate passes",
-]
-numerics_contracts = [
-  "JSON-safe metric extraction rejects booleans, missing values, and nonfinite values before gate arithmetic",
-  "finite-difference reports record response fraction, asymmetry, condition number, and relative gradient uncertainty before promotion",
-  "replicated-window and same-control bracket reports fail closed with explicit blockers when metadata, uncertainty, or locality evidence is insufficient",
-]
-fast_tests = [
-  "tests/validation/nonlinear/test_nonlinear_gradient_evidence.py",
-]
-artifact_paths = [
-  "docs/_static/nonlinear_turbulence_gradient_evidence_status.json",
-  "docs/_static/nonlinear_turbulence_gradient_evidence_gap_report.json",
-  "docs/_static/nonlinear_gradient_next_campaign_design.json",
-  "docs/_static/nonlinear_gradient_ql_seed_screen.json",
-  "docs/_static/nonlinear_gradient_state_control_runbook.json",
-  "docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.json",
-]
-next_tests = [
-  "add direct malformed-gradient payload regressions for nonfinite JSON-compatible values and mixed production/startup scope markers",
-  "add replicated-window failure regressions for missing statistics and mismatched path lengths",
-]
-
-[[modules]]
 module = "gkx.objectives.eigen"
 path = "src/gkx/objectives/eigen.py"
 owner_lane = "production solver-objective geometry-gradient validation"
@@ -2194,6 +2120,9 @@ next_tests = [
 [[modules]]
 module = "gkx.diagnostics.nonlinear_transport_optimization"
 path = "src/gkx/diagnostics/nonlinear_transport_optimization.py"
+owned_modules = [
+  "gkx.diagnostics.nonlinear_gradient_statistics",
+]
 owner_lane = "production nonlinear transport optimization claim diagnostics"
 status = "active"
 coverage_priority = "high"

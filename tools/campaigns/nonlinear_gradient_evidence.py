@@ -29,7 +29,7 @@ from gkx.diagnostics.metadata import (
     _metric_margin,
     classify_gradient_artifact,
 )
-from gkx.diagnostics.nonlinear_replicates import (
+from tools.campaigns.nonlinear_replicates import (
     summarize_window_evidence,
 )
 from gkx.diagnostics.transport import (
