@@ -1997,3 +1997,39 @@ media that costs the clone nothing.
   known-failure allowlist masks real regressions inside the same file. With
   Actions minutes restored, CI is authoritative again and local runs are the
   fast filter, not the verdict.
+
+## 2026-08-24 — the 192^2 rung: QHS converges, and the box choice is validated
+
+The decisive stellarator rung finally ran once both office GPUs came free.
+QHS at y0 = 14, Nx = Ny in {64, 96, 128, 192}, flux +/- SEM:
+
+  64^2   5.905 +/- 0.591
+  96^2   4.486 +/- 0.961    -24.0% vs 64^2
+  128^2  3.643 +/- 0.980    -18.8% vs 96^2
+  192^2  3.418 +/- 1.111     -6.2% vs 128^2
+
+The fall flattens sharply and the 128 -> 192 change of 0.225 is well inside
+the 192^2 SEM of 1.111. QHS therefore CONVERGES near 3.4; the repeated
+statement that stellarator flux was "still falling" was true through 128^2
+and is no longer true at 192^2.
+
+Box independence is now measured rather than assumed, which validates the
+y0 = 14 default shipped in #117: at 192^2, y0 = 14 gives 3.418 +/- 1.111 and
+y0 = 21 gives 3.311 +/- 0.936. They agree within errors, so the calibrated
+box is not biasing the converged answer.
+
+The shipped 96^2 preview bias is now a NUMBER instead of a hedge: for QHS it
+reads 4.486 against a converged ~3.4, about +31% high. The docs and the
+resolution estimator should carry that figure in place of the unquantified
+"upper estimate" label.
+
+DIII-D is confirmed converged and saturated at every rung: 18.342, 16.863,
+17.503 at 64/96/128, i.e. ~17 +/- 0.9 with the 96 and 128 rungs agreeing
+within errors.
+
+Still outstanding: qa_vac 192^2 (running) and qa_b0p5 192^2, which died at
+22 s with RESOURCE_EXHAUSTED trying to allocate 432 MiB while the other two
+192^2 jobs held ~10 GB each. A memory-gated retry is armed to launch it at
+>= 11 GB free. A y0 = 10.5 point at 96^2 gives 4.882 for qa_vac, close to
+that case's y0 = 14 128^2 value of 4.903, which is the expected trade of box
+against grid at fixed binormal reach.
