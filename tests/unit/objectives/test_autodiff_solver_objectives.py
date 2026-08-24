@@ -2602,18 +2602,20 @@ def test_objective_portfolio_helpers_are_exported_at_package_top_level() -> None
     contract = sgk.validate_objective_portfolio_contract(rows)
 
     assert isinstance(contract, sgk.StellaratorObjectivePortfolioContract)
-    assert isinstance(
-        sgk.ReducedPortfolioArtifactGuardConfig(), ReducedPortfolioArtifactGuardConfig
-    )
     np.testing.assert_allclose(float(sgk.aggregate_objective_portfolio(rows)), 1.0)
     assert (
         sgk.objective_portfolio_sensitivity_report
         is objective_portfolio_sensitivity_report
     )
-    assert (
-        sgk.reduced_portfolio_artifact_guard_report
-        is reduced_portfolio_artifact_guard_report
+    # The reduced-portfolio artifact guard is campaign promotion policy, not
+    # solver API: it ships in tools/campaigns/ and is deliberately absent from
+    # the installable package's top level.
+    assert isinstance(
+        ReducedPortfolioArtifactGuardConfig(), ReducedPortfolioArtifactGuardConfig
     )
+    assert not hasattr(sgk, "ReducedPortfolioArtifactGuardConfig")
+    assert not hasattr(sgk, "reduced_portfolio_artifact_guard_report")
+    assert callable(reduced_portfolio_artifact_guard_report)
 
 
 # ---- test_stellarator_optimization.py ----
