@@ -1004,13 +1004,6 @@ Stellarator Objective Portfolios
    :members:
    :private-members:
 
-Stellarator Objective Portfolio Guard
--------------------------------------
-
-.. automodule:: gkx.objectives.portfolio_guard
-   :members:
-   :private-members:
-
 Runtime Runner
 --------------
 

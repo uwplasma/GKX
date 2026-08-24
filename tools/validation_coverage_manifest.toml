@@ -2453,36 +2453,6 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.objectives.portfolio_guard"
-path = "src/gkx/objectives/portfolio_guard.py"
-owner_lane = "persisted VMEC/Boozer objective-portfolio promotion gates"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "held-out surface and field-line validation for stellarator microstability optimization",
-  "release guardrails separating reduced growth/QL rows from nonlinear claims",
-]
-physics_contracts = [
-  "real reduced portfolios include growth and quasilinear objectives before promotion",
-  "artifact guards fail closed for nonlinear turbulent-transport claims",
-]
-numerics_contracts = [
-  "persisted samples reconstruct rectangular surface/alpha/ky tensors",
-  "provenance, coverage, reduction, and AD/FD gates are explicit",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-  "tests/validation/stellarator/test_check_vmec_boozer_gates.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_reduced_portfolio_guard.json",
-]
-next_tests = [
-  "repeat the guard on selected held-out surface/alpha artifacts before manuscript promotion",
-]
-
-[[modules]]
 module = "gkx.objectives.vmec_transport"
 path = "src/gkx/objectives/vmec_transport.py"
 owner_lane = "VMEC-JAX transport objective configuration, sample tables, reductions, and callback"

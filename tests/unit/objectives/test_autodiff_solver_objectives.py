@@ -2326,7 +2326,7 @@ def test_write_solver_objective_gradient_artifacts(tmp_path: Path) -> None:
 # ---- test_stellarator_objective_portfolio.py ----
 
 
-from gkx.objectives.portfolio_guard import (
+from tools.campaigns.portfolio_guard import (
     ReducedPortfolioArtifactGuardConfig,
     reduced_portfolio_artifact_guard_report,
 )
