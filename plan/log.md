@@ -2033,3 +2033,37 @@ Still outstanding: qa_vac 192^2 (running) and qa_b0p5 192^2, which died at
 >= 11 GB free. A y0 = 10.5 point at 96^2 gives 4.882 for qa_vac, close to
 that case's y0 = 14 128^2 value of 4.903, which is the expected trade of box
 against grid at fixed binormal reach.
+
+## 2026-08-24 — the 192^2 verdict, corrected: finite beta does NOT converge
+
+All four cases now have their 192^2 rung at y0 = 14. Judging each step against
+its own SEM rather than by eye:
+
+  tok_diiid  18.342 -> 16.863 -> 17.503            96->128 inside SEM: CONVERGED
+  qa_vac      6.732 ->  5.612 ->  4.903 -> 4.773   128->192 -2.7%, inside SEM
+  qhs         5.905 ->  4.486 ->  3.643 -> 3.418   128->192 -6.2%, inside SEM
+  qa_b0p5     7.199 ->  6.452 ->  5.925 -> 5.473   128->192 -7.6%, EXCEEDS SEM
+
+An earlier entry in this log claimed the stellarators converge at 192^2. That
+was written before qa_b0p5 finished and is now corrected: **two of three
+stellarators converge by 192^2; the finite-beta case does not.** qa_b0p5's
+last step is larger than its own error bar (0.452 against +/- 0.414), so its
+flux is still falling and no converged value can be quoted for it.
+
+QHS deserves a caveat too. Its 192^2 SEM is +/- 1.111 on a value of 3.418 --
+32% relative -- so "inside SEM" is weak evidence there. The stronger argument
+is the trend flattening from -24% to -19% to -6%. qa_vac is the clean case:
+-2.7% against +/- 0.558.
+
+Consequences for the estimator and the docs:
+- A single "stellarators converge at 192^2" rule cannot be written. Finite
+  beta needs its own tier, and the honest label for it is "not converged at
+  any rung measured".
+- The shipped 96^2 preview bias, where a converged value exists: +31% (qhs
+  against 3.418), +18% (qa_vac against 4.773). For qa_b0p5 only a lower bound
+  can be stated: at least +18% against the 192^2 value, which is itself high.
+- 128^2 is the defensible standard tier for the converging cases: +6.6% (qhs)
+  and +2.7% (qa_vac) against their 192^2 values.
+- A qa_vac t_max = 800 run is in flight to separate horizon from resolution:
+  every stellarator rung stopped unsaturated at the t = 400 cap, so part of
+  the residual drift may be temporal rather than spatial.
