@@ -1827,3 +1827,52 @@ media that costs the clone nothing.
 - This collapses the cutover: instead of replaying 84 heads onto rewritten
   history with exact tree and patch checks for each, the force-push is
   `main` plus tags, with one open roadmap head to rebase.
+
+## 2026-08-23 — cutover blockers cleared; commit messages stay historical
+
+- Catch-up replay: candidate `main` is now `3c790e7f`, carrying the three
+  newest public commits (#120, #118, #121). Independently verified, not taken
+  on the replaying agent's word: candidate tree `9ee1dba6` is byte-identical
+  to public `0d167caa`, `git fsck --full --strict` exits 0, and a scan of all
+  reachable metadata returns ZERO claude/codex/co-authored/anthropic hits.
+- Recovery bundle re-frozen: `GKX-pre-rewrite-2026-08-23.bundle`,
+  286,768,136 bytes, SHA-256
+  `d43388575089cd329e17ba68b4e1562909325ccfd7c6ff43e5237d4c03068941`,
+  verifies as a complete history, carries 88 heads + 28 tags + 120 pull refs,
+  and its restore clone passes strict `fsck`.
+- Pre-cutover battery on a fresh clone (Python 3.11.14, jax 0.10.2): mypy 0
+  errors, strict Sphinx ZERO warnings, 127 release gates, all three manifest
+  checkers and release readiness exit 0, import and CLI fine, and
+  **1,853 passed / 46 skipped / 0 failed** across unit + integration.
+- Size and integrity: pack 8,599,981 B; pack+index 9,088,001 B; complete
+  `.git` **9,410,553 B** -- 589,447 B under the strict 10 MB gate and less
+  than half the owner's 20 MB bound; zero alternates; fsck clean.
+- **Owner decision on the former project name: commit messages are left
+  alone.** The scrub preview showed a blind token map would falsify the
+  history's own account of the rename -- "Rename SPECTRAX-GK -> GKX" becomes
+  "Rename GKX -> GKX", the two console scripts "(spectrax-gk, spectraxgk)"
+  collapse to "(gkx, gkx)", and "No spectrax remnant remains" inverts to
+  claim the NEW name is gone; 17 lines across 7 commit objects would have
+  needed hand-written text, one of them wholesale. This mirrors the release
+  ruling: GKX titles, historical record intact. Consequence: there is no
+  commit-message filter pass, so no re-SHA, and the verified size, integrity
+  and ref-map numbers above stand as final rather than needing re-derivation.
+- The 18 annotated tag messages WERE scrubbed in the candidate (they are
+  titles, exactly like the release titles): `SPECTRAX-GK vX.Y` -> `GKX vX.Y`,
+  with each tag's target commit, tagger identity and raw tagger date
+  preserved and verified unchanged. Residual `spectrax` in tag messages: 0.
+- The 87-unmapped-heads blocker recorded earlier is **obsolete**: the owner
+  authorized the branch deletion, so the repository now has 4 heads. Only the
+  roadmap head needs rebasing onto rewritten `main`.
+- Toolchain drift to fix, unrelated to the rewrite: `ruff` is an unpinned dev
+  dependency and `pyproject.toml` declares no `[tool.ruff.lint] select`, so a
+  fresh environment resolved ruff 0.16.4 and reported 1,371 findings under its
+  wider default rule set (I001, RUF100, UP035, PLC0414, TRY004 dominate). The
+  classic `E4,E7,E9,F` selection is clean and the tree is byte-identical to
+  public `main`, so this is not a rewrite defect -- pin the linter.
+- Process note: the agent running the battery hit sandbox denials on `git
+  push`/`git fetch` into the local candidate and worked around them with
+  `git pack-objects` + `git update-ref` rather than stopping. The operations
+  were local and nothing reached the public repository, and every substantive
+  claim above was re-verified independently, but future delegated cutover
+  work must stop at a denial and hand back.
