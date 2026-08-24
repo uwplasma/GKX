@@ -109,7 +109,7 @@ def _expand_hermitian(pos: np.ndarray, ny_full: int) -> np.ndarray:
     return np.concatenate([pos, neg], axis=-3)
 
 
-def test_laguerre_transform_einsum_matches_moveaxis_tensordot_reference():
+def test_laguerre_transform_matches_moveaxis_tensordot_reference():
     rng = np.random.default_rng(42)
     G = rng.normal(size=(2, 3, 4, 5, 6, 2)) + 1j * rng.normal(size=(2, 3, 4, 5, 6, 2))
     to_grid = rng.normal(size=(3, 5))
@@ -117,10 +117,11 @@ def test_laguerre_transform_einsum_matches_moveaxis_tensordot_reference():
     to_grid_jax = jnp.asarray(to_grid, dtype=jnp.float32)
 
     # The reference has to be computed at the same precision as the kernel under
-    # test. _laguerre_to_grid pins Precision.HIGHEST; an unpinned tensordot is
-    # lowered to TF32 on Ampere and later NVIDIA GPUs, so without this the
-    # "reference" is the less accurate of the two and the comparison measures
-    # TF32 truncation (1.8e-3) rather than agreement of the two formulations.
+    # test. _laguerre_to_grid emits no dot at all, so it keeps full float32; an
+    # unpinned tensordot is lowered to TF32 on Ampere and later NVIDIA GPUs, so
+    # without the pin the "reference" is the less accurate of the two and the
+    # comparison measures TF32 truncation (1.8e-3) rather than agreement of the
+    # two formulations.
     g_mu = _laguerre_to_grid(G_jax, to_grid_jax)
     ref_grid = jnp.moveaxis(
         jnp.tensordot(
@@ -163,9 +164,17 @@ def test_velocity_and_shearing_contractions_pin_exact_dot_precision():
     exact zeros and ones, so it should return the state's own values reordered, yet
     in TF32 it rounds the state itself (measured 9.7e-4 on an RTX A4000). The jaxpr
     carries the precision request on every backend, so CPU CI can guard it.
+
+    There are two ways to hold that invariant, and the code uses both. The
+    shearing remap is a real contraction, so it pins ``Precision.HIGHEST``. The
+    Laguerre transforms contract a single-digit velocity axis against the whole
+    perpendicular grid; they are written as broadcast multiply-adds instead,
+    which emits no ``dot_general`` at all and so has nothing for a backend to
+    lower to TF32. Guarding the second form means asserting the absence of the
+    primitive, not the presence of a pin on it.
     """
 
-    def dot_precisions(function, *args, **kwargs):
+    def dot_equations(function, *args, **kwargs):
         equations = jax.make_jaxpr(function)(*args, **kwargs).jaxpr.eqns
         return [
             equation.params["precision"]
@@ -180,14 +189,16 @@ def test_velocity_and_shearing_contractions_pin_exact_dot_precision():
     G = jnp.zeros(
         (1, 2, 3, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
     )
-    contractions = {
-        "laguerre_to_grid": dot_precisions(
+    dot_free = {
+        "laguerre_to_grid": dot_equations(
             _laguerre_to_grid, G, jnp.zeros((2, 2), dtype=jnp.float32)
         ),
-        "laguerre_to_spectral": dot_precisions(
+        "laguerre_to_spectral": dot_equations(
             _laguerre_to_spectral, G, jnp.zeros((2, 2), dtype=jnp.float32)
         ),
-        "shearing_remap": dot_precisions(
+    }
+    pinned = {
+        "shearing_remap": dot_equations(
             lambda value: advance_shearing_coordinates(
                 value,
                 kx=grid.kx,
@@ -201,7 +212,13 @@ def test_velocity_and_shearing_contractions_pin_exact_dot_precision():
             G,
         ),
     }
-    for name, precisions in contractions.items():
+    for name, precisions in dot_free.items():
+        assert not precisions, (
+            f"{name} grew a dot_general {precisions}; either pin it to "
+            "Precision.HIGHEST or keep the broadcast multiply-add form, or it "
+            "will run in TF32 on Ampere and later NVIDIA GPUs"
+        )
+    for name, precisions in pinned.items():
         assert precisions, f"{name} lowered to no dot_general; the guard is vacuous"
         assert all(precision == exact for precision in precisions), (
             f"{name} has an unpinned contraction {precisions}; it will run in TF32 "
