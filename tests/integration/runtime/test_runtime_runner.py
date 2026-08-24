@@ -4388,3 +4388,40 @@ def test_runtime_parameter_scan_warm_start_declines_a_large_step(
     assert "initial_state" not in calls[2]
     assert all(call["return_state"] is True for call in calls)
     np.testing.assert_allclose(result.gamma, [0.01, 0.011, 1.0])
+
+
+def test_multimode_seed_fills_a_ky_selected_grid_and_leaves_the_zonal_mode_alone() -> None:
+    """A linear scan point seeds the one k_y it selected, not nothing at all.
+
+    The dealiased startup loop skips binormal index 0 because on a full grid
+    that index is the zonal mode. A linear run selects its k_y first, so its
+    grid holds a single *nonzero* binormal entry at index 0; skipping by
+    position gave `range(1, 1)`, an all-zero state, and an eigensolver handed a
+    null seed. The skip has to test the k_y value. Both halves are pinned here:
+    the selected grid seeds, and the full grid still leaves the zonal mode out.
+    """
+
+    from gkx.core.grid import select_ky_grid
+    from gkx.diagnostics.modes import select_ky_index
+
+    cfg = _base_runtime_cfg()
+    grid_full = build_spectral_grid(cfg.grid)
+
+    # Full grid: index 0 is k_y = 0 and stays unseeded.
+    assert float(np.asarray(grid_full.ky)[0]) == 0.0
+    assert all(ky_i != 0 for _kx_i, ky_i in _dealiased_initial_mode_pairs(grid_full))
+
+    # One selected k_y: index 0 is now a physical mode and must be seeded.
+    target = float(np.asarray(grid_full.ky)[1])
+    grid = select_ky_grid(grid_full, select_ky_index(np.asarray(grid_full.ky), target))
+    assert np.asarray(grid.ky).size == 1
+    assert float(np.asarray(grid.ky)[0]) != 0.0
+    assert _dealiased_initial_mode_pairs(grid) == [(0, 0)]
+
+    state = np.asarray(
+        _build_initial_condition(
+            grid, build_runtime_geometry(cfg), cfg,
+            ky_index=0, kx_index=0, Nl=2, Nm=3, nspecies=1,
+        )
+    )
+    assert np.max(np.abs(state)) > 0.0
