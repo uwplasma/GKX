@@ -472,7 +472,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from gkx.objectives.vmec_candidate_admission import (
+from tools.campaigns.vmec_candidate_admission import (
     build_authoritative_wout_candidate_gate,
     build_solved_vmec_candidate_gate,
     build_wout_reproducibility_gate,
@@ -876,24 +876,24 @@ def test_authoritative_wout_candidate_gate_reports_wout_load_errors(
 # ---- test_vmex_transport_admission.py ----
 
 
-import gkx.diagnostics.stellarator_transport_reports as transport_reports
-from gkx.diagnostics.stellarator_transport_reports import (
+import tools.campaigns.stellarator_transport_reports as transport_reports
+from tools.campaigns.stellarator_transport_reports import (
     build_nonlinear_audit_redesign_report,
     build_nonlinear_campaign_admission_report,
     build_nonlinear_landscape_admission_report,
     build_reduced_nonlinear_audit_prelaunch_report,
 )
-from gkx.objectives.vmec_transport_admission import (
+from tools.campaigns.vmec_transport_admission import (
     VMEXNonlinearAuditPolicy,
     VMEXNonlinearCampaignPolicy,
     VMEXReducedPrelaunchPolicy,
     VMEXTransportAdmissionPolicy,
 )
-from gkx.objectives.vmec_transport_admission import (
+from tools.campaigns.vmec_transport_admission import (
     candidate_transport_metric,
     transport_objective_sample_summary,
 )
-from gkx.objectives.vmec_transport_admission import (
+from tools.campaigns.vmec_transport_admission import (
     build_transport_admission_report,
     select_admitted_transport_candidate,
 )
@@ -1001,18 +1001,22 @@ def test_transport_admission_can_require_stronger_relative_improvement() -> None
 
     assert report["admitted_transport_candidates"] == ["large"]
     assert report["promoted_candidate"]["label"] == "large"
+    assert (
+        select_admitted_transport_candidate(summaries, policy=policy)
+        == report["promoted_candidate"]
+    )
 
 
-def test_transport_admission_exports_public_api() -> None:
-    assert gkx.VMEXTransportAdmissionPolicy is VMEXTransportAdmissionPolicy
-    assert (
-        gkx.build_transport_admission_report is build_transport_admission_report
-    )
-    assert gkx.candidate_transport_metric is candidate_transport_metric
-    assert (
-        gkx.select_admitted_transport_candidate
-        is select_admitted_transport_candidate
-    )
+def test_transport_admission_is_not_installable_public_api() -> None:
+    """Campaign admission policy lives in tools/campaigns, not in the package."""
+
+    for name in (
+        "VMEXTransportAdmissionPolicy",
+        "build_transport_admission_report",
+        "candidate_transport_metric",
+        "select_admitted_transport_candidate",
+    ):
+        assert not hasattr(gkx, name)
 
 
 def _matched_comparison(
@@ -1070,10 +1074,6 @@ def test_nonlinear_landscape_admission_selects_uncertainty_resolved_candidate() 
     assert report["selected_candidate"]["relative_reduction"] > 0.26
     assert report["selected_candidate"]["uncertainty_z_score"] > 17.0
     assert all(row["admitted"] for row in report["candidates"])
-    assert (
-        gkx.build_nonlinear_landscape_admission_report
-        is build_nonlinear_landscape_admission_report
-    )
     assert (
         build_nonlinear_landscape_admission_report
         is transport_reports.build_nonlinear_landscape_admission_report
@@ -1183,11 +1183,6 @@ def test_reduced_nonlinear_audit_prelaunch_passes_calibrated_landscape_margin() 
     assert report["gates"][0]["passed"] is True
     assert report["reduced_cross_sample_statistics"]["passed"] is True
     assert report["gates"][2]["metric"] == "reduced_cross_sample_dispersion"
-    assert gkx.VMEXReducedPrelaunchPolicy is VMEXReducedPrelaunchPolicy
-    assert (
-        gkx.build_reduced_nonlinear_audit_prelaunch_report
-        is build_reduced_nonlinear_audit_prelaunch_report
-    )
     assert (
         build_reduced_nonlinear_audit_prelaunch_report
         is transport_reports.build_reduced_nonlinear_audit_prelaunch_report
@@ -1287,11 +1282,6 @@ def test_campaign_admission_combines_reduced_and_replicated_landscape_gates() ->
     assert report["selected_landscape_candidate"]["label"] == "+3% RBC(0,1)"
     assert report["claim_scope"].startswith(
         "next nonlinear optimizer-campaign admission"
-    )
-    assert gkx.VMEXNonlinearCampaignPolicy is VMEXNonlinearCampaignPolicy
-    assert (
-        gkx.build_nonlinear_campaign_admission_report
-        is build_nonlinear_campaign_admission_report
     )
     assert (
         build_nonlinear_campaign_admission_report
@@ -1426,18 +1416,9 @@ def test_nonlinear_audit_redesign_promotes_only_when_audit_and_sample_coverage_p
     assert report["blockers"] == []
     assert report["objective_sample_summary"]["sample_count"] == 18
     assert all(gate["passed"] for gate in report["gates"])
-    assert gkx.VMEXNonlinearAuditPolicy is VMEXNonlinearAuditPolicy
-    assert (
-        gkx.build_nonlinear_audit_redesign_report
-        is build_nonlinear_audit_redesign_report
-    )
     assert (
         build_nonlinear_audit_redesign_report
         is transport_reports.build_nonlinear_audit_redesign_report
-    )
-    assert (
-        gkx.transport_objective_sample_summary
-        is transport_objective_sample_summary
     )
 
 

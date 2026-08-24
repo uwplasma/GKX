@@ -959,20 +959,6 @@ VMEC-JAX Transport Branch Gates
 .. automodule:: gkx.objectives.vmec_transport_branch
    :members:
 
-VMEC-JAX Transport Admission
-----------------------------
-
-.. automodule:: gkx.objectives.vmec_transport_admission
-   :members:
-   :private-members:
-
-Stellarator Transport Reports
------------------------------
-
-.. automodule:: gkx.diagnostics.stellarator_transport_reports
-   :members:
-   :private-members:
-
 VMEC-JAX Transport Optimization
 -------------------------------
 
@@ -983,12 +969,6 @@ VMEC-JAX Boundary Chain
 -----------------------
 
 .. automodule:: gkx.geometry.vmec_boundary_chain
-   :members:
-
-VMEC-JAX Candidate Gates
-------------------------
-
-.. automodule:: gkx.objectives.vmec_candidate_admission
    :members:
 
 Stellarator ITG Objectives

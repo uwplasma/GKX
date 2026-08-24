@@ -763,28 +763,31 @@ campaign launch and artifact-building policy stays in ``tools``. Model-selection
 input normalization, optimized-equilibrium audit summaries, and absolute-flux
 claim guardrails in ``diagnostics/quasilinear_model_selection.py``.
 
-VMEC-JAX candidate and transport admission gates now have explicit owners.
-``gkx.objectives.vmec_candidate_admission`` owns solved-equilibrium,
-authoritative-WOUT, and WOUT-reproducibility candidate gates. It keeps aspect,
-iota, iota-profile, quasisymmetry, and pass/fail helpers together so optimizer
-state and WOUT gates share one JSON schema and threshold semantics.
-``gkx.objectives.vmec_transport_admission`` owns transport-admission
-policy dataclasses, reduced transport metric selection, multi-surface/
-field-line/``k_y`` sample coverage, and promoted transport-candidate selection.
-The ``gkx.objectives.vmec_transport`` module owns objective
-configuration, optional-backend path policy, differentiable sample tables,
-reductions, and the optimizer callback. Eigenbranch-locality gates remain in
-``vmec_transport_branch`` because they evaluate a distinct three-state
-continuation contract.
-``gkx.diagnostics.stellarator_transport_reports`` owns report-style
+VMEC-JAX candidate and transport admission gates are campaign governance, not
+runtime physics, so they live outside the installable package in
+``tools/campaigns/``. ``tools/campaigns/vmec_candidate_admission.py`` owns
+solved-equilibrium, authoritative-WOUT, and WOUT-reproducibility candidate
+gates. It keeps aspect, iota, iota-profile, quasisymmetry, and pass/fail
+helpers together so optimizer state and WOUT gates share one JSON schema and
+threshold semantics. ``tools/campaigns/vmec_transport_admission.py`` owns
+transport-admission policy dataclasses, reduced transport metric selection,
+multi-surface/field-line/``k_y`` sample coverage, and promoted
+transport-candidate selection.
+``tools/campaigns/stellarator_transport_reports.py`` owns report-style
 nonlinear transport diagnostics: landscape admission, reduced prelaunch gates,
 next-campaign admission, and matched nonlinear audit redesign. Persisted gate
 flags must be explicit booleans and replicate counts must be finite,
 nonnegative integers; malformed values fail closed into report blockers rather
-than becoming truthy or raising during report construction. The public
-``gkx.api`` re-exports user-facing admission helpers directly
-from these owners, while installable validation-campaign subpackages have
-been removed.
+than becoming truthy or raising during report construction.
+
+The installable package keeps the physics these gates read.
+The ``gkx.objectives.vmec_transport`` module owns objective
+configuration, optional-backend path policy, differentiable sample tables,
+reductions, and the optimizer callback. Eigenbranch-locality gates remain in
+``vmec_transport_branch`` because they evaluate a distinct three-state
+continuation contract. Because admission policy is no longer installed,
+``gkx.api`` no longer re-exports admission helpers; campaign code imports
+them from ``tools.campaigns``.
 
 The first differentiable-geometry split keeps
 ``gkx.geometry.differentiable`` as the public facade while

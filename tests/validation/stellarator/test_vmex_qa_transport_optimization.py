@@ -11,8 +11,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-import gkx
-from gkx.objectives.vmec_candidate_admission import (
+from tools.campaigns.vmec_candidate_admission import (
     build_solved_vmec_candidate_gate,
 )
 
@@ -270,9 +269,6 @@ def test_matched_qa_transport_evidence_fails_closed() -> None:
 
 
 def test_solved_wout_candidate_gate_passes_valid_qa_branch() -> None:
-    assert (
-        gkx.build_solved_vmec_candidate_gate is build_solved_vmec_candidate_gate
-    )
     result = SimpleNamespace(
         history={
             "aspect_final": 5.999233,
