@@ -1951,3 +1951,49 @@ media that costs the clone nothing.
   installable package into `tools/campaigns/`.
   ALGORITHMS/PERF-2 -- attack the measured 59% of per-step time spent on data
   movement, under a bitwise-identity requirement.
+
+## 2026-08-24 — CI restored as a real signal; `--linear` was broken three ways
+
+- PR #124 merged: README reorganized around tasks on the VMEX model, and
+  `ruff` pinned to 0.16.4 with an explicit `[tool.ruff.lint] select` of the
+  classic `E4,E7,E9,F` the code is written against. Ruff 0.16 widened its
+  default rule set, so an unpinned dev dependency reported 1,371 findings on
+  a tree 0.15.12 calls clean; a new contributor's first lint run now agrees
+  with CI.
+- The README work also CORRECTED claims against tracked evidence rather than
+  restating them. The adjoint/finite-difference agreement was advertised as
+  1e-11 through 1024 steps; the tracked JSON shows 1e-11 holds through 512
+  and 1024 is 2.7e-9 -- inside the declared 1e-6 gate, but not what was
+  claimed. Collision-verification prose contradicted its own JSON. A `--nu-scan`
+  flag was documented that does not exist. Three claims with no locatable
+  evidence were cut, including a comparison citing an external source file
+  nothing in-repo backs.
+- **`gkx wout_XXX.nc --linear` was broken in three independent ways**, each
+  masking the next, which is why an advertised flag shipped in 1.8.0 unable
+  to run at all:
+  1. the startup CFL *diagnostic* crashed the run -- an imported equilibrium
+     arrives on a closed theta interval carrying 49 points against a 48-point
+     grid. The nonlinear path already conforms geometry and guards this
+     diagnostic; the linear path did neither.
+  2. the eigensolver seed was identically zero. `_dealiased_initial_mode_pairs`
+     skips binormal index 0 to avoid seeding the zonal mode, but a linear run
+     selects one `k_y` FIRST, so its grid holds a single nonzero entry at
+     index 0. Skipping by position gave `range(1, 1)`: nothing seeded, and
+     SOLVAX correctly refused a null `v0`. Now the zonal skip tests the `k_y`
+     VALUE, not its index; the full-grid nonlinear seed hashes identically
+     before and after (`c21f9690...`).
+  3. the step was guaranteed to overflow. The shorthand hard-codes a scan
+     reaching `k_y rho = 1`, where the measured explicit bound is 0.019, while
+     the deck it inherits carries `dt = 0.1` -- 5.3x over. `fixed_dt = false`
+     does not rescue it because the linear paths advance the whole RHS at a
+     fixed step. The shorthand now caps `dt` at 0.01 for the scan it configures.
+  Verified NOT a regression from the `y0 = 14` defaults: the old `y0 = 21` box
+  fails identically.
+- Lesson recorded about the local protocol: the genuine SLIM-3 regression CI
+  caught (an export test still demanding `gkx.ReducedPortfolioArtifactGuardConfig`
+  after the guard was evicted) lives in
+  `tests/unit/objectives/test_autodiff_solver_objectives.py` -- one of the three
+  files this machine treats as "known environment failures" on jax 0.9.2. A
+  known-failure allowlist masks real regressions inside the same file. With
+  Actions minutes restored, CI is authoritative again and local runs are the
+  fast filter, not the verdict.
