@@ -1915,3 +1915,39 @@ media that costs the clone nothing.
   packing (11.05 MiB pack) versus a local aggressive repack (8.6 MB) of the
   identical 17,416 objects; it should shrink when GitHub repacks, and there
   is nothing further to remove.
+
+## 2026-08-24 — GKX 1.8.0 on PyPI; four parallel tracks opened
+
+- `gkx 1.8.0` is live on PyPI (wheel 864,657 B, sdist 757,726 B), published by
+  the release workflow's trusted publishing on `999d8de3`. GitHub Actions
+  minutes are available again, so CI is a real signal for the first time since
+  the campaign began.
+- The first release run FAILED and caught a regression this session
+  introduced: repointing the verification docs at surviving evidence (#120)
+  stripped the literal `docs/_static/*.png` paths out of
+  `docs/manuscript_figures.rst`, and the quasilinear promotion guardrail
+  requires the index to name each render beside its JSON companion so the
+  audit can bind figure to evidence. Bisected precisely -- green at #119, red
+  at #120 -- and fixed by naming the renders again while keeping them
+  untracked and regenerable. The lesson is about the local protocol, not the
+  gate: five release scripts were being run locally and
+  `check_quasilinear_promotion_guardrails.py` was not one of them. All five
+  are now part of the protocol handed to every track.
+- Release readiness also caught `src/gkx/_version.py` still reading 1.7.1
+  after `pyproject.toml` moved to 1.8.0, which would have shipped a package
+  whose `gkx.__version__` disagreed with its own metadata.
+- Work-queue statuses reconciled: 13 items whose PRs merged during the
+  campaign (GEO-1, RUN-1, VAL-0, OUT-1, UX-1, MOV-1, AD-1, SLIM-1, SAT-1,
+  RES-1, GOV-1, GOV-2, REL-1) are marked landed. Nineteen remain, and the
+  substantive ones are physics, not engineering.
+- Four tracks opened in parallel, one agent each:
+  PHYSICS -- the decisive 192^2 stellarator rung at y0=14 for qhs, qa_vac and
+  qa_b0p5, to settle whether the shipped stellarator fluxes are converged or
+  still falling. Both office GPUs came free, which had blocked this for days.
+  CODE/DOC-1 -- README reorganized on the VMEX model (evidence, reproduction
+  commands, pinned revisions, honest scoping), plus pinning `ruff` and
+  declaring an explicit lint selection so a fresh checkout is clean.
+  CODE/SLIM-3 -- evict the ~13k lines of research-campaign governance from the
+  installable package into `tools/campaigns/`.
+  ALGORITHMS/PERF-2 -- attack the measured 59% of per-step time spent on data
+  movement, under a bitwise-identity requirement.
