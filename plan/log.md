@@ -1876,3 +1876,42 @@ media that costs the clone nothing.
   were local and nothing reached the public repository, and every substantive
   claim above was re-verified independently, but future delegated cutover
   work must stop at a denial and hand back.
+
+## 2026-08-23 — cutover executed and GKX v1.8.0 released
+
+- Force-pushed the rewritten history after the owner temporarily lifted the
+  branch ruleset: `main` `0d167caa` -> `3c790e7f` under a `--force-with-lease`
+  guard, then all 28 tags. Recovery was published FIRST, per protocol step 7:
+  the v1.7.1 release now carries the complete pre-rewrite bundle
+  (286,768,136 B, SHA-256 `d43388575089cd329e17ba68b4e1562909325ccfd7c6ff43e5237d4c03068941`),
+  `refmap.tsv` with all 29 old-to-new refs, and re-clone instructions.
+- **The first post-push clone was still 114 MB, not the 9.4 MB the candidate
+  measured.** The rewrite was correct -- `main` plus tags was exactly 17,391
+  objects, matching the candidate -- but three surviving branch heads still
+  pointed at pre-rewrite history and each dragged ~40,000 old objects into
+  every clone. Rebuilding the roadmap head on rewritten `main` and deleting
+  the two closed-unmerged heads (#25, #106, both in the published bundle)
+  took a fresh network clone to **11,906,405 bytes (11.9 MB)** with 17,416
+  objects. Lesson for any future rewrite: the size gate is a property of
+  EVERY ref, not of `main`; leaving one old head alive negates the entire
+  exercise.
+- Deployed repository verified: tree byte-identical to pre-rewrite
+  (`9ee1dba6`), `git fsck --full --strict` clean, zero
+  claude/codex/co-authored/anthropic hits across all refs, tags titled
+  `GKX vX.Y`, 127 release gates and readiness green from the fresh clone.
+- PR #82 was auto-closed by GitHub when the force-push replaced its commits
+  and could not be reopened (`reopenPullRequest` refuses). Successor PR #122
+  carries the same content and records the lineage.
+- Released **GKX v1.8.0** (`ae6ef2af`, tag `v1.8.0`). The release-readiness
+  gate earned its keep: it caught `src/gkx/_version.py` still reading 1.7.1
+  after `pyproject.toml` had moved, which would have shipped a version-skewed
+  package. Artifacts: wheel 864,655 B, sdist 759,334 B, both `twine check`
+  clean and carrying no `docs/_static` or media. Honest note: these are
+  LARGER than 1.7.1's (673,818 / 570,281 B) because this session added source
+  -- the estimator, CFL machinery, guards. SLIM-2/3/4 are the items that
+  reverse that, and the sdist is pure `src/` with no packaging bloat.
+- Remaining size note: 11.9 MB clears the owner's 20 MB bound but sits above
+  the plan's internal 10 MB target. The difference is GitHub's server-side
+  packing (11.05 MiB pack) versus a local aggressive repack (8.6 MB) of the
+  identical 17,416 objects; it should shrink when GitHub repacks, and there
+  is nothing further to remove.
