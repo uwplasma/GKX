@@ -2803,6 +2803,212 @@ def test_cli_wout_linear_flag_runs_default_ky_scan(
     assert (tmp_path / "wout_lin" / "gkx.toml").exists()
 
 
+_WOUT_LINEAR_E2E_DECK = """
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 3.0
+fprim = 1.0
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 4
+Ny = 8
+Nz = 16
+Lx = 12.56
+Ly = 12.56
+boundary = "linked"
+y0 = 2.0
+
+[time]
+t_max = 2.0
+dt = 0.5
+method = "rk3"
+use_diffrax = false
+sample_stride = 1
+fixed_dt = false
+cfl = 0.9
+
+[geometry]
+model = "vmec"
+vmec_file = "replaced-by-the-shorthand.nc"
+torflux = 0.64
+alpha = 0.0
+npol = 1.0
+
+[init]
+init_field = "density"
+init_amp = 0.001
+gaussian_init = false
+init_single = false
+
+[physics]
+linear = false
+nonlinear = true
+electrostatic = true
+adiabatic_electrons = true
+tau_e = 1.0
+collisions = false
+hypercollisions = true
+
+[terms]
+nonlinear = 1.0
+
+[run]
+Nl = 2
+Nm = 4
+
+[scan]
+ky = [0.5]
+Nl = 2
+Nm = 4
+"""
+
+
+def _write_closed_interval_vmec_eik(path: Path) -> Path:
+    """Write the `*.eik.nc` a VMEC import produces for a circular flux tube.
+
+    Written by the shipped writer and read back by the shipped loader, so the
+    geometry under test is a real imported flux tube: sampled on the closed
+    theta interval, one point longer than the grid built from it.
+    """
+
+    from types import SimpleNamespace
+
+    from gkx.geometry.imported_vmec import write_vmec_eik_netcdf
+
+    nz, shat, q, eps, r0 = 16, 0.8, 1.4, 0.18, 3.0
+    theta = np.linspace(-np.pi, np.pi, nz + 1)
+    cos_t, sin_t = np.cos(theta), np.sin(theta)
+    shear = shat * theta
+    drift = 2.0 * (cos_t + shear * sin_t) / r0
+    drift0 = -2.0 * shat * sin_t / r0
+    write_vmec_eik_netcdf(
+        path,
+        {
+            "theta": theta,
+            "theta_PEST": theta,
+            "bmag": 1.0 / (1.0 + eps * cos_t),
+            "gradpar": np.full(theta.size, 1.0 / (q * r0)),
+            "grho": np.ones(theta.size),
+            "gds2": 1.0 + shear * shear,
+            "gds21": -shat * shear,
+            "gds22": np.full(theta.size, shat * shat),
+            "gbdrift": drift,
+            "cvdrift": drift,
+            "gbdrift0": drift0,
+            "cvdrift0": drift0,
+            "Rplot": r0 + eps * cos_t,
+            "Zplot": eps * sin_t,
+            "grad_x": np.zeros((3, theta.size)),
+            "grad_y": np.zeros((3, theta.size)),
+            "b_vec": np.zeros((3, theta.size)),
+            "dpsidrho": 1.0,
+            "kxfac": 1.0,
+            "Rmaj": r0,
+            "q": q,
+            "shat": shat,
+            "scale": 1.0,
+            "alpha": 0.0,
+            "zeta_center": 0.0,
+            "nfp": 1,
+        },
+        request=SimpleNamespace(),
+    )
+    return path
+
+
+def test_cli_wout_linear_shorthand_scans_imported_vmec_geometry_end_to_end(
+    capsys, monkeypatch, tmp_path: Path
+) -> None:
+    """`gkx wout_XXX.nc --linear` solves, with nothing about the run stubbed.
+
+    Three defects each masked the next, so nothing short of running the whole
+    command catches them: the CFL hint aborted on the imported geometry's
+    closed theta interval, the multimode seed left a one-k_y grid at zero, and
+    the inherited nonlinear step overflowed. Two of the three fail silently or
+    as a downstream symptom, which is why the assertions here are that the scan
+    exits clean *and* reports a mode that actually grew.
+    """
+
+    from gkx.geometry import load_imported_geometry_netcdf
+    from gkx.workflows.runtime.wout import LINEAR_SCAN_DT
+
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_e2e.nc")
+    eik = _write_closed_interval_vmec_eik(tmp_path / "geom.eik.nc")
+    imported = load_imported_geometry_netcdf(eik)
+    assert imported.theta_closed_interval is True
+    monkeypatch.setattr("gkx.runtime.generate_runtime_vmec_eik", lambda _cfg: eik)
+
+    deck = tmp_path / "deck.toml"
+    deck.write_text(_WOUT_LINEAR_E2E_DECK, encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["gkx", str(wout), str(deck), "--linear", "--no-progress", "--no-plots"],
+    )
+
+    assert main() == 0
+
+    scanned = [
+        line for line in capsys.readouterr().out.splitlines() if line.startswith("ky=")
+    ]
+    assert len(scanned) == 1
+    gamma = float(scanned[0].split("gamma=")[1].split()[0])
+    omega = float(scanned[0].split("omega=")[1].split()[0])
+    assert np.isfinite(gamma) and np.isfinite(omega)
+    # An all-zero seed fits to |gamma| ~ 1e-16 and exits 0, so the magnitude is
+    # what separates a solved mode from a silently empty one.
+    assert gamma > 1.0e-6
+
+    resolved = tmp_path / "wout_e2e" / "gkx.toml"
+    data = tomllib.loads(resolved.read_text(encoding="utf-8"))
+    assert data["geometry"]["model"] == "vmec"
+    assert data["geometry"]["vmec_file"] == str(wout.resolve())
+    assert data["physics"]["linear"] is True
+    assert data["physics"]["nonlinear"] is False
+    assert data["terms"]["nonlinear"] == 0.0
+    # The deck's nonlinear step is reduced for the scan; its ky list survives.
+    assert data["time"]["dt"] == LINEAR_SCAN_DT
+    assert data["scan"]["ky"] == [0.5]
+    for name in ("gkx.scan.csv", "gkx.summary.json"):
+        assert (tmp_path / "wout_e2e" / name).is_file()
+
+
+def test_wout_linear_leaves_a_step_already_under_the_scan_bound_alone(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """The scan step is a ceiling, not an assignment.
+
+    A deck that already asked for a finer step than the shorthand's ceiling
+    keeps it, and its own `[scan]` table is filled in rather than replaced.
+    """
+
+    from gkx.workflows.runtime.wout import LINEAR_SCAN_DT
+
+    monkeypatch.chdir(tmp_path)
+    wout = _write_tiny_wout(tmp_path / "wout_fine_dt.nc")
+    deck = tmp_path / "deck.toml"
+    deck.write_text(
+        _RUNTIME_NONLINEAR_TOML_MIN.replace("dt = 0.01", "dt = 0.0005")
+        + '\n[scan]\nky = [0.25]\n',
+        encoding="utf-8",
+    )
+
+    args = _direct_config_shorthand_args([str(deck), str(wout), "--linear"])
+
+    resolved = tmp_path / "wout_fine_dt" / "gkx.toml"
+    assert args == ["scan-runtime-linear", "--config", str(resolved)]
+    data = tomllib.loads(resolved.read_text(encoding="utf-8"))
+    assert data["time"]["dt"] == 0.0005 < LINEAR_SCAN_DT
+    assert data["scan"]["ky"] == [0.25]
+
+
 def test_direct_config_shorthand_wout_honors_out_flag(
     monkeypatch, tmp_path: Path
 ) -> None:

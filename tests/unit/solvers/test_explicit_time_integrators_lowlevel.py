@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import warnings
 
 import jax.numpy as jnp
 import numpy as np
@@ -9,6 +10,12 @@ import pytest
 import gkx.solvers.time.explicit as eti
 from gkx.solvers.time.explicit_steps import _linear_explicit_stage_update
 from gkx.terms.config import FieldState
+
+
+def replace_time_cfg(cfg, **changes):
+    from dataclasses import replace
+
+    return replace(cfg, **changes)
 
 
 def _cache() -> SimpleNamespace:
@@ -387,3 +394,73 @@ def test_cfl_bound_names_the_traced_input_it_cannot_read() -> None:
 
     with pytest.raises(ValueError, match="cannot read a traced curvature drift"):
         jax.jit(probe)(jnp.asarray(1.0))
+
+
+def _closed_interval_copy(sampled):
+    """Return `sampled` re-expressed on the closed theta interval.
+
+    This is the shape an imported `*.eik.nc` file carries -- the terminal theta
+    point repeated at the far end of the period -- so its profiles are one
+    sample longer than the spectral grid they belong to.
+    """
+
+    from dataclasses import replace as dataclass_replace
+
+    theta = np.asarray(sampled.theta, dtype=float)
+    closed = np.append(theta, theta[-1] + float(theta[1] - theta[0]))
+
+    def _wrap(name: str) -> np.ndarray:
+        profile = np.asarray(getattr(sampled, name), dtype=float)
+        return np.append(profile, profile[0])
+
+    return dataclass_replace(
+        sampled,
+        theta=closed,
+        theta_closed_interval=True,
+        source_model="vmec-eik",
+        **{
+            name: _wrap(name)
+            for name in (
+                "bmag_profile", "bgrad_profile", "gds2_profile", "gds21_profile",
+                "gds22_profile", "cv_profile", "gb_profile", "cv0_profile",
+                "gb0_profile", "jacobian_profile", "grho_profile",
+            )
+        },
+    )
+
+
+def test_fixed_dt_cfl_hint_conforms_imported_geometry_instead_of_aborting() -> None:
+    """The startup hint survives an imported flux tube -- and still fires.
+
+    An imported equilibrium arrives on the closed theta interval, one sample
+    longer than the grid it is used with, which made this hint raise and take
+    every `gkx wout_XXX.nc --linear` run down with it. Conforming the geometry
+    is what fixes that; the surrounding `except` would also stop the crash, but
+    silently, so this pins the warning itself. Drop the conform and the hint
+    goes quiet on exactly the runs that need it.
+    """
+
+    from gkx.geometry import ensure_flux_tube_geometry_data
+    from gkx.solvers.time.explicit_cfl import warn_if_fixed_dt_exceeds_cfl
+
+    _g0, grid, geom, params, _cache, n_l, n_m = _tiny_linear_case()
+    imported = _closed_interval_copy(ensure_flux_tube_geometry_data(geom, grid.z))
+    assert imported.theta.shape[0] == np.asarray(grid.z).size + 1
+
+    over_cfl = eti.ExplicitTimeConfig(
+        t_max=1.0, dt=5.0, method="rk3", sample_stride=1, fixed_dt=True
+    )
+    with pytest.warns(RuntimeWarning, match="exceeds the estimated"):
+        warn_if_fixed_dt_exceeds_cfl(
+            grid=grid, geom=imported, params=params,
+            n_laguerre=n_l, n_hermite=n_m, tcfg=over_cfl,
+        )
+
+    # A step under the bound stays silent on the same imported geometry.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        warn_if_fixed_dt_exceeds_cfl(
+            grid=grid, geom=imported, params=params, n_laguerre=n_l, n_hermite=n_m,
+            tcfg=replace_time_cfg(over_cfl, dt=1.0e-6),
+        )
+    assert not [w for w in caught if "exceeds the estimated" in str(w.message)]
