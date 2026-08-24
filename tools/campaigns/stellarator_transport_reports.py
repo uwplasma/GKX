@@ -9,7 +9,7 @@ from typing import Any, cast
 import numpy as np
 
 from gkx.diagnostics.metadata import _explicit_true, _nonnegative_int
-from gkx.objectives.vmec_transport_admission import (
+from tools.campaigns.vmec_transport_admission import (
     VMEXNonlinearAuditPolicy,
     VMEXNonlinearCampaignPolicy,
     VMEXReducedPrelaunchPolicy,

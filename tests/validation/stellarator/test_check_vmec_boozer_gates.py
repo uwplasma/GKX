@@ -7,7 +7,7 @@ from support.paths import load_release_tool
 
 import pytest
 
-from gkx.objectives.portfolio_guard import (
+from tools.campaigns.portfolio_guard import (
     ReducedPortfolioArtifactGuardConfig,
     reduced_portfolio_artifact_guard_report,
 )

@@ -16,12 +16,18 @@ import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from gkx.artifacts.plotting import set_plot_style  # noqa: E402
-from gkx.objectives.gradient_gates import linear_solver_geometry_gradient_report  # noqa: E402
 from gkx.objectives.vmec_boozer_gradients import (  # noqa: E402
     mode21_vmec_boozer_linear_frequency_gradient_report,
     mode21_vmec_boozer_nonlinear_window_gradient_report,
     mode21_vmec_boozer_quasilinear_gradient_report,
+)
+from tools.campaigns.gradient_gates import (  # noqa: E402
+    linear_solver_geometry_gradient_report,
 )
 
 

@@ -10,7 +10,13 @@ from typing import Any
 
 import numpy as np
 
-from gkx.objectives.vmec_transport_admission import _finite_float_or_none
+
+def _finite_float_or_none(value: Any) -> float | None:
+    try:
+        out = float(value)
+    except Exception:
+        return None
+    return out if np.isfinite(out) else None
 
 
 @dataclass(frozen=True)

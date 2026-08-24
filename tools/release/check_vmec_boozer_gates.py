@@ -1235,7 +1235,7 @@ def _reduced_portfolio_guard_helpers():
     for path in (src, ROOT):
         if str(path) not in sys.path:
             sys.path.insert(0, str(path))
-    from gkx.objectives.portfolio_guard import (
+    from tools.campaigns.portfolio_guard import (
         ReducedPortfolioArtifactGuardConfig,
         reduced_portfolio_artifact_guard_report,
     )

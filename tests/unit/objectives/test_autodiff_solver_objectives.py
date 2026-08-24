@@ -778,7 +778,11 @@ def test_autodiff_finite_difference_report_rejects_bad_inputs() -> None:
 
 # ---- test_solver_objective_gradients.py ----
 
-import gkx.objectives.gradient_gates as gradient_gates
+import tools.campaigns.gradient_gates as gradient_gates
+from tools.campaigns.gradient_gates import (
+    linear_solver_geometry_gradient_report,
+    solver_objective_branch_gradient_report,
+)
 import gkx.objectives.sampling as sampling
 import gkx.objectives.solver_vmec as solver_vmec
 from gkx import (
@@ -794,12 +798,10 @@ from gkx import (
     default_solver_geometry_design_params,
     dominant_eigenvalue_branch_locality_report,
     dominant_real_eigenvalue,
-    linear_solver_geometry_gradient_report,
     mode21_vmec_boozer_linear_frequency_gradient_report,
     mode21_vmec_boozer_nonlinear_window_gradient_report,
     mode21_vmec_boozer_quasilinear_gradient_report,
     solver_linear_operator_matrix_from_geometry,
-    solver_objective_branch_gradient_report,
     solver_growth_rate_from_geometry,
     solver_objective_vector_from_geometry,
     solver_grid_options_from_ky_values,
@@ -923,10 +925,6 @@ def test_linear_solver_geometry_gradient_report_passes_actual_rhs_gate() -> None
         fd_step=1.0e-3, rtol=1.0e-1, atol=2.0e-3
     )
 
-    assert (
-        gkx.linear_solver_geometry_gradient_report
-        is linear_solver_geometry_gradient_report
-    )
     assert report["passed"] is True
     assert report["source_scope"] == "solver_ready_geometry_contract"
     assert report["linear_growth_gradient_gate"] is True
@@ -1422,10 +1420,6 @@ def test_solver_objective_branch_gradient_report_gates_public_evaluator() -> Non
         n_hermite=1,
     )
 
-    assert (
-        gkx.solver_objective_branch_gradient_report
-        is solver_objective_branch_gradient_report
-    )
     assert report["passed"] is True
     assert report["source_scope"] == "solver_ready_geometry_contract"
     assert report["value_evaluator_finite"] is True
@@ -2326,7 +2320,7 @@ def test_write_solver_objective_gradient_artifacts(tmp_path: Path) -> None:
 # ---- test_stellarator_objective_portfolio.py ----
 
 
-from gkx.objectives.portfolio_guard import (
+from tools.campaigns.portfolio_guard import (
     ReducedPortfolioArtifactGuardConfig,
     reduced_portfolio_artifact_guard_report,
 )
@@ -2608,18 +2602,20 @@ def test_objective_portfolio_helpers_are_exported_at_package_top_level() -> None
     contract = sgk.validate_objective_portfolio_contract(rows)
 
     assert isinstance(contract, sgk.StellaratorObjectivePortfolioContract)
-    assert isinstance(
-        sgk.ReducedPortfolioArtifactGuardConfig(), ReducedPortfolioArtifactGuardConfig
-    )
     np.testing.assert_allclose(float(sgk.aggregate_objective_portfolio(rows)), 1.0)
     assert (
         sgk.objective_portfolio_sensitivity_report
         is objective_portfolio_sensitivity_report
     )
-    assert (
-        sgk.reduced_portfolio_artifact_guard_report
-        is reduced_portfolio_artifact_guard_report
+    # The reduced-portfolio artifact guard is campaign promotion policy, not
+    # solver API: it ships in tools/campaigns/ and is deliberately absent from
+    # the installable package's top level.
+    assert isinstance(
+        ReducedPortfolioArtifactGuardConfig(), ReducedPortfolioArtifactGuardConfig
     )
+    assert not hasattr(sgk, "ReducedPortfolioArtifactGuardConfig")
+    assert not hasattr(sgk, "reduced_portfolio_artifact_guard_report")
+    assert callable(reduced_portfolio_artifact_guard_report)
 
 
 # ---- test_stellarator_optimization.py ----
