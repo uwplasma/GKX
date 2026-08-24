@@ -2024,39 +2024,13 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.objectives.gradient_gates"
-path = "src/gkx/objectives/gradient_gates.py"
-owner_lane = "production solver-objective geometry-gradient validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "implicit non-Hermitian eigenpair sensitivities for solver-ready geometry objectives",
-  "actual linear-RHS gradient checks before VMEC/Boozer production-gradient promotion",
-]
-physics_contracts = [
-  "solver-ready gates validate actual linear-RHS growth, frequency, and quasilinear-weight observables without claiming full VMEC/Boozer optimization",
-  "branch-continuity reports must require the monitored dominant-growth branch to remain locally dominant under finite-difference perturbations",
-]
-numerics_contracts = [
-  "eigenpair sensitivities must be compared with nearest-branch finite differences using explicit gap, absolute, and relative tolerances",
-  "solver-ready value evaluators must remain finite and shape-compatible with the solver-objective vector contract",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-  "tests/unit/solvers/test_solver_gradient_gate_modules.py",
-]
-artifact_paths = [
-  "docs/_static/solver_objective_gradient_gate.json",
-]
-next_tests = [
-  "add direct invalid-moment tests for solver_objective_branch_gradient_report",
-  "add a second solver-ready geometry parameterization before broad optimization claims",
-]
-
-[[modules]]
 module = "gkx.objectives.vmec_boozer_gradients"
 path = "src/gkx/objectives/vmec_boozer_gradients.py"
+owned_modules = [
+  "gkx.objectives.solver_vmec",
+  "gkx.geometry.vmec_boundary_chain",
+  "gkx.objectives.vmec_transport_optimization",
+]
 owner_lane = "production solver-objective geometry-gradient validation"
 status = "active"
 coverage_priority = "high"
@@ -2250,174 +2224,6 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.objectives.solver_gradient_reports"
-path = "src/gkx/objectives/solver_gradient_reports.py"
-owned_modules = [
-  "gkx.objectives.solver_vmec",
-  "gkx.objectives.stellarator",
-  "gkx.objectives.stellarator_contracts",
-  "gkx.geometry.vmec_boundary_chain",
-  "gkx.objectives.vmec_transport_optimization",
-]
-owner_lane = "production solver-objective gradient reports and validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "implicit left/right non-Hermitian eigenpair sensitivity theory",
-  "finite-difference validation for geometry-parameter transport objectives",
-]
-physics_contracts = [
-  "actual linear-RHS growth/frequency and quasilinear-weight observables must be differentiated before optimization claims",
-  "solver-ready geometry gates are complemented by full vmex/booz_xform_jax state-gradient gates before optimization claims",
-  "VMEC-JAX boundary-chain audits distinguish exact solved-equilibrium finite differences from frozen-axis replay derivatives before promotion",
-  "mode-21 VMEC/Boozer state-to-solver eigenfrequency and quasilinear heat-flux-weight gradients must pass before reduced stellarator objective promotion",
-  "multi-equilibrium reduced linear/quasilinear VMEC/Boozer state-gradient holdouts must pass before broadening differentiable stellarator-objective claims beyond one fixture",
-  "multi-equilibrium reduced nonlinear-window estimator gradients may be validated as bounded differentiability gates, but not promoted as converged nonlinear heat-flux optimization claims",
-  "compact nonlinear finite-difference audits may validate startup plumbing and conditioning, but must not be promoted as transport heat-flux averages",
-  "production nonlinear heat-flux claims require long post-transient running-average windows, block/window stability, repeatability, and VMEC/Boozer optimized-equilibrium gradient gates",
-  "the nonlinear time-horizon audit must classify startup, reduced-estimator, feasibility, and release transport artifacts separately",
-]
-numerics_contracts = [
-  "implicit eigenpair sensitivities match nearest-branch central finite differences",
-  "branch isolation and biorthogonal left/right eigenvector conditioning are recorded",
-  "VMEC/Boozer finite differences use a conditioned step recorded in the artifact",
-  "boundary-chain diagnostics record exact final-state, raw initial-state, frozen-axis JVP, and frozen-axis VJP consistency before accepting a gradient convention",
-  "late-window envelope metrics are smooth under JAX AD and agree with central finite differences",
-  "startup nonlinear heat-flux window finite differences require repeatability, monotonic drive response, bounded coefficient of variation, bounded trend, and resolved response fraction",
-  "production nonlinear heat-flux averages additionally require a discarded transient, enough post-transient samples, cumulative running-mean convergence, stable independent late blocks, and finite flux above the startup/noise floor",
-  "VMEC/Boozer nonlinear finite-difference startup audits require finite imported-geometry nonlinear runs, deterministic repeatability, resolved geometry perturbation, and resolved central response; forward/backward asymmetry is diagnostic until a long-window gradient gate is promoted",
-  "long external-VMEC feasibility traces require a separate grid/window convergence gate before entering quasilinear calibration",
-  "optimized-equilibrium nonlinear transport promotion requires seed and timestep long-window replicate audits with finite flux, running-mean stability, block/SEM stability, and bounded ensemble spread",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-  "tests/validation/stellarator/test_check_vmec_boozer_gates.py",
-  "tests/validation/nonlinear/test_nonlinear_transport_optimization.py",
-  "tests/validation/nonlinear/test_nonlinear_transport_release_gates.py",
-  "tests/unit/objectives/test_vmec_transport_objectives.py",
-  "tests/validation/stellarator/test_vmex_qa_transport_optimization.py",
-]
-artifact_paths = [
-  "docs/_static/solver_objective_gradient_gate.json",
-  "docs/_static/solver_objective_gradient_gate.png",
-  "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
-  "docs/_static/vmec_boozer_solver_frequency_gradient_gate.png",
-  "docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_aggregate_objective_gate.json",
-  "docs/_static/vmec_boozer_aggregate_objective_gate.png",
-  "docs/_static/vmec_boozer_aggregate_line_search_gate.json",
-  "docs/_static/vmec_boozer_aggregate_line_search_gate.png",
-  "docs/_static/vmex_transport_gradient_diagnostic.json",
-  "docs/_static/vmex_transport_gradient_line_search.json",
-  "docs/_static/vmex_transport_gradient_line_search.svg",
-  "docs/_static/vmex_boundary_chain_idx28_iter500.json",
-  "docs/_static/vmex_boundary_chain_multicomponent.json",
-  "docs/_static/vmex_boundary_chain_multicomponent.png",
-  "docs/_static/vmec_boozer_multi_point_objective_gate.json",
-  "docs/_static/vmec_boozer_multi_point_objective_gate.png",
-  "docs/_static/vmec_boozer_aggregate_line_search_comparison.json",
-  "docs/_static/vmec_boozer_aggregate_line_search_comparison.png",
-  "docs/_static/vmec_boozer_aggregate_alpha_holdout_gate.json",
-  "docs/_static/vmec_boozer_aggregate_alpha_holdout_gate.png",
-  "docs/_static/vmec_boozer_aggregate_surface_holdout_gate.json",
-  "docs/_static/vmec_boozer_aggregate_surface_holdout_gate.png",
-  "docs/_static/vmec_boozer_second_equilibrium_aggregate_gate.json",
-  "docs/_static/vmec_boozer_second_equilibrium_aggregate_gate.png",
-  "docs/_static/vmec_boozer_aggregate_holdout_promotion_gate.json",
-  "docs/_static/vmec_boozer_nonlinear_window_gradient_gate.json",
-  "docs/_static/vmec_boozer_nonlinear_window_gradient_gate.png",
-  "docs/_static/vmec_boozer_li383_nonlinear_window_gradient_gate.json",
-  "docs/_static/vmec_boozer_li383_nonlinear_window_gradient_gate.png",
-  "docs/_static/vmec_boozer_li383_solver_frequency_gradient_gate.json",
-  "docs/_static/vmec_boozer_li383_solver_frequency_gradient_gate.png",
-  "docs/_static/vmec_boozer_li383_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_li383_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_qh_mid_m2_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_qh_mid_m2_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_li383_mid_m2_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_li383_mid_m2_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_qh_mid_m3_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_qh_mid_m3_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_li383_mid_m3_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_li383_mid_m3_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_qh_zsin_mid_m1_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_qh_zsin_mid_m1_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_li383_zsin_mid_m1_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_li383_zsin_mid_m1_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_qh_zcos_mid_m1_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_qh_zcos_mid_m1_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_li383_zcos_mid_m1_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_li383_zcos_mid_m1_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_qh_rsin_mid_m1_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_qh_rsin_mid_m1_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_li383_rsin_mid_m1_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_li383_rsin_mid_m1_quasilinear_gradient_gate.png",
-  "docs/_static/vmec_boozer_gradient_holdout_matrix.json",
-  "docs/_static/vmec_boozer_gradient_holdout_matrix.png",
-  "docs/_static/nonlinear_window_fd_audit.json",
-  "docs/_static/nonlinear_window_fd_audit.png",
-  "docs/_static/vmec_boozer_nonlinear_window_fd_audit.json",
-  "docs/_static/vmec_boozer_nonlinear_window_fd_audit.png",
-  "docs/_static/vmex_qa_transport_candidate_comparison.json",
-  "docs/_static/vmex_qa_transport_candidate_comparison.csv",
-  "docs/_static/vmex_qa_transport_candidate_comparison.png",
-  "docs/_static/quasilinear_vmec_dshape_linear_spectrum.png",
-  "docs/_static/quasilinear_vmec_itermodel_linear_spectrum.png",
-  "docs/_static/quasilinear_vmec_updown_asym_linear_spectrum.png",
-  "docs/_static/external_vmec_dshape_nonlinear_t250_n48_pilot.json",
-  "docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.json",
-  "docs/_static/external_vmec_dshape_t250_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_dshape_t250_high_grid_convergence_gate.png",
-  "docs/_static/external_vmec_itermodel_nonlinear_t350_n48_pilot.json",
-  "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.json",
-  "docs/_static/external_vmec_itermodel_t350_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_itermodel_t350_high_grid_convergence_gate.png",
-  "docs/_static/external_vmec_updown_asym_nonlinear_t450_n48_pilot.json",
-  "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.json",
-  "docs/_static/external_vmec_updown_asym_t450_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_updown_asym_t450_high_grid_convergence_gate.png",
-  "docs/_static/external_vmec_circular_t250_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_circular_t250_high_grid_convergence_gate.png",
-  "docs/_static/external_vmec_qh_nonlinear_t150_pilot.json",
-  "docs/_static/external_vmec_qh_nonlinear_t150_pilot.png",
-  "docs/_static/external_vmec_qh_nonlinear_t150_n48_pilot.json",
-  "docs/_static/external_vmec_qh_nonlinear_t150_n48_pilot.png",
-  "docs/_static/external_vmec_qh_nonlinear_t150_n64_pilot.json",
-  "docs/_static/external_vmec_qh_nonlinear_t150_n64_pilot.png",
-  "docs/_static/external_vmec_qh_grid_convergence_gate.json",
-  "docs/_static/external_vmec_qh_grid_convergence_gate.png",
-  "docs/_static/external_vmec_qh_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_qh_high_grid_convergence_gate.png",
-  "docs/_static/nonlinear_transport_time_horizon_audit.json",
-  "docs/_static/nonlinear_transport_time_horizon_audit.png",
-  "docs/_static/production_nonlinear_optimization_guard.json",
-  "docs/_static/production_nonlinear_optimization_guard.png",
-  "docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.json",
-  "docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_gate.png",
-  "docs/_static/optimized_equilibrium_replicates/optimized_equilibrium_replicate_t700_ensemble_readiness.json",
-  "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_t700_ensemble_gate.json",
-  "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_t700_ensemble_gate.png",
-  "docs/_static/qa_no_ess_reference_replicates/qa_no_ess_reference_t700_ensemble_readiness.json",
-  "docs/_static/qa_no_ess_to_optimized_nonlinear_audit.json",
-  "docs/_static/qa_no_ess_to_optimized_nonlinear_audit.png",
-  "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/optimized_equilibrium_post_optimization_nonlinear_t700_n64_seed31_transport_window.convergence.json",
-  "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/optimized_equilibrium_post_optimization_nonlinear_t700_n64_seed32_transport_window.convergence.json",
-  "docs/_static/optimized_equilibrium_replicates/nonlinear_window_convergence_reports/optimized_equilibrium_post_optimization_nonlinear_t700_n64_dt0p04_transport_window.convergence.json",
-  "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed31_transport_window.convergence.json",
-  "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_seed32_transport_window.convergence.json",
-  "docs/_static/qa_no_ess_reference_replicates/nonlinear_window_convergence_reports/qa_no_ess_reference_equilibrium_nonlinear_t700_n64_dt0p04_transport_window.convergence.json",
-]
-next_tests = [
-  "extend the reduced nonlinear-window estimator-gradient matrix to optimized-equilibrium holdouts before broad stellarator transport-gradient claims",
-  "replace reduced nonlinear-window estimator gates with converged nonlinear-window turbulence-gradient or robust finite-difference audits before broad nonlinear optimization-gradient claims",
-  "promote the boundary-chain probe from sparse diagnostic to standard geometry-gradient gate after VMEC-JAX exposes a public solved-equilibrium linearization API",
-  "add matched baseline-to-optimized nonlinear audits before broad geometry-family heat-flux-reduction claims",
-  "tighten VMEC/Boozer nonlinear-window finite-difference audits into local-gradient conditioning gates only after converged post-transient windows and local-gradient evidence exist",
-]
-
-[[modules]]
 module = "gkx.objectives.portfolio"
 path = "src/gkx/objectives/portfolio.py"
 owner_lane = "objective portfolio reduction, sensitivity, conditioning, and covariance"
@@ -2519,6 +2325,10 @@ next_tests = [
 [[modules]]
 module = "gkx.objectives.stellarator_tables"
 path = "src/gkx/objectives/stellarator_tables.py"
+owned_modules = [
+  "gkx.objectives.stellarator",
+  "gkx.objectives.stellarator_contracts",
+]
 owner_lane = "reduced and VMEC/Boozer stellarator ITG objective table and portfolio gates"
 status = "active"
 coverage_priority = "high"

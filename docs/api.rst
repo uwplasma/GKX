@@ -905,13 +905,6 @@ Solver Geometry Objectives
    :members:
    :private-members:
 
-Solver-Ready Gradient Gates
----------------------------
-
-.. automodule:: gkx.objectives.gradient_gates
-   :members:
-   :private-members:
-
 Solver VMEC/Boozer Gradient Gates
 ---------------------------------
 

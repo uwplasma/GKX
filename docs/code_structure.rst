@@ -149,8 +149,8 @@ Physics / Numerics / IO Map
      - ``operators/linear/rhs.py``, ``operators/linear/cache_builder.py``, ``operators/linear/collisions.py``, ``operators/linear/collision_tables.py``, ``operators/linear/dissipation.py``, ``solvers/linear/``, ``terms/linear_terms.py``, ``terms/fields.py``, and ``terms/assembly.py``
      - manufactured solutions, observed-order, eigenfunction and branch tests; cache-builder tests cover staged grid, geometry, twist-shift, gyro/moment, drift, and linked-boundary packing
    * - Solver objectives and eigen-AD gates
-     - top-level ``gkx`` objective exports, ``objectives/core.py``, ``objectives/eigen.py``, ``objectives/portfolio.py``, ``objectives/portfolio_guard.py``, ``objectives/zonal.py``, ``objectives/stellarator.py``, ``objectives/solver_vmec.py``, ``objectives/gradient_gates.py``, and the retained ``objectives/vmec_*`` modules
-     - core linear/quasilinear observables, implicit eigenpair VJP, branch locality, portfolio reduction/covariance, zonal and stellarator objectives, VMEC/Boozer geometry gradients, admission gates, and finite-difference line searches
+     - top-level ``gkx`` objective exports, ``objectives/core.py``, ``objectives/eigen.py``, ``objectives/portfolio.py``, ``objectives/zonal.py``, ``objectives/stellarator.py``, ``objectives/solver_vmec.py``, and the retained ``objectives/vmec_*`` modules
+     - core linear/quasilinear observables, implicit eigenpair VJP, branch locality, portfolio reduction/covariance, zonal and stellarator objectives, VMEC/Boozer geometry gradients, and finite-difference line searches
    * - Nonlinear operators
      - ``solvers/nonlinear/state_integration.py``, ``solvers/nonlinear/diagnostic_integration.py``, ``operators/nonlinear/rhs.py``, ``operators/nonlinear/brackets.py``, ``operators/nonlinear/diagnostic_state.py``, ``operators/nonlinear/diagnostics.py``, ``operators/nonlinear/projection.py``, ``operators/nonlinear/collisions.py``, ``solvers/nonlinear/explicit.py``, ``solvers/nonlinear/diagnostics.py``, ``solvers/nonlinear/imex.py``, ``solvers/nonlinear/imex_diagnostics.py``, ``core/velocity.py``, and ``terms/nonlinear.py``
      - RHS routing, bracket payload, explicit stepping, explicit diagnostic orchestration, IMEX diagnostic orchestration, cached IMEX operator/state policy, diagnostic tuple assembly, fixed-mode and Hermitian projection, collision-split, staged electrostatic/electromagnetic nonlinear contribution helpers, transport-window tests
@@ -406,16 +406,14 @@ Completed extractions:
   weights:
   ``objectives/sampling.py``
 - solver-ready geometry objective gates, reduced nonlinear-window metrics,
-  solver-ready gradient gates, mode-21 VMEC/Boozer gradient gates,
+  mode-21 VMEC/Boozer gradient gates,
   backend-free portfolio row/weight contracts, portfolio AD/FD sensitivity
-  gates, artifact promotion guards, geometry-owned VMEC/Boozer state coefficient helpers,
+  gates, geometry-owned VMEC/Boozer state coefficient helpers,
   VMEC/Boozer objective-table plumbing, and VMEC/Boozer finite-difference/
   line-search gates:
   ``objectives/geometry.py``,
-  ``objectives/gradient_gates.py``,
   ``objectives/vmec_boozer_gradients.py``,
   ``objectives/portfolio.py``,
-  ``objectives/portfolio_guard.py``,
   ``objectives/vmec_boozer.py``,
   ``objectives/vmec_boozer_fd.py``,
   ``objectives/vmec_boozer_line_search.py``. Scalar and aggregate

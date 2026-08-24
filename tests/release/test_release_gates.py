@@ -2901,7 +2901,7 @@ def test_repository_validation_manifest_is_well_formed() -> None:
     assert rows["gkx.terms.assembly"]["coverage_target_percent"] == 95.0
     assert rows["gkx.runtime"]["n_owned_modules"] >= 5
     assert rows["gkx.diagnostics.validation_gates"]["n_physics_contracts"] >= 2
-    assert rows["gkx.objectives.gradient_gates"]["coverage_target_percent"] == 95.0
+    assert rows["gkx.objectives.autodiff_validation"]["coverage_target_percent"] == 98.0
     assert rows["gkx.objectives.vmec_boozer_gradients"]["n_numerics_contracts"] >= 2
 
     assert rows["gkx.operators.linear.cache_builder"]["coverage_target_percent"] == 95.0
