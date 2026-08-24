@@ -62,7 +62,17 @@ recursive = true
 # anisotropy->ky_max map from the 2026-08 resolution scan, and folding those
 # constants into wout.py or startup.py would bury a fitted physics contract
 # inside CLI plumbing that changes for unrelated reasons.
-baseline = 221
+# 221 -> 199: evicting research-campaign governance from the installable
+# package. Eight modules left src/gkx: the VMEC candidate/transport admission
+# policies and their report builders, the reduced-portfolio promotion guard,
+# the solver gradient gates, and the nonlinear turbulence-gradient evidence and
+# replicate-manifest owners. Seven moved to tools/campaigns/, which is where the
+# campaign that calls them already lives; objectives/solver_gradient_reports.py
+# was deleted outright because every function in it forwarded, unchanged, to an
+# implementation in another module and nothing but the gkx.api registry
+# imported it. None of them was reachable from a run, a CLI command, or a
+# solver path. The count also absorbs the slack main was already carrying.
+baseline = 199
 target = 45
 
 [[topology_policy.counts]]
@@ -532,7 +542,16 @@ recursive = true
 # estimator; wout.py gains the --estimate short-circuit and the printed
 # table. The scan it encodes cost two GPU-nights; the estimate costs one
 # geometry generation, and choosing one rung too low inflated flux 18-132%.
-baseline = 96769
+# 96769 -> 91418: the same eviction, measured in lines. 5,236 lines of
+# promotion gates, candidate admission policy, and evidence/report builders are
+# no longer installed with the package; a release user never called any of
+# them. The physics they read stays: objectives/portfolio.py,
+# objectives/vmec_transport*.py, diagnostics/nonlinear_gradient_statistics.py,
+# diagnostics/transport_windows.py, diagnostics/metadata.py, and
+# diagnostics/validation_gates.py are all untouched. The seven lines that came
+# back are vmec_transport_optimization.py's own finite-float helper, which was
+# the single reason it still imported the admission module.
+baseline = 91418
 target = 45000
 
 [[line_budget_policy.counts]]
