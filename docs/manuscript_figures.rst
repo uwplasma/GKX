@@ -50,7 +50,7 @@ deferred from the current manuscript scope.
 
 The latest manuscript-stack additions are deliberately contract-level figures
 (each a regenerable render backed by tracked JSON evidence):
-``docs/_static/quasilinear_holdout_gap_report.json`` states exactly why
+``docs/_static/quasilinear_holdout_gap_report.json`` (whose regenerable render is ``docs/_static/quasilinear_holdout_gap_report.png``, not tracked in git) states exactly why
 absolute-flux promotion remains blocked;
 ``docs/_static/vmec_boozer_aggregate_objective_gate.json`` together with
 ``docs/_static/vmec_boozer_reduced_portfolio_guard.json`` validates the
@@ -190,7 +190,7 @@ Core Validation Figures
    * - Quasilinear calibration audit
      - ``tools/artifacts/plot_quasilinear_calibration.py report`` and ``tools/artifacts/plot_quasilinear_calibration.py``
      - Initial train/holdout artifact closed as a failed model-transfer gate
-     - current artifact bases: the tracked JSON reports ``docs/_static/quasilinear_cyclone_calibration_audit_report.json``, ``docs/_static/quasilinear_cyclone_miller_train_holdout_report.json``, ``docs/_static/quasilinear_hsx_train_holdout_report.json``, ``docs/_static/quasilinear_w7x_train_holdout_report.json``, the manuscript-facing combined report ``docs/_static/quasilinear_stellarator_train_holdout_report.json``, and the input-provenance audit ``docs/_static/quasilinear_validated_calibration_inputs.json`` (the calibration-audit and train/holdout panels are regenerable renders and are not tracked in git). The current one-constant train/holdout report fits the heat-flux scale on Cyclone and the external-VMEC ITERModel case, then scores ten held-out windows: Cyclone Miller, HSX, W7-X, D-shaped external VMEC, up-down asymmetric external VMEC, circular external VMEC, CTH-like external VMEC, shaped-pressure external VMEC, replicated QP external VMEC, and replicated Solovev external VMEC. The CTH-like and shaped-pressure rows are admitted only under explicit high-grid policies that exclude failed coarse-grid traces, while the QP and Solovev rows are matched to passed replicated nonlinear summary gates. The report intentionally remains ``calibration_dataset`` with ``passed = false`` because held-out errors exceed the ``0.35`` gate; the current holdout mean relative error is about ``6.49`` for the positive-growth mixing-length family. The input audit confirms that every current train/holdout nonlinear artifact maps to a passed nonlinear gate or to a scoped high-grid admission gate, while failed QH and older feasibility pilots remain excluded. This closes the NetCDF/CSV/high-grid-admission calibration machinery and provenance gate but not a calibrated absolute-flux claim.
+     - current artifact bases: the tracked JSON reports ``docs/_static/quasilinear_cyclone_calibration_audit_report.json``, ``docs/_static/quasilinear_cyclone_miller_train_holdout_report.json``, ``docs/_static/quasilinear_hsx_train_holdout_report.json``, ``docs/_static/quasilinear_w7x_train_holdout_report.json``, the manuscript-facing combined report ``docs/_static/quasilinear_stellarator_train_holdout_report.json`` with its figure sidecar ``docs/_static/quasilinear_stellarator_train_holdout.json`` (regenerable render ``docs/_static/quasilinear_stellarator_train_holdout.png``, not tracked in git), and the input-provenance audit ``docs/_static/quasilinear_validated_calibration_inputs.json`` (the calibration-audit and train/holdout panels are regenerable renders and are not tracked in git). The current one-constant train/holdout report fits the heat-flux scale on Cyclone and the external-VMEC ITERModel case, then scores ten held-out windows: Cyclone Miller, HSX, W7-X, D-shaped external VMEC, up-down asymmetric external VMEC, circular external VMEC, CTH-like external VMEC, shaped-pressure external VMEC, replicated QP external VMEC, and replicated Solovev external VMEC. The CTH-like and shaped-pressure rows are admitted only under explicit high-grid policies that exclude failed coarse-grid traces, while the QP and Solovev rows are matched to passed replicated nonlinear summary gates. The report intentionally remains ``calibration_dataset`` with ``passed = false`` because held-out errors exceed the ``0.35`` gate; the current holdout mean relative error is about ``6.49`` for the positive-growth mixing-length family. The input audit confirms that every current train/holdout nonlinear artifact maps to a passed nonlinear gate or to a scoped high-grid admission gate, while failed QH and older feasibility pilots remain excluded. This closes the NetCDF/CSV/high-grid-admission calibration machinery and provenance gate but not a calibrated absolute-flux claim.
    * - External-VMEC nonlinear holdouts
      - ``tools/release/check_vmec_boozer_gates.py high-grid-admission``
      - Solovev replicated holdout admitted as negative absolute-QL evidence; QH remains negative evidence
@@ -288,28 +288,28 @@ in the repository-slimming passes and, because the generators were retired,
 are not regenerable in-tree. Each documents a scoped negative or
 claim-boundary result, not a runtime absolute-flux predictor:
 
-- ``docs/_static/quasilinear_saturation_rule_sweep.json``:
+- ``docs/_static/quasilinear_saturation_rule_sweep.png`` (regenerable render, not tracked in git; numeric evidence in the JSON companion ``docs/_static/quasilinear_saturation_rule_sweep.json``):
   simple-rule saturation sweep on two training cases and ten held-out windows;
   positive-growth mixing length, linear heat-flux weight, and absolute-growth
   all fail the held-out absolute-flux gate.
-- ``docs/_static/quasilinear_shape_aware_saturation.json``:
+- ``docs/_static/quasilinear_shape_aware_saturation.png`` (regenerable render, not tracked in git; numeric evidence in the JSON companion ``docs/_static/quasilinear_shape_aware_saturation.json``):
   shared spectrum-shape exponent model, a manuscript-facing negative result
   ruling out a one-exponent envelope.
-- ``docs/_static/quasilinear_candidate_uncertainty.json``:
+- ``docs/_static/quasilinear_candidate_uncertainty.png`` (regenerable render, not tracked in git; numeric evidence in the JSON companion ``docs/_static/quasilinear_candidate_uncertainty.json``):
   leave-one-geometry-out candidate scoring with training-residual prediction
   intervals; the best candidate ``spectral_envelope_ridge`` misses the 0.35
   transport gate.
-- ``docs/_static/quasilinear_candidate_regularization_sweep.json``:
+- ``docs/_static/quasilinear_candidate_regularization_sweep.png`` (regenerable render, not tracked in git; numeric evidence in the JSON companion ``docs/_static/quasilinear_candidate_regularization_sweep.json``):
   ridge-penalty sweep confirming no tested penalty passes the gate.
-- ``docs/_static/quasilinear_dataset_sufficiency.json``:
+- ``docs/_static/quasilinear_dataset_sufficiency.png`` (regenerable render, not tracked in git; numeric evidence in the JSON companion ``docs/_static/quasilinear_dataset_sufficiency.json``):
   audit of the validated nonlinear windows behind the candidate models.
-- ``docs/_static/quasilinear_model_selection_status.json``:
+- ``docs/_static/quasilinear_model_selection_status.png`` (regenerable render, not tracked in git; numeric evidence in the JSON companion ``docs/_static/quasilinear_model_selection_status.json``):
   consolidated claim-boundary record, ``passed=false`` with the
   dataset-sufficiency, uncertainty, and transport-error blockers.
 - ``docs/_static/quasilinear_stellarator_usefulness.png`` (with JSON
   companion): stellarator usefulness/limitation summary across HSX, W7-X,
   CTH-like, and shaped-pressure windows.
-- ``docs/_static/quasilinear_screening_skill.json``:
+- ``docs/_static/quasilinear_screening_skill.png`` (regenerable render, not tracked in git; numeric evidence in the JSON companion ``docs/_static/quasilinear_screening_skill.json``):
   rank/correlation screening skill; no model passes the full-portfolio and
   held-out rank gates.
 

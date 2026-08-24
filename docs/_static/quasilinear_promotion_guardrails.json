@@ -258,7 +258,7 @@
         "passed": true
       },
       {
-        "detail": "nearby index text mentions JSON companion",
+        "detail": "docs/_static/quasilinear_stellarator_train_holdout.json",
         "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_stellarator_train_holdout",
         "passed": true
       },
@@ -298,7 +298,7 @@
         "passed": true
       },
       {
-        "detail": "nearby index text mentions JSON companion",
+        "detail": "docs/_static/quasilinear_saturation_rule_sweep.json",
         "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_saturation_rule_sweep",
         "passed": true
       },
@@ -338,7 +338,7 @@
         "passed": true
       },
       {
-        "detail": "nearby index text mentions JSON companion",
+        "detail": "docs/_static/quasilinear_shape_aware_saturation.json",
         "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_shape_aware_saturation",
         "passed": true
       },
@@ -378,7 +378,7 @@
         "passed": true
       },
       {
-        "detail": "nearby index text mentions JSON companion",
+        "detail": "docs/_static/quasilinear_candidate_uncertainty.json",
         "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_candidate_uncertainty",
         "passed": true
       },
@@ -418,7 +418,7 @@
         "passed": true
       },
       {
-        "detail": "nearby index text mentions JSON companion",
+        "detail": "docs/_static/quasilinear_candidate_regularization_sweep.json",
         "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_candidate_regularization_sweep",
         "passed": true
       },
@@ -458,7 +458,7 @@
         "passed": true
       },
       {
-        "detail": "nearby index text mentions JSON companion",
+        "detail": "docs/_static/quasilinear_dataset_sufficiency.json",
         "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_dataset_sufficiency",
         "passed": true
       },
@@ -578,7 +578,7 @@
         "passed": true
       },
       {
-        "detail": "nearby index text mentions JSON companion",
+        "detail": "docs/_static/quasilinear_screening_skill.json",
         "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_screening_skill",
         "passed": true
       },
@@ -618,7 +618,7 @@
         "passed": true
       },
       {
-        "detail": "nearby index text mentions JSON companion",
+        "detail": "docs/_static/quasilinear_holdout_gap_report.json",
         "metric": "ql_figure_index_mentions_json_sidecar:docs/_static/quasilinear_holdout_gap_report",
         "passed": true
       },
