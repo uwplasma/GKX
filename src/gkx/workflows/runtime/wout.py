@@ -13,6 +13,10 @@ WOUT_SIGNATURE_VARIABLES = ("rmnc", "zmns", "xm", "xn")
 WOUT_FLAG_NAMES = ("--vmec", "--vmex")
 DEFAULT_LINEAR_KY_VALUES = (0.1, 0.2, 0.3, 0.4, 0.55, 0.7, 0.85, 1.0)
 
+#: Fixed step for the shorthand linear scan. Half the measured 0.019 bound
+#: at the top of DEFAULT_LINEAR_KY_VALUES, so every rung integrates.
+LINEAR_SCAN_DT = 0.01
+
 # Path-valued deck fields that must survive relocating the resolved deck.
 _DECK_PATH_FIELDS = (
     ("geometry", "vmec_file"),
@@ -188,10 +192,24 @@ def _force_vmec_geometry(data: dict[str, Any], wout_path: Path) -> None:
 
 
 def _apply_linear_scan_defaults(data: dict[str, Any]) -> None:
-    """Switch a deck to linear physics with a default ky-scan list."""
+    """Switch a deck to linear physics with a default ky-scan list.
+
+    The step is reduced along with the physics. A nonlinear deck is written
+    around its own low-``k_y`` box, while this scan reaches ``k_y rho = 1``,
+    where the explicit bound is far tighter: on the shipped stellarator deck
+    the CFL-stable step falls from 0.067 at the first finite ``k_y`` to 0.019
+    at the top of the scan, so the nonlinear deck's 0.1 overflows every rung
+    and the growth fit then refuses a non-finite history. The linear paths
+    advance the whole RHS explicitly at a fixed step, so adaptivity in the
+    deck does not rescue them.
+    """
 
     data["physics"] = {**data.get("physics", {}), "linear": True, "nonlinear": False}
     data["terms"] = {**data.get("terms", {}), "nonlinear": 0.0}
+    time_cfg = dict(data.get("time", {}))
+    if float(time_cfg.get("dt", 0.0)) > LINEAR_SCAN_DT:
+        time_cfg["dt"] = LINEAR_SCAN_DT
+        data["time"] = time_cfg
     scan = dict(data.get("scan", {}))
     scan.setdefault("ky", list(DEFAULT_LINEAR_KY_VALUES))
     data["scan"] = scan
