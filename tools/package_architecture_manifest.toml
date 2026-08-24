@@ -535,6 +535,14 @@ recursive = true
 # diagnostics/validation_gates.py are all untouched. The seven lines that came
 # back are vmec_transport_optimization.py's own finite-float helper, which was
 # the single reason it still imported the admission module.
+# 91418 -> 91451: replacing the Laguerre grid transform's einsum with an
+# explicit accumulation. XLA lowered that contraction to a degenerate GEMM
+# (M=5, K=4, N=Nm*Ny*Nx*Nz) that streamed the whole state through a library
+# kernel at 2.4 GB/s, the profile's single largest kernel. Written as
+# broadcast multiply-adds behind an optimization barrier it fuses instead:
+# the nonlinear RHS runs 20-31% faster at 48^2, 64^2 and 96^2, and the
+# primary output NetCDF is bitwise identical. The added lines are the
+# helper and the docstring recording why a dot_general must not come back.
 # 91418 -> 91462: making `gkx wout.nc --linear` run at all. It failed three
 # independent ways: the startup CFL hint crashed on an imported equilibrium
 # whose closed theta interval is one point longer than its grid; the
@@ -543,7 +551,7 @@ recursive = true
 # and the shorthand inherited a nonlinear deck dt of 0.1 against a 0.019
 # bound at the top of its own scan. The CFL hint moved to the module that
 # owns the bound, which took workflows/linear.py from 1001 to 978 lines.
-baseline = 91462
+baseline = 91494
 target = 45000
 
 [[line_budget_policy.counts]]
