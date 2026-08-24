@@ -473,30 +473,67 @@ def _check_laguerre_transform_conditioning(
 # Nonlinear Laguerre quadrature kernels live with the velocity basis they transform.
 
 
+def _laguerre_contract_axis1(state: jnp.ndarray, matrix: jnp.ndarray) -> jnp.ndarray:
+    """Contract ``state`` axis 1 with ``matrix`` row axis, left to right.
+
+    This is ``einsum("s a m y x z,a b -> s b m y x z")`` written as an explicit
+    accumulation over ``a``. The contraction is tiny (``Nl`` is single digit)
+    but the free axis is the whole perpendicular-parallel grid, so XLA's dot
+    emitter runs it as a degenerate GEMM that streams the state through a
+    library kernel instead of fusing it. Spelling the same sum as broadcast
+    multiply-adds keeps it a single fusible loop.
+
+    The accumulation runs ``a = 0, 1, ...``, the order a ``dot_general``
+    reduction over that axis uses, so this returns the same bits as the
+    ``Precision.HIGHEST`` einsum it replaces rather than merely the same value:
+    the whole nonlinear RHS, the linear RHS, the field solve and a hand-built
+    RK3 step are bitwise unchanged across it, in float32 and in x64. Only
+    inside ``lax.scan`` do last bits move, and there the scan's compiled step
+    already differs from the same step unrolled by more than this change moves
+    it -- compiler scheduling freedom that the unmodified code has too, not a
+    different contraction.
+
+    Keep the loop written out. A ``dot_general`` here is both slower and, on
+    Ampere and later NVIDIA GPUs, silently lowered to TF32 unless it is pinned;
+    broadcast multiply-adds have nothing to lower.
+    """
+
+    state = jnp.asarray(state)
+    matrix = jnp.asarray(matrix)
+    if state.ndim != 6 or matrix.ndim != 2:
+        raise ValueError(
+            "Laguerre contraction expects a 6D state and a 2D transform matrix"
+        )
+    out_shape = (1, matrix.shape[1]) + (1,) * (state.ndim - 2)
+    total = None
+    for index in range(matrix.shape[0]):
+        term = state[:, index][:, None, ...] * jnp.reshape(matrix[index], out_shape)
+        total = term if total is None else total + term
+    if total is None:  # pragma: no cover - Nl is always at least one
+        raise ValueError("Laguerre transform matrix cannot be empty")
+    return total
+
+
 def _laguerre_to_grid(G: jnp.ndarray, laguerre_to_grid: jnp.ndarray) -> jnp.ndarray:
-    """Transform Laguerre moments to the muB quadrature grid."""
-    G = jnp.asarray(G)
-    laguerre_to_grid = jnp.asarray(laguerre_to_grid)
-    return jnp.einsum(
-        "slmyxz,lj->sjmyxz",
-        G,
-        laguerre_to_grid,
-        precision=jax.lax.Precision.HIGHEST,
-    )
+    """Transform Laguerre moments to the muB quadrature grid.
+
+    The barrier keeps the contraction a separate pass from whatever reads its
+    result. Its only consumer is the nonlinear bracket, which reads the grid
+    values through the transpose that moves ``z`` off the minor axis for the
+    perpendicular transform. Fused, that made the contraction re-read the
+    moment array once per Laguerre point at the transpose's stride -- one cache
+    line fetched per eight bytes used. Kept apart, the contraction streams the
+    moments contiguously and the transpose becomes XLA's own blocked copy.
+    """
+
+    return jax.lax.optimization_barrier(_laguerre_contract_axis1(G, laguerre_to_grid))
 
 
 def _laguerre_to_spectral(
     g_mu: jnp.ndarray, laguerre_to_spectral: jnp.ndarray
 ) -> jnp.ndarray:
     """Transform muB quadrature-grid values back to Laguerre moments."""
-    g_mu = jnp.asarray(g_mu)
-    laguerre_to_spectral = jnp.asarray(laguerre_to_spectral)
-    return jnp.einsum(
-        "sjmyxz,jl->slmyxz",
-        g_mu,
-        laguerre_to_spectral,
-        precision=jax.lax.Precision.HIGHEST,
-    )
+    return _laguerre_contract_axis1(g_mu, laguerre_to_spectral)
 
 
 def _laguerre_j0_field(
@@ -513,9 +550,7 @@ def _laguerre_j0_field(
         b = b[None, ...]
     if roots.ndim == 0:
         roots = roots[None]
-    alpha2 = jnp.maximum(
-        0.0, 2.0 * roots[None, :, None, None, None] * b[:, None, ...]
-    )
+    alpha2 = jnp.maximum(0.0, 2.0 * roots[None, :, None, None, None] * b[:, None, ...])
     j0, _j1_over_alpha = _gyro_bessel_factors(alpha2)
     field_b = field[None, None, ...]
     return j0 * field_b * jnp.asarray(factor, dtype=field.dtype)
@@ -549,9 +584,7 @@ def _laguerre_bpar_correction(
     tz_arr = jnp.asarray(tz)
     if tz_arr.ndim == 0:
         tz_arr = tz_arr[None]
-    alpha2 = jnp.maximum(
-        0.0, 2.0 * roots[None, :, None, None, None] * b[:, None, ...]
-    )
+    alpha2 = jnp.maximum(0.0, 2.0 * roots[None, :, None, None, None] * b[:, None, ...])
     _j0, j1_over_alpha = _gyro_bessel_factors(alpha2)
     coeff = (
         tz_arr[:, None, None, None, None]
