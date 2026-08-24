@@ -149,8 +149,8 @@ Physics / Numerics / IO Map
      - ``operators/linear/rhs.py``, ``operators/linear/cache_builder.py``, ``operators/linear/collisions.py``, ``operators/linear/collision_tables.py``, ``operators/linear/dissipation.py``, ``solvers/linear/``, ``terms/linear_terms.py``, ``terms/fields.py``, and ``terms/assembly.py``
      - manufactured solutions, observed-order, eigenfunction and branch tests; cache-builder tests cover staged grid, geometry, twist-shift, gyro/moment, drift, and linked-boundary packing
    * - Solver objectives and eigen-AD gates
-     - top-level ``gkx`` objective exports, ``objectives/core.py``, ``objectives/eigen.py``, ``objectives/portfolio.py``, ``objectives/portfolio_guard.py``, ``objectives/zonal.py``, ``objectives/stellarator.py``, ``objectives/solver_vmec.py``, ``objectives/gradient_gates.py``, and the retained ``objectives/vmec_*`` modules
-     - core linear/quasilinear observables, implicit eigenpair VJP, branch locality, portfolio reduction/covariance, zonal and stellarator objectives, VMEC/Boozer geometry gradients, admission gates, and finite-difference line searches
+     - top-level ``gkx`` objective exports, ``objectives/core.py``, ``objectives/eigen.py``, ``objectives/portfolio.py``, ``objectives/zonal.py``, ``objectives/stellarator.py``, ``objectives/solver_vmec.py``, and the retained ``objectives/vmec_*`` modules
+     - core linear/quasilinear observables, implicit eigenpair VJP, branch locality, portfolio reduction/covariance, zonal and stellarator objectives, VMEC/Boozer geometry gradients, and finite-difference line searches
    * - Nonlinear operators
      - ``solvers/nonlinear/state_integration.py``, ``solvers/nonlinear/diagnostic_integration.py``, ``operators/nonlinear/rhs.py``, ``operators/nonlinear/brackets.py``, ``operators/nonlinear/diagnostic_state.py``, ``operators/nonlinear/diagnostics.py``, ``operators/nonlinear/projection.py``, ``operators/nonlinear/collisions.py``, ``solvers/nonlinear/explicit.py``, ``solvers/nonlinear/diagnostics.py``, ``solvers/nonlinear/imex.py``, ``solvers/nonlinear/imex_diagnostics.py``, ``core/velocity.py``, and ``terms/nonlinear.py``
      - RHS routing, bracket payload, explicit stepping, explicit diagnostic orchestration, IMEX diagnostic orchestration, cached IMEX operator/state policy, diagnostic tuple assembly, fixed-mode and Hermitian projection, collision-split, staged electrostatic/electromagnetic nonlinear contribution helpers, transport-window tests
@@ -406,16 +406,14 @@ Completed extractions:
   weights:
   ``objectives/sampling.py``
 - solver-ready geometry objective gates, reduced nonlinear-window metrics,
-  solver-ready gradient gates, mode-21 VMEC/Boozer gradient gates,
+  mode-21 VMEC/Boozer gradient gates,
   backend-free portfolio row/weight contracts, portfolio AD/FD sensitivity
-  gates, artifact promotion guards, geometry-owned VMEC/Boozer state coefficient helpers,
+  gates, geometry-owned VMEC/Boozer state coefficient helpers,
   VMEC/Boozer objective-table plumbing, and VMEC/Boozer finite-difference/
   line-search gates:
   ``objectives/geometry.py``,
-  ``objectives/gradient_gates.py``,
   ``objectives/vmec_boozer_gradients.py``,
   ``objectives/portfolio.py``,
-  ``objectives/portfolio_guard.py``,
   ``objectives/vmec_boozer.py``,
   ``objectives/vmec_boozer_fd.py``,
   ``objectives/vmec_boozer_line_search.py``. Scalar and aggregate
@@ -461,8 +459,9 @@ Completed extractions:
   Explicit finite comparison metrics take precedence over fallback
   statistics, including a physical zero; zero uncertainty separation can
   therefore never be replaced by a stale positive fallback and accidentally
-  promote an audit. Replicate-spread diagnostics now live in
-  ``diagnostics/nonlinear_replicates.py`` and stage ensemble row normalization,
+  promote an audit. Replicate-spread diagnostics live outside the
+  installable package in ``tools/campaigns/nonlinear_replicates.py`` and stage
+  ensemble row normalization,
   high/low variant selection, state classification, replicate-row packing, and
   summary assembly. The same owner builds seed/timestep artifact-readiness
   manifests, while ``diagnostics/transport_windows.py`` owns individual-window
@@ -471,8 +470,8 @@ Completed extractions:
 - quasilinear nonlinear-window convergence metadata is consolidated in
   ``diagnostics/transport_windows.py`` for statistics, CSV/summary IO,
   promotion readiness, and ensemble uncertainty; replicate readiness belongs
-  to ``diagnostics/nonlinear_replicates.py``. The public API re-exports the
-  documented transport-window helpers directly from these diagnostics owners.
+  to ``tools/campaigns/nonlinear_replicates.py``. The public API re-exports the
+  documented transport-window helpers directly from the diagnostics owners.
   Persisted report, gate, and row pass flags must be explicit booleans; strings
   and numeric lookalikes fail closed. The statistics owner stages validated
   late-window selection, finite-sample counts, drift/terminal-window metrics,
@@ -605,16 +604,16 @@ Completed extractions:
 - nonlinear turbulence-gradient paired-seed statistics, control-variate
   construction, uncertainty propagation, and independent control-mean gates
   live in ``diagnostics/nonlinear_gradient_statistics.py`` as pure reusable
-  functions. Historical candidate selection and launch policy remains in a
-  temporary campaign owner pending deletion; it no longer owns scientific
-  uncertainty arithmetic.
+  functions. Candidate selection and launch policy is campaign governance and
+  now lives in ``tools/campaigns/``; it never owned scientific uncertainty
+  arithmetic.
 - nonlinear turbulence-gradient evidence scope markers, acceptance config
   dataclasses, JSON-safe parsing, finite-difference conditioning gates, and
   artifact classification live in ``diagnostics/metadata.py``. Replicated
-  window summaries live in ``diagnostics/nonlinear_replicates.py`` and central
-  finite-difference transport response/uncertainty lives in
+  window summaries live in ``tools/campaigns/nonlinear_replicates.py`` and
+  central finite-difference transport response/uncertainty lives in
   ``diagnostics/transport.py``. The compact
-  ``diagnostics/nonlinear_gradient_evidence.py`` facade owns bracket and
+  ``tools/campaigns/nonlinear_gradient_evidence.py`` facade owns bracket and
   candidate report orchestration plus production evidence-gap reports. It has
   one final export contract; ``diagnostics/metadata.py`` and
   ``diagnostics/transport.py`` likewise each have one complete owner contract
@@ -763,28 +762,31 @@ campaign launch and artifact-building policy stays in ``tools``. Model-selection
 input normalization, optimized-equilibrium audit summaries, and absolute-flux
 claim guardrails in ``diagnostics/quasilinear_model_selection.py``.
 
-VMEC-JAX candidate and transport admission gates now have explicit owners.
-``gkx.objectives.vmec_candidate_admission`` owns solved-equilibrium,
-authoritative-WOUT, and WOUT-reproducibility candidate gates. It keeps aspect,
-iota, iota-profile, quasisymmetry, and pass/fail helpers together so optimizer
-state and WOUT gates share one JSON schema and threshold semantics.
-``gkx.objectives.vmec_transport_admission`` owns transport-admission
-policy dataclasses, reduced transport metric selection, multi-surface/
-field-line/``k_y`` sample coverage, and promoted transport-candidate selection.
-The ``gkx.objectives.vmec_transport`` module owns objective
-configuration, optional-backend path policy, differentiable sample tables,
-reductions, and the optimizer callback. Eigenbranch-locality gates remain in
-``vmec_transport_branch`` because they evaluate a distinct three-state
-continuation contract.
-``gkx.diagnostics.stellarator_transport_reports`` owns report-style
+VMEC-JAX candidate and transport admission gates are campaign governance, not
+runtime physics, so they live outside the installable package in
+``tools/campaigns/``. ``tools/campaigns/vmec_candidate_admission.py`` owns
+solved-equilibrium, authoritative-WOUT, and WOUT-reproducibility candidate
+gates. It keeps aspect, iota, iota-profile, quasisymmetry, and pass/fail
+helpers together so optimizer state and WOUT gates share one JSON schema and
+threshold semantics. ``tools/campaigns/vmec_transport_admission.py`` owns
+transport-admission policy dataclasses, reduced transport metric selection,
+multi-surface/field-line/``k_y`` sample coverage, and promoted
+transport-candidate selection.
+``tools/campaigns/stellarator_transport_reports.py`` owns report-style
 nonlinear transport diagnostics: landscape admission, reduced prelaunch gates,
 next-campaign admission, and matched nonlinear audit redesign. Persisted gate
 flags must be explicit booleans and replicate counts must be finite,
 nonnegative integers; malformed values fail closed into report blockers rather
-than becoming truthy or raising during report construction. The public
-``gkx.api`` re-exports user-facing admission helpers directly
-from these owners, while installable validation-campaign subpackages have
-been removed.
+than becoming truthy or raising during report construction.
+
+The installable package keeps the physics these gates read.
+The ``gkx.objectives.vmec_transport`` module owns objective
+configuration, optional-backend path policy, differentiable sample tables,
+reductions, and the optimizer callback. Eigenbranch-locality gates remain in
+``vmec_transport_branch`` because they evaluate a distinct three-state
+continuation contract. Because admission policy is no longer installed,
+``gkx.api`` no longer re-exports admission helpers; campaign code imports
+them from ``tools.campaigns``.
 
 The first differentiable-geometry split keeps
 ``gkx.geometry.differentiable`` as the public facade while

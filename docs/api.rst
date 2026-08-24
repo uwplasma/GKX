@@ -468,23 +468,10 @@ Runtime Execution Dispatch
    :members:
    :private-members:
 
-Nonlinear Replicate Diagnostics
--------------------------------
-
-.. automodule:: gkx.diagnostics.nonlinear_replicates
-   :members:
-
 Nonlinear Transport Optimization Diagnostics
 --------------------------------------------
 
 .. automodule:: gkx.diagnostics.nonlinear_transport_optimization
-   :members:
-   :private-members:
-
-Nonlinear Gradient Evidence Diagnostics
----------------------------------------
-
-.. automodule:: gkx.diagnostics.nonlinear_gradient_evidence
    :members:
    :private-members:
 
@@ -905,13 +892,6 @@ Solver Geometry Objectives
    :members:
    :private-members:
 
-Solver-Ready Gradient Gates
----------------------------
-
-.. automodule:: gkx.objectives.gradient_gates
-   :members:
-   :private-members:
-
 Solver VMEC/Boozer Gradient Gates
 ---------------------------------
 
@@ -959,20 +939,6 @@ VMEC-JAX Transport Branch Gates
 .. automodule:: gkx.objectives.vmec_transport_branch
    :members:
 
-VMEC-JAX Transport Admission
-----------------------------
-
-.. automodule:: gkx.objectives.vmec_transport_admission
-   :members:
-   :private-members:
-
-Stellarator Transport Reports
------------------------------
-
-.. automodule:: gkx.diagnostics.stellarator_transport_reports
-   :members:
-   :private-members:
-
 VMEC-JAX Transport Optimization
 -------------------------------
 
@@ -983,12 +949,6 @@ VMEC-JAX Boundary Chain
 -----------------------
 
 .. automodule:: gkx.geometry.vmec_boundary_chain
-   :members:
-
-VMEC-JAX Candidate Gates
-------------------------
-
-.. automodule:: gkx.objectives.vmec_candidate_admission
    :members:
 
 Stellarator ITG Objectives
@@ -1021,13 +981,6 @@ Stellarator Objective Portfolios
 --------------------------------
 
 .. automodule:: gkx.objectives.portfolio
-   :members:
-   :private-members:
-
-Stellarator Objective Portfolio Guard
--------------------------------------
-
-.. automodule:: gkx.objectives.portfolio_guard
    :members:
    :private-members:
 

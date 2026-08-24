@@ -23,11 +23,12 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(ROOT / "src"))
+for _path in (ROOT / "src", ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 from gkx.artifacts.plotting import set_plot_style  # noqa: E402
-from gkx.diagnostics.nonlinear_gradient_evidence import (  # noqa: E402
+from tools.campaigns.nonlinear_gradient_evidence import (  # noqa: E402
     NonlinearTurbulenceGradientEvidenceConfig,
     NonlinearTurbulenceGradientGapConfig,
     load_json_artifact,
