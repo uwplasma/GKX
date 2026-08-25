@@ -203,22 +203,6 @@ baseline_lines = 1099
 target_lines = 1000
 reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
 
-[[complexity_policy.exceptions]]
-path = "workflows/linear.py"
-# 983 -> 1001: merging the fit-stationarity work (#56) into the linear workflow
-# that #51, #53, and #54 had already grown. Neither side is optional and neither
-# subsumes the other: main threads the run directory and auto-plot handoff
-# through the same branch dispatcher that this branch threads window_method and
-# the stderr renormalization through, so the merged module lands one line over
-# the default budget. The overage is recorded rather than absorbed by a split,
-# because the thing to remove here is the duplication between the three
-# _run_*_linear_runtime branches, not the module boundary -- splitting on the
-# boundary that is one line away would leave that duplication in place and cost
-# an import cycle back to the shared context dataclass.
-baseline_lines = 1001
-target_lines = 1000
-reason = "One linear-runtime branch dispatcher keeps the explicit, Krylov, and full-trajectory paths reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
-
 [line_budget_policy]
 mode = "no_regression_until_target"
 description = "Track real code deletion rather than file reshuffling."
@@ -559,7 +543,15 @@ recursive = true
 # the nonlinear RHS runs 20-31% faster at 48^2, 64^2 and 96^2, and the
 # primary output NetCDF is bitwise identical. The added lines are the
 # helper and the docstring recording why a dot_general must not come back.
-baseline = 91451
+# 91418 -> 91462: making `gkx wout.nc --linear` run at all. It failed three
+# independent ways: the startup CFL hint crashed on an imported equilibrium
+# whose closed theta interval is one point longer than its grid; the
+# eigensolver seed was identically zero because the zonal-mode skip tested
+# the binormal INDEX, and a linear run selects one nonzero k_y into index 0;
+# and the shorthand inherited a nonlinear deck dt of 0.1 against a 0.019
+# bound at the top of its own scan. The CFL hint moved to the module that
+# owns the bound, which took workflows/linear.py from 1001 to 978 lines.
+baseline = 91494
 target = 45000
 
 [[line_budget_policy.counts]]

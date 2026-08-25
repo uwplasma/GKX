@@ -207,15 +207,23 @@ def _centered_glibc_random_pairs(seed: int, count: int) -> np.ndarray:
 
 
 def _dealiased_initial_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
-    """Return the dealiased startup-loop `(kx, ky)` pairs for multimode initial conditions."""
+    """Return the dealiased startup-loop `(kx, ky)` pairs for multimode initial conditions.
+
+    The binormal index 0 is skipped only when it really is the zonal mode. A
+    linear run selects one ``k_y`` before seeding, so its grid holds a single
+    nonzero binormal entry at index 0; skipping it by position left the whole
+    state at zero and the eigensolver was handed a null seed.
+    """
 
     nx = int(np.asarray(grid.kx).size)
-    ny = int(np.asarray(grid.ky).size)
+    ky_values = np.asarray(grid.ky)
+    ny = int(ky_values.size)
     kx_max = 1 + (nx - 1) // 3
     ky_max = 1 + (ny - 1) // 3
-    return [
-        (int(kx_i), int(ky_i)) for kx_i in range(kx_max) for ky_i in range(1, ky_max)
+    ky_indices = [
+        int(ky_i) for ky_i in range(ky_max) if float(ky_values[ky_i]) != 0.0
     ]
+    return [(int(kx_i), ky_i) for kx_i in range(kx_max) for ky_i in ky_indices]
 
 
 def _periodic_zp_from_grid(z: np.ndarray) -> float:

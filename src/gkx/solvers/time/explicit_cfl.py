@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import warnings
 from typing import Any
 
 import numpy as np
@@ -457,3 +458,42 @@ def _linear_frequency_bound(
     omega_max[2] = _parallel_streaming_frequency(params, grid_bounds, species, geometry)
     return omega_max
 
+
+def warn_if_fixed_dt_exceeds_cfl(
+    *, grid: Any, geom: Any, params: Any, n_laguerre: int, n_hermite: int, tcfg: Any
+) -> None:
+    """Warn at startup when a fixed linear dt exceeds the explicit CFL estimate.
+
+    The fixed-step linear paths advance the whole physical RHS explicitly (the
+    imex methods only treat damping implicitly), so the explicit-time frequency
+    bound applies to them too. An over-CFL dt overflows the trajectory, and the
+    growth fit then fails loudly; this names the cause before the run starts.
+
+    Geometry is conformed to this grid and any failure is swallowed: an
+    imported equilibrium carries a closed theta interval one point longer than
+    the grid, which made this hint abort every ``gkx wout.nc --linear`` run. A
+    diagnostic that can stop a working run is worse than no diagnostic.
+    """
+
+    from gkx.config import resolve_cfl_fac
+    from gkx.geometry import ensure_flux_tube_geometry_data
+
+    try:
+        geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
+        wmax = float(np.sum(_linear_frequency_bound(
+            grid, geom_eff, params, n_laguerre, n_hermite
+        )))
+    except Exception:  # noqa: BLE001 - a startup hint must never stop a run
+        return
+    if not np.isfinite(wmax) or wmax <= 0.0:
+        return
+    cfl_fac = resolve_cfl_fac(str(tcfg.method), tcfg.cfl_fac)
+    dt_stable = cfl_fac * float(tcfg.cfl) / wmax
+    if float(tcfg.dt) > dt_stable:
+        warnings.warn(
+            f"requested dt={float(tcfg.dt):.4g} exceeds the estimated "
+            f"CFL-stable step {dt_stable:.4g} (max linear frequency "
+            f"{wmax:.4g}); the integration may overflow -- reduce dt",
+            RuntimeWarning,
+            stacklevel=2,
+        )
