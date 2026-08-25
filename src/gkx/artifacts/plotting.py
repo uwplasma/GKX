@@ -689,10 +689,23 @@ def _artifact_base(path: Path) -> Path:
     return path
 
 
+def _sidecar(base: Path, suffix: str) -> Path:
+    """Return ``base`` + ``suffix``, the way the writers actually name sidecars.
+
+    ``Path.with_suffix`` replaces the final suffix instead of appending, so a
+    run whose output path is ``foo.out.nc`` -- the convention the shipped decks
+    use -- had its sidecars written as ``foo.out.nc.summary.json`` and looked
+    for as ``foo.out.summary.json``. Plotting such a run failed with "Could not
+    infer runtime summary".
+    """
+
+    return base.with_name(base.name + suffix)
+
+
 def _load_linear_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    summary = json.loads(base.with_suffix(".summary.json").read_text(encoding="utf-8"))
-    timeseries = np.genfromtxt(base.with_suffix(".timeseries.csv"), delimiter=",", names=True, dtype=float)
-    eigen = np.genfromtxt(base.with_suffix(".eigenfunction.csv"), delimiter=",", names=True, dtype=float)
+    summary = json.loads(_sidecar(base, ".summary.json").read_text(encoding="utf-8"))
+    timeseries = np.genfromtxt(_sidecar(base, ".timeseries.csv"), delimiter=",", names=True, dtype=float)
+    eigen = np.genfromtxt(_sidecar(base, ".eigenfunction.csv"), delimiter=",", names=True, dtype=float)
     t = np.asarray(timeseries["t"], dtype=float)
     signal = np.asarray(timeseries["signal_real"], dtype=float) + 1j * np.asarray(timeseries["signal_imag"], dtype=float)
     z = np.asarray(eigen["z"], dtype=float)
@@ -701,8 +714,8 @@ def _load_linear_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.nd
 
 
 def _load_linear_scan_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
-    summary = json.loads(base.with_suffix(".summary.json").read_text(encoding="utf-8"))
-    scan = np.genfromtxt(base.with_suffix(".scan.csv"), delimiter=",", names=True, dtype=float)
+    summary = json.loads(_sidecar(base, ".summary.json").read_text(encoding="utf-8"))
+    scan = np.genfromtxt(_sidecar(base, ".scan.csv"), delimiter=",", names=True, dtype=float)
     ky = np.atleast_1d(np.asarray(scan["ky"], dtype=float))
     gamma = np.atleast_1d(np.asarray(scan["gamma"], dtype=float))
     omega = np.atleast_1d(np.asarray(scan["omega"], dtype=float))
@@ -710,8 +723,8 @@ def _load_linear_scan_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, 
 
 
 def _load_nonlinear_csv(base: Path) -> tuple[dict, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
-    summary = json.loads(base.with_suffix(".summary.json").read_text(encoding="utf-8"))
-    diag = np.genfromtxt(base.with_suffix(".diagnostics.csv"), delimiter=",", names=True, dtype=float)
+    summary = json.loads(_sidecar(base, ".summary.json").read_text(encoding="utf-8"))
+    diag = np.genfromtxt(_sidecar(base, ".diagnostics.csv"), delimiter=",", names=True, dtype=float)
     names = set(diag.dtype.names or ())
     t = np.asarray(diag["t"], dtype=float)
     wphi = np.asarray(diag["Wphi"], dtype=float) if "Wphi" in names else None
@@ -779,7 +792,7 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
             title=f"GKX nonlinear runtime: {base.name}",
         )
     else:
-        summary_path = base.with_suffix(".summary.json")
+        summary_path = _sidecar(base, ".summary.json")
         if not summary_path.exists():
             raise FileNotFoundError(f"Could not infer runtime summary from {in_path}")
         summary = json.loads(summary_path.read_text(encoding="utf-8"))

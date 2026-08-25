@@ -551,7 +551,13 @@ recursive = true
 # and the shorthand inherited a nonlinear deck dt of 0.1 against a 0.019
 # bound at the top of its own scan. The CFL hint moved to the module that
 # owns the bound, which took workflows/linear.py from 1001 to 978 lines.
-baseline = 91494
+# 91494 -> 91507: naming artifact sidecars the way the writers do. The
+# writers append ".summary.json" to the output base, while the readers used
+# Path.with_suffix, which REPLACES the final suffix -- so a run whose output
+# path ends in ".out.nc", the convention the shipped decks use, wrote
+# foo.out.nc.summary.json and was looked for as foo.out.summary.json.
+# Plotting any such run failed with "Could not infer runtime summary".
+baseline = 91507
 target = 45000
 
 [[line_budget_policy.counts]]
