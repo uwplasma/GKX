@@ -2067,3 +2067,27 @@ Consequences for the estimator and the docs:
 - A qa_vac t_max = 800 run is in flight to separate horizon from resolution:
   every stellarator rung stopped unsaturated at the t = 400 cap, so part of
   the residual drift may be temporal rather than spatial.
+
+## 2026-08-25 — horizon control: resolution convergence is not time convergence
+
+The qa_vac 192^2 case was rerun at twice the horizon to separate the two
+axes. At y0 = 14:
+
+  t_max = 400   flux 4.773 +/- 0.558   saturated = False   window [29, 400]
+  t_max = 800   flux 4.500 +/- 0.282   saturated = False   window [29, 800]
+
+Doubling the horizon moves the mean by -5.7% and halves the SEM, as doubling
+the sample should, but the run STILL does not satisfy the saturation
+criterion at t = 800. So the earlier entry recording qa_vac as "converged at
+4.773" was only half right: it is converged in RESOLUTION -- 128 -> 192 sits
+inside the SEM -- while the time average itself is still drifting with the
+horizon. The two axes have to be reported separately, and a t = 400 number
+carries a horizon bias of order 5% on top of whatever resolution bias it has.
+
+This changes what the estimator and docs can promise. A grid recommendation
+alone does not buy a converged flux; the horizon has to be long enough for
+the saturation rule to fire, and on these stellarator cases it does not fire
+at 400 or at 800. The honest user-facing statement is that GKX reports a
+windowed time average with its own SEM and an explicit not-saturated flag,
+and that the flag is doing real work on stellarator cases rather than
+decorating a converged answer.
