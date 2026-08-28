@@ -420,7 +420,9 @@ payload = "\n".join(
 ).encode()
 assert len(gkx.__all__) == 347
 assert len(api.__all__) == 346
-print(hashlib.sha256(payload).hexdigest())
+digest = hashlib.sha256(payload).hexdigest()
+assert digest == "d74c9ddcb00b724c2749dfeda683c8ea207b89109eb609e3d1389bbb4a929e27"
+print(digest)
 PY2
 ```
 
