@@ -101,8 +101,15 @@ def build_window_case(
 
     runtime, raw = load_runtime_from_toml(toml_path)
     if grid_override:
+        resolved_grid_override = dict(grid_override)
+        if "Nz" in resolved_grid_override and "ntheta" not in resolved_grid_override:
+            # GridConfig intentionally gives ntheta precedence over Nz. A profiler
+            # asking for an exact total Nz must not silently retain the TOML's
+            # per-period ntheta and measure a different shape from the one named.
+            resolved_grid_override["ntheta"] = None
         runtime = dataclasses.replace(
-            runtime, grid=dataclasses.replace(runtime.grid, **grid_override)
+            runtime,
+            grid=dataclasses.replace(runtime.grid, **resolved_grid_override),
         )
     grid = build_spectral_grid(runtime.grid)
     # Sample the geometry HERE, outside any trace. Inside jit every jnp

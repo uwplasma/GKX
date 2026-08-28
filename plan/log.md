@@ -2300,3 +2300,16 @@ profiles remain outside Git until their schema and claim boundary are reviewed.
 Roll back if supporting both invocation modes requires changing numerical code
 or if the repaired profiler does not reach the same production heat-flux
 window on both devices.
+
+During the real acceptance rerun, both repaired commands reached the adjoint
+but revealed a second profiler-contract defect before any result could be
+promoted: `--nz 16` produced a state whose final axis was 24. The shipped TOML
+sets `ntheta=24`, and `build_spectral_grid` intentionally gives `ntheta`
+precedence over `Nz`; the profiling override replaced `Nz` without clearing
+that higher-priority field. This branch therefore also makes an explicit `Nz`
+campaign override clear inherited `ntheta` and adds a real shipped-case shape
+regression. This changes only the case selected by an explicit profiling
+override, making the measured grid match the command; solver configuration
+precedence and unoverridden campaigns remain unchanged. The first 16x16x24
+CPU/GPU measurements are rejected. Acceptance now additionally requires exact
+16x16x16 state shapes in both reruns and matched step/block numerical results.

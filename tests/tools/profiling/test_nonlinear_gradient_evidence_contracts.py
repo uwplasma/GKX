@@ -89,6 +89,20 @@ def test_gradient_window_imports_from_the_repository_package() -> None:
     subprocess.run([sys.executable, "-I", "-c", command], check=True)
 
 
+def test_gradient_window_nz_override_wins_over_shipped_ntheta() -> None:
+    case = _ladder_tool().build_window_case(
+        REPO_ROOT
+        / "examples"
+        / "nonlinear"
+        / "axisymmetric"
+        / "runtime_cyclone_nonlinear_t400.toml",
+        {"Nx": 6, "Ny": 4, "Nz": 10},
+    )
+
+    assert case["shape"][-3:] == (4, 6, 10)
+    assert case["grid"].z.size == 10
+
+
 def test_docs_page_names_every_generator() -> None:
     page = (REPO_ROOT / "docs" / "nonlinear_autodiff.rst").read_text()
     for relative in GENERATORS:
