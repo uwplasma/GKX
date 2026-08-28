@@ -2437,3 +2437,24 @@ comparison-tool tests, release contracts, typing, architecture/size,
 documentation, and diff checks. Roll back if the protocol permits raw external
 outputs in Git, a version-agnostic golden oracle, an external executable in
 permanent CI, or an unsupported cross-code accuracy claim.
+
+## 2026-08-28 — self-contained numerical fingerprint scope
+
+Task: close the Phase 0 numerical-fingerprint inventory with selected
+self-contained linear, nonlinear, geometry, collision, restart,
+differentiation, and optimization cases. Non-goals: no solver, model,
+normalization, tolerance, runtime default, public API, output format, generated
+artifact, scientific threshold, or performance claim change. Baseline: GKX
+`cb2219bbf835a7f96817bf766bbbfc29c992a0b5` with the corrected prepared CPU/GPU
+profiles from #132. Affected public behavior and scientific claims: none; the
+snapshot distinguishes exact/analytic identities, dtype-aware numerical
+fingerprints, performance metadata, and negative claim boundaries. Expected
+files are this append-only entry and one Markdown inventory under
+`plan/baseline/`; existing tracked self-contained artifacts remain unchanged.
+Acceptance requires exact file SHA-256 values and selected JSON paths; named
+source tests or builders; no external executable/output or private path in the
+new snapshot; direct hash/value reproduction; focused owning tests; release
+contracts; typing; architecture/size; documentation; and diff checks. Roll
+back if an artifact cannot be reproduced from GKX-owned inputs, if a hardware
+timing is treated as a numerical invariant, if a negative gate is promoted, or
+if executable code changes.
