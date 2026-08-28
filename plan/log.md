@@ -2371,3 +2371,24 @@ and gradient gates with exact reproduction commands. Run Markdown hygiene,
 release-contract, architecture, size, and diff checks. Roll back if ownership
 is inferred only from roadmap prose, if a deletion candidate lacks a named
 replacement and gate, or if this documentation change alters packaged code.
+
+## 2026-08-28 — equilibrium ExB-shear readiness audit scope
+
+Task: close the Phase 0 readiness audit and decide whether the existing
+equilibrium-flow-shear research implementation enters the GKX 3.0 stable gate
+or moves to the first GKX 3.1 physics lane. Non-goals: no shearing-coordinate,
+remap, operator, integrator, timestep, boundary, input, solver, physics,
+artifact, or performance implementation change; no failed gate is retuned.
+Baseline: GKX `4104bf4a2d7463fcd56e9c38434d88510377d2b4`, including the tracked
+fixed-step response artifact generated at source revision `bc2fe552`. Affected
+behavior and scientific claims: no runtime behavior changes; the audit must
+make the release boundary unambiguous and preserve negative evidence. Expected
+files are this append-only entry and one Markdown snapshot under
+`plan/baseline/`. Acceptance requires a source/test/evidence matrix for the
+coordinate, remap, cache, explicit, IMEX, derivative, boundary, nonlinear
+transport, comparison, and input-file gates; exact artifact statistics and
+reproduction commands; and a yes/no 3.0 decision using the preapproved rule.
+Run the owning flow-shear artifact contracts, release contracts, architecture,
+size, documentation, and diff checks. Roll back if the audit promotes a failed
+transport result, weakens a prospective threshold, hides the research API, or
+changes executable behavior.
