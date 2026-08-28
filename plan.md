@@ -2073,3 +2073,14 @@ Append entries below this line. Do not rewrite historical entries.
 - Files expected to change: `benchmarks/performance/benchmark_integrators.py` and `tests/validation/benchmarks/test_benchmark_contracts.py`.
 - Acceptance: the benchmark module imports, `--help` succeeds, a one-step bounded native run is finite, the focused benchmark-contract tests pass, Ruff is clean, and the repository architecture/size gates do not regress.
 - Rollback condition: revert if the repaired import resolves to a different numerical implementation than the current canonical linear operator/cache/integrator owners or if the bounded run changes the frozen solver behavior.
+
+### 2026-08-28 - Freeze the reproducible GKX 1.8.2 baseline inventory
+
+- Task: add a tracked Phase 0 audit snapshot with exact repository, environment, architecture, packaging, dependency, public-API, and test measurements and their reproduction commands.
+- Non-goals: no source, solver, physics, numerical fingerprint, public API, dependency, output schema, performance implementation, or release-claim change.
+- Baseline: GKX 1.8.2 `main` at `e89c7fed31657f32b638e653c7b266e33cded805`; planning branch at `8b46a909` before this entry.
+- Affected public behavior and scientific claims: none; the snapshot records observed behavior and explicitly labels measurements that remain unavailable on the current CPU-only host.
+- Files expected to change: append-only root `plan.md` and new `plan/baseline/gkx_1_8_2.md` only.
+- Acceptance: every reported count and smoke result has an exact command; clean wheel and sdist installs import and expose the CLI; the full local suite result is recorded; limitations and open Phase 0 gates are explicit; `git diff --check` passes.
+- Measurements: frozen commit and clone revisions, Python/JAX/device details, tracked file and byte counts, public export count and registry digest, declared/imported dependencies, distribution sizes, clean-install smoke tests, full-suite outcome, and baseline defects found during reproduction.
+- Rollback condition: revert the snapshot if a value cannot be reproduced at the frozen commit, a command mutates scientific reference data, or an observed result is presented as a CPU/GPU performance or physics claim without the required synchronized gate.
