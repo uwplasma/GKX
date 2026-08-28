@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
+
+if TYPE_CHECKING:
+    from pandas import DataFrame
+else:
+    DataFrame = Any
 
 from gkx.diagnostics.growth_windows import (
     _analytic_signal,
@@ -15,6 +21,19 @@ from gkx.diagnostics.growth_windows import (
     _tail_window,
 )
 from gkx.diagnostics.validation_gates import ZonalFlowResponseMetrics
+
+
+def _require_pandas() -> Any:
+    """Import pandas for dataframe/CSV helpers with an actionable failure."""
+    try:
+        return importlib.import_module("pandas")
+    except ModuleNotFoundError as exc:
+        if exc.name != "pandas":
+            raise
+        raise ModuleNotFoundError(
+            "pandas is required for GKX zonal CSV/dataframe helpers; "
+            "install it with `pip install 'gkx[validation]'`"
+        ) from exc
 
 
 def _float_groupby_key(value: object) -> float:
@@ -64,6 +83,7 @@ def normalize_trace(
 def load_w7x_trace_csv(path: Path) -> tuple[np.ndarray, np.ndarray]:
     """Load a W7-X trace CSV with either ``t`` or ``t_reference`` as the time column."""
 
+    pd = _require_pandas()
     trace = pd.read_csv(path)
     time_col = "t_reference" if "t_reference" in trace.columns else "t"
     if "phi_zonal_real" not in trace.columns or time_col not in trace.columns:
@@ -79,6 +99,7 @@ def load_w7x_combined_trace_csv(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Load one ``kx`` trace from a combined W7-X zonal trace CSV."""
 
+    pd = _require_pandas()
     trace = pd.read_csv(path)
     required = {"kx_target", "t_reference"}
     missing = required.difference(trace.columns)
@@ -94,9 +115,10 @@ def load_w7x_combined_trace_csv(
     return np.asarray(subset["t_reference"], dtype=float), np.asarray(subset[value_col], dtype=float)
 
 
-def reference_residual_table(path: Path) -> pd.DataFrame:
+def reference_residual_table(path: Path) -> DataFrame:
     """Build a per-``kx`` residual table from digitized stella/GENE inset data."""
 
+    pd = _require_pandas()
     table = pd.read_csv(path)
     required = {"kx_rhoi", "code", "residual_median"}
     missing = required.difference(table.columns)
@@ -121,9 +143,10 @@ def reference_residual_table(path: Path) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("kx").reset_index(drop=True)
 
 
-def reference_time_limits(trace_table: pd.DataFrame) -> pd.DataFrame:
+def reference_time_limits(trace_table: DataFrame) -> DataFrame:
     """Return digitized reference time limits for each W7-X zonal ``kx`` value."""
 
+    pd = _require_pandas()
     required = {"kx_rhoi", "t_vti_over_a"}
     missing = required.difference(trace_table.columns)
     if missing:
@@ -141,7 +164,7 @@ def reference_time_limits(trace_table: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def reference_mean_trace(trace_table: pd.DataFrame, kx: float) -> tuple[np.ndarray, np.ndarray]:
+def reference_mean_trace(trace_table: DataFrame, kx: float) -> tuple[np.ndarray, np.ndarray]:
     """Return the mean digitized stella/GENE trace for one W7-X zonal ``kx``."""
 
     ref_subset = trace_table[np.isclose(trace_table["kx_rhoi"], float(kx))]

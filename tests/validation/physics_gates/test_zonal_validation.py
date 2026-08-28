@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import gkx.diagnostics.zonal_validation as zonal_validation
 from gkx.diagnostics.zonal_validation import (
     kx_token,
     load_w7x_combined_trace_csv,
@@ -23,6 +24,24 @@ from gkx.diagnostics.zonal_validation import (
 # quoted against it, so a change to the gate changes the test with it.
 GAMMA_GATE_ATOL_R0_OVER_VI = 0.03
 MERLO_R0 = 2.77778
+
+
+def test_pandas_is_required_only_by_dataframe_helpers(monkeypatch) -> None:
+    original_import = zonal_validation.importlib.import_module
+
+    def import_without_pandas(name, *args, **kwargs):
+        if name == "pandas":
+            raise ModuleNotFoundError("No module named 'pandas'", name="pandas")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(zonal_validation.importlib, "import_module", import_without_pandas)
+    with pytest.raises(ModuleNotFoundError, match=r"gkx\[validation\]"):
+        zonal_validation.reference_residual_table(Path("unused.csv"))
+
+    t = np.linspace(0.0, 20.0, 801)
+    response = 0.2 + np.exp(-0.05 * t) * np.cos(0.8 * t)
+    metrics = zonal_validation.zonal_flow_response_metrics(t, response)
+    assert np.isfinite(metrics.residual_level)
 
 
 def test_kx_token_and_trace_path_contract() -> None:

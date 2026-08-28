@@ -77,6 +77,9 @@ dev = [
 assets = [
   "Pillow",
 ]
+validation = [
+  "pandas",
+]
 
 [project.scripts]
 gkx = "gkx.cli:main"
@@ -125,8 +128,6 @@ module = [
   "booz_xform_jax",
   "netCDF4",
   "pandas",
-  "rich",
-  "rich.*",
   "scipy",
   "scipy.*",
 ]

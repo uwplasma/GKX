@@ -151,30 +151,15 @@ def _linear_explicit_step(
     )
 
 
-def _start_progress(show_progress: bool) -> Any | None:
-    if not show_progress:
-        return None
-    from rich.console import Console
-    from rich.panel import Panel
-
-    console = Console()
-    console.print(
-        Panel.fit(
-            "[bold blue]GKX[/bold blue] | [bold green]Explicit Linear Simulation Started[/bold green]",
-            border_style="blue",
-        )
-    )
-    return console
+def _start_progress(show_progress: bool) -> bool:
+    if show_progress:
+        print("[gkx] explicit linear simulation started", flush=True)
+    return show_progress
 
 
-def _finish_progress(console: Any | None) -> None:
-    if console is None:
-        return
-    from rich.panel import Panel
-
-    console.print(
-        Panel.fit("[bold green]Simulation Complete![/bold green]", border_style="green")
-    )
+def _finish_progress(show_progress: bool) -> None:
+    if show_progress:
+        print("[gkx] explicit linear simulation complete", flush=True)
 
 
 def _normalize_method(method: str) -> str:
@@ -316,40 +301,20 @@ def _append_sample(
 
 
 def _emit_sample_progress(
-    console: Any | None,
+    show_progress: bool,
     *,
     step: int,
-    sample_stride: int,
     t: float,
     t_max: float,
     sample: _DiagnosticSample,
 ) -> None:
-    if console is None:
-        return
-    from rich import box
-    from rich.table import Table
-
-    table = Table(
-        box=box.HORIZONTALS,
-        show_header=(step <= sample_stride),
-        header_style="bold magenta",
-    )
-    if step <= sample_stride:
-        table.add_column("Progress", justify="right", style="cyan")
-        table.add_column("Step", justify="right", style="green")
-        table.add_column("Time", justify="right", style="yellow")
-        table.add_column("Wg", justify="right")
-        table.add_column("Wphi", justify="right")
-        table.add_column("Heat", justify="right")
-    table.add_row(
-        f"{(t / t_max) * 100:>3.0f}%",
-        str(step),
-        f"{float(t):.2f}",
-        f"{sample.Wg:.4e}",
-        f"{sample.Wphi:.4e}",
-        f"{sample.heat:.4e}",
-    )
-    console.print(table)
+    if show_progress:
+        print(
+            f"[gkx] progress={(t / t_max) * 100:.0f}% step={step} "
+            f"t={float(t):.6g} Wg={sample.Wg:.4e} "
+            f"Wphi={sample.Wphi:.4e} heat={sample.heat:.4e}",
+            flush=True,
+        )
 
 
 def _build_diagnostics(buffers: _SampleBuffers) -> SimulationDiagnostics:
@@ -436,7 +401,6 @@ def integrate_linear_explicit_diagnostics(
                 _emit_sample_progress(
                     console,
                     step=step,
-                    sample_stride=policy.sample_stride,
                     t=t,
                     t_max=policy.t_max,
                     sample=sample,
