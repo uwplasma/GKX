@@ -2106,3 +2106,11 @@ Append entries below this line. Do not rewrite historical entries.
 - Acceptance: a clean wheel without pandas/Rich imports the zonal module, computes a bounded zonal metric, emits start/sample/finish progress without failure, and gives an actionable pandas-extra error only when a dataframe helper is invoked; installed optional dependencies retain existing dataframe and styled-progress tests; Ruff, typing, architecture/size, packaging, focused tests, and the full base-wheel smoke pass.
 - Measurements: report wheel size, clean import time, clean progress-path time/allocation, and numerical identity of the zonal metric against the pandas-equipped environment; do not interpret presentation-path timings as solver performance.
 - Rollback condition: revert if optionalization changes a numerical metric or dataframe schema, adds a base dependency, suppresses progress entirely, masks an unrelated import error, or makes the optional dependency failure less specific.
+
+### 2026-08-28 - Dependency-repair scope decision: delete the Rich-only progress branch
+
+- Evidence: the first dependency-boundary implementation preserved Rich styling with a plain fallback but added 40 installable source lines, and the frozen architecture gate rejected 91,547 lines against the 91,507-line baseline.
+- Decision: do not add or preserve a separate optional Rich presentation implementation in the diagnostics-rich explicit path. Use the concise plain-text progress contract already owned by GKX's primary explicit runner, retain start/sample/finish and the existing sample cadence, and remove Rich from this path and from proposed extras.
+- Rationale: Rich was never declared by the base or development package, the clean wheel could not execute the path, presentation does not justify architecture regression, and one plain progress owner is closer to the GKX 3 dependency and consolidation targets.
+- Revised acceptance: the architecture source-line count must be at or below 91,507; clean base and development installs emit equivalent progress fields without Rich; no solver state, diagnostic value, or numerical output changes.
+- Claim change: presentation only. Styled panels/tables are intentionally retired from this one diagnostics path; no scientific or performance claim changes.
