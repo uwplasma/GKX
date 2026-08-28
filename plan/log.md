@@ -2148,3 +2148,44 @@ runtime/compile/memory/transfer baselines, complete API and downstream
 inventory, protected required contexts, and executable external-comparator
 protocols. The three implementation PRs and this planning PR remain drafts;
 Rogerio remains the sole merger.
+
+## 2026-08-28 — approved merges and prepared-profile fingerprint repair scope
+
+Rogerio explicitly approved all four drafts and authorized admin merge where
+needed, superseding the earlier merge hold. GKX #129 merged as `0a37b2fb`, GKX
+#130 as `7c4d4598`, SOLVAX #86 as `b82cc5b`, and the roadmap GKX #122 as
+`ec446fb8`. The two implementation matrices were green. The roadmap merge used
+the approved admin path with 39 checks passing, none failing, and one redundant
+long nonlinear shard still in progress. No failing check was bypassed.
+
+The first synchronized Phase 0 run used GKX `ec446fb8`, SOLVAX `b82cc5b`, JAX
+0.10.2, float32, and the shipped Cyclone nonlinear case at
+`(Nx, Ny, Nz, Nl, Nm) = (64, 64, 24, 4, 8)` for 200 adaptive RK3 steps. Five
+prepared repeats gave 54.675 s median on the Apple M4 CPU and 4.359 s on one
+RTX A4000, a 12.54x device-throughput ratio. Preparation/compile/first execute
+was 58.762 s CPU and 12.056 s GPU. The GPU allocator reported 427,536,128 B
+peak use; peak process RSS was 1,884,635,136 B CPU and 1,976,516,608 B GPU.
+
+Those numerical fingerprints are rejected as evidence because the profiler
+mislabels the prepared result tuple: the production contract is
+`(time, diagnostics, final_state, fields)`, while
+`_prepared_result_summary` treats it as
+`(final_state, diagnostics, dt_series, fields)`. The tracked historical
+profiles and prose consequently call the time vector a final state and the
+full state a timestep series. The timing and allocator measurements remain
+observations, but no CPU/GPU identity claim may use the mislabeled summaries.
+
+Next task: repair the prepared-profile semantic labels and regenerate the four
+compact CPU/GPU profiles before continuing the Phase 0 performance matrix.
+Non-goals: no solver, physics, runtime result, public API, dependency, output
+schema, performance implementation, or broad documentation rewrite. Baseline:
+GKX `ec446fb8` on `main`. Expected files are
+`tools/profiling/profile_runtime_kernels.py`, its focused profiling-contract
+test, the four compact prepared-profile JSON summaries, and the directly
+affected paragraph in `docs/performance.rst`. Acceptance requires a regression
+whose distinct shapes fail on the old tuple interpretation; exact
+time/diagnostic/state/field semantic shapes; synchronized CPU/GPU and compact/
+resolved numerical identity; five warm repeats for the compact CPU/GPU lane;
+focused tests, Ruff, architecture/size gates, and documentation warnings as
+errors. Roll back if the repaired profiler changes the runtime trajectory or
+cannot bind every fingerprint to the production return contract.
