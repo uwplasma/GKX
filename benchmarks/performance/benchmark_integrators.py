@@ -16,7 +16,8 @@ from gkx.config import CycloneBaseCase
 from gkx.solvers.time.diffrax_linear import integrate_linear_diffrax
 from gkx.geometry import SAlphaGeometry
 from gkx.core.grid import build_spectral_grid
-from gkx.linear import LinearParams, build_linear_cache, integrate_linear
+from gkx.operators.linear import LinearParams, build_linear_cache
+from gkx.solvers.linear import integrate_linear
 
 
 def _block(tree):
