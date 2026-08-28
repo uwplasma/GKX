@@ -2349,3 +2349,25 @@ CPU/GPU measurements are rejected. Acceptance now additionally requires exact
 - **Rollback:** abandon the branch if history cannot distinguish a port from
   compatibility behavior, or revert the documentation-only commit if an
   upstream source/revision assertion proves unsupported.
+
+## 2026-08-28 — VMEX/GKX/booz_xform_jax ownership audit scope
+
+Task: freeze the current equilibrium, Boozer-transform, flux-tube, and
+turbulence-objective ownership boundary across the three maintained
+repositories, including concrete GKX deletion candidates and the missing
+cross-repository parity gates. Non-goals: no geometry equation, normalization,
+public API, dependency, solver, objective, repository, or runtime behavior
+change; this PR will not delete or move implementation. Baseline: GKX
+`4104bf4a2d7463fcd56e9c38434d88510377d2b4`, VMEX
+`f7bd9469a059d2c54b6d85a125205c8c245c0a10`, and booz_xform_jax
+`1d5e8c8a72db8a745e7cb56fb077b64bb85d0763`. Affected behavior and
+scientific claims: none; the audit must distinguish currently exercised
+interfaces from target ownership and must not promote an unverified parity
+claim. Expected files are this append-only entry and one Markdown inventory
+under `plan/baseline/`. Acceptance requires source-derived public seams,
+module/function ownership, direct cross-repository imports, solver-ready array
+contract fields, duplicated-owner/deletion candidates, and prospective parity
+and gradient gates with exact reproduction commands. Run Markdown hygiene,
+release-contract, architecture, size, and diff checks. Roll back if ownership
+is inferred only from roadmap prose, if a deletion candidate lacks a named
+replacement and gate, or if this documentation change alters packaged code.
