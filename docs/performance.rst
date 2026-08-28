@@ -1369,23 +1369,29 @@ claim.
 
 The current controlled prepared profiles are tracked as
 ``prepared_nonlinear_runtime_cpu_profile.json`` and
-``prepared_nonlinear_runtime_gpu_profile.json``. Both use commit ``d3f3aef8``,
-Python 3.10.12, JAX 0.6.2, NumPy 2.2.4, adaptive RK3, 200 steps, diagnostic
-stride 10, and compact scalar diagnostics on the same office node. The CPU
-warm run takes ``109.275 s`` and one RTX A4000 takes ``9.338 s``, a measured
-``11.70x`` device-throughput ratio after separate compilation. This is not an
-end-to-end executable or multi-GPU scaling claim. The final-state norm is
-identical at recorded precision; timestep, potential, and heat-flux norms
-agree within ``3.8e-6`` relative. The profiler and artifact gate now require
-these numerical fingerprints, matched software/configuration, and at least a
-``5x`` ratio before the row can remain promoted.
+``prepared_nonlinear_runtime_gpu_profile.json``. Both use profiler-fix commit
+``b150705c``, Python 3.12.13, JAX 0.10.2, NumPy 2.5.2, adaptive RK3, 200 steps,
+diagnostic stride 10, and compact scalar diagnostics. The CPU profile ran on
+an Apple M4 and the GPU profile on one RTX A4000. Five-repeat medians are
+``55.332 s`` CPU and ``4.326 s`` GPU, a measured ``12.79x`` device-throughput
+ratio after separate compilation; preparation/compile/first execution takes
+``58.871 s`` and ``13.515 s``, respectively. Peak CPU process RSS is
+``1.807 GB``; the GPU allocator peaks at ``417.1 MB`` with ``1.846 GB`` peak
+host RSS. This is not an end-to-end executable, transfer, or multi-GPU scaling
+claim. The time vector is identical, while potential, heat-flux, and timestep
+norms agree within ``3.55e-6`` relative. The true final-state norm differs by
+``4.45e-4`` after the 200 adaptive nonlinear steps, so its explicit artifact
+gate is ``1e-3`` rather than the ``1e-5`` diagnostic gate. Earlier profiles
+misread the production ``(time, diagnostics, final_state, fields)`` tuple and
+therefore called the exact time vector a final state; the shape-gated profiler
+and regression now prevent that false identity claim.
 
 Matched resolved-diagnostic profiles use the same 200-step trajectory and
 produce exactly the same recorded final-state, potential, heat-flux, and
-timestep norms. On CPU, retaining mode-resolved histories adds ``0.62%`` warm
-time and ``1.18%`` peak host RSS. On the A4000, three-repeat medians show
-``2.36%`` warm-time overhead, ``2.78%`` peak device-memory overhead, ``5.38%``
-additional live device allocation, and ``2.61%`` peak host-RSS overhead. The
+timestep norms. On CPU, retaining mode-resolved histories adds ``2.41%`` warm
+time and ``4.01%`` peak host RSS. On the A4000, three-repeat medians show
+``0.82%`` warm-time overhead, ``2.49%`` peak device-memory overhead, ``5.02%``
+additional live device allocation, and ``5.91%`` peak host-RSS overhead. The
 artifact gate permits at most 25% runtime and 10% memory overhead. Compact
 diagnostics therefore remain the recommended optimization/UQ path, while
 resolved diagnostics are inexpensive enough to enable when spectral evidence

@@ -8,15 +8,15 @@
   "dt": 0.01,
   "fixed_dt": false,
   "git_dirty": false,
-  "git_revision": "d3f3aef8edfa4df33db960ea76799fa42a4aee66",
+  "git_revision": "b150705cd568657443ad2433aa071aef06d57892",
   "memory_summary": {
     "device": "cuda:0",
     "device_stats": {
-      "bytes_in_use": 88662272,
-      "bytes_limit": 12563152896,
-      "peak_bytes_in_use": 351376128
+      "bytes_in_use": 101654016,
+      "bytes_limit": 12564037632,
+      "peak_bytes_in_use": 417082624
     },
-    "host_peak_rss_bytes": 1906864128
+    "host_peak_rss_bytes": 1845723136
   },
   "method": "rk3",
   "nl": 4,
@@ -25,8 +25,18 @@
   "result_summary": {
     "dt": {
       "finite_fraction": 1.0,
-      "l2_norm": 0.12653492391109467,
-      "max_abs": 0.0012508047511801124,
+      "l2_norm": 0.09986159950494766,
+      "max_abs": 0.02179158851504326,
+      "shape": [
+        21
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 0.45762335881590843
+    },
+    "final_state": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.12656144797801971,
+      "max_abs": 0.0012508038198575377,
       "shape": [
         1,
         4,
@@ -35,10 +45,32 @@
         64,
         24
       ],
-      "sum_imag": -1.2640645735001454e-10,
-      "sum_real": 0.3302218145230539
+      "sum_imag": -3.2359713237999077e-10,
+      "sum_real": 0.33040518399358443
     },
-    "final_state": {
+    "heat_flux": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.00010252481297357008,
+      "max_abs": 3.0482799047604203e-05,
+      "shape": [
+        21
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 0.0004280175895701177
+    },
+    "phi": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.04132746532559395,
+      "max_abs": 0.0007708927150815725,
+      "shape": [
+        64,
+        64,
+        24
+      ],
+      "sum_imag": -1.2364284596166897e-10,
+      "sum_real": 0.3301476556646339
+    },
+    "time": {
       "finite_fraction": 1.0,
       "l2_norm": 11.751726150512695,
       "max_abs": 4.3583245277404785,
@@ -47,43 +79,23 @@
       ],
       "sum_imag": 0.0,
       "sum_real": 46.19821972772479
-    },
-    "heat_flux": {
-      "finite_fraction": 1.0,
-      "l2_norm": 0.00010248796024825424,
-      "max_abs": 3.0474828236037865e-05,
-      "shape": [
-        21
-      ],
-      "sum_imag": 0.0,
-      "sum_real": 0.00042784617889424226
-    },
-    "phi": {
-      "finite_fraction": 1.0,
-      "l2_norm": 0.04132678359746933,
-      "max_abs": 0.0007708925404585898,
-      "shape": [
-        64,
-        64,
-        24
-      ],
-      "sum_imag": -7.834669024653351e-11,
-      "sum_real": 0.33056667390279104
     }
   },
   "reuse_prepared_simulation": true,
-  "run_median_s": 9.33783835900249,
+  "run_median_s": 4.325974703999236,
   "run_times_s": [
-    9.231134155008476,
-    9.33783835900249,
-    9.391280523966998
+    4.329163719987264,
+    4.323669727978995,
+    4.325974703999236,
+    4.3244719899958,
+    4.32771890697768
   ],
   "sample_stride": 10,
   "software": {
-    "jax": "0.6.2",
-    "numpy": "2.2.4",
-    "python": "3.10.12"
+    "jax": "0.10.2",
+    "numpy": "2.5.2",
+    "python": "3.12.13"
   },
   "steps": 200,
-  "warmup_time_s": 20.240282515995204
+  "warmup_time_s": 13.515269163006451
 }

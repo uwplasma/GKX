@@ -180,12 +180,13 @@ def _array_fingerprint(value: Any) -> dict[str, Any]:
 def _prepared_result_summary(result: Any) -> dict[str, Any]:
     """Fingerprint the state and diagnostics paired with prepared timings."""
 
-    final_state, diagnostics, dt_series, fields = result
+    time_points, diagnostics, final_state, fields = result
     return {
+        "time": _array_fingerprint(time_points),
         "final_state": _array_fingerprint(final_state),
         "phi": _array_fingerprint(fields.phi),
         "heat_flux": _array_fingerprint(diagnostics.heat_flux_t),
-        "dt": _array_fingerprint(dt_series),
+        "dt": _array_fingerprint(diagnostics.dt_t),
     }
 
 
