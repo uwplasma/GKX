@@ -7,8 +7,40 @@ import numpy as np
 import pytest
 
 import gkx.solvers.time.explicit as eti
+import gkx.solvers.time.explicit_diagnostics as explicit_diagnostics
 from gkx.solvers.time.explicit_steps import _linear_explicit_stage_update
 from gkx.terms.config import FieldState
+
+
+def _progress_sample() -> explicit_diagnostics._DiagnosticSample:
+    scalar = jnp.asarray(0.0)
+    return explicit_diagnostics._DiagnosticSample(
+        phi=scalar,
+        gamma=scalar,
+        omega=scalar,
+        Wg=1.0,
+        Wphi=0.5,
+        Wapar=0.0,
+        heat=0.25,
+        particle=0.0,
+    )
+
+
+def test_diagnostics_progress_uses_plain_base_install_contract(capsys) -> None:
+    console = explicit_diagnostics._start_progress(True)
+    assert console is True
+    explicit_diagnostics._emit_sample_progress(
+        console,
+        step=1,
+        t=0.5,
+        t_max=1.0,
+        sample=_progress_sample(),
+    )
+    explicit_diagnostics._finish_progress(console)
+    output = capsys.readouterr().out
+    assert "explicit linear simulation started" in output
+    assert "progress=50% step=1" in output
+    assert "explicit linear simulation complete" in output
 
 
 def _cache() -> SimpleNamespace:
