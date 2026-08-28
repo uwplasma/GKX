@@ -2189,3 +2189,26 @@ resolved numerical identity; five warm repeats for the compact CPU/GPU lane;
 focused tests, Ruff, architecture/size gates, and documentation warnings as
 errors. Roll back if the repaired profiler changes the runtime trajectory or
 cannot bind every fingerprint to the production return contract.
+
+## 2026-08-28 — startup profiler configuration handoff repair scope
+
+The next Phase 0 cold-start command failed before emitting evidence on both the
+Apple M4 CPU and RTX A4000. `profile_startup_and_cache.py runtime-startup`
+passes `implicit_solve_method` from `TimeConfig`, but that configuration field
+and the corresponding explicit-diagnostics keyword no longer exist. This is a
+stale profiling entry point, not a solver or device failure.
+
+Task: delete the obsolete keyword handoff and add a regression that compares
+every explicit keyword in the profiler call with the production integration
+signature, then rerun the real one-step startup workflow on matched CPU and
+GPU environments. Non-goals: no runtime configuration field, implicit method,
+solver, physics, public API, dependency, output schema, or performance change.
+Baseline: GKX `ec446fb8` plus the independent profile-fingerprint repair in
+#132. Expected files are `tools/profiling/profile_startup_and_cache.py` and the
+focused profiling-contract test only; compact startup results stay local until
+their schema and claim boundary are reviewed. Acceptance requires the old tree
+to fail the keyword/signature regression, the repaired command to emit every
+startup phase on CPU and NVIDIA, finite and matched RHS norms, focused tests,
+Ruff, typing, architecture/size checks, and no source-line increase. Roll back
+if the repair changes runtime defaults or requires restoring the deleted
+configuration option.
