@@ -2148,3 +2148,96 @@ runtime/compile/memory/transfer baselines, complete API and downstream
 inventory, protected required contexts, and executable external-comparator
 protocols. The three implementation PRs and this planning PR remain drafts;
 Rogerio remains the sole merger.
+
+## 2026-08-28 — approved merges and prepared-profile fingerprint repair scope
+
+Rogerio explicitly approved all four drafts and authorized admin merge where
+needed, superseding the earlier merge hold. GKX #129 merged as `0a37b2fb`, GKX
+#130 as `7c4d4598`, SOLVAX #86 as `b82cc5b`, and the roadmap GKX #122 as
+`ec446fb8`. The two implementation matrices were green. The roadmap merge used
+the approved admin path with 39 checks passing, none failing, and one redundant
+long nonlinear shard still in progress. No failing check was bypassed.
+
+The first synchronized Phase 0 run used GKX `ec446fb8`, SOLVAX `b82cc5b`, JAX
+0.10.2, float32, and the shipped Cyclone nonlinear case at
+`(Nx, Ny, Nz, Nl, Nm) = (64, 64, 24, 4, 8)` for 200 adaptive RK3 steps. Five
+prepared repeats gave 54.675 s median on the Apple M4 CPU and 4.359 s on one
+RTX A4000, a 12.54x device-throughput ratio. Preparation/compile/first execute
+was 58.762 s CPU and 12.056 s GPU. The GPU allocator reported 427,536,128 B
+peak use; peak process RSS was 1,884,635,136 B CPU and 1,976,516,608 B GPU.
+
+Those numerical fingerprints are rejected as evidence because the profiler
+mislabels the prepared result tuple: the production contract is
+`(time, diagnostics, final_state, fields)`, while
+`_prepared_result_summary` treats it as
+`(final_state, diagnostics, dt_series, fields)`. The tracked historical
+profiles and prose consequently call the time vector a final state and the
+full state a timestep series. The timing and allocator measurements remain
+observations, but no CPU/GPU identity claim may use the mislabeled summaries.
+
+Next task: repair the prepared-profile semantic labels and regenerate the four
+compact CPU/GPU profiles before continuing the Phase 0 performance matrix.
+Non-goals: no solver, physics, runtime result, public API, dependency, output
+schema, performance implementation, or broad documentation rewrite. Baseline:
+GKX `ec446fb8` on `main`. Expected files are
+`tools/profiling/profile_runtime_kernels.py`, its focused profiling-contract
+test, the four compact prepared-profile JSON summaries, and the directly
+affected paragraph in `docs/performance.rst`. Acceptance requires a regression
+whose distinct shapes fail on the old tuple interpretation; exact
+time/diagnostic/state/field semantic shapes; synchronized CPU/GPU and compact/
+resolved numerical identity; five warm repeats for the compact CPU/GPU lane;
+focused tests, Ruff, architecture/size gates, and documentation warnings as
+errors. Roll back if the repaired profiler changes the runtime trajectory or
+cannot bind every fingerprint to the production return contract.
+
+## 2026-08-28 — startup profiler configuration handoff repair scope
+
+The next Phase 0 cold-start command failed before emitting evidence on both the
+Apple M4 CPU and RTX A4000. `profile_startup_and_cache.py runtime-startup`
+passes `implicit_solve_method` from `TimeConfig`, but that configuration field
+and the corresponding explicit-diagnostics keyword no longer exist. This is a
+stale profiling entry point, not a solver or device failure.
+
+Task: delete the obsolete keyword handoff and add a regression that compares
+every explicit keyword in the profiler call with the production integration
+signature, then rerun the real one-step startup workflow on matched CPU and
+GPU environments. Non-goals: no runtime configuration field, implicit method,
+solver, physics, public API, dependency, output schema, or performance change.
+Baseline: GKX `ec446fb8` plus the independent profile-fingerprint repair in
+#132. Expected files are `tools/profiling/profile_startup_and_cache.py` and the
+focused profiling-contract test only; compact startup results stay local until
+their schema and claim boundary are reviewed. Acceptance requires the old tree
+to fail the keyword/signature regression, the repaired command to emit every
+startup phase on CPU and NVIDIA, finite and matched RHS norms, focused tests,
+Ruff, typing, architecture/size checks, and no source-line increase. Roll back
+if the repair changes runtime defaults or requires restoring the deleted
+configuration option.
+
+## 2026-08-28 — public API and VMEX-use inventory scope
+
+Task: freeze every GKX 1.8.2 top-level export, its lazy target, and known VMEX
+use before Phase 1 reduces the facade to at most 30 names. Record VMEX private
+submodule imports separately because they are compatibility debt, not public
+API. Non-goals: no export, import target, deprecation, VMEX source, or runtime
+behavior changes. Baseline: the 347-name registry and digest already recorded
+for GKX 1.8.2; the merged #129/#130/#122 changes do not alter it. Expected file
+is one generated Markdown inventory under `plan/baseline/`. Acceptance requires
+all `gkx.__all__` names exactly once, every lazy export bound to its module and
+attribute, AST-derived VMEX reference counts, and explicit private-import rows.
+Rollback if the generated inventory count or digest disagrees with the frozen
+baseline, or if any downstream-use claim comes from prose rather than an
+executable import/attribute reference.
+
+## 2026-08-28 — dependency and runtime-import inventory scope
+
+Task: freeze every core and optional dependency declaration and compare the
+core list with static and literal dynamic imports under `src/gkx`. Non-goals:
+no dependency addition/removal, import rewrite, optional-feature promotion, or
+packaging behavior change. Baseline: GKX 1.8.2 after #130, whose pandas and
+Rich boundary was independently repaired. Expected file is one generated
+Markdown inventory under `plan/baseline/`. Acceptance requires every
+`project.dependencies` and optional-extra entry, source-file counts for direct
+imports, literal `import_module` ownership, and explicit rows for imported but
+transitive/optional modules and declared but unused modules. Roll back if an
+import is inferred from prose or if conditional/type-checking imports are
+presented as unconditional runtime requirements.
