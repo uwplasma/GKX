@@ -14,6 +14,7 @@ import pytest
 
 from support.paths import REPO_ROOT, load_release_tool
 from benchmarks import cyclone_linear_benchmark
+from benchmarks.performance import benchmark_integrators
 from benchmarks.performance.benchmark_runtime_memory import (
     RuntimeBenchRun,
     _load_manifest,
@@ -76,6 +77,14 @@ ROOT = REPO_ROOT
 MANIFEST = ROOT / "benchmarks" / "results" / "manifest.toml"
 MAX_TRACKED_RESULT_BYTES = 1_000_000
 MAX_ROOT_BENCHMARK_PAYLOAD_BYTES = 200_000
+
+
+def test_integrator_benchmark_uses_canonical_linear_owners() -> None:
+    assert benchmark_integrators.LinearParams is LinearParams
+    assert benchmark_integrators.build_linear_cache is build_linear_cache
+    assert benchmark_integrators.integrate_linear.__module__ == (
+        "gkx.solvers.linear.integrators"
+    )
 
 
 def test_benchmark_readme_references_existing_python_drivers() -> None:
