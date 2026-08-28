@@ -34,15 +34,20 @@ def test_cyclone_runtime_profiler_default_config_exists() -> None:
 
 def test_prepared_profile_summary_fingerprints_numerical_outputs() -> None:
     result = (
-        jnp.asarray([1.0 + 2.0j, 3.0 - 1.0j]),
-        SimpleNamespace(heat_flux_t=jnp.asarray([2.0, 4.0])),
-        jnp.asarray([0.1, 0.2]),
+        jnp.asarray([0.0, 0.5]),
+        SimpleNamespace(
+            heat_flux_t=jnp.asarray([2.0, 4.0]),
+            dt_t=jnp.asarray([0.1, 0.2]),
+        ),
+        jnp.arange(6, dtype=jnp.float32).reshape(1, 2, 3).astype(jnp.complex64),
         SimpleNamespace(phi=jnp.asarray([3.0j, 4.0])),
     )
 
     summary = runtime_kernels._prepared_result_summary(result)
 
-    assert summary["final_state"]["shape"] == [2]
+    assert summary["time"]["shape"] == [2]
+    assert summary["time"]["max_abs"] == 0.5
+    assert summary["final_state"]["shape"] == [1, 2, 3]
     assert summary["final_state"]["finite_fraction"] == 1.0
     np.testing.assert_allclose(summary["phi"]["l2_norm"], 5.0)
     np.testing.assert_allclose(summary["heat_flux"]["sum_real"], 6.0)
@@ -97,10 +102,18 @@ def test_prepared_nonlinear_cpu_gpu_profiles_are_matched_and_clean() -> None:
     assert cpu["backend"] == "cpu"
     assert gpu["backend"] == "gpu"
     assert cpu["run_median_s"] / gpu["run_median_s"] >= 5.0
-    for name in ("final_state", "phi", "heat_flux", "dt"):
+    expected_shapes = {
+        "time": [21],
+        "final_state": [1, 4, 8, 64, 64, 24],
+        "phi": [64, 64, 24],
+        "heat_flux": [21],
+        "dt": [21],
+    }
+    for name, expected_shape in expected_shapes.items():
         assert (
             cpu["result_summary"][name]["shape"] == gpu["result_summary"][name]["shape"]
         )
+        assert cpu["result_summary"][name]["shape"] == expected_shape
         assert cpu["result_summary"][name]["finite_fraction"] == 1.0
         assert gpu["result_summary"][name]["finite_fraction"] == 1.0
         np.testing.assert_allclose(
@@ -136,7 +149,7 @@ def test_resolved_diagnostic_profiles_are_identity_gated_and_bounded() -> None:
             / compact["memory_summary"]["host_peak_rss_bytes"]
             <= 1.10
         )
-        for name in ("final_state", "phi", "heat_flux", "dt"):
+        for name in ("time", "final_state", "phi", "heat_flux", "dt"):
             np.testing.assert_allclose(
                 compact["result_summary"][name]["l2_norm"],
                 resolved["result_summary"][name]["l2_norm"],
