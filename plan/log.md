@@ -2413,3 +2413,27 @@ tests, release contracts, typing, architecture/size, documentation, and diff
 checks. Roll back if an owner is selected by roadmap prose rather than current
 code evidence, if a Diffrax-only behavior is omitted, or if executable code is
 changed.
+
+## 2026-08-28 — local-only external comparison protocol scope
+
+Task: close the Phase 0 external-comparison policy gate with an executable
+local workspace contract for GX, stella, and GS2 and a promotion path from
+cross-code findings to self-contained GKX evidence. Non-goals: no external
+code build, run, source, input, binary, raw output, scientific threshold,
+normalization, GKX solver, permanent oracle, or CI dependency change. Baseline:
+GKX `cb2219bbf835a7f96817bf766bbbfc29c992a0b5`, GX
+`3865a53778862e1686f414bf6f416339e24887c9`, stella
+`2b8e269f2addd0baa5991057eafa022135e04498`, and GS2
+`4d8c94bcfd976ed5d04ec83e776c3d915038a589`. Affected public behavior and
+scientific claims: none; this audit separates local comparison evidence from
+release assertions and cannot declare either implementation correct from a
+single disagreement. Expected files are this append-only entry and one Phase 0
+protocol under `plan/baseline/`. Acceptance requires exact repository/build/
+input/normalization/resolution/timestep/residual/postprocessor provenance;
+local path and raw-output exclusion rules; staged disagreement diagnosis;
+GX/stella/GS2 command templates; and an explicit rule for translating a
+finding into a self-contained GKX test or compact versioned summary. Run the
+comparison-tool tests, release contracts, typing, architecture/size,
+documentation, and diff checks. Roll back if the protocol permits raw external
+outputs in Git, a version-agnostic golden oracle, an external executable in
+permanent CI, or an unsupported cross-code accuracy claim.
