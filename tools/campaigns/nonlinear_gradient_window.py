@@ -50,10 +50,16 @@ from typing import Any
 
 import numpy as np
 
-from nonlinear_saturated_state import (
-    _campaign_source_provenance,
-    _gkx_source_tree_matches,
-)
+if __package__:
+    from .nonlinear_saturated_state import (
+        _campaign_source_provenance,
+        _gkx_source_tree_matches,
+    )
+else:  # Direct ``python tools/campaigns/nonlinear_gradient_window.py`` execution.
+    from nonlinear_saturated_state import (
+        _campaign_source_provenance,
+        _gkx_source_tree_matches,
+    )
 
 
 def _require_compatible_state_source(archive, provenance: dict[str, object]) -> str:

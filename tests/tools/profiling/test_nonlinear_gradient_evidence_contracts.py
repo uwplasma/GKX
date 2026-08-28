@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -73,6 +75,18 @@ def test_gradient_ladder_requires_compatible_clean_state_source(
 @pytest.mark.parametrize("relative", GENERATORS)
 def test_generator_scripts_are_present(relative: str) -> None:
     assert (REPO_ROOT / relative).is_file()
+
+
+def test_gradient_window_imports_from_the_repository_package() -> None:
+    """The profiler imports the campaign through ``tools.campaigns``."""
+
+    command = (
+        "import sys; "
+        f"sys.path.insert(0, {str(REPO_ROOT)!r}); "
+        "from tools.campaigns.nonlinear_gradient_window import build_window_case; "
+        "assert callable(build_window_case)"
+    )
+    subprocess.run([sys.executable, "-I", "-c", command], check=True)
 
 
 def test_docs_page_names_every_generator() -> None:
