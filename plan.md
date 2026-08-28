@@ -2063,3 +2063,13 @@ Append entries below this line. Do not rewrite historical entries.
 - Acceptance: the roadmap follows the approved stable order, retains an append-only work log, names explicit phase exit gates and PR boundaries, and leaves `main` untouched.
 - Measurements: verify the plan structure and repository state; baseline correctness and cold/warm runtime, memory, compile, transfer, API, dependency, and provenance inventories remain Phase 0 follow-up work.
 - Rollback condition: revert this planning commit if it differs from the maintainer-approved charter or weakens the recorded scientific, performance, or review gates.
+
+### 2026-08-28 - Restore the linear-integrator benchmark entry point
+
+- Task: repair the shipped fixed-step linear-integrator benchmark discovered to be unimportable during the Phase 0 baseline audit, and add a regression that imports its real module.
+- Non-goals: no solver implementation, integration method, default, numerical result, public package export, dependency, or performance claim changes.
+- Baseline: GKX 1.8.2 `main` at `e89c7fed31657f32b638e653c7b266e33cded805`; `python benchmarks/performance/benchmark_integrators.py --help` fails with `ModuleNotFoundError: gkx.linear` because the benchmark retained a pre-consolidation import.
+- Affected public behavior and scientific claims: developer benchmark usability only; no promoted user API or scientific claim is affected.
+- Files expected to change: `benchmarks/performance/benchmark_integrators.py` and `tests/validation/benchmarks/test_benchmark_contracts.py`.
+- Acceptance: the benchmark module imports, `--help` succeeds, a one-step bounded native run is finite, the focused benchmark-contract tests pass, Ruff is clean, and the repository architecture/size gates do not regress.
+- Rollback condition: revert if the repaired import resolves to a different numerical implementation than the current canonical linear operator/cache/integrator owners or if the bounded run changes the frozen solver behavior.
