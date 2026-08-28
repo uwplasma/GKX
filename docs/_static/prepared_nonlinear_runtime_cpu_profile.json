@@ -2,17 +2,17 @@
   "backend": "cpu",
   "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
   "devices": [
-    "TFRT_CPU_0"
+    "cpu:0"
   ],
   "diagnostics_stride": 10,
   "dt": 0.01,
   "fixed_dt": false,
   "git_dirty": false,
-  "git_revision": "d3f3aef8edfa4df33db960ea76799fa42a4aee66",
+  "git_revision": "b150705cd568657443ad2433aa071aef06d57892",
   "memory_summary": {
-    "device": "TFRT_CPU_0",
+    "device": "cpu:0",
     "device_stats": {},
-    "host_peak_rss_bytes": 4467748864
+    "host_peak_rss_bytes": 1807368192
   },
   "method": "rk3",
   "nl": 4,
@@ -21,8 +21,18 @@
   "result_summary": {
     "dt": {
       "finite_fraction": 1.0,
-      "l2_norm": 0.12653478980064392,
-      "max_abs": 0.001250803004950285,
+      "l2_norm": 0.09986161440610886,
+      "max_abs": 0.021791590377688408,
+      "shape": [
+        21
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 0.45762339793145657
+    },
+    "final_state": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.12650516629219055,
+      "max_abs": 0.0012508020736277103,
       "shape": [
         1,
         4,
@@ -31,10 +41,32 @@
         64,
         24
       ],
-      "sum_imag": -1.291814264066382e-10,
-      "sum_real": 0.330221522938571
+      "sum_imag": -3.215405374682595e-10,
+      "sum_real": 0.33040481948888484
     },
-    "final_state": {
+    "heat_flux": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.00010252444917568937,
+      "max_abs": 3.048268990823999e-05,
+      "shape": [
+        21
+      ],
+      "sum_imag": 0.0,
+      "sum_real": 0.0004280160652285758
+    },
+    "phi": {
+      "finite_fraction": 1.0,
+      "l2_norm": 0.04132739081978798,
+      "max_abs": 0.0007708912598900497,
+      "shape": [
+        64,
+        64,
+        24
+      ],
+      "sum_imag": 1.0805745187525417e-10,
+      "sum_real": 0.3301473326262035
+    },
+    "time": {
       "finite_fraction": 1.0,
       "l2_norm": 11.751726150512695,
       "max_abs": 4.3583245277404785,
@@ -42,42 +74,24 @@
         21
       ],
       "sum_imag": 0.0,
-      "sum_real": 46.19821972772479
-    },
-    "heat_flux": {
-      "finite_fraction": 1.0,
-      "l2_norm": 0.00010248759645037353,
-      "max_abs": 3.0474713639705442e-05,
-      "shape": [
-        21
-      ],
-      "sum_imag": 0.0,
-      "sum_real": 0.0004278446473620079
-    },
-    "phi": {
-      "finite_fraction": 1.0,
-      "l2_norm": 0.04132673516869545,
-      "max_abs": 0.0007708911434747279,
-      "shape": [
-        64,
-        64,
-        24
-      ],
-      "sum_imag": 9.904022046924865e-13,
-      "sum_real": 0.33056641042311297
+      "sum_real": 46.198219729587436
     }
   },
   "reuse_prepared_simulation": true,
-  "run_median_s": 109.27489167399472,
+  "run_median_s": 55.33224799996242,
   "run_times_s": [
-    109.27489167399472
+    49.538521124981344,
+    57.555575332953595,
+    55.9970299169654,
+    55.33224799996242,
+    51.11166054091882
   ],
   "sample_stride": 10,
   "software": {
-    "jax": "0.6.2",
-    "numpy": "2.2.4",
-    "python": "3.10.12"
+    "jax": "0.10.2",
+    "numpy": "2.5.2",
+    "python": "3.12.13"
   },
   "steps": 200,
-  "warmup_time_s": 115.74483938602498
+  "warmup_time_s": 58.87082079204265
 }
