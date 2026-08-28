@@ -2091,3 +2091,60 @@ at 400 or at 800. The honest user-facing statement is that GKX reports a
 windowed time average with its own SEM and an explicit not-saturated flag,
 and that the flag is doing real work on stellarator cases rather than
 decorating a converged answer.
+
+## 2026-08-28 — fresh 1.8.2 baseline and first bounded modernization tranche
+
+The user-supplied research-grade roadmap was adopted as the charter on the
+open planning branch; historical entries in this file remain evidence, not
+instructions. A fresh workspace at `/Users/rogerio/local/GKX_project` now
+contains GKX, SOLVAX, VMEX, BOOZ_XFORM_JAX, GX, stella, and GS2 plus a shared
+Python 3.11 environment. The frozen GKX 1.8.2 baseline is recorded in
+`plan/baseline/gkx_1_8_2.md`: 199 source files / 91,507 lines, 101 test files /
+86,899 lines, 347 facade names, and registry digest
+`d74c9ddc04e66c1391a6b90677564349d5bc5cfacb97dd6707fff26242d8957d`.
+Its 2,609-test local collection completed successfully, and clean wheel/sdist
+installation smoke tests passed.
+
+Three deliberately narrow implementation drafts were opened without merging:
+
+- GKX #129 repairs stale linear-integrator benchmark imports and adds a
+  regression test. The bounded benchmark completes in 1.304 s cold with
+  7.47 MB peak Python-traced allocation on the Apple M4 CPU host; this is a
+  functional baseline, not a cross-device performance claim.
+- SOLVAX #86 adds opt-in Eisenstat--Walker choice-2 forcing to Newton--Krylov
+  while preserving the constant-forcing default. On a 32-point nonlinear PDE,
+  the adaptive lane used 8 Arnoldi iterations versus 15 for the matched tight
+  constant lane, with comparable final residuals. The constant path was
+  numerically unchanged, and all 721 local tests plus the full CI matrix pass.
+- GKX #130 repairs optional diagnostics dependency boundaries: pandas is lazy
+  and exposed through a `validation` extra; the undeclared Rich path is
+  deleted in favor of the existing plain progress reporter. The base wheel
+  imports and computes zonal validation without pandas or Rich, and source
+  size falls by 13 lines. Local full-suite, packaging, typing, lint, and release
+  gates pass. At this log update, 31 CI jobs pass, none fail, six are pending,
+  and the nightly-only job is skipped.
+
+Downstream evidence is bounded and must not be overstated:
+
+- BOOZ_XFORM_JAX: 20 passed, 7 optional skips.
+- VMEX: the focused turbulence suite passed (13 passed, 2 optional skips); a
+  full run was stopped after 78 passed / 4 skipped at 5% because it is not a
+  bounded local gate.
+- GKX's VMEC/VMEX geometry and finite-beta Boozer parity slice passed 44 tests.
+- GS2 8.2.1 built natively on Apple Silicon with MPI, FFTW, and NetCDF after
+  pointing its macOS profile at `/opt/homebrew`. Both `fields_local` legacy
+  tests passed under two MPI ranks.
+- stella configures after recursive submodule initialization, but its pinned
+  external git-version generator emits invalid or missing macros from this
+  out-of-tree build, so no executable result is claimed.
+- GX remains an NVIDIA-only external gate on this CPU-only Mac: no `nvcc` or
+  NVIDIA device is present. Cold/warm JIT, device-memory, transfer, gradient,
+  and optimization claims therefore remain open until synchronized NVIDIA
+  runs are captured.
+
+Phase 0 is not closed by this tranche. Remaining acceptance work includes the
+full case fingerprints and output/provenance schema, synchronized CPU/NVIDIA
+runtime/compile/memory/transfer baselines, complete API and downstream
+inventory, protected required contexts, and executable external-comparator
+protocols. The three implementation PRs and this planning PR remain drafts;
+Rogerio remains the sole merger.
