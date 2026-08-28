@@ -2212,3 +2212,18 @@ startup phase on CPU and NVIDIA, finite and matched RHS norms, focused tests,
 Ruff, typing, architecture/size checks, and no source-line increase. Roll back
 if the repair changes runtime defaults or requires restoring the deleted
 configuration option.
+
+## 2026-08-28 — public API and VMEX-use inventory scope
+
+Task: freeze every GKX 1.8.2 top-level export, its lazy target, and known VMEX
+use before Phase 1 reduces the facade to at most 30 names. Record VMEX private
+submodule imports separately because they are compatibility debt, not public
+API. Non-goals: no export, import target, deprecation, VMEX source, or runtime
+behavior changes. Baseline: the 347-name registry and digest already recorded
+for GKX 1.8.2; the merged #129/#130/#122 changes do not alter it. Expected file
+is one generated Markdown inventory under `plan/baseline/`. Acceptance requires
+all `gkx.__all__` names exactly once, every lazy export bound to its module and
+attribute, AST-derived VMEX reference counts, and explicit private-import rows.
+Rollback if the generated inventory count or digest disagrees with the frozen
+baseline, or if any downstream-use claim comes from prose rather than an
+executable import/attribute reference.
