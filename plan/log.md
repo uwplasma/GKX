@@ -2392,3 +2392,24 @@ Run the owning flow-shear artifact contracts, release contracts, architecture,
 size, documentation, and diff checks. Roll back if the audit promotes a failed
 transport result, weakens a prospective threshold, hides the research API, or
 changes executable behavior.
+
+## 2026-08-28 — explicit/IMEX/Diffrax ownership audit scope
+
+Task: freeze every shipped time-integration route, its runtime selector,
+public seam, scientific scope, and migration gate so Phase 2 can promote one
+native explicit owner, one native IMEX owner, and remove Diffrax without
+silently losing behavior. Non-goals: no tableau, solver, tolerance, default,
+configuration, dependency, public API, numerical result, or performance
+change. Baseline: GKX `4104bf4a2d7463fcd56e9c38434d88510377d2b4` with
+Diffrax/Equinox still declared and the native routes already carrying several
+production seams. Affected behavior and scientific claims: none; the audit
+must label implemented versus validated behavior and cannot declare migration
+complete. Expected files are this append-only entry and one Markdown inventory
+under `plan/baseline/`. Acceptance requires source-derived call graphs and
+configuration choices; explicit/IMEX/Diffrax capability and test matrices;
+value/order/stability/restart/diagnostic/AD/device migration gates; direct
+workflow commands; and named deletion candidates. Run the focused integrator
+tests, release contracts, typing, architecture/size, documentation, and diff
+checks. Roll back if an owner is selected by roadmap prose rather than current
+code evidence, if a Diffrax-only behavior is omitted, or if executable code is
+changed.
