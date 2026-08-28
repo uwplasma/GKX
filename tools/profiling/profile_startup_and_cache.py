@@ -322,7 +322,6 @@ def main_runtime_startup(argv: list[str] | None = None) -> None:
                 collision_split=bool(cfg.time.collision_split),
                 collision_scheme=str(cfg.time.collision_scheme),
                 implicit_restart=int(cfg.time.implicit_restart),
-                implicit_solve_method=str(cfg.time.implicit_solve_method),
                 implicit_preconditioner=cfg.time.implicit_preconditioner,
                 external_phi=external_phi,
                 show_progress=False,
