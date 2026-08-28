@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 from pathlib import Path
+import textwrap
 from types import SimpleNamespace
 
 import jax.numpy as jnp
@@ -15,6 +18,10 @@ from tools.profiling.profile_startup_and_cache import (
     _write_phase_csv,
     _write_phase_json,
     build_low_rank_moment_cache,
+    main_runtime_startup,
+)
+from gkx.solvers.nonlinear.diagnostic_integration import (
+    integrate_nonlinear_explicit_diagnostics_state,
 )
 
 runtime_kernels = load_profiling_tool("profile_runtime_kernels")
@@ -57,6 +64,26 @@ def test_prepared_profile_summary_fingerprints_numerical_outputs() -> None:
 def test_runtime_profile_normalizes_peak_rss_units() -> None:
     assert runtime_kernels._peak_rss_bytes(123, system="Darwin") == 123
     assert runtime_kernels._peak_rss_bytes(123, system="Linux") == 123 * 1024
+
+
+def test_runtime_startup_profiler_keywords_match_integration_contract() -> None:
+    tree = ast.parse(textwrap.dedent(inspect.getsource(main_runtime_startup)))
+    integration_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "integrate_nonlinear_explicit_diagnostics_state"
+    ]
+
+    assert len(integration_calls) == 1
+    passed_keywords = {
+        keyword.arg for keyword in integration_calls[0].keywords if keyword.arg
+    }
+    accepted_keywords = set(
+        inspect.signature(integrate_nonlinear_explicit_diagnostics_state).parameters
+    )
+    assert passed_keywords <= accepted_keywords, passed_keywords - accepted_keywords
 
 
 def test_sspx3_stage_profile_preserves_identity_without_speedup_claim() -> None:
