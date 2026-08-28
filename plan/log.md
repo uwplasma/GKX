@@ -2227,3 +2227,17 @@ attribute, AST-derived VMEX reference counts, and explicit private-import rows.
 Rollback if the generated inventory count or digest disagrees with the frozen
 baseline, or if any downstream-use claim comes from prose rather than an
 executable import/attribute reference.
+
+## 2026-08-28 — dependency and runtime-import inventory scope
+
+Task: freeze every core and optional dependency declaration and compare the
+core list with static and literal dynamic imports under `src/gkx`. Non-goals:
+no dependency addition/removal, import rewrite, optional-feature promotion, or
+packaging behavior change. Baseline: GKX 1.8.2 after #130, whose pandas and
+Rich boundary was independently repaired. Expected file is one generated
+Markdown inventory under `plan/baseline/`. Acceptance requires every
+`project.dependencies` and optional-extra entry, source-file counts for direct
+imports, literal `import_module` ownership, and explicit rows for imported but
+transitive/optional modules and declared but unused modules. Roll back if an
+import is inferred from prose or if conditional/type-checking imports are
+presented as unconditional runtime requirements.
