@@ -2269,3 +2269,47 @@ presented as unconditional runtime requirements.
 - **Rollback:** abandon this branch if the schema cannot be derived exactly
   from the frozen source without changing production code; otherwise revert
   the documentation-only commit with no runtime or data migration.
+
+## 2026-08-28 — nonlinear-adjoint profiler import repair scope
+
+The maintained 64-step adjoint checkpoint profiler failed before compilation
+on both the matched Apple M4 CPU and RTX A4000 environments. Its fallback
+imports `tools.campaigns.nonlinear_gradient_window` as a namespace-package
+module, but that module imports sibling `nonlinear_saturated_state` only as a
+top-level script module. The documented campaign command works because direct
+execution adds `tools/campaigns` to `sys.path`; the documented profiling
+command imports through the repository root and therefore cannot resolve the
+sibling.
+
+Task: make the shared campaign module choose a relative sibling import when it
+is package-imported and retain its top-level sibling import when executed
+directly. Non-goals: no adjoint, checkpoint, nonlinear window, campaign state,
+solver, physics, public API, dependency, output schema, memory, or performance
+implementation change. Baseline: GKX `4104bf4a2d7463fcd56e9c38434d88510377d2b4`
+on branch `fix/adjoint-profiler-import`; the failed CPU/GPU commands were also
+reproduced on common source `b150705c` with Python 3.12.13, JAX/JAXLIB 0.10.2,
+and NumPy 2.5.2.
+
+Expected files are `tools/campaigns/nonlinear_gradient_window.py`, its focused
+profiling-contract test, and this append-only entry. Acceptance requires a
+repository-root package-import regression that fails on the old code, the
+documented direct campaign import path, the real 64-step checkpoint profiler
+on matched CPU and NVIDIA environments, step/block objective and gradient
+identity, focused tests, Ruff, typing, and architecture/size gates. Raw
+profiles remain outside Git until their schema and claim boundary are reviewed.
+Roll back if supporting both invocation modes requires changing numerical code
+or if the repaired profiler does not reach the same production heat-flux
+window on both devices.
+
+During the real acceptance rerun, both repaired commands reached the adjoint
+but revealed a second profiler-contract defect before any result could be
+promoted: `--nz 16` produced a state whose final axis was 24. The shipped TOML
+sets `ntheta=24`, and `build_spectral_grid` intentionally gives `ntheta`
+precedence over `Nz`; the profiling override replaced `Nz` without clearing
+that higher-priority field. This branch therefore also makes an explicit `Nz`
+campaign override clear inherited `ntheta` and adds a real shipped-case shape
+regression. This changes only the case selected by an explicit profiling
+override, making the measured grid match the command; solver configuration
+precedence and unoverridden campaigns remain unchanged. The first 16x16x24
+CPU/GPU measurements are rejected. Acceptance now additionally requires exact
+16x16x16 state shapes in both reruns and matched step/block numerical results.
