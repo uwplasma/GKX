@@ -3142,3 +3142,30 @@ Per the prospective rollback gate, the prototype source and tests were
 removed. The next stiff-owner attempt must consolidate GKX's existing
 Hermite/field-corrected implicit machinery rather than add a second line solve
 or run a general GMRES inside every IMEX stage.
+
+Follow-up A4000 triage used the existing backward-Euler implicit owner on the
+same full-resolution kinetic-electron state for a matched `t=0.4` horizon.
+Reducing Hermite-line GMRES restart from 20 to 4 preserved the result while
+cutting peak device allocation from 66,176,000 to 28,414,464 bytes; restart 2
+fell to 23,696,384 bytes but was slightly slower. The prepared 100-step kernel
+at `dt=0.004` remained 5.16 seconds warm, compared with 0.648 seconds and a
+17,511,680-byte peak for 500 native RK4 steps at `dt=0.0008`. SOLVAX 0.17
+fixed-work FGMRES with restart 4 and eight bounded cycles certified every
+stage and reduced the implicit warm time to 2.23 seconds, but still did not
+beat RK4 time-to-solution or memory.
+
+A matrix-free Crank--Nicolson probe established second-order accuracy without
+backward-Euler damping bias: at `dt=0.004`, 100 steps had `0.00284` relative
+state error against the RK4 reference, all stages converged, and warm time was
+1.64 seconds. Doubling to `dt=0.008` raised state error to `0.01138`; restart 8
+and `rtol=1e-5` certified the stages but took 1.67 seconds and peaked at
+52,090,368 bytes. Reusing the global low-moment field-corrected shifted
+preconditioner did not reduce iterations and raised the device peak to about
+696 MB. A symmetric line/field split reached 0.599 seconds warm with a
+27,338,240-byte peak, but excited a catastrophic parasitic split mode even
+when the explicit field substep was reduced from `0.0004` to `0.0001`; it is
+rejected. These measurements select full coupled streaming/field solves over
+naive splitting, fixed-work SOLVAX over nested dynamic GMRES, and small restart
+spaces over the old default. Promotion still requires a representative stiff
+case where the second-order route improves time-to-accuracy, plus implicit
+value/order/restart/diagnostic/gradient gates and bounded transpose solves.
