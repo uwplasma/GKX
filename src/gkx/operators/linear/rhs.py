@@ -14,10 +14,6 @@ from gkx.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from gkx.operators.linear.dissipation import (
-    custom_collision_contribution,
-    terms_without_builtin_collisions,
-)
 
 
 def linear_rhs(
@@ -58,43 +54,20 @@ def linear_rhs_cached(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS using precomputed geometry/cache arrays."""
 
-    from gkx.terms.assembly import (
-        assemble_rhs_cached,
-        assemble_rhs_cached_electrostatic_jit,
-        assemble_rhs_cached_jit,
-    )
+    from gkx.terms.assembly import assemble_linear_rhs_cached
 
     term_cfg = linear_terms_to_term_config(terms)
-    assembled_terms = terms_without_builtin_collisions(term_cfg, collision_operator)
-
-    if use_jit:
-        rhs_fn = (
-            assemble_rhs_cached_electrostatic_jit
-            if force_electrostatic_fields
-            else assemble_rhs_cached_jit
-        )
-        dG, fields = rhs_fn(G, cache, params, assembled_terms, dt)
-    else:
-        dG, fields = assemble_rhs_cached(
-            G,
-            cache,
-            params,
-            terms=assembled_terms,
-            use_custom_vjp=use_custom_vjp,
-            dt=dt,
-            force_electrostatic_fields=force_electrostatic_fields,
-        )
-    collision_rhs = custom_collision_contribution(
+    dG, fields = assemble_linear_rhs_cached(
         G,
-        fields,
         cache,
         params,
-        term_cfg,
-        collision_operator,
-        force_electrostatic_fields=force_electrostatic_fields,
+        terms=term_cfg,
+        use_jit=use_jit,
+        use_custom_vjp=use_custom_vjp,
+        dt=dt,
+        electrostatic_fields=force_electrostatic_fields,
+        collision_operator=collision_operator,
     )
-    if collision_rhs is not None:
-        dG = dG + collision_rhs
     return dG, fields.phi
 
 

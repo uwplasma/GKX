@@ -2759,3 +2759,57 @@ reported 16,821,248 peak device bytes. Final-state norms were
 `2.8284272048040293e-05` CPU and `2.828427022905089e-05` GPU (about `6.4e-8`
 relative). This tiny fixed-shape workload validates reuse and bounded memory;
 it is not a CPU/GPU speedup or production-throughput claim.
+
+## 2026-08-29 — Phase 2 cached linear-assembly consolidation scope
+
+Task: make `gkx.terms.assembly` the single serial owner of cached linear RHS
+route selection and custom-collision composition. The linear and nonlinear
+facades currently repeat the same three policies: select the electrostatic or
+full compiled field route, disable the built-in collision term when a custom
+operator owns it, and add that custom contribution after the shared field
+solve. Preserve `gkx.operators.linear.rhs` and
+`gkx.operators.nonlinear.rhs.linear_rhs_jit_for_terms_impl` as thin
+compatibility routes. Baseline: the prepared-contract branch at
+`3d963943b32e47c3f4a507a920379eb2ee114314`, with 199 installable Python files
+and 91,502 installable source lines. Non-goals: no term equation, coefficient,
+normalization, fixed summation order, field solve, collision model, nonlinear
+bracket, timestepper, sharding kernel, public API, schema, or numerical default
+change. Specialized device-local assembly remains in its topology owner while
+continuing to call the canonical local-term assembler. Acceptance: exact or
+existing-tolerance identity for serial linear and nonlinear electrostatic and
+electromagnetic RHS values, named term contributions, custom collisions,
+JIT/eager paths, forward and reverse derivatives, and representative implicit
+and parallel callers; unchanged compatibility-object identities; all focused
+linear/nonlinear/operator/parallel tests, release gates, Ruff, typing,
+architecture/size, documentation, packaging, and diff gates; a net source-line
+reduction; and synchronized cold/warm/host-memory measurements with no material
+regression. Roll back if a numerical fingerprint or derivative changes, the
+canonical owner grows a second term implementation, a serial path gains a
+collective, import laziness regresses, or duplicated orchestration remains.
+
+Evidence: the consolidated owner reduces installable source from 91,502 to
+91,499 lines while retaining 199 files. The duplicate uncached
+`gkx.terms.assemble_rhs` compatibility wrapper and its existence-only tests
+were removed; `gkx.operators.linear.linear_rhs` remains the grid/geometry entry
+point. A deterministic x64 S-alpha comparison produced byte-identical SHA-256
+fingerprints before and after consolidation for eager and compiled linear RHS
+and fields, differentiable and compiled nonlinear RHS and fields, and the
+reverse-mode scalar gradient (nine arrays/scalars total). A synchronized
+float32 electrostatic CPU smoke at `Nx=8`, `Ny=16`, `Nz=24`, `Nl=6`, `Nm=10`
+reported baseline/consolidated cold execution of 0.502/0.499 s and warm medians
+of 0.189/0.193 ms. Both outer call JAXPRs contained one compiled-call primitive
+and returned norm 2139.0703125. Traced cold Python peaks were 3,415,799 and
+3,649,103 bytes; after peak reset, 31 warm calls added only 544 and 753 peak
+bytes respectively and retained no incremental growth. The 0.23 MB cold-only
+trace-cache difference is bounded and negligible beside compiled runtime
+allocation; the measured path has no material cold, warm, or repeated-memory
+regression.
+
+The matched office RTX A4000 smoke on CUDA device 0 with JAX 0.6.2 reported
+baseline/consolidated cold execution of 1.888/1.746 s, warm medians of
+2.403/2.451 ms, identical norm 2139.070800781, and peak device allocation of
+617,728/617,216 bytes. Traced cold Python peaks were 3,840,792/4,059,724 bytes;
+the 31 warm calls added 658/2,086 peak bytes and retained no incremental
+growth. Thus the consolidation preserves the GPU result and device-memory
+footprint, improves the measured cold sample, and changes warm execution by
+about two percent in this bounded smoke.
