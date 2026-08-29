@@ -3169,3 +3169,12 @@ naive splitting, fixed-work SOLVAX over nested dynamic GMRES, and small restart
 spaces over the old default. Promotion still requires a representative stiff
 case where the second-order route improves time-to-accuracy, plus implicit
 value/order/restart/diagnostic/gradient gates and bounded transpose solves.
+
+Increasing the kinetic-electron Hermite resolution to `Nm=64` did not reverse
+the decision. Coupled Crank--Nicolson at `dt=0.004` took 3.59 seconds warm for
+100 steps, peaked at 73,321,472 device bytes, certified every stage, and had
+`0.00566` relative state error against RK4. The stable RK4 reference at
+`dt=0.0005` took 1.86 seconds warm for 800 steps and peaked at 27,886,080
+bytes. Thus even an eightfold step-count reduction remains about 1.9 times
+slower and 2.6 times larger in device memory; higher velocity resolution alone
+is not an acceptable performance justification for the current preconditioner.
