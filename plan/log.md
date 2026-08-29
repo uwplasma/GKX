@@ -3077,3 +3077,68 @@ kinetic-electron executable now completes its native implicit density path
 instead of raising the explicit-method error. Focused implicit, diagnostic,
 and runtime-option tests pass; Ruff and mypy pass; installable source remains
 at 199 files and rises to 91,470 lines, below the reviewed 91,507-line ceiling.
+
+## 2026-08-29 — Phase 2 native stiff-IMEX prototype scope
+
+Task: add a mathematically second-order native IMEX candidate for the stiff
+field-free Hermite streaming ladder while keeping diagonal collision and
+hypercollision sinks bounded by exact Strang half steps. Use the
+ARS(2,2,2) additive tableau and solve each implicit stage directly in
+FFT/Hermite space. A similarity transform, `G_m = i**m Y_m`, makes the
+streaming tridiagonal bands real so SOLVAX can select its fused accelerator
+path and solve complex states as two real right-hand sides. Support both
+periodic and twist-linked FFT chains. Baseline: the native-step consolidation
+at `0a36b1b4`, with 199 installable Python files and 91,424 installable source
+lines.
+
+This is a candidate, not yet the promoted stiff owner. The electromagnetic
+field-drive part of parallel streaming remains explicit, as do custom
+non-diagonal collision operators; custom collisions and state-parallel ARS2
+runs fail before compilation. The existing full-operator backward-Euler/GMRES
+route is not renamed or presented as second order. Non-goals for this tranche:
+no nonlinear IMEX replacement, field-Schur solve, collision-model expansion,
+Diffrax removal, default-method change, example retuning, public API promise,
+or new physics-validation claim.
+
+Initial deterministic x64 evidence gives the expected fourfold error reduction
+under timestep halving for the scalar ARS tableau and for a periodic
+gyrokinetic streaming case against a fine RK4 reference. Periodic and
+twist-linked structured solves satisfy `(I - a L_stream) y = rhs` to their
+working-precision residual on the runtime spectral subspace; the periodic
+solve also has a finite reverse-mode gradient. Standard and diagnostics-rich
+integrators return exactly identical state and field histories. The tableau
+caches its first explicit stage, so each completed step uses two full RHS
+evaluations and two structured line solves. Until field-drive assembly is
+separated from the streaming ladder, forming the explicit remainder also
+reapplies the ladder at both stages; this is a visible optimization target, not
+a hidden promotion claim. A reduced
+two-species linked kinetic-electron runtime smoke with `(Nl, Nm, Nz)=(4,8,24)`,
+`dt=0.001`, and `t_max=0.02` completed cold on the Apple M4 in 3.68 seconds
+with finite fitted outputs. A second smoke at `dt=0.005`, `t_max=0.05`
+completed in 3.78 seconds with finite outputs. These short fits are only
+operability checks and are deliberately not physical growth-rate evidence.
+
+Acceptance before promotion: manufactured value/order and reverse-gradient
+gates; periodic/linked inverse residuals; standard/diagnostic identity; full
+kinetic-electron and TEM accuracy against native RK4 and the temporary Diffrax
+oracle; synchronized CPU and RTX A4000 cold/warm/device-memory profiles; an
+explicit CFL bound that retains the still-explicit electromagnetic guard; and
+early validation for unsupported custom-collision or parallel combinations.
+Roll back if the line solve materializes dense velocity matrices, loses linked
+Hermitian coverage, changes the unsplit RHS, fails second order, or does not
+improve time-to-accuracy or memory on a representative stiff case.
+
+The representative full-resolution kinetic-electron gate rejected this
+candidate. On one office RTX A4000, the field-free split overflowed at
+`dt=0.004` because the still-explicit electromagnetic field drive retained an
+estimated `0.0004454` stability bound. Adding a matrix-free field correction
+with the exact Hermite solve as a GMRES preconditioner did not rescue the
+route: `dt=0.004`, 500 steps overflowed after 111.41 seconds; `dt=0.001`, 500
+steps was finite but took 178.84 seconds cold and 171.13 seconds warm, reached
+a 35,477,248-byte device peak, and covered too little physical time for a
+settled fit. This is orders of magnitude slower than the maintained explicit
+stress lane and also raises installable source from 91,424 to 91,825 lines.
+Per the prospective rollback gate, the prototype source and tests were
+removed. The next stiff-owner attempt must consolidate GKX's existing
+Hermite/field-corrected implicit machinery rather than add a second line solve
+or run a general GMRES inside every IMEX stage.
