@@ -802,10 +802,17 @@ def test_vmec_tensor_mapping_builds_finite_mapping_from_mocked_vmec_modules(
             },
         }
 
+    def gk_fieldline_geometry_from_wout(wout, **kwargs):  # noqa: ANN001, ANN202
+        captured["wout"] = wout
+        return gk_fieldline_geometry(None, None, **kwargs)
+
     monkeypatch.setattr(
         vmec_tensor_mapping,
         "_import_vmex_turbulence",
-        lambda: types.SimpleNamespace(gk_fieldline_geometry=gk_fieldline_geometry),
+        lambda: types.SimpleNamespace(
+            gk_fieldline_geometry=gk_fieldline_geometry,
+            gk_fieldline_geometry_from_wout=gk_fieldline_geometry_from_wout,
+        ),
     )
 
     state = object()
@@ -859,6 +866,19 @@ def test_vmec_tensor_mapping_builds_finite_mapping_from_mocked_vmec_modules(
     assert geometry.source_model == "vmex:core.turbulence"
     np.testing.assert_array_equal(geometry.bmag_profile, mapping["bmag"])
     assert geometry.gradpar_value == pytest.approx(0.5)
+
+    wout = object()
+    imported = vmec_tensor_mapping.from_vmex_wout(
+        wout,
+        surface_index=2,
+        alpha=0.2,
+        ntheta=ntheta,
+    )
+    assert captured["wout"] is wout
+    assert captured["s_index"] == 2
+    assert imported.source_model == "vmex:core.turbulence:wout"
+    np.testing.assert_array_equal(imported.bmag_profile, mapping["bmag"])
+    assert imported.gradpar_value == pytest.approx(0.5)
 
 
 def test_from_vmex_preserves_geometry_vjp(monkeypatch) -> None:
