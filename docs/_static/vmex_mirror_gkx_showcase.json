@@ -1,0 +1,41 @@
+{
+  "animated_loop": "vmex_mirror_gkx_loop.webp",
+  "device": "cpu:0",
+  "figure": "vmex_mirror_gkx_showcase.webp",
+  "generator": "tools/artifacts/build_vmex_mirror_gkx_artifacts.py",
+  "gkx_commit": "b155cfc64b5017f7ceaee3d06526131b8b6a11e7",
+  "gradpar": 0.11172655358143961,
+  "inputs": {
+    "arc_oversample": 8,
+    "axial_flux_derivative": 0.02,
+    "coefficient_count": 16,
+    "current_derivative": 0.0,
+    "mpol": 4,
+    "n_hermite": 3,
+    "n_laguerre": 2,
+    "ns": 5,
+    "ntheta": 32,
+    "nxi": 4,
+    "return_radius": 2.0,
+    "section_turns": 0,
+    "semi_major": 0.4,
+    "semi_minor": 0.3,
+    "straight_length": 4.0
+  },
+  "jax_version": "0.10.2",
+  "kind": "vmex_closed_mirror_gkx_showcase",
+  "mirror_ratio": 1.7784889820898235,
+  "movie": "vmex_mirror_gkx_rotation.mp4",
+  "objectives": {
+    "gamma": 0.13907072654347788,
+    "kperp_eff2": 0.26519461271219086,
+    "linear_heat_flux_weight": 1.9028109563693314,
+    "linear_particle_flux_weight": 0.0,
+    "mixing_length_heat_flux_proxy": 0.9978532349160659,
+    "omega": -0.14938341334279895
+  },
+  "precision": "float64",
+  "scope": "closed periodic mirror-hybrid; no open-end kinetic claim",
+  "snapshot": "vmex_mirror_gkx_snapshot.webp",
+  "vmex_commit": "597e00220a0e3411c8deae231bd4ddae8ec23cb8"
+}

@@ -22,6 +22,37 @@ steady across the loop, not growing. It is an animated image rather than a
 (1.8 MB) is a release asset rather than tracked media; both are rebuilt by
 [`build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py).
 
+### Closed mirror flux tubes
+
+Magnetic mirrors confine particles along a field line by raising magnetic-field
+strength near the ends of a low-field region: particles with sufficient
+perpendicular energy reflect before reaching the high-field ends. VMEX builds
+the three-dimensional equilibrium and a closing field line; GKX receives its
+local metric, drifts, and mirror force on an equal-arc flux-tube grid.
+
+<img src="docs/_static/vmex_mirror_gkx_snapshot.webp" width="720" alt="Snapshot of a closed VMEX mirror field line and its magnetic-field strength along the equal-arc GKX grid">
+
+The colored points are one periodic racetrack field line and the curve is the
+same line read in GKX's parallel coordinate. The compact loop follows that
+coordinate while rotating the geometry:
+
+<img src="docs/_static/vmex_mirror_gkx_loop.webp" width="720" alt="Animated rotation of a closed VMEX mirror field line with a marker moving along its GKX magnetic-field profile">
+
+<img src="docs/_static/vmex_mirror_gkx_showcase.webp" width="900" alt="Closed VMEX stellarator-mirror racetrack, equal-arc magnetic-field profile, and perpendicular GKX metric">
+
+The same in-memory VMEX mirror state now feeds GKX without a file round trip:
+VMEX owns field-line closure, the Clebsch/metric/drift construction, and the
+equal-arc grid; GKX validates that array contract and evaluates its existing
+linear and quasilinear objectives. The pictured case has mirror ratio 1.778,
+growth rate 0.1391, and mixing-length heat-flux proxy 0.9979 on the documented
+small resolution. See the **[full-rate MP4](docs/_static/vmex_mirror_gkx_rotation.mp4)**,
+the [model and equations](docs/geometry.rst#closed-vmex-mirror-geometry), and
+the [machine-readable run record](docs/_static/vmex_mirror_gkx_showcase.json).
+The snapshot (13 kB), 36-frame loop (105 kB), diagnostic figure (57 kB), and
+four-second MP4 (200 kB) total about 375 kB and share one reproducible builder.
+This is a closed periodic stellarator--mirror hybrid, not an open-end loss or
+sheath calculation.
+
 ## Install
 
 ```bash
@@ -693,6 +724,7 @@ artifact of record and the figure is a render of it.
 | `qa_transport_equilibria.png`, `qa_transport_reduction.svg` | `tools/artifacts/build_qa_transport_figures.py` | `qa_transport_summary.csv` |
 | `quasilinear_stellarator_usefulness.png` | **generator retired — not regenerable** | `quasilinear_stellarator_usefulness.json` |
 | `runtime_memory_benchmark.png` | `benchmarks/performance/benchmark_runtime_memory.py` | `runtime_memory_summary_ship_refresh.json` |
+| `vmex_mirror_gkx_{snapshot,loop,showcase}.webp`, `vmex_mirror_gkx_rotation.mp4` | `tools/artifacts/build_vmex_mirror_gkx_artifacts.py` | `vmex_mirror_gkx_showcase.json`, `vmex_mirror_gkx_performance.json` |
 
 The turbulence loop is the only two-stage one. For a physics run, continue a
 saved saturated state with the same method and CFL policy; only the two

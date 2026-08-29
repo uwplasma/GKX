@@ -248,9 +248,7 @@ def test_flux_tube_geometry_from_mapping_builds_solver_contract() -> None:
     )
     assert gkx.geometry_observable_names is geometry_observable_names
     assert gkx.flux_tube_geometry_observables is flux_tube_geometry_observables
-    geom = flux_tube_geometry_from_mapping(
-        _sample_mapping(), source_model="vmex:test"
-    )
+    geom = flux_tube_geometry_from_mapping(_sample_mapping(), source_model="vmex:test")
 
     assert geom.source_model == "vmex:test"
     assert geom.theta.shape == (8,)
@@ -487,14 +485,10 @@ def test_differentiable_backend_path_helpers_handle_missing_modules(
     (existing / "src").mkdir(parents=True)
     monkeypatch.setenv("GKX_VMEX_PATH", str(existing))
 
-    paths = _candidate_paths(
-        ("GKX_VMEX_PATH",), (existing, tmp_path / "missing")
-    )
+    paths = _candidate_paths(("GKX_VMEX_PATH",), (existing, tmp_path / "missing"))
 
     assert paths == [existing.resolve(), (existing / "src").resolve()]
-    assert (
-        _find_importable_module("gkx_definitely_missing_backend", paths) is None
-    )
+    assert _find_importable_module("gkx_definitely_missing_backend", paths) is None
 
 
 def test_differentiable_backend_path_helpers_prefer_configured_checkout(
@@ -908,6 +902,66 @@ def test_from_vmex_preserves_geometry_vjp(monkeypatch) -> None:
     assert derivative == pytest.approx(float(jnp.sum(jnp.cos(theta) ** 2)))
 
 
+def test_from_vmex_mirror_is_a_thin_lazy_adapter(monkeypatch) -> None:
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 16, endpoint=False)
+    ones, zeros = jnp.ones_like(theta), jnp.zeros_like(theta)
+    calls = []
+
+    def owner(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {
+            "theta": theta,
+            "gradpar": 0.2 * ones,
+            "bmag": 1.0 + 0.2 * jnp.cos(theta),
+            "bgrad": -0.04 * jnp.sin(theta) / (1.0 + 0.2 * jnp.cos(theta)),
+            "gds2": ones,
+            "gds21": zeros,
+            "gds22": ones,
+            "cvdrift": zeros,
+            "gbdrift": zeros,
+            "cvdrift0": zeros,
+            "gbdrift0": zeros,
+        }
+
+    original_import = vmec_tensor_mapping.importlib.import_module
+    module = types.SimpleNamespace(gk_closed_fieldline_geometry=owner)
+    monkeypatch.setattr(
+        vmec_tensor_mapping.importlib,
+        "import_module",
+        lambda name: (
+            module if name == "vmex.mirror.turbulence" else original_import(name)
+        ),
+    )
+    inputs = (object(), object(), object())
+    geometry = vmec_tensor_mapping.from_vmex_mirror(
+        *inputs,
+        axial_flux_derivative=0.02,
+        radial_index=3,
+        ntheta=16,
+    )
+    assert geometry.source_model == "vmex:mirror.turbulence"
+    assert geometry.theta.shape == (16,)
+    assert calls == [
+        (
+            inputs,
+            {"axial_flux_derivative": 0.02, "radial_index": 3, "ntheta": 16},
+        )
+    ]
+    np.testing.assert_allclose(geometry.bmag_profile, 1.0 + 0.2 * jnp.cos(theta))
+
+
+def test_from_vmex_mirror_missing_owner_is_actionable(monkeypatch) -> None:
+    monkeypatch.setattr(
+        vmec_tensor_mapping.importlib,
+        "import_module",
+        lambda _name: (_ for _ in ()).throw(ImportError("absent")),
+    )
+    with pytest.raises(RuntimeError, match="closed-mirror geometry"):
+        vmec_tensor_mapping.from_vmex_mirror(
+            object(), object(), object(), axial_flux_derivative=0.02
+        )
+
+
 def test_vmec_state_sensitivity_ad_fd_diagnostics_match_analytic_jacobian() -> None:
     def observables(params: jnp.ndarray) -> jnp.ndarray:
         return jnp.asarray(
@@ -973,10 +1027,7 @@ def test_vmex_flux_tube_sensitivity_report_starts_from_real_vmec_state_when_avai
 
     report = vmex_flux_tube_sensitivity_report(ntheta=12, fd_step=2.0e-6)
 
-    assert (
-        gkx.vmex_flux_tube_sensitivity_report
-        is vmex_flux_tube_sensitivity_report
-    )
+    assert gkx.vmex_flux_tube_sensitivity_report is vmex_flux_tube_sensitivity_report
     assert "available" in report
     if not report["available"]:
         assert report["sensitivity"] is None
@@ -1017,10 +1068,7 @@ def test_vmex_flux_tube_array_parity_report_tracks_production_gap_when_available
 
     report = vmex_flux_tube_array_parity_report(ntheta=8)
 
-    assert (
-        gkx.vmex_flux_tube_array_parity_report
-        is vmex_flux_tube_array_parity_report
-    )
+    assert gkx.vmex_flux_tube_array_parity_report is vmex_flux_tube_array_parity_report
     assert "available" in report
     if not report["available"]:
         assert "reason" in report or "error" in report
@@ -1082,9 +1130,7 @@ def test_vmex_flux_tube_array_parity_report_tracks_production_gap_when_available
         assert float(report["equal_arc_drift_worst_normalized_max_abs"]) < 1.2e-1
 
 
-def test_vmex_flux_tube_array_parity_report_enforces_boozer_resolution_floor() -> (
-    None
-):
+def test_vmex_flux_tube_array_parity_report_enforces_boozer_resolution_floor() -> None:
     with pytest.raises(ValueError, match="mboz and nboz"):
         vmex_flux_tube_array_parity_report(mboz=20, nboz=21)
 
@@ -1242,8 +1288,7 @@ def test_vmex_metric_tensor_sensitivity_report_checks_real_metric_tensors_when_a
         is vmex_metric_tensor_sensitivity_report
     )
     assert (
-        gkx.vmec_metric_tensor_observable_names
-        is vmec_metric_tensor_observable_names
+        gkx.vmec_metric_tensor_observable_names is vmec_metric_tensor_observable_names
     )
     assert "available" in report
     if not report["available"]:

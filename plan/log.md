@@ -3220,3 +3220,34 @@ Ruff, typing, architecture/size, warning-as-error docs, and diff gates pass;
 installable source remains below the reviewed 91,510-line ceiling. Roll back
 if GKX imports VMEX eagerly, reconstructs equilibrium tensors, requires
 `booz_xform_jax` for this path, or changes any existing geometry fingerprint.
+
+## 2026-08-29 — Closed VMEX mirror-to-GKX geometry scope
+
+Task: add the one thin `gkx.geometry.from_vmex_mirror` conversion after VMEX
+owns a differentiable closed-racetrack mapping. The immediate physics lane is
+a one-circuit-closing periodic stellarator–mirror field line, with VMEX owning
+the Clebsch label, Cartesian metric/drifts, equal-arc remap, normalization, and
+closure rejection. GKX owns only generic mapping validation and its existing
+linear/quasilinear/nonlinear consumers. Baseline: canonical VMEX state adapter
+PR #156 merged at `235bd390`, 199 source files and 91,507 installable Python
+lines. The adapter must not add a source file or regress that line ceiling.
+
+Acceptance: mock ownership/conversion tests and the real optional VMEX path
+pass; the real `(Nl,Nm,Nz)=(2,3,16)` dense objective is finite and nontrivial;
+geometry-to-growth AD matches centered finite difference; CPU/NVIDIA values,
+gradients, cold/warm JIT, and memory are recorded; docs state the equations
+and prohibit open-end claims. True open mirrors require a reviewed
+nonperiodic parallel operator, particle/sheath boundaries, sources, ambipolar
+potential, loss-cone collisions, and a compatible background ordering. They
+are not created by periodically joining VMEX end cuts.
+
+Evidence: the closed racetrack produces finite linear/quasilinear objectives
+and an analytic radius sensitivity that agrees with centered finite difference
+to `1.20e-8` relative error. Apple CPU and NVIDIA RTX A4000 float64 objectives
+agree to about `5e-15` and gradients to `1.1e-14`. For the intentionally tiny
+`(2,3,16)` acceptance problem, warm value/gradient time is 9.30 ms on CPU and
+217 ms on GPU, with a 151,138,048-byte GPU allocation peak. This is a parity
+and accelerator-readiness gate, not a speedup claim; representative nonlinear
+throughput remains a separate performance gate. The tracked figure, movie,
+run record, and performance record are generated or documented under
+`docs/_static/vmex_mirror_gkx_*`.
