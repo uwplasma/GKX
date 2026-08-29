@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Benchmark-facing linear example.
 # For parity-sensitive reproduction against tracked reference outputs, run with:
 #   JAX_ENABLE_X64=1 gkx examples/linear/axisymmetric/cyclone.toml

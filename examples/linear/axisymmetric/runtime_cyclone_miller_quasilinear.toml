@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Cyclone Miller linear quasilinear transport diagnostic example.
 # This mirrors the archived Cyclone Miller nonlinear validation geometry while
 # running a linear eigenmode scan. The saturated heat-flux estimate uses an

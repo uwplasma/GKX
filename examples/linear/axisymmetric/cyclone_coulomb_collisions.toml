@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Cyclone ITG with the gyrokinetic (finite-Larmor) Coulomb collision operator.
 #
 #   JAX_ENABLE_X64=1 gkx examples/linear/axisymmetric/cyclone_coulomb_collisions.toml

@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Gonzalez-Jerez et al., J. Plasma Phys. 88, 905880310 (2022), test 4:
 # collisionless W7-X bean-tube zonal-flow relaxation in the high-mirror
 # configuration at torflux = 0.64 with adiabatic electrons, zero gradients,

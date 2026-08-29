@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Merlo et al. Phys. Plasmas 23, 032104 (2016), Rosenbluth-Hinton/GAM
 # benchmark, Case III at r/a = 0.5.  The physics contract follows Sec. V:
 # adiabatic electrons, zero density/temperature gradients, ky = 0,

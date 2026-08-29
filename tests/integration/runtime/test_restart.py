@@ -137,3 +137,11 @@ def test_load_netcdf_restart_state_rejects_malformed_netcdf(tmp_path: Path) -> N
     root.close()
     with pytest.raises(ValueError, match="restart Nz"):
         load_netcdf_restart_state(nz_mismatch, nspecies=1, Nl=1, Nm=1, ny=4, nx=4, nz=1)
+
+
+def test_restart_reader_rejects_unsupported_future_schema(tmp_path: Path) -> None:
+    path = tmp_path / "future.restart.nc"
+    with Dataset(path, "w") as root:
+        root.setncattr("schema_version", 2)
+    with pytest.raises(ValueError, match="unsupported GKX NetCDF schema_version 2"):
+        load_netcdf_restart_state(path, nspecies=1, Nl=1, Nm=1, ny=1, nx=1, nz=1)

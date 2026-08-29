@@ -21,15 +21,7 @@ from gkx.workflows.runtime.config import (
     RuntimeTermsConfig,
 )
 
-RUNTIME_TOML_TOP_LEVEL_KEYS = {
-    "species",
-    "physics",
-    "collisions",
-    "normalization",
-    "expert",
-    "output",
-    "quasilinear",
-}
+RUNTIME_TOML_SCHEMA_VERSION = 1
 EXECUTABLE_TOML_SHORTHAND_COMMANDS = {
     "run",
     "run-runtime-linear",
@@ -64,14 +56,7 @@ def describe_binary_input(path: Path) -> str | None:
 
 
 def load_toml(path: str | Path) -> dict:
-    """Load a TOML file into a plain dictionary.
-
-    A binary file reaches here whenever it was not recognised earlier -- most
-    often an equilibrium whose name or contents did not match the wout
-    signature -- and ``tomllib`` reports that as a decode error against a byte
-    offset, which says nothing about what went wrong. Name the file and what it
-    turned out to be instead.
-    """
+    """Load TOML, naming common binary formats instead of reporting byte offsets."""
 
     path = Path(path)
     try:
@@ -91,6 +76,17 @@ def load_toml(path: str | Path) -> dict:
         ) from exc
     except tomllib.TOMLDecodeError as exc:
         raise ValueError(f"{path} is not valid TOML: {exc}") from exc
+
+
+def _validate_runtime_schema_version(data: dict[str, Any]) -> None:
+    raw = data.get("schema_version", 0)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ValueError("schema_version must be the integer 1")
+    if raw not in (0, RUNTIME_TOML_SCHEMA_VERSION):
+        raise ValueError(
+            f"unsupported GKX TOML schema_version {raw}; upgrade GKX or migrate "
+            "the deck using the input-schema documentation"
+        )
 
 
 def is_runtime_toml(data: dict[str, Any]) -> bool:
@@ -148,27 +144,7 @@ def direct_config_shorthand_args(
 
 
 def resolve_runtime_path(value: str | None, *, base_dir: Path) -> str | None:
-    """Expand and resolve a runtime config path.
-
-    Applies ``$VAR`` and ``~`` expansion, then resolves relative paths against
-    ``base_dir``. If an unresolved ``$VAR`` remains after expansion (env var not
-    set), the original value is returned unchanged so downstream code can raise
-    a clearer error. ``None`` is passed through.
-
-    Parameters
-    ----------
-    value : str or None
-        Raw path string from a TOML config or CLI flag.
-    base_dir : Path
-        Directory used to resolve relative paths. Callers typically pass the
-        config file's parent directory (TOML values) or ``Path.cwd()``
-        (CLI-supplied values).
-
-    Returns
-    -------
-    str or None
-        Absolute resolved path as a string, or ``None`` when ``value`` is ``None``.
-    """
+    """Expand a config path and resolve it relative to ``base_dir``."""
     if value is None:
         return None
     expanded = os.path.expanduser(os.path.expandvars(value))
@@ -326,6 +302,7 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
 
     path = Path(path)
     data = load_toml(path)
+    _validate_runtime_schema_version(data)
     base_dir = path.resolve().parent
     cfg = _apply_runtime_section_overrides(_runtime_base_config(data), data)
     species = _runtime_species_from_toml(data.get("species"))

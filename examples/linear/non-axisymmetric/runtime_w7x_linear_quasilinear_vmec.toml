@@ -1,3 +1,5 @@
+schema_version = 1
+
 # VMEC-backed stellarator linear quasilinear transport diagnostic example.
 # Generate the self-contained QI equilibrium with:
 #   cd examples/vmec && vmex input.nfp3_QI_fixed_resolution_final

@@ -30,6 +30,7 @@ from gkx.artifacts.spectral_layout import (
     _spectral_to_xy,
     _state_basis_moments,
     _write_runtime_root_metadata,
+    NETCDF_SCHEMA_VERSION,
 )
 from gkx.core.grid import (
     build_spectral_grid,
@@ -832,6 +833,7 @@ def _write_restart_netcdf(
     path = Path(restart_path)
     _ensure_parent(path)
     with Dataset(path, "w") as root:
+        root.setncattr("schema_version", NETCDF_SCHEMA_VERSION)
         root.createDimension("Nspecies", restart_state_layout.shape[0])
         root.createDimension("Nm", restart_state_layout.shape[1])
         root.createDimension("Nl", restart_state_layout.shape[2])

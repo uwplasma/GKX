@@ -18,6 +18,8 @@ Minimal runtime TOML example
 
 .. code-block:: toml
 
+   schema_version = 1
+
    [[species]]
    name = "ion"
    charge = 1.0
@@ -59,6 +61,16 @@ Minimal runtime TOML example
    Nm = 12
    solver = "auto"
    fit_signal = "auto"
+
+Schema compatibility
+^^^^^^^^^^^^^^^^^^^^
+
+Maintained runtime decks declare ``schema_version = 1`` at the document root.
+Versionless GKX 1.8.2 decks remain readable as legacy schema 0 and are not
+rewritten in place. Resolved decks written by the equilibrium shorthand are
+schema 1. A non-integer or unsupported future version fails before numerical
+work and points to this migration contract; upgrade GKX before reading a newer
+schema.
 
 Quasilinear diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^

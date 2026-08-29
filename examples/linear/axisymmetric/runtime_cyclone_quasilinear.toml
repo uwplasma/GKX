@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Cyclone linear quasilinear transport diagnostic example.
 # This computes eigenfunction-resolved electrostatic heat/particle flux weights
 # from one linear mode, then applies an explicit uncalibrated mixing-length
