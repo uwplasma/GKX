@@ -3220,3 +3220,23 @@ Ruff, typing, architecture/size, warning-as-error docs, and diff gates pass;
 installable source remains below the reviewed 91,510-line ceiling. Roll back
 if GKX imports VMEX eagerly, reconstructs equilibrium tensors, requires
 `booz_xform_jax` for this path, or changes any existing geometry fingerprint.
+
+## 2026-08-29 — Closed VMEX mirror-to-GKX geometry scope
+
+Task: add the one thin `gkx.geometry.from_vmex_mirror` conversion after VMEX
+owns a differentiable closed-racetrack mapping. The immediate physics lane is
+a one-circuit-closing periodic stellarator–mirror field line, with VMEX owning
+the Clebsch label, Cartesian metric/drifts, equal-arc remap, normalization, and
+closure rejection. GKX owns only generic mapping validation and its existing
+linear/quasilinear/nonlinear consumers. Baseline: canonical VMEX state adapter
+PR #156 merged at `235bd390`, 199 source files and 91,507 installable Python
+lines. The adapter must not add a source file or regress that line ceiling.
+
+Acceptance: mock ownership/conversion tests and the real optional VMEX path
+pass; the real `(Nl,Nm,Nz)=(2,3,16)` dense objective is finite and nontrivial;
+geometry-to-growth AD matches centered finite difference; CPU/NVIDIA values,
+gradients, cold/warm JIT, and memory are recorded; docs state the equations
+and prohibit open-end claims. True open mirrors require a reviewed
+nonperiodic parallel operator, particle/sheath boundaries, sources, ambipolar
+potential, loss-cone collisions, and a compatible background ordering. They
+are not created by periodically joining VMEX end cuts.

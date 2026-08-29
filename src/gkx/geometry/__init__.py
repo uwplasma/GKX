@@ -25,7 +25,7 @@ from gkx.geometry.flux_tube import (
     load_imported_geometry_netcdf,
     sample_flux_tube_geometry,
 )
-from gkx.geometry.vmec_tensor_mapping import from_vmex
+from gkx.geometry.vmec_tensor_mapping import from_vmex, from_vmex_mirror
 
 __all__ = [
     "FluxTubeGeometryData",
@@ -43,6 +43,7 @@ __all__ = [
     "effective_boundary",
     "ensure_flux_tube_geometry_data",
     "from_vmex",
+    "from_vmex_mirror",
     "load_imported_geometry_netcdf",
     "sample_flux_tube_geometry",
     "twist_shift_params",

@@ -1,14 +1,4 @@
-"""Direct VMEC (PEST field-line) flux-tube mapping bridge via ``vmex``.
-
-The historical tensor route evaluated raw VMEC metric/``|B|`` tensors from the
-retired ``vmex`` internals and rebuilt the flux-tube contract locally.
-The route is now a thin adapter over the vmex public turbulence seam
-:func:`vmex.core.turbulence.gk_fieldline_geometry`, which emits the exact
-in-memory mapping contract consumed by
-:func:`gkx.flux_tube_geometry_from_mapping` (GS2-style normalizations,
-PEST field-line sampling, pure JAX, differentiable w.r.t. ``(state,
-runtime)``).
-"""
+"""Thin GKX conversions for VMEX-owned toroidal and closed-mirror mappings."""
 
 from __future__ import annotations
 
@@ -38,25 +28,10 @@ def vmex_flux_tube_mapping_from_state(  # pragma: no cover
     equal_arc: bool = True,
     arc_oversample: int = 4,
 ) -> dict[str, Any]:
-    """Build a solver-ready flux-tube mapping from a solved ``vmex`` state.
+    """Build VMEX's equal-arc PEST mapping with GS2/GX normalizations.
 
-    ``state``/``runtime`` come from :func:`load_solved_vmex_case` (or any
-    :class:`vmex.optimize.Equilibrium`).  The mapping is produced by
-    :func:`vmex.core.turbulence.gk_fieldline_geometry`: one PEST field line
-    ``theta* = alpha + iota (phi - zeta0)`` on full-mesh surface
-    ``surface_index`` (vmex default, ~60 % of the radius, when ``None``),
-    sampled on ``theta = linspace(-pi, pi, ntheta, endpoint=False)`` with the
-    GS2-style normalizations ``L_ref`` = effective minor radius and
-    ``B_ref = 2 |psi_edge| / L_ref**2``.  ``equal_arc=True`` (the GKX
-    solver contract) resamples the parallel coordinate so ``gradpar`` is
-    exactly uniform.
-
-    The returned dict satisfies :func:`flux_tube_geometry_from_mapping` and is
-    differentiable with respect to the vmex spectral state.  The vmex parity
-    diagnostics (``dp_drho``, ``gradpar_profile``, sampled PEST angles, ...)
-    are passed through under the ``"vmex"`` key expected by the existing
-    report consumers, with ``reference_length``/``reference_b`` aliases for
-    ``L_ref``/``B_ref``.
+    VMEX owns all arrays and differentiability.  Its diagnostics pass through
+    under ``"vmex"`` with the two historical reference aliases GKX reports use.
     """
 
     turbulence_mod = _import_vmex_turbulence()
@@ -93,12 +68,10 @@ def from_vmex(
     arc_oversample: int = 4,
     validate_finite: bool = True,
 ) -> Any:
-    """Return GKX's generic flux-tube geometry for a solved VMEX state.
-    VMEX owns every field-line array; GKX only validates and stores them.
-    Importing this module does not import VMEX or Boozer support.
-    """
+    """Return generic GKX geometry for a solved VMEX toroidal state."""
 
     from gkx.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
+
     mapping = vmex_flux_tube_mapping_from_state(
         state,
         runtime,
@@ -116,4 +89,29 @@ def from_vmex(
     )
 
 
-__all__ = ["from_vmex", "vmex_flux_tube_mapping_from_state"]
+def from_vmex_mirror(
+    state: Any,
+    discretization: Any,
+    axis: Any,
+    *,
+    validate_finite: bool = True,
+    **geometry_kwargs: Any,
+) -> Any:
+    """Return generic GKX geometry for a periodic VMEX mirror field line."""
+
+    try:
+        mirror = importlib.import_module("vmex.mirror.turbulence")
+    except Exception as exc:  # pragma: no cover - environment-dependent
+        raise RuntimeError("vmex closed-mirror geometry support is required") from exc
+    from gkx.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
+
+    return flux_tube_geometry_from_mapping(
+        mirror.gk_closed_fieldline_geometry(
+            state, discretization, axis, **geometry_kwargs
+        ),
+        source_model="vmex:mirror.turbulence",
+        validate_finite=validate_finite,
+    )
+
+
+__all__ = ["from_vmex", "from_vmex_mirror", "vmex_flux_tube_mapping_from_state"]
