@@ -28,7 +28,6 @@ class _FieldSolveCoefficients:
     temp: jnp.ndarray
     mass: jnp.ndarray
     tz: jnp.ndarray
-    zt: jnp.ndarray
     vth: jnp.ndarray
 
 
@@ -82,7 +81,6 @@ def _field_solve_coefficients(
         temp=jnp.asarray(temp, dtype=real_dtype),
         mass=jnp.asarray(mass, dtype=real_dtype),
         tz=tz_arr,
-        zt=jnp.where(tz_arr == 0.0, 0.0, 1.0 / tz_arr),
         vth=jnp.asarray(vth, dtype=real_dtype),
     )
 
@@ -93,18 +91,42 @@ def _field_moments(
     *,
     axis_name: str | None = None,
 ) -> _FieldMoments:
+    return _reduce_electrostatic_moments(
+        G,
+        coeffs.Jl,
+        coeffs.tau_e,
+        coeffs.charge,
+        coeffs.density,
+        coeffs.tz,
+        axis_name=axis_name,
+    )
+
+
+def _reduce_electrostatic_moments(
+    G: jnp.ndarray,
+    Jl: jnp.ndarray,
+    tau_e: float | jnp.ndarray,
+    charge: jnp.ndarray,
+    density: jnp.ndarray,
+    tz: jnp.ndarray,
+    *,
+    axis_name: str | None = None,
+) -> _FieldMoments:
+    """Reduce the serial or species-sharded quasineutrality moments."""
+
     Gm0 = G[:, :, 0, ...]
     nbar = _species_sum(
-        coeffs.density[:, None, None, None]
-        * coeffs.charge[:, None, None, None]
-        * jnp.sum(coeffs.Jl * Gm0, axis=1),
+        density[:, None, None, None]
+        * charge[:, None, None, None]
+        * jnp.sum(Jl * Gm0, axis=1),
         axis_name,
     )
-    g0 = jnp.sum(coeffs.Jl * coeffs.Jl, axis=1)
+    g0 = jnp.sum(Jl * Jl, axis=1)
+    zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
     qneut = _species_sum(
-        coeffs.density[:, None, None, None]
-        * coeffs.charge[:, None, None, None]
-        * coeffs.zt[:, None, None, None]
+        density[:, None, None, None]
+        * charge[:, None, None, None]
+        * zt[:, None, None, None]
         * (1.0 - g0),
         axis_name,
     )
@@ -113,29 +135,59 @@ def _field_moments(
         nbar=nbar,
         g0=g0,
         qneut=qneut,
-        qphi=coeffs.tau_e + qneut,
+        qphi=tau_e + qneut,
     )
 
 
-def _adiabatic_quasineutrality(
-    cache, coeffs: _FieldSolveCoefficients, moments: _FieldMoments
+def _zonal_adiabatic_correction(
+    nbar: jnp.ndarray,
+    qneut: jnp.ndarray,
+    tau_e: float | jnp.ndarray,
+    *,
+    jacobian: jnp.ndarray | None = None,
+    ky: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
-    jacobian = jnp.asarray(cache.jacobian, dtype=coeffs.tau_e.dtype)
-    jac = jacobian[None, None, :]
+    """Return the exact zonal ``<phi>`` correction for adiabatic species."""
+
+    if jacobian is None or ky is None:
+        return jnp.zeros_like(nbar[..., 0])
+    tau = jnp.asarray(tau_e, dtype=jnp.real(nbar).dtype)
+    qphi = tau + qneut
+    denom_safe = jnp.where(qphi == 0.0, jnp.inf, qphi)
+    jac = jnp.asarray(jacobian, dtype=denom_safe.dtype)[None, None, :]
+    numerator = jnp.sum(
+        jnp.where(jac == 0.0, 0.0, nbar / denom_safe * jac), axis=-1
+    )
+    weight = jnp.sum(jac * qneut / denom_safe, axis=-1)
+    weight_safe = jnp.where(weight == 0.0, jnp.inf, weight)
+    ky0_mask = (jnp.asarray(ky) == 0.0)[:, None]
+    kx_mask = (jnp.arange(numerator.shape[-1]) > 0)[None, :]
+    return jnp.where(ky0_mask & kx_mask, numerator / weight_safe, 0.0)
+
+
+def _solve_electrostatic_from_moments(
+    moments: _FieldMoments,
+    tau_e: float | jnp.ndarray,
+    *,
+    mask0: jnp.ndarray | None = None,
+    jacobian: jnp.ndarray | None = None,
+    ky: jnp.ndarray | None = None,
+) -> jnp.ndarray:
+    """Solve quasineutrality from canonical reduced field moments."""
+
     denom_safe = jnp.where(moments.qphi == 0.0, jnp.inf, moments.qphi)
-    phi_avg_num = jnp.where(jac == 0.0, 0.0, moments.nbar / denom_safe * jac)
-    phi_avg_num_sum = jnp.sum(phi_avg_num, axis=-1)
-    phi_avg_denom = jnp.sum(jacobian * moments.qneut / denom_safe, axis=-1)
-    phi_avg_denom_safe = jnp.where(phi_avg_denom == 0.0, jnp.inf, phi_avg_denom)
-    ratio = phi_avg_num_sum / phi_avg_denom_safe
-    ky0_mask = (cache.ky == 0.0)[:, None]
-    kx_mask = (jnp.arange(phi_avg_num_sum.shape[1]) > 0)[None, :]
-    phi_avg = jnp.where(ky0_mask & kx_mask, ratio, 0.0)
-    return (moments.nbar + coeffs.tau_e * phi_avg[..., None]) / denom_safe
+    if jacobian is None or ky is None:
+        phi = moments.nbar / denom_safe
+    else:
+        tau = jnp.asarray(tau_e, dtype=jnp.real(moments.nbar).dtype)
+        phi_avg = _zonal_adiabatic_correction(
+            moments.nbar, moments.qneut, tau, jacobian=jacobian, ky=ky
+        )
+        phi = (moments.nbar + tau * phi_avg[..., None]) / denom_safe
+    return phi if mask0 is None else jnp.where(mask0, 0.0, phi)
 
 
 def _electrostatic_phi(
-    G: jnp.ndarray,
     cache,
     coeffs: _FieldSolveCoefficients,
     moments: _FieldMoments,
@@ -143,7 +195,12 @@ def _electrostatic_phi(
     denom_safe = jnp.where(moments.qphi == 0.0, jnp.inf, moments.qphi)
     phi_es = jax.lax.cond(
         jnp.any(coeffs.tau_e > 0.0),
-        lambda _: _adiabatic_quasineutrality(cache, coeffs, moments),
+        lambda _: _solve_electrostatic_from_moments(
+            moments,
+            coeffs.tau_e,
+            jacobian=jnp.asarray(cache.jacobian, dtype=coeffs.tau_e.dtype),
+            ky=cache.ky,
+        ),
         lambda _: moments.nbar / denom_safe,
         operand=None,
     )
@@ -319,7 +376,7 @@ def _solve_fields_impl(
         w_bpar=w_bpar,
     )
     moments = _field_moments(G, coeffs, axis_name=axis_name)
-    phi_es = _electrostatic_phi(G, cache, coeffs, moments)
+    phi_es = _electrostatic_phi(cache, coeffs, moments)
     phi, bpar = _solve_phi_bpar(cache, coeffs, moments, phi_es, axis_name=axis_name)
     apar = _solve_apar(G, cache, coeffs, moments, phi, axis_name=axis_name)
     return FieldState(phi=phi, apar=apar, bpar=bpar)
@@ -386,7 +443,7 @@ def solve_electrostatic_phi_species_shard(
         w_bpar=zeros,
     )
     moments = _field_moments(G, coeffs, axis_name=axis_name)
-    return _electrostatic_phi(G, cache, coeffs, moments)
+    return _electrostatic_phi(cache, coeffs, moments)
 
 
 @jax.custom_vjp

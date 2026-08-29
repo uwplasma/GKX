@@ -2639,3 +2639,34 @@ Ruff, typing, frozen source/file ceilings, warning-as-error docs, and diff
 checks. Roll back if a direct legacy import breaks before GKX 3.0, a VMEX name
 leaves the advertised set, root import becomes eager, or any numerical or
 architecture gate changes.
+
+## 2026-08-29 — Phase 2 electrostatic field-moment consolidation scope
+
+Task: begin the scientific-core consolidation by making `gkx.terms.fields`
+the single serial owner of the electrostatic density/polarization moment
+reduction and zonal adiabatic correction. Preserve the historical
+`gkx.operators.linear.quasineutrality_phi` and
+`gkx.parallel.electrostatic_phi_reference` entry points as thin compatibility
+routes to that owner. Baseline: `main` after PR #143 at
+`de1c62c4c29934c9e8b56e8cacbbff703b448532`. Non-goals: no field equation,
+normalization, sign, mask, zero-denominator policy, custom-VJP, electromagnetic
+phi/apar/bpar algebra, public advertisement, schema, solver, integration,
+sharding plan, fused multi-device kernel, physics claim, or numerical default
+change. Specialized device-local reductions remain in their performance
+owners because their collective operations are topology-specific. Expected
+files: this append-only entry, the canonical field owner, the two existing
+compatibility modules, and focused field/linear/parallel tests. Acceptance:
+bitwise or gated-tolerance identity for single- and multispecies serial
+quasineutrality, masked and zonal adiabatic cases, production electrostatic
+and electromagnetic solves, JIT and reverse-mode gradients; unchanged named
+compatibility objects; unchanged sharded/fused results on logical devices;
+all field, linear, parallel-autodiff, release, Ruff, typing, architecture/size,
+warning-as-error documentation, and diff gates; and a net reduction in
+duplicated installable source lines. Measurements: record source line change,
+JAXPR primitive/compile behavior for the canonical serial solve, cold and warm
+bounded execution, and peak host allocation with synchronized results. Roll
+back if any frozen field value or derivative changes outside its existing
+tolerance, the consolidation adds a collective to a serial path, causes an
+import cycle/eager JAX import, regresses cold/warm execution or memory beyond
+measurement noise, changes a sharding contract, or fails to delete duplicate
+algebra.
