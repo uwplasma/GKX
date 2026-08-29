@@ -366,7 +366,7 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'set_plot_style': ('gkx.artifacts.plotting', 'set_plot_style'),
 }
 
-__all__ = list(_EXPORT_TARGETS)
+__all__ = ['load', 'solve', 'scan', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig']
 
 
 def __getattr__(name: str) -> Any:

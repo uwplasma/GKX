@@ -31,7 +31,7 @@ def test_parallel_public_api_exports_are_stable() -> None:
         "parallel_identity_report",
     )
 
-    assert set(public_names) <= set(gkx.__all__)
+    assert set(public_names).isdisjoint(gkx.__all__)
     assert set(public_names) <= set(parallel.__all__)
     for name in public_names:
         assert getattr(gkx, name) is getattr(parallel, name)

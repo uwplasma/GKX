@@ -2611,3 +2611,31 @@ owning suites, release gates, Ruff, typing, frozen source line/file ceilings,
 warning-as-error docs, and diff checks. Roll back if versioning rewrites legacy
 data, changes a numerical payload, makes old versionless artifacts unreadable,
 requires a second input format, or regresses any architecture budget.
+
+## 2026-08-29 — Phase 1 advertised root-facade reduction scope
+
+Task: reduce the advertised `gkx` root surface from 354 names to 13:
+`__version__`, the seven completed `load`/`solve`/`scan` and Case/Result
+contracts, plus the five public names used by VMEX's maintained turbulence
+integration. Record the schema merge from PR #142 as
+`ca962b9b14c20ca4ec6525798a4a40e649104980`. Non-goals: no lazy-target
+deletion, import relocation, runtime deprecation warning, VMEX source change,
+new `plot`/`prepare`/objective/device contract, typed-submodel redesign,
+solver, schema, artifact, dependency, performance, or numerical change.
+Compatibility: the existing 353-target lazy registry remains intact, so every
+GKX 1.x name stays directly importable through GKX 2.x; names outside the
+advertised set are removed no earlier than GKX 3.0 and should be imported from
+their deliberate subpackages during the transition. Affected behavior:
+`gkx.__all__`, `gkx.api.__all__`, `dir(gkx)`, and wildcard imports expose only
+the promoted surface; direct named legacy imports preserve object identity.
+Scientific claims: none. Expected files: this append-only entry, the existing
+API registry owner, focused public/subpackage/VMEX compatibility tests, and the
+single public-API documentation page. Acceptance requires exactly 13 root and
+12 `gkx.api` advertised names; all advertised lazy imports from a base wheel;
+an unchanged 353-target registry; direct legacy identity across config,
+operator, solver, parallel, diagnostic, artifact, and objective domains; all
+five VMEX public imports; no NumPy/JAX eager import at `import gkx`; release,
+Ruff, typing, frozen source/file ceilings, warning-as-error docs, and diff
+checks. Roll back if a direct legacy import breaks before GKX 3.0, a VMEX name
+leaves the advertised set, root import becomes eager, or any numerical or
+architecture gate changes.

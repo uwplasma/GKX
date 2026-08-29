@@ -79,12 +79,24 @@ def _tiny_linear_objects():
     return cfg, geom, grid, params, terms, cache, state
 
 
-def test_top_level_api_exports_promoted_quasilinear_diagnostics() -> None:
-    """Promoted diagnostics resolve to their implementation-owner objects."""
+def test_top_level_api_preserves_named_quasilinear_diagnostics() -> None:
+    """Legacy named imports remain available outside the advertised facade."""
 
-    promoted = set(public_quasilinear.__all__) & set(quasilinear_transport.__all__)
-    assert promoted
-    for name in promoted:
+    domain_exports = set(quasilinear_transport.__all__)
+    assert domain_exports.isdisjoint(public_quasilinear.__all__)
+    legacy_exports = {
+        "QuasilinearTransportResult",
+        "compute_quasilinear_from_linear_state",
+        "effective_kperp2",
+        "mixing_length_amplitude2_jax",
+        "phi_norm2",
+        "quasilinear_feature_objective",
+        "saturation_amplitude2",
+        "saturated_flux_from_linear_weight",
+        "shape_aware_power_law_objective",
+    }
+    assert legacy_exports <= domain_exports
+    for name in legacy_exports:
         assert getattr(public_quasilinear, name) is getattr(quasilinear_transport, name)
 
 

@@ -4,11 +4,23 @@ API Reference
 Public API Registry
 -------------------
 
-The top-level ``gkx`` package remains the stable user-facing facade.
-Implementation ownership lives in the domain modules below; the compact API
-registry lazily re-exports promoted symbols without keeping one re-export file
-per domain. Advanced users should import from the owning domain modules when
-they need implementation-specific extension points.
+The top-level ``gkx`` package advertises only the current product contracts:
+``load``, ``solve``, ``scan``, ``Case``, ``LinearResult``,
+``NonlinearResult``, and ``ScanResult``. Five integration names remain
+advertised for the maintained VMEX turbulence coupling:
+``flux_tube_geometry_from_mapping``, ``solver_objective_vector_from_geometry``,
+``solver_linear_operator_matrix_from_geometry``,
+``solver_scalar_objective_from_vector``, and
+``VMEXTransportObjectiveConfig``. Together with ``__version__``, this makes a
+13-name root surface.
+
+Implementation ownership remains in the domain modules below. GKX 1.x root
+names outside this advertised set stay available by direct named import
+through GKX 2.x, but no longer appear in ``gkx.__all__``, ``dir(gkx)``, or
+wildcard imports. They may be removed no earlier than GKX 3.0; migrate to the
+owning subpackage shown in this reference before then. The complete legacy
+lazy registry is retained during that window, so this reduction does not
+eagerly import numerical dependencies or wrap the underlying objects.
 
 GKX 3 Product Contracts
 -----------------------
