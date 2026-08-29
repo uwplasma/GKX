@@ -1,4 +1,4 @@
-"""Explicit linear step kernels and growth-rate diagnostic helpers."""
+"""Native explicit/diagonal-IMEX steps and growth-rate diagnostic helpers."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ __all__ = [
     "_growth_rate_mode_mask",
     "_instantaneous_growth_rate_step",
     "_linear_explicit_step",
+    "_linear_native_step",
     "_linear_term_config",
     "_rk3_heun_step",
     "_rk4_step",
@@ -282,6 +283,37 @@ def _linear_explicit_stage_update(
         f"Unsupported method {method_key!r}; explicit linear method must be one of "
         "{'euler', 'rk2', 'rk3', "
         "'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
+    )
+
+
+def _linear_native_step(
+    G: jnp.ndarray,
+    damping: jnp.ndarray,
+    dt_val: jnp.ndarray,
+    *,
+    method_key: str,
+    rhs: LinearStageRhsFn,
+) -> jnp.ndarray:
+    """Advance one native explicit or diagonal-IMEX linear step."""
+
+    if method_key == "imex":
+        dG = rhs(G)
+        dG_explicit = dG + damping * G
+        return (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
+    if method_key == "imex2":
+        dG = rhs(G)
+        dG_explicit = dG + damping * G
+        G_half = (G + 0.5 * dt_val * dG_explicit) / (
+            1.0 + 0.5 * dt_val * damping
+        )
+        dG_half = rhs(G_half)
+        dG_half_explicit = dG_half + damping * G_half
+        return (G + dt_val * dG_half_explicit) / (1.0 + dt_val * damping)
+    return _linear_explicit_stage_update(
+        G,
+        dt_val,
+        method_key=method_key,
+        rhs=rhs,
     )
 
 

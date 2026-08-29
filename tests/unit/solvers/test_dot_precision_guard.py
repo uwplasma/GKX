@@ -62,7 +62,7 @@ EXACT = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
 # better conditioned than the entries themselves. Pinning it would cost a
 # matrix product per restart to change nothing measurable.
 ALLOWED_UNPINNED_MATRIX_DOTS = {
-    "krylov_algorithms.py:673": "overlap ranking only; argmax provably unmoved",
+    "krylov_algorithms.py:675": "overlap ranking only; argmax provably unmoved",
 }
 
 

@@ -17,7 +17,7 @@ from gkx.operators.linear.cache_arrays import (
 )
 from gkx.operators.linear.params import LinearParams, LinearTerms, _x64_enabled
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.time.explicit_steps import _linear_explicit_stage_update
+from gkx.solvers.time.explicit_steps import _linear_native_step
 
 
 def _validate_linear_sampling(*, steps: int, sample_stride: int) -> None:
@@ -85,39 +85,6 @@ def _rhs(
         terms=terms,
         use_jit=False,
         collision_operator=collision_operator,
-    )
-
-
-def _advance_linear_state(
-    G_in: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    terms: LinearTerms,
-    *,
-    method: str,
-    dt_val: jnp.ndarray,
-    damping: jnp.ndarray,
-    collision_operator: Any | None = None,
-) -> jnp.ndarray:
-    def explicit_rhs(state: jnp.ndarray) -> jnp.ndarray:
-        return _rhs(state, cache, params, terms, collision_operator)[0]
-
-    if method == "imex":
-        dG = explicit_rhs(G_in)
-        dG_explicit = dG + damping * G_in
-        return (G_in + dt_val * dG_explicit) / (1.0 + dt_val * damping)
-    if method == "imex2":
-        dG = explicit_rhs(G_in)
-        dG_explicit = dG + damping * G_in
-        G_half = (G_in + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
-        dG_half = explicit_rhs(G_half)
-        dG_half_exp = dG_half + damping * G_half
-        return (G_in + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
-    return _linear_explicit_stage_update(
-        G_in,
-        dt_val,
-        method_key=method,
-        rhs=explicit_rhs,
     )
 
 
@@ -218,15 +185,14 @@ def _every_step_scan(
     collision_operator: Any | None = None,
 ) -> tuple[jnp.ndarray, tuple[jnp.ndarray, ...]]:
     def step(G_in: jnp.ndarray, idx: jnp.ndarray):
-        G_out = _advance_linear_state(
+        G_out = _linear_native_step(
             G_in,
-            cache,
-            params,
-            terms,
-            method=method,
-            dt_val=dt_val,
-            damping=damping,
-            collision_operator=collision_operator,
+            damping,
+            dt_val,
+            method_key=method,
+            rhs=lambda state: _rhs(
+                state, cache, params, terms, collision_operator
+            )[0],
         )
         outputs = _diagnostic_sample(
             G_out,
@@ -269,15 +235,14 @@ def _strided_sample_scan(
 ) -> tuple[jnp.ndarray, tuple[jnp.ndarray, ...]]:
     def sample_step(G_in: jnp.ndarray, idx: jnp.ndarray):
         def inner_step(_i: jnp.ndarray, g: jnp.ndarray) -> jnp.ndarray:
-            return _advance_linear_state(
+            return _linear_native_step(
                 g,
-                cache,
-                params,
-                terms,
-                method=method,
-                dt_val=dt_val,
-                damping=damping,
-                collision_operator=collision_operator,
+                damping,
+                dt_val,
+                method_key=method,
+                rhs=lambda state: _rhs(
+                    state, cache, params, terms, collision_operator
+                )[0],
             )
 
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)

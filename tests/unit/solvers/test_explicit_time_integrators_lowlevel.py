@@ -8,7 +8,10 @@ import pytest
 
 import gkx.solvers.time.explicit as eti
 import gkx.solvers.time.explicit_diagnostics as explicit_diagnostics
-from gkx.solvers.time.explicit_steps import _linear_explicit_stage_update
+from gkx.solvers.time.explicit_steps import (
+    _linear_explicit_stage_update,
+    _linear_native_step,
+)
 from gkx.terms.config import FieldState
 
 
@@ -157,6 +160,41 @@ def test_self_staging_explicit_methods_do_not_evaluate_unused_rhs(
 
     assert calls == expected_calls
     assert np.all(np.isfinite(np.asarray(result)))
+
+
+@pytest.mark.parametrize(("method", "expected_calls"), [("imex", 1), ("imex2", 2)])
+def test_native_diagonal_imex_step_matches_scalar_amplification(
+    method: str, expected_calls: int
+) -> None:
+    rate = 0.2 - 0.1j
+    damping = 0.7
+    dt = 0.05
+    calls = 0
+
+    def rhs(state):
+        nonlocal calls
+        calls += 1
+        return rate * state
+
+    state = jnp.asarray([1.0 + 0.0j])
+    result = _linear_native_step(
+        state,
+        jnp.asarray(damping),
+        jnp.asarray(dt),
+        method_key=method,
+        rhs=rhs,
+    )
+
+    explicit_rate = rate + damping
+    if method == "imex":
+        expected = (1.0 + dt * explicit_rate) / (1.0 + dt * damping)
+    else:
+        half = (1.0 + 0.5 * dt * explicit_rate) / (
+            1.0 + 0.5 * dt * damping
+        )
+        expected = (1.0 + dt * explicit_rate * half) / (1.0 + dt * damping)
+    assert calls == expected_calls
+    np.testing.assert_allclose(np.asarray(result), [expected], rtol=1.0e-6)
 
 
 def test_explicit_from_config_preserves_adaptive_controls(monkeypatch) -> None:

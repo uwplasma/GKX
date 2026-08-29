@@ -34,7 +34,10 @@ from gkx.solvers.linear.parallel import (
     _is_electrostatic_field_terms,
     linear_rhs_parallel_cached,
 )
-from gkx.solvers.time.explicit_steps import _linear_explicit_stage_update
+from gkx.solvers.time.explicit_steps import (
+    _linear_explicit_stage_update,
+    _linear_native_step,
+)
 
 __all__ = [
     "_integrate_linear_cached",
@@ -143,33 +146,6 @@ def _linear_phi_callable(
     return solve_phi
 
 
-def _advance_linear_state(
-    G: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]],
-    damping: jnp.ndarray,
-    dt_val: jnp.ndarray,
-    method: str,
-) -> jnp.ndarray:
-    if method == "imex":
-        dG, _phi = rhs(G)
-        dG_explicit = dG + damping * G
-        return (G + dt_val * dG_explicit) / (1.0 + dt_val * damping)
-    if method == "imex2":
-        dG, _phi = rhs(G)
-        dG_explicit = dG + damping * G
-        G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
-        dG_half, _phi = rhs(G_half)
-        dG_half_exp = dG_half + damping * G_half
-        return (G + dt_val * dG_half_exp) / (1.0 + dt_val * damping)
-    return _linear_explicit_stage_update(
-        G,
-        dt_val,
-        method_key=method,
-        rhs=lambda value: rhs(value)[0],
-    )
-
-
 def _maybe_emit_linear_progress(
     G: jnp.ndarray,
     *,
@@ -252,12 +228,12 @@ def _integrate_linear_cached_impl(
     )
 
     def advance(G: jnp.ndarray) -> jnp.ndarray:
-        return _advance_linear_state(
+        return _linear_native_step(
             G,
-            rhs=rhs,
-            damping=damping,
-            dt_val=dt_val,
-            method=method,
+            damping,
+            dt_val,
+            method_key=method,
+            rhs=lambda value: rhs(value)[0],
         )
 
     def step(G: jnp.ndarray, idx: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:

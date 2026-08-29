@@ -2990,3 +2990,61 @@ returned finite `gamma=1.24264955`, `omega=1.13347366`, and
 selected early window spans less than two growth times, so this result closes
 native operability and bounded-memory gates but does not promote a new
 kinetic-electron physics claim.
+
+## 2026-08-29 — Phase 2 native linear-step consolidation scope
+
+Task: make `gkx.solvers.time.explicit_steps._linear_native_step` the single
+owner of explicit and diagonal-IMEX linear step algebra. The standard cached
+integrator and its diagnostics-rich sibling currently duplicate the complete
+Euler/RK dispatch, IMEX Euler update, and two-stage `imex2` update; the
+propagator-based eigenmode route also carries its own copy of the `imex2`
+algebra. Baseline:
+the native-example branch at `330ee9f3`, with 199 installable Python files and
+91,449 installable source lines. Both callers retain ownership of cache,
+fields, density, progress, collision-operator composition, sampling, and final
+diagnostics; only the array timestep map moves to their existing common kernel
+module. Non-goals: no tableau, damping coefficient, collision model, RHS,
+field solve, method name, timestep policy, output cadence, sharding route,
+public API, schema, or numerical-default change. This consolidation does not
+promote the current diagonal IMEX scheme as the final stiff-streaming owner.
+
+Acceptance: exact x64 identity for standard and diagnostics-rich RK4, IMEX,
+and `imex2` final states, field histories, density histories, Hermite-Laguerre
+energy histories, and reverse-mode scalar gradients; unchanged RHS evaluation
+counts; focused low-level, linear, custom-collision, runtime, parallel, release,
+Ruff, typing, documentation, packaging, architecture/size, and diff gates; a
+net source-line reduction; and synchronized cold/warm/host-memory measurements
+without material regression. Roll back if either caller changes a value or
+gradient, an explicit method performs an unused RHS evaluation, a custom
+collision is doubled, the shared helper acquires cache or diagnostic policy,
+or consolidation obscures the fact that the existing IMEX owner treats only
+diagonal damping implicitly.
+
+Initial deterministic x64 evidence produced byte-identical SHA-256 hashes
+before and after consolidation for 18 standard/diagnostic RK4, IMEX, and
+`imex2` state, field, density, and energy outputs, plus six corresponding
+reverse-mode gradients. The new scalar owner test fixes the one/two RHS-call
+counts of IMEX/`imex2`; the existing propagator and Krylov core suite also
+passes with its `imex2` update delegated to the owner. Installable source falls
+from 91,449 to 91,424 lines with 199 files unchanged. A synchronized Apple M4
+float32 smoke using twenty
+`imex2` steps reported baseline/consolidated standard cold times of
+2.495/2.500 seconds and warm medians of 13.381/13.596 milliseconds; the
+diagnostics path reported 1.161/1.168 seconds cold and 861.858/875.574
+milliseconds warm. All final norms were exactly `0.0003668618155643344`.
+Traced cold host peaks were 8,742,376/8,744,216 bytes for the standard path and
+4,813,059/4,812,104 bytes for diagnostics; repeated-call peaks were likewise
+matched within measurement noise. These provisional CPU measurements show no
+material runtime or memory regression; NVIDIA parity remains to be recorded.
+
+On one office RTX A4000 with JAX 0.10.2, the same matched smoke reported
+baseline/consolidated standard cold times of 7.793/7.017 seconds and warm
+medians of 52.873/44.616 milliseconds. The diagnostics path reported
+2.851/2.732 seconds cold and 1.674/1.751 seconds warm, with warm minima of
+1.623/1.631 seconds. Both paths retained the exact float32 norm
+`0.000366861728252843`. An isolated two-device memory pass measured the same
+130,816-byte peak device allocation before and after; Python-traced cold peaks
+were 8,622,537/8,658,256 bytes for the standard path and
+4,808,692/4,809,008 bytes for diagnostics. Thus the shared step owner preserves
+the GPU result and device footprint, improves the paired standard sample, and
+changes diagnostics timing only within the observed small-run noise.
