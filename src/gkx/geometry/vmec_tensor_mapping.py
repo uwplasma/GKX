@@ -6,16 +6,16 @@ import importlib
 from typing import Any
 
 
-def _import_vmex(module: str, message: str) -> Any:
-    """Import an optional VMEX owner only when its adapter is called."""
+def _import_vmex_turbulence() -> Any:
+    """Import the optional VMEX owner only when a toroidal adapter is called."""
     try:
-        return importlib.import_module(module)
+        return importlib.import_module("vmex.core.turbulence")
     except Exception as exc:  # pragma: no cover - environment-dependent
-        raise RuntimeError(message) from exc
+        raise RuntimeError("vmex is required for VMEC geometry") from exc
 
 
 def _vmex_mapping(method: str, *args: Any, **selection: Any) -> dict[str, Any]:
-    owner = _import_vmex("vmex.core.turbulence", "vmex is required for VMEC geometry")
+    owner = _import_vmex_turbulence()
     mapping = dict(getattr(owner, method)(*args, **selection))
     metadata = dict(mapping.pop("vmex"))
     mapping["vmex"] = {
@@ -88,8 +88,7 @@ def from_vmex_wout(wout: Any, **geometry_kwargs: Any) -> Any:
     validate_finite = bool(geometry_kwargs.pop("validate_finite", True))
     surface_index = geometry_kwargs.pop("surface_index", None)
     mapping = _vmex_mapping(
-        "gk_fieldline_geometry_from_wout",
-        wout,
+        "gk_fieldline_geometry_from_wout", wout,
         s_index=None if surface_index is None else int(surface_index),
         **geometry_kwargs,
     )
@@ -105,13 +104,12 @@ def from_vmex_mirror(
     **geometry_kwargs: Any,
 ) -> Any:
     """Return generic GKX geometry for a periodic VMEX mirror field line."""
-    mirror = _import_vmex(
-        "vmex.mirror.turbulence", "vmex closed-mirror geometry support is required"
-    )
+    try:
+        mirror = importlib.import_module("vmex.mirror.turbulence")
+    except Exception as exc:  # pragma: no cover - environment-dependent
+        raise RuntimeError("vmex closed-mirror geometry support is required") from exc
     return _geometry(
-        mirror.gk_closed_fieldline_geometry(
-            state, discretization, axis, **geometry_kwargs
-        ),
+        mirror.gk_closed_fieldline_geometry(state, discretization, axis, **geometry_kwargs),
         "vmex:mirror.turbulence",
         validate_finite,
     )
