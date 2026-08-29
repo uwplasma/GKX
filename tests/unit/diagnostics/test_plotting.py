@@ -31,6 +31,7 @@ from gkx.artifacts.plotting import (
     ReferenceSeries,
     linear_runtime_panel_figure,
     nonlinear_runtime_panel_figure,
+    plot,
     plot_saved_output,
     scan_comparison_figure,
     scan_multi_reference_figure,
@@ -199,6 +200,58 @@ def test_nonlinear_runtime_panel_figure(tmp_path):
     fig.savefig(out)
     plt.close(fig)
     assert out.exists()
+
+
+def test_plot_dispatches_promoted_runtime_results_without_side_effects():
+    from gkx.diagnostics import SimulationDiagnostics
+    from gkx.diagnostics.modes import ModeSelection
+    from gkx.workflows.runtime.results import (
+        RuntimeLinearResult,
+        RuntimeLinearScanResult,
+        RuntimeNonlinearResult,
+    )
+
+    t = np.linspace(0.1, 1.0, 8)
+    z = np.linspace(-np.pi, np.pi, 16)
+    linear = RuntimeLinearResult(
+        ky=0.2, gamma=0.3, omega=-0.4,
+        selection=ModeSelection(0, 0), t=t,
+        signal=np.exp((0.3 - 0.4j) * t), z=z,
+        eigenfunction=np.cos(z) + 0.2j * np.sin(z),
+    )
+    fig, axes = plot(linear)
+    assert np.asarray(axes).size == 2
+    plt.close(fig)
+    fig, axes = plot(replace(linear, t=None, signal=None))
+    assert np.asarray(axes).size == 3
+    plt.close(fig)
+
+    scan = RuntimeLinearScanResult(
+        ky=np.array([0.1, 0.2]), gamma=np.array([0.2, 0.3]),
+        omega=np.array([-0.4, -0.5]),
+    )
+    fig, axes = plot(scan)
+    assert np.asarray(axes).size == 2
+    plt.close(fig)
+
+    ones = np.ones_like(t)
+    diagnostics = SimulationDiagnostics(
+        t=t, dt_t=ones, dt_mean=np.asarray(1.0), gamma_t=0.1 * ones,
+        omega_t=-0.2 * ones, Wg_t=ones, Wphi_t=2.0 * ones,
+        Wapar_t=np.zeros_like(t), heat_flux_t=0.3 * ones,
+        particle_flux_t=0.1 * ones, energy_t=3.0 * ones,
+    )
+    nonlinear = RuntimeNonlinearResult(t=t, diagnostics=diagnostics)
+    fig, axes = plot(nonlinear)
+    assert np.asarray(axes).size == 3
+    plt.close(fig)
+
+    with pytest.raises(ValueError, match="z and eigenfunction"):
+        plot(replace(linear, z=None, eigenfunction=None))
+    with pytest.raises(ValueError, match="time diagnostics"):
+        plot(replace(nonlinear, diagnostics=None))
+    with pytest.raises(TypeError, match="LinearResult"):
+        plot(object())
 
 
 def test_eigenfunction_reference_overlay_figure(tmp_path):

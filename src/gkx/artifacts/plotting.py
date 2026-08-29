@@ -32,7 +32,6 @@ def set_plot_style() -> None:
     )
 
 
-
 def cyclone_reference_figure(ref: CycloneReference) -> Tuple[plt.Figure, np.ndarray]:
     """Create a two-panel Cyclone base case reference plot."""
 
@@ -67,48 +66,20 @@ def cyclone_comparison_figure(
     fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.5, 5.0))
     ax0, ax1 = axes
 
-    ax0.plot(
-        ref.ky,
-        ref.gamma,
-        marker="o",
-        color="#1f77b4",
-        linewidth=2.0,
-        label="Reference",
-    )
-    ax0.plot(
-        scan.ky,
-        scan.gamma,
-        marker="s",
-        markerfacecolor="none",
-        markeredgewidth=1.6,
-        linestyle="--",
-        color="#2ca02c",
-        linewidth=1.8,
-        label=label,
-    )
+    ax0.plot(ref.ky, ref.gamma, marker="o", color="#1f77b4", linewidth=2.0,
+             label="Reference")
+    ax0.plot(scan.ky, scan.gamma, marker="s", markerfacecolor="none",
+             markeredgewidth=1.6, linestyle="--", color="#2ca02c",
+             linewidth=1.8, label=label)
     ax0.set_ylabel(r"$\gamma a / v_{ti}$")
     ax0.set_title("Cyclone base case (adiabatic electrons)")
     ax0.legend(loc="best")
 
-    ax1.plot(
-        ref.ky,
-        ref.omega,
-        marker="o",
-        color="#ff7f0e",
-        linewidth=2.0,
-        label="Reference",
-    )
-    ax1.plot(
-        scan.ky,
-        scan.omega,
-        marker="s",
-        markerfacecolor="none",
-        markeredgewidth=1.6,
-        linestyle="--",
-        color="#d62728",
-        linewidth=1.8,
-        label=label,
-    )
+    ax1.plot(ref.ky, ref.omega, marker="o", color="#ff7f0e", linewidth=2.0,
+             label="Reference")
+    ax1.plot(scan.ky, scan.omega, marker="s", markerfacecolor="none",
+             markeredgewidth=1.6, linestyle="--", color="#d62728",
+             linewidth=1.8, label=label)
     ax1.set_xlabel(r"$k_y \rho_i$")
     ax1.set_ylabel(r"$\omega a / v_{ti}$")
     ax1.legend(loc="best")
@@ -408,8 +379,6 @@ def growth_rate_heatmap(
     return fig, ax
 
 
-
-
 def growth_fit_figure(
     t: np.ndarray,
     signal: np.ndarray,
@@ -560,8 +529,6 @@ def eigenfunction_reference_overlay_figure(
     return fig, axes
 
 
-
-
 def _normalize_by_real_max(eigenfunction: np.ndarray) -> np.ndarray:
     eigen = np.asarray(eigenfunction, dtype=np.complex128)
     real_scale = float(np.max(np.abs(np.real(eigen)))) if eigen.size else 0.0
@@ -677,6 +644,42 @@ def nonlinear_runtime_panel_figure(
     fig.suptitle(title, y=1.02)
     fig.tight_layout()
     return fig, axes
+
+
+def plot(result: Any) -> Tuple[plt.Figure, np.ndarray]:
+    """Create the standard in-memory figure for a promoted runtime result."""
+
+    from gkx.workflows.runtime import results as runtime_results
+
+    if isinstance(result, runtime_results.RuntimeLinearScanResult):
+        return scan_comparison_figure(
+            result.ky, result.gamma, result.omega, r"$k_y \rho_i$", "GKX linear scan"
+        )
+    if isinstance(result, runtime_results.RuntimeLinearResult):
+        if result.z is None or result.eigenfunction is None:
+            raise ValueError("linear plotting requires z and eigenfunction arrays")
+        if result.t is not None and result.signal is not None:
+            return linear_runtime_panel_figure(
+                t=result.t, signal=result.signal, z=result.z,
+                eigenfunction=result.eigenfunction, gamma=result.gamma,
+                omega=result.omega,
+            )
+        panel = LinearValidationPanel(
+            name="GKX", z=result.z, eigenfunction=result.eigenfunction,
+            x=np.asarray([result.ky]), gamma=np.asarray([result.gamma]),
+            omega=np.asarray([result.omega]), x_label=r"$k_y \rho_i$",
+        )
+        return linear_validation_figure([panel])
+    if isinstance(result, runtime_results.RuntimeNonlinearResult) and result.diagnostics is not None:
+        diagnostics = result.diagnostics
+        return nonlinear_runtime_panel_figure(
+            t=np.asarray(diagnostics.t), wphi=np.asarray(diagnostics.Wphi_t),
+            heat_flux=np.asarray(diagnostics.heat_flux_t),
+            gamma=np.asarray(diagnostics.gamma_t), omega=np.asarray(diagnostics.omega_t),
+        )
+    if isinstance(result, runtime_results.RuntimeNonlinearResult):
+        raise ValueError("nonlinear plotting requires retained time diagnostics")
+    raise TypeError("plot expects a LinearResult, NonlinearResult, or ScanResult")
 
 
 def _artifact_base(path: Path) -> Path:
@@ -833,8 +836,6 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
     fig.savefig(out_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
     return out_path
-
-
 
 
 def zonal_flow_response_figure(*args: Any, **kwargs: Any) -> tuple[Any, Any]:

@@ -5,14 +5,14 @@ Public API Registry
 -------------------
 
 The top-level ``gkx`` package advertises only the current product contracts:
-``load``, ``solve``, ``scan``, ``Case``, ``LinearResult``,
+``load``, ``solve``, ``scan``, ``plot``, ``Case``, ``LinearResult``,
 ``NonlinearResult``, and ``ScanResult``. Five integration names remain
 advertised for the maintained VMEX turbulence coupling:
 ``flux_tube_geometry_from_mapping``, ``solver_objective_vector_from_geometry``,
 ``solver_linear_operator_matrix_from_geometry``,
 ``solver_scalar_objective_from_vector``, and
 ``VMEXTransportObjectiveConfig``. Together with ``__version__``, this makes a
-13-name root surface.
+14-name root surface.
 
 Implementation ownership remains in the domain modules below. GKX 1.x root
 names outside this advertised set stay available by direct named import
@@ -47,13 +47,16 @@ The first high-level workflow is deliberately small::
 
    case = gkx.load("cyclone.toml")
    result = gkx.solve(case)
+   figure, axes = gkx.plot(result)
    spectrum = gkx.scan(case, [0.1, 0.2, 0.3])
 
 ``load`` resolves case-relative paths through the established TOML owner.
 ``solve`` dispatches to the established nonlinear runner when nonlinear physics
 is enabled and otherwise to the linear runner. ``scan`` is the established
 runtime scan function itself, so these names add no numerical implementation or
-result conversion.
+result conversion. ``plot`` dispatches those result containers to the existing
+linear, scan, and nonlinear figure builders; it returns ``(Figure, axes)`` and
+does not save or display implicitly.
 
 .. automodule:: gkx.api
    :members:
