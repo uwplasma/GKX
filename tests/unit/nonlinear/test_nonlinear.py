@@ -1168,6 +1168,8 @@ def test_adaptive_time_step_run_compiles_and_matches_the_eager_trajectory() -> N
     eager = run(state)
     compiled = jax.jit(run)(state)
     assert bool(jnp.isfinite(eager)) and float(eager) > 0.0
-    # The adaptive step is chosen from the same host bound either way, so the
-    # compiled trajectory is the eager one, not an approximation of it.
-    np.testing.assert_allclose(np.asarray(compiled), np.asarray(eager), rtol=1.0e-12)
+    # The adaptive step is chosen from the same host bound either way. The
+    # final float32 reduction may reassociate under JIT, so require one relative
+    # rounding unit rather than an unattainable float64-scale tolerance.
+    tolerance = max(1.0e-12, float(np.finfo(np.asarray(eager).dtype).eps))
+    np.testing.assert_allclose(np.asarray(compiled), np.asarray(eager), rtol=tolerance)

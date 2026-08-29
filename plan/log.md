@@ -2696,3 +2696,21 @@ Roll back if plotting fabricates a physical history, mutates a result, writes
 or shows implicitly, changes a saved-output/CLI path, makes root import eager,
 or adds a second plotting implementation instead of dispatching to the
 existing owners.
+
+## 2026-08-29 — float32 adaptive eager/JIT test-tolerance scope
+
+Task: repair the adaptive nonlinear eager/JIT identity gate so its tolerance
+matches the float32 scalar reduction it compares. Baseline: `main` after PR
+#145 at `5ae08f636f7cd3096bffce08dcd37675b8b45f39`. The test currently requires
+`rtol=1e-12` from float32 results and fails on both untouched main and the
+prepared-contract branch by `1.1641532e-10` absolute / `8.048021e-8` relative,
+one float32-scale rounding unit. JIT may reassociate the final energy sum even
+when every adaptive timestep and trajectory value follows the same path.
+Preserve the existing `1e-12` float64 threshold while flooring it at the
+compared dtype's machine epsilon. Non-goals: no solver, timestep, reduction, dtype, JIT,
+physics, numerical default, source, or production tolerance change. Acceptance:
+the focused test passes repeatedly; an intentional perturbation larger than
+one relative float32 epsilon still fails; the complete nonlinear owner suite,
+release gates, Ruff, architecture/size checks, and diff checks pass. Roll back
+if the gate admits a different timestep trajectory or any production value is
+changed.
