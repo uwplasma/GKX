@@ -3048,3 +3048,32 @@ were 8,622,537/8,658,256 bytes for the standard path and
 4,808,692/4,809,008 bytes for diagnostics. Thus the shared step owner preserves
 the GPU result and device footprint, improves the paired standard sample, and
 changes diagnostics timing only within the observed small-run noise.
+
+## 2026-08-29 — Phase 2 implicit diagnostic ownership
+
+Task: make the diagnostics-rich linear sampler use the existing implicit
+operator and SOLVAX step owner when `method="implicit"`. The configured
+kinetic-electron density path previously sent that method through
+`_linear_native_step`, which rejects it as an explicit-method mismatch before
+the first timestep. Refactor the every-step and strided diagnostic scans to
+accept one prepared advance closure, preserve the native explicit/diagonal
+IMEX route, and forward the runtime deck's implicit restart and preconditioner
+settings. Baseline: merged native-step consolidation `4019243a`, with 199
+installable Python files and 91,424 installable source lines.
+
+Acceptance: standard and diagnostics-rich implicit paths share the same
+matrix-free operator, preconditioner, and per-step solve constructor; 5-D
+single-species shape restoration is preserved; implicit custom collision
+operators fail before compilation; explicit diagnostic fingerprints remain
+unchanged; configured density fitting forwards its implicit policy; focused
+linear and runtime tests, Ruff, typing, architecture/size, and diff gates pass.
+Roll back if diagnostics introduce a second implicit algorithm, save complete
+state histories merely to compute density, or exceed the source budget.
+
+Initial x64 evidence gives exact final-state identity between standard and
+diagnostics-rich implicit integration on the same prepared solve, matching
+field histories, and finite sampled density. The full configured
+kinetic-electron executable now completes its native implicit density path
+instead of raising the explicit-method error. Focused implicit, diagnostic,
+and runtime-option tests pass; Ruff and mypy pass; installable source remains
+at 199 files and rises to 91,470 lines, below the reviewed 91,507-line ceiling.

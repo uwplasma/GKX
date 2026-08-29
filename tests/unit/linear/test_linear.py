@@ -26,7 +26,10 @@ from gkx.operators.linear.moments import (
 )
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.rhs import linear_rhs, linear_rhs_cached
-from gkx.solvers.linear.integrators import integrate_linear
+from gkx.solvers.linear.integrators import (
+    integrate_linear,
+    integrate_linear_diagnostics,
+)
 from gkx.operators.linear.linked import _build_linked_fft_maps
 from gkx.operators.linear.params import _x64_enabled
 from gkx.operators.linear.streaming import grad_z_linked_fft
@@ -1898,6 +1901,50 @@ def test_integrate_linear_implicit_runs():
         implicit_relax=0.5,
     )
     assert phi_t.shape[0] == 1
+
+
+def test_implicit_standard_and_diagnostic_routes_match():
+    """Implicit diagnostics must use the same prepared solve step."""
+
+    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams(nu=0.1)
+    state = jnp.zeros((1, 1, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    terms = LinearTerms(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+    common = dict(
+        dt=0.1,
+        steps=2,
+        method="implicit",
+        terms=terms,
+        sample_stride=1,
+        implicit_iters=0,
+        implicit_maxiter=1,
+        implicit_restart=2,
+    )
+
+    standard, fields = integrate_linear(
+        state, grid, geom, params, **common
+    )
+    diagnostic, phi, density = integrate_linear_diagnostics(
+        state, grid, geom, params, **common
+    )
+
+    np.testing.assert_array_equal(np.asarray(diagnostic), np.asarray(standard))
+    np.testing.assert_allclose(np.asarray(phi), np.asarray(fields))
+    assert density.shape[0] == 2
 
 
 def test_apply_hermite_v_simple():

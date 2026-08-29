@@ -15,8 +15,18 @@ from gkx.operators.linear.cache_arrays import (
     collision_damping,
     hypercollision_damping,
 )
-from gkx.operators.linear.params import LinearParams, LinearTerms, _x64_enabled
+from gkx.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    PreconditionerSpec,
+    _x64_enabled,
+)
 from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.solvers.linear.implicit import (
+    _ImplicitSolveOptions,
+    _build_implicit_operator,
+    _build_implicit_solve_step,
+)
 from gkx.solvers.time.explicit_steps import _linear_native_step
 
 
@@ -177,23 +187,14 @@ def _every_step_scan(
     *,
     dt_val: jnp.ndarray,
     steps: int,
-    method: str,
-    damping: jnp.ndarray,
+    advance: Callable[[jnp.ndarray], jnp.ndarray],
     species_index: int | None,
     record_hl_energy: bool,
     show_progress: bool,
     collision_operator: Any | None = None,
 ) -> tuple[jnp.ndarray, tuple[jnp.ndarray, ...]]:
     def step(G_in: jnp.ndarray, idx: jnp.ndarray):
-        G_out = _linear_native_step(
-            G_in,
-            damping,
-            dt_val,
-            method_key=method,
-            rhs=lambda state: _rhs(
-                state, cache, params, terms, collision_operator
-            )[0],
-        )
+        G_out = advance(G_in)
         outputs = _diagnostic_sample(
             G_out,
             cache,
@@ -226,8 +227,7 @@ def _strided_sample_scan(
     dt_val: jnp.ndarray,
     steps: int,
     sample_stride: int,
-    method: str,
-    damping: jnp.ndarray,
+    advance: Callable[[jnp.ndarray], jnp.ndarray],
     species_index: int | None,
     record_hl_energy: bool,
     show_progress: bool,
@@ -235,15 +235,7 @@ def _strided_sample_scan(
 ) -> tuple[jnp.ndarray, tuple[jnp.ndarray, ...]]:
     def sample_step(G_in: jnp.ndarray, idx: jnp.ndarray):
         def inner_step(_i: jnp.ndarray, g: jnp.ndarray) -> jnp.ndarray:
-            return _linear_native_step(
-                g,
-                damping,
-                dt_val,
-                method_key=method,
-                rhs=lambda state: _rhs(
-                    state, cache, params, terms, collision_operator
-                )[0],
-            )
+            return advance(g)
 
         G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
         outputs = _diagnostic_sample(
@@ -287,6 +279,12 @@ def integrate_linear_diagnostics(
     record_hl_energy: bool = False,
     show_progress: bool = False,
     collision_operator: Any | None = None,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_preconditioner: PreconditionerSpec = None,
 ) -> (
     tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
     | tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
@@ -300,13 +298,59 @@ def integrate_linear_diagnostics(
     )
     G, real_dtype = _initial_state(G0)
     dt_val = jnp.asarray(dt, dtype=real_dtype)
-    damping = _linear_damping(
-        G,
-        cache_use,
-        params,
-        real_dtype,
-        include_collisions=collision_operator is None,
-    )
+    squeeze_species = False
+    if method == "implicit":
+        if collision_operator is not None:
+            raise NotImplementedError(
+                "implicit integration does not support custom collision operators"
+            )
+        G, shape, size, dt_val, precond, matvec, squeeze_species = (
+            _build_implicit_operator(
+                G,
+                cache_use,
+                params,
+                dt,
+                terms_use,
+                implicit_preconditioner,
+            )
+        )
+        advance = _build_implicit_solve_step(
+            cache=cache_use,
+            params=params,
+            terms=terms_use,
+            dt_val=dt_val,
+            size=size,
+            shape=shape,
+            matvec=matvec,
+            precond_op=precond,
+            options=_ImplicitSolveOptions(
+                tol=implicit_tol,
+                maxiter=implicit_maxiter,
+                iters=implicit_iters,
+                relax=implicit_relax,
+                restart=implicit_restart,
+            ),
+        )
+    else:
+        damping = _linear_damping(
+            G,
+            cache_use,
+            params,
+            real_dtype,
+            include_collisions=collision_operator is None,
+        )
+
+        def advance(state: jnp.ndarray) -> jnp.ndarray:
+            return _linear_native_step(
+                state,
+                damping,
+                dt_val,
+                method_key=method,
+                rhs=lambda value: _rhs(
+                    value, cache_use, params, terms_use, collision_operator
+                )[0],
+            )
+
     if sample_stride <= 1:
         G_out, outputs = _every_step_scan(
             G,
@@ -315,8 +359,7 @@ def integrate_linear_diagnostics(
             terms_use,
             dt_val=dt_val,
             steps=steps,
-            method=method,
-            damping=damping,
+            advance=advance,
             species_index=species_index,
             record_hl_energy=record_hl_energy,
             show_progress=show_progress,
@@ -331,13 +374,14 @@ def integrate_linear_diagnostics(
             dt_val=dt_val,
             steps=steps,
             sample_stride=sample_stride,
-            method=method,
-            damping=damping,
+            advance=advance,
             species_index=species_index,
             record_hl_energy=record_hl_energy,
             show_progress=show_progress,
             collision_operator=collision_operator,
         )
+    if squeeze_species:
+        G_out = G_out[0]
     if record_hl_energy:
         phi_t, density_t, hl_t = outputs
         return G_out, phi_t, density_t, hl_t

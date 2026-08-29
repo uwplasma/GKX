@@ -411,6 +411,8 @@ def _integrate_linear_density_path(
         species_index=0,
         record_hl_energy=False,
         show_progress=show_progress,
+        implicit_restart=int(tcfg.implicit_restart),
+        implicit_preconditioner=tcfg.implicit_preconditioner,
         collision_operator=_resolve_config_collision_operator(
             tcfg, ctx.params, ctx.initial_state
         ),

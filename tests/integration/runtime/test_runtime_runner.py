@@ -739,9 +739,15 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
 ) -> None:
     import gkx.runtime as runtime
 
+    base_cfg = _base_runtime_cfg()
     cfg = replace(
-        _base_runtime_cfg(),
+        base_cfg,
         species=(RuntimeSpeciesConfig(name="ion"),),
+        time=replace(
+            base_cfg.time,
+            implicit_restart=7,
+            implicit_preconditioner="hermite-line",
+        ),
         normalization=RuntimeNormalizationConfig(
             contract="cyclone", diagnostic_norm="none"
         ),
@@ -757,14 +763,20 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
             (1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64
         ),
     )
-    monkeypatch.setattr(
-        runtime,
-        "integrate_linear_diagnostics",
-        lambda *args, **kwargs: (
+    diagnostic_kwargs = {}
+
+    def _fake_integrate_linear_diagnostics(*args, **kwargs):
+        diagnostic_kwargs.update(kwargs)
+        return (
             np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64),
             np.ones((3, 1, 1, grid.z.size), dtype=np.complex64),
             3.0 * np.ones((3, 1, 1, grid.z.size), dtype=np.complex64),
-        ),
+        )
+
+    monkeypatch.setattr(
+        runtime,
+        "integrate_linear_diagnostics",
+        _fake_integrate_linear_diagnostics,
     )
     monkeypatch.setattr(
         runtime,
@@ -810,6 +822,8 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
     assert np.allclose(res.signal, np.array([1.0, 2.0, 4.0]))
     assert res.fit_window_tmin == pytest.approx(0.01)
     assert res.fit_window_tmax == pytest.approx(0.03)
+    assert diagnostic_kwargs["implicit_restart"] == 7
+    assert diagnostic_kwargs["implicit_preconditioner"] == "hermite-line"
 
 
 def test_runtime_linear_diffrax_project_mode_keeps_full_field_history(
