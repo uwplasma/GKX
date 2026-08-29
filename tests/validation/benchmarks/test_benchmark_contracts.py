@@ -30,6 +30,7 @@ from benchmarks.performance.benchmark_runtime_memory import (
     _write_summary,
 )
 from gkx.core.velocity import J_l_all, single_precision_factorial
+from gkx.config import resolve_cfl_fac
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear import dissipation as linear_dissipation_module
@@ -64,6 +65,7 @@ from gkx.benchmarking.shared import (
 from gkx.core.grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.solvers.time.explicit_cfl import _linear_frequency_bound
 from gkx.runtime import (
     _build_initial_condition as build_runtime_initial_condition,
     build_runtime_geometry,
@@ -115,7 +117,7 @@ def test_benchmark_public_exports_resolve() -> None:
 def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
     """The canonical runtime case must preserve the established TEM operator."""
 
-    runtime_cfg, _raw = load_runtime_from_toml(
+    runtime_cfg, raw = load_runtime_from_toml(
         ROOT / "examples" / "linear" / "axisymmetric" / "runtime_tem.toml"
     )
     legacy_model = SimpleNamespace(
@@ -135,11 +137,26 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
     ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     grid = select_ky_grid(grid_full, ky_index)
 
+    assert runtime_cfg.time.use_diffrax is False
+    assert runtime_cfg.time.fixed_dt is True
+    assert runtime_cfg.time.method == "rk2"
+    assert runtime_cfg.time.sample_stride == 20
+    assert raw["run"]["solver"] == "auto"
+    tem_steps = round(runtime_cfg.time.t_max / runtime_cfg.time.dt)
+    assert tem_steps * runtime_cfg.time.dt == pytest.approx(runtime_cfg.time.t_max)
+    assert tem_steps % runtime_cfg.time.sample_stride == 0
+
     runtime_params = build_runtime_linear_params(
         runtime_cfg,
         Nm=n_hermite,
         geom=geometry,
     )
+    cfl_params = build_runtime_linear_params(runtime_cfg, Nm=32, geom=geometry)
+    omega_bound = _linear_frequency_bound(grid, geometry, cfl_params, 12, 32)
+    cfl_numerator = resolve_cfl_fac(
+        runtime_cfg.time.method, runtime_cfg.time.cfl_fac
+    ) * float(runtime_cfg.time.cfl)
+    assert runtime_cfg.time.dt * float(np.sum(omega_bound)) <= cfl_numerator
     legacy_params = _two_species_params(
         legacy_model,
         kpar_scale=float(geometry.gradpar()),
@@ -207,7 +224,7 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
 def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
     """The canonical kinetic-electron case preserves the executed operator."""
 
-    runtime_cfg, _raw = load_runtime_from_toml(
+    runtime_cfg, raw = load_runtime_from_toml(
         ROOT
         / "examples"
         / "linear"
@@ -230,9 +247,26 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
     ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     grid = select_ky_grid(grid_full, ky_index)
 
+    assert runtime_cfg.time.use_diffrax is False
+    assert runtime_cfg.time.fixed_dt is True
+    assert runtime_cfg.time.method == "rk4"
+    assert runtime_cfg.time.sample_stride == 10
+    assert raw["run"]["solver"] == "auto"
+    kinetic_steps = round(runtime_cfg.time.t_max / runtime_cfg.time.dt)
+    assert kinetic_steps * runtime_cfg.time.dt == pytest.approx(
+        runtime_cfg.time.t_max
+    )
+    assert kinetic_steps % runtime_cfg.time.sample_stride == 0
+
     runtime_params = build_runtime_linear_params(
         runtime_cfg, Nm=n_hermite, geom=geometry
     )
+    cfl_params = build_runtime_linear_params(runtime_cfg, Nm=32, geom=geometry)
+    omega_bound = _linear_frequency_bound(grid, geometry, cfl_params, 12, 32)
+    cfl_numerator = resolve_cfl_fac(
+        runtime_cfg.time.method, runtime_cfg.time.cfl_fac
+    ) * float(runtime_cfg.time.cfl)
+    assert runtime_cfg.time.dt * float(np.sum(omega_bound)) <= cfl_numerator
     legacy_params = _two_species_params(
         model,
         kpar_scale=float(geometry.gradpar()),

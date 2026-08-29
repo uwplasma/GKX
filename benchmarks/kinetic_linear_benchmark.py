@@ -19,11 +19,15 @@ def main() -> None:
         description="Kinetic-electron ITG benchmark example."
     )
     parser.add_argument(
-        "--no-diffrax", action="store_true", help="Disable diffrax integrator."
+        "--diffrax",
+        action="store_true",
+        help="Use the temporary Diffrax migration oracle instead of native RK4.",
     )
     parser.add_argument("--solver", default="Tsit5", help="Diffrax solver name.")
     parser.add_argument(
-        "--no-adaptive", action="store_true", help="Disable adaptive step sizes."
+        "--no-adaptive",
+        action="store_true",
+        help="Disable adaptive Diffrax steps (with --diffrax).",
     )
     args = parser.parse_args()
 
@@ -35,7 +39,7 @@ def main() -> None:
         time=replace(
             cfg.time,
             t_max=8.0,
-            use_diffrax=not args.no_diffrax,
+            use_diffrax=args.diffrax,
             diffrax_solver=args.solver,
             diffrax_adaptive=not args.no_adaptive,
         ),

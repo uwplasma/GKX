@@ -2920,3 +2920,73 @@ medians of 8.690--9.191/8.929--8.951 ms. Peak device allocation was exactly
 6,025,245/5,998,009 bytes; 11 warm calls added 682/809 peak bytes with no
 incremental retained growth. The corrected GPU route therefore preserves the
 device footprint and has no material cold or warm regression.
+
+## 2026-08-29 — Phase 2 native linear example-default scope
+
+Task: move the two remaining Diffrax-selected linear example decks, TEM and
+kinetic-electron Cyclone, to the promoted native explicit owner after the
+end-damping-rate repair established that every route integrates the same RHS.
+Baseline: the native end-damping repair at `a3ea46d4`, with 199 installable
+Python files and 91,451 installable source lines. Use a fixed step no larger
+than the runtime's own full-resolution linear CFL estimate and reduce saved
+history with an exactly divisible sample stride. Keep Diffrax settings and an
+explicit benchmark-driver `--diffrax` flag only as a temporary migration
+oracle. Move both direct decks from their Krylov workaround to `solver =
+"auto"`, so their primary runs exercise the native time owner and retain Krylov
+only as the existing invalid-fit fallback. Non-goals: no term equation, field
+solve, normalization, collision,
+damping, initial condition, fit policy, benchmark claim, runtime-wide default,
+public API, adaptive controller, native tableau, or dependency removal. The
+TEM literature row remains provisional and the kinetic-electron row remains a
+stress lane.
+
+Acceptance: both checked-in decks select native fixed-step integration; their
+full `(Nl, Nm) = (12, 32)` step sizes satisfy the startup CFL bound at the
+canonical `ky`; native and Diffrax give matched finite fitted modes on the
+maintained horizons; kinetic-electron time-path execution no longer ends at
+the Diffrax 20,000-step ceiling; the benchmark drivers default to native and
+retain an explicit oracle opt-in; example, benchmark-contract, linear runtime,
+release, Ruff, typing, documentation, packaging, architecture/size, and diff
+gates pass. Record synchronized NVIDIA cold/warm runtime and device/host memory
+at matched accuracy. Roll back if a native trajectory is non-finite, fitted
+growth or frequency misses its migration tolerance, the shipped step exceeds
+the measured bound, saved histories grow unnecessarily, or the oracle ceases
+to be independently runnable.
+
+Initial full-resolution office RTX A4000 evidence with x64 enabled found a TEM
+RK2 CFL bound of `0.00060293`; native `dt=0.0005`, stride 20 produced
+`gamma=3.75703186`, `omega=1.53976427` in 18.95 seconds cold, versus adaptive
+Tsit5 `gamma=3.75703314`, `omega=1.53976652` in 17.85 seconds. The
+kinetic-electron RK4 bound was `0.00084223`; at the benchmark's `t=8` horizon,
+native `dt=0.0008`, stride 10 produced `gamma=0.84405105`,
+`omega=0.02076489` in 21.98 seconds cold, versus adaptive Tsit5
+`gamma=0.83848937`, `omega=0.02201978` in 32.78 seconds. The checked-in
+Diffrax ceiling fails before its time path reaches the declared `t=40`;
+native `dt=0.0005`, stride 20 completed that horizon in 95.12
+seconds. These are migration and operability measurements, not new physics
+validation claims.
+
+Using the same kinetic-electron `t=8`, `ky=0.3`, `(Nl, Nm)=(12, 32)` case and
+the fixed fit window `1.85 <= t <= 2.15`, native RK4 returned
+`gamma=0.84504824`, `omega=0.02056741`, while the adaptive Tsit5 oracle
+returned `gamma=0.84518270`, `omega=0.02049774`: relative differences of about
+`1.6e-4` and `3.4e-3`, respectively, with both fit R-squared values above
+`0.99978`. Isolated two-GPU profiling on the office A4000s reported native
+cold/warm end-to-end times of 25.16/14.59 seconds and a 17,461,248-byte device
+peak, versus Diffrax 47.85/37.87 seconds and a 69,052,672-byte device peak.
+Python-traced cold peaks were 15,052,678/16,693,106 bytes and second-run peaks
+20,887,045/23,573,797 bytes for native/Diffrax; the higher second-run host
+values include the retained runtime and fit caches, while live device use
+after synchronization fell to 768/316,416 bytes. At matched fitted-mode
+accuracy, the native owner is therefore about 2.6 times faster warm and uses
+about one quarter of the peak device memory in this maintained stress case.
+
+Finally, the exact proposed kinetic-electron deck (`solver="auto"`, `t=40`,
+`dt=0.0008`, stride 10, `(Nl, Nm)=(12, 32)`) completed on the office A4000 in
+80.35 seconds with 5,000 finite saved samples, a 28,911,616-byte peak device
+allocation, and a 32,436,910-byte Python-traced peak. The automatic fit
+returned finite `gamma=1.24264955`, `omega=1.13347366`, and
+`R^2=0.99998463`; its existing stationary-window policy still warns that the
+selected early window spans less than two growth times, so this result closes
+native operability and bounded-memory gates but does not promote a new
+kinetic-electron physics claim.

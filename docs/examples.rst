@@ -480,10 +480,14 @@ The kinetic-electron script loads
 ``examples/linear/axisymmetric/runtime_kinetic_electron.toml``. The same input
 can be run directly with
 ``gkx examples/linear/axisymmetric/runtime_kinetic_electron.toml``.
+It defaults to the native RK4 owner; ``--diffrax`` on the Python benchmark
+driver selects the temporary migration oracle.
 
 The TEM script loads ``examples/linear/axisymmetric/runtime_tem.toml``; users
 can run the same single-mode case directly with
 ``gkx examples/linear/axisymmetric/runtime_tem.toml``.
+It defaults to native RK2, with the same ``--diffrax`` oracle option on the
+Python benchmark driver.
 
 Foundational demos
 ------------------
