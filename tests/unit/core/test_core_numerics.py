@@ -350,6 +350,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
 import sys
 sys.path.insert(0, {str(REPO_ROOT / "src")!r})
 import gkx
+assert {{'Case', 'LinearResult', 'NonlinearResult', 'ScanResult'}} <= set(gkx.__all__)
 assert "numpy" not in sys.modules
 assert "jax" not in sys.modules
 from gkx.parallel.decomposition import build_independent_portfolio_decomposition
@@ -371,6 +372,56 @@ assert "jax" not in sys.modules
 assert "LinearParams" in api.__all__
 """
     subprocess.run([sys.executable, "-S", "-c", api_script], check=True)
+
+
+def test_gkx3_product_contracts_preserve_identity_immutability_and_arrays() -> None:
+    from dataclasses import FrozenInstanceError, is_dataclass
+
+    import gkx
+    from gkx.diagnostics.modes import ModeSelection
+    from gkx.workflows.runtime.config import Case, RuntimeConfig
+    from gkx.workflows.runtime.results import (
+        LinearResult,
+        NonlinearResult,
+        RuntimeLinearResult,
+        RuntimeLinearScanResult,
+        RuntimeNonlinearResult,
+        ScanResult,
+    )
+
+    assert Case is RuntimeConfig
+    assert gkx.Case is RuntimeConfig
+    assert is_dataclass(Case)
+    case = Case()
+    with pytest.raises(FrozenInstanceError):
+        case.grid = case.grid  # type: ignore[misc]
+
+    assert LinearResult is RuntimeLinearResult
+    assert NonlinearResult is RuntimeNonlinearResult
+    assert ScanResult is RuntimeLinearScanResult
+    assert gkx.LinearResult is RuntimeLinearResult
+    assert gkx.NonlinearResult is RuntimeNonlinearResult
+    assert gkx.ScanResult is RuntimeLinearScanResult
+
+    state = np.arange(6.0)
+    linear = LinearResult(
+        ky=0.2,
+        gamma=0.1,
+        omega=-0.3,
+        selection=ModeSelection(ky_index=0, kx_index=0),
+        state=state,
+    )
+    nonlinear = NonlinearResult(t=state, diagnostics=None, state=state)
+    scan = ScanResult(ky=state, gamma=state, omega=state)
+
+    assert linear.state is state
+    assert nonlinear.t is state
+    assert nonlinear.state is state
+    assert scan.ky is state
+    assert scan.gamma is state
+    assert scan.omega is state
+    with pytest.raises(FrozenInstanceError):
+        linear.state = state  # type: ignore[misc]
 
 
 # Progress callback contracts.

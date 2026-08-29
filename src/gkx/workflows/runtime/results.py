@@ -83,6 +83,10 @@ class RuntimeNonlinearResult:
     # driven by the saturation stop policy.
     saturation: dict[str, Any] | None = None
 
+LinearResult = RuntimeLinearResult
+NonlinearResult = RuntimeNonlinearResult
+ScanResult = RuntimeLinearScanResult
+
 
 def nonlinear_field_phi2(fields: FieldState) -> np.ndarray:
     """Return the mean electrostatic energy density from final fields."""

@@ -302,3 +302,5 @@ class RuntimeConfig:
             "quasilinear": self.quasilinear.to_dict(),
             "parallel": self.parallel.to_dict(),
         }
+
+Case = RuntimeConfig
