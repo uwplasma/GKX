@@ -1201,18 +1201,15 @@ def test_linear_rhs_cached_uses_generic_jit_unless_electrostatic_is_forced(
     cache = params = object()
     calls: list[str] = []
 
-    def _fake_generic(G, cache, params, terms, dt=None, external_phi=None):
+    def _fake_generic(G, cache, params, terms, external_phi=None):
         calls.append("generic")
         assert float(terms.apar) == pytest.approx(0.0)
         assert float(terms.bpar) == pytest.approx(0.0)
-        assert float(dt) == pytest.approx(0.25)
         return jnp.zeros_like(G), FieldState(
             phi=jnp.zeros(G.shape[-3:], dtype=G.dtype), apar=None, bpar=None
         )
 
-    monkeypatch.setattr(
-        "gkx.terms.assembly.assemble_rhs_cached_jit", _fake_generic
-    )
+    monkeypatch.setattr("gkx.terms.assembly.assemble_rhs_cached_jit", _fake_generic)
     monkeypatch.setattr(
         "gkx.terms.assembly.assemble_rhs_cached_electrostatic_jit",
         lambda *args, **kwargs: pytest.fail(
@@ -1225,7 +1222,6 @@ def test_linear_rhs_cached_uses_generic_jit_unless_electrostatic_is_forced(
         cache,
         params,
         terms=LinearTerms(apar=0.0, bpar=0.0),
-        dt=0.25,
     )
 
     assert calls == ["generic"]
@@ -1244,12 +1240,10 @@ def test_linear_rhs_parallel_cached_serial_alias_and_error_branches(
         calls.append("serial")
         assert kwargs["use_jit"] is False
         assert kwargs["use_custom_vjp"] is False
-        assert float(kwargs["dt"]) == pytest.approx(0.2)
+        assert "dt" not in kwargs
         return jnp.ones_like(G), jnp.zeros(G.shape[-3:], dtype=G.dtype)
 
-    monkeypatch.setattr(
-        "gkx.operators.linear.rhs.linear_rhs_cached", _fake_serial
-    )
+    monkeypatch.setattr("gkx.operators.linear.rhs.linear_rhs_cached", _fake_serial)
 
     rhs, phi = linear_rhs_parallel_cached(
         G0,
@@ -1259,7 +1253,6 @@ def test_linear_rhs_parallel_cached_serial_alias_and_error_branches(
         parallel=None,
         use_jit=False,
         use_custom_vjp=False,
-        dt=0.2,
     )
     assert calls == ["serial"]
     assert rhs.shape == G0.shape

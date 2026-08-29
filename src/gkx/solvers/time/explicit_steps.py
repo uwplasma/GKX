@@ -156,15 +156,12 @@ def _linear_stage_rhs(
     cache: LinearCache,
     params: LinearParams,
     term_cfg: TermConfig,
-    dt_val: jnp.ndarray,
     assemble_rhs_cached_fn=assemble_rhs_cached,
 ) -> LinearStageRhsFn:
     """Return the linear RHS closure used by explicit staged methods."""
 
     def rhs(state: jnp.ndarray) -> jnp.ndarray:
-        dG, _fields = assemble_rhs_cached_fn(
-            state, cache, params, terms=term_cfg, dt=dt_val
-        )
+        dG, _fields = assemble_rhs_cached_fn(state, cache, params, terms=term_cfg)
         return dG
 
     return rhs
@@ -302,7 +299,7 @@ def _linear_explicit_step(
 
     dt_val = jnp.asarray(dt)
     method_key = method.strip().lower()
-    rhs = _linear_stage_rhs(cache, params, term_cfg, dt_val, assemble_rhs_cached_fn)
+    rhs = _linear_stage_rhs(cache, params, term_cfg, assemble_rhs_cached_fn)
     G_next = _linear_explicit_stage_update(
         G,
         dt_val,
@@ -314,7 +311,5 @@ def _linear_explicit_step(
     G_next = _apply_completed_step_state_mask(jnp.asarray(G_next), cache)
 
     # fields at the end of step
-    _, fields = assemble_rhs_cached_fn(
-        G_next, cache, params, terms=term_cfg, dt=dt_val
-    )
+    _, fields = assemble_rhs_cached_fn(G_next, cache, params, terms=term_cfg)
     return G_next, fields

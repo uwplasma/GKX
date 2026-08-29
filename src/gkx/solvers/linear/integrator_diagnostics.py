@@ -76,7 +76,6 @@ def _rhs(
     cache: LinearCache,
     params: LinearParams,
     terms: LinearTerms,
-    dt_val: jnp.ndarray,
     collision_operator: Any | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     return linear_rhs_cached(
@@ -85,7 +84,6 @@ def _rhs(
         params,
         terms=terms,
         use_jit=False,
-        dt=dt_val,
         collision_operator=collision_operator,
     )
 
@@ -102,7 +100,7 @@ def _advance_linear_state(
     collision_operator: Any | None = None,
 ) -> jnp.ndarray:
     def explicit_rhs(state: jnp.ndarray) -> jnp.ndarray:
-        return _rhs(state, cache, params, terms, dt_val, collision_operator)[0]
+        return _rhs(state, cache, params, terms, collision_operator)[0]
 
     if method == "imex":
         dG = explicit_rhs(G_in)
@@ -192,13 +190,12 @@ def _diagnostic_sample(
     cache: LinearCache,
     params: LinearParams,
     terms: LinearTerms,
-    dt_val: jnp.ndarray,
     species_index: int | None,
     *,
     record_hl_energy: bool,
     collision_operator: Any | None = None,
 ) -> tuple[jnp.ndarray, ...]:
-    _dG, phi = _rhs(G, cache, params, terms, dt_val, collision_operator)
+    _dG, phi = _rhs(G, cache, params, terms, collision_operator)
     density = _density_from_state(G, cache, species_index)
     if record_hl_energy:
         return phi, density, _hl_energy_from_state(G)
@@ -236,7 +233,6 @@ def _every_step_scan(
             cache,
             params,
             terms,
-            dt_val,
             species_index,
             record_hl_energy=record_hl_energy,
             collision_operator=collision_operator,
@@ -290,7 +286,6 @@ def _strided_sample_scan(
             cache,
             params,
             terms,
-            dt_val,
             species_index,
             record_hl_energy=record_hl_energy,
             collision_operator=collision_operator,

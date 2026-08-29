@@ -246,14 +246,10 @@ def _species_arrays(params: LinearParams, ns: int, real_dtype: Any) -> _SpeciesA
 def _scalar_params(
     params: LinearParams,
     real_dtype: Any,
-    dt: jnp.ndarray | float | None,
 ) -> _ScalarParams:
-    """Collect scalar RHS parameters and the dt-scaled end-damping amplitude."""
+    """Collect scalar RHS parameters using the configured damping rate."""
 
     damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
-    if dt is not None:
-        dt_arr = jnp.asarray(dt, dtype=real_dtype)
-        damp_amp = jnp.where(dt_arr != 0.0, damp_amp / dt_arr, damp_amp)
     return _ScalarParams(
         omega_d_scale=jnp.asarray(params.omega_d_scale, dtype=real_dtype),
         omega_star_scale=jnp.asarray(params.omega_star_scale, dtype=real_dtype),
@@ -654,7 +650,6 @@ def assemble_rhs_cached(
     *,
     terms: TermConfig | None = None,
     use_custom_vjp: bool = True,
-    dt: jnp.ndarray | float | None = None,
     external_phi: jnp.ndarray | float | None = None,
     force_electrostatic_fields: bool = False,
 ) -> Tuple[jnp.ndarray, FieldState]:
@@ -670,7 +665,7 @@ def assemble_rhs_cached(
     term_cfg = terms or TermConfig()
     state = _normalized_rhs_state(G, cache)
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
-    scalars = _scalar_params(params, state.real_dtype, dt)
+    scalars = _scalar_params(params, state.real_dtype)
     weights = _term_weights(params, term_cfg, state.real_dtype)
     rhs_fields = _solved_rhs_fields(
         state.G,
@@ -697,7 +692,6 @@ def assemble_rhs_cached_with_fields(
     fields: FieldState,
     *,
     terms: TermConfig | None = None,
-    dt: jnp.ndarray | float | None = None,
     force_electrostatic_fields: bool = False,
     skip_dissipation: bool = False,
     hermite_window: HermiteWindow | None = None,
@@ -714,7 +708,7 @@ def assemble_rhs_cached_with_fields(
     term_cfg = terms or TermConfig()
     state = _normalized_rhs_state(G, cache)
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
-    scalars = _scalar_params(params, state.real_dtype, dt)
+    scalars = _scalar_params(params, state.real_dtype)
     weights = _term_weights(params, term_cfg, state.real_dtype)
     _, _, h_apar, h_bpar = _rhs_field_views(
         fields, term_cfg, force_electrostatic_fields=force_electrostatic_fields
@@ -752,14 +746,11 @@ def assemble_rhs_cached_jit(
     cache: LinearCache,
     params: LinearParams,
     terms: TermConfig,
-    dt: jnp.ndarray | float | None = None,
     external_phi: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Jitted wrapper for cached RHS assembly."""
 
-    return assemble_rhs_cached(
-        G, cache, params, terms=terms, dt=dt, external_phi=external_phi
-    )
+    return assemble_rhs_cached(G, cache, params, terms=terms, external_phi=external_phi)
 
 
 @functools.partial(jax.jit)
@@ -768,7 +759,6 @@ def assemble_rhs_cached_electrostatic_jit(
     cache: LinearCache,
     params: LinearParams,
     terms: TermConfig,
-    dt: jnp.ndarray | float | None = None,
     external_phi: jnp.ndarray | float | None = None,
 ) -> Tuple[jnp.ndarray, FieldState]:
     """Jitted cached RHS assembly for statically electrostatic field terms."""
@@ -778,7 +768,6 @@ def assemble_rhs_cached_electrostatic_jit(
         cache,
         params,
         terms=terms,
-        dt=dt,
         external_phi=external_phi,
         force_electrostatic_fields=True,
     )
@@ -808,7 +797,6 @@ def assemble_linear_rhs_cached(
     terms: TermConfig | None = None,
     use_jit: bool = True,
     use_custom_vjp: bool = True,
-    dt: jnp.ndarray | float | None = None,
     external_phi: jnp.ndarray | float | None = None,
     electrostatic_fields: bool | None = None,
     collision_operator: CollisionOperator | None = None,
@@ -838,7 +826,6 @@ def assemble_linear_rhs_cached(
             cache,
             params,
             assembled_terms,
-            dt=dt,
             external_phi=external_phi,
         )
     else:
@@ -848,7 +835,6 @@ def assemble_linear_rhs_cached(
             params,
             terms=assembled_terms,
             use_custom_vjp=use_custom_vjp,
-            dt=dt,
             external_phi=external_phi,
             force_electrostatic_fields=electrostatic,
         )
@@ -902,7 +888,6 @@ def assemble_rhs_terms_cached(
     *,
     terms: TermConfig | None = None,
     use_custom_vjp: bool = True,
-    dt: jnp.ndarray | float | None = None,
 ) -> tuple[jnp.ndarray, FieldState, dict[str, jnp.ndarray]]:
     """Assemble per-term RHS contributions for diagnostics and audits.
 
@@ -916,7 +901,7 @@ def assemble_rhs_terms_cached(
     term_cfg = terms or TermConfig()
     state = _normalized_rhs_state(G, cache)
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
-    scalars = _scalar_params(params, state.real_dtype, dt)
+    scalars = _scalar_params(params, state.real_dtype)
     weights = _term_weights(params, term_cfg, state.real_dtype)
     rhs_fields = _solved_rhs_fields(
         state.G,

@@ -2861,3 +2861,62 @@ baseline/consolidated cold execution of 95.923/86.313 ms, warm medians of
 1,504/376 bytes. The shared owner therefore preserves the GPU result and device
 footprint, improves the measured cold sample, and changes the tiny warm kernel
 by about five microseconds without repeated-memory growth.
+
+## 2026-08-29 — Phase 2 native end-damping-rate repair scope
+
+Task: make every linear integration owner interpret `damp_ends_amp` as the
+per-unit-time rate declared by the runtime schema, normalization contract, and
+operator equation. The first native/Diffrax migration smoke found that native
+linear routes pass their step size into RHS assembly, which silently divides
+the rate by `dt`, while Diffrax and Krylov routes do not. On the maintained
+kinetic-electron case this makes the two solvers integrate different operators
+and prevents a timestep-refinement comparison from converging. Baseline: the
+Hermitian-projection branch at
+`c0ebf067d87b642617c905dbd6ccb2ba504c6255`, with 199 installable Python files
+and 91,495 installable source lines. Remove the undocumented RHS `dt` scaling
+seam and retain the explicit runtime `damp_ends_scale_by_dt` compatibility
+control as the only owner of opt-in per-step scaling. Apply the same rate
+contract to serial, diagnostic, implicit, explicit, and promoted parallel
+linear routes. Non-goals: no damping profile, width, field solve, collision,
+tableau, timestep controller, default input, nonlinear RHS, public product
+facade, or scientific promotion change. Acceptance: exact RHS identity across
+integrator owners for a nonzero linked end-damping case; native/Diffrax
+short-horizon convergence under a shared initial state; unchanged results when
+end damping is disabled; explicit opt-in scaling applied exactly once; all
+focused linear, Diffrax, parallel, runtime, release, typing, lint,
+documentation, packaging, architecture/size, and diff gates; a net source-line
+reduction; and matched CPU/NVIDIA value, cold/warm runtime, and memory evidence.
+Roll back if the default rate still depends on step size, the opt-in scaling is
+lost or doubled, a solver integrates a different RHS, a parallel route changes
+topology, or a no-damping fingerprint changes.
+
+Evidence: removing the RHS timestep seam reduces installable source from
+91,495 to 91,449 lines with 199 files unchanged. A deterministic x64 linked
+case with `damp_ends_amp=0` retained byte-identical SHA-256 fingerprints for
+the eager RHS, field solve, three-step RK4 final state, and saved field history
+(four outputs total). With nonzero damping, a two-step Euler test now gives
+the same state through the native and Diffrax owners. On reduced versions of
+the two maintained Diffrax-selected inputs, the TEM native/Diffrax absolute
+state difference was already bounded at about `4e-13`; the kinetic-electron
+route changed from a nonconvergent operator mismatch to fourth-order RK4
+convergence against a high-accuracy Dopri8 reference. Its relative final-state
+error fell from `6.173e-7` at `dt=1e-3` to `3.812e-8` at `dt=5e-4` and
+`2.419e-9` at `dt=2.5e-4` over the matched `t=0.1` horizon.
+
+A synchronized float32 CPU profile of twenty RK4 steps on a linked
+`(Nl, Nm, Ny, Nx, Nz) = (12, 32, 1, 1, 96)` state reported baseline/repaired
+cold samples of 0.780--0.828/0.788--0.826 seconds and paired warm medians of
+58.084--58.364/58.309--58.579 ms. The changed norms, 0.0177984163 and
+0.0195752233, are the intended correction from a per-step-amplified damping
+operator to the configured per-unit-time rate. Traced cold Python peaks were
+4,160,095/4,141,867 bytes; 11 warm calls added only 128 peak bytes in both
+routes and retained no incremental growth. The repair therefore changes the
+declared physics without a material CPU compile, warm-runtime, or memory cost.
+
+The matched office RTX A4000 profile with JAX 0.6.2 reported paired
+baseline/repaired cold samples of 2.670--2.686/2.626--2.633 seconds and warm
+medians of 8.690--9.191/8.929--8.951 ms. Peak device allocation was exactly
+3,035,904 bytes in both routes. Traced cold Python peaks were
+6,025,245/5,998,009 bytes; 11 warm calls added 682/809 peak bytes with no
+incremental retained growth. The corrected GPU route therefore preserves the
+device footprint and has no material cold or warm regression.

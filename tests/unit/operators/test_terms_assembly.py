@@ -113,9 +113,7 @@ def test_compute_fields_cached_matches_rhs_fields_and_validation() -> None:
     ) + 1j * rng.normal(size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size))
     G0 = jnp.asarray(G0)
 
-    rhs, fields_rhs = assemble_rhs_cached(
-        G0, cache, params, use_custom_vjp=False, dt=0.1
-    )
+    rhs, fields_rhs = assemble_rhs_cached(G0, cache, params, use_custom_vjp=False)
     fields_only = compute_fields_cached(G0, cache, params, use_custom_vjp=False)
     assert rhs.shape == G0.shape
     assert np.allclose(
