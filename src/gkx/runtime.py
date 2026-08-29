@@ -28,7 +28,10 @@ from gkx.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from gkx.solvers.nonlinear.diagnostic_integration import integrate_nonlinear_explicit_diagnostics_state
+from gkx.solvers.nonlinear.diagnostic_integration import (
+    integrate_nonlinear_explicit_diagnostics_state,
+    prepare_nonlinear_explicit_diagnostics,
+)
 from gkx.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from gkx.diagnostics.normalization import apply_diagnostic_normalization
 from gkx.parallel import independent_map
@@ -127,6 +130,7 @@ _PATCHABLE_RUNTIME_GLOBALS = (
     integrate_linear_diagnostics,
     integrate_linear_from_config,
     integrate_nonlinear_explicit_diagnostics_state,
+    prepare_nonlinear_explicit_diagnostics,
     integrate_nonlinear_from_config,
     linear_terms_to_term_config,
     run_adaptive_runtime_chunk_loop,
@@ -175,7 +179,7 @@ __all__ = [
     "build_runtime_geometry", "build_runtime_linear_params",
     "build_runtime_linear_terms", "build_runtime_term_config",
     "run_runtime_linear", "run_runtime_nonlinear",
-    "run_runtime_scan", "solve",
+    "run_runtime_scan", "solve", "prepare",
 ]
 
 
@@ -287,6 +291,18 @@ def solve(
     if case.physics.linear:
         return run_runtime_linear(case, **options)
     raise ValueError("case must enable linear or nonlinear physics")
+
+
+def prepare(case: Case, **options: Any) -> Any:
+    """Prepare a reusable compiled nonlinear simulation for one case."""
+    if not case.physics.nonlinear:
+        raise ValueError("prepare currently requires nonlinear physics")
+    if options.pop("diagnostics", True) is not True:
+        raise ValueError("prepare requires diagnostics=True")
+    return run_runtime_nonlinear_impl(
+        case, diagnostics=True, prepare_only=True,
+        deps=_runtime_nonlinear_dispatch_deps(), **options
+    )
 
 
 def run_runtime_linear(

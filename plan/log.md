@@ -2714,3 +2714,48 @@ one relative float32 epsilon still fails; the complete nonlinear owner suite,
 release gates, Ruff, architecture/size checks, and diff checks pass. Roll back
 if the gate admits a different timestep trajectory or any production value is
 changed.
+
+## 2026-08-29 — Phase 1 prepared nonlinear Python contract scope
+
+Task: promote `gkx.prepare(case)` as the compile-stable repeated-execution
+boundary already implemented by the explicit nonlinear diagnostic integrator.
+Baseline: `main` after PR #146 at
+`8d7cc66ed170167f6d7a230e99a1c244b68a8d08`. The advertised root surface
+grows from 14 to 15 names and `gkx.api` from 13 to 14; the 354-target legacy
+registry gains only this promoted owner. Non-goals: no new integrator, field
+equation, result schema, numerical default, objective definition, sharding
+algorithm, CLI command, artifact format, implicit solve, or performance claim.
+Preparation reuses the runtime's existing geometry, grid, parameters, terms,
+initial condition, timestep, and diagnostic-policy setup, then returns the
+established `PreparedExplicitNonlinearDiagnostics` object. Its `run` method
+supports same-signature initial states and its array-only boundary preserves
+the existing reverse-mode and matched dynamic geometry/cache/parameter
+contracts. Linear, IMEX, active early saturation, diagnostics-disabled, and
+parallel-sharded requests fail explicitly until those modes have measured
+prepared owners. Acceptance: prepared/direct fixed-step parity, one trace for
+same-shape repeated calls, finite reverse-mode gradients, lazy root identity,
+actionable unsupported-mode errors, CPU cold/warm/host-memory measurements,
+an office-GPU smoke and reuse measurement, wheel smoke, nonlinear/API/release
+tests, Ruff, full typing, frozen architecture/size ceilings, warning-as-error
+docs, and diff checks. Roll back if preparation changes the direct solver,
+duplicates runtime setup, recompiles unchanged signatures, loses array-only
+differentiability, silently ignores a requested execution policy, or exceeds
+the frozen 199-file/91,507-line installable-source ceiling.
+
+## 2026-08-29 — Phase 1 prepared contract CPU/GPU validation evidence
+
+The bounded synchronized reuse smoke uses an explicit RK2 nonlinear case at
+`Nx=4`, `Ny=4`, `Nz=8`, `Nl=2`, `Nm=3`, four steps, compact diagnostics, and
+five prebuilt same-signature initial states. On the local Apple M4 CPU with
+JAX 0.10.2, runtime setup/preparation took 4.930 s, first compiled execution
+1.159 s, and the warm median 0.419 ms. Python-traced cold peak was 61,576,665
+bytes; the warm series added a 16,954-byte peak and 618 retained bytes; peak
+process RSS grew by 558,645,248 bytes. On one office RTX A4000 with JAX 0.10.2
+and driver 580.173.02, the matched measurements were 14.919 s preparation,
+3.375 s first execution, and 2.343 ms warm median. Python-traced cold peak was
+62,763,804 bytes; the warm series added a 16,822-byte peak and 598 retained
+bytes; peak process RSS grew by 1,694,834,688 bytes and the JAX allocator
+reported 16,821,248 peak device bytes. Final-state norms were
+`2.8284272048040293e-05` CPU and `2.828427022905089e-05` GPU (about `6.4e-8`
+relative). This tiny fixed-shape workload validates reuse and bounded memory;
+it is not a CPU/GPU speedup or production-throughput claim.

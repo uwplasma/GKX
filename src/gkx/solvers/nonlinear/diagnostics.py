@@ -208,12 +208,6 @@ def _explicit_options_from_values(values: dict[str, Any]) -> _ExplicitDiagnostic
     )
 
 
-def _discard_imex_only_options(*_unused: Any) -> None:
-    """Document IMEX-only options accepted by the shared public signature."""
-
-    return None
-
-
 def _prepare_explicit_diagnostic_state(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -710,14 +704,6 @@ def prepare_explicit_nonlinear_diagnostics_impl(
 ) -> PreparedExplicitNonlinearDiagnostics:
     """Prepare one compile-stable explicit nonlinear diagnostic simulation."""
 
-    _discard_imex_only_options(
-        implicit_tol,
-        implicit_maxiter,
-        implicit_iters,
-        implicit_relax,
-        implicit_restart,
-        implicit_preconditioner,
-    )
     options = _explicit_options_from_values(locals())
     components = _build_explicit_scan_components(
         G0,
@@ -876,14 +862,6 @@ def integrate_explicit_nonlinear_diagnostics_impl(
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate an explicit nonlinear run and return diagnostics plus final state."""
 
-    _discard_imex_only_options(
-        implicit_tol,
-        implicit_maxiter,
-        implicit_iters,
-        implicit_relax,
-        implicit_restart,
-        implicit_preconditioner,
-    )
     options = _explicit_options_from_values(locals())
     components = _build_explicit_scan_components(
         G0,

@@ -51,6 +51,7 @@ class FullNonlinearRuntimeDeps:
     infer_runtime_nonlinear_steps: Callable[..., int]
     runtime_external_phi: Callable[..., Any]
     build_runtime_nonlinear_diagnostics_kwargs: Callable[..., dict[str, Any]]
+    prepare_nonlinear_explicit_diagnostics: Callable[..., Any]
     integrate_nonlinear_explicit_diagnostics_state: Callable[..., Any]
     run_adaptive_runtime_chunk_loop: Callable[..., Any]
     build_runtime_nonlinear_result: Callable[..., RuntimeNonlinearResult]
@@ -292,19 +293,11 @@ def _saturation_stop_condition(
 def _nonlinear_cfl_margin(
     cfg: RuntimeConfig, ctx: _RunContext, *, Nl: int, Nm: int
 ) -> tuple[float, float, np.ndarray] | None:
-    """Return ``(bound, dt / bound, omega components)``, or None if unavailable.
+    """Return the nonlinear CFL bound and ratio, or ``None`` if unavailable.
 
-    ``include_diamagnetic_drive=False`` is deliberate: it is the convention the
-    nonlinear adaptive step itself uses, and the drive term is not a step-size
-    constraint. Using the linear convention here would tighten the bound on any
-    deck with finite gradients -- for the Cyclone short example it is the
-    difference between 1.33x and 2.96x -- and report a margin the runtime never
-    applies.
-
-    Returns None rather than raising. The bound is advisory, and computing it
-    can fail on inputs a run is otherwise happy with: geometry that has not
-    been sampled onto this grid, or an analytic geometry that arrives traced.
-    A diagnostic that can abort a working run is worse than no diagnostic.
+    Match the adaptive step's no-diamagnetic-drive convention. This advisory
+    calculation must not abort an otherwise valid run when geometry is traced
+    or has not yet been sampled onto the grid.
     """
 
     from gkx.config import resolve_cfl_fac
@@ -337,15 +330,9 @@ def _report_nonlinear_cfl_margin(
     Nm: int,
     status: Callable[[str], None],
 ) -> None:
-    """Report the run's CFL margin, and warn when a fixed step is over it.
+    """Report the CFL margin because fixed steps bypass adaptive enforcement.
 
-    ``fixed_dt`` runs never consult the CFL machinery -- the policy builder
-    short-circuits before the bound is even computed -- so a deck's dt is
-    checked against its own geometry by nobody. That is how a benchmark shipped
-    at 1.6x its bound, produced 404 NaN samples, and was not noticed for a
-    release. The margin is reported unconditionally so it reaches run logs and
-    artifact metadata, which is what makes an after-the-fact provenance
-    question answerable.
+    Keep unsafe deck choices visible in logs and artifact metadata.
     """
 
     margin = _nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm)
@@ -726,12 +713,15 @@ def run_full_nonlinear_runtime(
     return_state: bool,
     show_progress: bool,
     status_callback: Callable[[str], None] | None = None,
-) -> RuntimeNonlinearResult:
+    prepare_only: bool = False,
+) -> Any:
     """Run one full-GK nonlinear point from a runtime config."""
 
     # Resolved before any geometry or grid work so an unroutable [parallel]
     # request fails immediately instead of after a long serial run.
     plan = resolve_nonlinear_parallel_plan(cfg.parallel)
+    if prepare_only and plan is not None:
+        raise ValueError("prepared nonlinear execution currently requires serial policy")
     status = _status_callback(status_callback)
     ctx = _prepare_context(
         cfg,
@@ -759,6 +749,20 @@ def run_full_nonlinear_runtime(
         f"nonlinear diagnostics={'on' if policy.diagnostics_on else 'off'} "
         f"fixed_mode={'on' if policy.fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
+    if prepare_only:
+        if _saturation_stop_condition(cfg, ctx, policy) is not None:
+            raise ValueError("prepared execution cannot stop early at saturation")
+        kwargs = _diagnostic_kwargs(
+            cfg, ctx, policy, deps=deps, steps=ctx.steps, method=method,
+            sample_stride=policy.sample_stride,
+            diagnostics_stride=policy.diagnostics_stride,
+            fixed_dt=bool(cfg.time.fixed_dt), show_progress=show_progress,
+        )
+        if not bool(cfg.time.fixed_dt):
+            kwargs["time_horizon"] = float(cfg.time.t_max)
+        return deps.prepare_nonlinear_explicit_diagnostics(
+            ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs
+        )
     if plan is None:
         return _run_once(cfg, ctx, policy, deps=deps, method=method, status=status)[0]
     return _run_sharded(

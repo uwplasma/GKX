@@ -339,7 +339,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     from support.paths import REPO_ROOT
 
     promoted = [
-        "load", "solve", "scan", "plot", "Case", "LinearResult", "NonlinearResult",
+        "load", "solve", "scan", "plot", "prepare", "Case", "LinearResult", "NonlinearResult",
         "ScanResult", "flux_tube_geometry_from_mapping",
         "solver_objective_vector_from_geometry",
         "solver_linear_operator_matrix_from_geometry",
@@ -347,7 +347,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     ]
     assert public_api.__all__ == promoted
     assert gkx.__all__ == ["__version__", *promoted]
-    assert len(public_api._EXPORT_TARGETS) == 354
+    assert len(public_api._EXPORT_TARGETS) == 355
     assert len(public_api.__all__) == len(set(public_api.__all__))
     assert set(gkx.__all__) <= set(dir(gkx))
     assert "LinearParams" not in dir(gkx)
@@ -356,6 +356,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     assert set(wildcard) - {"__builtins__"} == set(gkx.__all__)
     from gkx.artifacts.plotting import plot as plot_owner
     assert gkx.plot is public_api.plot is plot_owner
+    assert gkx.prepare is public_api.prepare
     assert gkx.ExplicitTimeConfig.__name__ == "ExplicitTimeConfig"
     assert callable(gkx.integrate_nonlinear_explicit_diagnostics)
     assert callable(gkx.branch_continuity_metrics)
@@ -372,8 +373,8 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
 import sys
 sys.path.insert(0, {str(REPO_ROOT / "src")!r})
 import gkx
-assert len(gkx.__all__) == 14
-assert set(gkx.__all__) == {{'__version__', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan', 'plot', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig'}}
+assert len(gkx.__all__) == 15
+assert set(gkx.__all__) == {{'__version__', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan', 'plot', 'prepare', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig'}}
 assert "numpy" not in sys.modules
 assert "jax" not in sys.modules
 from gkx.parallel.decomposition import build_independent_portfolio_decomposition
@@ -476,12 +477,28 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
 
     monkeypatch.setattr(runtime, "run_runtime_linear", fake_linear)
     monkeypatch.setattr(runtime, "run_runtime_nonlinear", fake_nonlinear)
+    assert gkx.prepare is runtime.prepare
+    prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
+
+    def fake_prepare(cfg, **options):
+        prepared_calls.append((cfg, options))
+        return "prepared-simulation"
+
+    monkeypatch.setattr(runtime, "run_runtime_nonlinear_impl", fake_prepare)
     assert gkx.solve(case, ky_target=0.2) == "linear-result"
     nonlinear = replace(case, physics=replace(case.physics, nonlinear=True))
     assert gkx.solve(nonlinear, steps=2) == "nonlinear-result"
     disabled = replace(case, physics=replace(case.physics, linear=False))
     with pytest.raises(ValueError, match="enable linear or nonlinear"):
         gkx.solve(disabled)
+    with pytest.raises(ValueError, match="requires nonlinear"):
+        gkx.prepare(case)
+    with pytest.raises(ValueError, match="diagnostics=True"):
+        gkx.prepare(nonlinear, diagnostics=False)
+    assert gkx.prepare(nonlinear, steps=2) == "prepared-simulation"
+    assert prepared_calls[0][0] is nonlinear
+    assert prepared_calls[0][1]["diagnostics"] is True
+    assert prepared_calls[0][1]["prepare_only"] is True
     assert calls == [
         ("linear", case, {"ky_target": 0.2}),
         ("nonlinear", nonlinear, {"steps": 2}),
