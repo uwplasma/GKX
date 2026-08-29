@@ -2313,3 +2313,39 @@ override, making the measured grid match the command; solver configuration
 precedence and unoverridden campaigns remain unchanged. The first 16x16x24
 CPU/GPU measurements are rejected. Acceptance now additionally requires exact
 16x16x16 state shapes in both reruns and matched step/block numerical results.
+
+## 2026-08-28 — Phase 0 GX-derived-function provenance scope
+
+- **Task:** trace the GX-derived geometry implementation from its explicit
+  import commit through current module/function owners, record the upstream GX
+  repository and best source revision supported by local history, and begin a
+  root `PROVENANCE.md` containing the required GX copyright and MIT notice.
+- **Non-goals:** no geometry formula, normalization, backend selection, public
+  API, dependency, generated artifact, physics claim, or performance change;
+  no claim that merely GX-compatible output readers or independently
+  implemented parity fixes are copied code.
+- **Baseline:** branch `plan/phase0-gx-provenance` from GKX `main` at
+  `4104bf4a2d7463fcd56e9c38434d88510377d2b4`; local GX checkout
+  `3865a53778862e1686f414bf6f416339e24887c9`, with
+  `96e42569fa9ffc392a46ddedddf5d24a27b8de39` the last GX revision preceding
+  GKX's 2026-04-01 import.
+- **Affected behavior and claims:** documentation, license attribution, and
+  distribution metadata only. The inventory distinguishes directly recorded
+  ports, later descendants, paper-derived numerical methods, and
+  interoperability/parity code. A pre-change wheel contains only GKX's
+  `LICENSE`, so the provenance notice must also be declared as a license file.
+- **Expected files:** add root `PROVENANCE.md`, add
+  `plan/baseline/gkx_1_8_2_gx_provenance.md`, append this work-log entry,
+  include `PROVENANCE.md` in `pyproject.toml` license files, and add one focused
+  release-metadata regression. No file is expected to move or be deleted.
+- **Acceptance:** reproduce the three imported-file hashes and 1,941-line
+  function/class inventory from GKX commit `58ff86c8`; map every imported
+  top-level symbol to a current owner or an explicit rename/removal; confirm
+  current owner ancestry through split/consolidation commits; copy the GX MIT
+  notice verbatim from the upstream checkout; build wheel and sdist and verify
+  both carry `LICENSE` and `PROVENANCE.md`; verify no product source file
+  changed; run the focused release test plus repository size and package
+  architecture gates.
+- **Rollback:** abandon the branch if history cannot distinguish a port from
+  compatibility behavior, or revert the documentation-only commit if an
+  upstream source/revision assertion proves unsupported.

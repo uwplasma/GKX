@@ -2369,6 +2369,19 @@ def _compact(path: str) -> str:
     return " ".join((ROOT / path).read_text(encoding="utf-8").split())
 
 
+def test_distribution_metadata_includes_third_party_provenance() -> None:
+    """Ship the GX notice with every wheel/sdist containing its descendants."""
+
+    from gkx.utils import tomlcompat as tomllib
+
+    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert metadata["project"]["license-files"] == ["LICENSE", "PROVENANCE.md"]
+
+    provenance = (ROOT / "PROVENANCE.md").read_text(encoding="utf-8")
+    assert "Copyright (c) 2011-2023 Noah R. Mandell" in provenance
+    assert "https://bitbucket.org/gyrokinetics/gx" in provenance
+
+
 REQUIRED_PHRASES = {
     "docs/release_scope.rst": (
         "a scoped model-development and optimization-screening result",
