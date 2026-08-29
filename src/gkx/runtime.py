@@ -33,7 +33,7 @@ from gkx.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
 from gkx.diagnostics.normalization import apply_diagnostic_normalization
 from gkx.parallel import independent_map
 from gkx.diagnostics.quasilinear_transport import compute_quasilinear_from_linear_state
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.workflows.runtime.config import Case, RuntimeConfig
 from gkx.workflows.runtime import startup as runtime_startup
 from gkx.workflows.runtime.execution import (
     RuntimeLinearDispatchDeps,
@@ -106,8 +106,6 @@ from gkx.geometry.vmec_eik import generate_runtime_vmec_eik
 
 _RUNTIME_CASE_FIT_KEYS = _WORKFLOW_RUNTIME_CASE_FIT_KEYS
 
-# These symbols are intentionally imported into the runtime facade because the
-# dispatch/workflow dependency builders read them from ``sys.modules[__name__]``.
 _PATCHABLE_RUNTIME_GLOBALS = (
     apply_diagnostic_normalization,
     apply_geometry_grid_defaults,
@@ -177,7 +175,7 @@ __all__ = [
     "build_runtime_geometry", "build_runtime_linear_params",
     "build_runtime_linear_terms", "build_runtime_term_config",
     "run_runtime_linear", "run_runtime_nonlinear",
-    "run_runtime_scan",
+    "run_runtime_scan", "solve",
 ]
 
 
@@ -272,13 +270,23 @@ def _runtime_facade_module() -> Any:
 
 def _runtime_linear_dispatch_deps() -> RuntimeLinearDispatchDeps:
     """Build linear runtime dispatch dependencies from patchable module globals."""
-
     return build_runtime_linear_dispatch_deps(_runtime_facade_module())
 
 
 def _runtime_linear_time_fit_options(values: Mapping[str, Any]) -> dict[str, Any]:
     """Return shared runtime linear time-integration and fit options."""
     return {name: values[name] for name in _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS}
+
+
+def solve(
+    case: Case, **options: Any
+) -> RuntimeLinearResult | RuntimeNonlinearResult:
+    """Solve one case through its existing linear or nonlinear runtime owner."""
+    if case.physics.nonlinear:
+        return run_runtime_nonlinear(case, **options)
+    if case.physics.linear:
+        return run_runtime_linear(case, **options)
+    raise ValueError("case must enable linear or nonlinear physics")
 
 
 def run_runtime_linear(
@@ -358,14 +366,7 @@ def run_runtime_scan(
     parallel_executor: str = "thread",
     warm_start: bool | None = None,
 ) -> RuntimeLinearScanResult:
-    """Run a ky scan using the unified runtime config path.
-
-    The public facade keeps runtime monkeypatch seams intact while scan
-    coordination lives in ``workflows/runtime/orchestration_scan.py``.
-    ``warm_start`` overrides ``[output] warm_start``: with it on, the scan is
-    walked in neighbour order and each point starts from the previous point's
-    converged state.
-    """
+    """Run a ky scan; ``warm_start`` overrides the case output policy."""
 
     return _run_runtime_scan_orchestration_impl(
         cfg,
@@ -385,8 +386,6 @@ def run_runtime_scan(
 
 
 def _runtime_scan_orchestration_deps() -> Any:
-    """Build ky-scan orchestration dependencies from patchable facade globals."""
-
     return build_runtime_scan_orchestration_deps(_runtime_facade_module())
 
 
@@ -428,14 +427,10 @@ def _run_runtime_scan_batch(
 
 
 def _runtime_scan_batch_deps() -> Any:
-    """Build combined-ky scan dependencies from patchable facade globals."""
-
     return build_runtime_scan_batch_deps(_runtime_facade_module())
 
 
 def _runtime_nonlinear_dispatch_deps() -> RuntimeNonlinearDispatchDeps:
-    """Build nonlinear runtime dispatch dependencies from patchable module globals."""
-
     return build_runtime_nonlinear_dispatch_deps(_runtime_facade_module())
 
 

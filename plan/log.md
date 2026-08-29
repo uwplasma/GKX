@@ -2546,3 +2546,25 @@ architecture/size manifests; warning-as-error documentation; and diff checks.
 Roll back if aliases allocate or copy state, eager-import the solver stack,
 break a historical import, alter serialized data, require a kernel edit, or
 change a numerical fingerprint.
+
+## 2026-08-29 — Phase 1 load/solve/scan workflow scope
+
+Task: promote `load`, `solve`, and `scan` as thin top-level contracts over the
+existing TOML loader and runtime linear, nonlinear, and scan owners. Record the
+identity-contract merge from PR #139 as
+`a9bd09ab9aa2b115c5c768c11f734148101f3cca`. Non-goals: no `prepare` or `plot`
+contract; no CLI, schema, typed-submodel, output, kernel, integrator, equation,
+normalization, dtype, tolerance, dependency, or top-level-removal change.
+Baseline: GKX main at the PR #139 merge, whose complete required CI passed.
+Affected behavior: `load(path)` returns the resolved immutable `Case`; `solve`
+selects the existing nonlinear owner when nonlinear physics is enabled and the
+existing linear owner otherwise; `scan` is the exact existing runtime scan
+function. Scientific claims: none. Expected files: this append-only entry,
+existing runtime/TOML/API owners, their existing public-API tests, and concise
+API documentation. Acceptance requires pure dispatch tests with no numerical
+execution, exact scan-function identity, path resolution through `load`,
+historical API preservation, lazy-import smoke, source line/file budgets,
+release gates, typing, warning-as-error docs, and diff checks. Roll back if the
+facade duplicates numerical logic, copies arrays, changes owner defaults,
+eager-imports NumPy/JAX before a promoted name is accessed, weakens invalid-case
+errors, or regresses any architecture budget.
