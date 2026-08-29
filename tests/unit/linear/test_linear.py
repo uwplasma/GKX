@@ -36,6 +36,7 @@ from gkx.operators.linear.streaming import grad_z_linked_fft
 from gkx.core.velocity import J_l_all
 from gkx.solvers.linear.krylov import dominant_eigenpair
 from gkx.solvers.linear.implicit import _build_implicit_operator
+from gkx.solvers.linear import implicit as implicit_solver
 from gkx.terms.linear_terms import (
     collision_invariant_rates,
     collision_quadratic_rate,
@@ -1903,7 +1904,8 @@ def test_integrate_linear_implicit_runs():
     assert phi_t.shape[0] == 1
 
 
-def test_implicit_standard_and_diagnostic_routes_match():
+@pytest.mark.parametrize("method", ["implicit", "implicit2"])
+def test_implicit_standard_and_diagnostic_routes_match(method: str):
     """Implicit diagnostics must use the same prepared solve step."""
 
     grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
@@ -1927,7 +1929,7 @@ def test_implicit_standard_and_diagnostic_routes_match():
     common = dict(
         dt=0.1,
         steps=2,
-        method="implicit",
+        method=method,
         terms=terms,
         sample_stride=1,
         implicit_iters=0,
@@ -1945,6 +1947,55 @@ def test_implicit_standard_and_diagnostic_routes_match():
     np.testing.assert_array_equal(np.asarray(diagnostic), np.asarray(standard))
     np.testing.assert_allclose(np.asarray(phi), np.asarray(fields))
     assert density.shape[0] == 2
+
+
+def test_implicit2_is_second_order_and_reverse_differentiable(monkeypatch):
+    """The bounded coupled theta step must retain CN order and reverse mode."""
+
+    rate = jnp.asarray(-0.4 + 1.3j, dtype=jnp.complex64)
+
+    def scalar_rhs(state, *_args, **_kwargs):
+        return rate * state, jnp.zeros((1,), dtype=state.dtype)
+
+    monkeypatch.setattr(implicit_solver, "linear_rhs_cached", scalar_rhs)
+
+    def trajectory(initial: jnp.ndarray, dt: float, steps: int) -> jnp.ndarray:
+        dt_operator = jnp.asarray(0.5 * dt, dtype=jnp.float32)
+
+        def matvec(vector: jnp.ndarray) -> jnp.ndarray:
+            return vector - dt_operator * rate * vector
+
+        advance = implicit_solver._build_implicit_solve_step(
+            cache=object(),
+            params=object(),
+            terms=LinearTerms(),
+            dt_val=dt_operator,
+            size=1,
+            shape=(1,),
+            matvec=matvec,
+            precond_op=lambda vector: vector,
+            options=implicit_solver._ImplicitSolveOptions(
+                tol=1.0e-7,
+                maxiter=1,
+                iters=0,
+                relax=1.0,
+                restart=1,
+                explicit_weight=1.0,
+                fixed_work=True,
+            ),
+        )
+        return jax.lax.fori_loop(0, steps, lambda _index, value: advance(value), initial)
+
+    initial = jnp.asarray([1.0 + 0.2j], dtype=jnp.complex64)
+    exact = initial * jnp.exp(rate)
+    coarse = jnp.linalg.norm(trajectory(initial, 0.1, 10) - exact)
+    fine = jnp.linalg.norm(trajectory(initial, 0.05, 20) - exact)
+    assert coarse / fine > 3.8
+
+    gradient = jax.grad(
+        lambda scale: jnp.real(jnp.sum(trajectory(scale * initial, 0.1, 10)))
+    )(jnp.asarray(1.0, dtype=jnp.float32))
+    assert jnp.isfinite(gradient)
 
 
 def test_apply_hermite_v_simple():
