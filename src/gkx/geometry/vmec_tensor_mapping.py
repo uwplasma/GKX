@@ -28,7 +28,7 @@ def vmex_flux_tube_mapping_from_state(  # pragma: no cover
     equal_arc: bool = True,
     arc_oversample: int = 4,
 ) -> dict[str, Any]:
-    """Build VMEX's equal-arc PEST mapping with GS2/GX normalizations.
+    """Build VMEX's equal-arc PEST mapping with standard normalizations.
 
     VMEX owns all arrays and differentiability.  Its diagnostics pass through
     under ``"vmex"`` with the two historical reference aliases GKX reports use.

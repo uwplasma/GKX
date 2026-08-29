@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from io import BytesIO
 import json
 from pathlib import Path
 import subprocess
@@ -12,6 +13,7 @@ jax.config.update("jax_enable_x64", True)
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.animation import FFMpegWriter, FuncAnimation  # noqa: E402
 import numpy as np  # noqa: E402
+from PIL import Image  # noqa: E402
 
 from gkx.geometry import from_vmex_mirror  # noqa: E402
 from gkx.artifacts.plotting import set_plot_style  # noqa: E402
@@ -149,6 +151,8 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
     plt.close(figure)
 
     movie_path = output_dir / "vmex_mirror_gkx_rotation.mp4"
+    snapshot_path = output_dir / "vmex_mirror_gkx_snapshot.webp"
+    loop_path = output_dir / "vmex_mirror_gkx_loop.webp"
     if movie:
         movie_figure = plt.figure(figsize=(8.0, 4.0), constrained_layout=True)
         movie_3d = movie_figure.add_subplot(1, 2, 1, projection="3d")
@@ -171,8 +175,26 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
             marker.set_xdata([theta[index % theta.size] / np.pi] * 2)
             return (marker,)
 
+        frame(0)
+        movie_figure.savefig(snapshot_path, dpi=105)
         animation = FuncAnimation(movie_figure, frame, frames=72, interval=50)
         animation.save(movie_path, writer=FFMpegWriter(fps=18, bitrate=700), dpi=120)
+        loop_frames = []
+        for index in range(0, 72, 2):
+            frame(index)
+            buffer = BytesIO()
+            movie_figure.savefig(buffer, format="png", dpi=80)
+            buffer.seek(0)
+            loop_frames.append(Image.open(buffer).convert("RGB").copy())
+        loop_frames[0].save(
+            loop_path,
+            save_all=True,
+            append_images=loop_frames[1:],
+            duration=110,
+            loop=0,
+            quality=55,
+            method=6,
+        )
         plt.close(movie_figure)
 
     root = Path(__file__).resolve().parents[2]
@@ -189,6 +211,8 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
         "mirror_ratio": float(bmag.max() / bmag.min()),
         "gradpar": float(geometry.gradpar_value),
         "figure": figure_path.name,
+        "snapshot": snapshot_path.name if movie else None,
+        "animated_loop": loop_path.name if movie else None,
         "movie": movie_path.name if movie else None,
         "generator": str(Path(__file__).relative_to(root)),
     }

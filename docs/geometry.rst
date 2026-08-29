@@ -290,11 +290,14 @@ VMEX's ``mirror-gyrokinetics`` explanation page.
    :alt: Closed VMEX mirror field line, magnetic-field profile, and GKX metric
    :width: 100%
 
-The companion :download:`rotating field-line movie
+The README also carries a 13 kB :download:`poster snapshot
+<_static/vmex_mirror_gkx_snapshot.webp>` and a 105 kB, 36-frame
+:download:`animated WebP loop <_static/vmex_mirror_gkx_loop.webp>`. The
+companion :download:`rotating field-line movie
 <_static/vmex_mirror_gkx_rotation.mp4>` follows the equal-arc marker around the
-same one-circuit-closing line. Both media and their machine-readable
-:download:`run record <_static/vmex_mirror_gkx_showcase.json>` are regenerated
-with:
+same one-circuit-closing line at full frame rate. All media and their
+machine-readable :download:`run record
+<_static/vmex_mirror_gkx_showcase.json>` are regenerated with:
 
 .. code-block:: bash
 

@@ -1,8 +1,9 @@
 {
+  "animated_loop": "vmex_mirror_gkx_loop.webp",
   "device": "cpu:0",
   "figure": "vmex_mirror_gkx_showcase.webp",
   "generator": "tools/artifacts/build_vmex_mirror_gkx_artifacts.py",
-  "gkx_commit": "15b649af2bc04312b2258cc3a765cc79c2f99881",
+  "gkx_commit": "b155cfc64b5017f7ceaee3d06526131b8b6a11e7",
   "gradpar": 0.11172655358143961,
   "inputs": {
     "arc_oversample": 8,
@@ -35,5 +36,6 @@
   },
   "precision": "float64",
   "scope": "closed periodic mirror-hybrid; no open-end kinetic claim",
+  "snapshot": "vmex_mirror_gkx_snapshot.webp",
   "vmex_commit": "597e00220a0e3411c8deae231bd4ddae8ec23cb8"
 }
