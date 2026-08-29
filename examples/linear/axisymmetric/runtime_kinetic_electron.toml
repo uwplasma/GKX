@@ -38,9 +38,13 @@ nperiod = 2
 
 [time]
 t_max = 40.0
-dt = 0.01
+dt = 0.0008
 method = "rk4"
-use_diffrax = true
+sample_stride = 10
+fixed_dt = true
+use_diffrax = false
+# Temporary migration-oracle settings used by
+# ``python benchmarks/kinetic_linear_benchmark.py --diffrax``.
 diffrax_solver = "Tsit5"
 diffrax_adaptive = true
 diffrax_rtol = 1.0e-4
@@ -106,7 +110,7 @@ nonlinear = 0.0
 ky = 0.3
 Nl = 12
 Nm = 32
-solver = "krylov"
+solver = "auto"
 
 [scan]
 ky = [0.1, 0.2, 0.3, 0.4, 0.5]
