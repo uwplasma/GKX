@@ -2522,3 +2522,27 @@ if executable code changes.
   `LinearResult`/`NonlinearResult`/`ScanResult` contracts around the existing
   configuration and runtime-result owners, without moving kernels or copying
   state arrays.
+
+## 2026-08-28 — Phase 1 identity-preserving Case/Result contract scope
+
+Task: introduce the first GKX 3 product-surface names, `Case`, `LinearResult`,
+`NonlinearResult`, and `ScanResult`, as identity-preserving aliases of the
+existing frozen runtime configuration and result owners. Record the Phase 0
+closeout merge from PR #138 as
+`620240b7b89e7662d7b53743587b3c7e9bb27739`. Non-goals: no kernel or workflow
+movement; no typed-submodel redesign; no `load`, `solve`, `scan`, `plot`, or
+`prepare` implementation; no top-level export reduction; no schema, CLI,
+equation, normalization, dtype, tolerance, output, dependency, or numerical
+behavior change. Baseline: GKX main at the PR #138 merge, with 38 successful
+CI jobs and the intentional nightly skip. Affected public behavior: four new
+lazy top-level names resolve to the exact existing classes; all historical
+`Runtime*` names remain supported. Scientific claims: none. Expected files:
+this append-only entry, the two existing runtime owner modules, the lazy public
+API registry, focused contract tests, and concise API documentation. Acceptance
+requires object identity between each new and historical class; frozen
+dataclass behavior; result-array identity proving no copy; lazy-import smoke;
+the owning runtime/config and core public-API tests; release gates; typing;
+architecture/size manifests; warning-as-error documentation; and diff checks.
+Roll back if aliases allocate or copy state, eager-import the solver stack,
+break a historical import, alter serialized data, require a kernel edit, or
+change a numerical fingerprint.

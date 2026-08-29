@@ -10,6 +10,27 @@ registry lazily re-exports promoted symbols without keeping one re-export file
 per domain. Advanced users should import from the owning domain modules when
 they need implementation-specific extension points.
 
+GKX 3 Product Contracts
+-----------------------
+
+The first GKX 3 product-surface names are immutable, zero-copy views of the
+established runtime contracts:
+
+``Case``
+   The frozen runtime configuration, identical to ``RuntimeConfig``.
+``LinearResult``
+   A linear solve result, identical to ``RuntimeLinearResult``.
+``NonlinearResult``
+   A nonlinear solve result, identical to ``RuntimeNonlinearResult``.
+``ScanResult``
+   A linear scan result, identical to ``RuntimeLinearScanResult``.
+
+The identity relationship is intentional during migration: existing workflows
+already return the new contract types, result arrays are never wrapped or
+copied, and historical ``Runtime*`` imports remain valid. Later Phase 1 changes
+will add the high-level loading and solving functions without moving numerical
+kernels into this public facade.
+
 .. automodule:: gkx.api
    :members:
    :exclude-members: KrylovConfig
