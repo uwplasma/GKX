@@ -9,6 +9,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from gkx.operators.nonlinear.brackets import _complete_hermitian_ky
+
 __all__ = [
     "ShearingCoordinateUpdate",
     "_make_compressed_real_fft_projector",
@@ -152,7 +154,6 @@ def _cached_hermitian_projector(
     if not use_hermitian:
         return lambda G_state: G_state
 
-    neg_hi = nyc - 1 if (ny_full % 2 == 0) else nyc
     # The conjugate kx ordering stays a host array. These projectors are cached
     # and reused across traces, and a device constant materialized here would
     # belong to whichever trace happened to build it first, escaping that scope
@@ -167,10 +168,7 @@ def _cached_hermitian_projector(
 
     def project(G_state: jnp.ndarray) -> jnp.ndarray:
         pos = G_state[..., :nyc, :, :]
-        neg = jnp.conj(pos[..., 1:neg_hi, :, :])[..., ::-1, :, :]
-        if kx_neg is not None:
-            neg = neg[..., kx_neg, :]
-        return jnp.concatenate([pos, neg], axis=-3)
+        return _complete_hermitian_ky(pos, ny_full, nx, kx_neg)
 
     return project
 

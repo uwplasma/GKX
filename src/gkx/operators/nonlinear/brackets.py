@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Any, Sequence
 
 import jax.numpy as jnp
 
@@ -94,9 +94,9 @@ def _fft_scales(
 
 def _complete_hermitian_ky(
     positive_ky: jnp.ndarray,
-    *,
     ny_full: int,
     nx: int,
+    conjugate_kx: Any | None = None,
 ) -> jnp.ndarray:
     if ny_full <= 1:
         return positive_ky
@@ -105,12 +105,10 @@ def _complete_hermitian_ky(
     negative_ky = jnp.conj(positive_ky[..., 1:neg_hi, :, :])
     negative_ky = negative_ky[..., ::-1, :, :]
     if nx > 1:
-        conjugate_kx = jnp.concatenate(
-            [
-                jnp.asarray([0], dtype=jnp.int32),
-                jnp.arange(nx - 1, 0, -1, dtype=jnp.int32),
-            ]
-        )
+        if conjugate_kx is None:
+            conjugate_kx = jnp.asarray(
+                (0,) + tuple(range(nx - 1, 0, -1)), dtype=jnp.int32
+            )
         negative_ky = negative_ky[..., conjugate_kx, :]
     return jnp.concatenate([positive_ky, negative_ky], axis=-3)
 
