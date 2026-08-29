@@ -15,11 +15,6 @@ Two options address stiff Hermite--Laguerre systems:
   physical preconditioners include diagonal damping and an FFT/Hermite-line
   inverse of the additive diagonal-plus-streaming symbol.  Linked chains
   retain the twist-and-shift layout.
-* ``method="implicit2"`` applies Crank--Nicolson to the same fully coupled
-  operator. It bounds the prepared solve at four Arnoldi vectors and eight
-  restart cycles and uses SOLVAX's fixed-work control flow so reverse mode can
-  traverse an outer time scan. It remains opt-in until representative
-  time-to-accuracy and memory gates beat the explicit owner.
 
 The same line inverse is available to shift-invert Arnoldi.  The default
 ``shift_preconditioner="auto"`` uses it for electrostatic models, selects the

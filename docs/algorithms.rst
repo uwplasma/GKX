@@ -50,10 +50,9 @@ Operator splitting summary
 Time integration is handled with explicit Runge-Kutta schemes or IMEX/implicit
 updates. The operator splitting used in ``imex`` mode treats
 ``\mathcal{D}_{\mathrm{coll}}`` implicitly while keeping the streaming and
-drift/drive terms explicit. ``implicit`` performs a backward-Euler solve over
-the fully coupled matrix-free operator. The opt-in ``implicit2`` candidate
-applies the Crank--Nicolson theta method to that same operator with bounded
-fixed-work GMRES; it does not split the field drive from streaming.
+drift/drive terms explicit. The fully implicit option performs a backward-Euler
+solve using GMRES with a diagonal preconditioner that includes damping and
+drift/mirror diagonals.
 
 Data layout and memory
 ----------------------

@@ -640,9 +640,8 @@ def integrate_linear(
     method = "imex" if method == "semi-implicit" else method
     parallel_strategy = _linear_parallel_strategy(parallel)
     force_electrostatic_fields = _is_electrostatic_field_terms(terms)
-    implicit_method = method in {"implicit", "implicit2"}
     if collision_operator is not None:
-        if implicit_method:
+        if method == "implicit":
             raise NotImplementedError(
                 "custom collision operators currently require an explicit or IMEX method"
             )
@@ -668,7 +667,7 @@ def integrate_linear(
             force_electrostatic_fields=force_electrostatic_fields,
             collision_operator=collision_operator,
         )
-    if implicit_method:
+    if method == "implicit":
         if parallel_strategy != "serial":
             raise NotImplementedError(
                 "parallel linear integration currently supports only explicit fixed-step methods"
@@ -681,23 +680,13 @@ def integrate_linear(
             steps=steps,
             terms=terms,
             implicit_tol=implicit_tol,
-            implicit_maxiter=(
-                min(implicit_maxiter, 8)
-                if method == "implicit2"
-                else implicit_maxiter
-            ),
+            implicit_maxiter=implicit_maxiter,
             implicit_iters=implicit_iters,
             implicit_relax=implicit_relax,
-            implicit_restart=(
-                min(implicit_restart, 4)
-                if method == "implicit2"
-                else implicit_restart
-            ),
+            implicit_restart=implicit_restart,
             implicit_preconditioner=implicit_preconditioner,
             checkpoint=checkpoint,
             sample_stride=sample_stride,
-            theta=0.5 if method == "implicit2" else 1.0,
-            fixed_work=method == "implicit2",
         )
     if parallel_strategy != "serial":
         return _dispatch_parallel_linear(

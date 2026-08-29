@@ -69,8 +69,6 @@ class _ImplicitSolveOptions:
     iters: int
     relax: float
     restart: int
-    explicit_weight: float = 0.0
-    fixed_work: bool = False
 
 
 _IMPLICIT_PRECONDITIONER_ALIASES = {
@@ -757,7 +755,7 @@ def _build_implicit_operator(
 
 
 def _implicit_fixed_point_guess(
-    rhs: jnp.ndarray,
+    G_in: jnp.ndarray,
     *,
     cache: LinearCache,
     params: LinearParams,
@@ -777,10 +775,10 @@ def _implicit_fixed_point_guess(
             use_jit=False,
             use_custom_vjp=False,
         )
-        g_next = rhs + dt_val * dG
+        g_next = G_in + dt_val * dG
         return (1.0 - implicit_relax) * g + implicit_relax * g_next
 
-    return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, rhs)
+    return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
 
 
 def _implicit_gmres_step(
@@ -799,26 +797,11 @@ def _implicit_gmres_step(
     implicit_iters: int,
     implicit_relax: float,
     implicit_restart: int,
-    explicit_weight: float,
-    fixed_work: bool,
 ) -> jnp.ndarray:
-    """Advance one theta-method step with a fixed-point warm start and GMRES."""
-
-    if explicit_weight == 0.0:
-        rhs = G_in
-    else:
-        dG_in, _phi = linear_rhs_cached(
-            G_in,
-            cache,
-            params,
-            terms=terms,
-            use_jit=False,
-            use_custom_vjp=False,
-        )
-        rhs = G_in + explicit_weight * dt_val * dG_in
+    """Advance one implicit step with a fixed-point warm start and GMRES."""
 
     G_guess = _implicit_fixed_point_guess(
-        rhs,
+        G_in,
         cache=cache,
         params=params,
         terms=terms,
@@ -828,14 +811,13 @@ def _implicit_gmres_step(
     )
     solution = gmres(
         matvec,
-        rhs.reshape(size),
+        G_in.reshape(size),
         x0=G_guess.reshape(size),
         precond=precond_op,
         restart=implicit_restart,
         rtol=implicit_tol,
         atol=0.0,
         max_restarts=implicit_maxiter,
-        fixed_work=fixed_work,
     )
     return solution.x.reshape(shape)
 
@@ -900,8 +882,6 @@ def _build_implicit_solve_step(
             implicit_iters=options.iters,
             implicit_relax=options.relax,
             implicit_restart=options.restart,
-            explicit_weight=options.explicit_weight,
-            fixed_work=options.fixed_work,
         )
 
     return solve_step
@@ -969,19 +949,13 @@ def _integrate_linear_implicit_cached(
     implicit_preconditioner: PreconditionerSpec = None,
     checkpoint: bool = False,
     sample_stride: int = 1,
-    theta: float = 1.0,
-    fixed_work: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Implicit theta-method integrator over the fully coupled linear operator."""
+    """Implicit linear integrator using GMRES with a diagonal preconditioner."""
     terms = LinearTerms() if terms is None else terms
     _validate_implicit_sample_policy(steps=steps, sample_stride=sample_stride)
-    if not 0.5 <= theta <= 1.0:
-        raise ValueError("theta must be in [0.5, 1.0]")
 
     G, shape, size, dt_val, precond_op, matvec, squeeze_species = (
-        _build_implicit_operator(
-            G0, cache, params, theta * dt, terms, implicit_preconditioner
-        )
+        _build_implicit_operator(G0, cache, params, dt, terms, implicit_preconditioner)
     )
     solve_step = _build_implicit_solve_step(
         cache=cache,
@@ -998,8 +972,6 @@ def _integrate_linear_implicit_cached(
             iters=implicit_iters,
             relax=implicit_relax,
             restart=implicit_restart,
-            explicit_weight=(1.0 - theta) / theta,
-            fixed_work=fixed_work,
         ),
     )
     G_out, phi_t = _scan_implicit_outputs(

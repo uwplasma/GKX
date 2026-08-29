@@ -3149,7 +3149,7 @@ Reducing Hermite-line GMRES restart from 20 to 4 preserved the result while
 cutting peak device allocation from 66,176,000 to 28,414,464 bytes; restart 2
 fell to 23,696,384 bytes but was slightly slower. The prepared 100-step kernel
 at `dt=0.004` remained 5.16 seconds warm, compared with 0.648 seconds and a
-17,511,680-byte peak for 500 native RK4 steps at `dt=0.0008`. SOLVAX 0.18
+17,511,680-byte peak for 500 native RK4 steps at `dt=0.0008`. SOLVAX 0.17
 fixed-work FGMRES with restart 4 and eight bounded cycles certified every
 stage and reduced the implicit warm time to 2.23 seconds, but still did not
 beat RK4 time-to-solution or memory.
@@ -3178,33 +3178,3 @@ the decision. Coupled Crank--Nicolson at `dt=0.004` took 3.59 seconds warm for
 bytes. Thus even an eightfold step-count reduction remains about 1.9 times
 slower and 2.6 times larger in device memory; higher velocity resolution alone
 is not an acceptable performance justification for the current preconditioner.
-
-## 2026-08-29 — Phase 2 fully coupled second-order implicit candidate
-
-Task: add one opt-in `implicit2` candidate that applies the Crank--Nicolson
-theta method to GKX's existing complete matrix-free linear operator. Reuse the
-same cache, field solve, Hermite-line preconditioner, standard/diagnostic scan
-owner, and SOLVAX GMRES adapter as backward Euler. Bound the candidate at a
-four-vector restart and eight restart cycles, and select SOLVAX 0.18's
-fixed-work masked control flow so an outer trajectory has static work and a
-reverse-mode path. Baseline: merged stiff-solver triage PR #154 at `340dd225`,
-with 199 installable Python files and 91,470 installable source lines.
-
-The design audit used GX's prepared explicit timestepper, stella's coupled
-kinetic/field response-matrix advance, GS2's implicit field ownership, and
-gyaradax's JAX-native explicit scan and CFL organization as local provenance
-and design references. No external source is copied and no external executable
-or raw comparator output enters the permanent tests. The rejected
-streaming-only ARS2 and line/field split routes remain deleted.
-
-Acceptance: scalar manufactured second-order convergence; finite reverse-mode
-trajectory gradient through the bounded solve; standard/diagnostic value
-identity; full kinetic-electron and TEM comparison against native RK4 and the
-temporary Diffrax oracle; synchronized CPU and office RTX A4000 cold/warm and
-device-memory measurements; finite and bounded transpose solves; no custom
-collision or parallel combination silently accepted; SOLVAX dependency and
-documentation versions agree; and installable source remains below the
-reviewed 91,570-line ceiling. Roll back the candidate if any stage fails its
-residual, if the method fails second order, if gradients replay dynamic Krylov
-control flow, or if no representative stiff case improves time-to-accuracy or
-memory over native explicit RK.

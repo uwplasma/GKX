@@ -299,7 +299,7 @@ def integrate_linear_diagnostics(
     G, real_dtype = _initial_state(G0)
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     squeeze_species = False
-    if method in {"implicit", "implicit2"}:
+    if method == "implicit":
         if collision_operator is not None:
             raise NotImplementedError(
                 "implicit integration does not support custom collision operators"
@@ -309,7 +309,7 @@ def integrate_linear_diagnostics(
                 G,
                 cache_use,
                 params,
-                (0.5 if method == "implicit2" else 1.0) * dt,
+                dt,
                 terms_use,
                 implicit_preconditioner,
             )
@@ -325,20 +325,10 @@ def integrate_linear_diagnostics(
             precond_op=precond,
             options=_ImplicitSolveOptions(
                 tol=implicit_tol,
-                maxiter=(
-                    min(implicit_maxiter, 8)
-                    if method == "implicit2"
-                    else implicit_maxiter
-                ),
+                maxiter=implicit_maxiter,
                 iters=implicit_iters,
                 relax=implicit_relax,
-                restart=(
-                    min(implicit_restart, 4)
-                    if method == "implicit2"
-                    else implicit_restart
-                ),
-                explicit_weight=1.0 if method == "implicit2" else 0.0,
-                fixed_work=method == "implicit2",
+                restart=implicit_restart,
             ),
         )
     else:

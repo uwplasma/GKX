@@ -94,10 +94,8 @@ These links are clickable in the HTML docs via the ``viewcode`` extension.
 Structured solver dependency contract
 -------------------------------------
 
-GKX requires ``solvax>=0.18.0``. Version 0.18.0 is the first release with the
-bounded fixed-work GMRES control flow used by the native second-order implicit
-candidate. It is the admitted release because its complex Krylov and
-structured-solve interfaces
+GKX requires ``solvax>=0.7.3,<0.8``. Version 0.7.3 is the current
+admitted release because its complex Krylov and structured-solve interfaces
 pass the downstream linear, IMEX, geometry-gradient, and implicit-objective
 suite on the current JAX stack. The release also retains current-JAX
 linear-transpose compatibility, complex CPU/GPU tridiagonal identity gates,
@@ -134,10 +132,6 @@ The linear solver supports:
   treated implicitly and the remaining terms explicitly.
 - **Backward Euler + GMRES** in ``method="implicit"`` for stiff scans, with a
   diagonal preconditioner that includes damping and drift/mirror diagonals.
-- **Crank--Nicolson + bounded fixed-work GMRES** in ``method="implicit2"``.
-  The candidate advances the complete streaming/field operator and caps its
-  Krylov workspace at restart four and eight cycles; promotion still depends
-  on matched time-to-accuracy, memory, and transpose-solve gates.
 - **IMEX (implicit linear operator + explicit nonlinear term)** in
   ``method="imex"`` for nonlinear runs, using the same GMRES-based linear
   solve and preconditioner. Reverse derivatives use the converged-system
