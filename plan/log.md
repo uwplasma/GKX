@@ -3149,7 +3149,7 @@ Reducing Hermite-line GMRES restart from 20 to 4 preserved the result while
 cutting peak device allocation from 66,176,000 to 28,414,464 bytes; restart 2
 fell to 23,696,384 bytes but was slightly slower. The prepared 100-step kernel
 at `dt=0.004` remained 5.16 seconds warm, compared with 0.648 seconds and a
-17,511,680-byte peak for 500 native RK4 steps at `dt=0.0008`. SOLVAX 0.17
+17,511,680-byte peak for 500 native RK4 steps at `dt=0.0008`. SOLVAX 0.18
 fixed-work FGMRES with restart 4 and eight bounded cycles certified every
 stage and reduced the implicit warm time to 2.23 seconds, but still did not
 beat RK4 time-to-solution or memory.
@@ -3178,6 +3178,24 @@ the decision. Coupled Crank--Nicolson at `dt=0.004` took 3.59 seconds warm for
 bytes. Thus even an eightfold step-count reduction remains about 1.9 times
 slower and 2.6 times larger in device memory; higher velocity resolution alone
 is not an acceptable performance justification for the current preconditioner.
+
+The source-level Crank--Nicolson candidate was then exercised through the
+actual standard and diagnostics owners with SOLVAX 0.18 fixed-work GMRES. The
+manufactured scalar gate showed second-order convergence, the bounded outer
+scan had a finite reverse-mode gradient, and standard/diagnostic values were
+identical. The full `(Nl,Nm,Nz)=(12,32,96)` linked kinetic-electron A4000 gate
+nevertheless rejected it decisively. At `dt=0.004`, 100 steps, restart 4, and
+eight fixed cycles, warm time was 9.53 seconds and peak device allocation was
+34,188,800 bytes, versus 0.249 seconds for 500 RK4 steps at `dt=0.0008`; the
+final norms were `0.01586415` and `0.01586172`. Reducing the bounded budget did
+not provide a usable compromise: `(restart,cycles)=(2,1)` and `(2,2)` became
+non-finite, `(4,1)` grew by roughly `6e19` relative to RK4, `(4,2)` had relative
+state error `9.62`, and `(4,4)` still took 4.80 seconds with relative error
+`0.0466`. All candidate source, tests, dependency changes, and public method
+names were reverted. The design audit of GX, GS2, stella, and gyaradax supports
+retaining a fully coupled kinetic/field owner, but the next attempt must reduce
+the coupled preconditioned iteration count rather than merely replace dynamic
+Krylov loops with a statically bounded replay.
 
 ## 2026-08-29 — Phase 2 canonical VMEX flux-tube adapter scope
 
