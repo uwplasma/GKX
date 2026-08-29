@@ -323,7 +323,7 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
     run_runtime.set_defaults(func=_cmd_run_runtime_linear)
 
     scan_runtime = sub.add_parser(
-        "scan-runtime-linear",
+        "scan", aliases=("scan-runtime-linear",),
         help="Run a ky scan from unified runtime TOML config",
     )
     _add_config_flag(scan_runtime)
@@ -377,7 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Run a VMEC/VMEX equilibrium with: %(prog)s wout_XXX.nc [deck.toml] "
             "[--linear] (aliases: --vmec/--vmex FILE); add --estimate to print "
             "the minimum-grid estimate and exit without running. "
-            "Plot a saved result with: %(prog)s --plot OUTPUT_FILE [--out FIGURE.png]"
+            "Plot a saved result with: %(prog)s plot OUTPUT_FILE [--out FIGURE.png] (legacy: %(prog)s --plot OUTPUT_FILE)."
         ),
     )
     parser.add_argument(
@@ -402,7 +402,7 @@ def main() -> int:
     enable_persistent_compilation_cache()
     if not argv:
         return _cmd_default_demo()
-    if argv[0] == "--plot":
+    if argv[0] in {"plot", "--plot"}:
         return plot_saved_output_command(argv, plot_saved_output=plot_saved_output)
 
     shorthand_args = _direct_config_shorthand_args(argv)

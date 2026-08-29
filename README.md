@@ -135,7 +135,7 @@ saturation: not saturated by the time horizon window=[3.06144,6] heat_flux=3.158
 Replot any saved bundle without rerunning the physics:
 
 ```bash
-gkx --plot wout_circular_tokamak/gkx.out.nc
+gkx plot wout_circular_tokamak/gkx.out.nc
 ```
 
 **What it costs.** Measured on an Apple M3 Max (10 performance + 4 efficiency
@@ -184,7 +184,7 @@ gkx examples/linear/axisymmetric/cyclone.toml
 gkx run-runtime-nonlinear \
   --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
   --steps 200 --out cyclone.out.nc
-gkx --plot cyclone.out.nc
+gkx plot cyclone.out.nc
 ```
 
 The first command runs the Cyclone linear point through the certified Krylov
@@ -198,7 +198,7 @@ ky=0.3000 gamma=0.093089 omega=0.282015
 A deck without an `[output] path` and without `--out` writes no files; add
 either to keep artifacts. `gkx run` auto-detects linear versus nonlinear from
 `[physics]`; `gkx --help` lists the explicit `run-runtime-linear`,
-`scan-runtime-linear`, `run-runtime-nonlinear`, and `geometry` subcommands.
+`scan` (legacy: `scan-runtime-linear`), `run-runtime-nonlinear`, and `geometry` subcommands.
 
 Examples live under [`examples/linear`](examples/linear) (axisymmetric and
 stellarator linear runs), [`examples/nonlinear`](examples/nonlinear)

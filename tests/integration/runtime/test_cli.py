@@ -118,18 +118,21 @@ def test_cli_help_advertises_default_demo_and_plot_route() -> None:
     help_text = cli.build_parser().format_help()
 
     assert "without arguments for the self-contained linear demo" in help_text
+    assert "plot OUTPUT_FILE" in help_text
     assert "--plot OUTPUT_FILE" in help_text
+    assert "scan-runtime-linear" in help_text
 
 
+@pytest.mark.parametrize("plot_command", ["plot", "--plot"])
 def test_cli_global_plot_uses_saved_output_renderer(
-    capsys, monkeypatch, tmp_path: Path
+    capsys, monkeypatch, tmp_path: Path, plot_command: str
 ) -> None:
     rendered = tmp_path / "rendered.png"
     monkeypatch.setattr(
         "gkx.cli.plot_saved_output", lambda path, out=None: rendered
     )
     monkeypatch.setattr(
-        sys, "argv", ["gkx", "--plot", "tools_out/linear_case.summary.json"]
+        sys, "argv", ["gkx", plot_command, "tools_out/linear_case.summary.json"]
     )
     code = main()
     out = capsys.readouterr().out
@@ -187,13 +190,13 @@ def test_cli_global_plot_renders_linear_scan_bundle(
 
 
 def test_cli_plot_usage_errors(capsys, monkeypatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["gkx", "--plot"])
+    monkeypatch.setattr(sys, "argv", ["gkx", "plot"])
     assert main() == 1
-    assert "usage: gkx --plot" in capsys.readouterr().out
+    assert "usage: gkx plot" in capsys.readouterr().out
 
     monkeypatch.setattr(sys, "argv", ["gkx", "--plot", "a", "--bad"])
     assert main() == 1
-    assert "usage: gkx --plot" in capsys.readouterr().out
+    assert "usage: gkx plot" in capsys.readouterr().out
 
 
 def test_runtime_command_deps_are_built_from_patchable_cli_scope(
@@ -217,6 +220,11 @@ def test_cli_runtime_toml_dispatch_is_uniform() -> None:
     assert _is_runtime_toml({}) is True
     assert _toml_shorthand_command({"physics": {}}) == "run"
     assert _toml_shorthand_command({"case": "cyclone"}) == "run"
+
+    parser = cli.build_parser()
+    promoted = parser.parse_args(["scan", "--config", "case.toml"])
+    legacy = parser.parse_args(["scan-runtime-linear", "--config", "case.toml"])
+    assert promoted.func is legacy.func is cli._cmd_scan_runtime_linear
 
 
 def test_cli_geometry_routes_vmec_and_miller_backends(

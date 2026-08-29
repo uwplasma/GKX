@@ -2568,3 +2568,22 @@ release gates, typing, warning-as-error docs, and diff checks. Roll back if the
 facade duplicates numerical logic, copies arrays, changes owner defaults,
 eager-imports NumPy/JAX before a promoted name is accessed, weakens invalid-case
 errors, or regresses any architecture budget.
+
+## 2026-08-29 — Phase 1 scan/plot CLI alias scope
+
+Task: promote `gkx scan` and `gkx plot` as the obvious CLI spellings while
+retaining `scan-runtime-linear` and `--plot` as compatibility aliases. Record
+the workflow-contract merge from PR #140 as
+`05e9c009ebc1a3673dc7e0fd80866f4213b01e04`. Non-goals: no Rich/tqdm or other
+dependency change; no progress rendering, parser framework, runtime workflow,
+schema, output, kernel, equation, normalization, dtype, tolerance, or numerical
+behavior change. Baseline: GKX main at the PR #140 merge, whose complete
+required CI passed. Affected behavior: help promotes `scan` and `plot`; both
+legacy spellings execute the exact same callbacks. Scientific claims: none.
+Expected files: this append-only entry, the existing CLI parser/dispatcher,
+existing CLI tests, and user documentation. Acceptance requires parser callback
+identity for both scan spellings; renderer argument identity for both plot
+spellings; updated help/usage; direct TOML shorthand preservation; full CLI and
+release gates; typing; source/file budgets; warning-as-error docs; and diff
+checks. Roll back if an alias changes defaults, artifacts, plotting behavior,
+callback selection, exit status, eager imports, or any architecture budget.
