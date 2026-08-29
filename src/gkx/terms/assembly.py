@@ -9,9 +9,7 @@ from typing import Any, Callable, Tuple
 import jax
 import jax.numpy as jnp
 
-from gkx.core.grid import SpectralGrid
-from gkx.geometry import FluxTubeGeometryLike
-from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.collision import CollisionOperator
 from gkx.operators.linear.cache_model import HermiteWindow, LinearCache
 from gkx.operators.linear.moments import build_H
 from gkx.operators.linear.params import LinearParams, _as_species_array
@@ -20,9 +18,11 @@ from gkx.terms.fields import _solve_fields_impl, solve_fields
 from gkx.operators.linear.dissipation import (
     _is_static_zero,
     collisions_contribution,
+    custom_collision_contribution,
     end_damping_contribution,
     hypercollisions_contribution,
     hyperdiffusion_contribution,
+    terms_without_builtin_collisions,
 )
 from gkx.terms.linear_terms import (
     curvature_gradb_contribution,
@@ -30,6 +30,8 @@ from gkx.terms.linear_terms import (
     linked_streaming_contribution,
     mirror_contribution,
 )
+
+RhsCallable = Callable[..., tuple[jnp.ndarray, FieldState]]
 
 
 @dataclass(frozen=True)
@@ -584,7 +586,13 @@ def _rhs_term_contributions(
         "curvature": curvature,
         "gradb": gradb,
         "diamagnetic": _diamagnetic_contribution(
-            state.G, cache, species, scalars, weights, rhs_fields, state.imag,
+            state.G,
+            cache,
+            species,
+            scalars,
+            weights,
+            rhs_fields,
+            state.imag,
             hermite_window,
         ),
         "collisions": collisions,
@@ -776,6 +784,88 @@ def assemble_rhs_cached_electrostatic_jit(
     )
 
 
+def linear_rhs_jit_for_terms(
+    term_cfg: TermConfig,
+    *,
+    electrostatic_rhs_fn: RhsCallable = assemble_rhs_cached_electrostatic_jit,
+    full_rhs_fn: RhsCallable = assemble_rhs_cached_jit,
+    is_static_zero_fn: Callable[[object], bool] = _is_static_zero,
+) -> RhsCallable:
+    """Return the narrowest compiled linear RHS route for ``term_cfg``."""
+
+    return (
+        electrostatic_rhs_fn
+        if is_static_zero_fn(term_cfg.apar) and is_static_zero_fn(term_cfg.bpar)
+        else full_rhs_fn
+    )
+
+
+def assemble_linear_rhs_cached(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    terms: TermConfig | None = None,
+    use_jit: bool = True,
+    use_custom_vjp: bool = True,
+    dt: jnp.ndarray | float | None = None,
+    external_phi: jnp.ndarray | float | None = None,
+    electrostatic_fields: bool | None = None,
+    collision_operator: CollisionOperator | None = None,
+    electrostatic_rhs_fn: RhsCallable | None = None,
+    full_rhs_fn: RhsCallable | None = None,
+    eager_rhs_fn: RhsCallable | None = None,
+    is_static_zero_fn: Callable[[object], bool] = _is_static_zero,
+) -> tuple[jnp.ndarray, FieldState]:
+    """Assemble cached linear terms and any replacing custom collision."""
+
+    electrostatic_rhs_fn = electrostatic_rhs_fn or assemble_rhs_cached_electrostatic_jit
+    full_rhs_fn = full_rhs_fn or assemble_rhs_cached_jit
+    eager_rhs_fn = eager_rhs_fn or assemble_rhs_cached
+    term_cfg = terms or TermConfig()
+    assembled_terms = terms_without_builtin_collisions(term_cfg, collision_operator)
+    electrostatic = (
+        is_static_zero_fn(assembled_terms.apar)
+        and is_static_zero_fn(assembled_terms.bpar)
+        if electrostatic_fields is None
+        else electrostatic_fields
+    )
+
+    if use_jit:
+        rhs_fn = electrostatic_rhs_fn if electrostatic else full_rhs_fn
+        dG, fields = rhs_fn(
+            G,
+            cache,
+            params,
+            assembled_terms,
+            dt=dt,
+            external_phi=external_phi,
+        )
+    else:
+        dG, fields = eager_rhs_fn(
+            G,
+            cache,
+            params,
+            terms=assembled_terms,
+            use_custom_vjp=use_custom_vjp,
+            dt=dt,
+            external_phi=external_phi,
+            force_electrostatic_fields=electrostatic,
+        )
+    collision_rhs = custom_collision_contribution(
+        G,
+        fields,
+        cache,
+        params,
+        term_cfg,
+        collision_operator,
+        force_electrostatic_fields=electrostatic,
+    )
+    if collision_rhs is not None:
+        dG = dG + collision_rhs
+    return dG, fields
+
+
 def compute_fields_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -847,27 +937,6 @@ def assemble_rhs_terms_cached(
     return total.astype(state.out_dtype), rhs_fields.fields, contrib
 
 
-def assemble_rhs(
-    G: jnp.ndarray,
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    *,
-    Nl: int,
-    Nm: int,
-    terms: TermConfig | None = None,
-    cache: LinearCache | None = None,
-    dt: jnp.ndarray | float | None = None,
-    external_phi: jnp.ndarray | float | None = None,
-) -> Tuple[jnp.ndarray, FieldState]:
-    """Assemble the RHS from term-wise modules."""
-
-    cache = cache or build_linear_cache(grid, geom, params, Nl, Nm)
-    return assemble_rhs_cached(
-        G, cache, params, terms=terms, dt=dt, external_phi=external_phi
-    )
-
-
 __all__ = [
     "_RHSFields",
     "_RHSState",
@@ -890,10 +959,11 @@ __all__ = [
     "_streaming_contribution",
     "_sum_rhs_terms",
     "_term_weights",
-    "assemble_rhs",
+    "assemble_linear_rhs_cached",
     "assemble_rhs_cached",
     "assemble_rhs_cached_electrostatic_jit",
     "assemble_rhs_cached_jit",
     "assemble_rhs_terms_cached",
     "compute_fields_cached",
+    "linear_rhs_jit_for_terms",
 ]

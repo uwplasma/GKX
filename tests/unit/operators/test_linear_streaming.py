@@ -413,7 +413,6 @@ def test_streaming_positive_validation_is_the_shared_guard() -> None:
 
 
 def test_terms_package_lazy_exports() -> None:
-    assert callable(term_pkg.assemble_rhs)
     assert callable(term_pkg.assemble_rhs_cached)
     assert callable(term_pkg.assemble_rhs_cached_jit)
     with pytest.raises(AttributeError):

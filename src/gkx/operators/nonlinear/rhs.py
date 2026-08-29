@@ -18,37 +18,19 @@ from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.assembly import (
     _is_static_zero,
+    assemble_linear_rhs_cached,
     assemble_rhs_cached,
     assemble_rhs_cached_electrostatic_jit,
     assemble_rhs_cached_jit,
+    linear_rhs_jit_for_terms as linear_rhs_jit_for_terms_impl,
 )
 from gkx.terms.config import FieldState, TermConfig
-from gkx.operators.linear.dissipation import (
-    custom_collision_contribution,
-    terms_without_builtin_collisions,
-)
 from gkx.terms.nonlinear import nonlinear_em_contribution
 
 RhsCallable = Callable[..., tuple[jnp.ndarray, FieldState]]
 StaticZeroCallable = Callable[[object], bool]
 NonlinearContributionCallable = Callable[..., jnp.ndarray]
 FieldSolveCallable = Callable[..., FieldState]
-
-
-def linear_rhs_jit_for_terms_impl(
-    term_cfg: TermConfig,
-    *,
-    electrostatic_rhs_fn: RhsCallable = assemble_rhs_cached_electrostatic_jit,
-    full_rhs_fn: RhsCallable = assemble_rhs_cached_jit,
-    is_static_zero_fn: StaticZeroCallable = _is_static_zero,
-) -> RhsCallable:
-    """Return the narrowest compiled linear RHS path compatible with ``term_cfg``."""
-
-    return (
-        electrostatic_rhs_fn
-        if is_static_zero_fn(term_cfg.apar) and is_static_zero_fn(term_cfg.bpar)
-        else full_rhs_fn
-    )
 
 
 def nonlinear_rhs_cached_impl(
@@ -72,35 +54,21 @@ def nonlinear_rhs_cached_impl(
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
     term_cfg = terms or TermConfig()
-    linear_terms = terms_without_builtin_collisions(term_cfg, collision_operator)
-    electrostatic = is_static_zero_fn(linear_terms.apar) and is_static_zero_fn(
-        linear_terms.bpar
+    dG, fields = assemble_linear_rhs_cached(
+        G,
+        cache,
+        params,
+        terms=term_cfg,
+        use_jit=not differentiable,
+        use_custom_vjp=not differentiable,
+        external_phi=external_phi,
+        electrostatic_fields=None,
+        collision_operator=collision_operator,
+        electrostatic_rhs_fn=electrostatic_rhs_fn,
+        full_rhs_fn=full_rhs_fn,
+        eager_rhs_fn=differentiable_rhs_fn,
+        is_static_zero_fn=is_static_zero_fn,
     )
-    if differentiable:
-        dG, fields = differentiable_rhs_fn(
-            G,
-            cache,
-            params,
-            terms=linear_terms,
-            use_custom_vjp=False,
-            external_phi=external_phi,
-            force_electrostatic_fields=electrostatic,
-        )
-    else:
-        linear_rhs_fn = linear_rhs_jit_for_terms_impl(
-            linear_terms,
-            electrostatic_rhs_fn=electrostatic_rhs_fn,
-            full_rhs_fn=full_rhs_fn,
-            is_static_zero_fn=is_static_zero_fn,
-        )
-        dG, fields = linear_rhs_fn(
-            G, cache, params, linear_terms, external_phi=external_phi
-        )
-    collision_rhs = custom_collision_contribution(
-        G, fields, cache, params, term_cfg, collision_operator
-    )
-    if collision_rhs is not None:
-        dG = dG + collision_rhs
     if term_cfg.nonlinear != 0.0:
         real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
         weight = jnp.asarray(term_cfg.nonlinear, dtype=real_dtype)

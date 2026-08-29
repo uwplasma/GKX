@@ -9,6 +9,7 @@ import gkx.solvers.nonlinear as nonlinear_solvers
 import gkx.solvers.nonlinear.diagnostics as solver_diagnostics
 import gkx.solvers.nonlinear.explicit as solver_explicit
 import gkx.solvers.nonlinear.imex as solver_imex
+from gkx.terms.assembly import linear_rhs_jit_for_terms
 
 
 def test_operator_package_preserves_public_linear_export_identity() -> None:
@@ -20,6 +21,7 @@ def test_nonlinear_operator_package_reexports_rhs_implementation() -> None:
     assert (
         nonlinear_operators.linear_rhs_jit_for_terms_impl
         is operator_rhs.linear_rhs_jit_for_terms_impl
+        is linear_rhs_jit_for_terms
     )
     assert (
         nonlinear_operators.nonlinear_rhs_cached_impl
