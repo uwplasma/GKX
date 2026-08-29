@@ -2813,3 +2813,51 @@ the 31 warm calls added 658/2,086 peak bytes and retained no incremental
 growth. Thus the consolidation preserves the GPU result and device-memory
 footprint, improves the measured cold sample, and changes warm execution by
 about two percent in this bounded smoke.
+
+## 2026-08-29 — Phase 2 Hermitian nonlinear-projection consolidation scope
+
+Task: make `gkx.operators.nonlinear.brackets._complete_hermitian_ky` the single
+owner of full-`ky` Hermitian reconstruction for both compressed real-FFT
+brackets and nonlinear state projection. The cached projector currently repeats
+the same positive-row slice, conjugation, `ky` reversal, `kx` conjugate-index
+mapping, and concatenation. Baseline: the cached-linear-assembly branch at
+`73a0b32f822a8db2da80f701fed5d0a6376aec12`, with 199 installable Python files
+and 91,499 installable source lines. Preserve the cached host `kx` index array
+so a projector reused across traces never retains a device constant from the
+trace that created it. Non-goals: no packed derivative FFT, bracket equation,
+FFT normalization, dealiasing, shearing-coordinate remap, projection cadence,
+state layout, parallel topology, public API, numerical default, or off-manifold
+complex-VJP contract change. In particular, the prior packed-bracket prototype
+is excluded because its unconstrained complex-state VJP differed materially;
+this tranche only removes duplicate reconstruction algebra. Acceptance:
+byte-identical compressed-bracket and projector values for odd/even and
+one/two-sided `ky`, `nx=1` and `nx>1`; exact compatibility-object and projector
+cache identity; unchanged JIT, JVP, reverse-mode, remap, fixed-mode, nonlinear
+step, logical multi-device, and projected-gradient gates; Ruff, typing,
+architecture/size, documentation, packaging, and diff gates; a net source-line
+reduction; and synchronized CPU/GPU cold, warm, and memory measurements with no
+material regression. Roll back if Hermitian symmetry, a frozen trajectory or
+derivative changes, a cached projector captures a trace-owned device constant,
+or the shared helper adds work to the compressed bracket.
+
+Evidence: the shared owner reduces installable source from 91,499 to 91,495
+lines with 199 files unchanged. Deterministic x64 comparisons produced
+byte-identical SHA-256 fingerprints before and after consolidation for odd and
+even full-`ky` completion, cached projection, `nx=1`, `nx>1`, the compressed
+nonlinear bracket, and a reverse-mode projector derivative (ten outputs total).
+The projector JAXPR remained at nine primitives. A synchronized float32 CPU
+smoke on a `(2, 4, 6, 32, 32, 8)` state reported baseline/consolidated cold
+execution of 42.873/43.342 ms, warm medians of 92.375/91.875 microseconds,
+identical one-primitive outer JAXPRs and norm 887.384399414. Traced cold Python
+peaks were 125,508/126,257 bytes; 51 warm calls added 2,000 peak bytes and
+retained 1,352 bytes in both routes. The shared reconstruction therefore has
+no material CPU compile, warm-runtime, or repeated-memory regression.
+
+The matched office RTX A4000 smoke on CUDA device 0 with JAX 0.6.2 reported
+baseline/consolidated cold execution of 95.923/86.313 ms, warm medians of
+147.591/152.598 microseconds, identical norm 887.384338379, and identical
+9,437,184-byte peak device allocation. Traced cold Python peaks were
+316,454/317,880 bytes; 51 warm calls added 2,280/1,176 peak bytes and retained
+1,504/376 bytes. The shared owner therefore preserves the GPU result and device
+footprint, improves the measured cold sample, and changes the tiny warm kernel
+by about five microseconds without repeated-memory growth.
