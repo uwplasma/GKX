@@ -2670,3 +2670,29 @@ tolerance, the consolidation adds a collective to a serial path, causes an
 import cycle/eager JAX import, regresses cold/warm execution or memory beyond
 measurement noise, changes a sharding contract, or fails to delete duplicate
 algebra.
+
+## 2026-08-29 — Phase 1 in-memory Python plot contract scope
+
+Task: close the remaining `gkx.plot(result)` product-surface gap with one thin
+dispatcher over the existing runtime result containers and plotting owners.
+Baseline: `main` after PR #144 at
+`f0c7ce7cf59898a4b26f7fd9fd60a63906f01a16`. The advertised root surface
+grows from 13 to 14 names and `gkx.api` from 12 to 13; the existing 353-target
+legacy registry gains only the new promoted target. Non-goals: no result
+schema or field change, saved-bundle/CLI plotting change, plotting style
+rewrite, new plotting dependency, implicit file write or display, solver,
+physics, numerical, JIT, memory, or performance claim change. The Python
+contract returns the same `(Figure, axes)` shape as the existing figure
+builders and leaves save/show policy to the caller. Expected files: this
+append-only entry, the existing plotting owner and API registry, the focused
+plot/API tests, and the single API documentation page. Acceptance: linear
+time-history and eigen-only results, ky scans, and nonlinear diagnostic histories
+produce finite labelled figures; summary-only nonlinear results and other
+incomplete or unsupported results fail with actionable messages; `import gkx` remains
+free of matplotlib/NumPy/JAX imports; resolving `gkx.plot` is lazy and object
+identical to its owner; wheel smoke, plotting/API/release tests, Ruff, typing,
+frozen architecture/size ceilings, warning-as-error docs, and diff checks pass.
+Roll back if plotting fabricates a physical history, mutates a result, writes
+or shows implicitly, changes a saved-output/CLI path, makes root import eager,
+or adds a second plotting implementation instead of dispatching to the
+existing owners.

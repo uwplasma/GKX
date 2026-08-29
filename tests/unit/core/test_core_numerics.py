@@ -339,7 +339,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     from support.paths import REPO_ROOT
 
     promoted = [
-        "load", "solve", "scan", "Case", "LinearResult", "NonlinearResult",
+        "load", "solve", "scan", "plot", "Case", "LinearResult", "NonlinearResult",
         "ScanResult", "flux_tube_geometry_from_mapping",
         "solver_objective_vector_from_geometry",
         "solver_linear_operator_matrix_from_geometry",
@@ -347,13 +347,15 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     ]
     assert public_api.__all__ == promoted
     assert gkx.__all__ == ["__version__", *promoted]
-    assert len(public_api._EXPORT_TARGETS) == 353
+    assert len(public_api._EXPORT_TARGETS) == 354
     assert len(public_api.__all__) == len(set(public_api.__all__))
     assert set(gkx.__all__) <= set(dir(gkx))
     assert "LinearParams" not in dir(gkx)
     wildcard: dict[str, object] = {}
     exec("from gkx import *", wildcard)
     assert set(wildcard) - {"__builtins__"} == set(gkx.__all__)
+    from gkx.artifacts.plotting import plot as plot_owner
+    assert gkx.plot is public_api.plot is plot_owner
     assert gkx.ExplicitTimeConfig.__name__ == "ExplicitTimeConfig"
     assert callable(gkx.integrate_nonlinear_explicit_diagnostics)
     assert callable(gkx.branch_continuity_metrics)
@@ -370,8 +372,8 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
 import sys
 sys.path.insert(0, {str(REPO_ROOT / "src")!r})
 import gkx
-assert len(gkx.__all__) == 13
-assert set(gkx.__all__) == {{'__version__', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig'}}
+assert len(gkx.__all__) == 14
+assert set(gkx.__all__) == {{'__version__', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan', 'plot', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig'}}
 assert "numpy" not in sys.modules
 assert "jax" not in sys.modules
 from gkx.parallel.decomposition import build_independent_portfolio_decomposition
