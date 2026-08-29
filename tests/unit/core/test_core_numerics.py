@@ -350,7 +350,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
 import sys
 sys.path.insert(0, {str(REPO_ROOT / "src")!r})
 import gkx
-assert {{'Case', 'LinearResult', 'NonlinearResult', 'ScanResult'}} <= set(gkx.__all__)
+assert {{'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan'}} <= set(gkx.__all__)
 assert "numpy" not in sys.modules
 assert "jax" not in sys.modules
 from gkx.parallel.decomposition import build_independent_portfolio_decomposition
@@ -422,6 +422,46 @@ def test_gkx3_product_contracts_preserve_identity_immutability_and_arrays() -> N
     assert scan.omega is state
     with pytest.raises(FrozenInstanceError):
         linear.state = state  # type: ignore[misc]
+
+
+def test_gkx3_workflow_contracts_delegate_to_existing_owners(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+
+    import gkx
+    import gkx.runtime as runtime
+    from gkx.workflows.runtime.config import Case, RuntimeConfig
+
+    path = tmp_path / "case.toml"
+    path.write_text('[geometry]\ngeometry_file = "relative.eik"\n', encoding="utf-8")
+    case = gkx.load(path)
+    assert isinstance(case, Case)
+    assert case.geometry.geometry_file == str(tmp_path / "relative.eik")
+    assert gkx.scan is runtime.run_runtime_scan
+
+    calls: list[tuple[str, RuntimeConfig, dict[str, object]]] = []
+
+    def fake_linear(cfg, **options):
+        calls.append(("linear", cfg, options))
+        return "linear-result"
+
+    def fake_nonlinear(cfg, **options):
+        calls.append(("nonlinear", cfg, options))
+        return "nonlinear-result"
+
+    monkeypatch.setattr(runtime, "run_runtime_linear", fake_linear)
+    monkeypatch.setattr(runtime, "run_runtime_nonlinear", fake_nonlinear)
+    assert gkx.solve(case, ky_target=0.2) == "linear-result"
+    nonlinear = replace(case, physics=replace(case.physics, nonlinear=True))
+    assert gkx.solve(nonlinear, steps=2) == "nonlinear-result"
+    disabled = replace(case, physics=replace(case.physics, linear=False))
+    with pytest.raises(ValueError, match="enable linear or nonlinear"):
+        gkx.solve(disabled)
+    assert calls == [
+        ("linear", case, {"ky_target": 0.2}),
+        ("nonlinear", nonlinear, {"steps": 2}),
+    ]
 
 
 # Progress callback contracts.

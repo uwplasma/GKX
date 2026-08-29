@@ -28,8 +28,20 @@ established runtime contracts:
 The identity relationship is intentional during migration: existing workflows
 already return the new contract types, result arrays are never wrapped or
 copied, and historical ``Runtime*`` imports remain valid. Later Phase 1 changes
-will add the high-level loading and solving functions without moving numerical
-kernels into this public facade.
+can therefore add high-level workflows without moving numerical kernels into
+this public facade.
+
+The first high-level workflow is deliberately small::
+
+   case = gkx.load("cyclone.toml")
+   result = gkx.solve(case)
+   spectrum = gkx.scan(case, [0.1, 0.2, 0.3])
+
+``load`` resolves case-relative paths through the established TOML owner.
+``solve`` dispatches to the established nonlinear runner when nonlinear physics
+is enabled and otherwise to the linear runner. ``scan`` is the established
+runtime scan function itself, so these names add no numerical implementation or
+result conversion.
 
 .. automodule:: gkx.api
    :members:

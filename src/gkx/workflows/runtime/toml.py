@@ -9,7 +9,7 @@ from pathlib import Path
 
 from gkx.utils import tomlcompat as tomllib
 from gkx.workflows.runtime.config import (
-    RuntimeCollisionConfig,
+    Case, RuntimeCollisionConfig,
     RuntimeConfig,
     RuntimeExpertConfig,
     RuntimeNormalizationConfig,
@@ -332,3 +332,8 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     if species is not None:
         cfg = replace(cfg, species=species)
     return _resolve_runtime_config_paths(cfg, base_dir=base_dir), data
+
+
+def load(path: str | Path) -> Case:
+    """Load a resolved immutable GKX case from TOML."""
+    return load_runtime_from_toml(path)[0]
