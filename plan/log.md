@@ -3077,3 +3077,104 @@ kinetic-electron executable now completes its native implicit density path
 instead of raising the explicit-method error. Focused implicit, diagnostic,
 and runtime-option tests pass; Ruff and mypy pass; installable source remains
 at 199 files and rises to 91,470 lines, below the reviewed 91,507-line ceiling.
+
+## 2026-08-29 — Phase 2 native stiff-IMEX prototype scope
+
+Task: add a mathematically second-order native IMEX candidate for the stiff
+field-free Hermite streaming ladder while keeping diagonal collision and
+hypercollision sinks bounded by exact Strang half steps. Use the
+ARS(2,2,2) additive tableau and solve each implicit stage directly in
+FFT/Hermite space. A similarity transform, `G_m = i**m Y_m`, makes the
+streaming tridiagonal bands real so SOLVAX can select its fused accelerator
+path and solve complex states as two real right-hand sides. Support both
+periodic and twist-linked FFT chains. Baseline: the native-step consolidation
+at `0a36b1b4`, with 199 installable Python files and 91,424 installable source
+lines.
+
+This is a candidate, not yet the promoted stiff owner. The electromagnetic
+field-drive part of parallel streaming remains explicit, as do custom
+non-diagonal collision operators; custom collisions and state-parallel ARS2
+runs fail before compilation. The existing full-operator backward-Euler/GMRES
+route is not renamed or presented as second order. Non-goals for this tranche:
+no nonlinear IMEX replacement, field-Schur solve, collision-model expansion,
+Diffrax removal, default-method change, example retuning, public API promise,
+or new physics-validation claim.
+
+Initial deterministic x64 evidence gives the expected fourfold error reduction
+under timestep halving for the scalar ARS tableau and for a periodic
+gyrokinetic streaming case against a fine RK4 reference. Periodic and
+twist-linked structured solves satisfy `(I - a L_stream) y = rhs` to their
+working-precision residual on the runtime spectral subspace; the periodic
+solve also has a finite reverse-mode gradient. Standard and diagnostics-rich
+integrators return exactly identical state and field histories. The tableau
+caches its first explicit stage, so each completed step uses two full RHS
+evaluations and two structured line solves. Until field-drive assembly is
+separated from the streaming ladder, forming the explicit remainder also
+reapplies the ladder at both stages; this is a visible optimization target, not
+a hidden promotion claim. A reduced
+two-species linked kinetic-electron runtime smoke with `(Nl, Nm, Nz)=(4,8,24)`,
+`dt=0.001`, and `t_max=0.02` completed cold on the Apple M4 in 3.68 seconds
+with finite fitted outputs. A second smoke at `dt=0.005`, `t_max=0.05`
+completed in 3.78 seconds with finite outputs. These short fits are only
+operability checks and are deliberately not physical growth-rate evidence.
+
+Acceptance before promotion: manufactured value/order and reverse-gradient
+gates; periodic/linked inverse residuals; standard/diagnostic identity; full
+kinetic-electron and TEM accuracy against native RK4 and the temporary Diffrax
+oracle; synchronized CPU and RTX A4000 cold/warm/device-memory profiles; an
+explicit CFL bound that retains the still-explicit electromagnetic guard; and
+early validation for unsupported custom-collision or parallel combinations.
+Roll back if the line solve materializes dense velocity matrices, loses linked
+Hermitian coverage, changes the unsplit RHS, fails second order, or does not
+improve time-to-accuracy or memory on a representative stiff case.
+
+The representative full-resolution kinetic-electron gate rejected this
+candidate. On one office RTX A4000, the field-free split overflowed at
+`dt=0.004` because the still-explicit electromagnetic field drive retained an
+estimated `0.0004454` stability bound. Adding a matrix-free field correction
+with the exact Hermite solve as a GMRES preconditioner did not rescue the
+route: `dt=0.004`, 500 steps overflowed after 111.41 seconds; `dt=0.001`, 500
+steps was finite but took 178.84 seconds cold and 171.13 seconds warm, reached
+a 35,477,248-byte device peak, and covered too little physical time for a
+settled fit. This is orders of magnitude slower than the maintained explicit
+stress lane and also raises installable source from 91,424 to 91,825 lines.
+Per the prospective rollback gate, the prototype source and tests were
+removed. The next stiff-owner attempt must consolidate GKX's existing
+Hermite/field-corrected implicit machinery rather than add a second line solve
+or run a general GMRES inside every IMEX stage.
+
+Follow-up A4000 triage used the existing backward-Euler implicit owner on the
+same full-resolution kinetic-electron state for a matched `t=0.4` horizon.
+Reducing Hermite-line GMRES restart from 20 to 4 preserved the result while
+cutting peak device allocation from 66,176,000 to 28,414,464 bytes; restart 2
+fell to 23,696,384 bytes but was slightly slower. The prepared 100-step kernel
+at `dt=0.004` remained 5.16 seconds warm, compared with 0.648 seconds and a
+17,511,680-byte peak for 500 native RK4 steps at `dt=0.0008`. SOLVAX 0.17
+fixed-work FGMRES with restart 4 and eight bounded cycles certified every
+stage and reduced the implicit warm time to 2.23 seconds, but still did not
+beat RK4 time-to-solution or memory.
+
+A matrix-free Crank--Nicolson probe established second-order accuracy without
+backward-Euler damping bias: at `dt=0.004`, 100 steps had `0.00284` relative
+state error against the RK4 reference, all stages converged, and warm time was
+1.64 seconds. Doubling to `dt=0.008` raised state error to `0.01138`; restart 8
+and `rtol=1e-5` certified the stages but took 1.67 seconds and peaked at
+52,090,368 bytes. Reusing the global low-moment field-corrected shifted
+preconditioner did not reduce iterations and raised the device peak to about
+696 MB. A symmetric line/field split reached 0.599 seconds warm with a
+27,338,240-byte peak, but excited a catastrophic parasitic split mode even
+when the explicit field substep was reduced from `0.0004` to `0.0001`; it is
+rejected. These measurements select full coupled streaming/field solves over
+naive splitting, fixed-work SOLVAX over nested dynamic GMRES, and small restart
+spaces over the old default. Promotion still requires a representative stiff
+case where the second-order route improves time-to-accuracy, plus implicit
+value/order/restart/diagnostic/gradient gates and bounded transpose solves.
+
+Increasing the kinetic-electron Hermite resolution to `Nm=64` did not reverse
+the decision. Coupled Crank--Nicolson at `dt=0.004` took 3.59 seconds warm for
+100 steps, peaked at 73,321,472 device bytes, certified every stage, and had
+`0.00566` relative state error against RK4. The stable RK4 reference at
+`dt=0.0005` took 1.86 seconds warm for 800 steps and peaked at 27,886,080
+bytes. Thus even an eightfold step-count reduction remains about 1.9 times
+slower and 2.6 times larger in device memory; higher velocity resolution alone
+is not an acceptable performance justification for the current preconditioner.
