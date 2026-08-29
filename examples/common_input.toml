@@ -1,3 +1,5 @@
+schema_version = 1
+
 # GKX default stellarator input deck used by the `gkx wout_XXX.nc` shorthand.
 # The CLI fills in [geometry].vmec_file from the wout argument and writes the
 # fully-resolved copy next to the run outputs (<wout-stem>/gkx.toml).

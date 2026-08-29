@@ -39,6 +39,14 @@ When the nonlinear output target ends in ``.out.nc`` (recommended) or another
 This is the release-facing format for nonlinear parity, restart, and external
 post-processing workflows.
 
+Each new file carries the root attribute ``schema_version = 1``. Runtime
+readers also accept GKX 1.8.2 files with no such attribute as legacy schema 0;
+an unsupported future version fails with migration guidance. Version 1 adds
+only this metadata: the frozen groups, variables, dimensions, dtypes, complex
+``ri`` convention, dealiased axes, and restart transpose are unchanged, so
+older readers that ignore unknown root attributes continue to consume the
+payload.
+
 It is also what the bare equilibrium shorthand writes: ``gkx wout_XXX.nc``
 groups its artifacts under ``./<wout-stem>/`` with ``[output] path`` set to
 ``<wout-stem>/gkx.out.nc``. A plain prefix there would have produced CSV

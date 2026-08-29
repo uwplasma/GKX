@@ -117,6 +117,43 @@ axis = " KY "
     assert cfg.parallel.axis == "ky"
 
 
+def test_runtime_toml_schema_accepts_v1_and_legacy_but_rejects_other_versions(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "case.toml"
+    path.write_text("schema_version = 1\n[physics]\n", encoding="utf-8")
+    _cfg, raw = load_runtime_from_toml(path)
+    assert raw["schema_version"] == 1
+
+    path.write_text("[physics]\n", encoding="utf-8")
+    _cfg, raw = load_runtime_from_toml(path)
+    assert "schema_version" not in raw
+
+    for invalid in ('"1"', "true"):
+        path.write_text(f"schema_version = {invalid}\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="must be the integer 1"):
+            load_runtime_from_toml(path)
+    path.write_text("schema_version = 2\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="unsupported GKX TOML schema_version 2"):
+        load_runtime_from_toml(path)
+
+
+def test_maintained_runtime_decks_declare_schema_v1() -> None:
+    paths = sorted((REPO_ROOT / "examples").rglob("*.toml"))
+    paths += [
+        REPO_ROOT / "benchmarks" / name
+        for name in (
+            "collisional_zonal_response.toml",
+            "runtime_miller_zonal_response.toml",
+            "runtime_secondary_slab.toml",
+            "runtime_w7x_zonal_response_vmec.toml",
+        )
+    ]
+    assert paths
+    for path in paths:
+        assert load_toml(path).get("schema_version") == 1, path
+
+
 def test_toml_shorthand_policy_uses_one_runtime_command(
     tmp_path: Path,
 ) -> None:

@@ -7,10 +7,10 @@ The product version is 1.8.2; the snapshot also contains the merged planning,
 benchmark-import, and optional-dependency repairs, none of which changed these
 contracts.
 
-The implementation has no persisted output-schema version. TOML input files
-have `schema_version`, but runtime summary JSON, CSV, NPY, and NetCDF output do
-not. The NetCDF scalar `code_info=1` with attribute `value="gkx"` identifies
-the producing code only; it is not read or documented as a schema version.
+The implementation has no persisted runtime schema version: runtime TOML
+inputs and summary JSON, CSV, NPY, and NetCDF outputs are versionless. The
+NetCDF scalar `code_info=1` with attribute `value="gkx"` identifies the
+producing code only; it is not read or documented as a schema version.
 Consequently every structure below is a de facto compatibility surface until
 Phase 1 introduces explicit versioning and migration tests.
 

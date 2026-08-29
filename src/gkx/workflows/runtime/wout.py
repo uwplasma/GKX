@@ -7,7 +7,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Callable
 
-from gkx.workflows.runtime.toml import load_toml, resolve_runtime_path
+from gkx.workflows.runtime.toml import RUNTIME_TOML_SCHEMA_VERSION, load_toml, resolve_runtime_path
 
 WOUT_SIGNATURE_VARIABLES = ("rmnc", "zmns", "xm", "xn")
 WOUT_FLAG_NAMES = ("--vmec", "--vmex")
@@ -355,6 +355,7 @@ def wout_shorthand_args(
 
     deck_path = Path(config_arg) if config_arg is not None else default_wout_deck_path()
     data = dict(load_toml_func(deck_path))
+    data.setdefault("schema_version", RUNTIME_TOML_SCHEMA_VERSION)
     _resolve_deck_paths(data, base_dir=deck_path.resolve().parent)
     _force_vmec_geometry(data, wout_path)
     if config_arg is None:

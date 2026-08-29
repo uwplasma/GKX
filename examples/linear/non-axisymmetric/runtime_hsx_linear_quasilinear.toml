@@ -1,3 +1,5 @@
+schema_version = 1
+
 # HSX linear quasilinear transport diagnostic example.
 # This mirrors the adiabatic-electron HSX nonlinear validation setup, but runs a
 # bounded linear spectrum used for quasilinear calibration audits. The

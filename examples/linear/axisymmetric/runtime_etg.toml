@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Runtime benchmark example.
 # Use JAX_ENABLE_X64=1 when reproducing tracked parity-sensitive outputs.
 # Leave it unset for faster exploratory runs with the default precision policy.

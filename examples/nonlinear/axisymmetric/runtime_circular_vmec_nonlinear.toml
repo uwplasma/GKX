@@ -1,3 +1,5 @@
+schema_version = 1
+
 # VMEC-backed circular tokamak nonlinear ITG example.
 # Generate the equilibrium with:
 #   cd examples/vmec && vmex input.circular_tokamak

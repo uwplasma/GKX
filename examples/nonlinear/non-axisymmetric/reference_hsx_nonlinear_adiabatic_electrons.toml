@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Reference nonlinear adiabatic-electron ITG case on HSX.
 # This config matches the parameters used in established HSX benchmarks.
 

@@ -6,6 +6,20 @@ from typing import Any
 
 import numpy as np
 
+NETCDF_SCHEMA_VERSION = 1
+
+
+def _validate_netcdf_schema_version(root: Any) -> None:
+    raw = root.getncattr("schema_version") if "schema_version" in root.ncattrs() else 0
+    if isinstance(raw, bool) or not isinstance(raw, (int, np.integer)):
+        raise ValueError("NetCDF schema_version must be the integer 1")
+    version = int(raw)
+    if version not in (0, NETCDF_SCHEMA_VERSION):
+        raise ValueError(
+            f"unsupported GKX NetCDF schema_version {version}; upgrade GKX or "
+            "migrate the artifact"
+        )
+
 
 def _require_netcdf4():
     try:
@@ -124,6 +138,7 @@ def _maybe_var(
 def _write_runtime_root_metadata(
     root: Any, cfg: Any, *, nspecies: int, nl: int, nm: int
 ) -> None:
+    root.setncattr("schema_version", NETCDF_SCHEMA_VERSION)
     root.createVariable("ny", "i4", ())[:] = np.int32(cfg.grid.Ny)
     root.createVariable("nx", "i4", ())[:] = np.int32(cfg.grid.Nx)
     root.createVariable("ntheta", "i4", ())[:] = np.int32(

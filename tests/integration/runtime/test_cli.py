@@ -2734,6 +2734,7 @@ def test_direct_config_shorthand_wout_flag_aliases_match_positional(
         resolved,
     ]
     data = tomllib.loads(Path(resolved).read_text(encoding="utf-8"))
+    assert data["schema_version"] == 1
     assert data["geometry"]["model"] == "vmec"
     assert data["grid"]["Ny"] == 6
 

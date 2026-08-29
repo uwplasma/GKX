@@ -18,6 +18,7 @@ from gkx.artifacts.spectral_layout import (
     _dealiased_kx_indices,
     _dealiased_ky_count,
     _require_netcdf4,
+    _validate_netcdf_schema_version,
 )
 from gkx.diagnostics import (
     ResolvedDiagnostics,
@@ -745,6 +746,7 @@ def load_netcdf_restart_state(
         raise ImportError("netCDF4 is required to load NetCDF restart files") from exc
 
     with Dataset(Path(path), "r") as root:
+        _validate_netcdf_schema_version(root)
         if "G" not in root.variables:
             raise ValueError(f"restart file {path} does not contain variable 'G'")
         raw = np.asarray(root.variables["G"][:], dtype=float)
@@ -832,6 +834,7 @@ def _condense_diagnostics_for_netcdf_output(
 def load_nonlinear_netcdf_diagnostics(path: str | Path) -> SimulationDiagnostics:
     Dataset = _require_netcdf4()
     with Dataset(Path(path), "r") as root:
+        _validate_netcdf_schema_version(root)
         grids = root.groups["Grids"]
         diag_group = root.groups["Diagnostics"]
         time_vals = np.asarray(grids.variables["time"][:], dtype=np.float64)
@@ -1023,6 +1026,7 @@ def load_diagnostic_time_series(
     import netCDF4 as nc
 
     with nc.Dataset(src) as ds:
+        _validate_netcdf_schema_version(ds)
         values = _load_diagnostic_variable(
             ds,
             src=src,

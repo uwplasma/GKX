@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Reference-aligned kinetic-electron Cyclone linear case. The effective seed
 # and linked-boundary damping are explicit; no benchmark wrapper overrides it.
 

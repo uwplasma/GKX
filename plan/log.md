@@ -2587,3 +2587,27 @@ spellings; updated help/usage; direct TOML shorthand preservation; full CLI and
 release gates; typing; source/file budgets; warning-as-error docs; and diff
 checks. Roll back if an alias changes defaults, artifacts, plotting behavior,
 callback selection, exit status, eager imports, or any architecture budget.
+
+## 2026-08-29 — Phase 1 runtime schema-version scope
+
+Task: establish schema version 1 for human-authored runtime TOML and nonlinear
+NetCDF output/restart bundles, with bounded adapters for GKX 1.8.2's
+versionless schema. Non-goals: no field, group, dimension, dtype, array order,
+artifact name, result container, solver, physics, numerical default, public API,
+dependency, performance, or broad configuration-converter change. Baseline:
+GKX main at the PR #141 merge,
+`1f2537ccdfcba9274c80820d3fe7115d43b3cd0b`. Affected behavior: maintained
+runtime decks declare `schema_version = 1`; versionless decks and NetCDF files
+remain readable as legacy schema 0; writers emit version 1; unsupported future
+versions fail before numerical work with an actionable migration message.
+Scientific claims: none. Expected files: this append-only entry, existing TOML
+and NetCDF owner modules, maintained runtime TOML decks, focused runtime-config
+and artifact/restart tests, and the input/output documentation. Acceptance
+requires v1, legacy-v0, invalid-type, and future-version TOML tests; v1 writer,
+legacy-reader, future-version rejection, restart, append, and old-reader
+compatibility tests for NetCDF; exact preservation of the frozen 1.8.2 payload
+inventory apart from version metadata; all maintained decks loading as v1;
+owning suites, release gates, Ruff, typing, frozen source line/file ceilings,
+warning-as-error docs, and diff checks. Roll back if versioning rewrites legacy
+data, changes a numerical payload, makes old versionless artifacts unreadable,
+requires a second input format, or regresses any architecture budget.

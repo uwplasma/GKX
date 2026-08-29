@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Runtime-configured trapped-electron-mode stress case. This provisional
 # literature case is useful for kinetic-electron branch testing but is not a
 # promoted validation reference; see docs/benchmarks.rst.

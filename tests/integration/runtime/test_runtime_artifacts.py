@@ -923,6 +923,10 @@ def test_runtime_artifact_root_metadata_and_active_field() -> None:
     class _Root:
         def __init__(self):
             self.vars = {}
+            self.attrs = {}
+
+        def setncattr(self, key, value):
+            self.attrs[key] = value
 
         def createVariable(self, name, _dtype, _dims=()):
             var = _Var()
@@ -938,6 +942,7 @@ def test_runtime_artifact_root_metadata_and_active_field() -> None:
     assert int(root.vars["nx"].values) == 7
     assert int(root.vars["ntheta"].values) == 8
     assert int(root.vars["nperiod"].values) == 1
+    assert root.attrs["schema_version"] == 1
     assert root.vars["code_info"].attrs["value"] == "gkx"
 
     field = np.arange(5 * 7 * 2, dtype=np.float32).reshape(5, 7, 2)
@@ -1353,6 +1358,7 @@ def test_write_runtime_nonlinear_artifacts_writes_nonlinear_netcdf_bundle(
     assert Path(paths["big"]).exists()
 
     with Dataset(paths["out"], "r") as root:
+        assert root.getncattr("schema_version") == 1
         assert set(root.groups) == {"Diagnostics", "Geometry", "Grids", "Inputs"}
         assert int(root.variables["ny"][()]) == 8
         assert int(root.variables["nx"][()]) == 8
@@ -1404,12 +1410,14 @@ def test_write_runtime_nonlinear_artifacts_writes_nonlinear_netcdf_bundle(
         assert "TurbulentHeating_kxkyst" in root.groups["Diagnostics"].variables
 
     with Dataset(paths["restart"], "r") as root:
+        assert root.getncattr("schema_version") == 1
         assert root.dimensions["Nkx"].size == 5
         assert root.dimensions["Nky"].size == 3
         assert root.variables["G"].shape[-1] == 2
         assert "time" in root.variables
 
     with Dataset(paths["big"], "r") as root:
+        assert root.getncattr("schema_version") == 1
         assert root.variables["code_info"].getncattr("value") == "gkx"
         assert "Phi" in root.groups["Diagnostics"].variables
         assert "PhiXY" in root.groups["Diagnostics"].variables
@@ -1837,6 +1845,10 @@ def test_load_nonlinear_netcdf_diagnostics_fills_missing_turbulent_heating(
             diag.createVariable(name, "f4", ("time", "s"))[:] = values
     loaded = load_nonlinear_netcdf_diagnostics(out_nc)
     assert np.allclose(loaded.turbulent_heating_t, np.zeros(2, dtype=np.float32))
+    with Dataset(out_nc, "a") as root:
+        root.setncattr("schema_version", 2)
+    with pytest.raises(ValueError, match="unsupported GKX NetCDF schema_version 2"):
+        load_nonlinear_netcdf_diagnostics(out_nc)
 
 
 def test_run_runtime_nonlinear_with_artifacts_append_preserves_loaded_netcdf_schema(

@@ -1,3 +1,5 @@
+schema_version = 1
+
 # Frei, Ernst & Ricci, Phys. Plasmas 29, 093902 (2022), Figure 12.
 # Run through tools/artifacts/build_zonal_flow_artifacts.py
 # simulate-collisional-zonal-dk with a generated P24/J10 collision archive.
