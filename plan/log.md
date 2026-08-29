@@ -3178,3 +3178,27 @@ the decision. Coupled Crank--Nicolson at `dt=0.004` took 3.59 seconds warm for
 bytes. Thus even an eightfold step-count reduction remains about 1.9 times
 slower and 2.6 times larger in device memory; higher velocity resolution alone
 is not an acceptable performance justification for the current preconditioner.
+
+## 2026-08-29 — Phase 2 canonical VMEX flux-tube adapter scope
+
+Task: establish `gkx.geometry.from_vmex` as the one thin live-state adapter
+from VMEX's public `gk_fieldline_geometry` array seam to GKX's existing generic
+`FluxTubeGeometryData` contract. Keep `vmex` responsible for equilibrium and
+field-line arrays and GKX responsible only for validation and solver
+consumption. Baseline: merged stiff-evidence PR #154 at `340dd225`, with 199
+installable Python files and 91,470 installable source lines. Non-goals: no
+VMEC spectral reconstruction, Boozer transform, WOUT reader, geometry formula,
+normalization, objective, solver, public-root, or numerical-default change;
+no duplicate array conversion; and no deletion of the temporary standard-file
+path before parity.
+
+Acceptance: the adapter calls only the public VMEX turbulence seam, forwards
+the complete field-line selection policy, returns the exact generic GKX
+geometry owner, rejects malformed mappings through that owner, preserves
+array values and source metadata, and has a finite VJP through representative
+geometry observables. Existing mapping/report compatibility names remain
+unchanged. Focused geometry/objective tests, VMEX downstream integration,
+Ruff, typing, architecture/size, warning-as-error docs, and diff gates pass;
+installable source remains below the reviewed 91,510-line ceiling. Roll back
+if GKX imports VMEX eagerly, reconstructs equilibrium tensors, requires
+`booz_xform_jax` for this path, or changes any existing geometry fingerprint.

@@ -855,6 +855,58 @@ def test_vmec_tensor_mapping_builds_finite_mapping_from_mocked_vmec_modules(
     assert mapping["vmex"]["reference_length"] == pytest.approx(1.5)
     assert mapping["vmex"]["reference_b"] == pytest.approx(2.0)
 
+    geometry = vmec_tensor_mapping.from_vmex(
+        state,
+        runtime,
+        surface_index=2,
+        alpha=0.2,
+        ntheta=ntheta,
+    )
+    assert geometry.source_model == "vmex:core.turbulence"
+    np.testing.assert_array_equal(geometry.bmag_profile, mapping["bmag"])
+    assert geometry.gradpar_value == pytest.approx(0.5)
+
+
+def test_from_vmex_preserves_geometry_vjp(monkeypatch) -> None:
+    """The thin public adapter must not sever VMEX array derivatives."""
+
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 8, endpoint=False)
+    ones = jnp.ones_like(theta)
+
+    def gk_fieldline_geometry(state, _runtime, **_kwargs):
+        return {
+            "theta": theta,
+            "gradpar": 0.5 * ones,
+            "bmag": 1.0 + state * jnp.cos(theta),
+            "bgrad": state * jnp.sin(theta),
+            "gds2": 1.1 * ones,
+            "gds21": -0.2 * ones,
+            "gds22": 0.9 * ones,
+            "cvdrift": 0.3 * ones,
+            "cvdrift0": 0.0 * ones,
+            "gbdrift": 0.25 * ones,
+            "gbdrift0": 0.0 * ones,
+            "grho": ones,
+            "jacobian": 1.2 * ones,
+            "nfp": 1,
+            "vmex": {"L_ref": 1.5, "B_ref": 2.0},
+        }
+
+    monkeypatch.setattr(
+        vmec_tensor_mapping,
+        "_import_vmex_turbulence",
+        lambda: types.SimpleNamespace(gk_fieldline_geometry=gk_fieldline_geometry),
+    )
+    derivative = jax.grad(
+        lambda amplitude: jnp.sum(
+            vmec_tensor_mapping.from_vmex(
+                amplitude, object(), ntheta=theta.size, validate_finite=False
+            ).bmag_profile
+            * jnp.cos(theta)
+        )
+    )(jnp.asarray(0.05))
+    assert derivative == pytest.approx(float(jnp.sum(jnp.cos(theta) ** 2)))
+
 
 def test_vmec_state_sensitivity_ad_fd_diagnostics_match_analytic_jacobian() -> None:
     def observables(params: jnp.ndarray) -> jnp.ndarray:

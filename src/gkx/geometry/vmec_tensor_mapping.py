@@ -81,4 +81,39 @@ def vmex_flux_tube_mapping_from_state(  # pragma: no cover
     return mapping
 
 
-__all__ = ["vmex_flux_tube_mapping_from_state"]
+def from_vmex(
+    state: Any,
+    runtime: Any,
+    *,
+    surface_index: int | None = None,
+    alpha: float = 0.0,
+    zeta0: float = 0.0,
+    ntheta: int = 32,
+    equal_arc: bool = True,
+    arc_oversample: int = 4,
+    validate_finite: bool = True,
+) -> Any:
+    """Return GKX's generic flux-tube geometry for a solved VMEX state.
+    VMEX owns every field-line array; GKX only validates and stores them.
+    Importing this module does not import VMEX or Boozer support.
+    """
+
+    from gkx.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
+    mapping = vmex_flux_tube_mapping_from_state(
+        state,
+        runtime,
+        surface_index=surface_index,
+        alpha=alpha,
+        zeta0=zeta0,
+        ntheta=ntheta,
+        equal_arc=equal_arc,
+        arc_oversample=arc_oversample,
+    )
+    return flux_tube_geometry_from_mapping(
+        mapping,
+        source_model="vmex:core.turbulence",
+        validate_finite=validate_finite,
+    )
+
+
+__all__ = ["from_vmex", "vmex_flux_tube_mapping_from_state"]
