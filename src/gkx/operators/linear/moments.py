@@ -17,6 +17,10 @@ from gkx.operators.linear.streaming import (
     shift_axis,
     streaming_ladder_term,
 )
+from gkx.terms.fields import (
+    _reduce_electrostatic_moments,
+    _solve_electrostatic_from_moments,
+)
 
 __all__ = [
     "apply_hermite_v",
@@ -134,24 +138,10 @@ def quasineutrality_phi(
     """Solve electrostatic quasineutrality for phi with optional adiabatic closure."""
 
     _check_nonnegative(tau_e, "tau_e")
-    Gm0 = G[:, :, 0, ...]
-    num = jnp.sum(
-        density[:, None, None, None]
-        * charge[:, None, None, None]
-        * jnp.sum(Jl * Gm0, axis=1),
-        axis=0,
+    moments = _reduce_electrostatic_moments(
+        G, Jl, tau_e, charge, density, tz
     )
-    g0 = jnp.sum(Jl * Jl, axis=1)
-    zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
-    den = tau_e + jnp.sum(
-        density[:, None, None, None]
-        * charge[:, None, None, None]
-        * zt[:, None, None, None]
-        * (1.0 - g0),
-        axis=0,
-    )
-    den_safe = jnp.where(den == 0.0, jnp.inf, den)
-    return num / den_safe
+    return _solve_electrostatic_from_moments(moments, tau_e)
 
 
 def build_H(

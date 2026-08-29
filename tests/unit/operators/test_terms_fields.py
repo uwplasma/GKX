@@ -13,6 +13,7 @@ from gkx.core.grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
+from gkx.parallel.velocity_drive import electrostatic_phi_reference
 from gkx.terms.fields import _solve_fields_impl, solve_fields
 
 
@@ -261,3 +262,51 @@ def test_adiabatic_zonal_field_solve_uses_cached_jacobian() -> None:
     )
 
     assert not jnp.allclose(out_base.phi, out_varied.phi)
+
+
+def test_serial_reference_matches_canonical_zonal_value_and_gradient() -> None:
+    cache, params, G, charge, density, temp, mass, tz, vth = _build_case(
+        beta=0.0, fapar=0.0
+    )
+    G = jnp.zeros_like(G).at[0, 0, 0, 0, 1, :].set(
+        0.2 + 0.05j * jnp.asarray(cache.bmag)
+    )
+
+    def production_phi(G_in: jnp.ndarray) -> jnp.ndarray:
+        return _solve_fields_impl(
+            G_in,
+            cache,
+            params,
+            charge=charge,
+            density=density,
+            temp=temp,
+            mass=mass,
+            tz=tz,
+            vth=vth,
+            fapar=jnp.asarray(0.0, dtype=jnp.float32),
+            w_bpar=jnp.asarray(0.0, dtype=jnp.float32),
+        ).phi
+
+    def reference_phi(G_in: jnp.ndarray) -> jnp.ndarray:
+        return electrostatic_phi_reference(
+            G_in,
+            Jl=cache.Jl,
+            tau_e=params.tau_e,
+            charge=charge,
+            density=density,
+            tz=tz,
+            mask0=cache.mask0,
+            jacobian=cache.jacobian,
+            ky=cache.ky,
+        )
+
+    expected = production_phi(G)
+    observed = jax.jit(reference_phi)(G)
+    assert jnp.allclose(observed, expected, rtol=1.0e-6, atol=1.0e-6)
+
+    def loss(phi_fn, state):
+        return jnp.real(jnp.sum(jnp.abs(phi_fn(state)) ** 2))
+
+    expected_grad = jax.grad(lambda state: loss(production_phi, state))(G)
+    observed_grad = jax.grad(lambda state: loss(reference_phi, state))(G)
+    assert jnp.allclose(observed_grad, expected_grad, rtol=1.0e-5, atol=1.0e-5)
