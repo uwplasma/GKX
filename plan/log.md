@@ -3240,3 +3240,14 @@ and prohibit open-end claims. True open mirrors require a reviewed
 nonperiodic parallel operator, particle/sheath boundaries, sources, ambipolar
 potential, loss-cone collisions, and a compatible background ordering. They
 are not created by periodically joining VMEX end cuts.
+
+Evidence: the closed racetrack produces finite linear/quasilinear objectives
+and an analytic radius sensitivity that agrees with centered finite difference
+to `1.20e-8` relative error. Apple CPU and NVIDIA RTX A4000 float64 objectives
+agree to about `5e-15` and gradients to `1.1e-14`. For the intentionally tiny
+`(2,3,16)` acceptance problem, warm value/gradient time is 9.30 ms on CPU and
+217 ms on GPU, with a 151,138,048-byte GPU allocation peak. This is a parity
+and accelerator-readiness gate, not a speedup claim; representative nonlinear
+throughput remains a separate performance gate. The tracked figure, movie,
+run record, and performance record are generated or documented under
+`docs/_static/vmex_mirror_gkx_*`.

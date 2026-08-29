@@ -22,6 +22,21 @@ steady across the loop, not growing. It is an animated image rather than a
 (1.8 MB) is a release asset rather than tracked media; both are rebuilt by
 [`build_turbulence_movie.py`](tools/artifacts/build_turbulence_movie.py).
 
+### Closed VMEX mirror geometry
+
+<img src="docs/_static/vmex_mirror_gkx_showcase.webp" width="900" alt="Closed VMEX stellarator-mirror racetrack, equal-arc magnetic-field profile, and perpendicular GKX metric">
+
+The same in-memory VMEX mirror state now feeds GKX without a file round trip:
+VMEX owns field-line closure, the Clebsch/metric/drift construction, and the
+equal-arc grid; GKX validates that array contract and evaluates its existing
+linear and quasilinear objectives. The pictured case has mirror ratio 1.778,
+growth rate 0.1391, and mixing-length heat-flux proxy 0.9979 on the documented
+small resolution. See the **[rotating field-line movie](docs/_static/vmex_mirror_gkx_rotation.mp4)**,
+the [model and equations](docs/geometry.rst#closed-vmex-mirror-geometry), and
+the [machine-readable run record](docs/_static/vmex_mirror_gkx_showcase.json).
+This is a closed periodic stellarator--mirror hybrid, not an open-end loss or
+sheath calculation.
+
 ## Install
 
 ```bash
@@ -693,6 +708,7 @@ artifact of record and the figure is a render of it.
 | `qa_transport_equilibria.png`, `qa_transport_reduction.svg` | `tools/artifacts/build_qa_transport_figures.py` | `qa_transport_summary.csv` |
 | `quasilinear_stellarator_usefulness.png` | **generator retired — not regenerable** | `quasilinear_stellarator_usefulness.json` |
 | `runtime_memory_benchmark.png` | `benchmarks/performance/benchmark_runtime_memory.py` | `runtime_memory_summary_ship_refresh.json` |
+| `vmex_mirror_gkx_showcase.webp`, `vmex_mirror_gkx_rotation.mp4` | `tools/artifacts/build_vmex_mirror_gkx_artifacts.py` | `vmex_mirror_gkx_showcase.json`, `vmex_mirror_gkx_performance.json` |
 
 The turbulence loop is the only two-stage one. For a physics run, continue a
 saved saturated state with the same method and CFL policy; only the two
