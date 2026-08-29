@@ -3272,3 +3272,12 @@ focused geometry/objective, real downstream VMEX, Ruff, typing,
 architecture/size, warning-as-error docs, and diff gates pass. Roll back if
 GKX interprets a WOUT coefficient, duplicates a geometry calculation, or the
 file route requires equilibrium reconstruction or convergence.
+
+The coupled office RTX A4000 gate kept both routes on `cuda:0`. On the shaped
+13-surface, 32-point equal-arc case, live-state geometry took 23.35 seconds on
+its first synchronized call and 0.421 seconds warm median; the WOUT route,
+after shared kernels had compiled, took 6.41 seconds on its first call and
+0.327 seconds warm median. Live/WOUT maximum absolute disagreement was
+`4.89e-15` across all geometry arrays and `1.39e-16` across scalar contract
+fields. The WOUT host normalization therefore introduces no device fallback
+and no measurable warm-runtime penalty in this gate.
