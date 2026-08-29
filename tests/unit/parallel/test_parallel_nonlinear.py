@@ -435,7 +435,7 @@ def test_nonlinear_parallel_public_api_exports_are_stable() -> None:
         "release_ready_nonlinear_parallel_strategies",
     )
 
-    assert set(public_names) <= set(gkx.__all__)
+    assert set(public_names).isdisjoint(gkx.__all__)
     assert set(public_names) <= set(nonlinear_parallel.__all__)
     assert NonlinearParallelStrategy is nonlinear_parallel.NonlinearParallelStrategy
     assert (
