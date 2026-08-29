@@ -2458,3 +2458,67 @@ contracts; typing; architecture/size; documentation; and diff checks. Roll
 back if an artifact cannot be reproduced from GKX-owned inputs, if a hardware
 timing is treated as a numerical invariant, if a negative gate is promoted, or
 if executable code changes.
+
+## 2026-08-28 — Phase 0 merged-foundation closeout
+
+- **Merged foundations:** the approved roadmap merged in PR #122 as
+  `ec446fb8e7b7fff8f72e8dd857927399996f42b6`; the reproducible Phase 0
+  measurement/API/dependency baseline merged in PR #131 as
+  `4104bf4a2d7463fcd56e9c38434d88510377d2b4`; corrected prepared profiles
+  merged in PR #132 as `cb2219bbf835a7f96817bf766bbbfc29c992a0b5`;
+  startup-profiler handoff repair merged in PR #137 as
+  `ef85df88253fd731e8fecd0b49f9864bff6028f2`; the 1.8.2 output-schema
+  inventory merged in PR #134 as `a30489f3a53b70a2b53f5c9f63d166897111de1e`;
+  the repaired nonlinear-adjoint profiler merged in PR #136 as
+  `0a0a9b4539e44e24c518d056318aee602cd5d4d1`; and the GX provenance ledger
+  and distribution notice merged in PR #135 as
+  `4884598617f53fa58f5e7f26724487364462ca1c`.
+- **Final prepared-run measurements:** the matched Cyclone 64x64x24,
+  200-adaptive-step case has CPU warm median `55.33224799996242 s`,
+  prepare/compile/first `58.870820792 s`, and host RSS `1,807,368,192 B`.
+  RTX A4000 GPU 1 has warm median `4.325974703999236 s`,
+  prepare/compile/first `13.515269163 s`, peak device memory `417,082,624 B`,
+  live device memory `101,654,016 B`, and host RSS `1,845,723,136 B`; the
+  warm CPU/GPU ratio is `12.790700775`. CPU/GPU relative L2 differences are
+  `4.44698e-4` for final state, `1.8028e-6` for phi, `3.5484e-6` for heat
+  flux, and `1.492e-7` for the timestep trace.
+- **Final startup and adjoint measurements:** one-step startup totals are
+  `9.697 s` on CPU and `29.926 s` on the RTX A4000, with matched RHS norms to
+  approximately `1e-6`. On the exact 16x16x16, 64-step checkpoint case, CPU
+  step/block warm times are `1.882767833/3.126297500 s` and temporary memory
+  `369,874,760/71,167,912 B` (5.1972x reduction); GPU step/block warm times
+  are `0.118627214/0.220419216 s` and temporary memory
+  `338,415,376/33,365,944 B` (10.1425x reduction). Step/block gradients agree
+  to `3.1267e-7` relative; CPU/GPU objective and gradient differences are
+  `3.8712e-6` and `3.8563e-6` relative.
+- **Changed baseline counts:** merged main contains 199 installable source
+  Python files and 91,494 lines, 101 test files and 87,045 lines, 89 tool
+  files and 72,225 lines, and no remaining developer-script Python files.
+  The Phase 0 source fixes did not increase installable source lines; focused
+  profiler and release regressions account for the test/tool changes.
+- **Decisions:** the existing equilibrium ExB-shear research lane does not
+  meet the bounded GKX 3.0 transport gate and is deferred to the first GKX
+  3.1 physics lane without threshold retuning. VMEX owns live
+  equilibrium-to-field-line mapping, `booz_xform_jax` owns Boozer transforms,
+  and GKX owns the generic flux-tube contract and solver consumption. Native
+  explicit RK and one native IMEX route are the target owners; Diffrax remains
+  until the frozen parity gates pass. External GX/stella/GS2 results remain
+  local diagnostics and must be promoted only as self-contained GKX tests or
+  compact versioned summaries.
+- **SOLVAX coordination:** Eisenstat--Walker forcing merged in SOLVAX PR #86
+  as `b82cc5b0c9b6eac8119379d94209c4c42c32c16a`; fixed-work masked GMRES and
+  Newton--Krylov loops merged in SOLVAX PR #90 as
+  `d03df780ab0e4d22239142bc9cbe65c6113ae2c0`. GKX adoption and application-
+  level CPU/GPU profiling remain separate Phase 2/5 work and are not implied
+  by the generic solver merge.
+- **Deferred issues:** persisted outputs still lack an explicit schema version;
+  VMEX lacks the target WOUT-to-live-state array contract; the broad float32
+  quasilinear implicit-sensitivity example exceeds its present tolerance while
+  the frozen selected case and x64 run pass; raw external-code outputs remain
+  excluded; and architecture/file-count targets remain deliberately unmet at
+  the frozen baseline.
+- **Next unblocked task:** after this documentation-only closeout passes its
+  gates, begin Phase 1 with one small PR introducing immutable `Case` and
+  `LinearResult`/`NonlinearResult`/`ScanResult` contracts around the existing
+  configuration and runtime-result owners, without moving kernels or copying
+  state arrays.
