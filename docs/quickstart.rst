@@ -25,8 +25,8 @@ Executable demo
    gkx examples/linear/axisymmetric/cyclone.toml
    gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out cyclone_runtime
    gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --steps 50 --out tools_out/cyclone_nonlinear.out.nc
-   gkx --plot tools_out/cyclone_nonlinear.out.nc
-   gkx --plot gkx_default_linear.summary.json
+   gkx plot tools_out/cyclone_nonlinear.out.nc
+   gkx plot gkx_default_linear.summary.json
 
 Running ``gkx`` with no TOML launches a short Cyclone initial-value
 linear demo, prints live progress with elapsed time and ETA, and writes the
@@ -91,8 +91,8 @@ Plot diagnostics directly from the output:
 
 .. code-block:: bash
 
-   gkx --plot tools_out/cyclone_nonlinear.out.nc
-   gkx --plot gkx_default_linear.summary.json
+   gkx plot tools_out/cyclone_nonlinear.out.nc
+   gkx plot gkx_default_linear.summary.json
 
 Self-contained VMEC geometry
 ----------------------------
