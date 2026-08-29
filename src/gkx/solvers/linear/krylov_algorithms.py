@@ -16,6 +16,7 @@ from gkx.operators.linear.cache_arrays import (
 )
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
+from gkx.solvers.time.explicit_steps import _linear_native_step
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import TermConfig
 
@@ -70,12 +71,13 @@ def _advance_imex2(
     dt: jnp.ndarray,
 ) -> jnp.ndarray:
     damping = _compute_damping(v, cache, params)
-    dG = _apply_operator(v, cache, params, term_cfg)
-    dG_explicit = dG + damping * v
-    v_half = (v + 0.5 * dt * dG_explicit) / (1.0 + 0.5 * dt * damping)
-    dG_half = _apply_operator(v_half, cache, params, term_cfg)
-    dG_half_exp = dG_half + damping * v_half
-    return (v + dt * dG_half_exp) / (1.0 + dt * damping)
+    return _linear_native_step(
+        v,
+        damping,
+        dt,
+        method_key="imex2",
+        rhs=lambda value: _apply_operator(value, cache, params, term_cfg),
+    )
 
 
 def _omega_scale(cache: LinearCache, params: LinearParams) -> jnp.ndarray:
