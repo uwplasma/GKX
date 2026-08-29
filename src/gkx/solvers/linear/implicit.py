@@ -711,7 +711,6 @@ def _build_implicit_matvec(
             terms=state.terms,
             use_jit=False,
             use_custom_vjp=False,
-            dt=state.dt_val,
         )
         return (x - state.dt_val * dG).reshape(state.size)
 
@@ -775,7 +774,6 @@ def _implicit_fixed_point_guess(
             terms=terms,
             use_jit=False,
             use_custom_vjp=False,
-            dt=dt_val,
         )
         g_next = G_in + dt_val * dG
         return (1.0 - implicit_relax) * g + implicit_relax * g_next
@@ -841,7 +839,6 @@ def _implicit_phi_diagnostic(
         terms=terms,
         use_jit=False,
         use_custom_vjp=False,
-        dt=dt_val,
     )
     return phi
 

@@ -1233,7 +1233,7 @@ def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_gri
     assert int(np.asarray(grid.ky_mode)[0]) > 0
 
 
-def test_assemble_rhs_terms_scales_linked_end_damping_by_step_dt():
+def test_linear_integrator_uses_linked_end_damping_as_a_rate():
     grid_full = build_spectral_grid(
         GridConfig(
             Nx=1,
@@ -1267,18 +1267,44 @@ def test_assemble_rhs_terms_scales_linked_end_damping_by_step_dt():
         bpar=0.0,
     )
 
-    _rhs_raw, _fields_raw, contrib_raw = assemble_rhs_terms_cached(
+    rhs_raw, _fields_raw, contrib_raw = assemble_rhs_terms_cached(
         G, cache, params, terms=term_cfg
     )
-    _rhs_dt, _fields_dt, contrib_dt = assemble_rhs_terms_cached(
-        G, cache, params, terms=term_cfg, dt=0.2
-    )
-
     end_raw = np.asarray(contrib_raw["end_damping"])
-    end_dt = np.asarray(contrib_dt["end_damping"])
     mask = np.abs(end_raw) > 1.0e-12
     assert np.any(mask)
-    assert np.allclose(end_dt[mask], end_raw[mask] / 0.2, rtol=1.0e-6, atol=1.0e-6)
+
+    terms = LinearTerms(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        hyperdiffusion=0.0,
+        end_damping=1.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+    for dt in (0.1, 0.2):
+        integrated, _phi = integrate_linear(
+            G,
+            grid,
+            geom,
+            params,
+            dt=dt,
+            steps=1,
+            method="euler",
+            terms=terms,
+        )
+        measured_rate = (np.asarray(integrated) - np.asarray(G)) / dt
+        assert np.allclose(
+            measured_rate[mask],
+            np.asarray(rhs_raw)[mask],
+            rtol=1.0e-6,
+            atol=1.0e-6,
+        )
 
 
 def test_streaming_zero_for_constant_z():

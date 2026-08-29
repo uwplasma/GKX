@@ -15,6 +15,7 @@ from gkx.solvers.time import (
     integrate_linear_diffrax_streaming,
     integrate_nonlinear_diffrax,
 )
+from gkx.solvers.linear.integrators import integrate_linear
 from gkx.solvers.time.diffrax_core import (
     _adjoint,
     _density_from_G_cached,
@@ -29,7 +30,7 @@ from gkx.solvers.time.diffrax_core import (
 )
 from gkx.geometry import SAlphaGeometry
 from gkx.core.grid import build_spectral_grid
-from gkx.operators.linear.params import LinearParams
+from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.params import Species, build_linear_params
 from gkx.terms.config import TermConfig
 from dataclasses import replace
@@ -53,6 +54,52 @@ def _tiny_diffrax_setup(nx: int = 2, ny: int = 3, nz: int = 8):
         (2, 3, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
     ) * (1.0e-6 + 1.0e-7j)
     return grid, geom, params, G
+
+
+def test_native_and_diffrax_linear_routes_share_end_damping_rate() -> None:
+    grid, geom, base_params, state = _tiny_diffrax_setup(nx=1, ny=4, nz=8)
+    params = replace(base_params, damp_ends_amp=0.1, damp_ends_widthfrac=0.25)
+    terms = LinearTerms(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        hyperdiffusion=0.0,
+        end_damping=1.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+
+    native_state, _native_phi = integrate_linear(
+        state,
+        grid,
+        geom,
+        params,
+        dt=0.01,
+        steps=2,
+        method="euler",
+        terms=terms,
+    )
+    diffrax_state, _diffrax_phi = integrate_linear_diffrax(
+        state,
+        grid,
+        geom,
+        params,
+        dt=0.01,
+        steps=2,
+        method="Euler",
+        terms=terms,
+        adaptive=False,
+        sample_stride=2,
+        return_state=True,
+        progress_bar=False,
+        jit=False,
+    )
+
+    assert jnp.allclose(native_state, diffrax_state, rtol=1.0e-6, atol=1.0e-12)
 
 
 def test_adaptive_linear_forward_jvp_matches_centered_difference() -> None:
