@@ -43,6 +43,7 @@ from gkx.runtime import (
     build_runtime_geometry,
     build_runtime_linear_params,
     build_runtime_linear_terms,
+    prepare,
     run_runtime_linear,
     run_runtime_nonlinear,
     run_runtime_scan,
@@ -1126,6 +1127,35 @@ def test_runtime_nonlinear_smoke() -> None:
     )
     assert res.diagnostics is not None
     assert res.diagnostics.t.size == 3
+
+
+def test_prepare_runtime_nonlinear_reuses_existing_execution_contract() -> None:
+    cfg = replace(
+        _base_runtime_cfg(),
+        grid=GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0, boundary="periodic"),
+        time=TimeConfig(
+            t_max=0.02, dt=0.01, method="rk2", use_diffrax=False, fixed_dt=True
+        ),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
+        terms=RuntimeTermsConfig(nonlinear=0.0, hypercollisions=0.0, end_damping=0.0),
+    )
+    simulation = prepare(cfg, Nl=2, Nm=2, steps=2, resolved_diagnostics=False)
+    t, diagnostics, state, _fields = simulation.run()
+    direct = run_runtime_nonlinear(
+        cfg, Nl=2, Nm=2, steps=2, resolved_diagnostics=False, return_state=True
+    )
+    np.testing.assert_allclose(np.asarray(t), direct.t)
+    assert direct.diagnostics is not None and direct.state is not None
+    np.testing.assert_allclose(
+        np.asarray(diagnostics.heat_flux_t), np.asarray(direct.diagnostics.heat_flux_t)
+    )
+    np.testing.assert_allclose(np.asarray(state), direct.state)
+    with pytest.raises(ValueError, match="cannot stop early at saturation"):
+        prepare(cfg, Nl=2, Nm=2, steps=16, resolved_diagnostics=False)
+    full_horizon = replace(cfg, time=replace(cfg.time, run_to="t_max"))
+    with pytest.raises(ValueError, match="only support explicit methods"):
+        prepare(full_horizon, Nl=2, Nm=2, steps=2, method="imex")
 
 
 def test_runtime_nonlinear_diagnostics_stride() -> None:

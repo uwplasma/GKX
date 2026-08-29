@@ -5,14 +5,14 @@ Public API Registry
 -------------------
 
 The top-level ``gkx`` package advertises only the current product contracts:
-``load``, ``solve``, ``scan``, ``plot``, ``Case``, ``LinearResult``,
+``load``, ``solve``, ``scan``, ``plot``, ``prepare``, ``Case``, ``LinearResult``,
 ``NonlinearResult``, and ``ScanResult``. Five integration names remain
 advertised for the maintained VMEX turbulence coupling:
 ``flux_tube_geometry_from_mapping``, ``solver_objective_vector_from_geometry``,
 ``solver_linear_operator_matrix_from_geometry``,
 ``solver_scalar_objective_from_vector``, and
 ``VMEXTransportObjectiveConfig``. Together with ``__version__``, this makes a
-14-name root surface.
+15-name root surface.
 
 Implementation ownership remains in the domain modules below. GKX 1.x root
 names outside this advertised set stay available by direct named import
@@ -49,6 +49,8 @@ The first high-level workflow is deliberately small::
    result = gkx.solve(case)
    figure, axes = gkx.plot(result)
    spectrum = gkx.scan(case, [0.1, 0.2, 0.3])
+   simulation = gkx.prepare(case)
+   time, diagnostics, state, fields = simulation.run()
 
 ``load`` resolves case-relative paths through the established TOML owner.
 ``solve`` dispatches to the established nonlinear runner when nonlinear physics
@@ -57,6 +59,13 @@ runtime scan function itself, so these names add no numerical implementation or
 result conversion. ``plot`` dispatches those result containers to the existing
 linear, scan, and nonlinear figure builders; it returns ``(Figure, axes)`` and
 does not save or display implicitly.
+
+``prepare`` reuses the nonlinear runtime's established explicit diagnostic
+scan and fixes its grid, geometry layout, numerical method, and output schema.
+Repeated ``simulation.run(initial_state)`` calls reuse the compiled scan for
+matching shapes and dtypes; ``simulation.run_arrays`` is the differentiable
+array-only boundary. Prepared execution currently rejects linear, IMEX,
+parallel-sharded, and active run-to-saturation cases with explicit errors.
 
 .. automodule:: gkx.api
    :members:

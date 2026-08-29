@@ -220,6 +220,7 @@ def build_runtime_nonlinear_dispatch_deps(scope: Any) -> RuntimeNonlinearDispatc
             infer_runtime_nonlinear_steps=scope._infer_runtime_nonlinear_steps,
             runtime_external_phi=scope._runtime_external_phi,
             build_runtime_nonlinear_diagnostics_kwargs=scope.build_runtime_nonlinear_diagnostics_kwargs,
+            prepare_nonlinear_explicit_diagnostics=scope.prepare_nonlinear_explicit_diagnostics,
             integrate_nonlinear_explicit_diagnostics_state=scope.integrate_nonlinear_explicit_diagnostics_state,
             run_adaptive_runtime_chunk_loop=scope.run_adaptive_runtime_chunk_loop,
             build_runtime_nonlinear_result=scope.build_runtime_nonlinear_result,
@@ -246,8 +247,9 @@ def run_runtime_nonlinear_impl(
     return_state: bool = False,
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
+    prepare_only: bool = False,
     deps: RuntimeNonlinearDispatchDeps,
-) -> RuntimeNonlinearResult:
+) -> Any:
     """Run one nonlinear point from a case-agnostic runtime config."""
 
     def _status(message: str) -> None:
@@ -274,4 +276,5 @@ def run_runtime_nonlinear_impl(
         return_state=return_state,
         show_progress=show_progress,
         status_callback=status_callback,
+        prepare_only=prepare_only,
     )
