@@ -2349,3 +2349,176 @@ CPU/GPU measurements are rejected. Acceptance now additionally requires exact
 - **Rollback:** abandon the branch if history cannot distinguish a port from
   compatibility behavior, or revert the documentation-only commit if an
   upstream source/revision assertion proves unsupported.
+
+## 2026-08-28 — VMEX/GKX/booz_xform_jax ownership audit scope
+
+Task: freeze the current equilibrium, Boozer-transform, flux-tube, and
+turbulence-objective ownership boundary across the three maintained
+repositories, including concrete GKX deletion candidates and the missing
+cross-repository parity gates. Non-goals: no geometry equation, normalization,
+public API, dependency, solver, objective, repository, or runtime behavior
+change; this PR will not delete or move implementation. Baseline: GKX
+`4104bf4a2d7463fcd56e9c38434d88510377d2b4`, VMEX
+`f7bd9469a059d2c54b6d85a125205c8c245c0a10`, and booz_xform_jax
+`1d5e8c8a72db8a745e7cb56fb077b64bb85d0763`. Affected behavior and
+scientific claims: none; the audit must distinguish currently exercised
+interfaces from target ownership and must not promote an unverified parity
+claim. Expected files are this append-only entry and one Markdown inventory
+under `plan/baseline/`. Acceptance requires source-derived public seams,
+module/function ownership, direct cross-repository imports, solver-ready array
+contract fields, duplicated-owner/deletion candidates, and prospective parity
+and gradient gates with exact reproduction commands. Run Markdown hygiene,
+release-contract, architecture, size, and diff checks. Roll back if ownership
+is inferred only from roadmap prose, if a deletion candidate lacks a named
+replacement and gate, or if this documentation change alters packaged code.
+
+## 2026-08-28 — equilibrium ExB-shear readiness audit scope
+
+Task: close the Phase 0 readiness audit and decide whether the existing
+equilibrium-flow-shear research implementation enters the GKX 3.0 stable gate
+or moves to the first GKX 3.1 physics lane. Non-goals: no shearing-coordinate,
+remap, operator, integrator, timestep, boundary, input, solver, physics,
+artifact, or performance implementation change; no failed gate is retuned.
+Baseline: GKX `4104bf4a2d7463fcd56e9c38434d88510377d2b4`, including the tracked
+fixed-step response artifact generated at source revision `bc2fe552`. Affected
+behavior and scientific claims: no runtime behavior changes; the audit must
+make the release boundary unambiguous and preserve negative evidence. Expected
+files are this append-only entry and one Markdown snapshot under
+`plan/baseline/`. Acceptance requires a source/test/evidence matrix for the
+coordinate, remap, cache, explicit, IMEX, derivative, boundary, nonlinear
+transport, comparison, and input-file gates; exact artifact statistics and
+reproduction commands; and a yes/no 3.0 decision using the preapproved rule.
+Run the owning flow-shear artifact contracts, release contracts, architecture,
+size, documentation, and diff checks. Roll back if the audit promotes a failed
+transport result, weakens a prospective threshold, hides the research API, or
+changes executable behavior.
+
+## 2026-08-28 — explicit/IMEX/Diffrax ownership audit scope
+
+Task: freeze every shipped time-integration route, its runtime selector,
+public seam, scientific scope, and migration gate so Phase 2 can promote one
+native explicit owner, one native IMEX owner, and remove Diffrax without
+silently losing behavior. Non-goals: no tableau, solver, tolerance, default,
+configuration, dependency, public API, numerical result, or performance
+change. Baseline: GKX `4104bf4a2d7463fcd56e9c38434d88510377d2b4` with
+Diffrax/Equinox still declared and the native routes already carrying several
+production seams. Affected behavior and scientific claims: none; the audit
+must label implemented versus validated behavior and cannot declare migration
+complete. Expected files are this append-only entry and one Markdown inventory
+under `plan/baseline/`. Acceptance requires source-derived call graphs and
+configuration choices; explicit/IMEX/Diffrax capability and test matrices;
+value/order/stability/restart/diagnostic/AD/device migration gates; direct
+workflow commands; and named deletion candidates. Run the focused integrator
+tests, release contracts, typing, architecture/size, documentation, and diff
+checks. Roll back if an owner is selected by roadmap prose rather than current
+code evidence, if a Diffrax-only behavior is omitted, or if executable code is
+changed.
+
+## 2026-08-28 — local-only external comparison protocol scope
+
+Task: close the Phase 0 external-comparison policy gate with an executable
+local workspace contract for GX, stella, and GS2 and a promotion path from
+cross-code findings to self-contained GKX evidence. Non-goals: no external
+code build, run, source, input, binary, raw output, scientific threshold,
+normalization, GKX solver, permanent oracle, or CI dependency change. Baseline:
+GKX `cb2219bbf835a7f96817bf766bbbfc29c992a0b5`, GX
+`3865a53778862e1686f414bf6f416339e24887c9`, stella
+`2b8e269f2addd0baa5991057eafa022135e04498`, and GS2
+`4d8c94bcfd976ed5d04ec83e776c3d915038a589`. Affected public behavior and
+scientific claims: none; this audit separates local comparison evidence from
+release assertions and cannot declare either implementation correct from a
+single disagreement. Expected files are this append-only entry and one Phase 0
+protocol under `plan/baseline/`. Acceptance requires exact repository/build/
+input/normalization/resolution/timestep/residual/postprocessor provenance;
+local path and raw-output exclusion rules; staged disagreement diagnosis;
+GX/stella/GS2 command templates; and an explicit rule for translating a
+finding into a self-contained GKX test or compact versioned summary. Run the
+comparison-tool tests, release contracts, typing, architecture/size,
+documentation, and diff checks. Roll back if the protocol permits raw external
+outputs in Git, a version-agnostic golden oracle, an external executable in
+permanent CI, or an unsupported cross-code accuracy claim.
+
+## 2026-08-28 — self-contained numerical fingerprint scope
+
+Task: close the Phase 0 numerical-fingerprint inventory with selected
+self-contained linear, nonlinear, geometry, collision, restart,
+differentiation, and optimization cases. Non-goals: no solver, model,
+normalization, tolerance, runtime default, public API, output format, generated
+artifact, scientific threshold, or performance claim change. Baseline: GKX
+`cb2219bbf835a7f96817bf766bbbfc29c992a0b5` with the corrected prepared CPU/GPU
+profiles from #132. Affected public behavior and scientific claims: none; the
+snapshot distinguishes exact/analytic identities, dtype-aware numerical
+fingerprints, performance metadata, and negative claim boundaries. Expected
+files are this append-only entry and one Markdown inventory under
+`plan/baseline/`; existing tracked self-contained artifacts remain unchanged.
+Acceptance requires exact file SHA-256 values and selected JSON paths; named
+source tests or builders; no external executable/output or private path in the
+new snapshot; direct hash/value reproduction; focused owning tests; release
+contracts; typing; architecture/size; documentation; and diff checks. Roll
+back if an artifact cannot be reproduced from GKX-owned inputs, if a hardware
+timing is treated as a numerical invariant, if a negative gate is promoted, or
+if executable code changes.
+
+## 2026-08-28 — Phase 0 merged-foundation closeout
+
+- **Merged foundations:** the approved roadmap merged in PR #122 as
+  `ec446fb8e7b7fff8f72e8dd857927399996f42b6`; the reproducible Phase 0
+  measurement/API/dependency baseline merged in PR #131 as
+  `4104bf4a2d7463fcd56e9c38434d88510377d2b4`; corrected prepared profiles
+  merged in PR #132 as `cb2219bbf835a7f96817bf766bbbfc29c992a0b5`;
+  startup-profiler handoff repair merged in PR #137 as
+  `ef85df88253fd731e8fecd0b49f9864bff6028f2`; the 1.8.2 output-schema
+  inventory merged in PR #134 as `a30489f3a53b70a2b53f5c9f63d166897111de1e`;
+  the repaired nonlinear-adjoint profiler merged in PR #136 as
+  `0a0a9b4539e44e24c518d056318aee602cd5d4d1`; and the GX provenance ledger
+  and distribution notice merged in PR #135 as
+  `4884598617f53fa58f5e7f26724487364462ca1c`.
+- **Final prepared-run measurements:** the matched Cyclone 64x64x24,
+  200-adaptive-step case has CPU warm median `55.33224799996242 s`,
+  prepare/compile/first `58.870820792 s`, and host RSS `1,807,368,192 B`.
+  RTX A4000 GPU 1 has warm median `4.325974703999236 s`,
+  prepare/compile/first `13.515269163 s`, peak device memory `417,082,624 B`,
+  live device memory `101,654,016 B`, and host RSS `1,845,723,136 B`; the
+  warm CPU/GPU ratio is `12.790700775`. CPU/GPU relative L2 differences are
+  `4.44698e-4` for final state, `1.8028e-6` for phi, `3.5484e-6` for heat
+  flux, and `1.492e-7` for the timestep trace.
+- **Final startup and adjoint measurements:** one-step startup totals are
+  `9.697 s` on CPU and `29.926 s` on the RTX A4000, with matched RHS norms to
+  approximately `1e-6`. On the exact 16x16x16, 64-step checkpoint case, CPU
+  step/block warm times are `1.882767833/3.126297500 s` and temporary memory
+  `369,874,760/71,167,912 B` (5.1972x reduction); GPU step/block warm times
+  are `0.118627214/0.220419216 s` and temporary memory
+  `338,415,376/33,365,944 B` (10.1425x reduction). Step/block gradients agree
+  to `3.1267e-7` relative; CPU/GPU objective and gradient differences are
+  `3.8712e-6` and `3.8563e-6` relative.
+- **Changed baseline counts:** merged main contains 199 installable source
+  Python files and 91,494 lines, 101 test files and 87,045 lines, 89 tool
+  files and 72,225 lines, and no remaining developer-script Python files.
+  The Phase 0 source fixes did not increase installable source lines; focused
+  profiler and release regressions account for the test/tool changes.
+- **Decisions:** the existing equilibrium ExB-shear research lane does not
+  meet the bounded GKX 3.0 transport gate and is deferred to the first GKX
+  3.1 physics lane without threshold retuning. VMEX owns live
+  equilibrium-to-field-line mapping, `booz_xform_jax` owns Boozer transforms,
+  and GKX owns the generic flux-tube contract and solver consumption. Native
+  explicit RK and one native IMEX route are the target owners; Diffrax remains
+  until the frozen parity gates pass. External GX/stella/GS2 results remain
+  local diagnostics and must be promoted only as self-contained GKX tests or
+  compact versioned summaries.
+- **SOLVAX coordination:** Eisenstat--Walker forcing merged in SOLVAX PR #86
+  as `b82cc5b0c9b6eac8119379d94209c4c42c32c16a`; fixed-work masked GMRES and
+  Newton--Krylov loops merged in SOLVAX PR #90 as
+  `d03df780ab0e4d22239142bc9cbe65c6113ae2c0`. GKX adoption and application-
+  level CPU/GPU profiling remain separate Phase 2/5 work and are not implied
+  by the generic solver merge.
+- **Deferred issues:** persisted outputs still lack an explicit schema version;
+  VMEX lacks the target WOUT-to-live-state array contract; the broad float32
+  quasilinear implicit-sensitivity example exceeds its present tolerance while
+  the frozen selected case and x64 run pass; raw external-code outputs remain
+  excluded; and architecture/file-count targets remain deliberately unmet at
+  the frozen baseline.
+- **Next unblocked task:** after this documentation-only closeout passes its
+  gates, begin Phase 1 with one small PR introducing immutable `Case` and
+  `LinearResult`/`NonlinearResult`/`ScanResult` contracts around the existing
+  configuration and runtime-result owners, without moving kernels or copying
+  state arrays.

@@ -1,88 +1,147 @@
 # GKX 1.8.2 dependency and runtime-import inventory
 
-Baseline packaging commit: `7c4d4598bbd1263fd451a57dc814ac50c65579f3` after the optional-dependency repair. Counts cover Python files under `src/gkx`; test, documentation, and developer-tool imports are not runtime-package requirements.
+Status: Phase 0 packaging snapshot; documentation only. Baseline:
+`4104bf4a2d7463fcd56e9c38434d88510377d2b4`, after the pandas/Rich base-wheel
+repair. Counts are AST-derived from the 199 Python files under `src/gkx`.
 
-## Core declarations
+## Base requirements
 
-| Requirement | Import root | Static source files | Literal dynamic files | Finding |
-| --- | --- | ---: | ---: | --- |
-| `jax>=0.10.1` | `jax` | 114 | 0 | Core array/JIT/autodiff runtime. |
-| `jaxlib>=0.10.1` | `jaxlib` | 0 | 0 | Declared companion lower bound; no direct Python import. |
-| `numpy` | `numpy` | 106 | 0 | Host arrays, serialization, and validation numerics. |
-| `matplotlib` | `matplotlib` | 9 | 0 | Plotting and figure artifacts. |
-| `scipy` | `scipy` | 4 | 0 | Reference numerics and selected analysis routines. |
-| `netCDF4` | `netCDF4` | 14 | 0 | Runtime and artifact NetCDF I/O. |
-| `diffrax` | `diffrax` | 1 | 0 | Legacy/promoted-audit integration route pending Phase 2 consolidation. |
-| `equinox` | `equinox` | 1 | 0 | PyTree/module utilities used by the Diffrax route. |
-| `solvax>=0.12.0` | `solvax` | 7 | 0 | Matrix-free eigensolver and implicit-solver ownership. |
-| `booz_xform_jax` | `booz_xform_jax` | 0 | 3 | Loaded literally through importlib in geometry bridges. |
-| `tqdm` | `tqdm` | 0 | 0 | No package-source import found; deletion candidate pending CLI/user audit. |
+| Declaration | Static import files | Literal dynamic import owners | Observed role | Phase 1 disposition to prove |
+|---|---:|---|---|---|
+| `jax>=0.10.1` | 114 | none | core arrays, transforms, compilation, AD, devices | retain core with tested floor/latest stacks |
+| `jaxlib>=0.10.1` | 0 | none | compiled JAX backend and version compatibility | retain explicit compatible floor even without a Python import |
+| `numpy` | 106 | none | host arrays, I/O, validation, plotting | retain core |
+| `matplotlib` | 9 | none | plotting and demo modules | decide core versus plotting extra through clean-wheel workflow tests |
+| `scipy` | 4 | none | interpolation/integration and linear-solver helpers | retain only exercised owners after consolidation |
+| `netCDF4` | 14 | none | canonical/runtime and foreign NetCDF I/O | retain core while NetCDF is the canonical result format |
+| `diffrax` | 1 | none | temporary integrator oracle through `diffrax_core.py` | remove after native explicit/IMEX migration parity |
+| `equinox` | 1 | none | Diffrax runtime seam | remove with Diffrax unless another promoted owner remains |
+| `solvax>=0.12.0` | 7 | none | Krylov/implicit solves and custom derivatives | retain only validated algorithms and keep a released-version lane |
+| `booz_xform_jax` | 0 | three direct `import_module` owners plus backend discovery | optional VMEC/Boozer bridge | move out of GKX core after geometry ownership/parity and clean-wheel gates |
+| `tqdm` | 0 | none | no executable use under `src/gkx` | remove unless a promoted workflow demonstrates an owner |
+
+The static count includes imports under type-checking or guarded scopes; the
+exceptions are called out below. A zero import count is not automatically an
+unused dependency: `jaxlib` supplies JAX's executable backend. Conversely,
+declaration does not justify retention: `tqdm` has no source owner.
 
 ## Optional extras
 
-| Extra | Declared requirement | Package-source relation |
-| --- | --- | --- |
-| `docs` | `sphinx` | development/documentation/release only |
-| `docs` | `sphinx-rtd-theme` | development/documentation/release only |
-| `docs` | `matplotlib` | also a core dependency |
-| `release` | `build` | development/documentation/release only |
-| `release` | `twine` | development/documentation/release only |
-| `dev` | `pytest` | development/documentation/release only |
-| `dev` | `pytest-cov` | development/documentation/release only |
-| `dev` | `ruff==0.16.4` | development/documentation/release only |
-| `dev` | `mypy` | development/documentation/release only |
-| `dev` | `mpmath` | development/documentation/release only |
-| `dev` | `gmpy2` | development/documentation/release only |
-| `dev` | `pandas` | lazy zonal dataframe/CSV helpers; no base import required |
-| `dev` | `Pillow` | lazy image optimization in `gkx.artifacts.figure_style` |
-| `dev` | `mkdocs` | development/documentation/release only |
-| `dev` | `sphinx` | development/documentation/release only |
-| `dev` | `sphinx-rtd-theme` | development/documentation/release only |
-| `dev` | `matplotlib` | also a core dependency |
-| `dev` | `build` | development/documentation/release only |
-| `dev` | `twine` | development/documentation/release only |
-| `assets` | `Pillow` | lazy image optimization in `gkx.artifacts.figure_style` |
-| `validation` | `pandas` | lazy zonal dataframe/CSV helpers; no base import required |
+| Extra | Declarations | Source ownership |
+|---|---|---|
+| `docs` | Sphinx, RTD theme, matplotlib | documentation build configuration and plots |
+| `release` | build, twine | distribution build/metadata checks; no installable-source import |
+| `dev` | pytest, pytest-cov, pinned Ruff, MyPy, mpmath, gmpy2, pandas, Pillow, MkDocs, Sphinx/theme, matplotlib, build, twine | tests, lint/type tools, validation, assets, docs, and release |
+| `assets` | Pillow | optional PNG palette quantization in `save_figure` |
+| `validation` | pandas | zonal dataframe/CSV helpers through `_require_pandas` |
 
-## Imported roots outside core declarations
+The base-wheel repair makes pandas truly optional: `DataFrame` is type-only at
+runtime and dataframe/CSV helpers load pandas with one actionable error.
+Pillow is imported inside the palette-quantization branch only. Neither is a
+base import requirement.
 
-| Import root | Static source files | Literal dynamic files | Classification |
-| --- | ---: | ---: | --- |
-| `PIL` | 1 | 0 | covered by the `assets`/`dev` Pillow extra; lazy function import |
-| `booz_xform` | 0 | 1 | optional backend fallback, not supplied by `booz_xform_jax` and not declared by GKX |
-| `cycler` | 1 | 0 | direct import supplied transitively by core matplotlib; declare directly or import through matplotlib |
-| `pandas` | 1 | 1 | TYPE_CHECKING plus lazy import; covered by the `validation`/`dev` extra |
-| `tomli` | 1 | 0 | Python <3.11 fallback is unreachable under requires-python >=3.11; cleanup candidate |
-| `vmex` | 1 | 4 | optional geometry/optimization bridge loaded statically in one local scope and dynamically elsewhere; ownership matrix required before packaging decision |
+## Imported but not directly declared
 
-## Literal dynamic-import files
+| Import | Files | Boundary | Finding |
+|---|---:|---|---|
+| `cycler` | 1 | unconditional module import in `artifacts/figure_style.py` | supplied transitively by matplotlib but used directly; either declare it, use matplotlib's public exposure, or remove the direct dependency |
+| `PIL` | 1 | guarded function-local import | correctly covered by `assets`/`dev`, not base |
+| `pandas` | 1 static type-only plus 1 literal dynamic owner | guarded optional feature | correctly covered by `validation`/`dev` after #130 |
+| `tomli` | 1 fallback branch | Python `<3.11` only | unreachable under current `requires-python >=3.11`; the module docstring still claims Python 3.10 support and is stale |
+| `vmex` | 1 guarded import plus 4 literal dynamic owners | optional live-equilibrium integration | intentionally not declared in GKX core; must remain an optional one-way adapter |
+| `booz_xform` | 1 literal dynamic owner | optional legacy/Fortran-compatible backend | not declared; auto-discovery must fail clearly when absent |
 
-### `booz_xform_jax`
+Standard-library and internal `gkx` imports are excluded from dependency
+decisions. `PIL` maps to the Pillow distribution, and `tomli` maps to the
+backport distribution rather than its import spelling.
 
-- `src/gkx/geometry/booz_xform_bridge.py`
-- `src/gkx/geometry/vmec_boozer_constants.py`
-- `src/gkx/geometry/vmec_boozer_core.py`
+## Literal dynamic-import ownership
 
-### `pandas`
+- `booz_xform_jax.jax_api` is loaded directly by
+  `geometry/booz_xform_bridge.py`, `geometry/vmec_boozer_constants.py`, and
+  `geometry/vmec_boozer_core.py`; `backend_discovery.py` also resolves the
+  package through its generic search helper.
+- VMEX is loaded by `geometry/booz_xform_bridge.py`,
+  `vmec_boozer_constants.py`, `vmec_boozer_core.py`,
+  `vmec_state_sensitivity.py`, and `vmec_tensor_mapping.py`.
+- pandas is loaded only by
+  `diagnostics/zonal_validation.py:_require_pandas` outside type checking.
+- The runtime imports no `tqdm` symbol and no literal dynamic `tqdm` module.
 
-- `src/gkx/diagnostics/zonal_validation.py`
+These paths reinforce the geometry ownership audit: live VMEX and Boozer
+integration should become a small optional composition, not define the base
+installation.
 
-### `vmex`
+## Direct-import file owners
 
-- `src/gkx/geometry/vmec_boozer_constants.py`
-- `src/gkx/geometry/vmec_boozer_core.py`
-- `src/gkx/geometry/vmec_state_sensitivity.py`
-- `src/gkx/geometry/vmec_tensor_mapping.py`
+Compact source ownership for the smaller declared dependencies is:
 
-## Decisions exposed by the inventory
+- SciPy: `geometry/imported_vmec.py`,
+  `geometry/vmec_boozer_derivatives.py`,
+  `geometry/vmec_field_line_sampling.py`, and `solvers/linear/krylov.py`.
+- Diffrax and Equinox: `solvers/time/diffrax_core.py` only.
+- SOLVAX: `geometry/autodiff_checks.py`, `objectives/core.py`,
+  `solvers/linear/adaptive_propagator.py`, `solvers/linear/implicit.py`,
+  `solvers/linear/krylov.py`, `solvers/linear/krylov_algorithms.py`, and
+  `solvers/nonlinear/imex.py`.
+- Matplotlib: eight `artifacts` modules plus `workflows/demo.py`.
+- NetCDF4: fourteen artifact, calibration, geometry, and WOUT owners. This is
+  consistent with the frozen canonical output contract, but should consolidate
+  behind the result/I/O owner in Phase 2.
 
-- `tqdm` is declared but unused under `src/gkx`; verify console and downstream obligations before deleting it.
-- `cycler` is imported directly but only transitively declared through matplotlib; Phase 1 packaging should either declare it or route the import through the owner dependency.
-- `booz_xform` is an undeclared optional fallback; make it an explicit extra or remove the fallback after the JAX bridge owns the supported path.
-- `tomli` is dead compatibility code at the Python 3.11 floor.
-- VMEX remains optional in package metadata even though several promoted geometry/objective paths load it; the VMEX/GKX ownership matrix must decide whether those paths move to VMEX, become an explicit extra, or leave the GKX 3 surface.
-- `jaxlib` is explicitly lower-bounded without a direct import, while JAX also owns its runtime dependency; retain only if the independent compatibility rationale survives the minimum-stack audit.
+JAX and NumPy are intentionally pervasive (114 and 106 files). Their counts
+are architecture evidence: consolidation must reduce import sites with module
+ownership, not add wrapper dependencies around arrays.
+
+## Packaging obligations
+
+1. Test Python 3.11 with minimum compatible versions and a current supported
+   stack. Import-only tests are insufficient for JAX/JAXLIB and SOLVAX.
+2. A base wheel must run analytic/Miller linear and nonlinear smoke workflows,
+   write/read canonical outputs, and plot only if matplotlib remains core.
+3. Validation and asset extras must be tested both absent (actionable errors)
+   and present (dataframe/CSV and palette output work).
+4. VMEX and Boozer workflows need their own explicit optional install contract;
+   local-checkout discovery is not a packaging interface.
+5. Native explicit/IMEX parity must land before removing Diffrax/Equinox.
+6. Remove `tqdm` only in a focused dependency PR with clean-wheel and CLI
+   evidence; this audit does not change metadata.
+7. Resolve the direct `cycler` import instead of relying silently on a
+   transitive dependency.
+8. Delete the obsolete Python 3.10 `tomli` fallback and stale support wording
+   only in a separate source-neutral cleanup after the floor gate confirms
+   Python 3.11.
 
 ## Reproduction
 
-Parse `pyproject.toml` with `tomllib`; parse every `src/gkx/*.py` file with `ast`; count top-level roots from `import`/`from` nodes and literal string roots passed to `import_module`. Conditional and type-checking imports are then classified by source inspection, not counted as unconditional imports.
+```bash
+python - <<'PY'
+import ast
+import tomllib
+from pathlib import Path
+
+root = Path('.')
+project = tomllib.loads((root / 'pyproject.toml').read_text())['project']
+print(project['dependencies'])
+print(project['optional-dependencies'])
+
+owners = {}
+for path in sorted((root / 'src/gkx').rglob('*.py')):
+    tree = ast.parse(path.read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names = [alias.name.split('.')[0] for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names = [node.module.split('.')[0]]
+        else:
+            names = []
+        for name in names:
+            owners.setdefault(name, set()).add(str(path))
+for name, paths in sorted(owners.items()):
+    print(name, len(paths))
+PY
+```
+
+Literal `importlib.import_module` calls and generic backend-discovery calls must
+also be reviewed; the static loop alone deliberately cannot infer their
+runtime requirement level.
