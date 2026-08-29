@@ -2241,3 +2241,31 @@ imports, literal `import_module` ownership, and explicit rows for imported but
 transitive/optional modules and declared but unused modules. Roll back if an
 import is inferred from prose or if conditional/type-checking imports are
 presented as unconditional runtime requirements.
+
+## 2026-08-28 — Phase 0 current-output-schema inventory scope
+
+- **Task:** freeze GKX 1.8.2's current Python result containers and persisted
+  linear, scan, nonlinear-table, nonlinear-NetCDF, restart, and quasilinear
+  artifact contracts, including file naming, required and conditional keys,
+  columns, array dimensions, dtypes, and known compatibility obligations.
+- **Non-goals:** no schema redesign or version tag; no writer, loader, solver,
+  numerical-default, public-API, dependency, performance, or physics change;
+  no generated artifacts or raw run data committed.
+- **Baseline:** branch `plan/phase0-output-schema` from GKX `main` at
+  `4104bf4a2d7463fcd56e9c38434d88510377d2b4` (the merged Phase 0 baseline
+  inventory, PR #131).
+- **Affected behavior and claims:** documentation only. The inventory will
+  describe de facto 1.8.2 behavior and explicitly identify conditional output
+  and the absence of a persisted output-schema version; it will not claim that
+  every current field is a permanent GKX 3 contract.
+- **Expected files:** add
+  `plan/baseline/gkx_1_8_2_output_schema.md` and append this work-log entry.
+  No file is expected to move or be deleted.
+- **Acceptance:** mechanically compare documented result fields, JSON keys,
+  CSV headers, NetCDF groups/variables/dimensions, and artifact suffixes with
+  the source; run focused runtime-artifact and NetCDF artifact tests; verify no
+  product source or test file changed; run repository size and documentation
+  link/build checks if the new inventory is linked into rendered docs.
+- **Rollback:** abandon this branch if the schema cannot be derived exactly
+  from the frozen source without changing production code; otherwise revert
+  the documentation-only commit with no runtime or data migration.
