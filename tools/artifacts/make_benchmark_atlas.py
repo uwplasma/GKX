@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from gkx.utils import tomlcompat as tomllib
+import tomllib
 
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt

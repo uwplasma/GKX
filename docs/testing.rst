@@ -1211,9 +1211,9 @@ any Sphinx warning from a stale directive is an error.
 **5. The** ``python-floor`` **job.** Every other job pins 3.11 explicitly;
 this one installs at the declared ``requires-python`` floor and collects the
 whole suite, because collection is where an import that does not exist on the
-floor actually fails. It is also where the "no per-module ``tomllib``/``tomli``
-try/except" rule is enforced: TOML reads go through ``gkx.utils.tomlcompat``,
-the repository's only shim.
+floor actually fails. The floor is 3.11, where ``tomllib`` is part of the
+standard library, so TOML reads import it directly; a release gate forbids the
+``tomli`` backport rather than requiring a shim around it.
 
 .. code-block:: bash
 

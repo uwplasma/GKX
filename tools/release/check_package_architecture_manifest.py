@@ -21,7 +21,7 @@ from typing import Any, Iterable
 # no install, so reach the repository's single TOML shim through ``src``.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from gkx.utils import tomlcompat as tomllib
+import tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = REPO_ROOT / "tools" / "package_architecture_manifest.toml"

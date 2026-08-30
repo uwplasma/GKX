@@ -171,7 +171,7 @@ def _read_deck(source: str | Path) -> tuple[dict[str, Any] | None, Path | None]:
     path = Path(f"{_artifact_base(Path(source))}.toml")
     if not path.is_file():
         return None, None
-    from gkx.utils import tomlcompat as tomllib
+    import tomllib
 
     try:
         return tomllib.loads(path.read_text(encoding="utf-8")), path

@@ -1,0 +1,2437 @@
+{
+ "modules": [
+  {
+   "module": "gkx.artifacts.io",
+   "file": "src/gkx/artifacts/io.py",
+   "lines": 1086,
+   "imports": 3,
+   "imported_by": 7
+  },
+  {
+   "module": "gkx.artifacts.nonlinear_netcdf",
+   "file": "src/gkx/artifacts/nonlinear_netcdf.py",
+   "lines": 1056,
+   "imports": 7,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.workflows.nonlinear",
+   "file": "src/gkx/workflows/nonlinear.py",
+   "lines": 1000,
+   "imports": 12,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.workflows.runtime.commands",
+   "file": "src/gkx/workflows/runtime/commands.py",
+   "lines": 1000,
+   "imports": 8,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.linear.collisions",
+   "file": "src/gkx/operators/linear/collisions.py",
+   "lines": 999,
+   "imports": 1,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.solvers.linear.krylov_algorithms",
+   "file": "src/gkx/solvers/linear/krylov_algorithms.py",
+   "lines": 999,
+   "imports": 7,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.solvers.linear.implicit",
+   "file": "src/gkx/solvers/linear/implicit.py",
+   "lines": 990,
+   "imports": 6,
+   "imported_by": 6
+  },
+  {
+   "module": "gkx.parallel.integrators",
+   "file": "src/gkx/parallel/integrators.py",
+   "lines": 986,
+   "imports": 15,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.workflows.linear",
+   "file": "src/gkx/workflows/linear.py",
+   "lines": 980,
+   "imports": 10,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.linear.cache_builder",
+   "file": "src/gkx/operators/linear/cache_builder.py",
+   "lines": 973,
+   "imports": 7,
+   "imported_by": 15
+  },
+  {
+   "module": "gkx.solvers.nonlinear.state_integration",
+   "file": "src/gkx/solvers/nonlinear/state_integration.py",
+   "lines": 967,
+   "imports": 19,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.diagnostics.analysis",
+   "file": "src/gkx/diagnostics/analysis.py",
+   "lines": 955,
+   "imports": 4,
+   "imported_by": 6
+  },
+  {
+   "module": "gkx.terms.assembly",
+   "file": "src/gkx/terms/assembly.py",
+   "lines": 954,
+   "imports": 8,
+   "imported_by": 17
+  },
+  {
+   "module": "gkx.diagnostics.nonlinear_gradient_statistics",
+   "file": "src/gkx/diagnostics/nonlinear_gradient_statistics.py",
+   "lines": 952,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.operators.linear.dissipation",
+   "file": "src/gkx/operators/linear/dissipation.py",
+   "lines": 951,
+   "imports": 5,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.geometry.vmec_boozer_core",
+   "file": "src/gkx/geometry/vmec_boozer_core.py",
+   "lines": 948,
+   "imports": 6,
+   "imported_by": 9
+  },
+  {
+   "module": "gkx.geometry.imported_miller",
+   "file": "src/gkx/geometry/imported_miller.py",
+   "lines": 941,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.geometry.vmec_flux_tube_reports",
+   "file": "src/gkx/geometry/vmec_flux_tube_reports.py",
+   "lines": 938,
+   "imports": 9,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.diagnostics.nonlinear_transport_optimization",
+   "file": "src/gkx/diagnostics/nonlinear_transport_optimization.py",
+   "lines": 930,
+   "imports": 1,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.solvers.linear.parallel_electrostatic",
+   "file": "src/gkx/solvers/linear/parallel_electrostatic.py",
+   "lines": 928,
+   "imports": 11,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.diagnostics.moments",
+   "file": "src/gkx/diagnostics/moments.py",
+   "lines": 923,
+   "imports": 7,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.diagnostics.metadata",
+   "file": "src/gkx/diagnostics/metadata.py",
+   "lines": 916,
+   "imports": 0,
+   "imported_by": 9
+  },
+  {
+   "module": "gkx.diagnostics.transport_windows",
+   "file": "src/gkx/diagnostics/transport_windows.py",
+   "lines": 911,
+   "imports": 1,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.geometry.vmec_field_line_sampling",
+   "file": "src/gkx/geometry/vmec_field_line_sampling.py",
+   "lines": 910,
+   "imports": 1,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.diagnostics.zonal_validation",
+   "file": "src/gkx/diagnostics/zonal_validation.py",
+   "lines": 909,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.workflows.runtime.orchestration_scan",
+   "file": "src/gkx/workflows/runtime/orchestration_scan.py",
+   "lines": 902,
+   "imports": 7,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.benchmarking.shared",
+   "file": "src/gkx/benchmarking/shared.py",
+   "lines": 898,
+   "imports": 9,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.geometry.autodiff_checks",
+   "file": "src/gkx/geometry/autodiff_checks.py",
+   "lines": 888,
+   "imports": 1,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.objectives.core",
+   "file": "src/gkx/objectives/core.py",
+   "lines": 887,
+   "imports": 11,
+   "imported_by": 9
+  },
+  {
+   "module": "gkx.terms.nonlinear",
+   "file": "src/gkx/terms/nonlinear.py",
+   "lines": 887,
+   "imports": 2,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.solvers.nonlinear.diagnostics",
+   "file": "src/gkx/solvers/nonlinear/diagnostics.py",
+   "lines": 886,
+   "imports": 7,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.diagnostics.quasilinear_calibration",
+   "file": "src/gkx/diagnostics/quasilinear_calibration.py",
+   "lines": 885,
+   "imports": 1,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.objectives.vmec_boozer_line_search",
+   "file": "src/gkx/objectives/vmec_boozer_line_search.py",
+   "lines": 882,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.artifacts.plotting",
+   "file": "src/gkx/artifacts/plotting.py",
+   "lines": 869,
+   "imports": 6,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.artifacts.transport_figures",
+   "file": "src/gkx/artifacts/transport_figures.py",
+   "lines": 855,
+   "imports": 4,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.objectives.zonal",
+   "file": "src/gkx/objectives/zonal.py",
+   "lines": 851,
+   "imports": 1,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.diagnostics.growth_rates",
+   "file": "src/gkx/diagnostics/growth_rates.py",
+   "lines": 845,
+   "imports": 4,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.objectives.autodiff_validation",
+   "file": "src/gkx/objectives/autodiff_validation.py",
+   "lines": 839,
+   "imports": 1,
+   "imported_by": 7
+  },
+  {
+   "module": "gkx.objectives.vmec_boozer_fd",
+   "file": "src/gkx/objectives/vmec_boozer_fd.py",
+   "lines": 822,
+   "imports": 5,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.solvers.nonlinear.imex_diagnostics",
+   "file": "src/gkx/solvers/nonlinear/imex_diagnostics.py",
+   "lines": 816,
+   "imports": 7,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.geometry.vmec_boozer_derivatives",
+   "file": "src/gkx/geometry/vmec_boozer_derivatives.py",
+   "lines": 810,
+   "imports": 2,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.solvers.linear.krylov",
+   "file": "src/gkx/solvers/linear/krylov.py",
+   "lines": 783,
+   "imports": 4,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.operators.nonlinear.diagnostic_state",
+   "file": "src/gkx/operators/nonlinear/diagnostic_state.py",
+   "lines": 761,
+   "imports": 4,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.nonlinear.device_z",
+   "file": "src/gkx/operators/nonlinear/device_z.py",
+   "lines": 749,
+   "imports": 3,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.geometry.vmec_boundary_chain",
+   "file": "src/gkx/geometry/vmec_boundary_chain.py",
+   "lines": 730,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.diagnostics.quasilinear_model_selection",
+   "file": "src/gkx/diagnostics/quasilinear_model_selection.py",
+   "lines": 728,
+   "imports": 1,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.solvers.linear.integrators",
+   "file": "src/gkx/solvers/linear/integrators.py",
+   "lines": 720,
+   "imports": 19,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.workflows.runtime.orchestration_artifacts",
+   "file": "src/gkx/workflows/runtime/orchestration_artifacts.py",
+   "lines": 720,
+   "imports": 2,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.workflows.runtime.diagnostics",
+   "file": "src/gkx/workflows/runtime/diagnostics.py",
+   "lines": 709,
+   "imports": 3,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.objectives.vmec_boozer_gradients",
+   "file": "src/gkx/objectives/vmec_boozer_gradients.py",
+   "lines": 701,
+   "imports": 3,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.diagnostics.transport",
+   "file": "src/gkx/diagnostics/transport.py",
+   "lines": 700,
+   "imports": 5,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.geometry.imported_vmec",
+   "file": "src/gkx/geometry/imported_vmec.py",
+   "lines": 699,
+   "imports": 4,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.nonlinear.spectral_identity_integrator",
+   "file": "src/gkx/operators/nonlinear/spectral_identity_integrator.py",
+   "lines": 692,
+   "imports": 5,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.diagnostics.validation_gates",
+   "file": "src/gkx/diagnostics/validation_gates.py",
+   "lines": 675,
+   "imports": 3,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.objectives.stellarator_reduced",
+   "file": "src/gkx/objectives/stellarator_reduced.py",
+   "lines": 663,
+   "imports": 3,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.solvers.nonlinear.explicit",
+   "file": "src/gkx/solvers/nonlinear/explicit.py",
+   "lines": 661,
+   "imports": 1,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.solvers.linear.parallel_streaming",
+   "file": "src/gkx/solvers/linear/parallel_streaming.py",
+   "lines": 649,
+   "imports": 6,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.objectives.portfolio",
+   "file": "src/gkx/objectives/portfolio.py",
+   "lines": 641,
+   "imports": 1,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.objectives.vmec_transport",
+   "file": "src/gkx/objectives/vmec_transport.py",
+   "lines": 636,
+   "imports": 4,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.terms.linear_terms",
+   "file": "src/gkx/terms/linear_terms.py",
+   "lines": 628,
+   "imports": 5,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.diagnostics.quasilinear_transport",
+   "file": "src/gkx/diagnostics/quasilinear_transport.py",
+   "lines": 625,
+   "imports": 7,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.parallel.independent",
+   "file": "src/gkx/parallel/independent.py",
+   "lines": 623,
+   "imports": 2,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.diagnostics.growth_windows",
+   "file": "src/gkx/diagnostics/growth_windows.py",
+   "lines": 621,
+   "imports": 0,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.core.velocity",
+   "file": "src/gkx/core/velocity.py",
+   "lines": 617,
+   "imports": 0,
+   "imported_by": 11
+  },
+  {
+   "module": "gkx.operators.nonlinear.policies",
+   "file": "src/gkx/operators/nonlinear/policies.py",
+   "lines": 617,
+   "imports": 8,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.geometry.vmec_state_sensitivity",
+   "file": "src/gkx/geometry/vmec_state_sensitivity.py",
+   "lines": 603,
+   "imports": 6,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.solvers.time.explicit",
+   "file": "src/gkx/solvers/time/explicit.py",
+   "lines": 603,
+   "imports": 12,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.operators.nonlinear.domain_decomposition",
+   "file": "src/gkx/operators/nonlinear/domain_decomposition.py",
+   "lines": 577,
+   "imports": 1,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.operators.linear.streaming",
+   "file": "src/gkx/operators/linear/streaming.py",
+   "lines": 575,
+   "imports": 2,
+   "imported_by": 8
+  },
+  {
+   "module": "gkx.solvers.time.diffrax_streaming",
+   "file": "src/gkx/solvers/time/diffrax_streaming.py",
+   "lines": 572,
+   "imports": 7,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.objectives.vmec_transport_optimization",
+   "file": "src/gkx/objectives/vmec_transport_optimization.py",
+   "lines": 562,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.artifacts.run_summary",
+   "file": "src/gkx/artifacts/run_summary.py",
+   "lines": 557,
+   "imports": 4,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.terms.fields",
+   "file": "src/gkx/terms/fields.py",
+   "lines": 557,
+   "imports": 1,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.geometry.vmec_state_controls",
+   "file": "src/gkx/geometry/vmec_state_controls.py",
+   "lines": 546,
+   "imports": 4,
+   "imported_by": 7
+  },
+  {
+   "module": "gkx.geometry.flux_tube",
+   "file": "src/gkx/geometry/flux_tube.py",
+   "lines": 531,
+   "imports": 1,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.linear.params",
+   "file": "src/gkx/operators/linear/params.py",
+   "lines": 527,
+   "imports": 4,
+   "imported_by": 45
+  },
+  {
+   "module": "gkx.parallel.velocity_drive",
+   "file": "src/gkx/parallel/velocity_drive.py",
+   "lines": 523,
+   "imports": 3,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.workflows.runtime.initial_conditions",
+   "file": "src/gkx/workflows/runtime/initial_conditions.py",
+   "lines": 513,
+   "imports": 7,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.operators.nonlinear.spectral_core",
+   "file": "src/gkx/operators/nonlinear/spectral_core.py",
+   "lines": 505,
+   "imports": 2,
+   "imported_by": 7
+  },
+  {
+   "module": "gkx.solvers.time.explicit_cfl",
+   "file": "src/gkx/solvers/time/explicit_cfl.py",
+   "lines": 499,
+   "imports": 4,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.workflows.runtime.diagnostic_arrays",
+   "file": "src/gkx/workflows/runtime/diagnostic_arrays.py",
+   "lines": 496,
+   "imports": 2,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.runtime",
+   "file": "src/gkx/runtime.py",
+   "lines": 492,
+   "imports": 29,
+   "imported_by": 6
+  },
+  {
+   "module": "gkx.operators.nonlinear.spectral_identity_reports",
+   "file": "src/gkx/operators/nonlinear/spectral_identity_reports.py",
+   "lines": 481,
+   "imports": 2,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.solvers.nonlinear.diagnostic_integration",
+   "file": "src/gkx/solvers/nonlinear/diagnostic_integration.py",
+   "lines": 470,
+   "imports": 20,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.objectives.stellarator",
+   "file": "src/gkx/objectives/stellarator.py",
+   "lines": 469,
+   "imports": 8,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.parallel.velocity_hermite",
+   "file": "src/gkx/parallel/velocity_hermite.py",
+   "lines": 458,
+   "imports": 2,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.solvers.nonlinear.imex",
+   "file": "src/gkx/solvers/nonlinear/imex.py",
+   "lines": 454,
+   "imports": 1,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.solvers.linear.adaptive_propagator",
+   "file": "src/gkx/solvers/linear/adaptive_propagator.py",
+   "lines": 449,
+   "imports": 4,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.solvers.time.diffrax_linear",
+   "file": "src/gkx/solvers/time/diffrax_linear.py",
+   "lines": 449,
+   "imports": 8,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.objectives.solver_vmec",
+   "file": "src/gkx/objectives/solver_vmec.py",
+   "lines": 442,
+   "imports": 6,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.geometry.analytic",
+   "file": "src/gkx/geometry/analytic.py",
+   "lines": 441,
+   "imports": 1,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.cli",
+   "file": "src/gkx/cli.py",
+   "lines": 438,
+   "imports": 11,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.solvers.time.diffrax_nonlinear",
+   "file": "src/gkx/solvers/time/diffrax_nonlinear.py",
+   "lines": 427,
+   "imports": 9,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.solvers.time.explicit_diagnostics",
+   "file": "src/gkx/solvers/time/explicit_diagnostics.py",
+   "lines": 419,
+   "imports": 8,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.geometry.kernels",
+   "file": "src/gkx/geometry/kernels.py",
+   "lines": 417,
+   "imports": 0,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.objectives.stellarator_tables",
+   "file": "src/gkx/objectives/stellarator_tables.py",
+   "lines": 415,
+   "imports": 5,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.objectives.vmec_transport_branch",
+   "file": "src/gkx/objectives/vmec_transport_branch.py",
+   "lines": 405,
+   "imports": 4,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.objectives.eigen",
+   "file": "src/gkx/objectives/eigen.py",
+   "lines": 399,
+   "imports": 0,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.parallel.decomposition",
+   "file": "src/gkx/parallel/decomposition.py",
+   "lines": 399,
+   "imports": 0,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.artifacts.snapshots",
+   "file": "src/gkx/artifacts/snapshots.py",
+   "lines": 393,
+   "imports": 1,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.solvers.linear.integrator_diagnostics",
+   "file": "src/gkx/solvers/linear/integrator_diagnostics.py",
+   "lines": 392,
+   "imports": 10,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.operators.linear.collision_tables",
+   "file": "src/gkx/operators/linear/collision_tables.py",
+   "lines": 389,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.config",
+   "file": "src/gkx/config.py",
+   "lines": 384,
+   "imports": 0,
+   "imported_by": 18
+  },
+  {
+   "module": "gkx.api",
+   "file": "src/gkx/api/__init__.py",
+   "lines": 383,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.workflows.runtime.parallel_nonlinear",
+   "file": "src/gkx/workflows/runtime/parallel_nonlinear.py",
+   "lines": 383,
+   "imports": 5,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.workflows.runtime.wout",
+   "file": "src/gkx/workflows/runtime/wout.py",
+   "lines": 382,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.workflows.runtime.startup",
+   "file": "src/gkx/workflows/runtime/startup.py",
+   "lines": 359,
+   "imports": 12,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.nonlinear.parallel_contracts_spectral",
+   "file": "src/gkx/operators/nonlinear/parallel_contracts_spectral.py",
+   "lines": 356,
+   "imports": 0,
+   "imported_by": 7
+  },
+  {
+   "module": "gkx.geometry.sensitivity",
+   "file": "src/gkx/geometry/sensitivity.py",
+   "lines": 353,
+   "imports": 4,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.nonlinear.diagnostics",
+   "file": "src/gkx/operators/nonlinear/diagnostics.py",
+   "lines": 353,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.solvers.time.explicit_steps",
+   "file": "src/gkx/solvers/time/explicit_steps.py",
+   "lines": 347,
+   "imports": 4,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.workflows.runtime.chunks",
+   "file": "src/gkx/workflows/runtime/chunks.py",
+   "lines": 346,
+   "imports": 4,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.diagnostics.modes",
+   "file": "src/gkx/diagnostics/modes.py",
+   "lines": 345,
+   "imports": 0,
+   "imported_by": 13
+  },
+  {
+   "module": "gkx.objectives.vmec_boozer",
+   "file": "src/gkx/objectives/vmec_boozer.py",
+   "lines": 342,
+   "imports": 3,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.workflows.runtime.policies",
+   "file": "src/gkx/workflows/runtime/policies.py",
+   "lines": 338,
+   "imports": 4,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.geometry.booz_xform_bridge",
+   "file": "src/gkx/geometry/booz_xform_bridge.py",
+   "lines": 335,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.parallel.velocity_streaming",
+   "file": "src/gkx/parallel/velocity_streaming.py",
+   "lines": 328,
+   "imports": 4,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.solvers.linear.parallel",
+   "file": "src/gkx/solvers/linear/parallel.py",
+   "lines": 327,
+   "imports": 6,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.artifacts.spectral_layout",
+   "file": "src/gkx/artifacts/spectral_layout.py",
+   "lines": 325,
+   "imports": 0,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.artifacts.run_figures",
+   "file": "src/gkx/artifacts/run_figures.py",
+   "lines": 320,
+   "imports": 4,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.geometry.backend_discovery",
+   "file": "src/gkx/geometry/backend_discovery.py",
+   "lines": 319,
+   "imports": 0,
+   "imported_by": 10
+  },
+  {
+   "module": "gkx.workflows.runtime.toml",
+   "file": "src/gkx/workflows/runtime/toml.py",
+   "lines": 316,
+   "imports": 2,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.operators.nonlinear.brackets",
+   "file": "src/gkx/operators/nonlinear/brackets.py",
+   "lines": 310,
+   "imports": 1,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.objectives.vmec_boozer_context",
+   "file": "src/gkx/objectives/vmec_boozer_context.py",
+   "lines": 307,
+   "imports": 11,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.workflows.runtime.config",
+   "file": "src/gkx/workflows/runtime/config.py",
+   "lines": 306,
+   "imports": 1,
+   "imported_by": 13
+  },
+  {
+   "module": "gkx.solvers.time.runners",
+   "file": "src/gkx/solvers/time/runners.py",
+   "lines": 305,
+   "imports": 14,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.geometry.flux_tube_contract",
+   "file": "src/gkx/geometry/flux_tube_contract.py",
+   "lines": 302,
+   "imports": 2,
+   "imported_by": 8
+  },
+  {
+   "module": "gkx.workflows.runtime.warm_start",
+   "file": "src/gkx/workflows/runtime/warm_start.py",
+   "lines": 301,
+   "imports": 0,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.nonlinear.device_z_reports",
+   "file": "src/gkx/operators/nonlinear/device_z_reports.py",
+   "lines": 290,
+   "imports": 3,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.operators.nonlinear.spectral_identity_rhs",
+   "file": "src/gkx/operators/nonlinear/spectral_identity_rhs.py",
+   "lines": 287,
+   "imports": 3,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.linear.linked",
+   "file": "src/gkx/operators/linear/linked.py",
+   "lines": 284,
+   "imports": 0,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.parallel.velocity_plan",
+   "file": "src/gkx/parallel/velocity_plan.py",
+   "lines": 283,
+   "imports": 0,
+   "imported_by": 6
+  },
+  {
+   "module": "gkx.workflows.runtime.execution",
+   "file": "src/gkx/workflows/runtime/execution.py",
+   "lines": 280,
+   "imports": 5,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.operators.nonlinear.projection",
+   "file": "src/gkx/operators/nonlinear/projection.py",
+   "lines": 278,
+   "imports": 1,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.workflows.runtime.resolution",
+   "file": "src/gkx/workflows/runtime/resolution.py",
+   "lines": 277,
+   "imports": 9,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.geometry.differentiable",
+   "file": "src/gkx/geometry/differentiable.py",
+   "lines": 276,
+   "imports": 11,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.artifacts.gx_output",
+   "file": "src/gkx/artifacts/gx_output.py",
+   "lines": 262,
+   "imports": 2,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.diagnostics.saturation",
+   "file": "src/gkx/diagnostics/saturation.py",
+   "lines": 261,
+   "imports": 1,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.artifacts.zonal_plots",
+   "file": "src/gkx/artifacts/zonal_plots.py",
+   "lines": 248,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.core.grid",
+   "file": "src/gkx/core/grid.py",
+   "lines": 247,
+   "imports": 1,
+   "imported_by": 33
+  },
+  {
+   "module": "gkx.geometry.numerics",
+   "file": "src/gkx/geometry/numerics.py",
+   "lines": 242,
+   "imports": 0,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.operators.linear.moments",
+   "file": "src/gkx/operators/linear/moments.py",
+   "lines": 237,
+   "imports": 7,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.workflows.demo",
+   "file": "src/gkx/workflows/demo.py",
+   "lines": 235,
+   "imports": 0,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.geometry.vmec_eik",
+   "file": "src/gkx/geometry/vmec_eik.py",
+   "lines": 232,
+   "imports": 3,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.operators.nonlinear.parallel_contracts_domain",
+   "file": "src/gkx/operators/nonlinear/parallel_contracts_domain.py",
+   "lines": 231,
+   "imports": 0,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.nonlinear.collisions",
+   "file": "src/gkx/operators/nonlinear/collisions.py",
+   "lines": 221,
+   "imports": 4,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.operators.linear.cache_arrays",
+   "file": "src/gkx/operators/linear/cache_arrays.py",
+   "lines": 219,
+   "imports": 3,
+   "imported_by": 6
+  },
+  {
+   "module": "gkx.geometry.core",
+   "file": "src/gkx/geometry/core.py",
+   "lines": 214,
+   "imports": 3,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.operators.nonlinear.spectral_layout",
+   "file": "src/gkx/operators/nonlinear/spectral_layout.py",
+   "lines": 214,
+   "imports": 0,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.workflows.runtime.initial_phi",
+   "file": "src/gkx/workflows/runtime/initial_phi.py",
+   "lines": 214,
+   "imports": 1,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.linear.cache_model",
+   "file": "src/gkx/operators/linear/cache_model.py",
+   "lines": 208,
+   "imports": 0,
+   "imported_by": 37
+  },
+  {
+   "module": "gkx.geometry.vmec_boozer_drifts",
+   "file": "src/gkx/geometry/vmec_boozer_drifts.py",
+   "lines": 206,
+   "imports": 1,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.objectives.sampling",
+   "file": "src/gkx/objectives/sampling.py",
+   "lines": 197,
+   "imports": 2,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.artifacts.figure_style",
+   "file": "src/gkx/artifacts/figure_style.py",
+   "lines": 193,
+   "imports": 0,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.solvers.time.diffrax_core",
+   "file": "src/gkx/solvers/time/diffrax_core.py",
+   "lines": 188,
+   "imports": 4,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.objectives.stellarator_contracts",
+   "file": "src/gkx/objectives/stellarator_contracts.py",
+   "lines": 180,
+   "imports": 1,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.operators.nonlinear.rhs",
+   "file": "src/gkx/operators/nonlinear/rhs.py",
+   "lines": 172,
+   "imports": 6,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.operators.nonlinear.parallel_contracts_strategy",
+   "file": "src/gkx/operators/nonlinear/parallel_contracts_strategy.py",
+   "lines": 160,
+   "imports": 0,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.parallel.batch",
+   "file": "src/gkx/parallel/batch.py",
+   "lines": 159,
+   "imports": 1,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.objectives.geometry",
+   "file": "src/gkx/objectives/geometry.py",
+   "lines": 158,
+   "imports": 3,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.workflows.runtime.artifacts",
+   "file": "src/gkx/workflows/runtime/artifacts.py",
+   "lines": 158,
+   "imports": 5,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.operators.nonlinear.parallel",
+   "file": "src/gkx/operators/nonlinear/parallel.py",
+   "lines": 157,
+   "imports": 9,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.parallel.state",
+   "file": "src/gkx/parallel/state.py",
+   "lines": 156,
+   "imports": 0,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.utils.callbacks",
+   "file": "src/gkx/utils/callbacks.py",
+   "lines": 143,
+   "imports": 0,
+   "imported_by": 5
+  },
+  {
+   "module": "gkx.utils.compilation_cache",
+   "file": "src/gkx/utils/compilation_cache.py",
+   "lines": 143,
+   "imports": 0,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.geometry.miller_eik",
+   "file": "src/gkx/geometry/miller_eik.py",
+   "lines": 135,
+   "imports": 2,
+   "imported_by": 3
+  },
+  {
+   "module": "gkx.parallel.velocity",
+   "file": "src/gkx/parallel/velocity.py",
+   "lines": 133,
+   "imports": 5,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.workflows.runtime.results",
+   "file": "src/gkx/workflows/runtime/results.py",
+   "lines": 128,
+   "imports": 3,
+   "imported_by": 8
+  },
+  {
+   "module": "gkx.diagnostics.normalization",
+   "file": "src/gkx/diagnostics/normalization.py",
+   "lines": 120,
+   "imports": 0,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.solvers.linear.krylov_propagator",
+   "file": "src/gkx/solvers/linear/krylov_propagator.py",
+   "lines": 116,
+   "imports": 4,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.geometry.vmec_tensor_mapping",
+   "file": "src/gkx/geometry/vmec_tensor_mapping.py",
+   "lines": 115,
+   "imports": 1,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.parallel",
+   "file": "src/gkx/parallel/__init__.py",
+   "lines": 110,
+   "imports": 0,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.parallel.identity",
+   "file": "src/gkx/parallel/identity.py",
+   "lines": 108,
+   "imports": 0,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.geometry.vmec_boozer_constants",
+   "file": "src/gkx/geometry/vmec_boozer_constants.py",
+   "lines": 91,
+   "imports": 0,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.operators.linear",
+   "file": "src/gkx/operators/linear/__init__.py",
+   "lines": 83,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.solvers.linear.parallel_common",
+   "file": "src/gkx/solvers/linear/parallel_common.py",
+   "lines": 76,
+   "imports": 1,
+   "imported_by": 6
+  },
+  {
+   "module": "gkx.solvers.nonlinear",
+   "file": "src/gkx/solvers/nonlinear/__init__.py",
+   "lines": 75,
+   "imports": 5,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.terms.config",
+   "file": "src/gkx/terms/config.py",
+   "lines": 71,
+   "imports": 0,
+   "imported_by": 28
+  },
+  {
+   "module": "gkx.operators.linear.rhs",
+   "file": "src/gkx/operators/linear/rhs.py",
+   "lines": 70,
+   "imports": 7,
+   "imported_by": 7
+  },
+  {
+   "module": "gkx.geometry",
+   "file": "src/gkx/geometry/__init__.py",
+   "lines": 52,
+   "imports": 5,
+   "imported_by": 28
+  },
+  {
+   "module": "gkx.operators.nonlinear",
+   "file": "src/gkx/operators/nonlinear/__init__.py",
+   "lines": 46,
+   "imports": 3,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.solvers.linear",
+   "file": "src/gkx/solvers/linear/__init__.py",
+   "lines": 43,
+   "imports": 4,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.solvers.time",
+   "file": "src/gkx/solvers/time/__init__.py",
+   "lines": 43,
+   "imports": 5,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.diagnostics",
+   "file": "src/gkx/diagnostics/__init__.py",
+   "lines": 34,
+   "imports": 3,
+   "imported_by": 15
+  },
+  {
+   "module": "gkx.operators.collision",
+   "file": "src/gkx/operators/collision.py",
+   "lines": 34,
+   "imports": 0,
+   "imported_by": 9
+  },
+  {
+   "module": "gkx.artifacts.foreign_output",
+   "file": "src/gkx/artifacts/foreign_output.py",
+   "lines": 32,
+   "imports": 1,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx",
+   "file": "src/gkx/__init__.py",
+   "lines": 31,
+   "imports": 1,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.artifacts",
+   "file": "src/gkx/artifacts/__init__.py",
+   "lines": 29,
+   "imports": 1,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.terms",
+   "file": "src/gkx/terms/__init__.py",
+   "lines": 23,
+   "imports": 2,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.operators",
+   "file": "src/gkx/operators/__init__.py",
+   "lines": 16,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.workflows.runtime",
+   "file": "src/gkx/workflows/runtime/__init__.py",
+   "lines": 5,
+   "imports": 0,
+   "imported_by": 4
+  },
+  {
+   "module": "gkx.workflows",
+   "file": "src/gkx/workflows/__init__.py",
+   "lines": 3,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.benchmarking",
+   "file": "src/gkx/benchmarking/__init__.py",
+   "lines": 2,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx._version",
+   "file": "src/gkx/_version.py",
+   "lines": 1,
+   "imports": 0,
+   "imported_by": 2
+  },
+  {
+   "module": "gkx.core",
+   "file": "src/gkx/core/__init__.py",
+   "lines": 1,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.objectives",
+   "file": "src/gkx/objectives/__init__.py",
+   "lines": 1,
+   "imports": 0,
+   "imported_by": 1
+  },
+  {
+   "module": "gkx.solvers",
+   "file": "src/gkx/solvers/__init__.py",
+   "lines": 1,
+   "imports": 0,
+   "imported_by": 0
+  },
+  {
+   "module": "gkx.utils",
+   "file": "src/gkx/utils/__init__.py",
+   "lines": 1,
+   "imports": 0,
+   "imported_by": 0
+  }
+ ],
+ "edges": {
+  "gkx": [
+   "gkx._version"
+  ],
+  "gkx.artifacts": [
+   "gkx.artifacts.io"
+  ],
+  "gkx.artifacts.foreign_output": [
+   "gkx.artifacts"
+  ],
+  "gkx.artifacts.gx_output": [
+   "gkx.artifacts.figure_style",
+   "gkx.artifacts.transport_figures"
+  ],
+  "gkx.artifacts.io": [
+   "gkx.artifacts.spectral_layout",
+   "gkx.diagnostics",
+   "gkx.workflows.runtime.diagnostic_arrays"
+  ],
+  "gkx.artifacts.nonlinear_netcdf": [
+   "gkx.artifacts.io",
+   "gkx.artifacts.spectral_layout",
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_builder",
+   "gkx.runtime"
+  ],
+  "gkx.artifacts.plotting": [
+   "gkx.artifacts.foreign_output",
+   "gkx.artifacts.zonal_plots",
+   "gkx.benchmarking.shared",
+   "gkx.diagnostics.growth_rates",
+   "gkx.diagnostics.modes",
+   "gkx.workflows.runtime"
+  ],
+  "gkx.artifacts.run_figures": [
+   "gkx.artifacts.foreign_output",
+   "gkx.artifacts.plotting",
+   "gkx.artifacts.run_summary",
+   "gkx.artifacts.transport_figures"
+  ],
+  "gkx.artifacts.run_summary": [
+   "gkx.artifacts.figure_style",
+   "gkx.artifacts.plotting",
+   "gkx.artifacts.snapshots",
+   "gkx.artifacts.transport_figures"
+  ],
+  "gkx.artifacts.snapshots": [
+   "gkx.artifacts.figure_style"
+  ],
+  "gkx.artifacts.transport_figures": [
+   "gkx.artifacts.figure_style",
+   "gkx.artifacts.io",
+   "gkx.artifacts.plotting",
+   "gkx.diagnostics"
+  ],
+  "gkx.artifacts.zonal_plots": [
+   "gkx.artifacts.plotting",
+   "gkx.diagnostics.zonal_validation"
+  ],
+  "gkx.benchmarking.shared": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics.analysis",
+   "gkx.diagnostics.growth_rates",
+   "gkx.diagnostics.modes",
+   "gkx.diagnostics.normalization",
+   "gkx.geometry",
+   "gkx.operators.linear.params",
+   "gkx.solvers.linear.krylov"
+  ],
+  "gkx.cli": [
+   "gkx._version",
+   "gkx.artifacts.plotting",
+   "gkx.geometry.miller_eik",
+   "gkx.geometry.vmec_eik",
+   "gkx.runtime",
+   "gkx.utils.compilation_cache",
+   "gkx.workflows.demo",
+   "gkx.workflows.runtime",
+   "gkx.workflows.runtime.artifacts",
+   "gkx.workflows.runtime.commands",
+   "gkx.workflows.runtime.toml"
+  ],
+  "gkx.core.grid": [
+   "gkx.config"
+  ],
+  "gkx.diagnostics": [
+   "gkx.diagnostics.metadata",
+   "gkx.diagnostics.moments",
+   "gkx.diagnostics.transport"
+  ],
+  "gkx.diagnostics.analysis": [
+   "gkx.diagnostics.growth_rates",
+   "gkx.diagnostics.growth_windows",
+   "gkx.diagnostics.metadata",
+   "gkx.diagnostics.modes"
+  ],
+  "gkx.diagnostics.growth_rates": [
+   "gkx.diagnostics.growth_windows",
+   "gkx.diagnostics.modes",
+   "gkx.diagnostics.normalization",
+   "gkx.operators.linear.params"
+  ],
+  "gkx.diagnostics.moments": [
+   "gkx.core.grid",
+   "gkx.core.velocity",
+   "gkx.diagnostics.metadata",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.streaming"
+  ],
+  "gkx.diagnostics.nonlinear_transport_optimization": [
+   "gkx.diagnostics.metadata"
+  ],
+  "gkx.diagnostics.quasilinear_calibration": [
+   "gkx.diagnostics.transport_windows"
+  ],
+  "gkx.diagnostics.quasilinear_model_selection": [
+   "gkx.diagnostics.metadata"
+  ],
+  "gkx.diagnostics.quasilinear_transport": [
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.terms.assembly",
+   "gkx.terms.config"
+  ],
+  "gkx.diagnostics.saturation": [
+   "gkx.diagnostics.analysis"
+  ],
+  "gkx.diagnostics.transport": [
+   "gkx.core.grid",
+   "gkx.diagnostics.metadata",
+   "gkx.diagnostics.moments",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params"
+  ],
+  "gkx.diagnostics.transport_windows": [
+   "gkx.diagnostics.metadata"
+  ],
+  "gkx.diagnostics.validation_gates": [
+   "gkx.diagnostics.analysis",
+   "gkx.diagnostics.modes",
+   "gkx.diagnostics.transport_windows"
+  ],
+  "gkx.diagnostics.zonal_validation": [
+   "gkx.diagnostics.growth_windows",
+   "gkx.diagnostics.validation_gates"
+  ],
+  "gkx.geometry": [
+   "gkx.config",
+   "gkx.geometry.analytic",
+   "gkx.geometry.core",
+   "gkx.geometry.flux_tube",
+   "gkx.geometry.vmec_tensor_mapping"
+  ],
+  "gkx.geometry.analytic": [
+   "gkx.config"
+  ],
+  "gkx.geometry.autodiff_checks": [
+   "gkx.geometry.backend_discovery"
+  ],
+  "gkx.geometry.booz_xform_bridge": [
+   "gkx.geometry.autodiff_checks",
+   "gkx.geometry.backend_discovery"
+  ],
+  "gkx.geometry.core": [
+   "gkx.config",
+   "gkx.geometry.analytic",
+   "gkx.geometry.flux_tube"
+  ],
+  "gkx.geometry.differentiable": [
+   "gkx.geometry",
+   "gkx.geometry.autodiff_checks",
+   "gkx.geometry.backend_discovery",
+   "gkx.geometry.booz_xform_bridge",
+   "gkx.geometry.flux_tube_contract",
+   "gkx.geometry.numerics",
+   "gkx.geometry.sensitivity",
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.geometry.vmec_flux_tube_reports",
+   "gkx.geometry.vmec_state_sensitivity",
+   "gkx.geometry.vmec_tensor_mapping"
+  ],
+  "gkx.geometry.flux_tube": [
+   "gkx.geometry.analytic"
+  ],
+  "gkx.geometry.flux_tube_contract": [
+   "gkx.geometry",
+   "gkx.geometry.backend_discovery"
+  ],
+  "gkx.geometry.imported_miller": [
+   "gkx.geometry.analytic",
+   "gkx.geometry.kernels"
+  ],
+  "gkx.geometry.imported_vmec": [
+   "gkx.geometry.backend_discovery",
+   "gkx.geometry.vmec_boozer_derivatives",
+   "gkx.geometry.vmec_field_line_sampling",
+   "gkx.geometry.vmec_state_controls"
+  ],
+  "gkx.geometry.miller_eik": [
+   "gkx.geometry.imported_miller",
+   "gkx.workflows.runtime.config"
+  ],
+  "gkx.geometry.sensitivity": [
+   "gkx.geometry.autodiff_checks",
+   "gkx.geometry.backend_discovery",
+   "gkx.geometry.flux_tube_contract",
+   "gkx.objectives.autodiff_validation"
+  ],
+  "gkx.geometry.vmec_boozer_core": [
+   "gkx.geometry.core",
+   "gkx.geometry.flux_tube_contract",
+   "gkx.geometry.numerics",
+   "gkx.geometry.vmec_boozer_constants",
+   "gkx.geometry.vmec_boozer_derivatives",
+   "gkx.geometry.vmec_boozer_drifts"
+  ],
+  "gkx.geometry.vmec_boozer_derivatives": [
+   "gkx.geometry.vmec_field_line_sampling",
+   "gkx.geometry.vmec_state_controls"
+  ],
+  "gkx.geometry.vmec_boozer_drifts": [
+   "gkx.geometry.numerics"
+  ],
+  "gkx.geometry.vmec_eik": [
+   "gkx.config",
+   "gkx.geometry.imported_vmec",
+   "gkx.workflows.runtime.config"
+  ],
+  "gkx.geometry.vmec_field_line_sampling": [
+   "gkx.geometry.kernels"
+  ],
+  "gkx.geometry.vmec_flux_tube_reports": [
+   "gkx.geometry",
+   "gkx.geometry.backend_discovery",
+   "gkx.geometry.flux_tube_contract",
+   "gkx.geometry.imported_vmec",
+   "gkx.geometry.numerics",
+   "gkx.geometry.sensitivity",
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.geometry.vmec_state_controls",
+   "gkx.geometry.vmec_tensor_mapping"
+  ],
+  "gkx.geometry.vmec_state_controls": [
+   "gkx.geometry.backend_discovery",
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.geometry.vmec_boozer_derivatives",
+   "gkx.geometry.vmec_field_line_sampling"
+  ],
+  "gkx.geometry.vmec_state_sensitivity": [
+   "gkx.geometry.autodiff_checks",
+   "gkx.geometry.backend_discovery",
+   "gkx.geometry.flux_tube_contract",
+   "gkx.geometry.vmec_field_line_sampling",
+   "gkx.geometry.vmec_state_controls",
+   "gkx.geometry.vmec_tensor_mapping"
+  ],
+  "gkx.geometry.vmec_tensor_mapping": [
+   "gkx.geometry.flux_tube_contract"
+  ],
+  "gkx.objectives.autodiff_validation": [
+   "gkx.parallel"
+  ],
+  "gkx.objectives.core": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.diagnostics.quasilinear_transport",
+   "gkx.objectives.autodiff_validation",
+   "gkx.objectives.eigen",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.rhs",
+   "gkx.solvers.linear.krylov",
+   "gkx.solvers.linear.krylov_algorithms"
+  ],
+  "gkx.objectives.geometry": [
+   "gkx.geometry.autodiff_checks",
+   "gkx.geometry.flux_tube_contract",
+   "gkx.objectives.core"
+  ],
+  "gkx.objectives.portfolio": [
+   "gkx.objectives.autodiff_validation"
+  ],
+  "gkx.objectives.sampling": [
+   "gkx.config",
+   "gkx.core.grid"
+  ],
+  "gkx.objectives.solver_vmec": [
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.geometry.vmec_state_controls",
+   "gkx.objectives.core",
+   "gkx.objectives.vmec_boozer",
+   "gkx.objectives.vmec_boozer_fd",
+   "gkx.objectives.vmec_boozer_line_search"
+  ],
+  "gkx.objectives.stellarator": [
+   "gkx.geometry.backend_discovery",
+   "gkx.objectives",
+   "gkx.objectives.autodiff_validation",
+   "gkx.objectives.stellarator_contracts",
+   "gkx.objectives.stellarator_reduced",
+   "gkx.objectives.stellarator_tables",
+   "gkx.objectives.vmec_boozer",
+   "gkx.parallel"
+  ],
+  "gkx.objectives.stellarator_contracts": [
+   "gkx.objectives.portfolio"
+  ],
+  "gkx.objectives.stellarator_reduced": [
+   "gkx.diagnostics.quasilinear_transport",
+   "gkx.objectives.autodiff_validation",
+   "gkx.objectives.stellarator_contracts"
+  ],
+  "gkx.objectives.stellarator_tables": [
+   "gkx.objectives.core",
+   "gkx.objectives.portfolio",
+   "gkx.objectives.stellarator_contracts",
+   "gkx.objectives.stellarator_reduced",
+   "gkx.objectives.vmec_boozer"
+  ],
+  "gkx.objectives.vmec_boozer": [
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.objectives.core",
+   "gkx.objectives.sampling"
+  ],
+  "gkx.objectives.vmec_boozer_context": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.diagnostics.quasilinear_transport",
+   "gkx.geometry.flux_tube_contract",
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.geometry.vmec_state_controls",
+   "gkx.objectives.autodiff_validation",
+   "gkx.objectives.core",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.rhs"
+  ],
+  "gkx.objectives.vmec_boozer_fd": [
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.geometry.vmec_state_controls",
+   "gkx.objectives.core",
+   "gkx.objectives.sampling",
+   "gkx.objectives.vmec_boozer"
+  ],
+  "gkx.objectives.vmec_boozer_gradients": [
+   "gkx.objectives.autodiff_validation",
+   "gkx.objectives.geometry",
+   "gkx.objectives.vmec_boozer_context"
+  ],
+  "gkx.objectives.vmec_boozer_line_search": [
+   "gkx.objectives.core",
+   "gkx.objectives.vmec_boozer_fd"
+  ],
+  "gkx.objectives.vmec_transport": [
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.objectives.core",
+   "gkx.objectives.portfolio",
+   "gkx.objectives.stellarator"
+  ],
+  "gkx.objectives.vmec_transport_branch": [
+   "gkx.geometry.vmec_boozer_core",
+   "gkx.objectives.core",
+   "gkx.objectives.eigen",
+   "gkx.objectives.vmec_transport"
+  ],
+  "gkx.objectives.zonal": [
+   "gkx.objectives.portfolio"
+  ],
+  "gkx.operators.linear.cache_arrays": [
+   "gkx.core.velocity",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params"
+  ],
+  "gkx.operators.linear.cache_builder": [
+   "gkx.core.grid",
+   "gkx.core.velocity",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_arrays",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.linked",
+   "gkx.operators.linear.params"
+  ],
+  "gkx.operators.linear.collision_tables": [
+   "gkx.operators.collision",
+   "gkx.operators.linear.collisions"
+  ],
+  "gkx.operators.linear.collisions": [
+   "gkx.operators.collision"
+  ],
+  "gkx.operators.linear.dissipation": [
+   "gkx.operators.collision",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.moments",
+   "gkx.operators.linear.streaming",
+   "gkx.terms.config"
+  ],
+  "gkx.operators.linear.moments": [
+   "gkx.core.grid",
+   "gkx.core.velocity",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.streaming",
+   "gkx.terms.fields"
+  ],
+  "gkx.operators.linear.params": [
+   "gkx.operators.collision",
+   "gkx.operators.linear.collision_tables",
+   "gkx.operators.linear.collisions",
+   "gkx.terms.config"
+  ],
+  "gkx.operators.linear.rhs": [
+   "gkx.core.grid",
+   "gkx.geometry",
+   "gkx.operators.collision",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.terms.assembly"
+  ],
+  "gkx.operators.linear.streaming": [
+   "gkx.core.velocity",
+   "gkx.operators.linear.params"
+  ],
+  "gkx.operators.nonlinear": [
+   "gkx.operators.nonlinear",
+   "gkx.operators.nonlinear.diagnostic_state",
+   "gkx.operators.nonlinear.rhs"
+  ],
+  "gkx.operators.nonlinear.brackets": [
+   "gkx.core.grid"
+  ],
+  "gkx.operators.nonlinear.collisions": [
+   "gkx.operators.linear.cache_arrays",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.terms.config"
+  ],
+  "gkx.operators.nonlinear.device_z": [
+   "gkx.operators.nonlinear.device_z_reports",
+   "gkx.operators.nonlinear.parallel_contracts_spectral",
+   "gkx.operators.nonlinear.spectral_core"
+  ],
+  "gkx.operators.nonlinear.device_z_reports": [
+   "gkx.operators.nonlinear.domain_decomposition",
+   "gkx.operators.nonlinear.parallel_contracts_spectral",
+   "gkx.operators.nonlinear.spectral_core"
+  ],
+  "gkx.operators.nonlinear.diagnostic_state": [
+   "gkx.core.grid",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.terms.config"
+  ],
+  "gkx.operators.nonlinear.diagnostics": [
+   "gkx.diagnostics.metadata",
+   "gkx.utils.callbacks"
+  ],
+  "gkx.operators.nonlinear.domain_decomposition": [
+   "gkx.operators.nonlinear.parallel_contracts_domain"
+  ],
+  "gkx.operators.nonlinear.parallel": [
+   "gkx.operators.nonlinear.device_z",
+   "gkx.operators.nonlinear.domain_decomposition",
+   "gkx.operators.nonlinear.parallel_contracts_domain",
+   "gkx.operators.nonlinear.parallel_contracts_spectral",
+   "gkx.operators.nonlinear.parallel_contracts_strategy",
+   "gkx.operators.nonlinear.spectral_core",
+   "gkx.operators.nonlinear.spectral_identity_integrator",
+   "gkx.operators.nonlinear.spectral_identity_reports",
+   "gkx.operators.nonlinear.spectral_identity_rhs"
+  ],
+  "gkx.operators.nonlinear.policies": [
+   "gkx.core.grid",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.nonlinear.brackets",
+   "gkx.operators.nonlinear.collisions",
+   "gkx.operators.nonlinear.projection",
+   "gkx.solvers.linear.implicit",
+   "gkx.terms.config"
+  ],
+  "gkx.operators.nonlinear.projection": [
+   "gkx.operators.nonlinear.brackets"
+  ],
+  "gkx.operators.nonlinear.rhs": [
+   "gkx.operators.collision",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.terms.assembly",
+   "gkx.terms.config",
+   "gkx.terms.nonlinear"
+  ],
+  "gkx.operators.nonlinear.spectral_core": [
+   "gkx.operators.nonlinear.parallel_contracts_spectral",
+   "gkx.operators.nonlinear.spectral_layout"
+  ],
+  "gkx.operators.nonlinear.spectral_identity_integrator": [
+   "gkx.operators.nonlinear.device_z",
+   "gkx.operators.nonlinear.domain_decomposition",
+   "gkx.operators.nonlinear.parallel_contracts_spectral",
+   "gkx.operators.nonlinear.spectral_core",
+   "gkx.operators.nonlinear.spectral_identity_rhs"
+  ],
+  "gkx.operators.nonlinear.spectral_identity_reports": [
+   "gkx.operators.nonlinear.parallel_contracts_spectral",
+   "gkx.operators.nonlinear.spectral_core"
+  ],
+  "gkx.operators.nonlinear.spectral_identity_rhs": [
+   "gkx.operators.nonlinear.parallel_contracts_spectral",
+   "gkx.operators.nonlinear.spectral_core",
+   "gkx.operators.nonlinear.spectral_identity_reports"
+  ],
+  "gkx.parallel.batch": [
+   "gkx.parallel.identity"
+  ],
+  "gkx.parallel.independent": [
+   "gkx.parallel.decomposition",
+   "gkx.parallel.identity"
+  ],
+  "gkx.parallel.integrators": [
+   "gkx.diagnostics.moments",
+   "gkx.diagnostics.transport",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.rhs",
+   "gkx.operators.nonlinear.projection",
+   "gkx.parallel.state",
+   "gkx.parallel.velocity_hermite",
+   "gkx.parallel.velocity_plan",
+   "gkx.solvers.linear.parallel_common",
+   "gkx.solvers.nonlinear.state_integration",
+   "gkx.terms.assembly",
+   "gkx.terms.config",
+   "gkx.terms.fields",
+   "gkx.terms.nonlinear"
+  ],
+  "gkx.parallel.velocity": [
+   "gkx.parallel",
+   "gkx.parallel.velocity_drive",
+   "gkx.parallel.velocity_hermite",
+   "gkx.parallel.velocity_plan",
+   "gkx.parallel.velocity_streaming"
+  ],
+  "gkx.parallel.velocity_drive": [
+   "gkx.core.velocity",
+   "gkx.parallel.velocity_plan",
+   "gkx.terms.fields"
+  ],
+  "gkx.parallel.velocity_hermite": [
+   "gkx.operators.linear.streaming",
+   "gkx.parallel.velocity_plan"
+  ],
+  "gkx.parallel.velocity_streaming": [
+   "gkx.core.velocity",
+   "gkx.operators.linear.streaming",
+   "gkx.parallel.velocity_hermite",
+   "gkx.parallel.velocity_plan"
+  ],
+  "gkx.runtime": [
+   "gkx.core.grid",
+   "gkx.diagnostics.growth_rates",
+   "gkx.diagnostics.modes",
+   "gkx.diagnostics.normalization",
+   "gkx.diagnostics.quasilinear_transport",
+   "gkx.geometry",
+   "gkx.geometry.miller_eik",
+   "gkx.geometry.vmec_eik",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.params",
+   "gkx.parallel",
+   "gkx.solvers.linear.integrators",
+   "gkx.solvers.linear.krylov",
+   "gkx.solvers.nonlinear.diagnostic_integration",
+   "gkx.solvers.time.runners",
+   "gkx.terms.config",
+   "gkx.workflows.linear",
+   "gkx.workflows.nonlinear",
+   "gkx.workflows.runtime",
+   "gkx.workflows.runtime.chunks",
+   "gkx.workflows.runtime.commands",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.diagnostic_arrays",
+   "gkx.workflows.runtime.diagnostics",
+   "gkx.workflows.runtime.execution",
+   "gkx.workflows.runtime.orchestration_scan",
+   "gkx.workflows.runtime.policies",
+   "gkx.workflows.runtime.results",
+   "gkx.workflows.runtime.startup"
+  ],
+  "gkx.solvers.linear": [
+   "gkx.solvers.linear.implicit",
+   "gkx.solvers.linear.integrators",
+   "gkx.solvers.linear.krylov",
+   "gkx.solvers.linear.parallel"
+  ],
+  "gkx.solvers.linear.adaptive_propagator": [
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.linear.krylov_algorithms",
+   "gkx.solvers.linear.krylov_propagator"
+  ],
+  "gkx.solvers.linear.implicit": [
+   "gkx.operators.linear.cache_arrays",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.rhs",
+   "gkx.terms.assembly",
+   "gkx.terms.config"
+  ],
+  "gkx.solvers.linear.integrator_diagnostics": [
+   "gkx.core.grid",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_arrays",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.rhs",
+   "gkx.solvers.linear.implicit",
+   "gkx.solvers.time.explicit_steps",
+   "gkx.utils.callbacks"
+  ],
+  "gkx.solvers.linear.integrators": [
+   "gkx.core.grid",
+   "gkx.geometry",
+   "gkx.operators.collision",
+   "gkx.operators.linear.cache_arrays",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.rhs",
+   "gkx.solvers.linear.implicit",
+   "gkx.solvers.linear.integrator_diagnostics",
+   "gkx.solvers.linear.parallel",
+   "gkx.solvers.linear.parallel_common",
+   "gkx.solvers.linear.parallel_electrostatic",
+   "gkx.solvers.linear.parallel_streaming",
+   "gkx.solvers.time.explicit_steps",
+   "gkx.terms.assembly",
+   "gkx.terms.config",
+   "gkx.terms.fields",
+   "gkx.utils.callbacks"
+  ],
+  "gkx.solvers.linear.krylov": [
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.linear.adaptive_propagator",
+   "gkx.solvers.linear.krylov_algorithms"
+  ],
+  "gkx.solvers.linear.krylov_algorithms": [
+   "gkx.operators.linear.cache_arrays",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.linear.implicit",
+   "gkx.solvers.time.explicit_steps",
+   "gkx.terms.assembly",
+   "gkx.terms.config"
+  ],
+  "gkx.solvers.linear.krylov_propagator": [
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.linear.krylov_algorithms",
+   "gkx.terms.config"
+  ],
+  "gkx.solvers.linear.parallel": [
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.rhs",
+   "gkx.solvers.linear.parallel_common",
+   "gkx.solvers.linear.parallel_electrostatic",
+   "gkx.solvers.linear.parallel_streaming"
+  ],
+  "gkx.solvers.linear.parallel_common": [
+   "gkx.operators.linear.params"
+  ],
+  "gkx.solvers.linear.parallel_electrostatic": [
+   "gkx.core.velocity",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.moments",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.streaming",
+   "gkx.parallel.velocity",
+   "gkx.parallel.velocity_drive",
+   "gkx.solvers.linear.parallel_common",
+   "gkx.solvers.linear.parallel_streaming",
+   "gkx.terms.assembly",
+   "gkx.terms.config"
+  ],
+  "gkx.solvers.linear.parallel_streaming": [
+   "gkx.core.velocity",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.linear.streaming",
+   "gkx.parallel.velocity",
+   "gkx.solvers.linear.parallel_common"
+  ],
+  "gkx.solvers.nonlinear": [
+   "gkx.solvers.nonlinear.diagnostic_integration",
+   "gkx.solvers.nonlinear.diagnostics",
+   "gkx.solvers.nonlinear.explicit",
+   "gkx.solvers.nonlinear.imex",
+   "gkx.solvers.nonlinear.state_integration"
+  ],
+  "gkx.solvers.nonlinear.diagnostic_integration": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.nonlinear.collisions",
+   "gkx.operators.nonlinear.diagnostic_state",
+   "gkx.operators.nonlinear.diagnostics",
+   "gkx.operators.nonlinear.policies",
+   "gkx.operators.nonlinear.rhs",
+   "gkx.solvers.nonlinear.diagnostics",
+   "gkx.solvers.nonlinear.explicit",
+   "gkx.solvers.nonlinear.imex",
+   "gkx.solvers.nonlinear.state_integration",
+   "gkx.solvers.time.explicit",
+   "gkx.terms.assembly",
+   "gkx.terms.config",
+   "gkx.terms.nonlinear"
+  ],
+  "gkx.solvers.nonlinear.diagnostics": [
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.nonlinear.imex_diagnostics",
+   "gkx.terms.config"
+  ],
+  "gkx.solvers.nonlinear.explicit": [
+   "gkx.utils.callbacks"
+  ],
+  "gkx.solvers.nonlinear.imex": [
+   "gkx.solvers.nonlinear.imex_diagnostics"
+  ],
+  "gkx.solvers.nonlinear.imex_diagnostics": [
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.nonlinear.explicit",
+   "gkx.terms.config"
+  ],
+  "gkx.solvers.nonlinear.state_integration": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics.moments",
+   "gkx.diagnostics.transport",
+   "gkx.geometry",
+   "gkx.operators.collision",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.operators.nonlinear.policies",
+   "gkx.operators.nonlinear.projection",
+   "gkx.operators.nonlinear.rhs",
+   "gkx.solvers.linear.implicit",
+   "gkx.solvers.nonlinear.explicit",
+   "gkx.solvers.nonlinear.imex",
+   "gkx.solvers.time.explicit",
+   "gkx.terms.assembly",
+   "gkx.terms.config",
+   "gkx.terms.nonlinear"
+  ],
+  "gkx.solvers.time": [
+   "gkx.solvers.time",
+   "gkx.solvers.time.diffrax_linear",
+   "gkx.solvers.time.diffrax_nonlinear",
+   "gkx.solvers.time.diffrax_streaming",
+   "gkx.solvers.time.explicit"
+  ],
+  "gkx.solvers.time.diffrax_core": [
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.terms.assembly",
+   "gkx.terms.config"
+  ],
+  "gkx.solvers.time.diffrax_linear": [
+   "gkx.core.grid",
+   "gkx.diagnostics.modes",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.time.diffrax_core",
+   "gkx.terms.assembly"
+  ],
+  "gkx.solvers.time.diffrax_nonlinear": [
+   "gkx.core.grid",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.time.diffrax_core",
+   "gkx.terms.assembly",
+   "gkx.terms.config",
+   "gkx.terms.nonlinear"
+  ],
+  "gkx.solvers.time.diffrax_streaming": [
+   "gkx.core.grid",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.time.diffrax_core",
+   "gkx.terms.assembly"
+  ],
+  "gkx.solvers.time.explicit": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.time.explicit_cfl",
+   "gkx.solvers.time.explicit_diagnostics",
+   "gkx.solvers.time.explicit_steps",
+   "gkx.terms.assembly",
+   "gkx.utils.callbacks"
+  ],
+  "gkx.solvers.time.explicit_cfl": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.geometry",
+   "gkx.operators.linear.params"
+  ],
+  "gkx.solvers.time.explicit_diagnostics": [
+   "gkx.core.grid",
+   "gkx.diagnostics",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.solvers.time.explicit_cfl",
+   "gkx.solvers.time.explicit_steps",
+   "gkx.terms.assembly"
+  ],
+  "gkx.solvers.time.explicit_steps": [
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.terms.assembly",
+   "gkx.terms.config"
+  ],
+  "gkx.solvers.time.runners": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics.modes",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.params",
+   "gkx.parallel.integrators",
+   "gkx.parallel.state",
+   "gkx.solvers.linear.integrators",
+   "gkx.solvers.nonlinear.state_integration",
+   "gkx.solvers.time.diffrax_linear",
+   "gkx.solvers.time.diffrax_nonlinear",
+   "gkx.terms.config"
+  ],
+  "gkx.terms": [
+   "gkx.terms",
+   "gkx.terms.config"
+  ],
+  "gkx.terms.assembly": [
+   "gkx.operators.collision",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.dissipation",
+   "gkx.operators.linear.moments",
+   "gkx.operators.linear.params",
+   "gkx.terms.config",
+   "gkx.terms.fields",
+   "gkx.terms.linear_terms"
+  ],
+  "gkx.terms.fields": [
+   "gkx.terms.config"
+  ],
+  "gkx.terms.linear_terms": [
+   "gkx.core.velocity",
+   "gkx.operators.linear.cache_model",
+   "gkx.operators.linear.dissipation",
+   "gkx.operators.linear.streaming",
+   "gkx.operators.nonlinear.collisions"
+  ],
+  "gkx.terms.nonlinear": [
+   "gkx.core.velocity",
+   "gkx.operators.nonlinear.brackets"
+  ],
+  "gkx.workflows.linear": [
+   "gkx.benchmarking.shared",
+   "gkx.core.grid",
+   "gkx.diagnostics.analysis",
+   "gkx.diagnostics.modes",
+   "gkx.solvers.time.explicit",
+   "gkx.solvers.time.explicit_cfl",
+   "gkx.solvers.time.runners",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.diagnostics",
+   "gkx.workflows.runtime.results"
+  ],
+  "gkx.workflows.nonlinear": [
+   "gkx.artifacts.io",
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics.analysis",
+   "gkx.diagnostics.saturation",
+   "gkx.geometry",
+   "gkx.runtime",
+   "gkx.solvers.time.explicit_cfl",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.diagnostic_arrays",
+   "gkx.workflows.runtime.parallel_nonlinear",
+   "gkx.workflows.runtime.results"
+  ],
+  "gkx.workflows.runtime.artifacts": [
+   "gkx.artifacts.io",
+   "gkx.artifacts.nonlinear_netcdf",
+   "gkx.artifacts.spectral_layout",
+   "gkx.runtime",
+   "gkx.workflows.runtime.orchestration_artifacts"
+  ],
+  "gkx.workflows.runtime.chunks": [
+   "gkx.diagnostics",
+   "gkx.diagnostics.metadata",
+   "gkx.terms.config",
+   "gkx.workflows.runtime.diagnostic_arrays"
+  ],
+  "gkx.workflows.runtime.commands": [
+   "gkx.artifacts.run_figures",
+   "gkx.runtime",
+   "gkx.workflows.runtime.artifacts",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.orchestration_artifacts",
+   "gkx.workflows.runtime.results",
+   "gkx.workflows.runtime.toml",
+   "gkx.workflows.runtime.warm_start"
+  ],
+  "gkx.workflows.runtime.config": [
+   "gkx.config"
+  ],
+  "gkx.workflows.runtime.diagnostic_arrays": [
+   "gkx.diagnostics",
+   "gkx.diagnostics.analysis"
+  ],
+  "gkx.workflows.runtime.diagnostics": [
+   "gkx.diagnostics.growth_rates",
+   "gkx.diagnostics.modes",
+   "gkx.workflows.runtime.results"
+  ],
+  "gkx.workflows.runtime.execution": [
+   "gkx.workflows.linear",
+   "gkx.workflows.nonlinear",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.diagnostics",
+   "gkx.workflows.runtime.results"
+  ],
+  "gkx.workflows.runtime.initial_conditions": [
+   "gkx.artifacts.io",
+   "gkx.core.grid",
+   "gkx.geometry",
+   "gkx.operators.linear.cache_builder",
+   "gkx.operators.linear.params",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.initial_phi"
+  ],
+  "gkx.workflows.runtime.initial_phi": [
+   "gkx.operators.linear.params"
+  ],
+  "gkx.workflows.runtime.orchestration_artifacts": [
+   "gkx.diagnostics",
+   "gkx.workflows.runtime.results"
+  ],
+  "gkx.workflows.runtime.orchestration_scan": [
+   "gkx.diagnostics.modes",
+   "gkx.runtime",
+   "gkx.solvers.time.runners",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.diagnostics",
+   "gkx.workflows.runtime.results",
+   "gkx.workflows.runtime.warm_start"
+  ],
+  "gkx.workflows.runtime.parallel_nonlinear": [
+   "gkx.operators.nonlinear.spectral_core",
+   "gkx.parallel.integrators",
+   "gkx.parallel.state",
+   "gkx.parallel.velocity_plan",
+   "gkx.solvers.linear.parallel_common"
+  ],
+  "gkx.workflows.runtime.policies": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.diagnostics.modes",
+   "gkx.workflows.runtime.config"
+  ],
+  "gkx.workflows.runtime.resolution": [
+   "gkx.config",
+   "gkx.core.grid",
+   "gkx.geometry",
+   "gkx.geometry.core",
+   "gkx.solvers.time.explicit_cfl",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.startup",
+   "gkx.workflows.runtime.toml",
+   "gkx.workflows.runtime.wout"
+  ],
+  "gkx.workflows.runtime.results": [
+   "gkx.diagnostics",
+   "gkx.diagnostics.modes",
+   "gkx.terms.config"
+  ],
+  "gkx.workflows.runtime.startup": [
+   "gkx.artifacts.io",
+   "gkx.benchmarking.shared",
+   "gkx.diagnostics.normalization",
+   "gkx.geometry",
+   "gkx.geometry.miller_eik",
+   "gkx.geometry.vmec_eik",
+   "gkx.operators.linear.params",
+   "gkx.solvers.linear.krylov",
+   "gkx.terms.config",
+   "gkx.workflows.runtime.config",
+   "gkx.workflows.runtime.initial_conditions",
+   "gkx.workflows.runtime.initial_phi"
+  ],
+  "gkx.workflows.runtime.toml": [
+   "gkx.workflows.runtime",
+   "gkx.workflows.runtime.config"
+  ],
+  "gkx.workflows.runtime.wout": [
+   "gkx.workflows.runtime.resolution",
+   "gkx.workflows.runtime.toml"
+  ]
+ }
+}

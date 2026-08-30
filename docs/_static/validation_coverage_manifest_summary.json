@@ -205,7 +205,6 @@
       "gkx.workflows.runtime.toml",
       "gkx.workflows.runtime.wout",
       "gkx.workflows.runtime.resolution",
-      "gkx.utils.tomlcompat",
       "gkx.utils.compilation_cache",
       "gkx.solvers.time.runners",
       "gkx.workflows.runtime.config",

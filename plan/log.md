@@ -3409,3 +3409,59 @@ gave 370 names because it imported the installed site-packages build rather
 than the worktree. Measured from source, gkx.api.__all__ is 14 and the lazy
 _EXPORT_TARGETS registry is 352. Always measure with PYTHONPATH pointed at the
 branch, never against an installed wheel.
+## 2026-08-30 - PR A1-1 import graph and deletion map - core/a1-1-import-graph
+
+Baseline:
+- GKX SHA: e19336dc, the audited revision
+- source/test files and lines: src/gkx 199/90,857; tests 101/87,725
+- relevant existing gate: all five release scripts green; 128 release tests
+
+Scope:
+- intended change: generate the import graph, cycles, largest-module and
+  campaign-module inventories the plan requires, and delete only clearly dead
+  forwarding wrappers
+- non-goals: no large moves, no package restructuring, no physics change; the
+  cycles found here are Phase A/B work, not this pull request's
+- acceptance: inventory artifacts committed and reproducible, one genuinely dead
+  wrapper removed with every consumer migrated, all gates green
+- rollback: revert; the only executable change is an import statement rewrite
+  from a shim to the standard library
+
+Changes:
+- plan/inventory/import_graph.json: 198 modules and their intra-package edges,
+  produced by parsing every module's AST
+- plan/inventory/deletion_map.md: package totals, the five import cycles, the
+  fifteen largest modules, the twenty-seven zero-in-degree modules, and the four
+  campaign/report modules still installed
+- deleted src/gkx/utils/tomlcompat.py, 30 lines. It existed so that a bare
+  `import tomllib` would not raise on Python 3.10. The floor is 3.11,
+  `requires-python` says `>=3.11`, `tomli` is not a declared dependency, and the
+  fallback branch carried `# pragma: no cover` because it was unreachable
+- nineteen files now import `tomllib` from the standard library
+- tests/release/test_release_gates.py: the gate that REQUIRED the shim is
+  inverted to forbid the `tomli` backport, since that is the condition that can
+  still regress; the test asserting the shim imported cheaply is removed with
+  the module it described
+- tools/validation_coverage_manifest.toml: dropped the tracking entry for the
+  deleted module
+- public/schema behavior: unchanged
+
+Evidence:
+- focused tests: 149 tests across the former shim consumers pass; 127 release
+  tests pass
+- gates: architecture, repository-size, validation-coverage, release-readiness
+  and quasilinear guardrails all pass; `import gkx` and `gkx --help` work; MyPy
+  unchanged at the one known local-environment error over 198 files
+- values, tolerances, residuals: none changed
+
+Findings recorded for later phases, both negative and worth keeping:
+- Twenty-seven modules have no in-package importer, and NONE is dead: each is
+  reached from tests, tools, examples, or documentation. Low in-degree must not
+  be read as deadness in Phase A.
+- Five import cycles exist. The largest spans seven modules across `runtime`,
+  `workflows.nonlinear`, three `workflows.runtime` modules and
+  `artifacts.nonlinear_netcdf`. A cycle cannot be decomposed into one-owner
+  modules without being broken first, so this is the first structural obstacle
+  to the 45-file target.
+- Only four campaign/report modules remain installed, 2,350 lines, each with a
+  live in-package importer. They are Phase B candidates.

@@ -7,7 +7,7 @@ from typing import Any, Callable, Sequence, cast
 import os
 from pathlib import Path
 
-from gkx.utils import tomlcompat as tomllib
+import tomllib
 from gkx.workflows.runtime.config import (
     Case, RuntimeCollisionConfig,
     RuntimeConfig,
