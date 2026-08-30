@@ -72,7 +72,12 @@ recursive = true
 # implementation in another module and nothing but the gkx.api registry
 # imported it. None of them was reachable from a run, a CLI command, or a
 # solver path. The count also absorbs the slack main was already carrying.
-baseline = 199
+# Report builders evicted to tools/campaigns: vmec_flux_tube_reports and
+# vmec_state_sensitivity are parity and sensitivity REPORT owners, not solver
+# geometry. They were reachable only through wrappers on the differentiable
+# facade, so evicting them removes the wrappers, four lazy-registry names, and
+# the dedicated coverage suites that existed only to cover them.
+baseline = 197
 target = 45
 
 [[topology_policy.counts]]
@@ -140,7 +145,12 @@ recursive = true
 # the exported name is the public type rather than the solver internal it
 # used to leak, and that the object refuses a parameterised solve instead
 # of quietly solving a different problem.
-baseline = 103
+# Report builders evicted to tools/campaigns: vmec_flux_tube_reports and
+# vmec_state_sensitivity are parity and sensitivity REPORT owners, not solver
+# geometry. They were reachable only through wrappers on the differentiable
+# facade, so evicting them removes the wrappers, four lazy-registry names, and
+# the dedicated coverage suites that existed only to cover them.
+baseline = 101
 # Target lowered 36 -> 30: the approved GKX 3 contract in the handoff plan.
 target = 30
 
@@ -150,7 +160,12 @@ path = "tools"
 pattern = "*.py"
 recursive = true
 # 95 -> 90: measured at e19336dc.
-baseline = 90
+# Report builders evicted to tools/campaigns: vmec_flux_tube_reports and
+# vmec_state_sensitivity are parity and sensitivity REPORT owners, not solver
+# geometry. They were reachable only through wrappers on the differentiable
+# facade, so evicting them removes the wrappers, four lazy-registry names, and
+# the dedicated coverage suites that existed only to cover them.
+baseline = 95
 target = 0
 
 [[topology_policy.counts]]
@@ -586,7 +601,12 @@ recursive = true
 # half the product and leaked a private type doing it. The new module owns no
 # numerics: each method delegates to the runtime path the case would have
 # taken anyway.
-baseline = 91340
+# Report builders evicted to tools/campaigns: vmec_flux_tube_reports and
+# vmec_state_sensitivity are parity and sensitivity REPORT owners, not solver
+# geometry. They were reachable only through wrappers on the differentiable
+# facade, so evicting them removes the wrappers, four lazy-registry names, and
+# the dedicated coverage suites that existed only to cover them.
+baseline = 89733
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -601,7 +621,12 @@ recursive = true
 # GKX 3 contract and contradicted it.
 # 87986 -> 88011: updating the pinned public-API list, the lazy-registry count,
 # and the prepare contract assertions that A1-3 deliberately changes.
-baseline = 88011
+# Report builders evicted to tools/campaigns: vmec_flux_tube_reports and
+# vmec_state_sensitivity are parity and sensitivity REPORT owners, not solver
+# geometry. They were reachable only through wrappers on the differentiable
+# facade, so evicting them removes the wrappers, four lazy-registry names, and
+# the dedicated coverage suites that existed only to cover them.
+baseline = 86500
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -610,7 +635,12 @@ path = "tools"
 pattern = "*.py"
 recursive = true
 # 97346 -> 72461: measured at e19336dc.
-baseline = 72461
+# Report builders evicted to tools/campaigns: vmec_flux_tube_reports and
+# vmec_state_sensitivity are parity and sensitivity REPORT owners, not solver
+# geometry. They were reachable only through wrappers on the differentiable
+# facade, so evicting them removes the wrappers, four lazy-registry names, and
+# the dedicated coverage suites that existed only to cover them.
+baseline = 75970
 target = 0
 
 [[line_budget_policy.counts]]
