@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -18,16 +17,11 @@ from gkx.geometry.autodiff_checks import (
 from gkx.geometry.backend_discovery import (
     discover_differentiable_geometry_backends,
 )
-from gkx.geometry.booz_xform_bridge import (
-    booz_xform_flux_tube_mapping_from_inputs,
-)
 from gkx.geometry.flux_tube_contract import (
     _VMEC_FIELD_LINE_OBSERVABLE_NAMES,
     _VMEC_METRIC_OBSERVABLE_NAMES,
 )
-from gkx.geometry.vmec_boozer_core import _boozer_xform_inputs_from_state
 from gkx.geometry.vmec_field_line_sampling import _rms_with_floor
-from gkx.geometry.sensitivity import geometry_sensitivity_report
 from gkx.geometry.vmec_state_controls import (
     _VMECStateContext,
     _length_two_params,
@@ -36,16 +30,6 @@ from gkx.geometry.vmec_state_controls import (
     _resolve_vmec_state_indices,
 )
 from gkx.geometry.vmec_tensor_mapping import _import_vmex_turbulence
-
-
-@dataclass(frozen=True)
-class _BoozerFluxTubeSensitivityRun:
-    ctx: _VMECStateContext
-    radial_index: int
-    mode_index: int
-    surface_index: int
-    sensitivity: dict[str, object]
-    booz_meta: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -345,172 +329,6 @@ def _load_vmec_geom_sensitivity_context(
     return ctx, turbulence_mod, ridx, midx, sidx
 
 
-def _load_vmec_boozer_sensitivity_context(
-    *,
-    case_name: str,
-    radial_index: int | None,
-    mode_index: int,
-    surface_index: int | None,
-) -> tuple[_VMECStateContext, Any, int, int, int]:
-    """Load vmex state data and the traceable Boozer-tables seam."""
-
-    ctx = _load_vmec_state_context(str(case_name))
-    boozer_tables_mod = importlib.import_module("vmex.core.boozer_tables")
-    ridx, midx, sidx = _resolve_vmec_state_indices(
-        ctx.base_Rcos,
-        radial_index=radial_index,
-        mode_index=mode_index,
-        surface_index=surface_index,
-        surface_grid="half_mesh",
-    )
-    return ctx, boozer_tables_mod, ridx, midx, sidx
-
-
-def _vmec_to_boozer_mapping_fn(
-    *,
-    ctx: _VMECStateContext,
-    boozer_tables_mod: Any,
-    radial_index: int,
-    mode_index: int,
-    surface_index: int,
-    mboz: int,
-    nboz: int,
-    ntheta: int,
-) -> Callable[[jnp.ndarray], dict[str, Any]]:
-    """Return the differentiable VMEC-state to Boozer field-line mapping."""
-
-    def mapping_fn(x: jnp.ndarray) -> dict[str, Any]:
-        traced_state = _perturb_vmec_state(
-            ctx, x, radial_index=radial_index, mode_index=mode_index
-        )
-        inputs = _boozer_xform_inputs_from_state(
-            traced_state,
-            ctx.runtime,
-            inp=ctx.inp,
-            wout=ctx.wout,
-            boozer_tables_mod=boozer_tables_mod,
-            ns_full=int(ctx.base_Rcos.shape[0]),
-        )
-        return booz_xform_flux_tube_mapping_from_inputs(
-            inputs,
-            mboz=int(mboz),
-            nboz=int(nboz),
-            ntheta=int(ntheta),
-            surface_index=int(surface_index),
-            magnetic_shear=0.35,
-            jit=False,
-        )
-
-    return mapping_fn
-
-
-def _boozer_flux_tube_report_payload(
-    *,
-    sensitivity: dict[str, object],
-    booz_meta: Mapping[str, Any],
-    mboz: int,
-    nboz: int,
-    ntheta: int,
-) -> dict[str, object]:
-    """Pack JSON-ready Boozer flux-tube payload fields."""
-
-    return {
-        "sensitivity": sensitivity,
-        "mboz": int(mboz),
-        "nboz": int(nboz),
-        "ntheta": int(ntheta),
-        "bmnc_b": np.asarray(booz_meta["bmnc_b"]).tolist(),
-        "ixm_b": np.asarray(booz_meta["ixm_b"]).tolist(),
-        "ixn_b": np.asarray(booz_meta["ixn_b"]).tolist(),
-        "iota_b": float(np.asarray(booz_meta["iota_b"])),
-    }
-
-
-def _run_vmec_boozer_flux_tube_sensitivity(
-    *,
-    params: jnp.ndarray,
-    case_name: str,
-    radial_index: int | None,
-    mode_index: int,
-    surface_index: int | None,
-    fd_step: float,
-    mboz: int,
-    nboz: int,
-    ntheta: int,
-) -> _BoozerFluxTubeSensitivityRun:
-    ctx, boozer_tables_mod, ridx, midx, sidx = _load_vmec_boozer_sensitivity_context(
-        case_name=str(case_name),
-        radial_index=radial_index,
-        mode_index=mode_index,
-        surface_index=surface_index,
-    )
-    mapping_fn = _vmec_to_boozer_mapping_fn(
-        ctx=ctx,
-        boozer_tables_mod=boozer_tables_mod,
-        radial_index=ridx,
-        mode_index=midx,
-        surface_index=sidx,
-        mboz=mboz,
-        nboz=nboz,
-        ntheta=ntheta,
-    )
-    sensitivity = geometry_sensitivity_report(
-        mapping_fn,
-        params,
-        fd_step=float(fd_step),
-        source_model="vmex:state->booz_xform_jax:field-line-bmag",
-    )
-    mapping = mapping_fn(params)
-    return _BoozerFluxTubeSensitivityRun(
-        ctx=ctx,
-        radial_index=ridx,
-        mode_index=midx,
-        surface_index=sidx,
-        sensitivity=sensitivity,
-        booz_meta=mapping["booz_xform"],
-    )
-
-
-def _run_vmec_boozer_flux_tube_report(
-    *,
-    params: jnp.ndarray,
-    case_name: str,
-    radial_index: int | None,
-    mode_index: int,
-    surface_index: int | None,
-    fd_step: float,
-    mboz: int,
-    nboz: int,
-    ntheta: int,
-) -> _VMECStateSensitivityReportRun:
-    """Return a metadata-ready Boozer flux-tube sensitivity run."""
-
-    run = _run_vmec_boozer_flux_tube_sensitivity(
-        params=params,
-        case_name=case_name,
-        radial_index=radial_index,
-        mode_index=mode_index,
-        surface_index=surface_index,
-        fd_step=float(fd_step),
-        mboz=mboz,
-        nboz=nboz,
-        ntheta=ntheta,
-    )
-    return _VMECStateSensitivityReportRun(
-        ctx=run.ctx,
-        radial_index=run.radial_index,
-        mode_index=run.mode_index,
-        surface_index=run.surface_index,
-        payload=_boozer_flux_tube_report_payload(
-            sensitivity=run.sensitivity,
-            booz_meta=run.booz_meta,
-            mboz=mboz,
-            nboz=nboz,
-            ntheta=ntheta,
-        ),
-    )
-
-
 def _metric_tensor_report_payload(
     *,
     ctx: _VMECStateContext,
@@ -688,61 +506,6 @@ def _run_vmec_field_line_tensor_sensitivity(
     )
 
 
-def vmex_boozer_flux_tube_sensitivity_report(  # pragma: no cover
-    *,
-    params: jnp.ndarray | None = None,
-    case_name: str = "circular_tokamak",
-    radial_index: int | None = None,
-    mode_index: int = 1,
-    surface_index: int | None = None,
-    fd_step: float = 1.0e-5,
-    mboz: int = 2,
-    nboz: int = 0,
-    ntheta: int = 32,
-) -> dict[str, object]:
-    """AD/FD-check vmex state coefficients through the Boozer bridge.
-
-    This is the first end-to-end optional-backend gate that starts from a real
-    solved ``vmex`` spectral state instead of a hand-built Boozer input bundle.
-    It solves a small bundled VMEC example, perturbs two Fourier coefficients
-    ``[R_cos(radial_index, mode_index), Z_sin(radial_index, mode_index)]``,
-    stacks the traceable half-mesh Boozer tables from
-    ``vmex.core.boozer_tables.boozer_input_tables``, samples the resulting
-    Boozer ``|B|`` spectrum on a field line, and checks GKX
-    geometry-observable derivatives against central finite differences.
-
-    The current metric/drift closure is still intentionally smooth and local to
-    GKX. Full production promotion requires replacing it with sampled
-    VMEC/Boozer metric tensors and parity-checking those arrays against the
-    imported VMEC/EIK path.
-    """
-
-    return _optional_vmec_state_sensitivity_report(
-        params=params,
-        default_param=1.0e-3,
-        case_name=str(case_name),
-        fd_step=float(fd_step),
-        backend_available=lambda info: bool(
-            info.get("vmex_available", False)
-            and info.get("booz_xform_jax_api_available", False)
-        ),
-        unavailable_reason=(
-            "vmex or booz_xform_jax functional API is not available"
-        ),
-        build_run=lambda p: _run_vmec_boozer_flux_tube_report(
-            params=p,
-            case_name=str(case_name),
-            radial_index=radial_index,
-            mode_index=mode_index,
-            surface_index=surface_index,
-            fd_step=float(fd_step),
-            mboz=mboz,
-            nboz=nboz,
-            ntheta=ntheta,
-        ),
-    )
-
-
 def vmex_metric_tensor_sensitivity_report(  # pragma: no cover
     *,
     params: jnp.ndarray | None = None,
@@ -835,7 +598,6 @@ def vmex_field_line_tensor_sensitivity_report(  # pragma: no cover
 
 
 __all__ = [
-    "vmex_boozer_flux_tube_sensitivity_report",
     "vmex_field_line_tensor_sensitivity_report",
     "vmex_metric_tensor_sensitivity_report",
 ]

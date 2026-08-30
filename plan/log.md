@@ -3317,3 +3317,39 @@ records through their DOI resolvers). It remains non-green because of the
 repository's pre-existing 403/404 links, including the deleted historical
 planning-branch URL; APS also returns 403 to the automated checker for the new,
 browser-verified Baldwin DOI. No new invalid target was introduced.
+
+## 2026-08-30 — Remove the synthetic Boozer metric/drift closure
+
+Task: delete the legacy Boozer-spectrum-to-GKX mapping that combines a real
+``|B|`` spectrum with invented smooth metric and drift arrays. Baseline:
+``main`` at ``7eeda99d``, with 199 installable Python files and 91,505
+installable source lines. VMEX now owns the real live-state and WOUT field-line
+arrays, and GKX's thin ``from_vmex`` / ``from_vmex_wout`` adapters consume
+those arrays through the generic flux-tube contract.
+
+Non-goals: no change to the canonical VMEX adapters, standard WOUT/EIK import,
+generic flux-tube mapping, Boozer spectral transform/evaluation, solver,
+normalization, or numerical defaults. The genuine VMEX metric and field-line
+tensor derivative gates remain. The removed diagnostic APIs are not replaced
+by compatibility wrappers because retaining them would continue to advertise
+nonphysical solver-ready geometry; migration documentation points users to the
+canonical real-geometry owners.
+
+Acceptance: no installed path can manufacture solver-ready ``gds*`` or drift
+arrays from the synthetic closure; obsolete top-level/facade exports and their
+existence-only tests are removed; genuine Boozer spectral and VMEX tensor gates
+still pass; public docs name the replacement paths; architecture, API, release,
+Ruff, typing, warning-as-error docs, and diff gates pass; and installed source
+and tests both decrease. Roll back if a canonical VMEX, WOUT/EIK, Boozer
+spectral, or generic mapping fingerprint changes.
+
+Evidence: the patch removes 648 installable source lines (91,505 to 90,857),
+three advanced API-registry names, and 186 test lines without adding a file.
+All 68 focused differentiable-geometry tests and all 344 broader geometry,
+public-API, and VMEC-transport tests pass under JAX x64; all 2,629 repository
+tests collect from the branch source. MyPy passes all 199 source files. Ruff,
+the architecture and repository-size manifests, 128 release tests, validation
+coverage, release readiness, warning-as-error Sphinx HTML, API migration smoke,
+and ``git diff --check`` pass. The frozen 1.7/1.8 baseline inventories remain
+unchanged as historical evidence; current callers must migrate to real VMEX,
+WOUT, or complete-mapping geometry.

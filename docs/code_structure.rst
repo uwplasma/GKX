@@ -819,14 +819,15 @@ policy live in ``gkx.geometry.core``. The
 re-exports the same classes and functions for existing user code.
 Geometry sensitivity, inverse-design, and local UQ reports live in
 ``gkx.geometry.sensitivity`` so backend bridge modules can depend on
-the report contract without importing the public facade. Bounded VMEC
-boundary and Boozer-spectrum bridge checks, Boozer ``|B|`` field-line
-evaluation, and Boozer-to-flux-tube sensitivity diagnostics live in
-``gkx.geometry.booz_xform_bridge``. Pure helper imports retain object
-identity; backend-discovery-dependent bridge functions use thin facade wrappers
-so existing monkeypatch-based optional-backend tests still target
-``gkx.geometry.differentiable``. VMEC-state-to-Boozer, VMEC metric
-tensor, and VMEC field-line tensor AD/FD sensitivity reports live in
+the report contract without importing the public facade. Bounded VMEC boundary
+and Boozer-spectrum checks plus Boozer ``|B|`` field-line evaluation live in
+``gkx.geometry.booz_xform_bridge``. It does not construct solver geometry: the
+retired synthetic closure mixed a real magnetic spectrum with invented metric
+and drift arrays. Pure helper imports retain object identity;
+backend-discovery-dependent checks use thin facade wrappers so existing
+monkeypatch-based optional-backend tests still target
+``gkx.geometry.differentiable``. VMEC metric tensor and VMEC field-line tensor
+AD/FD sensitivity reports live in
 ``gkx.geometry.vmec_state_sensitivity``; the public facade uses the
 same hook-preserving wrapper pattern, while the implementation owns shared
 VMEC example loading, coefficient-index validation, perturbation policy, and
