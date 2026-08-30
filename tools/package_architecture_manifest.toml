@@ -599,7 +599,9 @@ recursive = true
 # 87725 -> 87823: the prepared-simulation contract suite.
 # Target lowered 55000 -> 35000: the 55,000 figure predated the approved
 # GKX 3 contract and contradicted it.
-baseline = 87986
+# 87986 -> 88011: updating the pinned public-API list, the lazy-registry count,
+# and the prepare contract assertions that A1-3 deliberately changes.
+baseline = 88011
 target = 35000
 
 [[line_budget_policy.counts]]
