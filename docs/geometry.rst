@@ -330,6 +330,98 @@ missing open-boundary physics:
 * `Rosen et al., full-f kinetic mirror equilibria (2026)
   <https://arxiv.org/abs/2604.11684>`__.
 
+Open-ended mirrors: model-admission review
+------------------------------------------
+
+An open mirror is not a different endpoint option for the periodic flux-tube
+solver. Particles cross physical end planes, the loss cone changes the
+background distribution, sources replace lost particles, collisions scatter
+particles between passing and trapped regions, and the electrostatic potential
+adjusts the electron and ion loss rates. These pieces form one kinetic model.
+Endpoint damping or a zero-incoming-value rule by itself is only a numerical
+outflow experiment.
+
+The minimum conservative one-dimensional reference problem evolves a full
+distribution ``f_s(z, v_parallel, mu, t)``:
+
+.. math::
+
+   \partial_t(\mathcal J f_s)
+   +\partial_z(\mathcal J v_\parallel f_s)
+   +\partial_{v_\parallel}(\mathcal J a_{\parallel s}f_s)
+   =\mathcal J\left(C_s[f]+S_s\right),
+
+.. math::
+
+   a_{\parallel s}
+   =-\frac{\mu}{m_s}\partial_z B
+    -\frac{q_s}{m_s}\partial_z\phi,
+   \qquad
+   \mathcal E_s=\frac{m_s v_\parallel^2}{2}+\mu B+q_s\phi.
+
+Here ``mathcal J`` is the gyrocentre phase-space Jacobian. In a static smooth
+field, the collisionless interior must preserve magnetic moment ``mu`` and
+energy ``mathcal E_s`` to the scheme's order. With midplane field ``B_0`` and
+throat field ``B_m``, the zero-potential loss-cone boundary is
+
+.. math::
+
+   \sin^2\vartheta_{lc}=\frac{B_0}{B_m}=\frac{1}{R_m}.
+
+An electrostatic barrier shifts this boundary through ``mathcal E_s``; it must
+not be represented by changing the geometric mirror ratio. At an end plane,
+outgoing characteristics leave the domain. Incoming characteristics require a
+declared absorbing, logical-sheath, or conducting-sheath rule. A kinetic sheath
+must derive its reflection cutoff from the end potential and field solve, not
+from a fixed velocity mask. Sources must state their particle and energy
+injection, and the collision operator must state which invariants it preserves
+and how it repopulates the loss cone.
+
+The ownership boundary is therefore:
+
+* VMEX owns the open equilibrium, axis/surface geometry, ``B(z)``, metric and
+  drift arrays, physical end planes, and geometry differentiation;
+* an admitted open-kinetic owner must own conservative phase-space fluxes,
+  velocity-space boundary treatment, positivity, sources, collisions, and the
+  electrostatic field/sheath closure;
+* GKX may consume that model only after its background ordering is compatible
+  with GKX's public claim. The present local-Maxwellian delta-f core is not
+  such an owner.
+
+GX, GS2, stella, and gyaradax remain valuable periodic/twist-linked
+flux-tube references, but their endpoint machinery is not evidence for this
+open model. The appropriate primary references are the full-f conservative
+open-field-line formulation and sheath treatment of `Shi et al. (2017)
+<https://doi.org/10.1017/S002237781700037X>`__ and the high-field-mirror study
+of `Francisquez et al. (2023) <https://arxiv.org/abs/2305.06372>`__. The
+classical end-loss processes and their collision dependence are reviewed by
+`Baldwin (1977) <https://doi.org/10.1103/RevModPhys.49.317>`__.
+
+Admission is prospective and ordered:
+
+1. **Interior invariants.** On an open grid with no end encounter, verify
+   manufactured streaming order, phase-space conservation, ``mu`` and
+   ``mathcal E_s``, mirror turning points, and bounce periods.
+2. **Characteristic boundaries.** In uniform ``B``, verify exact advection,
+   no incoming contamination, particle/energy flux accounting, positivity,
+   and velocity/grid convergence for each boundary rule.
+3. **Source--collision balance.** Demonstrate a stationary full-f state with
+   independently audited particle and energy balances and converged loss-cone
+   population. A local-Maxwellian delta-f source is not sufficient evidence.
+4. **Ambipolar potential.** Couple the field and sheath model, converge the
+   electron/ion end currents, and compare potential and confinement-time
+   trends with Pastukhov theory and published Gkeyll mirror inputs.
+5. **Multidimensional turbulence.** Only after the one-dimensional gates pass,
+   add perpendicular dynamics and compare growth, saturation, fluxes, and end
+   loads at increasing phase-space resolution.
+
+Strong mirror forces may be softened only as a controlled acceleration. Every
+softened production result needs an unsoftened resolution sequence showing
+convergence of potential, loss rate, energy balance, and the claimed
+observable. Until all gates above have an approved owner and evidence, GKX
+supports closed periodic mirror hybrids only and makes no open-mirror,
+Pastukhov, sheath, or confinement-time claim.
+
 VMEX WOUT geometry
 ------------------
 
