@@ -3251,3 +3251,33 @@ and accelerator-readiness gate, not a speedup claim; representative nonlinear
 throughput remains a separate performance gate. The tracked figure, movie,
 run record, and performance record are generated or documented under
 `docs/_static/vmex_mirror_gkx_*`.
+
+## 2026-08-29 — Phase 2 VMEX WOUT adapter scope
+
+Task: add `gkx.geometry.from_vmex_wout` as the standard-file companion to
+`from_vmex`, delegating all WOUT reading, spectral evaluation, metrics, drifts,
+and normalization to VMEX's targeted public
+`gk_fieldline_geometry_from_wout` seam. Baseline: the stacked canonical VMEX
+adapter candidate at `bea05f61` and VMEX WOUT API PR #190 at `76fca503`.
+Non-goals: no GKX WOUT reader, VMEC reconstruction, equilibrium solve, Boozer
+transform, geometry formula, objective, solver, default, dependency, or legacy
+adapter deletion before parity.
+
+Acceptance: path and in-memory WOUT inputs reach only the public VMEX seam;
+the complete field-line policy is forwarded; live-state and WOUT routes for
+the same equilibrium agree on every generic geometry array, scalar,
+normalization, and provenance field; malformed mappings fail through the
+generic GKX contract; ordinary imports remain VMEX- and Boozer-free; and
+focused geometry/objective, real downstream VMEX, Ruff, typing,
+architecture/size, warning-as-error docs, and diff gates pass. Roll back if
+GKX interprets a WOUT coefficient, duplicates a geometry calculation, or the
+file route requires equilibrium reconstruction or convergence.
+
+The coupled office RTX A4000 gate kept both routes on `cuda:0`. On the shaped
+13-surface, 32-point equal-arc case, live-state geometry took 23.35 seconds on
+its first synchronized call and 0.421 seconds warm median; the WOUT route,
+after shared kernels had compiled, took 6.41 seconds on its first call and
+0.327 seconds warm median. Live/WOUT maximum absolute disagreement was
+`4.89e-15` across all geometry arrays and `1.39e-16` across scalar contract
+fields. The WOUT host normalization therefore introduces no device fallback
+and no measurable warm-runtime penalty in this gate.
