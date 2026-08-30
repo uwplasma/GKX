@@ -270,6 +270,114 @@ def _cmd_generate_geometry(args: argparse.Namespace) -> int:
     return 0
 
 
+
+# The plan's six commands are run, scan, estimate, plot, inspect and validate.
+# estimate, inspect and validate were previously reachable only as flags on the
+# equilibrium shorthand or not at all, which meant a user could not discover
+# them from `gkx --help`.
+
+_DEPRECATED_COMMANDS = {
+    "run-runtime-linear": "run",
+    "scan-runtime-linear": "scan",
+    "run-runtime-nonlinear": "run",
+}
+
+
+def _warn_deprecated_command(name: str) -> None:
+    """Name the replacement for a command kept for one release."""
+
+    replacement = _DEPRECATED_COMMANDS[name]
+    print(
+        f"gkx: '{name}' is deprecated and will be removed in the next release; "
+        f"use 'gkx {replacement}' instead.",
+        file=sys.stderr,
+    )
+
+
+def _cmd_estimate(args: argparse.Namespace) -> int:
+    """Print the deterministic minimum-grid estimate for an equilibrium."""
+
+    from gkx.workflows.runtime.resolution import estimate_resolution
+    from gkx.workflows.runtime.wout import format_estimate_table
+
+    estimate = estimate_resolution(
+        args.equilibrium, torflux=args.torflux, target_error=args.tier
+    )
+    print(f"equilibrium: {args.equilibrium}")
+    print(format_estimate_table(estimate))
+    return 0
+
+
+def _cmd_inspect(args: argparse.Namespace) -> int:
+    """Describe a case or a saved result without running anything."""
+
+    import json
+
+    target = Path(args.target)
+    if target.suffix.lower() == ".toml":
+        from gkx.workflows.runtime.toml import load
+
+        payload = load(target).summary()
+    else:
+        from gkx.artifacts.plotting import _artifact_base, _sidecar
+
+        # The writers append their suffix to the output path, so a run whose
+        # [output] path is foo.out.nc writes foo.out.nc.summary.json. Try that
+        # first; fall back to the stripped base for a path already carrying a
+        # sidecar suffix.
+        candidates = (
+            _sidecar(target, ".summary.json"),
+            _sidecar(_artifact_base(target), ".summary.json"),
+        )
+        summary_path = next((c for c in candidates if c.exists()), None)
+        if summary_path is None:
+            print(f"gkx: no summary beside {target}", file=sys.stderr)
+            return 1
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    print(json.dumps(payload, indent=2, default=str))
+    return 0
+
+
+def _cmd_validate(args: argparse.Namespace) -> int:
+    """Validate a case file and report the first problem in plain language."""
+
+    from gkx.workflows.runtime.toml import load
+
+    try:
+        case = load(Path(args.config))
+        case.validate()
+    except (ValueError, OSError) as exc:
+        print(f"gkx: {args.config} is not runnable: {exc}", file=sys.stderr)
+        return 1
+    print(f"gkx: {args.config} is a valid case")
+    return 0
+
+
+def _add_product_parsers(sub: argparse._SubParsersAction) -> None:
+    """Register estimate, inspect and validate."""
+
+    estimate = sub.add_parser(
+        "estimate", help="Print the minimum-grid estimate for an equilibrium"
+    )
+    estimate.add_argument("equilibrium", type=str)
+    estimate.add_argument(
+        "--tier",
+        choices=("preview", "standard", "cautious"),
+        default="standard",
+    )
+    estimate.add_argument("--torflux", type=float, default=None)
+    estimate.set_defaults(func=_cmd_estimate)
+
+    inspect_p = sub.add_parser(
+        "inspect", help="Describe a case TOML or a saved result without running it"
+    )
+    inspect_p.add_argument("target", type=str)
+    inspect_p.set_defaults(func=_cmd_inspect)
+
+    validate = sub.add_parser("validate", help="Check that a case TOML is runnable")
+    validate.add_argument("config", type=str)
+    validate.set_defaults(func=_cmd_validate)
+
 def _add_geometry_parser(sub: argparse._SubParsersAction) -> None:
     geometry = sub.add_parser(
         "geometry", help="Generate solver geometry from a runtime TOML configuration"
@@ -389,6 +497,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_generic_run_parser(sub)
     _add_runtime_parsers(sub)
     _add_geometry_parser(sub)
+    _add_product_parsers(sub)
 
     return parser
 
@@ -423,14 +532,17 @@ def _runtime_command_deps() -> RuntimeCommandDeps:
 
 
 def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
+    _warn_deprecated_command("run-runtime-linear")
     return run_runtime_linear_command(args, deps=_runtime_command_deps())
 
 
 def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
+    _warn_deprecated_command("scan-runtime-linear")
     return scan_runtime_linear_command(args, deps=_runtime_command_deps())
 
 
 def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
+    _warn_deprecated_command("run-runtime-nonlinear")
     return run_runtime_nonlinear_command(args, deps=_runtime_command_deps())
 
 
