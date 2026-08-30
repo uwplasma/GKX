@@ -211,11 +211,7 @@ def prepare_simulation(case: Any, **options: Any) -> PreparedSimulation:
     difference is reported by ``compiled_at_prepare`` rather than hidden.
     """
 
-    # Case.validate arrives with the public-types work; call it when present so
-    # this path does not depend on merge order.
-    validate = getattr(case, "validate", None)
-    if callable(validate):
-        validate()
+    case.validate()
     kind = _case_kind(case)
     # Nl/Nm are run-time selections, not case fields: the deck carries them in
     # its [run] table and the runtime resolves them per call. Mirror the

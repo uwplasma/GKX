@@ -3466,6 +3466,60 @@ Findings recorded for later phases, both negative and worth keeping:
 - Only four campaign/report modules remain installed, 2,350 lines, each with a
   live in-package importer. They are Phase B candidates.
 
+## 2026-08-30 - PR A1-2 real public case and result types - api/a1-2-public-types
+
+Baseline:
+- GKX SHA: 29b22200, main after A1-1
+- relevant existing gate: all five release scripts green; 127 release tests
+
+Scope:
+- intended change: give the public types the behaviour section 7.3 contracts
+  for, adapting the existing writers and figure builders rather than adding
+  machinery; preserve every numerical value and artifact schema
+- non-goals: no PreparedSimulation, no CLI change, no alias removal beyond what
+  the new methods make redundant; those are A1-3 and A2-1
+- acceptance: contracted methods present, a written case reloads to the case
+  that wrote it, saved artifacts byte-unchanged, gates green
+- rollback: revert; every new method delegates, so behaviour is recoverable
+
+Changes:
+- Case gains replace, validate, to_toml and summary. replace validates the copy
+  before returning it, so a loop that builds cases fails on the case it built
+  rather than several stages later inside a compiled kernel. validate checks
+  the cross-section conditions no individual section can see: at least one
+  kinetic species, physics.linear and physics.nonlinear not both set, positive
+  dt and t_max, and a vmec_file when the geometry model is vmec
+- RuntimeLinearResult, RuntimeLinearScanResult and RuntimeNonlinearResult gain
+  save, plot, print_summary, to_dataset and summary through one shared
+  _ResultArtifacts base. save and plot delegate to the writers and figure
+  builder the runtime already used, so artifact bytes are unchanged
+- to_dataset returns exactly the three keyword arguments xarray.Dataset accepts
+  without importing xarray. Section 21.1 is removing dependencies, not adding
+  them, so a caller who has xarray writes xarray.Dataset(**payload) and a
+  caller who does not still gets named arrays with their coordinates
+- extracted one deck_text renderer in workflows/runtime/wout.py and deleted the
+  duplicate body it replaced. Case.to_toml and the equilibrium shorthand now
+  share a serializer and cannot drift apart in quoting or table ordering
+- the renderer now omits None instead of raising. TOML has no null and an
+  absent key is how the loader spells "use the default", which is what makes
+  the round trip exact
+- tests/unit/api/test_public_types.py added, 32 tests
+- public/schema behavior: additive only; no existing field, artifact, or
+  numerical value changed
+
+Evidence:
+- focused tests: 32 new public-type tests pass; 159 tests across the api and
+  release suites pass together
+- gates: architecture, repository-size, validation-coverage and
+  release-readiness all pass; Ruff clean; MyPy at the one known local error
+- values, tolerances, residuals: none changed
+
+Three manifest baselines were ratcheted with reasons recorded in the manifest:
+source lines 90,857 -> 91,131 for the new surface, test files 101 -> 102 and
+test lines 87,725 -> 87,888 for the contract suite. The test-file bump is
+against the direction of the 30-file target and is justified in place: this is
+the public-surface contract the plan requires of A1-2, and it is a file the
+final topology keeps rather than merges.
 ## 2026-08-30 - PR A1-3 real PreparedSimulation - api/a1-3-prepared-simulation
 
 Baseline:

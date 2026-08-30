@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+from pathlib import Path
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Tuple
 
@@ -302,5 +304,86 @@ class RuntimeConfig:
             "quasilinear": self.quasilinear.to_dict(),
             "parallel": self.parallel.to_dict(),
         }
+
+    def replace(self, **changes: Any) -> "RuntimeConfig":
+        """Return a validated copy with ``changes`` applied.
+
+        The dataclass is frozen, so this is the supported way to derive a case.
+        The copy is validated before it is returned: a scan that builds cases in
+        a loop should fail on the case it built, not several stages later inside
+        a compiled kernel.
+        """
+
+        updated = dataclasses.replace(self, **changes)
+        updated.validate()
+        return updated
+
+    def validate(self) -> "RuntimeConfig":
+        """Check cross-section consistency and return ``self``.
+
+        Each section already validates its own fields in ``__post_init__``.
+        What no section can see is a disagreement between sections, which is
+        what this checks.
+        """
+
+        errors: list[str] = []
+        if not self.species:
+            errors.append("a case needs at least one species")
+        kinetic = [s for s in self.species if getattr(s, "kinetic", False)]
+        if not kinetic:
+            errors.append("a case needs at least one kinetic species")
+        if bool(self.physics.linear) and bool(self.physics.nonlinear):
+            errors.append("physics.linear and physics.nonlinear cannot both be true")
+        if float(self.time.dt) <= 0.0:
+            errors.append("time.dt must be positive")
+        if float(self.time.t_max) <= 0.0:
+            errors.append("time.t_max must be positive")
+        if self.geometry.model == "vmec" and not self.geometry.vmec_file:
+            errors.append("geometry.model = 'vmec' requires geometry.vmec_file")
+        if errors:
+            raise ValueError("invalid case: " + "; ".join(errors))
+        return self
+
+    def summary(self) -> Dict[str, Any]:
+        """Return the scalars that identify this case in a log or a report."""
+
+        return {
+            "geometry_model": self.geometry.model,
+            "n_species": len(self.species),
+            "n_kinetic_species": sum(
+                1 for s in self.species if getattr(s, "kinetic", False)
+            ),
+            "linear": bool(self.physics.linear),
+            "nonlinear": bool(self.physics.nonlinear),
+            "electromagnetic": bool(getattr(self.physics, "electromagnetic", False)),
+            "grid": {
+                "Nx": self.grid.Nx,
+                "Ny": self.grid.Ny,
+                "Nz": self.grid.Nz,
+                "y0": self.grid.y0,
+            },
+            "time": {
+                "t_max": self.time.t_max,
+                "dt": self.time.dt,
+                "method": self.time.method,
+                "fixed_dt": self.time.fixed_dt,
+            },
+        }
+
+    def to_toml(self, path: str | Path) -> Path:
+        """Write this case as TOML and return the path written.
+
+        The text round-trips through ``gkx.load``: what is written is what the
+        loader reads back, so a case saved from Python and a case edited by hand
+        are the same object to the runtime.
+        """
+
+        from gkx.workflows.runtime.wout import deck_text
+
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(deck_text(self.to_dict()), encoding="utf-8")
+        return target
+
 
 Case = RuntimeConfig

@@ -128,12 +128,19 @@ recursive = true
 # recorded anisotropy values), a ground-truth table no existing runtime suite
 # carries, plus the --estimate short-circuit contract (prints and exits with
 # no deck or output directory written).
+# 101 -> 102: tests/unit/api/test_public_types.py. The GKX 3 contract asks
+# for at most 30 test files, so a new one has to earn its place. This is the
+# public surface contract the plan requires of A1-2, and it is a file the
+# final topology keeps rather than merges: it pins that Case owns replace,
+# validate, to_toml and summary, that each result owns save, plot,
+# print_summary and to_dataset, that a written case reloads to the case that
+# wrote it, and that an unsaturated window is never reported as accepted.
 # 101 -> 102: tests/unit/api/test_prepared_simulation.py, the public
 # prepared-simulation contract. It pins that both case kinds prepare, that
 # the exported name is the public type rather than the solver internal it
 # used to leak, and that the object refuses a parameterised solve instead
 # of quietly solving a different problem.
-baseline = 102
+baseline = 103
 # Target lowered 36 -> 30: the approved GKX 3 contract in the handoff plan.
 target = 30
 
@@ -566,13 +573,20 @@ recursive = true
 # Plotting any such run failed with "Could not infer runtime summary".
 # 91507 -> 90857: measured at e19336dc. Deletions through #162 already
 # earned this; the baseline had not been ratcheted to claim them.
+# 90857 -> 91131: giving the public types the behaviour the plan contracts
+# for. Case gains replace, validate, to_toml and summary; each result gains
+# save, plot, print_summary, to_dataset and summary. The verbs existed as
+# helpers a caller had to know to import, so this is surface, not new
+# machinery: save and plot delegate to the writers and figure builders the
+# runtime already used. Partly offset by extracting one deck_text renderer
+# and deleting the duplicate body it replaced.
 # 90857 -> 91066: src/gkx/api/prepared.py, the public prepared simulation.
 # gkx.prepare returned the solver-internal PreparedExplicitNonlinearDiagnostics
 # and raised for every linear case, so the reusable-execution concept covered
 # half the product and leaked a private type doing it. The new module owns no
 # numerics: each method delegates to the runtime path the case would have
 # taken anyway.
-baseline = 91066
+baseline = 91340
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -581,10 +595,11 @@ path = "tests"
 pattern = "*.py"
 recursive = true
 # 96202 -> 87725: measured at e19336dc.
+# 87725 -> 87888: the public-surface contract tests described above.
 # 87725 -> 87823: the prepared-simulation contract suite.
-baseline = 87823
 # Target lowered 55000 -> 35000: the 55,000 figure predated the approved
 # GKX 3 contract and contradicted it.
+baseline = 87986
 target = 35000
 
 [[line_budget_policy.counts]]
