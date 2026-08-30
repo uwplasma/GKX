@@ -129,14 +129,16 @@ recursive = true
 # carries, plus the --estimate short-circuit contract (prints and exits with
 # no deck or output directory written).
 baseline = 101
-target = 36
+# Target lowered 36 -> 30: the approved GKX 3 contract in the handoff plan.
+target = 30
 
 [[topology_policy.counts]]
 name = "tool_python_files"
 path = "tools"
 pattern = "*.py"
 recursive = true
-baseline = 95
+# 95 -> 90: measured at e19336dc.
+baseline = 90
 target = 0
 
 [[topology_policy.counts]]
@@ -557,7 +559,9 @@ recursive = true
 # path ends in ".out.nc", the convention the shipped decks use, wrote
 # foo.out.nc.summary.json and was looked for as foo.out.summary.json.
 # Plotting any such run failed with "Could not infer runtime summary".
-baseline = 91507
+# 91507 -> 90857: measured at e19336dc. Deletions through #162 already
+# earned this; the baseline had not been ratcheted to claim them.
+baseline = 90857
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -565,15 +569,19 @@ name = "test_python_lines"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 96202
-target = 55000
+# 96202 -> 87725: measured at e19336dc.
+baseline = 87725
+# Target lowered 55000 -> 35000: the 55,000 figure predated the approved
+# GKX 3 contract and contradicted it.
+target = 35000
 
 [[line_budget_policy.counts]]
 name = "tool_python_lines"
 path = "tools"
 pattern = "*.py"
 recursive = true
-baseline = 97346
+# 97346 -> 72461: measured at e19336dc.
+baseline = 72461
 target = 0
 
 [[line_budget_policy.counts]]
