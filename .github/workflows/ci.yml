@@ -90,9 +90,8 @@ jobs:
         run: |
           python - <<'PY'
           import sys, tomllib, gkx
-          from gkx.utils import tomlcompat
           assert sys.version_info[:2] == (3, 11), sys.version_info
-          assert tomlcompat.loads("a = 1") == {"a": 1}
+          assert tomllib.loads("a = 1") == {"a": 1}
           print("gkx", gkx.__version__, "on", sys.version)
           PY
 
