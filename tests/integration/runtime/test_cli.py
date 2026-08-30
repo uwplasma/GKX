@@ -3,6 +3,7 @@
 import argparse
 from dataclasses import dataclass
 import os
+import json
 import sys
 import tomllib
 from pathlib import Path
@@ -3081,3 +3082,101 @@ def test_scan_runtime_linear_resolves_warm_start(
     assert main() == 0
     capsys.readouterr()
     assert captured["warm_start"] is expected
+
+
+# --- the six product commands ------------------------------------------
+#
+# estimate, inspect and validate complete the command set the product
+# contract names. estimate was previously reachable only as a flag on the
+# equilibrium shorthand, and the other two did not exist, so none of them
+# appeared in `gkx --help`.
+
+
+def _valid_case_toml(tmp_path) -> Path:
+    """Write a case that validates: analytic geometry needs no wout file."""
+
+    source = Path(__file__).resolve().parents[3] / "examples" / "common_input.toml"
+    text = source.read_text(encoding="utf-8").replace(
+        'model = "vmec"', 'model = "s-alpha"'
+    )
+    target = tmp_path / "case.toml"
+    target.write_text(text, encoding="utf-8")
+    return target
+
+
+def test_cli_validate_accepts_a_runnable_case(tmp_path, capsys, monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["gkx", "validate", str(_valid_case_toml(tmp_path))])
+    assert main() == 0
+    assert "is a valid case" in capsys.readouterr().out
+
+
+def test_cli_validate_names_the_problem_and_exits_nonzero(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The shipped template declares VMEC geometry with no wout file."""
+
+    source = Path(__file__).resolve().parents[3] / "examples" / "common_input.toml"
+    target = tmp_path / "template.toml"
+    target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["gkx", "validate", str(target)])
+    assert main() == 1
+    assert "requires geometry.vmec_file" in capsys.readouterr().err
+
+
+def test_cli_validate_reports_a_missing_file_rather_than_raising(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["gkx", "validate", str(tmp_path / "absent.toml")])
+    assert main() == 1
+    assert "not runnable" in capsys.readouterr().err
+
+
+def test_cli_inspect_describes_a_case_without_running_it(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["gkx", "inspect", str(_valid_case_toml(tmp_path))])
+    assert main() == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["geometry_model"] == "s-alpha"
+    assert payload["n_species"] >= 1
+
+
+def test_cli_inspect_reads_a_saved_result_summary(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    base = tmp_path / "run.out.nc"
+    base.with_name(base.name + ".summary.json").write_text(
+        json.dumps({"kind": "linear", "gamma": 0.14}), encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "argv", ["gkx", "inspect", str(base)])
+    assert main() == 0
+    assert json.loads(capsys.readouterr().out)["gamma"] == 0.14
+
+
+def test_cli_inspect_reports_a_missing_summary(tmp_path, capsys, monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["gkx", "inspect", str(tmp_path / "none.out.nc")])
+    assert main() == 1
+    assert "no summary beside" in capsys.readouterr().err
+
+
+def test_cli_help_lists_the_product_commands() -> None:
+    from gkx.cli import build_parser
+
+    text = build_parser().format_help()
+    for command in ("run", "scan", "estimate", "inspect", "validate"):
+        assert command in text
+
+
+def test_deprecated_commands_name_their_replacement(capsys, monkeypatch) -> None:
+    """They keep working for one release and say what to use instead."""
+
+    from gkx.cli import _warn_deprecated_command
+
+    for name, replacement in (
+        ("run-runtime-linear", "run"),
+        ("scan-runtime-linear", "scan"),
+        ("run-runtime-nonlinear", "run"),
+    ):
+        _warn_deprecated_command(name)
+        err = capsys.readouterr().err
+        assert name in err and f"gkx {replacement}" in err
