@@ -321,8 +321,16 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     else:
         from gkx.artifacts.plotting import _artifact_base, _sidecar
 
-        summary_path = _sidecar(_artifact_base(target), ".summary.json")
-        if not summary_path.exists():
+        # The writers append their suffix to the output path, so a run whose
+        # [output] path is foo.out.nc writes foo.out.nc.summary.json. Try that
+        # first; fall back to the stripped base for a path already carrying a
+        # sidecar suffix.
+        candidates = (
+            _sidecar(target, ".summary.json"),
+            _sidecar(_artifact_base(target), ".summary.json"),
+        )
+        summary_path = next((c for c in candidates if c.exists()), None)
+        if summary_path is None:
             print(f"gkx: no summary beside {target}", file=sys.stderr)
             return 1
         payload = json.loads(summary_path.read_text(encoding="utf-8"))

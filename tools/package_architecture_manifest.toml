@@ -581,7 +581,7 @@ recursive = true
 # a user could not discover any of them from gkx --help. The three redundant
 # run-runtime-* and scan-runtime-* commands now name their replacement on
 # use and are removed next release, which is where these lines come back.
-baseline = 91205
+baseline = 91213
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -591,7 +591,10 @@ pattern = "*.py"
 recursive = true
 # 96202 -> 87725: measured at e19336dc.
 # 87725 -> 87888: the public-surface contract tests described above.
-baseline = 87888
+# 87888 -> 87972: CLI coverage for estimate, inspect and validate. The
+# fast-coverage gate requires 95% on cli.py and the three new commands took it
+# to 87.82%; with these tests it is 97%.
+baseline = 87972
 # Target lowered 55000 -> 35000: the 55,000 figure predated the approved
 # GKX 3 contract and contradicted it.
 target = 35000
