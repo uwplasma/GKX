@@ -45,11 +45,7 @@ def vmex_flux_tube_mapping_from_state(  # pragma: no cover
     equal_arc: bool = True,
     arc_oversample: int = 4,
 ) -> dict[str, Any]:
-    """Build VMEX's equal-arc PEST mapping with standard normalizations.
-
-    VMEX owns all arrays and differentiability.  Its diagnostics pass through
-    under ``"vmex"`` with the two historical reference aliases GKX reports use.
-    """
+    """Build VMEX's differentiable equal-arc PEST mapping."""
     return _vmex_mapping(
         "gk_fieldline_geometry",
         state,
