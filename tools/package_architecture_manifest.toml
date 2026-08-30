@@ -128,7 +128,12 @@ recursive = true
 # recorded anisotropy values), a ground-truth table no existing runtime suite
 # carries, plus the --estimate short-circuit contract (prints and exits with
 # no deck or output directory written).
-baseline = 101
+# 101 -> 102: tests/unit/api/test_prepared_simulation.py, the public
+# prepared-simulation contract. It pins that both case kinds prepare, that
+# the exported name is the public type rather than the solver internal it
+# used to leak, and that the object refuses a parameterised solve instead
+# of quietly solving a different problem.
+baseline = 102
 # Target lowered 36 -> 30: the approved GKX 3 contract in the handoff plan.
 target = 30
 
@@ -561,7 +566,13 @@ recursive = true
 # Plotting any such run failed with "Could not infer runtime summary".
 # 91507 -> 90857: measured at e19336dc. Deletions through #162 already
 # earned this; the baseline had not been ratcheted to claim them.
-baseline = 90857
+# 90857 -> 91066: src/gkx/api/prepared.py, the public prepared simulation.
+# gkx.prepare returned the solver-internal PreparedExplicitNonlinearDiagnostics
+# and raised for every linear case, so the reusable-execution concept covered
+# half the product and leaked a private type doing it. The new module owns no
+# numerics: each method delegates to the runtime path the case would have
+# taken anyway.
+baseline = 91066
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -570,7 +581,8 @@ path = "tests"
 pattern = "*.py"
 recursive = true
 # 96202 -> 87725: measured at e19336dc.
-baseline = 87725
+# 87725 -> 87823: the prepared-simulation contract suite.
+baseline = 87823
 # Target lowered 55000 -> 35000: the 55,000 figure predated the approved
 # GKX 3 contract and contradicted it.
 target = 35000

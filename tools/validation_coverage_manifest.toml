@@ -29,6 +29,37 @@ excluded_modules = [
 ]
 
 [[modules]]
+module = "gkx.api.prepared"
+path = "src/gkx/api/prepared.py"
+owner_lane = "public prepared-simulation object"
+status = "closed"
+coverage_priority = "medium"
+coverage_target_percent = 95.0
+reference_anchors = [
+  "reusable compiled-simulation objects in differentiable scientific libraries",
+  "public API contract in the GKX 3 plan, section 7.3",
+]
+physics_contracts = [
+  "preparing a case and solving it directly take the same runtime path, so a prepared solve cannot report different physics than an unprepared one",
+  "a prepared object refuses a parameterised solve rather than silently solving a different problem",
+]
+numerics_contracts = [
+  "reported state shape follows the case grid and the resolved Laguerre and Hermite counts",
+  "the memory estimate is declared a floor rather than a ceiling, because it does not model diagnostic buffers",
+]
+fast_tests = [
+  "tests/unit/api/test_prepared_simulation.py",
+]
+next_tests = [
+  "a prepared nonlinear solve reproduces the unprepared solve bit for bit",
+  "value_and_grad against a prepared nonlinear objective, once the differentiable prepared path lands",
+  "scan over ky returns the same result as the standalone runtime scan",
+]
+artifact_paths = [
+  "docs/api.rst",
+]
+
+[[modules]]
 module = "gkx.api.__init__"
 path = "src/gkx/api/__init__.py"
 owner_lane = "compact lazy public API registry"
