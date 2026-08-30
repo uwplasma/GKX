@@ -241,6 +241,16 @@ The adapter calls only ``vmex.core.turbulence.gk_fieldline_geometry`` and then
 the same generic mapping validator above. It contains no VMEC spectral or
 Boozer reconstruction and does not import VMEX until called.
 
+The former ``booz_xform_flux_tube_mapping_from_inputs`` route has been removed.
+It combined a real Boozer ``|B|`` spectrum with synthetic smooth metric and
+drift profiles, so its output was not an admissible solver geometry. Use
+``from_vmex`` for a solved state, ``from_vmex_wout`` for a standard WOUT, or
+``flux_tube_geometry_from_mapping`` when an upstream code already provides the
+complete physical array contract. ``booz_xform_jax`` remains the owner of
+Boozer transforms and spectra; GKX still exposes the bounded spectral
+derivative check and field-line ``|B|`` evaluator, but neither invents missing
+metric or drift coefficients.
+
 Closed VMEX mirror geometry
 ---------------------------
 

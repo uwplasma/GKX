@@ -44,7 +44,6 @@ from gkx.geometry.differentiable import (
     _radial_derivative_array,
     _radial_derivative_profile,
     _scalar_parity_metrics,
-    booz_xform_flux_tube_sensitivity_report,
     booz_xform_spectral_sensitivity_report,
     discover_differentiable_geometry_backends,
     finite_difference_jacobian,
@@ -55,7 +54,6 @@ from gkx.geometry.differentiable import (
     geometry_observable_names,
     geometry_sensitivity_report,
     vmex_boozer_equal_arc_core_profiles_from_state,
-    vmex_boozer_flux_tube_sensitivity_report,
     vmex_field_line_tensor_sensitivity_report,
     vmex_flux_tube_array_parity_report,
     vmex_flux_tube_sensitivity_report,
@@ -145,8 +143,6 @@ def test_differentiable_geometry_facade_preserves_split_symbol_identity() -> Non
     )
     assert callable(diff_geom.vmec_boundary_aspect_sensitivity_report)
     assert callable(diff_geom.booz_xform_spectral_sensitivity_report)
-    assert callable(diff_geom.booz_xform_flux_tube_mapping_from_inputs)
-    assert callable(diff_geom.booz_xform_flux_tube_sensitivity_report)
     assert (
         diff_geom.evaluate_boozer_bmag_on_field_line
         is booz_bridge.evaluate_boozer_bmag_on_field_line
@@ -159,13 +155,8 @@ def test_differentiable_geometry_facade_preserves_split_symbol_identity() -> Non
         diff_geom.booz_xform_spectral_sensitivity_report
         is not booz_bridge.booz_xform_spectral_sensitivity_report
     )
-    assert callable(diff_geom.vmex_boozer_flux_tube_sensitivity_report)
     assert callable(diff_geom.vmex_metric_tensor_sensitivity_report)
     assert callable(diff_geom.vmex_field_line_tensor_sensitivity_report)
-    assert (
-        diff_geom.vmex_boozer_flux_tube_sensitivity_report
-        is not vmec_state_sensitivity.vmex_boozer_flux_tube_sensitivity_report
-    )
     assert (
         diff_geom.vmex_metric_tensor_sensitivity_report
         is not vmec_state_sensitivity.vmex_metric_tensor_sensitivity_report
@@ -606,76 +597,6 @@ def test_booz_xform_spectral_sensitivity_report_is_bounded_when_available() -> N
     assert float(report["objective"]) > 0.0
     assert float(report["max_abs_ad_fd_error"]) < 1.0e-7
     assert np.asarray(report["bmnc_b"]).shape == (1, 2)
-
-
-def test_booz_xform_flux_tube_sensitivity_report_is_bounded_when_available() -> None:
-    for name in ("booz_xform_jax", "booz_xform_jax.jax_api"):
-        sys.modules.pop(name, None)
-
-    report = booz_xform_flux_tube_sensitivity_report(ntheta=32, fd_step=2.0e-5)
-
-    assert (
-        gkx.booz_xform_flux_tube_sensitivity_report
-        is booz_xform_flux_tube_sensitivity_report
-    )
-    assert "available" in report
-    if not report["available"]:
-        assert report["sensitivity"] is None
-        return
-
-    sensitivity = report["sensitivity"]
-    assert sensitivity["observable_names"] == list(geometry_observable_names())
-    assert np.asarray(sensitivity["jacobian_ad"]).shape == (
-        len(geometry_observable_names()),
-        2,
-    )
-    assert float(sensitivity["max_abs_ad_fd_error"]) < 2.0e-6
-    assert float(sensitivity["max_rel_ad_fd_error"]) < 2.0e-4
-    assert sensitivity["conditioning"]["jacobian_shape"] == [
-        len(geometry_observable_names()),
-        2,
-    ]
-    assert np.asarray(report["bmnc_b"]).shape == (5,)
-
-
-def test_vmex_boozer_flux_tube_sensitivity_report_starts_from_real_vmec_state_when_available() -> (
-    None
-):
-    for name in (
-        "vmex",
-        "vmex.driver",
-        "vmex.config",
-        "vmex.static",
-        "vmex.wout",
-        "vmex.booz_input",
-        "booz_xform_jax",
-        "booz_xform_jax.jax_api",
-    ):
-        sys.modules.pop(name, None)
-
-    report = vmex_boozer_flux_tube_sensitivity_report(ntheta=16, fd_step=2.0e-5)
-
-    assert (
-        gkx.vmex_boozer_flux_tube_sensitivity_report
-        is vmex_boozer_flux_tube_sensitivity_report
-    )
-    assert "available" in report
-    if not report["available"]:
-        assert report["sensitivity"] is None
-        return
-
-    sensitivity = report["sensitivity"]
-    assert report["case_name"] == "circular_tokamak"
-    assert report["param_names"] == ["delta_Rcos", "delta_Zsin"]
-    assert sensitivity["observable_names"] == list(geometry_observable_names())
-    assert np.asarray(sensitivity["jacobian_ad"]).shape == (
-        len(geometry_observable_names()),
-        2,
-    )
-    assert float(sensitivity["max_abs_ad_fd_error"]) < 2.0e-5
-    assert float(sensitivity["max_rel_ad_fd_error"]) < 2.0e-4
-    assert sensitivity["conditioning"]["finite_ad_jacobian"] is True
-    assert np.asarray(report["bmnc_b"]).shape == (2,)
 
 
 def test_vmec_state_sensitivity_report_helpers_are_fail_closed_and_json_ready() -> None:

@@ -1,9 +1,9 @@
 """Unit contracts for the vmex-backed VMEC-state sensitivity helpers.
 
-These exercise the private helpers behind the three ``# pragma: no cover``
+These exercise the private helpers behind the two ``# pragma: no cover``
 public entry points of ``gkx.geometry.vmec_state_sensitivity`` directly,
 using synthetic ``_VMECStateContext`` bundles and a monkeypatched
-``gk_fieldline_geometry`` / Boozer-tables seam so that no real vmex equilibrium
+``gk_fieldline_geometry`` seam so that no real vmex equilibrium
 solve is required.  Numeric expectations (packed observable order, hand-computed
 RMS/mean values, and the AD derivatives of the two perturbed Fourier controls)
 are checked against the underlying contracts rather than merely asserting that a
@@ -13,9 +13,8 @@ result exists.
 from __future__ import annotations
 
 import dataclasses
-import sys
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 
 import jax.numpy as jnp
 import numpy as np
@@ -172,30 +171,6 @@ def test_tensor_sensitivity_payload_packs_observables_and_ad_fd_diagnostics() ->
     np.testing.assert_allclose(payload["jacobian_fd"], payload["jacobian_ad"], atol=1e-4)
     assert float(payload["max_abs_ad_fd_error"]) < 1e-4
     assert payload["conditioning"]["jacobian_shape"] == [2, 2]
-
-
-def test_boozer_flux_tube_report_payload_packs_booz_xform_metadata() -> None:
-    sensitivity = {"observable_names": ["mean_bmag"], "max_abs_ad_fd_error": 1.0e-9}
-    booz_meta = {
-        "bmnc_b": np.asarray([1.0, 0.1, -0.05]),
-        "ixm_b": np.asarray([0, 1, 2]),
-        "ixn_b": np.asarray([0, 0, 4]),
-        "iota_b": np.asarray(0.37),
-    }
-
-    payload = vss._boozer_flux_tube_report_payload(
-        sensitivity=sensitivity, booz_meta=booz_meta, mboz=3, nboz=1, ntheta=24
-    )
-
-    assert payload["sensitivity"] is sensitivity
-    assert payload["mboz"] == 3
-    assert payload["nboz"] == 1
-    assert payload["ntheta"] == 24
-    assert payload["bmnc_b"] == [1.0, 0.1, -0.05]
-    assert payload["ixm_b"] == [0, 1, 2]
-    assert payload["ixn_b"] == [0, 0, 4]
-    assert payload["iota_b"] == pytest.approx(0.37)
-    assert isinstance(payload["iota_b"], float)
 
 
 # ---------------------------------------------------------------------------
@@ -359,161 +334,6 @@ def test_load_vmec_geom_sensitivity_context_resolves_metric_indices(monkeypatch)
     assert seen["case_name"] == "circular_tokamak"
     # ns=5 -> ridx = 5 // 2 = 2 ; metric default surface = min(ridx - 1, ns - 1) = 1
     assert (ridx, midx, sidx) == (2, 1, 1)
-
-
-def test_load_vmec_boozer_sensitivity_context_imports_tables_seam(monkeypatch) -> None:
-    ctx = _make_state_context(ns=5, nmode=3)
-    monkeypatch.setattr(vss, "_load_vmec_state_context", lambda _c: ctx)
-    fake_tables = ModuleType("vmex.core.boozer_tables")
-    monkeypatch.setitem(sys.modules, "vmex.core.boozer_tables", fake_tables)
-
-    out_ctx, out_mod, ridx, midx, sidx = vss._load_vmec_boozer_sensitivity_context(
-        case_name="circular_tokamak",
-        radial_index=None,
-        mode_index=1,
-        surface_index=None,
-    )
-
-    assert out_ctx is ctx
-    assert out_mod is fake_tables
-    # ns=5 -> ridx = 2 ; half-mesh default surface = min(ridx - 1, ns - 2) = 1
-    assert (ridx, midx, sidx) == (2, 1, 1)
-
-
-# ---------------------------------------------------------------------------
-# Boozer flux-tube mapping wiring + run bundling
-# ---------------------------------------------------------------------------
-def test_vmec_to_boozer_mapping_fn_wires_state_through_boozer_bridge(monkeypatch) -> None:
-    ctx = _make_state_context(ns=4, nmode=2)
-    boozer_tables_mod = ModuleType("vmex.core.boozer_tables")
-    inputs_sentinel = object()
-    mapping_sentinel = {"booz_xform": {"iota_b": 0.4}, "marker": "mapping"}
-    seen_inputs: dict[str, object] = {}
-    seen_mapping: dict[str, object] = {}
-
-    def fake_inputs(state, runtime, **kwargs):  # noqa: ANN001, ANN202
-        seen_inputs["state"] = state
-        seen_inputs["runtime"] = runtime
-        seen_inputs.update(kwargs)
-        return inputs_sentinel
-
-    def fake_mapping(inputs, **kwargs):  # noqa: ANN001, ANN202
-        seen_mapping["inputs"] = inputs
-        seen_mapping.update(kwargs)
-        return mapping_sentinel
-
-    monkeypatch.setattr(vss, "_boozer_xform_inputs_from_state", fake_inputs)
-    monkeypatch.setattr(vss, "booz_xform_flux_tube_mapping_from_inputs", fake_mapping)
-
-    mapping_fn = vss._vmec_to_boozer_mapping_fn(
-        ctx=ctx,
-        boozer_tables_mod=boozer_tables_mod,
-        radial_index=1,
-        mode_index=1,
-        surface_index=0,
-        mboz=2,
-        nboz=0,
-        ntheta=16,
-    )
-    result = mapping_fn(jnp.asarray([0.001, 0.002]))
-
-    assert result is mapping_sentinel
-    # state perturbed at [radial_index, mode_index] and threaded to the seam
-    assert float(seen_inputs["state"].R_cos[1, 1]) == pytest.approx(0.001)
-    assert float(seen_inputs["state"].Z_sin[1, 1]) == pytest.approx(0.002)
-    assert seen_inputs["runtime"] is ctx.runtime
-    assert seen_inputs["inp"] is ctx.inp
-    assert seen_inputs["wout"] is ctx.wout
-    assert seen_inputs["boozer_tables_mod"] is boozer_tables_mod
-    assert seen_inputs["ns_full"] == 4
-    # bridge receives the produced inputs plus the hard-wired shear / jit flags
-    assert seen_mapping["inputs"] is inputs_sentinel
-    assert seen_mapping["mboz"] == 2
-    assert seen_mapping["nboz"] == 0
-    assert seen_mapping["ntheta"] == 16
-    assert seen_mapping["surface_index"] == 0
-    assert seen_mapping["magnetic_shear"] == pytest.approx(0.35)
-    assert seen_mapping["jit"] is False
-
-
-def test_run_vmec_boozer_flux_tube_report_bundles_sensitivity_and_meta(
-    monkeypatch,
-) -> None:
-    ctx = _make_state_context()
-    fake_tables = ModuleType("vmex.core.boozer_tables")
-    fake_sensitivity = {"observable_names": ["mean_bmag"], "max_abs_ad_fd_error": 0.0}
-    booz_meta = {
-        "bmnc_b": np.asarray([1.0, 0.1]),
-        "ixm_b": np.asarray([0, 1]),
-        "ixn_b": np.asarray([0, 0]),
-        "iota_b": 0.42,
-    }
-    seen_load: dict[str, object] = {}
-    seen_builder: dict[str, object] = {}
-    seen_report: dict[str, object] = {}
-
-    def fake_load(**kwargs):  # noqa: ANN001, ANN202
-        seen_load.update(kwargs)
-        return ctx, fake_tables, 1, 1, 0
-
-    def fake_mapping_fn(_params):  # noqa: ANN001, ANN202
-        return {"booz_xform": booz_meta}
-
-    def fake_builder(**kwargs):  # noqa: ANN001, ANN202
-        seen_builder.update(kwargs)
-        return fake_mapping_fn
-
-    def fake_report(mapping_fn, params, **kwargs):  # noqa: ANN001, ANN202
-        seen_report["mapping_fn"] = mapping_fn
-        seen_report["params"] = np.asarray(params).tolist()
-        seen_report.update(kwargs)
-        return fake_sensitivity
-
-    monkeypatch.setattr(vss, "_load_vmec_boozer_sensitivity_context", fake_load)
-    monkeypatch.setattr(vss, "_vmec_to_boozer_mapping_fn", fake_builder)
-    monkeypatch.setattr(vss, "geometry_sensitivity_report", fake_report)
-
-    run = vss._run_vmec_boozer_flux_tube_report(
-        params=jnp.asarray([1.0e-3, 1.0e-3]),
-        case_name="circular_tokamak",
-        radial_index=None,
-        mode_index=1,
-        surface_index=None,
-        fd_step=1.0e-5,
-        mboz=2,
-        nboz=0,
-        ntheta=16,
-    )
-
-    assert isinstance(run, vss._VMECStateSensitivityReportRun)
-    assert run.ctx is ctx
-    assert (run.radial_index, run.mode_index, run.surface_index) == (1, 1, 0)
-    assert run.payload["sensitivity"] is fake_sensitivity
-    assert run.payload["mboz"] == 2
-    assert run.payload["nboz"] == 0
-    assert run.payload["ntheta"] == 16
-    np.testing.assert_allclose(run.payload["bmnc_b"], [1.0, 0.1])
-    assert run.payload["ixm_b"] == [0, 1]
-    assert run.payload["ixn_b"] == [0, 0]
-    assert run.payload["iota_b"] == pytest.approx(0.42)
-    # context loader received the request unchanged
-    assert seen_load["case_name"] == "circular_tokamak"
-    assert seen_load["radial_index"] is None
-    assert seen_load["mode_index"] == 1
-    assert seen_load["surface_index"] is None
-    # mapping builder wired with the resolved indices + boozer module
-    assert seen_builder["ctx"] is ctx
-    assert seen_builder["boozer_tables_mod"] is fake_tables
-    assert seen_builder["radial_index"] == 1
-    assert seen_builder["surface_index"] == 0
-    assert seen_builder["mboz"] == 2
-    # the sensitivity gate is tagged with the state->boozer source model
-    assert seen_report["mapping_fn"] is fake_mapping_fn
-    assert seen_report["source_model"] == (
-        "vmex:state->booz_xform_jax:field-line-bmag"
-    )
-    assert seen_report["fd_step"] == pytest.approx(1.0e-5)
-    np.testing.assert_allclose(seen_report["params"], [1.0e-3, 1.0e-3])
 
 
 # ---------------------------------------------------------------------------

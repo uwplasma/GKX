@@ -115,20 +115,6 @@ def booz_xform_spectral_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
     )
 
 
-@wraps(_booz_bridge.booz_xform_flux_tube_mapping_from_inputs)
-def booz_xform_flux_tube_mapping_from_inputs(*args: Any, **kwargs: Any) -> Any:
-    return _call_with_facade_backend_discovery(
-        _booz_bridge.booz_xform_flux_tube_mapping_from_inputs, *args, **kwargs
-    )
-
-
-@wraps(_booz_bridge.booz_xform_flux_tube_sensitivity_report)
-def booz_xform_flux_tube_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
-    return _call_with_facade_backend_discovery(
-        _booz_bridge.booz_xform_flux_tube_sensitivity_report, *args, **kwargs
-    )
-
-
 def _call_with_vmec_state_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> Any:
     with _patched_module_attrs(
         _vmec_state_sensitivity,
@@ -136,10 +122,6 @@ def _call_with_vmec_state_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> 
             "discover_differentiable_geometry_backends": (
                 discover_differentiable_geometry_backends
             ),
-            "booz_xform_flux_tube_mapping_from_inputs": (
-                booz_xform_flux_tube_mapping_from_inputs
-            ),
-            "geometry_sensitivity_report": geometry_sensitivity_report,
             "finite_difference_jacobian": finite_difference_jacobian,
             "_sensitivity_conditioning_metadata": (
                 _sensitivity_conditioning_metadata
@@ -147,15 +129,6 @@ def _call_with_vmec_state_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> 
         },
     ):
         return func(*args, **kwargs)
-
-
-@wraps(_vmec_state_sensitivity.vmex_boozer_flux_tube_sensitivity_report)
-def vmex_boozer_flux_tube_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
-    return _call_with_vmec_state_facade_hooks(
-        _vmec_state_sensitivity.vmex_boozer_flux_tube_sensitivity_report,
-        *args,
-        **kwargs,
-    )
 
 
 @wraps(_vmec_state_sensitivity.vmex_metric_tensor_sensitivity_report)
@@ -280,8 +253,6 @@ def vmex_flux_tube_array_parity_report(*args: Any, **kwargs: Any) -> Any:
 
 
 __all__ = [
-    "booz_xform_flux_tube_mapping_from_inputs",
-    "booz_xform_flux_tube_sensitivity_report",
     "booz_xform_spectral_sensitivity_report",
     "discover_differentiable_geometry_backends",
     "evaluate_boozer_bmag_on_field_line",
@@ -293,7 +264,6 @@ __all__ = [
     "geometry_observable_names",
     "geometry_sensitivity_report",
     "observable_gradient_validation_report",
-    "vmex_boozer_flux_tube_sensitivity_report",
     "vmex_boozer_equal_arc_core_profiles_from_state",
     "vmex_field_line_tensor_sensitivity_report",
     "vmex_flux_tube_array_parity_report",
