@@ -3281,3 +3281,39 @@ after shared kernels had compiled, took 6.41 seconds on its first call and
 `4.89e-15` across all geometry arrays and `1.39e-16` across scalar contract
 fields. The WOUT host normalization therefore introduces no device fallback
 and no measurable warm-runtime penalty in this gate.
+
+## 2026-08-30 — Open-ended mirror model-admission review
+
+Task: freeze the equations, ownership, claim boundary, and prospective gates
+that must be satisfied before a true open VMEX mirror can enter GKX. Baseline:
+`main` at `88d56c6f`, after the closed-mirror, recovered WOUT-regression, and
+canonical WOUT-adapter merges. This tranche changes documentation only. It
+does not add an open parallel operator, a boundary-condition switch, a source,
+a sheath closure, a collision model, or an end-loss claim.
+
+Source review: GX, GS2, stella, and gyaradax are periodic or twist-linked local
+flux-tube references and do not supply the missing open-mirror model. VMEX owns
+the open equilibrium and geometry. The relevant kinetic reference class is
+the conservative full-f open-field-line work in Gkeyll: phase-space upwinding,
+absorbing/conducting-sheath boundaries, self-consistent potential, sources,
+and collisions are one coupled model rather than separable flags.
+
+Acceptance: the public geometry page records the conservative kinetic
+equation, particle invariants and loss-cone condition, boundary/source/field
+ownership, a staged benchmark ladder, force-softening policy, and an explicit
+admission decision. Warning-as-error documentation, link, spelling/style,
+architecture/size, and release gates must pass. Roll back if the text implies
+that joining end cuts, damping endpoint cells, or setting incoming values to
+zero is a physical mirror model; if it presents a Lane-A result as Pastukhov,
+sheath, or confinement evidence; or if it commits GKX's local-Maxwellian
+delta-f core to a full-f boundary model before a separately reviewed owner is
+selected.
+
+Evidence: warning-as-error Sphinx HTML, the package architecture manifest,
+the 19.52 MB repository-size manifest, 128 release-gate tests, and `git diff
+--check` pass. The full repository link checker reaches all three new primary
+references (the Francisquez arXiv record directly and the Shi/Baldwin journal
+records through their DOI resolvers). It remains non-green because of the
+repository's pre-existing 403/404 links, including the deleted historical
+planning-branch URL; APS also returns 403 to the automated checker for the new,
+browser-verified Baldwin DOI. No new invalid target was introduced.
