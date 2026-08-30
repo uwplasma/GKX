@@ -10,7 +10,6 @@ Conventions:
      (gamma, omega)[vth/a] = (gamma, omega)[cs/a] / sqrt(2)
 """
 import re
-import sys
 import numpy as np
 
 SQRT2 = np.sqrt(2.0)

@@ -1524,7 +1524,7 @@ import re
 
 from support.paths import REPO_ROOT
 
-from gkx.utils import tomlcompat as tomllib
+import tomllib
 from tools.release.check_package_architecture_manifest import (
     validate_architecture_policy,
 )
@@ -2372,7 +2372,7 @@ def _compact(path: str) -> str:
 def test_distribution_metadata_includes_third_party_provenance() -> None:
     """Ship the GX notice with every wheel/sdist containing its descendants."""
 
-    from gkx.utils import tomlcompat as tomllib
+    import tomllib
 
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["license-files"] == ["LICENSE", "PROVENANCE.md"]
@@ -3343,8 +3343,6 @@ import os
 from pathlib import Path
 
 FLOOR_REPO_ROOT = Path(__file__).resolve().parents[2]
-TOML_SHIM = "src/gkx/utils/tomlcompat.py"
-TOML_SHIM_IMPORT = "from gkx.utils import tomlcompat as tomllib"
 # Gates the repo-hygiene job runs before anything is pip-installed.
 UNINSTALLED_RELEASE_GATES = (
     "tools/release/check_repository_size_manifest.py",
@@ -3387,46 +3385,33 @@ def _uninstalled_run(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_tomllib_fallback_lives_only_in_the_shim() -> None:
-    """No other module may import tomllib/tomli, directly or behind its own guard."""
+def test_no_module_imports_the_tomli_backport() -> None:
+    """`tomllib` is stdlib on the declared floor, so the backport must not appear.
+
+    This gate used to require the opposite: every module had to route through a
+    `gkx.utils.tomlcompat` shim, because a bare `import tomllib` raises on
+    Python 3.10 and the suite was uncollectable there. The floor is now 3.11,
+    `requires-python` says so, and `tomli` is not a declared dependency, so the
+    shim's fallback branch was unreachable and the indirection bought nothing.
+    What still needs guarding is the reverse: nothing may quietly reintroduce a
+    dependency on the backport.
+    """
 
     offenders: dict[str, list[int]] = {}
     for relative in _tracked_python_files():
-        if relative == TOML_SHIM:
-            continue
         text = (FLOOR_REPO_ROOT / relative).read_text(encoding="utf-8")
         hits = [
             number
             for number, line in enumerate(text.splitlines(), start=1)
-            if line.split("#")[0].strip().split(" as ")[0]
-            in {"import tomllib", "import tomli"}
+            if line.split("#")[0].strip().split(" as ")[0] == "import tomli"
         ]
         if hits:
             offenders[relative] = hits
 
     assert not offenders, (
-        "these modules import tomllib/tomli directly and so cannot be imported on "
-        f"the declared Python floor; use `{TOML_SHIM_IMPORT}` instead: {offenders}"
+        "these modules import the tomli backport; the declared floor is 3.11 and "
+        f"stdlib tomllib is the only sanctioned parser: {offenders}"
     )
-
-
-def test_toml_shim_stays_cheap_to_import() -> None:
-    """The uninstalled release gates reach the shim through ``src``, so keep it light.
-
-    Importing it must not drag in the solver stack, and on 3.11+ it must need
-    nothing outside the standard library at all.
-    """
-
-    probe = (
-        "import sys; sys.path.insert(0, 'src');"
-        " from gkx.utils import tomlcompat;"
-        " assert tomlcompat.loads('a = 1') == {'a': 1};"
-        " heavy = {'jax', 'jaxlib', 'numpy', 'scipy', 'matplotlib', 'netCDF4'}"
-        " & set(sys.modules);"
-        " assert not heavy, heavy"
-    )
-    proc = _uninstalled_run(["-c", probe])
-    assert proc.returncode == 0, proc.stderr
 
 
 @pytest.mark.parametrize("relative", UNINSTALLED_RELEASE_GATES)
@@ -3658,7 +3643,7 @@ def _decks_reaching_the_nonlinear_runtime() -> tuple[set[str], set[str]]:
 def _deck_run_to(relative: str) -> str | None:
     """The ``[time] run_to`` the deck itself carries, or None if it leaves it."""
 
-    from gkx.utils import tomlcompat as tomllib
+    import tomllib
 
     data = tomllib.loads((RUN_TO_REPO_ROOT / relative).read_text(encoding="utf-8"))
     value = data.get("time", {}).get("run_to")
@@ -3943,7 +3928,7 @@ _KBM_TWO_BUILD_SPREAD = 0.00204
 
 
 def _parity_cases() -> list[dict]:
-    from gkx.utils import tomlcompat as tomllib
+    import tomllib
 
     return tomllib.loads(_PARITY_MANIFEST.read_text(encoding="utf-8"))["case"]
 

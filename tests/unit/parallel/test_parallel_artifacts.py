@@ -13,7 +13,7 @@ from support.paths import REPO_ROOT, load_release_tool
 
 import pytest
 
-from gkx.utils import tomlcompat as tomllib
+import tomllib
 
 
 ROOT = REPO_ROOT

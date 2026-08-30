@@ -327,7 +327,7 @@ def _literature_comparison(toml_path: Path, threshold: dict) -> dict | None:
     Returns ``None`` rather than guessing when the case is not on that contract.
     """
 
-    from gkx.utils import tomlcompat as tomllib
+    import tomllib
 
     critical = threshold.get("critical_multiplier")
     if critical is None or not np.isfinite(critical):

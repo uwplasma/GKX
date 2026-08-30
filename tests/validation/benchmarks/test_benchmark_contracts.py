@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 import re
 import subprocess
-from gkx.utils import tomlcompat as tomllib
+import tomllib
 from types import SimpleNamespace
 
 import jax.numpy as jnp
