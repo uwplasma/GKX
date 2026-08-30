@@ -18,8 +18,8 @@ BASE = "/private/tmp/claude-501/-Users-rogeriojorge-local/1e858e4f-6438-4dbd-8d3
 # --- stella: parse final-time rows of the 6-point scan .omega file ---
 stella = {}
 with open(f"{BASE}/stella_scan/cbc_scan6.omega") as f:
-    lines = [l for l in f if l.strip() and not l.strip().startswith("#")]
-rows = [list(map(float, l.split())) for l in lines]
+    lines = [line for line in f if line.strip() and not line.strip().startswith("#")]
+rows = [list(map(float, line.split())) for line in lines]
 tmax = max(r[0] for r in rows)
 for r in rows:
     if r[0] == tmax:

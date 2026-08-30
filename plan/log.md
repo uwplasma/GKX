@@ -3354,6 +3354,61 @@ and ``git diff --check`` pass. The frozen 1.7/1.8 baseline inventories remain
 unchanged as historical evidence; current callers must migrate to real VMEX,
 WOUT, or complete-mapping geometry.
 
+## 2026-08-30 - PR H0-1 replace plan and rebaseline current main - plan/h0-rebaseline
+
+Baseline:
+- GKX SHA: e19336dc2202b721d12df4f27ab84835b1360de7, matching the plan's audited revision
+- companion SHAs: unchanged; no companion repository was read or modified
+- source/test/tool files and lines at that revision: src/gkx 199/90,857; tests
+  101/87,725; tools 90/72,461; examples 37/4,749; benchmarks 12/1,673; docs 33
+  reStructuredText/18,869; scripts holds no Python
+- relevant existing gate: architecture, repository-size, validation-coverage,
+  release-readiness and quasilinear guardrails all green before editing; Ruff
+  reported three findings in plan/notes/make_comparison.py; MyPy reported the
+  single known local-environment error at objectives/core.py:348, which is the
+  jax<0.10.1 signature for eig on this machine and not a source defect
+
+Scope:
+- intended change: make the new handoff plan the root ground truth, archive the
+  superseded plan, replace approximate counts with regenerated exact ones,
+  correct the architecture manifest where it contradicted the approved contract,
+  and add the compact PR ledger
+- non-goals: no solver, geometry, API or test-behaviour change; no deletion of
+  source or tests; the GKX 3 topology work belongs to Phase A and later
+- acceptance: exact counts committed, manifest consistent with section 2.4, old
+  plan archived, ledger present, all gates green
+- rollback: revert the branch; nothing outside planning files and the manifest
+  is touched, so no numerical result can change
+
+Changes:
+- plan.md replaced by the GKX 3.0 handoff; previous plan moved verbatim to
+  plan/archive/plan_pre_2026-08-30.md
+- plan/pr_ledger.md added: 160 pull requests exist in #1-#162, 152 merged and 8
+  closed unmerged; #2 and #9 do not exist on GitHub. It links plan/pr_audit.md
+  rather than duplicating it
+- tools/package_architecture_manifest.toml: test file target 36 -> 30 and test
+  line target 55,000 -> 35,000, both of which contradicted section 2.4; four
+  stale baselines ratcheted to the measured tree (source lines 91,507 -> 90,857,
+  test lines 96,202 -> 87,725, tool lines 97,346 -> 72,461, tool files 95 -> 90)
+  so the gate stops carrying slack that merged deletions had already earned
+- plan/notes/make_comparison.py: removed an unused import and renamed two
+  ambiguous `l` bindings, which makes Ruff clean repository-wide
+- public/schema behavior: unchanged
+
+Evidence:
+- focused tests: 128 release-gate tests pass
+- gates: architecture, repository-size, validation-coverage, release-readiness
+  and quasilinear promotion guardrails all pass after the manifest correction;
+  Ruff now reports no findings anywhere, an improvement on the pre-edit state;
+  MyPy is unchanged at the one known environment error
+- CPU/NVIDIA measurements: none applicable; no executable path changed
+- values, tolerances, residuals: none changed
+
+Correction recorded for the next agent: an early count of the advertised API
+gave 370 names because it imported the installed site-packages build rather
+than the worktree. Measured from source, gkx.api.__all__ is 14 and the lazy
+_EXPORT_TARGETS registry is 352. Always measure with PYTHONPATH pointed at the
+branch, never against an installed wheel.
 ## 2026-08-30 - PR A1-1 import graph and deletion map - core/a1-1-import-graph
 
 Baseline:
