@@ -575,7 +575,13 @@ recursive = true
 # machinery: save and plot delegate to the writers and figure builders the
 # runtime already used. Partly offset by extracting one deck_text renderer
 # and deleting the duplicate body it replaced.
-baseline = 91131
+# 91131 -> 91205: the CLI gains estimate, inspect and validate, completing
+# the six commands the product contract names. estimate was reachable only
+# as a flag on the equilibrium shorthand and the other two did not exist, so
+# a user could not discover any of them from gkx --help. The three redundant
+# run-runtime-* and scan-runtime-* commands now name their replacement on
+# use and are removed next release, which is where these lines come back.
+baseline = 91205
 target = 45000
 
 [[line_budget_policy.counts]]

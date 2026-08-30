@@ -3520,3 +3520,46 @@ test lines 87,725 -> 87,888 for the contract suite. The test-file bump is
 against the direction of the 30-file target and is justified in place: this is
 the public-surface contract the plan requires of A1-2, and it is a file the
 final topology keeps rather than merges.
+
+## 2026-08-30 - PR A2-1 CLI consolidation - cli/a2-1-consolidation
+
+Baseline:
+- GKX SHA: f986c13c, main after A1-2
+- commands before: run, run-runtime-linear, scan, scan-runtime-linear,
+  run-runtime-nonlinear, geometry
+
+Scope:
+- intended change: complete the six commands the product contract names, and
+  put the redundant ones on a one-release deprecation that says what to use
+- non-goals: removing the deprecated commands, which happens next release; and
+  removing the patchable dependency bundles, which is its own change with its
+  own evidence
+- acceptance: estimate, inspect and validate exist and work; deprecated
+  commands still run and name their replacement; gates green
+- rollback: revert; no runtime path changed
+
+Changes:
+- estimate: prints the deterministic minimum-grid table for an equilibrium. It
+  existed only as --estimate on the equilibrium shorthand, so it could not be
+  found from gkx --help
+- inspect: describes a case TOML through Case.summary, or a saved result
+  through its summary sidecar, without running anything. New
+- validate: loads a case and runs Case.validate, reporting the first real
+  problem in plain language and exiting non-zero. New
+- run-runtime-linear, scan-runtime-linear and run-runtime-nonlinear print a
+  deprecation line naming their replacement and continue to work
+- public/schema behavior: additive; no existing command changed behaviour
+
+Evidence:
+- focused tests: 199 tests across the CLI and release suites pass
+- gates: architecture, repository-size, validation-coverage and
+  release-readiness pass; Ruff clean; MyPy at the one known local error
+- manual: estimate, inspect and validate exercised against a real deck;
+  validate correctly refuses the shipped template
+
+One observation worth keeping. `gkx validate examples/common_input.toml`
+reports the template as not runnable, because it declares geometry.model =
+"vmec" without a vmec_file: the equilibrium shorthand injects that at run time.
+This is correct rather than a bug, and it is the first time the product could
+state it. A user who copies the template and runs it directly gets a precise
+message instead of a failure deeper in geometry construction.
