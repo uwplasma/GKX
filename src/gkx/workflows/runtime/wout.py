@@ -142,14 +142,16 @@ def _toml_value(value: Any) -> str:
     raise TypeError(f"unsupported resolved-deck value: {value!r}")
 
 
-def resolved_deck_text(data: dict[str, Any], *, wout_path: Path) -> str:
-    """Render resolved deck data as TOML, mirroring the demo reproducer."""
+def deck_text(data: dict[str, Any], *, header: tuple[str, ...] = ()) -> str:
+    """Render deck data as TOML, with an optional comment header.
 
-    lines = [
-        "# Fully-resolved GKX input written by the wout equilibrium shorthand.",
-        f"# equilibrium: {wout_path}",
-        "# Rerun with: gkx <this file>",
-    ]
+    This is the single renderer. ``resolved_deck_text`` supplies the equilibrium
+    shorthand's header and delegates here, so a case written by ``Case.to_toml``
+    and a deck written by the shorthand share one serializer and cannot drift
+    apart in quoting or table ordering.
+    """
+
+    lines = list(header)
     tables = {
         key: value
         for key, value in data.items()
@@ -157,7 +159,7 @@ def resolved_deck_text(data: dict[str, Any], *, wout_path: Path) -> str:
         or (isinstance(value, list) and value and all(isinstance(v, dict) for v in value))
     }
     for key, value in data.items():
-        if key not in tables:
+        if key not in tables and value is not None:
             lines.append(f"{key} = {_toml_value(value)}")
     for key, value in tables.items():
         items = value if isinstance(value, list) else [value]
@@ -165,8 +167,24 @@ def resolved_deck_text(data: dict[str, Any], *, wout_path: Path) -> str:
         for item in items:
             lines.append("")
             lines.append(marker)
-            lines.extend(f"{k} = {_toml_value(v)}" for k, v in item.items())
+            # TOML has no null. A field left as None is absent from the file,
+            # which is exactly how the loader spells "use the default", so a
+            # written case reloads to the case that wrote it.
+            lines.extend(
+                f"{k} = {_toml_value(v)}" for k, v in item.items() if v is not None
+            )
     return "\n".join(lines) + "\n"
+
+
+def resolved_deck_text(data: dict[str, Any], *, wout_path: Path) -> str:
+    """Render resolved deck data as TOML, mirroring the demo reproducer."""
+
+    header = (
+        "# Fully-resolved GKX input written by the wout equilibrium shorthand.",
+        f"# equilibrium: {wout_path}",
+        "# Rerun with: gkx <this file>",
+    )
+    return deck_text(data, header=header)
 
 
 def _resolve_deck_paths(data: dict[str, Any], *, base_dir: Path) -> None:
