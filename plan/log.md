@@ -3520,3 +3520,56 @@ test lines 87,725 -> 87,888 for the contract suite. The test-file bump is
 against the direction of the 30-file target and is justified in place: this is
 the public-surface contract the plan requires of A1-2, and it is a file the
 final topology keeps rather than merges.
+## 2026-08-30 - PR A1-3 real PreparedSimulation - api/a1-3-prepared-simulation
+
+Baseline:
+- GKX SHA: 29b22200, main after A1-1
+- relevant existing gate: all four release scripts green
+
+Scope:
+- intended change: replace the leaked solver internal that gkx.prepare
+  returned with the public object section 7.3 describes, covering linear and
+  nonlinear cases with typed methods and compilation metadata
+- non-goals: the differentiable prepared path, prepared nonlinear restarts, and
+  removing the patchable dependency bundles; each needs its own evidence
+- acceptance: both case kinds prepare, the exported name is the public type,
+  refusals are explicit, gates green
+- rollback: revert; the module owns no numerics and every method delegates
+
+Changes:
+- src/gkx/api/prepared.py adds PreparedSimulation and prepare_simulation. The
+  object carries the case, kind, resolved state shape, Laguerre and Hermite
+  counts, and the prepared backend when there is one, and exposes solve, scan,
+  value_and_grad, warmup, estimate_memory, summary and print_summary
+- gkx.prepare now resolves to this object. It previously returned
+  PreparedExplicitNonlinearDiagnostics, a solver-internal type, and raised
+  "prepare currently requires nonlinear physics" for every linear case
+- the advertised API is 15 names: PreparedSimulation joins the 14
+- tests/unit/api/test_prepared_simulation.py adds 17 tests
+- public/schema behavior: gkx.prepare's return type changes from the solver
+  internal to the public wrapper. Nothing that called .run() on the old object
+  breaks, because the nonlinear backend is still reached through solve
+
+Evidence:
+- focused tests: 17 prepared-simulation tests; 144 across the api and release
+  suites together
+- gates: architecture, repository-size, validation-coverage and
+  release-readiness pass; Ruff clean; MyPy at the one known local error
+- values, tolerances, residuals: none changed
+
+Design notes worth keeping:
+- estimate_memory reports a floor and says so in the payload. It covers the
+  distribution array and the stages an explicit step holds live, and does not
+  model the diagnostic buffers a long sampled run accumulates. A number that
+  claimed to be a ceiling would be wrong on exactly the runs where memory
+  matters.
+- compiled_at_prepare is reported rather than assumed. A nonlinear case builds
+  its scan closure during prepare, which is what makes a later solve cheap; a
+  linear case does not, because the linear runtime chooses its solver per call.
+  Reporting the difference is better than pretending both are the same.
+- solve refuses a parameterised call and scan refuses an unsupported parameter,
+  naming what to use instead. A prepared object that quietly solved a different
+  problem than the one it summarises would be the worst possible failure for an
+  object whose entire purpose is reuse.
+- Case.validate is called through getattr because it arrives with the public
+  types work in a sibling branch; this avoids stacking the two pull requests.

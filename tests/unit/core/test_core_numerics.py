@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 
 import jax.numpy as jnp
 import numpy as np
+import inspect
 import pytest
 
 import gkx.config as public_config
@@ -339,7 +340,8 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     from support.paths import REPO_ROOT
 
     promoted = [
-        "load", "solve", "scan", "plot", "prepare", "Case", "LinearResult", "NonlinearResult",
+        "load", "solve", "scan", "plot", "prepare", "PreparedSimulation",
+        "Case", "LinearResult", "NonlinearResult",
         "ScanResult", "flux_tube_geometry_from_mapping",
         "solver_objective_vector_from_geometry",
         "solver_linear_operator_matrix_from_geometry",
@@ -347,7 +349,10 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     ]
     assert public_api.__all__ == promoted
     assert gkx.__all__ == ["__version__", *promoted]
-    assert len(public_api._EXPORT_TARGETS) == 352
+    # 353, not 352: PreparedSimulation joins the advertised names, and every
+    # advertised name is also a lazy target -- the registry is the loading
+    # mechanism for the whole surface, not only the compatibility tail.
+    assert len(public_api._EXPORT_TARGETS) == 353
     assert len(public_api.__all__) == len(set(public_api.__all__))
     assert set(gkx.__all__) <= set(dir(gkx))
     assert "LinearParams" not in dir(gkx)
@@ -373,8 +378,8 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
 import sys
 sys.path.insert(0, {str(REPO_ROOT / "src")!r})
 import gkx
-assert len(gkx.__all__) == 15
-assert set(gkx.__all__) == {{'__version__', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan', 'plot', 'prepare', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig'}}
+assert len(gkx.__all__) == 16
+assert set(gkx.__all__) == {{'__version__', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan', 'plot', 'prepare', 'PreparedSimulation', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig'}}
 assert "numpy" not in sys.modules
 assert "jax" not in sys.modules
 from gkx.parallel.decomposition import build_independent_portfolio_decomposition
@@ -477,7 +482,16 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
 
     monkeypatch.setattr(runtime, "run_runtime_linear", fake_linear)
     monkeypatch.setattr(runtime, "run_runtime_nonlinear", fake_nonlinear)
-    assert gkx.prepare is runtime.prepare
+    # gkx.prepare is now the public PreparedSimulation constructor rather than
+    # the runtime function it wraps. The delegation this test exists to pin is
+    # still real and is asserted directly: preparing a nonlinear case reaches
+    # runtime.prepare, so the facade adds a type without adding numerics.
+    from gkx.api.prepared import prepare_simulation
+
+    assert gkx.prepare is prepare_simulation
+    assert "runtime.prepare" in inspect.getsource(prepare_simulation).replace(
+        "_runtime.prepare", "runtime.prepare"
+    )
     prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
 
     def fake_prepare(cfg, **options):
@@ -486,16 +500,27 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
 
     monkeypatch.setattr(runtime, "run_runtime_nonlinear_impl", fake_prepare)
     assert gkx.solve(case, ky_target=0.2) == "linear-result"
-    nonlinear = replace(case, physics=replace(case.physics, nonlinear=True))
+    # linear must be cleared as well: a case that declares both is rejected by
+    # Case.validate, which is what prepare now runs before it builds anything.
+    nonlinear = replace(
+        case, physics=replace(case.physics, linear=False, nonlinear=True)
+    )
     assert gkx.solve(nonlinear, steps=2) == "nonlinear-result"
     disabled = replace(case, physics=replace(case.physics, linear=False))
     with pytest.raises(ValueError, match="enable linear or nonlinear"):
         gkx.solve(disabled)
-    with pytest.raises(ValueError, match="requires nonlinear"):
-        gkx.prepare(case)
+    # prepare used to raise for a linear case. It now prepares one and reports
+    # that the linear runtime compiles per call rather than at prepare time.
+    linear_prepared = gkx.prepare(case)
+    assert linear_prepared.kind == "linear"
+    assert linear_prepared.summary()["compiled_at_prepare"] is False
     with pytest.raises(ValueError, match="diagnostics=True"):
         gkx.prepare(nonlinear, diagnostics=False)
-    assert gkx.prepare(nonlinear, steps=2) == "prepared-simulation"
+    nonlinear_prepared = gkx.prepare(nonlinear, steps=2)
+    assert nonlinear_prepared.kind == "nonlinear"
+    # The wrapper adds a type, not numerics: the object the runtime built is
+    # carried through unchanged.
+    assert nonlinear_prepared._backend == "prepared-simulation"
     assert prepared_calls[0][0] is nonlinear
     assert prepared_calls[0][1]["diagnostics"] is True
     assert prepared_calls[0][1]["prepare_only"] is True

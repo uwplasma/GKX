@@ -95,7 +95,8 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'NonlinearResult': ('gkx.workflows.runtime.results', 'NonlinearResult'),
     'ScanResult': ('gkx.workflows.runtime.results', 'ScanResult'),
     'plot': ('gkx.artifacts.plotting', 'plot'),
-    'prepare': ('gkx.runtime', 'prepare'),
+    'prepare': ('gkx.api.prepared', 'prepare_simulation'),
+    'PreparedSimulation': ('gkx.api.prepared', 'PreparedSimulation'),
     'build_runtime_linear_params': ('gkx.runtime', 'build_runtime_linear_params'),
     'build_runtime_linear_terms': ('gkx.runtime', 'build_runtime_linear_terms'),
     'build_runtime_term_config': ('gkx.runtime', 'build_runtime_term_config'),
@@ -365,7 +366,7 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'set_plot_style': ('gkx.artifacts.plotting', 'set_plot_style'),
 }
 
-__all__ = ['load', 'solve', 'scan', 'plot', 'prepare', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig']
+__all__ = ['load', 'solve', 'scan', 'plot', 'prepare', 'PreparedSimulation', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig']
 
 
 def __getattr__(name: str) -> Any:
