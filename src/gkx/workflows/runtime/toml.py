@@ -89,6 +89,48 @@ def _validate_runtime_schema_version(data: dict[str, Any]) -> None:
         )
 
 
+# Time keys that selected the removed Diffrax integrator family, mapped to the
+# native replacement a deck should use instead. The dataclass merge silently
+# drops keys it does not recognise, so a deck that still selects Diffrax would
+# otherwise run on a different integrator without saying so.
+_REMOVED_TIME_KEYS: dict[str, str] = {
+    "use_diffrax": (
+        "the native explicit integrator is now the only time-integration owner; "
+        "delete the key and select the scheme with method = \"rk2\"/\"rk3\"/\"rk4\""
+    ),
+    "diffrax_solver": (
+        "select the native tableau with method = \"rk2\", \"rk3\", \"rk4\", or "
+        "\"sspx3\""
+    ),
+    "diffrax_adaptive": (
+        "the native linear owner is fixed-step; set dt from the reported CFL "
+        "bound, and use the nonlinear adaptive policy through fixed_dt = false"
+    ),
+    "diffrax_rtol": "the native fixed-step owner is controlled by dt, not a tolerance",
+    "diffrax_atol": "the native fixed-step owner is controlled by dt, not a tolerance",
+    "diffrax_max_steps": "the native owner runs t_max / dt steps with no step ceiling",
+}
+
+
+def _validate_removed_time_keys(data: dict[str, Any]) -> None:
+    """Reject decks that still select the removed Diffrax integrator family."""
+
+    time_section = data.get("time")
+    if not isinstance(time_section, dict):
+        return
+    present = [key for key in _REMOVED_TIME_KEYS if key in time_section]
+    if not present:
+        return
+    details = "; ".join(f"{key}: {_REMOVED_TIME_KEYS[key]}" for key in present)
+    raise ValueError(
+        "[time] "
+        + ", ".join(repr(key) for key in present)
+        + " selected the Diffrax integrator, which GKX no longer ships. "
+        + details
+        + "."
+    )
+
+
 def is_runtime_toml(data: dict[str, Any]) -> bool:
     """Return whether a parsed input uses the supported runtime schema."""
 
@@ -303,6 +345,7 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     path = Path(path)
     data = load_toml(path)
     _validate_runtime_schema_version(data)
+    _validate_removed_time_keys(data)
     base_dir = path.resolve().parent
     cfg = _apply_runtime_section_overrides(_runtime_base_config(data), data)
     species = _runtime_species_from_toml(data.get("species"))

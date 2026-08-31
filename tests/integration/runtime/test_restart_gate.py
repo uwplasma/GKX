@@ -52,7 +52,6 @@ def _restart_base_cfg() -> RuntimeConfig:
             t_max=1.0,
             dt=0.02,
             method="rk2",
-            use_diffrax=False,
             fixed_dt=True,
             diagnostics=True,
             sample_stride=1,

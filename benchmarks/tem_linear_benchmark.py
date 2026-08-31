@@ -1,5 +1,4 @@
 import argparse
-from dataclasses import replace
 from pathlib import Path
 
 from gkx.artifacts.plotting import scan_comparison_figure
@@ -14,31 +13,11 @@ TEM_CONFIG = ROOT / "examples" / "linear" / "axisymmetric" / "runtime_tem.toml"
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="TEM linear scan example.")
-    parser.add_argument(
-        "--diffrax",
-        action="store_true",
-        help="Use the temporary Diffrax migration oracle instead of native RK2.",
-    )
-    parser.add_argument("--solver", default="Tsit5", help="Diffrax solver name.")
-    parser.add_argument(
-        "--no-adaptive",
-        action="store_true",
-        help="Disable adaptive Diffrax steps (with --diffrax).",
-    )
-    args = parser.parse_args()
+    parser.parse_args()
 
     ref = load_tem_reference()
     ky_vals = ref.ky
     cfg, _raw = load_runtime_from_toml(TEM_CONFIG)
-    cfg = replace(
-        cfg,
-        time=replace(
-            cfg.time,
-            use_diffrax=args.diffrax,
-            diffrax_solver=args.solver,
-            diffrax_adaptive=not args.no_adaptive,
-        ),
-    )
     scan = run_runtime_scan(
         cfg,
         ky_vals,

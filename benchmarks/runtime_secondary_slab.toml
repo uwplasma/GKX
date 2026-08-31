@@ -35,7 +35,6 @@ run_to = "t_max"
 t_max = 2.0
 dt = 1.0
 method = "sspx3"
-use_diffrax = false
 sample_stride = 1
 fixed_dt = true
 cfl = 1.0

@@ -2670,7 +2670,6 @@ def test_split_shards_is_round_robin_and_complete() -> None:
 
 def test_split_shards_isolates_known_high_cost_tests() -> None:
     expensive = [
-        Path("tests/unit/solvers/test_diffrax_integrators_core.py"),
         Path("tests/integration/runtime/test_runtime_runner.py"),
         Path("tests/unit/nonlinear/test_nonlinear.py"),
         Path("tests/unit/nonlinear/test_nonlinear_helpers_extra.py"),
@@ -2683,7 +2682,6 @@ def test_split_shards_isolates_known_high_cost_tests() -> None:
         [path.name for path in shard if path in expensive] for shard in shards
     ]
     assert sorted(name for shard in expensive_by_shard for name in shard) == [
-        "test_diffrax_integrators_core.py",
         "test_nonlinear.py",
         "test_nonlinear_helpers_extra.py",
         "test_parallel_linear_velocity.py",

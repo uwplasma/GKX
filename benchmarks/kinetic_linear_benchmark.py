@@ -18,32 +18,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Kinetic-electron ITG benchmark example."
     )
-    parser.add_argument(
-        "--diffrax",
-        action="store_true",
-        help="Use the temporary Diffrax migration oracle instead of native RK4.",
-    )
-    parser.add_argument("--solver", default="Tsit5", help="Diffrax solver name.")
-    parser.add_argument(
-        "--no-adaptive",
-        action="store_true",
-        help="Disable adaptive Diffrax steps (with --diffrax).",
-    )
-    args = parser.parse_args()
+    parser.parse_args()
 
     ref = load_cyclone_reference_kinetic()
     ky_vals = ref.ky
     cfg, _raw = load_runtime_from_toml(KINETIC_CONFIG)
-    cfg = replace(
-        cfg,
-        time=replace(
-            cfg.time,
-            t_max=8.0,
-            use_diffrax=args.diffrax,
-            diffrax_solver=args.solver,
-            diffrax_adaptive=not args.no_adaptive,
-        ),
-    )
+    cfg = replace(cfg, time=replace(cfg.time, t_max=8.0))
     scan = run_runtime_scan(
         cfg,
         ky_vals,

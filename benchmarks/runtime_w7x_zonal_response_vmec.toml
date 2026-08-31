@@ -63,7 +63,6 @@ dt = 0.02
 method = "rk4"
 sample_stride = 4
 diagnostics_stride = 4
-use_diffrax = false
 fixed_dt = true
 diagnostics = true
 

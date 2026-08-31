@@ -347,42 +347,10 @@ def _validate_parallel_linear_time_path(ctx: _LinearRuntimeContext, tcfg: Any) -
     )
     if parallel_strategy == "serial":
         return
-    if tcfg.use_diffrax:
-        raise NotImplementedError(
-            "parallel linear RHS is currently supported only by the fixed-step cached integrator"
-        )
     if need_density:
         raise NotImplementedError(
             "parallel linear RHS runtime path currently requires fit_signal='phi'"
         )
-
-
-def _integrate_linear_diffrax_path(
-    ctx: _LinearRuntimeContext,
-    *,
-    deps: FullLinearRuntimeDeps,
-    tcfg: Any,
-    mode_method: str,
-    need_density: bool,
-    show_progress: bool,
-) -> _LinearTrajectory:
-    save_field = "phi+density" if need_density else "phi"
-    g_last, saved = deps.integrate_linear_from_config(
-        ctx.initial_state,
-        ctx.grid,
-        ctx.geom,
-        ctx.params,
-        tcfg,
-        terms=ctx.terms,
-        save_mode=None,
-        mode_method=mode_method,
-        save_field=save_field,
-        density_species_index=0 if need_density else None,
-        show_progress=show_progress,
-        parallel=ctx.cfg.parallel,
-    )
-    phi_t, density_t = saved if need_density else (saved, None)
-    return _LinearTrajectory(g_last=g_last, phi_t=phi_t, density_t=density_t)
 
 
 def _integrate_linear_density_path(
@@ -429,7 +397,6 @@ def _integrate_linear_cached_phi_path(
     *,
     deps: FullLinearRuntimeDeps,
     tcfg: Any,
-    mode_method: str,
     show_progress: bool,
 ) -> _LinearTrajectory:
     g_last, phi_t = deps.integrate_linear_from_config(
@@ -439,9 +406,6 @@ def _integrate_linear_cached_phi_path(
         ctx.params,
         tcfg,
         terms=ctx.terms,
-        save_mode=ctx.selection,
-        mode_method=mode_method,
-        save_field="phi",
         show_progress=show_progress,
         parallel=ctx.cfg.parallel,
     )
@@ -461,7 +425,6 @@ def _integrate_linear_time_series(
     *,
     deps: FullLinearRuntimeDeps,
     tcfg: Any,
-    mode_method: str,
     show_progress: bool,
     status_callback: _StatusCallback,
 ) -> _LinearTrajectory:
@@ -482,19 +445,6 @@ def _integrate_linear_time_series(
             show_progress=show_progress,
         )
         trajectory = _LinearTrajectory(None, phi_t, None, t_explicit)
-    elif tcfg.use_diffrax:
-        _status(
-            status_callback,
-            f"running diffrax integrator over {n_steps} steps with sample_stride={int(tcfg.sample_stride)}",
-        )
-        trajectory = _integrate_linear_diffrax_path(
-            ctx,
-            deps=deps,
-            tcfg=tcfg,
-            mode_method=mode_method,
-            need_density=need_density,
-            show_progress=show_progress,
-        )
     elif need_density:
         _status(
             status_callback,
@@ -516,7 +466,6 @@ def _integrate_linear_time_series(
             ctx,
             deps=deps,
             tcfg=tcfg,
-            mode_method=mode_method,
             show_progress=show_progress,
         )
 
@@ -678,7 +627,6 @@ def _run_linear_runtime_branch(
         ctx,
         deps=deps,
         tcfg=time_config,
-        mode_method=fit_policy.mode_method,
         show_progress=show_progress,
         status_callback=status_callback,
     )

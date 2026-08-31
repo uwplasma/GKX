@@ -49,7 +49,7 @@ def _vmec_runtime_cfg(
             nperiod=1,
         ),
         time=TimeConfig(
-            t_max=1.0, dt=0.1, method="rk4", use_diffrax=False, fixed_dt=True
+            t_max=1.0, dt=0.1, method="rk4", fixed_dt=True
         ),
         geometry=GeometryConfig(
             model="vmec",

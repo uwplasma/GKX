@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from gkx.diagnostics.modes import ModeSelection, ModeSelectionBatch
 from gkx.config import TimeConfig
-from gkx.solvers.time.diffrax_linear import integrate_linear_diffrax
-from gkx.solvers.time.diffrax_nonlinear import integrate_nonlinear_diffrax
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.solvers.linear.integrators import integrate_linear
@@ -131,7 +128,7 @@ def _reject_unsupported_config_collision_operator(time_cfg: TimeConfig, path: st
     raise NotImplementedError(
         f"collision_operator={name!r} is not supported by the {path} path; "
         "it is currently available on the fixed-step cached integrator "
-        "(set use_diffrax = false and leave state_sharding unset)."
+        "(leave state_sharding unset)."
     )
 
 
@@ -160,10 +157,6 @@ def integrate_linear_from_config(
     *,
     cache: LinearCache | None = None,
     terms: LinearTerms | None = None,
-    save_mode: ModeSelection | ModeSelectionBatch | None = None,
-    mode_method: str = "z_index",
-    save_field: str = "phi",
-    density_species_index: int | None = None,
     show_progress: bool | None = None,
     parallel: Any | None = None,
 ) -> tuple:
@@ -171,37 +164,6 @@ def integrate_linear_from_config(
 
     steps = _steps_from_time(time_cfg)
     show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
-    parallel_strategy = "serial" if parallel is None else str(getattr(parallel, "strategy", "serial")).lower().replace("-", "_")
-    if time_cfg.use_diffrax:
-        if parallel_strategy != "serial":
-            raise NotImplementedError("parallel linear RHS is currently supported only by the fixed-step cached integrator")
-        _reject_unsupported_config_collision_operator(time_cfg, "diffrax linear")
-        state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
-        return integrate_linear_diffrax(
-            G0,
-            grid,
-            geom,
-            params,
-            dt=time_cfg.dt,
-            steps=steps,
-            method=time_cfg.diffrax_solver,
-            cache=cache,
-            terms=terms,
-            adaptive=time_cfg.diffrax_adaptive,
-            rtol=time_cfg.diffrax_rtol,
-            atol=time_cfg.diffrax_atol,
-            max_steps=time_cfg.diffrax_max_steps,
-            show_progress=show_progress_use,
-            progress_bar=show_progress_use,
-            checkpoint=time_cfg.checkpoint,
-            sample_stride=time_cfg.sample_stride,
-            return_state=time_cfg.save_state,
-            save_mode=save_mode,
-            mode_method=mode_method,
-            save_field=save_field,
-            density_species_index=density_species_index,
-            state_sharding=state_sharding,
-        )
     return integrate_linear(
         G0,
         grid,
@@ -239,29 +201,6 @@ def integrate_nonlinear_from_config(
     show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
     _validate_nonlinear_config_state_sharding(time_cfg.state_sharding)
     state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
-    if time_cfg.use_diffrax:
-        _reject_unsupported_config_collision_operator(time_cfg, "diffrax nonlinear")
-        return integrate_nonlinear_diffrax(
-            G0,
-            grid,
-            geom,
-            params,
-            dt=time_cfg.dt,
-            steps=steps,
-            method=time_cfg.diffrax_solver,
-            cache=cache,
-            terms=terms,
-            adaptive=time_cfg.diffrax_adaptive,
-            rtol=time_cfg.diffrax_rtol,
-            atol=time_cfg.diffrax_atol,
-            max_steps=time_cfg.diffrax_max_steps,
-            show_progress=show_progress_use,
-            progress_bar=show_progress_use,
-            checkpoint=time_cfg.checkpoint,
-            compressed_real_fft=time_cfg.compressed_real_fft,
-            laguerre_mode=time_cfg.laguerre_nonlinear_mode,
-            state_sharding=state_sharding,
-        )
     if state_sharding is not None:
         _reject_unsupported_config_collision_operator(time_cfg, "sharded nonlinear")
         if cache is None:

@@ -20,7 +20,7 @@ from gkx.terms.config import FieldState
 def test_integrate_linear_from_config():
     """TimeConfig should map into the linear integrator."""
     grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2", use_diffrax=False)
+    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2")
     cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -43,7 +43,7 @@ def test_integrate_linear_from_config_forwards_parallel(monkeypatch):
     monkeypatch.setattr(runners, "integrate_linear", fake_integrate_linear)
 
     grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2", use_diffrax=False)
+    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2")
     cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -56,28 +56,8 @@ def test_integrate_linear_from_config_forwards_parallel(monkeypatch):
     assert captured["parallel"] is parallel
 
 
-def test_integrate_linear_from_config_rejects_parallel_diffrax() -> None:
-    grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2", use_diffrax=True)
-    cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
-
-    with pytest.raises(NotImplementedError, match="fixed-step cached"):
-        integrate_linear_from_config(
-            G,
-            grid,
-            geom,
-            params,
-            cfg.time,
-            parallel=type("P", (), {"strategy": "velocity"})(),
-        )
-
-
 def test_integrate_nonlinear_from_config_routes_fixed_step_state_sharding(monkeypatch):
-    """Non-diffrax nonlinear runs should honor TimeConfig.state_sharding."""
+    """Nonlinear runs should honor TimeConfig.state_sharding."""
 
     captured = {}
 
@@ -98,7 +78,7 @@ def test_integrate_nonlinear_from_config_routes_fixed_step_state_sharding(monkey
 
     grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     time_cfg = TimeConfig(
-        t_max=0.2, dt=0.1, method="rk2", use_diffrax=False, state_sharding="ky"
+        t_max=0.2, dt=0.1, method="rk2", state_sharding="ky"
     )
     cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
     grid = build_spectral_grid(cfg.grid)
@@ -121,7 +101,7 @@ def test_integrate_nonlinear_from_config_rejects_ungated_z_state_sharding():
 
     grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     time_cfg = TimeConfig(
-        t_max=0.2, dt=0.1, method="rk2", use_diffrax=False, state_sharding="z"
+        t_max=0.2, dt=0.1, method="rk2", state_sharding="z"
     )
     cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
     grid = build_spectral_grid(cfg.grid)
@@ -139,7 +119,7 @@ def test_integrate_linear_from_config_applies_selected_collision_operator():
     grid_cfg = GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
     cfg = CycloneBaseCase(
         grid=grid_cfg,
-        time=TimeConfig(t_max=0.4, dt=0.05, method="rk2", use_diffrax=False),
+        time=TimeConfig(t_max=0.4, dt=0.05, method="rk2"),
     )
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -177,7 +157,6 @@ def test_integrate_linear_from_config_reports_moment_basis_mismatch():
             t_max=0.2,
             dt=0.1,
             method="rk2",
-            use_diffrax=False,
             collision_operator="sugama",
         ),
     )
@@ -190,14 +169,19 @@ def test_integrate_linear_from_config_reports_moment_basis_mismatch():
         integrate_linear_from_config(G, grid, geom, params, cfg.time)
 
 
-def test_config_collision_operator_rejects_unsupported_solver_paths():
+def test_config_collision_operator_rejects_unsupported_solver_paths(monkeypatch):
     """Unsupported paths must raise instead of silently ignoring the setting."""
+
+    monkeypatch.setattr(
+        runners, "resolve_state_sharding", lambda G0, spec: "mesh" if spec else None
+    )
 
     grid_cfg = GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
     cfg = CycloneBaseCase(
         grid=grid_cfg,
         time=TimeConfig(
-            t_max=0.2, dt=0.1, method="rk2", use_diffrax=True,
+            t_max=0.2, dt=0.1, method="rk2",
+            state_sharding="ky",
             collision_operator="sugama",
         ),
     )
@@ -206,7 +190,5 @@ def test_config_collision_operator_rejects_unsupported_solver_paths():
     params = LinearParams(nu=0.05)
     G = jnp.zeros((4, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128)
 
-    with pytest.raises(NotImplementedError, match="diffrax linear"):
-        integrate_linear_from_config(G, grid, geom, params, cfg.time)
-    with pytest.raises(NotImplementedError, match="diffrax nonlinear"):
+    with pytest.raises(NotImplementedError, match="sharded nonlinear"):
         integrate_nonlinear_from_config(G, grid, geom, params, cfg.time)

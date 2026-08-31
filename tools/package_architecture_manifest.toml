@@ -77,7 +77,10 @@ recursive = true
 # geometry. They were reachable only through wrappers on the differentiable
 # facade, so evicting them removes the wrappers, four lazy-registry names, and
 # the dedicated coverage suites that existed only to cover them.
-baseline = 197
+# 199 -> 195: removing Diffrax from the base product. The four
+# solvers/time/diffrax_*.py owner modules are deleted; the coupled implicit
+# owner (solvers/linear/implicit.py) is unaffected.
+baseline = 193
 target = 45
 
 [[topology_policy.counts]]
@@ -150,8 +153,10 @@ recursive = true
 # geometry. They were reachable only through wrappers on the differentiable
 # facade, so evicting them removes the wrappers, four lazy-registry names, and
 # the dedicated coverage suites that existed only to cover them.
-baseline = 101
+# 103 -> 102: tests/unit/solvers/test_diffrax_integrators_core.py is deleted
+# with the integrator it covered.
 # Target lowered 36 -> 30: the approved GKX 3 contract in the handoff plan.
+baseline = 100
 target = 30
 
 [[topology_policy.counts]]
@@ -612,7 +617,10 @@ recursive = true
 # geometry. They were reachable only through wrappers on the differentiable
 # facade, so evicting them removes the wrappers, four lazy-registry names, and
 # the dedicated coverage suites that existed only to cover them.
-baseline = 89845
+# 91448 -> 89715: removing Diffrax from the base product. The four owner
+# modules carried 1,636 lines; the remainder is the config fields, the
+# runner and workflow branches, and the dead save-selector kwargs they fed.
+baseline = 88112
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -635,7 +643,9 @@ recursive = true
 # geometry. They were reachable only through wrappers on the differentiable
 # facade, so evicting them removes the wrappers, four lazy-registry names, and
 # the dedicated coverage suites that existed only to cover them.
-baseline = 86601
+# 88110 -> 86902: deleting the 935-line Diffrax integrator suite and the
+# Diffrax-only runtime/example cases, net of the new removed-key deck gate.
+baseline = 85393
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -649,7 +659,9 @@ recursive = true
 # geometry. They were reachable only through wrappers on the differentiable
 # facade, so evicting them removes the wrappers, four lazy-registry names, and
 # the dedicated coverage suites that existed only to cover them.
-baseline = 75482
+# 72461 -> 72301: removing the Diffrax comparison route from
+# tools/comparison/ky_diagnostics.py and the Diffrax config from make_tables.
+baseline = 75322
 target = 0
 
 [[line_budget_policy.counts]]

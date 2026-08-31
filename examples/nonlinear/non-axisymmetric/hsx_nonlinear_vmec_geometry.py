@@ -78,7 +78,6 @@ def build_hsx_nonlinear_cfg(
             t_max=t_max,
             dt=dt,
             method="rk3",
-            use_diffrax=False,
             fixed_dt=False,
             sample_stride=50,
             diagnostics_stride=50,

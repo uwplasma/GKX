@@ -257,7 +257,7 @@ it accepts explicit method, timestep, resolution, and JSON-output controls:
 .. code-block:: bash
 
    python benchmarks/performance/benchmark_integrators.py \
-     --skip-diffrax --method sspx3 --steps 480 --dt 0.005 \
+     --method sspx3 --steps 480 --dt 0.005 \
      --Nl 7 --Nm 14 --ky 0.3 --warmup 1 --repeat 5 \
      --out-json tools_out/linear_sspx3_profile.json
 
@@ -744,12 +744,14 @@ figures below, because those paths preserve serial ordering and have explicit
 solver-observable identity gates.
 
 
-The raw sweep data lives in ``docs/_static/scaling_speedup_data.csv`` and can
-be replotted with:
+The raw sweep data lives in ``docs/_static/scaling_speedup_data.csv``. It was
+measured on the Diffrax linear route that GKX no longer ships, so it is
+retained as a historical engineering record rather than a reproducible
+artifact, and can be replotted with:
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_scaling_panels.py diffrax-speedup
+   python tools/artifacts/plot_scaling_panels.py legacy-two-device
 
 The exploratory distributed-RK2 strong-scaling data is still tracked for
 engineering work, but it is intentionally not presented as a headline
@@ -1232,8 +1234,7 @@ Fixed-step nonlinear state sharding
 The fixed-step nonlinear runner now has the same full-state sharding contract
 as the linear path for release-gated state axes. Set
 ``TimeConfig.state_sharding = "auto"`` (or a concrete axis such as ``"ky"`` or
-``"kx"``) with ``use_diffrax = false`` to route through
-``gkx.integrate_nonlinear_sharded``. The implementation uses a ``pjit``
+``"kx"``) to route through ``gkx.integrate_nonlinear_sharded``. The implementation uses a ``pjit``
 scan and preserves the serial Runge-Kutta update; it is therefore an
 identity-gated state-sharding primitive, not a halo-exchange FFT domain
 decomposition claim. Sharding the ``z`` FFT axis is deliberately not exposed as

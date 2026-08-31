@@ -912,7 +912,6 @@ def build_secondary_stage2_config(
             t_max=float(t_max),
             dt=float(dt),
             method=str(method),
-            use_diffrax=False,
             fixed_dt=True,
         ),
         init=replace(

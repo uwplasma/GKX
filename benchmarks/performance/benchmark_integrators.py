@@ -13,7 +13,6 @@ import jax
 import jax.numpy as jnp
 
 from gkx.config import CycloneBaseCase
-from gkx.solvers.time.diffrax_linear import integrate_linear_diffrax
 from gkx.geometry import SAlphaGeometry
 from gkx.core.grid import build_spectral_grid
 from gkx.operators.linear import LinearParams, build_linear_cache
@@ -51,13 +50,6 @@ def main() -> None:
     )
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=1)
-    parser.add_argument("--diffrax-solver", default="Heun")
-    parser.add_argument("--diffrax-adaptive", action="store_true")
-    parser.add_argument("--diffrax-rtol", type=float, default=1.0e-3)
-    parser.add_argument("--diffrax-atol", type=float, default=1.0e-6)
-    parser.add_argument("--diffrax-max-steps", type=int, default=20000)
-    parser.add_argument("--no-diffrax-jit", action="store_true")
-    parser.add_argument("--skip-diffrax", action="store_true")
     parser.add_argument("--method", default=None)
     parser.add_argument("--steps", type=int, default=None)
     parser.add_argument("--dt", type=float, default=None)
@@ -101,27 +93,8 @@ def main() -> None:
             cache=cache,
         )
 
-    def run_diffrax():
-        return integrate_linear_diffrax(
-            G0,
-            grid,
-            geom,
-            params,
-            dt=dt,
-            steps=steps,
-            method=args.diffrax_solver,
-            adaptive=args.diffrax_adaptive,
-            rtol=args.diffrax_rtol,
-            atol=args.diffrax_atol,
-            max_steps=args.diffrax_max_steps,
-            progress_bar=False,
-            jit=not args.no_diffrax_jit,
-        )
-
     for _ in range(max(args.warmup, 0)):
         _block(run_custom())
-        if not args.skip_diffrax:
-            _block(run_diffrax())
 
     custom = _measure(run_custom, repeat=args.repeat)
     final_state, field_history = _block(run_custom())
@@ -130,7 +103,6 @@ def main() -> None:
     custom["finite"] = bool(
         jnp.all(jnp.isfinite(final_state)) and jnp.all(jnp.isfinite(field_history))
     )
-    diffrax = None if args.skip_diffrax else _measure(run_diffrax, repeat=args.repeat)
 
     print("Cyclone defaults benchmark")
     print(f"steps={steps} dt={dt} method={method} Nl={args.Nl} Nm={args.Nm}")
@@ -138,11 +110,6 @@ def main() -> None:
         f"custom:  median={custom['median_s']:.3f}s  "
         f"host_peak={custom['host_peak_mb']:.2f} MB"
     )
-    if diffrax is not None:
-        print(
-            f"diffrax: median={diffrax['median_s']:.3f}s  "
-            f"host_peak={diffrax['host_peak_mb']:.2f} MB"
-        )
     print("Note: host_peak is Python tracemalloc (device memory not captured).")
     if args.out_json is not None:
         payload = {
@@ -160,7 +127,6 @@ def main() -> None:
             "Nz": int(grid.z.size),
             "ky": float(grid.ky[ky_index]),
             "custom": custom,
-            "diffrax": diffrax,
         }
         args.out_json.parent.mkdir(parents=True, exist_ok=True)
         args.out_json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

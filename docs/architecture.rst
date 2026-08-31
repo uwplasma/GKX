@@ -62,7 +62,7 @@ The linear solve is structured as:
 4. solve the field equations for :math:`(\\phi, B_\\parallel, A_\\parallel)`
 5. build the gyrokinetic variable ``H``
 6. assemble RHS by summing per-term kernels from ``gkx.terms``
-7. advance in time using ``integrate_linear``/diffrax/Krylov with the same RHS
+7. advance in time using ``integrate_linear``/Krylov with the same RHS
 
 This structure is intentionally modular so that nonlinear terms, collisions,
 geometry adapters, and electromagnetic extensions can be inserted with minimal

@@ -199,9 +199,8 @@ when a moment operator is active, so collisions are never counted twice.
 
 Two constraints follow from the tabulated coefficients. The run's moment count
 ``Nl*Nm`` must match a shipped table (8 or 18), and the operators run on the
-fixed-step cached integrator, so ``use_diffrax = false``. The diffrax, sharded,
-and Krylov eigenvalue paths raise rather than silently substituting the diagonal
-term. The Coulomb tables are generated at unit mass and temperature ratio, so a
+fixed-step cached integrator. The sharded and Krylov eigenvalue paths raise
+rather than silently substituting the diagonal term. The Coulomb tables are generated at unit mass and temperature ratio, so a
 multispecies request is refused rather than extrapolated.
 
 Collision frequency

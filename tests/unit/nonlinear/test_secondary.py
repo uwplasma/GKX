@@ -40,7 +40,7 @@ def _base_cfg() -> RuntimeConfig:
             boundary="periodic",
             y0=10.0,
         ),
-        time=TimeConfig(t_max=2.0, dt=1.0, method="sspx3", use_diffrax=False),
+        time=TimeConfig(t_max=2.0, dt=1.0, method="sspx3"),
         init=InitializationConfig(
             init_field="density", init_amp=1.0, gaussian_init=False, init_single=True
         ),

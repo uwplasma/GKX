@@ -51,7 +51,7 @@ def _nonlinear_cfg(parallel: RuntimeParallelConfig | None = None) -> RuntimeConf
     cfg = RuntimeConfig(
         grid=GridConfig(Nx=1, Ny=8, Nz=16, Lx=6.28, Ly=6.28, boundary="periodic"),
         time=TimeConfig(
-            t_max=0.2, dt=0.01, method="rk2", use_diffrax=False, sample_stride=1
+            t_max=0.2, dt=0.01, method="rk2", sample_stride=1
         ),
         geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
         init=InitializationConfig(

@@ -67,7 +67,6 @@ def run_case(model: str, collisionality: float, t_max: float = 2.0) -> dict:
     time_config = dataclasses.replace(
         config.time,
         # The moment operators run on the fixed-step cached integrator.
-        use_diffrax=False,
         method="rk2",
         t_max=t_max,
         dt=0.002,

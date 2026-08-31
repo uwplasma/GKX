@@ -51,7 +51,6 @@ cfg = RuntimeConfig(
         t_max=T_MAX,
         dt=DT,
         method="rk3",
-        use_diffrax=False,
         fixed_dt=False,
         sample_stride=50,
         diagnostics_stride=50,

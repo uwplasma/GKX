@@ -27,7 +27,6 @@ dt = 0.01
 method = "rk3"
 sample_stride = 10
 diagnostics_stride = 10
-use_diffrax = false
 fixed_dt = false
 dt_max = 0.05
 cfl = 0.9

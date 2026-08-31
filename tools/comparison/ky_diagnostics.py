@@ -47,7 +47,6 @@ from gkx.config import (
     InitializationConfig,
     KBMBaseCase,
 )
-from gkx.solvers.time.diffrax_linear import integrate_linear_diffrax
 from gkx.geometry import SAlphaGeometry
 from gkx.core.grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
@@ -492,125 +491,6 @@ def _run_time_method(
     return summary
 
 
-def _run_diffrax_method(
-    outdir: Path,
-    label: str,
-    G0: np.ndarray,
-    grid,
-    geom,
-    params,
-    terms,
-    *,
-    dt: float,
-    steps: int,
-    sample_stride: int,
-    mode_method: str,
-    z_index: int,
-    fit_cfg: dict,
-    navg_fraction: float,
-    adaptive: bool,
-    ref: tuple[float, float] | None,
-):
-    params_use = params
-    _, phi_t = integrate_linear_diffrax(
-        G0,
-        grid,
-        geom,
-        params_use,
-        dt=dt,
-        steps=steps,
-        method=label.replace("diffrax-", ""),
-        adaptive=adaptive,
-        rtol=1.0e-5,
-        atol=1.0e-7,
-        max_steps=max(steps * 10, 10000),
-        progress_bar=False,
-        sample_stride=sample_stride,
-        terms=terms,
-        save_field="phi",
-    )
-    _, dens_t = integrate_linear_diffrax(
-        G0,
-        grid,
-        geom,
-        params_use,
-        dt=dt,
-        steps=steps,
-        method=label.replace("diffrax-", ""),
-        adaptive=adaptive,
-        rtol=1.0e-5,
-        atol=1.0e-7,
-        max_steps=max(steps * 10, 10000),
-        progress_bar=False,
-        sample_stride=sample_stride,
-        terms=terms,
-        save_field="density",
-    )
-
-    phi_t_np = np.asarray(phi_t)
-    dens_t_np = np.asarray(dens_t)
-    t = np.arange(phi_t_np.shape[0]) * dt * sample_stride
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=z_index)
-    phi_signal = extract_mode_time_series(phi_t_np, sel, method=mode_method)
-    dens_signal = extract_mode_time_series(dens_t_np, sel, method=mode_method)
-    phi_fit = _fit_signal(t, phi_signal, **fit_cfg)
-    dens_fit = _fit_signal(t, dens_signal, **fit_cfg)
-
-    gx_gamma, gx_omega, gx_gamma_t, gx_omega_t, gx_t = (
-        instantaneous_growth_rate_from_phi(
-            phi_t_np,
-            t,
-            sel,
-            navg_fraction=navg_fraction,
-            mode_method="z_index",
-        )
-    )
-
-    best = phi_fit if phi_fit["r2_log"] >= dens_fit["r2_log"] else dens_fit
-    eigen = extract_eigenfunction(
-        phi_t_np,
-        t,
-        sel,
-        z=np.asarray(grid.z),
-        method="svd",
-        tmin=best["tmin"],
-        tmax=best["tmax"],
-    )
-
-    phi_energy = _energy_timeseries(phi_t_np)
-    dens_energy = _energy_timeseries(dens_t_np)
-
-    prefix = label + ("-adapt" if adaptive else "-fixed")
-    np.save(outdir / f"{prefix}_t.npy", t)
-    np.save(outdir / f"{prefix}_phi_t.npy", phi_t_np)
-    np.save(outdir / f"{prefix}_density_t.npy", dens_t_np)
-    np.save(outdir / f"{prefix}_phi_energy.npy", phi_energy)
-    np.save(outdir / f"{prefix}_density_energy.npy", dens_energy)
-    np.save(outdir / f"{prefix}_phi_log_energy.npy", _safe_log(phi_energy))
-    np.save(outdir / f"{prefix}_density_log_energy.npy", _safe_log(dens_energy))
-    np.save(outdir / f"{prefix}_gx_gamma_t.npy", gx_gamma_t)
-    np.save(outdir / f"{prefix}_gx_omega_t.npy", gx_omega_t)
-    np.save(outdir / f"{prefix}_gx_t.npy", gx_t)
-    np.save(outdir / f"{prefix}_eigenfunction.npy", eigen)
-
-    _plot_timeseries(
-        outdir, prefix, t, phi_energy, dens_energy, (best["tmin"], best["tmax"]), ref
-    )
-    _plot_eigenfunction(outdir, prefix, np.asarray(grid.z), eigen)
-
-    summary = {
-        "method": prefix,
-        "dt": dt,
-        "steps": steps,
-        "sample_stride": sample_stride,
-        "adaptive": adaptive,
-        "phi_fit": phi_fit,
-        "density_fit": dens_fit,
-        "gx_avg": {"gamma": float(gx_gamma), "omega": float(gx_omega)},
-    }
-    return summary
-
-
 def _run_krylov_method(
     outdir: Path,
     label: str,
@@ -721,8 +601,6 @@ def main() -> None:
     method_specs = {
         "time-rk4": ("time", "rk4"),
         "time-imex2": ("time", "imex2"),
-        "diffrax-dopri8": ("diffrax", "Dopri8"),
-        "diffrax-kencarp4": ("diffrax", "KenCarp4"),
         "krylov-propagator": ("krylov", "propagator"),
         "krylov-power": ("krylov", "power"),
     }
@@ -781,44 +659,6 @@ def main() -> None:
                 navg_fraction=navg_fraction,
                 ref=ref,
             )
-        elif kind == "diffrax":
-            summary = _run_diffrax_method(
-                run_dir,
-                label,
-                G0,
-                grid,
-                geom,
-                params,
-                terms,
-                dt=args.dt,
-                steps=args.steps,
-                sample_stride=args.sample_stride,
-                mode_method=mode_method,
-                z_index=z_index,
-                fit_cfg=fit_cfg,
-                navg_fraction=navg_fraction,
-                adaptive=False,
-                ref=ref,
-            )
-            summary_adapt = _run_diffrax_method(
-                run_dir,
-                label,
-                G0,
-                grid,
-                geom,
-                params,
-                terms,
-                dt=args.dt,
-                steps=args.steps,
-                sample_stride=args.sample_stride,
-                mode_method=mode_method,
-                z_index=z_index,
-                fit_cfg=fit_cfg,
-                navg_fraction=navg_fraction,
-                adaptive=True,
-                ref=ref,
-            )
-            summary = {"fixed": summary, "adaptive": summary_adapt}
         else:
             summary = _run_krylov_method(
                 run_dir,

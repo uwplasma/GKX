@@ -86,12 +86,6 @@ class TimeConfig:
     checkpoint: bool = False
     implicit_restart: int = 20
     implicit_preconditioner: str | None = None
-    use_diffrax: bool = True
-    diffrax_solver: str = "Dopri8"
-    diffrax_adaptive: bool = False
-    diffrax_rtol: float = 1.0e-5
-    diffrax_atol: float = 1.0e-7
-    diffrax_max_steps: int = 4096
     state_sharding: str | None = None
     progress_bar: bool = False
     fixed_dt: bool = True
@@ -270,12 +264,6 @@ class CycloneBaseCase:
         t_max=150.0,
         dt=0.01,
         method="rk4",
-        use_diffrax=True,
-        diffrax_solver="Dopri8",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-6,
-        diffrax_atol=1.0e-8,
-        diffrax_max_steps=200000,
         fixed_dt=False,
         dt_max=0.05,
     )
@@ -344,11 +332,6 @@ class KBMBaseCase:
         t_max=40.0,
         dt=0.01,
         method="rk4",
-        diffrax_solver="Tsit5",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-4,
-        diffrax_atol=1.0e-7,
-        diffrax_max_steps=20000,
     )
     geometry: GeometryConfig = GeometryConfig(R0=2.77778)
     model: KineticElectronModelConfig = KineticElectronModelConfig(beta=0.015)

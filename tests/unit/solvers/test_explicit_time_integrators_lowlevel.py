@@ -260,7 +260,7 @@ def test_integrate_linear_explicit_from_config_runs_full_rk4_loop() -> None:
     )
     g0 = g0.at[0, 0, 1, 0, :].set(1.0e-3 * jnp.exp(1j * z))
     time_cfg = TimeConfig(
-        t_max=0.2, dt=0.02, method="rk4", sample_stride=1, use_diffrax=False
+        t_max=0.2, dt=0.02, method="rk4", sample_stride=1
     )
     t, phi = eti.integrate_linear_explicit_from_config(
         g0, grid, geom, params, time_cfg, Nl=n_l, Nm=n_m, z_index=grid.z.size // 2

@@ -13,8 +13,8 @@ schema_version = 1
 #
 # Two constraints apply to the moment operators:
 #   * Nl * Nm must equal 8, the tabulated Hermite-Laguerre truncation.
-#   * They run on the fixed-step cached integrator, so use_diffrax = false and
-#     solver = "time"; the Krylov eigenvalue path does not carry them.
+#   * They run on the fixed-step cached integrator, so solver = "time";
+#     the Krylov eigenvalue path does not carry them.
 
 [[species]]
 name = "ion"
@@ -47,7 +47,6 @@ nperiod = 2
 t_max = 120.0
 dt = 0.002
 method = "rk2"
-use_diffrax = false
 sample_stride = 2
 progress_bar = true
 collision_operator = "coulomb_finite_kperp"

@@ -478,25 +478,6 @@ Explicit CFL Policy
    :members:
    :private-members:
 
-Diffrax Time Integrators
-------------------------
-
-.. automodule:: gkx.solvers.time.diffrax_core
-   :members:
-   :private-members:
-
-.. automodule:: gkx.solvers.time.diffrax_linear
-   :members:
-   :private-members:
-
-.. automodule:: gkx.solvers.time.diffrax_streaming
-   :members:
-   :private-members:
-
-.. automodule:: gkx.solvers.time.diffrax_nonlinear
-   :members:
-   :private-members:
-
 Config-Driven Time Runners
 --------------------------
 

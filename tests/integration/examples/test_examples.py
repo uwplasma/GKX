@@ -19,7 +19,6 @@ from gkx.core.grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry, sample_flux_tube_geometry
 from gkx.operators.linear.params import LinearParams
 from gkx.solvers.time.runners import (
-    integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )
 from gkx.terms.config import TermConfig
@@ -149,31 +148,9 @@ def test_runtime_batch_ky_scan_example_uses_independent_workers(
     assert "independent ky workers" in scan.parallel["identity_contract"]
 
 
-def test_example_smoke_diffrax() -> None:
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(
-        t_max=0.2,
-        dt=0.1,
-        use_diffrax=True,
-        diffrax_solver="Tsit5",
-        diffrax_adaptive=True,
-        diffrax_rtol=1.0e-3,
-        diffrax_atol=1.0e-6,
-        diffrax_max_steps=20000,
-        progress_bar=False,
-    )
-    cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
-    _, phi_t = integrate_linear_from_config(G, grid, geom, params, cfg.time)
-    assert phi_t.shape[0] == 2
-
-
 def test_example_smoke_nonlinear_scan() -> None:
     grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2", use_diffrax=False)
+    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2")
     cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -196,7 +173,7 @@ def test_example_smoke_nonlinear_scan() -> None:
 
 def test_example_smoke_nonlinear_scan_with_sampled_geometry() -> None:
     grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2", use_diffrax=False)
+    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2")
     cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = sample_flux_tube_geometry(SAlphaGeometry.from_config(cfg.geometry), grid.z)

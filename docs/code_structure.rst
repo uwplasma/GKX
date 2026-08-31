@@ -101,7 +101,6 @@ The executable-facing runtime path is split conceptually into four layers:
    - ``solvers/time/explicit.py``
    - ``solvers/time/explicit_steps.py``
    - ``solvers/time/explicit_cfl.py``
-   - ``solvers/time/diffrax_*`` owner modules exported by ``solvers/time/__init__.py``
    - ``solvers/time/runners.py``
 3. **diagnostics and artifacts**
    - ``diagnostics/moments.py``
@@ -239,20 +238,8 @@ Completed extractions:
   construction, energy/transport sampling, progress rendering, and
   ``SimulationDiagnostics`` construction so saved explicit-time benchmark paths
   exercise named numerical pieces instead of one monolithic loop.
-- Diffrax time-integration internals. ``solvers/time/__init__.py`` remains the
-  package-level public facade while optional dependency/policy helpers, linear save-path
-  integration, streaming growth/frequency fits, and nonlinear integration live
-  in ``solvers/time/diffrax_core.py``, ``diffrax_linear.py``,
-  ``diffrax_streaming.py``, and ``diffrax_nonlinear.py``. The streaming owner
-  stages state/cache preparation, monitored-mode extraction, optimized
-  density-mode extraction, weighted log-derivative accumulation, Diffrax RHS
-  construction, IMEX zero-term routing, and saved-result finalization so
-  differentiable streaming fits can be audited without changing the public
-  ``integrate_linear_diffrax_streaming`` contract.
-  The saved-field linear owner stages state/cache preparation, packed-state
-  sharding, RHS construction, save-field/mode extraction, save-time policy,
-  Diffrax solve execution, and final unpacking while keeping the public
-  ``integrate_linear_diffrax`` contract stable.
+- Fixed-step time-integration internals. ``solvers/time/__init__.py`` remains
+  the package-level public facade.
   The fixed-step cached linear integrator stages method validation,
   state/damping preparation, serial/parallel RHS routing, RK/IMEX/SSPX3
   stepping, progress callbacks, and sample-stride scans separately while
@@ -260,10 +247,6 @@ Completed extractions:
   The nonlinear explicit solver owns fixed-step RK/SSP/K10 scan policy, progress
   callbacks, state projection, and diagnostic explicit stepping in
   ``solvers/nonlinear/explicit.py``.
-  The nonlinear owner stages state/cache preparation, packed-state sharding,
-  linear and nonlinear RHS construction, IMEX term routing, saved-``phi``
-  extraction, solve execution, and final ``FieldState`` packing while keeping
-  the public ``integrate_nonlinear_diffrax`` contract stable.
 - term-wise RHS assembly internals. ``terms/assembly.py`` owns public RHS
   assembly, cached RHS composition, per-term diagnostic decomposition,
   field-only solves, external-field sources, electrostatic-field policy, and

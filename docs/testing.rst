@@ -800,23 +800,18 @@ tracked non-finite result under the same closure family, so this remains an
 open physics/numerics lane rather than a closed W7-X zonal validation.
 
 
-Diffrax and nonlinear smoke tests
----------------------------------
+Solver and nonlinear smoke tests
+--------------------------------
 
-Diffrax integration and the nonlinear driver are exercised with fast smoke
+The linear solvers and the nonlinear driver are exercised with fast smoke
 tests:
 
-- ``tests/unit/solvers/test_diffrax_integrators_core.py`` runs explicit, IMEX, streaming, and branch-coverage diffrax solver contracts
-  on tiny grids.
-- ``tests/unit/solvers/test_diffrax_integrators_core.py`` hardens branch coverage for
-  diffrax helper paths (solver selection, save modes, streaming fits, IMEX
-  branches, parallelization, and validation errors).
 - ``tests/unit/solvers/test_linear_krylov_core.py`` hardens matrix-free Krylov internals
   (mode-family targeting, shift-invert preconditioner selection, fallback
   policy, and dominant eigenpair wrappers).
 - ``tests/integration/examples/test_examples.py`` verifies shipped example workflows:
   autodiff inverse/UQ demos, implicit quasilinear sensitivity checks,
-  independent-ky parallelization examples, the config-driven diffrax runner, and
+  independent-ky parallelization examples, the config-driven runner, and
   short nonlinear scans through the assembled E×B nonlinear bracket.
 - ``tests/unit/nonlinear/test_nonlinear_exb.py`` exercises the nonlinear bracket sign,
   real-FFT path, flutter coupling, scalar/precomputed gyroaverage paths, and
@@ -1246,8 +1241,6 @@ the time of writing it resolved to:
 - ``jax`` 0.10.2 (``pyproject`` floor ``jax>=0.10.1``)
 - ``jaxlib`` 0.10.2 (``pyproject`` floor ``jaxlib>=0.10.1``)
 - ``numpy`` 2.4.6
-- ``diffrax`` 0.7.2
-- ``equinox`` 0.13.8
 
 The jax floor is a hard one, not a preference: ``gkx.objectives.core`` calls
 ``lax_linalg.eig(..., enable_eigvec_derivs=True)``, which first shipped in jax
@@ -1450,8 +1443,8 @@ physics rigor:
   offline artifact gates and mocked CI contracts, not by importing unavailable
   external repositories in the public coverage job.
 - **Manual full tier**: full ``pytest`` suite plus strict coverage gates:
-  ``gkx.terms >= 90%`` and per-module core gates for
-  ``solvers/linear/krylov.py`` and the ``solvers/time/diffrax_*`` owner modules.
+  ``gkx.terms >= 90%`` and a per-module core gate for
+  ``solvers/linear/krylov.py``.
 
 This keeps iteration latency low for development and still enforces complete
 coverage and regression checks on demand without relying on scheduled runners.
@@ -1560,20 +1553,18 @@ cross-code harness keeps evolving.
 Core solver coverage gates
 --------------------------
 
-CI also enforces dedicated per-module thresholds for the two linear solver
-engines that are most likely to regress during algorithm work:
+CI also enforces a dedicated per-module threshold for the linear solver engine
+that is most likely to regress during algorithm work:
 
 - ``gkx.solvers.linear.krylov`` (matrix-free Arnoldi/shift-invert path)
-- ``gkx.solvers.time.diffrax_linear``/``diffrax_nonlinear``/``diffrax_core`` (Diffrax explicit/IMEX/implicit paths)
 
-The gate runs focused tests and checks each module from ``coverage-core.xml``:
+The gate runs focused tests and checks the module from ``coverage-core.xml``:
 
 .. code-block:: bash
 
    pytest -q tests/unit/solvers/test_linear_krylov_core.py \
-          tests/unit/solvers/test_diffrax_integrators_core.py \
           --maxfail=1 --disable-warnings \
           --cov=src/gkx \
           --cov-report=xml:coverage-core.xml
 
-Both modules are required to stay at or above 90% line coverage in CI.
+The module is required to stay at or above 90% line coverage in CI.

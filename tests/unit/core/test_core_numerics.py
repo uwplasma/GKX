@@ -354,7 +354,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     # mechanism for the whole surface, not only the compatibility tail.
     # 349: evicting the parity and sensitivity report builders to
     # tools/campaigns removed their four advertised names from the registry.
-    assert len(public_api._EXPORT_TARGETS) == 349
+    assert len(public_api._EXPORT_TARGETS) == 346
     assert len(public_api.__all__) == len(set(public_api.__all__))
     assert set(gkx.__all__) <= set(dir(gkx))
     assert "LinearParams" not in dir(gkx)
