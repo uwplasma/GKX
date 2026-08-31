@@ -583,7 +583,7 @@ def test_cpu_gpu_short_window_gate_matches_within_tolerance() -> None:
     from gkx.runtime import run_runtime_nonlinear
 
     restart_helpers = load_repo_script(
-        Path("tests/integration/runtime/test_restart_gate.py"),
+        Path("tests/integration/runtime/test_runtime_runner.py"),
         module_name="runtime_restart_gate_helpers",
     )
     cfg = restart_helpers._restart_base_cfg()

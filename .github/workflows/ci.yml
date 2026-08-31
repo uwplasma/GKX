@@ -207,7 +207,6 @@ jobs:
           - name: runtime-core
             files: >-
               tests/integration/runtime/test_runtime_config.py
-              tests/integration/runtime/test_runtime_helpers.py
               tests/integration/runtime/test_runtime_runner.py
               tests/unit/solvers/test_runners_and_orchestration.py
               tests/integration/runtime/test_cli.py
@@ -218,7 +217,7 @@ jobs:
               tests/unit/nonlinear/test_nonlinear_helpers_extra.py
               tests/unit/nonlinear/test_nonlinear_exb.py
               tests/validation/benchmarks/test_benchmark_contracts.py
-              tests/integration/runtime/test_runtime_diagnostics.py
+              tests/integration/runtime/test_runtime_artifacts.py
           - name: parallel-autodiff
             # Logical CPU devices so the sharded nonlinear routing gates run
             # here instead of skipping until wide coverage.

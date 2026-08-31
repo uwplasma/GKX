@@ -168,11 +168,9 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/integration/runtime/test_runtime_config.py",
-  "tests/integration/runtime/test_runtime_helpers.py",
+  "tests/integration/runtime/test_cli.py",
   "tests/integration/runtime/test_runtime_runner.py",
   "tests/integration/runtime/test_runtime_artifacts.py",
-  "tests/integration/runtime/test_restart.py",
-  "tests/integration/runtime/test_resolution_estimator.py",
 ]
 artifact_paths = [
   "docs/_static/validation_gate_index.json",
@@ -203,7 +201,7 @@ numerics_contracts = [
   "adaptive step-count ceilings remain finite and reject zero-length runs",
 ]
 fast_tests = [
-  "tests/integration/runtime/test_runtime_helpers.py",
+  "tests/integration/runtime/test_cli.py",
 ]
 artifact_paths = [
   "docs/_static/validation_gate_index.json",
@@ -239,7 +237,7 @@ numerics_contracts = [
   "checkpointed nonlinear artifact handoff validates finite chunks before writing restart or output artifacts",
 ]
 fast_tests = [
-  "tests/integration/runtime/test_runtime_helpers.py",
+  "tests/integration/runtime/test_cli.py",
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
 artifact_paths = [
@@ -1346,7 +1344,7 @@ numerics_contracts = [
   "resolved diagnostic reductions preserve shape and mode indexing",
 ]
 fast_tests = [
-  "tests/integration/runtime/test_runtime_diagnostics.py",
+  "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/tools/comparison/test_reference_comparison_tools.py",
 ]
 artifact_paths = [
@@ -1671,7 +1669,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
-  "tests/integration/runtime/test_restart_gate.py",
+  "tests/integration/runtime/test_runtime_runner.py",
 ]
 artifact_paths = [
   "docs/_static/benchmark_readme_panel.png",
@@ -1704,8 +1702,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
-  "tests/integration/runtime/test_restart.py",
-  "tests/integration/runtime/test_restart_gate.py",
+  "tests/integration/runtime/test_runtime_runner.py",
 ]
 artifact_paths = [
   "docs/_static/benchmark_readme_panel.png",

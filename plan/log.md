@@ -3848,6 +3848,7 @@ Outcome:
   legs rather than a well between throats. The second is an open review item.
 - next task: PR C1-2, solvers test consolidation.
 ## 2026-08-30 — PR C1-2 consolidate the solvers unit domain (`tests/c1-2-solvers-consolidation`)
+## 2026-08-30 — PR C1-3 consolidate the runtime integration domain (`tests/c1-3-runtime-consolidation`)
 
 ## 2026-08-30 — PR C2-1 shared test fixture layer, measured on one domain (`tests/c2-1-fixture-layer-pilot`)
 
@@ -3924,6 +3925,41 @@ Evidence:
   test gross, 3.1 net of the fixture layer; the domain fell 4,485 -> 4,325, or
   3.6 per cent.
 - gates: `ruff check .` clean. `ruff format` deliberately not run.
+- `tests/integration/runtime` 11 files / 16,535 lines
+- relevant existing gate: the architecture manifest ratchet on `test_python_files`
+
+Scope:
+- intended change: group `tests/integration/runtime` by the layer a run passes
+  through rather than by module name.
+- explicitly out of scope: deleting or rewriting any test, and the manifest
+  ratchet, which is applied centrally because three consolidation branches were
+  in flight against the same baseline.
+
+Changes:
+- `test_runtime_config.py` owns configuration and pre-run planning: deck to
+  `RuntimeConfig`, the resolution estimator, and mode/index/solver policy —
+  everything decided before a step is taken.
+- `test_runtime_runner.py` owns execution: startup, the linear and nonlinear
+  runners, the adaptive chunk loop, and the restart gate.
+- `test_runtime_artifacts.py` owns outputs: the diagnostics a run computes and
+  the NetCDF/JSON they are persisted into.
+- `test_cli.py` owns the user-facing surface: argparse plus the command layer
+  it dispatches into.
+- `test_restart_gate.py` and `test_restart.py` were deliberately split apart
+  despite the shared name: the first runs the solver twice and compares, so it
+  is execution; the second is NetCDF IO, so it is artifacts.
+
+Evidence:
+- identity-preserving: 411 collected node IDs before and after, empty diff;
+  410 passed and 1 skipped both ways. Verified independently of the agent.
+- collisions: no top-level definition collided, and this tree has no fixtures.
+  Every hit was a duplicate import resolved by keeping the superset. One
+  deserved a runtime check rather than an assumption:
+  `RuntimeLinearResult`/`RuntimeNonlinearResult` were imported from two
+  different modules, confirmed to be the same object by `is`, so dropping the
+  duplicate is a no-op rather than a silent value swap.
+- gates: `ruff check .` clean; validation coverage exits 0; `ci.yml` parses and
+  every test path it names exists.
 - physics/mathematics/numerics gates: none re-run and none claimed.
 - CPU/NVIDIA measurements: none taken.
 
@@ -3953,3 +3989,16 @@ Outcome:
   recur. `LinearParams` varies per test in ways that are the point of the test.
 - next task: land the consolidation queue, then take the 35,000 question back to
   the maintainer rather than deleting tests to satisfy a number.
+- the most valuable find was not a test at all:
+  `tests/unit/parallel/test_parallel_core.py` loads
+  `tests/integration/runtime/test_restart_gate.py` *by file path* and calls a
+  helper out of it. Consolidating that file would have broken live code with no
+  static signal. Repointed, and verified by loading the merged module and
+  calling the helper.
+- `pytestmark = pytest.mark.integration` from the runner now also covers the
+  absorbed chunk and restart-gate tests. Checked: no CI lane filters on that
+  marker, and these already live under `tests/integration/`.
+- two frozen `plan/baseline/` records named the moved node IDs in reproduce
+  commands and were repointed, because they are instructions a reader would
+  run, not dated measurements.
+- next task: C1-4 physics gates, then the central manifest ratchet.
