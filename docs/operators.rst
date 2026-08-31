@@ -268,7 +268,7 @@ alone, which makes the comparison a check on the convention as well as on the
 values.
 
 The properties a linearized collision operator must satisfy are gated
-numerically in ``tests/validation/physics_gates/test_collision_conservation.py``:
+numerically in ``tests/validation/physics_gates/test_collision_physics.py``:
 
 .. list-table::
    :header-rows: 1
@@ -347,7 +347,7 @@ A direct micro-benchmark of the naive form was not an unambiguous win, however
 -- it traded roughly four times the arithmetic for the lower memory traffic, and
 the compiler already fuses part of the interpolation -- so this is recorded as a
 measured constraint rather than an implemented optimization.
-``tests/validation/physics_gates/test_collision_operator_cost.py`` bounds the
+``tests/validation/physics_gates/test_collision_physics.py`` bounds the
 current cost so a structural regression is caught.
 
 Published convergence studies ask for considerably more than eight moments --

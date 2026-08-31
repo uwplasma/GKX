@@ -1327,7 +1327,7 @@ Measurement pitfalls
 ~~~~~~~~~~~~~~~~~~~~~
 
 Four separate traps produce plausible but wrong numbers here. Each is gated in
-``tests/validation/physics_gates/test_landau_damping.py``.
+``tests/validation/physics_gates/test_hermite_hierarchy_physics.py``.
 
 **1. A collisionless truncated Hermite system cannot Landau damp at all.**
 Free streaming is anti-Hermitian, so the truncated matrix has a purely real
@@ -1469,7 +1469,7 @@ It is not a drop-in improvement on a well-tuned hypercollision.
 The closure is selected through the Python API,
 ``linked_streaming_contribution(..., hermite_closure="reflectionless")``;
 ``"truncation"`` remains the default. Gates:
-``tests/validation/physics_gates/test_hermite_closure.py``.
+``tests/validation/physics_gates/test_hermite_hierarchy_physics.py``.
 
 Curvature, grad-B, and mirror couplings
 ---------------------------------------
