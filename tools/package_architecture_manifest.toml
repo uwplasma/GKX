@@ -72,7 +72,10 @@ recursive = true
 # implementation in another module and nothing but the gkx.api registry
 # imported it. None of them was reachable from a run, a CLI command, or a
 # solver path. The count also absorbs the slack main was already carrying.
-baseline = 199
+# 199 -> 195: removing Diffrax from the base product. The four
+# solvers/time/diffrax_*.py owner modules are deleted; the coupled implicit
+# owner (solvers/linear/implicit.py) is unaffected.
+baseline = 195
 target = 45
 
 [[topology_policy.counts]]
@@ -140,7 +143,9 @@ recursive = true
 # the exported name is the public type rather than the solver internal it
 # used to leak, and that the object refuses a parameterised solve instead
 # of quietly solving a different problem.
-baseline = 103
+# 103 -> 102: tests/unit/solvers/test_diffrax_integrators_core.py is deleted
+# with the integrator it covered.
+baseline = 102
 # Target lowered 36 -> 30: the approved GKX 3 contract in the handoff plan.
 target = 30
 
@@ -592,7 +597,10 @@ recursive = true
 # a user could not discover any of them from gkx --help. The three redundant
 # run-runtime-* and scan-runtime-* commands now name their replacement on
 # use and are removed next release, which is where these lines come back.
-baseline = 91448
+# 91448 -> 89715: removing Diffrax from the base product. The four owner
+# modules carried 1,636 lines; the remainder is the config fields, the
+# runner and workflow branches, and the dead save-selector kwargs they fed.
+baseline = 89715
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -610,7 +618,9 @@ recursive = true
 # GKX 3 contract and contradicted it.
 # 87986 -> 88011: updating the pinned public-API list, the lazy-registry count,
 # and the prepare contract assertions that A1-3 deliberately changes.
-baseline = 88110
+# 88110 -> 86902: deleting the 935-line Diffrax integrator suite and the
+# Diffrax-only runtime/example cases, net of the new removed-key deck gate.
+baseline = 86902
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -619,7 +629,9 @@ path = "tools"
 pattern = "*.py"
 recursive = true
 # 97346 -> 72461: measured at e19336dc.
-baseline = 72461
+# 72461 -> 72301: removing the Diffrax comparison route from
+# tools/comparison/ky_diagnostics.py and the Diffrax config from make_tables.
+baseline = 72301
 target = 0
 
 [[line_budget_policy.counts]]

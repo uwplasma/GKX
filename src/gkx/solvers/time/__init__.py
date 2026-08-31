@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from gkx.solvers.time.diffrax_linear import integrate_linear_diffrax
-from gkx.solvers.time.diffrax_nonlinear import integrate_nonlinear_diffrax
-from gkx.solvers.time.diffrax_streaming import integrate_linear_diffrax_streaming
 from gkx.solvers.time.explicit import (
     ExplicitTimeConfig,
     integrate_linear_explicit,
@@ -33,11 +30,8 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "ExplicitTimeConfig",
-    "integrate_linear_diffrax",
-    "integrate_linear_diffrax_streaming",
     "integrate_linear_explicit",
     "integrate_linear_explicit_diagnostics",
     "integrate_linear_from_config",
-    "integrate_nonlinear_diffrax",
     "integrate_nonlinear_from_config",
 ]

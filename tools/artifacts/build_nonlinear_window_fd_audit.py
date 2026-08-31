@@ -83,7 +83,6 @@ def cyclone_runtime_config(
             t_max=float(dt),
             dt=float(dt),
             method="rk2",
-            use_diffrax=False,
             fixed_dt=True,
             sample_stride=1,
             diagnostics_stride=1,

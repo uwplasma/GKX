@@ -138,11 +138,6 @@ Minimal TOML example
    [time]
    t_max = 10.0
    dt = 0.002
-   use_diffrax = true
-   diffrax_solver = "Dopri8"
-   diffrax_adaptive = true
-   diffrax_rtol = 1.0e-6
-   diffrax_atol = 1.0e-8
    state_sharding = "auto"
    compressed_real_fft = true
 
@@ -577,10 +572,9 @@ added. Current velocity RHS routes are limited to single-species periodic 5D
 electrostatic states.
 
 For full runtime TOML files this velocity-space route is exposed only through
-the fixed-step linear executable path with ``fit_signal = "phi"``. Diffrax
-linear runs and density-assisted automatic fitting stay serial until they have
-their own identity gates, so requesting velocity parallelization there raises a
-clear error.
+the fixed-step linear executable path with ``fit_signal = "phi"``.
+Density-assisted automatic fitting stays serial until it has its own identity
+gate, so requesting velocity parallelization there raises a clear error.
 
 For independent scan, sensitivity, and UQ workloads, use
 ``gkx.batch_map`` for JAX-array maps and ``gkx.independent_map``

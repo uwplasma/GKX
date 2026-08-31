@@ -45,7 +45,6 @@ from gkx.workflows.runtime.orchestration_scan import (
     run_runtime_scan_ky_task,
 )
 from gkx.workflows.runtime.diagnostics import _prepare_runtime_linear_fit_inputs
-from gkx.diagnostics.analysis import late_time_linear_metrics
 from gkx.config import (
     GeometryConfig,
     GridConfig,
@@ -84,7 +83,6 @@ from gkx.runtime import (
     build_runtime_linear_params,
     build_runtime_linear_terms,
     build_runtime_term_config,
-    run_runtime_linear,
     run_runtime_nonlinear,
     run_runtime_scan,
 )
@@ -106,7 +104,7 @@ def _base_cfg() -> RuntimeConfig:
     return RuntimeConfig(
         grid=GridConfig(Nx=4, Ny=6, Nz=8, Lx=6.28, Ly=6.28, boundary="periodic"),
         time=TimeConfig(
-            t_max=0.4, dt=0.1, method="rk2", use_diffrax=False, sample_stride=1
+            t_max=0.4, dt=0.1, method="rk2", sample_stride=1
         ),
         geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
         init=InitializationConfig(
@@ -1955,104 +1953,6 @@ def test_run_runtime_scan_parallel_config_requests_combined_ky_batch(
     assert captured["solverless_kwargs"]["method"] == "rk2"
     assert captured["solverless_kwargs"]["sample_stride"] == 2
     assert captured["solverless_kwargs"]["show_progress"] is True
-
-
-def test_run_runtime_linear_diffrax_contract_paths(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import gkx.runtime as runtime
-
-    cfg0 = _base_cfg()
-    cfg = replace(
-        cfg0,
-        time=replace(cfg0.time, use_diffrax=True, dt=0.01, t_max=0.03, sample_stride=1),
-    )
-    geom = build_runtime_geometry(cfg)
-    grid = build_spectral_grid(cfg.grid)
-    gamma_ref = 0.25
-    omega_ref = -0.12
-    t_saved = np.asarray([0.01, 0.02, 0.03], dtype=float)
-
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
-        "_build_initial_condition",
-        lambda *args, **kwargs: np.zeros(
-            (1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64
-        ),
-    )
-
-    calls: list[tuple[object, str]] = []
-
-    def _fake_integrate(*args, **kwargs):
-        calls.append((kwargs["save_mode"], kwargs["save_field"]))
-        if kwargs["save_field"] == "phi+density":
-            phi_t = np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
-            density_t = 3.0 * np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
-            return np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64), (
-                phi_t,
-                density_t,
-            )
-        phi_t = np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
-        return np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64), phi_t
-
-    monkeypatch.setattr(runtime, "integrate_linear_from_config", _fake_integrate)
-    monkeypatch.setattr(
-        runtime,
-        "extract_mode_time_series",
-        lambda arr, sel, method="project": (
-            np.exp((gamma_ref - 1j * omega_ref) * t_saved).astype(np.complex128)
-            if np.max(np.abs(arr)) < 2.0
-            else np.asarray([1.0, 2.0, 4.0], dtype=np.complex128)
-        ),
-    )
-    monkeypatch.setattr(
-        runtime,
-        "fit_growth_rate_auto_with_stats",
-        lambda t, signal, **kwargs: (
-            (0.05, -0.02, 0.01, 0.03, 1.0, 0.0)
-            if np.max(np.abs(signal)) < 2.0
-            else (0.2, -0.08, 0.01, 0.03, 2.0, 0.0)
-        ),
-    )
-    monkeypatch.setattr(
-        runtime,
-        "extract_eigenfunction",
-        lambda *args, **kwargs: np.ones(grid.z.size, dtype=np.complex128),
-    )
-    monkeypatch.setattr(
-        runtime,
-        "apply_diagnostic_normalization",
-        lambda gamma, omega, **kwargs: (gamma, omega),
-    )
-
-    res_phi = run_runtime_linear(
-        cfg,
-        ky_target=0.1,
-        Nl=3,
-        Nm=4,
-        solver="time",
-        fit_signal="phi",
-        mode_method="project",
-    )
-    res_auto = run_runtime_linear(
-        cfg,
-        ky_target=0.1,
-        Nl=3,
-        Nm=4,
-        solver="time",
-        fit_signal="auto",
-        mode_method="project",
-    )
-
-    assert calls[0] == (None, "phi")
-    assert calls[1] == (None, "phi+density")
-    metrics = late_time_linear_metrics(res_phi, tail_fraction=2.0 / 3.0)
-    assert res_phi.fit_signal_used == "phi"
-    assert metrics.gamma_fit == pytest.approx(gamma_ref, rel=1.0e-3)
-    assert metrics.omega_fit == pytest.approx(omega_ref, rel=1.0e-3)
-    assert res_auto.fit_signal_used == "density"
-    np.testing.assert_allclose(res_auto.signal, [1.0, 2.0, 4.0])
 
 
 def test_run_runtime_nonlinear_final_state_contract(

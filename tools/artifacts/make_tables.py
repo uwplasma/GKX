@@ -535,7 +535,6 @@ def _scan_linear_verbose(
                     t_max=t_max,
                     dt=dt_spot,
                     method="implicit",
-                    use_diffrax=False,
                     implicit_preconditioner="hermite-line",
                     progress_bar=False,
                     sample_stride=1,
@@ -633,11 +632,6 @@ REFERENCE_CYCLONE_WINDOW = dict(
     late_penalty=0.1,
 )
 
-CYCLONE_PUBLIC_TIME = TimeConfig(
-    t_max=150.0, dt=0.01, use_diffrax=True, diffrax_solver="Tsit5",
-    diffrax_adaptive=False, diffrax_rtol=1.0e-4, diffrax_atol=1.0e-7,
-    diffrax_max_steps=20000, progress_bar=False, fixed_dt=True,
-)
 CYCLONE_PUBLIC_NL = 16
 CYCLONE_PUBLIC_NM = 48
 

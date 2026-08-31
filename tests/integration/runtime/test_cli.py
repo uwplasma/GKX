@@ -460,7 +460,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -529,7 +528,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -945,7 +943,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -1017,7 +1014,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -1096,7 +1092,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -1167,7 +1162,6 @@ boundary = "periodic"
 t_max = 0.1
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -1239,7 +1233,6 @@ boundary = "periodic"
 t_max = 0.1
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -1302,7 +1295,6 @@ boundary = "periodic"
 t_max = 0.1
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -1396,7 +1388,6 @@ boundary = "periodic"
 t_max = 0.1
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -1481,7 +1472,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 fixed_dt = false
 
 [geometry]
@@ -1585,7 +1575,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -1634,7 +1623,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 model = "vmec-eik"
@@ -1680,7 +1668,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 model = "vmec"
@@ -1727,7 +1714,6 @@ boundary = "periodic"
 t_max = 0.2
 dt = 0.01
 method = "rk2"
-use_diffrax = false
 
 [geometry]
 q = 1.4
@@ -2838,7 +2824,6 @@ y0 = 2.0
 t_max = 2.0
 dt = 0.5
 method = "rk3"
-use_diffrax = false
 sample_stride = 1
 fixed_dt = false
 cfl = 0.9

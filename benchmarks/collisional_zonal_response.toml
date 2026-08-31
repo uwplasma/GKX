@@ -30,7 +30,6 @@ t_max = 600.1
 dt = 0.005
 method = "rk2"
 sample_stride = 10
-use_diffrax = false
 fixed_dt = true
 progress_bar = true
 

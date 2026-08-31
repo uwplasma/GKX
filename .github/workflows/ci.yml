@@ -146,12 +146,10 @@ jobs:
       - name: Print benchmark stack
         run: |
           python - <<'PY'
-          import diffrax, equinox, jax, jaxlib, numpy
+          import jax, jaxlib, numpy
           print("jax", jax.__version__)
           print("jaxlib", jaxlib.__version__)
           print("numpy", numpy.__version__)
-          print("diffrax", diffrax.__version__)
-          print("equinox", equinox.__version__)
           PY
 
       - name: MyPy (types)
@@ -209,7 +207,6 @@ jobs:
               tests/unit/solvers/test_dot_precision_guard.py
           - name: runtime-core
             files: >-
-              tests/unit/solvers/test_diffrax_integrators_core.py
               tests/integration/runtime/test_runtime_config.py
               tests/integration/runtime/test_runtime_helpers.py
               tests/integration/runtime/test_runtime_runner.py
@@ -260,12 +257,10 @@ jobs:
       - name: Print benchmark stack
         run: |
           python - <<'PY'
-          import diffrax, equinox, jax, jaxlib, numpy
+          import jax, jaxlib, numpy
           print("jax", jax.__version__)
           print("jaxlib", jaxlib.__version__)
           print("numpy", numpy.__version__)
-          print("diffrax", diffrax.__version__)
-          print("equinox", equinox.__version__)
           PY
 
       - name: Pytest shard (${{ matrix.shard.name }})
@@ -688,12 +683,10 @@ jobs:
       - name: Print benchmark stack
         run: |
           python - <<'PY'
-          import diffrax, equinox, jax, jaxlib, numpy
+          import jax, jaxlib, numpy
           print("jax", jax.__version__)
           print("jaxlib", jaxlib.__version__)
           print("numpy", numpy.__version__)
-          print("diffrax", diffrax.__version__)
-          print("equinox", equinox.__version__)
           PY
 
       - name: MyPy (types)
@@ -726,7 +719,7 @@ jobs:
             --cov=src/gkx/terms \
             --cov-fail-under=90
 
-      - name: Krylov + Diffrax Core Coverage (>=90% each)
+      - name: Krylov Core Coverage (>=90%)
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
@@ -734,7 +727,6 @@ jobs:
         run: |
           pytest -q \
             tests/unit/solvers/test_linear_krylov_core.py \
-            tests/unit/solvers/test_diffrax_integrators_core.py \
             --maxfail=1 --disable-warnings \
             --cov=src/gkx \
             --cov-report=xml:coverage-core.xml \
@@ -745,7 +737,6 @@ jobs:
 
           thresholds = {
               "linear_krylov.py": 90.0,
-              "diffrax_integrators.py": 90.0,
           }
 
           root = ET.parse("coverage-core.xml").getroot()

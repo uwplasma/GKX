@@ -137,7 +137,7 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
     ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     grid = select_ky_grid(grid_full, ky_index)
 
-    assert runtime_cfg.time.use_diffrax is False
+    assert not [key for key in raw["time"] if "diffrax" in key]
     assert runtime_cfg.time.fixed_dt is True
     assert runtime_cfg.time.method == "rk2"
     assert runtime_cfg.time.sample_stride == 20
@@ -247,7 +247,7 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
     ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     grid = select_ky_grid(grid_full, ky_index)
 
-    assert runtime_cfg.time.use_diffrax is False
+    assert not [key for key in raw["time"] if "diffrax" in key]
     assert runtime_cfg.time.fixed_dt is True
     assert runtime_cfg.time.method == "rk4"
     assert runtime_cfg.time.sample_stride == 10

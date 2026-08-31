@@ -129,10 +129,6 @@ path = "src/gkx/runtime.py"
 owned_modules = [
   "gkx.cli",
   "gkx.config",
-  "gkx.solvers.time.diffrax_core",
-  "gkx.solvers.time.diffrax_linear",
-  "gkx.solvers.time.diffrax_nonlinear",
-  "gkx.solvers.time.diffrax_streaming",
   "gkx.solvers.time.explicit",
   "gkx.solvers.time.explicit_diagnostics",
   "gkx.solvers.time.explicit_cfl",

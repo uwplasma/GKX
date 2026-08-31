@@ -36,9 +36,6 @@ The core numerical algorithms and their implementation entry points are:
 - **CFL-controlled RK4 (adaptive step control, streaming diagnostics)**:
   :func:`gkx.integrate_linear_explicit`
   (implemented in :func:`gkx.solvers.time.explicit.integrate_linear_explicit`).
-- **Diffrax integration (explicit/implicit/IMEX)**:
-  :func:`gkx.solvers.time.integrate_linear_diffrax`,
-  :func:`gkx.solvers.time.integrate_nonlinear_diffrax`.
 - **Config-driven runner**:
   :func:`gkx.solvers.time.runners.integrate_linear_from_config`.
 - **Implicit solve (Backward Euler + GMRES)**:
@@ -142,29 +139,17 @@ These are all implemented in :func:`gkx.solvers.linear.integrators.integrate_lin
 share the cached operator data assembled by
 :func:`gkx.operators.linear.cache_builder.build_linear_cache`.
 
-Diffrax integration
--------------------
+Distributed state sharding
+--------------------------
 
-Diffrax-backed solvers are available via
-:func:`gkx.solvers.time.integrate_linear_diffrax` and
-:func:`gkx.solvers.time.integrate_nonlinear_diffrax`. Explicit
-solvers (e.g., ``Tsit5``) and implicit/IMEX solvers (e.g., ``KenCarp``) are
-supported. Progress reporting is disabled by default; enable it by setting
+Progress reporting is disabled by default; enable it by setting
 ``TimeConfig.progress_bar=True`` (or ``progress_bar=True`` in the integrator
-call). Diffrax currently emits a warning when evolving complex-valued states;
-the solvers still run, but treat this as experimental behavior.
-
-Use :class:`gkx.config.TimeConfig` and
-:func:`gkx.solvers.time.runners.integrate_linear_from_config` to select diffrax
-integration from input configuration without changing call sites. By default,
-``TimeConfig`` enables diffrax with a fixed-step Dopri8 solver; set
-``use_diffrax=False`` to force the built-in fixed-step integrators.
+call).
 
 For distributed parallelization, set ``TimeConfig.state_sharding = "auto"``
 (or ``"ky"`` / ``"kx"`` for the release-gated nonlinear path) to partition the
-packed state array over multiple JAX devices. This is honored by diffrax
-integrations and by the fixed-step nonlinear scan through
-``integrate_nonlinear_sharded``. When only one device is visible, the
+packed state array over multiple JAX devices. This is honored by the
+fixed-step nonlinear scan through ``integrate_nonlinear_sharded``. When only one device is visible, the
 parallelization request is ignored and the run proceeds on a single device
 while preserving the same control-flow path for identity testing. The nonlinear
 config path intentionally rejects ``"z"`` sharding because the current
@@ -178,25 +163,9 @@ the release reference for active nonlinear state-sharding diagnostics, and
 production nonlinear speedup claims still require separate identity,
 transport-window, and profiler gates.
 
-For scan workloads, the default path is custom fixed-step ``imex2`` with
-``TimeConfig.use_diffrax=False``. This keeps stepping shape-stable and improves
-throughput for multi-ky scans. Diffrax adaptive stepping remains available as
-an optional mode through ``TimeConfig.use_diffrax=True``.
-
-Adaptive differentiation is an explicit API policy rather than an accidental
-property of the controller. For a low-dimensional tangent direction, call
-:func:`gkx.solvers.time.integrate_linear_diffrax` with
-``derivative_mode="forward"``. This selects native JAX rules and supports a
-JVP through the accepted adaptive trajectory. The release gate uses a nonzero
-thermodynamic-drive tangent: it agrees with a centered finite difference to
-``1.9e-5`` relative error, and changing ``rtol`` from ``1e-3`` to ``3e-4``
-changes the objective and tangent by less than ``2e-4`` relative. The default
-``derivative_mode="reverse"`` retains the custom-VJP field solve used by
-scalar objectives. With ``checkpoint=True``, adaptive Tsit5 uses Diffrax's
-recursive checkpoint adjoint; its reverse gradient matches both the forward
-JVP and centered finite difference to ``1.9e-5`` relative on the same physical
-observable. Adaptive reverse mode without checkpointing remains unpromoted
-because its direct adjoint exceeded the bounded local memory envelope.
+For scan workloads, the default path is the custom fixed-step ``imex2``
+owner. This keeps stepping shape-stable and improves throughput for multi-ky
+scans.
 
 Nonlinear FFT bracket
 ---------------------
@@ -442,11 +411,6 @@ Performance tuning
 GKX includes several performance-oriented options that preserve
 end-to-end JAX differentiability:
 
-- **Streaming growth-rate fits**: use
-  :func:`gkx.solvers.time.integrate_linear_diffrax_streaming`
-  to compute ``(gamma, omega)`` online without storing time series. This reduces
-  memory pressure during long scans. The streaming fit supports ``phi`` or
-  density moments via ``fit_signal`` and uses a fixed ``tmin/tmax`` window.
 - **Batched ky scans**: pass ``ky_batch>1`` to the benchmark scan helpers to
   integrate multiple ky values at once using a sliced ky grid. Set
   ``fixed_batch_shape=True`` (default) to edge-pad the final batch and avoid
@@ -455,9 +419,7 @@ end-to-end JAX differentiability:
   single FFT pipeline so the spatial derivatives are computed once and reused
   across fields. This removes redundant transforms and reduces FFT calls.
 - **Donation and parallelized buffers**: time integrators donate state buffers
-  in JIT-compiled paths to reduce allocations. The diffrax integrators accept a
-  ``state_sharding`` argument if you want to preserve explicit JAX
-  parallelization on the state array.
+  in JIT-compiled paths to reduce allocations.
 - **Implicit preconditioning hooks**: ``implicit_preconditioner`` accepts
   ``"auto"/"diag"/"physics"/"block"`` (full diagonal preconditioner),
   ``"damping"`` (collisional/hyper-only), ``"pas"`` (PAS line preconditioner),
@@ -1530,8 +1492,8 @@ Putting the pieces together, the linear operator is assembled from:
 Operator toggles start from :class:`gkx.operators.linear.params.LinearTerms` and are
 converted into one canonical :class:`gkx.terms.TermConfig` through
 :func:`gkx.operators.linear.params.linear_terms_to_term_config`. The same modular RHS
-path is then used by fixed-step linear integrators, diffrax integrators,
-Krylov operator applications, and nonlinear IMEX linear solves.
+path is then used by fixed-step linear integrators, Krylov operator
+applications, and nonlinear IMEX linear solves.
 
 The RHS is assembled in :mod:`gkx.terms` via
 :func:`gkx.terms.assemble_rhs_cached`, which sums per-term kernels

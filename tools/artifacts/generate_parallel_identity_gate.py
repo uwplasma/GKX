@@ -612,7 +612,7 @@ def _default_runtime_config(*, nx: int, ny: int, nz: int) -> RuntimeConfig:
             Nx=nx, Ny=ny, Nz=nz, ntheta=nz, nperiod=1, y0=10.0, boundary="linked"
         ),
         time=TimeConfig(
-            t_max=0.2, dt=0.02, method="rk2", use_diffrax=False, sample_stride=1
+            t_max=0.2, dt=0.02, method="rk2", sample_stride=1
         ),
         geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
         init=InitializationConfig(

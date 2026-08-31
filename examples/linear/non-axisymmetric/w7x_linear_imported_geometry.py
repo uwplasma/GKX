@@ -43,7 +43,6 @@ cfg = RuntimeConfig(
         t_max=T_MAX,
         dt=DT,
         method="rk4",
-        use_diffrax=False,
         fixed_dt=True,
         sample_stride=1,
     ),

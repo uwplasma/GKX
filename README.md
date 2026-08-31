@@ -70,7 +70,7 @@ warning and an under-resolution warning rather than presenting an
 under-converged growth rate as a result.
 
 Python 3.11+ is required. The wheel pulls in CPU JAX, SciPy, matplotlib,
-NetCDF4, diffrax, equinox, `solvax`, and the `booz_xform_jax` bridge used by the
+NetCDF4, `solvax`, and the `booz_xform_jax` bridge used by the
 VMEC geometry path; install an accelerator-enabled JAX wheel separately from the
 [JAX installation guide](https://docs.jax.dev/en/latest/installation.html).
 
@@ -699,9 +699,9 @@ Validated release claims are bounded by the [release scope](docs/release_scope.r
 - The Sugama, improved-Sugama, and Coulomb operators are verified against their
   published closed forms and structural invariants, and are validated for
   like-species collisions; species-coupled Coulomb coefficients remain open.
-- Collision operators run on the fixed-step cached integrator. The diffrax,
-  sharded, and Krylov eigenvalue paths reject them rather than silently
-  substituting the built-in diagonal term.
+- Collision operators run on the fixed-step cached integrator. The sharded and
+  Krylov eigenvalue paths reject them rather than silently substituting the
+  built-in diagonal term.
 - Production nonlinear domain decomposition and equilibrium ExB flow shear
   remain open.
 

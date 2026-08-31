@@ -3616,3 +3616,100 @@ reports the template as not runnable, because it declares geometry.model =
 This is correct rather than a bug, and it is the first time the product could
 state it. A user who copies the template and runs it directly gets a precise
 message instead of a failure deeper in geometry construction.
+
+## 2026-08-30 — remove Diffrax from the base product (`solvers/b2-1-remove-diffrax`)
+
+Baseline:
+- GKX SHA: `e98b47f9` (`cli: complete the six product commands (#167)`)
+- companion SHAs: none; no companion repository is touched
+- source/test/tool files and lines: `src/gkx` 199 files / 91,448 lines; `tests`
+  103 files / 88,110 lines; `tools` 90 files / 72,461 lines
+- relevant existing gate: the package architecture manifest's no-regression
+  ratchet on those same counts, plus release readiness, quasilinear
+  guardrails, validation coverage, and repository size
+
+Scope:
+- intended change: close the §11.2 stiff-path gate in favour of native
+  ownership and delete Diffrax from the base product — the four owner modules,
+  the six `TimeConfig` selector fields, every deck key, the public exports, the
+  dependency, and the documentation that described it as an available
+  integrator
+- non-goals: no equation, field solve, normalization, collision, damping,
+  initial condition, fit policy, benchmark claim, native tableau, or adaptive
+  controller change; no new measurements; the coupled implicit owner
+  (`solvers/linear/implicit.py`) is untouched and stays
+- prospective acceptance and rollback criteria: accept if `import diffrax`
+  appears nowhere in `src/`, every deck loads, and lint, typing, release,
+  solver/runtime, strict-docs, and the five release checks pass. Roll back if
+  any shipped deck or example loses its integrator, if a removed field turns
+  out to have a live user, or if a native path changes a reported number.
+
+The decision rests on the office RTX A4000 evidence already recorded on
+2026-08-29 in this log, not on new measurements. At matched fitted-mode
+accuracy on the maintained kinetic-electron stress case, the native explicit
+owner ran 25.16/14.59 seconds cold/warm against Diffrax 47.85/37.87 — about
+2.6x faster warm — with a 17,461,248-byte device peak against 69,052,672
+bytes, about one quarter. The Diffrax 20,000-step ceiling fails before its
+time path reaches the declared `t=40` horizon that native completes. No
+shipped deck or example selected `use_diffrax = true`, and no test used
+Diffrax as a live oracle: the only surviving `match=` hits were
+`pytest.raises(NotImplementedError, match="diffrax ...")` assertions about
+paths that refused it. The gate in §11.2 therefore selects native ownership
+and no unique promoted capability remains.
+
+Changes:
+- files removed: `src/gkx/solvers/time/diffrax_core.py` (188),
+  `diffrax_linear.py` (449), `diffrax_nonlinear.py` (427),
+  `diffrax_streaming.py` (572) — 1,636 lines;
+  `tests/unit/solvers/test_diffrax_integrators_core.py` (935);
+  `examples/theory_and_demos/diffrax_linear_demo.py` (41)
+- functions removed: `_integrate_linear_diffrax_path` and the `use_diffrax`
+  branch in `workflows/linear.py`; the Diffrax branches of
+  `integrate_linear_from_config` and `integrate_nonlinear_from_config` in
+  `solvers/time/runners.py`; the `save_mode`/`mode_method`/`save_field`/
+  `density_species_index` kwargs those branches were the only consumer of, so
+  no dead selector survives on the native runner; `_run_diffrax_method` and
+  the two `diffrax-*` labels in `tools/comparison/ky_diagnostics.py`; the
+  `--diffrax` oracle flags on both linear benchmark drivers and the Diffrax
+  half of `benchmarks/performance/benchmark_integrators.py`
+- public/schema behavior: `TimeConfig.use_diffrax`, `diffrax_solver`,
+  `diffrax_adaptive`, `diffrax_rtol`, `diffrax_atol`, and `diffrax_max_steps`
+  are gone, as are the `gkx.integrate_linear_diffrax`,
+  `integrate_linear_diffrax_streaming`, and `integrate_nonlinear_diffrax`
+  exports. The dataclass merge in `workflows/runtime/toml.py` silently drops
+  keys it does not recognise, so a deck that still selects Diffrax would have
+  run on a different integrator without saying so. `_validate_removed_time_keys`
+  now rejects all six keys with a message naming the native replacement —
+  `method` for the solver selector, `dt` for the tolerances, and `t_max / dt`
+  for the step ceiling. Failing loudly is the right default for a removed
+  solver selector: the alternative silently changes the numerics a deck asked
+  for. `tests/integration/runtime/test_runtime_config.py` pins that behaviour
+  and that every shipped deck carries none of the keys.
+- dependencies: `diffrax` and `equinox` are removed from `pyproject.toml` and
+  `requirements.txt`. No GKX source imports `equinox` any more; it remains
+  installed transitively because `solvax` declares it as a hard dependency of
+  its own, so nothing in the environment changes for a user.
+- after: `src/gkx` 195 files / 89,715 lines; `tests` 102 files / 86,902 lines;
+  `tools` 90 files / 72,301 lines. The architecture manifest baselines are
+  ratcheted to those measured counts so the gate keeps the gain.
+
+Evidence:
+- focused tests: `tests/release` 127 passed; `tests/unit/solvers` +
+  `tests/integration/runtime` 588 passed, 1 skipped
+- physics/mathematics/numerics gates: none re-run and none claimed. This
+  change removes a route; it does not assert a physical result.
+- gates: `ruff check .` clean; `mypy src` at the one known local error
+  (`objectives/core.py:348`, jax `enable_eigvec_derivs`); all five
+  `tools/release/check_*.py` exit 0; `sphinx -b html -W docs` builds with zero
+  warnings; `import gkx` and `gkx --help` work with `diffrax` blocked from
+  `sys.meta_path`
+- CPU/NVIDIA measurements: none taken. The gate rests on the 2026-08-29 office
+  A4000 record quoted above.
+
+Outcome:
+- accepted
+- remaining blocker: none for B2-1. `docs/_static/scaling_speedup_data.csv` is
+  a two-device sweep measured on the removed route; it is kept as a historical
+  engineering record, its plot subcommand renamed `legacy-two-device`, and the
+  docs now say it is not reproducible from current source.
+- next task: Phase C test consolidation (PR C1-1 onward)

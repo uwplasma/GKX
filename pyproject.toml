@@ -30,8 +30,6 @@ dependencies = [
   "matplotlib",
   "scipy",
   "netCDF4",
-  "diffrax",
-  "equinox",
   "solvax>=0.12.0",
   # The VMEC geometry path hard-requires the booz_xform_jax bridge
   # (gkx.geometry.backend_discovery).

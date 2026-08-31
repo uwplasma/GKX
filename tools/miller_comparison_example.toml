@@ -24,7 +24,6 @@ nperiod = 3
 t_max = 10.0
 dt = 0.1
 method = "rk3"
-use_diffrax = false
 sample_stride = 10
 diagnostics_stride = 10
 fixed_dt = false

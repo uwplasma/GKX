@@ -138,6 +138,53 @@ def test_runtime_toml_schema_accepts_v1_and_legacy_but_rejects_other_versions(
         load_runtime_from_toml(path)
 
 
+def test_runtime_toml_rejects_removed_diffrax_time_keys(tmp_path: Path) -> None:
+    """A deck that still selects Diffrax must fail loudly, not be ignored."""
+
+    path = tmp_path / "case.toml"
+
+    path.write_text(
+        "schema_version = 1\n[time]\nt_max = 1.0\nuse_diffrax = true\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="'use_diffrax'") as excinfo:
+        load_runtime_from_toml(path)
+    message = str(excinfo.value)
+    assert "no longer ships" in message
+    # The message has to name the native replacement, not just the removal.
+    assert "method" in message
+
+    # A deck that only carries the tuning keys must fail the same way.
+    path.write_text(
+        "schema_version = 1\n[time]\ndiffrax_solver = \"Tsit5\"\n"
+        "diffrax_max_steps = 20000\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="diffrax_solver") as excinfo:
+        load_runtime_from_toml(path)
+    assert "diffrax_max_steps" in str(excinfo.value)
+
+    # Selecting the native owner explicitly still loads.
+    path.write_text(
+        "schema_version = 1\n[time]\nt_max = 1.0\nmethod = \"rk4\"\n",
+        encoding="utf-8",
+    )
+    cfg, _raw = load_runtime_from_toml(path)
+    assert cfg.time.method == "rk4"
+
+
+def test_maintained_runtime_decks_carry_no_removed_time_keys() -> None:
+    """Every shipped deck must load under the current schema."""
+
+    paths = sorted((REPO_ROOT / "examples").rglob("*.toml"))
+    paths += sorted((REPO_ROOT / "benchmarks").rglob("*.toml"))
+    paths += sorted((REPO_ROOT / "tools" / "comparison").rglob("*.toml"))
+    assert paths
+    for path in paths:
+        time_section = load_toml(path).get("time", {})
+        assert not [key for key in time_section if "diffrax" in key], path
+
+
 def test_maintained_runtime_decks_declare_schema_v1() -> None:
     paths = sorted((REPO_ROOT / "examples").rglob("*.toml"))
     paths += [

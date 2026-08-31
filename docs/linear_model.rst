@@ -155,7 +155,7 @@ Numerical realization
 - perpendicular Fourier representation in :math:`(k_x, k_y)`
 - field-aligned :math:`z` grid with linked boundary support
 - JAX-fused RHS with cache-backed geometry/gyroaverage tensors
-- diffrax and custom fixed-step integrators
+- custom fixed-step integrators
 - matrix-free Krylov/shift-invert for eigenvalue-focused scans
 
 Benchmark contract

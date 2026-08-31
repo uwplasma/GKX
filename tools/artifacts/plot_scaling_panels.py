@@ -2,7 +2,7 @@
 """Plot scaling and parallelization panels from tracked JSON/CSV artifacts.
 
 Subcommands:
-  diffrax-speedup       Two-device diffrax scaling from scaling_speedup_data.csv.
+  legacy-two-device     Archived two-device linear scaling from scaling_speedup_data.csv.
   independent-ky        Independent ky CPU/GPU scan strong-scaling panel.
   rhs-profile           CPU/GPU nonlinear RHS kernel split profile.
   nonlinear-sharding    Nonlinear whole-state sharding diagnostic scaling panel.
@@ -22,8 +22,8 @@ import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DIFFRAX_DATA = REPO_ROOT / "docs" / "_static" / "scaling_speedup_data.csv"
-DEFAULT_DIFFRAX_PNG = REPO_ROOT / "docs" / "_static" / "scaling_speedup.png"
+DEFAULT_LEGACY_SPEEDUP_DATA = REPO_ROOT / "docs" / "_static" / "scaling_speedup_data.csv"
+DEFAULT_LEGACY_SPEEDUP_PNG = REPO_ROOT / "docs" / "_static" / "scaling_speedup.png"
 DEFAULT_INDEPENDENT_KY_INPUTS = [
     REPO_ROOT / "docs" / "_static" / "independent_ky_scan_scaling_cpu_large.json",
     REPO_ROOT / "docs" / "_static" / "independent_ky_scan_scaling_gpu_large.json",
@@ -237,11 +237,16 @@ def write_rhs_profile_panel(
     return paths
 
 
-def write_diffrax_speedup_panel(
-    data_path: Path = DEFAULT_DIFFRAX_DATA,
-    out_png: Path = DEFAULT_DIFFRAX_PNG,
+def write_legacy_two_device_speedup_panel(
+    data_path: Path = DEFAULT_LEGACY_SPEEDUP_DATA,
+    out_png: Path = DEFAULT_LEGACY_SPEEDUP_PNG,
 ) -> dict[str, str]:
-    """Plot two-device diffrax speedup from the tracked CSV sweep."""
+    """Plot the archived two-device linear speedup from the tracked CSV sweep.
+
+    The sweep was measured on the Diffrax linear route that GKX no longer
+    ships; the CSV is retained as a historical engineering record and is not
+    reproducible from the current source.
+    """
 
     import matplotlib
 
@@ -276,7 +281,9 @@ def write_diffrax_speedup_panel(
     ax.set_ylabel("Speedup (1x / 2x)")
     ax.set_xlabel("Linear integration steps per run")
     ax.set_xticks(sorted(df[df["backend"].isin(["cpu", "cuda"])]["steps"].unique()))
-    ax.set_title("Two-device diffrax scaling (Ny=64, Nz=128, Nl=6, Nm=6)")
+    ax.set_title(
+        "Archived two-device linear scaling (Ny=64, Nz=128, Nl=6, Nm=6)"
+    )
     ax.legend(loc="lower right", frameon=False)
     ax.grid(True, alpha=0.25)
     fig.tight_layout()
@@ -601,10 +608,12 @@ def write_nonlinear_sharding_artifacts(
     }
 
 
-def build_diffrax_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Plot two-device diffrax scaling.")
-    parser.add_argument("--data", type=Path, default=DEFAULT_DIFFRAX_DATA)
-    parser.add_argument("--out-png", type=Path, default=DEFAULT_DIFFRAX_PNG)
+def build_legacy_two_device_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Plot the archived two-device linear scaling sweep."
+    )
+    parser.add_argument("--data", type=Path, default=DEFAULT_LEGACY_SPEEDUP_DATA)
+    parser.add_argument("--out-png", type=Path, default=DEFAULT_LEGACY_SPEEDUP_PNG)
     return parser
 
 
@@ -661,9 +670,9 @@ def build_rhs_profile_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main_diffrax_speedup(argv: list[str] | None = None) -> int:
-    args = build_diffrax_parser().parse_args(argv)
-    paths = write_diffrax_speedup_panel(args.data, args.out_png)
+def main_legacy_two_device(argv: list[str] | None = None) -> int:
+    args = build_legacy_two_device_parser().parse_args(argv)
+    paths = write_legacy_two_device_speedup_panel(args.data, args.out_png)
     print(f"Wrote {paths['png']}")
     return 0
 
@@ -731,7 +740,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.add_argument(
             "command",
             choices=(
-                "diffrax-speedup",
+                "legacy-two-device",
                 "independent-ky",
                 "rhs-profile",
                 "nonlinear-sharding",
@@ -740,8 +749,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 2
     command, rest = tokens[0], tokens[1:]
-    if command == "diffrax-speedup":
-        return main_diffrax_speedup(rest)
+    if command == "legacy-two-device":
+        return main_legacy_two_device(rest)
     if command == "independent-ky":
         return main_independent_ky(rest)
     if command == "rhs-profile":

@@ -95,7 +95,7 @@ group = "required_core"
 status = "validated_scoped"
 gkx_owner = "gkx.solvers.time and gkx.workflows.runtime"
 comparison_owner = "src/ts_rk3.cu, src/ts_rk4.cu, src/ts_sspx2.cu, src/ts_sspx3.cu, and src/ts_k10.cu"
-evidence = "Euler/RK2/RK3/RK4/SSPx3/K10 observed-order tests plus fixed-CFL and Diffrax adaptive-path gates; identical method names are not assumed to imply identical tableaux"
+evidence = "Euler/RK2/RK3/RK4/SSPx3/K10 observed-order tests plus fixed-CFL gates; identical method names are not assumed to imply identical tableaux"
 
 [[capabilities]]
 id = "dominant_eigenmode_solver"

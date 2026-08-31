@@ -13,7 +13,6 @@ import numpy as np
 import pytest
 
 import gkx.workflows.runtime.startup as startup
-from gkx.diagnostics.analysis import late_time_linear_metrics
 from gkx.config import (
     CycloneBaseCase,
     GeometryConfig,
@@ -73,7 +72,7 @@ def _base_runtime_cfg() -> RuntimeConfig:
     return RuntimeConfig(
         grid=GridConfig(Nx=1, Ny=8, Nz=16, Lx=6.28, Ly=6.28, boundary="periodic"),
         time=TimeConfig(
-            t_max=0.2, dt=0.01, method="rk2", use_diffrax=False, sample_stride=1
+            t_max=0.2, dt=0.01, method="rk2", sample_stride=1
         ),
         geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
         init=InitializationConfig(
@@ -826,75 +825,6 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
     assert diagnostic_kwargs["implicit_preconditioner"] == "hermite-line"
 
 
-def test_runtime_linear_diffrax_project_mode_keeps_full_field_history(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import gkx.runtime as runtime
-
-    cfg0 = _base_runtime_cfg()
-    cfg = replace(
-        cfg0,
-        time=replace(cfg0.time, use_diffrax=True, sample_stride=1, dt=0.01, t_max=0.03),
-    )
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
-        "_build_initial_condition",
-        lambda *args, **kwargs: np.zeros(
-            (1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64
-        ),
-    )
-
-    def _fake_integrate_linear_from_config(*args, **kwargs):
-        assert kwargs["save_mode"] is None
-        phi_t = np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
-        return np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64), phi_t
-
-    monkeypatch.setattr(
-        runtime, "integrate_linear_from_config", _fake_integrate_linear_from_config
-    )
-    gamma_ref = 0.25
-    omega_ref = -0.12
-    t_saved = np.asarray([0.01, 0.02, 0.03], dtype=float)
-    monkeypatch.setattr(
-        runtime,
-        "extract_mode_time_series",
-        lambda phi_t, sel, method="project": np.exp(
-            (gamma_ref - 1j * omega_ref) * t_saved
-        ).astype(np.complex128),
-    )
-    monkeypatch.setattr(
-        runtime,
-        "extract_eigenfunction",
-        lambda *args, **kwargs: np.ones(grid.z.size, dtype=np.complex128),
-    )
-    monkeypatch.setattr(
-        runtime,
-        "apply_diagnostic_normalization",
-        lambda gamma, omega, **kwargs: (gamma, omega),
-    )
-
-    res = run_runtime_linear(
-        cfg,
-        ky_target=0.1,
-        Nl=3,
-        Nm=4,
-        solver="time",
-        fit_signal="phi",
-        mode_method="project",
-    )
-
-    assert res.fit_signal_used == "phi"
-    metrics = late_time_linear_metrics(res, tail_fraction=2.0 / 3.0)
-    assert res.gamma == pytest.approx(gamma_ref, rel=1.0e-3)
-    assert res.omega == pytest.approx(omega_ref, rel=1.0e-3)
-    assert metrics.gamma_fit == pytest.approx(gamma_ref, rel=1.0e-3)
-    assert metrics.omega_fit == pytest.approx(omega_ref, rel=1.0e-3)
-
-
 def test_runtime_linear_forwards_velocity_parallel_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -904,7 +834,7 @@ def test_runtime_linear_forwards_velocity_parallel_config(
     cfg = replace(
         cfg0,
         time=replace(
-            cfg0.time, use_diffrax=False, sample_stride=1, dt=0.01, t_max=0.03
+            cfg0.time, sample_stride=1, dt=0.01, t_max=0.03
         ),
         parallel=RuntimeParallelConfig(
             strategy="velocity", axis="hermite", backend="auto", num_devices=1
@@ -974,84 +904,6 @@ def test_runtime_linear_forwards_velocity_parallel_config(
             solver="time",
             fit_signal="auto",
         )
-
-
-def test_runtime_linear_diffrax_auto_fit_with_density_keeps_full_fields(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import gkx.runtime as runtime
-
-    cfg0 = _base_runtime_cfg()
-    cfg = replace(
-        cfg0,
-        time=replace(cfg0.time, use_diffrax=True, sample_stride=1, dt=0.01, t_max=0.03),
-    )
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
-        "_build_initial_condition",
-        lambda *args, **kwargs: np.zeros(
-            (1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64
-        ),
-    )
-
-    def _fake_integrate_linear_from_config(*args, **kwargs):
-        assert kwargs["save_mode"] is None
-        assert kwargs["save_field"] == "phi+density"
-        phi_t = np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
-        density_t = 3.0 * np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
-        return np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64), (
-            phi_t,
-            density_t,
-        )
-
-    monkeypatch.setattr(
-        runtime, "integrate_linear_from_config", _fake_integrate_linear_from_config
-    )
-    monkeypatch.setattr(
-        runtime,
-        "extract_mode_time_series",
-        lambda arr, sel, method="project": (
-            np.asarray([1.0, 1.1, 1.2], dtype=np.complex128)
-            if np.max(np.abs(arr)) < 2.0
-            else np.asarray([1.0, 2.0, 4.0], dtype=np.complex128)
-        ),
-    )
-    monkeypatch.setattr(
-        runtime,
-        "fit_growth_rate_auto_with_stats",
-        lambda t, signal, **kwargs: (
-            (0.05, -0.02, 0.01, 0.03, 1.0, 0.0)
-            if np.max(np.abs(signal)) < 2.0
-            else (0.2, -0.08, 0.01, 0.03, 2.0, 0.0)
-        ),
-    )
-    monkeypatch.setattr(
-        runtime,
-        "extract_eigenfunction",
-        lambda *args, **kwargs: np.ones(grid.z.size, dtype=np.complex128),
-    )
-    monkeypatch.setattr(
-        runtime,
-        "apply_diagnostic_normalization",
-        lambda gamma, omega, **kwargs: (gamma, omega),
-    )
-
-    res = run_runtime_linear(
-        cfg,
-        ky_target=0.1,
-        Nl=3,
-        Nm=4,
-        solver="time",
-        fit_signal="auto",
-        mode_method="project",
-    )
-
-    assert res.fit_signal_used == "density"
-    assert np.allclose(res.signal, np.array([1.0, 2.0, 4.0]))
 
 
 def test_runtime_linear_auto_solver_falls_back_to_krylov(
@@ -1148,7 +1000,7 @@ def test_prepare_runtime_nonlinear_reuses_existing_execution_contract() -> None:
         _base_runtime_cfg(),
         grid=GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0, boundary="periodic"),
         time=TimeConfig(
-            t_max=0.02, dt=0.01, method="rk2", use_diffrax=False, fixed_dt=True
+            t_max=0.02, dt=0.01, method="rk2", fixed_dt=True
         ),
         species=(RuntimeSpeciesConfig(name="ion"),),
         physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
@@ -2033,7 +1885,6 @@ def test_runtime_nonlinear_adaptive_dt() -> None:
             t_max=0.2,
             dt=0.01,
             method="rk2",
-            use_diffrax=False,
             sample_stride=1,
             fixed_dt=False,
             dt_min=1.0e-5,
@@ -2058,7 +1909,6 @@ def test_runtime_nonlinear_adaptive_default_steps_match_integrator_dt_cap() -> N
             t_max=0.2,
             dt=0.01,
             method="rk3",
-            use_diffrax=False,
             sample_stride=1,
             diagnostics_stride=1,
             fixed_dt=False,
@@ -2084,7 +1934,6 @@ def test_runtime_nonlinear_adaptive_default_steps_chunk_until_tmax(monkeypatch) 
             t_max=0.25,
             dt=0.1,
             method="rk3",
-            use_diffrax=False,
             sample_stride=2,
             diagnostics_stride=2,
             fixed_dt=False,
@@ -2286,7 +2135,6 @@ def test_runtime_nonlinear_dealias_toggle_executes() -> None:
             t_max=0.03,
             dt=0.01,
             method="rk2",
-            use_diffrax=False,
             sample_stride=1,
             diagnostics_stride=1,
             nonlinear_dealias=False,
@@ -2345,7 +2193,6 @@ def test_runtime_nonlinear_resolves_cfl_factor(
             t_max=0.1,
             dt=0.1,
             method="rk3",
-            use_diffrax=False,
             sample_stride=1,
             diagnostics_stride=1,
             fixed_dt=False,
@@ -2637,7 +2484,6 @@ def test_runtime_linear_accepts_miller_model_via_generated_eik(
             t_max=0.2,
             dt=0.01,
             method="rk2",
-            use_diffrax=False,
             sample_stride=1,
             fixed_dt=True,
         ),
@@ -2745,7 +2591,6 @@ def test_runtime_linear_explicit_time_root_level_geometry_matches_analytic_refer
             t_max=0.08,
             dt=0.02,
             method="rk4",
-            use_diffrax=False,
             sample_stride=1,
             fixed_dt=True,
         ),
@@ -2826,7 +2671,6 @@ z_max = {3.0 * np.pi}
 t_max = 0.08
 dt = 0.02
 method = "rk4"
-use_diffrax = false
 sample_stride = 1
 fixed_dt = true
 
@@ -2868,7 +2712,6 @@ diagnostic_norm = "none"
             t_max=0.08,
             dt=0.02,
             method="rk4",
-            use_diffrax=False,
             sample_stride=1,
             fixed_dt=True,
         ),
@@ -2915,7 +2758,6 @@ def test_runtime_nonlinear_accepts_imported_eik_geometry_aliases(
             t_max=0.04,
             dt=0.02,
             method="rk3",
-            use_diffrax=False,
             sample_stride=1,
             diagnostics_stride=1,
             fixed_dt=True,
@@ -3252,7 +3094,6 @@ def test_runtime_nonlinear_mode_selection_respects_dealias(monkeypatch) -> None:
             t_max=0.02,
             dt=0.01,
             method="rk2",
-            use_diffrax=False,
             sample_stride=1,
             diagnostics_stride=1,
             nonlinear_dealias=True,
@@ -3317,7 +3158,6 @@ def test_runtime_nonlinear_mode_selection_honors_kx_target(monkeypatch) -> None:
             t_max=0.02,
             dt=0.01,
             method="rk3",
-            use_diffrax=False,
             sample_stride=1,
             diagnostics_stride=1,
             nonlinear_dealias=False,
@@ -3422,7 +3262,6 @@ boundary = "periodic"
 t_max = 0.02
 dt = 0.01
 method = "euler"
-use_diffrax = false
 sample_stride = 1
 
 [geometry]

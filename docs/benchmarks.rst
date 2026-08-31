@@ -459,8 +459,7 @@ The current extended panel covers:
 
 The kinetic-electron scan is defined by
 ``examples/linear/axisymmetric/runtime_kinetic_electron.toml`` and runs through
-the unified runtime API. Native fixed-step RK4 is the default owner; pass
-``--diffrax`` to the benchmark driver only for migration-oracle comparisons.
+the unified runtime API. Native fixed-step RK4 is the sole owner.
 Its effective reference seed, linked-boundary damping, species, and
 electromagnetic toggles are explicit in that file rather than being applied by
 a hidden benchmark wrapper.
@@ -487,8 +486,7 @@ near ``-0.986``.
 The authoritative executable input is
 ``examples/linear/axisymmetric/runtime_tem.toml``. It uses the unified runtime
 schema, including electron-only Gaussian moment initialization, and native
-fixed-step RK2 is the default owner. The benchmark driver's ``--diffrax``
-option retains the independent migration oracle. The driver runs that file
+fixed-step RK2 is the sole owner. The driver runs that file
 through the same runtime scan path exposed to users. A state/parameter/RHS
 identity test protects the migration from the former case-specific runner.
 

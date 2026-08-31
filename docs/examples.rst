@@ -480,14 +480,12 @@ The kinetic-electron script loads
 ``examples/linear/axisymmetric/runtime_kinetic_electron.toml``. The same input
 can be run directly with
 ``gkx examples/linear/axisymmetric/runtime_kinetic_electron.toml``.
-It defaults to the native RK4 owner; ``--diffrax`` on the Python benchmark
-driver selects the temporary migration oracle.
+It runs on the native RK4 owner.
 
 The TEM script loads ``examples/linear/axisymmetric/runtime_tem.toml``; users
 can run the same single-mode case directly with
 ``gkx examples/linear/axisymmetric/runtime_tem.toml``.
-It defaults to native RK2, with the same ``--diffrax`` oracle option on the
-Python benchmark driver.
+It runs on the native RK2 owner.
 
 Foundational demos
 ------------------
@@ -501,7 +499,6 @@ blocks without running a full benchmark case:
    python examples/theory_and_demos/cyclone_geometry.py
    python examples/theory_and_demos/autodiff_inverse_growth.py
    python examples/theory_and_demos/autodiff_inverse_twomode.py
-   python examples/theory_and_demos/diffrax_linear_demo.py
    python examples/theory_and_demos/example.py
    python examples/theory_and_demos/gradB_coupling_hl_1d.py
    python examples/theory_and_demos/linear_rhs_demo.py

@@ -57,5 +57,5 @@
     "passed": false
   },
   "interpretation": "The source refactor removes one eager SSPX3 RHS call and centralizes stage equations, but XLA already dead-code-eliminated the unused result in compiled execution. No end-to-end speedup is claimed.",
-  "reproduction": "PYTHONPATH=<checkout>/src python benchmarks/performance/benchmark_integrators.py --skip-diffrax --method sspx3 --steps 480 --dt 0.005 --Nl 7 --Nm 14 --ky 0.3 --warmup 1 --repeat 5 --label <label> --out-json <output.json>"
+  "reproduction": "PYTHONPATH=<checkout>/src python benchmarks/performance/benchmark_integrators.py --method sspx3 --steps 480 --dt 0.005 --Nl 7 --Nm 14 --ky 0.3 --warmup 1 --repeat 5 --label <label> --out-json <output.json>"
 }
