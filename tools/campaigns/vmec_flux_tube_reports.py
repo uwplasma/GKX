@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from gkx.geometry.vmec_eik import _VMEC_EIK_DEFAULT_REQUEST
+
 from dataclasses import dataclass
 from pathlib import Path
 import tempfile
@@ -76,25 +78,6 @@ _PRODUCTION_CORE_ARRAY_NAMES = (
     "jacobian",
     "grho",
 )
-_VMEC_EIK_DEFAULT_REQUEST: dict[str, object] = {
-    "y0": 10.0,
-    "x0": None,
-    "jtwist": None,
-    "beta": 0.0,
-    "npol": 1.0,
-    "npol_min": None,
-    "isaxisym": False,
-    "which_crossing": None,
-    "betaprim": None,
-    "z": (1.0, -1.0),
-    "mass": (1.0, 2.7e-4),
-    "dens": (1.0, 1.0),
-    "temp": (1.0, 1.0),
-    "tprim": (3.0, 0.0),
-    "fprim": (1.0, 0.0),
-    "vnewk": (0.0, 0.0),
-    "species_type": ("ion", "electron"),
-}
 
 
 def _normalized_max_abs(metrics: dict[str, object]) -> float:

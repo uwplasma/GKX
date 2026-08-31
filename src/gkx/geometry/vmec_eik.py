@@ -230,3 +230,26 @@ def generate_runtime_vmec_eik(
         )
 
     return generate_vmec_eik_internal(output_path=resolved_path, request=request)
+
+# Default EIK request template. This is a geometry default rather than report
+# machinery, so it stays in the package even though the parity report builders
+# that consume it moved to tools/campaigns.
+_VMEC_EIK_DEFAULT_REQUEST: dict[str, object] = {
+    "y0": 10.0,
+    "x0": None,
+    "jtwist": None,
+    "beta": 0.0,
+    "npol": 1.0,
+    "npol_min": None,
+    "isaxisym": False,
+    "which_crossing": None,
+    "betaprim": None,
+    "z": (1.0, -1.0),
+    "mass": (1.0, 2.7e-4),
+    "dens": (1.0, 1.0),
+    "temp": (1.0, 1.0),
+    "tprim": (3.0, 0.0),
+    "fprim": (1.0, 0.0),
+    "vnewk": (0.0, 0.0),
+    "species_type": ("ion", "electron"),
+}

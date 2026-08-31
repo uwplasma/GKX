@@ -10,12 +10,9 @@ from typing import Any
 from gkx.geometry import FluxTubeGeometryData
 import gkx.geometry.booz_xform_bridge as _booz_bridge
 import gkx.geometry.vmec_boozer_core as _vmec_boozer_core
-import gkx.geometry.vmec_flux_tube_reports as _vmec_flux_tube_reports
-import gkx.geometry.vmec_state_sensitivity as _vmec_state_sensitivity
 import gkx.geometry.vmec_tensor_mapping as _vmec_tensor_mapping
 from gkx.geometry.autodiff_checks import (
     _json_ready as _json_ready,
-    _sensitivity_conditioning_metadata,
     finite_difference_jacobian,
     observable_gradient_validation_report,
 )
@@ -115,40 +112,6 @@ def booz_xform_spectral_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
     )
 
 
-def _call_with_vmec_state_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> Any:
-    with _patched_module_attrs(
-        _vmec_state_sensitivity,
-        {
-            "discover_differentiable_geometry_backends": (
-                discover_differentiable_geometry_backends
-            ),
-            "finite_difference_jacobian": finite_difference_jacobian,
-            "_sensitivity_conditioning_metadata": (
-                _sensitivity_conditioning_metadata
-            ),
-        },
-    ):
-        return func(*args, **kwargs)
-
-
-@wraps(_vmec_state_sensitivity.vmex_metric_tensor_sensitivity_report)
-def vmex_metric_tensor_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
-    return _call_with_vmec_state_facade_hooks(
-        _vmec_state_sensitivity.vmex_metric_tensor_sensitivity_report,
-        *args,
-        **kwargs,
-    )
-
-
-@wraps(_vmec_state_sensitivity.vmex_field_line_tensor_sensitivity_report)
-def vmex_field_line_tensor_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
-    return _call_with_vmec_state_facade_hooks(
-        _vmec_state_sensitivity.vmex_field_line_tensor_sensitivity_report,
-        *args,
-        **kwargs,
-    )
-
-
 @wraps(_vmec_tensor_mapping.vmex_flux_tube_mapping_from_state)
 def vmex_flux_tube_mapping_from_state(*args: Any, **kwargs: Any) -> Any:
     return _vmec_tensor_mapping.vmex_flux_tube_mapping_from_state(
@@ -212,46 +175,6 @@ def flux_tube_geometry_from_vmec_boozer_state(
     )
 
 
-def _call_with_vmec_report_facade_hooks(func: Any, *args: Any, **kwargs: Any) -> Any:
-    with _patched_module_attrs(
-        _vmec_flux_tube_reports,
-        {
-            "discover_differentiable_geometry_backends": (
-                discover_differentiable_geometry_backends
-            ),
-            "flux_tube_geometry_from_mapping": flux_tube_geometry_from_mapping,
-            "geometry_sensitivity_report": geometry_sensitivity_report,
-            "vmex_boozer_equal_arc_core_profiles_from_state": (
-                vmex_boozer_equal_arc_core_profiles_from_state
-            ),
-            "vmex_flux_tube_mapping_from_state": (
-                vmex_flux_tube_mapping_from_state
-            ),
-            "_array_parity_metrics": _array_parity_metrics,
-            "_scalar_parity_metrics": _scalar_parity_metrics,
-        },
-    ):
-        return func(*args, **kwargs)
-
-
-@wraps(_vmec_flux_tube_reports.vmex_flux_tube_sensitivity_report)
-def vmex_flux_tube_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
-    return _call_with_vmec_report_facade_hooks(
-        _vmec_flux_tube_reports.vmex_flux_tube_sensitivity_report,
-        *args,
-        **kwargs,
-    )
-
-
-@wraps(_vmec_flux_tube_reports.vmex_flux_tube_array_parity_report)
-def vmex_flux_tube_array_parity_report(*args: Any, **kwargs: Any) -> Any:
-    return _call_with_vmec_report_facade_hooks(
-        _vmec_flux_tube_reports.vmex_flux_tube_array_parity_report,
-        *args,
-        **kwargs,
-    )
-
-
 __all__ = [
     "booz_xform_spectral_sensitivity_report",
     "discover_differentiable_geometry_backends",
@@ -265,11 +188,7 @@ __all__ = [
     "geometry_sensitivity_report",
     "observable_gradient_validation_report",
     "vmex_boozer_equal_arc_core_profiles_from_state",
-    "vmex_field_line_tensor_sensitivity_report",
-    "vmex_flux_tube_array_parity_report",
     "vmex_flux_tube_mapping_from_state",
-    "vmex_flux_tube_sensitivity_report",
-    "vmex_metric_tensor_sensitivity_report",
     "vmec_boundary_aspect_sensitivity_report",
     "vmec_field_line_tensor_observable_names",
     "vmec_metric_tensor_observable_names",

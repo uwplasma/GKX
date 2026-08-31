@@ -167,13 +167,6 @@ Differentiable Boozer Bridge
    :members:
    :private-members:
 
-Differentiable VMEC-State Sensitivity
--------------------------------------
-
-.. automodule:: gkx.geometry.vmec_state_sensitivity
-   :members:
-   :private-members:
-
 Differentiable VMEC Boozer Core
 -------------------------------
 
@@ -192,13 +185,6 @@ Differentiable VMEC Boozer Constants
 ------------------------------------
 
 .. automodule:: gkx.geometry.vmec_boozer_constants
-   :members:
-   :private-members:
-
-Differentiable VMEC Flux-Tube Reports
--------------------------------------
-
-.. automodule:: gkx.geometry.vmec_flux_tube_reports
    :members:
    :private-members:
 
