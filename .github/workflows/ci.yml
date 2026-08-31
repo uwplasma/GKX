@@ -216,8 +216,7 @@ jobs:
           - name: nonlinear-core
             files: >-
               tests/unit/nonlinear/test_nonlinear.py
-              tests/unit/nonlinear/test_nonlinear_window_gradient_matrix.py
-              tests/unit/nonlinear/test_adaptive_chunk_memory.py
+              tests/unit/nonlinear/test_nonlinear_helpers_extra.py
               tests/unit/nonlinear/test_nonlinear_exb.py
               tests/validation/benchmarks/test_benchmark_contracts.py
               tests/integration/runtime/test_runtime_diagnostics.py
@@ -342,7 +341,7 @@ jobs:
             tests/integration/runtime/test_cli.py \
             tests/unit/diagnostics/test_plotting.py \
             tests/integration/runtime/test_runtime_artifacts.py \
-            tests/unit/nonlinear/test_secondary.py \
+            tests/unit/nonlinear/test_nonlinear_exb.py \
             tests/unit/diagnostics/test_analysis.py \
             tests/unit/diagnostics/test_timestep_cost.py \
             tests/validation/benchmarks/test_benchmarking.py \
