@@ -1,10 +1,14 @@
 {
   "animated_loop": "vmex_mirror_gkx_loop.webp",
+  "bmag_max_over_min": 1.7784889820898229,
+  "bmag_max_over_min_note": "Ratio of the two flat legs of the closed racetrack on the sampled field line, not a throat-to-midplane mirror ratio: the modulation is produced by the rotating elliptical cross-section, so it tracks cross_section_elongation_squared and not straight_length or return_radius. See the closed VMEX mirror geometry section of docs/geometry.rst.",
+  "cross_section_elongation_squared": 1.7777777777777781,
   "device": "cpu:0",
+  "equilibrium_state": "seeded initial state from build_stellarator_mirror_hybrid, not a solved fixed-boundary equilibrium",
   "figure": "vmex_mirror_gkx_showcase.webp",
   "generator": "tools/artifacts/build_vmex_mirror_gkx_artifacts.py",
-  "gkx_commit": "b155cfc64b5017f7ceaee3d06526131b8b6a11e7",
-  "gradpar": 0.11172655358143961,
+  "gkx_commit": "cee8408bad265968d3c78bd9683c01ba2c49ee35",
+  "gradpar": 0.11172655358143962,
   "inputs": {
     "arc_oversample": 8,
     "axial_flux_derivative": 0.02,
@@ -24,18 +28,19 @@
   },
   "jax_version": "0.10.2",
   "kind": "vmex_closed_mirror_gkx_showcase",
-  "mirror_ratio": 1.7784889820898235,
   "movie": "vmex_mirror_gkx_rotation.mp4",
   "objectives": {
-    "gamma": 0.13907072654347788,
-    "kperp_eff2": 0.26519461271219086,
-    "linear_heat_flux_weight": 1.9028109563693314,
+    "gamma": 0.1390707265434779,
+    "kperp_eff2": 0.2651946127121912,
+    "linear_heat_flux_weight": 1.9028109563693363,
     "linear_particle_flux_weight": 0.0,
-    "mixing_length_heat_flux_proxy": 0.9978532349160659,
-    "omega": -0.14938341334279895
+    "mixing_length_heat_flux_proxy": 0.9978532349160674,
+    "omega": -0.1493834133427985
   },
+  "plot_convention": "the plotted parallel profiles are rolled so z=0 is the |B| minimum; the recorded numbers use the unrolled geometry",
   "precision": "float64",
   "scope": "closed periodic mirror-hybrid; no open-end kinetic claim",
+  "seed_force_residual_normalized_rms": 0.6115025145309694,
   "snapshot": "vmex_mirror_gkx_snapshot.webp",
   "vmex_commit": "597e00220a0e3411c8deae231bd4ddae8ec23cb8"
 }

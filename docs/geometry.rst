@@ -361,7 +361,7 @@ correct for the seeded state and reproduce to :math:`10^{-15}`; they are not
 properties of a converged VMEX equilibrium, and solving this configuration
 changes them.
 
-The README also carries a 15 kB :download:`poster snapshot
+This page also tracks a 15 kB :download:`poster snapshot
 <_static/vmex_mirror_gkx_snapshot.webp>` and a 110 kB, 36-frame
 :download:`animated WebP loop <_static/vmex_mirror_gkx_loop.webp>`. The
 companion :download:`rotating field-line movie
