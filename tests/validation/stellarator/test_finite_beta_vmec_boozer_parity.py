@@ -208,7 +208,9 @@ def _finite_beta_case_paths(directory: Path, case: str) -> tuple[Path, Path]:
 def _imported_runtime_geometry(wout_path: Path, *, torflux: float, ntheta: int):
     from gkx.geometry import load_imported_geometry_netcdf
     from gkx.geometry.imported_vmec import generate_vmec_eik_internal
-    from gkx.geometry.vmec_flux_tube_reports import _VMEC_EIK_DEFAULT_REQUEST
+    # The report builders moved to tools/campaigns; the default EIK request is
+    # a constant this parity check needs, not report machinery.
+    from gkx.geometry.vmec_eik import _VMEC_EIK_DEFAULT_REQUEST
 
     payload = dict(_VMEC_EIK_DEFAULT_REQUEST)
     payload.update(

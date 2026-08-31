@@ -1589,9 +1589,7 @@ owned_modules = [
   "gkx.geometry.vmec_boozer_derivatives",
   "gkx.geometry.vmec_boozer_drifts",
   "gkx.geometry.vmec_field_line_sampling",
-  "gkx.geometry.vmec_flux_tube_reports",
   "gkx.geometry.vmec_state_controls",
-  "gkx.geometry.vmec_state_sensitivity",
   "gkx.geometry.vmec_tensor_mapping",
 ]
 owner_lane = "in-memory vmex/booz_xform_jax bridge into the flux-tube geometry contract"

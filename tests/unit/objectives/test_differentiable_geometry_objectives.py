@@ -27,9 +27,17 @@ import gkx.geometry.vmec_boozer_core as vmec_boozer_core
 import gkx.geometry.vmec_boozer_constants as vmec_boozer_constants
 import gkx.geometry.vmec_boozer_derivatives as vmec_boozer_derivatives
 import gkx.geometry.vmec_field_line_sampling as vmec_field_line_sampling
-import gkx.geometry.vmec_flux_tube_reports as vmec_flux_tube_reports
+import tools.campaigns.vmec_flux_tube_reports as vmec_flux_tube_reports
+from tools.campaigns.vmec_flux_tube_reports import (
+    vmex_flux_tube_array_parity_report,
+    vmex_flux_tube_sensitivity_report,
+)
 import gkx.geometry.vmec_state_controls as vmec_state_controls
-import gkx.geometry.vmec_state_sensitivity as vmec_state_sensitivity
+import tools.campaigns.vmec_state_sensitivity as vmec_state_sensitivity
+from tools.campaigns.vmec_state_sensitivity import (
+    vmex_field_line_tensor_sensitivity_report,
+    vmex_metric_tensor_sensitivity_report,
+)
 import gkx.geometry.vmec_tensor_mapping as vmec_tensor_mapping
 from gkx.geometry.differentiable import (
     _array_parity_metrics,
@@ -54,10 +62,6 @@ from gkx.geometry.differentiable import (
     geometry_observable_names,
     geometry_sensitivity_report,
     vmex_boozer_equal_arc_core_profiles_from_state,
-    vmex_field_line_tensor_sensitivity_report,
-    vmex_flux_tube_array_parity_report,
-    vmex_flux_tube_sensitivity_report,
-    vmex_metric_tensor_sensitivity_report,
     vmec_boundary_aspect_sensitivity_report,
     vmec_field_line_tensor_observable_names,
     vmec_metric_tensor_observable_names,
@@ -155,16 +159,16 @@ def test_differentiable_geometry_facade_preserves_split_symbol_identity() -> Non
         diff_geom.booz_xform_spectral_sensitivity_report
         is not booz_bridge.booz_xform_spectral_sensitivity_report
     )
-    assert callable(diff_geom.vmex_metric_tensor_sensitivity_report)
-    assert callable(diff_geom.vmex_field_line_tensor_sensitivity_report)
-    assert (
-        diff_geom.vmex_metric_tensor_sensitivity_report
-        is not vmec_state_sensitivity.vmex_metric_tensor_sensitivity_report
-    )
-    assert (
-        diff_geom.vmex_field_line_tensor_sensitivity_report
-        is not vmec_state_sensitivity.vmex_field_line_tensor_sensitivity_report
-    )
+    # The sensitivity and parity REPORT builders moved to tools/campaigns; the
+    # facade no longer wraps them, and the package no longer advertises them.
+    for gone in (
+        "vmex_metric_tensor_sensitivity_report",
+        "vmex_field_line_tensor_sensitivity_report",
+        "vmex_flux_tube_sensitivity_report",
+        "vmex_flux_tube_array_parity_report",
+    ):
+        assert not hasattr(diff_geom, gone)
+        assert not hasattr(gkx, gone)
     assert callable(diff_geom.vmex_flux_tube_mapping_from_state)
     assert (
         diff_geom.vmex_flux_tube_mapping_from_state
@@ -185,16 +189,6 @@ def test_differentiable_geometry_facade_preserves_split_symbol_identity() -> Non
     assert (
         diff_geom.vmex_boozer_equal_arc_core_profiles_from_state
         is not vmec_boozer_core.vmex_boozer_equal_arc_core_profiles_from_state
-    )
-    assert callable(diff_geom.vmex_flux_tube_sensitivity_report)
-    assert callable(diff_geom.vmex_flux_tube_array_parity_report)
-    assert (
-        diff_geom.vmex_flux_tube_sensitivity_report
-        is not vmec_flux_tube_reports.vmex_flux_tube_sensitivity_report
-    )
-    assert (
-        diff_geom.vmex_flux_tube_array_parity_report
-        is not vmec_flux_tube_reports.vmex_flux_tube_array_parity_report
     )
     assert (
         diff_geom.vmec_field_line_tensor_observable_names
@@ -968,7 +962,6 @@ def test_vmex_flux_tube_sensitivity_report_starts_from_real_vmec_state_when_avai
 
     report = vmex_flux_tube_sensitivity_report(ntheta=12, fd_step=2.0e-6)
 
-    assert gkx.vmex_flux_tube_sensitivity_report is vmex_flux_tube_sensitivity_report
     assert "available" in report
     if not report["available"]:
         assert report["sensitivity"] is None
@@ -1009,7 +1002,6 @@ def test_vmex_flux_tube_array_parity_report_tracks_production_gap_when_available
 
     report = vmex_flux_tube_array_parity_report(ntheta=8)
 
-    assert gkx.vmex_flux_tube_array_parity_report is vmex_flux_tube_array_parity_report
     assert "available" in report
     if not report["available"]:
         assert "reason" in report or "error" in report
@@ -1225,10 +1217,6 @@ def test_vmex_metric_tensor_sensitivity_report_checks_real_metric_tensors_when_a
     report = vmex_metric_tensor_sensitivity_report(fd_step=2.0e-5)
 
     assert (
-        gkx.vmex_metric_tensor_sensitivity_report
-        is vmex_metric_tensor_sensitivity_report
-    )
-    assert (
         gkx.vmec_metric_tensor_observable_names is vmec_metric_tensor_observable_names
     )
     assert "available" in report
@@ -1269,10 +1257,6 @@ def test_vmex_field_line_tensor_sensitivity_report_checks_stellarator_tensors_wh
 
     report = vmex_field_line_tensor_sensitivity_report(ntheta=24, fd_step=1.0e-6)
 
-    assert (
-        gkx.vmex_field_line_tensor_sensitivity_report
-        is vmex_field_line_tensor_sensitivity_report
-    )
     assert (
         gkx.vmec_field_line_tensor_observable_names
         is vmec_field_line_tensor_observable_names
