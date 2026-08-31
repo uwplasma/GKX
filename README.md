@@ -87,7 +87,7 @@ A completed run groups everything under `./<wout-stem>/`:
 | `gkx.restart.nc` | packed Hermite-Laguerre state for continuation |
 | `gkx.{flux_time,flux_spectra,phi2_spectra,snapshot_xy,flux_tube_3d,summary}.png` | the standard figure set |
 
-An under-resolved run says so rather than presenting the number anyway:
+An under-resolved run warns instead of reporting the number:
 
 ```
 warning: heat-flux ky cutoff is unresolved: the highest 10% of retained positive-ky modes reach 100% of the spectral peak (warning threshold 10%). Increase Ny at fixed Ly, then repeat matched Nx/Ny convergence; this warning is necessary, not sufficient, for resolution.
