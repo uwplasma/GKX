@@ -201,16 +201,15 @@ jobs:
               tests/unit/operators/test_operator_kernels.py
               tests/unit/operators/test_terms_assembly.py
               tests/unit/operators/test_terms_fields.py
-              tests/unit/solvers/test_nonlinear_explicit_scan.py
+              tests/unit/solvers/test_time_integrators.py
               tests/unit/operators/test_linear_streaming.py
               tests/unit/solvers/test_linear_krylov_core.py
-              tests/unit/solvers/test_dot_precision_guard.py
           - name: runtime-core
             files: >-
               tests/integration/runtime/test_runtime_config.py
               tests/integration/runtime/test_runtime_helpers.py
               tests/integration/runtime/test_runtime_runner.py
-              tests/unit/solvers/test_runners.py
+              tests/unit/solvers/test_runners_and_orchestration.py
               tests/integration/runtime/test_cli.py
               tests/integration/examples/test_examples.py
           - name: nonlinear-core
@@ -227,7 +226,7 @@ jobs:
             files: >-
               tests/unit/parallel/test_parallel_core.py
               tests/unit/parallel/test_parallel_nonlinear_routing.py
-              tests/unit/solvers/test_sharded_integrators.py
+              tests/unit/solvers/test_runners_and_orchestration.py
               tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py
               tests/unit/objectives/test_autodiff_solver_objectives.py
               tests/unit/objectives/test_differentiable_geometry_objectives.py
@@ -711,7 +710,7 @@ jobs:
             tests/unit/operators/test_terms_assembly.py \
             tests/unit/operators/test_linear_streaming.py \
             tests/unit/operators/test_terms_fields.py \
-            tests/unit/solvers/test_nonlinear_explicit_scan.py \
+            tests/unit/solvers/test_time_integrators.py \
             tests/unit/nonlinear/test_nonlinear_exb.py \
             tests/unit/nonlinear/test_nonlinear.py \
             --maxfail=1 --disable-warnings \

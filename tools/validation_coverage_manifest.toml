@@ -470,7 +470,7 @@ fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/linear/test_linear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
-  "tests/unit/solvers/test_nonlinear_imex.py",
+  "tests/unit/solvers/test_time_integrators.py",
 ]
 artifact_paths = [
   "docs/_static/cyclone_resolution_observed_order.json",
@@ -680,8 +680,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/solvers/test_nonlinear_explicit_step.py",
-  "tests/unit/solvers/test_nonlinear_imex.py",
+  "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear_exb.py",
   "tests/unit/parallel/test_parallel_nonlinear.py",
   "tests/unit/operators/test_terms_assembly.py",
@@ -794,8 +793,7 @@ numerics_contracts = [
   "state dtype and projection are applied after the final stage for scan-carry stability",
 ]
 fast_tests = [
-  "tests/unit/solvers/test_nonlinear_explicit_step.py",
-  "tests/unit/solvers/test_nonlinear_explicit_scan.py",
+  "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
@@ -833,7 +831,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
-  "tests/unit/solvers/test_nonlinear_explicit_step.py",
+  "tests/unit/solvers/test_time_integrators.py",
 ]
 artifact_paths = [
   "docs/_static/nonlinear_window_statistics.json",
@@ -869,7 +867,7 @@ numerics_contracts = [
   "constant-RHS SSPX3 stage composition gives the same one-step update as the exact constant derivative",
 ]
 fast_tests = [
-  "tests/unit/solvers/test_nonlinear_imex.py",
+  "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
@@ -1812,7 +1810,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/parallel/test_parallel_core.py",
-  "tests/unit/solvers/test_sharded_integrators.py",
+  "tests/unit/solvers/test_runners_and_orchestration.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
 ]
 artifact_paths = [
@@ -1998,7 +1996,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
-  "tests/unit/solvers/test_solver_gradient_gate_modules.py",
+  "tests/unit/solvers/test_runners_and_orchestration.py",
 ]
 artifact_paths = [
   "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
@@ -2030,7 +2028,7 @@ numerics_contracts = [
   "feature extraction must build the same linear cache and quadrature weights used by the promoted solver-objective reports",
 ]
 fast_tests = [
-  "tests/unit/solvers/test_solver_gradient_gate_modules.py",
+  "tests/unit/solvers/test_runners_and_orchestration.py",
 ]
 artifact_paths = [
   "docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
