@@ -389,23 +389,37 @@ def loss(shape):
 heat_flux, gradient = jax.value_and_grad(loss)(shape0)
 ```
 
+![Nonlinear adjoint memory and derivative validation](docs/_static/nonlinear_autodiff_validation.png)
+
 On a 16x16x16 Cyclone case over a 1024-step window, checkpointing cuts measured
 temporary state from 7.82 GB to 187 MB on CPU and 7.80 GB to 148 MB on an RTX
-A4000, for 1.92x and 1.77x more runtime. Adjoint and centered finite differences
-agree to 1e-11 through 512 steps and 2.7e-9 at 1024, inside the 1e-6 gate, and
-part at 2048 where chaotic trajectory separation sets the useful window length.
-[nonlinear autodiff](docs/nonlinear_autodiff.rst).
+A4000, for 1.92x and 1.77x more runtime. The exact discrete differentiation and
+centered finite differences agree to 1e-11 through 512 steps and 2.7e-9 at 1024,
+inside the 1e-6 gate, and part at 2048 where chaotic trajectory separation sets
+the useful window length. [nonlinear autodiff](docs/nonlinear_autodiff.rst).
 
-This composes into shape optimization through turbulence:
-[`QA_optimization.py`](examples/optimization/QA_optimization.py) adds the heat
+### QA shape optimization through turbulence
+
+[`QA_optimization.py`](examples/optimization/QA_optimization.py) adds this heat
 flux as a fourth objective to VMEX's vacuum QA ladder, composing VMEX's implicit
-equilibrium derivative with the exact GKX window derivative. The measured 12.26%
-reduction across 24 nominal pairs is **not statistically resolved** — 4 of 48
-traces fail the per-trace drift test — and is published as preliminary.
-Promotion requires stationary individual traces, autocorrelation-aware batches,
-resolved spectral tails, and grid/timestep convergence. Rows in
-[`qa_transport_summary.csv`](docs/_static/qa_transport_summary.csv); campaign in
-[stellarator optimization](docs/stellarator_optimization.rst).
+equilibrium derivative with the exact GKX window derivative.
+
+![Initial and optimized QA equilibria](docs/_static/qa_transport_equilibria.png)
+
+Eight low-order boundary coefficients move; aspect ratio changes by +0.0115% and
+mean iota by -0.044%, while the QA residual goes from 5.88e-4 to 1.54e-3.
+
+![Matched QA heat-flux traces and convergence](docs/_static/qa_transport_reduction.svg)
+
+The startup spike is excluded and the shaded window is measured. The preliminary
+12.26% reduction across 24 nominal pairs has a conditional 95% CI of
+10.64-13.88%, and is **not statistically resolved**: 4 of 48 nominal traces fail
+the published per-trace final-drift test. Promotion requires stationary
+individual traces, autocorrelation-aware batches, resolved spectral tails, and
+grid/timestep convergence; nonlinear optimization evidence requires matched,
+replicated, long post-saturation windows. Every row is in
+[`qa_transport_summary.csv`](docs/_static/qa_transport_summary.csv); the campaign
+is in [stellarator optimization](docs/stellarator_optimization.rst).
 
 ## How GKX compares
 
