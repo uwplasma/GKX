@@ -21,9 +21,7 @@ EXAMPLES = ROOT / "examples" / "optimization"
 QA_SCRIPT = EXAMPLES / "QA_optimization.py"
 TRANSPORT_SUMMARY = ROOT / "docs" / "_static" / "qa_transport_summary.csv"
 TRANSPORT_TRACES = ROOT / "docs" / "_static" / "qa_transport_traces.csv"
-TRANSPORT_TIMESERIES = (
-    ROOT / "docs" / "_static" / "qa_transport_nominal_timeseries.csv"
-)
+TRANSPORT_TIMESERIES = ROOT / "docs" / "_static" / "qa_transport_nominal_timeseries.csv"
 
 
 def _transport_summary() -> dict[str, dict[str, float]]:
@@ -63,7 +61,7 @@ def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
     assert "p_hyper_m=float(min(20, max(NM // 2, 1)))" in text
     assert "gkx.integrate_nonlinear(" in text
     assert "gkx.nonlinear_heat_flux_window(" in text
-    assert "implicit_jacobian_method=\"auto\"" in text
+    assert 'implicit_jacobian_method="auto"' in text
     assert "objective_function_terms = [" in text
     assert "(qs, 0.0, QA_PRIORITY)," in text
     assert "(opt.aspect_ratio, ASPECT_TARGET, ASPECT_PRIORITY)," in text
@@ -103,9 +101,7 @@ def test_docs_scope_vmex_transport_optimizer_claims() -> None:
 
 def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(
-        encoding="utf-8"
-    )
+    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
     figures = (
         "nonlinear_autodiff_validation.png",
         "qa_transport_equilibria.png",
@@ -183,7 +179,9 @@ def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None
     assert "post-saturation" in normalized_readme.lower()
 
     assert "QA_optimization.py" in docs
-    assert "nonlinear_heat_flux_window" not in docs or "physical heat-flux window" in docs
+    assert (
+        "nonlinear_heat_flux_window" not in docs or "physical heat-flux window" in docs
+    )
     assert ".. figure:: _static/stellarator_itg_optimization_comparison.png" not in docs
     assert "screening diagnostics" in docs
     assert (
@@ -239,21 +237,22 @@ def test_matched_qa_transport_evidence_fails_closed() -> None:
         pairs = int(row["pairs"])
         assert len(case_traces) == 2 * pairs
         for design in ("baseline", "candidate"):
-            seeds = {int(trace["seed"]) for trace in case_traces if trace["design"] == design}
+            seeds = {
+                int(trace["seed"]) for trace in case_traces if trace["design"] == design
+            }
             assert seeds == set(range(pairs))
         assert all(float(trace["tau"]) > 0.0 for trace in case_traces)
         assert all(float(trace["neff"]) > 0.0 for trace in case_traces)
         assert all(
-            int(trace["stationary"])
-            == int(abs(float(trace["trend_percent"])) <= 20.0)
+            int(trace["stationary"]) == int(abs(float(trace["trend_percent"])) <= 20.0)
             for trace in case_traces
         )
         assert row["stationary_traces"] == sum(
             int(trace["stationary"]) for trace in case_traces
         )
-        assert row["nonstationary_traces"] == len(case_traces) - row[
-            "stationary_traces"
-        ]
+        assert (
+            row["nonstationary_traces"] == len(case_traces) - row["stationary_traces"]
+        )
         assert row["resolved_spectra_available"] == 0.0
         assert row["promotion_ready"] == 0.0
 

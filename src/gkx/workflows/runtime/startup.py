@@ -241,7 +241,9 @@ def build_runtime_linear_params(
     has_kinetic_electron = any(float(s.charge) < 0.0 for s in species)
     has_kinetic_ion = any(float(s.charge) > 0.0 for s in species)
     if cfg.physics.adiabatic_electrons and cfg.physics.adiabatic_ions:
-        raise ValueError("adiabatic_electrons and adiabatic_ions are mutually exclusive")
+        raise ValueError(
+            "adiabatic_electrons and adiabatic_ions are mutually exclusive"
+        )
     if cfg.physics.adiabatic_electrons and has_kinetic_electron:
         raise ValueError(
             "adiabatic_electrons=True conflicts with kinetic electron species"

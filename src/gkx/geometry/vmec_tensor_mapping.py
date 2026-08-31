@@ -73,8 +73,14 @@ def from_vmex(
 ) -> Any:
     """Return generic GKX geometry for a solved VMEX toroidal state."""
     mapping = vmex_flux_tube_mapping_from_state(
-        state, runtime, surface_index=surface_index, alpha=alpha, zeta0=zeta0,
-        ntheta=ntheta, equal_arc=equal_arc, arc_oversample=arc_oversample,
+        state,
+        runtime,
+        surface_index=surface_index,
+        alpha=alpha,
+        zeta0=zeta0,
+        ntheta=ntheta,
+        equal_arc=equal_arc,
+        arc_oversample=arc_oversample,
     )
     return _geometry(mapping, "vmex:core.turbulence", validate_finite)
 
@@ -84,7 +90,8 @@ def from_vmex_wout(wout: Any, **geometry_kwargs: Any) -> Any:
     validate_finite = bool(geometry_kwargs.pop("validate_finite", True))
     surface_index = geometry_kwargs.pop("surface_index", None)
     mapping = _vmex_mapping(
-        "gk_fieldline_geometry_from_wout", wout,
+        "gk_fieldline_geometry_from_wout",
+        wout,
         s_index=None if surface_index is None else int(surface_index),
         **geometry_kwargs,
     )
@@ -105,11 +112,17 @@ def from_vmex_mirror(
     except Exception as exc:  # pragma: no cover - environment-dependent
         raise RuntimeError("vmex closed-mirror geometry support is required") from exc
     return _geometry(
-        mirror.gk_closed_fieldline_geometry(state, discretization, axis, **geometry_kwargs),
+        mirror.gk_closed_fieldline_geometry(
+            state, discretization, axis, **geometry_kwargs
+        ),
         "vmex:mirror.turbulence",
         validate_finite,
     )
 
 
-__all__ = ["from_vmex", "from_vmex_mirror", "from_vmex_wout",
-           "vmex_flux_tube_mapping_from_state"]
+__all__ = [
+    "from_vmex",
+    "from_vmex_mirror",
+    "from_vmex_wout",
+    "vmex_flux_tube_mapping_from_state",
+]

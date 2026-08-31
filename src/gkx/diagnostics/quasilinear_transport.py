@@ -83,19 +83,31 @@ class QuasilinearTransportResult:
         payload["channels"] = list(self.channels)
         payload["species"] = list(self.species)
         payload["heat_flux_weight_species"] = list(self.heat_flux_weight_species)
-        payload["particle_flux_weight_species"] = list(self.particle_flux_weight_species)
+        payload["particle_flux_weight_species"] = list(
+            self.particle_flux_weight_species
+        )
         if self.saturated_heat_flux_species is not None:
-            payload["saturated_heat_flux_species"] = list(self.saturated_heat_flux_species)
+            payload["saturated_heat_flux_species"] = list(
+                self.saturated_heat_flux_species
+            )
         if self.saturated_particle_flux_species is not None:
-            payload["saturated_particle_flux_species"] = list(self.saturated_particle_flux_species)
+            payload["saturated_particle_flux_species"] = list(
+                self.saturated_particle_flux_species
+            )
         payload["heat_flux_weight_total"] = float(sum(self.heat_flux_weight_species))
-        payload["particle_flux_weight_total"] = float(sum(self.particle_flux_weight_species))
+        payload["particle_flux_weight_total"] = float(
+            sum(self.particle_flux_weight_species)
+        )
         if self.saturated_heat_flux_species is not None:
-            payload["saturated_heat_flux_total"] = float(sum(self.saturated_heat_flux_species))
+            payload["saturated_heat_flux_total"] = float(
+                sum(self.saturated_heat_flux_species)
+            )
         else:
             payload["saturated_heat_flux_total"] = None
         if self.saturated_particle_flux_species is not None:
-            payload["saturated_particle_flux_total"] = float(sum(self.saturated_particle_flux_species))
+            payload["saturated_particle_flux_total"] = float(
+                sum(self.saturated_particle_flux_species)
+            )
         else:
             payload["saturated_particle_flux_total"] = None
         return payload
@@ -170,7 +182,9 @@ def effective_kperp2(
 
     weights = spectral_phi_weights(phi, cache, vol_fac, use_dealias=use_dealias)
     denom = jnp.sum(weights)
-    return jnp.sum(cache.kperp2 * weights) / jnp.maximum(denom, jnp.asarray(eps, dtype=denom.dtype))
+    return jnp.sum(cache.kperp2 * weights) / jnp.maximum(
+        denom, jnp.asarray(eps, dtype=denom.dtype)
+    )
 
 
 def phi_norm2(
@@ -187,7 +201,9 @@ def phi_norm2(
 
     norm_key = normalization.strip().lower()
     if norm_key not in _SUPPORTED_NORMALIZATIONS:
-        raise ValueError(f"Unknown quasilinear amplitude normalization '{normalization}'")
+        raise ValueError(
+            f"Unknown quasilinear amplitude normalization '{normalization}'"
+        )
     if norm_key == "phi_rms":
         return jnp.maximum(
             jnp.sum(spectral_phi_weights(phi, cache, vol_fac, use_dealias=use_dealias)),
@@ -200,7 +216,9 @@ def phi_norm2(
             jnp.asarray(eps, dtype=jnp.real(phi).dtype),
         )
     return jnp.maximum(
-        electrostatic_field_energy(phi, cache, params, vol_fac, use_dealias=use_dealias),
+        electrostatic_field_energy(
+            phi, cache, params, vol_fac, use_dealias=use_dealias
+        ),
         jnp.asarray(eps, dtype=jnp.real(phi).dtype),
     )
 
@@ -218,7 +236,9 @@ def saturation_amplitude2(
 
     rule_key = rule.strip().lower()
     if rule_key not in _SUPPORTED_RULES:
-        raise NotImplementedError(f"Quasilinear saturation rule '{rule}' is not implemented")
+        raise NotImplementedError(
+            f"Quasilinear saturation rule '{rule}' is not implemented"
+        )
     if rule_key == "none":
         return None
     if kperp_eff2_value <= 0.0 or not np.isfinite(kperp_eff2_value):
@@ -301,7 +321,9 @@ def quasilinear_feature_objective(
         denom = jnp.maximum(x[..., 1], jnp.asarray(1.0e-30, dtype=x.dtype))
         return jnp.asarray(csat, dtype=x.dtype) * jnp.abs(x[..., 0]) * x[..., 2] / denom
     if rule_key not in {"mixing_length", "lapillonne_2011"}:
-        raise NotImplementedError(f"Quasilinear feature rule '{rule}' is not implemented")
+        raise NotImplementedError(
+            f"Quasilinear feature rule '{rule}' is not implemented"
+        )
     return saturated_flux_from_linear_weight(
         x[..., 2],
         x[..., 0],
@@ -364,7 +386,9 @@ def _resolve_quasilinear_options(
     channels_use = normalize_quasilinear_channels(channels)
     kperp_key = kperp_average.strip().lower()
     if kperp_key != "phi_weighted":
-        raise NotImplementedError("Only phi_weighted kperp averaging is validated so far")
+        raise NotImplementedError(
+            "Only phi_weighted kperp averaging is validated so far"
+        )
     return _QuasilinearOptions(
         mode=mode_key,
         channels=channels_use,

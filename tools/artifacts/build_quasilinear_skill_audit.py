@@ -77,8 +77,14 @@ def within_family() -> dict[str, object]:
         row = rows.get(round(entry["coefficient_value"], 10))
         if row is None:
             continue
-        records.append((row["relative_fraction"], entry["mean"], entry["sem"],
-                        row.get("reduced_metrics") or {}))
+        records.append(
+            (
+                row["relative_fraction"],
+                entry["mean"],
+                entry["sem"],
+                row.get("reduced_metrics") or {},
+            )
+        )
     records.sort()
 
     fraction = np.array([r[0] for r in records])
@@ -113,7 +119,8 @@ def within_family() -> dict[str, object]:
             "flux": flux.tolist(),
             "flux_sem": sem.tolist(),
             "linear_weight": [
-                float(r[3].get("quasilinear_flux_linear_weight", np.nan)) for r in records
+                float(r[3].get("quasilinear_flux_linear_weight", np.nan))
+                for r in records
             ],
         },
     }
@@ -141,12 +148,27 @@ def build_figure(summary: dict, output: Path) -> None:
         fig, axes = plt.subplots(1, 3, figsize=(15.4, 4.4))
 
         ax = axes[0]
-        ax.errorbar(fraction, flux, yerr=sem, marker="o", markersize=5,
-                    color=GKX_COLORS["blue"], linewidth=1.6, capsize=2.5,
-                    label="nonlinear heat flux")
+        ax.errorbar(
+            fraction,
+            flux,
+            yerr=sem,
+            marker="o",
+            markersize=5,
+            color=GKX_COLORS["blue"],
+            linewidth=1.6,
+            capsize=2.5,
+            label="nonlinear heat flux",
+        )
         twin = ax.twinx()
-        twin.plot(fraction, proxy, marker="s", markersize=4.5,
-                  color=GKX_COLORS["orange"], linewidth=1.6, label="quasilinear proxy")
+        twin.plot(
+            fraction,
+            proxy,
+            marker="s",
+            markersize=4.5,
+            color=GKX_COLORS["orange"],
+            linewidth=1.6,
+            label="quasilinear proxy",
+        )
         twin.set_ylabel("quasilinear proxy", color=GKX_COLORS["orange"])
         twin.tick_params(axis="y", colors=GKX_COLORS["orange"])
         twin.grid(False)
@@ -163,20 +185,32 @@ def build_figure(summary: dict, output: Path) -> None:
         panel_label(ax, "(a)")
 
         ax = axes[1]
-        ax.errorbar(proxy, flux, yerr=sem, fmt="o", markersize=6,
-                    color=GKX_COLORS["blue"], capsize=2.5, linestyle="none")
+        ax.errorbar(
+            proxy,
+            flux,
+            yerr=sem,
+            fmt="o",
+            markersize=6,
+            color=GKX_COLORS["blue"],
+            capsize=2.5,
+            linestyle="none",
+        )
         fit = np.polyfit(proxy, flux, 1)
         dense = np.linspace(proxy.min(), proxy.max(), 32)
-        ax.plot(dense, np.polyval(fit, dense), color=GKX_COLORS["vermillion"],
-                linewidth=1.6, alpha=0.75)
+        ax.plot(
+            dense,
+            np.polyval(fit, dense),
+            color=GKX_COLORS["vermillion"],
+            linewidth=1.6,
+            alpha=0.75,
+        )
         rho = family["correlations"]["quasilinear_flux_linear_weight"]["spearman"]
         ax.set_xlabel("quasilinear proxy  (the objective being minimized)")
         ax.set_ylabel(r"$Q_{\rm nl}$  (what we actually want lower)")
         ax.set_title("Minimizing the proxy raises the flux")
         annotate_reference(
             ax,
-            f"Spearman = {rho:+.3f}\n"
-            "an optimizer following this walks the wrong way",
+            f"Spearman = {rho:+.3f}\nan optimizer following this walks the wrong way",
             loc="upper right",
         )
         panel_label(ax, "(b)")
@@ -203,7 +237,8 @@ def build_figure(summary: dict, output: Path) -> None:
         ax.set_title("No proxy has useful skill")
         ax.grid(axis="y", visible=False)
         annotate_reference(
-            ax, "red = wrong sign\nan objective needs positive skill here",
+            ax,
+            "red = wrong sign\nan objective needs positive skill here",
             loc="lower left",
         )
         panel_label(ax, "(c)", dx=-0.42)
@@ -229,16 +264,24 @@ def main() -> int:
     summary = {"cross_device": cross_device(), "within_family": within_family()}
 
     family = summary["within_family"]
-    print(f"within-family: n={family['n']}, flux {family['flux_range'][0]:.2f}"
-          f"-{family['flux_range'][1]:.2f}, noise {family['noise_floor_percent']:.1f}%")
+    print(
+        f"within-family: n={family['n']}, flux {family['flux_range'][0]:.2f}"
+        f"-{family['flux_range'][1]:.2f}, noise {family['noise_floor_percent']:.1f}%"
+    )
     print(f"{'metric':<48}{'Pearson':>9}{'Spearman':>10}{'lower':>8}{'upper':>8}")
     for name, stats in family["correlations"].items():
-        print(f"{name:<48}{stats['pearson']:>9.3f}{stats['spearman']:>10.3f}"
-              f"{stats['spearman_lower_half']:>8.3f}{stats['spearman_upper_half']:>8.3f}")
-    print(f"\ncontrol -- Spearman(|fraction|, flux) = {family['spearman_abs_fraction']:+.3f}")
+        print(
+            f"{name:<48}{stats['pearson']:>9.3f}{stats['spearman']:>10.3f}"
+            f"{stats['spearman_lower_half']:>8.3f}{stats['spearman_upper_half']:>8.3f}"
+        )
+    print(
+        f"\ncontrol -- Spearman(|fraction|, flux) = {family['spearman_abs_fraction']:+.3f}"
+    )
     print("\ncross-device:")
     for name, stats in summary["cross_device"]["correlations"].items():
-        print(f"  {name:<20} Pearson {stats['pearson']:+.3f}  Spearman {stats['spearman']:+.3f}")
+        print(
+            f"  {name:<20} Pearson {stats['pearson']:+.3f}  Spearman {stats['spearman']:+.3f}"
+        )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(summary, indent=2) + "\n")

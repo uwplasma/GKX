@@ -63,7 +63,9 @@ def test_validation_gate_facade_points_to_focused_modules() -> None:
 
     assert LateTimeLinearMetrics is metric_analysis.LateTimeLinearMetrics
     assert NonlinearWindowMetrics is metric_analysis.NonlinearWindowMetrics
-    assert EigenfunctionComparisonMetrics is mode_analysis.EigenfunctionComparisonMetrics
+    assert (
+        EigenfunctionComparisonMetrics is mode_analysis.EigenfunctionComparisonMetrics
+    )
     assert gates.evaluate_scalar_gate is evaluate_scalar_gate
     assert gates.gate_report_to_dict is gate_report_to_dict
     assert gates.observed_order_gate_report is observed_order_gate_report
@@ -76,7 +78,9 @@ def test_validation_gate_primitives_are_public_and_owned_by_diagnostics() -> Non
     )
     assert isinstance(metrics, ZonalFlowResponseMetrics)
     assert validation_gates.observed_order_gate_report is observed_order_gate_report
-    assert validation_gates.branch_continuity_gate_report is branch_continuity_gate_report
+    assert (
+        validation_gates.branch_continuity_gate_report is branch_continuity_gate_report
+    )
     assert (
         validation_gates.nonlinear_heat_flux_convergence_gate_report
         is nonlinear_heat_flux_convergence_gate_report
@@ -562,7 +566,9 @@ def test_pandas_is_required_only_by_dataframe_helpers(monkeypatch) -> None:
             raise ModuleNotFoundError("No module named 'pandas'", name="pandas")
         return original_import(name, *args, **kwargs)
 
-    monkeypatch.setattr(zonal_validation.importlib, "import_module", import_without_pandas)
+    monkeypatch.setattr(
+        zonal_validation.importlib, "import_module", import_without_pandas
+    )
     with pytest.raises(ModuleNotFoundError, match=r"gkx\[validation\]"):
         zonal_validation.reference_residual_table(Path("unused.csv"))
 

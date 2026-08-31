@@ -270,7 +270,6 @@ def _cmd_generate_geometry(args: argparse.Namespace) -> int:
     return 0
 
 
-
 # The plan's six commands are run, scan, estimate, plot, inspect and validate.
 # estimate, inspect and validate were previously reachable only as flags on the
 # equilibrium shorthand or not at all, which meant a user could not discover
@@ -378,6 +377,7 @@ def _add_product_parsers(sub: argparse._SubParsersAction) -> None:
     validate.add_argument("config", type=str)
     validate.set_defaults(func=_cmd_validate)
 
+
 def _add_geometry_parser(sub: argparse._SubParsersAction) -> None:
     geometry = sub.add_parser(
         "geometry", help="Generate solver geometry from a runtime TOML configuration"
@@ -431,7 +431,8 @@ def _add_runtime_parsers(sub: argparse._SubParsersAction) -> None:
     run_runtime.set_defaults(func=_cmd_run_runtime_linear)
 
     scan_runtime = sub.add_parser(
-        "scan", aliases=("scan-runtime-linear",),
+        "scan",
+        aliases=("scan-runtime-linear",),
         help="Run a ky scan from unified runtime TOML config",
     )
     _add_config_flag(scan_runtime)

@@ -1131,9 +1131,7 @@ def test_vmec_fieldlines_falls_back_for_square_vmex_wout(
         "gkx.geometry.vmec_state_controls._import_booz_backend",
         _fake_import_backend,
     )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_state_controls._vmec_splines", _fake_splines
-    )
+    monkeypatch.setattr("gkx.geometry.vmec_state_controls._vmec_splines", _fake_splines)
 
     out = _vmec_fieldlines(
         vmec_fname="square-vmec-jax.nc",
@@ -1305,18 +1303,10 @@ def test_generate_vmec_eik_internal_maps_boundary_and_computes_betaprim(
         calls["write"] = {"path": path, "profiles": profiles, "request": request}
         Path(path).write_bytes(b"mock eik data")
 
-    monkeypatch.setattr(
-        "gkx.geometry.imported_vmec._vmec_fieldlines", _mock_fieldlines
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.imported_vmec._apply_flux_tube_cut", _mock_cut
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.imported_vmec._equal_arc_remap", _mock_remap
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.imported_vmec.write_vmec_eik_netcdf", _mock_write
-    )
+    monkeypatch.setattr("gkx.geometry.imported_vmec._vmec_fieldlines", _mock_fieldlines)
+    monkeypatch.setattr("gkx.geometry.imported_vmec._apply_flux_tube_cut", _mock_cut)
+    monkeypatch.setattr("gkx.geometry.imported_vmec._equal_arc_remap", _mock_remap)
+    monkeypatch.setattr("gkx.geometry.imported_vmec.write_vmec_eik_netcdf", _mock_write)
 
     request = SimpleNamespace(
         vmec_file=str(tmp_path / "wout_test.nc"),

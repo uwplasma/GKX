@@ -325,9 +325,7 @@ def nonlinear_heat_flux_window(
     cache = build_linear_cache(grid, geometry, params, Nl=Nl, Nm=Nm)
     _volume_factor, flux_factor = fieldline_quadrature_weights(geometry, grid)
     project_state: Callable[[jnp.ndarray], jnp.ndarray] = (
-        _make_hermitian_projector(
-            np.asarray(grid.ky), int(np.asarray(grid.kx).size)
-        )
+        _make_hermitian_projector(np.asarray(grid.ky), int(np.asarray(grid.kx).size))
         if compressed_real_fft
         else lambda state: state
     )
@@ -421,9 +419,7 @@ def _integrate_nonlinear_sheared_scan(
 ) -> tuple[jnp.ndarray, Any]:
     """Run the shared shearing-coordinate scan with optional transport output."""
 
-    if str(grid.boundary).lower() not in {"periodic", "linked"} or bool(
-        grid.non_twist
-    ):
+    if str(grid.boundary).lower() not in {"periodic", "linked"} or bool(grid.non_twist):
         raise NotImplementedError(
             "sheared integration requires a periodic or linked standard flux tube"
         )

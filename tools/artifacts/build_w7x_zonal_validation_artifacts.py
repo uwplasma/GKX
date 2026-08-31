@@ -291,9 +291,7 @@ def contract_audit_figure(
 
     for ax, this_kx in zip(axes[1, :], overlay_kx, strict=True):
         ref_t, ref_y = reference_mean_trace(reference_traces, this_kx)
-        obs_t, obs_y = load_w7x_combined_trace_csv(
-            gkx_traces, this_kx, normalized=True
-        )
+        obs_t, obs_y = load_w7x_combined_trace_csv(gkx_traces, this_kx, normalized=True)
         ax.plot(ref_t, ref_y, color="#1d4e89", linewidth=2.0, label="digitized mean")
         ax.plot(
             obs_t,
@@ -1464,7 +1462,6 @@ def run_response_panel(argv: list[str] | None = None) -> int:
         )
     )
     return 0
-
 
 
 def main(argv: list[str] | None = None) -> int:

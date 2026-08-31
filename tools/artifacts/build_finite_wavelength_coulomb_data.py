@@ -162,7 +162,10 @@ def main(argv: list[str] | None = None) -> int:
         help="maximum Hermite order P; the moment count is (P+1)*(J+1)",
     )
     parser.add_argument(
-        "--laguerre", type=int, default=MAXIMUM_LAGUERRE_ORDER, help="maximum Laguerre order J"
+        "--laguerre",
+        type=int,
+        default=MAXIMUM_LAGUERRE_ORDER,
+        help="maximum Laguerre order J",
     )
     parser.add_argument(
         "--stem",
@@ -198,7 +201,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"generated {moments} moments in {elapsed:.1f}s at {args.digits} digits")
     for name, value in diagonals.items():
         print(f"  {name}: {value.shape}")
-    print(f"wrote {data_path.relative_to(REPO_ROOT)} ({data_path.stat().st_size} bytes)")
+    print(
+        f"wrote {data_path.relative_to(REPO_ROOT)} ({data_path.stat().st_size} bytes)"
+    )
     print(f"wrote {metadata_path.relative_to(REPO_ROOT)}")
 
     if args.check:

@@ -309,15 +309,9 @@ LANES: dict[str, tuple[EvidenceCheck, ...]] = {
         EvidenceCheck(
             "linear cache builder", "src/gkx/operators/linear/cache_builder.py"
         ),
-        EvidenceCheck(
-            "linear moments module", "src/gkx/operators/linear/moments.py"
-        ),
-        EvidenceCheck(
-            "linear params module", "src/gkx/operators/linear/params.py"
-        ),
-        EvidenceCheck(
-            "linear parallel module", "src/gkx/solvers/linear/parallel.py"
-        ),
+        EvidenceCheck("linear moments module", "src/gkx/operators/linear/moments.py"),
+        EvidenceCheck("linear params module", "src/gkx/operators/linear/params.py"),
+        EvidenceCheck("linear parallel module", "src/gkx/solvers/linear/parallel.py"),
         EvidenceCheck(
             "nonlinear helper module", "src/gkx/operators/nonlinear/policies.py"
         ),
@@ -326,9 +320,7 @@ LANES: dict[str, tuple[EvidenceCheck, ...]] = {
             "src/gkx/benchmarking/shared.py",
             "CYCLONE_KRYLOV_DEFAULT",
         ),
-        EvidenceCheck(
-            "diagnostic moment kernels", "src/gkx/diagnostics/moments.py"
-        ),
+        EvidenceCheck("diagnostic moment kernels", "src/gkx/diagnostics/moments.py"),
         EvidenceCheck(
             "coverage manifest",
             "tools/validation_coverage_manifest.toml",

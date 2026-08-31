@@ -17,7 +17,9 @@ DEFAULT_TABLE = ROOT / "docs/_static/comparison/kbm_reference_candidates.csv"
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--table", type=Path, default=DEFAULT_TABLE)
-    parser.add_argument("--output", type=Path, default=Path("kbm_linear_comparison.png"))
+    parser.add_argument(
+        "--output", type=Path, default=Path("kbm_linear_comparison.png")
+    )
     args = parser.parse_args()
 
     table = pd.read_csv(args.table).sort_values("ky")

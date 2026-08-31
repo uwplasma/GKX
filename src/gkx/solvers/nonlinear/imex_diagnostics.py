@@ -55,9 +55,7 @@ def advance_imex_nonlinear_state(
 
         G1 = _euler_step(G, _SSPX3_ADT * dt_val)
         G2_euler = _euler_step(G1, _SSPX3_ADT * dt_val)
-        G2 = project_state(
-            (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
-        )
+        G2 = project_state((1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler)
         G3 = _euler_step(G2, _SSPX3_ADT * dt_val)
         return (
             (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
@@ -721,14 +719,19 @@ def _imex_option_bundle(
             implicit_restart=implicit_restart,
         ),
         diagnostics=_IMEXDiagnosticOptions(
-            omega_ky_index=omega_ky_index, omega_kx_index=omega_kx_index,
-            flux_scale=flux_scale, wphi_scale=wphi_scale,
+            omega_ky_index=omega_ky_index,
+            omega_kx_index=omega_kx_index,
+            flux_scale=flux_scale,
+            wphi_scale=wphi_scale,
         ),
         scan=_IMEXScanOptions(
             method=method,
-            steps=steps, checkpoint=checkpoint,
-            sample_stride=sample_stride, diagnostics_stride=diagnostics_stride,
-            external_phi=external_phi, show_progress=show_progress,
+            steps=steps,
+            checkpoint=checkpoint,
+            sample_stride=sample_stride,
+            diagnostics_stride=diagnostics_stride,
+            external_phi=external_phi,
+            show_progress=show_progress,
             collision_scheme=collision_scheme,
         ),
     )
@@ -801,9 +804,16 @@ def integrate_imex_nonlinear_diagnostics_impl(
         collision_scheme=collision_scheme,
     )
     return _integrate_imex_nonlinear_diagnostics_core(
-        G0, grid, geom, params, dt, deps=deps,
-        preparation=options.preparation, runtime=options.runtime,
-        diagnostics=options.diagnostics, scan=options.scan,
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        deps=deps,
+        preparation=options.preparation,
+        runtime=options.runtime,
+        diagnostics=options.diagnostics,
+        scan=options.scan,
     )
 
 

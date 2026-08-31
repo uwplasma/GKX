@@ -254,9 +254,7 @@ def _miller_runtime_cfg(
             ntheta=24,
             nperiod=1,
         ),
-        time=TimeConfig(
-            t_max=1.0, dt=0.1, method="rk3", fixed_dt=True
-        ),
+        time=TimeConfig(t_max=1.0, dt=0.1, method="rk3", fixed_dt=True),
         geometry=GeometryConfig(
             model="miller",
             geometry_file=geometry_file,

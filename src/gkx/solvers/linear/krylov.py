@@ -497,7 +497,9 @@ def _sparse_shift_invert_branch(
     """Factor the exact sparse shifted operator when matrix-free cold solves stall."""
 
     if int(v0.size) < 3:
-        raise ValueError("sparse shift-invert requires an operator of size at least three")
+        raise ValueError(
+            "sparse shift-invert requires an operator of size at least three"
+        )
     if cfg.shift is None:
         raise ValueError("sparse shift-invert requires a supplied or coarse-grid shift")
     residual_tol = certifiable_residual_tolerance(
@@ -514,9 +516,7 @@ def _sparse_shift_invert_branch(
         return _apply_operator(state, cache, params, term_cfg)
 
     _status(status_callback, "assembling sparse operator in bounded column batches")
-    matrix = sparse_operator_matrix(
-        apply, v0, batch_size=64, drop_tolerance=1.0e-14
-    )
+    matrix = sparse_operator_matrix(apply, v0, batch_size=64, drop_tolerance=1.0e-14)
     shift = complex(cfg.shift)
     _status(
         status_callback,

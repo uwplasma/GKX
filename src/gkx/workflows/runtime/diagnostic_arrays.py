@@ -195,6 +195,7 @@ def stride_runtime_diagnostics(
     indices = np.arange(offset_use, np.asarray(diag.t).size, stride_use)
     if keep_last and (indices.size == 0 or indices[-1] != np.asarray(diag.t).size - 1):
         indices = np.append(indices, np.asarray(diag.t).size - 1)
+
     def _take(arr: np.ndarray | jnp.ndarray) -> np.ndarray:
         return np.asarray(arr)[indices, ...].copy()
 

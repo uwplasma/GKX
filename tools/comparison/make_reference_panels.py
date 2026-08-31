@@ -116,7 +116,15 @@ def _load_imported_linear(path: Path) -> pd.DataFrame:
 
 def _load_imported_linear_lastvalue(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
-    required = {"ky", "rel_gamma", "rel_omega", "gamma", "gamma_gx", "omega", "omega_gx"}
+    required = {
+        "ky",
+        "rel_gamma",
+        "rel_omega",
+        "gamma",
+        "gamma_gx",
+        "omega",
+        "omega_gx",
+    }
     missing = required.difference(df.columns)
     if missing:
         raise ValueError(f"{path} missing columns {sorted(missing)}")
@@ -155,9 +163,28 @@ def _plot_imported_linear(
     note: str | None = None,
 ) -> None:
     ky = np.asarray(df["ky"], dtype=float)
-    ax.plot(ky, np.asarray(df["mean_rel_omega"], dtype=float), marker="o", linewidth=2.0, label="window rel ω")
-    ax.plot(ky, np.asarray(df["mean_rel_gamma"], dtype=float), marker="s", linewidth=2.0, label="window rel γ")
-    ax.plot(ky, np.asarray(df["mean_rel_Wg"], dtype=float), marker="^", linewidth=2.0, linestyle="--", label="window rel Wg")
+    ax.plot(
+        ky,
+        np.asarray(df["mean_rel_omega"], dtype=float),
+        marker="o",
+        linewidth=2.0,
+        label="window rel ω",
+    )
+    ax.plot(
+        ky,
+        np.asarray(df["mean_rel_gamma"], dtype=float),
+        marker="s",
+        linewidth=2.0,
+        label="window rel γ",
+    )
+    ax.plot(
+        ky,
+        np.asarray(df["mean_rel_Wg"], dtype=float),
+        marker="^",
+        linewidth=2.0,
+        linestyle="--",
+        label="window rel Wg",
+    )
     ax.plot(
         ky,
         np.asarray(df["mean_rel_Wphi"], dtype=float),
@@ -166,7 +193,9 @@ def _plot_imported_linear(
         linestyle="--",
         label="window rel Wphi",
     )
-    if "mean_rel_Wapar" in df.columns and np.any(np.asarray(df["mean_rel_Wapar"], dtype=float) > 0.0):
+    if "mean_rel_Wapar" in df.columns and np.any(
+        np.asarray(df["mean_rel_Wapar"], dtype=float) > 0.0
+    ):
         ax.plot(
             ky,
             np.asarray(df["mean_rel_Wapar"], dtype=float),
@@ -211,15 +240,32 @@ def _plot_imported_linear(
             ha="left",
             fontsize=8,
             color="#334155",
-            bbox={"facecolor": "white", "edgecolor": "#cbd5e1", "boxstyle": "round,pad=0.25"},
+            bbox={
+                "facecolor": "white",
+                "edgecolor": "#cbd5e1",
+                "boxstyle": "round,pad=0.25",
+            },
         )
 
 
 def _plot_secondary(ax: Axes, df: pd.DataFrame, title: str) -> None:
     modes = [f"({row.ky:.2f},{row.kx:+.2f})" for row in df.itertuples(index=False)]
     x = np.arange(len(modes), dtype=float)
-    ax.plot(x, np.asarray(df["gamma_gx"], dtype=float), marker="o", linewidth=2.0, label="γ reference")
-    ax.plot(x, np.asarray(df["gamma_sp"], dtype=float), marker="s", linewidth=2.0, linestyle="--", label="γ GKX")
+    ax.plot(
+        x,
+        np.asarray(df["gamma_gx"], dtype=float),
+        marker="o",
+        linewidth=2.0,
+        label="γ reference",
+    )
+    ax.plot(
+        x,
+        np.asarray(df["gamma_sp"], dtype=float),
+        marker="s",
+        linewidth=2.0,
+        linestyle="--",
+        label="γ GKX",
+    )
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.set_ylabel("gamma")
     ax.set_xticks(x)
@@ -237,15 +283,25 @@ def _plot_secondary(ax: Axes, df: pd.DataFrame, title: str) -> None:
     ax_omega.set_ylabel("|Δω|")
     handles_l, labels_l = ax.get_legend_handles_labels()
     handles_r, labels_r = ax_omega.get_legend_handles_labels()
-    ax.legend(handles_l + handles_r, labels_l + labels_r, fontsize=8, frameon=False, loc="upper left")
+    ax.legend(
+        handles_l + handles_r,
+        labels_l + labels_r,
+        fontsize=8,
+        frameon=False,
+        loc="upper left",
+    )
 
 
 def _plot_linear_metric(ax: Axes, df: pd.DataFrame, *, metric: str, title: str) -> None:
     ky = np.asarray(df["ky"], dtype=float)
     reference = np.asarray(df[f"{metric}_gx"], dtype=float)
     gkx = np.asarray(df[metric], dtype=float)
-    ax.plot(ky, reference, marker="o", linewidth=2.2, color="#111111", label="reference")
-    ax.plot(ky, gkx, marker="s", linewidth=2.2, color="#d1495b", linestyle="--", label="GKX")
+    ax.plot(
+        ky, reference, marker="o", linewidth=2.2, color="#111111", label="reference"
+    )
+    ax.plot(
+        ky, gkx, marker="s", linewidth=2.2, color="#d1495b", linestyle="--", label="GKX"
+    )
     ax.set_title(title, fontsize=13, fontweight="bold")
     ax.set_xlabel(r"$k_y \rho_i$")
     ax.set_ylabel(metric)
@@ -401,16 +457,34 @@ def build_parser() -> argparse.ArgumentParser:
 def build_tokamak_panel(args: argparse.Namespace) -> None:
     cyclone_linear = _load_linear_mismatch(_resolve(args.cyclone_linear))
     kbm_linear = _load_linear_mismatch(_resolve(args.kbm_linear))
-    cyclone_img = _autocrop_image(mpimg.imread(_resolve(args.cyclone_nonlinear_panel)), pad_pixels=4)
-    kbm_img = _autocrop_image(mpimg.imread(_resolve(args.kbm_nonlinear_panel)), pad_pixels=4)
+    cyclone_img = _autocrop_image(
+        mpimg.imread(_resolve(args.cyclone_nonlinear_panel)), pad_pixels=4
+    )
+    kbm_img = _autocrop_image(
+        mpimg.imread(_resolve(args.kbm_nonlinear_panel)), pad_pixels=4
+    )
     out = _resolve(args.out)
 
     fig = plt.figure(figsize=(19.5, 12.6), constrained_layout=True)
     gs = fig.add_gridspec(2, 4, height_ratios=[0.9, 1.45])
-    _plot_linear_metric(fig.add_subplot(gs[0, 0]), cyclone_linear, metric="gamma", title="Cyclone (Miller) Linear γ")
-    _plot_linear_metric(fig.add_subplot(gs[0, 1]), cyclone_linear, metric="omega", title="Cyclone (Miller) Linear ω")
-    _plot_linear_metric(fig.add_subplot(gs[0, 2]), kbm_linear, metric="gamma", title="KBM Linear γ")
-    _plot_linear_metric(fig.add_subplot(gs[0, 3]), kbm_linear, metric="omega", title="KBM Linear ω")
+    _plot_linear_metric(
+        fig.add_subplot(gs[0, 0]),
+        cyclone_linear,
+        metric="gamma",
+        title="Cyclone (Miller) Linear γ",
+    )
+    _plot_linear_metric(
+        fig.add_subplot(gs[0, 1]),
+        cyclone_linear,
+        metric="omega",
+        title="Cyclone (Miller) Linear ω",
+    )
+    _plot_linear_metric(
+        fig.add_subplot(gs[0, 2]), kbm_linear, metric="gamma", title="KBM Linear γ"
+    )
+    _plot_linear_metric(
+        fig.add_subplot(gs[0, 3]), kbm_linear, metric="omega", title="KBM Linear ω"
+    )
 
     ax_c = fig.add_subplot(gs[1, :2])
     ax_c.imshow(cyclone_img)
@@ -422,14 +496,18 @@ def build_tokamak_panel(args: argparse.Namespace) -> None:
     ax_k.set_title("KBM Nonlinear", fontsize=14, fontweight="bold")
     ax_k.axis("off")
 
-    fig.suptitle("Tokamak Reference Validation: Cyclone and KBM", fontsize=17, fontweight="bold")
+    fig.suptitle(
+        "Tokamak Reference Validation: Cyclone and KBM", fontsize=17, fontweight="bold"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=240, facecolor="white")
     plt.close(fig)
     print(f"saved {out}")
 
 
-def _load_stellarator_linear_args(args: argparse.Namespace) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def _load_stellarator_linear_args(
+    args: argparse.Namespace,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return (
         _load_imported_linear(_resolve(args.w7x_linear_csv)),
         _load_imported_linear(_resolve(args.hsx_linear_csv)),
@@ -482,7 +560,9 @@ def build_publication_panel(args: argparse.Namespace) -> None:
         note="near marginality inflates the whole-window γ average; late-time closure remains tight",
     )
 
-    fig.suptitle("Reference-Code Validation: Publication Panel", fontsize=18, fontweight="bold")
+    fig.suptitle(
+        "Reference-Code Validation: Publication Panel", fontsize=18, fontweight="bold"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=240, facecolor="white")
     fig.savefig(pdf_out, facecolor="white")

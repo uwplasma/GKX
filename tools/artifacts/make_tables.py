@@ -236,7 +236,9 @@ def _write_kbm_public_mismatch_table(
                 _kbm_public_rows_from_gx_mismatch(
                     kbm_reference_mismatch,
                     lowky_ckpt_path=(
-                        None if kbm_reference_mismatch == kbm_candidates else kbm_lowky_ckpt
+                        None
+                        if kbm_reference_mismatch == kbm_candidates
+                        else kbm_lowky_ckpt
                     ),
                 )
             )
@@ -602,33 +604,63 @@ def _scan_linear_verbose(
 
 WINDOWS = {
     "cyclone": dict(
-        window_fraction=0.3, min_points=80, start_fraction=0.58,
-        growth_weight=0.0, require_positive=True, min_amp_fraction=0.05,
-        max_fraction=0.6, end_fraction=0.8, max_amp_fraction=0.8,
-        late_penalty=0.3, window_method="loglinear", mode_method="project",
+        window_fraction=0.3,
+        min_points=80,
+        start_fraction=0.58,
+        growth_weight=0.0,
+        require_positive=True,
+        min_amp_fraction=0.05,
+        max_fraction=0.6,
+        end_fraction=0.8,
+        max_amp_fraction=0.8,
+        late_penalty=0.3,
+        window_method="loglinear",
+        mode_method="project",
     ),
     "kinetic": dict(
-        window_fraction=0.3, min_points=160, start_fraction=0.45,
-        growth_weight=0.1, require_positive=True, min_amp_fraction=0.05,
+        window_fraction=0.3,
+        min_points=160,
+        start_fraction=0.45,
+        growth_weight=0.1,
+        require_positive=True,
+        min_amp_fraction=0.05,
     ),
     "etg": dict(
-        window_fraction=0.25, min_points=120, start_fraction=0.4,
-        growth_weight=0.2, require_positive=True, min_amp_fraction=0.1,
+        window_fraction=0.25,
+        min_points=120,
+        start_fraction=0.4,
+        growth_weight=0.2,
+        require_positive=True,
+        min_amp_fraction=0.1,
     ),
     "kbm": dict(
-        window_fraction=0.3, min_points=120, start_fraction=0.35,
-        growth_weight=0.0, require_positive=False, min_amp_fraction=0.05,
+        window_fraction=0.3,
+        min_points=120,
+        start_fraction=0.35,
+        growth_weight=0.0,
+        require_positive=False,
+        min_amp_fraction=0.05,
     ),
     "tem": dict(
-        window_fraction=0.35, min_points=120, start_fraction=0.5,
-        growth_weight=0.2, require_positive=True, min_amp_fraction=0.1,
+        window_fraction=0.35,
+        min_points=120,
+        start_fraction=0.5,
+        growth_weight=0.2,
+        require_positive=True,
+        min_amp_fraction=0.1,
     ),
 }
 
 REFERENCE_CYCLONE_WINDOW = dict(
-    window_method="loglinear", min_points=40, start_fraction=0.1,
-    max_fraction=0.8, end_fraction=0.8, require_positive=True,
-    min_amp_fraction=0.05, max_amp_fraction=0.8, growth_weight=0.1,
+    window_method="loglinear",
+    min_points=40,
+    start_fraction=0.1,
+    max_fraction=0.8,
+    end_fraction=0.8,
+    require_positive=True,
+    min_amp_fraction=0.05,
+    max_amp_fraction=0.8,
+    growth_weight=0.1,
     late_penalty=0.1,
 )
 

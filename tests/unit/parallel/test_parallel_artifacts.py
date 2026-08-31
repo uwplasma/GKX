@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-
 # ---- test_parallel_artifact_contracts.py ----
 
 import json
@@ -119,8 +118,7 @@ def test_parallel_manifests_track_current_cpu_gpu_scaling_artifacts() -> None:
     validation_paths = {
         path
         for module in validation["modules"]
-        if module["module"]
-        in {"gkx.parallel.__init__", "gkx.parallel.state"}
+        if module["module"] in {"gkx.parallel.__init__", "gkx.parallel.state"}
         for path in module["artifact_paths"]
     }
 
@@ -1105,8 +1103,7 @@ def test_nonlinear_sharding_profiles_are_identity_gated_and_scoped() -> None:
         is False
     )
     assert (
-        benchmark_gpu["sharded_results"]["kx"]["diagnostic_identity_gate_pass"]
-        is False
+        benchmark_gpu["sharded_results"]["kx"]["diagnostic_identity_gate_pass"] is False
     )
     assert benchmark_gpu["sharded_results"]["kx"]["max_abs_rhs_error"] > 1.0
     assert benchmark_gpu["sharded_results"]["kx"]["identity_gate_pass"] is False

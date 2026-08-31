@@ -61,7 +61,11 @@ from gkx.diagnostics.analysis import select_ky_index
 from gkx.geometry import FluxTubeGeometryData
 from gkx.geometry import SAlphaGeometry, sample_flux_tube_geometry
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.params import LinearParams, LinearTerms, linear_terms_to_term_config
+from gkx.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    linear_terms_to_term_config,
+)
 from gkx.operators.linear.params import Species, build_linear_params
 from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
 from gkx.solvers.time.explicit import (
@@ -1195,7 +1199,9 @@ def test_runtime_artifact_geometry_writer_applies_imported_grid_defaults(
     )
     assert geom_out.theta_closed_interval is False
     np.testing.assert_allclose(group.values["Rplot"], geom.cylindrical_R_profile[:-1])
-    np.testing.assert_allclose(group.values["zeta_plot"], geom.toroidal_angle_profile[:-1])
+    np.testing.assert_allclose(
+        group.values["zeta_plot"], geom.toroidal_angle_profile[:-1]
+    )
     assert float(group.values["kxfac"]) == pytest.approx(1.25)
 
 

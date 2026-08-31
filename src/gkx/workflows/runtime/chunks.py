@@ -258,7 +258,9 @@ def run_adaptive_runtime_chunk_loop(
         diag_chunk = _chunk_diagnostics_to_host(diag_chunk)
         diag_chunk = _offset_chunk_diagnostics_time(diag_chunk, offset=t_elapsed)
         time_dtype = np.asarray(diag_chunk.t).dtype
-        time_tol = max(_TIME_PROGRESS_EPS, 8.0 * np.finfo(time_dtype).eps * max(float(t_max), 1.0))
+        time_tol = max(
+            _TIME_PROGRESS_EPS, 8.0 * np.finfo(time_dtype).eps * max(float(t_max), 1.0)
+        )
         terminal = np.flatnonzero(np.asarray(diag_chunk.t) >= float(t_max) - time_tol)
         if terminal.size:
             diag_chunk = slice_runtime_diagnostics(diag_chunk, int(terminal[0]) + 1)

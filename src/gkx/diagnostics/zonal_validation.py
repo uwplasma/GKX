@@ -87,8 +87,12 @@ def load_w7x_trace_csv(path: Path) -> tuple[np.ndarray, np.ndarray]:
     trace = pd.read_csv(path)
     time_col = "t_reference" if "t_reference" in trace.columns else "t"
     if "phi_zonal_real" not in trace.columns or time_col not in trace.columns:
-        raise ValueError(f"{path} must contain phi_zonal_real and either t or t_reference columns")
-    return np.asarray(trace[time_col], dtype=float), np.asarray(trace["phi_zonal_real"], dtype=float)
+        raise ValueError(
+            f"{path} must contain phi_zonal_real and either t or t_reference columns"
+        )
+    return np.asarray(trace[time_col], dtype=float), np.asarray(
+        trace["phi_zonal_real"], dtype=float
+    )
 
 
 def load_w7x_combined_trace_csv(
@@ -112,7 +116,9 @@ def load_w7x_combined_trace_csv(
     if subset.empty:
         raise ValueError(f"{path} has no trace for kx={kx}")
     subset = subset.sort_values("t_reference")
-    return np.asarray(subset["t_reference"], dtype=float), np.asarray(subset[value_col], dtype=float)
+    return np.asarray(subset["t_reference"], dtype=float), np.asarray(
+        subset[value_col], dtype=float
+    )
 
 
 def reference_residual_table(path: Path) -> DataFrame:
@@ -164,15 +170,21 @@ def reference_time_limits(trace_table: DataFrame) -> DataFrame:
     return pd.DataFrame(rows)
 
 
-def reference_mean_trace(trace_table: DataFrame, kx: float) -> tuple[np.ndarray, np.ndarray]:
+def reference_mean_trace(
+    trace_table: DataFrame, kx: float
+) -> tuple[np.ndarray, np.ndarray]:
     """Return the mean digitized stella/GENE trace for one W7-X zonal ``kx``."""
 
     ref_subset = trace_table[np.isclose(trace_table["kx_rhoi"], float(kx))]
     if ref_subset.empty:
         raise ValueError(f"missing reference trace for kx={kx}")
-    ref_pivot = ref_subset.pivot_table(index="t_vti_over_a", columns="code", values="response", aggfunc="mean")
+    ref_pivot = ref_subset.pivot_table(
+        index="t_vti_over_a", columns="code", values="response", aggfunc="mean"
+    )
     ref_pivot = ref_pivot.sort_index()
-    return np.asarray(ref_pivot.index, dtype=float), np.asarray(ref_pivot.mean(axis=1), dtype=float)
+    return np.asarray(ref_pivot.index, dtype=float), np.asarray(
+        ref_pivot.mean(axis=1), dtype=float
+    )
 
 
 def tail_trace_metrics(
@@ -187,7 +199,9 @@ def tail_trace_metrics(
 
     ref_tmax = float(np.nanmax(t_ref))
     tail_start = ref_tmax - float(tail_fraction) * (ref_tmax - float(np.nanmin(t_ref)))
-    mask = (np.asarray(t_obs, dtype=float) >= tail_start) & (np.asarray(t_obs, dtype=float) <= ref_tmax)
+    mask = (np.asarray(t_obs, dtype=float) >= tail_start) & (
+        np.asarray(t_obs, dtype=float) <= ref_tmax
+    )
     if not np.any(mask):
         return {
             "tail_std": None,
@@ -195,10 +209,16 @@ def tail_trace_metrics(
             "tail_mean_abs_error": None,
             "tail_max_abs_error": None,
         }
-    ref_interp = np.interp(np.asarray(t_obs, dtype=float)[mask], np.asarray(t_ref, dtype=float), np.asarray(y_ref, dtype=float))
+    ref_interp = np.interp(
+        np.asarray(t_obs, dtype=float)[mask],
+        np.asarray(t_ref, dtype=float),
+        np.asarray(y_ref, dtype=float),
+    )
     obs_tail = np.asarray(y_obs, dtype=float)[mask]
     diff = obs_tail - ref_interp
-    ref_tail = np.asarray(y_ref, dtype=float)[np.asarray(t_ref, dtype=float) >= tail_start]
+    ref_tail = np.asarray(y_ref, dtype=float)[
+        np.asarray(t_ref, dtype=float) >= tail_start
+    ]
     return {
         "tail_std": float(np.std(obs_tail)),
         "reference_tail_std": float(np.std(ref_tail)),
@@ -244,11 +264,15 @@ class _ZonalPeakFitState:
     damping_fit_tmax: float = float("nan")
 
 
-def _coerce_zonal_trace(t: np.ndarray, response: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _coerce_zonal_trace(
+    t: np.ndarray, response: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     t_arr = np.asarray(t, dtype=float)
     resp = np.asarray(response, dtype=float)
     if t_arr.ndim != 1 or resp.ndim != 1 or t_arr.size != resp.size:
-        raise ValueError("t and response must be one-dimensional arrays of equal length")
+        raise ValueError(
+            "t and response must be one-dimensional arrays of equal length"
+        )
     if t_arr.size < 4:
         raise ValueError("zonal-flow response requires at least four samples")
 
@@ -270,15 +294,21 @@ def _normalized_zonal_options(
 ) -> tuple[str, str, str]:
     policy = str(initial_policy).strip().lower().replace("-", "_")
     if policy not in {"window_abs_mean", "first_abs"}:
-        raise ValueError("initial_policy must be one of {'window_abs_mean', 'first_abs'}")
+        raise ValueError(
+            "initial_policy must be one of {'window_abs_mean', 'first_abs'}"
+        )
     if peak_fit_max_peaks is not None and int(peak_fit_max_peaks) <= 0:
         raise ValueError("peak_fit_max_peaks must be > 0 when provided")
     damping_mode = str(damping_fit_mode).strip().lower().replace("-", "_")
     if damping_mode not in _DAMPING_FIT_MODES:
-        raise ValueError(f"damping_fit_mode must be one of {sorted(_DAMPING_FIT_MODES)}")
+        raise ValueError(
+            f"damping_fit_mode must be one of {sorted(_DAMPING_FIT_MODES)}"
+        )
     frequency_mode = str(frequency_fit_mode).strip().lower().replace("-", "_")
     if frequency_mode not in {"peak_spacing", "hilbert_phase"}:
-        raise ValueError("frequency_fit_mode must be one of {'peak_spacing', 'hilbert_phase'}")
+        raise ValueError(
+            "frequency_fit_mode must be one of {'peak_spacing', 'hilbert_phase'}"
+        )
     if not 0.0 <= float(hilbert_trim_fraction) < 0.5:
         raise ValueError("hilbert_trim_fraction must be in [0, 0.5)")
     return policy, damping_mode, frequency_mode
@@ -297,7 +327,9 @@ def _initial_response_level(
     elif policy == "first_abs":
         initial_level = float(abs(resp[0]))
     else:
-        lead_mask, _lead_tmin, _lead_tmax = _leading_window(t_arr, float(initial_fraction))
+        lead_mask, _lead_tmin, _lead_tmax = _leading_window(
+            t_arr, float(initial_fraction)
+        )
         initial_vals = resp[lead_mask]
         if initial_vals.size == 0:
             raise ValueError("response windows must be non-empty")
@@ -336,7 +368,9 @@ def _residual_window_metrics(
     )
 
 
-def _zonal_peak_indices(detrended_norm: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _zonal_peak_indices(
+    detrended_norm: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if detrended_norm.size < 3:
         empty = np.asarray([], dtype=int)
         return empty, empty, empty
@@ -356,7 +390,11 @@ def _zonal_peak_indices(detrended_norm: np.ndarray) -> tuple[np.ndarray, np.ndar
         )
         + 1
     )
-    return max_peak_idx, min_peak_idx, np.sort(np.concatenate([max_peak_idx, min_peak_idx]))
+    return (
+        max_peak_idx,
+        min_peak_idx,
+        np.sort(np.concatenate([max_peak_idx, min_peak_idx])),
+    )
 
 
 def _limited_peak_fit(
@@ -388,7 +426,9 @@ def _combined_envelope_damping(
     valid = np.isfinite(peak_fit_values) & (peak_fit_values > 0.0)
     if np.count_nonzero(valid) < 2:
         return float("nan"), int(peak_fit_times.size)
-    slope, _offset = np.polyfit(peak_fit_times[valid], np.log(peak_fit_values[valid]), 1)
+    slope, _offset = np.polyfit(
+        peak_fit_times[valid], np.log(peak_fit_values[valid]), 1
+    )
     return float(-slope), int(peak_fit_times.size)
 
 
@@ -438,7 +478,12 @@ def _sliding_period_envelope(
     """
 
     spacing = float(np.median(np.diff(t_arr))) if t_arr.size > 1 else 0.0
-    if not np.isfinite(spacing) or spacing <= 0.0 or not np.isfinite(period) or period <= 0.0:
+    if (
+        not np.isfinite(spacing)
+        or spacing <= 0.0
+        or not np.isfinite(period)
+        or period <= 0.0
+    ):
         return np.asarray([], dtype=float), np.asarray([], dtype=float)
     width = int(round(float(period) / spacing))
     if width % 2 == 0:
@@ -529,8 +574,14 @@ def _fit_peak_times_for_frequency(
     damping_mode: str,
 ) -> np.ndarray:
     fit_peak_times = peak_times[fit_mask[peak_idx]]
-    if peak_fit_max_peaks is not None and damping_mode == "combined_envelope" and fit_peak_times.size:
-        fit_peak_times = fit_peak_times[: min(int(peak_fit_max_peaks), int(fit_peak_times.size))]
+    if (
+        peak_fit_max_peaks is not None
+        and damping_mode == "combined_envelope"
+        and fit_peak_times.size
+    ):
+        fit_peak_times = fit_peak_times[
+            : min(int(peak_fit_max_peaks), int(fit_peak_times.size))
+        ]
     return fit_peak_times
 
 
@@ -541,7 +592,9 @@ def _peak_spacing_frequency(
     fit_mask: np.ndarray,
     peak_idx: np.ndarray,
 ) -> float:
-    freq_peak_times = fit_peak_times if fit_peak_times.size >= 2 else peak_times[fit_mask[peak_idx]]
+    freq_peak_times = (
+        fit_peak_times if fit_peak_times.size >= 2 else peak_times[fit_mask[peak_idx]]
+    )
     if freq_peak_times.size < 2:
         return float("nan")
     dt_peaks = np.diff(freq_peak_times)
@@ -570,7 +623,9 @@ def _hilbert_phase_frequency(
         trim_mask[-trim:] = False
     amp = np.abs(analytic)
     valid = np.isfinite(omega) & np.isfinite(amp) & (amp > 1.0e-6) & trim_mask
-    return float(np.mean(omega[valid])) if np.count_nonzero(valid) >= 2 else float("nan")
+    return (
+        float(np.mean(omega[valid])) if np.count_nonzero(valid) >= 2 else float("nan")
+    )
 
 
 def _zonal_damping_fit(

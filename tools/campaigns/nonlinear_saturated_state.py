@@ -402,17 +402,18 @@ def _load_replay_traces(
             if (
                 provenance.get("git_commit") != source_commit
                 or provenance.get("git_dirty") is not False
-                or float(summary.get("previous_t_end", float("nan")))
-                != segment_start
+                or float(summary.get("previous_t_end", float("nan"))) != segment_start
             ):
-                raise ValueError(f"{summary_path}: summary provenance differs from trace")
+                raise ValueError(
+                    f"{summary_path}: summary provenance differs from trace"
+                )
             if "trace_artifact" in summary:
                 if summary["trace_artifact"].get("sha256") != digest:
-                    raise ValueError(f"{summary_path}: summary digest differs from trace")
+                    raise ValueError(
+                        f"{summary_path}: summary digest differs from trace"
+                    )
             elif "trace" in summary:
-                for name, values_part in zip(
-                    ("t", "heat_flux", "Wphi", "Wg"), values
-                ):
+                for name, values_part in zip(("t", "heat_flux", "Wphi", "Wg"), values):
                     recorded = np.asarray(
                         [sample[name] for sample in summary["trace"]], dtype=float
                     )
@@ -567,12 +568,18 @@ def _load_continuation_state(
             raise SystemExit(f"continuation state lacks {', '.join(sorted(missing))}")
         commit = str(np.asarray(archive["gkx_git_commit"]).item())
         dirty = int(np.asarray(archive["gkx_git_dirty"]).item())
-        if dirty != 0 or not commit or not _gkx_source_tree_matches(
-            str(source_provenance["repository_root"]),
-            commit,
-            str(source_provenance["git_commit"]),
+        if (
+            dirty != 0
+            or not commit
+            or not _gkx_source_tree_matches(
+                str(source_provenance["repository_root"]),
+                commit,
+                str(source_provenance["git_commit"]),
+            )
         ):
-            raise SystemExit("continuation state is not pinned to compatible GKX source")
+            raise SystemExit(
+                "continuation state is not pinned to compatible GKX source"
+            )
         schema = (
             str(np.asarray(archive["campaign_identity_schema"]).item())
             if "campaign_identity_schema" in archive
@@ -985,8 +992,7 @@ def main() -> int:
             **{
                 name: replay_identity[name]
                 for name in _STATE_IDENTITY_FIELDS
-                if name
-                not in {"Nx", "Ny", "Nz", "Nl", "Nm", "random_seed"}
+                if name not in {"Nx", "Ny", "Nz", "Nl", "Nm", "random_seed"}
             },
             **_npz_source_provenance(source_provenance),
         )

@@ -10,7 +10,9 @@ from gkx.config import GridConfig
 from gkx.core.grid import build_spectral_grid
 
 
-def _surface_index_tuple(value: int | None | tuple[int | None, ...] | list[int | None]) -> tuple[int | None, ...]:
+def _surface_index_tuple(
+    value: int | None | tuple[int | None, ...] | list[int | None],
+) -> tuple[int | None, ...]:
     if value is None:
         return (None,)
     if isinstance(value, int):
@@ -32,10 +34,15 @@ def _surface_sample_axis(
             {"surface_index": None, "torflux": float(torflux)}
             for torflux in _float_tuple(torflux_values, name="torflux_values")
         )
-    return tuple({"surface_index": surface_index} for surface_index in _surface_index_tuple(surface_indices))
+    return tuple(
+        {"surface_index": surface_index}
+        for surface_index in _surface_index_tuple(surface_indices)
+    )
 
 
-def _int_tuple(value: int | tuple[int, ...] | list[int], *, name: str) -> tuple[int, ...]:
+def _int_tuple(
+    value: int | tuple[int, ...] | list[int], *, name: str
+) -> tuple[int, ...]:
     result: tuple[int, ...]
     if isinstance(value, int):
         result = (int(value),)
@@ -46,7 +53,9 @@ def _int_tuple(value: int | tuple[int, ...] | list[int], *, name: str) -> tuple[
     return result
 
 
-def _float_tuple(value: float | tuple[float, ...] | list[float], *, name: str) -> tuple[float, ...]:
+def _float_tuple(
+    value: float | tuple[float, ...] | list[float], *, name: str
+) -> tuple[float, ...]:
     result: tuple[float, ...]
     if isinstance(value, (float, int)):
         result = (float(value),)
@@ -84,7 +93,9 @@ def solver_grid_options_from_ky_values(
         raise ValueError("ky_base must be positive and finite")
     ratios = value_array / base
     indices = np.rint(ratios).astype(int)
-    if np.any(indices < 1) or not np.allclose(ratios, indices, rtol=5.0e-10, atol=5.0e-12):
+    if np.any(indices < 1) or not np.allclose(
+        ratios, indices, rtol=5.0e-10, atol=5.0e-12
+    ):
         raise ValueError("ky_values must be positive integer multiples of ky_base")
     if len(set(int(item) for item in indices)) != int(indices.size):
         raise ValueError("ky_values map to duplicate selected ky indices")
@@ -96,7 +107,9 @@ def solver_grid_options_from_ky_values(
     selected = tuple(int(item) for item in indices)
     resolved = np.asarray(grid.ky, dtype=float)[list(selected)]
     if not np.allclose(resolved, value_array, rtol=5.0e-6, atol=5.0e-8):
-        raise RuntimeError("internal ky grid construction did not reproduce requested ky_values")
+        raise RuntimeError(
+            "internal ky grid construction did not reproduce requested ky_values"
+        )
     return {
         "ky_base": base,
         "ly": ly,
@@ -112,10 +125,15 @@ def _ky_sample_axis(
     *,
     ky_base: float | None,
     objective_kwargs: dict[str, Any],
-) -> tuple[tuple[dict[str, float | int], ...], dict[str, Any], dict[str, object] | None]:
+) -> tuple[
+    tuple[dict[str, float | int], ...], dict[str, Any], dict[str, object] | None
+]:
     if ky_values is None:
         return (
-            tuple({"selected_ky_index": index} for index in _int_tuple(selected_ky_indices, name="selected_ky_indices")),
+            tuple(
+                {"selected_ky_index": index}
+                for index in _int_tuple(selected_ky_indices, name="selected_ky_indices")
+            ),
             objective_kwargs,
             None,
         )
@@ -141,12 +159,16 @@ def _ky_sample_axis(
             "selected_ky": resolved_value,
             "ky_abs_error": abs(resolved_value - requested_value),
         }
-        for index, requested_value, resolved_value in zip(selected, requested, resolved, strict=True)
+        for index, requested_value, resolved_value in zip(
+            selected, requested, resolved, strict=True
+        )
     )
     return rows, updated_kwargs, grid_options
 
 
-def _aggregate_weights(weights: tuple[float, ...] | list[float] | np.ndarray | None, n_samples: int) -> np.ndarray:
+def _aggregate_weights(
+    weights: tuple[float, ...] | list[float] | np.ndarray | None, n_samples: int
+) -> np.ndarray:
     if n_samples < 1:
         raise ValueError("n_samples must be positive")
     if weights is None:
@@ -175,7 +197,9 @@ def _aggregate_sample_metadata(
             for selected_ky_index in selected_ky_indices:
                 rows.append(
                     {
-                        "surface_index": None if surface_index is None else int(surface_index),
+                        "surface_index": None
+                        if surface_index is None
+                        else int(surface_index),
                         "alpha": float(alpha),
                         "selected_ky_index": int(selected_ky_index),
                         "weight": float(weights[weight_index]),

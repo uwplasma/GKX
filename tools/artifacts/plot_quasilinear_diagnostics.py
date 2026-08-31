@@ -284,7 +284,9 @@ def build_spectrum_shape_report(
     with netCDF4.Dataset(nonlinear_path) as root:
         ky = np.asarray(_netcdf_variable(root, "Grids/ky")[:], dtype=float)
         time = np.asarray(_netcdf_variable(root, "Grids/time")[:], dtype=float)
-        resolved = np.asarray(_netcdf_variable(root, nonlinear_variable)[:], dtype=float)
+        resolved = np.asarray(
+            _netcdf_variable(root, nonlinear_variable)[:], dtype=float
+        )
 
     if resolved.ndim != 3:
         raise ValueError(f"{nonlinear_variable} must have shape (time, species, ky)")
@@ -510,7 +512,9 @@ def write_artifacts(summary: dict[str, Any], out_prefix: Path) -> dict[str, str]
         speedup = np.asarray(
             [float(row["strong_speedup_vs_1_device"]) for row in subset], dtype=float
         )
-        elapsed = np.asarray([float(row["timed_wall_s"]) for row in subset], dtype=float)
+        elapsed = np.asarray(
+            [float(row["timed_wall_s"]) for row in subset], dtype=float
+        )
         heat_rel = np.asarray(
             [float(row["max_heat_flux_proxy_rel_error"]) for row in subset], dtype=float
         )
@@ -580,15 +584,23 @@ def write_artifacts(summary: dict[str, Any], out_prefix: Path) -> dict[str, str]
 
 
 def _add_spectrum_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--spectrum", required=True, help="Input *.quasilinear_spectrum.csv")
-    parser.add_argument("--out", default=str(DEFAULT_SPECTRUM_OUT), help="Output PNG path")
+    parser.add_argument(
+        "--spectrum", required=True, help="Input *.quasilinear_spectrum.csv"
+    )
+    parser.add_argument(
+        "--out", default=str(DEFAULT_SPECTRUM_OUT), help="Output PNG path"
+    )
     parser.add_argument("--title", default="Quasilinear Transport Spectrum")
 
 
 def _add_shape_gate_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--spectrum", required=True, help="Input quasilinear spectrum CSV")
     parser.add_argument(
-        "--nonlinear", required=True, help="Input nonlinear NetCDF with resolved diagnostics"
+        "--spectrum", required=True, help="Input quasilinear spectrum CSV"
+    )
+    parser.add_argument(
+        "--nonlinear",
+        required=True,
+        help="Input nonlinear NetCDF with resolved diagnostics",
     )
     parser.add_argument("--out", required=True, help="Output PNG path")
     parser.add_argument("--ql-column", default="heat_flux_weight_total")
@@ -598,7 +610,9 @@ def _add_shape_gate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--species-index", type=int, default=0)
     parser.add_argument("--tv-gate", type=float, default=0.2)
     parser.add_argument("--cosine-gate", type=float, default=0.95)
-    parser.add_argument("--title", default="Quasilinear/nonlinear ky-spectrum shape gate")
+    parser.add_argument(
+        "--title", default="Quasilinear/nonlinear ky-spectrum shape gate"
+    )
 
 
 def _add_uq_scaling_args(parser: argparse.ArgumentParser) -> None:

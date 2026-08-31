@@ -16,9 +16,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_HERMITE_PREFIX = REPO_ROOT / "docs" / "_static" / "hermite_exchange_gate"
 DEFAULT_REDUCE_PREFIX = REPO_ROOT / "docs" / "_static" / "velocity_field_reduce_gate"
-DEFAULT_LADDER_PREFIX = (
-    REPO_ROOT / "docs" / "_static" / "hermite_streaming_ladder_gate"
-)
+DEFAULT_LADDER_PREFIX = REPO_ROOT / "docs" / "_static" / "hermite_streaming_ladder_gate"
 DEFAULT_PERIODIC_PREFIX = (
     REPO_ROOT / "docs" / "_static" / "periodic_streaming_microkernel_gate"
 )
@@ -585,7 +583,9 @@ def _plot_ladder(summary: dict[str, object], paths: dict[str, Path]) -> None:
     axes[1].semilogy(
         m, np.maximum(error, 1.0e-16), "s-", lw=2.0, label="absolute error"
     )
-    axes[1].axhline(float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate")
+    axes[1].axhline(
+        float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate"
+    )
     status = "passed" if bool(summary["identity_passed"]) else "failed"
     axes[1].set_xlabel("Hermite index m")
     axes[1].set_ylabel("absolute error")
@@ -624,7 +624,9 @@ def _plot_periodic(summary: dict[str, object], paths: dict[str, Path]) -> None:
     axes[1].semilogy(
         m, np.maximum(error, 1.0e-16), "s-", lw=2.0, label="absolute error"
     )
-    axes[1].axhline(float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate")
+    axes[1].axhline(
+        float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate"
+    )
     status = "passed" if bool(summary["identity_passed"]) else "failed"
     axes[1].set_xlabel("Hermite index m")
     axes[1].set_ylabel("absolute error")
@@ -688,7 +690,11 @@ def _run_hermite(args: argparse.Namespace) -> int:
         atol=1.0e-7 if args.atol is None else float(args.atol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 
@@ -701,7 +707,11 @@ def _run_reduce(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 
@@ -715,7 +725,11 @@ def _run_ladder(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 
@@ -729,7 +743,11 @@ def _run_periodic(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 

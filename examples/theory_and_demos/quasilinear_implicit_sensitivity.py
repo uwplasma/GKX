@@ -31,10 +31,20 @@ from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.artifacts.plotting import set_plot_style
-from gkx.diagnostics.quasilinear_transport import effective_kperp2, phi_norm2, saturated_flux_from_linear_weight
+from gkx.diagnostics.quasilinear_transport import (
+    effective_kperp2,
+    phi_norm2,
+    saturated_flux_from_linear_weight,
+)
 
 
-OBSERVABLE_LABELS = (r"$\gamma$", r"$\omega$", r"$k_{\perp,\mathrm{eff}}^2$", r"$\hat Q_i$", r"$Q_i^{ML}$")
+OBSERVABLE_LABELS = (
+    r"$\gamma$",
+    r"$\omega$",
+    r"$k_{\perp,\mathrm{eff}}^2$",
+    r"$\hat Q_i$",
+    r"$Q_i^{ML}$",
+)
 # The differentiated parameters are LinearParams.fprim/tprim, which are
 # a/L_n and a/L_T -- not R/L. Label them as what is on the axis.
 PARAMETER_LABELS = (r"$a/L_n$", r"$a/L_{Ti}$")
@@ -113,7 +123,9 @@ def build_report(
 
     def matrix_fn(x):
         params = _params_from_features(x)
-        return explicit_complex_operator_matrix(lambda state: rhs_with_params(state, params)[0], state_shape)
+        return explicit_complex_operator_matrix(
+            lambda state: rhs_with_params(state, params)[0], state_shape
+        )
 
     def objective_fn(eigenvalue, eigenvector, x):
         params = _params_from_features(x)
@@ -122,21 +134,26 @@ def build_report(
         zeros = jnp.zeros_like(phi)
         kperp_eff2 = effective_kperp2(phi, cache, vol_fac)
         norm = phi_norm2(phi, cache, params, vol_fac, normalization="phi_rms")
-        heat_weight = jnp.sum(
-            heat_flux_species(
-                state,
-                phi,
-                zeros,
-                zeros,
-                cache,
-                grid,
-                params,
-                flux_fac,
+        heat_weight = (
+            jnp.sum(
+                heat_flux_species(
+                    state,
+                    phi,
+                    zeros,
+                    zeros,
+                    cache,
+                    grid,
+                    params,
+                    flux_fac,
+                )
             )
-        ) / norm
+            / norm
+        )
         gamma = jnp.real(eigenvalue)
         omega = -jnp.imag(eigenvalue)
-        saturated_heat = saturated_flux_from_linear_weight(heat_weight, gamma, kperp_eff2)
+        saturated_heat = saturated_flux_from_linear_weight(
+            heat_weight, gamma, kperp_eff2
+        )
         return jnp.asarray([gamma, omega, kperp_eff2, heat_weight, saturated_heat])
 
     params = jnp.asarray([r_over_ln, r_over_lti])
@@ -153,7 +170,9 @@ def build_report(
     matrix = matrix_fn(params)
     eigvals, eigvecs = jnp.linalg.eig(matrix)
     index = int(report["selected_index"])
-    observables = np.asarray(objective_fn(eigvals[index], eigvecs[:, index], params), dtype=float)
+    observables = np.asarray(
+        objective_fn(eigvals[index], eigvecs[:, index], params), dtype=float
+    )
     report.update(
         {
             "kind": "quasilinear_implicit_sensitivity_demo",
@@ -184,7 +203,9 @@ def write_figure(report: dict[str, object], out: Path) -> None:
     colors = ["#2563eb", "#0891b2", "#16a34a", "#f97316", "#7c3aed"]
     ax0.bar(np.arange(len(observables)), observables, color=colors)
     ax0.axhline(0.0, color="0.25", linewidth=0.8)
-    ax0.set_xticks(np.arange(len(observables)), OBSERVABLE_LABELS, rotation=20, ha="right")
+    ax0.set_xticks(
+        np.arange(len(observables)), OBSERVABLE_LABELS, rotation=20, ha="right"
+    )
     ax0.set_ylabel("value")
     ax0.set_title("Reduced quasilinear observables")
 
@@ -201,7 +222,13 @@ def write_figure(report: dict[str, object], out: Path) -> None:
     lo = float(min(np.min(jac_fd), np.min(jac_impl)))
     hi = float(max(np.max(jac_fd), np.max(jac_impl)))
     pad = 0.05 * max(hi - lo, 1.0e-12)
-    ax2.plot([lo - pad, hi + pad], [lo - pad, hi + pad], color="#dc2626", linestyle="--", linewidth=1.2)
+    ax2.plot(
+        [lo - pad, hi + pad],
+        [lo - pad, hi + pad],
+        color="#dc2626",
+        linestyle="--",
+        linewidth=1.2,
+    )
     ax2.set_xlabel("central finite difference")
     ax2.set_ylabel("implicit left/right derivative")
     ax2.set_title("Derivative parity")
@@ -209,8 +236,12 @@ def write_figure(report: dict[str, object], out: Path) -> None:
     ax3 = axes[1, 1]
     x = np.arange(jac_impl.shape[0])
     width = 0.35
-    ax3.bar(x - width / 2, rel_err[:, 0], width, label=PARAMETER_LABELS[0], color="#2563eb")
-    ax3.bar(x + width / 2, rel_err[:, 1], width, label=PARAMETER_LABELS[1], color="#f97316")
+    ax3.bar(
+        x - width / 2, rel_err[:, 0], width, label=PARAMETER_LABELS[0], color="#2563eb"
+    )
+    ax3.bar(
+        x + width / 2, rel_err[:, 1], width, label=PARAMETER_LABELS[1], color="#f97316"
+    )
     ax3.set_xticks(x, OBSERVABLE_LABELS, rotation=20, ha="right")
     ax3.set_yscale("log")
     ax3.set_ylabel("relative derivative error")
@@ -236,7 +267,9 @@ def write_figure(report: dict[str, object], out: Path) -> None:
     plt.close(fig)
 
 
-def run_demo(*, outdir: Path, plot: bool = True, write_files: bool = True) -> dict[str, object]:
+def run_demo(
+    *, outdir: Path, plot: bool = True, write_files: bool = True
+) -> dict[str, object]:
     """Run the demo and optionally write JSON/figure artifacts."""
 
     outdir.mkdir(parents=True, exist_ok=True)

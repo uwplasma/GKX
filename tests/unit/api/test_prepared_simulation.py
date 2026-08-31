@@ -69,7 +69,9 @@ def test_state_shape_follows_the_case_grid() -> None:
 def test_estimate_memory_scales_with_the_grid_and_admits_it_is_a_floor() -> None:
     small = prepare_simulation(_linear_case(), Nl=4, Nm=8)
     large = prepare_simulation(_linear_case(), Nl=8, Nm=16)
-    assert large.estimate_memory()["state_bytes"] > small.estimate_memory()["state_bytes"]
+    assert (
+        large.estimate_memory()["state_bytes"] > small.estimate_memory()["state_bytes"]
+    )
     assert small.estimate_memory()["is_floor_not_ceiling"] is True
 
 

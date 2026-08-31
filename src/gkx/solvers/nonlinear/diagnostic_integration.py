@@ -90,20 +90,53 @@ from gkx.solvers.nonlinear.state_integration import (
 _IMEX_METHODS = {"imex", "semi-implicit"}
 
 _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
-    "method", "cache", "terms", "checkpoint", "sample_stride",
-    "diagnostics_stride", "use_dealias_mask", "z_index", "compressed_real_fft",
-    "laguerre_mode", "omega_ky_index", "omega_kx_index", "flux_scale",
-    "wphi_scale", "fixed_dt", "dt_min", "dt_max", "time_horizon", "cfl", "cfl_fac",
-    "collision_split", "collision_scheme", "implicit_tol", "implicit_maxiter",
-    "implicit_iters", "implicit_relax", "implicit_restart",
-    "implicit_preconditioner", "fixed_mode_ky_index",
-    "fixed_mode_kx_index", "external_phi", "resolved_diagnostics",
+    "method",
+    "cache",
+    "terms",
+    "checkpoint",
+    "sample_stride",
+    "diagnostics_stride",
+    "use_dealias_mask",
+    "z_index",
+    "compressed_real_fft",
+    "laguerre_mode",
+    "omega_ky_index",
+    "omega_kx_index",
+    "flux_scale",
+    "wphi_scale",
+    "fixed_dt",
+    "dt_min",
+    "dt_max",
+    "time_horizon",
+    "cfl",
+    "cfl_fac",
+    "collision_split",
+    "collision_scheme",
+    "implicit_tol",
+    "implicit_maxiter",
+    "implicit_iters",
+    "implicit_relax",
+    "implicit_restart",
+    "implicit_preconditioner",
+    "fixed_mode_ky_index",
+    "fixed_mode_kx_index",
+    "external_phi",
+    "resolved_diagnostics",
     "show_progress",
 )
 _IMEX_DIAGNOSTIC_OPTION_KEYS = tuple(
     key
     for key in _EXPLICIT_DIAGNOSTIC_OPTION_KEYS
-    if key not in {"fixed_dt", "dt_min", "dt_max", "time_horizon", "cfl", "cfl_fac", "resolved_diagnostics"}
+    if key
+    not in {
+        "fixed_dt",
+        "dt_min",
+        "dt_max",
+        "time_horizon",
+        "cfl",
+        "cfl_fac",
+        "resolved_diagnostics",
+    }
 )
 
 
@@ -285,14 +318,16 @@ def integrate_nonlinear_explicit_diagnostics(
             **_options_from_scope(locals(), _IMEX_DIAGNOSTIC_OPTION_KEYS),
         )
 
-    t, diag_out, _G_final, _fields_final = _integrate_nonlinear_explicit_diagnostics_impl(
-        G0,
-        grid,
-        geom,
-        params,
-        dt,
-        steps,
-        **_options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS),
+    t, diag_out, _G_final, _fields_final = (
+        _integrate_nonlinear_explicit_diagnostics_impl(
+            G0,
+            grid,
+            geom,
+            params,
+            dt,
+            steps,
+            **_options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS),
+        )
     )
     return t, diag_out
 

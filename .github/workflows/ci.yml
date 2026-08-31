@@ -36,6 +36,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Lint and format
+        run: |
+          # Read the pin out of pyproject's dev extra rather than repeating it
+          # here, so this gate and a local `pip install -e ".[dev]"` can never
+          # drift to two different ruff styles.
+          pin=$(python -c "import tomllib;print(next(x for x in tomllib.load(open('pyproject.toml','rb'))['project']['optional-dependencies']['dev'] if x.startswith('ruff')))")
+          python -m pip install "$pin"
+          ruff check .
+          ruff format --check .
+
       - name: Repository size manifest
         run: |
           python tools/release/check_repository_size_manifest.py

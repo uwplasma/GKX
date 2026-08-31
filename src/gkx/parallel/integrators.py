@@ -316,9 +316,6 @@ def integrate_nonlinear_sharded(
     return runner(G_init, cache, params, _dt_array(dt, state_dtype))
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # Production species x Hermite shard_map route
 # ---------------------------------------------------------------------------
@@ -383,9 +380,7 @@ def _species_hermite_inputs(cache, params, ns, real_dtype, plan, hermite_count):
         chunks=nm_chunks,
         ghost_depth=int(plan.hermite_ghost_depth),
     )
-    windowed = hermite_window_cache_arrays(
-        cache, indices, hermite_count=hermite_count
-    )
+    windowed = hermite_window_cache_arrays(cache, indices, hermite_count=hermite_count)
     window_specs = hermite_cache_partition_specs(windowed, "m")
     species_cache = {
         name: getattr(cache, name)
@@ -444,12 +439,8 @@ def _fused_scalar_diagnostics(
         # mesh axes, which a species-only psum does not.
         return jax.lax.psum(value * _mesh_owner_mask(mesh_axes, value), mesh_axes)
 
-    wg = jax.lax.psum(
-        distribution_free_energy(local, grid, params, vol_fac), mesh_axes
-    )
-    wphi = owner_sum(
-        electrostatic_field_energy(fields.phi, cache, params, vol_fac)
-    )
+    wg = jax.lax.psum(distribution_free_energy(local, grid, params, vol_fac), mesh_axes)
+    wphi = owner_sum(electrostatic_field_energy(fields.phi, cache, params, vol_fac))
     heat = owner_sum(
         jnp.sum(
             heat_flux_species(
@@ -672,10 +663,15 @@ def _reject_unsharded_hermite_terms(term_cfg, params, plan) -> None:
     )
 
 
-def _resolve_species_hermite_placement(G0, cache, params, *, plan, devices, num_devices):
+def _resolve_species_hermite_placement(
+    G0, cache, params, *, plan, devices, num_devices
+):
     """Return the mesh, plan, and every sharded leaf for one placement."""
 
-    from gkx.parallel.state import build_species_hermite_mesh, species_hermite_state_spec
+    from gkx.parallel.state import (
+        build_species_hermite_mesh,
+        species_hermite_state_spec,
+    )
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
     from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
 
@@ -729,11 +725,7 @@ def _species_hermite_mapped(
     ) = _species_hermite_inputs(cache, params, ns, real_dtype, plan, hermite_count)
     linear_cfg = replace(term_cfg, nonlinear=0.0)
     index_spec = jsharding.PartitionSpec("m")
-    names = (
-        tuple(species_cache)
-        + tuple(windowed)
-        + tuple(_SPECIES_PARAM_NAMES)
-    )
+    names = tuple(species_cache) + tuple(windowed) + tuple(_SPECIES_PARAM_NAMES)
     values = (
         tuple(species_cache.values())
         + tuple(windowed.values())
@@ -928,9 +920,7 @@ def integrate_nonlinear_species_hermite(
                 k1,
                 rhs=lambda arg: (rhs(arg)[0], None),
                 stage=stage,
-                project_shard=lambda arg: _project_local(
-                    arg, projector, state_dtype
-                ),
+                project_shard=lambda arg: _project_local(arg, projector, state_dtype),
                 dt_val=dt_val,
             )
             nxt = _project_local(nxt, projector, state_dtype)
@@ -940,7 +930,9 @@ def integrate_nonlinear_species_hermite(
         return (final, stacked) if record else (final, None)
 
     out_specs = (
-        (state_spec, (scalar_spec,) * len(_TRACE_NAMES)) if record else (state_spec, None)
+        (state_spec, (scalar_spec,) * len(_TRACE_NAMES))
+        if record
+        else (state_spec, None)
     )
     mapped = jax.shard_map(
         local_scan,
@@ -954,9 +946,7 @@ def integrate_nonlinear_species_hermite(
     final, stacked = jax.jit(mapped)(
         stage_from_host(state, NamedSharding(mesh, state_spec)), *leaves
     )
-    traces = (
-        dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
-    )
+    traces = dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
     return SpeciesHermiteRun(
         state=final,
         traces=traces,

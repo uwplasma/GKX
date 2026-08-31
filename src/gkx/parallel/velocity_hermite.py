@@ -346,9 +346,7 @@ def hermite_window_cache_arrays(
         gathered = jnp.take(array, jnp.asarray(clipped), axis=axis)
         mask_shape = [1] * gathered.ndim
         mask_shape[axis] = idx.size
-        windowed[name] = jnp.where(
-            jnp.asarray(valid).reshape(mask_shape), gathered, 0
-        )
+        windowed[name] = jnp.where(jnp.asarray(valid).reshape(mask_shape), gathered, 0)
     return windowed
 
 
@@ -396,7 +394,9 @@ def hermite_halo_extend(
     return jnp.concatenate([from_below, local, from_above], axis=axis)
 
 
-def hermite_halo_interior(extended: Any, *, chunks: int, ghost_depth: int, axis: int = 2):
+def hermite_halo_interior(
+    extended: Any, *, chunks: int, ghost_depth: int, axis: int = 2
+):
     """Drop the ghost rows a :func:`hermite_halo_extend` slab carries."""
 
     blocks = int(chunks)

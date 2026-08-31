@@ -759,9 +759,7 @@ def run_runtime_scan_batch(
         raise ValueError("ky_values must not be empty")
 
     setup = _batch_scan_setup(cfg, ky_arr, Nl=Nl, Nm=Nm, deps=deps)
-    g0 = _combined_batch_initial_condition(
-        cfg, setup, Nl=Nl, Nm=Nm, deps=deps
-    )
+    g0 = _combined_batch_initial_condition(cfg, setup, Nl=Nl, Nm=Nm, deps=deps)
     options = _runtime_scan_options(
         method=method,
         dt=dt,
@@ -802,15 +800,16 @@ def run_runtime_parameter_scan(
     update_config: Callable[[RuntimeConfig, float, int], RuntimeConfig],
     ky_target: float = 0.3,
     linear_options: Mapping[str, Any] | None = None,
-    point_options: Callable[
-        [float, int, RuntimeLinearResult | None], Mapping[str, Any]
-    ] | None = None,
+    point_options: Callable[[float, int, RuntimeLinearResult | None], Mapping[str, Any]]
+    | None = None,
     candidate_options: Callable[
         [float, int, RuntimeLinearResult | None], Sequence[Mapping[str, Any]]
-    ] | None = None,
+    ]
+    | None = None,
     select_candidate: Callable[
         [float, int, tuple[RuntimeLinearResult, ...], RuntimeLinearResult | None], int
-    ] | None = None,
+    ]
+    | None = None,
     continuation: bool = False,
     warm_start: bool = False,
     warm_start_max_step: float = 0.25,
@@ -864,7 +863,8 @@ def run_runtime_parameter_scan(
 
         overrides = (
             tuple(candidate_options(float(value), index, previous))
-            if candidate_options is not None else ({},)
+            if candidate_options is not None
+            else ({},)
         )
         if not overrides:
             raise ValueError("candidate_options must return at least one candidate")
@@ -874,7 +874,8 @@ def run_runtime_parameter_scan(
         )
         selected = (
             int(select_candidate(float(value), index, candidates, previous))
-            if select_candidate is not None else 0
+            if select_candidate is not None
+            else 0
         )
         if selected < 0 or selected >= len(candidates):
             raise IndexError("select_candidate returned an out-of-range index")

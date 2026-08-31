@@ -32,6 +32,7 @@ from gkx.workflows.runtime.diagnostic_arrays import (
 
 _RUNTIME_FIELD_NAMES = ("phi", "apar", "bpar")
 
+
 def _artifact_base(path: Path) -> Path:
     if path.suffix.lower() in {".json", ".csv", ".npy", ".npz"}:
         return path.with_suffix("")
@@ -111,7 +112,6 @@ def validate_finite_runtime_result(result: Any, *, label: str) -> None:
         return
     for name in _RUNTIME_FIELD_NAMES:
         validate_finite_array(getattr(fields, name, None), label=f"{label} {name}")
-
 
 
 @dataclass(frozen=True)
@@ -277,8 +277,12 @@ def _quasilinear_scan_columns(
     return _QuasilinearSpectrumColumns(
         ky=ql_ky,
         mode_ky=np.asarray([_payload_float(p, "ky") for p in ql_payloads], dtype=float),
-        gamma=np.asarray([_payload_float(p, "gamma") for p in ql_payloads], dtype=float),
-        omega=np.asarray([_payload_float(p, "omega") for p in ql_payloads], dtype=float),
+        gamma=np.asarray(
+            [_payload_float(p, "gamma") for p in ql_payloads], dtype=float
+        ),
+        omega=np.asarray(
+            [_payload_float(p, "omega") for p in ql_payloads], dtype=float
+        ),
         kperp_eff2=np.asarray(
             [_payload_float(p, "kperp_eff2") for p in ql_payloads], dtype=float
         ),
@@ -651,6 +655,7 @@ def write_runtime_nonlinear_table_artifacts(
         paths["state"] = str(state_path)
     return paths
 
+
 def _expand_positive_ky_to_full(
     state_positive_ky: np.ndarray, *, ny_full: int
 ) -> np.ndarray:
@@ -771,6 +776,7 @@ def load_netcdf_restart_state(
     )
     return _expand_positive_ky_to_full(positive_ky, ny_full=ny)
 
+
 def _resolved_species_time(arr: Any | None, *, fallback: np.ndarray) -> np.ndarray:
     if arr is None:
         return np.asarray(fallback, dtype=np.float32)
@@ -885,8 +891,6 @@ def load_nonlinear_netcdf_diagnostics(path: str | Path) -> SimulationDiagnostics
         phi_mode_t=None,
         resolved=ResolvedDiagnostics(**resolved_payload),
     )
-
-
 
 
 @dataclass(frozen=True)
@@ -1057,7 +1061,6 @@ def load_diagnostic_time_series(
         variable=str(variable),
         source_path=str(src),
     )
-
 
 
 __all__ = [

@@ -146,6 +146,7 @@ def _device_z_pencil_shard_map_rhs_fn(  # pragma: no cover - exercised by profil
         )
     )
 
+
 _OBSERVABLE_SUM_LANES = 4096
 
 
@@ -234,6 +235,7 @@ def _spectral_physical_transport_observable_sums(
         dtype=real_dtype,
     )
 
+
 def _spectral_physical_transport_observable_vector_from_sums(
     sums: jax.Array,
 ) -> jax.Array:
@@ -251,6 +253,7 @@ def _spectral_physical_transport_observable_vector_from_sums(
         ],
         dtype=real_dtype,
     )
+
 
 def _device_z_pencil_shard_map_observables_fn(  # pragma: no cover - exercised by profile artifacts.
     mesh: Any,
@@ -284,6 +287,7 @@ def _device_z_pencil_shard_map_observables_fn(  # pragma: no cover - exercised b
             check_vma=False,
         )
     )
+
 
 def _append_device_z_transport_observables(
     traces: dict[str, list[float]],
@@ -702,6 +706,7 @@ def device_z_pencil_nonlinear_spectral_transport_window_identity_gate(
         rtol=rtol,
     )
 
+
 def _append_spectral_physical_observable_vector(
     traces: dict[str, list[float]],
     values: jax.Array,
@@ -713,6 +718,7 @@ def _append_spectral_physical_observable_vector(
     traces["physical_flux"].append(float(values[2]))
     traces["bracket_rms"].append(float(values[3]))
 
+
 def _append_spectral_physical_observables(
     traces: dict[str, list[float]],
     state_hat: jax.Array,
@@ -722,6 +728,7 @@ def _append_spectral_physical_observables(
         _spectral_physical_transport_observable_sums(state_hat, bracket_hat)
     )
     _append_spectral_physical_observable_vector(traces, values)
+
 
 __all__ = [
     "_append_device_z_transport_observables",

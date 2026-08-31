@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+
 @dataclass(frozen=True)
 class EigenfunctionComparisonMetrics:
     """Phase-aligned eigenfunction comparison summary."""
@@ -15,6 +16,7 @@ class EigenfunctionComparisonMetrics:
     overlap: float
     relative_l2: float
     phase_shift: float
+
 
 @dataclass(frozen=True)
 class EigenfunctionReferenceBundle:
@@ -153,7 +155,9 @@ def density_moment(
             return np.sum(Jl[None, ...] * Gm0, axis=1).sum(axis=0)
         Gm0 = G[species_index, :, 0, ...]
         return np.sum(Jl * Gm0, axis=0)
-    raise ValueError("G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)")
+    raise ValueError(
+        "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
+    )
 
 
 def extract_eigenfunction(

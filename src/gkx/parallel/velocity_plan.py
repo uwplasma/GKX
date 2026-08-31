@@ -233,9 +233,7 @@ def build_species_hermite_mesh_plan(
         ns_chunks -= 1
     nm_chunks = devices // ns_chunks
     if ns_chunks * nm_chunks != devices:
-        raise ValueError(
-            f"{devices} devices do not factor over Ns={ns} species-first"
-        )
+        raise ValueError(f"{devices} devices do not factor over Ns={ns} species-first")
     if nm % nm_chunks:
         raise ValueError(
             f"Hermite extent Nm={nm} is not exactly divisible by the "

@@ -67,7 +67,9 @@ def _pair_from(value: Any) -> tuple[float, float] | None:
     return window if window[1] > window[0] else None
 
 
-def measured_average_window(summary: Mapping[str, Any] | None) -> tuple[float, float] | None:
+def measured_average_window(
+    summary: Mapping[str, Any] | None,
+) -> tuple[float, float] | None:
     """Return a recorded averaging window without inventing a default."""
 
     if not summary:

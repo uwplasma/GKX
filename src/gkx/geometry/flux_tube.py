@@ -200,6 +200,7 @@ class FluxTubeGeometryData(_SpectralGeometryMixin):
     def grho(self, theta: jnp.ndarray) -> jnp.ndarray:
         return self._broadcast_profile(theta, self.grho_profile)
 
+
 def sample_flux_tube_geometry(
     geom: SAlphaGeometry | SlabGeometry, theta: jnp.ndarray
 ) -> FluxTubeGeometryData:

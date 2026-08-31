@@ -99,7 +99,10 @@ def _linked_counts_in_direction(
     for idx in range(nakx):
         for idy in range(naky):
             idx_star = idx
-            while idx_star != neighbor_map[idy, idx_star] and neighbor_map[idy, idx_star] >= 0:
+            while (
+                idx_star != neighbor_map[idy, idx_star]
+                and neighbor_map[idy, idx_star] >= 0
+            ):
                 counts[idy, idx] += 1
                 idx_star = neighbor_map[idy, idx_star]
     return counts
@@ -241,7 +244,9 @@ def _build_linked_end_damping_profile(
     if ky_mode is not None:
         ky_mode_arr = np.asarray(ky_mode, dtype=np.int32).reshape(-1)
         if ky_mode_arr.size < ny:
-            raise ValueError("ky_mode must have at least ny entries for linked end damping")
+            raise ValueError(
+                "ky_mode must have at least ny entries for linked end damping"
+            )
     if nx > 1:
         kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1, dtype=np.int32)))
     else:
@@ -260,12 +265,16 @@ def _build_linked_end_damping_profile(
             for p, idx_flat in enumerate(chain):
                 ky_idx = int(idx_flat % ny)
                 kx_idx = int(idx_flat // ny)
-                ky_phys = int(ky_mode_arr[ky_idx]) if ky_mode_arr is not None else ky_idx
+                ky_phys = (
+                    int(ky_mode_arr[ky_idx]) if ky_mode_arr is not None else ky_idx
+                )
                 if ky_phys == 0:
                     continue
                 if ky_mode_arr is not None:
                     mirror_matches = np.flatnonzero(ky_mode_arr == -ky_phys)
-                    mirror_ky = int(mirror_matches[0]) if mirror_matches.size else ky_idx
+                    mirror_ky = (
+                        int(mirror_matches[0]) if mirror_matches.size else ky_idx
+                    )
                 else:
                     mirror_ky = (-ky_idx) % ny
                 mirror_kx = int(kx_neg[kx_idx])

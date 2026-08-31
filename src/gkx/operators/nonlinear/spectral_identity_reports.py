@@ -45,7 +45,9 @@ class _RHSIdentityErrors:
     rhs: _AbsRelError
 
 
-def _abs_rel_error(reference: jax.Array, candidate: jax.Array, *, atol: float) -> _AbsRelError:
+def _abs_rel_error(
+    reference: jax.Array, candidate: jax.Array, *, atol: float
+) -> _AbsRelError:
     abs_error, rel_error = _max_abs_rel_error(reference, candidate, atol=atol)
     return _AbsRelError(abs_error, rel_error)
 

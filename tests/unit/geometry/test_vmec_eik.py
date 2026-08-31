@@ -48,9 +48,7 @@ def _vmec_runtime_cfg(
             ntheta=32,
             nperiod=1,
         ),
-        time=TimeConfig(
-            t_max=1.0, dt=0.1, method="rk4", fixed_dt=True
-        ),
+        time=TimeConfig(t_max=1.0, dt=0.1, method="rk4", fixed_dt=True),
         geometry=GeometryConfig(
             model="vmec",
             vmec_file=str(vmec_path),
@@ -211,9 +209,7 @@ def test_atomic_vmec_eik_write_replaces_final_path(
         temp_paths.append(path)
         path.write_text("new", encoding="utf-8")
 
-    monkeypatch.setattr(
-        "gkx.geometry.imported_vmec.write_vmec_eik_netcdf", fake_write
-    )
+    monkeypatch.setattr("gkx.geometry.imported_vmec.write_vmec_eik_netcdf", fake_write)
 
     vmec_backend._write_vmec_eik_netcdf_atomically(out_path, {}, request="request")
 
@@ -229,9 +225,7 @@ def test_generate_runtime_vmec_eik_invokes_internal_generator(
     cfg = _vmec_runtime_cfg(tmp_path, geometry_file=str(out_path))
 
     mock_gen = MagicMock(return_value=out_path.resolve())
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen
-    )
+    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen)
     monkeypatch.setattr(
         "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: True
     )
@@ -263,9 +257,7 @@ def test_generate_runtime_vmec_eik_reuses_default_cache_without_backend(
     mock_gen = MagicMock(
         side_effect=AssertionError("cached VMEC geometry should be reused")
     )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen
-    )
+    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen)
 
     out = generate_runtime_vmec_eik(cfg)
 
@@ -288,9 +280,7 @@ def test_generate_runtime_vmec_eik_regenerates_invalid_default_cache(
         "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: True
     )
     mock_gen = MagicMock(return_value=expected_out.resolve())
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen
-    )
+    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen)
 
     out = generate_runtime_vmec_eik(cfg)
 
@@ -312,9 +302,7 @@ def test_generate_runtime_vmec_eik_uses_default_output_when_none(
         "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: True
     )
     mock_gen = MagicMock(return_value=expected_out.resolve())
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen
-    )
+    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen)
 
     out = generate_runtime_vmec_eik(cfg)
 

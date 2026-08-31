@@ -268,8 +268,10 @@ def test_serial_reference_matches_canonical_zonal_value_and_gradient() -> None:
     cache, params, G, charge, density, temp, mass, tz, vth = _build_case(
         beta=0.0, fapar=0.0
     )
-    G = jnp.zeros_like(G).at[0, 0, 0, 0, 1, :].set(
-        0.2 + 0.05j * jnp.asarray(cache.bmag)
+    G = (
+        jnp.zeros_like(G)
+        .at[0, 0, 0, 0, 1, :]
+        .set(0.2 + 0.05j * jnp.asarray(cache.bmag))
     )
 
     def production_phi(G_in: jnp.ndarray) -> jnp.ndarray:

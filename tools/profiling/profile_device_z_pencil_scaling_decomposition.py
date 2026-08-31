@@ -103,7 +103,9 @@ def _stats(times: list[float]) -> dict[str, float]:
     }
 
 
-def _max_abs_rel(candidate: Any, reference: Any, *, floor: float) -> tuple[float, float]:
+def _max_abs_rel(
+    candidate: Any, reference: Any, *, floor: float
+) -> tuple[float, float]:
     candidate_arr = np.asarray(candidate)
     reference_arr = np.asarray(reference)
     max_abs = float(np.max(np.abs(candidate_arr - reference_arr)))
@@ -247,7 +249,9 @@ def build_decomposition(
             ),
         }
 
-    identity_rows = [row for row in rows if row["active"] and row["route"] == "shard_map"]
+    identity_rows = [
+        row for row in rows if row["active"] and row["route"] == "shard_map"
+    ]
     all_identity = all(bool(row["identity_passed"]) for row in identity_rows)
     return _json_clean(
         {
@@ -296,21 +300,33 @@ def _isolated_grids(
             command = [
                 sys.executable,
                 str(Path(__file__).resolve()),
-                "--shape", ",".join(str(item) for item in shape),
-                "--device-counts", ",".join(str(item) for item in device_counts),
-                "--steps", str(int(steps)),
-                "--dt", repr(float(dt)),
-                "--warmups", str(int(warmups)),
-                "--repeats", str(int(repeats)),
-                "--atol", repr(float(atol)),
-                "--rtol", repr(float(rtol)),
-                "--min-speedup", repr(float(min_speedup)),
-                "--out-prefix", str(prefix),
+                "--shape",
+                ",".join(str(item) for item in shape),
+                "--device-counts",
+                ",".join(str(item) for item in device_counts),
+                "--steps",
+                str(int(steps)),
+                "--dt",
+                repr(float(dt)),
+                "--warmups",
+                str(int(warmups)),
+                "--repeats",
+                str(int(repeats)),
+                "--atol",
+                repr(float(atol)),
+                "--rtol",
+                repr(float(rtol)),
+                "--min-speedup",
+                repr(float(min_speedup)),
+                "--out-prefix",
+                str(prefix),
             ]
             if z_chunk_size is not None:
                 command += ["--z-chunk-size", str(int(z_chunk_size))]
             subprocess.run(command, check=True)
-            payload = json.loads(prefix.with_suffix(".json").read_text(encoding="utf-8"))
+            payload = json.loads(
+                prefix.with_suffix(".json").read_text(encoding="utf-8")
+            )
             grids.extend(payload["grids"])
     return grids
 
@@ -419,7 +435,9 @@ def build_summary(
                     else "parallel_scaling"
                 ),
                 "production_speedup_claim_allowed": bool(
-                    all_identity and max_net is not None and max_net >= float(min_speedup)
+                    all_identity
+                    and max_net is not None
+                    and max_net >= float(min_speedup)
                 ),
             },
         }
@@ -458,9 +476,7 @@ def write_artifacts(summary: dict[str, Any], out_prefix: Path) -> None:
         writer = csv.DictWriter(fh, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for grid in grids:
-            indexed = {
-                (row["route"], row["device_count"]): row for row in grid["rows"]
-            }
+            indexed = {(row["route"], row["device_count"]): row for row in grid["rows"]}
             two = indexed.get(("shard_map", 2), {})
             dec = grid.get("decomposition") or {}
             writer.writerow(
@@ -517,7 +533,9 @@ def write_artifacts(summary: dict[str, Any], out_prefix: Path) -> None:
         label="net speedup vs serial",
     )
     axes[0].axhline(2.0, color="0.7", ls="--", lw=0.9)
-    axes[0].axhline(gate, color="0.25", ls=":", lw=1.2, label=f"{gate:g}x promotion gate")
+    axes[0].axhline(
+        gate, color="0.25", ls=":", lw=1.2, label=f"{gate:g}x promotion gate"
+    )
     axes[0].set_xscale("log")
     axes[0].set_xlabel("state size (10$^6$ complex elements)")
     axes[0].set_ylabel("ratio")
@@ -536,9 +554,7 @@ def write_artifacts(summary: dict[str, Any], out_prefix: Path) -> None:
             color=palette[index % len(palette)],
             label=f"$N_y\\times N_x$ = {perp[0]}$\\times${perp[1]}",
         )
-    needed = [
-        _metric(grid, "parallel_scaling_vs_one_device") / gate for grid in grids
-    ]
+    needed = [_metric(grid, "parallel_scaling_vs_one_device") / gate for grid in grids]
     axes[1].plot(
         sizes, needed, "--", lw=1.4, color="0.35", label="overhead needed for gate"
     )

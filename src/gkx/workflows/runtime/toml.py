@@ -9,7 +9,8 @@ from pathlib import Path
 
 import tomllib
 from gkx.workflows.runtime.config import (
-    Case, RuntimeCollisionConfig,
+    Case,
+    RuntimeCollisionConfig,
     RuntimeConfig,
     RuntimeExpertConfig,
     RuntimeNormalizationConfig,
@@ -96,11 +97,10 @@ def _validate_runtime_schema_version(data: dict[str, Any]) -> None:
 _REMOVED_TIME_KEYS: dict[str, str] = {
     "use_diffrax": (
         "the native explicit integrator is now the only time-integration owner; "
-        "delete the key and select the scheme with method = \"rk2\"/\"rk3\"/\"rk4\""
+        'delete the key and select the scheme with method = "rk2"/"rk3"/"rk4"'
     ),
     "diffrax_solver": (
-        "select the native tableau with method = \"rk2\", \"rk3\", \"rk4\", or "
-        "\"sspx3\""
+        'select the native tableau with method = "rk2", "rk3", "rk4", or "sspx3"'
     ),
     "diffrax_adaptive": (
         "the native linear owner is fixed-step; set dt from the reported CFL "
@@ -300,7 +300,9 @@ def _runtime_species_from_toml(
     return tuple(species) if species else None
 
 
-def _resolve_runtime_config_paths(cfg: RuntimeConfig, *, base_dir: Path) -> RuntimeConfig:
+def _resolve_runtime_config_paths(
+    cfg: RuntimeConfig, *, base_dir: Path
+) -> RuntimeConfig:
     """Resolve every path-valued runtime field against the TOML directory."""
 
     return replace(

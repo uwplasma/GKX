@@ -492,9 +492,7 @@ def _integrate_collisional_zonal_trace(
     maximum_normalized_time: float,
     sample_stride: int,
     snapshot_normalized_time: float | None = None,
-) -> tuple[
-    np.ndarray, np.ndarray, float, int, np.ndarray | None, float | None
-]:
+) -> tuple[np.ndarray, np.ndarray, float, int, np.ndarray | None, float | None]:
     """Advance one collision model and optionally retain one physical state."""
 
     import time
@@ -796,12 +794,13 @@ def reconstruct_collisional_zonal_velocity_sections(
     laguerre_sign = (-1.0) ** np.arange(n_laguerre)
     parallel = np.linspace(-3.0, 3.0, point_count)
     perpendicular = np.linspace(0.0, 4.0, point_count)
-    hermite_parallel = np.asarray(
-        [eval_hermite(order, parallel) for order in hermite_order]
-    ) / hermite_norm[:, None]
-    hermite_zero = np.asarray(
-        [eval_hermite(order, 0.0) for order in hermite_order]
-    ) / hermite_norm
+    hermite_parallel = (
+        np.asarray([eval_hermite(order, parallel) for order in hermite_order])
+        / hermite_norm[:, None]
+    )
+    hermite_zero = (
+        np.asarray([eval_hermite(order, 0.0) for order in hermite_order]) / hermite_norm
+    )
     laguerre_zero = laguerre_sign * np.asarray(
         [eval_laguerre(order, 0.0) for order in range(n_laguerre)]
     )
@@ -813,9 +812,7 @@ def reconstruct_collisional_zonal_velocity_sections(
         * np.abs(np.einsum("lm,ma,l->a", moments, hermite_parallel, laguerre_zero)),
         "perpendicular": np.exp(-perpendicular)
         * np.abs(
-            np.einsum(
-                "lm,m,la->a", moments, hermite_zero, laguerre_perpendicular
-            )
+            np.einsum("lm,m,la->a", moments, hermite_zero, laguerre_perpendicular)
         ),
     }
     coordinates = {"parallel": parallel, "perpendicular": perpendicular}
@@ -877,9 +874,7 @@ def run_finite_wavelength_collisional_zonal_trace(
     if sample_stride < 1 or nz < 8:
         raise ValueError("sample_stride must be >= 1 and nz must be >= 8")
 
-    if out_sections_csv is not None and (
-        kx != 0.2 or maximum_normalized_time <= 5.0
-    ):
+    if out_sections_csv is not None and (kx != 0.2 or maximum_normalized_time <= 5.0):
         raise ValueError(
             "velocity sections require kx=0.2 and maximum normalized time > 5"
         )
@@ -992,17 +987,15 @@ def run_finite_wavelength_collisional_zonal_trace(
         steps,
         snapshot_state,
         snapshot_time,
-    ) = (
-        _integrate_collisional_zonal_trace(
-            problem,
-            collision_operator=operator,
-            terms=terms,
-            collision_frequency=collision_frequency,
-            dt=dt,
-            maximum_normalized_time=maximum_normalized_time,
-            sample_stride=sample_stride,
-            snapshot_normalized_time=(5.0 if out_sections_csv is not None else None),
-        )
+    ) = _integrate_collisional_zonal_trace(
+        problem,
+        collision_operator=operator,
+        terms=terms,
+        collision_frequency=collision_frequency,
+        dt=dt,
+        maximum_normalized_time=maximum_normalized_time,
+        sample_stride=sample_stride,
+        snapshot_normalized_time=(5.0 if out_sections_csv is not None else None),
     )
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     with out_csv.open("w", newline="", encoding="utf-8") as handle:
@@ -2317,7 +2310,7 @@ def _miller_converged_gate_report(
                 rtol=0.0,
                 notes=(
                     "Fraction of the configured horizon the trace actually "
-                    "reaches. [time] run_to defaults to \"saturation\", which "
+                    'reaches. [time] run_to defaults to "saturation", which '
                     "declares a zero-gradient run converged inside the first "
                     "chunk and truncates it at t ~ 6 without raising."
                 ),

@@ -721,7 +721,9 @@ def run_full_nonlinear_runtime(
     # request fails immediately instead of after a long serial run.
     plan = resolve_nonlinear_parallel_plan(cfg.parallel)
     if prepare_only and plan is not None:
-        raise ValueError("prepared nonlinear execution currently requires serial policy")
+        raise ValueError(
+            "prepared nonlinear execution currently requires serial policy"
+        )
     status = _status_callback(status_callback)
     ctx = _prepare_context(
         cfg,
@@ -753,10 +755,16 @@ def run_full_nonlinear_runtime(
         if _saturation_stop_condition(cfg, ctx, policy) is not None:
             raise ValueError("prepared execution cannot stop early at saturation")
         kwargs = _diagnostic_kwargs(
-            cfg, ctx, policy, deps=deps, steps=ctx.steps, method=method,
+            cfg,
+            ctx,
+            policy,
+            deps=deps,
+            steps=ctx.steps,
+            method=method,
             sample_stride=policy.sample_stride,
             diagnostics_stride=policy.diagnostics_stride,
-            fixed_dt=bool(cfg.time.fixed_dt), show_progress=show_progress,
+            fixed_dt=bool(cfg.time.fixed_dt),
+            show_progress=show_progress,
         )
         if not bool(cfg.time.fixed_dt):
             kwargs["time_horizon"] = float(cfg.time.t_max)

@@ -139,7 +139,7 @@ def _run_solver_chunk(args: argparse.Namespace) -> dict[str, Any]:
             ntheta=int(args.nz),
             nperiod=1,
             y0=10.0,
-        )
+        ),
     )
     tmin = float(args.fit_start_fraction) * float(args.dt) * int(args.steps)
     tmax = float(args.fit_end_fraction) * float(args.dt) * int(args.steps)
@@ -355,9 +355,7 @@ def run_independent_ky_sweep(args: argparse.Namespace) -> dict[str, Any]:
     _OMEGA_ATOL = float(args.omega_atol)
     ky_values = np.asarray(args.ky, dtype=float)
     rows: list[dict[str, Any]] = []
-    with tempfile.TemporaryDirectory(
-        prefix="gkx-independent-ky-scaling-"
-    ) as tmp_name:
+    with tempfile.TemporaryDirectory(prefix="gkx-independent-ky-scaling-") as tmp_name:
         tmp = Path(tmp_name)
         for device_count in list(args.devices):
             rows.append(
@@ -485,7 +483,7 @@ def _run_ensemble_chunk(args: argparse.Namespace) -> dict[str, Any]:
             ntheta=int(args.nz),
             nperiod=1,
             y0=10.0,
-        )
+        ),
     )
     tmin = float(args.fit_start_fraction) * float(args.dt) * int(args.steps)
     tmax = float(args.fit_end_fraction) * float(args.dt) * int(args.steps)
@@ -681,9 +679,7 @@ def _quasilinear_identity_metrics(
             "max_gamma_abs_error": math.nan,
             "identity_gate_pass": False,
         }
-    ref_members = {
-        float(member["tprim"]): member for member in reference["members"]
-    }
+    ref_members = {float(member["tprim"]): member for member in reference["members"]}
     row_members = {float(member["tprim"]): member for member in row["members"]}
     if set(ref_members) != set(row_members):
         return {

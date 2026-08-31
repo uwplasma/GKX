@@ -54,8 +54,6 @@ def _vmec_field_line_sampling_coordinates(
     return iota_line, iota_safe, theta_line, theta_vmec, zeta_line
 
 
-
-
 class _Struct:
     """Mutable attribute bag for assembled VMEC geometry records."""
 
@@ -295,7 +293,9 @@ class _FluxSurfaceBoozerGeometry:
     sqrt_g_booz: np.ndarray
 
 
-def _sample_boozer_mode_table(vs: Any, s: np.ndarray, ns: int) -> tuple[np.ndarray, ...]:
+def _sample_boozer_mode_table(
+    vs: Any, s: np.ndarray, ns: int
+) -> tuple[np.ndarray, ...]:
     """Sample Boozer Fourier amplitudes and radial derivatives at one surface."""
 
     mnmax_b = vs.mnbooz
@@ -345,7 +345,9 @@ def _boozer_mode_angle(
 
     mode_index = (slice(None),) + (None,) * theta_b.ndim
     theta_eval = theta_b + np.pi if flipit else theta_b
-    return xm_b[mode_index] * theta_eval[None, ...] - xn_b[mode_index] * phi_b[None, ...]
+    return (
+        xm_b[mode_index] * theta_eval[None, ...] - xn_b[mode_index] * phi_b[None, ...]
+    )
 
 
 def _boozer_mode_sum(coefficients: np.ndarray, basis: np.ndarray) -> np.ndarray:
@@ -437,8 +439,7 @@ def _fieldline_cartesian_derivatives(
             - tensors.R_b * sinphi * (1.0 - tensors.d_nu_b_d_phi_b)
         ),
         d_X_d_s=(
-            tensors.d_R_b_d_s * cosphi
-            - tensors.R_b * sinphi * (-tensors.d_nu_b_d_s)
+            tensors.d_R_b_d_s * cosphi - tensors.R_b * sinphi * (-tensors.d_nu_b_d_s)
         ),
         d_Y_d_theta_b=(
             tensors.d_R_b_d_theta_b * sinphi
@@ -449,8 +450,7 @@ def _fieldline_cartesian_derivatives(
             + tensors.R_b * cosphi * (1.0 - tensors.d_nu_b_d_phi_b)
         ),
         d_Y_d_s=(
-            tensors.d_R_b_d_s * sinphi
-            + tensors.R_b * cosphi * (-tensors.d_nu_b_d_s)
+            tensors.d_R_b_d_s * sinphi + tensors.R_b * cosphi * (-tensors.d_nu_b_d_s)
         ),
     )
 
@@ -529,9 +529,7 @@ def _fieldline_alpha_gradients(
     grad_psi_Z = gradients.grad_psi_Z
     g_sup_psi_psi = grad_psi_X**2 + grad_psi_Y**2 + grad_psi_Z**2
     radial_shear = (
-        -(phi_b - zeta_center)
-        * d_iota_d_s[:, None, None]
-        / edge_toroidal_flux_over_2pi
+        -(phi_b - zeta_center) * d_iota_d_s[:, None, None] / edge_toroidal_flux_over_2pi
     )
     grad_alpha_X = (
         radial_shear * grad_psi_X
@@ -674,7 +672,10 @@ def _fieldline_metric_profiles(
     grad_alpha_dot_grad_psi_b = alpha_gradients.g_sup_psi_psi * shear.L1
     return _FieldlineMetricProfiles(
         bmag=modB_b / B_reference,
-        gradpar_theta_b=-L_reference / modB_b / tensors.sqrt_g_booz * iota[:, None, None],
+        gradpar_theta_b=-L_reference
+        / modB_b
+        / tensors.sqrt_g_booz
+        * iota[:, None, None],
         gradpar_phi=L_reference / modB_b / tensors.sqrt_g_booz,
         gds2=grad_alpha_dot_grad_alpha_b * L_reference**2 * s[:, None, None],
         gds21=grad_alpha_dot_grad_psi_b * sfac * shat[:, None, None] / B_reference,

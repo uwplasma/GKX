@@ -404,7 +404,9 @@ def _domain_transport_trace_errors(
     *,
     floor: float,
 ) -> _DomainTransportTraceErrors:
-    mass_abs, mass_rel = _relative_trace_error(serial.mass, decomposed.mass, floor=floor)
+    mass_abs, mass_rel = _relative_trace_error(
+        serial.mass, decomposed.mass, floor=floor
+    )
     free_energy_abs, free_energy_rel = _relative_trace_error(
         serial.free_energy,
         decomposed.free_energy,

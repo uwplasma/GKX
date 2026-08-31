@@ -34,8 +34,7 @@ def test_saturation_campaign_prints_cumulative_runtime_progress(capsys) -> None:
     )
 
     assert capsys.readouterr().out == (
-        "[gkx] completed nonlinear chunk 2: "
-        "t=25/100 progress= 25.0% elapsed=01:00\n"
+        "[gkx] completed nonlinear chunk 2: t=25/100 progress= 25.0% elapsed=01:00\n"
     )
 
 

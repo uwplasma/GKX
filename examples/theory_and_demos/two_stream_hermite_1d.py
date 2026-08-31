@@ -16,12 +16,16 @@ def main() -> None:
     grid = build_spectral_grid(grid_cfg)
     geom = SAlphaGeometry.from_config(GeometryConfig())
     params = LinearParams(tprim=0.0, fprim=0.0, nu=0.0)
-    terms = LinearTerms(streaming=1.0, mirror=0.0, curvature=0.0, gradb=0.0, diamagnetic=0.0)
+    terms = LinearTerms(
+        streaming=1.0, mirror=0.0, curvature=0.0, gradb=0.0, diamagnetic=0.0
+    )
 
     G0 = jnp.zeros((2, 2, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
     G0 = G0.at[0, 0, 0, 0, :].set(1.0e-3 + 0.0j)
 
-    _, phi_t = integrate_linear(G0, grid, geom, params, dt=0.1, steps=10, method="rk2", terms=terms)
+    _, phi_t = integrate_linear(
+        G0, grid, geom, params, dt=0.1, steps=10, method="rk2", terms=terms
+    )
     phi_np = np.asarray(phi_t)
     print("two_stream demo phi_t shape:", phi_np.shape)
     print("phi_t min/max:", phi_np.min(), phi_np.max())

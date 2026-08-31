@@ -341,8 +341,6 @@ def write_branch_artifacts(
     }
 
 
-
-
 DEFAULT_W7X_OUT = ROOT / "docs" / "_static" / "w7x_tem_extension_status.png"
 DEFAULT_W7X_SPECTRUM = ROOT / "docs" / "_static" / "w7x_fluctuation_spectrum_panel.json"
 DEFAULT_TEM_TABLE = ROOT / "docs" / "_static" / "tem_mismatch_table.csv"
@@ -610,10 +608,10 @@ def write_w7x_status_artifacts(
     }
 
 
-
-
 def build_branch_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Build the axisymmetric TEM branch audit.")
+    parser = argparse.ArgumentParser(
+        description="Build the axisymmetric TEM branch audit."
+    )
     parser.add_argument("--table", type=Path, default=DEFAULT_TABLE)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--out", type=Path, default=DEFAULT_BRANCH_OUT)
@@ -640,11 +638,19 @@ def main(argv: list[str] | None = None) -> int:
     mode, mode_args = args[0], args[1:]
     if mode == "axisymmetric-branch":
         parsed = build_branch_parser().parse_args(mode_args)
-        payload = build_branch_audit_payload(table=parsed.table, reference=parsed.reference)
+        payload = build_branch_audit_payload(
+            table=parsed.table, reference=parsed.reference
+        )
         if parsed.json_only:
             print(json.dumps(_json_clean(payload), indent=2, sort_keys=True))
         else:
-            print(json.dumps(write_branch_artifacts(payload, out_png=parsed.out), indent=2, sort_keys=True))
+            print(
+                json.dumps(
+                    write_branch_artifacts(payload, out_png=parsed.out),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
         return 0
 
     parsed = build_w7x_parser().parse_args(mode_args)

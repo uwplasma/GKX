@@ -14,7 +14,9 @@ from typing import Any
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_FIELD_PREFIX = REPO_ROOT / "docs" / "_static" / "electrostatic_field_reduce_gate"
+DEFAULT_FIELD_PREFIX = (
+    REPO_ROOT / "docs" / "_static" / "electrostatic_field_reduce_gate"
+)
 DEFAULT_DRIFT_PREFIX = REPO_ROOT / "docs" / "_static" / "electrostatic_drift_gate"
 DEFAULT_DIAMAGNETIC_PREFIX = (
     REPO_ROOT / "docs" / "_static" / "electrostatic_diamagnetic_gate"
@@ -146,7 +148,9 @@ def _velocity_plan(state: Any, device_list: list[Any]) -> Any:
     )
 
 
-def _electrostatic_phi(state: Any, cache: Any, params: Any, plan: Any, devices: list[Any]):
+def _electrostatic_phi(
+    state: Any, cache: Any, params: Any, plan: Any, devices: list[Any]
+):
     from gkx.parallel.velocity import electrostatic_phi_shard_map
 
     return electrostatic_phi_shard_map(
@@ -565,7 +569,9 @@ def _plot_field(summary: dict[str, object], paths: dict[str, Path]) -> None:
     axes[1].semilogy(
         z, np.maximum(error, 1.0e-16), "s-", lw=2.0, label="absolute error"
     )
-    axes[1].axhline(float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate")
+    axes[1].axhline(
+        float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate"
+    )
     status = "passed" if bool(summary["identity_passed"]) else "failed"
     axes[1].set_xlabel("z index")
     axes[1].set_ylabel("absolute error")
@@ -604,7 +610,9 @@ def _plot_moment(summary: dict[str, object], paths: dict[str, Path]) -> None:
     axes[1].semilogy(
         m, np.maximum(error, 1.0e-16), "s-", lw=2.0, label="absolute error"
     )
-    axes[1].axhline(float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate")
+    axes[1].axhline(
+        float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate"
+    )
     axes[1].set_xlabel("Hermite index m")
     axes[1].set_ylabel("absolute error")
     status = "passed" if bool(summary["identity_passed"]) else "failed"
@@ -645,7 +653,9 @@ def _plot_components(summary: dict[str, object], paths: dict[str, Path]) -> None
     axes[1].semilogy(
         x, np.maximum(error, 1.0e-16), "s-", lw=2.0, label="absolute error"
     )
-    axes[1].axhline(float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate")
+    axes[1].axhline(
+        float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate"
+    )
     axes[1].set_xticks(x, labels)
     axes[1].set_ylabel("absolute error")
     status = "passed" if bool(summary["identity_passed"]) else "failed"
@@ -699,7 +709,11 @@ def _run_field(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 
@@ -716,7 +730,11 @@ def _run_drift(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 
@@ -733,7 +751,11 @@ def _run_diamagnetic(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 

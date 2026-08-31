@@ -225,11 +225,7 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
     """The canonical kinetic-electron case preserves the executed operator."""
 
     runtime_cfg, raw = load_runtime_from_toml(
-        ROOT
-        / "examples"
-        / "linear"
-        / "axisymmetric"
-        / "runtime_kinetic_electron.toml"
+        ROOT / "examples" / "linear" / "axisymmetric" / "runtime_kinetic_electron.toml"
     )
     model = SimpleNamespace(
         tprim_i=2.49,
@@ -253,9 +249,7 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
     assert runtime_cfg.time.sample_stride == 10
     assert raw["run"]["solver"] == "auto"
     kinetic_steps = round(runtime_cfg.time.t_max / runtime_cfg.time.dt)
-    assert kinetic_steps * runtime_cfg.time.dt == pytest.approx(
-        runtime_cfg.time.t_max
-    )
+    assert kinetic_steps * runtime_cfg.time.dt == pytest.approx(runtime_cfg.time.t_max)
     assert kinetic_steps % runtime_cfg.time.sample_stride == 0
 
     runtime_params = build_runtime_linear_params(
@@ -317,9 +311,7 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
         atol=1.0e-12,
     )
 
-    cache = build_linear_cache(
-        grid, geometry, runtime_params, n_laguerre, n_hermite
-    )
+    cache = build_linear_cache(grid, geometry, runtime_params, n_laguerre, n_hermite)
     runtime_rhs, _ = linear_rhs_cached(
         runtime_state,
         cache,
@@ -345,9 +337,14 @@ def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
         ROOT / "examples" / "linear" / "axisymmetric" / "runtime_kbm.toml"
     )
     model = SimpleNamespace(
-        tprim_i=2.49, tprim_e=2.49, fprim=0.8,
-        Te_over_Ti=1.0, mass_ratio=1.0 / 0.00027,
-        nu_i=0.0, nu_e=0.0, beta=runtime_cfg.physics.beta,
+        tprim_i=2.49,
+        tprim_e=2.49,
+        fprim=0.8,
+        Te_over_Ti=1.0,
+        mass_ratio=1.0 / 0.00027,
+        nu_i=0.0,
+        nu_e=0.0,
+        beta=runtime_cfg.physics.beta,
     )
     n_laguerre, n_hermite = 2, 4
     geometry = build_runtime_geometry(runtime_cfg)
@@ -359,28 +356,43 @@ def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
         runtime_cfg, Nm=n_hermite, geom=geometry
     )
     legacy_params = _two_species_params(
-        model, kpar_scale=float(geometry.gradpar()),
+        model,
+        kpar_scale=float(geometry.gradpar()),
         omega_d_scale=KBM_OMEGA_D_SCALE,
         omega_star_scale=KBM_OMEGA_STAR_SCALE,
         rho_star=KBM_RHO_STAR,
-        damp_ends_amp=0.1, damp_ends_widthfrac=0.125,
+        damp_ends_amp=0.1,
+        damp_ends_widthfrac=0.125,
         nhermite=n_hermite,
     )
     for field in fields(runtime_params):
         np.testing.assert_allclose(
             np.asarray(getattr(runtime_params, field.name)),
             np.asarray(getattr(legacy_params, field.name)),
-            rtol=1.0e-7, atol=1.0e-9, err_msg=field.name,
+            rtol=1.0e-7,
+            atol=1.0e-9,
+            err_msg=field.name,
         )
     assert build_runtime_linear_terms(runtime_cfg).hypercollisions == 1.0
 
     runtime_state = build_runtime_initial_condition(
-        grid, geometry, runtime_cfg, ky_index=0, kx_index=0,
-        Nl=n_laguerre, Nm=n_hermite, nspecies=2,
+        grid,
+        geometry,
+        runtime_cfg,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        nspecies=2,
     )
     legacy_single = build_benchmark_initial_condition(
-        grid, geometry, ky_index=0, kx_index=0,
-        Nl=n_laguerre, Nm=n_hermite, init_cfg=runtime_cfg.init,
+        grid,
+        geometry,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        init_cfg=runtime_cfg.init,
     )
     legacy_state = np.zeros_like(np.asarray(runtime_state))
     legacy_state[1] = np.asarray(legacy_single)
@@ -388,11 +400,16 @@ def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
 
     cache = build_linear_cache(grid, geometry, runtime_params, n_laguerre, n_hermite)
     runtime_rhs, _ = linear_rhs_cached(
-        runtime_state, cache, runtime_params,
+        runtime_state,
+        cache,
+        runtime_params,
         terms=build_runtime_linear_terms(runtime_cfg),
     )
     legacy_rhs, _ = linear_rhs_cached(
-        legacy_state, cache, legacy_params, terms=LinearTerms(bpar=0.0),
+        legacy_state,
+        cache,
+        legacy_params,
+        terms=LinearTerms(bpar=0.0),
     )
     np.testing.assert_allclose(runtime_rhs, legacy_rhs, rtol=1.0e-6, atol=2.0e-16)
 

@@ -105,10 +105,7 @@ def _explicit_sspx3_state(
     G2 = project_state((1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler)
     G3 = euler_step(G2)
     return (
-        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
-        + _SSPX3_W3 * G1
-        + (_SSPX3_W2 - 1.0) * G2
-        + G3
+        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G + _SSPX3_W3 * G1 + (_SSPX3_W2 - 1.0) * G2 + G3
     )
 
 
@@ -457,7 +454,9 @@ def _advance_explicit_diagnostic_state(
     """Advance one explicit diagnostic state and compute its new fields."""
 
     dG, fields = rhs_fn(G)
-    dt_local = jnp.asarray(time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype)
+    dt_local = jnp.asarray(
+        time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype
+    )
     if max_dt is not None:
         dt_local = jnp.minimum(dt_local, jnp.maximum(max_dt, 0.0))
     G_new = advance_explicit_nonlinear_state(
@@ -544,6 +543,7 @@ def make_explicit_diagnostic_step(
         idx: Any,
     ) -> tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]]:
         G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
+
         def advance(max_dt: jnp.ndarray | None):
             G_new, fields_new, dt_local = _advance_explicit_diagnostic_state(
                 G,
@@ -592,6 +592,7 @@ def make_explicit_diagnostic_step(
                 t_new,
                 dt_local,
             )
+
         if time_horizon is None:
             return advance(None)
         remaining = jnp.maximum(jnp.asarray(time_horizon) - t_prev, 0.0)

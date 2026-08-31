@@ -42,6 +42,7 @@ from gkx.geometry.vmec_state_controls import (
     _vmec_boozer_state_parameter_name,
 )
 
+
 def _report_float(report: dict[str, object], key: str) -> float:
     return _report_float_impl(report, key)
 
@@ -424,6 +425,7 @@ def vmec_boozer_scalar_objective_line_search_report(  # pragma: no cover
         _finite_difference_report_fn=vmec_boozer_scalar_objective_finite_difference_report,
         **kwargs,
     )
+
 
 __all__ = [
     "_load_vmex_example_state_bundle",

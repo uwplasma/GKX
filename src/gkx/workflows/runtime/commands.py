@@ -547,7 +547,9 @@ def plot_saved_output_command(
     """Render a saved runtime artifact from the top-level ``--plot`` command."""
 
     if len(argv) < 2:
-        print("usage: gkx plot OUTPUT_FILE [--out FIGURE.png]; legacy usage: gkx --plot OUTPUT_FILE [--out FIGURE.png]")
+        print(
+            "usage: gkx plot OUTPUT_FILE [--out FIGURE.png]; legacy usage: gkx --plot OUTPUT_FILE [--out FIGURE.png]"
+        )
         return 1
     input_path = argv[1]
     out_path = None
@@ -555,7 +557,9 @@ def plot_saved_output_command(
         if len(argv) == 4 and argv[2] == "--out":
             out_path = argv[3]
         else:
-            print("usage: gkx plot OUTPUT_FILE [--out FIGURE.png]; legacy usage: gkx --plot OUTPUT_FILE [--out FIGURE.png]")
+            print(
+                "usage: gkx plot OUTPUT_FILE [--out FIGURE.png]; legacy usage: gkx --plot OUTPUT_FILE [--out FIGURE.png]"
+            )
             return 1
     rendered = plot_saved_output(input_path, out=out_path)
     print(f"saved {rendered}")

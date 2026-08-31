@@ -52,9 +52,7 @@ def test_resolve_manifest_path_handles_relative_and_env_paths(
     monkeypatch.setenv("GKX_AUDIT_ROOT", str(tmp_path / "audit_root"))
 
     rel = _resolve_manifest_path("../configs/lane.toml", manifest_dir=manifest_dir)
-    env_rel = _resolve_manifest_path(
-        "$GKX_AUDIT_ROOT/dumps", manifest_dir=manifest_dir
-    )
+    env_rel = _resolve_manifest_path("$GKX_AUDIT_ROOT/dumps", manifest_dir=manifest_dir)
 
     assert rel == (tmp_path / "configs" / "lane.toml").resolve()
     assert env_rel == (tmp_path / "audit_root" / "dumps").resolve()

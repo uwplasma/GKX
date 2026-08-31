@@ -42,9 +42,7 @@ grid = build_spectral_grid(cfg.grid)
 geom = SAlphaGeometry.from_config(cfg.geometry)
 params = build_linear_params([Species(1.0, 1.0, 1.0, 1.0, 2.0, 0.8)], tau_e=1.0)
 
-G0 = jnp.zeros(
-    (NL, NM, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
-)
+G0 = jnp.zeros((NL, NM, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
 G0 = G0.at[0, 0, grid.ky.size // 2, 0, :].set(1.0e-3 + 0.0j)
 cache = build_linear_cache(grid, geom, params, NL, NM)
 
@@ -52,7 +50,9 @@ rows = []
 for n in DEVICES:
     devices = jax.devices()[:n]
     if len(devices) < n:
-        raise RuntimeError(f"Requested {n} devices but only {len(devices)} are visible.")
+        raise RuntimeError(
+            f"Requested {n} devices but only {len(devices)} are visible."
+        )
     state_sharding = resolve_state_sharding(G0, "ky", devices=devices)
     warm = integrate_linear_sharded(
         G0, cache, params, dt=DT, steps=2, state_sharding=state_sharding

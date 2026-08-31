@@ -23,7 +23,9 @@ def _format_duration(seconds: float) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-def progress_update_stride(steps: int, *, target_updates: int = _TARGET_PROGRESS_UPDATES) -> int:
+def progress_update_stride(
+    steps: int, *, target_updates: int = _TARGET_PROGRESS_UPDATES
+) -> int:
     """Return a bounded host-callback cadence for long integrations."""
 
     steps_i = max(int(steps), 1)
@@ -31,7 +33,9 @@ def progress_update_stride(steps: int, *, target_updates: int = _TARGET_PROGRESS
     return max((steps_i + target_i - 1) // target_i, 1)
 
 
-def should_emit_progress(idx: Any, steps: Any, *, target_updates: int = _TARGET_PROGRESS_UPDATES) -> Any:
+def should_emit_progress(
+    idx: Any, steps: Any, *, target_updates: int = _TARGET_PROGRESS_UPDATES
+) -> Any:
     """Return a JAX-friendly predicate for whether a progress update should fire."""
 
     idx_i = jnp.asarray(idx, dtype=jnp.int32)

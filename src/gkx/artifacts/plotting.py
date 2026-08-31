@@ -13,6 +13,7 @@ import numpy as np
 from gkx.benchmarking.shared import CycloneReference, CycloneScanResult
 from gkx.diagnostics.growth_rates import fit_growth_rate
 
+
 def set_plot_style() -> None:
     """Apply the shared publication style used by generated figures."""
 
@@ -66,20 +67,38 @@ def cyclone_comparison_figure(
     fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.5, 5.0))
     ax0, ax1 = axes
 
-    ax0.plot(ref.ky, ref.gamma, marker="o", color="#1f77b4", linewidth=2.0,
-             label="Reference")
-    ax0.plot(scan.ky, scan.gamma, marker="s", markerfacecolor="none",
-             markeredgewidth=1.6, linestyle="--", color="#2ca02c",
-             linewidth=1.8, label=label)
+    ax0.plot(
+        ref.ky, ref.gamma, marker="o", color="#1f77b4", linewidth=2.0, label="Reference"
+    )
+    ax0.plot(
+        scan.ky,
+        scan.gamma,
+        marker="s",
+        markerfacecolor="none",
+        markeredgewidth=1.6,
+        linestyle="--",
+        color="#2ca02c",
+        linewidth=1.8,
+        label=label,
+    )
     ax0.set_ylabel(r"$\gamma a / v_{ti}$")
     ax0.set_title("Cyclone base case (adiabatic electrons)")
     ax0.legend(loc="best")
 
-    ax1.plot(ref.ky, ref.omega, marker="o", color="#ff7f0e", linewidth=2.0,
-             label="Reference")
-    ax1.plot(scan.ky, scan.omega, marker="s", markerfacecolor="none",
-             markeredgewidth=1.6, linestyle="--", color="#d62728",
-             linewidth=1.8, label=label)
+    ax1.plot(
+        ref.ky, ref.omega, marker="o", color="#ff7f0e", linewidth=2.0, label="Reference"
+    )
+    ax1.plot(
+        scan.ky,
+        scan.omega,
+        marker="s",
+        markerfacecolor="none",
+        markeredgewidth=1.6,
+        linestyle="--",
+        color="#d62728",
+        linewidth=1.8,
+        label=label,
+    )
     ax1.set_xlabel(r"$k_y \rho_i$")
     ax1.set_ylabel(r"$\omega a / v_{ti}$")
     ax1.legend(loc="best")
@@ -111,7 +130,14 @@ def scan_comparison_figure(
 
     ax0.plot(x, gamma, marker="o", color="#2ca02c", label=label)
     if x_ref is not None and gamma_ref is not None:
-        ax0.plot(x_ref, gamma_ref, marker="o", linestyle="None", color="#1f77b4", label=ref_label)
+        ax0.plot(
+            x_ref,
+            gamma_ref,
+            marker="o",
+            linestyle="None",
+            color="#1f77b4",
+            label=ref_label,
+        )
     ax0.set_ylabel(r"$\gamma a / v_{ti}$")
     ax0.set_title(title)
     ax0.legend(loc="best")
@@ -120,7 +146,14 @@ def scan_comparison_figure(
 
     ax1.plot(x, omega, marker="o", color="#d62728", label=label)
     if x_ref is not None and omega_ref is not None:
-        ax1.plot(x_ref, omega_ref, marker="o", linestyle="None", color="#1f77b4", label=ref_label)
+        ax1.plot(
+            x_ref,
+            omega_ref,
+            marker="o",
+            linestyle="None",
+            color="#1f77b4",
+            label=ref_label,
+        )
     ax1.set_xlabel(x_label)
     ax1.set_ylabel(r"$\omega a / v_{ti}$")
     ax1.legend(loc="best")
@@ -149,7 +182,7 @@ def etg_trend_figure(
 
     ax0.plot(tprim_e, gamma, marker="o", color="#1f77b4")
     ax0.set_ylabel(r"$\gamma a / v_{ti}$")
-    ax0.set_title(fr"ETG trend at $k_y={ky_target:.2f}$")
+    ax0.set_title(rf"ETG trend at $k_y={ky_target:.2f}$")
 
     ax1.plot(tprim_e, omega, marker="o", color="#ff7f0e")
     ax1.set_xlabel(r"$a/L_{Te}$")
@@ -215,7 +248,13 @@ def linear_validation_figure(
     for i, panel in enumerate(panels):
         ax0, ax1, ax2 = axes[i]
         ax0.plot(panel.z, panel.eigenfunction.real, color="#1f77b4", label="Re")
-        ax0.plot(panel.z, panel.eigenfunction.imag, color="#ff7f0e", linestyle="--", label="Im")
+        ax0.plot(
+            panel.z,
+            panel.eigenfunction.imag,
+            color="#ff7f0e",
+            linestyle="--",
+            label="Im",
+        )
         ax0.set_ylabel(panel.name)
         ax0.set_xlabel(r"$\theta$")
         if i == 0:
@@ -227,7 +266,14 @@ def linear_validation_figure(
 
         ax1.plot(panel.x, panel.gamma, marker="o", color="#2ca02c", label="GKX")
         if panel.x_ref is not None and panel.gamma_ref is not None:
-            ax1.plot(panel.x_ref, panel.gamma_ref, marker="o", linestyle="None", color="#1f77b4", label=panel.ref_label)
+            ax1.plot(
+                panel.x_ref,
+                panel.gamma_ref,
+                marker="o",
+                linestyle="None",
+                color="#1f77b4",
+                label=panel.ref_label,
+            )
         ax1.set_xlabel(panel.x_label)
         ax1.set_ylabel(r"$\gamma a / v_{ti}$")
         if panel.log_x:
@@ -235,7 +281,14 @@ def linear_validation_figure(
 
         ax2.plot(panel.x, panel.omega, marker="o", color="#d62728", label="GKX")
         if panel.x_ref is not None and panel.omega_ref is not None:
-            ax2.plot(panel.x_ref, panel.omega_ref, marker="o", linestyle="None", color="#1f77b4", label=panel.ref_label)
+            ax2.plot(
+                panel.x_ref,
+                panel.omega_ref,
+                marker="o",
+                linestyle="None",
+                color="#1f77b4",
+                label=panel.ref_label,
+            )
         ax2.set_xlabel(panel.x_label)
         ax2.set_ylabel(r"$\omega a / v_{ti}$")
         if panel.log_x:
@@ -266,7 +319,13 @@ def linear_validation_multi_reference_figure(
     for i, panel in enumerate(panels):
         ax0, ax1, ax2 = axes[i]
         ax0.plot(panel.z, panel.eigenfunction.real, color="#1f77b4", label="Re")
-        ax0.plot(panel.z, panel.eigenfunction.imag, color="#ff7f0e", linestyle="--", label="Im")
+        ax0.plot(
+            panel.z,
+            panel.eigenfunction.imag,
+            color="#ff7f0e",
+            linestyle="--",
+            label="Im",
+        )
         ax0.set_ylabel(panel.name)
         ax0.set_xlabel(r"$\theta$")
         if i == 0:
@@ -411,9 +470,7 @@ def growth_fit_figure(
         if fit_t.size:
             log_ref = log_energy[fit_mask][0]
             fit_line = 2.0 * gamma * (fit_t - fit_t[0]) + log_ref
-            ax1.plot(
-                fit_t, fit_line, color="red", linestyle="--", label="fit line"
-            )
+            ax1.plot(fit_t, fit_line, color="red", linestyle="--", label="fit line")
     ax0.legend(loc="best", fontsize=9)
     ax1.legend(loc="best", fontsize=9)
     fig.tight_layout()
@@ -440,13 +497,27 @@ def eigenfunction_overlap_summary_figure(
     overlap_arr = np.asarray(overlap, dtype=float)
     rel_l2_arr = np.asarray(relative_l2, dtype=float)
 
-    ax0.plot(ky_arr, overlap_arr, color="#0f4c81", marker="o", linewidth=2.2, label=overlap_label)
+    ax0.plot(
+        ky_arr,
+        overlap_arr,
+        color="#0f4c81",
+        marker="o",
+        linewidth=2.2,
+        label=overlap_label,
+    )
     ax0.set_ylabel("overlap")
     ax0.set_ylim(0.0, min(1.02, max(1.0, float(np.nanmax(overlap_arr)) + 0.02)))
     ax0.set_title(title)
     ax0.legend(loc="best", frameon=False)
 
-    ax1.plot(ky_arr, rel_l2_arr, color="#c44e52", marker="s", linewidth=2.2, label=rel_l2_label)
+    ax1.plot(
+        ky_arr,
+        rel_l2_arr,
+        color="#c44e52",
+        marker="s",
+        linewidth=2.2,
+        label=rel_l2_label,
+    )
     ax1.set_xlabel(x_label)
     ax1.set_ylabel(r"relative $L^2$")
     ax1.legend(loc="best", frameon=False)
@@ -491,22 +562,61 @@ def eigenfunction_reference_overlay_figure(
     fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.9))
     ax0, ax1, ax2 = axes
 
-    ax0.plot(theta_ref_arr, np.real(ref), color="#0f4c81", linewidth=2.4, label="Reference Re")
-    ax0.plot(theta_arr, np.real(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="GKX Re")
+    ax0.plot(
+        theta_ref_arr,
+        np.real(ref),
+        color="#0f4c81",
+        linewidth=2.4,
+        label="Reference Re",
+    )
+    ax0.plot(
+        theta_arr,
+        np.real(eig_aligned),
+        color="#c44e52",
+        linewidth=2.0,
+        linestyle="--",
+        label="GKX Re",
+    )
     ax0.set_xlabel(r"$\theta$")
     ax0.set_ylabel("real")
     ax0.set_title("Real part")
     ax0.legend(loc="best", frameon=False)
 
-    ax1.plot(theta_ref_arr, np.imag(ref), color="#0f4c81", linewidth=2.4, label="Reference Im")
-    ax1.plot(theta_arr, np.imag(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="GKX Im")
+    ax1.plot(
+        theta_ref_arr,
+        np.imag(ref),
+        color="#0f4c81",
+        linewidth=2.4,
+        label="Reference Im",
+    )
+    ax1.plot(
+        theta_arr,
+        np.imag(eig_aligned),
+        color="#c44e52",
+        linewidth=2.0,
+        linestyle="--",
+        label="GKX Im",
+    )
     ax1.set_xlabel(r"$\theta$")
     ax1.set_ylabel("imag")
     ax1.set_title("Imaginary part")
     ax1.legend(loc="best", frameon=False)
 
-    ax2.plot(theta_ref_arr, np.abs(ref), color="#0f4c81", linewidth=2.4, label="Reference $|\\phi|$")
-    ax2.plot(theta_arr, np.abs(eig_aligned), color="#c44e52", linewidth=2.0, linestyle="--", label="GKX $|\\phi|$")
+    ax2.plot(
+        theta_ref_arr,
+        np.abs(ref),
+        color="#0f4c81",
+        linewidth=2.4,
+        label="Reference $|\\phi|$",
+    )
+    ax2.plot(
+        theta_arr,
+        np.abs(eig_aligned),
+        color="#c44e52",
+        linewidth=2.0,
+        linestyle="--",
+        label="GKX $|\\phi|$",
+    )
     ax2.set_xlabel(r"$\theta$")
     ax2.set_ylabel(r"$|\phi|$")
     ax2.set_title("Amplitude")
@@ -518,7 +628,12 @@ def eigenfunction_reference_overlay_figure(
         transform=ax2.transAxes,
         va="bottom",
         ha="left",
-        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "#cccccc"},
+        bbox={
+            "boxstyle": "round,pad=0.3",
+            "facecolor": "white",
+            "alpha": 0.9,
+            "edgecolor": "#cccccc",
+        },
     )
 
     for axis in axes:
@@ -570,11 +685,22 @@ def linear_runtime_panel_figure(
         transform=ax0.transAxes,
         va="top",
         ha="left",
-        bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.9, "edgecolor": "#cccccc"},
+        bbox={
+            "boxstyle": "round,pad=0.3",
+            "facecolor": "white",
+            "alpha": 0.9,
+            "edgecolor": "#cccccc",
+        },
     )
 
     eigen_norm = _normalize_by_real_max(eigenfunction)
-    ax1.plot(np.asarray(z, dtype=float), np.real(eigen_norm), color="#0f4c81", linewidth=2.4, label="Re")
+    ax1.plot(
+        np.asarray(z, dtype=float),
+        np.real(eigen_norm),
+        color="#0f4c81",
+        linewidth=2.4,
+        label="Re",
+    )
     ax1.plot(
         np.asarray(z, dtype=float),
         np.imag(eigen_norm),
@@ -611,7 +737,12 @@ def nonlinear_runtime_panel_figure(
 
     ax0, ax1, ax2 = axes
     if phi2 is not None:
-        ax0.plot(t_arr, np.maximum(np.asarray(phi2, dtype=float), 1.0e-30), color="#0f4c81", linewidth=2.4)
+        ax0.plot(
+            t_arr,
+            np.maximum(np.asarray(phi2, dtype=float), 1.0e-30),
+            color="#0f4c81",
+            linewidth=2.4,
+        )
         ax0.set_yscale("log")
         ax0.set_ylabel(r"$|\phi|^2$")
         ax0.set_title("Field amplitude")
@@ -621,18 +752,40 @@ def nonlinear_runtime_panel_figure(
         ax0.set_title("Electrostatic energy")
 
     if wphi is not None:
-        ax1.plot(t_arr, np.asarray(wphi, dtype=float), color="#2a9d8f", linewidth=2.4, label=r"$W_\phi$")
+        ax1.plot(
+            t_arr,
+            np.asarray(wphi, dtype=float),
+            color="#2a9d8f",
+            linewidth=2.4,
+            label=r"$W_\phi$",
+        )
     if gamma is not None:
-        ax1.plot(t_arr, np.asarray(gamma, dtype=float), color="#f4a261", linewidth=2.0, linestyle="--", label=r"$\gamma$")
+        ax1.plot(
+            t_arr,
+            np.asarray(gamma, dtype=float),
+            color="#f4a261",
+            linewidth=2.0,
+            linestyle="--",
+            label=r"$\gamma$",
+        )
     if omega is not None:
-        ax1.plot(t_arr, np.asarray(omega, dtype=float), color="#c44e52", linewidth=2.0, linestyle=":", label=r"$\omega$")
+        ax1.plot(
+            t_arr,
+            np.asarray(omega, dtype=float),
+            color="#c44e52",
+            linewidth=2.0,
+            linestyle=":",
+            label=r"$\omega$",
+        )
     ax1.set_xlabel("t")
     ax1.set_title("Resolved diagnostics")
     if wphi is not None or gamma is not None or omega is not None:
         ax1.legend(loc="best", frameon=False)
 
     if heat_flux is not None:
-        ax2.plot(t_arr, np.asarray(heat_flux, dtype=float), color="#c44e52", linewidth=2.4)
+        ax2.plot(
+            t_arr, np.asarray(heat_flux, dtype=float), color="#c44e52", linewidth=2.4
+        )
     ax2.set_xlabel("t")
     ax2.set_ylabel("Heat flux")
     ax2.set_title("Transport")
@@ -660,22 +813,34 @@ def plot(result: Any) -> Tuple[plt.Figure, np.ndarray]:
             raise ValueError("linear plotting requires z and eigenfunction arrays")
         if result.t is not None and result.signal is not None:
             return linear_runtime_panel_figure(
-                t=result.t, signal=result.signal, z=result.z,
-                eigenfunction=result.eigenfunction, gamma=result.gamma,
+                t=result.t,
+                signal=result.signal,
+                z=result.z,
+                eigenfunction=result.eigenfunction,
+                gamma=result.gamma,
                 omega=result.omega,
             )
         panel = LinearValidationPanel(
-            name="GKX", z=result.z, eigenfunction=result.eigenfunction,
-            x=np.asarray([result.ky]), gamma=np.asarray([result.gamma]),
-            omega=np.asarray([result.omega]), x_label=r"$k_y \rho_i$",
+            name="GKX",
+            z=result.z,
+            eigenfunction=result.eigenfunction,
+            x=np.asarray([result.ky]),
+            gamma=np.asarray([result.gamma]),
+            omega=np.asarray([result.omega]),
+            x_label=r"$k_y \rho_i$",
         )
         return linear_validation_figure([panel])
-    if isinstance(result, runtime_results.RuntimeNonlinearResult) and result.diagnostics is not None:
+    if (
+        isinstance(result, runtime_results.RuntimeNonlinearResult)
+        and result.diagnostics is not None
+    ):
         diagnostics = result.diagnostics
         return nonlinear_runtime_panel_figure(
-            t=np.asarray(diagnostics.t), wphi=np.asarray(diagnostics.Wphi_t),
+            t=np.asarray(diagnostics.t),
+            wphi=np.asarray(diagnostics.Wphi_t),
             heat_flux=np.asarray(diagnostics.heat_flux_t),
-            gamma=np.asarray(diagnostics.gamma_t), omega=np.asarray(diagnostics.omega_t),
+            gamma=np.asarray(diagnostics.gamma_t),
+            omega=np.asarray(diagnostics.omega_t),
         )
     if isinstance(result, runtime_results.RuntimeNonlinearResult):
         raise ValueError("nonlinear plotting requires retained time diagnostics")
@@ -684,7 +849,14 @@ def plot(result: Any) -> Tuple[plt.Figure, np.ndarray]:
 
 def _artifact_base(path: Path) -> Path:
     name = path.name
-    for suffix in (".summary.json", ".timeseries.csv", ".eigenfunction.csv", ".diagnostics.csv", ".scan.csv", ".out.nc"):
+    for suffix in (
+        ".summary.json",
+        ".timeseries.csv",
+        ".eigenfunction.csv",
+        ".diagnostics.csv",
+        ".scan.csv",
+        ".out.nc",
+    ):
         if name.lower().endswith(suffix):
             return path.with_name(name[: -len(suffix)])
     if path.suffix.lower() in {".json", ".csv", ".nc"}:
@@ -705,43 +877,74 @@ def _sidecar(base: Path, suffix: str) -> Path:
     return base.with_name(base.name + suffix)
 
 
-def _load_linear_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _load_linear_bundle(
+    base: Path,
+) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     summary = json.loads(_sidecar(base, ".summary.json").read_text(encoding="utf-8"))
-    timeseries = np.genfromtxt(_sidecar(base, ".timeseries.csv"), delimiter=",", names=True, dtype=float)
-    eigen = np.genfromtxt(_sidecar(base, ".eigenfunction.csv"), delimiter=",", names=True, dtype=float)
+    timeseries = np.genfromtxt(
+        _sidecar(base, ".timeseries.csv"), delimiter=",", names=True, dtype=float
+    )
+    eigen = np.genfromtxt(
+        _sidecar(base, ".eigenfunction.csv"), delimiter=",", names=True, dtype=float
+    )
     t = np.asarray(timeseries["t"], dtype=float)
-    signal = np.asarray(timeseries["signal_real"], dtype=float) + 1j * np.asarray(timeseries["signal_imag"], dtype=float)
+    signal = np.asarray(timeseries["signal_real"], dtype=float) + 1j * np.asarray(
+        timeseries["signal_imag"], dtype=float
+    )
     z = np.asarray(eigen["z"], dtype=float)
-    eig = np.asarray(eigen["eigen_real"], dtype=float) + 1j * np.asarray(eigen["eigen_imag"], dtype=float)
+    eig = np.asarray(eigen["eigen_real"], dtype=float) + 1j * np.asarray(
+        eigen["eigen_imag"], dtype=float
+    )
     return summary, t, signal, z, eig
 
 
-def _load_linear_scan_bundle(base: Path) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+def _load_linear_scan_bundle(
+    base: Path,
+) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
     summary = json.loads(_sidecar(base, ".summary.json").read_text(encoding="utf-8"))
-    scan = np.genfromtxt(_sidecar(base, ".scan.csv"), delimiter=",", names=True, dtype=float)
+    scan = np.genfromtxt(
+        _sidecar(base, ".scan.csv"), delimiter=",", names=True, dtype=float
+    )
     ky = np.atleast_1d(np.asarray(scan["ky"], dtype=float))
     gamma = np.atleast_1d(np.asarray(scan["gamma"], dtype=float))
     omega = np.atleast_1d(np.asarray(scan["omega"], dtype=float))
     return summary, ky, gamma, omega
 
 
-def _load_nonlinear_csv(base: Path) -> tuple[dict, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+def _load_nonlinear_csv(
+    base: Path,
+) -> tuple[
+    dict,
+    np.ndarray,
+    np.ndarray | None,
+    np.ndarray | None,
+    np.ndarray | None,
+    np.ndarray | None,
+]:
     summary = json.loads(_sidecar(base, ".summary.json").read_text(encoding="utf-8"))
-    diag = np.genfromtxt(_sidecar(base, ".diagnostics.csv"), delimiter=",", names=True, dtype=float)
+    diag = np.genfromtxt(
+        _sidecar(base, ".diagnostics.csv"), delimiter=",", names=True, dtype=float
+    )
     names = set(diag.dtype.names or ())
     t = np.asarray(diag["t"], dtype=float)
     wphi = np.asarray(diag["Wphi"], dtype=float) if "Wphi" in names else None
-    heat_flux = np.asarray(diag["heat_flux"], dtype=float) if "heat_flux" in names else None
+    heat_flux = (
+        np.asarray(diag["heat_flux"], dtype=float) if "heat_flux" in names else None
+    )
     gamma = np.asarray(diag["gamma"], dtype=float) if "gamma" in names else None
     omega = np.asarray(diag["omega"], dtype=float) if "omega" in names else None
     return summary, t, wphi, heat_flux, gamma, omega
 
 
-def _load_nonlinear_netcdf(path: Path) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+def _load_nonlinear_netcdf(
+    path: Path,
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
     try:
         import netCDF4
     except ModuleNotFoundError as exc:  # pragma: no cover - optional runtime dependency
-        raise SystemExit("netCDF4 is required to plot *.out.nc runtime bundles") from exc
+        raise SystemExit(
+            "netCDF4 is required to plot *.out.nc runtime bundles"
+        ) from exc
 
     with netCDF4.Dataset(path) as root:
         diag = root.groups["Diagnostics"]
@@ -757,13 +960,19 @@ def _load_nonlinear_netcdf(path: Path) -> tuple[np.ndarray, np.ndarray | None, n
         if time_var is None:
             raise KeyError(f"{Path(path).name} carries no Grids/time axis")
         t = np.asarray(time_var[:], dtype=float)
-        phi2 = np.asarray(diag.variables["Phi2_t"][:], dtype=float) if "Phi2_t" in diag.variables else None
+        phi2 = (
+            np.asarray(diag.variables["Phi2_t"][:], dtype=float)
+            if "Phi2_t" in diag.variables
+            else None
+        )
         wphi = None
         heat_flux = None
         if "Wphi_st" in diag.variables:
             wphi = np.sum(np.asarray(diag.variables["Wphi_st"][:], dtype=float), axis=1)
         if "HeatFlux_st" in diag.variables:
-            heat_flux = np.sum(np.asarray(diag.variables["HeatFlux_st"][:], dtype=float), axis=1)
+            heat_flux = np.sum(
+                np.asarray(diag.variables["HeatFlux_st"][:], dtype=float), axis=1
+            )
     return t, phi2, wphi, heat_flux
 
 

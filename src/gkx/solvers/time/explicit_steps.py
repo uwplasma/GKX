@@ -224,10 +224,7 @@ def _linear_sspx3_state(
     G2 = (1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler
     G3 = euler_step(G2)
     return (
-        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
-        + _SSPX3_W3 * G1
-        + (_SSPX3_W2 - 1.0) * G2
-        + G3
+        (1.0 - _SSPX3_W2 - _SSPX3_W3) * G + _SSPX3_W3 * G1 + (_SSPX3_W2 - 1.0) * G2 + G3
     )
 
 
@@ -303,9 +300,7 @@ def _linear_native_step(
     if method_key == "imex2":
         dG = rhs(G)
         dG_explicit = dG + damping * G
-        G_half = (G + 0.5 * dt_val * dG_explicit) / (
-            1.0 + 0.5 * dt_val * damping
-        )
+        G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
         dG_half = rhs(G_half)
         dG_half_explicit = dG_half + damping * G_half
         return (G + dt_val * dG_half_explicit) / (1.0 + dt_val * damping)

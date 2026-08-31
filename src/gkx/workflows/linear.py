@@ -335,8 +335,12 @@ def _warn_if_linear_dt_exceeds_cfl(ctx: _LinearRuntimeContext, tcfg: Any) -> Non
     from gkx.solvers.time.explicit_cfl import warn_if_fixed_dt_exceeds_cfl
 
     warn_if_fixed_dt_exceeds_cfl(
-        grid=ctx.grid, geom=ctx.geom, params=ctx.params,
-        n_laguerre=ctx.n_laguerre, n_hermite=ctx.n_hermite, tcfg=tcfg,
+        grid=ctx.grid,
+        geom=ctx.geom,
+        params=ctx.params,
+        n_laguerre=ctx.n_laguerre,
+        n_hermite=ctx.n_hermite,
+        tcfg=tcfg,
     )
 
 

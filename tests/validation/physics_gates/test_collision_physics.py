@@ -242,9 +242,7 @@ def test_finite_larmor_self_adjointness_breaks_at_first_order_in_b() -> None:
     small = (grid > 0.0) & (grid <= 0.5)
     asymmetry = np.array(
         [
-            np.abs(
-                (matrix := finite_wavelength_matrix(index)) - matrix.T
-            ).max()
+            np.abs((matrix := finite_wavelength_matrix(index)) - matrix.T).max()
             for index in np.flatnonzero(small)
         ]
     )
@@ -287,10 +285,10 @@ def test_finite_larmor_conservation_defect_is_first_order_in_b() -> None:
             ]
         )
         assert np.all(defect > 0.0), f"{name} defect vanishes identically at finite b"
-        exponent = float(
-            np.polyfit(np.log(grid[small]), np.log(defect), 1)[0]
+        exponent = float(np.polyfit(np.log(grid[small]), np.log(defect), 1)[0])
+        assert 1.8 <= exponent <= 2.2, (
+            f"{name} defect scales as B^{exponent:.3f}, not B^2"
         )
-        assert 1.8 <= exponent <= 2.2, f"{name} defect scales as B^{exponent:.3f}, not B^2"
 
     # Monotone growth with wavelength: FLR corrections do not fortuitously cancel.
     density = collisional_invariants()["density"]
@@ -321,9 +319,7 @@ def test_laguerre_transform_is_well_conditioned_at_high_resolution() -> None:
     for resolution in (8, 16, 20, 24, 32, 64, 96):
         to_grid, to_spectral, _ = laguerre_transform(resolution)
         to_grid = np.asarray(to_grid)
-        identity = np.abs(
-            to_grid @ np.asarray(to_spectral) - np.eye(resolution)
-        ).max()
+        identity = np.abs(to_grid @ np.asarray(to_spectral) - np.eye(resolution)).max()
         assert identity < 1.0e-8, f"nl={resolution} round-trip {identity:.3e}"
         # The Szego bound is what keeps the transform conditioned.
         assert np.abs(to_grid).max() <= 1.0 + 1.0e-9, (

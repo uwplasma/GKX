@@ -214,9 +214,13 @@ def test_plot_dispatches_promoted_runtime_results_without_side_effects():
     t = np.linspace(0.1, 1.0, 8)
     z = np.linspace(-np.pi, np.pi, 16)
     linear = RuntimeLinearResult(
-        ky=0.2, gamma=0.3, omega=-0.4,
-        selection=ModeSelection(0, 0), t=t,
-        signal=np.exp((0.3 - 0.4j) * t), z=z,
+        ky=0.2,
+        gamma=0.3,
+        omega=-0.4,
+        selection=ModeSelection(0, 0),
+        t=t,
+        signal=np.exp((0.3 - 0.4j) * t),
+        z=z,
         eigenfunction=np.cos(z) + 0.2j * np.sin(z),
     )
     fig, axes = plot(linear)
@@ -227,7 +231,8 @@ def test_plot_dispatches_promoted_runtime_results_without_side_effects():
     plt.close(fig)
 
     scan = RuntimeLinearScanResult(
-        ky=np.array([0.1, 0.2]), gamma=np.array([0.2, 0.3]),
+        ky=np.array([0.1, 0.2]),
+        gamma=np.array([0.2, 0.3]),
         omega=np.array([-0.4, -0.5]),
     )
     fig, axes = plot(scan)
@@ -236,10 +241,17 @@ def test_plot_dispatches_promoted_runtime_results_without_side_effects():
 
     ones = np.ones_like(t)
     diagnostics = SimulationDiagnostics(
-        t=t, dt_t=ones, dt_mean=np.asarray(1.0), gamma_t=0.1 * ones,
-        omega_t=-0.2 * ones, Wg_t=ones, Wphi_t=2.0 * ones,
-        Wapar_t=np.zeros_like(t), heat_flux_t=0.3 * ones,
-        particle_flux_t=0.1 * ones, energy_t=3.0 * ones,
+        t=t,
+        dt_t=ones,
+        dt_mean=np.asarray(1.0),
+        gamma_t=0.1 * ones,
+        omega_t=-0.2 * ones,
+        Wg_t=ones,
+        Wphi_t=2.0 * ones,
+        Wapar_t=np.zeros_like(t),
+        heat_flux_t=0.3 * ones,
+        particle_flux_t=0.1 * ones,
+        energy_t=3.0 * ones,
     )
     nonlinear = RuntimeNonlinearResult(t=t, diagnostics=diagnostics)
     fig, axes = plot(nonlinear)
@@ -770,10 +782,17 @@ def test_movie_snapshot_replays_lightweight_physical_cuts(tmp_path, monkeypatch)
         toroidal_angle_profile=np.array([0.0, 0.2]),
     )
     rendered = []
-    monkeypatch.setattr(module, "render_frame", lambda *args, **kwargs: rendered.append((args, kwargs)))
+    monkeypatch.setattr(
+        module, "render_frame", lambda *args, **kwargs: rendered.append((args, kwargs))
+    )
     monkeypatch.setattr(module, "_encode", lambda *args, **kwargs: 0)
 
-    assert module.render_snapshots(snapshot, tmp_path / "movie.mp4", fps=2, frames_only=True, keep_frames=True) == 0
+    assert (
+        module.render_snapshots(
+            snapshot, tmp_path / "movie.mp4", fps=2, frames_only=True, keep_frames=True
+        )
+        == 0
+    )
     assert len(rendered) == 2
     assert rendered[0][0][0].shape == (6, 8)
     assert rendered[0][0][1].shape == (8, 10)
@@ -1060,9 +1079,7 @@ def test_run_summary_figure_survives_a_bundle_without_spectra(tmp_path):
     base = _write_csv_sidecar(tmp_path, name="thin_case")
     out = tmp_path / "thin.summary.png"
 
-    fig, axes = nonlinear_summary_figure(
-        base.with_suffix(".diagnostics.csv"), out=out
-    )
+    fig, axes = nonlinear_summary_figure(base.with_suffix(".diagnostics.csv"), out=out)
     try:
         assert out.exists()
         assert axes["heat_flux"].get_lines()

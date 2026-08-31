@@ -146,7 +146,9 @@ def _positive_nfp(data: Mapping[str, Any]) -> int:
     return nfp
 
 
-def _scalar_metadata(data: Mapping[str, Any], *, validate_finite: bool) -> dict[str, Any]:
+def _scalar_metadata(
+    data: Mapping[str, Any], *, validate_finite: bool
+) -> dict[str, Any]:
     return {
         "q": _scalar(data, "q", 1.0, validate_finite=validate_finite),
         "s_hat": _scalar(
@@ -196,7 +198,9 @@ def flux_tube_geometry_from_mapping(
 
     return FluxTubeGeometryData(
         theta=theta,
-        gradpar_value=_gradpar_value(arrays["gradpar"], validate_finite=validate_finite),
+        gradpar_value=_gradpar_value(
+            arrays["gradpar"], validate_finite=validate_finite
+        ),
         bmag_profile=arrays["bmag"],
         bgrad_profile=arrays["bgrad"],
         gds2_profile=arrays["gds2"],

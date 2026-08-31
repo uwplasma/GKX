@@ -548,7 +548,9 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
     """Apply electrostatic streaming with a precomputed electrostatic field."""
 
     from gkx.parallel.velocity import periodic_streaming_shard_map
-    from gkx.operators.linear.streaming import grad_z_periodic as operator_grad_z_periodic
+    from gkx.operators.linear.streaming import (
+        grad_z_periodic as operator_grad_z_periodic,
+    )
 
     particle_streaming = -periodic_streaming_shard_map(
         arr, plan, kz=cache.kz, vth=params.vth, devices=devices

@@ -623,9 +623,7 @@ def test_calibration_point_from_nonlinear_netcdf_window_validation(
             np.asarray([1.0, 2.0])
         )
     mismatch_summary = tmp_path / "mismatch_summary.json"
-    mismatch_summary.write_text(
-        json.dumps({"gkx": str(mismatch)}), encoding="utf-8"
-    )
+    mismatch_summary.write_text(json.dumps({"gkx": str(mismatch)}), encoding="utf-8")
     with pytest.raises(ValueError, match="first dimension"):
         calibration_point_from_nonlinear_window_summary(
             mismatch_summary,
@@ -701,9 +699,7 @@ def test_integrated_quasilinear_flux_from_spectrum_and_window_point(
     diag = tmp_path / "diag.csv"
     diag.write_text("t,heat_flux\n0.0,2.0\n1.0,4.0\n", encoding="utf-8")
     summary = tmp_path / "summary.json"
-    summary.write_text(
-        json.dumps({"case": "c", "gkx": str(diag)}), encoding="utf-8"
-    )
+    summary.write_text(json.dumps({"case": "c", "gkx": str(diag)}), encoding="utf-8")
 
     point = calibration_point_from_spectrum_and_nonlinear_window(
         spectrum,
@@ -794,9 +790,7 @@ def test_calibration_summary_ingestion_validates_csv_windows_and_relative_paths(
     missing_t = tmp_path / "missing_t.csv"
     missing_t.write_text("heat_flux\n1.0\n", encoding="utf-8")
     summary_missing_t = tmp_path / "summary_missing_t.json"
-    summary_missing_t.write_text(
-        json.dumps({"gkx": str(missing_t)}), encoding="utf-8"
-    )
+    summary_missing_t.write_text(json.dumps({"gkx": str(missing_t)}), encoding="utf-8")
     with pytest.raises(ValueError, match="'t' column"):
         calibration_point_from_nonlinear_window_summary(
             summary_missing_t,

@@ -271,8 +271,6 @@ def _make_fixed_mode_projector(
     fixed_block = jnp.asarray(fixed_state)[..., ky_i : ky_i + 1, kx_i : kx_i + 1, :]
 
     def project(G_state: jnp.ndarray) -> jnp.ndarray:
-        return G_state.at[..., ky_i : ky_i + 1, kx_i : kx_i + 1, :].set(
-            fixed_block
-        )
+        return G_state.at[..., ky_i : ky_i + 1, kx_i : kx_i + 1, :].set(fixed_block)
 
     return project

@@ -125,9 +125,7 @@ def build_parallel_ky_scan_gate(
     )
     cfg = replace(
         base_cfg,
-        grid=replace(
-            base_cfg.grid, Nx=nx, Ny=ny, Nz=nz, ntheta=nz, nperiod=1, y0=10.0
-        ),
+        grid=replace(base_cfg.grid, Nx=nx, Ny=ny, Nz=nz, ntheta=nz, nperiod=1, y0=10.0),
     )
     serial, serial_elapsed = _timed_cyclone_scan(
         ky_values,
@@ -199,7 +197,9 @@ def build_parallel_ky_scan_gate(
     )
 
 
-def write_parallel_ky_scan_artifacts(summary: dict[str, object], out_prefix: Path) -> dict[str, str]:
+def write_parallel_ky_scan_artifacts(
+    summary: dict[str, object], out_prefix: Path
+) -> dict[str, str]:
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
     json_path = out_prefix.with_suffix(".json")
     csv_path = out_prefix.with_suffix(".csv")
@@ -257,8 +257,12 @@ def write_parallel_ky_scan_artifacts(summary: dict[str, object], out_prefix: Pat
         color="#c03a2b",
         label=r"$\omega$ abs.",
     )
-    axes[1].axhline(_summary_float(summary, "gamma_rtol"), color="#1b6ca8", ls=":", lw=1.2)
-    axes[1].axhline(_summary_float(summary, "omega_atol"), color="#c03a2b", ls=":", lw=1.2)
+    axes[1].axhline(
+        _summary_float(summary, "gamma_rtol"), color="#1b6ca8", ls=":", lw=1.2
+    )
+    axes[1].axhline(
+        _summary_float(summary, "omega_atol"), color="#c03a2b", ls=":", lw=1.2
+    )
     axes[1].set_xlabel(r"$k_y \rho_i$")
     axes[1].set_ylabel("identity error")
     axes[1].set_title("Numerical identity gate")
@@ -290,11 +294,18 @@ def write_parallel_ky_scan_artifacts(summary: dict[str, object], out_prefix: Pat
     fig.savefig(png_path, dpi=220)
     fig.savefig(pdf_path)
     plt.close(fig)
-    return {"json": str(json_path), "csv": str(csv_path), "png": str(png_path), "pdf": str(pdf_path)}
+    return {
+        "json": str(json_path),
+        "csv": str(csv_path),
+        "png": str(png_path),
+        "pdf": str(pdf_path),
+    }
 
 
 def _build_ky_scan_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate a solver-backed ky-batch parallelization identity gate.")
+    parser = argparse.ArgumentParser(
+        description="Generate a solver-backed ky-batch parallelization identity gate."
+    )
     parser.add_argument("--out-prefix", type=Path, default=DEFAULT_KY_SCAN_PREFIX)
     parser.add_argument("--ky", nargs="+", type=float, default=[0.1, 0.2, 0.3, 0.4])
     parser.add_argument("--serial-batch", type=int, default=1)
@@ -328,11 +339,19 @@ def _main_ky_scan(argv: list[str] | None = None) -> int:
         nhermite=args.nhermite,
     )
     paths = write_parallel_ky_scan_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0 if bool(summary["identity_passed"]) else 1
 
 
-DEFAULT_LOGICAL_CPU_PREFIX = REPO_ROOT / "docs" / "_static" / "logical_cpu_parallel_scan_gate"
+DEFAULT_LOGICAL_CPU_PREFIX = (
+    REPO_ROOT / "docs" / "_static" / "logical_cpu_parallel_scan_gate"
+)
+
+
 def _block_until_ready(tree: Any) -> None:
     import jax
 
@@ -488,7 +507,9 @@ def build_logical_cpu_parallel_scan_gate(
     )
 
 
-def write_logical_cpu_parallel_scan_artifacts(summary: dict[str, object], out_prefix: Path) -> dict[str, str]:
+def write_logical_cpu_parallel_scan_artifacts(
+    summary: dict[str, object], out_prefix: Path
+) -> dict[str, str]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -546,7 +567,9 @@ def write_logical_cpu_parallel_scan_artifacts(summary: dict[str, object], out_pr
     status = "passed" if bool(summary["identity_passed"]) else "failed"
     axes[2].set_xlabel(r"$k_y \rho_i$")
     axes[2].set_ylabel("identity error")
-    axes[2].set_title(f"Gate {status}, {_summary_float(summary, 'observed_speedup'):.2f}x")
+    axes[2].set_title(
+        f"Gate {status}, {_summary_float(summary, 'observed_speedup'):.2f}x"
+    )
     axes[2].legend(frameon=False, fontsize=8)
 
     for ax in axes:
@@ -563,7 +586,9 @@ def write_logical_cpu_parallel_scan_artifacts(summary: dict[str, object], out_pr
 
 
 def _build_logical_cpu_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate a logical-CPU independent-scan parallelization identity gate.")
+    parser = argparse.ArgumentParser(
+        description="Generate a logical-CPU independent-scan parallelization identity gate."
+    )
     parser.add_argument("--out-prefix", type=Path, default=DEFAULT_LOGICAL_CPU_PREFIX)
     parser.add_argument(
         "--ky", nargs="+", type=float, default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
@@ -599,21 +624,25 @@ def _main_logical_cpu(argv: list[str] | None = None) -> int:
         ql_rtol=args.ql_rtol,
     )
     paths = write_logical_cpu_parallel_scan_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0 if bool(summary["identity_passed"]) else 1
 
 
+DEFAULT_QUASILINEAR_RUNTIME_PREFIX = (
+    REPO_ROOT / "docs" / "_static" / "quasilinear_runtime_parallel_gate"
+)
 
 
-DEFAULT_QUASILINEAR_RUNTIME_PREFIX = REPO_ROOT / "docs" / "_static" / "quasilinear_runtime_parallel_gate"
 def _default_runtime_config(*, nx: int, ny: int, nz: int) -> RuntimeConfig:
     return RuntimeConfig(
         grid=GridConfig(
             Nx=nx, Ny=ny, Nz=nz, ntheta=nz, nperiod=1, y0=10.0, boundary="linked"
         ),
-        time=TimeConfig(
-            t_max=0.2, dt=0.02, method="rk2", sample_stride=1
-        ),
+        time=TimeConfig(t_max=0.2, dt=0.02, method="rk2", sample_stride=1),
         geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
         init=InitializationConfig(
             init_field="density", init_amp=1.0e-8, gaussian_init=False
@@ -764,7 +793,9 @@ def build_quasilinear_runtime_parallel_gate(
     )
 
 
-def write_quasilinear_runtime_parallel_artifacts(summary: dict[str, Any], out_prefix: Path) -> dict[str, str]:
+def write_quasilinear_runtime_parallel_artifacts(
+    summary: dict[str, Any], out_prefix: Path
+) -> dict[str, str]:
     """Write JSON/CSV/PNG/PDF artifacts for the quasilinear identity gate."""
 
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
@@ -873,8 +904,12 @@ def write_quasilinear_runtime_parallel_artifacts(summary: dict[str, Any], out_pr
 
 
 def _build_quasilinear_runtime_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate a quasilinear runtime-scan worker identity gate.")
-    parser.add_argument("--out-prefix", type=Path, default=DEFAULT_QUASILINEAR_RUNTIME_PREFIX)
+    parser = argparse.ArgumentParser(
+        description="Generate a quasilinear runtime-scan worker identity gate."
+    )
+    parser.add_argument(
+        "--out-prefix", type=Path, default=DEFAULT_QUASILINEAR_RUNTIME_PREFIX
+    )
     parser.add_argument("--ky", nargs="+", type=float, default=[0.1, 0.2])
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--rtol", type=float, default=1.0e-10)
@@ -907,7 +942,11 @@ def _main_quasilinear_runtime(argv: list[str] | None = None) -> int:
         nhermite=args.nhermite,
     )
     paths = write_quasilinear_runtime_parallel_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0 if bool(summary["identity_passed"]) else 1
 
 
@@ -919,7 +958,9 @@ def main(argv: list[str] | None = None) -> int:
         "quasilinear-runtime": _main_quasilinear_runtime,
     }
     if not raw or raw[0] in {"-h", "--help"}:
-        print("usage: generate_parallel_identity_gate.py {ky-scan,logical-cpu,quasilinear-runtime} [options]")
+        print(
+            "usage: generate_parallel_identity_gate.py {ky-scan,logical-cpu,quasilinear-runtime} [options]"
+        )
         print("\nsubcommands:")
         print("  ky-scan              real Cyclone solver ky-batch identity gate")
         print("  logical-cpu          JAX batch_map logical-CPU identity gate")
@@ -929,7 +970,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         runner = commands[command]
     except KeyError as exc:
-        raise SystemExit(f"unknown parallel identity gate subcommand: {command}") from exc
+        raise SystemExit(
+            f"unknown parallel identity gate subcommand: {command}"
+        ) from exc
     return runner(raw)
 
 

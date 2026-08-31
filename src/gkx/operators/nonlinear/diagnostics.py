@@ -23,7 +23,9 @@ __all__ = [
 ]
 
 
-def _pack_resolved_diagnostics(resolved_t: tuple[np.ndarray, ...]) -> ResolvedDiagnostics:
+def _pack_resolved_diagnostics(
+    resolved_t: tuple[np.ndarray, ...],
+) -> ResolvedDiagnostics:
     return ResolvedDiagnostics(
         Phi2_kxt=resolved_t[0],
         Phi2_kyt=resolved_t[1],
@@ -112,9 +114,9 @@ def sampled_scan_intervals(length: int, stride: int) -> np.ndarray:
         dtype=np.int32,
     )
     sample_steps = sample_idx + np.int32(1)
-    return np.diff(np.concatenate([np.asarray([0], dtype=np.int32), sample_steps])).astype(
-        np.int32
-    )
+    return np.diff(
+        np.concatenate([np.asarray([0], dtype=np.int32), sample_steps])
+    ).astype(np.int32)
 
 
 def run_sampled_explicit_diagnostic_scan(

@@ -279,8 +279,6 @@ def _condense_kykx_for_output(
     return arr_np
 
 
-
-
 def infer_triple_dealiased_ny(nky_positive: int) -> int:
     """Infer the full ``Ny`` from the number of positive ``k_y`` points.
 

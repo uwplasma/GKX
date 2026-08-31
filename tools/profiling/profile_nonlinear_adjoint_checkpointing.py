@@ -81,9 +81,7 @@ def main() -> int:
             make_window,
         )
 
-    case = build_window_case(
-        args.toml, {"Nx": args.nx, "Ny": args.ny, "Nz": args.nz}
-    )
+    case = build_window_case(args.toml, {"Nx": args.nx, "Ny": args.ny, "Nz": args.nz})
     complex_dtype = np.complex128 if args.precision == "64" else np.complex64
     rng = np.random.default_rng(args.seed)
     draw = rng.standard_normal(case["shape"]) + 1j * rng.standard_normal(case["shape"])

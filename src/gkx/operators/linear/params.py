@@ -514,12 +514,12 @@ def collision_operator_from_config(
         finite = build_finite_wavelength_coulomb_operator(
             density, mass, temperature, moments
         )
-        scale = jnp.reshape(jnp.asarray(nu), ()) if jnp.asarray(nu).ndim == 0 else (
-            jnp.asarray(nu).reshape((-1, 1))
+        scale = (
+            jnp.reshape(jnp.asarray(nu), ())
+            if jnp.asarray(nu).ndim == 0
+            else (jnp.asarray(nu).reshape((-1, 1)))
         )
-        return dataclasses.replace(
-            finite, pair_frequency=finite.pair_frequency * scale
-        )
+        return dataclasses.replace(finite, pair_frequency=finite.pair_frequency * scale)
     else:
         raise ValueError(
             f"collision_operator must be one of {COLLISION_OPERATOR_NAMES}"

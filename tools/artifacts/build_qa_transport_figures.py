@@ -98,9 +98,11 @@ def trace_stats(path: Path) -> dict[str, float | int | str]:
     tau = integrated_autocorrelation_time(flux, dt)
     neff = min(flux.size, flux.size * dt / (2.0 * tau)) if tau > 0.0 else flux.size
     midpoint = 0.5 * (time[0] + time[-1])
-    half_shift = 100.0 * (
-        flux[time > midpoint].mean() - flux[time <= midpoint].mean()
-    ) / flux.mean()
+    half_shift = (
+        100.0
+        * (flux[time > midpoint].mean() - flux[time <= midpoint].mean())
+        / flux.mean()
+    )
     trend = 100.0 * np.polyfit(time, flux, 1)[0] * (time[-1] - time[0]) / flux.mean()
     stationary = abs(trend) <= MAX_FINAL_DRIFT_PERCENT
     return {
@@ -123,7 +125,11 @@ def trace_stats(path: Path) -> dict[str, float | int | str]:
 def summarize(rows: list[dict]) -> list[dict]:
     output = []
     for case in ORDER:
-        base = {int(r["seed"]): r for r in rows if r["case"] == case and r["design"] == "baseline"}
+        base = {
+            int(r["seed"]): r
+            for r in rows
+            if r["case"] == case and r["design"] == "baseline"
+        }
         candidate = {
             int(r["seed"]): r
             for r in rows
@@ -137,7 +143,13 @@ def summarize(rows: list[dict]) -> list[dict]:
         reduction = 100.0 * (b - c) / b
         scatter_sem = reduction.std(ddof=1) / np.sqrt(len(seeds))
         iat_variance = [
-            (100.0 * float(candidate[s]["mean"]) * float(base[s]["sem"]) / float(base[s]["mean"]) ** 2) ** 2
+            (
+                100.0
+                * float(candidate[s]["mean"])
+                * float(base[s]["sem"])
+                / float(base[s]["mean"]) ** 2
+            )
+            ** 2
             + (100.0 * float(candidate[s]["sem"]) / float(base[s]["mean"])) ** 2
             for s in seeds
         ]
@@ -150,8 +162,7 @@ def summarize(rows: list[dict]) -> list[dict]:
             [float(candidate[s]["half_shift_percent"]) for s in seeds]
         )
         stationary_traces = sum(
-            int(base[s]["stationary"]) + int(candidate[s]["stationary"])
-            for s in seeds
+            int(base[s]["stationary"]) + int(candidate[s]["stationary"]) for s in seeds
         )
         trace_count = 2 * len(seeds)
         nx, ny, nz, nl, nm, timestep = METADATA[case]
@@ -177,8 +188,12 @@ def summarize(rows: list[dict]) -> list[dict]:
                 "conservative_sem_percent": float(sem),
                 "ci95_low_percent": float(mean - critical * sem),
                 "ci95_high_percent": float(mean + critical * sem),
-                "median_tau_baseline": float(np.median([float(base[s]["tau"]) for s in seeds])),
-                "median_tau_candidate": float(np.median([float(candidate[s]["tau"]) for s in seeds])),
+                "median_tau_baseline": float(
+                    np.median([float(base[s]["tau"]) for s in seeds])
+                ),
+                "median_tau_candidate": float(
+                    np.median([float(candidate[s]["tau"]) for s in seeds])
+                ),
                 "median_window_in_tau": float(
                     np.median(
                         [float(base[s]["window_in_tau"]) for s in seeds]
@@ -192,13 +207,20 @@ def summarize(rows: list[dict]) -> list[dict]:
                     )
                 ),
                 "baseline_half_shift_percent": float(base_half.mean()),
-                "baseline_half_shift_sem_percent": float(base_half.std(ddof=1) / np.sqrt(len(seeds))),
+                "baseline_half_shift_sem_percent": float(
+                    base_half.std(ddof=1) / np.sqrt(len(seeds))
+                ),
                 "candidate_half_shift_percent": float(candidate_half.mean()),
-                "candidate_half_shift_sem_percent": float(candidate_half.std(ddof=1) / np.sqrt(len(seeds))),
+                "candidate_half_shift_sem_percent": float(
+                    candidate_half.std(ddof=1) / np.sqrt(len(seeds))
+                ),
                 "mean_abs_half_shift_percent": float(
                     np.mean(
                         [abs(float(base[s]["half_shift_percent"])) for s in seeds]
-                        + [abs(float(candidate[s]["half_shift_percent"])) for s in seeds]
+                        + [
+                            abs(float(candidate[s]["half_shift_percent"]))
+                            for s in seeds
+                        ]
                     )
                 ),
                 "mean_abs_trend_percent": float(
@@ -303,7 +325,11 @@ def plot_transport(output_dir: Path) -> None:
     x = np.arange(len(labels), dtype=float)
     for index, summary_row in enumerate(summary):
         rows = [row for row in trace_rows if row["case"] == summary_row["case"]]
-        base = {int(row["seed"]): float(row["mean"]) for row in rows if row["design"] == "baseline"}
+        base = {
+            int(row["seed"]): float(row["mean"])
+            for row in rows
+            if row["design"] == "baseline"
+        }
         candidate = {
             int(row["seed"]): float(row["mean"])
             for row in rows
@@ -322,12 +348,20 @@ def plot_transport(output_dir: Path) -> None:
         )
     failed = np.asarray([row["case"] == "perp24" for row in summary])
     axes[1].errorbar(
-        x[~failed], values[~failed], yerr=(lower[~failed], upper[~failed]),
-        fmt="o", color="#0072B2", capsize=3,
+        x[~failed],
+        values[~failed],
+        yerr=(lower[~failed], upper[~failed]),
+        fmt="o",
+        color="#0072B2",
+        capsize=3,
     )
     axes[1].errorbar(
-        x[failed], values[failed], yerr=(lower[failed], upper[failed]),
-        fmt="x", color="#D55E00", capsize=3,
+        x[failed],
+        values[failed],
+        yerr=(lower[failed], upper[failed]),
+        fmt="x",
+        color="#D55E00",
+        capsize=3,
     )
     axes[1].axhline(0.0, color="black", linewidth=0.8)
     for boundary in (2.5, 6.5, 8.5):
@@ -378,9 +412,7 @@ def plot_equilibria(input_dir: Path, output_dir: Path) -> None:
             radius, vertical = surface_rz(
                 wout, s_index=int(wout.ns) - 1, theta=theta, phi=phi
             )
-            field = surface_modB(
-                wout, s_index=int(wout.ns) - 1, theta=theta, phi=phi
-            )
+            field = surface_modB(wout, s_index=int(wout.ns) - 1, theta=theta, phi=phi)
             phi_grid = np.meshgrid(phi, theta)[0]
             surfaces.append(
                 (
@@ -426,7 +458,9 @@ def plot_equilibria(input_dir: Path, output_dir: Path) -> None:
             shade=False,
         )
         scale = 1.02 * max(np.abs(x).max(), np.abs(y).max())
-        axis.auto_scale_xyz([-scale, scale], [-scale, scale], [-0.35 * scale, 0.35 * scale])
+        axis.auto_scale_xyz(
+            [-scale, scale], [-scale, scale], [-0.35 * scale, 0.35 * scale]
+        )
         axis.set_box_aspect((1.0, 1.0, 0.55), zoom=1.18)
         axis.view_init(elev=27, azim=-55)
         axis.set_axis_off()
@@ -461,7 +495,9 @@ def plot_equilibria(input_dir: Path, output_dir: Path) -> None:
         if column:
             axis.set_yticklabels([])
     scalar = cm.ScalarMappable(norm=norm, cmap="viridis")
-    colorbar = figure.colorbar(scalar, ax=figure.axes, location="right", shrink=0.72, pad=0.02)
+    colorbar = figure.colorbar(
+        scalar, ax=figure.axes, location="right", shrink=0.72, pad=0.02
+    )
     colorbar.set_label(r"$|B|/\langle |B|\rangle$")
     output = output_dir / "qa_transport_equilibria.png"
     figure.savefig(

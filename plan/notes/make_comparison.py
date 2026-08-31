@@ -9,6 +9,7 @@ Conventions:
      ky_stella = sqrt(2) * ky_gkx_input
      (gamma, omega)[vth/a] = (gamma, omega)[cs/a] / sqrt(2)
 """
+
 import re
 import numpy as np
 
@@ -31,9 +32,9 @@ gkx = {}
 gkx_horizon = {}
 pat = re.compile(r"ky=([0-9.]+)\s+gamma=(-?[0-9.]+)\s+omega=(-?[0-9.]+)")
 for fname, horizon in [
-    ("gkx_miller_scan_sqrt2.log", 40),   # batch scan, t=40
-    ("gkx_lowky_t80.log", 80),           # ky 0.1414, 0.2121 at t=80
-    ("gkx_refine2.log", 120),            # ky 0.2828 t=80; ky 0.1414 t=120 (last wins)
+    ("gkx_miller_scan_sqrt2.log", 40),  # batch scan, t=40
+    ("gkx_lowky_t80.log", 80),  # ky 0.1414, 0.2121 at t=80
+    ("gkx_refine2.log", 120),  # ky 0.2828 t=80; ky 0.1414 t=120 (last wins)
 ]:
     try:
         with open(f"{BASE}/gkx/{fname}") as f:
@@ -54,12 +55,16 @@ with open("/Users/rogeriojorge/local/GKX/docs/_static/cyclone_mismatch_table.csv
     next(f)
     for line in f:
         v = list(map(float, line.split(",")))
-        gxtab[round(v[0], 6)] = tuple(v[1:5])  # gamma_ref, omega_ref, gamma_gkx, omega_gkx
+        gxtab[round(v[0], 6)] = tuple(
+            v[1:5]
+        )  # gamma_ref, omega_ref, gamma_gkx, omega_gkx
 
-out = ["ky_stella,ky_gkx_input,gamma_stella_vth,omega_stella_vth,"
-       "gamma_gkx_cs,omega_gkx_cs,gamma_gkx_vth,omega_gkx_vth,"
-       "rel_gamma_gkx_vs_stella,rel_omega_gkx_vs_stella,gkx_fit_horizon,"
-       "gamma_gxref_raw,omega_gxref_raw,gamma_gkxtracked_raw,omega_gkxtracked_raw"]
+out = [
+    "ky_stella,ky_gkx_input,gamma_stella_vth,omega_stella_vth,"
+    "gamma_gkx_cs,omega_gkx_cs,gamma_gkx_vth,omega_gkx_vth,"
+    "rel_gamma_gkx_vs_stella,rel_omega_gkx_vs_stella,gkx_fit_horizon,"
+    "gamma_gxref_raw,omega_gxref_raw,gamma_gkxtracked_raw,omega_gkxtracked_raw"
+]
 for ky_st in sorted(stella):
     ky_g = ky_st / SQRT2
     w_st, g_st = stella[ky_st]
@@ -76,8 +81,9 @@ for ky_st in sorted(stella):
         horizon = gkx_horizon.get(match, 40)
     # tracked table overlap at face-value GKX ky (their input units)
     tk = min(gxtab, key=lambda k: abs(k - ky_g))
-    gx_g, gx_w, gkxt_g, gkxt_w = (gxtab[tk] if abs(tk - ky_g) < 5e-3
-                                  else (float("nan"),) * 4)
+    gx_g, gx_w, gkxt_g, gkxt_w = (
+        gxtab[tk] if abs(tk - ky_g) < 5e-3 else (float("nan"),) * 4
+    )
     out.append(
         f"{ky_st:.3f},{ky_g:.6f},{g_st:.6f},{w_st:.6f},"
         f"{g_cs:.6f},{w_cs:.6f},{g_vth:.6f},{w_vth:.6f},"

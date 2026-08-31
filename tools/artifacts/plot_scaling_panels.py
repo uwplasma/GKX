@@ -22,7 +22,9 @@ import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_LEGACY_SPEEDUP_DATA = REPO_ROOT / "docs" / "_static" / "scaling_speedup_data.csv"
+DEFAULT_LEGACY_SPEEDUP_DATA = (
+    REPO_ROOT / "docs" / "_static" / "scaling_speedup_data.csv"
+)
 DEFAULT_LEGACY_SPEEDUP_PNG = REPO_ROOT / "docs" / "_static" / "scaling_speedup.png"
 DEFAULT_INDEPENDENT_KY_INPUTS = [
     REPO_ROOT / "docs" / "_static" / "independent_ky_scan_scaling_cpu_large.json",
@@ -229,7 +231,9 @@ def write_rhs_profile_panel(
     paths = _save_figure(fig, out_png)
     plt.close(fig)
 
-    summary_path = summary_json if summary_json is not None else out_png.with_suffix(".json")
+    summary_path = (
+        summary_json if summary_json is not None else out_png.with_suffix(".json")
+    )
     write_rhs_profile_summary_json(
         build_rhs_profile_summary(profiles, case=str(case)), summary_path
     )
@@ -281,9 +285,7 @@ def write_legacy_two_device_speedup_panel(
     ax.set_ylabel("Speedup (1x / 2x)")
     ax.set_xlabel("Linear integration steps per run")
     ax.set_xticks(sorted(df[df["backend"].isin(["cpu", "cuda"])]["steps"].unique()))
-    ax.set_title(
-        "Archived two-device linear scaling (Ny=64, Nz=128, Nl=6, Nm=6)"
-    )
+    ax.set_title("Archived two-device linear scaling (Ny=64, Nz=128, Nl=6, Nm=6)")
     ax.legend(loc="lower right", frameon=False)
     ax.grid(True, alpha=0.25)
     fig.tight_layout()

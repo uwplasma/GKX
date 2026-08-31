@@ -26,12 +26,16 @@ def default_solver_geometry_design_params() -> jnp.ndarray:
     return jnp.asarray([0.05, 0.20], dtype=jnp.float32)
 
 
-def solver_ready_geometry_mapping(params: jnp.ndarray, theta: jnp.ndarray) -> dict[str, Any]:
+def solver_ready_geometry_mapping(
+    params: jnp.ndarray, theta: jnp.ndarray
+) -> dict[str, Any]:
     """Map a two-parameter design vector into solver-ready flux-tube arrays."""
 
     p = jnp.asarray(params)
     if p.ndim != 1 or int(p.size) != 2:
-        raise ValueError("params must be a length-2 vector [bmag_ripple, curvature_drift_scale]")
+        raise ValueError(
+            "params must be a length-2 vector [bmag_ripple, curvature_drift_scale]"
+        )
     ripple = p[0]
     drift = p[1]
     theta_arr = jnp.asarray(theta)
@@ -73,7 +77,11 @@ def tiny_differentiable_objective_gradient_report(
     linear eigensolver or optional VMEC/Boozer backends.
     """
 
-    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
+    p = (
+        default_solver_geometry_design_params()
+        if params is None
+        else jnp.asarray(params)
+    )
     if p.ndim != 1 or int(p.size) != 2:
         raise ValueError("params must be a length-2 vector")
     theta = jnp.linspace(-jnp.pi, jnp.pi, 16, endpoint=False, dtype=p.dtype)
@@ -142,7 +150,9 @@ def _objective_gate_rows(
                     "rel_error": rel_error,
                     "atol": float(atol),
                     "rtol": float(rtol),
-                    "passed": bool(abs_error <= float(atol) or rel_error <= float(rtol)),
+                    "passed": bool(
+                        abs_error <= float(atol) or rel_error <= float(rtol)
+                    ),
                 }
             )
     return rows

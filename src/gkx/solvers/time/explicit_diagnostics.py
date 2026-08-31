@@ -205,7 +205,11 @@ def _diagnostic_policy(
         ),
         mask=_growth_rate_mode_mask(grid.ky, grid.kx, grid.dealias_mask),
         wmax=float(
-            np.sum(_linear_frequency_bound(grid, geom_eff, params, G.shape[-5], G.shape[-4]))
+            np.sum(
+                _linear_frequency_bound(
+                    grid, geom_eff, params, G.shape[-5], G.shape[-4]
+                )
+            )
         ),
     )
 
@@ -264,10 +268,26 @@ def _diagnostic_sample(
         apar, cache, vol_fac, use_dealias=policy.use_dealias
     )
     heat = heat_flux_total(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=policy.use_dealias
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=policy.use_dealias,
     )
     particle = particle_flux_total(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=policy.use_dealias
+        G,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        flux_fac,
+        use_dealias=policy.use_dealias,
     )
     return _DiagnosticSample(
         phi=phi,
@@ -367,7 +387,9 @@ def integrate_linear_explicit_diagnostics(
     phi_prev = fields0.phi
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     stepper = _make_stepper(
-        _linear_explicit_step if linear_explicit_step_fn is None else linear_explicit_step_fn,
+        _linear_explicit_step
+        if linear_explicit_step_fn is None
+        else linear_explicit_step_fn,
         policy,
         jit=jit,
     )

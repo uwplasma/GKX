@@ -26,7 +26,9 @@ def _steps_from_time(cfg: TimeConfig) -> int:
     return steps
 
 
-def _resolve_config_collision_operator(time_cfg: TimeConfig, params: LinearParams, G0=None):
+def _resolve_config_collision_operator(
+    time_cfg: TimeConfig, params: LinearParams, G0=None
+):
     """Build the moment collision operator selected by ``TimeConfig``.
 
     Returns ``None`` for ``"none"``/``"lenard_bernstein"``, which keeps the
@@ -110,11 +112,13 @@ def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:
         f"collision_operator={name!r} provides a {expected}-moment drift-kinetic "
         f"matrix, but the run uses Nl*Nm = {nl}*{nm} = {nl * nm} moments. "
         f"Choose Nl and Nm with Nl*Nm = {expected} (for example Nl={expected // 2}, "
-        "Nm=2), or select collision_operator = \"lenard_bernstein\"."
+        'Nm=2), or select collision_operator = "lenard_bernstein".'
     )
 
 
-def _reject_unsupported_config_collision_operator(time_cfg: TimeConfig, path: str) -> None:
+def _reject_unsupported_config_collision_operator(
+    time_cfg: TimeConfig, path: str
+) -> None:
     """Fail loudly when a solver path cannot honour the selected operator.
 
     Silently ignoring ``collision_operator`` would report Lenard-Bernstein
@@ -163,7 +167,9 @@ def integrate_linear_from_config(
     """Integrate the linear system using TimeConfig settings."""
 
     steps = _steps_from_time(time_cfg)
-    show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
+    show_progress_use = bool(
+        time_cfg.progress_bar if show_progress is None else show_progress
+    )
     return integrate_linear(
         G0,
         grid,
@@ -198,7 +204,9 @@ def integrate_nonlinear_from_config(
     """Integrate the nonlinear system using TimeConfig settings."""
 
     steps = _steps_from_time(time_cfg)
-    show_progress_use = bool(time_cfg.progress_bar if show_progress is None else show_progress)
+    show_progress_use = bool(
+        time_cfg.progress_bar if show_progress is None else show_progress
+    )
     _validate_nonlinear_config_state_sharding(time_cfg.state_sharding)
     state_sharding = resolve_state_sharding(G0, time_cfg.state_sharding)
     if state_sharding is not None:

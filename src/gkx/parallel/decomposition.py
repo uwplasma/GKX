@@ -280,7 +280,9 @@ def shard_sequence(
     items = tuple(values)
     if len(items) != contract.n_items:
         raise ValueError("values length must match contract.n_items")
-    return tuple(tuple(items[index] for index in shard.indices) for shard in contract.shards)
+    return tuple(
+        tuple(items[index] for index in shard.indices) for shard in contract.shards
+    )
 
 
 def reconstruct_serial(
@@ -311,7 +313,9 @@ def reconstruct_serial(
     return tuple(reconstructed)
 
 
-def _coverage(contract: DecompositionContract) -> tuple[
+def _coverage(
+    contract: DecompositionContract,
+) -> tuple[
     tuple[int, ...],
     tuple[int, ...],
     tuple[int, ...],
@@ -351,9 +355,14 @@ def serial_reconstruction_identity_report(
     items = tuple(values)
     shards = shard_sequence(items, contract)
     reconstructed_values = reconstruct_serial(contract, shards)
-    expected_indices, reconstructed_indices, missing, duplicates, out_of_range, out_of_order = _coverage(
-        contract
-    )
+    (
+        expected_indices,
+        reconstructed_indices,
+        missing,
+        duplicates,
+        out_of_range,
+        out_of_order,
+    ) = _coverage(contract)
     comparator = equal or _default_equal
     values_match = len(reconstructed_values) == len(items) and all(
         comparator(left, right)

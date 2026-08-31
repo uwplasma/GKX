@@ -84,7 +84,9 @@ class VMEXNonlinearAuditPolicy:
             "minimum_sample_count": int(self.minimum_sample_count),
             "recommended_surfaces": [float(item) for item in self.recommended_surfaces],
             "recommended_alphas": [float(item) for item in self.recommended_alphas],
-            "recommended_ky_values": [float(item) for item in self.recommended_ky_values],
+            "recommended_ky_values": [
+                float(item) for item in self.recommended_ky_values
+            ],
         }
 
 
@@ -104,7 +106,9 @@ class VMEXReducedPrelaunchPolicy:
         return {
             "metric_key": str(self.metric_key),
             "minimum_relative_reduction": float(self.minimum_relative_reduction),
-            "failed_reference_safety_factor": float(self.failed_reference_safety_factor),
+            "failed_reference_safety_factor": float(
+                self.failed_reference_safety_factor
+            ),
             "require_sample_coverage": bool(self.require_sample_coverage),
             "maximum_cross_sample_sem_rel": float(self.maximum_cross_sample_sem_rel),
         }
@@ -151,7 +155,6 @@ class VMEXNonlinearCampaignPolicy:
                 self.require_landscape_admission_passed
             ),
         }
-
 
 
 # ---- sample coverage and metric helpers ----
@@ -215,7 +218,12 @@ def _ky_values_single_grid_compatible(values: Sequence[float]) -> bool:
     if not values:
         return False
     arr = np.asarray(values, dtype=float)
-    if arr.ndim != 1 or arr.size < 1 or not np.all(np.isfinite(arr)) or np.any(arr <= 0.0):
+    if (
+        arr.ndim != 1
+        or arr.size < 1
+        or not np.all(np.isfinite(arr))
+        or np.any(arr <= 0.0)
+    ):
         return False
     base = float(np.min(arr))
     ratios = arr / base
@@ -270,9 +278,13 @@ def transport_objective_sample_summary(
 
 
 # ---- candidate selection reports ----
-def _physical_gate_blockers(candidate: Mapping[str, Any], policy: VMEXTransportAdmissionPolicy) -> list[str]:
+def _physical_gate_blockers(
+    candidate: Mapping[str, Any], policy: VMEXTransportAdmissionPolicy
+) -> list[str]:
     blockers: list[str] = []
-    gate_reported_passed = bool(candidate.get("gate_reported_passed", candidate.get("passed", False)))
+    gate_reported_passed = bool(
+        candidate.get("gate_reported_passed", candidate.get("passed", False))
+    )
     gate_authoritative = bool(candidate.get("gate_is_authoritative", True))
     if bool(policy.require_authoritative_gate) and not gate_authoritative:
         blockers.append("non_authoritative_gate")
@@ -288,7 +300,9 @@ def _physical_gate_blockers(candidate: Mapping[str, Any], policy: VMEXTransportA
         else:
             blockers.append("gate_failed")
     if not bool(candidate.get("passed", False)):
-        if "gate_failed" not in blockers and not any(item.startswith("gate_") for item in blockers):
+        if "gate_failed" not in blockers and not any(
+            item.startswith("gate_") for item in blockers
+        ):
             blockers.append("candidate_not_passed")
     return blockers
 
@@ -299,7 +313,11 @@ def _relative_improvement(
     *,
     lower_is_better: bool,
 ) -> float:
-    signed = baseline_value - candidate_value if lower_is_better else candidate_value - baseline_value
+    signed = (
+        baseline_value - candidate_value
+        if lower_is_better
+        else candidate_value - baseline_value
+    )
     scale = max(abs(baseline_value), 1.0e-300)
     return float(signed / scale)
 
@@ -318,7 +336,9 @@ def _annotated_transport_candidate(
 ) -> dict[str, Any]:
     item = dict(raw)
     physical_blockers = _physical_gate_blockers(item, policy)
-    item["transport_metric"] = candidate_transport_metric(item, metric_keys=policy.metric_keys)
+    item["transport_metric"] = candidate_transport_metric(
+        item, metric_keys=policy.metric_keys
+    )
     item["physical_gate_blockers"] = physical_blockers
     item["admission_blockers"] = list(physical_blockers)
     item["relative_transport_improvement"] = None
@@ -340,13 +360,17 @@ def _select_transport_baseline(
     explicit = next((item for item in candidates if bool(item.get("baseline"))), None)
     if explicit is not None:
         return explicit
-    return next((item for item in candidates if item.get("transport_weight") is None), None)
+    return next(
+        (item for item in candidates if item.get("transport_weight") is None), None
+    )
 
 
 def _baseline_transport_state(
     baseline: dict[str, Any] | None,
 ) -> _BaselineTransportState:
-    metric = cast(dict[str, Any], baseline.get("transport_metric")) if baseline else None
+    metric = (
+        cast(dict[str, Any], baseline.get("transport_metric")) if baseline else None
+    )
     metric_value = (
         _finite_float_or_none(metric.get("value"))
         if isinstance(metric, Mapping)
@@ -442,7 +466,11 @@ def _promoted_transport_candidate(
                 float(item.get("relative_transport_improvement") or 0.0),
             ),
         )
-    if bool(policy.allow_baseline_fallback) and baseline.item is not None and baseline.physical_ok:
+    if (
+        bool(policy.allow_baseline_fallback)
+        and baseline.item is not None
+        and baseline.physical_ok
+    ):
         return baseline.item
     return None
 
@@ -471,7 +499,9 @@ def _transport_admission_payload(
         "baseline_transport_metric": baseline.metric,
         "candidates": list(candidates),
         "admitted_transport_candidates": [
-            item.get("label") for item in admitted_transport if item.get("label") is not None
+            item.get("label")
+            for item in admitted_transport
+            if item.get("label") is not None
         ],
         "transport_candidate_admitted": bool(admitted_transport),
         "promoted_candidate": promoted,
@@ -525,8 +555,6 @@ def select_admitted_transport_candidate(
     report = build_transport_admission_report(summaries, policy=policy)
     promoted = report.get("promoted_candidate")
     return dict(promoted) if isinstance(promoted, Mapping) else None
-
-
 
 
 __all__ = [

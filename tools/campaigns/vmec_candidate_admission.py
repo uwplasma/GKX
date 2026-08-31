@@ -20,7 +20,9 @@ def _finite_float_or_none(value: Any) -> float | None:
     return result if np.isfinite(result) else None
 
 
-def _finite_gate(value: float | None, *, lower: float | None = None, upper: float | None = None) -> bool:
+def _finite_gate(
+    value: float | None, *, lower: float | None = None, upper: float | None = None
+) -> bool:
     if value is None:
         return False
     if lower is not None and value < float(lower):
@@ -34,7 +36,9 @@ def _checks_passed(checks: Mapping[str, Mapping[str, Any]]) -> bool:
     return all(bool(check.get("passed")) for check in checks.values())
 
 
-def _aspect_check(value: float | None, *, target: float, tolerance: float) -> dict[str, Any]:
+def _aspect_check(
+    value: float | None, *, target: float, tolerance: float
+) -> dict[str, Any]:
     error = None if value is None else abs(value - float(target))
     return {
         "value": value,
@@ -63,7 +67,9 @@ def _profile_floor_passed(
     if floor is None:
         return True
     floor_value = float(floor)
-    return _finite_gate(min_iotas, lower=floor_value) and _finite_gate(min_iotaf, lower=floor_value)
+    return _finite_gate(min_iotas, lower=floor_value) and _finite_gate(
+        min_iotaf, lower=floor_value
+    )
 
 
 def _iota_profile_check(
@@ -84,7 +90,9 @@ def _iota_profile_check(
     return check
 
 
-def _profile_minima_from_arrays(iotas: np.ndarray, iotaf: np.ndarray) -> tuple[float | None, float | None]:
+def _profile_minima_from_arrays(
+    iotas: np.ndarray, iotaf: np.ndarray
+) -> tuple[float | None, float | None]:
     iotas = np.asarray(iotas, dtype=float)
     iotaf = np.asarray(iotaf, dtype=float)
     profile = iotas[1:] if iotas.size > 1 else iotas
@@ -95,7 +103,9 @@ def _profile_minima_from_arrays(iotas: np.ndarray, iotaf: np.ndarray) -> tuple[f
     )
 
 
-def final_iota_profiles_from_vmec_result(result: Any) -> tuple[np.ndarray, np.ndarray] | None:
+def final_iota_profiles_from_vmec_result(
+    result: Any,
+) -> tuple[np.ndarray, np.ndarray] | None:
     """Return final solved iota profiles from a vmex result bundle if available.
 
     ``result`` may carry ``final_wout`` (a ``vmex`` ``WoutData``-like object
@@ -138,7 +148,9 @@ def _final_quasisymmetry_from_vmec_result(result: Any) -> float | None:
     runtime = getattr(result, "final_runtime", None)
     if equilibrium is not None:
         state = state if state is not None else getattr(equilibrium, "state", None)
-        runtime = runtime if runtime is not None else getattr(equilibrium, "runtime", None)
+        runtime = (
+            runtime if runtime is not None else getattr(equilibrium, "runtime", None)
+        )
     helicity_m = int(getattr(result, "helicity_m", 1) or 1)
     helicity_n = int(getattr(result, "helicity_n", 0) or 0)
     surfaces = np.arange(0.0, 1.01, 0.1)
@@ -183,7 +195,9 @@ def _final_quasisymmetry_from_vmec_result(result: Any) -> float | None:
     params = getattr(result, "final_params", None)
     if optimizer is not None and params is not None:
         try:
-            return _finite_float_or_none(getattr(optimizer, "quasisymmetry_objective")(params))
+            return _finite_float_or_none(
+                getattr(optimizer, "quasisymmetry_objective")(params)
+            )
         except Exception:
             return None
     return None
@@ -202,7 +216,9 @@ def _wout_summary(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
             "source": str(source.get("source", "mapping")),
             "aspect": _finite_float_or_none(source.get("aspect")),
             "mean_iota": _finite_float_or_none(source.get("mean_iota")),
-            "min_iotas_excluding_axis": _finite_float_or_none(source.get("min_iotas_excluding_axis")),
+            "min_iotas_excluding_axis": _finite_float_or_none(
+                source.get("min_iotas_excluding_axis")
+            ),
             "min_iotaf": _finite_float_or_none(source.get("min_iotaf")),
         }
     path = Path(source)
@@ -228,9 +244,15 @@ def _wout_summary(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
     return {
         "source": str(path),
         "aspect": aspect,
-        "mean_iota": _finite_float_or_none(np.nanmean(profile)) if profile.size else None,
-        "min_iotas_excluding_axis": _finite_float_or_none(np.nanmin(profile)) if profile.size else None,
-        "min_iotaf": _finite_float_or_none(np.nanmin(finite_iotaf)) if finite_iotaf.size else None,
+        "mean_iota": _finite_float_or_none(np.nanmean(profile))
+        if profile.size
+        else None,
+        "min_iotas_excluding_axis": _finite_float_or_none(np.nanmin(profile))
+        if profile.size
+        else None,
+        "min_iotaf": _finite_float_or_none(np.nanmin(finite_iotaf))
+        if finite_iotaf.size
+        else None,
     }
 
 
@@ -244,8 +266,14 @@ def _wout_quasisymmetry(
     nphi: int,
 ) -> tuple[float | None, str, str | None]:
     if isinstance(source, Mapping):
-        value = _finite_float_or_none(source.get("qs_residual", source.get("quasisymmetry")))
-        return value, str(source.get("qs_source", "mapping")), None if value is not None else "missing_qs_residual"
+        value = _finite_float_or_none(
+            source.get("qs_residual", source.get("quasisymmetry"))
+        )
+        return (
+            value,
+            str(source.get("qs_source", "mapping")),
+            None if value is not None else "missing_qs_residual",
+        )
     try:
         import vmex as vj  # type: ignore[import-untyped, import-not-found]
 
@@ -258,7 +286,11 @@ def _wout_quasisymmetry(
             nphi=int(nphi),
         )
         value = _finite_float_or_none(qs.total(wout))
-        return value, "vmex_wout", None if value is not None else "nonfinite_qs_residual"
+        return (
+            value,
+            "vmex_wout",
+            None if value is not None else "nonfinite_qs_residual",
+        )
     except Exception as exc:
         return None, "vmex_wout_error", f"{type(exc).__name__}: {exc}"
 
@@ -348,14 +380,18 @@ def _wout_reproducibility_values(
         "rerun_aspect": _finite_float_or_none(rerun.get("aspect")),
         "ref_iota": _finite_float_or_none(reference.get("mean_iota")),
         "rerun_iota": _finite_float_or_none(rerun.get("mean_iota")),
-        "ref_min_iotas": _finite_float_or_none(reference.get("min_iotas_excluding_axis")),
+        "ref_min_iotas": _finite_float_or_none(
+            reference.get("min_iotas_excluding_axis")
+        ),
         "rerun_min_iotas": _finite_float_or_none(rerun.get("min_iotas_excluding_axis")),
         "ref_min_iotaf": _finite_float_or_none(reference.get("min_iotaf")),
         "rerun_min_iotaf": _finite_float_or_none(rerun.get("min_iotaf")),
     }
 
 
-def _wout_reproducibility_drifts(values: Mapping[str, float | None]) -> dict[str, float | None]:
+def _wout_reproducibility_drifts(
+    values: Mapping[str, float | None],
+) -> dict[str, float | None]:
     ref_aspect = values["ref_aspect"]
     rerun_aspect = values["rerun_aspect"]
     ref_iota = values["ref_iota"]
@@ -365,8 +401,12 @@ def _wout_reproducibility_drifts(values: Mapping[str, float | None]) -> dict[str
     ref_min_iotaf = values["ref_min_iotaf"]
     rerun_min_iotaf = values["rerun_min_iotaf"]
     return {
-        "aspect": None if ref_aspect is None or rerun_aspect is None else abs(rerun_aspect - ref_aspect),
-        "iota": None if ref_iota is None or rerun_iota is None else abs(abs(rerun_iota) - abs(ref_iota)),
+        "aspect": None
+        if ref_aspect is None or rerun_aspect is None
+        else abs(rerun_aspect - ref_aspect),
+        "iota": None
+        if ref_iota is None or rerun_iota is None
+        else abs(abs(rerun_iota) - abs(ref_iota)),
         "min_iotas": None
         if ref_min_iotas is None or rerun_min_iotas is None
         else abs(rerun_min_iotas - ref_min_iotas),
@@ -411,8 +451,12 @@ def _wout_reproducibility_checks(
             "passed": _finite_gate(drifts["aspect"], upper=float(aspect_repro_atol)),
         },
         "mean_iota_reproducibility": {
-            "reference": None if values["ref_iota"] is None else abs(values["ref_iota"]),
-            "rerun": None if values["rerun_iota"] is None else abs(values["rerun_iota"]),
+            "reference": None
+            if values["ref_iota"] is None
+            else abs(values["ref_iota"]),
+            "rerun": None
+            if values["rerun_iota"] is None
+            else abs(values["rerun_iota"]),
             "absolute_drift": drifts["iota"],
             "absolute_tolerance": float(mean_iota_repro_atol),
             "passed": _finite_gate(drifts["iota"], upper=float(mean_iota_repro_atol)),
@@ -518,7 +562,9 @@ def build_solved_vmec_candidate_gate(
     min_iota_profile: float | None = None
     min_iotaf_profile: float | None = None
     if iota_profiles is not None:
-        min_iota_profile, min_iotaf_profile = _profile_minima_from_arrays(*iota_profiles)
+        min_iota_profile, min_iotaf_profile = _profile_minima_from_arrays(
+            *iota_profiles
+        )
     elif iota_profile_floor is not None:
         profile_source = "missing"
 
@@ -528,7 +574,9 @@ def build_solved_vmec_candidate_gate(
         "quasisymmetry": {
             "value": qs_residual,
             "maximum": float(qs_residual_max),
-            "margin": None if qs_residual is None else float(qs_residual_max) - qs_residual,
+            "margin": None
+            if qs_residual is None
+            else float(qs_residual_max) - qs_residual,
             "source": qs_source,
             "passed": _finite_gate(qs_residual, upper=float(qs_residual_max)),
         },

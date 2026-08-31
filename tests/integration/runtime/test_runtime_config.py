@@ -180,7 +180,7 @@ def test_runtime_toml_rejects_removed_diffrax_time_keys(tmp_path: Path) -> None:
 
     # A deck that only carries the tuning keys must fail the same way.
     path.write_text(
-        "schema_version = 1\n[time]\ndiffrax_solver = \"Tsit5\"\n"
+        'schema_version = 1\n[time]\ndiffrax_solver = "Tsit5"\n'
         "diffrax_max_steps = 20000\n",
         encoding="utf-8",
     )
@@ -190,7 +190,7 @@ def test_runtime_toml_rejects_removed_diffrax_time_keys(tmp_path: Path) -> None:
 
     # Selecting the native owner explicitly still loads.
     path.write_text(
-        "schema_version = 1\n[time]\nt_max = 1.0\nmethod = \"rk4\"\n",
+        'schema_version = 1\n[time]\nt_max = 1.0\nmethod = "rk4"\n',
         encoding="utf-8",
     )
     cfg, _raw = load_runtime_from_toml(path)
@@ -1090,9 +1090,9 @@ def test_stellarator_upper_estimate_note_and_cheaper_box() -> None:
     assert not any("cheaper box" in note for note in at_ladder["notes"])
     assert not any(
         "upper estimate" in note
-        for note in resolution_from_features(
-            _features(0.14, nfp=1), dky=LADDER_DKY
-        )["notes"]
+        for note in resolution_from_features(_features(0.14, nfp=1), dky=LADDER_DKY)[
+            "notes"
+        ]
     )
 
 
@@ -1101,7 +1101,9 @@ def test_estimate_flag_short_circuits_before_any_output(
 ) -> None:
     calls: list[tuple[Path, str | None, str]] = []
 
-    def _fake_print(wout_path: Path, config_arg: str | None, *, target_error: str) -> None:
+    def _fake_print(
+        wout_path: Path, config_arg: str | None, *, target_error: str
+    ) -> None:
         calls.append((wout_path, config_arg, target_error))
 
     monkeypatch.setattr(runtime_wout, "_print_resolution_estimate", _fake_print)

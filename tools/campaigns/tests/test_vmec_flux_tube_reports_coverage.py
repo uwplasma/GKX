@@ -130,7 +130,9 @@ def _valid_flux_tube_mapping() -> dict[str, object]:
 # Pure metric helpers
 # ---------------------------------------------------------------------------
 def test_normalized_max_abs_reads_numeric_or_falls_back_to_inf() -> None:
-    assert reports._normalized_max_abs({"normalized_max_abs": 0.25}) == pytest.approx(0.25)
+    assert reports._normalized_max_abs({"normalized_max_abs": 0.25}) == pytest.approx(
+        0.25
+    )
     assert reports._normalized_max_abs(
         {"normalized_max_abs": np.float64(0.5)}
     ) == pytest.approx(0.5)
@@ -195,7 +197,9 @@ def test_worst_array_error_ignores_shape_mismatches_and_defaults_to_inf() -> Non
     assert reports._worst_array_error(metrics, ("a",)) == pytest.approx(0.02)
     assert reports._worst_array_error(metrics, ("a", "b")) == pytest.approx(0.05)
     assert np.isinf(
-        reports._worst_array_error({"x": {"normalized_max_abs": 0.1, "shape_match": False}})
+        reports._worst_array_error(
+            {"x": {"normalized_max_abs": 0.1, "shape_match": False}}
+        )
     )
 
 
@@ -341,7 +345,9 @@ def test_pack_equal_arc_parity_computes_worst_values_and_flips_flags() -> None:
     # core worst spans only theta/bmag/jacobian (bgrad is the derivative gate).
     assert packed["equal_arc_core_worst_normalized_max_abs"] == pytest.approx(0.004)
     assert packed["equal_arc_core_worst_scalar_rel"] == pytest.approx(0.003)
-    assert packed["equal_arc_derivative_worst_normalized_max_abs"] == pytest.approx(0.02)
+    assert packed["equal_arc_derivative_worst_normalized_max_abs"] == pytest.approx(
+        0.02
+    )
     assert packed["equal_arc_metric_worst_normalized_max_abs"] == pytest.approx(0.07)
     assert packed["equal_arc_drift_worst_normalized_max_abs"] == pytest.approx(0.09)
     assert packed["equal_arc_core_passed"] is True
@@ -371,7 +377,11 @@ def test_pack_equal_arc_parity_computes_worst_values_and_flips_flags() -> None:
         core_metrics=core_metrics,
         metric_metrics=metric_metrics,
         drift_metrics=drift_metrics,
-        scalar_metrics={"gradpar": {"rel": 0.5}, "q": {"rel": 0.0}, "s_hat": {"rel": 0.0}},
+        scalar_metrics={
+            "gradpar": {"rel": 0.5},
+            "q": {"rel": 0.0},
+            "s_hat": {"rel": 0.0},
+        },
         core_tolerance=0.01,
         derivative_tolerance=0.03,
         metric_tolerance=0.08,
@@ -409,9 +419,7 @@ def test_equal_arc_parity_report_packs_metrics_when_core_profiles_available(
     core = _equal_arc_core_dict()
     # Only the drift channel differs (reference max 10.0, diff 5.0 -> 0.5).
     imported = _equal_arc_imported(gb_profile=np.array([1.0, 2.0, 3.0, 4.0, 10.0]))
-    monkeypatch.setattr(
-        reports, "_equal_arc_core_profiles", lambda **kwargs: core
-    )
+    monkeypatch.setattr(reports, "_equal_arc_core_profiles", lambda **kwargs: core)
 
     report = reports._equal_arc_parity_report(
         info={"booz_xform_jax_api_available": True},
@@ -769,20 +777,18 @@ def test_vmec_array_parity_dataclasses_are_frozen() -> None:
 def test_vmec_array_parity_backend_unavailable_reason_covers_each_branch(
     monkeypatch,
 ) -> None:
-    assert reports._vmec_array_parity_backend_unavailable_reason(
-        {"vmex_available": False}
-    ) == "vmex is not available"
-
-    monkeypatch.setattr(
-        imported_vmec, "internal_vmec_backend_available", lambda: False
+    assert (
+        reports._vmec_array_parity_backend_unavailable_reason({"vmex_available": False})
+        == "vmex is not available"
     )
-    assert reports._vmec_array_parity_backend_unavailable_reason(
-        {"vmex_available": True}
-    ) == "internal VMEC/EIK backend is not available"
 
-    monkeypatch.setattr(
-        imported_vmec, "internal_vmec_backend_available", lambda: True
+    monkeypatch.setattr(imported_vmec, "internal_vmec_backend_available", lambda: False)
+    assert (
+        reports._vmec_array_parity_backend_unavailable_reason({"vmex_available": True})
+        == "internal VMEC/EIK backend is not available"
     )
+
+    monkeypatch.setattr(imported_vmec, "internal_vmec_backend_available", lambda: True)
     assert (
         reports._vmec_array_parity_backend_unavailable_reason({"vmex_available": True})
         is None

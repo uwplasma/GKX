@@ -471,9 +471,7 @@ def test_fit_growth_rate_auto_with_stats_fallback(monkeypatch) -> None:
     def _boom(*_args, **_kwargs):
         raise ValueError("forced")
 
-    monkeypatch.setattr(
-        "gkx.diagnostics.analysis.fit_growth_rate_with_stats", _boom
-    )
+    monkeypatch.setattr("gkx.diagnostics.analysis.fit_growth_rate_with_stats", _boom)
     gamma, omega, tmin, tmax, r2_log, r2_phase = fit_growth_rate_auto_with_stats(
         t, signal
     )

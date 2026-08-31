@@ -33,7 +33,9 @@ from gkx.artifacts.plotting import set_plot_style
 from gkx.operators.linear.params import Species, build_linear_params
 
 
-def _estimate_growth(phi_t: jnp.ndarray, t: jnp.ndarray, start_idx: int) -> tuple[jnp.ndarray, jnp.ndarray]:
+def _estimate_growth(
+    phi_t: jnp.ndarray, t: jnp.ndarray, start_idx: int
+) -> tuple[jnp.ndarray, jnp.ndarray]:
     phi_win = phi_t[start_idx:]
     t_win = t[start_idx:]
     amp = jnp.abs(phi_win) + 1.0e-12
@@ -163,7 +165,9 @@ def run_demo(
 
     Nl, Nm = 2, 2
     ky_idx = jnp.asarray(ky_indices, dtype=jnp.int32)
-    G0 = jnp.zeros((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
+    G0 = jnp.zeros(
+        (Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
+    )
     G0 = G0.at[0, 0, ky_indices[0], kx_index, :].set(1.0e-3 + 0.0j)
     G0 = G0.at[0, 0, ky_indices[1], kx_index, :].set(1.0e-3 + 0.0j)
 
@@ -209,15 +213,26 @@ def run_demo(
     )
     tprim_hist = path[:, 0]
     fprim_hist = path[:, 1]
-    loss_hist = np.sum((np.asarray([np.asarray(growth_fn(jnp.asarray(p))) for p in path]) - target[None, :]) ** 2, axis=1)
+    loss_hist = np.sum(
+        (
+            np.asarray([np.asarray(growth_fn(jnp.asarray(p))) for p in path])
+            - target[None, :]
+        )
+        ** 2,
+        axis=1,
+    )
 
     sweep_tprim = np.linspace(1.2, 3.8, 16)
     sweep_tprim_vals = np.asarray(
-        jax.vmap(lambda val: growth_fn(jnp.asarray([val, fprim_true])))(jnp.asarray(sweep_tprim))
+        jax.vmap(lambda val: growth_fn(jnp.asarray([val, fprim_true])))(
+            jnp.asarray(sweep_tprim)
+        )
     )
     sweep_fprim = np.linspace(0.4, 1.6, 16)
     sweep_fprim_vals = np.asarray(
-        jax.vmap(lambda val: growth_fn(jnp.asarray([tprim_true, val])))(jnp.asarray(sweep_fprim))
+        jax.vmap(lambda val: growth_fn(jnp.asarray([tprim_true, val])))(
+            jnp.asarray(sweep_fprim)
+        )
     )
 
     params_center = jnp.asarray([2.2, 0.9])
@@ -230,7 +245,9 @@ def run_demo(
         obs_plus = np.asarray(growth_fn(jnp.asarray(params_center + shift)))
         obs_minus = np.asarray(growth_fn(jnp.asarray(params_center - shift)))
         jac_fd[:, idx] = (obs_plus - obs_minus) / (2.0 * eps)
-    rel_err_cols = np.linalg.norm(jac_ad - jac_fd, axis=0) / (np.linalg.norm(jac_fd, axis=0) + 1.0e-12)
+    rel_err_cols = np.linalg.norm(jac_ad - jac_fd, axis=0) / (
+        np.linalg.norm(jac_fd, axis=0) + 1.0e-12
+    )
 
     uq = covariance_diagnostics(jac_ad, residual, regularization=1.0e-9)
     cov = np.asarray(uq["covariance"], dtype=float)
@@ -243,8 +260,13 @@ def run_demo(
         "fprim_final": float(params_final[1]),
         "observable_final": obs_final.tolist(),
         "observable_abs_error": np.abs(residual).tolist(),
-        "parameter_abs_error": [float(abs(params_final[0] - tprim_true)), float(abs(params_final[1] - fprim_true))],
-        "loss_final": float(loss_hist[-1]) if loss_hist.size else float(loss_fn(jnp.asarray(params_init))),
+        "parameter_abs_error": [
+            float(abs(params_final[0] - tprim_true)),
+            float(abs(params_final[1] - fprim_true)),
+        ],
+        "loss_final": float(loss_hist[-1])
+        if loss_hist.size
+        else float(loss_fn(jnp.asarray(params_init))),
         "jac_autodiff": jac_ad.tolist(),
         "jac_finite_diff": jac_fd.tolist(),
         "jac_rel_error": rel_err_cols.tolist(),
@@ -276,20 +298,72 @@ def run_demo(
         fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.0))
 
         ax0 = axes[0, 0]
-        ax0.plot(sweep_tprim, sweep_tprim_vals[:, 0], marker="o", color="#1f77b4", label="ky0 $\\gamma$")
-        ax0.plot(sweep_tprim, sweep_tprim_vals[:, 1], marker="s", color="#1f77b4", linestyle="--", label="ky0 $\\omega$")
-        ax0.plot(sweep_tprim, sweep_tprim_vals[:, 2], marker="o", color="#ff7f0e", label="ky1 $\\gamma$")
-        ax0.plot(sweep_tprim, sweep_tprim_vals[:, 3], marker="s", color="#ff7f0e", linestyle="--", label="ky1 $\\omega$")
+        ax0.plot(
+            sweep_tprim,
+            sweep_tprim_vals[:, 0],
+            marker="o",
+            color="#1f77b4",
+            label="ky0 $\\gamma$",
+        )
+        ax0.plot(
+            sweep_tprim,
+            sweep_tprim_vals[:, 1],
+            marker="s",
+            color="#1f77b4",
+            linestyle="--",
+            label="ky0 $\\omega$",
+        )
+        ax0.plot(
+            sweep_tprim,
+            sweep_tprim_vals[:, 2],
+            marker="o",
+            color="#ff7f0e",
+            label="ky1 $\\gamma$",
+        )
+        ax0.plot(
+            sweep_tprim,
+            sweep_tprim_vals[:, 3],
+            marker="s",
+            color="#ff7f0e",
+            linestyle="--",
+            label="ky1 $\\omega$",
+        )
         ax0.set_xlabel(r"$a/L_{Ti}$")
         ax0.set_ylabel(r"Observable")
         ax0.set_title("Sensitivity vs $a/L_{Ti}$")
         ax0.legend(loc="best", ncol=2, fontsize=9)
 
         ax1 = axes[0, 1]
-        ax1.plot(sweep_fprim, sweep_fprim_vals[:, 0], marker="o", color="#1f77b4", label="ky0 $\\gamma$")
-        ax1.plot(sweep_fprim, sweep_fprim_vals[:, 1], marker="s", color="#1f77b4", linestyle="--", label="ky0 $\\omega$")
-        ax1.plot(sweep_fprim, sweep_fprim_vals[:, 2], marker="o", color="#ff7f0e", label="ky1 $\\gamma$")
-        ax1.plot(sweep_fprim, sweep_fprim_vals[:, 3], marker="s", color="#ff7f0e", linestyle="--", label="ky1 $\\omega$")
+        ax1.plot(
+            sweep_fprim,
+            sweep_fprim_vals[:, 0],
+            marker="o",
+            color="#1f77b4",
+            label="ky0 $\\gamma$",
+        )
+        ax1.plot(
+            sweep_fprim,
+            sweep_fprim_vals[:, 1],
+            marker="s",
+            color="#1f77b4",
+            linestyle="--",
+            label="ky0 $\\omega$",
+        )
+        ax1.plot(
+            sweep_fprim,
+            sweep_fprim_vals[:, 2],
+            marker="o",
+            color="#ff7f0e",
+            label="ky1 $\\gamma$",
+        )
+        ax1.plot(
+            sweep_fprim,
+            sweep_fprim_vals[:, 3],
+            marker="s",
+            color="#ff7f0e",
+            linestyle="--",
+            label="ky1 $\\omega$",
+        )
         ax1.set_xlabel(r"$a/L_{n}$")
         ax1.set_ylabel(r"Observable")
         ax1.set_title("Sensitivity vs $a/L_{n}$")
@@ -302,16 +376,61 @@ def run_demo(
         quad_grid = np.zeros_like(dt_grid)
         for row in jac_ad:
             quad_grid += (row[0] * dt_grid + row[1] * df_grid) ** 2
-        levels = np.geomspace(max(float(np.nanmin(quad_grid[quad_grid > 0.0])), 1.0e-10), max(float(np.nanmax(quad_grid)), 1.0e-4), 8)
-        ax2.contour(tprim_grid, fprim_grid, quad_grid, levels=levels, colors="#cbd5e1", linewidths=1.0)
-        ax2.plot(tprim_hist, fprim_hist, marker="o", color="#2ca02c", label="Gauss-Newton path")
-        ax2.scatter([tprim_init], [fprim_init], color="#111827", marker="s", s=36, label="initial")
-        ax2.scatter([tprim_true], [fprim_true], color="#d62728", marker="x", s=80, label="target")
-        ax2.scatter([params_final[0]], [params_final[1]], color="#7c3aed", marker="o", s=42, label="recovered")
+        levels = np.geomspace(
+            max(float(np.nanmin(quad_grid[quad_grid > 0.0])), 1.0e-10),
+            max(float(np.nanmax(quad_grid)), 1.0e-4),
+            8,
+        )
+        ax2.contour(
+            tprim_grid,
+            fprim_grid,
+            quad_grid,
+            levels=levels,
+            colors="#cbd5e1",
+            linewidths=1.0,
+        )
+        ax2.plot(
+            tprim_hist,
+            fprim_hist,
+            marker="o",
+            color="#2ca02c",
+            label="Gauss-Newton path",
+        )
+        ax2.scatter(
+            [tprim_init],
+            [fprim_init],
+            color="#111827",
+            marker="s",
+            s=36,
+            label="initial",
+        )
+        ax2.scatter(
+            [tprim_true],
+            [fprim_true],
+            color="#d62728",
+            marker="x",
+            s=80,
+            label="target",
+        )
+        ax2.scatter(
+            [params_final[0]],
+            [params_final[1]],
+            color="#7c3aed",
+            marker="o",
+            s=42,
+            label="recovered",
+        )
         vals, vecs = np.linalg.eigh(cov)
         angle = np.degrees(np.arctan2(vecs[1, 0], vecs[0, 0]))
         width, height = 2.0 * np.sqrt(np.maximum(vals, 0.0))
-        ellipse = Ellipse((params_final[0], params_final[1]), width, height, angle=angle, fill=False, color="#9467bd")
+        ellipse = Ellipse(
+            (params_final[0], params_final[1]),
+            width,
+            height,
+            angle=angle,
+            fill=False,
+            color="#9467bd",
+        )
         ax2.add_patch(ellipse)
         ax2.set_xlabel(r"$a/L_{Ti}$")
         ax2.set_ylabel(r"$a/L_{n}$")
@@ -324,7 +443,12 @@ def run_demo(
             ha="left",
             va="bottom",
             fontsize=10,
-            bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "0.75", "alpha": 0.92},
+            bbox={
+                "boxstyle": "round,pad=0.25",
+                "fc": "white",
+                "ec": "0.75",
+                "alpha": 0.92,
+            },
         )
         ax2.legend(loc="best", fontsize=8)
 
@@ -335,13 +459,18 @@ def run_demo(
         ax3.text(
             0.03,
             0.95,
-            f"|Δp| = ({abs(params_final[0]-tprim_true):.2e}, {abs(params_final[1]-fprim_true):.2e})\n"
+            f"|Δp| = ({abs(params_final[0] - tprim_true):.2e}, {abs(params_final[1] - fprim_true):.2e})\n"
             f"max |Δobs| = {np.max(np.abs(residual)):.2e}",
             transform=ax3.transAxes,
             va="top",
             ha="left",
             fontsize=9,
-            bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "0.7", "alpha": 0.9},
+            bbox={
+                "boxstyle": "round,pad=0.25",
+                "fc": "white",
+                "ec": "0.7",
+                "alpha": 0.9,
+            },
         )
 
         fig.suptitle("Autodiff inverse demo (two-mode parameter recovery)")

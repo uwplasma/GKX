@@ -200,7 +200,9 @@ def main() -> int:
 
     print(f"\n{'geometric feature':<28}{'Pearson':>9}{'Spearman':>10}{'LOO R^2':>10}")
     for name, s in sorted(scores.items(), key=lambda kv: -abs(kv[1]["spearman"])):
-        print(f"{name:<28}{s['pearson']:>9.3f}{s['spearman']:>10.3f}{s['loo_r2']:>10.3f}")
+        print(
+            f"{name:<28}{s['pearson']:>9.3f}{s['spearman']:>10.3f}{s['loo_r2']:>10.3f}"
+        )
 
     # Collinearity diagnostic. On a ONE-parameter boundary scan every geometric
     # quantity is a function of the same scan coordinate, so features are
@@ -211,7 +213,10 @@ def main() -> int:
     # single-feature correlation. Separating the terms needs a scan over more
     # than one boundary coefficient.
     matrix = np.column_stack(
-        [np.log(np.abs(np.array([p["features"][n] for p in points])) + 1e-30) for n in scores]
+        [
+            np.log(np.abs(np.array([p["features"][n] for p in points])) + 1e-30)
+            for n in scores
+        ]
         + [np.ones(len(points))]
     )
     collinearity = {

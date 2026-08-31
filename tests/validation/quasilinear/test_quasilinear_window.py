@@ -749,8 +749,7 @@ def test_saturation_stop_decision_refuses_a_flux_stationary_from_t_zero() -> Non
     assert saturated_draws == {1.0e-8: 0, 1.0e2: 0}, saturated_draws
 
 
-def test_saturation_stop_decision_still_stops_a_run_that_started_saturated(
-) -> None:
+def test_saturation_stop_decision_still_stops_a_run_that_started_saturated() -> None:
     """A warm-started run has no growth phase and must still be allowed to stop.
 
     This is the case that rules out the obvious alternative fix. Requiring the

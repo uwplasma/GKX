@@ -36,9 +36,7 @@ DT = 0.005890226417991923  # time step; matches the tracked W7-X t=2 reference r
 T_MAX = 2.0  # final time
 
 cfg = RuntimeConfig(
-    grid=GridConfig(
-        Nx=1, Ny=82, Nz=256, Lx=62.8, Ly=62.8, boundary="linked", y0=10.0
-    ),
+    grid=GridConfig(Nx=1, Ny=82, Nz=256, Lx=62.8, Ly=62.8, boundary="linked", y0=10.0),
     time=TimeConfig(
         t_max=T_MAX,
         dt=DT,

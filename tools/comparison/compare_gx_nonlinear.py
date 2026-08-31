@@ -86,7 +86,15 @@ def _load_gkx_csv(path: Path) -> dict[str, np.ndarray]:
     named = np.genfromtxt(path, delimiter=",", names=True)
     if isinstance(named, np.ndarray) and named.dtype.names:
         names = set(named.dtype.names)
-        if {"t", "Wg", "Wphi", "Wapar", "energy", "heat_flux", "particle_flux"}.issubset(names):
+        if {
+            "t",
+            "Wg",
+            "Wphi",
+            "Wapar",
+            "energy",
+            "heat_flux",
+            "particle_flux",
+        }.issubset(names):
             out = {
                 "t": np.asarray(named["t"], dtype=float),
                 "Wg": np.asarray(named["Wg"], dtype=float),
@@ -139,12 +147,21 @@ def _load_gkx_diag(path: Path) -> dict[str, np.ndarray]:
     out = {
         "t": np.asarray(grid.variables["time"][:], dtype=float),
         "phi2": np.asarray(diag.variables["Phi2_t"][:], dtype=float),
-        "Wg": _reduce_species_time(np.asarray(diag.variables["Wg_st"][:], dtype=float), "Wg_st"),
-        "Wphi": _reduce_species_time(np.asarray(diag.variables["Wphi_st"][:], dtype=float), "Wphi_st"),
-        "Wapar": _reduce_species_time(np.asarray(diag.variables["Wapar_st"][:], dtype=float), "Wapar_st"),
-        "heat_flux": _reduce_species_time(np.asarray(diag.variables["HeatFlux_st"][:], dtype=float), "HeatFlux_st"),
+        "Wg": _reduce_species_time(
+            np.asarray(diag.variables["Wg_st"][:], dtype=float), "Wg_st"
+        ),
+        "Wphi": _reduce_species_time(
+            np.asarray(diag.variables["Wphi_st"][:], dtype=float), "Wphi_st"
+        ),
+        "Wapar": _reduce_species_time(
+            np.asarray(diag.variables["Wapar_st"][:], dtype=float), "Wapar_st"
+        ),
+        "heat_flux": _reduce_species_time(
+            np.asarray(diag.variables["HeatFlux_st"][:], dtype=float), "HeatFlux_st"
+        ),
         "particle_flux": _reduce_species_time(
-            np.asarray(diag.variables["ParticleFlux_st"][:], dtype=float), "ParticleFlux_st"
+            np.asarray(diag.variables["ParticleFlux_st"][:], dtype=float),
+            "ParticleFlux_st",
         ),
     }
     out["energy"] = out["Wg"] + out["Wphi"] + out["Wapar"]
@@ -160,12 +177,21 @@ def _load_gx_diag(path: Path) -> dict[str, np.ndarray]:
     out = {
         "t": t,
         "phi2": np.asarray(diag.variables["Phi2_t"][:], dtype=float),
-        "Wg": _reduce_species_time(np.asarray(diag.variables["Wg_st"][:], dtype=float), "Wg_st"),
-        "Wphi": _reduce_species_time(np.asarray(diag.variables["Wphi_st"][:], dtype=float), "Wphi_st"),
-        "Wapar": _reduce_species_time(np.asarray(diag.variables["Wapar_st"][:], dtype=float), "Wapar_st"),
-        "heat_flux": _reduce_species_time(np.asarray(diag.variables["HeatFlux_st"][:], dtype=float), "HeatFlux_st"),
+        "Wg": _reduce_species_time(
+            np.asarray(diag.variables["Wg_st"][:], dtype=float), "Wg_st"
+        ),
+        "Wphi": _reduce_species_time(
+            np.asarray(diag.variables["Wphi_st"][:], dtype=float), "Wphi_st"
+        ),
+        "Wapar": _reduce_species_time(
+            np.asarray(diag.variables["Wapar_st"][:], dtype=float), "Wapar_st"
+        ),
+        "heat_flux": _reduce_species_time(
+            np.asarray(diag.variables["HeatFlux_st"][:], dtype=float), "HeatFlux_st"
+        ),
         "particle_flux": _reduce_species_time(
-            np.asarray(diag.variables["ParticleFlux_st"][:], dtype=float), "ParticleFlux_st"
+            np.asarray(diag.variables["ParticleFlux_st"][:], dtype=float),
+            "ParticleFlux_st",
         ),
     }
     out["energy"] = out["Wg"] + out["Wphi"] + out["Wapar"]
@@ -200,7 +226,9 @@ def _apply_time_window(
 
 def _reduce_species_resolved(arr: np.ndarray, name: str) -> np.ndarray:
     if arr.ndim != 3:
-        raise ValueError(f"expected resolved array with shape (time, species, mode), got {arr.shape} for {name}")
+        raise ValueError(
+            f"expected resolved array with shape (time, species, mode), got {arr.shape} for {name}"
+        )
     if name.startswith("Wapar"):
         return np.asarray(arr[:, 0, :], dtype=float)
     return np.asarray(np.sum(arr, axis=1), dtype=float)
@@ -214,8 +242,12 @@ def _load_resolved_diag(path: Path) -> dict[str, np.ndarray]:
         "t": np.asarray(grid.variables["time"][:], dtype=float),
         "kx": np.asarray(grid.variables["kx"][:], dtype=float),
         "ky": np.asarray(grid.variables["ky"][:], dtype=float),
-        "Wphi_kx": _reduce_species_resolved(np.asarray(diag.variables["Wphi_kxst"][:], dtype=float), "Wphi_kxst"),
-        "Wphi_ky": _reduce_species_resolved(np.asarray(diag.variables["Wphi_kyst"][:], dtype=float), "Wphi_kyst"),
+        "Wphi_kx": _reduce_species_resolved(
+            np.asarray(diag.variables["Wphi_kxst"][:], dtype=float), "Wphi_kxst"
+        ),
+        "Wphi_ky": _reduce_species_resolved(
+            np.asarray(diag.variables["Wphi_kyst"][:], dtype=float), "Wphi_kyst"
+        ),
         "HeatFlux_kx": _reduce_species_resolved(
             np.asarray(diag.variables["HeatFlux_kxst"][:], dtype=float),
             "HeatFlux_kxst",
@@ -245,9 +277,13 @@ def _interp_mode_summary(
     cmp_y: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if ref_y.ndim != 2 or cmp_y.ndim != 2:
-        raise ValueError(f"expected resolved 2D arrays, got {ref_y.shape} and {cmp_y.shape}")
+        raise ValueError(
+            f"expected resolved 2D arrays, got {ref_y.shape} and {cmp_y.shape}"
+        )
     if ref_y.shape[1] != cmp_y.shape[1]:
-        raise ValueError(f"resolved mode count mismatch: {ref_y.shape[1]} vs {cmp_y.shape[1]}")
+        raise ValueError(
+            f"resolved mode count mismatch: {ref_y.shape[1]} vs {cmp_y.shape[1]}"
+        )
     mean_rel = np.zeros(ref_y.shape[1], dtype=float)
     max_rel = np.zeros(ref_y.shape[1], dtype=float)
     final_rel = np.zeros(ref_y.shape[1], dtype=float)
@@ -283,7 +319,9 @@ def _write_resolved_audit(
             gx_mask &= gx["t"] <= float(tmax)
             sp_mask &= sp["t"] <= float(tmax)
         if int(np.count_nonzero(gx_mask)) < 2 or int(np.count_nonzero(sp_mask)) < 2:
-            raise ValueError("resolved audit time window must retain at least two samples")
+            raise ValueError(
+                "resolved audit time window must retain at least two samples"
+            )
         gx["t"] = gx["t"][gx_mask]
         sp["t"] = sp["t"][sp_mask]
         for key in ("Wphi_kx", "Wphi_ky", "HeatFlux_kx"):
@@ -298,11 +336,27 @@ def _write_resolved_audit(
     )
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.0), constrained_layout=True)
     for ax, (name, axis_name, coords) in zip(axes, audit_specs):
-        mean_rel, max_rel, final_rel = _interp_mode_summary(sp["t"], sp[name], gx["t"], gx[name])
+        mean_rel, max_rel, final_rel = _interp_mode_summary(
+            sp["t"], sp[name], gx["t"], gx[name]
+        )
         coord_vals = np.asarray(coords, dtype=float)
         ax.plot(coord_vals, mean_rel, marker="o", linewidth=2.0, label="mean rel")
-        ax.plot(coord_vals, max_rel, marker="s", linewidth=1.8, linestyle="--", label="max rel")
-        ax.plot(coord_vals, np.abs(final_rel), marker="^", linewidth=1.6, linestyle=":", label="|final rel|")
+        ax.plot(
+            coord_vals,
+            max_rel,
+            marker="s",
+            linewidth=1.8,
+            linestyle="--",
+            label="max rel",
+        )
+        ax.plot(
+            coord_vals,
+            np.abs(final_rel),
+            marker="^",
+            linewidth=1.6,
+            linestyle=":",
+            label="|final rel|",
+        )
         ax.set_title(name.replace("_", " "), fontsize=12, fontweight="bold")
         ax.set_xlabel(axis_name)
         ax.set_yscale("log")
@@ -332,7 +386,9 @@ def _write_resolved_audit(
                 }
             )
     axes[0].legend(frameon=False, fontsize=8)
-    fig.suptitle("Resolved nonlinear diagnostic audit: GX vs GKX", fontsize=14, fontweight="bold")
+    fig.suptitle(
+        "Resolved nonlinear diagnostic audit: GX vs GKX", fontsize=14, fontweight="bold"
+    )
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=220)
     print(f"saved {out_png}")
@@ -344,10 +400,21 @@ def _write_resolved_audit(
 
 def run_diagnostics(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gx", type=Path, required=True, help="GX .out.nc file with diagnostics")
-    parser.add_argument("--gkx", type=Path, required=True, help="GKX nonlinear CSV or GX-style .out.nc")
-    parser.add_argument("--tmin", type=float, default=None, help="Optional min time for plotting and metrics")
-    parser.add_argument("--tmax", type=float, default=None, help="Optional max time for plotting")
+    parser.add_argument(
+        "--gx", type=Path, required=True, help="GX .out.nc file with diagnostics"
+    )
+    parser.add_argument(
+        "--gkx", type=Path, required=True, help="GKX nonlinear CSV or GX-style .out.nc"
+    )
+    parser.add_argument(
+        "--tmin",
+        type=float,
+        default=None,
+        help="Optional min time for plotting and metrics",
+    )
+    parser.add_argument(
+        "--tmax", type=float, default=None, help="Optional max time for plotting"
+    )
     parser.add_argument(
         "--out",
         type=Path,
@@ -407,8 +474,24 @@ def run_diagnostics(argv: list[str] | None = None) -> int:
 
     import matplotlib.patheffects as pe
 
-    gx_style = {"color": "#111827", "linewidth": 2.2, "linestyle": "--", "marker": "s", "markevery": max(len(sp["t"]) // 14, 1), "ms": 3.0, "zorder": 4}
-    sp_style = {"color": "#2563eb", "linewidth": 2.2, "marker": "o", "markevery": max(len(sp["t"]) // 14, 1), "ms": 3.2, "alpha": 0.92, "zorder": 3}
+    gx_style = {
+        "color": "#111827",
+        "linewidth": 2.2,
+        "linestyle": "--",
+        "marker": "s",
+        "markevery": max(len(sp["t"]) // 14, 1),
+        "ms": 3.0,
+        "zorder": 4,
+    }
+    sp_style = {
+        "color": "#2563eb",
+        "linewidth": 2.2,
+        "marker": "o",
+        "markevery": max(len(sp["t"]) // 14, 1),
+        "ms": 3.2,
+        "alpha": 0.92,
+        "zorder": 3,
+    }
     metric_specs = [
         ("Wg", gx["Wg"], sp["Wg"]),
         ("Wphi", gx["Wphi"], sp["Wphi"]),
@@ -422,29 +505,40 @@ def run_diagnostics(argv: list[str] | None = None) -> int:
         if label in {"Wg", "Wphi", "Wtot", "Heat flux"}:
             keep_specs.append((label, gx_y, sp_y))
             continue
-        if max(float(np.nanmax(np.abs(gx_y))), float(np.nanmax(np.abs(sp_y)))) > 1.0e-10:
+        if (
+            max(float(np.nanmax(np.abs(gx_y))), float(np.nanmax(np.abs(sp_y))))
+            > 1.0e-10
+        ):
             keep_specs.append((label, gx_y, sp_y))
 
     ncols = 2
     nrows = int(np.ceil(len(keep_specs) / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(10.8, 2.9 * nrows + 0.8), sharex=True, constrained_layout=True)
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(10.8, 2.9 * nrows + 0.8),
+        sharex=True,
+        constrained_layout=True,
+    )
     axes = np.atleast_1d(axes).ravel()
 
     for ax, (label, gx_y, sp_y) in zip(axes, keep_specs):
         ax.plot(sp["t"], sp_y, label="GKX", **sp_style)
         gx_line = ax.plot(gx["t"], gx_y, label="GX", **gx_style)[0]
-        gx_line.set_path_effects([pe.Stroke(linewidth=3.4, foreground="white"), pe.Normal()])
+        gx_line.set_path_effects(
+            [pe.Stroke(linewidth=3.4, foreground="white"), pe.Normal()]
+        )
         ax.set_ylabel(label)
         ax.grid(True, alpha=0.25)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-    for ax in axes[len(keep_specs):]:
+    for ax in axes[len(keep_specs) :]:
         ax.remove()
 
     if len(keep_specs) > 0:
         axes[0].legend(frameon=False, ncol=2, loc="upper right")
-    for ax in axes[max(0, len(keep_specs) - ncols):len(keep_specs)]:
+    for ax in axes[max(0, len(keep_specs) - ncols) : len(keep_specs)]:
         ax.set_xlabel("t")
     fig.suptitle(args.title, fontsize=13, fontweight="bold")
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -520,7 +614,9 @@ def run_diagnostics(argv: list[str] | None = None) -> int:
         print(f"saved {args.summary_json}")
     if args.resolved_out is not None:
         if args.gx.suffix != ".nc" or args.gkx.suffix != ".nc":
-            raise ValueError("--resolved-out requires both --gx and --gkx to be .nc files")
+            raise ValueError(
+                "--resolved-out requires both --gx and --gkx to be .nc files"
+            )
         _write_resolved_audit(
             gx_path=args.gx,
             sp_path=args.gkx,
@@ -2069,4 +2165,3 @@ def main(argv: list[str] | None = None) -> int | None:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
