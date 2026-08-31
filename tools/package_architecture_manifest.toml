@@ -182,7 +182,14 @@ recursive = true
 # before and after with an empty diff, 410 passed and 1 skipped either way.
 # Re-derived on rebase: the step is 89 -> 82 because the linear conftest landed
 # first, not the 94 -> 87 this branch originally computed.
-baseline = 82
+# 82 -> 76: C1-4 consolidates tests/validation/physics_gates from ten files to
+# four, grouped by the physical object each gate asserts about. Checked harder
+# than the other domains because these are physics gates: 72 collected node IDs
+# before and after with an empty diff, every test body byte-identical to its
+# origin by AST comparison, every module-level constant unchanged in value, and
+# 4 failed / 68 passed either way where the four are the known-environment jax
+# eig() failure. Re-derived on rebase after C1-3 landed.
+baseline = 76
 target = 30
 
 [[topology_policy.counts]]

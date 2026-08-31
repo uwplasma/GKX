@@ -3849,6 +3849,7 @@ Outcome:
 - next task: PR C1-2, solvers test consolidation.
 ## 2026-08-30 — PR C1-2 consolidate the solvers unit domain (`tests/c1-2-solvers-consolidation`)
 ## 2026-08-30 — PR C1-3 consolidate the runtime integration domain (`tests/c1-3-runtime-consolidation`)
+## 2026-08-30 — PR C1-4 consolidate the physics-gate domain (`tests/c1-4-physics-gates-consolidation`)
 
 ## 2026-08-30 — PR C2-1 shared test fixture layer, measured on one domain (`tests/c2-1-fixture-layer-pilot`)
 
@@ -3961,6 +3962,52 @@ Evidence:
 - gates: `ruff check .` clean; validation coverage exits 0; `ci.yml` parses and
   every test path it names exists.
 - physics/mathematics/numerics gates: none re-run and none claimed.
+- `tests/validation/physics_gates` 10 files / 2,429 lines
+- relevant existing gate: the architecture manifest ratchet on `test_python_files`
+
+Scope:
+- intended change: group the physics gates by the physical object each one
+  makes a statement about, rather than by helper reuse.
+- explicitly out of scope: any tolerance, gate threshold, reference value, or
+  provenance docstring, and the manifest ratchet, which is applied centrally.
+
+Changes:
+- `test_collision_physics.py` takes everything asserting about the collision
+  operators: exact invariants, the published Appendix-C coefficients, the FLR
+  ordering, the `b -> 0` multispecies reduction, the Spitzer-Harm coefficient
+  those same unlike-species blocks must reproduce, and the storage envelope of
+  the finite-Larmor tables that carry them.
+- `test_hermite_hierarchy_physics.py` takes the truncated parallel-velocity
+  hierarchy: closure coefficient and reflectionless absorption, the exact
+  Landau roots and the `2 sqrt(Nm)` recurrence law, and whether the linear
+  objective can report damping across the ladder. All three are statements
+  about what truncation does to free energy in `m`.
+- `test_validation_gates.py` takes the gate machinery and the zonal estimators
+  it reads.
+- `test_geometry_physics_contracts.py` left untouched; its physics does not
+  overlap the other three.
+
+Evidence:
+- identity-preserving: 72 collected node IDs before and after, empty diff.
+  Verified independently of the agent, against `main` rather than against the
+  agent's own baseline file.
+- stronger than the ID diff, and appropriate for a physics-gate tree: every
+  test and helper body in the merged files was compared AST-wise to its origin
+  and is byte-identical, and every module-level constant survived with an
+  identical value. No tolerance or reference value moved.
+- pass/fail identical: `4 failed, 68 passed` before and after, the same four
+  IDs, and they are the known-environment jax failure
+  (`eig() got an unexpected keyword argument 'enable_eigvec_derivs'`).
+- three hazards found that the ID diff does NOT catch, now recorded in §24:
+  a module-level `pytestmark` float64 `skipif` that would have widened to the
+  closure and objective gates -- and a widened skip reports green; a
+  `sys.path.insert` bootstrap that import hoisting would have reordered below
+  the import it enables; and absorbed module docstrings, which carry paper and
+  equation provenance, being truncated to their first line.
+- gates: `ruff check .` clean; validation coverage and release readiness exit 0;
+  `ci.yml` parses and every test path it names exists.
+- physics/mathematics/numerics gates: the physics gates themselves were re-run
+  and are unchanged. No physical claim is new.
 - CPU/NVIDIA measurements: none taken.
 
 Outcome:
@@ -4002,3 +4049,11 @@ Outcome:
   commands and were repointed, because they are instructions a reader would
   run, not dated measurements.
 - next task: C1-4 physics gates, then the central manifest ratchet.
+- references repointed in `docs/operators.rst`, `docs/numerics.rst`, `README.md`,
+  one `ci.yml` shard, the validation coverage manifest, a docstring pointer in
+  `src/gkx/objectives/core.py`, and one plan note.
+- flagged for the shard budget: pointing the `linear-core` shard at the merged
+  hierarchy file adds Landau damping's work (about 80 s locally) to a shard that
+  previously ran only the roughly 20 s objective gate. Not a failure, but the
+  shard is now less balanced and should be watched.
+- next task: the central manifest ratchet, then Phase C's remaining domains.

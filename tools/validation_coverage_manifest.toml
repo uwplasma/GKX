@@ -1406,7 +1406,7 @@ numerics_contracts = [
   "closure probes expose hypercollision source and strength explicitly",
 ]
 fast_tests = [
-  "tests/validation/physics_gates/test_zonal_validation.py",
+  "tests/validation/physics_gates/test_validation_gates.py",
   "tests/tools/comparison/test_reference_comparison_tools.py",
 ]
 artifact_paths = [

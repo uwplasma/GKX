@@ -176,7 +176,13 @@ jobs:
     # 1,919 to 4,212 lines, so that file moved to runtime-core, where it belongs
     # and which had headroom at 8.5 minutes. Both lanes now get 20 so a further
     # absorption does not silently reintroduce a timeout.
-    timeout-minutes: ${{ (matrix.shard.name == 'nonlinear-core' || matrix.shard.name == 'runtime-core') && 20 || 15 }}
+    # Shedding the runtime file was not enough on its own: the rebalanced lane
+    # still measured 18.4 minutes against a 20-minute ceiling in run
+    # 33398917781, because the nonlinear tests are the slow part and the move
+    # bought only about 1.8 minutes. Eight per cent headroom flakes on a slow
+    # runner, so nonlinear-core gets 30: the lane does roughly 18 minutes of
+    # genuine work and the cap should sit above that, not just above it.
+    timeout-minutes: ${{ matrix.shard.name == 'nonlinear-core' && 30 || (matrix.shard.name == 'runtime-core' && 20 || 15) }}
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -202,7 +208,7 @@ jobs:
             files: >-
               tests/unit/linear/test_linear.py
               tests/unit/linear/test_dimits_threshold_extraction.py
-              tests/validation/physics_gates/test_objective_reports_stability.py
+              tests/validation/physics_gates/test_hermite_hierarchy_physics.py
               tests/unit/linear/test_linear_param_units.py
               tests/unit/operators/test_operator_kernels.py
               tests/unit/operators/test_terms_assembly.py
