@@ -252,6 +252,7 @@ observable, reference, absolute/relative tolerance, and pass/fail convention.
 The companion coverage manifest should be updated when a new gate helper,
 artifact script, or refactor extraction changes module ownership or test
 responsibility.
+
 ``tools/artifacts/build_zonal_flow_artifacts.py miller-panel`` writes two such
 reports into its JSON metadata. ``gate_report`` is the asserted one: the
 residual, GAM frequency, and signed GAM damping against **GKX's own converged
@@ -260,10 +261,12 @@ that make those three numbers measurements at all. ``literature_comparison``
 holds the same three observables against the Merlo Case-III paper-scale
 read-off at the published tolerances, is reported rather than gated, and
 currently does not pass.
+
 ``tools/artifacts/generate_linear_reference_overlays.py kbm`` writes the same gate structure for
 the raw KBM eigenfunction overlay, using a strict overlap/relative-L2 policy.
 The current refreshed KBM overlay passes that policy with overlap ``0.999985``
 and relative ``L^2`` mismatch ``0.00721`` against the frozen GX raw mode.
+
 ``tools/artifacts/generate_linear_reference_overlays.py w7x`` applies the same raw-mode policy to
 the imported W7-X linear benchmark at ``k_y rho_i = 0.3``. It refreshes the
 frozen finite GX raw-mode bundle when a matching ``.big.nc`` file is supplied
@@ -272,6 +275,7 @@ and writes the ``w7x_eigenfunction_reference_overlay_ky0p3000`` overlay render
 companions under ``docs/_static/reference_modes/``. The current artifact
 passes with overlap
 ``0.9999999994`` and relative ``L^2`` mismatch ``3.33e-5``.
+
 ``tools/comparison/compare_gx_nonlinear.py diagnostics --summary-json`` now emits a
 matching gate report for nonlinear diagnostic comparison figures, using the
 window mean relative mismatch as the scalar acceptance metric. The summary
@@ -281,9 +285,11 @@ writes strict JSON, replacing nonfinite absolute-gate relative errors with
 KBM, HSX, and W7-X. The older short Cyclone diagnostic remains available as an
 exploratory startup/resolved-spectrum audit, but it is not counted in the
 release-gate index.
+
 Observed-order and branch-continuity gate helpers are also available so
 velocity-space convergence panels and branch-followed scan tables can use the
 same JSON-ready acceptance convention.
+
 ``tools/artifacts/build_linear_validation_artifacts.py observed-order`` is the generic no-rerun path for
 CSV-backed convergence studies: it reads either an explicit step column or a
 resolution column, writes an observed-order JSON gate report, and can generate
@@ -293,26 +299,32 @@ companion convergence figure is a regenerable render and is not tracked in
 git. It uses an office/GPU
 ``ky=0.30`` time-path sweep through ``(Nl,Nm)=(4,8),(6,12),(12,24),(16,32)``
 with ``tmax=150`` and passes the strict pairwise-order and final-error gates.
+
 ``tools/comparison/compare_gx_kbm.py --branch-summary-json`` wires that convention into
 the KBM branch-following workflow by summarizing adjacent ``gamma``/``omega``
 jumps and successive eigenfunction-overlap continuity for the selected branch.
+
 ``tools/artifacts/build_linear_validation_artifacts.py kbm-branch`` provides the corresponding
 no-rerun artifact path: it reads the existing selected KBM candidate table and
 writes ``docs/_static/kbm_branch_gate_summary.json`` with the same strict gate
 schema. The current continuity-first selected branch passes the adjacent
 growth/frequency jump and successive-overlap gates.
+
 ``tools/release/check_validation_coverage_manifest.py gate-index`` scans tracked JSON metadata and writes
 ``docs/_static/validation_gate_index.json``, ``.csv``, ``.png``, and ``.pdf`` so the docs
 always have one compact pass/open view of the currently materialized release
 validation gates. The current JSON index has ``17/18`` tracked reports passing,
 with the quasilinear model-selection status intentionally open until a
 candidate passes the strict uncertainty and transport-error gates.
+
 Exploratory diagnostics can set ``gate_index_include=false``
 to remain documented without being treated as release blockers.
+
 ``tools/artifacts/build_nonlinear_validation_panels.py window-statistics`` provides the companion
 manuscript-facing statistics panel for the nonlinear GX comparison gates by
 plotting the per-diagnostic ``mean_rel_abs`` and ``max_rel_abs`` values from
 those same tracked JSON summaries.
+
 The ``feasibility`` mode of the same command is the analogous tool for new
 finite nonlinear pilots that do not yet have a reference comparison or
 production-resolution convergence gate. It writes PNG/PDF/JSON/CSV artifacts
@@ -648,6 +660,7 @@ fail fast instead of running thousands of extra steps after a NaN. Third,
 default VMEC/eik cache outputs are reused when valid and generated through a
 unique temporary netCDF followed by atomic replacement, so parallel W7-X
 validation sweeps cannot observe or corrupt a partially written geometry file.
+
 A bounded
 ``k_x rho_i=0.07``, ``Nl=16``, ``Nm=64``, ``dt=0.05`` probe remained finite to
 ``t≈200`` and a post-fix ``t≈50`` rerun verified nonzero signed line-average
@@ -667,6 +680,7 @@ low-moment audit reached the digitized windows but flipped the residual sign at
 therefore not restart diagnostic continuity; it is the W7-X zonal damping,
 closure, and velocity-space recurrence behavior under the paper-facing
 line-first normalization.
+
 ``tools/artifacts/build_w7x_zonal_validation_artifacts.py contract`` turns the same tracked CSV/JSON
 artifacts into the ``w7x_zonal_contract_audit`` panel (a regenerable render;
 the tracked record is ``docs/_static/w7x_zonal_contract_audit.json``). That
@@ -674,6 +688,7 @@ panel is a
 publication-facing diagnostic of the open mismatch rather than a release gate;
 its JSON metadata has ``gate_index_include=false`` so the validation index does
 not count it as closed.
+
 The ``state-convention`` mode of the same command closes the state-level
 initializer and observable convention layer for the same paper-facing setup.
 At ``k_x rho_i=0.07``, ``Nl=16``, and ``Nm=64``, the recovered Gaussian
@@ -684,6 +699,7 @@ volume-average helper diagnostics agree with manual reductions to about
 volume-weighted level is ``0.28450 init_amp``; that explicit difference is why
 the paper-facing observable must remain ``Phi_zonal_line_kxt`` normalized by
 its first nonzero sample.
+
 The ``sweep`` mode of the same command then performs the bounded
 recurrence sweep requested for the paper lane without changing initializer or
 normalization conventions. Moment resolution and closure source are varied
@@ -695,6 +711,7 @@ the final Hermite-tail fraction from ``0.388`` to ``0.062`` but worsens the
 trace mean absolute error to ``0.291``; the ``k_z``-weighted closure remains
 close to no closure. This separates the remaining recurrence/closure problem
 from a state-convention error.
+
 The newest constant-hypercollision follow-up keeps the paper-facing
 normalization and compares ``nu_hyper_m=0.01`` and ``0.03`` at
 ``Nl=16,Nm=64`` to ``t v_t/a=100``. Increasing ``nu_hyper_m`` lowers the final
@@ -704,6 +721,7 @@ ratio from ``0.759`` to ``0.600``, but the mean trace error remains
 the digitized reference. The W7-X zonal lane therefore remains a physical
 closure/recurrence problem, not a normalization problem and not a simple
 constant-damping fix.
+
 The mixed Laguerre-Hermite closure audit then tests the best bounded closure
 candidate under a moment-resolution increase. At ``Nl=16,Nm=64`` and
 ``dt=0.05``, the mixed closure gives mean absolute trace error ``0.2753`` and
@@ -716,6 +734,7 @@ The more aggressive ``Nl=32,Nm=128`` run still becomes non-finite by
 time-step limitation from the larger physical result: the current mixed
 closure does not converge toward the digitized W7-X trace in a way that can be
 promoted as validation.
+
 ``tools/artifacts/build_w7x_zonal_validation_artifacts.py response-panel`` now exposes explicit
 ``--nu-hyper``, ``--nu-hyper-l``, ``--nu-hyper-m``, ``--nu-hyper-lm``,
 ``--p-hyper-*``, ``--hypercollisions-const``, ``--hypercollisions-kz``,
@@ -1449,21 +1468,20 @@ physics rigor:
 This keeps iteration latency low for development and still enforces complete
 coverage and regression checks on demand without relying on scheduled runners.
 
-Gates are independent, and a skip is not a pass
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Gate independence and skipped checks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Every job in ``.github/workflows/ci.yml`` checks out and installs for itself,
 so the only ``needs:`` edge left in the workflow is the real one:
 ``wide-coverage`` consumes the coverage artifacts that ``wide-coverage-shards``
 uploads. Nothing else is ordered.
 
-That is a deliberate correction rather than a preference. ``quick-tests`` used
-to declare ``needs: mypy``, so a red type check did not fail the tests -- it
-*skipped* them, along with the coverage, docs, and packaging jobs behind them.
-GitHub scores a skipped required check as satisfied, so the run reported no
-test signal instead of a failing one, and #62 reached main with seven genuine
-``NameError`` sites in ``src/gkx/parallel/integrators.py``. A first-stage gate
-that silently disables everything behind it converts one red light into none.
+``quick-tests`` used to declare ``needs: mypy``, so a red type check did not
+fail the tests -- it *skipped* them, along with the coverage, docs, and
+packaging jobs behind them. GitHub scores a skipped required check as
+satisfied, so the run reported no test signal instead of a failing one, and #62
+reached main with seven genuine ``NameError`` sites in
+``src/gkx/parallel/integrators.py``.
 
 The ``ci-required`` job closes the same hole from the other side. It depends on
 every gate, runs with ``if: always()``, and fails if any of them reports

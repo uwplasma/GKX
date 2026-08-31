@@ -3,9 +3,7 @@ Numerical defaults from SOLVAX
 
 GKX delegates physics-independent numerics to `SOLVAX
 <https://github.com/uwplasma/SOLVAX>`_. This page records which of its
-facilities GKX uses, which it deliberately does not, and what the open
-candidates are worth -- measured rather than asserted, so that a default can be
-changed on evidence and not on preference.
+facilities GKX uses, which it does not, and what the open candidates are worth.
 
 What GKX consumes today
 -----------------------
@@ -25,13 +23,12 @@ What GKX consumes today
    * - ``chunked_jacfwd``
      - bounded-memory geometry Jacobians (``geometry/autodiff_checks.py``)
 
-Four of SOLVAX's 113 public entry points. That ratio is not evidence of
-anything on its own -- most of SOLVAX exists for problems GKX does not have --
-and the one place it was tested, the shift-invert inner solve below, the
-unmigrated incumbent turned out to be the right choice.
+Four of SOLVAX's 113 public entry points. Most of SOLVAX targets problems GKX
+does not have. The one migration candidate that was measured, the shift-invert
+inner solve below, was rejected in favour of the unmigrated incumbent.
 
-The shift-invert inner solve: measured, and the incumbent wins
---------------------------------------------------------------
+Shift-invert inner solve
+------------------------
 
 ``solvers/linear/krylov_algorithms.py`` imports ``gmres`` from
 ``jax.scipy.sparse.linalg``, not from SOLVAX. This is deliberate and recorded in
@@ -80,19 +77,16 @@ is one to three orders of magnitude less accurate: the recycle space buys nothin
 here because the preconditioned shifted system is already well conditioned, and
 its extra operator applications per restart are pure overhead.
 
-That GKX consumes four of 113 SOLVAX entry points is therefore not, by itself,
-evidence of a missed opportunity on this path.
-
 Wall-clock times are not reported: the variants share one process and the first
 JAX-backed rung absorbs compilation, which makes the ordering an artifact of the
 harness rather than a property of the solvers.
 
-How this was got wrong first
-----------------------------
+Defects in the first measurement
+--------------------------------
 
-Recorded because the failure mode is reusable, not for penance. An earlier
-version of this page reported the opposite conclusion -- that plain GMRES stalled
-near ``1e-2`` while recycling reached machine precision. Two defects produced it:
+An earlier version of this page reported the opposite conclusion -- that plain
+GMRES stalled near ``1e-2`` while recycling reached machine precision. Two
+defects produced it:
 
 1. The tool passed ``preconditioner="auto"``. That is a valid value for
    ``dominant_eigenpair`` but not one of the names
@@ -107,8 +101,7 @@ near ``1e-2`` while recycling reached machine precision. Two defects produced it
 
 The tool carried an exact-LU control throughout, and it caught an unrelated
 branch-selection bug. It could not catch either of these, because it bypasses
-both the preconditioner and the conditioning of the shifted solve. **A control
-that shares an assumption with the thing it checks validates nothing.**
+both the preconditioner and the conditioning of the shifted solve.
 
 A third attempt took the shift from a genuinely coarser rung, which is what
 production continuation does. That failed too: at sizes where a dense reference
@@ -120,7 +113,7 @@ quality an independent variable instead of an accident.
 Open candidates
 ---------------
 
-Each of these is a hypothesis with a stated reason, not a plan of record.
+None of these is a plan of record.
 
 ``mixed_precision`` + ``iterative_refinement``
     Apply the preconditioner in single precision and compute residuals in
@@ -144,12 +137,9 @@ Each of these is a hypothesis with a stated reason, not a plan of record.
 Provenance
 ----------
 
-The harness that produced the table, ``tools/campaigns/shift_invert_recycling.py``,
-was **removed after it answered its question**. It existed to decide one thing --
-whether to migrate the shift-invert inner solve -- and the answer was no. Keeping
-380 lines of benchmark in the tree to defend a decision to change nothing is the
-wrong trade; it is recoverable from commit ``3aa1591b`` if the question reopens.
+The harness that produced the table, ``tools/campaigns/shift_invert_recycling.py``
+(380 lines), was removed once the migration question was answered; it is
+recoverable from commit ``3aa1591b`` if the question reopens.
 
-What survives is the number that matters and the reason to trust it: the exact-LU
-control reached machine precision on the same harness that produced the rest of
-the column, so the comparison was measured rather than assumed.
+The exact-LU control reached machine precision on the same harness that produced
+the rest of the column.

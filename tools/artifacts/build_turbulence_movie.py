@@ -15,6 +15,23 @@ Pass ``--initial-state`` from ``nonlinear_saturated_state.py`` to film a
 verified saturated trajectory. Chunked integration is deliberate: the cache,
 parameters, CFL policy, and chunk shape are fixed, so JAX compiles once and
 replays it without retaining a full state history.
+
+Two-stage use. Physics run, then render; only the two displayed cuts are kept::
+
+    python tools/artifacts/build_turbulence_movie.py CASE.toml \
+        --initial-state saturated_state.npz --snapshots movie_cuts.npz
+    python tools/artifacts/build_turbulence_movie.py --render-from movie_cuts.npz \
+        --output turbulence.mp4
+
+``--frames`` defaults to 120 and ``--fps`` to 20, which is the release-asset
+movie. The compact README loop is re-encoded from it; WebP because no GIF fit
+the repository size target at a resolution worth showing::
+
+    mkdir -p frames
+    ffmpeg -i gkx-cyclone-itg-turbulence.mp4 \
+        -vf "fps=4,scale=720:-2:flags=lanczos" frames/f_%04d.png
+    img2webp -loop 0 -lossy -q 58 -m 6 -d 250 frames/f_*.png \
+        -o docs/_static/turbulence_loop.webp
 """
 
 from __future__ import annotations
@@ -170,9 +187,13 @@ def _require_movie_geometry_profiles(geometry: Any, *, model: str) -> None:
         )
     arrays = [np.asarray(value, dtype=float).reshape(-1) for value in profiles]
     if len({array.size for array in arrays}) != 1 or arrays[0].size < 2:
-        raise RuntimeError("physical movie coordinate profiles must have equal length >= 2")
+        raise RuntimeError(
+            "physical movie coordinate profiles must have equal length >= 2"
+        )
     if not all(np.isfinite(array).all() for array in arrays):
-        raise RuntimeError("physical movie coordinate profiles contain non-finite values")
+        raise RuntimeError(
+            "physical movie coordinate profiles contain non-finite values"
+        )
 
 
 def render_frame(

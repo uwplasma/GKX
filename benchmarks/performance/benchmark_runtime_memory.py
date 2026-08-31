@@ -358,7 +358,10 @@ def _plot_results(csv_path: Path, png_path: Path, pdf_path: Path) -> None:
     x = list(range(len(order)))
     width = 0.24
     fig, axes = plt.subplots(
-        1, 2, figsize=(max(15.5, 1.45 * len(order) + 6.5), 7.4), constrained_layout=True
+        2,
+        1,
+        figsize=(max(13.0, 0.9 * len(order) + 4.0), 13.4),
+        constrained_layout=True,
     )
     warm_handles: list[Line2D] = []
 

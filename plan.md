@@ -1371,6 +1371,20 @@ Internal release policy, roadmap, campaign logs, manuscript figures, and archite
 - Keep docstrings concise; put derivations in documentation, not in 80-line source comments.
 - Verify all links and citations in CI, with an explicit allowlist for sites that block automated link checks.
 
+The maintainer reviewed the 1.8.2 README on 2026-08-30 and named the specific
+patterns to remove. They are listed here as a checklist because they recur:
+
+| Pattern | Example flagged | Rule |
+| --- | --- | --- |
+| Meta-commentary about the artifact itself | "It is deliberately short and says so" | Show the thing; do not narrate the choice to show it. |
+| Packaging trivia | "The wheel pulls in CPU JAX, SciPy, matplotlib, NetCDF4..." | State the Python floor and link the JAX install guide. Nothing else. |
+| Cutesy headings | "Stop when the answer stops changing" | Headings name the feature: "Stopping at saturation". |
+| Prose where a table belongs | the saturation paragraph, the cost paragraph | If it enumerates, it is a table. |
+| Self-justifying em-dash clauses | "the same data twice, because a flux-tube movie that only shows..." | Caption states what is shown, not why it is worth showing. |
+| Parenthetical hedges | "(Transcript abridged; the per-chunk ETA is whatever the host can sustain...)" | Abridge silently, or do not abridge. |
+| Caveat paragraphs longer than the claim | the CPU/GPU speedup span, the parallel status table | One sentence of scope, then a link. |
+| A figure or movie with no physical content | the rotating racetrack loop | Every asset must carry information the still text cannot. |
+
 ### 18.3 Documentation completeness gates
 
 A capability is not complete until docs contain:
@@ -1391,7 +1405,10 @@ All code snippets used as tutorials should execute in CI or be imported from tes
 
 ### 18.4 README target
 
-Reduce README to roughly 150-220 lines:
+The maintainer's ruling on 2026-08-30: "i dont care about specific readme number
+of lines, just about the content". The line count below is therefore an
+indication of density, not a gate, and no PR should be judged against it. What
+is binding is the ordering and the content list:
 
 1. badges;
 2. one-sentence identity and scope;
@@ -1403,6 +1420,39 @@ Reduce README to roughly 150-220 lines:
 8. links to examples, documentation, validation, citation, and contributing.
 
 Move detailed benchmark tables, movie encoding, machine profiles, claim inventories, and long transcripts into documentation. The README should help a new user run GKX before explaining the development history.
+
+Ordering is a decision, not a preference. The maintainer's ranking on
+2026-08-30: "more important than these proses and videos, are actually how to
+install gkx, examples of using it, api and toml, that should be the number one
+priority of gkx. possibly the flux tube movie at the top to captivate people's
+attention, but then installation and usage is more important than some other
+results". The performance-versus-GX panel moves near the top because "users
+really want to see that", and is re-rendered two rows by one column so each
+panel is legible at README width.
+
+The closed-mirror section is refactored to one short paragraph. All four mirror
+assets leave the README; they stay tracked because `docs/geometry.rst` uses
+them. The rotating-racetrack loop is removed: animating the camera around a
+closed circuit tells the reader nothing and confuses what the geometry is.
+
+Two findings from that refactor, recorded because they outlive the README pass:
+
+- Open-ended mirrors are structurally inadmissible, not merely unimplemented.
+  The parallel derivative is a periodic FFT (`operators/linear/streaming.py`
+  `grad_z_periodic`) and the only admitted boundaries are `periodic` and
+  `linked` (`operators/linear/cache_builder.py`, `solvers/nonlinear/
+  state_integration.py`). The racetrack closure exists because periodicity is
+  required. A README figure showing a GKX flux tube on an open mirror would be
+  a false capability claim, so it must not be built.
+- The shipped hybrid's `|B|` is a two-level step -- flat on each straight leg,
+  varying only through the bends -- so the recorded `mirror_ratio = 1.7785` is
+  the ratio between two legs, not between a well minimum and two localized
+  throats. The tracked panel is additionally centered on the high-field leg, so
+  it reads as a barrier rather than a well. Whether that framing is correct is
+  an open review item; the numbers stand, the words around them may not.
+  Regenerating the asset needs a machine with a newer VMEX: the installed 0.6.0
+  lacks `vmex.mirror.turbulence`, so both the builder and `from_vmex_mirror`
+  fail at import on the laptop.
 
 ---
 
@@ -1955,6 +2005,27 @@ Delete only clearly dead wrappers in this PR. No large moves.
 ### PR C1-1 onward: test consolidation by domain
 
 Merge one domain at a time, preserving detection power while reducing files and lines. Do not postpone all deletion to a final mega-PR.
+
+Acceptance check, learned from C1-1: compare the *collected pytest node-ID sets*
+before and after, not the totals. Two merge hazards pass a total-count check and
+fail an ID diff. Emitting functions with `ast.get_source_segment` drops their
+decorators and silently collapses every `parametrize` family; and two source
+files defining the same module-level constant leave the later value winning for
+the whole merged module, so tests keep passing while running different physics.
+
+### PR D1-1: README restructure
+
+Execute §18.4. Ship the reordering, the prose cuts, the feature table, the
+re-rendered two-row performance panel, and the refactored mirror section in one
+PR so the README is never half-converted on `main`. The mirror replacement asset
+and the saturation figure may land in the same PR or immediately after it, but
+the rotating racetrack loop is removed either way.
+
+### PR D1-2: documentation prose pass
+
+Apply the §18.2 checklist to `docs/*.rst`. Cut rhetoric only: no technical fact,
+number, citation, equation, or cross-reference may be lost. `sphinx -b html -W`
+stays clean.
 
 ---
 
