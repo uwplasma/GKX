@@ -175,7 +175,15 @@ recursive = true
 # geometry. They were reachable only through wrappers on the differentiable
 # facade, so evicting them removes the wrappers, four lazy-registry names, and
 # the dedicated coverage suites that existed only to cover them.
-baseline = 94
+# 94 -> 95: tools/artifacts/build_saturation_figure.py. The target is 0, so a
+# new tools file has to earn its place. This one does because the README states
+# that every figure regenerates from a checked-in script: the saturation panel
+# would otherwise be the second figure on the page with no owning generator,
+# and the first (quasilinear) is already a retired-generator exception that the
+# release gate has to special-case. It replays the shipped stop policy over
+# tracked heat-flux traces and runs no solver, so it stays a figure builder
+# rather than a campaign.
+baseline = 95
 target = 0
 
 [[topology_policy.counts]]
@@ -666,7 +674,12 @@ recursive = true
 # the dedicated coverage suites that existed only to cover them.
 # 72461 -> 72301: removing the Diffrax comparison route from
 # tools/comparison/ky_diagnostics.py and the Diffrax config from make_tables.
-baseline = 75322
+# 75322 -> 75780: the saturation figure builder (431 lines) plus the movie and
+# runtime-memory builders absorbing the encoding recipe and the two-row layout
+# that left the README. The recipe moved into the script that owns it rather
+# than being deleted, so this is prose relocated out of the README, not new
+# machinery.
+baseline = 75780
 target = 0
 
 [[line_budget_policy.counts]]

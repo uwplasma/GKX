@@ -294,8 +294,8 @@ only ``1.19x`` compute speedup and a large observable-gate overhead. This keeps
 the nonlinear decomposition lane diagnostic until an end-to-end solver route
 passes identity and speedup with streamed diagnostics.
 
-Production granularity and where the two-GPU time actually goes
----------------------------------------------------------------
+Production granularity and the two-GPU time budget
+--------------------------------------------------
 
 The ``1.48x`` two-GPU transport-window result was attributed to workload
 granularity: the grids were assumed too small to keep two GPUs busy, so larger
@@ -310,7 +310,7 @@ and the diagnostic spectral state, which is ``complex64`` irrespective of
 ``(4,16,96,96,32)`` four-step window re-measures at ``1.47x`` with the same
 ``7.45e-9`` maximum final-state absolute error.
 
-Two things are worth stating about what "production size" means here. The
+Two constraints bound what "production size" means here. The
 largest nonlinear grid shipped under ``examples/nonlinear/`` is the W7-X and
 HSX stellarator case at ``(N_l,N_m,N_y,N_x,N_z)=(4,8,96,96,48)``; the Cyclone
 and KBM cases are smaller. The tracked ``(4,16,96,96,32)`` profiling grid is

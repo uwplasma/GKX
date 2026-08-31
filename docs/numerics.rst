@@ -1290,7 +1290,7 @@ gyrokinetic ion-acoustic dispersion relation with adiabatic electrons at
    \zeta = \frac{\omega}{k_\parallel \sqrt{2T_i/m_i}},
 
 with :math:`Z` the Fried-Conte plasma dispersion function. It has no free
-parameters, so GKX either reproduces its roots or it does not.
+parameters.
 
 .. list-table:: GKX's linear operator vs the exact roots
    :header-rows: 1
@@ -1323,8 +1323,8 @@ parameters, so GKX either reproduces its roots or it does not.
    linear operator; panel (b) eigen-decomposes that same operator by applying it
    to Hermite basis vectors.
 
-Why this measurement is harder than it looks
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Measurement pitfalls
+~~~~~~~~~~~~~~~~~~~~~
 
 Four separate traps produce plausible but wrong numbers here. Each is gated in
 ``tests/validation/physics_gates/test_landau_damping.py``.

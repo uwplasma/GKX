@@ -111,10 +111,10 @@ converged state of its neighbour. A ky scan is walked in monotone ky order so
 that neighbours follow neighbours, and results are written back into the
 requested order. See :doc:`inputs` for the controls.
 
-It is **opt-in**, and these measurements are the reason.
+It is **opt-in**.
 
-Certified eigensolver: correct, but not faster
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Certified eigensolver
+~~~~~~~~~~~~~~~~~~~~~
 
 A 5-point ky scan of ``examples/linear/axisymmetric/cyclone.toml``
 (``solver = "krylov"``, ``Nl = 24``, ``Nm = 12``, laptop CPU, ``jax`` 0.9.2,
@@ -176,8 +176,8 @@ on this deck there are none to remove.
    the order and instrumenting ``jax_log_compiles`` removed it. Compare scan
    variants only with the persistent cache already populated for both.
 
-Time integration: half the horizon for the same answer
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Time integration
+~~~~~~~~~~~~~~~~~
 
 On a fixed-step time integration the win is real, and it is in the horizon
 rather than the cost per step. At ``ky = 0.4`` on the same deck, seeded from

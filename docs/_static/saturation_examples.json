@@ -1,0 +1,162 @@
+{
+  "kind": "saturation_examples",
+  "data_origin": "real",
+  "claim_level": "shipped stop policy replayed unmodified over heat-flux traces from tracked GKX nonlinear runs; no synthetic or hand-drawn data",
+  "policy_module": "src/gkx/diagnostics/saturation.py",
+  "policy_entry_point": "gkx.diagnostics.saturation.saturation_stop_decision",
+  "method": "The runtime evaluates the stop decision after each integration chunk (<=128 steps) on a growing trace and stops at the first chunk that saturates. This replay evaluates it on every growing prefix of the tracked trace, so the stop time reported is the earliest the policy could fire; a real run stops at or just after it.",
+  "gates": [
+    "flux distinguishable from zero",
+    "tau_ac resolved (autocorrelation crosses zero inside the window, and tau_ac > sampling interval)",
+    "window span >= min_window (10 tau_ac when unset)",
+    "autocorrelation-corrected relative SEM <= rel_sem",
+    "half-window means agree within 2x their combined SEM",
+    "same half-window stationarity on the Wphi and Wg guards"
+  ],
+  "config": {
+    "rel_sem": 0.05,
+    "min_window": null,
+    "min_samples": 16
+  },
+  "figure": "docs/_static/saturation_examples.png",
+  "cases": [
+    {
+      "panel": "a",
+      "key": "saturates_early",
+      "headline": "Saturates, horizon to spare",
+      "data_origin": "tracked_gkx_nonlinear_run",
+      "trace_csv": "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv",
+      "trace_source_bundle": "tools_out/itermodel_holdout/ITERModel_reference_nonlinear_t350_n64.out.nc",
+      "trace_label": "ITERModel external VMEC, Nx=Ny=64, Nz=40, t=350",
+      "trace_claim_level": "finite_nonlinear_feasibility_not_transport_validation",
+      "n_samples": 143,
+      "t_max": 350.0075378417969,
+      "guards_present": true,
+      "saturated": true,
+      "stop_time": 230.05484008789062,
+      "stop_index": 94,
+      "horizon_fraction_used": 0.6572853873560723,
+      "gates_binding_at_stop": [
+        "Wg_guard_not_stationary"
+      ],
+      "decision": {
+        "kind": "nonlinear_saturation_stop_decision",
+        "saturated": true,
+        "reasons": [],
+        "n_window": 50,
+        "window_tmin": 110.05211639404297,
+        "window_tmax": 230.05484008789062,
+        "window_span": 120.00272369384766,
+        "mean": 20.63483985900879,
+        "sem": 0.2951908614648549,
+        "rel_sem": 0.014305459285451155,
+        "tau_ac": 4.560666263673784,
+        "tau_ac_resolved": true,
+        "min_window": 45.60666263673784,
+        "first_half_mean": 20.57221565246582,
+        "second_half_mean": 20.697464065551756,
+        "halves_sem": 0.6075572387862703,
+        "stationary": true,
+        "guard_stationary": true,
+        "Wg_guard_stationary": true,
+        "config": {
+          "rel_sem": 0.05,
+          "min_window": null,
+          "min_samples": 16
+        }
+      }
+    },
+    {
+      "panel": "b",
+      "key": "saturates_late",
+      "headline": "Slower: the window must grow",
+      "data_origin": "tracked_gkx_nonlinear_run",
+      "trace_csv": "docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv",
+      "trace_source_bundle": "tools_out/external_vmec_holdouts/circular_tokamak/circular_tokamak_holdout_nonlinear_t450_n64.out.nc",
+      "trace_label": "circular external VMEC t450 n64",
+      "trace_claim_level": "finite_long_external_vmec_pilot_pending_high_grid_gate",
+      "n_samples": 181,
+      "t_max": 449.9636535644531,
+      "guards_present": true,
+      "saturated": true,
+      "stop_time": 277.5557556152344,
+      "stop_index": 112,
+      "horizon_fraction_used": 0.6168403901438165,
+      "gates_binding_at_stop": [
+        "rel_sem_above_threshold"
+      ],
+      "decision": {
+        "kind": "nonlinear_saturation_stop_decision",
+        "saturated": true,
+        "reasons": [],
+        "n_window": 71,
+        "window_tmin": 102.5516586303711,
+        "window_tmax": 277.5557556152344,
+        "window_span": 175.00409698486328,
+        "mean": 19.80139702810368,
+        "sem": 0.989491794176887,
+        "rel_sem": 0.049970807250242166,
+        "tau_ac": 8.899436025756467,
+        "tau_ac_resolved": true,
+        "min_window": 88.99436025756467,
+        "first_half_mean": 19.5412353515625,
+        "second_half_mean": 20.054331991407608,
+        "halves_sem": 2.0298428545466325,
+        "stationary": true,
+        "guard_stationary": true,
+        "Wg_guard_stationary": true,
+        "config": {
+          "rel_sem": 0.05,
+          "min_window": null,
+          "min_samples": 16
+        }
+      }
+    },
+    {
+      "panel": "c",
+      "key": "never_saturates",
+      "headline": "Never saturates",
+      "data_origin": "tracked_gkx_nonlinear_run",
+      "trace_csv": "docs/_static/external_vmec_dshape_nonlinear_t150_n32_pilot.traces.csv",
+      "trace_source_bundle": "tools_out/dshape_nonlinear_t150_n32.out.nc",
+      "trace_label": "D-shaped tokamak external VMEC, Nx=Ny=32, Nz=24, t=150",
+      "trace_claim_level": "finite_low_grid_long_nonlinear_feasibility_not_yet_transport_validation",
+      "n_samples": 61,
+      "t_max": 150.00454711914062,
+      "guards_present": true,
+      "saturated": false,
+      "stop_time": null,
+      "stop_index": null,
+      "horizon_fraction_used": 1.0,
+      "gates_binding_at_stop": [],
+      "decision": {
+        "kind": "nonlinear_saturation_stop_decision",
+        "saturated": false,
+        "reasons": [
+          "rel_sem_above_threshold"
+        ],
+        "n_window": 39,
+        "window_tmin": 55.04944610595703,
+        "window_tmax": 150.00454711914062,
+        "window_span": 94.9551010131836,
+        "mean": 19.3042873724913,
+        "sem": 2.1101162985496438,
+        "rel_sem": 0.1093081685862473,
+        "tau_ac": 7.258068912528268,
+        "tau_ac_resolved": true,
+        "min_window": 72.58068912528267,
+        "first_half_mean": 21.097441321925114,
+        "second_half_mean": 17.600791120529173,
+        "halves_sem": 3.7269051211692674,
+        "stationary": true,
+        "guard_stationary": true,
+        "Wg_guard_stationary": true,
+        "config": {
+          "rel_sem": 0.05,
+          "min_window": null,
+          "min_samples": 16
+        }
+      }
+    }
+  ]
+}

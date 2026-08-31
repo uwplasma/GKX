@@ -518,7 +518,6 @@ Reduced and stress cases
 Notes on interpretation
 -----------------------
 
-The atlas is split deliberately. The README stays limited to a compact
-publication panel, while this page keeps the larger linear, nonlinear, and
-stress figures visible without claiming that every scanned point is an exact
-closure.
+The README carries a compact publication panel; this page carries the larger
+linear, nonlinear, and stress figures. Not every scanned point in those figures
+is an exact closure.

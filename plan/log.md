@@ -3772,3 +3772,78 @@ Outcome:
   overlapping test bodies; consolidation only buys the file-count target.
 - next task: continue Phase C domain by domain (geometry, solvers, runtime),
   carrying the collect-only ID diff as the standing acceptance check.
+## 2026-08-30 — PR D1-1 README restructure and documentation prose pass (`docs/d1-1-readme-restructure`)
+
+Baseline:
+- GKX SHA: `9905e349` (`solvers: remove Diffrax from the base product (#169)`)
+- companion SHAs: none. VMEX was read for the mirror investigation, not changed.
+- README 786 lines; `docs/*.rst` 18,761 lines; `tools` 94 files / 75,322 lines
+- relevant existing gate: `check_quasilinear_promotion_guardrails.py`, which
+  greps README for required absolute-flux scope wording, and the architecture
+  manifest ratchet on tool file and line counts
+
+Scope:
+- intended change: execute §18.4. Reorder the README around the maintainer's
+  stated ranking (install and usage before results), delete the prose patterns
+  he named, add the run-control table and a saturation figure, promote the
+  performance panel, and refactor the mirror section.
+- explicitly out of scope: any change to physics, numerics, or defaults. No
+  measured value in README or docs was edited.
+
+Changes:
+- README 786 -> 482 lines, reordered: hero movie, install, run an equilibrium,
+  checked-in cases, TOML tables, run-control table, performance, Python API,
+  what GKX solves, collisions, validation, differentiation, comparison, scope.
+- removed: the wheel-contents paragraph, "it is deliberately short and says
+  so", the "Stop when the answer stops changing" heading, the abridged-transcript
+  parenthetical, the CPU->GPU speedup-span paragraph, the parallel status table,
+  and the ffmpeg/img2webp recipe (relocated into `build_turbulence_movie.py`,
+  the script that owns it).
+- `docs/_static/runtime_memory_benchmark.png` re-rendered two rows by one
+  column: 2856x997 -> 2544x2605. Both writers of that path were changed, so a
+  future benchmark campaign cannot silently revert the layout.
+- new `tools/artifacts/build_saturation_figure.py` and
+  `docs/_static/saturation_examples.{png,json}`.
+- docs prose pass over seven `.rst` files: eight cutesy headings renamed, the
+  meta-commentary and duplicated scope caveats cut, and two 70-80 line prose
+  walls broken into paragraphs.
+- mirror section reduced to one paragraph with no image; all four mirror assets
+  leave the README and stay tracked for `docs/geometry.rst`.
+
+Evidence:
+- docs prose pass is verifiably content-preserving: diffing removed against
+  added lines, zero numbers, zero URLs, and zero `:ref:`/`:doc:` targets appear
+  in removed lines without reappearing. `sphinx -b html -W` exits 0.
+- all 31 relative README links and all three embedded images resolve; code
+  fences balanced; no ragged tables.
+- the saturation figure is built from three tracked heat-flux traces, not
+  synthesized, and replays `saturation_stop_decision` unmodified at its default
+  `rel_sem = 0.05`. The three cases stop on three different gates, which
+  corrected a claim in the first README draft: the panel that waits on `Wg`
+  guard stationarity shows the flux gates alone do not decide.
+- gates: `ruff check .` clean; `sphinx -W` clean; release readiness, validation
+  coverage, architecture manifest, repository size, and quasilinear guardrails
+  all exit 0. `check_vmec_boozer_gates.py` exits 2 with an argparse usage error
+  on this branch and identically on `main`; it requires a subcommand and is not
+  a regression.
+- physics/mathematics/numerics gates: none re-run and none claimed.
+- CPU/NVIDIA measurements: none taken. The performance figure was re-rendered
+  from the tracked ship-refresh CSV; no benchmark was re-measured, and the
+  printed speedup range is identical to the previous figure's annotation.
+
+Outcome:
+- accepted
+- caveat: §18.4 asks for 150-220 lines and this lands at 482. The maintainer
+  asked for the TOML table, run-control table, geometry table, term table,
+  collision table, and worked CLI and Python examples in the README itself;
+  those are roughly 180 lines of tables and fenced blocks before any prose. The
+  target and the request are in tension and the request wins. §18.4 should be
+  rebaselined rather than quietly missed.
+- the quasilinear guardrail caught a real regression mid-work: the first draft
+  dropped the required "not a runtime/TOML absolute-flux predictor" wording and
+  the gate failed on the branch while passing on `main`. Restored.
+- two findings recorded in §18.4 for later work: open-ended mirrors are
+  structurally inadmissible because the parallel derivative is a periodic FFT,
+  and the shipped hybrid's recorded `mirror_ratio = 1.7785` describes two flat
+  legs rather than a well between throats. The second is an open review item.
+- next task: PR C1-2, solvers test consolidation.

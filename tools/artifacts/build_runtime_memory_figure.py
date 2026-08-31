@@ -68,7 +68,11 @@ def build_figure(results: Path, output: Path) -> dict[str, object]:
     width = 0.26
 
     with figure_style():
-        fig, axes = plt.subplots(1, 2, figsize=(14.6, 5.2))
+        # Stacked rather than side by side: at README width a two-column panel
+        # shrinks each axis to roughly half the page, which is where the case
+        # labels stop being legible. One column per row keeps the full width for
+        # every panel.
+        fig, axes = plt.subplots(2, 1, figsize=(13.0, 13.4))
 
         for ax, data, title, unit, logscale in (
             (axes[0], runtime, "Cold wall time", "s", True),
@@ -113,13 +117,15 @@ def build_figure(results: Path, output: Path) -> dict[str, object]:
             f"{min(speedups):.1f}$\\times$ to {max(speedups):.1f}$\\times$",
             loc="upper right",
         )
-        panel_label(axes[0], "(a)", dx=-0.07)
-        panel_label(axes[1], "(b)", dx=-0.07)
+        # dx is in axes fractions, so the offset has to shrink as the axes get
+        # wider or the label drifts off past the y-label.
+        panel_label(axes[0], "(a)", dx=-0.038)
+        panel_label(axes[1], "(b)", dx=-0.038)
 
         fig.suptitle(
             "Runtime and memory across the tracked benchmark cases", fontsize=13
         )
-        fig.tight_layout(rect=(0, 0, 1, 0.95))
+        fig.tight_layout(rect=(0, 0, 1, 0.97))
         save_figure(fig, output, palette_colors=256)
 
     return {
