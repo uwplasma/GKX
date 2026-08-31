@@ -176,7 +176,13 @@ recursive = true
 # 4,485 -> 4,325 with the collected node-ID set identical. A conftest is also
 # the only file that can hold fixtures for a directory, so the count rises by
 # one in exchange for every future test in the domain being shorter.
-baseline = 89
+# 89 -> 82: C1-3 consolidates tests/integration/runtime from eleven files to
+# four, grouped by the layer a run passes through: configuration and pre-run
+# planning, execution, outputs, and the CLI surface. 411 collected node IDs
+# before and after with an empty diff, 410 passed and 1 skipped either way.
+# Re-derived on rebase: the step is 89 -> 82 because the linear conftest landed
+# first, not the 94 -> 87 this branch originally computed.
+baseline = 82
 target = 30
 
 [[topology_policy.counts]]

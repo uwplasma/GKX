@@ -170,7 +170,13 @@ jobs:
     # Most shards retain a 15-minute budget. nonlinear-core has completed all
     # assertions after 14 minutes on hosted runners, so reserve five minutes
     # of setup and cleanup margin for that shard without relaxing the others.
-    timeout-minutes: ${{ matrix.shard.name == 'nonlinear-core' && 20 || 15 }}
+    # Consolidation made these lanes coarser: a lane names files, and merged
+    # files carry more tests than the ones they absorbed. nonlinear-core hit its
+    # 20-minute ceiling at 20.2 minutes once test_runtime_artifacts.py grew from
+    # 1,919 to 4,212 lines, so that file moved to runtime-core, where it belongs
+    # and which had headroom at 8.5 minutes. Both lanes now get 20 so a further
+    # absorption does not silently reintroduce a timeout.
+    timeout-minutes: ${{ (matrix.shard.name == 'nonlinear-core' || matrix.shard.name == 'runtime-core') && 20 || 15 }}
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -207,10 +213,10 @@ jobs:
           - name: runtime-core
             files: >-
               tests/integration/runtime/test_runtime_config.py
-              tests/integration/runtime/test_runtime_helpers.py
               tests/integration/runtime/test_runtime_runner.py
               tests/unit/solvers/test_runners_and_orchestration.py
               tests/integration/runtime/test_cli.py
+              tests/integration/runtime/test_runtime_artifacts.py
               tests/integration/examples/test_examples.py
           - name: nonlinear-core
             files: >-
@@ -218,7 +224,6 @@ jobs:
               tests/unit/nonlinear/test_nonlinear_helpers_extra.py
               tests/unit/nonlinear/test_nonlinear_exb.py
               tests/validation/benchmarks/test_benchmark_contracts.py
-              tests/integration/runtime/test_runtime_diagnostics.py
           - name: parallel-autodiff
             # Logical CPU devices so the sharded nonlinear routing gates run
             # here instead of skipping until wide coverage.

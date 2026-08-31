@@ -743,6 +743,15 @@ Boozer coordinates are not required by the turbulence solver when a complete str
    - QA/QH/QI stellarators;
    - `LASYM=true` case;
    - closed periodic mirror.
+
+   Blocker measured 2026-08-30: the mirror class cannot be frozen anywhere
+   currently reachable. `gkx.geometry.from_vmex_mirror` needs
+   `vmex.mirror.turbulence.gk_closed_fieldline_geometry`. The laptop has VMEX
+   0.6.0, which has `vmex.mirror` but not that module; the office box (two
+   RTX A4000, `~/stellarator_venv`, jax 0.6.2) has no `vmex.mirror` at all. The
+   other four classes are unblocked. The same gap blocks regenerating the mirror
+   README asset, so both wait on a VMEX version that is installed on neither
+   machine.
 2. Freeze AD/finite-difference geometry gradients for the live VMEX path.
 3. Search downstream imports in GKX, VMEX, examples, and local scripts.
 4. Redirect users to `from_vmex`, `from_vmex_wout`, or a generic complete mapping.
