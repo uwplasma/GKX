@@ -207,9 +207,10 @@ per step across every grid measured. Within a step, about 59% is data movement,
 
 Parallelism is production for independent `k_y` scans, quasilinear/UQ ensembles,
 and file-backed tasks, all deterministically ordered and serial-identity gated.
-Sensitivity sweeps need a matched scaling artifact before any speedup claim;
-nonlinear whole-state and domain decomposition are diagnostic only. Details:
-[parallelization](docs/parallelization.rst).
+Sensitivity sweeps can use the same deterministic independent-work
+reconstruction, but they need a dedicated matched scaling artifact before any
+speedup claim is promoted; nonlinear whole-state and domain decomposition stay
+diagnostic only. Details: [parallelization](docs/parallelization.rst).
 
 ## From Python
 
@@ -400,7 +401,9 @@ This composes into shape optimization through turbulence:
 flux as a fourth objective to VMEX's vacuum QA ladder, composing VMEX's implicit
 equilibrium derivative with the exact GKX window derivative. The measured 12.26%
 reduction across 24 nominal pairs is **not statistically resolved** — 4 of 48
-traces fail the per-trace drift test — and is published as preliminary. Rows in
+traces fail the per-trace drift test — and is published as preliminary.
+Promotion requires stationary individual traces, autocorrelation-aware batches,
+resolved spectral tails, and grid/timestep convergence. Rows in
 [`qa_transport_summary.csv`](docs/_static/qa_transport_summary.csv); campaign in
 [stellarator optimization](docs/stellarator_optimization.rst).
 
@@ -431,9 +434,9 @@ where the tracked nonlinear windows are finite. Derivations, calibration splits,
 and holdout gates: [quasilinear](docs/quasilinear.rst).
 
 Collision operators are validated for like-species collisions and run on the
-fixed-step cached integrator. W7-X zonal long-window recurrence and
-kinetic-electron extensions, production nonlinear domain decomposition, and
-equilibrium ExB flow shear remain open.
+fixed-step cached integrator. W7-X zonal long-window recurrence/damping and
+W7-X TEM / kinetic-electron extensions are deferred. Production nonlinear
+domain decomposition and equilibrium ExB flow shear remain open.
 
 ## Reproducing the figures
 
