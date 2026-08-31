@@ -1405,7 +1405,10 @@ All code snippets used as tutorials should execute in CI or be imported from tes
 
 ### 18.4 README target
 
-Reduce README to roughly 150-220 lines:
+The maintainer's ruling on 2026-08-30: "i dont care about specific readme number
+of lines, just about the content". The line count below is therefore an
+indication of density, not a gate, and no PR should be judged against it. What
+is binding is the ordering and the content list:
 
 1. badges;
 2. one-sentence identity and scope;
