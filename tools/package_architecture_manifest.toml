@@ -169,7 +169,14 @@ recursive = true
 # identical before and after (178 ids, empty diff), 178 passed either way.
 # The step is 94 -> 88 and not 100 -> 94 because C1-1 landed first; both
 # branches measured against the same pre-C1-1 main.
-baseline = 88
+# 88 -> 89: tests/unit/linear/conftest.py. The target is 30, so a new test file
+# has to earn its place, and this one is an exception in kind rather than a
+# test: it is the shared fixture layer measured by PR C2-1. It removes 342
+# lines from 51 test bodies for 182 lines of its own, and the domain fell
+# 4,485 -> 4,325 with the collected node-ID set identical. A conftest is also
+# the only file that can hold fixtures for a directory, so the count rises by
+# one in exchange for every future test in the domain being shorter.
+baseline = 89
 target = 30
 
 [[topology_policy.counts]]
