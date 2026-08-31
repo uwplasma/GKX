@@ -3847,3 +3847,62 @@ Outcome:
   and the shipped hybrid's recorded `mirror_ratio = 1.7785` describes two flat
   legs rather than a well between throats. The second is an open review item.
 - next task: PR C1-2, solvers test consolidation.
+## 2026-08-30 — PR C1-2 consolidate the solvers unit domain (`tests/c1-2-solvers-consolidation`)
+
+Baseline:
+- GKX SHA: `9905e349` (`solvers: remove Diffrax from the base product (#169)`)
+- companion SHAs: none
+- `tests/unit/solvers` 9 files / 4,673 lines; `tests` 100 files at the manifest's
+  counting rule
+- relevant existing gate: the architecture manifest ratchet on `test_python_files`
+
+Scope:
+- intended change: continue Phase C by grouping `tests/unit/solvers` by the
+  layer each file exercises rather than by source module.
+- explicitly out of scope: deleting or rewriting any test.
+
+Changes:
+- `test_time_integrators.py` takes everything that advances the state: linear
+  native tableaus, adaptive CFL, the nonlinear explicit stage update and method
+  dispatch, the checkpointed scan, and IMEX. IMEX groups here rather than with
+  the linear solver because it reuses the same step/scan/diagnostic scaffolding
+  and only delegates its implicit stage.
+- `test_linear_krylov_core.py` takes the matrix-free linear stack and the TF32
+  dot-precision guard, which asserts the precision contract on exactly those
+  contractions. The guard's rationale docstring is preserved verbatim.
+- `test_runners_and_orchestration.py` takes the callers above the integrators:
+  config-to-integrator routing, the sharded drivers, and the VMEC/Boozer
+  gradient gates.
+- manifest `test_python_files` ratcheted 100 -> 94.
+
+Evidence:
+- identity-preserving by the C1-1 standard: 178 collected node IDs before and
+  after, empty diff, and 178 passed both ways. Verified independently of the
+  agent that produced the merge.
+- one collision found and resolved: `LinearParams`, `LinearTerms`, and
+  `linear_terms_to_term_config` were imported twice from
+  `gkx.operators.linear.params`, the second block a strict subset of the first.
+  Resolved by deleting the redundant import block, not a definition. No
+  module-level constant collided.
+- `ruff format` was deliberately NOT run on the merged files. The repository is
+  not format-clean (51 test files and 94 source files would reflow), so
+  formatting these three would have reflowed pre-existing untouched code, added
+  62 lines, and pushed `test_python_lines` past its baseline. `ruff check .`
+  passes. This is a real inconsistency in the repository, not a property of
+  this change, and it is recorded rather than papered over.
+- gates: `ruff check .` clean; architecture manifest exits 0; validation
+  coverage exits 0; `tests/release` 127 passed; parallel-artifacts and
+  benchmark-contracts 72 passed.
+- physics/mathematics/numerics gates: none re-run and none claimed.
+- CPU/NVIDIA measurements: none taken.
+
+Outcome:
+- accepted
+- dangling references repointed: five `.github/workflows/ci.yml` lanes and ten
+  `tools/validation_coverage_manifest.toml` entries, two of which deduped
+  because the checker rejects duplicates within a list.
+- `plan/baseline/gkx_1_8_2_integrator_ownership.md` still names a long-deleted
+  test file. It is a frozen dated snapshot and no tool reads `plan/baseline`,
+  so editing it would falsify a record. Left alone deliberately.
+- next task: continue Phase C with `tests/integration/runtime` (11 files) and
+  `tests/validation/physics_gates` (10 files).

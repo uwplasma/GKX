@@ -161,7 +161,15 @@ recursive = true
 # three: its tests now live in test_nonlinear_helpers_extra.py, unchanged.)
 # The merge is ID-preserving, not a cull: pytest collects the same 167 node
 # IDs before and after, verified by diffing the two collect-only ID sets.
-baseline = 94
+# 94 -> 88: C1-2 consolidates tests/unit/solvers from nine files to three,
+# grouped by the layer each exercises rather than the module it was written
+# against: everything that advances the state, the matrix-free linear stack
+# with the dot-precision guard that pins its own contractions, and the callers
+# above the integrators. Same standard as C1-1: the collected node-ID set is
+# identical before and after (178 ids, empty diff), 178 passed either way.
+# The step is 94 -> 88 and not 100 -> 94 because C1-1 landed first; both
+# branches measured against the same pre-C1-1 main.
+baseline = 88
 target = 30
 
 [[topology_policy.counts]]
