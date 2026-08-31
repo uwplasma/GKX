@@ -19,7 +19,7 @@ tests.
 | Nonlinear | 200-step adaptive RK3 Cyclone prepared solve, `(64,64,24,4,8)`, float32 | CPU/GPU final-state L2 `0.12650516629219055` / `0.12656144797801971`; phi L2 `0.04132739081978798` / `0.04132746532559395`; heat-flux L2 `0.00010252444917568937` / `0.00010252481297357008` | `tools/profiling/profile_runtime_kernels.py`; prepared-profile contract tests | short trajectory and profiler contract; not stationary or converged transport |
 | Geometry | analytic s-alpha, `q=1.4`, `s_hat=1`, `epsilon=0`, `kx=0`, `ky=1`, `theta=[0,2]` | `k_perp^2=[1,5]` exactly within float dtype | `tests/unit/geometry/test_geometry.py::test_kperp2_matches_s_alpha` | analytic convention identity; not imported/VMEC/Boozer parity |
 | Collision | finite-b Coulomb algebra, Hermite 0--3 and Laguerre 0--1 | all gates true; maximum invariant residual `5.551115123125783e-17`; maximum projection relative error `3.1316539653265556e-13`; maximum eigenvalue `9.00846363925679e-18` | `tools/artifacts/build_linear_validation_artifacts.py`; frozen-output release contract | offline operator algebra, not runtime transport accuracy |
-| Restart | complex64 zonal/radial NetCDF round trip, shape `(1,3,4,8,8,6)` | maximum absolute error `0`; state and loaded SHA-256 both `14e4eb13...20f` after canonical load comparison | `tests/integration/runtime/test_restart_gate.py::test_netcdf_restart_roundtrips_zonal_radial_modes` | serialization identity; not interrupted long-run statistical identity |
+| Restart | complex64 zonal/radial NetCDF round trip, shape `(1,3,4,8,8,6)` | maximum absolute error `0`; state and loaded SHA-256 both `14e4eb13...20f` after canonical load comparison | `tests/integration/runtime/test_runtime_runner.py::test_netcdf_restart_roundtrips_zonal_radial_modes` | serialization identity; not interrupted long-run statistical identity |
 | Differentiation | two-observable inverse-growth demo | AD/FD row relative errors `0.0003877815615851432`, `0.00019905040971934795`; final loss `7.467800514859846e-06` | `examples/theory_and_demos/autodiff_inverse_growth.py`; integration example test | reduced differentiable workflow and local conditioning only |
 | Optimization | four-observable/two-parameter inverse demo | final `(tprim,fprim)=(2.8000000452018434,0.7999999842522637)`; loss `0`; AD/FD row relative errors `0.00040817007538862526`, `6.33443269180134e-05` | `examples/theory_and_demos/autodiff_inverse_twomode.py`; integration example test | small deterministic inverse problem; not nonlinear stellarator optimization |
 
@@ -153,7 +153,7 @@ python -m pytest -q \
   tests/unit/linear/test_dimits_threshold_extraction.py \
   tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py \
   tests/unit/geometry/test_geometry.py \
-  tests/integration/runtime/test_restart_gate.py::test_netcdf_restart_roundtrips_zonal_radial_modes \
+  tests/integration/runtime/test_runtime_runner.py::test_netcdf_restart_roundtrips_zonal_radial_modes \
   tests/integration/examples/test_examples.py::test_autodiff_inverse_growth_demo_summary \
   tests/integration/examples/test_examples.py::test_autodiff_twomode_demo_summary \
   tests/release/test_release_gates.py

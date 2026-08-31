@@ -253,8 +253,7 @@ Focused executable contract tests:
 
 ```console
 pytest -q tests/integration/runtime/test_runtime_artifacts.py
-pytest -q tests/integration/runtime/test_restart.py \
-  tests/integration/runtime/test_runtime_chunks.py
+pytest -q tests/integration/runtime/test_runtime_runner.py
 ```
 
 The inventory is documentation-only. Generated JSON, CSV, NPY, and NetCDF

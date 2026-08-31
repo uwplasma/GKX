@@ -3848,6 +3848,8 @@ Outcome:
   legs rather than a well between throats. The second is an open review item.
 - next task: PR C1-2, solvers test consolidation.
 ## 2026-08-30 — PR C1-2 consolidate the solvers unit domain (`tests/c1-2-solvers-consolidation`)
+## 2026-08-30 — PR C1-3 consolidate the runtime integration domain (`tests/c1-3-runtime-consolidation`)
+## 2026-08-30 — PR C1-4 consolidate the physics-gate domain (`tests/c1-4-physics-gates-consolidation`)
 
 ## 2026-08-30 — PR C2-1 shared test fixture layer, measured on one domain (`tests/c2-1-fixture-layer-pilot`)
 
@@ -3924,7 +3926,88 @@ Evidence:
   test gross, 3.1 net of the fixture layer; the domain fell 4,485 -> 4,325, or
   3.6 per cent.
 - gates: `ruff check .` clean. `ruff format` deliberately not run.
+- `tests/integration/runtime` 11 files / 16,535 lines
+- relevant existing gate: the architecture manifest ratchet on `test_python_files`
+
+Scope:
+- intended change: group `tests/integration/runtime` by the layer a run passes
+  through rather than by module name.
+- explicitly out of scope: deleting or rewriting any test, and the manifest
+  ratchet, which is applied centrally because three consolidation branches were
+  in flight against the same baseline.
+
+Changes:
+- `test_runtime_config.py` owns configuration and pre-run planning: deck to
+  `RuntimeConfig`, the resolution estimator, and mode/index/solver policy —
+  everything decided before a step is taken.
+- `test_runtime_runner.py` owns execution: startup, the linear and nonlinear
+  runners, the adaptive chunk loop, and the restart gate.
+- `test_runtime_artifacts.py` owns outputs: the diagnostics a run computes and
+  the NetCDF/JSON they are persisted into.
+- `test_cli.py` owns the user-facing surface: argparse plus the command layer
+  it dispatches into.
+- `test_restart_gate.py` and `test_restart.py` were deliberately split apart
+  despite the shared name: the first runs the solver twice and compares, so it
+  is execution; the second is NetCDF IO, so it is artifacts.
+
+Evidence:
+- identity-preserving: 411 collected node IDs before and after, empty diff;
+  410 passed and 1 skipped both ways. Verified independently of the agent.
+- collisions: no top-level definition collided, and this tree has no fixtures.
+  Every hit was a duplicate import resolved by keeping the superset. One
+  deserved a runtime check rather than an assumption:
+  `RuntimeLinearResult`/`RuntimeNonlinearResult` were imported from two
+  different modules, confirmed to be the same object by `is`, so dropping the
+  duplicate is a no-op rather than a silent value swap.
+- gates: `ruff check .` clean; validation coverage exits 0; `ci.yml` parses and
+  every test path it names exists.
 - physics/mathematics/numerics gates: none re-run and none claimed.
+- `tests/validation/physics_gates` 10 files / 2,429 lines
+- relevant existing gate: the architecture manifest ratchet on `test_python_files`
+
+Scope:
+- intended change: group the physics gates by the physical object each one
+  makes a statement about, rather than by helper reuse.
+- explicitly out of scope: any tolerance, gate threshold, reference value, or
+  provenance docstring, and the manifest ratchet, which is applied centrally.
+
+Changes:
+- `test_collision_physics.py` takes everything asserting about the collision
+  operators: exact invariants, the published Appendix-C coefficients, the FLR
+  ordering, the `b -> 0` multispecies reduction, the Spitzer-Harm coefficient
+  those same unlike-species blocks must reproduce, and the storage envelope of
+  the finite-Larmor tables that carry them.
+- `test_hermite_hierarchy_physics.py` takes the truncated parallel-velocity
+  hierarchy: closure coefficient and reflectionless absorption, the exact
+  Landau roots and the `2 sqrt(Nm)` recurrence law, and whether the linear
+  objective can report damping across the ladder. All three are statements
+  about what truncation does to free energy in `m`.
+- `test_validation_gates.py` takes the gate machinery and the zonal estimators
+  it reads.
+- `test_geometry_physics_contracts.py` left untouched; its physics does not
+  overlap the other three.
+
+Evidence:
+- identity-preserving: 72 collected node IDs before and after, empty diff.
+  Verified independently of the agent, against `main` rather than against the
+  agent's own baseline file.
+- stronger than the ID diff, and appropriate for a physics-gate tree: every
+  test and helper body in the merged files was compared AST-wise to its origin
+  and is byte-identical, and every module-level constant survived with an
+  identical value. No tolerance or reference value moved.
+- pass/fail identical: `4 failed, 68 passed` before and after, the same four
+  IDs, and they are the known-environment jax failure
+  (`eig() got an unexpected keyword argument 'enable_eigvec_derivs'`).
+- three hazards found that the ID diff does NOT catch, now recorded in §24:
+  a module-level `pytestmark` float64 `skipif` that would have widened to the
+  closure and objective gates -- and a widened skip reports green; a
+  `sys.path.insert` bootstrap that import hoisting would have reordered below
+  the import it enables; and absorbed module docstrings, which carry paper and
+  equation provenance, being truncated to their first line.
+- gates: `ruff check .` clean; validation coverage and release readiness exit 0;
+  `ci.yml` parses and every test path it names exists.
+- physics/mathematics/numerics gates: the physics gates themselves were re-run
+  and are unchanged. No physical claim is new.
 - CPU/NVIDIA measurements: none taken.
 
 Outcome:
@@ -3953,3 +4036,24 @@ Outcome:
   recur. `LinearParams` varies per test in ways that are the point of the test.
 - next task: land the consolidation queue, then take the 35,000 question back to
   the maintainer rather than deleting tests to satisfy a number.
+- the most valuable find was not a test at all:
+  `tests/unit/parallel/test_parallel_core.py` loads
+  `tests/integration/runtime/test_restart_gate.py` *by file path* and calls a
+  helper out of it. Consolidating that file would have broken live code with no
+  static signal. Repointed, and verified by loading the merged module and
+  calling the helper.
+- `pytestmark = pytest.mark.integration` from the runner now also covers the
+  absorbed chunk and restart-gate tests. Checked: no CI lane filters on that
+  marker, and these already live under `tests/integration/`.
+- two frozen `plan/baseline/` records named the moved node IDs in reproduce
+  commands and were repointed, because they are instructions a reader would
+  run, not dated measurements.
+- next task: C1-4 physics gates, then the central manifest ratchet.
+- references repointed in `docs/operators.rst`, `docs/numerics.rst`, `README.md`,
+  one `ci.yml` shard, the validation coverage manifest, a docstring pointer in
+  `src/gkx/objectives/core.py`, and one plan note.
+- flagged for the shard budget: pointing the `linear-core` shard at the merged
+  hierarchy file adds Landau damping's work (about 80 s locally) to a shard that
+  previously ran only the roughly 20 s objective gate. Not a failure, but the
+  shard is now less balanced and should be watched.
+- next task: the central manifest ratchet, then Phase C's remaining domains.

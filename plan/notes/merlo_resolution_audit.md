@@ -573,7 +573,7 @@ estimator returns gamma to within 1-2% for gamma = 0.03 / 0.06 / 0.10 and
 omega = 0.8 / 1.2, with a cadence spread below 1e-4 across a 16x span. The 1-2% low
 bias is deterministic (one window of a *decaying* signal is not one window of a
 stationary one) and is inside the quoted uncertainty. Pinned by three tests in
-`tests/validation/physics_gates/test_zonal_validation.py`.
+`tests/validation/physics_gates/test_validation_gates.py`.
 
 With the fixed estimator, gamma is also **resolution- and timestep-converged**, which
 the old one could not show: Nm = 96/144/192 give -0.1834 / -0.1841 / -0.1856, Nl=8

@@ -743,6 +743,15 @@ Boozer coordinates are not required by the turbulence solver when a complete str
    - QA/QH/QI stellarators;
    - `LASYM=true` case;
    - closed periodic mirror.
+
+   Blocker measured 2026-08-30: the mirror class cannot be frozen anywhere
+   currently reachable. `gkx.geometry.from_vmex_mirror` needs
+   `vmex.mirror.turbulence.gk_closed_fieldline_geometry`. The laptop has VMEX
+   0.6.0, which has `vmex.mirror` but not that module; the office box (two
+   RTX A4000, `~/stellarator_venv`, jax 0.6.2) has no `vmex.mirror` at all. The
+   other four classes are unblocked. The same gap blocks regenerating the mirror
+   README asset, so both wait on a VMEX version that is installed on neither
+   machine.
 2. Freeze AD/finite-difference geometry gradients for the live VMEX path.
 3. Search downstream imports in GKX, VMEX, examples, and local scripts.
 4. Redirect users to `from_vmex`, `from_vmex_wout`, or a generic complete mapping.
@@ -2060,12 +2069,33 @@ Delete only clearly dead wrappers in this PR. No large moves.
 
 Merge one domain at a time, preserving detection power while reducing files and lines. Do not postpone all deletion to a final mega-PR.
 
-Acceptance check, learned from C1-1: compare the *collected pytest node-ID sets*
-before and after, not the totals. Two merge hazards pass a total-count check and
-fail an ID diff. Emitting functions with `ast.get_source_segment` drops their
-decorators and silently collapses every `parametrize` family; and two source
-files defining the same module-level constant leave the later value winning for
-the whole merged module, so tests keep passing while running different physics.
+The acceptance check is a diff of the *collected pytest node-ID sets* before and
+after, not a comparison of totals. Four domains have now been merged and the
+hazards found are worth stating, because most of them keep the suite green:
+
+- **Decorators vanish.** Emitting a function with `ast.get_source_segment`
+  starts at `def`, dropping every decorator and collapsing each `parametrize`
+  family to one test. Caught by the ID diff.
+- **Module constants collide.** Two files defining the same top-level name leave
+  the later value winning for the whole merged module, so tests run against the
+  wrong number while still passing. Rename per origin block; never delete a
+  definition. Caught by an explicit collision check, not by the ID diff.
+- **`pytestmark` widens silently.** A module-level marker applies to every test
+  in the merged file. A float64 `skipif` from one file would have extended to
+  unrelated gates, and a widened skip turns green, not red. Convert module
+  markers to per-test decorators on exactly their original tests.
+- **Import hoisting breaks `sys.path` bootstraps.** Where a module-level
+  `sys.path.insert` must precede an import of a local helper, hoisting imports
+  above statements breaks collection.
+- **Docstrings carry provenance.** Absorbed module docstrings cite papers,
+  equations, and measured values; preserve them verbatim at the origin marker.
+- **Live code loads tests by path.** `tests/unit/parallel/test_parallel_core.py`
+  reads a test module by file path. Grep deleted basenames across `.py`, config,
+  workflows, and docs -- not only the test tree.
+
+Ratchet the manifest centrally when several consolidation branches are open.
+Each measures against the same `main` and independently computes the same new
+baseline, which is wrong for every branch after the first.
 
 ### PR D1-1: README restructure
 

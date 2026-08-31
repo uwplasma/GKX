@@ -76,7 +76,7 @@ def _default_gradient_linear_params(geometry: Any | None = None) -> LinearParams
     the imaginary axis at zero drive, ``argmax(Re lambda)`` is floored at zero or
     above, and **the objective cannot report a stable design**. Where the
     physical branch is weak it returned a marginal mode at ``|omega|`` of 20-90
-    instead. ``test_objective_reports_stability`` pins the numbers.
+    instead. ``test_hermite_hierarchy_physics`` pins the numbers.
 
     Hyperdiffusion must not be used for this. This path runs one selected ``k_y``
     with ``nx = 1``, so ``kperp^2_max`` *is* ``kperp^2`` in
