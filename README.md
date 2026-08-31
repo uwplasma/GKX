@@ -159,7 +159,9 @@ hybrid directly from memory, with no file round trip: VMEX owns the field-line
 closure, the Clebsch metric, and the equal-arc grid, and GKX evaluates its
 linear and quasilinear objectives on them. The parallel direction is a periodic
 FFT, so the field line must close; open-ended mirrors are a different model and
-are not admitted. Geometry, the mirror-ratio figure, and the admission review:
+are not admitted. The shipped case is a closed racetrack, and the field-strength
+ratio its figure reports is cross-section elongation rather than a mirror ratio.
+Geometry, that figure, and the admission review:
 [geometry](docs/geometry.rst#closed-vmex-mirror-geometry).
 
 ### Run control

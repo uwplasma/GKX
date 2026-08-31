@@ -694,7 +694,12 @@ recursive = true
 # that left the README. The recipe moved into the script that owns it rather
 # than being deleted, so this is prose relocated out of the README, not new
 # machinery.
-baseline = 75780
+# 75780 -> 75804: the VMEX closed-mirror artifact builder now measures the
+# seeded state's force residual, records what its field-strength ratio is
+# instead of calling it a mirror ratio, and centres the plotted parallel
+# profiles on the |B| minimum. Twenty-four lines buy a shipped figure and
+# record that no longer overstate what the case contains.
+baseline = 75804
 target = 0
 
 [[line_budget_policy.counts]]

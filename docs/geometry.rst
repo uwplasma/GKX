@@ -297,11 +297,72 @@ normalizations, validation ladder, and open-lane literature are maintained in
 VMEX's ``mirror-gyrokinetics`` explanation page.
 
 .. image:: _static/vmex_mirror_gkx_showcase.webp
-   :alt: Closed VMEX mirror field line, magnetic-field profile, and GKX metric
+   :alt: Closed VMEX mirror field line, its two-level magnetic-field profile
+         centred on the low-field leg, and the GKX perpendicular metric
    :width: 100%
 
-The README also carries a 13 kB :download:`poster snapshot
-<_static/vmex_mirror_gkx_snapshot.webp>` and a 105 kB, 36-frame
+The shipped case: field-strength modulation, not a mirror ratio
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The pictured racetrack is planar. Its axis lies in a single plane, with two
+straight legs at :math:`x=\pm2` and the two return bends at :math:`z=\pm3.797`.
+Along the sampled field line ``bmag`` is a two-level step. Nine of the
+thirty-two samples sit on each plateau, flat to 0.73% on the low leg and 0.51%
+on the high leg, and the transition between them is confined to the two bends.
+So is the mirror force: ``bgrad`` peaks at 0.069 in the bends and stays below
+0.007 on either plateau. One circuit carries exactly one low-field leg and one
+high-field leg, so a trapped particle bounces inside the low leg and the high
+leg closes that well on both sides.
+
+The recorded ``bmag_max_over_min`` is the ratio between those two flat legs. It
+is not a mirror ratio in the usual sense of a well minimum over a localized
+throat maximum, and this page already uses :math:`R_m` with that standard
+meaning in the loss-cone boundary below, so the closed case does not reuse the
+symbol. What the number measures is the rotating elliptical cross-section, not
+a mirror. On this configuration:
+
+* it converges to :math:`(\mathrm{semi\_major}/\mathrm{semi\_minor})^2`,
+  and follows that square as the pair is varied: sampled on the surface, the
+  ``0.4/0.3`` section of this case gives 1.77778, ``0.45/0.3`` gives 2.25000,
+  and both ``0.5/0.25`` and ``0.4/0.2`` give 4.00000. The 1.77849 that the
+  equal-arc field-line remap returns at ``coefficient_count=16`` is that same
+  1.777778 resolved on a finite axial basis; refining to
+  ``coefficient_count=32`` returns 1.777799;
+* it does not move at all when ``straight_length`` runs from 2.0 to 16.0 or
+  ``return_radius`` from 1.0 to 4.0 --- the two lengths a mirror ratio would be
+  built from;
+* it is exactly 1.0000 for a circular section
+  (``semi_major == semi_minor``), so the configuration then has no parallel
+  field-strength modulation at all;
+* it is 1.004 on the magnetic axis and ranges over 1.27 to 1.78 across the
+  field lines of the sampled surface, so it labels one flux tube rather than
+  the device.
+
+The recorded value 1.77849 is therefore a flux-tube field-strength modulation
+depth, and the loss-cone formula below must not be applied to it.
+
+The ``bmag`` and metric panels are drawn with the parallel origin at the
+``bmag`` minimum. The equal-arc grid otherwise lands ``z=0`` on the high-field
+leg, which draws a periodic circuit as a central barrier with half a well at
+each edge; centering on the low-field leg shows the same data as the single
+well the periodicity implies. The convention changes no computed quantity. The
+parallel domain is periodic, and shifting the origin by 1, 8, 16, or -5 of the
+32 grid points moves every solver objective by at most :math:`8.4\times10^{-15}`
+--- ``gamma``, ``omega``, and the mixing-length proxy are identical to
+round-off whichever leg carries ``z=0``.
+
+Finally, the case is evaluated on ``setup.initial_state``: the seeded
+minimum-energy stream function on the prescribed nested-ellipse surfaces, not a
+solved fixed-boundary equilibrium. Its normalized MHD force residual is 0.61,
+recorded as ``seed_force_residual_normalized_rms``, and VMEX's own
+``examples/mirror/stellarator_mirror_hybrid.py`` runs ``solve_fixed_boundary``
+before it plots. The quoted growth rate, frequency, and quasilinear proxy are
+correct for the seeded state and reproduce to :math:`10^{-15}`; they are not
+properties of a converged VMEX equilibrium, and solving this configuration
+changes them.
+
+The README also carries a 15 kB :download:`poster snapshot
+<_static/vmex_mirror_gkx_snapshot.webp>` and a 110 kB, 36-frame
 :download:`animated WebP loop <_static/vmex_mirror_gkx_loop.webp>`. The
 companion :download:`rotating field-line movie
 <_static/vmex_mirror_gkx_rotation.mp4>` follows the equal-arc marker around the
