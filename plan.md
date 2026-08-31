@@ -143,6 +143,60 @@ The architecture manifest was corrected in the same pull request: the test targe
 | Source lines | 90,857 | <=45,000 | remove at least 45,857 |
 | Test files | 101 | <=30 | remove or merge at least 71 |
 | Test lines | 87,725 | <=35,000 | remove 52,725 |
+
+Composition of the test lines, measured 2026-08-30 at 85,393 lines over 100
+files, because the shape of the gap decides the method:
+
+| Category | Lines |
+| --- | ---: |
+| 2,385 top-level test functions | 69,527 (mean 29, median 22) |
+| 311 helpers and classes | 5,481 |
+| module level: imports, constants, docstrings | 10,485 |
+| exact-duplicate function bodies | 157 |
+| near-duplicates, same structure and differing constants | 205 |
+
+Redundancy is 362 lines, 0.4 per cent. The suite is not bloated by copy-paste,
+so consolidation and deduplication cannot close a 50,000-line gap: reaching
+35,000 by deletion means removing about 1,700 of 2,385 tests, which is the
+opposite of the detection-power constraint in section 17.
+
+Where the lines actually are: `tests/` holds exactly one `conftest.py`, with
+zero fixtures, while the tree makes roughly 1,500 repeated construction calls --
+392 `SAlphaGeometry`/`from_config`, 287 zeroed-state inits, 235
+`build_spectral_grid`, 227 `GridConfig`, 182 linear cache/terms builds, 176
+`LinearParams`, 105 `CycloneBaseCase`. Every test rebuilds its world from
+scratch. Extracting that setup into shared and factory fixtures touches no
+assertion, so it is the one lever that reduces lines without reducing
+detection. Whether it is a large enough lever was measured on a `tests/unit/linear` pilot
+(PR C2-1) before any sweep. It is not.
+
+Pilot result: 51 of 134 tests migrated onto six factory fixtures, 6.6 lines
+saved per migrated test gross, 3.1 net of the 182-line fixture layer. The domain
+went 4,485 -> 4,325 lines, a 3.6 per cent reduction, with the collected node-ID
+set identical and 145 passed either way.
+
+The pilot also measured *why* the lever is small, which matters more than the
+rate. The roughly 1,500 repeated construction calls are overwhelmingly already
+single physical lines: `jnp.zeros((` 279 single-line against 0 multi-line,
+`SAlphaGeometry` 193 against 11, `build_spectral_grid` 196 against 50,
+`GridConfig` 152 against 38, `LinearParams` 124 against 52. Replacing a one-line
+construction with a one-line fixture call saves nothing. Savings come only from
+collapsing multi-statement blocks and multi-line literals, and tree-wide only
+about 33 such blocks remain, worth roughly 386 lines. A full fan-out lands
+between 1,000 and 3,000 lines: 85,393 down to about 82,500-84,400.
+
+**Conclusion, on evidence rather than judgement.** Deduplication offers 362
+lines, fixture extraction offers 1,000-3,000. Together they supply 2 to 6 per
+cent of the 50,393-line gap. There is no non-destructive route to 35,000 test
+lines. Reaching it requires deleting roughly 1,700 of 2,385 tests, which is a
+decision about which coverage to abandon and therefore belongs to the
+maintainer, not to a refactor. Until that decision is made, the 35,000 figure
+should not gate any pull request, and the manifest baseline should continue to
+ratchet on measured reductions only.
+
+The fixture layer is still worth landing on its own merits: tests written
+against it are shorter and more uniform, which is a maintainability gain even
+though it is not a line-count strategy.
 | Tool files | 90 | 0 under `tools/` | relocate/delete 90 |
 | Tool lines | 72,461 | 0 under `tools/` | relocate/delete 72,461 |
 | Advertised root API | 14 | <=30 | nominally passes |

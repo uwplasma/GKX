@@ -47,7 +47,6 @@ from gkx.terms.linear_terms import (
     multispecies_collision_invariant_rates,
 )
 from gkx.terms.assembly import assemble_rhs_terms_cached
-from gkx.terms.config import TermConfig
 
 
 def test_grad_z_periodic_sine():
@@ -195,12 +194,9 @@ def test_linked_fft_derivative_matches_periodic_for_one_link_chains():
     assert jnp.allclose(df_linked, df_periodic, rtol=1.0e-6, atol=2.0e-6)
 
 
-def test_compute_b_shape_and_value():
+def test_compute_b_shape_and_value(cyclone_world):
     """b should match k_perp^2 for s-alpha geometry."""
-    grid_cfg = GridConfig(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     b = compute_b(grid, geom, rho=1.0)
     assert b.shape == (cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
     kx0 = grid.kx[0]
@@ -210,7 +206,7 @@ def test_compute_b_shape_and_value():
     assert jnp.isclose(b[0, 0, 0], kx_eff * kx_eff + ky0 * ky0)
 
 
-def test_slab_itg_matrix_matches_published_gyro_moment_hierarchy() -> None:
+def test_slab_itg_matrix_matches_published_gyro_moment_hierarchy(only_terms) -> None:
     r"""The runtime must reproduce Frei et al. (2022), equations (2.14)--(2.18)."""
 
     maximum_hermite, maximum_laguerre = 3, 2
@@ -234,19 +230,7 @@ def test_slab_itg_matrix_matches_published_gyro_moment_hierarchy() -> None:
     cache = build_linear_cache(
         grid, SlabGeometry(s_hat=0.0, z0=10.0), params, Nl=nl, Nm=nm
     )
-    terms = LinearTerms(
-        streaming=1.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=1.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        hyperdiffusion=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
+    terms = only_terms(streaming=1.0, diamagnetic=1.0)
     phase = np.exp(1j * np.asarray(grid.z))
     mode_count = nl * nm
     observed = np.empty((mode_count, mode_count), dtype=complex)
@@ -1181,17 +1165,15 @@ def test_build_linear_cache_accepts_sampled_geometry_contract():
     assert jnp.allclose(cache_sampled.bmag, cache_geom.bmag)
 
 
-def test_build_linear_cache_restores_linked_end_damping_on_full_fft_grid():
-    grid = build_spectral_grid(
-        GridConfig(
-            Nx=8,
-            Ny=8,
-            Nz=8,
-            Lx=62.8,
-            Ly=2.0 * np.pi,
-            boundary="linked",
-            y0=1.0,
-        )
+def test_build_linear_cache_restores_linked_end_damping_on_full_fft_grid(spectral_grid):
+    grid = spectral_grid(
+        Nx=8,
+        Ny=8,
+        Nz=8,
+        Lx=62.8,
+        Ly=2.0 * np.pi,
+        boundary="linked",
+        y0=1.0,
     )
     geom = SAlphaGeometry.from_config(GeometryConfig(s_hat=0.8))
     cache = build_linear_cache(grid, geom, LinearParams(), Nl=2, Nm=2)
@@ -1210,19 +1192,19 @@ def test_build_linear_cache_restores_linked_end_damping_on_full_fft_grid():
     assert np.allclose(profile[mirror_ky, mirror_kx], profile[ky_idx, kx_idx])
 
 
-def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_grid():
-    grid_full = build_spectral_grid(
-        GridConfig(
-            Nx=1,
-            Ny=16,
-            Nz=96,
-            Lx=62.8,
-            Ly=20.0 * np.pi,
-            boundary="linked",
-            y0=10.0,
-            ntheta=32,
-            nperiod=2,
-        )
+def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_grid(
+    spectral_grid,
+):
+    grid_full = spectral_grid(
+        Nx=1,
+        Ny=16,
+        Nz=96,
+        Lx=62.8,
+        Ly=20.0 * np.pi,
+        boundary="linked",
+        y0=10.0,
+        ntheta=32,
+        nperiod=2,
     )
     ky_idx = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     assert float(grid_full.ky[ky_idx]) > 0.0
@@ -1236,19 +1218,19 @@ def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_gri
     assert int(np.asarray(grid.ky_mode)[0]) > 0
 
 
-def test_linear_integrator_uses_linked_end_damping_as_a_rate():
-    grid_full = build_spectral_grid(
-        GridConfig(
-            Nx=1,
-            Ny=16,
-            Nz=96,
-            Lx=62.8,
-            Ly=20.0 * np.pi,
-            boundary="linked",
-            y0=10.0,
-            ntheta=32,
-            nperiod=2,
-        )
+def test_linear_integrator_uses_linked_end_damping_as_a_rate(
+    only_term_config, only_terms, spectral_grid
+):
+    grid_full = spectral_grid(
+        Nx=1,
+        Ny=16,
+        Nz=96,
+        Lx=62.8,
+        Ly=20.0 * np.pi,
+        boundary="linked",
+        y0=10.0,
+        ntheta=32,
+        nperiod=2,
     )
     ky_idx = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     grid = select_ky_grid(grid_full, ky_idx)
@@ -1256,19 +1238,7 @@ def test_linear_integrator_uses_linked_end_damping_as_a_rate():
     params = LinearParams(damp_ends_amp=0.1, damp_ends_widthfrac=0.125)
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
     G = jnp.ones((2, 4, 1, 1, 96), dtype=jnp.complex64)
-    term_cfg = TermConfig(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        hyperdiffusion=0.0,
-        end_damping=1.0,
-        apar=0.0,
-        bpar=0.0,
-    )
+    term_cfg = only_term_config(end_damping=1.0)
 
     rhs_raw, _fields_raw, contrib_raw = assemble_rhs_terms_cached(
         G, cache, params, terms=term_cfg
@@ -1277,19 +1247,7 @@ def test_linear_integrator_uses_linked_end_damping_as_a_rate():
     mask = np.abs(end_raw) > 1.0e-12
     assert np.any(mask)
 
-    terms = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        hyperdiffusion=0.0,
-        end_damping=1.0,
-        apar=0.0,
-        bpar=0.0,
-    )
+    terms = only_terms(end_damping=1.0)
     for dt in (0.1, 0.2):
         integrated, _phi = integrate_linear(
             G,
@@ -1310,12 +1268,9 @@ def test_linear_integrator_uses_linked_end_damping_as_a_rate():
         )
 
 
-def test_streaming_zero_for_constant_z():
+def test_streaming_zero_for_constant_z(cyclone_world, only_terms):
     """Streaming should vanish for z-constant fields."""
-    grid_cfg = GridConfig(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams(
         omega_d_scale=0.0,
         omega_star_scale=0.0,
@@ -1330,28 +1285,14 @@ def test_streaming_zero_for_constant_z():
 
     G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     G = G.at[:, 1:, ...].set(1.0)
-    terms = LinearTerms(
-        streaming=1.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
+    terms = only_terms(streaming=1.0)
     dG, _phi = linear_rhs(G, grid, geom, params, terms=terms)
     assert jnp.allclose(dG, 0.0)
 
 
-def test_linear_rhs_shapes():
+def test_linear_rhs_shapes(cyclone_world):
     """RHS and potential should have consistent shapes."""
-    grid_cfg = GridConfig(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     dG, phi = linear_rhs(G, grid, geom, params)
@@ -1359,12 +1300,9 @@ def test_linear_rhs_shapes():
     assert phi.shape == (cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
 
 
-def test_linear_param_validation():
+def test_linear_param_validation(cyclone_world):
     """Invalid parameters should be rejected in checked paths."""
-    grid_cfg = GridConfig(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     with pytest.raises(ValueError):
         compute_b(grid, geom, rho=0.0)
@@ -1392,24 +1330,18 @@ def test_streaming_term_zero():
     assert jnp.allclose(out, 0.0)
 
 
-def test_integrate_linear_shapes():
+def test_integrate_linear_shapes(cyclone_world):
     """Integrator should return a time series of phi with expected length."""
-    grid_cfg = GridConfig(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     _, phi_t = integrate_linear(G, grid, geom, params, dt=0.1, steps=3, method="rk4")
     assert phi_t.shape[0] == 3
 
 
-def test_integrate_linear_progress_with_sample_stride_gt_one():
+def test_integrate_linear_progress_with_sample_stride_gt_one(cyclone_world):
     """Sampled progress reporting must compute diagnostics before emitting callbacks."""
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
 
@@ -1428,12 +1360,9 @@ def test_integrate_linear_progress_with_sample_stride_gt_one():
     assert phi_t.shape[0] == 2
 
 
-def test_integrate_linear_methods():
+def test_integrate_linear_methods(cyclone_world):
     """Explicit and IMEX paths should run without error."""
-    grid_cfg = GridConfig(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     for method in ("euler", "rk2", "imex", "semi-implicit", "sspx3"):
@@ -1443,12 +1372,9 @@ def test_integrate_linear_methods():
         assert phi_t.shape[0] == 2
 
 
-def test_integrate_linear_with_cache():
+def test_integrate_linear_with_cache(cyclone_world):
     """Integrate with a precomputed cache path."""
-    grid_cfg = GridConfig(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     cache = build_linear_cache(grid, geom, params, G.shape[0], G.shape[1])
@@ -1458,12 +1384,9 @@ def test_integrate_linear_with_cache():
     assert phi_t.shape[0] == 2
 
 
-def test_integrate_linear_donation_matches_nondonated():
+def test_integrate_linear_donation_matches_nondonated(cyclone_world):
     """Donating the initial state must not change the trajectory."""
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
     shape = (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
     G = jnp.arange(np.prod(shape), dtype=jnp.float32).reshape(shape).astype(jnp.complex64)
@@ -1488,12 +1411,9 @@ def test_integrate_linear_donation_matches_nondonated():
     np.testing.assert_allclose(phi_donated, phi, rtol=1.0e-6, atol=1.0e-6)
 
 
-def test_integrate_linear_checkpoint_runs():
+def test_integrate_linear_checkpoint_runs(cyclone_world):
     """Checkpointed integration should run on a tiny grid."""
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     _, phi_t = integrate_linear(
@@ -1502,24 +1422,18 @@ def test_integrate_linear_checkpoint_runs():
     assert phi_t.shape[0] == 2
 
 
-def test_integrate_linear_invalid_method():
+def test_integrate_linear_invalid_method(cyclone_world):
     """Invalid integrator names should raise a ValueError."""
-    grid_cfg = GridConfig(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     with pytest.raises(ValueError):
         integrate_linear(G, grid, geom, params, dt=0.1, steps=2, method="rk5")
 
 
-def test_linear_cache_matches_rhs():
+def test_linear_cache_matches_rhs(cyclone_world):
     """Cached RHS should match the direct RHS for the same inputs."""
-    grid_cfg = GridConfig(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     cache = build_linear_cache(grid, geom, params, G.shape[0], G.shape[1])
@@ -1529,28 +1443,16 @@ def test_linear_cache_matches_rhs():
     assert jnp.allclose(phi0, phi1)
 
 
-def test_linear_cached_rhs_replaces_builtin_collision_operator():
+def test_linear_cached_rhs_replaces_builtin_collision_operator(
+    cyclone_world, only_terms
+):
     """A custom collision model replaces collisions but not other terms."""
 
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.ones((1, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     cache = build_linear_cache(grid, geom, params, Nl=1, Nm=2)
-    terms = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.25,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
+    terms = only_terms(collisions=0.25)
 
     class DragCollision:
         def apply(self, context):
@@ -1566,11 +1468,8 @@ def test_linear_cached_rhs_replaces_builtin_collision_operator():
     np.testing.assert_allclose(np.asarray(dG), -0.75, atol=1.0e-6)
 
 
-def test_linear_cached_rhs_rejects_invalid_collision_shape():
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+def test_linear_cached_rhs_rejects_invalid_collision_shape(cyclone_world):
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.ones((1, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     cache = build_linear_cache(grid, geom, params, Nl=1, Nm=2)
@@ -1589,11 +1488,10 @@ def test_linear_cached_rhs_rejects_invalid_collision_shape():
         )
 
 
-def test_linear_integrator_applies_custom_collision_each_step():
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+def test_linear_integrator_applies_custom_collision_each_step(
+    cyclone_world, only_terms
+):
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G0 = jnp.ones((1, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
 
@@ -1601,18 +1499,7 @@ def test_linear_integrator_applies_custom_collision_each_step():
         def apply(self, context):
             return -3.0 * context.distribution
 
-    terms = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.25,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
+    terms = only_terms(collisions=0.25)
     G_final, _ = integrate_linear(
         G0,
         grid,
@@ -1627,12 +1514,9 @@ def test_linear_integrator_applies_custom_collision_each_step():
     np.testing.assert_allclose(np.asarray(G_final), 0.925**2, atol=1.0e-6)
 
 
-def test_linear_cache_tree_roundtrip():
+def test_linear_cache_tree_roundtrip(cyclone_world):
     """LinearCache pytree should round-trip through flatten/unflatten."""
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
     children, aux = cache.tree_flatten()
@@ -1644,23 +1528,17 @@ def test_linear_cache_tree_roundtrip():
     assert jnp.allclose(cache2.hyper_ratio, cache.hyper_ratio)
 
 
-def test_build_linear_cache_multispecies():
+def test_build_linear_cache_multispecies(cyclone_world):
     """Cache should support multiple species arrays."""
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams(rho=jnp.array([1.0, 0.5]))
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
     assert cache.Jl.shape[0] == 2
 
 
-def test_linear_rhs_multispecies_shapes():
+def test_linear_rhs_multispecies_shapes(cyclone_world):
     """Multispecies RHS should return a matching shape."""
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams(
         charge_sign=jnp.array([1.0, -1.0]),
         density=jnp.array([1.0, 1.0]),
@@ -1679,13 +1557,10 @@ def test_linear_rhs_multispecies_shapes():
     assert phi.shape == (cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
 
 
-def test_implicit_preconditioner_hermite_line_shape_and_finite():
+def test_implicit_preconditioner_hermite_line_shape_and_finite(cyclone_world):
     """Hermite-line preconditioner should run and preserve shape/dtype."""
 
-    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=16, Lx=62.8, Ly=62.8)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=4, Nz=16, Lx=62.8, Ly=62.8)
     params = LinearParams(
         fprim=cfg.model.fprim,
         tprim=cfg.model.tprim_i,
@@ -1715,13 +1590,14 @@ def test_implicit_preconditioner_hermite_line_shape_and_finite():
     assert jnp.all(jnp.isfinite(jnp.imag(y)))
 
 
-def test_implicit_preconditioner_linked_hermite_line_coarse_shape_and_finite():
+def test_implicit_preconditioner_linked_hermite_line_coarse_shape_and_finite(
+    cyclone_world, only_terms
+):
     """Linked Hermite-line coarse preconditioner should preserve finite vectors."""
 
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.28, Ly=6.28, boundary="linked")
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(
+        Nx=4, Ny=4, Nz=8, Lx=6.28, Ly=6.28, boundary="linked"
+    )
     params = LinearParams(
         omega_d_scale=0.1,
         omega_star_scale=0.1,
@@ -1752,11 +1628,16 @@ def test_implicit_preconditioner_linked_hermite_line_coarse_shape_and_finite():
     assert jnp.all(jnp.isfinite(jnp.real(z)))
 
 
-def _streaming_shift_invert_setup():
-    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=16, Lx=6.28, Ly=6.28)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+@pytest.fixture
+def streaming_shift_invert_setup(cyclone_world, only_terms):
+    """The streaming-only eigenproblem both shift-invert cases start from.
+
+    Returns ``(v0, cache, params, terms)`` for a 2x4x16 Cyclone flux tube with
+    every drive, collision and damping term switched off, ``Nl, Nm = 4, 8``, and
+    a ones vector in the solver's working complex dtype.
+    """
+
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=4, Nz=16, Lx=6.28, Ly=6.28)
     params = LinearParams(
         omega_d_scale=0.0,
         omega_star_scale=0.0,
@@ -1770,25 +1651,16 @@ def _streaming_shift_invert_setup():
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
     base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
     v0 = jnp.ones((Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size), dtype=base_dtype)
-    terms = LinearTerms(
-        streaming=1.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
+    terms = only_terms(streaming=1.0)
     return v0, cache, params, terms
 
 
-def test_shift_invert_nearest_pair_passes_physical_outer_residual():
+def test_shift_invert_nearest_pair_passes_physical_outer_residual(
+    streaming_shift_invert_setup,
+):
     """Nearest-shift selection should admit a converged streaming Ritz pair."""
 
-    v0, cache, params, terms = _streaming_shift_invert_setup()
+    v0, cache, params, terms = streaming_shift_invert_setup
     eigenvalue, eigenvector = dominant_eigenpair(
         v0,
         cache,
@@ -1816,10 +1688,12 @@ def test_shift_invert_nearest_pair_passes_physical_outer_residual():
     assert jnp.all(jnp.isfinite(eigenvector))
 
 
-def test_shift_invert_preconditioner_rejects_unconverged_outer_pair():
+def test_shift_invert_preconditioner_rejects_unconverged_outer_pair(
+    streaming_shift_invert_setup,
+):
     """A completed inner solve must not promote a large-residual Ritz pair."""
 
-    v0, cache, params, terms = _streaming_shift_invert_setup()
+    v0, cache, params, terms = streaming_shift_invert_setup
     with pytest.raises(RuntimeError, match="failed the outer residual gate"):
         dominant_eigenpair(
             v0,
@@ -1839,37 +1713,28 @@ def test_shift_invert_preconditioner_rejects_unconverged_outer_pair():
         )
 
 
-def test_linear_cache_rho_star_scales_ky():
+def test_linear_cache_rho_star_scales_ky(cyclone_world):
     """rho_star should scale cached ky for normalization control."""
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams(rho_star=2.0)
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
     assert jnp.allclose(cache.ky, grid.ky * 2.0)
 
 
-def test_linear_rhs_cached_invalid_shape():
+def test_linear_rhs_cached_invalid_shape(cyclone_world):
     """Cached RHS should reject invalid shapes."""
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
     with pytest.raises(ValueError):
         linear_rhs_cached(jnp.zeros((2, 3, 4)), cache, params)
 
 
-def test_jit_path_handles_tracers():
+def test_jit_path_handles_tracers(cyclone_world):
     """JIT tracing should exercise the tracer-safe validation path."""
     import jax
 
-    grid_cfg = GridConfig(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
 
@@ -1881,12 +1746,9 @@ def test_jit_path_handles_tracers():
     assert out.shape == G.shape
 
 
-def test_integrate_linear_implicit_runs():
+def test_integrate_linear_implicit_runs(cyclone_world):
     """Implicit path should run on a tiny grid."""
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams(nu=0.1)
     G = jnp.zeros((1, 1, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     _, phi_t = integrate_linear(
@@ -1903,27 +1765,13 @@ def test_integrate_linear_implicit_runs():
     assert phi_t.shape[0] == 1
 
 
-def test_implicit_standard_and_diagnostic_routes_match():
+def test_implicit_standard_and_diagnostic_routes_match(cyclone_world, only_terms):
     """Implicit diagnostics must use the same prepared solve step."""
 
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams(nu=0.1)
     state = jnp.zeros((1, 1, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
-    terms = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
+    terms = only_terms()
     common = dict(
         dt=0.1,
         steps=2,
@@ -1979,12 +1827,9 @@ def test_energy_operator_and_drive_coeffs():
     assert jnp.allclose(coeffs[1:, :], 0.0)
 
 
-def test_mirror_curvature_terms_activate_with_drift_scale():
+def test_mirror_curvature_terms_activate_with_drift_scale(cyclone_world, only_terms):
     """Drift/mirror terms should activate when omega_d_scale is nonzero."""
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=8, Lx=6.0, Ly=6.0)
     G = jnp.zeros((1, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     G = G.at[0, 1, 1, 0, :].set(1.0 + 0.0j)
 
@@ -1996,17 +1841,7 @@ def test_mirror_curvature_terms_activate_with_drift_scale():
         damp_ends_widthfrac=0.0,
     )
     cache_off = build_linear_cache(grid, geom, params_off, G.shape[0], G.shape[1])
-    terms_off = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-    )
+    terms_off = only_terms(bpar=1.0)
     dG_off, _phi_off = linear_rhs_cached(G, cache_off, params_off, terms=terms_off)
     assert jnp.allclose(dG_off, 0.0)
 
@@ -2018,27 +1853,14 @@ def test_mirror_curvature_terms_activate_with_drift_scale():
         damp_ends_widthfrac=0.0,
     )
     cache_on = build_linear_cache(grid, geom, params_on, G.shape[0], G.shape[1])
-    terms_on = LinearTerms(
-        streaming=0.0,
-        mirror=1.0,
-        curvature=1.0,
-        gradb=1.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-    )
+    terms_on = only_terms(mirror=1.0, curvature=1.0, gradb=1.0, bpar=1.0)
     dG_on, _phi_on = linear_rhs_cached(G, cache_on, params_on, terms=terms_on)
     assert jnp.max(jnp.abs(dG_on)) > 0.0
 
 
-def test_diamagnetic_drive_populates_second_hermite_moment():
+def test_diamagnetic_drive_populates_second_hermite_moment(cyclone_world, only_terms):
     """Diamagnetic drive should populate the m=2 component when enabled."""
-    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
     G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     ky_index = 1
     G = G.at[0, 0, ky_index, 0, :].set(1.0 + 0.0j)
@@ -2051,17 +1873,7 @@ def test_diamagnetic_drive_populates_second_hermite_moment():
         damp_ends_widthfrac=0.0,
     )
     cache_off = build_linear_cache(grid, geom, params_off, G.shape[0], G.shape[1])
-    terms_off = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-    )
+    terms_off = only_terms(bpar=1.0)
     dG_off, _phi_off = linear_rhs_cached(G, cache_off, params_off, terms=terms_off)
     assert jnp.allclose(dG_off[:, 2, ...], 0.0)
 
@@ -2073,28 +1885,15 @@ def test_diamagnetic_drive_populates_second_hermite_moment():
         damp_ends_widthfrac=0.0,
     )
     cache_on = build_linear_cache(grid, geom, params_on, G.shape[0], G.shape[1])
-    terms_on = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=1.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-    )
+    terms_on = only_terms(diamagnetic=1.0, bpar=1.0)
     dG_on, _phi_on = linear_rhs_cached(G, cache_on, params_on, terms=terms_on)
     assert jnp.max(jnp.abs(dG_on[:, 2, ...])) > 0.0
     assert jnp.allclose(dG_on[:, 1, ...], 0.0)
 
 
-def test_diamagnetic_drive_vanishes_for_zonal_mode():
+def test_diamagnetic_drive_vanishes_for_zonal_mode(cyclone_world, only_terms):
     """Diamagnetic drive should vanish for the ky=0 mode."""
-    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=2, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
     G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     G = G.at[0, 0, 0, 0, :].set(1.0 + 0.0j)
     params = LinearParams(
@@ -2105,27 +1904,14 @@ def test_diamagnetic_drive_vanishes_for_zonal_mode():
         damp_ends_widthfrac=0.0,
     )
     cache = build_linear_cache(grid, geom, params, G.shape[0], G.shape[1])
-    terms = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=1.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-    )
+    terms = only_terms(diamagnetic=1.0, bpar=1.0)
     dG, _phi = linear_rhs_cached(G, cache, params, terms=terms)
     assert jnp.allclose(dG, 0.0)
 
 
-def test_rho_star_scales_cache_ky():
+def test_rho_star_scales_cache_ky(cyclone_world):
     """rho_star should scale the cached ky values."""
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams(rho_star=2.0)
     cache = build_linear_cache(grid, geom, params, Nl=1, Nm=1)
     assert jnp.allclose(cache.ky, 2.0 * grid.ky)
@@ -2140,12 +1926,9 @@ def test_shift_axis_noop():
     assert jnp.allclose(out, arr)
 
 
-def test_apar_streaming_coupling_changes_rhs():
+def test_apar_streaming_coupling_changes_rhs(cyclone_world):
     """Finite beta should modify streaming via Apar coupling."""
-    grid_cfg = GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
+    cfg, grid, geom = cyclone_world(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
 
     G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     z = grid.z

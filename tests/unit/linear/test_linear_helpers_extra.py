@@ -345,32 +345,10 @@ def test_linear_params_and_terms_roundtrip() -> None:
     )
 
 
-def test_linear_term_classifiers_and_parallel_device_validation() -> None:
-    streaming_only = LinearTerms(
-        streaming=1.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        hyperdiffusion=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
-    electrostatic_slices = LinearTerms(
-        streaming=1.0,
-        mirror=1.0,
-        curvature=1.0,
-        gradb=1.0,
-        diamagnetic=1.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        hyperdiffusion=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
+def test_linear_term_classifiers_and_parallel_device_validation(only_terms) -> None:
+    streaming_only = only_terms(streaming=1.0)
+    electrostatic_slices = only_terms(
+        streaming=1.0, mirror=1.0, curvature=1.0, gradb=1.0, diamagnetic=1.0
     )
 
     assert _is_streaming_only_terms(streaming_only) is True
@@ -477,19 +455,17 @@ def test_linked_fft_maps_validate_ky_mode_and_empty_maps() -> None:
     assert np.allclose(profile, 0.0)
 
 
-def test_build_linear_cache_linked_non_twist_contract() -> None:
-    grid = build_spectral_grid(
-        GridConfig(
-            Nx=4,
-            Ny=4,
-            Nz=8,
-            Lx=2.0 * np.pi,
-            Ly=2.0 * np.pi,
-            y0=1.0,
-            boundary="linked",
-            jtwist=1,
-            non_twist=True,
-        )
+def test_build_linear_cache_linked_non_twist_contract(spectral_grid) -> None:
+    grid = spectral_grid(
+        Nx=4,
+        Ny=4,
+        Nz=8,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        y0=1.0,
+        boundary="linked",
+        jtwist=1,
+        non_twist=True,
     )
     geom = SAlphaGeometry(q=1.4, s_hat=1.0, epsilon=0.1)
     params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_widthfrac=0.25)
@@ -507,17 +483,15 @@ def test_build_linear_cache_linked_non_twist_contract() -> None:
         assert cache.linked_gather_map.shape == (grid.ky.size * grid.kx.size,)
 
 
-def test_build_linear_cache_y0_default_and_zero_twist_branches() -> None:
-    grid = build_spectral_grid(
-        GridConfig(
-            Nx=4,
-            Ny=4,
-            Nz=8,
-            Lx=2.0 * np.pi,
-            Ly=2.0 * np.pi,
-            boundary="linked",
-            jtwist=None,
-        )
+def test_build_linear_cache_y0_default_and_zero_twist_branches(spectral_grid) -> None:
+    grid = spectral_grid(
+        Nx=4,
+        Ny=4,
+        Nz=8,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        boundary="linked",
+        jtwist=None,
     )
     params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_widthfrac=0.0)
     geom = SAlphaGeometry(q=1.4, s_hat=0.0, epsilon=0.1)
@@ -559,11 +533,11 @@ def _sampled_geometry_with_shear(
     )
 
 
-def test_build_linear_cache_allows_traced_shear_for_periodic_sampled_geometry() -> None:
-    grid = build_spectral_grid(
-        GridConfig(
-            Nx=2, Ny=4, Nz=4, Lx=2.0 * np.pi, Ly=2.0 * np.pi, boundary="periodic"
-        )
+def test_build_linear_cache_allows_traced_shear_for_periodic_sampled_geometry(
+    spectral_grid,
+) -> None:
+    grid = spectral_grid(
+        Nx=2, Ny=4, Nz=4, Lx=2.0 * np.pi, Ly=2.0 * np.pi, boundary="periodic"
     )
     theta = jnp.asarray(grid.z, dtype=jnp.float32)
     params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0)
@@ -592,11 +566,11 @@ def test_laguerre_bessel_factors_have_analytic_zero_limit_and_tangent() -> None:
     )
 
 
-def test_laguerre_bessel_cache_has_finite_geometry_tangent_at_zero_mode() -> None:
-    grid = build_spectral_grid(
-        GridConfig(
-            Nx=2, Ny=4, Nz=4, Lx=2.0 * np.pi, Ly=2.0 * np.pi, boundary="periodic"
-        )
+def test_laguerre_bessel_cache_has_finite_geometry_tangent_at_zero_mode(
+    spectral_grid,
+) -> None:
+    grid = spectral_grid(
+        Nx=2, Ny=4, Nz=4, Lx=2.0 * np.pi, Ly=2.0 * np.pi, boundary="periodic"
     )
     theta = jnp.asarray(grid.z, dtype=jnp.float64)
     params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0)
@@ -612,17 +586,17 @@ def test_laguerre_bessel_cache_has_finite_geometry_tangent_at_zero_mode() -> Non
     assert np.isfinite(float(tangent))
 
 
-def test_build_linear_cache_periodic_non_twist_uses_geometry_shear() -> None:
-    grid = build_spectral_grid(
-        GridConfig(
-            Nx=2,
-            Ny=4,
-            Nz=8,
-            Lx=2.0 * np.pi,
-            Ly=2.0 * np.pi,
-            boundary="periodic",
-            non_twist=True,
-        )
+def test_build_linear_cache_periodic_non_twist_uses_geometry_shear(
+    spectral_grid,
+) -> None:
+    grid = spectral_grid(
+        Nx=2,
+        Ny=4,
+        Nz=8,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        boundary="periodic",
+        non_twist=True,
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
     params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0)
@@ -635,16 +609,14 @@ def test_build_linear_cache_periodic_non_twist_uses_geometry_shear() -> None:
     assert np.all(np.isfinite(np.asarray(cache.gb_d)))
 
 
-def test_sheared_kx_cache_zero_shear_identity_and_tangent() -> None:
-    grid = build_spectral_grid(
-        GridConfig(
-            Nx=4,
-            Ny=4,
-            Nz=8,
-            Lx=2.0 * np.pi,
-            Ly=2.0 * np.pi,
-            boundary="periodic",
-        )
+def test_sheared_kx_cache_zero_shear_identity_and_tangent(spectral_grid) -> None:
+    grid = spectral_grid(
+        Nx=4,
+        Ny=4,
+        Nz=8,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        boundary="periodic",
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
     params = LinearParams(rho_star=1.0, nu_hyper=0.0, nu_hyper_m=0.0)
@@ -753,17 +725,17 @@ def test_hyperdiffusion_accepts_sheared_two_dimensional_kx() -> None:
     np.testing.assert_allclose(two_dimensional, one_dimensional)
 
 
-def test_build_linear_cache_rejects_traced_shear_for_twist_shift_geometry() -> None:
-    grid = build_spectral_grid(
-        GridConfig(
-            Nx=2,
-            Ny=4,
-            Nz=4,
-            Lx=2.0 * np.pi,
-            Ly=2.0 * np.pi,
-            boundary="linked",
-            jtwist=1,
-        )
+def test_build_linear_cache_rejects_traced_shear_for_twist_shift_geometry(
+    spectral_grid,
+) -> None:
+    grid = spectral_grid(
+        Nx=2,
+        Ny=4,
+        Nz=4,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        boundary="linked",
+        jtwist=1,
     )
     theta = jnp.asarray(grid.z, dtype=jnp.float32)
     params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0)
@@ -1287,37 +1259,15 @@ def test_linear_rhs_parallel_cached_serial_alias_and_error_branches(
 
 
 def test_linear_rhs_parallel_cached_routes_gated_velocity_backends(
-    monkeypatch,
+    monkeypatch, only_terms
 ) -> None:
     G0 = jnp.zeros((2, 2, 1, 1, 2), dtype=jnp.complex64)
     cache = params = object()
     calls: list[tuple[str, int | None]] = []
 
-    streaming_only = LinearTerms(
-        streaming=1.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        hyperdiffusion=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
-    electrostatic_slices = LinearTerms(
-        streaming=1.0,
-        mirror=1.0,
-        curvature=1.0,
-        gradb=1.0,
-        diamagnetic=1.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        hyperdiffusion=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
+    streaming_only = only_terms(streaming=1.0)
+    electrostatic_slices = only_terms(
+        streaming=1.0, mirror=1.0, curvature=1.0, gradb=1.0, diamagnetic=1.0
     )
 
     def _out(name):
@@ -1597,24 +1547,13 @@ def test_integrate_linear_implicit_cached_sampled_path(monkeypatch) -> None:
     assert phi_t.shape[0] == 2
 
 
-def test_integrate_linear_diagnostics_validates_and_records_energy(monkeypatch) -> None:
+def test_integrate_linear_diagnostics_validates_and_records_energy(
+    diagnostics_cache, patch_diagnostics_kernels
+) -> None:
     G0 = jnp.zeros((1, 2, 2, 1, 1, 2), dtype=jnp.complex64)
     grid = geom = params = object()
-    cache = SimpleNamespace(
-        lb_lam=jnp.zeros((1, 2, 2, 1, 1, 2), dtype=jnp.float32),
-        Jl=jnp.ones((1, 2, 1, 1, 2), dtype=jnp.float32),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.hypercollision_damping",
-        lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.linear_rhs_cached",
-        lambda G, cache, params, **kwargs: (
-            jnp.ones_like(G),
-            jnp.ones((1, 1, 2), dtype=jnp.complex64),
-        ),
-    )
+    cache = diagnostics_cache((1, 2, 2, 1, 1, 2))
+    patch_diagnostics_kernels()
 
     with pytest.raises(ValueError):
         integrate_linear_diagnostics(
@@ -1646,24 +1585,11 @@ def test_integrate_linear_diagnostics_validates_and_records_energy(monkeypatch) 
 
 @pytest.mark.parametrize("method", ["euler", "rk2", "sspx3", "rk4"])
 def test_integrate_linear_diagnostics_explicit_method_branches(
-    monkeypatch, method: str
+    diagnostics_cache, patch_diagnostics_kernels, method: str
 ) -> None:
     G0 = jnp.zeros((2, 2, 1, 1, 2), dtype=jnp.complex64)
-    cache = SimpleNamespace(
-        lb_lam=jnp.zeros((2, 2, 1, 1, 2), dtype=jnp.float32),
-        Jl=jnp.ones((2, 1, 1, 2), dtype=jnp.float32),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.hypercollision_damping",
-        lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.linear_rhs_cached",
-        lambda G, cache, params, **kwargs: (
-            jnp.ones_like(G),
-            jnp.ones((1, 1, 2), dtype=jnp.complex64),
-        ),
-    )
+    cache = diagnostics_cache((2, 2, 1, 1, 2))
+    patch_diagnostics_kernels()
 
     G_out, phi_t, density_t = integrate_linear_diagnostics(
         G0,
@@ -1684,24 +1610,11 @@ def test_integrate_linear_diagnostics_explicit_method_branches(
 
 
 def test_integrate_linear_diagnostics_multispecies_density_and_invalid_method(
-    monkeypatch,
+    diagnostics_cache, patch_diagnostics_kernels
 ) -> None:
     G0 = jnp.zeros((2, 2, 2, 1, 1, 2), dtype=jnp.complex64)
-    cache = SimpleNamespace(
-        lb_lam=jnp.zeros((2, 2, 2, 1, 1, 2), dtype=jnp.float32),
-        Jl=jnp.ones((2, 2, 1, 1, 2), dtype=jnp.float32),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.hypercollision_damping",
-        lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.linear_rhs_cached",
-        lambda G, cache, params, **kwargs: (
-            jnp.ones_like(G),
-            jnp.ones((1, 1, 2), dtype=jnp.complex64),
-        ),
-    )
+    cache = diagnostics_cache((2, 2, 2, 1, 1, 2))
+    patch_diagnostics_kernels()
 
     G_out, phi_t, density_t, hl_t = integrate_linear_diagnostics(
         G0,
@@ -1734,29 +1647,18 @@ def test_integrate_linear_diagnostics_multispecies_density_and_invalid_method(
         )
 
 
-def test_integrate_linear_diagnostics_builds_cache_and_uses_imex2(monkeypatch) -> None:
+def test_integrate_linear_diagnostics_builds_cache_and_uses_imex2(
+    monkeypatch, diagnostics_cache, patch_diagnostics_kernels
+) -> None:
     G0 = jnp.zeros((2, 2, 1, 1, 2), dtype=jnp.complex64)
-    cache = SimpleNamespace(
-        lb_lam=jnp.zeros((1, 2, 2, 1, 1, 2), dtype=jnp.float32),
-        Jl=jnp.ones((1, 2, 1, 1, 2), dtype=jnp.float32),
-    )
+    cache = diagnostics_cache((1, 2, 2, 1, 1, 2))
     build_calls: list[tuple[int, int]] = []
 
     monkeypatch.setattr(
         "gkx.solvers.linear.integrator_diagnostics.build_linear_cache",
         lambda grid, geom, params, Nl, Nm: build_calls.append((Nl, Nm)) or cache,
     )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.hypercollision_damping",
-        lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.linear_rhs_cached",
-        lambda G, cache, params, **kwargs: (
-            jnp.ones_like(G),
-            jnp.ones((1, 1, 2), dtype=jnp.complex64),
-        ),
-    )
+    patch_diagnostics_kernels()
 
     G_out, phi_t, density_t = integrate_linear_diagnostics(
         G0,
@@ -1778,23 +1680,12 @@ def test_integrate_linear_diagnostics_builds_cache_and_uses_imex2(monkeypatch) -
     assert density_t.shape[0] == 2
 
 
-def test_integrate_linear_diagnostics_imex_sampled_multispecies(monkeypatch) -> None:
+def test_integrate_linear_diagnostics_imex_sampled_multispecies(
+    diagnostics_cache, patch_diagnostics_kernels
+) -> None:
     G0 = jnp.zeros((2, 2, 2, 1, 1, 2), dtype=jnp.complex64)
-    cache = SimpleNamespace(
-        lb_lam=jnp.zeros((2, 2, 2, 1, 1, 2), dtype=jnp.float32),
-        Jl=jnp.ones((2, 2, 1, 1, 2), dtype=jnp.float32),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.hypercollision_damping",
-        lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.linear_rhs_cached",
-        lambda G, cache, params, **kwargs: (
-            jnp.zeros_like(G),
-            jnp.ones((1, 1, 2), dtype=jnp.complex64),
-        ),
-    )
+    cache = diagnostics_cache((2, 2, 2, 1, 1, 2))
+    patch_diagnostics_kernels(rhs=jnp.zeros_like)
 
     G_out, phi_t, density_t = integrate_linear_diagnostics(
         G0,
@@ -1816,27 +1707,11 @@ def test_integrate_linear_diagnostics_imex_sampled_multispecies(monkeypatch) -> 
 
 
 def test_integrate_linear_diagnostics_species_none_and_5d_density_paths(
-    monkeypatch,
+    diagnostics_cache, patch_diagnostics_kernels
 ) -> None:
-    cache6 = SimpleNamespace(
-        lb_lam=jnp.zeros((2, 2, 2, 1, 1, 2), dtype=jnp.float32),
-        Jl=jnp.ones((2, 2, 1, 1, 2), dtype=jnp.float32),
-    )
-    cache5 = SimpleNamespace(
-        lb_lam=jnp.zeros((2, 2, 1, 1, 2), dtype=jnp.float32),
-        Jl=jnp.ones((2, 1, 1, 2), dtype=jnp.float32),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.hypercollision_damping",
-        lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
-    )
-    monkeypatch.setattr(
-        "gkx.solvers.linear.integrator_diagnostics.linear_rhs_cached",
-        lambda G, cache, params, **kwargs: (
-            jnp.ones_like(G),
-            jnp.ones((1, 1, 2), dtype=jnp.complex64),
-        ),
-    )
+    cache6 = diagnostics_cache((2, 2, 2, 1, 1, 2))
+    cache5 = diagnostics_cache((2, 2, 1, 1, 2))
+    patch_diagnostics_kernels()
 
     G6 = jnp.zeros((2, 2, 2, 1, 1, 2), dtype=jnp.complex64)
     G6_out, phi6_t, density6_t = integrate_linear_diagnostics(

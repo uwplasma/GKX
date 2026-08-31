@@ -3849,6 +3849,8 @@ Outcome:
 - next task: PR C1-2, solvers test consolidation.
 ## 2026-08-30 — PR C1-2 consolidate the solvers unit domain (`tests/c1-2-solvers-consolidation`)
 
+## 2026-08-30 — PR C2-1 shared test fixture layer, measured on one domain (`tests/c2-1-fixture-layer-pilot`)
+
 Baseline:
 - GKX SHA: `9905e349` (`solvers: remove Diffrax from the base product (#169)`)
 - companion SHAs: none
@@ -3893,6 +3895,35 @@ Evidence:
 - gates: `ruff check .` clean; architecture manifest exits 0; validation
   coverage exits 0; `tests/release` 127 passed; parallel-artifacts and
   benchmark-contracts 72 passed.
+- `tests/unit/linear` 5 files / 4,485 lines; `tests` 85,393 lines over 100 files
+- relevant existing gate: the architecture manifest ratchet on test lines
+
+Scope:
+- intended change: answer a question before acting on it. The contract asks for
+  at most 35,000 test lines against 85,393 measured. This PR establishes a
+  shared fixture layer on one domain and measures the real rate, so the decision
+  to sweep or to rebaseline rests on evidence.
+- explicitly out of scope: deleting any test, and any fan-out beyond this domain.
+
+Changes:
+- new `tests/unit/linear/conftest.py`, 182 lines, six factory fixtures.
+  Domain-local deliberately: nothing here is verified suite-wide, and the
+  measurement below argues against promoting it blind.
+- 51 of 134 tests migrated. `test_linear.py` 2,230 -> 2,013 and
+  `test_linear_helpers_extra.py` 1,928 -> 1,803.
+
+Evidence:
+- identity-preserving: 145 collected node IDs before and after, empty diff, and
+  145 passed both ways with the full pytest output identical modulo timing.
+  Verified independently.
+- `only_terms` writes every switch explicitly rather than inheriting defaults,
+  because `LinearTerms` defaults are not uniform (`bpar=1.0`,
+  `hyperdiffusion=0.0`). All 20 candidate literals were machine-checked for
+  object equality against the factory call before substitution.
+- the measurement, which is the actual deliverable: 6.6 lines saved per migrated
+  test gross, 3.1 net of the fixture layer; the domain fell 4,485 -> 4,325, or
+  3.6 per cent.
+- gates: `ruff check .` clean. `ruff format` deliberately not run.
 - physics/mathematics/numerics gates: none re-run and none claimed.
 - CPU/NVIDIA measurements: none taken.
 
@@ -3906,3 +3937,19 @@ Outcome:
   so editing it would falsify a record. Left alone deliberately.
 - next task: continue Phase C with `tests/integration/runtime` (11 files) and
   `tests/validation/physics_gates` (10 files).
+- accepted, and the fan-out is NOT recommended as a line-count strategy.
+- the reason is measured rather than extrapolated: the roughly 1,500 repeated
+  construction calls in the tree are overwhelmingly already single physical
+  lines, so a fixture call replaces them one-for-one and saves nothing. Only
+  multi-statement blocks and multi-line literals yield, and about 33 remain
+  tree-wide, worth roughly 386 lines. Full fan-out is worth 1,000-3,000 lines.
+- combined with the 362 lines of duplication measured earlier, every
+  non-destructive lever supplies 2 to 6 per cent of the 50,393-line gap.
+  Reaching 35,000 means deleting about 1,700 of 2,385 tests. That is a decision
+  about which coverage to abandon and it belongs to the maintainer.
+- three of five files in the domain, 327 lines, have no repeated setup at all
+  and were untouched. Roughly 950 lines of collision-operator tests plant a
+  different state, Bessel table, or eigenvalue matrix per test and do not
+  recur. `LinearParams` varies per test in ways that are the point of the test.
+- next task: land the consolidation queue, then take the 35,000 question back to
+  the maintainer rather than deleting tests to satisfy a number.
