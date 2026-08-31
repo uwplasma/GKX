@@ -156,7 +156,12 @@ recursive = true
 # 103 -> 102: tests/unit/solvers/test_diffrax_integrators_core.py is deleted
 # with the integrator it covered.
 # Target lowered 36 -> 30: the approved GKX 3 contract in the handoff plan.
-baseline = 100
+# 100 -> 94: C1-1 consolidates the nonlinear unit domain from 9 files to 3.
+# (The window-gradient-matrix file argued for above is one of the absorbed
+# three: its tests now live in test_nonlinear_helpers_extra.py, unchanged.)
+# The merge is ID-preserving, not a cull: pytest collects the same 167 node
+# IDs before and after, verified by diffing the two collect-only ID sets.
+baseline = 94
 target = 30
 
 [[topology_policy.counts]]

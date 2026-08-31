@@ -680,8 +680,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_rhs.py",
-  "tests/unit/nonlinear/test_nonlinear_diagnostic_state.py",
   "tests/unit/solvers/test_nonlinear_explicit_step.py",
   "tests/unit/solvers/test_nonlinear_imex.py",
   "tests/unit/nonlinear/test_nonlinear_exb.py",
@@ -730,7 +728,7 @@ numerics_contracts = [
   "zero-nonlinearity IMEX terms bypass field solves and return an exact zero state-shaped array",
 ]
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_rhs.py",
+  "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = [
@@ -764,7 +762,7 @@ numerics_contracts = [
   "closure construction binds static diagnostic metadata once while leaving state arrays JAX-transformable",
 ]
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_diagnostic_state.py",
+  "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = [

@@ -3713,3 +3713,62 @@ Outcome:
   engineering record, its plot subcommand renamed `legacy-two-device`, and the
   docs now say it is not reproducible from current source.
 - next task: Phase C test consolidation (PR C1-1 onward)
+
+## 2026-08-30 — PR C1-1 consolidate the nonlinear unit domain (`tests/c1-1-nonlinear-consolidation`)
+
+Baseline:
+- GKX SHA: `9905e349` (`solvers: remove Diffrax from the base product (#169)`)
+- companion SHAs: none; no companion repository is touched
+- source/test/tool files and lines: `src/gkx` 193 files / 88,112 lines; `tests`
+  100 files / 85,393 lines; `tools` 94 files / 75,322 lines
+- relevant existing gate: the package architecture manifest's no-regression
+  ratchet on `test_python_files` (baseline 100, target 30)
+
+Scope:
+- intended change: open Phase C by consolidating `tests/unit/nonlinear` from
+  nine files to three, grouped by what they exercise — the core solver, the
+  ExB/secondary path, and the helper surface. The GKX 3 contract asks for at
+  most 30 test files; this domain held nine of the hundred.
+- explicitly out of scope: deleting or rewriting any test. This PR moves test
+  functions between files and nothing else.
+
+Changes:
+- `test_nonlinear.py` absorbs `test_nonlinear_rhs.py` and
+  `test_nonlinear_diagnostic_state.py`
+- `test_nonlinear_exb.py` absorbs `test_secondary.py`
+- `test_nonlinear_helpers_extra.py` absorbs `test_adaptive_chunk_memory.py`,
+  `test_nonlinear_replicate_diagnostics.py`, and
+  `test_nonlinear_window_gradient_matrix.py`
+- manifest `test_python_files` baseline ratcheted 100 -> 94
+
+Evidence:
+- the merge is identity-preserving, and this is the load-bearing check: the
+  set of pytest node IDs collected from `tests/unit/nonlinear` is byte-for-byte
+  identical before and after (167 IDs, zero added, zero lost), verified by
+  diffing the two `--collect-only` ID listings rather than by comparing totals
+- focused tests: `tests/unit/nonlinear` 167 passed, matching the 167 passed
+  recorded on `9905e349` before the merge
+- a first attempt at this merge silently dropped 24 tests. The AST helper
+  emitted each function with `ast.get_source_segment`, which starts at `def`
+  and therefore discarded every decorator, collapsing each
+  `@pytest.mark.parametrize` family to a single unparametrized test. The
+  totals still looked plausible (143 collected, all passing), so only the ID
+  diff exposed it. The helper now slices from the first decorator line, and
+  the ID diff is the gate that keeps this class of loss visible.
+- physics/mathematics/numerics gates: none re-run and none claimed. No test
+  body, tolerance, or fixture changed; this PR only moves functions between
+  files.
+- gates: `ruff check .` clean; `ruff format` clean;
+  `check_package_architecture_manifest.py` exits 0 with `test_python_files`
+  measured at 94
+- CPU/NVIDIA measurements: none taken and none needed.
+
+Outcome:
+- accepted
+- caveat, stated plainly: file count fell 100 -> 94 but line count fell only
+  85,393 -> 85,378. Merging files removes duplicated module headers and
+  imports, nothing more. The contract's 35,000-line test target cannot be
+  reached by consolidation and needs a separate deduplication pass over
+  overlapping test bodies; consolidation only buys the file-count target.
+- next task: continue Phase C domain by domain (geometry, solvers, runtime),
+  carrying the collect-only ID diff as the standing acceptance check.

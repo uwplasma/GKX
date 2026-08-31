@@ -1,30 +1,46 @@
-"""Nonlinear integrator tests."""
+"""Core nonlinear solver, RHS, and diagnostic-state tests."""
+
+from __future__ import annotations
 
 from dataclasses import replace
-
-import numpy as np
-import jax
-import jax.numpy as jnp
-import pytest
-
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.diagnostics.transport import heat_flux_total
-from gkx.diagnostics.moments import fieldline_quadrature_weights
-from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
-from gkx.solvers.time.explicit import _linear_frequency_bound
 from gkx.core.grid import build_spectral_grid
+from gkx.diagnostics.moments import fieldline_quadrature_weights
+from gkx.diagnostics.transport import heat_flux_total
+from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams
+from gkx.operators.nonlinear.diagnostic_state import (
+    NonlinearDiagnosticKernels,
+    compute_nonlinear_diagnostic_tuple,
+    make_nonlinear_diagnostic_tuple_fn,
+)
 from gkx.operators.nonlinear.policies import build_nonlinear_imex_operator
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
-from gkx.solvers.nonlinear.diagnostic_integration import integrate_nonlinear_explicit_diagnostics, integrate_nonlinear_explicit_diagnostics_state, prepare_nonlinear_explicit_diagnostics
+from gkx.operators.nonlinear.rhs import (
+    linear_rhs_jit_for_terms_impl,
+    nonlinear_em_term_cached_impl,
+    nonlinear_rhs_cached_impl,
+)
+from gkx.solvers.nonlinear.diagnostic_integration import (
+    integrate_nonlinear_explicit_diagnostics,
+    integrate_nonlinear_explicit_diagnostics_state,
+    prepare_nonlinear_explicit_diagnostics,
+)
 from gkx.solvers.nonlinear.state_integration import (
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
     nonlinear_heat_flux_window,
 )
+from gkx.solvers.time.explicit import _linear_frequency_bound
+from gkx.terms.config import FieldState
 from gkx.terms.config import TermConfig
+from types import SimpleNamespace
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
 
 
 def test_integrate_nonlinear_checkpoint_runs():
@@ -571,14 +587,16 @@ def test_block_checkpointed_nonlinear_heat_flux_gradient_matches_finite_differen
     value, gradient = jax.value_and_grad(mean_heat_flux)(point)
     plain = jax.value_and_grad(lambda value: mean_heat_flux(value, False))(point)
     step = jnp.asarray(1.0e-2)
-    centered_fd = (
-        mean_heat_flux(point + step) - mean_heat_flux(point - step)
-    ) / (2 * step)
+    centered_fd = (mean_heat_flux(point + step) - mean_heat_flux(point - step)) / (
+        2 * step
+    )
 
     assert bool(jnp.isfinite(value))
     assert bool(jnp.isfinite(gradient))
     assert float(gradient) != 0.0
-    np.testing.assert_allclose(np.asarray((value, gradient)), np.asarray(plain), rtol=1e-6)
+    np.testing.assert_allclose(
+        np.asarray((value, gradient)), np.asarray(plain), rtol=1e-6
+    )
     np.testing.assert_allclose(
         np.asarray(gradient), np.asarray(centered_fd), rtol=5.0e-2, atol=1.0e-16
     )
@@ -1173,3 +1191,444 @@ def test_adaptive_time_step_run_compiles_and_matches_the_eager_trajectory() -> N
     # rounding unit rather than an unattainable float64-scale tolerance.
     tolerance = max(1.0e-12, float(np.finfo(np.asarray(eager).dtype).eps))
     np.testing.assert_allclose(np.asarray(compiled), np.asarray(eager), rtol=tolerance)
+
+
+# ---- from test_nonlinear_rhs.py ----
+
+
+def _minimal_cache() -> SimpleNamespace:
+    return SimpleNamespace(
+        Jl=jnp.ones((1, 1, 1, 1, 1), dtype=jnp.float32),
+        JlB=jnp.ones((1, 1, 1, 1, 1), dtype=jnp.float32),
+        sqrt_m=jnp.ones((1, 1, 1, 1, 1, 1), dtype=jnp.float32),
+        sqrt_m_p1=jnp.ones((1, 1, 1, 1, 1, 1), dtype=jnp.float32),
+        kx_grid=jnp.zeros((1, 1), dtype=jnp.float32),
+        ky_grid=jnp.zeros((1, 1), dtype=jnp.float32),
+        dealias_mask=jnp.ones((1, 1), dtype=bool),
+        kxfac=1.0,
+        laguerre_to_grid=None,
+        laguerre_to_spectral=None,
+        laguerre_roots=None,
+        laguerre_j0=None,
+        laguerre_j1_over_alpha=None,
+        b=None,
+    )
+
+
+def test_linear_rhs_jit_for_terms_impl_selects_narrowest_route() -> None:
+    electrostatic = object()
+    full = object()
+
+    assert (
+        linear_rhs_jit_for_terms_impl(
+            TermConfig(apar=0.0, bpar=0.0),
+            electrostatic_rhs_fn=electrostatic,  # type: ignore[arg-type]
+            full_rhs_fn=full,  # type: ignore[arg-type]
+            is_static_zero_fn=lambda value: float(value) == 0.0,
+        )
+        is electrostatic
+    )
+    assert (
+        linear_rhs_jit_for_terms_impl(
+            TermConfig(apar=1.0, bpar=0.0),
+            electrostatic_rhs_fn=electrostatic,  # type: ignore[arg-type]
+            full_rhs_fn=full,  # type: ignore[arg-type]
+            is_static_zero_fn=lambda value: float(value) == 0.0,
+        )
+        is full
+    )
+
+
+def test_nonlinear_rhs_cached_impl_skips_bracket_when_disabled() -> None:
+    G = jnp.ones((1, 1, 1, 1, 1, 2), dtype=jnp.complex64)
+    fields = FieldState(phi=jnp.zeros((1, 1, 2), dtype=jnp.complex64))
+    calls = {"linear": 0, "nonlinear": 0}
+
+    def linear_rhs(G_in, *_args, **_kwargs):
+        calls["linear"] += 1
+        return 2.0 * G_in, fields
+
+    def nonlinear_contribution(*_args, **_kwargs):
+        calls["nonlinear"] += 1
+        raise AssertionError("nonlinear contribution should not run")
+
+    rhs, rhs_fields = nonlinear_rhs_cached_impl(
+        G,
+        _minimal_cache(),
+        SimpleNamespace(tz=jnp.asarray([1.0]), vth=jnp.asarray([1.0])),
+        TermConfig(nonlinear=0.0, apar=0.0, bpar=0.0),
+        electrostatic_rhs_fn=linear_rhs,
+        full_rhs_fn=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError()),
+        nonlinear_contribution_fn=nonlinear_contribution,
+    )
+
+    assert calls == {"linear": 1, "nonlinear": 0}
+    np.testing.assert_allclose(np.asarray(rhs), 2.0)
+    assert rhs_fields is fields
+
+
+def test_nonlinear_rhs_cached_impl_accepts_custom_collision_operator() -> None:
+    G = jnp.ones((1, 1, 1, 1, 1, 2), dtype=jnp.complex64)
+    fields = FieldState(phi=2.0 * jnp.ones((1, 1, 2), dtype=jnp.complex64))
+    seen: dict[str, object] = {}
+
+    def linear_rhs(G_in, _cache, _params, terms, **_kwargs):
+        seen["linear_collision_weight"] = terms.collisions
+        seen["hypercollision_weight"] = terms.hypercollisions
+        return 2.0 * G_in, fields
+
+    class DragCollision:
+        def apply(self, context):
+            seen["cache"] = context.cache
+            seen["parameters"] = context.parameters
+            seen["fields"] = context.fields
+            seen["hamiltonian"] = context.hamiltonian
+            return -3.0 * context.distribution
+
+    cache = _minimal_cache()
+    parameters = SimpleNamespace(tz=jnp.asarray([1.0]), vth=jnp.asarray([1.0]))
+    rhs, _ = nonlinear_rhs_cached_impl(
+        G,
+        cache,
+        parameters,
+        TermConfig(collisions=0.25, hypercollisions=0.75, nonlinear=0.0),
+        collision_operator=DragCollision(),
+        electrostatic_rhs_fn=linear_rhs,
+        full_rhs_fn=linear_rhs,
+    )
+
+    assert seen["linear_collision_weight"] == 0.0
+    assert seen["hypercollision_weight"] == 0.75
+    assert seen["cache"] is cache
+    assert seen["parameters"] is parameters
+    assert seen["fields"] is fields
+    np.testing.assert_allclose(np.asarray(seen["hamiltonian"]), 3.0)
+    np.testing.assert_allclose(np.asarray(rhs), 1.25)
+
+
+def test_nonlinear_rhs_cached_impl_rejects_invalid_collision_shape() -> None:
+    G = jnp.ones((1, 1, 1, 1, 1, 2), dtype=jnp.complex64)
+    fields = FieldState(phi=jnp.zeros((1, 1, 2), dtype=jnp.complex64))
+
+    class InvalidCollision:
+        def apply(self, context):
+            return context.distribution[..., 0]
+
+    with pytest.raises(ValueError, match="same state shape"):
+        nonlinear_rhs_cached_impl(
+            G,
+            _minimal_cache(),
+            SimpleNamespace(tz=jnp.asarray([1.0]), vth=jnp.asarray([1.0])),
+            TermConfig(collisions=1.0, nonlinear=0.0),
+            collision_operator=InvalidCollision(),
+            electrostatic_rhs_fn=lambda state, *_args, **_kwargs: (
+                jnp.zeros_like(state),
+                fields,
+            ),
+            full_rhs_fn=lambda state, *_args, **_kwargs: (
+                jnp.zeros_like(state),
+                fields,
+            ),
+        )
+
+
+def test_nonlinear_rhs_cached_impl_forwards_physical_bracket_payload() -> None:
+    G = jnp.ones((1, 1, 1, 1, 1, 2), dtype=jnp.complex64)
+    phi = jnp.ones((1, 1, 2), dtype=jnp.complex64)
+    fields = FieldState(phi=phi, apar=2.0 * phi, bpar=3.0 * phi)
+    seen: dict[str, object] = {}
+
+    def linear_rhs(G_in, *_args, **_kwargs):
+        return jnp.zeros_like(G_in), fields
+
+    def nonlinear_contribution(G_in, **kwargs):
+        seen["shape"] = tuple(G_in.shape)
+        seen["apar_is_none"] = kwargs["apar"] is None
+        seen["bpar_is_none"] = kwargs["bpar"] is None
+        seen["weight"] = float(kwargs["weight"])
+        seen["apar_weight"] = kwargs["apar_weight"]
+        seen["bpar_weight"] = kwargs["bpar_weight"]
+        seen["compressed_real_fft"] = kwargs["compressed_real_fft"]
+        seen["laguerre_mode"] = kwargs["laguerre_mode"]
+        return 4.0 * jnp.ones_like(G_in)
+
+    rhs, _rhs_fields = nonlinear_rhs_cached_impl(
+        G,
+        _minimal_cache(),
+        SimpleNamespace(tz=jnp.asarray([1.0]), vth=jnp.asarray([1.0])),
+        TermConfig(nonlinear=0.25, apar=1.0, bpar=0.0),
+        compressed_real_fft=False,
+        laguerre_mode="spectral",
+        electrostatic_rhs_fn=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError()
+        ),
+        full_rhs_fn=linear_rhs,
+        nonlinear_contribution_fn=nonlinear_contribution,
+    )
+
+    np.testing.assert_allclose(np.asarray(rhs), 4.0)
+    assert seen == {
+        "shape": tuple(G.shape),
+        "apar_is_none": False,
+        "bpar_is_none": True,
+        "weight": 0.25,
+        "apar_weight": 1.0,
+        "bpar_weight": 0.0,
+        "compressed_real_fft": False,
+        "laguerre_mode": "spectral",
+    }
+
+
+def test_nonlinear_em_term_cached_impl_reuses_imex_bracket_payload() -> None:
+    G = jnp.ones((1, 1, 1, 1, 1, 2), dtype=jnp.complex64)
+    phi = jnp.ones((1, 1, 2), dtype=jnp.complex64)
+    fields = FieldState(phi=phi, apar=2.0 * phi, bpar=3.0 * phi)
+    seen: dict[str, object] = {"fields": 0, "nonlinear": 0}
+
+    def fields_fn(G_in, *_args, **kwargs):
+        seen["fields"] = int(seen["fields"]) + 1
+        seen["external_phi"] = kwargs["external_phi"]
+        np.testing.assert_allclose(np.asarray(G_in), np.asarray(G))
+        return fields
+
+    def nonlinear_contribution(G_in, **kwargs):
+        seen["nonlinear"] = int(seen["nonlinear"]) + 1
+        seen["shape"] = tuple(G_in.shape)
+        seen["apar_is_none"] = kwargs["apar"] is None
+        seen["bpar_is_none"] = kwargs["bpar"] is None
+        seen["weight"] = float(kwargs["weight"])
+        seen["apar_weight"] = kwargs["apar_weight"]
+        seen["bpar_weight"] = kwargs["bpar_weight"]
+        seen["compressed_real_fft"] = kwargs["compressed_real_fft"]
+        seen["laguerre_mode"] = kwargs["laguerre_mode"]
+        return 5.0 * jnp.ones_like(G_in)
+
+    zero = nonlinear_em_term_cached_impl(
+        G,
+        _minimal_cache(),
+        SimpleNamespace(tz=jnp.asarray([1.0]), vth=jnp.asarray([1.0])),
+        TermConfig(nonlinear=0.0),
+        fields_fn=fields_fn,
+        nonlinear_contribution_fn=nonlinear_contribution,
+    )
+    np.testing.assert_allclose(np.asarray(zero), 0.0)
+    assert seen == {"fields": 0, "nonlinear": 0}
+
+    out = nonlinear_em_term_cached_impl(
+        G,
+        _minimal_cache(),
+        SimpleNamespace(tz=jnp.asarray([1.0]), vth=jnp.asarray([1.0])),
+        TermConfig(nonlinear=0.5, apar=1.0, bpar=1.0),
+        external_phi=3.0,
+        compressed_real_fft=False,
+        laguerre_mode="spectral",
+        fields_fn=fields_fn,
+        nonlinear_contribution_fn=nonlinear_contribution,
+    )
+
+    np.testing.assert_allclose(np.asarray(out), 5.0)
+    assert seen == {
+        "fields": 1,
+        "nonlinear": 1,
+        "external_phi": 3.0,
+        "shape": tuple(G.shape),
+        "apar_is_none": False,
+        "bpar_is_none": False,
+        "weight": 0.5,
+        "apar_weight": 1.0,
+        "bpar_weight": 1.0,
+        "compressed_real_fft": False,
+        "laguerre_mode": "spectral",
+    }
+
+
+# ---- from test_nonlinear_diagnostic_state.py ----
+
+
+def _array(value: float) -> jnp.ndarray:
+    return jnp.asarray([value], dtype=jnp.float32)
+
+
+def _unused(*_args, **_kwargs):
+    raise AssertionError("kernel should not be used in this branch")
+
+
+def _growth(*_args, **_kwargs):
+    return (
+        jnp.asarray([[2.0]], dtype=jnp.float32),
+        jnp.asarray([[-3.0]], dtype=jnp.float32),
+    )
+
+
+def _minimal_inputs():
+    phi = jnp.ones((1, 1, 1), dtype=jnp.complex64)
+    return {
+        "G_state": jnp.ones((1, 1, 1, 1, 1, 1), dtype=jnp.complex64),
+        "fields_state": FieldState(phi=phi),
+        "G_prev_step": jnp.zeros((1, 1, 1, 1, 1, 1), dtype=jnp.complex64),
+        "fields_prev_step": FieldState(phi=phi),
+        "dt_step": jnp.asarray(0.1, dtype=jnp.float32),
+        "grid": SimpleNamespace(),
+        "cache": SimpleNamespace(),
+        "params": SimpleNamespace(),
+        "vol_fac": jnp.ones((1,), dtype=jnp.float32),
+        "flux_fac": jnp.asarray(1.0, dtype=jnp.float32),
+        "mask": jnp.asarray([[True]]),
+        "z_idx": 0,
+        "use_dealias": False,
+        "real_dtype": jnp.float32,
+        "omega_ky_index": None,
+        "omega_kx_index": None,
+        "flux_scale": 1.0,
+        "wphi_scale": 1.0,
+    }
+
+
+def test_compute_nonlinear_diagnostic_tuple_unresolved_uses_scalar_kernels() -> None:
+    kernels = NonlinearDiagnosticKernels(
+        instantaneous_growth_rate_step=_growth,
+        phi2_resolved=_unused,
+        zonal_phi_mode_kxt=_unused,
+        zonal_phi_line_kxt=_unused,
+        distribution_free_energy=lambda *_args, **_kwargs: _array(10),
+        distribution_free_energy_resolved=_unused,
+        electrostatic_field_energy=lambda *_args, **_kwargs: _array(20),
+        electrostatic_field_energy_resolved=_unused,
+        magnetic_vector_potential_energy=lambda *_args, **_kwargs: _array(30),
+        magnetic_vector_potential_energy_resolved=_unused,
+        heat_flux_species=lambda *_args, **_kwargs: jnp.asarray([4.0, 5.0]),
+        heat_flux_channel_resolved_species=_unused,
+        particle_flux_species=lambda *_args, **_kwargs: jnp.asarray([6.0]),
+        particle_flux_channel_resolved_species=_unused,
+        turbulent_heating_species=lambda *_args, **_kwargs: jnp.asarray([7.0]),
+        turbulent_heating_resolved_species=_unused,
+    )
+
+    out = compute_nonlinear_diagnostic_tuple(
+        **_minimal_inputs(),
+        resolved_diagnostics=False,
+        kernels=kernels,
+    )
+
+    assert len(out) == 13
+    np.testing.assert_allclose(np.asarray(out[0]), 2.0)
+    np.testing.assert_allclose(np.asarray(out[1]), -3.0)
+    np.testing.assert_allclose(np.asarray(out[2]), [10.0])
+    np.testing.assert_allclose(np.asarray(out[5]), 9.0)
+    np.testing.assert_allclose(np.asarray(out[6]), 6.0)
+    np.testing.assert_allclose(np.asarray(out[7]), 7.0)
+    assert out[-1] == ()
+
+
+def test_make_nonlinear_diagnostic_tuple_fn_preserves_scalar_contract() -> None:
+    kernels = NonlinearDiagnosticKernels(
+        instantaneous_growth_rate_step=_growth,
+        phi2_resolved=_unused,
+        zonal_phi_mode_kxt=_unused,
+        zonal_phi_line_kxt=_unused,
+        distribution_free_energy=lambda *_args, **_kwargs: _array(10),
+        distribution_free_energy_resolved=_unused,
+        electrostatic_field_energy=lambda *_args, **_kwargs: _array(20),
+        electrostatic_field_energy_resolved=_unused,
+        magnetic_vector_potential_energy=lambda *_args, **_kwargs: _array(30),
+        magnetic_vector_potential_energy_resolved=_unused,
+        heat_flux_species=lambda *_args, **_kwargs: jnp.asarray([4.0, 5.0]),
+        heat_flux_channel_resolved_species=_unused,
+        particle_flux_species=lambda *_args, **_kwargs: jnp.asarray([6.0]),
+        particle_flux_channel_resolved_species=_unused,
+        turbulent_heating_species=lambda *_args, **_kwargs: jnp.asarray([7.0]),
+        turbulent_heating_resolved_species=_unused,
+    )
+    inputs = _minimal_inputs()
+    compute_diag = make_nonlinear_diagnostic_tuple_fn(
+        grid=inputs["grid"],
+        cache=inputs["cache"],
+        params=inputs["params"],
+        vol_fac=inputs["vol_fac"],
+        flux_fac=inputs["flux_fac"],
+        mask=inputs["mask"],
+        z_idx=inputs["z_idx"],
+        use_dealias=inputs["use_dealias"],
+        real_dtype=inputs["real_dtype"],
+        omega_ky_index=inputs["omega_ky_index"],
+        omega_kx_index=inputs["omega_kx_index"],
+        flux_scale=inputs["flux_scale"],
+        wphi_scale=inputs["wphi_scale"],
+        resolved_diagnostics=False,
+        kernels=kernels,
+    )
+
+    out = compute_diag(
+        inputs["G_state"],
+        inputs["fields_state"],
+        inputs["G_prev_step"],
+        inputs["fields_prev_step"],
+        inputs["dt_step"],
+    )
+
+    assert len(out) == 13
+    np.testing.assert_allclose(np.asarray(out[0]), 2.0)
+    np.testing.assert_allclose(np.asarray(out[5]), 9.0)
+    assert out[-1] == ()
+
+
+def test_compute_nonlinear_diagnostic_tuple_resolved_packs_marker_order() -> None:
+    calls = {"heat": 0, "particle": 0}
+
+    def _resolved_tuple(start: int, count: int):
+        return tuple(_array(start + idx) for idx in range(count))
+
+    def _channel_tuple(name: str, start: int):
+        calls[name] += 1
+        return (
+            _resolved_tuple(start, 5),
+            _resolved_tuple(start + 5, 5),
+            _resolved_tuple(start + 10, 5),
+        )
+
+    kernels = NonlinearDiagnosticKernels(
+        instantaneous_growth_rate_step=_growth,
+        phi2_resolved=lambda *_args, **_kwargs: _resolved_tuple(100, 8),
+        zonal_phi_mode_kxt=lambda *_args, **_kwargs: _array(108),
+        zonal_phi_line_kxt=lambda *_args, **_kwargs: _array(109),
+        distribution_free_energy=lambda *_args, **_kwargs: _unused(),
+        distribution_free_energy_resolved=lambda *_args, **_kwargs: _resolved_tuple(
+            110, 6
+        ),
+        electrostatic_field_energy=lambda *_args, **_kwargs: _unused(),
+        electrostatic_field_energy_resolved=lambda *_args, **_kwargs: _resolved_tuple(
+            116, 5
+        ),
+        magnetic_vector_potential_energy=lambda *_args, **_kwargs: _unused(),
+        magnetic_vector_potential_energy_resolved=lambda *_args, **_kwargs: (
+            _resolved_tuple(121, 5)
+        ),
+        heat_flux_species=lambda *_args, **_kwargs: _unused(),
+        heat_flux_channel_resolved_species=lambda *_args, **_kwargs: _channel_tuple(
+            "heat", 131
+        ),
+        particle_flux_species=lambda *_args, **_kwargs: _unused(),
+        particle_flux_channel_resolved_species=lambda *_args, **_kwargs: _channel_tuple(
+            "particle", 151
+        ),
+        turbulent_heating_species=lambda *_args, **_kwargs: _unused(),
+        turbulent_heating_resolved_species=lambda *_args, **_kwargs: _resolved_tuple(
+            166, 5
+        ),
+    )
+
+    out = compute_nonlinear_diagnostic_tuple(
+        **_minimal_inputs(),
+        resolved_diagnostics=True,
+        kernels=kernels,
+    )
+
+    resolved = out[-1]
+    assert len(resolved) == 58
+    assert calls == {"heat": 1, "particle": 1}
+    np.testing.assert_allclose(np.asarray(out[2]), [110.0])
+    np.testing.assert_allclose(np.asarray(out[5]), [408.0])
+    np.testing.assert_allclose(np.asarray(resolved[0]), [101.0])
+    np.testing.assert_allclose(np.asarray(resolved[7]), [108.0])
+    np.testing.assert_allclose(np.asarray(resolved[26]), [132.0])
+    np.testing.assert_allclose(np.asarray(resolved[-1]), [170.0])
