@@ -16,7 +16,7 @@ import jax.numpy as jnp
 
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.geometry import FluxTubeGeometryLike
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import FieldState, TermConfig

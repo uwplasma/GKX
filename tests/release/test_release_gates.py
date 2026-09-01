@@ -2473,7 +2473,7 @@ def test_readme_python_quickstart_imports_exist() -> None:
         LinearParams,
         integrate_linear_from_config,
     )
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
 
     assert CycloneBaseCase is not None

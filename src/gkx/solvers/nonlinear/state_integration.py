@@ -12,7 +12,7 @@ import numpy as np
 
 from gkx.config import resolve_cfl_fac
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
+from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.operators.collision import CollisionOperator
 from gkx.diagnostics.transport import heat_flux_species, heat_flux_total
 from gkx.diagnostics.moments import fieldline_quadrature_weights

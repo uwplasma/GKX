@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import pytest
 
 import gkx.terms as term_pkg
-from gkx.core.velocity import hermite_ladder_coeffs
+from gkx.core_velocity import hermite_ladder_coeffs
 from gkx.terms.config import FieldState, TermConfig
 from gkx.operators.linear.streaming import (
     _check_positive,

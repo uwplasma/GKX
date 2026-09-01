@@ -20,7 +20,7 @@ from gkx.diagnostics.modes import (
     select_ky_index,
 )
 from gkx.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.solvers.linear.integrators import integrate_linear_diagnostics
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (

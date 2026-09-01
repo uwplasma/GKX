@@ -220,7 +220,7 @@ diagnostic only. Details: [parallelization](docs/parallelization.rst).
 import jax.numpy as jnp
 
 from gkx import CycloneBaseCase, LinearParams, integrate_linear_from_config
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 
 cfg = CycloneBaseCase()

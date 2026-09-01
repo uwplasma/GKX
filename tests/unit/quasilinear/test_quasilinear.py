@@ -12,7 +12,7 @@ import gkx
 import gkx as public_quasilinear
 from gkx.diagnostics import quasilinear_transport
 from gkx.geometry import SAlphaGeometry, apply_geometry_grid_defaults
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import linear_terms_to_term_config
 from gkx.diagnostics.quasilinear_transport import (

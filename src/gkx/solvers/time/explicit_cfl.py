@@ -11,7 +11,7 @@ from numpy.polynomial.laguerre import laggauss
 import jax
 import jax.numpy as jnp
 
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.params import LinearParams
 

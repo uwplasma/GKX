@@ -59,7 +59,7 @@ two private uses require coordinated repair rather than deprecation promises.
 |---|---|---:|---:|
 | `CycloneBaseCase` | `gkx.config:CycloneBaseCase` | 2 | 0 |
 | `GridConfig` | `gkx.config:GridConfig` | 4 | 0 |
-| `build_spectral_grid` | `gkx.core.grid:build_spectral_grid` | 5 | 0 |
+| `build_spectral_grid` | `gkx.core_grid:build_spectral_grid` | 5 | 0 |
 | `KBMBaseCase` | `gkx.config:KBMBaseCase` | 0 | 0 |
 | `TimeConfig` | `gkx.config:TimeConfig` | 16 | 0 |
 | `SAlphaGeometry` | `gkx.geometry:SAlphaGeometry` | 5 | 0 |
@@ -86,8 +86,8 @@ two private uses require coordinated repair rather than deprecation promises.
 | `vmec_boundary_aspect_sensitivity_report` | `gkx.geometry.differentiable:vmec_boundary_aspect_sensitivity_report` | 0 | 0 |
 | `vmec_field_line_tensor_observable_names` | `gkx.geometry.differentiable:vmec_field_line_tensor_observable_names` | 0 | 0 |
 | `vmec_metric_tensor_observable_names` | `gkx.geometry.differentiable:vmec_metric_tensor_observable_names` | 0 | 0 |
-| `J_l_all` | `gkx.core.velocity:J_l_all` | 1 | 0 |
-| `gamma0` | `gkx.core.velocity:gamma0` | 0 | 0 |
+| `J_l_all` | `gkx.core_velocity:J_l_all` | 1 | 0 |
+| `gamma0` | `gkx.core_velocity:gamma0` | 0 | 0 |
 | `load_runtime_from_toml` | `gkx.workflows.runtime.toml:load_runtime_from_toml` | 3 | 0 |
 | `DiagnosticNorm` | `gkx.diagnostics.normalization:DiagnosticNorm` | 0 | 0 |
 | `NormalizationContract` | `gkx.diagnostics.normalization:NormalizationContract` | 1 | 0 |

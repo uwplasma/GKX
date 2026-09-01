@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.config import InitializationConfig
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.params import Species, build_linear_params
 from gkx.diagnostics.analysis import fit_growth_rate, fit_growth_rate_auto
 from gkx.diagnostics.growth_rates import _normalize_growth_rate

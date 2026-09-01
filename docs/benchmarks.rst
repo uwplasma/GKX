@@ -371,7 +371,7 @@ Benchmark runner internals
 --------------------------
 
 Reusable reference loaders and comparison policies live in
-``gkx.benchmarking.shared``; timestepping, scans, geometry, and physical
+``gkx.benchmarking_shared``; timestepping, scans, geometry, and physical
 operators use the same runtime and solver APIs as ordinary simulations.
 Case-level reproduction policy stays in root ``benchmarks/`` drivers rather
 than creating a second installed solver stack.

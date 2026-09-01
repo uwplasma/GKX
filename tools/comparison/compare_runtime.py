@@ -31,7 +31,7 @@ from tools.comparison.compare_gx_rhs_terms import (
     _reshape_gx,
     _summary,
 )
-from gkx.core.grid import build_spectral_grid, select_real_fft_ky_grid
+from gkx.core_grid import build_spectral_grid, select_real_fft_ky_grid
 from gkx.diagnostics import (
     magnetic_vector_potential_energy,
     distribution_free_energy,

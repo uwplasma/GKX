@@ -81,7 +81,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     import jax
     from jax.sharding import NamedSharding, PartitionSpec
 
-    from gkx.core.velocity import laguerre_gyroaverage_neighbors
+    from gkx.core_velocity import laguerre_gyroaverage_neighbors
     from gkx.operators.linear.params import _as_species_array
     from gkx.operators.linear.streaming import (
         abs_z_linked_fft,

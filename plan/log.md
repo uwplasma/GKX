@@ -4108,3 +4108,58 @@ Outcome:
   failed `sphinx -W`.
 - next task: repoint the two tests that import `workflows/runtime/policies.py`
   directly, then merge it, which takes the gate to zero.
+
+## 2026-08-31 — PR R2-2 flatten the container-only directories (`refactor/r2-merge-split-modules`)
+
+Baseline:
+- continues the module merges in the same branch; `src/gkx` had 20 directories
+- relevant existing gate: the cohesion policy from section 25b, and the
+  architecture manifest's `required_domain_packages` list
+
+Scope:
+- intended change: remove directories that exist to hold one or two modules,
+  per section 25c.4 step 2, and rename by what the code is rather than where it
+  sat.
+- explicitly out of scope: the two-level nests under `operators/`, `solvers/`,
+  and `workflows/`, and the `objectives/` proportion problem.
+
+Changes:
+- `benchmarking/shared.py` -> `benchmarking_shared.py`; the package held one
+  real module.
+- `core/{grid,velocity}.py` -> `core_grid.py`, `core_velocity.py`.
+- `utils/{callbacks,compilation_cache}.py` -> `callbacks.py`,
+  `compilation_cache.py`. The directory name described neither module.
+- 152 files repointed across source, tests, tools, examples, and docs.
+
+Evidence:
+- feature preservation: advertised API stays 15, lazy registry stays 346, and
+  every module named in the registry still resolves.
+- `tests/release`, `tests/unit/core`, `tests/unit/operators`,
+  `tests/integration/runtime`, `tests/unit/solvers`: 864 passed, 1 skipped.
+- gates: `ruff check`, `ruff format --check`, `sphinx -W`, release readiness,
+  validation coverage, architecture manifest, repository size all clean.
+- physics/mathematics/numerics gates: none re-run and none claimed. Files moved;
+  no definition changed.
+
+Outcome:
+- accepted. Directories 20 -> 17.
+- two policies had to change and both are documented in place rather than
+  bypassed. The coverage manifest listed three package `__init__` modules that
+  no longer exist. The architecture manifest *required* `gkx.core` to exist as a
+  package, which is the directory-shaped rule the flat layout replaces;
+  requiring it now would mandate an empty directory.
+- a repointing miss cost one round: substituting `gkx.utils.callbacks` does not
+  catch `from gkx.utils import callbacks`, and seven tests failed on the
+  difference. This is the same shape as the `data/` mistake earlier the same
+  day -- searching for one spelling of a reference and concluding from its
+  absence. Both were caught by running tests rather than by re-reading the
+  grep, which is the only reason they did not ship.
+- one failure in the wide run is NOT from this work.
+  `test_public_api_facades_and_lazy_import_contracts` asserts that lazily
+  exported names are absent from `dir(gkx)`, but the loader caches resolved
+  names into the module, so any earlier test that touches one makes the
+  assertion fail. Confirmed identical on `main`: the same five-domain
+  combination gives `1 failed, 864 passed, 1 skipped` there too. CI shards do
+  not run that combination, so it sits latent. Filed separately rather than
+  folded in here.
+- next task: the two-level nests under `operators/`, `solvers/`, `workflows/`.

@@ -80,7 +80,7 @@ def _fused_electrostatic_constants(
     *,
     local_m: int,
 ) -> SimpleNamespace:
-    from gkx.core.velocity import laguerre_gyroaverage_neighbors
+    from gkx.core_velocity import laguerre_gyroaverage_neighbors
     from gkx.parallel.velocity_drive import _normalise_single_species_b
     from gkx.operators.linear.streaming import (
         grad_z_periodic as operator_grad_z_periodic,

@@ -10,8 +10,6 @@ require_all_package_modules_owned = true
 excluded_modules = [
   "gkx.__init__",
   "gkx._version",
-  "gkx.benchmarking.__init__",
-  "gkx.core.__init__",
   "gkx.diagnostics.__init__",
   "gkx.geometry.__init__",
   "gkx.objectives.__init__",
@@ -23,7 +21,6 @@ excluded_modules = [
   "gkx.solvers.nonlinear.__init__",
   "gkx.solvers.time.__init__",
   "gkx.terms.__init__",
-  "gkx.utils.__init__",
   "gkx.workflows.__init__",
   "gkx.workflows.runtime.__init__",
 ]
@@ -136,7 +133,7 @@ owned_modules = [
   "gkx.workflows.runtime.toml",
   "gkx.workflows.runtime.wout",
   "gkx.workflows.runtime.resolution",
-  "gkx.utils.compilation_cache",
+  "gkx.compilation_cache",
   "gkx.solvers.time.runners",
   "gkx.workflows.runtime.config",
   "gkx.workflows.runtime.diagnostic_arrays",
@@ -255,8 +252,8 @@ owned_modules = [
   "gkx.diagnostics.growth_rates",
   "gkx.diagnostics.growth_windows",
   "gkx.diagnostics.modes",
-  "gkx.core.velocity",
-  "gkx.core.grid",
+  "gkx.core_velocity",
+  "gkx.core_grid",
   "gkx.solvers.linear.adaptive_propagator",
   "gkx.solvers.linear.krylov_algorithms",
   "gkx.solvers.linear.krylov",
@@ -1279,8 +1276,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.benchmarking.shared"
-path = "src/gkx/benchmarking/shared.py"
+module = "gkx.benchmarking_shared"
+path = "src/gkx/benchmarking_shared.py"
 owned_modules = [
   "gkx.diagnostics.normalization",
 ]
@@ -1774,7 +1771,7 @@ module = "gkx.parallel.state"
 path = "src/gkx/parallel/state.py"
 owned_modules = [
   "gkx.parallel.integrators",
-  "gkx.utils.callbacks",
+  "gkx.callbacks",
   "gkx.parallel.velocity",
   "gkx.parallel.velocity_drive",
   "gkx.parallel.velocity_hermite",

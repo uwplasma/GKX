@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from gkx.config import TimeConfig
 from gkx.geometry import FluxTubeGeometryLike
-from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
+from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.solvers.linear.integrators import integrate_linear
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache

@@ -81,7 +81,7 @@ Collision Operator Interface
 Velocity-Space Core
 -------------------
 
-.. automodule:: gkx.core.velocity
+.. automodule:: gkx.core_velocity
    :members:
 
 Geometry
@@ -205,7 +205,7 @@ Differentiable Geometry Numerics
 Grids
 -----
 
-.. automodule:: gkx.core.grid
+.. automodule:: gkx.core_grid
    :members:
 
 Species and Linear Parameters
@@ -503,7 +503,7 @@ Nonlinear Gradient Statistics
 Benchmarks
 ----------
 
-.. automodule:: gkx.benchmarking.shared
+.. automodule:: gkx.benchmarking_shared
    :members:
    :no-index:
 
@@ -697,7 +697,7 @@ GX Output Plotting
 Persistent Compilation Cache
 ----------------------------
 
-.. automodule:: gkx.utils.compilation_cache
+.. automodule:: gkx.compilation_cache
    :members:
    :no-index:
 

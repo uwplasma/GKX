@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from dataclasses import fields as dataclass_fields
 from dataclasses import replace
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics.metadata import ResolvedDiagnostics, SimulationDiagnostics
 from gkx.diagnostics.moments import fieldline_quadrature_weights
 from gkx.diagnostics.transport import heat_flux_species

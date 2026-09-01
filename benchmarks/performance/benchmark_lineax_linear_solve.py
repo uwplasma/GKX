@@ -13,7 +13,7 @@ import lineax as lx
 import numpy as np
 import pandas as pd
 
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     CYCLONE_OMEGA_D_SCALE,
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
@@ -21,7 +21,7 @@ from gkx.benchmarking.shared import (
 )
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.linear import LinearParams, LinearTerms, build_linear_cache
 from gkx.solvers.linear.implicit import _build_implicit_operator
 

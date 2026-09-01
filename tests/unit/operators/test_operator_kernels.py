@@ -14,8 +14,8 @@ from scipy.special import eval_genlaguerre, eval_laguerre, j0, jv
 
 from gkx.config import GridConfig
 from gkx.operators.collision import CollisionContext
-from gkx.core.grid import build_spectral_grid
-from gkx.core.velocity import (
+from gkx.core_grid import build_spectral_grid
+from gkx.core_velocity import (
     J_l_all,
     associated_bessel_laguerre_coefficients,
     bessel_laguerre_kernels,

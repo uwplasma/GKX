@@ -70,7 +70,7 @@ Nonlinear electromagnetic terms additionally use :math:`J_0(\alpha)` and
 
 Source mapping:
 
-- ``src/gkx/core/velocity.py``
+- ``src/gkx/core_velocity.py``
 - ``src/gkx/terms/nonlinear.py``
 
 Streaming

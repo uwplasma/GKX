@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.collision_tables import _finite_wavelength_coulomb_bundle
@@ -314,7 +314,7 @@ def test_laguerre_transform_is_well_conditioned_at_high_resolution() -> None:
     with headroom rather than sit at the edge of a cliff.
     """
 
-    from gkx.core.velocity import laguerre_transform
+    from gkx.core_velocity import laguerre_transform
 
     for resolution in (8, 16, 20, 24, 32, 64, 96):
         to_grid, to_spectral, _ = laguerre_transform(resolution)

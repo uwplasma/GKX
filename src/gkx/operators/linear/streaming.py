@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from gkx.core.velocity import hermite_ladder_coeffs
+from gkx.core_velocity import hermite_ladder_coeffs
 
 # One positivity guard for the whole linear operator. The local copy asked
 # whether a ``jnp`` round trip of its argument was traced, which is true of every
@@ -494,7 +494,7 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
     ``x L_l = (2l+1) L_l - (l+1) L_{l+1} - l L_{l-1}`` gives negative
     off-diagonal couplings. The runtime state stores Laguerre coefficients in
     the alternating ``(-1)**l`` basis (the convention of
-    ``gkx.core.velocity.J_l_all``), which flips the sign of both off-diagonal
+    ``gkx.core_velocity.J_l_all``), which flips the sign of both off-diagonal
     terms; composing with runtime states requires the alternating-basis
     counterparts used by the production RHS (see the positive-neighbor
     couplings in ``gkx.terms.linear_terms``, e.g.

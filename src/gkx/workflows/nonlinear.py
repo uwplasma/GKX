@@ -14,7 +14,7 @@ import numpy as np
 from jax.typing import ArrayLike
 
 from gkx.artifacts.io import write_netcdf_restart_state
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics.analysis import fit_growth_rate
 from gkx.diagnostics.saturation import (
     SaturationStopConfig,

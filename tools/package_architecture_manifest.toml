@@ -18,9 +18,13 @@ blocked_prefixes = [
 allowed_root_prefix_modules = []
 
 [package_policy]
+# Section 25c replaces the directory-shaped layout with flat modules. A package
+# is required here only while it still holds more than a couple of modules;
+# gkx.core held two (grid, velocity) and is now gkx/core_grid.py and
+# gkx/core_velocity.py, so requiring the package would mandate an empty
+# directory. Same for gkx.utils and gkx.benchmarking, which were never listed.
 required_domain_packages = [
   "gkx.artifacts",
-  "gkx.core",
   "gkx.diagnostics",
   "gkx.geometry",
   "gkx.objectives",

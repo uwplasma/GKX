@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 from gkx.artifacts.plotting import scan_comparison_figure
-from gkx.benchmarking.shared import load_tem_reference
+from gkx.benchmarking_shared import load_tem_reference
 from gkx.runtime import run_runtime_scan
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 

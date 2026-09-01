@@ -6,7 +6,7 @@ import jax.numpy as jnp
 
 from gkx.operators.collision import CollisionOperator
 from gkx.geometry import FluxTubeGeometryLike
-from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
+from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (

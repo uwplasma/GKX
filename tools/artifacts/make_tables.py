@@ -19,7 +19,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     CYCLONE_OMEGA_D_SCALE,
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
@@ -44,7 +44,7 @@ from gkx.config import (
 from gkx.geometry import SAlphaGeometry
 from gkx.runtime import run_runtime_linear, run_runtime_scan
 from gkx.workflows.runtime.toml import load_runtime_from_toml
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.solvers.time.explicit import (
     ExplicitTimeConfig,
     integrate_linear_explicit,

@@ -317,7 +317,7 @@ LANES: dict[str, tuple[EvidenceCheck, ...]] = {
         ),
         EvidenceCheck(
             "benchmark policy module",
-            "src/gkx/benchmarking/shared.py",
+            "src/gkx/benchmarking_shared.py",
             "CYCLONE_KRYLOV_DEFAULT",
         ),
         EvidenceCheck("diagnostic moment kernels", "src/gkx/diagnostics/moments.py"),

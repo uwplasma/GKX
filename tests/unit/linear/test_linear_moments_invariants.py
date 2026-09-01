@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core.velocity import hermite_ladder_coeffs
+from gkx.core_velocity import hermite_ladder_coeffs
 import gkx.operators.linear.moments as linear_moments
 import gkx.operators.linear.streaming as streaming_operators
 

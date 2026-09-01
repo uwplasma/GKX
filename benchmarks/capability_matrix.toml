@@ -37,7 +37,7 @@ evidence = "adiabatic-electron ITG atlas plus kinetic-electron Cyclone/TEM stres
 id = "hermite_laguerre_velocity_basis"
 group = "required_core"
 status = "validated"
-gkx_owner = "gkx.core.velocity and gkx.terms.gyroaveraging"
+gkx_owner = "gkx.core_velocity and gkx.terms.gyroaveraging"
 comparison_owner = "src/moments.cu and src/laguerre_transform.cu"
 evidence = "basis orthonormality, streaming, gyroaverage, and velocity-resolution gates"
 

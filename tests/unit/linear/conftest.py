@@ -22,7 +22,7 @@ import jax.numpy as jnp
 import pytest
 
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.core.grid import SpectralGrid, build_spectral_grid
+from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.params import LinearTerms
 from gkx.terms.config import TermConfig

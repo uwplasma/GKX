@@ -29,7 +29,7 @@ from benchmarks.performance.benchmark_runtime_memory import (
     _write_row_logs,
     _write_summary,
 )
-from gkx.core.velocity import J_l_all, single_precision_factorial
+from gkx.core_velocity import J_l_all, single_precision_factorial
 from gkx.config import resolve_cfl_fac
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.params import LinearParams, LinearTerms
@@ -43,7 +43,7 @@ from gkx.terms.linear_terms import (
     linked_streaming_contribution,
     streaming_contribution,
 )
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     KBM_OMEGA_D_SCALE,
     KBM_OMEGA_STAR_SCALE,
     KBM_RHO_STAR,
@@ -62,7 +62,7 @@ from gkx.benchmarking.shared import (
     scan_window_valid,
     should_use_ky_batch,
 )
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.solvers.time.explicit_cfl import _linear_frequency_bound
@@ -108,7 +108,7 @@ def test_cyclone_publication_driver_uses_asymptotic_fit_window() -> None:
 
 
 def test_benchmark_public_exports_resolve() -> None:
-    import gkx.benchmarking.shared as benchmark_api
+    import gkx.benchmarking_shared as benchmark_api
 
     for name in benchmark_api.__all__:
         assert hasattr(benchmark_api, name), name

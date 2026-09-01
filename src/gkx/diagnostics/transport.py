@@ -8,7 +8,7 @@ from typing import Any
 
 import jax.numpy as jnp
 
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.diagnostics.moments import (
     _heat_flux_channel_contrib_species,
     _particle_flux_channel_contrib_species,

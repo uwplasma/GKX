@@ -61,10 +61,10 @@ from gkx.diagnostics.validation_gates import (  # noqa: E402
 )
 from gkx.artifacts.spectral_layout import infer_triple_dealiased_ny  # noqa: E402
 from gkx.diagnostics.growth_windows import late_time_window  # noqa: E402
-from gkx.benchmarking.shared import _apply_reference_hypercollisions  # noqa: E402
+from gkx.benchmarking_shared import _apply_reference_hypercollisions  # noqa: E402
 from gkx.runtime import run_runtime_linear  # noqa: E402
 from gkx.config import GridConfig, resolve_cfl_fac  # noqa: E402
-from gkx.core.grid import build_spectral_grid  # noqa: E402
+from gkx.core_grid import build_spectral_grid  # noqa: E402
 from gkx.operators.linear.params import build_linear_params  # noqa: E402
 from gkx.diagnostics.analysis import extract_eigenfunction  # noqa: E402
 from gkx.geometry import (  # noqa: E402

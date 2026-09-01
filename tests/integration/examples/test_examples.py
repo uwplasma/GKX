@@ -19,7 +19,7 @@ from examples.theory_and_demos.quasilinear_implicit_sensitivity import (
     run_demo as run_implicit_sensitivity_demo,
 )
 from gkx.config import CycloneBaseCase, GridConfig, TimeConfig
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry, sample_flux_tube_geometry
 from gkx.operators.linear.params import LinearParams
 from gkx.solvers.time.runners import (

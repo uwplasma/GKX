@@ -9,7 +9,7 @@ import jax.numpy as jnp
 
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
