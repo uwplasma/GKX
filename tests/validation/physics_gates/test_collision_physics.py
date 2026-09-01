@@ -32,7 +32,7 @@ from gkx.operators.linear.collisions import (
 )
 from gkx.operators.linear.params import LinearParams
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.time.runners import _resolve_config_collision_operator
+from gkx.solvers_time_runners import _resolve_config_collision_operator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "artifacts"))
 

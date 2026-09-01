@@ -24,17 +24,17 @@ from gkx.operators.linear.params import (
     _x64_enabled,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.linear.implicit import _integrate_linear_implicit_cached
-from gkx.solvers.linear.integrator_diagnostics import (
+from gkx.solvers_linear_implicit import _integrate_linear_implicit_cached
+from gkx.solvers_linear_integrator_diagnostics import (
     _linear_cache_or_build,
     _validate_linear_sampling,
     integrate_linear_diagnostics,
 )
-from gkx.solvers.linear.parallel import (
+from gkx.solvers_linear_parallel import (
     _is_electrostatic_field_terms,
     linear_rhs_parallel_cached,
 )
-from gkx.solvers.time.explicit_steps import (
+from gkx.solvers_time_explicit_steps import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )
@@ -358,7 +358,7 @@ def _dispatch_parallel_linear(
             "mixed species-Hermite integration is currently gated for Euler and RK2"
         )
     if route_axis in {"s", "species"}:
-        from gkx.solvers.linear.parallel_electrostatic import (
+        from gkx.solvers_linear_parallel_electrostatic import (
             prepare_electrostatic_species_inputs,
         )
 
@@ -384,7 +384,7 @@ def _dispatch_parallel_linear(
             force_electrostatic_fields=force_electrostatic_fields,
         )
     if route_axis in {"species_hermite", "s_m", "mixed"}:
-        from gkx.solvers.linear.parallel_streaming import (
+        from gkx.solvers_linear_parallel_streaming import (
             prepare_electrostatic_species_hermite_state,
         )
 
@@ -426,7 +426,7 @@ def _integrate_species_sharded_explicit(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Advance one species per device inside a named-collective ``pmap``."""
 
-    from gkx.solvers.linear.parallel_common import (
+    from gkx.solvers_linear_parallel_common import (
         _is_electrostatic_field_terms,
         _is_electrostatic_slice_terms,
         _resolve_parallel_devices,

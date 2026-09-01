@@ -279,7 +279,7 @@ def build_linear_rhs_streaming_electrostatic_gate(
     import jax.numpy as jnp
 
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
     from gkx.parallel.velocity import build_velocity_sharding_plan
     from gkx.workflows.runtime.config import RuntimeParallelConfig
 
@@ -342,7 +342,7 @@ def build_linear_rhs_streaming_electrostatic_gate(
     return _json_clean(
         {
             "case": "Electrostatic streaming linear-RHS shard-map identity gate",
-            "source": "gkx.solvers.linear.parallel.linear_rhs_parallel_cached backend=streaming_electrostatic",
+            "source": "gkx.solvers_linear_parallel.linear_rhs_parallel_cached backend=streaming_electrostatic",
             "reference_source": "gkx.operators.linear.rhs.linear_rhs_cached with only streaming enabled",
             "claim_scope": "streaming plus electrostatic field-solve call-graph identity, not a full-RHS or nonlinear speedup claim",
             "state_shape": tuple(int(x) for x in state.shape),
@@ -388,7 +388,7 @@ def build_linear_rhs_electrostatic_slices_gate(
     import jax.numpy as jnp
 
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
     from gkx.parallel.velocity import build_velocity_sharding_plan
     from gkx.workflows.runtime.config import RuntimeParallelConfig
 
@@ -459,7 +459,7 @@ def build_linear_rhs_electrostatic_slices_gate(
     return _json_clean(
         {
             "case": "Composed electrostatic linear-slices RHS identity gate",
-            "source": "gkx.solvers.linear.parallel.linear_rhs_parallel_cached backend=electrostatic_linear_slices",
+            "source": "gkx.solvers_linear_parallel.linear_rhs_parallel_cached backend=electrostatic_linear_slices",
             "reference_source": "gkx.operators.linear.rhs.linear_rhs_cached with streaming/mirror/curvature/gradB/diamagnetic enabled",
             "claim_scope": (
                 "single-species periodic electrostatic linear-RHS identity for the gated slices; "

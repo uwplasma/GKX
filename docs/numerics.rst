@@ -32,20 +32,20 @@ The core numerical algorithms and their implementation entry points are:
 - **Diamagnetic drive**:
   :func:`gkx.operators.linear.moments.diamagnetic_drive_coeffs`.
 - **Time integration (explicit RK, IMEX)**:
-  :func:`gkx.solvers.linear.integrators.integrate_linear`.
+  :func:`gkx.solvers_linear_integrators.integrate_linear`.
 - **CFL-controlled RK4 (adaptive step control, streaming diagnostics)**:
   :func:`gkx.integrate_linear_explicit`
-  (implemented in :func:`gkx.solvers.time.explicit.integrate_linear_explicit`).
+  (implemented in :func:`gkx.solvers_time_explicit.integrate_linear_explicit`).
 - **Config-driven runner**:
-  :func:`gkx.solvers.time.runners.integrate_linear_from_config`.
+  :func:`gkx.solvers_time_runners.integrate_linear_from_config`.
 - **Implicit solve (Backward Euler + GMRES)**:
-  :func:`gkx.solvers.linear.integrators.integrate_linear`.
+  :func:`gkx.solvers_linear_integrators.integrate_linear`.
 - **Structured Hermite-line solves and bounded-memory Jacobians**:
   `SOLVAX <https://github.com/uwplasma/SOLVAX>`_ provides the reusable
   tridiagonal and autodiff primitives; GKX retains physical layout,
   coefficients, tolerances, and acceptance policy.
 - **Nonlinear IMEX (implicit linear + explicit nonlinear)**:
-  :func:`gkx.solvers.nonlinear.state_integration.integrate_nonlinear`.
+  :func:`gkx.solvers_nonlinear_state_integration.integrate_nonlinear`.
 
 JAX execution model
 -------------------
@@ -53,7 +53,7 @@ JAX execution model
 The implementation leverages the following JAX primitives:
 
 - **JIT compilation**: ``jax.jit`` is used in
-  :func:`gkx.solvers.linear.integrators.integrate_linear` to stage time-stepping
+  :func:`gkx.solvers_linear_integrators.integrate_linear` to stage time-stepping
   kernels.
 - **Loop fusion**: ``jax.lax.scan`` drives the time integration loop.
 - **FFT grids**: ``jax.numpy.fft.fftfreq`` is used in
@@ -135,7 +135,7 @@ The linear solver supports:
   implicit derivative, so the gradient does not depend on the number of Krylov
   iterations except through primal/transpose solve accuracy.
 
-These are all implemented in :func:`gkx.solvers.linear.integrators.integrate_linear` and
+These are all implemented in :func:`gkx.solvers_linear_integrators.integrate_linear` and
 share the cached operator data assembled by
 :func:`gkx.operators.linear.cache_builder.build_linear_cache`.
 
@@ -249,7 +249,7 @@ the row-relative :math:`k_x` mesh. Direct full/compressed bracket, JAX-tangent,
 three-step state, and heat-flux gates agree within ``2e-5`` relative tolerance.
 The
 research function
-:func:`gkx.solvers.nonlinear.state_integration.integrate_nonlinear_sheared` verifies zero-shear
+:func:`gkx.solvers_nonlinear_state_integration.integrate_nonlinear_sheared` verifies zero-shear
 trajectory identity and cumulative full-step remapping. Its midpoint RK2 and
 three-stage Heun RK3 routes evaluate each RHS in the correctly remapped stage
 coordinate basis and return each derivative to the step basis before combining
@@ -299,7 +299,7 @@ redundant RHS evaluation per step without altering the Runge--Kutta tableau;
 the state-only path remains separate so it never computes fields solely for
 reuse.
 
-:func:`gkx.solvers.nonlinear.state_integration.integrate_nonlinear_sheared_transport` records the
+:func:`gkx.solvers_nonlinear_state_integration.integrate_nonlinear_sheared_transport` records the
 canonical per-species gyro-Bohm heat flux at every accepted step. It uses
 the same flux-surface quadrature and transport kernel as production nonlinear
 diagnostics and evaluates that kernel with the instantaneous sheared cache. The
@@ -514,7 +514,7 @@ end-to-end JAX differentiability:
 - **Reusable IMEX operators**: nonlinear IMEX runs can prebuild and reuse the
   matrix-free linear operator with
   :func:`gkx.operators.nonlinear.policies.build_nonlinear_imex_operator` and pass it to
-  :func:`gkx.solvers.nonlinear.state_integration.integrate_nonlinear_imex_cached` via
+  :func:`gkx.solvers_nonlinear_state_integration.integrate_nonlinear_imex_cached` via
   ``implicit_operator``. When ``apar=bpar=0``, the IMEX fixed-point and
   post-step field paths use the same electrostatic compiled linear-RHS route as
   the explicit nonlinear RHS, avoiding unused electromagnetic Hamiltonian

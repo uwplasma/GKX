@@ -1,7 +1,7 @@
 """Diagnostic tuple assembly for nonlinear time integration.
 
 This module owns the pure state-to-diagnostics assembly logic, with diagnostic
-kernels injected by :mod:`gkx.solvers.nonlinear.diagnostic_integration`
+kernels injected by :mod:`gkx.solvers_nonlinear_diagnostic_integration`
 so tests and interactive debugging can still monkeypatch the module-level
 functions.
 """

@@ -1,7 +1,7 @@
 """Nonlinear diagnostic integration drivers.
 
 This module owns the orchestration for explicit nonlinear diagnostic runs.
-:mod:`gkx.solvers.nonlinear.diagnostic_integration` injects the concrete
+:mod:`gkx.solvers_nonlinear_diagnostic_integration` injects the concrete
 kernels so tests and downstream users can still patch these seams without
 keeping the large implementation body inline.
 """
@@ -20,7 +20,7 @@ from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import FieldState, TermConfig
-from gkx.solvers.nonlinear.imex_diagnostics import (
+from gkx.solvers_nonlinear_imex_diagnostics import (
     IMEXNonlinearDiagnosticsDeps,
     integrate_imex_nonlinear_diagnostics_impl,
 )

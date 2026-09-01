@@ -19,7 +19,7 @@ from gkx.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from gkx.solvers.linear.krylov import KrylovConfig
+from gkx.solvers_linear_krylov import KrylovConfig
 from gkx.geometry.miller_eik import generate_runtime_miller_eik
 from gkx.diagnostics.normalization import get_normalization_contract
 from gkx.artifacts.io import load_netcdf_restart_state

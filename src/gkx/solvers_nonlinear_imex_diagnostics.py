@@ -16,7 +16,7 @@ from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import TermConfig
 
-from gkx.solvers.nonlinear.explicit import (
+from gkx.solvers_nonlinear_explicit import (
     _SSPX3_ADT,
     _SSPX3_W1,
     _SSPX3_W2,

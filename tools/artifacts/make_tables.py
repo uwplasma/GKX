@@ -45,13 +45,13 @@ from gkx.geometry import SAlphaGeometry
 from gkx.runtime import run_runtime_linear, run_runtime_scan
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from gkx.core_grid import build_spectral_grid, select_ky_grid
-from gkx.solvers.time.explicit import (
+from gkx.solvers_time_explicit import (
     ExplicitTimeConfig,
     integrate_linear_explicit,
 )
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
-from gkx.solvers.linear.krylov import KrylovConfig
+from gkx.solvers_linear_krylov import KrylovConfig
 from gkx.diagnostics.analysis import (
     ModeSelection,
     extract_mode_time_series,

@@ -18,12 +18,12 @@ from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.config import resolve_cfl_fac
-from gkx.solvers.time.explicit_diagnostics import (
+from gkx.solvers_time_explicit_diagnostics import (
     integrate_linear_explicit_diagnostics as _integrate_linear_explicit_diagnostics_impl,
 )
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.callbacks import progress_update_stride
-from gkx.solvers.time.explicit_cfl import (
+from gkx.solvers_time_explicit_cfl import (
     _cfl_wavenumber_arrays,
     _geometry_frequency_maxima,
     _gradient_ratio_max,
@@ -32,7 +32,7 @@ from gkx.solvers.time.explicit_cfl import (
     _non_twist_shift_frequency_max,
     _parallel_periods_from_grid,
 )
-from gkx.solvers.time.explicit_steps import (
+from gkx.solvers_time_explicit_steps import (
     _SSPX3_ADT,
     _SSPX3_W1,
     _SSPX3_W2,

@@ -23,6 +23,10 @@ allowed_root_prefix_modules = []
 # gkx.core held two (grid, velocity) and is now gkx/core_grid.py and
 # gkx/core_velocity.py, so requiring the package would mandate an empty
 # directory. Same for gkx.utils and gkx.benchmarking, which were never listed.
+# The gkx.solvers tree went the same way: its package __init__ was one line of
+# docstring over three subpackages, and linear, time and nonlinear are now flat
+# modules that re-export from their flat siblings, so none of the four is a
+# package any more.
 required_domain_packages = [
   "gkx.artifacts",
   "gkx.diagnostics",
@@ -32,10 +36,6 @@ required_domain_packages = [
   "gkx.operators.linear",
   "gkx.operators.nonlinear",
   "gkx.parallel",
-  "gkx.solvers",
-  "gkx.solvers.linear",
-  "gkx.solvers.nonlinear",
-  "gkx.solvers.time",
   "gkx.workflows",
   "gkx.workflows.runtime",
 ]

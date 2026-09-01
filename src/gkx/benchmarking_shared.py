@@ -25,7 +25,7 @@ from gkx.diagnostics.normalization import (
 )
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers.linear.krylov import KrylovConfig
+from gkx.solvers_linear_krylov import KrylovConfig
 
 VALID_FIT_SIGNALS = frozenset({"phi", "density", "auto"})
 _Record = TypeVar("_Record")

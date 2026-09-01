@@ -24,7 +24,7 @@ one ladder per configuration -- which is what makes a converged multi-device
 study look unaffordable.
 
 It is not actually unaffordable, because only one eigenpair is wanted. GKX
-already ships a matrix-free Arnoldi (``gkx.solvers.linear.dominant_eigenpair``)
+already ships a matrix-free Arnoldi (``gkx.solvers_linear.dominant_eigenpair``)
 whose cost is O(n^2 k) with k Krylov vectors rather than O(n^3), and whose
 memory is O(n k) rather than O(n^2). Measured here it is already 7.9x faster at
 n = 2560, with the advantage growing as n^3 / (n^2 k) = n / k.
@@ -53,7 +53,7 @@ wrong. Aliasing corrupts the *recovered* frequency, not the *selection*, because
 |mu| = exp(Re lambda * T) does not wrap: a long horizon T separates modes by
 growth alone, and the frequency is then recovered exactly from a Rayleigh
 quotient against the original continuous operator rather than from log(mu). That
-is the path ``gkx.solvers.linear.adaptive_propagator`` now takes, and it reaches
+is the path ``gkx.solvers_linear_adaptive_propagator`` now takes, and it reaches
 truncations the dense solve cannot represent at all.
 
 Shift-invert was likewise reframed rather than dropped. It is not the cold
@@ -100,7 +100,7 @@ def measure(
     from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import linear_params_for_geometry
-    from gkx.solvers.linear import dominant_eigenpair
+    from gkx.solvers_linear import dominant_eigenpair
 
     rows = []
     for n_laguerre, n_hermite in ladder:

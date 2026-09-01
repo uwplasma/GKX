@@ -14,7 +14,7 @@ import jax
 import jax.numpy as jnp
 from solvax import gmres, linear_solve
 
-from gkx.solvers.nonlinear.imex_diagnostics import (
+from gkx.solvers_nonlinear_imex_diagnostics import (
     advance_imex_nonlinear_state,
     make_imex_diagnostic_step,
     run_imex_diagnostic_scan,

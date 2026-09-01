@@ -237,7 +237,7 @@ For repeated nonlinear calls with fixed geometry and numerical policy, prepare
 the compiled simulation once and reuse it:
 
 ```python
-from gkx.solvers.nonlinear.diagnostic_integration import prepare_nonlinear_explicit_diagnostics
+from gkx.solvers_nonlinear_diagnostic_integration import prepare_nonlinear_explicit_diagnostics
 
 simulation = prepare_nonlinear_explicit_diagnostics(
     initial_state, grid, geometry, parameters,

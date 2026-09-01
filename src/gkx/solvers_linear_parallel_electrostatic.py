@@ -17,11 +17,11 @@ from gkx.operators.linear.params import (
     LinearTerms,
     _SPECIES_PARAM_NAMES,
 )
-from gkx.solvers.linear.parallel_common import (
+from gkx.solvers_linear_parallel_common import (
     _is_electrostatic_slice_terms,
     _resolve_parallel_devices,
 )
-from gkx.solvers.linear.parallel_streaming import (
+from gkx.solvers_linear_parallel_streaming import (
     _streaming_electrostatic_from_phi_velocity_sharded,
 )
 

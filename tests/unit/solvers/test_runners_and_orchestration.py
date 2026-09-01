@@ -24,7 +24,7 @@ from gkx.parallel.integrators import (
     integrate_linear_sharded,
     integrate_nonlinear_sharded,
 )
-from gkx.solvers.time.runners import (
+from gkx.solvers_time_runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )
@@ -36,7 +36,7 @@ import gkx.objectives.vmec_boozer_context as vmec_gradient_context
 import gkx.objectives.vmec_boozer_fd as fd_gates
 import gkx.objectives.vmec_boozer_gradients as vmec_gradient_gates
 import gkx.objectives.vmec_boozer_line_search as line_search_gates
-import gkx.solvers.time.runners as runners
+import gkx.solvers_time_runners as runners
 import jax.numpy as jnp
 import numpy as np
 import pytest

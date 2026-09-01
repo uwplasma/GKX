@@ -1574,7 +1574,7 @@ Core solver coverage gates
 CI also enforces a dedicated per-module threshold for the linear solver engine
 that is most likely to regress during algorithm work:
 
-- ``gkx.solvers.linear.krylov`` (matrix-free Arnoldi/shift-invert path)
+- ``gkx.solvers_linear_krylov`` (matrix-free Arnoldi/shift-invert path)
 
 The gate runs focused tests and checks the module from ``coverage-core.xml``:
 

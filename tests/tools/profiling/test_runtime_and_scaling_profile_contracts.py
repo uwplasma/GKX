@@ -20,7 +20,7 @@ from tools.profiling.profile_startup_and_cache import (
     build_low_rank_moment_cache,
     main_runtime_startup,
 )
-from gkx.solvers.nonlinear.diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostic_integration import (
     integrate_nonlinear_explicit_diagnostics_state,
 )
 
@@ -426,7 +426,7 @@ def test_profile_linear_rhs_parallel_slices_builds_summary(monkeypatch) -> None:
     monkeypatch.setattr("jax.devices", lambda _kind=None: [object(), object()])
     monkeypatch.setattr("gkx.operators.linear.rhs.linear_rhs_cached", fake_rhs)
     monkeypatch.setattr(
-        "gkx.solvers.linear.parallel.linear_rhs_parallel_cached", fake_rhs
+        "gkx.solvers_linear_parallel.linear_rhs_parallel_cached", fake_rhs
     )
 
     summary = linear_slices.profile_linear_rhs_parallel_slices(

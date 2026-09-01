@@ -23,7 +23,7 @@ from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.linear import LinearParams, LinearTerms, build_linear_cache
-from gkx.solvers.linear.implicit import _build_implicit_operator
+from gkx.solvers_linear_implicit import _build_implicit_operator
 
 
 def build_parser() -> argparse.ArgumentParser:

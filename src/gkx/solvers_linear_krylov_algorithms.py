@@ -16,7 +16,7 @@ from gkx.operators.linear.cache_arrays import (
 )
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers.time.explicit_steps import _linear_native_step
+from gkx.solvers_time_explicit_steps import _linear_native_step
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import TermConfig
 
@@ -198,7 +198,7 @@ def _build_shift_invert_precond(
     raises. This used to return ``(None, None)`` for those too, so a typo
     disabled preconditioning while the solve reported itself as preconditioned.
     ``"auto"`` must not arrive here -- it is a real policy resolved one level up
-    by :func:`gkx.solvers.linear.krylov._automatic_shift_preconditioner`, and
+    by :func:`gkx.solvers_linear_krylov._automatic_shift_preconditioner`, and
     mapping it to ``"damping"`` would hand a damping diagonal to a caller that
     asked for a physics-aware line solve.
     """
@@ -229,7 +229,7 @@ def _build_shift_invert_precond(
 
     # Import lazily to keep the core operator module independent of the
     # implicit integration policy at import time.
-    from gkx.solvers.linear.implicit import (
+    from gkx.solvers_linear_implicit import (
         _build_field_corrected_shifted_preconditioner,
         _build_shifted_hermite_preconditioner,
     )

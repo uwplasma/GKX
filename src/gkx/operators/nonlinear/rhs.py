@@ -1,7 +1,7 @@
 """Nonlinear RHS assembly helpers.
 
 This module owns the performance-critical RHS composition path.  The nonlinear
-integration solvers in :mod:`gkx.solvers.nonlinear` pass their
+integration solvers in :mod:`gkx.solvers_nonlinear` pass their
 module-level callables into these helpers so existing tests and downstream
 monkeypatch/debug workflows keep the same seams while the implementation stays
 isolated and easier to profile.

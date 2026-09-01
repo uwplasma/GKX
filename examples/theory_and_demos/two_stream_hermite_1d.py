@@ -8,7 +8,7 @@ from gkx.config import GeometryConfig, GridConfig
 from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid
 from gkx.operators.linear.params import LinearParams, LinearTerms
-from gkx.solvers.linear.integrators import integrate_linear
+from gkx.solvers_linear_integrators import integrate_linear
 
 
 def main() -> None:

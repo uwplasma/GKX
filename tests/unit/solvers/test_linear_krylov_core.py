@@ -23,13 +23,13 @@ from gkx.operators.linear.params import (
     build_linear_params,
     linear_terms_to_term_config,
 )
-from gkx.solvers.linear import implicit
+import gkx.solvers_linear_implicit as implicit
 from support.paired_solvax import requires_paired_solvax
 from types import SimpleNamespace
-import gkx.solvers.linear.adaptive_propagator as ap
-import gkx.solvers.linear.krylov as lk
-import gkx.solvers.linear.krylov_algorithms as ka
-import gkx.solvers.linear.krylov_propagator as kp
+import gkx.solvers_linear_adaptive_propagator as ap
+import gkx.solvers_linear_krylov as lk
+import gkx.solvers_linear_krylov_algorithms as ka
+import gkx.solvers_linear_krylov_propagator as kp
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -1806,7 +1806,9 @@ EXACT = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
 
 
 ALLOWED_UNPINNED_MATRIX_DOTS = {
-    "krylov_algorithms.py:675": "overlap ranking only; argmax provably unmoved",
+    # Renamed by the flat-layout pass; the file, the line and the measurement
+    # behind the exemption are unchanged, only the module path is.
+    "solvers_linear_krylov_algorithms.py:675": "overlap ranking only; argmax provably unmoved",
 }
 
 
@@ -1954,7 +1956,10 @@ def test_propagator_candidate_lift_pins_exact_dot_precision(candidates: int) -> 
     lifts = [
         precision
         for origin, precision in found
-        if origin.startswith("krylov_propagator")
+        # Flat-layout rename: the module is solvers_linear_krylov_propagator.py.
+        # This filter selects which contractions the precision guard inspects,
+        # so a stale prefix makes the guard silently vacuous rather than failing.
+        if origin.startswith("solvers_linear_krylov_propagator")
     ]
     assert lifts, "the candidate lift lowered to no matrix dot; the guard is vacuous"
     assert all(precision == EXACT for precision in lifts), (

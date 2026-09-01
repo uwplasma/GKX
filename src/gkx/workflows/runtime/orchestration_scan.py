@@ -471,7 +471,7 @@ def _run_batch_diagnostics(
     show_progress: bool,
     deps: RuntimeScanBatchDeps,
 ) -> _BatchDiagnostics:
-    from gkx.solvers.time.runners import _resolve_config_collision_operator
+    from gkx.solvers_time_runners import _resolve_config_collision_operator
 
     steps_val = int(round(tcfg.t_max / tcfg.dt))
     # The runtime linear scan is the path the executable takes, so the TOML

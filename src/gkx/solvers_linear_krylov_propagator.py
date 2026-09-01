@@ -9,7 +9,7 @@ import jax.numpy as jnp
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers.linear.krylov_algorithms import (
+from gkx.solvers_linear_krylov_algorithms import (
     _advance_rk4,
     _apply_operator,
     _arnoldi,

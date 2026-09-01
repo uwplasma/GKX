@@ -14,19 +14,19 @@ from gkx.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from gkx.solvers.linear.adaptive_propagator import (
+from gkx.solvers_linear_adaptive_propagator import (
     AdaptivePropagatorSolution as AdaptivePropagatorSolution,
     adaptive_propagator_eigenpair,
     certifiable_residual_tolerance,
 )
-from gkx.solvers.linear.krylov_algorithms import (
+from gkx.solvers_linear_krylov_algorithms import (
     _advance_imex2,
     _apply_operator,
     _assemble_rhs_cached_novjp,
     _compute_damping,
     _normalize,
 )
-from gkx.solvers.linear.krylov_algorithms import (
+from gkx.solvers_linear_krylov_algorithms import (
     _arnoldi,
     _build_shift_invert_precond,
     _mode_family_sign,

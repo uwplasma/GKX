@@ -27,7 +27,7 @@ MEMORY_PROFILES = (
 LADDER = STATIC / "nonlinear_heat_flux_gradient_window_rk3.json"
 #: AD/FD disagreement above which a rung is no longer a gradient. Matches the
 #: default in the ladder generator and the knee behind
-#: ``gkx.solvers.nonlinear.state_integration.DIVERGENCE_KNEE_STEPS``.
+#: ``gkx.solvers_nonlinear_state_integration.DIVERGENCE_KNEE_STEPS``.
 TOLERANCE = 1.0e-6
 
 

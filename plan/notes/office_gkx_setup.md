@@ -160,7 +160,7 @@ refusing to report an uncertified growth rate
 **Root cause: TF32.** The A4000 is Ampere, so JAX's default f32 matmul precision on GPU is
 tensorfloat32 (~10-bit mantissa). That inflates the eigenpair residual to 3.4e-3, **28×
 above** the certification floor `certifiable_residual_tolerance = 1000*eps(complex64) =
-1.192e-4` (`src/gkx/solvers/linear/adaptive_propagator.py:26`, gate applied at
+1.192e-4` (`src/gkx/solvers_linear_adaptive_propagator.py:26`, gate applied at
 `krylov.py:577`). The gate is correct; the arithmetic feeding it is not. Forcing full f32
 matmuls makes it converge on the first restart — hence also **40× faster**, because the
 default run burns all its restarts failing.

@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 from support.paths import REPO_ROOT, load_artifact_tool, load_tool_script
 
-from gkx.solvers.nonlinear.state_integration import DIVERGENCE_KNEE_STEPS
+from gkx.solvers_nonlinear_state_integration import DIVERGENCE_KNEE_STEPS
 
 STATIC = REPO_ROOT / "docs" / "_static"
 LADDER = STATIC / "nonlinear_heat_flux_gradient_window_rk3.json"

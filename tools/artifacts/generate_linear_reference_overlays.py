@@ -71,7 +71,7 @@ from gkx.geometry import (  # noqa: E402
     apply_imported_geometry_grid_defaults,
     load_imported_geometry_netcdf,
 )
-from gkx.solvers.time.explicit import ExplicitTimeConfig  # noqa: E402
+from gkx.solvers_time_explicit import ExplicitTimeConfig  # noqa: E402
 
 KBM_EIGENFUNCTION_GATE_TOLERANCES = {
     "min_overlap": 0.95,

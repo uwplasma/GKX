@@ -9,20 +9,20 @@ import jax.numpy as jnp
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams, LinearTerms
-from gkx.solvers.linear.parallel_common import *  # noqa: F403
-from gkx.solvers.linear.parallel_common import (
+from gkx.solvers_linear_parallel_common import *  # noqa: F403
+from gkx.solvers_linear_parallel_common import (
     __all__ as _common_all,
     _is_electrostatic_slice_terms,
     _is_streaming_only_terms,
 )
-from gkx.solvers.linear.parallel_electrostatic import *  # noqa: F403
-from gkx.solvers.linear.parallel_electrostatic import (
+from gkx.solvers_linear_parallel_electrostatic import *  # noqa: F403
+from gkx.solvers_linear_parallel_electrostatic import (
     __all__ as _electrostatic_all,
     linear_rhs_electrostatic_slices_velocity_sharded,
     linear_rhs_electrostatic_species_sharded,
 )
-from gkx.solvers.linear.parallel_streaming import *  # noqa: F403
-from gkx.solvers.linear.parallel_streaming import (
+from gkx.solvers_linear_parallel_streaming import *  # noqa: F403
+from gkx.solvers_linear_parallel_streaming import (
     __all__ as _streaming_all,
     linear_rhs_electrostatic_species_hermite_sharded,
     linear_rhs_streaming_electrostatic_velocity_sharded,

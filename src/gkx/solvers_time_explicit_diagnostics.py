@@ -23,8 +23,8 @@ from gkx.diagnostics import (
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams, LinearTerms
-from gkx.solvers.time.explicit_cfl import _linear_frequency_bound
-from gkx.solvers.time.explicit_steps import (
+from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
+from gkx.solvers_time_explicit_steps import (
     _diagnostic_midplane_index,
     _growth_rate_mode_mask,
     _instantaneous_growth_rate_step,

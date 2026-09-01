@@ -28,7 +28,7 @@ from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.linear.integrators import integrate_linear
+from gkx.solvers_linear_integrators import integrate_linear
 from gkx.operators import hermite_streaming
 from gkx.operators.linear import (
     apply_collision_moment_matrix,

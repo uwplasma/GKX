@@ -42,7 +42,7 @@ from gkx.diagnostics.analysis import (
     instantaneous_growth_rate_from_phi,
     select_ky_index,
 )
-from gkx.solvers.time.explicit import (
+from gkx.solvers_time_explicit import (
     ExplicitTimeConfig,
     _instantaneous_growth_rate_step,
     _linear_frequency_bound,

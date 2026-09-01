@@ -13,7 +13,7 @@ from gkx.operators.linear.params import (
     _as_species_array,
     linear_terms_to_term_config,
 )
-from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
+from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
 
 
 def _species_hermite_mesh_and_state_sharding(

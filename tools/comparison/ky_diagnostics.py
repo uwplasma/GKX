@@ -51,8 +51,8 @@ from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
-from gkx.solvers.linear.integrators import integrate_linear_diagnostics
-from gkx.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
+from gkx.solvers_linear_integrators import integrate_linear_diagnostics
+from gkx.solvers_linear_krylov import KrylovConfig, dominant_eigenpair
 from gkx.terms.assembly import compute_fields_cached
 from gkx.terms.config import TermConfig
 from gkx.workflows.runtime.startup import (

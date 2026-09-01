@@ -65,7 +65,7 @@ from gkx.benchmarking_shared import (
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.time.explicit_cfl import _linear_frequency_bound
+from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
 from gkx.runtime import (
     _build_initial_condition as build_runtime_initial_condition,
     build_runtime_geometry,
@@ -85,7 +85,7 @@ def test_integrator_benchmark_uses_canonical_linear_owners() -> None:
     assert benchmark_integrators.LinearParams is LinearParams
     assert benchmark_integrators.build_linear_cache is build_linear_cache
     assert benchmark_integrators.integrate_linear.__module__ == (
-        "gkx.solvers.linear.integrators"
+        "gkx.solvers_linear_integrators"
     )
 
 

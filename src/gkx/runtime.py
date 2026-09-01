@@ -21,18 +21,18 @@ from gkx.diagnostics.modes import (
 )
 from gkx.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike
 from gkx.core_grid import build_spectral_grid, select_ky_grid
-from gkx.solvers.linear.integrators import integrate_linear_diagnostics
+from gkx.solvers_linear_integrators import integrate_linear_diagnostics
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     linear_terms_to_term_config,
 )
-from gkx.solvers.nonlinear.diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostic_integration import (
     integrate_nonlinear_explicit_diagnostics_state,
     prepare_nonlinear_explicit_diagnostics,
 )
-from gkx.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
+from gkx.solvers_linear_krylov import KrylovConfig, dominant_eigenpair
 from gkx.diagnostics.normalization import apply_diagnostic_normalization
 from gkx.parallel import independent_map
 from gkx.diagnostics.quasilinear_transport import compute_quasilinear_from_linear_state
@@ -87,7 +87,7 @@ from gkx.workflows.runtime.startup import (
     _runtime_model_key,
     _species_to_linear,
 )
-from gkx.solvers.time.runners import (
+from gkx.solvers_time_runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )

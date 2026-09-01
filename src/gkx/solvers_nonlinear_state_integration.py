@@ -16,7 +16,7 @@ from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.operators.collision import CollisionOperator
 from gkx.diagnostics.transport import heat_flux_species, heat_flux_total
 from gkx.diagnostics.moments import fieldline_quadrature_weights
-from gkx.solvers.linear.implicit import _build_implicit_operator
+from gkx.solvers_linear_implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import (
     build_linear_cache,
@@ -39,17 +39,17 @@ from gkx.operators.nonlinear.rhs import (
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
-from gkx.solvers.nonlinear.explicit import (
+from gkx.solvers_nonlinear_explicit import (
     advance_explicit_nonlinear_state,
     checkpointed_explicit_scan,
     integrate_cached_explicit_scan,
     integrate_nonlinear_scan,
 )
-from gkx.solvers.nonlinear.imex import (
+from gkx.solvers_nonlinear_imex import (
     integrate_cached_imex_scan,
     solve_imex_step,
 )
-from gkx.solvers.time.explicit import (
+from gkx.solvers_time_explicit import (
     _laguerre_velocity_max,
     _linear_frequency_bound,
 )
