@@ -2636,13 +2636,24 @@ was then measured, on GKX's own shapes:
 | today: stack two components, one batched `irfft2` | 83.1 ms | 228.9 MB |
 | packed: one c2c `ifft2`, components as real and imaginary parts | **58.0 ms** | 226.5 MB |
 
-A 1.43x speedup at unchanged memory. **The timing is verified and the
-correctness is not**: the benchmark used a random spectral array, which is not
-Hermitian-symmetric, so it establishes shape and cost but not values. Reading two
-real fields off one complex transform is valid only because both derivatives are
-real in real space, which holds for the actual state but needs the `ky=0`
-symmetrisation the gyaradax authors flag. The implementation must be gated on the
-existing bracket tests, not on this benchmark.
+**That measurement was invalid and the technique does not apply here.** Checking
+the identity rather than the timing settles it: recovering two real fields from
+one complex inverse transform requires the **full** complex spectra of both. On
+half spectra it is simply wrong -- maximum error 2.38 against a field of order
+one, where the ordinary `irfft2` of the same half spectrum recovers the field to
+4.8e-7.
+
+The 1.43x came from comparing a stacked two-component `irfft2` against a
+single-component `ifft2`: half the work, and the wrong answer. Correctness was
+labelled unverified at the time, which was not enough -- the comparison was not
+like-for-like, so the timing did not mean anything either.
+
+The deeper reason is structural. Packing two real fields into one complex
+transform is how a code that works in **full** complex spectra buys back the
+factor of two that reality gives it. GKX already takes that factor by using
+`rfft`, so there is nothing left to pack: one complex transform of a given size
+costs about what two real transforms of that size cost. gyaradax report a gain
+because their transforms are c2c throughout. **Do not implement this.**
 
 ### 25e.4 A negative result worth not repeating
 
