@@ -24,7 +24,7 @@ from gkx.geometry import (
     sample_flux_tube_geometry,
     twist_shift_params,
 )
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams
 

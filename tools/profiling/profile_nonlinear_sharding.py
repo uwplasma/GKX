@@ -27,7 +27,7 @@ import numpy as np
 from gkx._version import __version__ as gkx_version
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams
 from gkx.solvers.nonlinear.state_integration import (

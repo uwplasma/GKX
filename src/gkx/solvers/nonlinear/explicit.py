@@ -285,7 +285,7 @@ def _maybe_emit_progress(
 
     if not show_progress:
         return G
-    from gkx.utils.callbacks import (  # type: ignore[import-untyped]
+    from gkx.callbacks import (  # type: ignore[import-untyped]
         print_callback,
         should_emit_progress,
     )

@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 import numpy as np
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.workflows.runtime.initial_phi import _density_moments_for_target_phi
 from gkx.workflows.runtime.initial_phi import (
@@ -138,7 +138,7 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
 
     if contract == "kbm":
         # Keep the benchmark-specific branch policy in its validation owner.
-        from gkx.benchmarking.shared import KBM_KRYLOV_DEFAULT
+        from gkx.benchmarking_shared import KBM_KRYLOV_DEFAULT
 
         return KBM_KRYLOV_DEFAULT
 

@@ -4,7 +4,7 @@ Architecture
 Core modules
 ------------
 
-- ``gkx.core.velocity``: Hermite/Laguerre basis functions, gyroaverage
+- ``gkx.core_velocity``: Hermite/Laguerre basis functions, gyroaverage
   coefficients, and polarization helpers.
 - ``gkx.geometry``: analytic s-alpha flux-tube geometry.
 - ``gkx.terms``: term-wise RHS kernels (streaming, mirror, drifts, drive, collisions, fields).
@@ -31,7 +31,7 @@ Core modules
 - ``gkx.runtime`` / ``gkx.workflows.runtime.config``: user-facing runtime entrypoints and configuration schema.
 - ``gkx.workflows.runtime.policies``: pure runtime selection policies for solver names, scan modes, nonlinear monitored modes, external fields, and step-count inference.
 - ``gkx.workflows.runtime.orchestration_scan``, ``gkx.workflows.runtime.chunks``, and ``gkx.workflows.runtime.orchestration_artifacts``: runtime scan batching, progress/ETA formatting, and nonlinear restart/checkpoint artifact handoff behind injectable seams.
-- ``gkx.benchmarking.shared``: reviewed reference tables,
+- ``gkx.benchmarking_shared``: reviewed reference tables,
   normalization constants, and comparison-only branch policies.
 - ``gkx.diagnostics.growth_rates``: reusable growth/frequency fitting.
 - ``gkx.artifacts.plotting``: reusable, publication-ready plotting utilities.

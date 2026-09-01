@@ -6,7 +6,7 @@ from typing import Any, Sequence
 
 import jax.numpy as jnp
 
-from gkx.core.grid import real_fft_mesh
+from gkx.core_grid import real_fft_mesh
 
 
 def _fft2_xy(x: jnp.ndarray) -> jnp.ndarray:

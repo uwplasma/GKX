@@ -8,7 +8,7 @@ import jax.numpy as jnp
 
 from gkx.config import resolve_cfl_fac
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams

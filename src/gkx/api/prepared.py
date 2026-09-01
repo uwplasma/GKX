@@ -167,7 +167,7 @@ class PreparedSimulation:
     def compilation_metadata(self) -> dict[str, Any]:
         """Report whether a second run of this topology can reuse a cache."""
 
-        from gkx.utils import compilation_cache
+        import gkx.compilation_cache as compilation_cache
 
         enabled = compilation_cache.compilation_cache_enabled()
         return {

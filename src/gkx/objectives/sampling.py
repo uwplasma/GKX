@@ -7,7 +7,7 @@ from typing import Any, cast
 import numpy as np
 
 from gkx.config import GridConfig
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 
 
 def _surface_index_tuple(

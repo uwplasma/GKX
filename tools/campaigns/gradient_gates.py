@@ -19,7 +19,7 @@ from gkx.diagnostics import (
     particle_flux_species,
 )
 from gkx.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms

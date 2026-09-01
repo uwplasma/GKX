@@ -16,7 +16,7 @@ from gkx.operators.nonlinear.brackets import (
     _stack_fields,
 )
 
-from gkx.core.velocity import (
+from gkx.core_velocity import (
     _laguerre_bpar_correction,
     _laguerre_bpar_correction_precomputed,
     _laguerre_j0_field,

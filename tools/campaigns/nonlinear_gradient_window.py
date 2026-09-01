@@ -90,7 +90,7 @@ def build_window_case(
 ) -> dict[str, Any]:
     """Load a shipped nonlinear case as arguments for the production window."""
 
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import ensure_flux_tube_geometry_data
     from gkx.runtime import (
         build_runtime_geometry,

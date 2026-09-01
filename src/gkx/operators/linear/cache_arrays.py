@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core.velocity import J_l_all
+from gkx.core_velocity import J_l_all
 from gkx.operators.linear.params import LinearParams, _as_species_array
 
 if TYPE_CHECKING:

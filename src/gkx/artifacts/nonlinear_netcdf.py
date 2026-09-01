@@ -32,7 +32,7 @@ from gkx.artifacts.spectral_layout import (
     _write_runtime_root_metadata,
     NETCDF_SCHEMA_VERSION,
 )
-from gkx.core.grid import (
+from gkx.core_grid import (
     build_spectral_grid,
     real_fft_ordered_kx,
     real_fft_unique_ky,

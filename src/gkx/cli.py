@@ -31,7 +31,7 @@ from gkx.workflows.demo import (
     run_default_linear_demo,
 )
 from gkx.runtime import run_runtime_linear, run_runtime_scan
-from gkx.utils.compilation_cache import enable_persistent_compilation_cache
+from gkx.compilation_cache import enable_persistent_compilation_cache
 from gkx.workflows.runtime.commands import (
     RuntimeCommandDeps,
     attach_preloaded_runtime_config,
@@ -508,7 +508,7 @@ def main() -> int:
     # Every executable path that can compile gets the persistent cache, before
     # any solver is built. Re-running an unchanged case is the common case
     # while a user edits a TOML, and it is the case that was paying a full
-    # cold compile every time. See gkx.utils.compilation_cache.
+    # cold compile every time. See gkx.compilation_cache.
     enable_persistent_compilation_cache()
     if not argv:
         return _cmd_default_demo()

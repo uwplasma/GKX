@@ -161,7 +161,7 @@ from compare_gx_imported_linear import (
 )
 from gkx.config import GeometryConfig, GridConfig
 from gkx.geometry import SAlphaGeometry, sample_flux_tube_geometry
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.solvers.time.explicit import ExplicitTimeConfig
 from gkx.operators.linear.params import LinearTerms
 from gkx.workflows.runtime.config import RuntimeConfig
@@ -1860,7 +1860,7 @@ def test_compare_gx_kbm_recompute_on_gx_time_grid(monkeypatch) -> None:
         import compare_gx_kbm as mod
     finally:
         sys.path.remove(str(tools_dir))
-    from gkx.benchmarking.shared import LinearRunResult
+    from gkx.benchmarking_shared import LinearRunResult
 
     captured: dict[str, object] = {}
 
@@ -1907,7 +1907,7 @@ def test_compare_gx_kbm_recompute_on_gx_time_grid_prefers_instantaneous_omega_se
         import compare_gx_kbm as mod
     finally:
         sys.path.remove(str(tools_dir))
-    from gkx.benchmarking.shared import LinearRunResult
+    from gkx.benchmarking_shared import LinearRunResult
 
     result = LinearRunResult(
         t=np.array([0.0, 1.0, 2.0], dtype=float),
@@ -1943,7 +1943,7 @@ def test_compare_gx_kbm_recompute_project_uses_fit_window(monkeypatch) -> None:
         import compare_gx_kbm as mod
     finally:
         sys.path.remove(str(tools_dir))
-    from gkx.benchmarking.shared import LinearRunResult
+    from gkx.benchmarking_shared import LinearRunResult
 
     calls: dict[str, object] = {}
 
@@ -2001,7 +2001,7 @@ def test_compare_gx_kbm_recompute_project_late_uses_late_fit_policy(
         import compare_gx_kbm as mod
     finally:
         sys.path.remove(str(tools_dir))
-    from gkx.benchmarking.shared import LinearRunResult
+    from gkx.benchmarking_shared import LinearRunResult
 
     calls: dict[str, object] = {}
 
@@ -2777,7 +2777,7 @@ def test_synth_positive_and_full_ky_rebuild_dump_grid() -> None:
 
 # ---- test_compare_gx_rhs_terms.py ----
 
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     KBM_OMEGA_D_SCALE,
     KBM_OMEGA_STAR_SCALE,
     KBM_RHO_STAR,
@@ -2785,7 +2785,7 @@ from gkx.benchmarking.shared import (
     _two_species_params,
 )
 from gkx.config import KBMBaseCase
-from gkx.core.grid import select_ky_grid
+from gkx.core_grid import select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.terms.assembly import assemble_rhs_terms_cached, compute_fields_cached
 from gkx.terms.config import TermConfig

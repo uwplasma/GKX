@@ -333,7 +333,7 @@ def maybe_emit_nonlinear_progress(
     if not show_progress:
         return state
 
-    from gkx.utils.callbacks import print_callback, should_emit_progress
+    from gkx.callbacks import print_callback, should_emit_progress
 
     gamma_cb, omega_cb = diag[0], diag[1]
     Wg_cb, Wphi_cb = diag[2], diag[3]

@@ -1106,7 +1106,7 @@ def test_species_field_reduce_shard_map_matches_reference_when_devices_available
 def _small_periodic_field_problem():
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.geometry import SAlphaGeometry
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams
 
@@ -1129,7 +1129,7 @@ def _small_periodic_field_problem():
 def _small_kinetic_electron_problem(*, linked: bool = False):
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.geometry import SAlphaGeometry
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams
 
@@ -2616,7 +2616,7 @@ def test_hermite_streaming_ladder_shard_map_matches_reference_when_logical_devic
 
 
 def test_periodic_streaming_reference_matches_production_streaming_term() -> None:
-    from gkx.core.velocity import hermite_ladder_coeffs
+    from gkx.core_velocity import hermite_ladder_coeffs
     from gkx.operators.linear.streaming import streaming_ladder_term
 
     ns, nl, nm, ny, nx, nz = 1, 2, 4, 2, 1, 8
@@ -2691,7 +2691,7 @@ def test_periodic_streaming_shard_map_matches_reference_when_logical_devices_ava
 def test_linear_rhs_parallel_cached_streaming_only_matches_serial_call_graph() -> None:
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.geometry import SAlphaGeometry
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
@@ -2772,7 +2772,7 @@ def test_linear_rhs_parallel_cached_electrostatic_streaming_matches_serial_call_
 ):
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.geometry import SAlphaGeometry
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
@@ -3201,7 +3201,7 @@ def _species_hermite_problem(ns: int = 2, nl: int = 2, nm: int = 8, n: int = 4):
     import numpy as np
 
     from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.diagnostics.moments import fieldline_quadrature_weights
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.cache_builder import build_linear_cache

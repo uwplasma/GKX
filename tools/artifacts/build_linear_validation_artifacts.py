@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
-    from gkx.benchmarking.shared import LinearScanResult
+    from gkx.benchmarking_shared import LinearScanResult
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -6091,7 +6091,7 @@ def finite_wavelength_itg_growth_curve(
     import jax.numpy as jnp
 
     from gkx.config import GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SlabGeometry
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
@@ -6233,7 +6233,7 @@ def collisionless_slab_itg_hierarchy(
     import jax.numpy as jnp
 
     from gkx.config import GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SlabGeometry
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
@@ -6830,7 +6830,7 @@ def build_figures_parser() -> argparse.ArgumentParser:
 def _load_gkx_scan_from_mismatch(
     csv_path: Path, *, x_col: str = "ky"
 ) -> LinearScanResult:
-    from gkx.benchmarking.shared import LinearScanResult
+    from gkx.benchmarking_shared import LinearScanResult
 
     table = pd.read_csv(csv_path).sort_values(x_col)
     return LinearScanResult(
@@ -6841,7 +6841,7 @@ def _load_gkx_scan_from_mismatch(
 
 
 def _cyclone_refresh_reference(ref: LinearScanResult) -> LinearScanResult:
-    from gkx.benchmarking.shared import LinearScanResult
+    from gkx.benchmarking_shared import LinearScanResult
 
     keep = np.asarray(ref.ky) <= 0.45 + 1.0e-12
     return LinearScanResult(
@@ -6853,7 +6853,7 @@ def _cyclone_refresh_reference(ref: LinearScanResult) -> LinearScanResult:
 
 def _run_etg_figures(*, outdir: Path, progress: bool) -> None:
     from gkx.artifacts.plotting import scan_comparison_figure
-    from gkx.benchmarking.shared import load_etg_reference
+    from gkx.benchmarking_shared import load_etg_reference
     from gkx.runtime import run_runtime_scan
     from gkx.workflows.runtime.toml import load_runtime_from_toml
 
@@ -6902,7 +6902,7 @@ def _run_etg_figures(*, outdir: Path, progress: bool) -> None:
 
 def _run_kbm_figures(*, outdir: Path) -> None:
     from gkx.artifacts.plotting import scan_comparison_figure
-    from gkx.benchmarking.shared import load_kbm_reference
+    from gkx.benchmarking_shared import load_kbm_reference
 
     reference = load_kbm_reference()
     mismatch_csv = outdir / "kbm_mismatch_table.csv"
@@ -6933,7 +6933,7 @@ def main_figures(argv: list[str] | None = None) -> int:
         cyclone_comparison_figure,
         cyclone_reference_figure,
     )
-    from gkx.benchmarking.shared import load_cyclone_reference
+    from gkx.benchmarking_shared import load_cyclone_reference
 
     args = build_figures_parser().parse_args(argv)
     outdir = REPO_ROOT / "docs" / "_static"

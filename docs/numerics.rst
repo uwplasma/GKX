@@ -17,9 +17,9 @@ Algorithm mapping (numerics → code)
 The core numerical algorithms and their implementation entry points are:
 
 - **Hermite–Laguerre pseudo-spectral expansion**:
-  :mod:`gkx.core.velocity`.
+  :mod:`gkx.core_velocity`.
 - **Gyroaverage / polarization**:
-  :func:`gkx.core.velocity.J_l_all`,
+  :func:`gkx.core_velocity.J_l_all`,
   :func:`gkx.operators.linear.moments.quasineutrality_phi`.
 - **Centered periodic derivative in z**:
   :func:`gkx.operators.linear.moments.grad_z_periodic`.
@@ -57,7 +57,7 @@ The implementation leverages the following JAX primitives:
   kernels.
 - **Loop fusion**: ``jax.lax.scan`` drives the time integration loop.
 - **FFT grids**: ``jax.numpy.fft.fftfreq`` is used in
-  :func:`gkx.core.grid.build_spectral_grid`.
+  :func:`gkx.core_grid.build_spectral_grid`.
 - **Sparse Krylov solver**: ``solvax.gmres`` is used for implicit linear and
   nonlinear IMEX time steps through one shared GKX policy adapter.
   Nonlinear IMEX reverse mode wraps the tolerance-controlled solve with

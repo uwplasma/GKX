@@ -163,7 +163,7 @@ Python demo
 
    print(result.gamma, result.omega)
 
-Tracked comparison tables are available through :mod:`gkx.benchmarking.shared`;
+Tracked comparison tables are available through :mod:`gkx.benchmarking_shared`;
 all simulations use the unified runtime API above.
 
 Run from TOML

@@ -292,7 +292,7 @@ def test_integrate_linear_explicit_from_config_runs_full_rk4_loop() -> None:
     # End-to-end explicit linear rk4 loop (public API) on a tiny Cyclone case,
     # exercising _run_linear_explicit_loop and its stepper/progress helpers.
     from gkx.config import CycloneBaseCase, GridConfig, TimeConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.params import LinearParams
 
@@ -416,7 +416,7 @@ def test_linear_loop_progress_clock_and_history_arrays() -> None:
 
 def _tiny_linear_case():
     from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.params import LinearParams
 
@@ -1275,7 +1275,7 @@ def test_integrate_nonlinear_scan_k10_branch_is_finite_and_shape_preserving() ->
 
 
 def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> None:
-    from gkx.utils import callbacks
+    import gkx.callbacks as callbacks
 
     callback_calls: list[int] = []
 

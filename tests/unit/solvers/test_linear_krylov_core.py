@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.geometry.sensitivity import _damped_gauss_newton_step
 from gkx.operators.linear.cache_builder import build_linear_cache
@@ -1726,7 +1726,7 @@ def test_line_and_field_preconditioners_are_not_the_damping_diagonal() -> None:
 
     from pathlib import Path
 
-    from gkx.core.grid import select_ky_grid
+    from gkx.core_grid import select_ky_grid
     from gkx.geometry.flux_tube import sample_flux_tube_geometry
     from gkx.runtime import (
         build_runtime_geometry,

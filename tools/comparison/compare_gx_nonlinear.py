@@ -22,7 +22,7 @@ from gkx.diagnostics.validation_gates import (
     gate_report,
     gate_report_to_dict,
 )
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     CYCLONE_OMEGA_D_SCALE,
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
@@ -33,8 +33,8 @@ from gkx.benchmarking.shared import (
     _two_species_params,
 )
 from gkx.config import CycloneBaseCase, GridConfig, KBMBaseCase
-from gkx.core.grid import build_spectral_grid, twothirds_mask
-from gkx.core.velocity import laguerre_quadrature_count
+from gkx.core_grid import build_spectral_grid, twothirds_mask
+from gkx.core_velocity import laguerre_quadrature_count
 from gkx.geometry import (
     SAlphaGeometry,
     apply_imported_geometry_grid_defaults,

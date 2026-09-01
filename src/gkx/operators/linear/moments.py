@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 
-from gkx.core.velocity import hermite_ladder_coeffs
+from gkx.core_velocity import hermite_ladder_coeffs
 from gkx.geometry import FluxTubeGeometryLike
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import HermiteWindow, hermite_index_of
 from gkx.operators.linear.params import _check_nonnegative, _check_positive
 from gkx.operators.linear.streaming import (
@@ -89,7 +89,7 @@ def energy_operator(
     The perpendicular part uses ``apply_laguerre_x`` and therefore assumes the
     plain Laguerre basis with negative ``l +/- 1`` couplings, while the runtime
     state uses the alternating ``(-1)**l`` basis of
-    ``gkx.core.velocity.J_l_all``. Composing with runtime states requires the
+    ``gkx.core_velocity.J_l_all``. Composing with runtime states requires the
     alternating-basis counterparts in ``gkx.terms.linear_terms`` (sign-flipped
     ``l +/- 1`` couplings); this helper is not used by the production RHS.
     """
@@ -114,7 +114,7 @@ def diamagnetic_drive_coeffs(
     Built from ``energy_operator`` and therefore expressed in the plain
     Laguerre basis, whose off-diagonal ``l +/- 1`` signs differ from the
     alternating ``(-1)**l`` basis carried by the runtime state (see
-    ``gkx.core.velocity.J_l_all``). Applying these coefficients to runtime
+    ``gkx.core_velocity.J_l_all``). Applying these coefficients to runtime
     states requires the alternating-basis diamagnetic-drive path in
     ``gkx.terms.linear_terms`` instead; this helper is not used by the
     production RHS.

@@ -32,7 +32,7 @@ from gkx.artifacts.plotting import set_plot_style  # noqa: E402
 from gkx.artifacts.io import (  # noqa: E402
     load_diagnostic_time_series,
 )
-from gkx.core.grid import SpectralGrid, build_spectral_grid  # noqa: E402
+from gkx.core_grid import SpectralGrid, build_spectral_grid  # noqa: E402
 from gkx.diagnostics import (  # noqa: E402
     fieldline_quadrature_weights,
     zonal_phi_line_kxt,

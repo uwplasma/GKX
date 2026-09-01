@@ -23,7 +23,7 @@ from gkx.diagnostics.analysis import (
     windowed_growth_rate_from_omega_series,
     select_ky_index,
 )
-from gkx.benchmarking.shared import KBM_KRYLOV_DEFAULT
+from gkx.benchmarking_shared import KBM_KRYLOV_DEFAULT
 from gkx.runtime import run_runtime_linear
 from gkx.diagnostics.analysis import branch_continuity_metrics
 from gkx.diagnostics.validation_gates import (
@@ -36,7 +36,7 @@ from gkx.config import (
     GridConfig,
     KineticElectronModelConfig,
 )
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.workflows.runtime.toml import load_runtime_from_toml, load_toml
 
 LATE_PROJECT_WINDOW_FRACTION = 0.3

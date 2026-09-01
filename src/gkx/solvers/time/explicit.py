@@ -13,7 +13,7 @@ import numpy as np
 
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.geometry import FluxTubeGeometryLike
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
@@ -22,7 +22,7 @@ from gkx.solvers.time.explicit_diagnostics import (
     integrate_linear_explicit_diagnostics as _integrate_linear_explicit_diagnostics_impl,
 )
 from gkx.terms.assembly import assemble_rhs_cached
-from gkx.utils.callbacks import progress_update_stride
+from gkx.callbacks import progress_update_stride
 from gkx.solvers.time.explicit_cfl import (
     _cfl_wavenumber_arrays,
     _geometry_frequency_maxima,

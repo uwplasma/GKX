@@ -62,7 +62,7 @@ def evaluate(case: dict) -> dict:
     import jaxlib
 
     from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
     from gkx.operators.linear.params import Species, build_linear_params
     from gkx.solvers.nonlinear.state_integration import nonlinear_heat_flux_window

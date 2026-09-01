@@ -29,7 +29,7 @@ from typing import Any
 import numpy as np
 
 from gkx.config import resolve_cfl_fac
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.geometry.core import (
     apply_geometry_grid_defaults,

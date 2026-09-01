@@ -14,12 +14,12 @@ from gkx.artifacts.io import (
     validate_finite_array,
     validate_finite_runtime_result,
 )
-from gkx.benchmarking.shared import _build_initial_condition
+from gkx.benchmarking_shared import _build_initial_condition
 from gkx.config import CycloneBaseCase
 from gkx.config import GridConfig, TimeConfig
 from gkx.config import InitializationConfig
-from gkx.core.grid import build_spectral_grid, select_ky_grid
-from gkx.core.velocity import gamma0
+from gkx.core_grid import build_spectral_grid, select_ky_grid
+from gkx.core_velocity import gamma0
 from gkx.diagnostics import (
     ResolvedDiagnostics,
     SimulationDiagnostics,

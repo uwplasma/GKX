@@ -14,7 +14,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import FieldState

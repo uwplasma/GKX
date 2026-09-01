@@ -7,7 +7,7 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
-from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape
+from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
@@ -136,7 +136,7 @@ def _maybe_emit_progress(
 ) -> jnp.ndarray:
     if not show_progress:
         return G
-    from gkx.utils.callbacks import print_callback, should_emit_progress
+    from gkx.callbacks import print_callback, should_emit_progress
 
     completed_step = jnp.minimum((idx + 1) * step_multiplier, steps) - 1
     sim_time = jnp.minimum((idx + 1) * step_multiplier, steps) * dt_val

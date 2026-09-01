@@ -7,7 +7,7 @@ import math
 
 import jax.numpy as jnp
 
-from gkx.core.velocity import laguerre_gyroaverage_neighbors
+from gkx.core_velocity import laguerre_gyroaverage_neighbors
 
 from gkx.operators.nonlinear.collisions import (
     conservative_full_f_dougherty_cross_moments as conservative_full_f_dougherty_cross_moments,

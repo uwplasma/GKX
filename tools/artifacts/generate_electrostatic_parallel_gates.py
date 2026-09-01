@@ -99,7 +99,7 @@ def build_problem(
     import jax.numpy as jnp
 
     from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams

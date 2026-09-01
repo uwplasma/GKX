@@ -12,8 +12,8 @@ import pytest
 from gkx.diagnostics.analysis import estimate_observed_order
 from gkx.config import GridConfig
 from gkx.geometry import FluxTubeGeometryData, SAlphaGeometry
-from gkx.core.grid import build_spectral_grid
-from gkx.core.velocity import _gyro_bessel_factors, J_l_all
+from gkx.core_grid import build_spectral_grid
+from gkx.core_velocity import _gyro_bessel_factors, J_l_all
 import gkx.operators.linear as linear_cache
 import gkx.solvers.linear.integrators as linear_integrators
 import gkx.solvers.linear.implicit as linear_implicit

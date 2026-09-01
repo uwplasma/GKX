@@ -9,8 +9,8 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from gkx.core.velocity import _gyro_bessel_factors, laguerre_transform
-from gkx.core.grid import SpectralGrid
+from gkx.core_velocity import _gyro_bessel_factors, laguerre_transform
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_arrays import (
     _build_end_damping_profile_array,
     _build_gyroaverage_cache_arrays,

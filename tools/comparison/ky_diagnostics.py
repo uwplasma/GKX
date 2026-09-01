@@ -24,7 +24,7 @@ from gkx.diagnostics.analysis import (
     instantaneous_growth_rate_from_phi,
     select_ky_index,
 )
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     CYCLONE_OMEGA_D_SCALE,
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
@@ -48,7 +48,7 @@ from gkx.config import (
     KBMBaseCase,
 )
 from gkx.geometry import SAlphaGeometry
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.solvers.linear.integrators import integrate_linear_diagnostics

@@ -331,7 +331,7 @@ def build_hermite_streaming_ladder_gate(
 def _production_streaming_term(state: Any, *, kz: Any, vth: float) -> Any:
     import jax.numpy as jnp
 
-    from gkx.core.velocity import hermite_ladder_coeffs
+    from gkx.core_velocity import hermite_ladder_coeffs
     from gkx.operators.linear.streaming import streaming_ladder_term
 
     nm = int(state.shape[-4])

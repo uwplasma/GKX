@@ -2,7 +2,7 @@ import jax.numpy as jnp
 
 from gkx.config import CycloneBaseCase
 from gkx.geometry import SAlphaGeometry
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 
 
 def main(kx0: float = 0.0, ky: float = 0.3) -> None:

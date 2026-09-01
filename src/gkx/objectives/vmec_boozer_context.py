@@ -7,7 +7,7 @@ from typing import Any
 import jax.numpy as jnp
 
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.diagnostics import fieldline_quadrature_weights, heat_flux_species
 from gkx.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
 from gkx.geometry.vmec_boozer_core import (

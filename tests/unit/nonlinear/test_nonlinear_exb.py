@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from gkx.config import GridConfig
 from gkx.config import InitializationConfig, TimeConfig
-from gkx.core.grid import build_spectral_grid, real_fft_mesh
-from gkx.core.velocity import (
+from gkx.core_grid import build_spectral_grid, real_fft_mesh
+from gkx.core_velocity import (
     _laguerre_bpar_correction,
     _laguerre_bpar_correction_precomputed,
     _laguerre_j0_field,
@@ -13,7 +13,7 @@ from gkx.core.velocity import (
     _laguerre_to_grid,
     _laguerre_to_spectral,
 )
-from gkx.core.velocity import bessel_j0, bessel_j1, laguerre_transform
+from gkx.core_velocity import bessel_j0, bessel_j1, laguerre_transform
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.operators.nonlinear.brackets import (
     _apply_mask_xy,
@@ -1383,7 +1383,7 @@ def test_precomputed_bessel_helpers_match_direct_evaluation():
             0.0, 2.0 * roots[None, :, None, None, None] * b_species[:, None, ...]
         )
     )
-    from gkx.core.velocity import bessel_j0 as _b0, bessel_j1 as _b1
+    from gkx.core_velocity import bessel_j0 as _b0, bessel_j1 as _b1
 
     j0 = _b0(alpha)
     j1 = _b1(alpha)

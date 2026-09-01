@@ -15,7 +15,7 @@ the origin markers below delimit each block.
 from __future__ import annotations
 
 from gkx.config import CycloneBaseCase, GridConfig, TimeConfig
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.objectives.core import solver_scalar_objective_from_vector
 from gkx.operators.linear.params import LinearParams

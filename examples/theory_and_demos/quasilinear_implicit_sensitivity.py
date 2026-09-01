@@ -26,7 +26,7 @@ from gkx.objectives.autodiff_validation import (
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.diagnostics import fieldline_quadrature_weights, heat_flux_species
 from gkx.geometry import SAlphaGeometry
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.rhs import linear_rhs_cached

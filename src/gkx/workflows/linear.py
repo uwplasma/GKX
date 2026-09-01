@@ -8,8 +8,8 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.benchmarking.shared import LinearRunResult, LinearScanResult
-from gkx.core.grid import SpectralGrid, build_spectral_grid
+from gkx.benchmarking_shared import LinearRunResult, LinearScanResult
+from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.analysis import fit_growth_rate_auto
 from gkx.diagnostics.modes import (
     ModeSelection,

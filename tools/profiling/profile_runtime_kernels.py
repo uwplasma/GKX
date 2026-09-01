@@ -34,7 +34,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution fallba
         make_profile_options,
     )
 
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import apply_imported_geometry_grid_defaults
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached

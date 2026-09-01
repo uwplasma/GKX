@@ -133,7 +133,7 @@ def _diamagnetic_drive_from_global_m(
 ) -> Any:
     import jax.numpy as jnp
 
-    from gkx.core.velocity import laguerre_gyroaverage_neighbors
+    from gkx.core_velocity import laguerre_gyroaverage_neighbors
 
     arr = jnp.asarray(state)
     real_dtype = jnp.real(arr).dtype
