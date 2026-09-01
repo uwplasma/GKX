@@ -2314,6 +2314,93 @@ collected node-ID set; and the physics gates are unchanged. Simplification that
 cannot show those three is refactoring on trust, which is what this section
 exists to avoid.
 
+## 25c. Flat source layout, measured
+
+Section 25b asked what the lines do. This section asks what the *directories*
+do, prompted by the observation that `src/gkx` carries twenty of them, some
+holding a single file. Measured at `c23f6f94` on 2026-08-31.
+
+### 25c.1 What the structure actually is
+
+193 files in 20 directories, 88,988 lines. Several directories exist to hold
+almost nothing: `solvers/__init__.py` is one line and the package holds only
+subpackages; `operators/` has 50 lines of its own beside its subpackages;
+`benchmarking/` holds one real file of 933 lines; `core/` holds two;
+`utils/` holds two, named `callbacks` and `compilation_cache`, under a
+directory name that says nothing about either.
+
+### 25c.2 Three hypotheses tested, one confirmed
+
+- **"There are experimental lanes nobody uses."** Largely false. Walking the
+  import graph from `gkx.api`, `gkx.cli`, and every module named in the lazy
+  `_EXPORT_TARGETS` registry reaches 178 of 193 modules. Only 15 modules and
+  2,436 lines are unreachable. The package is not full of abandoned work.
+- **"`objectives/` is experimental."** False as stated, but it is lopsided.
+  It is 10,918 lines across 21 modules, and exactly four names from all of it
+  are advertised in `gkx.api.__all__`, three from `core.py` and one from
+  `vmec_transport.py`. Seven modules totalling 3,667 lines export nothing at
+  all, and the `vmec_boozer_*` cluster alone is 2,355 of those. Every one of
+  them has between one and four internal consumers, so they are deep machinery
+  rather than dead code. The problem is proportion, not abandonment.
+- **"`data/` is test-only ballast."** False, and the way it was nearly got
+  wrong is worth recording. A literal grep for each filename found no consumer
+  for `finite_wavelength_coulomb.{json,npz}` or their `_18` variants -- four
+  files, 112 kB -- so they looked like dead payload shipped in the wheel.
+  Deleting them broke three tests. `operators/linear/collision_tables.py`
+  builds the names at run time from `_FINITE_WAVELENGTH_STEM` and a moment
+  count of 8 or 18, so no literal ever appears in the source. Those tables are
+  the `coulomb_finite_kperp` operator, one of the five shipped collision models
+  and a headline capability. They were restored.
+  **A filename that is assembled at run time is invisible to a grep, so
+  "nothing references this" is a hypothesis to be tested by deletion and a test
+  run, never a conclusion on its own.** All twelve `data/` files are live.
+
+### 25c.3 The flat layout, and what it costs
+
+Grouping every current module by its directory and allowing 1,200 lines per
+file gives **88 flat modules** in place of 193 files in 20 directories. Nothing
+about that requires subdirectories.
+
+The tension has to be stated because it constrains the order of work:
+
+| Lines per file | Flat modules needed |
+| ---: | ---: |
+| 800 | 112 |
+| 1,000 | 89 |
+| 1,200 | 75 |
+| 2,000 | 45 |
+
+Section 2.4 asks for at most 45 installable files and at most 45,000 lines.
+Those two are consistent with each other at about 1,000 lines per file. They
+are *not* consistent with today's 88,988 lines: 45 files now would mean modules
+of about 1,980 lines each, which trades twenty directories for forty-five
+unreadable files and is not a simplification. **File flattening and line
+reduction are the same problem, and flattening must not be used to claim the
+file target while the line count is untouched.**
+
+### 25c.4 Revised program
+
+1. Leave `data/` alone. All twelve files are live; see above for the check that
+   proves it and the mistake that nearly removed four of them.
+2. Remove the directories that hold nothing: `solvers/`, `operators/`, and
+   `benchmarking/` as containers, folding their direct content into the module
+   that uses it.
+3. Rename by what the code is, not where it sits. `utils` becomes the two
+   things it holds; `workflows` and `artifacts` are named for the reader rather
+   than the author, and `artifacts` in particular is output plumbing that no
+   user of the solver calls.
+4. Flatten the remaining packages into single modules per concept, targeting 88
+   files at 1,200 lines, and only then pursue 45 as the line count falls.
+5. Rebalance `objectives`: 10,918 lines behind four advertised names is the
+   largest proportion problem in the package. Decide per module whether it is
+   public capability that should be advertised, or machinery that belongs
+   inside its one consumer.
+
+The gate from section 25b applies unchanged: the advertised API and lazy
+registry may not shrink except by a recorded decision, the collected test
+node-ID set is unchanged, and the physics gates are untouched. Moving code
+between files must not move anything out of the package.
+
 ## 26. Risk register
 
 | Risk | Consequence | Control |
