@@ -2655,7 +2655,35 @@ factor of two that reality gives it. GKX already takes that factor by using
 costs about what two real transforms of that size cost. gyaradax report a gain
 because their transforms are c2c throughout. **Do not implement this.**
 
-### 25e.4 A negative result worth not repeating
+### 25e.4 The array layout is the largest measured lever
+
+The state is laid out `(species, l, m, ky, kx, z)` and the perpendicular
+transforms run over axes `(-2, -3)`, so the Fourier axes are **not** innermost.
+XLA transforms only innermost axes, so `jnp.fft` inserts a `moveaxis` before and
+after every call. The profile attributes 7.9 per cent of step time to
+`transpose_copy_fusion` before counting what was absorbed into larger kernels,
+and finds that 18 of 25 transposes in the module come from three lines.
+
+Measured directly, same element count and same transform:
+
+| layout | time | temp memory |
+| --- | ---: | ---: |
+| current, `(..., ky, kx, z)` over axes `(-2,-3)` | 38.1 ms | 114.4 MB |
+| proposed, `(..., z, ky, kx)` over axes `(-2,-1)` | **18.0 ms** | **57.8 MB** |
+
+**2.1x faster at half the temporary memory**, from axis order alone. It is the
+largest single lever measured, and it moves runtime and memory together.
+
+It is also the most invasive change available, because the axis order is part of
+the state contract: every module that indexes the state, the artifact writers,
+the restart format and the parallel decomposition all assume the present order.
+It should be one PR that does nothing else, gated on the collected node-ID set,
+the physics gates and a restart round-trip, and it should be measured end to end
+rather than on this microbenchmark -- the research thread found the same layout
+win in isolation and then could not reproduce it inside a full bracket, because
+it interacts with the FFT threading effect in §25e.3.
+
+### 25e.5 A negative result worth not repeating
 
 `_complete_hermitian_ky` rebuilds the full ky spectrum from the half spectrum
 with a slice, a conjugate, a reverse, an index gather and a concatenate. The
