@@ -4057,3 +4057,54 @@ Outcome:
   previously ran only the roughly 20 s objective gate. Not a failure, but the
   shard is now less balanced and should be watched.
 - next task: the central manifest ratchet, then Phase C's remaining domains.
+
+## 2026-08-31 — PR R2-1 merge modules that were split rather than encapsulated (`refactor/r2-merge-split-modules`)
+
+Baseline:
+- GKX SHA: built on `plan/r1-source-simplification`, which replaces the flat
+  per-file line cap with the cohesion gate this PR is measured by
+- `src/gkx` 193 files; cohesion gate reports 5 single-consumer split modules
+
+Scope:
+- intended change: rejoin modules whose only consumer imports most of their
+  names. Interface width is the discriminator, not consumer count.
+- explicitly out of scope: `workflows/runtime/policies.py`, which qualifies on
+  width but is imported directly by two test modules, one of which monkeypatches
+  it as a module object. Merging changes what that test patches, so it needs the
+  test repointed first and is a different change with different risk.
+
+Changes:
+- `workflows/runtime/initial_conditions.py` -> `startup.py` (10 names)
+- `operators/nonlinear/spectral_layout.py` -> `spectral_core.py` (10 names)
+- `operators/nonlinear/device_z_reports.py` -> `device_z.py` (8 names)
+- `workflows/runtime/execution.py` -> `runtime.py` (6 names)
+
+Evidence:
+- feature preservation, all three arms: advertised `gkx.api.__all__` stays 15,
+  the lazy `_EXPORT_TARGETS` registry stays 346, and every module named in that
+  registry still imports.
+- `tests/integration/runtime`, `tests/unit/nonlinear`, `tests/release`:
+  703 passed, 1 skipped, and one release-gate assertion updated (below).
+- cohesion: single-consumer split modules 5 -> 1; source files 193 -> 189. The
+  baseline is tightened to 1 in the same PR so the gain cannot be given back.
+- `ruff check`, `ruff format --check`, `sphinx -W`, release readiness,
+  validation coverage, repository size: all clean.
+- physics/mathematics/numerics gates: none re-run and none claimed. No
+  definition changed; the merges move code between files.
+
+Outcome:
+- accepted
+- one release-gate assertion was lowered deliberately:
+  `spectral_core["n_owned_modules"] >= 4` becomes `>= 3`, because
+  `spectral_layout` was absorbed INTO `spectral_core` and is no longer a
+  separate module to own. Its coverage did not leave the package, it moved
+  inside the owning row's own file. The reason is recorded at the assertion.
+- `runtime.py` crossed its per-file complexity baseline, 513 -> 781, and took a
+  named exception with a written reason. That is the mechanism working as
+  designed: a merge past a budget is a recorded judgement, not a silent pass.
+- four dangling references were found and fixed, each of which would have broken
+  CI: two `owned_modules` entries naming merged modules, one `owned_modules`
+  list left empty which broke TOML parsing, and a stale `automodule` block that
+  failed `sphinx -W`.
+- next task: repoint the two tests that import `workflows/runtime/policies.py`
+  directly, then merge it, which takes the gate to zero.

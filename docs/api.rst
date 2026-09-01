@@ -485,12 +485,6 @@ Config-Driven Time Runners
    :members:
    :private-members:
 
-Runtime Execution Dispatch
---------------------------
-
-.. automodule:: gkx.workflows.runtime.execution
-   :members:
-   :private-members:
 
 Nonlinear Transport Optimization Diagnostics
 --------------------------------------------
@@ -764,13 +758,6 @@ Runtime Diagnostic Arrays
 -------------------------
 
 .. automodule:: gkx.workflows.runtime.diagnostic_arrays
-   :members:
-   :private-members:
-
-Runtime Initial Conditions
---------------------------
-
-.. automodule:: gkx.workflows.runtime.initial_conditions
    :members:
    :private-members:
 
