@@ -2549,6 +2549,63 @@ None of these is visible to a grep, and each was caught by a checker or a test:
 - precision guards keyed by file name, one of which failed with "the guard is
   vacuous" because it was written to detect its own hollowing-out.
 
+## 25e. Cold-start cost, measured
+
+The performance work starts from what is already recorded in
+`docs/performance.rst`: about 97 per cent of a run is time stepping, and within
+one step about 59 per cent is data movement, 31 per cent the FFTs themselves,
+and under 10 per cent physics arithmetic. That is the *warm* picture. Cold runs
+were measured separately on 2026-08-31 and have a different bottleneck.
+
+### 25e.1 The cache build is 278 compilations, not a computation
+
+Cold setup at a deliberately tiny grid, 16x16x8 with `Nl=2, Nm=4`, on CPU:
+
+| stage | time | share |
+| --- | ---: | ---: |
+| `build_linear_cache` | 2,619 ms | 74.6% |
+| `import jax` | 618 ms | 17.6% |
+| `build_spectral_grid` | 262 ms | 7.5% |
+| everything else | 14 ms | 0.4% |
+
+At that grid the arithmetic is trivial, so the time is not computation, and a
+second call proves it: **2,373 ms first, 10 ms second**. Changing the grid to
+32x32x16 re-pays it in full at 2,166 ms, so the cost is per distinct shape.
+
+Counting compilation events during one build gives the mechanism: **278 separate
+XLA compilations**, led by 56 `jit(multiply)`, 36 `jit(broadcast_in_dim)`, 22
+`jit(add)`, 18 each of `subtract`, `true_divide` and `convert_element_type`.
+There is no `jax.jit` anywhere in that path, so every primitive is being
+compiled on its own under op-by-op dispatch. This is the textbook cost of
+unjitted `jnp` in a setup path, and it is paid before a single time step.
+
+### 25e.2 Why the obvious fix does not apply
+
+Wrapping the build in `jax.jit` fails twice, and both failures are informative.
+`SpectralGrid` is not hashable, so it cannot be a static argument; and passing
+it as a traced pytree raises `ConcretizationTypeError`, because the build
+deliberately calls `float()` on geometry values to decide whether a twist-shift
+cache is resolvable. Those are *structural* decisions made from concrete values,
+not arithmetic, and they are the reason the module already carries an
+`_is_tracer` helper.
+
+So the fix is not one decorator. The candidates are to compute the one-shot
+setup arrays with `numpy`, which removes XLA from the path entirely but must not
+break the differentiable geometry route that reaches this build through
+`objectives/core.py`; or to split the structural decisions from the array
+construction and jit only the latter. Which is right depends on whether the
+build is ever genuinely traced in production, which is the next thing to
+measure rather than assume.
+
+### 25e.3 A negative result worth not repeating
+
+`_complete_hermitian_ky` rebuilds the full ky spectrum from the half spectrum
+with a slice, a conjugate, a reverse, an index gather and a concatenate. The
+gather has an algebraically identical `roll` formulation, and the two were
+benchmarked on CPU at two grid sizes: identical outputs, and the roll is 4 to 9
+per cent faster, which is inside the noise. **The gather is not the bottleneck
+and XLA lowers it fine.** Recorded so the experiment is not repeated.
+
 ## 26. Risk register
 
 | Risk | Consequence | Control |
