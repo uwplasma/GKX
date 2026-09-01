@@ -2629,7 +2629,20 @@ transform, not insert a new materialisation. The structural candidate is packing
 the two derivative components into one complex array and taking a single c2c
 inverse instead of a stacked pair, recovering the two real fields as real and
 imaginary parts -- halving the transform count rather than rearranging it. That
-is measured as the next step, not assumed.
+was then measured, on GKX's own shapes:
+
+| form | time | temp memory |
+| --- | ---: | ---: |
+| today: stack two components, one batched `irfft2` | 83.1 ms | 228.9 MB |
+| packed: one c2c `ifft2`, components as real and imaginary parts | **58.0 ms** | 226.5 MB |
+
+A 1.43x speedup at unchanged memory. **The timing is verified and the
+correctness is not**: the benchmark used a random spectral array, which is not
+Hermitian-symmetric, so it establishes shape and cost but not values. Reading two
+real fields off one complex transform is valid only because both derivatives are
+real in real space, which holds for the actual state but needs the `ky=0`
+symmetrisation the gyaradax authors flag. The implementation must be gated on the
+existing bracket tests, not on this benchmark.
 
 ### 25e.4 A negative result worth not repeating
 
