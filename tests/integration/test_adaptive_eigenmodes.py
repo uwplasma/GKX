@@ -28,7 +28,7 @@ from gkx.runtime import (
     build_runtime_linear_params,
     build_runtime_linear_terms,
 )
-from gkx.solvers.linear import adaptive_propagator_eigenpair, dominant_eigenpair
+from gkx.solvers_linear import adaptive_propagator_eigenpair, dominant_eigenpair
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from support.paired_solvax import requires_paired_solvax
 

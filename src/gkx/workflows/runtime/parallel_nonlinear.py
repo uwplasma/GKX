@@ -47,7 +47,7 @@ from gkx.operators.nonlinear.spectral_core import (
     _within_abs_or_rel_tolerance,
 )
 from gkx.parallel.state import resolve_state_sharding
-from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
+from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
 
 SUPPORTED_NONLINEAR_STRATEGIES = ("serial", "shard_map")
 SUPPORTED_NONLINEAR_AXES = ("ky", "species_hermite")

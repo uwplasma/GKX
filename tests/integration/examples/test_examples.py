@@ -22,7 +22,7 @@ from gkx.config import CycloneBaseCase, GridConfig, TimeConfig
 from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry, sample_flux_tube_geometry
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers.time.runners import (
+from gkx.solvers_time_runners import (
     integrate_nonlinear_from_config,
 )
 from gkx.terms.config import TermConfig

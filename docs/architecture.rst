@@ -11,10 +11,10 @@ Core modules
 - ``gkx.operators.linear``: cache construction, linked-boundary maps,
   Hermite/Laguerre moment operators, linear parameter pytrees, and cached RHS
   assembly entry points.
-- ``gkx.solvers.linear``: matrix-free eigensolver policy, linear
+- ``gkx.solvers_linear``: matrix-free eigensolver policy, linear
   fixed-step/diagnostic integration policy, implicit GMRES/preconditioner
   policy, and gated velocity-parallel linear RHS dispatch.
-- ``gkx.solvers.nonlinear``: explicit RK/SSP/K10 and IMEX fixed-point,
+- ``gkx.solvers_nonlinear``: explicit RK/SSP/K10 and IMEX fixed-point,
   GMRES, and stage-composition policy.
 - ``gkx.operators.nonlinear.diagnostics``: sampling, resolved-diagnostic
   packing, and ``SimulationDiagnostics`` construction shared by nonlinear

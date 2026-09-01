@@ -16,10 +16,9 @@ excluded_modules = [
   "gkx.operators.__init__",
   "gkx.operators.linear.__init__",
   "gkx.operators.nonlinear.__init__",
-  "gkx.solvers.__init__",
-  "gkx.solvers.linear.__init__",
-  "gkx.solvers.nonlinear.__init__",
-  "gkx.solvers.time.__init__",
+  "gkx.solvers_linear",
+  "gkx.solvers_nonlinear",
+  "gkx.solvers_time",
   "gkx.terms.__init__",
   "gkx.workflows.__init__",
   "gkx.workflows.runtime.__init__",
@@ -126,15 +125,15 @@ path = "src/gkx/runtime.py"
 owned_modules = [
   "gkx.cli",
   "gkx.config",
-  "gkx.solvers.time.explicit",
-  "gkx.solvers.time.explicit_diagnostics",
-  "gkx.solvers.time.explicit_cfl",
-  "gkx.solvers.time.explicit_steps",
+  "gkx.solvers_time_explicit",
+  "gkx.solvers_time_explicit_diagnostics",
+  "gkx.solvers_time_explicit_cfl",
+  "gkx.solvers_time_explicit_steps",
   "gkx.workflows.runtime.toml",
   "gkx.workflows.runtime.wout",
   "gkx.workflows.runtime.resolution",
   "gkx.compilation_cache",
-  "gkx.solvers.time.runners",
+  "gkx.solvers_time_runners",
   "gkx.workflows.runtime.config",
   "gkx.workflows.runtime.diagnostic_arrays",
   "gkx.workflows.runtime.diagnostics",
@@ -254,10 +253,10 @@ owned_modules = [
   "gkx.diagnostics.modes",
   "gkx.core_velocity",
   "gkx.core_grid",
-  "gkx.solvers.linear.adaptive_propagator",
-  "gkx.solvers.linear.krylov_algorithms",
-  "gkx.solvers.linear.krylov",
-  "gkx.solvers.linear.krylov_propagator",
+  "gkx.solvers_linear_adaptive_propagator",
+  "gkx.solvers_linear_krylov_algorithms",
+  "gkx.solvers_linear_krylov",
+  "gkx.solvers_linear_krylov_propagator",
   "gkx.terms.config",
   "gkx.terms.fields",
   "gkx.operators.linear.dissipation",
@@ -441,8 +440,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.linear.implicit"
-path = "src/gkx/solvers/linear/implicit.py"
+module = "gkx.solvers_linear_implicit"
+path = "src/gkx/solvers_linear_implicit.py"
 owner_lane = "implicit linear operator and GMRES integration policy"
 status = "active"
 coverage_priority = "medium"
@@ -475,10 +474,10 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.linear.integrators"
-path = "src/gkx/solvers/linear/integrators.py"
+module = "gkx.solvers_linear_integrators"
+path = "src/gkx/solvers_linear_integrators.py"
 owned_modules = [
-  "gkx.solvers.linear.integrator_diagnostics",
+  "gkx.solvers_linear_integrator_diagnostics",
 ]
 owner_lane = "linear fixed-step integration, implicit dispatch, and diagnostic sampling"
 status = "active"
@@ -609,12 +608,12 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.linear.parallel"
-path = "src/gkx/solvers/linear/parallel.py"
+module = "gkx.solvers_linear_parallel"
+path = "src/gkx/solvers_linear_parallel.py"
 owned_modules = [
-  "gkx.solvers.linear.parallel_common",
-  "gkx.solvers.linear.parallel_electrostatic",
-  "gkx.solvers.linear.parallel_streaming",
+  "gkx.solvers_linear_parallel_common",
+  "gkx.solvers_linear_parallel_electrostatic",
+  "gkx.solvers_linear_parallel_streaming",
 ]
 owner_lane = "gated velocity-parallel linear RHS dispatch and Hermite shard-map helpers"
 status = "active"
@@ -646,10 +645,10 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.nonlinear.state_integration"
-path = "src/gkx/solvers/nonlinear/state_integration.py"
+module = "gkx.solvers_nonlinear_state_integration"
+path = "src/gkx/solvers_nonlinear_state_integration.py"
 owned_modules = [
-  "gkx.solvers.nonlinear.diagnostic_integration",
+  "gkx.solvers_nonlinear_diagnostic_integration",
   "gkx.operators.nonlinear.brackets",
   "gkx.terms.nonlinear",
 ]
@@ -767,8 +766,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.nonlinear.explicit"
-path = "src/gkx/solvers/nonlinear/explicit.py"
+module = "gkx.solvers_nonlinear_explicit"
+path = "src/gkx/solvers_nonlinear_explicit.py"
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"
 coverage_priority = "high"
@@ -800,8 +799,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.nonlinear.diagnostics"
-path = "src/gkx/solvers/nonlinear/diagnostics.py"
+module = "gkx.solvers_nonlinear_diagnostics"
+path = "src/gkx/solvers_nonlinear_diagnostics.py"
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"
 coverage_priority = "high"
@@ -835,10 +834,10 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.nonlinear.imex"
-path = "src/gkx/solvers/nonlinear/imex.py"
+module = "gkx.solvers_nonlinear_imex"
+path = "src/gkx/solvers_nonlinear_imex.py"
 owned_modules = [
-  "gkx.solvers.nonlinear.imex_diagnostics",
+  "gkx.solvers_nonlinear_imex_diagnostics",
 ]
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"

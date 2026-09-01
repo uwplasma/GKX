@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 
 import gkx
-from gkx.solvers.nonlinear.diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostic_integration import (
     integrate_nonlinear_explicit_diagnostics_state,
 )
 import vmex as vj

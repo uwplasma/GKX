@@ -17,7 +17,7 @@ gate in this document is executable and green.
 - `method="rk2"` selects the native method; it is ignored by Diffrax routes.
 
 `integrate_linear_from_config` and `integrate_nonlinear_from_config` in
-`src/gkx/solvers/time/runners.py` own that branch. The checked-in runtime TOML
+`src/gkx/solvers_time_runners.py` own that branch. The checked-in runtime TOML
 decks overwhelmingly set `use_diffrax=false`; the linear TEM and kinetic-
 electron decks are the two checked-in runtime decks that deliberately select
 Diffrax with Tsit5. Python benchmarks may select Diffrax unless their
@@ -169,12 +169,12 @@ warm runtime, checkpoint memory, or gradient stability regresses.
 
 After the gates close, the named deletion candidates are:
 
-- `src/gkx/solvers/time/diffrax_core.py`
-- `src/gkx/solvers/time/diffrax_linear.py`
-- `src/gkx/solvers/time/diffrax_nonlinear.py`
-- `src/gkx/solvers/time/diffrax_streaming.py`
-- their exports in `src/gkx/__init__.py` and `src/gkx/solvers/time/__init__.py`
-- their branches/imports in `src/gkx/solvers/time/runners.py`
+- `src/gkx/solvers_time/diffrax_core.py`
+- `src/gkx/solvers_time/diffrax_linear.py`
+- `src/gkx/solvers_time/diffrax_nonlinear.py`
+- `src/gkx/solvers_time/diffrax_streaming.py`
+- their exports in `src/gkx/__init__.py` and `src/gkx/solvers_time.py`
+- their branches/imports in `src/gkx/solvers_time_runners.py`
 - Diffrax-only tests after their scientific assertions move to native tests
 - `diffrax` and `equinox` in `pyproject.toml`
 - deprecated `TimeConfig` Diffrax fields after the compatibility window
@@ -202,6 +202,6 @@ Reproduce route declarations and direct streaming callers with:
 rg -n 'use_diffrax|diffrax_solver|diffrax_(adaptive|rtol|atol|max_steps)' \
   src/gkx examples benchmarks docs tests
 rg -n 'integrate_linear_diffrax_streaming\\(' \
-  --glob '*.py' --glob '!src/gkx/solvers/time/diffrax_streaming.py'
-wc -l src/gkx/solvers/time/diffrax_{core,linear,nonlinear,streaming}.py
+  --glob '*.py' --glob '!src/gkx/solvers_time/diffrax_streaming.py'
+wc -l src/gkx/solvers_time/diffrax_{core,linear,nonlinear,streaming}.py
 ```

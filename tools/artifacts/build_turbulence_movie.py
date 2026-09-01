@@ -56,7 +56,7 @@ from gkx.geometry import (  # noqa: E402
     apply_geometry_grid_defaults,
     ensure_flux_tube_geometry_data,
 )
-from gkx.solvers.nonlinear.diagnostic_integration import (  # noqa: E402
+from gkx.solvers_nonlinear_diagnostic_integration import (  # noqa: E402
     prepare_nonlinear_explicit_diagnostics,
 )
 from gkx.workflows.runtime.policies import (  # noqa: E402

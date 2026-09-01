@@ -15,11 +15,11 @@ from gkx.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from gkx.solvers.linear.krylov_algorithms import (
+from gkx.solvers_linear_krylov_algorithms import (
     _apply_operator,
     dominant_eigenpair_propagator_cached,
 )
-from gkx.solvers.linear.krylov_propagator import (
+from gkx.solvers_linear_krylov_propagator import (
     dominant_eigenpairs_propagator_cached,
 )
 

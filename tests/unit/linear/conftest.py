@@ -168,11 +168,11 @@ def patch_diagnostics_kernels(monkeypatch):
 
     def _patch(rhs=jnp.ones_like) -> None:
         monkeypatch.setattr(
-            "gkx.solvers.linear.integrator_diagnostics.hypercollision_damping",
+            "gkx.solvers_linear_integrator_diagnostics.hypercollision_damping",
             lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
         )
         monkeypatch.setattr(
-            "gkx.solvers.linear.integrator_diagnostics.linear_rhs_cached",
+            "gkx.solvers_linear_integrator_diagnostics.linear_rhs_cached",
             lambda G, cache, params, **kwargs: (
                 rhs(G),
                 jnp.ones((1, 1, 2), dtype=jnp.complex64),

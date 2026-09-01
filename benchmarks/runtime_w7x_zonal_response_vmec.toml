@@ -48,7 +48,7 @@ t_max = 60.0
 # dt must stay under the parallel-streaming CFL of the equilibrium this deck
 # loads. That limit is omega_streaming = |gradpar| * kz_max * 2*sqrt(Nm), and it
 # is the term that dominates here: at Nm = 32 the runtime's own bound
-# (gkx.solvers.time.explicit_cfl) reads omega = 75.0 of a total 81.5, giving a
+# (gkx.solvers_time_explicit_cfl) reads omega = 75.0 of a total 81.5, giving a
 # stable dt of 0.0311 for rk4, near-constant across the four kx of the sweep.
 # The deck shipped dt = 0.05 -- 1.6x over -- and blew up: Wphi grew from 5.4e-16
 # to 3.2e+42 and went NaN at t = 5.65, then integrated NaN to t_max. Measured

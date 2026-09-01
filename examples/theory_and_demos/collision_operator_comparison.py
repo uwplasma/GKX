@@ -38,7 +38,7 @@ from gkx.config import CycloneBaseCase
 from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.params import COLLISION_OPERATOR_NAMES, LinearParams
-from gkx.solvers.time.runners import integrate_linear_from_config
+from gkx.solvers_time_runners import integrate_linear_from_config
 
 # The drift-kinetic tables are the eight-moment truncation of the reference
 # papers, so the run must use Nl * Nm = 8.

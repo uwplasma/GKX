@@ -47,7 +47,7 @@ from gkx.benchmarking_shared import (
 )
 from gkx.config import InitializationConfig
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers.linear.krylov import KrylovConfig
+from gkx.solvers_linear_krylov import KrylovConfig
 
 
 def _linear_params() -> LinearParams:

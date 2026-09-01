@@ -500,7 +500,7 @@ def _integrate_collisional_zonal_trace(
     import jax
     import jax.numpy as jnp
 
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_linear_integrators import integrate_linear
     from gkx.terms.assembly import compute_fields_cached
 
     initial_phi = compute_fields_cached(

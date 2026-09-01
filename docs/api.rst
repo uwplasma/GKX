@@ -290,67 +290,67 @@ Linear Dissipation
 Linear Implicit Solvers
 -----------------------
 
-.. automodule:: gkx.solvers.linear.implicit
+.. automodule:: gkx.solvers_linear_implicit
    :members:
    :private-members:
 
 Linear Integrators
 ------------------
 
-.. automodule:: gkx.solvers.linear.integrators
+.. automodule:: gkx.solvers_linear_integrators
    :members:
    :private-members:
 
 Linear Diagnostic Integration
 -----------------------------
 
-.. automodule:: gkx.solvers.linear.integrator_diagnostics
+.. automodule:: gkx.solvers_linear_integrator_diagnostics
    :members:
    :private-members:
 
 Linear Parallel RHS
 -------------------
 
-.. automodule:: gkx.solvers.linear.parallel
+.. automodule:: gkx.solvers_linear_parallel
    :members:
    :private-members:
 
 Linear Parallel Policy
 ----------------------
 
-.. automodule:: gkx.solvers.linear.parallel_common
+.. automodule:: gkx.solvers_linear_parallel_common
    :members:
    :private-members:
 
 Linear Parallel Streaming
 -------------------------
 
-.. automodule:: gkx.solvers.linear.parallel_streaming
+.. automodule:: gkx.solvers_linear_parallel_streaming
    :members:
    :private-members:
 
 Linear Parallel Electrostatic Slices
 ------------------------------------
 
-.. automodule:: gkx.solvers.linear.parallel_electrostatic
+.. automodule:: gkx.solvers_linear_parallel_electrostatic
    :members:
    :private-members:
 
 Linear Krylov Solvers
 ---------------------
 
-.. automodule:: gkx.solvers.linear.krylov
+.. automodule:: gkx.solvers_linear_krylov
    :members:
    :private-members:
 
 Linear Eigenmode Solver Internals
 ---------------------------------
 
-``gkx.solvers.linear.krylov`` owns ``KrylovConfig`` and the public
+``gkx.solvers_linear_krylov`` owns ``KrylovConfig`` and the public
 status-reporting wrapper, while the focused helper modules below own operator
 application, branch selection, shift-invert preconditioning, and Arnoldi iterations.
 
-.. automodule:: gkx.solvers.linear.krylov_algorithms
+.. automodule:: gkx.solvers_linear_krylov_algorithms
    :members:
    :private-members:
    :no-index:
@@ -416,14 +416,14 @@ Nonlinear Term Assembly
 Nonlinear Explicit Step
 -----------------------
 
-.. automodule:: gkx.solvers.nonlinear.explicit
+.. automodule:: gkx.solvers_nonlinear_explicit
    :members:
    :private-members:
 
 Nonlinear State Integration
 ---------------------------
 
-.. automodule:: gkx.solvers.nonlinear.state_integration
+.. automodule:: gkx.solvers_nonlinear_state_integration
    :members:
    :private-members:
    :no-index:
@@ -431,14 +431,14 @@ Nonlinear State Integration
 Nonlinear Diagnostic Drivers
 ----------------------------
 
-.. automodule:: gkx.solvers.nonlinear.diagnostics
+.. automodule:: gkx.solvers_nonlinear_diagnostics
    :members:
    :private-members:
 
 Nonlinear Diagnostic Integration
 --------------------------------
 
-.. automodule:: gkx.solvers.nonlinear.diagnostic_integration
+.. automodule:: gkx.solvers_nonlinear_diagnostic_integration
    :members:
    :private-members:
    :no-index:
@@ -446,42 +446,42 @@ Nonlinear Diagnostic Integration
 Nonlinear IMEX
 --------------
 
-.. automodule:: gkx.solvers.nonlinear.imex
+.. automodule:: gkx.solvers_nonlinear_imex
    :members:
    :private-members:
 
 Explicit Time Integrators
 -------------------------
 
-.. automodule:: gkx.solvers.time.explicit
+.. automodule:: gkx.solvers_time_explicit
    :members:
    :private-members:
 
 Explicit Step Kernels
 ---------------------
 
-.. automodule:: gkx.solvers.time.explicit_steps
+.. automodule:: gkx.solvers_time_explicit_steps
    :members:
    :private-members:
 
 Explicit Diagnostic Integrators
 -------------------------------
 
-.. automodule:: gkx.solvers.time.explicit_diagnostics
+.. automodule:: gkx.solvers_time_explicit_diagnostics
    :members:
    :private-members:
 
 Explicit CFL Policy
 -------------------
 
-.. automodule:: gkx.solvers.time.explicit_cfl
+.. automodule:: gkx.solvers_time_explicit_cfl
    :members:
    :private-members:
 
 Config-Driven Time Runners
 --------------------------
 
-.. automodule:: gkx.solvers.time.runners
+.. automodule:: gkx.solvers_time_runners
    :members:
    :private-members:
 

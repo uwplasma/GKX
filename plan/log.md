@@ -2993,7 +2993,7 @@ kinetic-electron physics claim.
 
 ## 2026-08-29 — Phase 2 native linear-step consolidation scope
 
-Task: make `gkx.solvers.time.explicit_steps._linear_native_step` the single
+Task: make `gkx.solvers_time_explicit_steps._linear_native_step` the single
 owner of explicit and diagonal-IMEX linear step algebra. The standard cached
 integrator and its diagnostics-rich sibling currently duplicate the complete
 Euler/RK dispatch, IMEX Euler update, and two-stage `imex2` update; the
@@ -3658,7 +3658,7 @@ paths that refused it. The gate in §11.2 therefore selects native ownership
 and no unique promoted capability remains.
 
 Changes:
-- files removed: `src/gkx/solvers/time/diffrax_core.py` (188),
+- files removed: `src/gkx/solvers_time/diffrax_core.py` (188),
   `diffrax_linear.py` (449), `diffrax_nonlinear.py` (427),
   `diffrax_streaming.py` (572) — 1,636 lines;
   `tests/unit/solvers/test_diffrax_integrators_core.py` (935);
@@ -4225,3 +4225,45 @@ Outcome:
   not run that combination, so it sits latent. Filed separately rather than
   folded in here.
 - next task: the two-level nests under `operators/`, `solvers/`, `workflows/`.
+
+## 2026-08-31 — PR R2-3 flatten the solvers tree (`refactor/r2-merge-split-modules`)
+
+Scope:
+- intended change: section 25c.4 step 2 continued. `gkx.solvers` was a one-line
+  docstring package over three subpackages holding 25 modules.
+- explicitly out of scope: the `operators/` and `workflows/` nests.
+
+Changes:
+- 25 modules flattened: `solvers/{linear,time,nonlinear}/x.py` becomes
+  `solvers_{linear,time,nonlinear}_x.py`, and each subpackage `__init__` becomes
+  a flat re-export module. 99 files repointed.
+- four `required_domain_packages` entries dropped, because none of
+  `gkx.solvers`, `.linear`, `.time`, `.nonlinear` is a package any more.
+
+Evidence:
+- `tests/unit/solvers`, `tests/unit/parallel`, `tests/release`,
+  `tests/integration/runtime`: 907 passed, 42 skipped.
+- advertised API 15, lazy registry 346, every registry target resolves.
+- `ruff check`, `ruff format --check`, `sphinx -W`, and all four release
+  checkers clean.
+- physics/mathematics/numerics gates: two precision guards were repointed, not
+  weakened. See below.
+
+Outcome:
+- accepted. Directories 20 -> 13 across this branch; source files 193 -> 185.
+- five package-to-module hazards appeared, none visible to a grep:
+  `from <pkg> import <submodule>` is meaningless once the package is a module;
+  a converter produced a double alias; `__all__` fails F822 in a regular module
+  where a package `__init__` resolved the name through its submodule; four
+  manifest entries required the packages to exist; and two precision guards are
+  keyed by file name.
+- the precision guards are the ones that matter.
+  `ALLOWED_UNPINNED_MATRIX_DOTS` is keyed `filename:line`, and
+  `test_propagator_candidate_lift_pins_exact_dot_precision` filters
+  contractions by a module-name prefix. Both pin TF32 behaviour on Ampere and
+  later NVIDIA GPUs. The prefix filter failed with "the candidate lift lowered
+  to no matrix dot; the guard is vacuous", which is the test detecting its own
+  hollowing-out. Without that assertion the rename would have left a numerics
+  guard inspecting nothing while the suite stayed green. Both were repointed
+  with the exemption text and the measurement behind it unchanged.
+- next task: the `operators/` and `workflows/` nests.

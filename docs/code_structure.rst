@@ -522,7 +522,7 @@ Completed extractions:
   spectra/channel schema packing while preserving the
   explicit/IMEX scan tuple schema. The old root nonlinear helper shims were
   removed; normal users should use the top-level ``gkx`` public API and
-  developer helpers should import from ``gkx.solvers.nonlinear`` and
+  developer helpers should import from ``gkx.solvers_nonlinear`` and
   ``gkx.operators.nonlinear``.
 - full-GK nonlinear executable orchestration lives in
   ``workflows/nonlinear.py`` behind the public ``gkx.runtime`` facade.
@@ -553,7 +553,7 @@ Completed extractions:
   fixed-point/GMRES solve policy: ``solvers/nonlinear/explicit.py``,
   ``solvers/nonlinear/diagnostics.py``, ``solvers/nonlinear/imex_diagnostics.py``,
   and ``solvers/nonlinear/imex.py``. Developer helpers should import from
-  ``gkx.solvers.nonlinear``.
+  ``gkx.solvers_nonlinear``.
 - linear cache, linked-boundary maps, Hermite-Laguerre moments, parameter
   pytrees, cache-backed RHS assembly, implicit linear GMRES/preconditioner
   policy, fixed-step/diagnostic integration policy, eigenmode policy/operator/

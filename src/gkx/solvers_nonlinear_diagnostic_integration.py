@@ -57,7 +57,7 @@ from gkx.operators.nonlinear.collisions import (
     _collision_damping,
 )
 from gkx.operators.nonlinear.rhs import nonlinear_em_term_cached_impl
-from gkx.solvers.nonlinear.diagnostics import (
+from gkx.solvers_nonlinear_diagnostics import (
     ExplicitNonlinearDiagnosticsDeps,
     IMEXNonlinearDiagnosticsDeps,
     PreparedExplicitNonlinearDiagnostics,
@@ -65,24 +65,24 @@ from gkx.solvers.nonlinear.diagnostics import (
     integrate_imex_nonlinear_diagnostics_impl,
     prepare_explicit_nonlinear_diagnostics_impl,
 )
-from gkx.solvers.nonlinear.explicit import (
+from gkx.solvers_nonlinear_explicit import (
     make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
 )
-from gkx.solvers.nonlinear.imex import (
+from gkx.solvers_nonlinear_imex import (
     make_imex_diagnostic_step,
     make_imex_nonlinear_term,
     make_imex_solve_step,
     run_imex_diagnostic_scan,
     solve_imex_step,
 )
-from gkx.solvers.time.explicit import (
+from gkx.solvers_time_explicit import (
     _diagnostic_midplane_index,
     _instantaneous_growth_rate_step,
     _laguerre_velocity_max,
     _linear_frequency_bound,
 )
-from gkx.solvers.nonlinear.state_integration import (
+from gkx.solvers_nonlinear_state_integration import (
     _linear_rhs_jit_for_terms,
     nonlinear_rhs_cached,
 )

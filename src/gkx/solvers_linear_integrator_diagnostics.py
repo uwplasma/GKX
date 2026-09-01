@@ -22,12 +22,12 @@ from gkx.operators.linear.params import (
     _x64_enabled,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.linear.implicit import (
+from gkx.solvers_linear_implicit import (
     _ImplicitSolveOptions,
     _build_implicit_operator,
     _build_implicit_solve_step,
 )
-from gkx.solvers.time.explicit_steps import _linear_native_step
+from gkx.solvers_time_explicit_steps import _linear_native_step
 
 
 def _validate_linear_sampling(*, steps: int, sample_stride: int) -> None:

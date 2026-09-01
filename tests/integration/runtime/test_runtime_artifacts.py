@@ -68,7 +68,7 @@ from gkx.operators.linear.params import (
 )
 from gkx.operators.linear.params import Species, build_linear_params
 from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
-from gkx.solvers.time.explicit import (
+from gkx.solvers_time_explicit import (
     ExplicitTimeConfig,
     _apply_completed_step_state_mask,
     _growth_rate_mode_mask,
@@ -160,7 +160,7 @@ import gkx.artifacts.spectral_layout as spectral_layout
 import gkx.diagnostics as diagnostics_module
 import gkx.diagnostics.metadata as diagnostics_metadata
 import gkx.diagnostics.moments as diagnostics_moments
-import gkx.solvers.time.explicit as explicit_time_integrators
+import gkx.solvers_time_explicit as explicit_time_integrators
 import gkx.workflows.runtime.artifacts as runtime_artifacts
 import jax.numpy as jnp
 import json

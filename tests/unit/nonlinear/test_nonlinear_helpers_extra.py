@@ -50,22 +50,22 @@ from gkx.operators.nonlinear.projection import (
     _make_hermitian_projector,
     _make_nonlinear_state_projector,
 )
-from gkx.solvers.nonlinear import (
+from gkx.solvers_nonlinear import (
     state_integration as nonlinear_state_integration_mod,
 )
-from gkx.solvers.nonlinear.diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostic_integration import (
     _integrate_nonlinear_explicit_diagnostics_impl,
 )
-from gkx.solvers.nonlinear.diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostic_integration import (
     integrate_nonlinear_explicit_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
     integrate_nonlinear_imex_diagnostics,
 )
-from gkx.solvers.nonlinear.state_integration import (
+from gkx.solvers_nonlinear_state_integration import (
     DIVERGENCE_KNEE_STEPS,
     nonlinear_heat_flux_window,
 )
-from gkx.solvers.nonlinear.state_integration import (
+from gkx.solvers_nonlinear_state_integration import (
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
@@ -1806,7 +1806,7 @@ def test_apply_collision_split_and_nonlinear_wrapper_routing(monkeypatch) -> Non
         _apply_collision_split(G, damping, jnp.asarray(0.1, dtype=jnp.float32), "bad")
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.integrate_nonlinear_imex_cached",
+        "gkx.solvers_nonlinear_state_integration.integrate_nonlinear_imex_cached",
         lambda *args, **kwargs: ("imex", "fields"),
     )
     assert integrate_nonlinear_cached(
@@ -1841,7 +1841,7 @@ def test_apply_collision_split_and_nonlinear_wrapper_routing(monkeypatch) -> Non
         )
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.integrate_nonlinear_scan",
+        "gkx.solvers_nonlinear_state_integration.integrate_nonlinear_scan",
         _fake_scan,
     )
     out_G, out_fields = integrate_nonlinear_cached(
@@ -1875,15 +1875,15 @@ def test_apply_collision_split_and_nonlinear_wrapper_routing(monkeypatch) -> Non
 def test_integrate_nonlinear_builds_cache_and_rejects_bad_shape(monkeypatch) -> None:
     calls: list[tuple[int, int]] = []
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.ensure_flux_tube_geometry_data",
+        "gkx.solvers_nonlinear_state_integration.ensure_flux_tube_geometry_data",
         lambda geom, z: "geom_eff",
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.build_linear_cache",
+        "gkx.solvers_nonlinear_state_integration.build_linear_cache",
         lambda grid, geom, params, Nl, Nm: calls.append((Nl, Nm)) or "cache",
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.integrate_nonlinear_cached",
+        "gkx.solvers_nonlinear_state_integration.integrate_nonlinear_cached",
         lambda G0, cache, params, dt, steps, **kwargs: ("G_out", "fields_out"),
     )
 
@@ -1918,7 +1918,7 @@ def test_integrate_nonlinear_builds_cache_and_rejects_bad_shape(monkeypatch) -> 
 
 def test_nonlinear_diagnostics_route_and_state_reject_imex(monkeypatch) -> None:
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.integrate_nonlinear_imex_diagnostics",
+        "gkx.solvers_nonlinear_diagnostic_integration.integrate_nonlinear_imex_diagnostics",
         lambda *args, **kwargs: ("t_imex", "diag_imex"),
     )
     assert integrate_nonlinear_explicit_diagnostics(
@@ -1948,7 +1948,7 @@ def test_integrate_nonlinear_explicit_diagnostics_explicit_and_state_routes(
 ) -> None:
     payload = ("t_explicit", "diag_explicit", "G_final", "fields_final")
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._integrate_nonlinear_explicit_diagnostics_impl",
+        "gkx.solvers_nonlinear_diagnostic_integration._integrate_nonlinear_explicit_diagnostics_impl",
         lambda *args, **kwargs: payload,
     )
 
@@ -1979,7 +1979,7 @@ def test_explicit_diagnostics_impl_rejects_imex_and_bad_state_rank(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.ensure_flux_tube_geometry_data",
+        "gkx.solvers_nonlinear_diagnostic_integration.ensure_flux_tube_geometry_data",
         lambda geom, z: geom,
     )
     grid = SimpleNamespace(z=np.array([0.0]))
@@ -2022,7 +2022,7 @@ def test_integrate_nonlinear_explicit_diagnostics_forwarding_contracts(
         return ("t", "diag", "G_final", "fields_final")
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._integrate_nonlinear_explicit_diagnostics_impl",
+        "gkx.solvers_nonlinear_diagnostic_integration._integrate_nonlinear_explicit_diagnostics_impl",
         _fake_impl,
     )
 
@@ -2081,7 +2081,7 @@ def test_integrate_nonlinear_explicit_diagnostics_imex_forwarding_contracts(
         return ("t_imex", "diag_imex")
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.integrate_nonlinear_imex_diagnostics",
+        "gkx.solvers_nonlinear_diagnostic_integration.integrate_nonlinear_imex_diagnostics",
         _fake_imex,
     )
 
@@ -2153,34 +2153,34 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         )
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.ensure_flux_tube_geometry_data",
+        "gkx.solvers_nonlinear_diagnostic_integration.ensure_flux_tube_geometry_data",
         lambda geom, z: geom,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.fieldline_quadrature_weights",
+        "gkx.solvers_nonlinear_diagnostic_integration.fieldline_quadrature_weights",
         lambda geom, grid: (
             jnp.ones((grid.z.size,), dtype=jnp.float32),
             jnp.asarray(1.0),
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._diagnostic_omega_mode_mask",
+        "gkx.solvers_nonlinear_diagnostic_integration._diagnostic_omega_mode_mask",
         lambda grid, cache, **kwargs: jnp.ones((2, 1), dtype=bool),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._linear_frequency_bound",
+        "gkx.solvers_nonlinear_diagnostic_integration._linear_frequency_bound",
         lambda *args, **kwargs: np.array([0.0, 0.0, 0.0], dtype=float),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._laguerre_velocity_max",
+        "gkx.solvers_nonlinear_diagnostic_integration._laguerre_velocity_max",
         lambda nl: 0.0,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.nonlinear_rhs_cached",
+        "gkx.solvers_nonlinear_diagnostic_integration.nonlinear_rhs_cached",
         lambda G, cache, params, terms, **kwargs: (jnp.ones_like(G), fields),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.compute_fields_cached",
+        "gkx.solvers_nonlinear_diagnostic_integration.compute_fields_cached",
         lambda *args, **kwargs: fields,
     )
 
@@ -2191,15 +2191,15 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         )
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._instantaneous_growth_rate_step",
+        "gkx.solvers_nonlinear_diagnostic_integration._instantaneous_growth_rate_step",
         _fake_growth,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.phi2_resolved",
+        "gkx.solvers_nonlinear_diagnostic_integration.phi2_resolved",
         lambda *args, **kwargs: _resolved_tuple(),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.distribution_free_energy_resolved",
+        "gkx.solvers_nonlinear_diagnostic_integration.distribution_free_energy_resolved",
         lambda *args, **kwargs: (
             jnp.ones((1,), dtype=jnp.float32),
             jnp.ones((1, 1), dtype=jnp.float32),
@@ -2210,7 +2210,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.electrostatic_field_energy_resolved",
+        "gkx.solvers_nonlinear_diagnostic_integration.electrostatic_field_energy_resolved",
         lambda *args, **kwargs: (
             jnp.ones((1,), dtype=jnp.float32),
             jnp.ones((1, 1), dtype=jnp.float32),
@@ -2220,7 +2220,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.magnetic_vector_potential_energy_resolved",
+        "gkx.solvers_nonlinear_diagnostic_integration.magnetic_vector_potential_energy_resolved",
         lambda *args, **kwargs: (
             jnp.ones((1,), dtype=jnp.float32),
             jnp.ones((1, 1), dtype=jnp.float32),
@@ -2230,7 +2230,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.heat_flux_channel_resolved_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.heat_flux_channel_resolved_species",
         lambda *args, **kwargs: (
             _split_flux_tuple(),
             _split_flux_tuple(),
@@ -2238,7 +2238,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.particle_flux_channel_resolved_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.particle_flux_channel_resolved_species",
         lambda *args, **kwargs: (
             _split_flux_tuple(),
             _split_flux_tuple(),
@@ -2246,7 +2246,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.turbulent_heating_resolved_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.turbulent_heating_resolved_species",
         lambda *args, **kwargs: (
             jnp.ones((1,), dtype=jnp.float32),
             jnp.ones((1, 1), dtype=jnp.float32),
@@ -2256,7 +2256,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._collision_damping",
+        "gkx.solvers_nonlinear_diagnostic_integration._collision_damping",
         lambda *args, **kwargs: jnp.ones((1, 1, 2, 1, 2), dtype=jnp.float32),
     )
 
@@ -2265,7 +2265,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         return G_state + 5.0
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._apply_collision_split",
+        "gkx.solvers_nonlinear_diagnostic_integration._apply_collision_split",
         _fake_collision_split,
     )
 
@@ -2366,69 +2366,69 @@ def test_explicit_diagnostics_resolved_schema_and_sample_axis(monkeypatch) -> No
         return tuple(_marker(base + offset) for offset in range(5))
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.ensure_flux_tube_geometry_data",
+        "gkx.solvers_nonlinear_diagnostic_integration.ensure_flux_tube_geometry_data",
         lambda geom, z: geom,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.fieldline_quadrature_weights",
+        "gkx.solvers_nonlinear_diagnostic_integration.fieldline_quadrature_weights",
         lambda geom, grid: (
             jnp.ones((grid.z.size,), dtype=jnp.float32),
             jnp.asarray(1.0),
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._diagnostic_omega_mode_mask",
+        "gkx.solvers_nonlinear_diagnostic_integration._diagnostic_omega_mode_mask",
         lambda grid, cache, **kwargs: jnp.ones((2, 2), dtype=bool),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._linear_frequency_bound",
+        "gkx.solvers_nonlinear_diagnostic_integration._linear_frequency_bound",
         lambda *args, **kwargs: np.array([0.0, 0.0, 0.0], dtype=float),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._laguerre_velocity_max",
+        "gkx.solvers_nonlinear_diagnostic_integration._laguerre_velocity_max",
         lambda nl: 0.0,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.nonlinear_rhs_cached",
+        "gkx.solvers_nonlinear_diagnostic_integration.nonlinear_rhs_cached",
         lambda G, cache, params, terms, **kwargs: (jnp.zeros_like(G), fields_state),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.compute_fields_cached",
+        "gkx.solvers_nonlinear_diagnostic_integration.compute_fields_cached",
         lambda *args, **kwargs: fields_state,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._instantaneous_growth_rate_step",
+        "gkx.solvers_nonlinear_diagnostic_integration._instantaneous_growth_rate_step",
         lambda *args, **kwargs: (
             jnp.full((2, 2), 1.25, dtype=jnp.float32),
             jnp.full((2, 2), -0.75, dtype=jnp.float32),
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.phi2_resolved",
+        "gkx.solvers_nonlinear_diagnostic_integration.phi2_resolved",
         lambda *args, **kwargs: tuple(_marker(v) for v in range(100, 108)),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.zonal_phi_mode_kxt",
+        "gkx.solvers_nonlinear_diagnostic_integration.zonal_phi_mode_kxt",
         lambda *args, **kwargs: _marker(108),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.zonal_phi_line_kxt",
+        "gkx.solvers_nonlinear_diagnostic_integration.zonal_phi_line_kxt",
         lambda *args, **kwargs: _marker(109),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.distribution_free_energy_resolved",
+        "gkx.solvers_nonlinear_diagnostic_integration.distribution_free_energy_resolved",
         lambda *args, **kwargs: tuple(_marker(v) for v in range(110, 116)),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.electrostatic_field_energy_resolved",
+        "gkx.solvers_nonlinear_diagnostic_integration.electrostatic_field_energy_resolved",
         lambda *args, **kwargs: tuple(_marker(v) for v in range(116, 121)),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.magnetic_vector_potential_energy_resolved",
+        "gkx.solvers_nonlinear_diagnostic_integration.magnetic_vector_potential_energy_resolved",
         lambda *args, **kwargs: tuple(_marker(v) for v in range(121, 126)),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.heat_flux_channel_resolved_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.heat_flux_channel_resolved_species",
         lambda *args, **kwargs: (
             _split_flux_tuple(130),
             _split_flux_tuple(134),
@@ -2436,7 +2436,7 @@ def test_explicit_diagnostics_resolved_schema_and_sample_axis(monkeypatch) -> No
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.particle_flux_channel_resolved_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.particle_flux_channel_resolved_species",
         lambda *args, **kwargs: (
             _split_flux_tuple(147),
             _split_flux_tuple(151),
@@ -2444,7 +2444,7 @@ def test_explicit_diagnostics_resolved_schema_and_sample_axis(monkeypatch) -> No
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.turbulent_heating_resolved_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.turbulent_heating_resolved_species",
         lambda *args, **kwargs: tuple(_marker(v) for v in range(160, 165)),
     )
 
@@ -2516,57 +2516,57 @@ def test_fixed_small_amplitude_mode_gamma_omega_are_finite(monkeypatch) -> None:
         return drive, _fields_from_state(G_state)
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.ensure_flux_tube_geometry_data",
+        "gkx.solvers_nonlinear_diagnostic_integration.ensure_flux_tube_geometry_data",
         lambda geom, z: geom,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.fieldline_quadrature_weights",
+        "gkx.solvers_nonlinear_diagnostic_integration.fieldline_quadrature_weights",
         lambda geom, grid: (
             jnp.ones((grid.z.size,), dtype=jnp.float32),
             jnp.asarray(1.0),
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._diagnostic_omega_mode_mask",
+        "gkx.solvers_nonlinear_diagnostic_integration._diagnostic_omega_mode_mask",
         lambda grid, cache, **kwargs: jnp.ones((4, 2), dtype=bool),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._linear_frequency_bound",
+        "gkx.solvers_nonlinear_diagnostic_integration._linear_frequency_bound",
         lambda *args, **kwargs: np.array([0.0, 0.0, 0.0], dtype=float),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration._laguerre_velocity_max",
+        "gkx.solvers_nonlinear_diagnostic_integration._laguerre_velocity_max",
         lambda nl: 0.0,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.nonlinear_rhs_cached", _rhs
+        "gkx.solvers_nonlinear_diagnostic_integration.nonlinear_rhs_cached", _rhs
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.compute_fields_cached",
+        "gkx.solvers_nonlinear_diagnostic_integration.compute_fields_cached",
         _fields_from_state,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.distribution_free_energy",
+        "gkx.solvers_nonlinear_diagnostic_integration.distribution_free_energy",
         lambda *args, **kwargs: jnp.asarray(0.0, dtype=jnp.float32),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.electrostatic_field_energy",
+        "gkx.solvers_nonlinear_diagnostic_integration.electrostatic_field_energy",
         lambda *args, **kwargs: jnp.asarray(0.0, dtype=jnp.float32),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.magnetic_vector_potential_energy",
+        "gkx.solvers_nonlinear_diagnostic_integration.magnetic_vector_potential_energy",
         lambda *args, **kwargs: jnp.asarray(0.0, dtype=jnp.float32),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.heat_flux_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.heat_flux_species",
         lambda *args, **kwargs: jnp.zeros((1,), dtype=jnp.float32),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.particle_flux_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.particle_flux_species",
         lambda *args, **kwargs: jnp.zeros((1,), dtype=jnp.float32),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.turbulent_heating_species",
+        "gkx.solvers_nonlinear_diagnostic_integration.turbulent_heating_species",
         lambda *args, **kwargs: jnp.zeros((1,), dtype=jnp.float32),
     )
 
@@ -2603,7 +2603,7 @@ def test_fixed_small_amplitude_mode_gamma_omega_are_finite(monkeypatch) -> None:
 
 def test_integrate_nonlinear_imex_diagnostics_rejects_bad_shape(monkeypatch) -> None:
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.diagnostic_integration.ensure_flux_tube_geometry_data",
+        "gkx.solvers_nonlinear_diagnostic_integration.ensure_flux_tube_geometry_data",
         lambda geom, z: geom,
     )
     with pytest.raises(ValueError):
@@ -2667,14 +2667,14 @@ def test_integrate_nonlinear_imex_cached_shape_mismatch_and_zero_nonlinear(
     gmres_calls: list[int] = []
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.imex.gmres",
+        "gkx.solvers_nonlinear_imex.gmres",
         lambda matvec, rhs, **kwargs: SimpleNamespace(
             x=gmres_calls.append(rhs.size) or rhs,
             converged=True,
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.assemble_rhs_cached_jit",
+        "gkx.solvers_nonlinear_state_integration.assemble_rhs_cached_jit",
         lambda G, cache, params, terms, **kwargs: (
             jnp.zeros_like(G),
             FieldState(
@@ -2683,7 +2683,7 @@ def test_integrate_nonlinear_imex_cached_shape_mismatch_and_zero_nonlinear(
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.compute_fields_cached",
+        "gkx.solvers_nonlinear_state_integration.compute_fields_cached",
         lambda G, cache, params, terms=None: (_ for _ in ()).throw(
             AssertionError("nonlinear path should stay off")
         ),
@@ -2722,20 +2722,20 @@ def test_integrate_nonlinear_imex_cached_uses_electrostatic_linear_path(
     calls: list[str] = []
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.assemble_rhs_cached_electrostatic_jit",
+        "gkx.solvers_nonlinear_state_integration.assemble_rhs_cached_electrostatic_jit",
         lambda G, cache, params, terms, **kwargs: (
             calls.append("electrostatic") or jnp.zeros_like(G),
             fields,
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.assemble_rhs_cached_jit",
+        "gkx.solvers_nonlinear_state_integration.assemble_rhs_cached_jit",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("generic linear RHS should not run")
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.imex.jax.scipy.sparse.linalg.gmres",
+        "gkx.solvers_nonlinear_imex.jax.scipy.sparse.linalg.gmres",
         lambda matvec, rhs, **kwargs: (rhs, SimpleNamespace(success=True)),
     )
 
@@ -2798,11 +2798,11 @@ def test_integrate_nonlinear_imex_cached_builds_operator_and_nonlinear_term(
         )
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration._build_implicit_operator",
+        "gkx.solvers_nonlinear_state_integration._build_implicit_operator",
         _fake_build_operator,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.compute_fields_cached",
+        "gkx.solvers_nonlinear_state_integration.compute_fields_cached",
         lambda G, cache, params, terms=None, external_phi=None: fields,
     )
 
@@ -2812,15 +2812,15 @@ def test_integrate_nonlinear_imex_cached_builds_operator_and_nonlinear_term(
         return jnp.ones_like(G)
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.nonlinear_em_contribution",
+        "gkx.solvers_nonlinear_state_integration.nonlinear_em_contribution",
         _fake_nonlinear_em,
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.state_integration.assemble_rhs_cached_jit",
+        "gkx.solvers_nonlinear_state_integration.assemble_rhs_cached_jit",
         lambda G, cache, params, terms, **kwargs: (jnp.zeros_like(G), fields),
     )
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.imex.jax.scipy.sparse.linalg.gmres",
+        "gkx.solvers_nonlinear_imex.jax.scipy.sparse.linalg.gmres",
         lambda matvec, rhs, **kwargs: (rhs, SimpleNamespace(success=True)),
     )
 
@@ -3390,7 +3390,7 @@ def test_electromagnetic_window_actually_solves_apar_and_bpar(case_grid):
     """Guard the EM rows: a silently electrostatic field solve would still pass FD."""
 
     from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
 
     grid, geom = case_grid
     params = LinearParams(beta=0.02, fapar=1.0)

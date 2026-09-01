@@ -538,7 +538,7 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     """
 
     from gkx.operators.linear.params import linear_terms_to_term_config
-    from gkx.solvers.linear.krylov_algorithms import _apply_operator
+    from gkx.solvers_linear_krylov_algorithms import _apply_operator
     from gkx.core_grid import select_ky_grid
     from gkx.diagnostics.modes import select_ky_index
 
@@ -3256,7 +3256,7 @@ def test_run_linear_case_toml_velocity_auto_reaches_parallel_rhs(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    import gkx.solvers.linear.integrators as linear_integrators
+    import gkx.solvers_linear_integrators as linear_integrators
 
     cfg_path = tmp_path / "velocity_auto.toml"
     cfg_path.write_text(
@@ -3802,8 +3802,8 @@ def test_runtime_linear_explicit_time_rejects_return_state_before_setup(
 
 
 def test_direct_linear_and_nonlinear_integrators_fast_smoke() -> None:
-    from gkx.solvers.nonlinear.state_integration import integrate_nonlinear
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
+    from gkx.solvers_linear_integrators import integrate_linear
 
     grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     cfg = CycloneBaseCase(grid=grid_cfg)

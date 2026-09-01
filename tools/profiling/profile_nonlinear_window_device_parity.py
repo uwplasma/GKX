@@ -65,7 +65,7 @@ def evaluate(case: dict) -> dict:
     from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
     from gkx.operators.linear.params import Species, build_linear_params
-    from gkx.solvers.nonlinear.state_integration import nonlinear_heat_flux_window
+    from gkx.solvers_nonlinear_state_integration import nonlinear_heat_flux_window
     from gkx.terms.config import TermConfig
 
     cfg = CycloneBaseCase(

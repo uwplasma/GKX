@@ -38,7 +38,7 @@ from gkx.core_grid import build_spectral_grid
 from gkx.geometry import apply_imported_geometry_grid_defaults
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
 from gkx.runtime import (
     _build_initial_condition,
     _runtime_external_phi,
@@ -272,7 +272,7 @@ def main_cyclone(argv: list[str] | None = None) -> int:
 
     from jax import profiler
 
-    from gkx.solvers.nonlinear.diagnostic_integration import (
+    from gkx.solvers_nonlinear_diagnostic_integration import (
         prepare_nonlinear_explicit_diagnostics,
     )
     from gkx.runtime import run_runtime_nonlinear
