@@ -281,7 +281,7 @@ def build_linear_rhs_streaming_electrostatic_gate(
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
     from gkx.parallel.velocity import build_velocity_sharding_plan
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     devices = _device_list(requested_devices)
     state, cache, params, grid = build_problem(
@@ -390,7 +390,7 @@ def build_linear_rhs_electrostatic_slices_gate(
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
     from gkx.parallel.velocity import build_velocity_sharding_plan
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     devices = _device_list(requested_devices)
     state, cache, params, grid = build_problem(

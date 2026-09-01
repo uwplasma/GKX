@@ -18,7 +18,7 @@ import pytest
 import gkx.workflows.nonlinear as nonlinear_workflow
 from gkx.config import GeometryConfig, GridConfig, InitializationConfig, TimeConfig
 from gkx.runtime import run_runtime_nonlinear
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeNormalizationConfig,
     RuntimeParallelConfig,

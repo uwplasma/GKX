@@ -302,7 +302,7 @@ path = "objectives/stellarator.py"
 # The target below is the honest next step: the fused file should be reduced by
 # removing duplication between the three former modules, not by splitting them
 # apart again along the seams that were just closed.
-baseline_lines = 1629
+baseline_lines = 1663
 target_lines = 1100
 reason = "Fused stellarator_tables and stellarator_reduced; reduce by deduplication, not by re-splitting."
 

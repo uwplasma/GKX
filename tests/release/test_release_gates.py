@@ -2297,7 +2297,7 @@ def test_large_modules_have_direct_manifest_rows() -> None:
 
 
 def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
-    _write_package(tmp_path, "gkx.runtime", "gkx.workflows.runtime.config")
+    _write_package(tmp_path, "gkx.runtime", "gkx.config")
     _write_fast_inputs(tmp_path)
 
     summary = _validate_tmp_coverage_manifest(
@@ -2305,7 +2305,7 @@ def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
         _coverage_manifest(
             _coverage_row(
                 "gkx.runtime",
-                owned_modules=["gkx.workflows.runtime.config"],
+                owned_modules=["gkx.config"],
             )
         ),
     )
@@ -2313,13 +2313,11 @@ def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
     assert summary["n_direct_modules"] == 1
     assert summary["n_owned_modules"] == 1
     assert summary["n_excluded_modules"] == 1
-    assert summary["owned_modules_by_owner"]["gkx.runtime"] == [
-        "gkx.workflows.runtime.config"
-    ]
+    assert summary["owned_modules_by_owner"]["gkx.runtime"] == ["gkx.config"]
 
 
 def test_manifest_rejects_unowned_package_modules(tmp_path: Path) -> None:
-    _write_package(tmp_path, "gkx.runtime", "gkx.workflows.runtime.config")
+    _write_package(tmp_path, "gkx.runtime", "gkx.config")
     _write_fast_inputs(tmp_path)
 
     with pytest.raises(ValueError, match="package modules lack coverage ownership"):
@@ -2333,13 +2331,13 @@ def test_manifest_rejects_duplicate_owned_modules(tmp_path: Path) -> None:
         tmp_path,
         "gkx.runtime",
         "gkx.linear",
-        "gkx.workflows.runtime.config",
+        "gkx.config",
     )
     _write_fast_inputs(tmp_path)
 
     manifest = _coverage_manifest(
-        _coverage_row("gkx.runtime", owned_modules=["gkx.workflows.runtime.config"]),
-        _coverage_row("gkx.linear", owned_modules=["gkx.workflows.runtime.config"]),
+        _coverage_row("gkx.runtime", owned_modules=["gkx.config"]),
+        _coverage_row("gkx.linear", owned_modules=["gkx.config"]),
     )
     with pytest.raises(ValueError, match="duplicate coverage ownership"):
         _validate_tmp_coverage_manifest(tmp_path, manifest)

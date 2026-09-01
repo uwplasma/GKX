@@ -36,7 +36,7 @@ from gkx.solvers_linear_krylov import KrylovConfig, dominant_eigenpair
 from gkx.diagnostics.normalization import apply_diagnostic_normalization
 from gkx.parallel import independent_map
 from gkx.diagnostics.quasilinear_transport import compute_quasilinear_from_linear_state
-from gkx.workflows.runtime.config import Case, RuntimeConfig
+from gkx.config import Case, RuntimeConfig
 from gkx.workflows.runtime import startup as runtime_startup
 from dataclasses import dataclass
 from gkx.workflows.runtime.diagnostics import _RuntimeLinearFitOptions

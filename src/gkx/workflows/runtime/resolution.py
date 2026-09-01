@@ -36,7 +36,7 @@ from gkx.geometry.core import (
     ensure_flux_tube_geometry_data,
 )
 from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.startup import (
     build_runtime_geometry,
     build_runtime_linear_params,

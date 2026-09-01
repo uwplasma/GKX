@@ -33,7 +33,7 @@ from gkx.runtime import (
     run_runtime_linear,
     run_runtime_scan,
 )
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeNormalizationConfig,
     RuntimeQuasilinearConfig,

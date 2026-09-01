@@ -398,7 +398,7 @@ Implementation map
      - single-run and scan execution, TOML/executable overrides, JSON/CSV
        artifact writing
    * - Input schema
-     - :mod:`gkx.workflows.runtime.config`, :mod:`gkx.workflows.runtime.toml`
+     - :mod:`gkx.config`, :mod:`gkx.workflows.runtime.toml`
      - ``[quasilinear]`` configuration and round-trip serialization
    * - Calibration reports
      - :mod:`gkx.diagnostics.quasilinear_calibration`

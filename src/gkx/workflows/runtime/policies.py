@@ -10,7 +10,7 @@ import numpy as np
 from gkx.diagnostics.modes import select_ky_index
 from gkx.config import resolve_cfl_fac
 from gkx.core_grid import SpectralGrid
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 
 __all__ = [
     "RuntimeIndependentParallelPlan",

@@ -1244,7 +1244,7 @@ Source Mapping
 - low-level parameter container:
   ``src/gkx/linear.py``
 - runtime parameter surface:
-  ``src/gkx/workflows/runtime/config.py``
+  ``src/gkx/config.py``
 
 Parameter Surface
 -----------------

@@ -58,7 +58,7 @@ on:
 - ``gkx.geometry``
 - ``gkx.cli``
 - ``gkx.runtime``
-- ``gkx.workflows.runtime.config``
+- ``gkx.config``
 - ``gkx.workflows.runtime.artifacts``
 - ``gkx.artifacts.plotting``
 - ``gkx.parallel``

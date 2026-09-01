@@ -63,7 +63,7 @@ from gkx.workflows.runtime.chunks import (
     run_adaptive_runtime_chunk_loop,
 )
 from gkx.workflows.runtime.commands import run_linear_case, run_nonlinear_case
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeCollisionConfig,
     RuntimeConfig,
     RuntimeExpertConfig,

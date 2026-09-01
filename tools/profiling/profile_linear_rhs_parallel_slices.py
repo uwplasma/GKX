@@ -198,7 +198,7 @@ def profile_linear_rhs_parallel_slices(
     import jax
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     platform_name = str(platform).lower()
     device_list = list(jax.devices(platform_name))[: int(requested_devices)]

@@ -70,7 +70,7 @@ from gkx.workflows.runtime.chunks import (
     build_runtime_progress_message,
     format_duration,
 )
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeExpertConfig,
     RuntimeNormalizationConfig,

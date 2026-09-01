@@ -42,7 +42,7 @@ from gkx.workflows.nonlinear import (
     run_secondary_seed,
     write_restart_state,
 )
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeExpertConfig,
     RuntimePhysicsConfig,

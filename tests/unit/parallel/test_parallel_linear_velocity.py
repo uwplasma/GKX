@@ -2696,7 +2696,7 @@ def test_linear_rhs_parallel_cached_streaming_only_matches_serial_call_graph() -
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     cfg = CycloneBaseCase(
         grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0, boundary="periodic")
@@ -2751,7 +2751,7 @@ def test_linear_rhs_parallel_cached_streaming_only_matches_serial_call_graph() -
 def test_linear_rhs_parallel_cached_rejects_non_streaming_velocity_route() -> None:
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     class Cache:
         kz = jnp.asarray([0.0, 1.0, -1.0])
@@ -2777,7 +2777,7 @@ def test_linear_rhs_parallel_cached_electrostatic_streaming_matches_serial_call_
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     cfg = CycloneBaseCase(
         grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0, boundary="periodic")
@@ -2844,7 +2844,7 @@ def test_linear_rhs_parallel_cached_electrostatic_linear_slices_match_serial_cal
     from gkx.operators.linear.params import LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     state, cache, params = _small_periodic_field_problem()
     z = jnp.linspace(0.0, 2.0 * jnp.pi, state.shape[-1], endpoint=False)
@@ -2901,7 +2901,7 @@ def test_linear_rhs_parallel_cached_auto_backend_selects_gated_electrostatic_sli
     from gkx.operators.linear.params import LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     state, cache, params = _small_periodic_field_problem()
     z = jnp.linspace(0.0, 2.0 * jnp.pi, state.shape[-1], endpoint=False)
@@ -2948,7 +2948,7 @@ def test_linear_rhs_parallel_cached_electrostatic_linear_slices_rejects_ungated_
 ):
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     class Cache:
         use_twist_shift = False

@@ -28,7 +28,7 @@ Core modules
   setup, adaptive time-step policy, fixed-mode omega masks used by comparison
   parity audits, reusable nonlinear IMEX operator construction, and public
   facades for the focused projection/collision owners.
-- ``gkx.runtime`` / ``gkx.workflows.runtime.config``: user-facing runtime entrypoints and configuration schema.
+- ``gkx.runtime`` / ``gkx.config``: user-facing runtime entrypoints and configuration schema.
 - ``gkx.workflows.runtime.policies``: pure runtime selection policies for solver names, scan modes, nonlinear monitored modes, external fields, and step-count inference.
 - ``gkx.workflows.runtime.orchestration_scan``, ``gkx.workflows.runtime.chunks``, and ``gkx.workflows.runtime.orchestration_artifacts``: runtime scan batching, progress/ETA formatting, and nonlinear restart/checkpoint artifact handoff behind injectable seams.
 - ``gkx.benchmarking_shared``: reviewed reference tables,

@@ -231,7 +231,7 @@ from gkx.geometry.miller_eik import (
     build_miller_geometry_request,
     generate_runtime_miller_eik,
 )
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeNormalizationConfig,
     RuntimePhysicsConfig,

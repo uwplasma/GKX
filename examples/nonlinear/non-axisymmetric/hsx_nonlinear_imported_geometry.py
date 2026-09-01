@@ -17,7 +17,7 @@ from gkx.config import (
     TimeConfig,
 )
 from gkx.runtime import run_runtime_nonlinear
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeCollisionConfig,
     RuntimeConfig,
     RuntimeNormalizationConfig,

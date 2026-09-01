@@ -164,7 +164,7 @@ from gkx.geometry import SAlphaGeometry, sample_flux_tube_geometry
 from gkx.core_grid import build_spectral_grid
 from gkx.solvers_time_explicit import ExplicitTimeConfig
 from gkx.operators.linear.params import LinearTerms
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 from gkx.operators.linear.params import Species
 
 

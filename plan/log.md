@@ -4267,3 +4267,52 @@ Outcome:
   guard inspecting nothing while the suite stayed green. Both were repointed
   with the exemption text and the measurement behind it unchanged.
 - next task: the `operators/` and `workflows/` nests.
+
+## 2026-08-31 — PR R4-1 lift the case type out of the deepest layer (`refactor/r4-flatten-and-fuse`)
+
+Baseline:
+- built on the fusion work in the same branch; the dependency graph at
+  `f9e5e97a` had 17 layer violations across 667 edges
+- relevant existing gate: cohesion policy, and the layer measurement in §25d
+
+Scope:
+- intended change: §25d.4 step 1. `RuntimeConfig`, aliased `Case`, lived in
+  `workflows/runtime/config.py` at the deepest layer while `geometry/vmec_eik.py`
+  and `geometry/miller_eik.py` imported it from among the shallowest.
+- explicitly out of scope: deciding whether two configuration systems are
+  wanted, which is §25d.4 step 2 and a scope question rather than a move.
+
+Changes:
+- the deck configuration module merged into `gkx/config.py`. It imported
+  nothing but that file, so the move was safe by construction rather than by
+  hope: `gkx/config.py` has no `gkx` imports at all.
+- `deck_text` and its `_toml_value` helper moved down with it. `Case.to_toml`
+  had reached back up into `workflows.runtime.wout` through a deferred import,
+  which is a cycle-breaker and therefore a symptom. `wout.py` now imports the
+  renderer downhill, and the two modules share one object rather than a copy.
+- 48 files repointed.
+
+Evidence:
+- layer violations 17 -> 15; both `geometry -> workflows` edges are gone, and
+  the `config -> workflows` edge the move briefly introduced was removed by
+  taking the renderer with it rather than left as a deferred import.
+- advertised API 15, lazy registry 346, every registry target resolves,
+  `gkx.Case is gkx.config.Case`, and `deck_text` is one shared object.
+- `tests/release`, `tests/unit/api`, `tests/integration/runtime`: 585 passed,
+  1 skipped, plus 127 release gates.
+- `ruff`, `ruff format --check`, `sphinx -W`, and all four release checkers
+  clean.
+- physics/mathematics/numerics gates: none re-run and none claimed. No
+  definition changed.
+
+Outcome:
+- accepted.
+- the remaining 15 violations are dominated by `solvers -> diagnostics`, seven
+  edges. That is a different question from a misplaced type: it asks whether
+  diagnostics belong below solvers rather than above them, and it should be
+  answered by reading what those seven imports actually need before anything
+  moves.
+- a release gate failed twice in this session for the same reason: it reads
+  git-tracked files, so deleting a module without staging leaves it scanning a
+  path that no longer exists. Staging is part of verification, not bookkeeping.
+- next task: §25d.4 step 2, the two configuration systems.

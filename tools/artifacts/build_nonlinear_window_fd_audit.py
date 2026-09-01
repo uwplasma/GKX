@@ -32,7 +32,7 @@ from gkx.config import (
 )  # noqa: E402
 from gkx.artifacts.plotting import set_plot_style  # noqa: E402
 from gkx.runtime import run_runtime_nonlinear  # noqa: E402
-from gkx.workflows.runtime.config import (  # noqa: E402
+from gkx.config import (  # noqa: E402
     RuntimeConfig,
     RuntimeNormalizationConfig,
     RuntimePhysicsConfig,

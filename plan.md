@@ -2400,6 +2400,91 @@ The gate from section 25b applies unchanged: the advertised API and lazy
 registry may not shrink except by a recorded decision, the collected test
 node-ID set is unchanged, and the physics gates are untouched. Moving code
 between files must not move anything out of the package.
+## 25d. Architecture, tested against the dependency graph
+
+Sections 25b and 25c measured lines and directories. This one measures the
+*connections*: a weighted import graph over 182 modules, 667 edges and 1,644
+imported names, built at `f9e5e97a` on 2026-08-31. Several candidate
+rearrangements were tested against it before proposing any.
+
+### 25d.1 The layering is already sound
+
+Assigning each package a layer (configuration, geometry, terms and operators,
+solvers, diagnostics, objectives, artifacts, workflows, entry points) and
+counting edges that run downhill gives **17 violating edges out of 667**. The
+package is not tangled. Any proposal that reorganises everything is solving a
+problem the code does not have, and the earlier instinct to flatten wholesale
+should be tempered by that.
+
+### 25d.2 The one structural inversion worth fixing
+
+`RuntimeConfig`, aliased as the public `Case`, lives in
+`workflows/runtime/config.py`, the deepest layer, and is imported by
+`geometry/vmec_eik.py` and `geometry/miller_eik.py`, among the shallowest.
+That is the worst inversion in the graph, and it is a symptom rather than an
+accident: **GKX has two parallel configuration systems.**
+
+| | Module | Holds |
+| --- | --- | --- |
+| physics configs | `gkx/config.py` | `GridConfig`, `TimeConfig`, `GeometryConfig`, `ModelConfig`, `CycloneBaseCase` |
+| deck configs | `gkx/config.py` | `RuntimeSpeciesConfig`, `RuntimePhysicsConfig`, ..., `RuntimeConfig` alias `Case` |
+
+The split is mostly clean -- 20 modules under `workflows/runtime` use the deck
+family, 23 elsewhere use the physics family -- but the deck family leaks into
+**10 modules outside its own package**, and geometry is one of them. The public
+entry type a user touches first therefore sits below everything, and pulling it
+upward drags the runtime layer with it.
+
+### 25d.3 What the graph says the pieces are
+
+The highest fan-in module is `operators/linear/params.py`: 528 lines, from
+which 99 names are imported. That is the real core type module, and no
+reorganisation should move or split it casually. Weighted label propagation
+over the import graph finds natural communities that mostly agree with the
+current directories -- nonlinear operators, nonlinear solvers, runtime,
+artifacts each come out as one cluster -- with the linear operator, linear
+solver and objective code appearing as a single 30-module, 15,520-line blob.
+That blob, not the directory count, is where the coupling actually is.
+
+Two earlier readings were wrong and are corrected here. `artifacts/spectral_layout.py`
+looked misplaced on fan-in alone; its 50 imported names come from only three
+consumers, so it is a cohesive cluster rather than a stray. And the
+`objectives` package is not experimental: the cluster analysis puts its
+stellarator code with the linear solver, which is where it belongs.
+
+### 25d.4 Revised program, in priority order
+
+1. **Lift the case type.** Move `RuntimeConfig` and its `Case` alias to the
+   configuration layer, so geometry and the rest stop importing downward from
+   `workflows.runtime`. This removes the deepest inversion and is the single
+   highest-value structural change available.
+2. **Decide whether two configuration systems are wanted.** If the deck model is
+   deliberately decoupled from the physics model, say so in the docs and keep
+   the translation explicit and in one place. If it is not deliberate, this is
+   the largest simplification left in the package.
+3. **Attack the 30-module blob**, not the directory count. Linear operators,
+   linear solvers and stellarator objectives are one community by measurement;
+   the fusions there are the ones that reduce real coupling.
+4. Continue flattening only where a directory is a container. Directory count
+   fell 20 -> 13 and the remaining ones hold real clusters.
+5. Fuse only where the consumer imports six or more names, and expect chains:
+   fusing `stellarator_tables` revealed `stellarator_reduced` at fourteen names,
+   which revealed `stellarator_contracts` at six. A module can look
+   double-consumed only because both consumers are halves of one split module.
+
+### 25d.5 Fusion hazards, from four completed fusions
+
+None of these is visible to a grep, and each was caught by a checker or a test:
+
+- a facade and its implementation colliding by name, so the later definition
+  silently wins and the facade's own logic never runs;
+- a constant used in a **default argument**, which evaluates at definition time,
+  so an appended body raises `NameError`;
+- a module docstring carrying a **scope claim** -- the reduced stellarator model
+  is a fitted feature map with an ODE envelope, not gyrokinetics -- which fusion
+  would have deleted;
+- precision guards keyed by file name, one of which failed with "the guard is
+  vacuous" because it was written to detect its own hollowing-out.
 
 ## 26. Risk register
 

@@ -138,7 +138,7 @@ from gkx.workflows.runtime.artifacts import (
     write_runtime_linear_artifacts,
     write_runtime_nonlinear_artifacts,
 )
-from gkx.workflows.runtime.config import RuntimeConfig, RuntimeOutputConfig
+from gkx.config import RuntimeConfig, RuntimeOutputConfig
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
 )

@@ -9,7 +9,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence, cast
 import numpy as np
 
 from gkx.diagnostics.modes import ModeSelection
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.diagnostics import (
     _RuntimeLinearFitOptions,
     ensure_finite_linear_history,

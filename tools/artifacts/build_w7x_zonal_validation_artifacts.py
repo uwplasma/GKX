@@ -56,7 +56,7 @@ from gkx.runtime import (  # noqa: E402
     build_runtime_term_config,
 )
 from gkx.terms.assembly import compute_fields_cached  # noqa: E402
-from gkx.workflows.runtime.config import RuntimeConfig  # noqa: E402
+from gkx.config import RuntimeConfig  # noqa: E402
 from gkx.workflows.runtime.artifacts import (  # noqa: E402
     run_runtime_nonlinear_with_artifacts,
 )

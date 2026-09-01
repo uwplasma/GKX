@@ -730,7 +730,7 @@ Transport Diagnostics
 Runtime Config
 --------------
 
-.. automodule:: gkx.workflows.runtime.config
+.. automodule:: gkx.config
    :members:
 
 Runtime Startup

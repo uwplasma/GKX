@@ -134,7 +134,6 @@ owned_modules = [
   "gkx.workflows.runtime.resolution",
   "gkx.compilation_cache",
   "gkx.solvers_time_runners",
-  "gkx.workflows.runtime.config",
   "gkx.workflows.runtime.diagnostic_arrays",
   "gkx.workflows.runtime.diagnostics",
   "gkx.workflows.runtime.initial_phi",

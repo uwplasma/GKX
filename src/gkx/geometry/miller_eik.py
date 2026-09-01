@@ -11,7 +11,7 @@ from pathlib import Path
 from gkx.geometry.imported_miller import (
     generate_miller_eik_internal,
 )
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]

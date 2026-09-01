@@ -22,7 +22,7 @@ from gkx.diagnostics.saturation import (
 )
 from gkx.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry
 from gkx.solvers_time_explicit_cfl import FIXED_DT_CFL_WARN_RATIO
-from gkx.workflows.runtime.config import RuntimeConfig, RuntimeExpertConfig
+from gkx.config import RuntimeConfig, RuntimeExpertConfig
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
 )

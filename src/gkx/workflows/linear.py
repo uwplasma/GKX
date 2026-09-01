@@ -16,7 +16,7 @@ from gkx.diagnostics.modes import (
     extract_eigenfunction,
     extract_mode_time_series,
 )
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
 from gkx.workflows.runtime.results import RuntimeLinearResult
 from gkx.solvers_time_explicit import integrate_linear_explicit_from_config

@@ -15,7 +15,7 @@ import pytest
 
 import gkx
 from gkx.api.prepared import PreparedSimulation, prepare_simulation
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 
 PREPARED_METHODS = (
     "solve",

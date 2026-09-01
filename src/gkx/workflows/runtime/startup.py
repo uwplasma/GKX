@@ -23,7 +23,7 @@ from gkx.solvers_linear_krylov import KrylovConfig
 from gkx.geometry.miller_eik import generate_runtime_miller_eik
 from gkx.diagnostics.normalization import get_normalization_contract
 from gkx.artifacts.io import load_netcdf_restart_state
-from gkx.workflows.runtime.config import RuntimeConfig, RuntimeSpeciesConfig
+from gkx.config import RuntimeConfig, RuntimeSpeciesConfig
 from gkx.operators.linear.params import Species, build_linear_params
 from gkx.terms.config import TermConfig
 from gkx.geometry.vmec_eik import generate_runtime_vmec_eik

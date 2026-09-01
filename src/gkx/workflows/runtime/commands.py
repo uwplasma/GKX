@@ -8,7 +8,7 @@ from typing import Any, Callable, Mapping, Sequence, cast
 
 import numpy as np
 
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.warm_start import resolve_scan_warm_start
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,

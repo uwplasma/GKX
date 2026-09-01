@@ -436,7 +436,7 @@ def test_gkx3_product_contracts_preserve_identity_immutability_and_arrays() -> N
 
     import gkx
     from gkx.diagnostics.modes import ModeSelection
-    from gkx.workflows.runtime.config import Case, RuntimeConfig
+    from gkx.config import Case, RuntimeConfig
     from gkx.workflows.runtime.results import (
         LinearResult,
         NonlinearResult,
@@ -488,7 +488,7 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
 
     import gkx
     import gkx.runtime as runtime
-    from gkx.workflows.runtime.config import Case, RuntimeConfig
+    from gkx.config import Case, RuntimeConfig
 
     path = tmp_path / "case.toml"
     path.write_text('[geometry]\ngeometry_file = "relative.eik"\n', encoding="utf-8")
