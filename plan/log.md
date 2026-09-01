@@ -4362,3 +4362,52 @@ Outcome:
   after any rename.
 - the layer model was analytic until this PR: measured by hand in the plan and
   enforced by nothing, so every edge fixed could have returned unnoticed.
+
+## 2026-09-01 — PR P1-1 first measured performance changes (`refactor/r4-flatten-and-fuse`)
+
+Scope:
+- correct two wrong performance figures in the docs, and land the first change
+  that a profile justifies.
+
+Evidence gathered:
+- an XLA profile on the office box (36-core CPU, RTX A4000, jax 0.9.2) at
+  32x32x16, 64x64x24 and 96x96x48 measured **196 ns per element per step**, flat
+  across the two larger grids and so converged. The documented 72--80 ns did not
+  survive re-measurement and is corrected in `docs/performance.rst` and README.
+- the movement share is confirmed at **60.0 per cent movement, 38.9 per cent
+  FFT**, but the documented "under 10 per cent arithmetic" is not measurable:
+  XLA fuses the physics into the movement and FFT kernels, so the 0.8 per cent
+  that shows as arithmetic is only the residue that failed to fuse.
+- **there is no dealias zero-padding.** The 2/3 rule is a mask multiply, and the
+  only two `pad` operations in the step come from `jnp.fft`'s `s=` argument with
+  zero width. The docs had named padding as a primary movement cost.
+- **41.9 per cent of step time is four `copy_concatenate_fusion` kernels** rooted
+  at the concatenate in `_complete_hermitian_ky`, running four times per RK3
+  step; one costs 6.9 ms against 2.8 ms for a same-sized FFT while doing less
+  arithmetic. Those kernels carry `outer_dimension_partitions:["1","2","3"]`, so
+  XLA threads them three ways whatever the core count.
+- **157 of 160 compilations are setup**, matching the cold-start measurement in
+  §25e. The stepper compiles once; there is no recompilation bug.
+
+Changes:
+- the two `jnp.take` index reversals in `operators/linear/streaming.py` become
+  slice, reverse and concatenate. XLA lowers the index form as a general gather
+  and materialises it; the sliced form fuses. Measured 13.0 -> 9.6 ms on a
+  `(2,4,8,96,96,48)` complex64 state, **1.35x**, with byte-identical output.
+
+Evidence for the change itself:
+- `tests/unit/linear`, `tests/unit/operators`, `tests/unit/nonlinear`: 414 passed.
+- `ruff`, `ruff format --check`, `sphinx -W` clean; release gates 138 passed.
+- physics/mathematics/numerics gates: the permutation is proved identical by
+  construction and by `allclose` against the original, and no tolerance moved.
+
+Outcome:
+- accepted.
+- one correction to my own earlier work: §25e.4 records that
+  `_complete_hermitian_ky`'s *gather* is not a bottleneck, which the profile
+  confirms -- but the *concatenate* rooted in the same function is 41.9 per cent
+  of the step. The isolated benchmark was right and the conclusion drawn from it
+  was too narrow.
+- next: the profile's own first recommendation, which is to stop round-tripping
+  the ky spectrum -- keep the half-ky rfft layout through the linear RHS rather
+  than expanding to full ky and re-completing the symmetry every stage.
