@@ -2277,13 +2277,30 @@ Functions classified by what their body does:
    fingerprint of cap-driven splitting), and the number of modules with at least
    six top-level definitions whose internal-reference ratio is below 0.30 (8).
    `default_max_lines` moves 1000 -> 1200 and is demoted to a runaway tripwire.
+   The single-consumer arm counts only edges where the consumer imports at
+   least six names, so the gate cannot push anyone into dissolving a genuine
+   interface to improve its score.
    Merging a single-consumer module back into its only caller now improves the
    score instead of breaching a limit. Both arms were verified to fire by
    tightening each baseline by one and confirming the checker raises.
-2. Collapse pure delegation, 381 functions and 4,633 lines, removing the hop.
-3. Inline single-use helpers of at most 40 lines where they do not name a real
-   concept. Judgement is required per function; the 16,601-line pool is a list
-   of candidates, not a target.
+2. ~~Collapse pure delegation, 381 functions and 4,633 lines.~~ **Withdrawn on
+   inspection.** The heuristic that produced 4,633 lines counts named
+   constructors and jit aliases as waste. `_bracket_evidence_config` converts
+   one config into another and `_matched_transport_context` builds a context
+   from a payload; inlining either would make its caller worse, not better.
+   Applying the strict test -- a forwarder passing its own parameters straight
+   through, unchanged -- leaves 22 functions and 318 lines, and several of those
+   are legitimate (`assemble_rhs_cached_jit` is a jit alias; `solve_fields` and
+   `solve_fields_species_shard` are two entry points onto one implementation).
+   There is no function-level refactor worth doing here, and the original figure
+   should not be quoted again.
+3. Merge modules that were split rather than encapsulated. Interface width is
+   the discriminator, not consumer count: `geometry/imported_miller.py` has one
+   consumer that imports exactly one name, which is 941 lines behind a real
+   entry point and must be left alone, while
+   `workflows/runtime/initial_conditions.py` has one consumer that reaches for
+   ten of its names, which is one module cut in two. Five modules are both
+   deeply coupled and small enough to rejoin under the 1,200-line tripwire.
 4. Consolidate validation and error construction, 295 functions and 7,865
    lines, behind shared validators. The message text is repeated far more than
    the logic is.
