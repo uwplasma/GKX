@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ast
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -214,6 +215,172 @@ def _validate_complexity_policy(
             + ", ".join(unowned)
         )
     return rows
+
+
+def _module_name(path: Path, source_root: Path) -> str:
+    """Return the importable dotted name for a file under ``source_root``.
+
+    ``source_root`` is ``src/gkx``, so the importable name is taken relative to
+    its parent: ``src/gkx/geometry/vmec_eik.py`` becomes ``gkx.geometry.vmec_eik``.
+    Getting this wrong makes every consumer lookup miss and the gate report a
+    reassuring zero, so it is derived rather than string-sliced.
+    """
+
+    name = path.relative_to(source_root.parent).as_posix()[:-3].replace("/", ".")
+    suffix = ".__init__"
+    return name[: -len(suffix)] if name.endswith(suffix) else name
+
+
+def _module_consumers(
+    source_root: Path,
+) -> tuple[dict[str, set[str]], dict[tuple[str, str], set[str]]]:
+    """Map each ``gkx`` module to its importers, and each edge to the names it pulls.
+
+    The name count is what separates a real interface from a split module. A
+    module with one consumer that imports a single entry point is encapsulating
+    something; a module with one consumer that reaches for ten of its names is
+    half of one module that was cut in two.
+    """
+
+    consumers: dict[str, set[str]] = {}
+    imported: dict[tuple[str, str], set[str]] = {}
+    for path in sorted(source_root.rglob("*.py")):
+        me = _module_name(path, source_root)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            targets: list[str] = []
+            if isinstance(node, ast.ImportFrom) and node.module:
+                targets = [node.module]
+            elif isinstance(node, ast.Import):
+                targets = [alias.name for alias in node.names]
+            for target in targets:
+                if target.startswith("gkx"):
+                    consumers.setdefault(target, set()).add(me)
+                    if isinstance(node, ast.ImportFrom):
+                        imported.setdefault((target, me), set()).update(
+                            alias.name for alias in node.names
+                        )
+    return consumers, imported
+
+
+def _internal_cohesion(tree: ast.Module) -> tuple[int, float]:
+    """Return (definition count, fraction of definitions used within the module).
+
+    A module whose definitions reference each other is doing one job. A module
+    whose definitions ignore each other is a drawer, however few lines it has.
+    """
+
+    defs = [
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    ]
+    if not defs:
+        return 0, 1.0
+    names = set(defs)
+    used: set[str] = set()
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        for child in ast.walk(node):
+            found = None
+            if isinstance(child, ast.Name):
+                found = child.id
+            elif isinstance(child, ast.Attribute):
+                found = child.attr
+            if found in names and found != node.name:
+                used.add(found)
+    return len(defs), len(used) / len(defs)
+
+
+def _validate_cohesion_policy(
+    data: dict[str, Any],
+    *,
+    source_root: Path,
+) -> dict[str, Any]:
+    """Enforce cohesion instead of a flat per-file line cap.
+
+    A per-file line cap does not reduce complexity, it relocates it: a module
+    that outgrows the cap is split, and the offcut becomes a helper module with
+    exactly one consumer. Measured on 2026-08-31, 42 such modules held 18,361
+    lines. Both signals below therefore ratchet downward, and merging a
+    single-consumer module back into its only caller improves the score rather
+    than tripping a limit.
+    """
+
+    policy = data.get("cohesion_policy")
+    if policy is None:
+        return {}
+    if not isinstance(policy, dict):
+        raise ValueError("cohesion_policy must be a TOML table")
+    _as_nonempty_string(policy.get("description"), "cohesion_policy.description")
+    min_defs = _as_nonnegative_int(
+        policy.get("min_definitions_for_cohesion"),
+        "cohesion_policy.min_definitions_for_cohesion",
+    )
+    floor = policy.get("min_internal_cohesion")
+    if not isinstance(floor, (int, float)) or not 0.0 <= float(floor) <= 1.0:
+        raise ValueError("cohesion_policy.min_internal_cohesion must be in [0, 1]")
+    single_baseline = _as_nonnegative_int(
+        policy.get("single_consumer_baseline"),
+        "cohesion_policy.single_consumer_baseline",
+    )
+    low_baseline = _as_nonnegative_int(
+        policy.get("low_cohesion_baseline"), "cohesion_policy.low_cohesion_baseline"
+    )
+    exempt = set(
+        _as_string_list(
+            policy.get("single_consumer_exempt", []),
+            "cohesion_policy.single_consumer_exempt",
+        )
+    )
+
+    min_names = _as_nonnegative_int(
+        policy.get("min_imported_names_for_split"),
+        "cohesion_policy.min_imported_names_for_split",
+    )
+    consumers, imported = _module_consumers(source_root)
+    single: list[str] = []
+    low: list[str] = []
+    for path in sorted(source_root.rglob("*.py")):
+        relative = path.relative_to(source_root).as_posix()
+        if relative.endswith("__init__.py"):
+            continue
+        module = _module_name(path, source_root)
+        seen = {name for name in consumers.get(module, set()) if name != module}
+        if len(seen) == 1 and relative not in exempt:
+            only = next(iter(seen))
+            if len(imported.get((module, only), set())) >= min_names:
+                single.append(relative)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        count, ratio = _internal_cohesion(tree)
+        if count >= min_defs and ratio < float(floor):
+            low.append(relative)
+
+    if len(single) > single_baseline:
+        raise ValueError(
+            "cohesion regressed: "
+            f"{len(single)} single-consumer modules, above baseline "
+            f"{single_baseline}"
+        )
+    if len(low) > low_baseline:
+        raise ValueError(
+            "cohesion regressed: "
+            f"{len(low)} low-cohesion modules, above baseline {low_baseline}"
+        )
+    return {
+        "single_consumer_modules": len(single),
+        "single_consumer_baseline": single_baseline,
+        "low_cohesion_modules": len(low),
+        "low_cohesion_baseline": low_baseline,
+        "min_internal_cohesion": float(floor),
+    }
 
 
 def _validate_topology_policy(
@@ -449,8 +616,10 @@ def validate_architecture_policy(
         data,
         require_targets=require_line_targets,
     )
+    cohesion = _validate_cohesion_policy(data, source_root=source_root)
 
     return {
+        "cohesion": cohesion,
         "layout_authority": str(metadata["layout_authority"]),
         "n_blocked_prefixes": len(blocked_prefixes),
         "n_allowed_root_prefix_modules": len(allowed_modules),

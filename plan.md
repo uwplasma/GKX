@@ -2213,6 +2213,107 @@ Do not paste full logs, stack traces, or generated tables into the work log. Sto
 
 ---
 
+## 25b. Source simplification, measured
+
+The test-suite analysis asked what the lines actually assert rather than how
+many there are. The same question was put to `src/gkx` on 2026-08-31 at
+`c23f6f94`. It is recorded here because the answer changes what "simplify"
+should mean: there is nothing to delete, and a great deal to *flatten*.
+
+### 25b.1 Measured shape
+
+193 files, 88,305 lines, 2,929 functions, 375 classes. Docstrings and comments
+are 5.6 per cent of the file, which is low for research code and consistent
+with the rule that derivations live in documentation.
+
+Functions classified by what their body does:
+
+| Kind | Functions | Lines | Share |
+| --- | ---: | ---: | ---: |
+| numerical kernel (`jnp`/`lax`/fft) | 706 | 24,974 | 34.7% |
+| other logic | 1,080 | 25,730 | 35.7% |
+| validation and error construction | 295 | 7,865 | 10.9% |
+| thin wrapper (<=3 statements, returns a call) | 347 | 6,315 | 8.8% |
+| pure delegation (single return of a call) | 381 | 4,633 | 6.4% |
+| serialization and IO | 105 | 2,507 | 3.5% |
+| stub or docstring-only | 15 | 21 | 0.0% |
+
+### 25b.2 What the measurement rules out
+
+- **There is no dead code.** Of 3,304 definitions in `src`, zero appear only at
+  their own definition site. Nothing can be removed for free, so simplification
+  cannot come from deletion.
+- **Only about a third of the package is numerical kernel.** The physics is
+  24,974 lines; the rest is structure around it.
+
+### 25b.3 What the measurement points at
+
+- **27.2 per cent of the package -- 1,379 functions, 24,027 lines -- is
+  indirection.** That is the union of thin wrappers and helpers with exactly one
+  call site and at most 40 lines. A 318-line kernel called once is good
+  decomposition; a 12-line helper called once is a hop that hides the code from
+  its reader.
+- **The file-size cap manufactures some of it.**
+  `tools/package_architecture_manifest.toml` sets `default_max_lines = 1000`,
+  and six modules sit at 986 to 1000 lines. A hard per-file cap does not reduce
+  complexity, it displaces complexity into helper modules and wrappers. The cap
+  should become a cohesion rule, or be raised and gated on complexity, before
+  any inlining pass -- otherwise flattening a file simply pushes it over the
+  ceiling and the indirection comes back.
+- **Twenty functions, 400 lines, are referenced only by tests.** Among them
+  `streaming_contribution`, `exb_nonlinear_contribution`,
+  `bessel_laguerre_kernels`. Each is either public API that should be
+  advertised and documented, or a helper that should be folded into its caller.
+  Existing only to be tested is neither.
+- **Five modules are pure re-export facades**, 238 lines, with no definitions.
+
+### 25b.4 Ordered program, and the gate it must pass
+
+1. Replace the flat 1,000-line cap with a cohesion rule, or raise it and gate on
+   complexity. Nothing below can be done honestly while the cap rewards hiding.
+   **Done.** `[cohesion_policy]` in the architecture manifest now measures two
+   things and ratchets both downward: the number of modules imported by exactly
+   one other module (42 at `c23f6f94`, holding 18,361 lines, which is the
+   fingerprint of cap-driven splitting), and the number of modules with at least
+   six top-level definitions whose internal-reference ratio is below 0.30 (8).
+   `default_max_lines` moves 1000 -> 1200 and is demoted to a runaway tripwire.
+   The single-consumer arm counts only edges where the consumer imports at
+   least six names, so the gate cannot push anyone into dissolving a genuine
+   interface to improve its score.
+   Merging a single-consumer module back into its only caller now improves the
+   score instead of breaching a limit. Both arms were verified to fire by
+   tightening each baseline by one and confirming the checker raises.
+2. ~~Collapse pure delegation, 381 functions and 4,633 lines.~~ **Withdrawn on
+   inspection.** The heuristic that produced 4,633 lines counts named
+   constructors and jit aliases as waste. `_bracket_evidence_config` converts
+   one config into another and `_matched_transport_context` builds a context
+   from a payload; inlining either would make its caller worse, not better.
+   Applying the strict test -- a forwarder passing its own parameters straight
+   through, unchanged -- leaves 22 functions and 318 lines, and several of those
+   are legitimate (`assemble_rhs_cached_jit` is a jit alias; `solve_fields` and
+   `solve_fields_species_shard` are two entry points onto one implementation).
+   There is no function-level refactor worth doing here, and the original figure
+   should not be quoted again.
+3. Merge modules that were split rather than encapsulated. Interface width is
+   the discriminator, not consumer count: `geometry/imported_miller.py` has one
+   consumer that imports exactly one name, which is 941 lines behind a real
+   entry point and must be left alone, while
+   `workflows/runtime/initial_conditions.py` has one consumer that reaches for
+   ten of its names, which is one module cut in two. Five modules are both
+   deeply coupled and small enough to rejoin under the 1,200-line tripwire.
+4. Consolidate validation and error construction, 295 functions and 7,865
+   lines, behind shared validators. The message text is repeated far more than
+   the logic is.
+5. Resolve the twenty test-only functions in each direction deliberately.
+6. Collapse the five facade modules into explicit `__init__` exports.
+
+The feature-preservation gate, and it is not optional: the advertised public API
+in `gkx.api.__all__` and the lazy `_EXPORT_TARGETS` registry may not shrink
+except by a decision recorded in this plan; the full test suite keeps its
+collected node-ID set; and the physics gates are unchanged. Simplification that
+cannot show those three is refactoring on trust, which is what this section
+exists to avoid.
+
 ## 26. Risk register
 
 | Risk | Consequence | Control |
