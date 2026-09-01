@@ -255,7 +255,7 @@ description = "Promote cohesion instead of capping file length. A per-file line 
 # consumer that reaches for ten of its names: that is one module cut in two.
 # Only the second kind is counted, which is why the baseline is 8 and not 42.
 min_imported_names_for_split = 6
-single_consumer_baseline = 5
+single_consumer_baseline = 1
 single_consumer_target = 0
 low_cohesion_baseline = 8
 low_cohesion_target = 0
@@ -330,7 +330,10 @@ path = "runtime.py"
 # Identical AST; no export was added or removed. One name per line is the better
 # form for a list that gets edited, so it is kept rather than guarded and the
 # facade budget absorbs the 13 lines.
-baseline_lines = 513
+# 513 -> 781: absorbs workflows/runtime/execution.py, which had exactly one consumer -- this
+# file -- and handed it most of its names. That is a split module, not an
+# interface, so the two rejoin. No definition changed and no export moved.
+baseline_lines = 781
 target_lines = 500
 reason = "Public runtime facade; the overage is the exploded __all__ list, so shrink it by removing exports rather than by splitting the facade."
 

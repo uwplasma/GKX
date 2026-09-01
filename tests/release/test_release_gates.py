@@ -2930,7 +2930,10 @@ def test_repository_validation_manifest_is_well_formed() -> None:
     assert rows["gkx.operators.nonlinear.diagnostic_state"]["n_physics_contracts"] >= 2
     spectral_core = rows["gkx.operators.nonlinear.spectral_core"]
     assert spectral_core["coverage_target_percent"] == 95.0
-    assert spectral_core["n_owned_modules"] >= 4
+    # 4 -> 3 owned modules: spectral_layout was absorbed INTO spectral_core, so
+    # it is no longer a separate module to own. Its code and coverage did not
+    # move out of the package, they moved inside this row's own file.
+    assert spectral_core["n_owned_modules"] >= 3
     assert spectral_core["n_numerics_contracts"] >= 2
     assert spectral_core["n_physics_contracts"] >= 2
     assert rows["gkx.solvers.nonlinear.explicit"]["coverage_target_percent"] == 95.0
