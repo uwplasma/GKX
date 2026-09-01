@@ -808,7 +808,7 @@ recursive = true
 # cap as the instrument that shapes module boundaries. It computes each
 # module's consumer count and its internal-reference ratio, and ratchets both
 # downward. The lines buy back an 18,361-line pile of single-consumer offcuts.
-baseline = 0
+baseline = 77602
 target = 0
 
 [[line_budget_policy.counts]]
