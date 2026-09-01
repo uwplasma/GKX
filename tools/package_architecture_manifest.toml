@@ -766,7 +766,12 @@ recursive = true
 # after; the delta is ruff splitting over-long calls, signatures, and collection
 # literals onto more physical lines. The budget counts physical lines, so it has
 # to absorb the one-time step. The target is deliberately left where it was.
-baseline = 77418
+# 77418 -> 77433: check_vmec_boozer_gates.py records the two removed Boozer
+# bridges instead of demanding they report available. The explanation is longer
+# than the two blocker lines it replaces, deliberately: the gate had been
+# passing on pre-deletion evidence for six days and the reason has to live in
+# the file, not only in a commit message.
+baseline = 77433
 target = 0
 
 [[line_budget_policy.counts]]

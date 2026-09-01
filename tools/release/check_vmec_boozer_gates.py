@@ -366,10 +366,25 @@ def _bridge_checks(bridge: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
         value is True for value in equal_arc_checks.values()
     ):
         blockers.append("bridge_equal_arc_subcheck_failed")
-    if not checks["vmex_boozer_available"]:
-        blockers.append("vmex_boozer_bridge_unavailable")
-    if not checks["booz_xform_flux_tube_available"]:
-        blockers.append("booz_xform_flux_tube_bridge_unavailable")
+    # The synthetic Boozer closure was removed in fff8a280 ("geometry: remove
+    # synthetic Boozer closure"), taking booz_xform_flux_tube_sensitivity_report
+    # and vmex_boozer_flux_tube_sensitivity_report with it. Requiring those two
+    # bridges to report available here could only ever be satisfied by the
+    # artifact generated BEFORE that deletion, and that is exactly what
+    # happened: the tracked bridge JSON kept asserting available=True for both
+    # while the code no longer had them, and the gate passed on it, because the
+    # generating example was itself broken by the same deletion and nobody
+    # could regenerate the evidence. Their absence is now recorded rather than
+    # demanded; the check values above still report false, so the evidence stays
+    # visible instead of being silently dropped.
+    checks["removed_boozer_bridges"] = [
+        name
+        for name, present in (
+            ("vmex_boozer_flux_tube", checks["vmex_boozer_available"]),
+            ("booz_xform_flux_tube", checks["booz_xform_flux_tube_available"]),
+        )
+        if not present
+    ]
     return checks, blockers
 
 

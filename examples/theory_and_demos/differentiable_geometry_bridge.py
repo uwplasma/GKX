@@ -29,6 +29,7 @@ A few minutes on a laptop CPU (longer when the optional vmex/booz gates run).
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -38,8 +39,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from gkx.objectives.autodiff_validation import covariance_diagnostics
-from gkx.geometry.differentiable import (
-    booz_xform_flux_tube_sensitivity_report,
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tools.campaigns.vmec_flux_tube_reports import (  # noqa: E402
+    vmex_flux_tube_array_parity_report,
+    vmex_flux_tube_sensitivity_report,
+)
+from tools.campaigns.vmec_state_sensitivity import (  # noqa: E402
+    vmex_field_line_tensor_sensitivity_report,
+    vmex_metric_tensor_sensitivity_report,
+)
+from gkx.geometry.differentiable import (  # noqa: E402
     booz_xform_spectral_sensitivity_report,
     discover_differentiable_geometry_backends,
     flux_tube_geometry_from_mapping,
@@ -47,11 +60,6 @@ from gkx.geometry.differentiable import (
     geometry_inverse_design_report,
     geometry_observable_names,
     geometry_sensitivity_report,
-    vmex_boozer_flux_tube_sensitivity_report,
-    vmex_field_line_tensor_sensitivity_report,
-    vmex_flux_tube_array_parity_report,
-    vmex_flux_tube_sensitivity_report,
-    vmex_metric_tensor_sensitivity_report,
     vmec_boundary_aspect_sensitivity_report,
 )
 
@@ -191,9 +199,7 @@ def make_figure(payload: dict[str, Any], out_png: Path) -> None:
     vmec_field_line = payload.get("vmex_field_line_tensor", {})
     vmec_flux_tube = payload.get("vmex_flux_tube", {})
     vmec_array_parity = payload.get("vmex_flux_tube_array_parity", {})
-    vmec_state = payload.get("vmex_boozer_flux_tube", {})
     booz = payload.get("booz_xform_spectral", {})
-    booz_flux = payload.get("booz_xform_flux_tube", {})
     vmec_text = "VMEC boundary AD/FD: n/a"
     if isinstance(vmec, dict) and vmec.get("available"):
         vmec_text = f"VMEC boundary AD/FD: {float(vmec['max_abs_ad_fd_error']):.1e}"
@@ -261,25 +267,13 @@ def make_figure(payload: dict[str, Any], out_png: Path) -> None:
     booz_text = "Boozer spectral AD/FD: n/a"
     if isinstance(booz, dict) and booz.get("available"):
         booz_text = f"Boozer spectral AD/FD: {float(booz['max_abs_ad_fd_error']):.1e}"
-    booz_flux_text = "Boozer flux-tube AD/FD: n/a"
-    if isinstance(booz_flux, dict) and booz_flux.get("available"):
-        booz_flux_text = (
-            "Boozer flux-tube AD/FD: "
-            f"{float(booz_flux['sensitivity']['max_abs_ad_fd_error']):.1e}"
-        )
-    vmec_state_text = "VMEC state -> Boozer AD/FD: n/a"
-    if isinstance(vmec_state, dict) and vmec_state.get("available"):
-        vmec_state_text = (
-            "VMEC state -> Boozer AD/FD: "
-            f"{float(vmec_state['sensitivity']['max_abs_ad_fd_error']):.1e}"
-        )
     axes[0, 0].text(
         0.03,
         0.04,
         (
             f"{vmec_text}\n{vmec_metric_text}\n{vmec_field_line_text}\n"
             f"{vmec_flux_tube_text}\n{vmec_parity_text}\n"
-            f"{booz_text}\n{booz_flux_text}\n{vmec_state_text}"
+            f"{booz_text}"
         ),
         transform=axes[0, 0].transAxes,
         fontsize=5.75,
@@ -380,17 +374,13 @@ vmec_field_line_tensor = vmex_field_line_tensor_sensitivity_report()
 vmec_flux_tube = vmex_flux_tube_sensitivity_report()
 vmec_flux_tube_array_parity = vmex_flux_tube_array_parity_report()
 booz_spectral = booz_xform_spectral_sensitivity_report()
-booz_flux_tube = booz_xform_flux_tube_sensitivity_report()
-vmec_state_boozer_flux_tube = vmex_boozer_flux_tube_sensitivity_report()
 
 payload: dict[str, Any] = {
     "backend_info": backend_info,
     "booz_xform_jax_api_available": bool(
         backend_info.get("booz_xform_jax_api_available", False)
     ),
-    "booz_xform_flux_tube": booz_flux_tube,
     "booz_xform_spectral": booz_spectral,
-    "vmex_boozer_flux_tube": vmec_state_boozer_flux_tube,
     "vmex_field_line_tensor": vmec_field_line_tensor,
     "vmex_flux_tube": vmec_flux_tube,
     "vmex_flux_tube_array_parity": vmec_flux_tube_array_parity,
