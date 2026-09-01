@@ -2213,6 +2213,81 @@ Do not paste full logs, stack traces, or generated tables into the work log. Sto
 
 ---
 
+## 25b. Source simplification, measured
+
+The test-suite analysis asked what the lines actually assert rather than how
+many there are. The same question was put to `src/gkx` on 2026-08-31 at
+`c23f6f94`. It is recorded here because the answer changes what "simplify"
+should mean: there is nothing to delete, and a great deal to *flatten*.
+
+### 25b.1 Measured shape
+
+193 files, 88,305 lines, 2,929 functions, 375 classes. Docstrings and comments
+are 5.6 per cent of the file, which is low for research code and consistent
+with the rule that derivations live in documentation.
+
+Functions classified by what their body does:
+
+| Kind | Functions | Lines | Share |
+| --- | ---: | ---: | ---: |
+| numerical kernel (`jnp`/`lax`/fft) | 706 | 24,974 | 34.7% |
+| other logic | 1,080 | 25,730 | 35.7% |
+| validation and error construction | 295 | 7,865 | 10.9% |
+| thin wrapper (<=3 statements, returns a call) | 347 | 6,315 | 8.8% |
+| pure delegation (single return of a call) | 381 | 4,633 | 6.4% |
+| serialization and IO | 105 | 2,507 | 3.5% |
+| stub or docstring-only | 15 | 21 | 0.0% |
+
+### 25b.2 What the measurement rules out
+
+- **There is no dead code.** Of 3,304 definitions in `src`, zero appear only at
+  their own definition site. Nothing can be removed for free, so simplification
+  cannot come from deletion.
+- **Only about a third of the package is numerical kernel.** The physics is
+  24,974 lines; the rest is structure around it.
+
+### 25b.3 What the measurement points at
+
+- **27.2 per cent of the package -- 1,379 functions, 24,027 lines -- is
+  indirection.** That is the union of thin wrappers and helpers with exactly one
+  call site and at most 40 lines. A 318-line kernel called once is good
+  decomposition; a 12-line helper called once is a hop that hides the code from
+  its reader.
+- **The file-size cap manufactures some of it.**
+  `tools/package_architecture_manifest.toml` sets `default_max_lines = 1000`,
+  and six modules sit at 986 to 1000 lines. A hard per-file cap does not reduce
+  complexity, it displaces complexity into helper modules and wrappers. The cap
+  should become a cohesion rule, or be raised and gated on complexity, before
+  any inlining pass -- otherwise flattening a file simply pushes it over the
+  ceiling and the indirection comes back.
+- **Twenty functions, 400 lines, are referenced only by tests.** Among them
+  `streaming_contribution`, `exb_nonlinear_contribution`,
+  `bessel_laguerre_kernels`. Each is either public API that should be
+  advertised and documented, or a helper that should be folded into its caller.
+  Existing only to be tested is neither.
+- **Five modules are pure re-export facades**, 238 lines, with no definitions.
+
+### 25b.4 Ordered program, and the gate it must pass
+
+1. Replace the flat 1,000-line cap with a cohesion rule, or raise it and gate on
+   complexity. Nothing below can be done honestly while the cap rewards hiding.
+2. Collapse pure delegation, 381 functions and 4,633 lines, removing the hop.
+3. Inline single-use helpers of at most 40 lines where they do not name a real
+   concept. Judgement is required per function; the 16,601-line pool is a list
+   of candidates, not a target.
+4. Consolidate validation and error construction, 295 functions and 7,865
+   lines, behind shared validators. The message text is repeated far more than
+   the logic is.
+5. Resolve the twenty test-only functions in each direction deliberately.
+6. Collapse the five facade modules into explicit `__init__` exports.
+
+The feature-preservation gate, and it is not optional: the advertised public API
+in `gkx.api.__all__` and the lazy `_EXPORT_TARGETS` registry may not shrink
+except by a decision recorded in this plan; the full test suite keeps its
+collected node-ID set; and the physics gates are unchanged. Simplification that
+cannot show those three is refactoring on trust, which is what this section
+exists to avoid.
+
 ## 26. Risk register
 
 | Risk | Consequence | Control |
