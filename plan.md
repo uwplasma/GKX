@@ -2458,10 +2458,19 @@ stellarator code with the linear solver, which is where it belongs.
    configuration layer, so geometry and the rest stop importing downward from
    `workflows.runtime`. This removes the deepest inversion and is the single
    highest-value structural change available.
-2. **Decide whether two configuration systems are wanted.** If the deck model is
-   deliberately decoupled from the physics model, say so in the docs and keep
-   the translation explicit and in one place. If it is not deliberate, this is
-   the largest simplification left in the package.
+2. ~~Decide whether two configuration systems are wanted.~~ **Answered, and the
+   premise was wrong.** There are not two systems. `RuntimeConfig` *composes* the
+   physics configs -- `grid: GridConfig`, `time: TimeConfig`,
+   `geometry: GeometryConfig`, `init: InitializationConfig` are four of its
+   thirteen fields -- and the two families share only six field names out of
+   about a hundred each, which are the composition points themselves. There is
+   no duplicated surface to remove, and the translation layer this section
+   assumed does not exist: composition means there is nothing to translate.
+   Merging them would push deck concerns such as output paths and quasilinear
+   settings into the solver-facing model, and would turn a change of file format
+   into a change of physics code. The boundary is load-bearing and stays.
+   The real simplification nearby is smaller: nine `Runtime*Config` classes carry
+   deck-only concerns and several are thin, so consolidate *those*.
 3. **Attack the 30-module blob**, not the directory count. Linear operators,
    linear solvers and stellarator objectives are one community by measurement;
    the fusions there are the ones that reduce real coupling.
