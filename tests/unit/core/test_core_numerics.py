@@ -366,7 +366,13 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     assert len(public_api._EXPORT_TARGETS) == 346
     assert len(public_api.__all__) == len(set(public_api.__all__))
     assert set(gkx.__all__) <= set(dir(gkx))
-    assert "LinearParams" not in dir(gkx)
+    # Laziness itself is asserted in the fresh interpreters below, not here:
+    # `__getattr__` caches every name it resolves into the module namespace, so
+    # in this process `dir(gkx)` reports which earlier tests happened to touch
+    # which attribute -- `tests/release` alone imports `LinearParams` off the
+    # root package. What is order-independent here is that the compatibility
+    # names load through the registry without being advertised.
+    assert "LinearParams" in public_api._EXPORT_TARGETS
     wildcard: dict[str, object] = {}
     exec("from gkx import *", wildcard)
     assert set(wildcard) - {"__builtins__"} == set(gkx.__all__)
@@ -395,6 +401,8 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
 import sys
 sys.path.insert(0, {str(REPO_ROOT / "src")!r})
 import gkx
+resolved = sorted(set(vars(gkx)) & set(gkx._EXPORT_TARGETS))
+assert resolved == [], resolved
 assert len(gkx.__all__) == 16
 assert set(gkx.__all__) == {{'__version__', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan', 'plot', 'prepare', 'PreparedSimulation', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig'}}
 assert "numpy" not in sys.modules
@@ -413,6 +421,8 @@ assert "jax" not in sys.modules
 import sys
 sys.path.insert(0, {str(REPO_ROOT / "src")!r})
 import gkx.api as api
+resolved = sorted(set(vars(api)) & set(api._EXPORT_TARGETS))
+assert resolved == [], resolved
 assert "numpy" not in sys.modules
 assert "jax" not in sys.modules
 assert "LinearParams" not in api.__all__
