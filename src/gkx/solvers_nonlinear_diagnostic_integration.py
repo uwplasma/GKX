@@ -15,24 +15,26 @@ from gkx.operators.linear.params import LinearParams
 from gkx.terms.assembly import compute_fields_cached
 from gkx.terms.config import FieldState, TermConfig
 from gkx.terms.nonlinear import nonlinear_em_contribution
-from gkx.diagnostics import (
-    SimulationDiagnostics,
+from gkx.diagnostics_contract import SimulationDiagnostics
+from gkx.operators.fluxes import (
     heat_flux_species,
-    heat_flux_channel_resolved_species,
     particle_flux_species,
-    particle_flux_channel_resolved_species,
-    phi2_resolved,
-    zonal_phi_line_kxt,
-    zonal_phi_mode_kxt,
     turbulent_heating_species,
-    turbulent_heating_resolved_species,
-    fieldline_quadrature_weights,
-    magnetic_vector_potential_energy,
-    magnetic_vector_potential_energy_resolved,
+)
+from gkx.operators.moments import (
     distribution_free_energy,
     distribution_free_energy_resolved,
     electrostatic_field_energy,
     electrostatic_field_energy_resolved,
+    fieldline_quadrature_weights,
+    heat_flux_channel_resolved_species,
+    magnetic_vector_potential_energy,
+    magnetic_vector_potential_energy_resolved,
+    particle_flux_channel_resolved_species,
+    phi2_resolved,
+    turbulent_heating_resolved_species,
+    zonal_phi_line_kxt,
+    zonal_phi_mode_kxt,
 )
 from gkx.operators.nonlinear.diagnostic_state import (
     NonlinearDiagnosticKernels,

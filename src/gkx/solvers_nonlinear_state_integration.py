@@ -14,8 +14,8 @@ from gkx.config import resolve_cfl_fac
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.operators.collision import CollisionOperator
-from gkx.diagnostics.transport import heat_flux_species, heat_flux_total
-from gkx.diagnostics.moments import fieldline_quadrature_weights
+from gkx.operators.fluxes import heat_flux_species, heat_flux_total
+from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.solvers_linear_implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import (

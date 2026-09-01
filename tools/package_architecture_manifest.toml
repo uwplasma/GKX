@@ -243,6 +243,38 @@ recursive = false
 baseline = 0
 target = 0
 
+[layer_policy]
+description = "Ratchet down imports that run against the layering. The model was analytic until now: the plan measured it by hand and nothing enforced it, so every edge fixed could silently return."
+# Ten edges were removed by putting the diagnostics contract and the flux
+# kernels in the layers that own them. SimulationDiagnostics is the solvers'
+# return type, not an analysis product, and the flux kernels run inside the
+# traced step under jit and psum -- computing them outside the timed route costs
+# up to 118x, so they are RHS-route code that was merely filed under a
+# diagnostics name. The remaining edges are counted, not forbidden: several are
+# genuine and deserve an argument rather than a workaround.
+violation_baseline = 5
+
+[layer_policy.layers]
+config = 0
+core_grid = 0
+core_velocity = 0
+callbacks = 0
+compilation_cache = 0
+diagnostics_contract = 0
+geometry = 1
+terms = 2
+operators = 2
+solvers = 3
+parallel = 3
+diagnostics = 4
+objectives = 5
+artifacts = 6
+benchmarking_shared = 6
+workflows = 7
+runtime = 7
+cli = 8
+api = 8
+
 [cohesion_policy]
 description = "Promote cohesion instead of capping file length. A per-file line cap does not reduce complexity, it relocates it: a module that outgrows the cap gets split and the offcut becomes a helper with exactly one consumer."
 # Measured at c23f6f94 on 2026-08-31, and both numbers ratchet DOWN:
@@ -832,7 +864,11 @@ recursive = true
 # cap as the instrument that shapes module boundaries. It computes each
 # module's consumer count and its internal-reference ratio, and ratchets both
 # downward. The lines buy back an 18,361-line pile of single-consumer offcuts.
-baseline = 77602
+# 77602 -> 77674: the layer gate. The layer model was analytic only -- measured
+# by hand in the plan, enforced by nothing -- so the ten edges just removed
+# could have come back silently. It ratchets a count rather than forbidding
+# upward imports, because several remaining edges are genuine.
+baseline = 77677
 target = 0
 
 [[line_budget_policy.counts]]

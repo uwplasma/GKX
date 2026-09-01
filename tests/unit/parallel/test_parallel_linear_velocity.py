@@ -3202,7 +3202,7 @@ def _species_hermite_problem(ns: int = 2, nl: int = 2, nm: int = 8, n: int = 4):
 
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.core_grid import build_spectral_grid
-    from gkx.diagnostics.moments import fieldline_quadrature_weights
+    from gkx.operators.moments import fieldline_quadrature_weights
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.cache_builder import build_linear_cache
 
@@ -3473,11 +3473,11 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
     import jax
     import numpy as np
 
-    from gkx.diagnostics.moments import (
+    from gkx.operators.moments import (
         distribution_free_energy,
         electrostatic_field_energy,
     )
-    from gkx.diagnostics.transport import heat_flux_species, particle_flux_species
+    from gkx.operators.fluxes import heat_flux_species, particle_flux_species
     from gkx.operators.nonlinear.projection import _make_hermitian_projector
     from gkx.parallel.integrators import integrate_nonlinear_species_hermite
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan

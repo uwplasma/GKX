@@ -6,7 +6,7 @@ import jax.numpy as jnp
 
 from gkx.core_grid import SpectralGrid
 from gkx.core_velocity import gamma0
-from gkx.diagnostics.metadata import ArrayLike
+from gkx.diagnostics_contract import ArrayLike
 from gkx.geometry import (
     FluxTubeGeometryData,
     FluxTubeGeometryLike,

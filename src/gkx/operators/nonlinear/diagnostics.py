@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.diagnostics.metadata import ResolvedDiagnostics, SimulationDiagnostics
+from gkx.diagnostics_contract import ResolvedDiagnostics, SimulationDiagnostics
 
 __all__ = [
     "_pack_resolved_diagnostics",

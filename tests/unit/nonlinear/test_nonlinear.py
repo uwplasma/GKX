@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.core_grid import build_spectral_grid
-from gkx.diagnostics.moments import fieldline_quadrature_weights
-from gkx.diagnostics.transport import heat_flux_total
+from gkx.operators.fluxes import heat_flux_total
+from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams

@@ -716,7 +716,7 @@ Normalization
 Moment And Energy Diagnostics
 -----------------------------
 
-.. automodule:: gkx.diagnostics.moments
+.. automodule:: gkx.operators.moments
    :members:
    :private-members:
 
@@ -732,6 +732,7 @@ Runtime Config
 
 .. automodule:: gkx.config
    :members:
+   :no-index:
 
 Runtime Startup
 ---------------

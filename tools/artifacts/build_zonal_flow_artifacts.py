@@ -412,7 +412,7 @@ def _build_collisional_zonal_problem(
     """Build the common paper-geometry state used by every collision model."""
 
     from gkx.core_grid import build_spectral_grid
-    from gkx.diagnostics.moments import fieldline_quadrature_weights
+    from gkx.operators.moments import fieldline_quadrature_weights
     from gkx.geometry import apply_geometry_grid_defaults
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.workflows.runtime.startup import (

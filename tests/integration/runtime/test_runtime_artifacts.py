@@ -159,7 +159,7 @@ import gkx.artifacts.nonlinear_netcdf as nonlinear_netcdf
 import gkx.artifacts.spectral_layout as spectral_layout
 import gkx.diagnostics as diagnostics_module
 import gkx.diagnostics.metadata as diagnostics_metadata
-import gkx.diagnostics.moments as diagnostics_moments
+import gkx.operators.moments as diagnostics_moments
 import gkx.solvers_time_explicit as explicit_time_integrators
 import gkx.workflows.runtime.artifacts as runtime_artifacts
 import jax.numpy as jnp

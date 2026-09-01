@@ -10,14 +10,16 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.core_grid import SpectralGrid
-from gkx.diagnostics import (
-    SimulationDiagnostics,
+from gkx.diagnostics_contract import SimulationDiagnostics
+from gkx.operators.fluxes import (
+    heat_flux_total,
+    particle_flux_total,
+)
+from gkx.operators.moments import (
     distribution_free_energy,
     electrostatic_field_energy,
     fieldline_quadrature_weights,
-    heat_flux_total,
     magnetic_vector_potential_energy,
-    particle_flux_total,
     total_energy,
 )
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data

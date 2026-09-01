@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 
 
-from gkx.diagnostics import SimulationDiagnostics
+from gkx.diagnostics_contract import SimulationDiagnostics
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache

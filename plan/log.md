@@ -4316,3 +4316,49 @@ Outcome:
   git-tracked files, so deleting a module without staging leaves it scanning a
   path that no longer exists. Staging is part of verification, not bookkeeping.
 - next task: §25d.4 step 2, the two configuration systems.
+
+## 2026-08-31 — PR R4-2 put the diagnostics kernels in the layer that owns them
+
+Scope:
+- §25d.4: the ten upward edges from solvers, parallel and operators into
+  diagnostics.
+
+Changes:
+- `gkx/diagnostics_contract.py` (new, layer 0, zero `gkx` imports) takes
+  `ArrayLike`, `CFL_SCALE_LABELS`, `ResolvedDiagnostics`, `SimulationDiagnostics`.
+- `diagnostics/moments.py` -> `operators/moments.py`.
+- `diagnostics/transport.py` lines 41-309 -> `operators/fluxes.py`, split at the
+  file's own `finite-difference evidence reports` marker.
+- re-export shims keep every public import site unchanged; two function-local
+  imports in `parallel/integrators.py` hoisted to module level.
+- a new `[layer_policy]` in the architecture manifest ratchets upward imports.
+
+Evidence:
+- the finding behind it: `gkx.diagnostics` is two packages under one name.
+  Importing it loads `metadata`, `moments` and `transport` and none of the other
+  fourteen analysis modules, and no solver touches the analysis half.
+  `SimulationDiagnostics` is the solvers' *return type*, and the flux kernels run
+  inside the traced step under `jit` and `lax.psum`, where the module's own
+  docstring records that computing them outside the timed route costs up to 118x.
+  They were RHS-route code filed under a diagnostics name.
+- all ten target edges removed; the new gate measures 5 upward imports and its
+  baseline is pinned there, verified to fire at 4.
+- 1,033 passed and 42 skipped across release, diagnostics, solvers, parallel and
+  runtime; `tests/unit/nonlinear` 167 passed.
+- advertised API 15, lazy registry 346, every target importable. `ruff`,
+  `ruff format --check`, `sphinx -W` and all four release checkers clean.
+- physics/mathematics/numerics gates: none re-run and none claimed. The traced
+  route is byte-identical; only the module a kernel lives in changed.
+
+Outcome:
+- accepted, and one regression of mine was found in the process. The solvers
+  flatten had broken `tests/unit/nonlinear/test_nonlinear_helpers_extra.py`: a
+  multiline `from gkx.solvers_nonlinear import (state_integration as ...)` that
+  my converter's pattern missed. **82 tests had stopped running silently**, and
+  my verification had covered the domains I touched but not that one, so
+  "907 passed" was true and misleading at once. A collection error in a file you
+  do not run looks exactly like success. `pytest --collect-only` over the whole
+  suite takes three seconds, collects 2,631 tests, and is now part of the gate
+  after any rename.
+- the layer model was analytic until this PR: measured by hand in the plan and
+  enforced by nothing, so every edge fixed could have returned unnoticed.

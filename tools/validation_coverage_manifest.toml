@@ -1310,11 +1310,13 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.diagnostics.moments"
-path = "src/gkx/diagnostics/moments.py"
+module = "gkx.operators.moments"
+path = "src/gkx/operators/moments.py"
 owned_modules = [
   "gkx.diagnostics.metadata",
   "gkx.diagnostics.transport",
+  "gkx.diagnostics_contract",
+  "gkx.operators.fluxes",
 ]
 owner_lane = "quadrature, energy, transport-channel, resolved, and metadata diagnostics"
 status = "active"

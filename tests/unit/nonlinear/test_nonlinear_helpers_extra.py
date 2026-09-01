@@ -8,8 +8,8 @@ from dataclasses import replace
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics.metadata import ResolvedDiagnostics, SimulationDiagnostics
-from gkx.diagnostics.moments import fieldline_quadrature_weights
-from gkx.diagnostics.transport import heat_flux_species
+from gkx.operators.fluxes import heat_flux_species
+from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.geometry import SAlphaGeometry
 from gkx.geometry import ensure_flux_tube_geometry_data
 from gkx.operators.linear.cache_builder import (
@@ -50,9 +50,7 @@ from gkx.operators.nonlinear.projection import (
     _make_hermitian_projector,
     _make_nonlinear_state_projector,
 )
-from gkx.solvers_nonlinear import (
-    state_integration as nonlinear_state_integration_mod,
-)
+import gkx.solvers_nonlinear_state_integration as nonlinear_state_integration_mod
 from gkx.solvers_nonlinear_diagnostic_integration import (
     _integrate_nonlinear_explicit_diagnostics_impl,
 )

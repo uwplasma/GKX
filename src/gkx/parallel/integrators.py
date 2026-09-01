@@ -10,6 +10,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from gkx.operators.fluxes import heat_flux_species, particle_flux_species
+from gkx.operators.moments import (
+    distribution_free_energy,
+    electrostatic_field_energy,
+)
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
@@ -420,12 +425,6 @@ def _fused_scalar_diagnostics(
     distinct slab of it); ``Wphi`` and the fluxes reduce over species only,
     because the head and the fields are already Hermite-complete on every shard.
     """
-
-    from gkx.diagnostics.moments import (
-        distribution_free_energy,
-        electrostatic_field_energy,
-    )
-    from gkx.diagnostics.transport import heat_flux_species, particle_flux_species
 
     zero = jnp.zeros_like(fields.phi)
     apar = fields.apar if fields.apar is not None else zero
