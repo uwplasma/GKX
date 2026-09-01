@@ -2438,13 +2438,28 @@ upward drags the runtime layer with it.
 ### 25d.3 What the graph says the pieces are
 
 The highest fan-in module is `operators/linear/params.py`: 528 lines, from
-which 99 names are imported. That is the real core type module, and no
-reorganisation should move or split it casually. Weighted label propagation
-over the import graph finds natural communities that mostly agree with the
-current directories -- nonlinear operators, nonlinear solvers, runtime,
-artifacts each come out as one cluster -- with the linear operator, linear
-solver and objective code appearing as a single 30-module, 15,520-line blob.
-That blob, not the directory count, is where the coupling actually is.
+which 99 names are imported. That is the real core type module.
+
+**The clustering claim first written here was wrong, and the method was the
+reason.** Weighted label propagation was run once, with one seed, and its output
+reported as measurement. Repeating it across twenty seeds gives a largest
+cluster ranging from 14 modules and 9,299 lines to 75 modules and 34,977 lines:
+the algorithm is not reproducible at this size and a single run says almost
+nothing. A 300-seed consensus, scored by co-association, gives the durable
+answer.
+
+What is actually there is a 39-module, 18,027-line community around the linear
+operator and linear solver -- "assemble a linear operator and advance or solve
+it". It has **zero import cycles** and is a clean twelve-deep DAG. The
+stellarator objectives are **not** part of it: they never co-clustered in 300 of
+300 runs, and form their own 17-module, 9,257-line community. The single seed
+had merged the two across a seam of seven name-imports.
+
+`params.py`'s fan-in is the reason that community coheres, not a defect. Its 100
+imports resolve to only fifteen distinct names -- `LinearParams` thirty-eight
+times, `LinearTerms` eighteen -- which is shared vocabulary rather than a
+grab-bag. It is not a cut vertex either: removing it leaves the rest connected.
+Splitting it would be actively harmful.
 
 Two earlier readings were wrong and are corrected here. `artifacts/spectral_layout.py`
 looked misplaced on fan-in alone; its 50 imported names come from only three
@@ -2469,11 +2484,31 @@ stellarator code with the linear solver, which is where it belongs.
    Merging them would push deck concerns such as output paths and quasilinear
    settings into the solver-facing model, and would turn a change of file format
    into a change of physics code. The boundary is load-bearing and stays.
-   The real simplification nearby is smaller: nine `Runtime*Config` classes carry
-   deck-only concerns and several are thin, so consolidate *those*.
-3. **Attack the 30-module blob**, not the directory count. Linear operators,
-   linear solvers and stellarator objectives are one community by measurement;
-   the fusions there are the ones that reduce real coupling.
+   The nearby simplification that section suggested -- consolidating the nine
+   deck-only `Runtime*Config` classes -- was measured and rejected too. Every one
+   maps 1:1 onto a TOML table on both paths: `toml.py` holds a literal
+   `(section_name, constructor)` table keyed by the `RuntimeConfig` field name,
+   and `to_dict` plus `deck_text` render one table per class. Merging any two
+   renames a user-visible section and breaks `Case.to_toml` round-tripping
+   through `gkx.load`. Even the thinnest, `RuntimeExpertConfig` at 13 lines, is
+   a documented section used by two tracked benchmark decks. Three others carry
+   `__post_init__` validation and are not passive field bags. **No consolidation
+   is safe here; the nine stay.**
+
+   One real duplication was found and deliberately left: `to_dict` returning
+   `asdict(self)` is repeated verbatim in seventeen classes. A shared mixin would
+   have to cross the physics/deck boundary that this section just established as
+   load-bearing, so it is recorded rather than done.
+3. **Do not split the linear community.** It is one concept and the data says
+   so. The payoff there is not decomposition but five edge fixes totalling seven
+   imports, after which it is a strictly layered DAG that documents itself:
+   move the `collision_operator_from_config` factory out of the type module into
+   `operators/linear/collision_factory.py`; promote two preconditioner builders
+   from `solvers.linear.implicit` into a `preconditioners` module; promote
+   `_linear_native_step` to a public stepping entry point; and narrow
+   `objectives.core`, which reaches into `solvers.linear.krylov_algorithms` for
+   the private `_build_shift_invert_precond`. That last one is the whole seam
+   joining the objectives community to the linear one.
 4. Continue flattening only where a directory is a container. Directory count
    fell 20 -> 13 and the remaining ones hold real clusters.
 5. Fuse only where the consumer imports six or more names, and expect chains:
