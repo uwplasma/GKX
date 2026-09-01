@@ -39,7 +39,7 @@ def _resolve_config_collision_operator(
 
     import jax.numpy as jnp
 
-    from gkx.operators.linear.params import collision_operator_from_config
+    from gkx.operators.linear.collision_factory import collision_operator_from_config
 
     name = str(time_cfg.collision_operator).strip().lower()
     if name in ("none", "lenard_bernstein"):

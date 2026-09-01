@@ -259,6 +259,7 @@ owned_modules = [
   "gkx.terms.config",
   "gkx.terms.fields",
   "gkx.operators.linear.dissipation",
+  "gkx.operators.linear.collision_factory",
   "gkx.terms.linear_terms",
   "gkx.operators.linear.streaming",
 ]
