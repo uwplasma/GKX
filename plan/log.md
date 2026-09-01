@@ -4057,3 +4057,66 @@ Outcome:
   previously ran only the roughly 20 s objective gate. Not a failure, but the
   shard is now less balanced and should be watched.
 - next task: the central manifest ratchet, then Phase C's remaining domains.
+
+## 2026-08-31 — PR E1-1 repair the differentiable-geometry bridge example (`docs/e1-1-fix-broken-example`)
+
+Baseline:
+- GKX SHA: `c23f6f94` (`Say what the closed VMEX mirror ratio actually measures (#177)`)
+- companion SHAs: none
+- relevant existing gate: `tools/release/check_vmec_boozer_gates.py
+  differentiability-claim`, which reads
+  `docs/_static/differentiable_geometry_bridge.json`
+
+Scope:
+- intended change: repair the example that generates the bridge evidence, and
+  stop a release gate from requiring evidence for capability that was deleted.
+- explicitly out of scope: replacing the tracked bridge artifact. See below.
+
+Changes:
+- `examples/theory_and_demos/differentiable_geometry_bridge.py` imported six
+  names that no longer exist. Two, `booz_xform_flux_tube_sensitivity_report`
+  and `vmex_boozer_flux_tube_sensitivity_report`, were deleted outright with
+  the synthetic Boozer closure in `fff8a280`; their code paths are removed.
+  Four were evicted to `tools/campaigns` and are repointed there, the same
+  pattern the tests already use.
+- `check_vmec_boozer_gates.py` no longer raises
+  `vmex_boozer_bridge_unavailable` or `booz_xform_flux_tube_bridge_unavailable`.
+  It records the removed bridges instead, so their absence stays visible.
+
+Evidence:
+- the finding that motivates this, stated plainly: a release gate has been
+  passing on evidence for capability that no longer exists. `fff8a280` deleted
+  both Boozer bridges on 2026-08-29 and left the example importing them. The
+  example is the generator for the gate's artifact, so once it broke, nobody
+  could regenerate the evidence and discover it contradicted the code. The
+  tracked JSON still asserts `available: true` for both bridges, and the gate
+  passed on that for six days. Examples are not in CI, which is why nothing
+  caught it.
+- the repaired example runs end to end and writes both artifacts. Verified on
+  the office box (`~/venvs/vmex-gpu`, Python 3.12, jax 0.9.2, RTX A4000):
+  `max AD/FD relative error: 0.000e+00`, `final residual norm: 0.000e+00`.
+- the gate change is verified not to weaken anything real: with the tracked
+  artifact restored it still exits 0, so the change removes only a requirement
+  that no artifact generated after `fff8a280` could ever satisfy.
+- the regenerated artifact is deliberately NOT committed. Its
+  `vmex_flux_tube_array_parity` report failed on an environment limitation
+  (`FileNotFoundError: in-memory:vmex.optimize.solve_equilibrium`), so it drops
+  parity evidence the tracked file carries. Replacing stale evidence with
+  missing evidence is not an improvement; regeneration needs an environment
+  where every report in the example runs.
+- gates: `ruff check .` clean; `tests/release` 127 passed; release readiness,
+  validation coverage, and architecture manifest exit 0.
+- physics/mathematics/numerics gates: none re-run and none claimed. No physical
+  value changed.
+
+Outcome:
+- accepted, with one open item that belongs to the maintainer: the bridge
+  artifact still describes two deleted capabilities and cannot be honestly
+  regenerated until the parity report runs in the regeneration environment.
+- an example audit on the office box ran every cheap example: of 21 runnable,
+  10 passed and 11 failed, but only this one was genuinely broken. Five failed
+  on `tomllib` because `~/stellarator_venv` is Python 3.10 and GKX needs 3.11,
+  four need data files or two devices as a precondition, and one is a plotting
+  utility that needs a prior run's bundle.
+- next task: put the canonical examples in CI at smoke resolution, which is the
+  Phase D exit gate that would have caught this on the day it broke.
