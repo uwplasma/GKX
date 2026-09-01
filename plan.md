@@ -2597,7 +2597,41 @@ construction and jit only the latter. Which is right depends on whether the
 build is ever genuinely traced in production, which is the next thing to
 measure rather than assume.
 
-### 25e.3 A negative result worth not repeating
+### 25e.3 The FFTs are losing their thread pool, and the obvious fix is worse
+
+Research into XLA:CPU turned up a mechanism worth verifying: an FFT thunk is
+handed the intra-op thread pool only under some conditions, and an FFT fed by an
+elementwise fusion appears to lose it. GKX multiplies by `i*kx` and `i*ky`
+immediately before every `irfft2` in the bracket, so if true every transform in
+the step is affected.
+
+Verified on this machine at GKX's own shapes, `(2,4,8,49,96,48)` complex64:
+
+| form | time |
+| --- | ---: |
+| `irfft2` of a jit **parameter** | 52.3 ms |
+| `irfft2` of a **fusion result**, same values | 83.0 ms |
+
+So the penalty is real and is about **1.6x**, against 5.4x reported on proxy
+code elsewhere. That is very likely part of what the warm profile attributes to
+"data movement": stalled wall time around the transforms rather than bytes moved.
+
+**The obvious fix makes it worse.** Splitting the multiply and the transform into
+two `jit` calls, so the transform is fed by a parameter, measures 89.5 ms against
+66.3 ms for the fused form: materialising the 113 MB intermediate costs more than
+the threading recovers. An earlier version of this measurement was wrong in the
+other direction because the `jit` wrappers were constructed inside the timing
+loop and retraced on every call; that error is recorded here because the
+corrected numbers reverse its conclusion.
+
+Any real fix therefore has to move the multiply to the other side of an existing
+transform, not insert a new materialisation. The structural candidate is packing
+the two derivative components into one complex array and taking a single c2c
+inverse instead of a stacked pair, recovering the two real fields as real and
+imaginary parts -- halving the transform count rather than rearranging it. That
+is measured as the next step, not assumed.
+
+### 25e.4 A negative result worth not repeating
 
 `_complete_hermitian_ky` rebuilds the full ky spectrum from the half spectrum
 with a slice, a conjugate, a reverse, an index gather and a concatenate. The
