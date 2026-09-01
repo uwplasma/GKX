@@ -1171,7 +1171,9 @@ def test_improved_sugama_pair_matches_published_equal_and_unequal_coefficients()
     assert improved_error / original_error < 0.41
 
 
-def test_drift_kinetic_collision_operators_obey_h_theorem_and_conserve_density() -> None:
+def test_drift_kinetic_collision_operators_obey_h_theorem_and_conserve_density() -> (
+    None
+):
     # Physics-limit benchmark for the promoted single-species drift-kinetic
     # collision operators (Coulomb, Sugama, improved Sugama) in the
     # Hermite-Laguerre moment basis. Each operator C acts as dG/dt = C @ G on
@@ -1203,7 +1205,9 @@ def test_drift_kinetic_collision_operators_obey_h_theorem_and_conserve_density()
         np.testing.assert_allclose(matrix[:, 0], 0.0, atol=1.0e-12)
 
 
-def test_collision_operator_from_config_selects_validates_and_stays_dissipative() -> None:
+def test_collision_operator_from_config_selects_validates_and_stays_dissipative() -> (
+    None
+):
     # TOML ``collision_operator`` selection: the diagonal defaults resolve to
     # None (the linear RHS keeps its built-in Lenard-Bernstein term, re-enabled
     # exactly when collision_operator is None), the moment-matrix names build a
@@ -1429,9 +1433,9 @@ def test_improved_sugama_multispecies_matrix_conserves_and_differentiates() -> N
     matrix = jax.jit(assemble_drift_kinetic_improved_sugama_matrix)(
         density, mass, temperature
     )
-    state = (
-        jnp.arange(16, dtype=real_dtype).reshape(2, 2, 4, 1, 1, 1) + 0.13j
-    ).astype(complex_dtype)
+    state = (jnp.arange(16, dtype=real_dtype).reshape(2, 2, 4, 1, 1, 1) + 0.13j).astype(
+        complex_dtype
+    )
     contribution = apply_multispecies_collision_moment_matrix(state, matrix)
     rates = multispecies_collision_invariant_rates(
         contribution, density=density, mass=mass, temperature=temperature

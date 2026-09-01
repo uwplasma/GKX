@@ -288,7 +288,9 @@ def test_streaming_term_periodic_and_linked_paths() -> None:
     sqrt_m = sqrt_m[:nm].reshape((1, 1, nm, 1, 1, 1))
     vth = jnp.ones((1, 1, 1, 1, 1, 1), dtype=jnp.float32)
 
-    out_periodic = streaming_ladder_term(H, kz=kz, vth=vth, sqrt_p=sqrt_p, sqrt_m=sqrt_m)
+    out_periodic = streaming_ladder_term(
+        H, kz=kz, vth=vth, sqrt_p=sqrt_p, sqrt_m=sqrt_m
+    )
     assert out_periodic.shape == H.shape
     assert jnp.isfinite(out_periodic).all()
 

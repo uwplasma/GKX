@@ -10,6 +10,12 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
+# fmt: off
+# The export table is data, not code: one row per public name, aligned so the
+# module a name comes from is readable down a column. Formatted, every row that
+# passes the line limit splits across four lines and the table roughly triples,
+# pushing this facade well past its 500-line budget for no gain in readability.
+# `ruff format --check` honours the guard, so the file still passes the gate.
 _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'CycloneBaseCase': ('gkx.config', 'CycloneBaseCase'),
     'GridConfig': ('gkx.config', 'GridConfig'),
@@ -358,8 +364,25 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'scan_comparison_figure': ('gkx.artifacts.plotting', 'scan_comparison_figure'),
     'set_plot_style': ('gkx.artifacts.plotting', 'set_plot_style'),
 }
+# fmt: on
 
-__all__ = ['load', 'solve', 'scan', 'plot', 'prepare', 'PreparedSimulation', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig']
+__all__ = [
+    "load",
+    "solve",
+    "scan",
+    "plot",
+    "prepare",
+    "PreparedSimulation",
+    "Case",
+    "LinearResult",
+    "NonlinearResult",
+    "ScanResult",
+    "flux_tube_geometry_from_mapping",
+    "solver_objective_vector_from_geometry",
+    "solver_linear_operator_matrix_from_geometry",
+    "solver_scalar_objective_from_vector",
+    "VMEXTransportObjectiveConfig",
+]
 
 
 def __getattr__(name: str) -> Any:
@@ -372,6 +395,7 @@ def __getattr__(name: str) -> Any:
     value = getattr(import_module(module_name), attr_name)
     globals()[name] = value
     return value
+
 
 def __dir__() -> list[str]:
     return sorted({*globals(), *__all__})

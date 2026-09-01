@@ -687,7 +687,6 @@ def _write_json(payload: dict[str, Any], path: Path) -> None:
     )
 
 
-
 def _add_zero_norm_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--config",
@@ -786,6 +785,7 @@ def _run_zero_norm_state_window(args: argparse.Namespace) -> int:
     print(f"saved {args.out_json}")
     return 0 if payload["passed"] else 1
 
+
 def _write_common(summary: dict[str, object], out_prefix: Path) -> dict[str, Path]:
     out_prefix.parent.mkdir(parents=True, exist_ok=True)
     paths = {
@@ -818,12 +818,22 @@ def _plot_abs_rows(summary: dict[str, object], paths: dict[str, Path]) -> None:
     rows = list(summary["rows"])
     m = np.asarray([row["m"] for row in rows], dtype=float)
     left_key = "production_abs" if "production_abs" in rows[0] else "serial_abs"
-    left_label = "linear_rhs streaming" if left_key == "production_abs" else "serial streaming+phi"
-    right_label = "shard_map streaming" if left_key == "production_abs" else "velocity route"
+    left_label = (
+        "linear_rhs streaming"
+        if left_key == "production_abs"
+        else "serial streaming+phi"
+    )
+    right_label = (
+        "shard_map streaming" if left_key == "production_abs" else "velocity route"
+    )
     serial = np.asarray([row[left_key] for row in rows], dtype=float)
     sharded = np.asarray([row["sharded_abs"] for row in rows], dtype=float)
     error = np.asarray([row["abs_error"] for row in rows], dtype=float)
-    title = "Streaming-only linear RHS" if left_key == "production_abs" else "Electrostatic streaming RHS"
+    title = (
+        "Streaming-only linear RHS"
+        if left_key == "production_abs"
+        else "Electrostatic streaming RHS"
+    )
 
     set_plot_style()
     fig, axes = plt.subplots(1, 2, figsize=(10.4, 3.8), constrained_layout=True)
@@ -837,7 +847,9 @@ def _plot_abs_rows(summary: dict[str, object], paths: dict[str, Path]) -> None:
     axes[1].semilogy(
         m, np.maximum(error, 1.0e-16), "s-", lw=2.0, label="absolute error"
     )
-    axes[1].axhline(float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate")
+    axes[1].axhline(
+        float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate"
+    )
     status = "passed" if bool(summary["identity_passed"]) else "failed"
     axes[1].set_xlabel("Hermite index m")
     axes[1].set_ylabel("absolute error")
@@ -874,7 +886,9 @@ def _plot_norm_rows(summary: dict[str, object], paths: dict[str, Path]) -> None:
     axes[0].legend(frameon=False, fontsize=8)
 
     axes[1].semilogy(m, np.maximum(error, 1.0e-16), "s-", lw=2.0, label="max abs error")
-    axes[1].axhline(float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate")
+    axes[1].axhline(
+        float(summary["atol"]), ls=":", lw=1.2, color="0.25", label="abs gate"
+    )
     axes[1].set_xlabel("Hermite index m")
     axes[1].set_ylabel("absolute error")
     status = "passed" if bool(summary["identity_passed"]) else "failed"
@@ -926,7 +940,11 @@ def _run_streaming(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 
@@ -943,7 +961,11 @@ def _run_streaming_electrostatic(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 
@@ -960,7 +982,11 @@ def _run_electrostatic_slices(args: argparse.Namespace) -> int:
         rtol=float(args.rtol),
     )
     paths = write_artifacts(summary, args.out_prefix)
-    print(json.dumps({"identity_passed": summary["identity_passed"], "paths": paths}, indent=2))
+    print(
+        json.dumps(
+            {"identity_passed": summary["identity_passed"], "paths": paths}, indent=2
+        )
+    )
     return 0
 
 
@@ -981,7 +1007,8 @@ def build_parser() -> argparse.ArgumentParser:
     streaming_electrostatic.set_defaults(func=_run_streaming_electrostatic)
 
     slices = subparsers.add_parser(
-        "electrostatic-slices", help="Gate the composed electrostatic linear-slices route."
+        "electrostatic-slices",
+        help="Gate the composed electrostatic linear-slices route.",
     )
     _add_common_args(slices, out_prefix=DEFAULT_SLICES_PREFIX)
     slices.set_defaults(func=_run_electrostatic_slices)

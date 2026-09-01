@@ -340,12 +340,21 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     from support.paths import REPO_ROOT
 
     promoted = [
-        "load", "solve", "scan", "plot", "prepare", "PreparedSimulation",
-        "Case", "LinearResult", "NonlinearResult",
-        "ScanResult", "flux_tube_geometry_from_mapping",
+        "load",
+        "solve",
+        "scan",
+        "plot",
+        "prepare",
+        "PreparedSimulation",
+        "Case",
+        "LinearResult",
+        "NonlinearResult",
+        "ScanResult",
+        "flux_tube_geometry_from_mapping",
         "solver_objective_vector_from_geometry",
         "solver_linear_operator_matrix_from_geometry",
-        "solver_scalar_objective_from_vector", "VMEXTransportObjectiveConfig",
+        "solver_scalar_objective_from_vector",
+        "VMEXTransportObjectiveConfig",
     ]
     assert public_api.__all__ == promoted
     assert gkx.__all__ == ["__version__", *promoted]
@@ -362,14 +371,20 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     exec("from gkx import *", wildcard)
     assert set(wildcard) - {"__builtins__"} == set(gkx.__all__)
     from gkx.artifacts.plotting import plot as plot_owner
+
     assert gkx.plot is public_api.plot is plot_owner
     assert gkx.prepare is public_api.prepare
     assert gkx.ExplicitTimeConfig.__name__ == "ExplicitTimeConfig"
     assert callable(gkx.integrate_nonlinear_explicit_diagnostics)
     assert callable(gkx.branch_continuity_metrics)
     for legacy in (
-        "GridConfig", "LinearParams", "integrate_nonlinear", "batch_map",
-        "ModeSelection", "growth_fit_figure", "VMEXGKXTransportObjective",
+        "GridConfig",
+        "LinearParams",
+        "integrate_nonlinear",
+        "batch_map",
+        "ModeSelection",
+        "growth_fit_figure",
+        "VMEXGKXTransportObjective",
     ):
         assert legacy not in gkx.__all__
         assert getattr(gkx, legacy) is getattr(public_api, legacy)
@@ -581,9 +596,7 @@ def test_should_emit_progress_sanitizes_steps_and_targets() -> None:
 
 def test_emit_progress_handles_time_variants_and_metric_labels(monkeypatch) -> None:
     ticks = iter([10.0, 12.0])
-    monkeypatch.setattr(
-        "gkx.utils.callbacks.time.perf_counter", lambda: next(ticks)
-    )
+    monkeypatch.setattr("gkx.utils.callbacks.time.perf_counter", lambda: next(ticks))
     _PROGRESS_START.clear()
 
     first = io.StringIO()

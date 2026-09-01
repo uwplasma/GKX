@@ -2570,14 +2570,8 @@ def test_hermite_streaming_ladder_reference_matches_manual_coefficients() -> Non
     expected[0, 1, 0, 0, 0] = 2.0 * np.sqrt(2.0) * (3.0 + 2.0j)
     expected[0, 3, 0, 0, 0] = 2.0 * np.sqrt(3.0) * (3.0 + 2.0j)
     np.testing.assert_allclose(np.asarray(ladder), expected, rtol=1.0e-6, atol=1.0e-6)
-    assert (
-        gkx.hermite_streaming_ladder_reference
-        is hermite_streaming_ladder_reference
-    )
-    assert (
-        gkx.hermite_streaming_ladder_shard_map
-        is hermite_streaming_ladder_shard_map
-    )
+    assert gkx.hermite_streaming_ladder_reference is hermite_streaming_ladder_reference
+    assert gkx.hermite_streaming_ladder_shard_map is hermite_streaming_ladder_shard_map
 
 
 def test_hermite_streaming_ladder_shard_map_noops_to_reference_for_single_chunk() -> (
@@ -2747,9 +2741,9 @@ def test_linear_rhs_parallel_cached_streaming_only_matches_serial_call_graph() -
     )
     assert gkx.linear_rhs_parallel_cached is linear_rhs_parallel_cached
     assert (
-        gkx.linear_rhs_streaming_velocity_sharded(
-            state, cache, params, num_devices=1
-        )[0].shape
+        gkx.linear_rhs_streaming_velocity_sharded(state, cache, params, num_devices=1)[
+            0
+        ].shape
         == state.shape
     )
 
@@ -3030,10 +3024,8 @@ def test_fused_electrostatic_kernel_term_sum_and_finite_quasineutrality(
     data = linear_parallel_electrostatic._fused_electrostatic_constants(
         full_state, cache, params, all_terms, local_m=2
     )
-    combined_rhs, phi = (
-        linear_parallel_electrostatic._fused_electrostatic_rhs_kernel(
-            local_state, data, route, axis_name="m"
-        )
+    combined_rhs, phi = linear_parallel_electrostatic._fused_electrostatic_rhs_kernel(
+        local_state, data, route, axis_name="m"
     )
 
     contributions = []
@@ -3264,7 +3256,9 @@ def test_species_hermite_plan_factors_species_first_with_exact_hermite_division(
     assert (four.chunks["s"], four.chunks["m"]) == (2, 2)
     assert four.hermite_ghost_depth == 2 and four.needs_hermite_exchange
     # Two devices and two species is the halo-free production configuration.
-    assert build_species_hermite_mesh_plan(shape, num_devices=2).hermite_ghost_depth == 0
+    assert (
+        build_species_hermite_mesh_plan(shape, num_devices=2).hermite_ghost_depth == 0
+    )
     with pytest.raises(ValueError, match="not exactly divisible"):
         build_species_hermite_mesh_plan(shape, num_devices=3)
     assert species_hermite_device_counts(2, 16) == (1, 2, 4, 8, 16)
@@ -3298,7 +3292,12 @@ def test_species_hermite_halo_is_one_exchange_per_direction():
         out_specs=spec,
         axis_names={"s", "m"},
     )
-    text = jax.jit(mapped).lower(jax.device_put(state, NamedSharding(mesh, spec))).compile().as_text()
+    text = (
+        jax.jit(mapped)
+        .lower(jax.device_put(state, NamedSharding(mesh, spec)))
+        .compile()
+        .as_text()
+    )
     assert len(re.findall(r"\bcollective-permute\b", text)) == 2
     assert "all-to-all" not in text
 

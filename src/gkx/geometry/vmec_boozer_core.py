@@ -317,8 +317,13 @@ def _surface_indices_for_stencil(
 
 
 def _boozer_xform_inputs_from_state(
-    state: Any, runtime: Any, *, inp: Any, wout: Any,
-    boozer_tables_mod: Any, ns_full: int,
+    state: Any,
+    runtime: Any,
+    *,
+    inp: Any,
+    wout: Any,
+    boozer_tables_mod: Any,
+    ns_full: int,
 ) -> _BoozXformInputs:
     """Stack traceable vmex Boozer tables over all half-mesh rows ``1..ns-1``."""
 
@@ -512,7 +517,9 @@ def _build_equal_arc_field_line(
     inv_gradpar_int = _cumulative_trapezoid(1.0 / gradpar_raw, theta_closed)
     gradpar_eqarc = 2.0 * jnp.pi / jnp.maximum(inv_gradpar_int[-1], eps)
     theta_eqarc = gradpar_eqarc * inv_gradpar_int - jnp.pi
-    theta_uniform_closed = jnp.linspace(-jnp.pi, jnp.pi, request.ntheta + 1, dtype=dtype)
+    theta_uniform_closed = jnp.linspace(
+        -jnp.pi, jnp.pi, request.ntheta + 1, dtype=dtype
+    )
     bmag_closed = jnp.asarray(
         _interp_equal_arc_profile(
             theta_uniform_closed,

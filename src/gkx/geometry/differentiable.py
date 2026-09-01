@@ -57,18 +57,14 @@ from gkx.geometry.sensitivity import (
 _DEFAULT_DISCOVER_DIFFERENTIABLE_GEOMETRY_BACKENDS = (
     discover_differentiable_geometry_backends
 )
-_CORE_FLUX_TUBE_FROM_STATE = (
-    _vmec_boozer_core.flux_tube_geometry_from_vmec_boozer_state
-)
+_CORE_FLUX_TUBE_FROM_STATE = _vmec_boozer_core.flux_tube_geometry_from_vmec_boozer_state
 _CORE_PROFILES_FROM_STATE = (
     _vmec_boozer_core.vmex_boozer_equal_arc_core_profiles_from_state
 )
 
 
 @contextmanager
-def _patched_module_attrs(
-    module: Any, replacements: dict[str, Any]
-) -> Iterator[None]:
+def _patched_module_attrs(module: Any, replacements: dict[str, Any]) -> Iterator[None]:
     """Temporarily patch module attributes and restore them after the call."""
 
     originals = {name: getattr(module, name) for name in replacements}
@@ -114,9 +110,7 @@ def booz_xform_spectral_sensitivity_report(*args: Any, **kwargs: Any) -> Any:
 
 @wraps(_vmec_tensor_mapping.vmex_flux_tube_mapping_from_state)
 def vmex_flux_tube_mapping_from_state(*args: Any, **kwargs: Any) -> Any:
-    return _vmec_tensor_mapping.vmex_flux_tube_mapping_from_state(
-        *args, **kwargs
-    )
+    return _vmec_tensor_mapping.vmex_flux_tube_mapping_from_state(*args, **kwargs)
 
 
 _cached_booz_xform_constants = _vmec_boozer_core._cached_booz_xform_constants
@@ -154,9 +148,7 @@ def prewarm_vmec_boozer_equal_arc_cache(*args: Any, **kwargs: Any) -> Any:
 
 
 @wraps(_CORE_PROFILES_FROM_STATE)
-def vmex_boozer_equal_arc_core_profiles_from_state(
-    *args: Any, **kwargs: Any
-) -> Any:
+def vmex_boozer_equal_arc_core_profiles_from_state(*args: Any, **kwargs: Any) -> Any:
     return _call_with_vmec_boozer_core_facade_hooks(
         _CORE_PROFILES_FROM_STATE,
         *args,

@@ -102,9 +102,7 @@ def test_integrate_nonlinear_from_config_routes_fixed_step_state_sharding(monkey
     monkeypatch.setattr(runners, "integrate_nonlinear_sharded", fake_sharded)
 
     grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(
-        t_max=0.2, dt=0.1, method="rk2", state_sharding="ky"
-    )
+    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2", state_sharding="ky")
     cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -125,9 +123,7 @@ def test_integrate_nonlinear_from_config_rejects_ungated_z_state_sharding():
     """The config path should not expose exploratory z-FFT sharding as release-grade."""
 
     grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(
-        t_max=0.2, dt=0.1, method="rk2", state_sharding="z"
-    )
+    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2", state_sharding="z")
     cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -205,7 +201,9 @@ def test_config_collision_operator_rejects_unsupported_solver_paths(monkeypatch)
     cfg = CycloneBaseCase(
         grid=grid_cfg,
         time=TimeConfig(
-            t_max=0.2, dt=0.1, method="rk2",
+            t_max=0.2,
+            dt=0.1,
+            method="rk2",
             state_sharding="ky",
             collision_operator="sugama",
         ),
@@ -309,9 +307,7 @@ def test_integrate_nonlinear_sharded_runs_with_mocked_pjit(monkeypatch) -> None:
         calls["rhs"] += 1
         return jnp.ones_like(G), FieldState(phi=jnp.ones((1, 1, 1), dtype=G.dtype))
 
-    monkeypatch.setattr(
-        "gkx.parallel.integrators.nonlinear_rhs_cached", fake_rhs
-    )
+    monkeypatch.setattr("gkx.parallel.integrators.nonlinear_rhs_cached", fake_rhs)
     monkeypatch.setattr("gkx.parallel.integrators.pjit", lambda fn, **kwargs: fn)
     monkeypatch.setattr(
         "gkx.parallel.integrators.jax.lax.with_sharding_constraint",
@@ -364,9 +360,7 @@ def test_integrate_nonlinear_sharded_explicit_methods_constant_rhs(
         calls["rhs"] += 1
         return jnp.ones_like(G), FieldState(phi=jnp.ones((1, 1, 1), dtype=G.dtype))
 
-    monkeypatch.setattr(
-        "gkx.parallel.integrators.nonlinear_rhs_cached", fake_rhs
-    )
+    monkeypatch.setattr("gkx.parallel.integrators.nonlinear_rhs_cached", fake_rhs)
     monkeypatch.setattr("gkx.parallel.integrators.pjit", lambda fn, **kwargs: fn)
 
     G0 = jnp.zeros((1, 1, 1, 1, 1), dtype=jnp.complex64)
@@ -404,9 +398,7 @@ def test_integrate_nonlinear_sharded_final_only_path(monkeypatch) -> None:
             phi=jnp.ones((1, 1, 1), dtype=G.dtype)
         )
 
-    monkeypatch.setattr(
-        "gkx.parallel.integrators.nonlinear_rhs_cached", fake_rhs
-    )
+    monkeypatch.setattr("gkx.parallel.integrators.nonlinear_rhs_cached", fake_rhs)
     monkeypatch.setattr("gkx.parallel.integrators.pjit", lambda fn, **kwargs: fn)
 
     G0 = jnp.zeros((1, 1, 1, 1, 1), dtype=jnp.complex64)

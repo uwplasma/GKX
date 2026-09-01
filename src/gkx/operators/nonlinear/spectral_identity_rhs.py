@@ -201,9 +201,7 @@ def nonlinear_spectral_pencil_rhs_identity_gate(
     )
 
     serial_field, serial_bracket, serial_rhs = _serial_nonlinear_spectral_rhs(state_hat)
-    pencil_field, pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(
-        state_hat
-    )
+    pencil_field, pencil_bracket, pencil_rhs = _pencil_nonlinear_spectral_rhs(state_hat)
     field_abs, field_rel = _max_abs_rel_error(serial_field, pencil_field, atol=atol)
     bracket_abs, bracket_rel = _max_abs_rel_error(
         serial_bracket, pencil_bracket, atol=atol

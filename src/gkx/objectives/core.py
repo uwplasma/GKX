@@ -600,9 +600,7 @@ def _matrix_free_dominant_linear_branch(
         # The acceptance below is fail-closed to NaN, so an unreachable
         # threshold does not merely loosen the gradient, it deletes it. The
         # inner solve keeps aiming a decade tighter than the acceptance.
-        accept_rtol = certifiable_residual_tolerance(
-            config.sensitivity_rtol, rhs.dtype
-        )
+        accept_rtol = certifiable_residual_tolerance(config.sensitivity_rtol, rhs.dtype)
         solve_rtol = certifiable_residual_tolerance(
             0.1 * config.sensitivity_rtol, rhs.dtype
         )

@@ -214,9 +214,7 @@ def test_cli_global_plot_uses_saved_output_renderer(
     capsys, monkeypatch, tmp_path: Path, plot_command: str
 ) -> None:
     rendered = tmp_path / "rendered.png"
-    monkeypatch.setattr(
-        "gkx.cli.plot_saved_output", lambda path, out=None: rendered
-    )
+    monkeypatch.setattr("gkx.cli.plot_saved_output", lambda path, out=None: rendered)
     monkeypatch.setattr(
         sys, "argv", ["gkx", plot_command, "tools_out/linear_case.summary.json"]
     )
@@ -2462,14 +2460,14 @@ def test_cli_nonlinear_run_shades_a_measured_average_window(
     monkeypatch.setattr(
         "gkx.artifacts.transport_figures.heat_flux_time_figure", _spy, raising=True
     )
-    _stub_nonlinear_run(
-        monkeypatch, {"out": str(bundle), "summary": str(summary)}
-    )
+    _stub_nonlinear_run(monkeypatch, {"out": str(bundle), "summary": str(summary)})
 
     assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(bundle))) == 0
 
     assert captured["window"] == (3.0, 6.0)
-    assert measured_average_window({"fit_window_tmin": 1.0, "fit_window_tmax": 2.0}) == (
+    assert measured_average_window(
+        {"fit_window_tmin": 1.0, "fit_window_tmax": 2.0}
+    ) == (
         1.0,
         2.0,
     )
@@ -2513,9 +2511,7 @@ def test_cli_nonlinear_run_does_not_shade_a_rejected_window(
         _warnings,
         raising=True,
     )
-    _stub_nonlinear_run(
-        monkeypatch, {"out": str(bundle), "summary": str(summary)}
-    )
+    _stub_nonlinear_run(monkeypatch, {"out": str(bundle), "summary": str(summary)})
 
     assert _cmd_run_runtime_nonlinear(_nonlinear_namespace(out=str(bundle))) == 0
 
@@ -2563,9 +2559,10 @@ def test_compilation_cache_directory_honours_the_environment(tmp_path: Path) -> 
     from gkx.utils import compilation_cache as cache
 
     override = tmp_path / "elsewhere"
-    assert cache.compilation_cache_directory(
-        {cache.DIRECTORY_ENV_VAR: str(override)}
-    ) == override
+    assert (
+        cache.compilation_cache_directory({cache.DIRECTORY_ENV_VAR: str(override)})
+        == override
+    )
     # No override: the repository-local .cache/gkx tree, matching where
     # generated *.eik.nc geometry already lives.
     assert cache.compilation_cache_directory({}).parts[-3:] == (
@@ -2852,9 +2849,7 @@ def test_cli_wout_linear_flag_runs_default_ky_scan(
         return {"summary": "scan.summary.json", "scan": "scan.csv"}
 
     monkeypatch.setattr("gkx.cli.run_runtime_scan", _fake_run_runtime_scan)
-    monkeypatch.setattr(
-        "gkx.cli.write_runtime_linear_scan_artifacts", _fake_write_scan
-    )
+    monkeypatch.setattr("gkx.cli.write_runtime_linear_scan_artifacts", _fake_write_scan)
     monkeypatch.setattr(sys, "argv", ["gkx", str(wout), "--linear", "--no-progress"])
 
     assert main() == 0
@@ -3061,7 +3056,7 @@ def test_wout_linear_leaves_a_step_already_under_the_scan_bound_alone(
     deck = tmp_path / "deck.toml"
     deck.write_text(
         _RUNTIME_NONLINEAR_TOML_MIN.replace("dt = 0.01", "dt = 0.0005")
-        + '\n[scan]\nky = [0.25]\n',
+        + "\n[scan]\nky = [0.25]\n",
         encoding="utf-8",
     )
 
@@ -3152,7 +3147,9 @@ def _valid_case_toml(tmp_path) -> Path:
 
 
 def test_cli_validate_accepts_a_runnable_case(tmp_path, capsys, monkeypatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["gkx", "validate", str(_valid_case_toml(tmp_path))])
+    monkeypatch.setattr(
+        sys, "argv", ["gkx", "validate", str(_valid_case_toml(tmp_path))]
+    )
     assert main() == 0
     assert "is a valid case" in capsys.readouterr().out
 
@@ -3181,7 +3178,9 @@ def test_cli_validate_reports_a_missing_file_rather_than_raising(
 def test_cli_inspect_describes_a_case_without_running_it(
     tmp_path, capsys, monkeypatch
 ) -> None:
-    monkeypatch.setattr(sys, "argv", ["gkx", "inspect", str(_valid_case_toml(tmp_path))])
+    monkeypatch.setattr(
+        sys, "argv", ["gkx", "inspect", str(_valid_case_toml(tmp_path))]
+    )
     assert main() == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["geometry_model"] == "s-alpha"
@@ -3235,9 +3234,7 @@ def test_deprecated_commands_name_their_replacement(capsys, monkeypatch) -> None
 def _base_cfg() -> RuntimeConfig:
     return RuntimeConfig(
         grid=GridConfig(Nx=4, Ny=6, Nz=8, Lx=6.28, Ly=6.28, boundary="periodic"),
-        time=TimeConfig(
-            t_max=0.4, dt=0.1, method="rk2", sample_stride=1
-        ),
+        time=TimeConfig(t_max=0.4, dt=0.1, method="rk2", sample_stride=1),
         geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
         init=InitializationConfig(
             init_field="density", init_amp=1.0e-8, gaussian_init=False
@@ -3617,29 +3614,29 @@ def test_runtime_command_artifact_output_helpers(
 ) -> None:
     calls: list[tuple[str, str]] = []
     deps = SimpleNamespace(
-        write_runtime_linear_artifacts=lambda path, _result: calls.append(
-            ("linear", str(path))
-        )
-        or {
-            "state": "linear.state.nc",
-            "summary": "linear.summary.json",
-            "timeseries": "linear.timeseries.csv",
-        },
-        write_runtime_linear_scan_artifacts=lambda path, _scan: calls.append(
-            ("scan", str(path))
-        )
-        or {
-            "quasilinear_spectrum": "scan.ql.csv",
-            "summary": "scan.summary.json",
-            "scan": "scan.csv",
-        },
-        write_quasilinear_artifacts=lambda path, _ql: calls.append(
-            ("quasilinear", str(path))
-        )
-        or {
-            "quasilinear_species": "ql.species.csv",
-            "quasilinear_summary": "ql.summary.json",
-        },
+        write_runtime_linear_artifacts=lambda path, _result: (
+            calls.append(("linear", str(path)))
+            or {
+                "state": "linear.state.nc",
+                "summary": "linear.summary.json",
+                "timeseries": "linear.timeseries.csv",
+            }
+        ),
+        write_runtime_linear_scan_artifacts=lambda path, _scan: (
+            calls.append(("scan", str(path)))
+            or {
+                "quasilinear_spectrum": "scan.ql.csv",
+                "summary": "scan.summary.json",
+                "scan": "scan.csv",
+            }
+        ),
+        write_quasilinear_artifacts=lambda path, _ql: (
+            calls.append(("quasilinear", str(path)))
+            or {
+                "quasilinear_species": "ql.species.csv",
+                "quasilinear_summary": "ql.summary.json",
+            }
+        ),
     )
     result = RuntimeLinearResult(
         ky=0.2,
@@ -4588,9 +4585,7 @@ def test_runtime_build_geometry_vmec_and_miller_branches(
     miller_path.write_bytes(b"x")
 
     monkeypatch.setattr("gkx.runtime.build_flux_tube_geometry", _fake_build)
-    monkeypatch.setattr(
-        "gkx.runtime.generate_runtime_vmec_eik", lambda _cfg: vmec_path
-    )
+    monkeypatch.setattr("gkx.runtime.generate_runtime_vmec_eik", lambda _cfg: vmec_path)
     monkeypatch.setattr(
         "gkx.runtime.generate_runtime_miller_eik", lambda _cfg: miller_path
     )
@@ -4833,9 +4828,7 @@ def test_run_runtime_scan_batch_validation_and_selection(
         "gkx.runtime.build_runtime_linear_params",
         lambda *_args, **_kwargs: params,
     )
-    monkeypatch.setattr(
-        "gkx.runtime.build_runtime_linear_terms", lambda _cfg: object()
-    )
+    monkeypatch.setattr("gkx.runtime.build_runtime_linear_terms", lambda _cfg: object())
     monkeypatch.setattr(
         "gkx.runtime._build_initial_condition",
         lambda *_args, **_kwargs: np.ones(
@@ -5691,12 +5684,14 @@ def test_half_horizon_settled_probe_detects_an_unsettled_fit() -> None:
 def test_half_horizon_settled_probe_declines_degenerate_input() -> None:
     t = np.linspace(0.0, 10.0, 50)
     signal = np.exp(0.1 * t)
-    assert half_horizon_settled_probe(
-        t, signal, gamma=0.0, tmin=None, tmax=None
-    ) == (None, None)
-    assert half_horizon_settled_probe(
-        t, signal, gamma=0.1, tmin=5.0, tmax=1.0
-    ) == (None, None)
+    assert half_horizon_settled_probe(t, signal, gamma=0.0, tmin=None, tmax=None) == (
+        None,
+        None,
+    )
+    assert half_horizon_settled_probe(t, signal, gamma=0.1, tmin=5.0, tmax=1.0) == (
+        None,
+        None,
+    )
 
 
 def test_warm_start_carry_state_rescales_without_losing_a_bit() -> None:

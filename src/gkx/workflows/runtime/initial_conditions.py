@@ -220,9 +220,7 @@ def _dealiased_initial_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
     ny = int(ky_values.size)
     kx_max = 1 + (nx - 1) // 3
     ky_max = 1 + (ny - 1) // 3
-    ky_indices = [
-        int(ky_i) for ky_i in range(ky_max) if float(ky_values[ky_i]) != 0.0
-    ]
+    ky_indices = [int(ky_i) for ky_i in range(ky_max) if float(ky_values[ky_i]) != 0.0]
     return [(int(kx_i), ky_i) for kx_i in range(kx_max) for ky_i in ky_indices]
 
 

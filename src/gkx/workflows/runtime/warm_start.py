@@ -54,7 +54,9 @@ class WarmStartPolicy:
     amplitude: float = 1.0
 
     @classmethod
-    def from_config(cls, cfg: Any, *, override: bool | None = None) -> "WarmStartPolicy":
+    def from_config(
+        cls, cfg: Any, *, override: bool | None = None
+    ) -> "WarmStartPolicy":
         """Resolve ``[output] warm_start`` with an optional explicit override."""
 
         configured = bool(getattr(getattr(cfg, "output", None), "warm_start", True))
@@ -188,9 +190,7 @@ def flux_tube_signature(geom: Any) -> np.ndarray:
     state saturated in one is a valid seed in the other.
     """
 
-    present = [
-        getattr(geom, name) for name in _SIGNATURE_FIELDS if hasattr(geom, name)
-    ]
+    present = [getattr(geom, name) for name in _SIGNATURE_FIELDS if hasattr(geom, name)]
     if not present:
         raise ValueError("geometry exposes none of the flux-tube signature profiles")
     return signature_from_arrays(present)

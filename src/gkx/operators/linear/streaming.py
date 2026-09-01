@@ -58,7 +58,9 @@ def _shift_kx_linked(
     f_ky = jnp.moveaxis(f, -2, 0)
     kx_mask = kx_mask.astype(f.dtype)
 
-    def _gather_ky(f_slice: jnp.ndarray, idx: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
+    def _gather_ky(
+        f_slice: jnp.ndarray, idx: jnp.ndarray, mask: jnp.ndarray
+    ) -> jnp.ndarray:
         gathered = jnp.take(f_slice, idx, axis=-1)
         return gathered * mask
 
@@ -274,7 +276,9 @@ def _linked_fft_full_cover_output(
     Nz: int,
 ) -> jnp.ndarray:
     if linked_inverse_permutation is None:
-        raise ValueError("linked_inverse_permutation required when linked_full_cover is True")
+        raise ValueError(
+            "linked_inverse_permutation required when linked_full_cover is True"
+        )
     updates_cat = jnp.concatenate(chain_updates, axis=-2)
     inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
     df_flat = jnp.take(updates_cat, inv, axis=-2)
@@ -372,7 +376,11 @@ def abs_z_periodic(
         if dz is None:
             raise ValueError("Either dz or kz must be provided")
         _check_positive(dz, "dz")
-        kz = 2.0 * jnp.pi * jnp.fft.fftfreq(f.shape[-1], d=jnp.asarray(dz, dtype=jnp.real(f).dtype))
+        kz = (
+            2.0
+            * jnp.pi
+            * jnp.fft.fftfreq(f.shape[-1], d=jnp.asarray(dz, dtype=jnp.real(f).dtype))
+        )
     f_hat = jnp.fft.fft(f, axis=-1)
     return jnp.fft.ifft(_fft_abs_multiplier(kz, f_hat) * f_hat, axis=-1)
 
@@ -501,11 +509,7 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
     l_shape = [1] * G.ndim
     l_shape[axis_l] = Nl
     l_col = ell.reshape(l_shape)
-    return (
-        (2.0 * l_col + 1.0) * G
-        - (l_col + 1.0) * G_plus
-        - l_col * G_minus
-    )
+    return (2.0 * l_col + 1.0) * G - (l_col + 1.0) * G_plus - l_col * G_minus
 
 
 def streaming_ladder_term(
@@ -549,9 +553,13 @@ def streaming_ladder_term(
             )
         else:
             if kx_link_plus is None or kx_link_minus is None:
-                raise ValueError("kx_link arrays must be provided for twist-shift boundaries")
+                raise ValueError(
+                    "kx_link arrays must be provided for twist-shift boundaries"
+                )
             if kx_mask_plus is None or kx_mask_minus is None:
-                raise ValueError("kx_link masks must be provided for twist-shift boundaries")
+                raise ValueError(
+                    "kx_link masks must be provided for twist-shift boundaries"
+                )
             dH_dz = _grad_z_linked_fd(
                 H,
                 dz=dz,

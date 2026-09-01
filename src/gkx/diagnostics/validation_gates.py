@@ -110,7 +110,9 @@ def evaluate_scalar_gate(
     rtol_f = float(rtol)
     if atol_f < 0.0 or rtol_f < 0.0:
         raise ValueError("atol and rtol must be non-negative")
-    abs_error = float(abs(obs - ref)) if np.isfinite(obs) and np.isfinite(ref) else float("inf")
+    abs_error = (
+        float(abs(obs - ref)) if np.isfinite(obs) and np.isfinite(ref) else float("inf")
+    )
     if np.isfinite(ref) and abs(ref) > 0.0:
         rel_error = float(abs_error / abs(ref))
     else:
@@ -542,11 +544,17 @@ def branch_continuity_gate_report(
         min_overlap = float(min_successive_overlap)
         if not 0.0 <= min_overlap <= 1.0:
             raise ValueError("min_successive_overlap must be in [0, 1]")
-        observed = float("nan") if metrics.min_successive_overlap is None else float(metrics.min_successive_overlap)
+        observed = (
+            float("nan")
+            if metrics.min_successive_overlap is None
+            else float(metrics.min_successive_overlap)
+        )
         gates.append(
             _upper_limit_gate(
                 "successive_overlap_deficit",
-                max(0.0, min_overlap - observed) if np.isfinite(observed) else float("nan"),
+                max(0.0, min_overlap - observed)
+                if np.isfinite(observed)
+                else float("nan"),
                 0.0,
                 notes=f"Passes when successive eigenfunction overlap >= {min_overlap:.6g}.",
             )
@@ -654,7 +662,6 @@ def matched_nonlinear_transport_report(
             "value_floor": value_floor,
         },
     }
-
 
 
 __all__ = [

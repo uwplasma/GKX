@@ -168,7 +168,9 @@ def test_tensor_sensitivity_payload_packs_observables_and_ad_fd_diagnostics() ->
     np.testing.assert_allclose(
         payload["jacobian_ad"], [[1.0, 2.0], [0.6, -1.0]], atol=1e-6
     )
-    np.testing.assert_allclose(payload["jacobian_fd"], payload["jacobian_ad"], atol=1e-4)
+    np.testing.assert_allclose(
+        payload["jacobian_fd"], payload["jacobian_ad"], atol=1e-4
+    )
     assert float(payload["max_abs_ad_fd_error"]) < 1e-4
     assert payload["conditioning"]["jacobian_shape"] == [2, 2]
 
@@ -209,7 +211,9 @@ def test_vmec_state_sensitivity_report_from_run_merges_metadata_and_payload() ->
     assert report["extra"] == 7
 
 
-def test_optional_vmec_state_sensitivity_report_returns_unavailable(monkeypatch) -> None:
+def test_optional_vmec_state_sensitivity_report_returns_unavailable(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(
         vss,
         "discover_differentiable_geometry_backends",
@@ -266,7 +270,9 @@ def test_optional_vmec_state_sensitivity_report_returns_failed(monkeypatch) -> N
     assert report["backend_info"] == {"vmex_available": True}
 
 
-def test_optional_vmec_state_sensitivity_report_returns_full_report(monkeypatch) -> None:
+def test_optional_vmec_state_sensitivity_report_returns_full_report(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(
         vss,
         "discover_differentiable_geometry_backends",
@@ -309,7 +315,9 @@ def test_optional_vmec_state_sensitivity_report_returns_full_report(monkeypatch)
 # ---------------------------------------------------------------------------
 # Context loaders (index resolution + backend seams)
 # ---------------------------------------------------------------------------
-def test_load_vmec_geom_sensitivity_context_resolves_metric_indices(monkeypatch) -> None:
+def test_load_vmec_geom_sensitivity_context_resolves_metric_indices(
+    monkeypatch,
+) -> None:
     ctx = _make_state_context(ns=5, nmode=3)
     turbulence = SimpleNamespace(name="turbulence")
     seen: dict[str, object] = {}

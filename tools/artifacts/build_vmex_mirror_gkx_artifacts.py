@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 
 import jax
+
 jax.config.update("jax_enable_x64", True)
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.animation import FFMpegWriter, FuncAnimation  # noqa: E402
@@ -97,10 +98,26 @@ def _case():
     # The case runs on ``setup.initial_state``, the seeded stream function on the prescribed
     # nested-ellipse surfaces, not a solved equilibrium: measure how far that seed sits from
     # force balance rather than leave a reader to assume it is one.
-    flux, current, grid = inputs["axial_flux_derivative"], inputs["current_derivative"], setup.discretization.grid
-    energy = mirror_energy(state, grid, axial_flux_derivative=flux, current_derivative=current, axis=setup.axis)
+    flux, current, grid = (
+        inputs["axial_flux_derivative"],
+        inputs["current_derivative"],
+        setup.discretization.grid,
+    )
+    energy = mirror_energy(
+        state,
+        grid,
+        axial_flux_derivative=flux,
+        current_derivative=current,
+        axis=setup.axis,
+    )
     residual = isotropic_force_residual(
-        energy, grid, state=state, axial_flux_derivative=flux, current_derivative=current, axis=setup.axis, closed=True
+        energy,
+        grid,
+        state=state,
+        axial_flux_derivative=flux,
+        current_derivative=current,
+        axis=setup.axis,
+        closed=True,
     )
     return inputs, setup, geometry, mapping, np.asarray(objectives), residual
 
@@ -126,7 +143,10 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
     # the objectives are invariant under the shift. docs/geometry.rst carries the measurement.
     # The low leg is a plateau straddling the seam, so take the fundamental's trough, not argmin.
     trough = np.angle(-np.sum(bmag * np.exp(-1j * theta)))
-    roll = bmag.size // 2 - int(np.round((trough + np.pi) / (2.0 * np.pi) * bmag.size)) % bmag.size
+    roll = (
+        bmag.size // 2
+        - int(np.round((trough + np.pi) / (2.0 * np.pi) * bmag.size)) % bmag.size
+    )
 
     def centered(values):
         return np.roll(np.asarray(values), roll)
@@ -146,21 +166,27 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
     axb.plot(theta / np.pi, centered(bmag), lw=2.2, label=r"$B/B_{ref}$")
     axb.plot(theta / np.pi, centered(bgrad), lw=1.7, label="bgrad")
     axb.axhline(0.0, color="0.75", lw=0.8)
-    axb.set(xlabel=r"equal-arc $z/\pi$ (origin at the $|B|$ minimum)", title="mirror force on the GKX grid")
+    axb.set(
+        xlabel=r"equal-arc $z/\pi$ (origin at the $|B|$ minimum)",
+        title="mirror force on the GKX grid",
+    )
     axb.legend(frameon=False)
 
     axm = figure.add_subplot(1, 3, 3)
     axm.plot(theta / np.pi, centered(geometry.gds2_profile), label="gds2")
     axm.plot(theta / np.pi, centered(geometry.gds21_profile), label="gds21")
     axm.plot(theta / np.pi, centered(geometry.gds22_profile), label="gds22")
-    axm.set(xlabel=r"equal-arc $z/\pi$ (origin at the $|B|$ minimum)", title="perpendicular metric")
+    axm.set(
+        xlabel=r"equal-arc $z/\pi$ (origin at the $|B|$ minimum)",
+        title="perpendicular metric",
+    )
     axm.legend(frameon=False, ncol=3, fontsize=8)
     axm.text(
         0.03,
         0.04,
         rf"GKX: $\gamma={objective[0]:.4f}$, $\omega={objective[1]:.4f}$"
         "\n"
-        rf"$Q_{{QL}}={objective[-1]:.4f}$, $B_{{max}}/B_{{min}}={bmag.max()/bmag.min():.3f}$",
+        rf"$Q_{{QL}}={objective[-1]:.4f}$, $B_{{max}}/B_{{min}}={bmag.max() / bmag.min():.3f}$",
         transform=axm.transAxes,
         fontsize=9,
         bbox={"facecolor": "white", "alpha": 0.85, "edgecolor": "0.8"},
@@ -221,7 +247,9 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
         "kind": "vmex_closed_mirror_gkx_showcase",
         "scope": "closed periodic mirror-hybrid; no open-end kinetic claim",
         "gkx_commit": _revision(root),
-        "vmex_commit": _revision(Path(__import__("vmex").__file__).resolve().parents[1]),
+        "vmex_commit": _revision(
+            Path(__import__("vmex").__file__).resolve().parents[1]
+        ),
         "jax_version": jax.__version__,
         "device": str(jax.devices()[0]),
         "precision": "float64",
@@ -229,9 +257,13 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
         "objectives": dict(zip(SOLVER_OBJECTIVE_NAMES, map(float, objective))),
         "bmag_max_over_min": float(bmag.max() / bmag.min()),
         "bmag_max_over_min_note": "Ratio of the two flat legs of the closed racetrack on the sampled field line, not a throat-to-midplane mirror ratio: the modulation is produced by the rotating elliptical cross-section, so it tracks cross_section_elongation_squared and not straight_length or return_radius. See the closed VMEX mirror geometry section of docs/geometry.rst.",
-        "cross_section_elongation_squared": float((inputs["semi_major"] / inputs["semi_minor"]) ** 2),
+        "cross_section_elongation_squared": float(
+            (inputs["semi_major"] / inputs["semi_minor"]) ** 2
+        ),
         "equilibrium_state": "seeded initial state from build_stellarator_mirror_hybrid, not a solved fixed-boundary equilibrium",
-        "seed_force_residual_normalized_rms": float(np.asarray(residual.normalized_rms)),
+        "seed_force_residual_normalized_rms": float(
+            np.asarray(residual.normalized_rms)
+        ),
         "plot_convention": "the plotted parallel profiles are rolled so z=0 is the |B| minimum; the recorded numbers use the unrolled geometry",
         "gradpar": float(geometry.gradpar_value),
         "figure": figure_path.name,
@@ -249,7 +281,10 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("docs/_static"), help="artifact directory"
+        "--output-dir",
+        type=Path,
+        default=Path("docs/_static"),
+        help="artifact directory",
     )
     parser.add_argument("--no-movie", action="store_true")
     args = parser.parse_args()

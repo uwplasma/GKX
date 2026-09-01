@@ -102,9 +102,7 @@ def _calibration_summary(report: dict[str, Any]) -> dict[str, Any]:
     by_split = report.get("by_split", {})
     holdout = by_split.get("holdout", {}) if isinstance(by_split, dict) else {}
     holdout_error = (
-        holdout.get("mean_abs_relative_error")
-        if isinstance(holdout, dict)
-        else None
+        holdout.get("mean_abs_relative_error") if isinstance(holdout, dict) else None
     )
     return {
         "artifact": report.get("source_artifact"),
@@ -317,7 +315,9 @@ def _optimized_audit_gate_context(
         for row in summaries
         if bool(row["supports_scoped_optimized_equilibrium_transport"])
     ]
-    overclaims = [row for row in summaries if bool(row["claims_universal_absolute_flux"])]
+    overclaims = [
+        row for row in summaries if bool(row["claims_universal_absolute_flux"])
+    ]
     return summaries, qualifying, overclaims
 
 
@@ -434,7 +434,7 @@ def _claim_boundary_gate_rows(
                 _gate(
                     "optimized_equilibrium_nonlinear_audit_qualified",
                     bool(qualifying_optimized_audits),
-                    "qualifying_audits=" f"{len(qualifying_optimized_audits)}",
+                    f"qualifying_audits={len(qualifying_optimized_audits)}",
                 ),
                 _gate(
                     "optimized_equilibrium_nonlinear_audit_scope_limited",
@@ -459,9 +459,7 @@ def _absolute_flux_promotion_status(
     *, passed: bool, scoped_optimized_evidence: bool, blockers: list[str]
 ) -> dict[str, Any]:
     if passed and scoped_optimized_evidence:
-        honest_status = (
-            "scoped_candidate_with_audited_optimized_equilibrium_evidence_not_universal_absolute_flux"
-        )
+        honest_status = "scoped_candidate_with_audited_optimized_equilibrium_evidence_not_universal_absolute_flux"
     elif passed:
         honest_status = "scoped_candidate_only_not_absolute_flux"
     else:
@@ -483,9 +481,7 @@ def _load_model_selection_artifacts(
     dataset_sufficiency: dict[str, Any] | str | Path,
     candidate_uncertainty: dict[str, Any] | str | Path,
     calibration_reports: Iterable[dict[str, Any] | str | Path],
-    optimized_equilibrium_nonlinear_audits: Iterable[
-        dict[str, Any] | str | Path
-    ],
+    optimized_equilibrium_nonlinear_audits: Iterable[dict[str, Any] | str | Path],
 ) -> _ModelSelectionArtifacts:
     return _ModelSelectionArtifacts(
         dataset=_as_dict(dataset_sufficiency),
@@ -570,9 +566,7 @@ def _model_selection_metrics(context: _ModelSelectionContext) -> dict[str, Any]:
         "candidate_prediction_interval_coverage": candidate_metrics[
             "candidate_coverage"
         ],
-        "transport_mean_relative_error_gate": candidate_metrics[
-            "transport_threshold"
-        ],
+        "transport_mean_relative_error_gate": candidate_metrics["transport_threshold"],
         "interval_coverage_gate": candidate_metrics["coverage_threshold"],
         "null_training_mean_mean_abs_relative_error": candidate_metrics["null_error"],
         "linear_weight_mean_abs_relative_error": candidate_metrics["linear_error"],
@@ -635,9 +629,7 @@ def build_quasilinear_model_selection_status(
     dataset_sufficiency: dict[str, Any] | str | Path,
     candidate_uncertainty: dict[str, Any] | str | Path,
     calibration_reports: Iterable[dict[str, Any] | str | Path] = (),
-    optimized_equilibrium_nonlinear_audits: Iterable[
-        dict[str, Any] | str | Path
-    ] = (),
+    optimized_equilibrium_nonlinear_audits: Iterable[dict[str, Any] | str | Path] = (),
     required_candidate: str = DEFAULT_REQUIRED_CANDIDATE,
     transport_gate: float | None = None,
     interval_coverage_gate: float | None = None,
@@ -683,6 +675,7 @@ def build_quasilinear_model_selection_status(
         ),
     )
 
+
 def build_quasilinear_model_selection_status_from_paths(
     *,
     dataset_sufficiency: str | Path,
@@ -699,9 +692,7 @@ def build_quasilinear_model_selection_status_from_paths(
         for idx, report in enumerate(calibration_reports)
     )
     optimized_audit_paths = tuple(
-        _ensure_path_payload(
-            f"optimized_equilibrium_nonlinear_audits[{idx}]", report
-        )
+        _ensure_path_payload(f"optimized_equilibrium_nonlinear_audits[{idx}]", report)
         for idx, report in enumerate(optimized_equilibrium_nonlinear_audits)
     )
     return build_quasilinear_model_selection_status(

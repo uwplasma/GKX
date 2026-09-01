@@ -26,8 +26,16 @@ from gkx.diagnostics.analysis import (
 from gkx.benchmarking.shared import KBM_KRYLOV_DEFAULT
 from gkx.runtime import run_runtime_linear
 from gkx.diagnostics.analysis import branch_continuity_metrics
-from gkx.diagnostics.validation_gates import branch_continuity_gate_report, gate_report_to_dict
-from gkx.config import KBMBaseCase, GeometryConfig, GridConfig, KineticElectronModelConfig
+from gkx.diagnostics.validation_gates import (
+    branch_continuity_gate_report,
+    gate_report_to_dict,
+)
+from gkx.config import (
+    KBMBaseCase,
+    GeometryConfig,
+    GridConfig,
+    KineticElectronModelConfig,
+)
 from gkx.core.grid import build_spectral_grid, select_ky_grid
 from gkx.workflows.runtime.toml import load_runtime_from_toml, load_toml
 
@@ -76,9 +84,7 @@ def _runtime_config_from_kbm_case(cfg: KBMBaseCase):
         init=cfg.init,
         physics=replace(runtime_cfg.physics, beta=float(model.beta)),
         species=(
-            replace(
-                ion, tprim=float(model.tprim_i), fprim=float(model.fprim)
-            ),
+            replace(ion, tprim=float(model.tprim_i), fprim=float(model.fprim)),
             replace(
                 electron,
                 mass=1.0 / float(model.mass_ratio),
@@ -226,13 +232,17 @@ def _prepare_gx_reference(
     int,
     float,
 ]:
-    gx_time, gx_ky_full, gx_omega_series, beta, q_gx, shat_gx, eps_gx, rmaj_gx = _load_gx_omega_gamma(path)
+    gx_time, gx_ky_full, gx_omega_series, beta, q_gx, shat_gx, eps_gx, rmaj_gx = (
+        _load_gx_omega_gamma(path)
+    )
     nky_full = int(len(gx_ky_full))
     if nky_full < 2:
         raise ValueError("GX output must contain at least two positive ky points.")
     y0 = _infer_y0(gx_ky_full) if len(gx_ky_full) > 1 else float(y0_fallback)
     if ky_arg:
-        ky_req = np.asarray([float(k.strip()) for k in ky_arg.split(",") if k.strip()], dtype=float)
+        ky_req = np.asarray(
+            [float(k.strip()) for k in ky_arg.split(",") if k.strip()], dtype=float
+        )
         if ky_req.size == 0:
             raise ValueError("No ky values parsed from --ky")
         idx = [int(np.argmin(np.abs(gx_ky_full - k))) for k in ky_req]
@@ -240,7 +250,18 @@ def _prepare_gx_reference(
         gx_omega_series = gx_omega_series[:, idx]
     else:
         gx_ky = gx_ky_full
-    return gx_time, gx_ky, gx_omega_series, beta, q_gx, shat_gx, eps_gx, rmaj_gx, nky_full, y0
+    return (
+        gx_time,
+        gx_ky,
+        gx_omega_series,
+        beta,
+        q_gx,
+        shat_gx,
+        eps_gx,
+        rmaj_gx,
+        nky_full,
+        y0,
+    )
 
 
 def _normalize_mode(theta: np.ndarray, mode: np.ndarray) -> np.ndarray:
@@ -258,7 +279,9 @@ def _normalize_mode(theta: np.ndarray, mode: np.ndarray) -> np.ndarray:
     return mode / ref
 
 
-def _load_gx_eigenfunction(path: Path, ky_target: float) -> tuple[np.ndarray, np.ndarray]:
+def _load_gx_eigenfunction(
+    path: Path, ky_target: float
+) -> tuple[np.ndarray, np.ndarray]:
     if path.suffix == ".npz":
         data = np.load(path, allow_pickle=False)
         theta = np.asarray(data["theta"], dtype=float)
@@ -304,8 +327,12 @@ def _save_trajectory(path: Path, result) -> Path:
         path,
         t=np.asarray(result.t, dtype=float),
         phi_t=_field_history(result),
-        gamma_t=np.asarray(gamma_t, dtype=float) if gamma_t is not None else np.array([], dtype=float),
-        omega_t=np.asarray(omega_t, dtype=float) if omega_t is not None else np.array([], dtype=float),
+        gamma_t=np.asarray(gamma_t, dtype=float)
+        if gamma_t is not None
+        else np.array([], dtype=float),
+        omega_t=np.asarray(omega_t, dtype=float)
+        if omega_t is not None
+        else np.array([], dtype=float),
         ky=float(result.ky),
         sel_ky=int(result.selection.ky_index),
         sel_kx=int(result.selection.kx_index),
@@ -384,7 +411,9 @@ def _extract_mode(
     phi_t = _field_history(result)
     t = np.asarray(result.t, dtype=float)
     if t.size <= 1:
-        return _normalize_mode(theta, np.asarray(phi_t[-1, 0, 0, :], dtype=np.complex128))
+        return _normalize_mode(
+            theta, np.asarray(phi_t[-1, 0, 0, :], dtype=np.complex128)
+        )
     mode = extract_eigenfunction(
         phi_t,
         t,
@@ -430,14 +459,18 @@ def _mode_metrics(
     )
     if gx_big.exists():
         theta_gx, mode_gx = _load_gx_eigenfunction(gx_big, float(ky_value))
-        if theta_gx.shape != theta.shape or not np.allclose(theta_gx, theta, atol=1.0e-6, rtol=1.0e-6):
+        if theta_gx.shape != theta.shape or not np.allclose(
+            theta_gx, theta, atol=1.0e-6, rtol=1.0e-6
+        ):
             mode_gx = _normalize_mode(theta, _interp_complex(theta, theta_gx, mode_gx))
         eig_overlap = _mode_overlap(mode_sp, mode_gx)
         eig_rel_l2 = _mode_rel_l2(mode_sp, mode_gx)
     else:
         eig_overlap = float("nan")
         eig_rel_l2 = float("nan")
-    prev_overlap = float("nan") if prev_mode is None else _mode_overlap(mode_sp, prev_mode)
+    prev_overlap = (
+        float("nan") if prev_mode is None else _mode_overlap(mode_sp, prev_mode)
+    )
     return theta, mode_sp, eig_overlap, eig_rel_l2, prev_overlap
 
 
@@ -505,8 +538,12 @@ def _build_cfg(
 def _replace_result(result, /, **updates):
     if is_dataclass(result):
         field_names = {field.name for field in fields(result)}
-        replace_updates = {name: value for name, value in updates.items() if name in field_names}
-        extra_updates = {name: value for name, value in updates.items() if name not in field_names}
+        replace_updates = {
+            name: value for name, value in updates.items() if name in field_names
+        }
+        extra_updates = {
+            name: value for name, value in updates.items() if name not in field_names
+        }
         result_new = replace(result, **replace_updates)
         if not extra_updates:
             return result_new
@@ -600,9 +637,13 @@ def _recompute_time_history_growth(args, result, *, mode_method: str):
     mode_method_base, fit_policy = _split_mode_method_policy(mode_method)
 
     if mode_method_base in {"project", "svd"}:
-        signal = extract_mode_time_series(_field_history(result), result.selection, method=mode_method_base)
+        signal = extract_mode_time_series(
+            _field_history(result), result.selection, method=mode_method_base
+        )
         if args.tmin is not None and args.tmax is not None:
-            gamma, omega = fit_growth_rate(signal=signal, t=t, tmin=args.tmin, tmax=args.tmax)
+            gamma, omega = fit_growth_rate(
+                signal=signal, t=t, tmin=args.tmin, tmax=args.tmax
+            )
             fit_tmin = float(args.tmin)
             fit_tmax = float(args.tmax)
         else:
@@ -640,8 +681,12 @@ def _recompute_time_history_growth(args, result, *, mode_method: str):
 
     if args.tmin is not None and args.tmax is not None:
         try:
-            signal = extract_mode_time_series(_field_history(result), result.selection, method=mode_method_base)
-            gamma, omega = fit_growth_rate(signal=signal, t=t, tmin=args.tmin, tmax=args.tmax)
+            signal = extract_mode_time_series(
+                _field_history(result), result.selection, method=mode_method_base
+            )
+            gamma, omega = fit_growth_rate(
+                signal=signal, t=t, tmin=args.tmin, tmax=args.tmax
+            )
             return _replace_result(
                 result,
                 gamma=float(gamma),
@@ -670,7 +715,9 @@ def _recompute_time_history_growth(args, result, *, mode_method: str):
             fit_window_tmax=fit_tmax,
         )
     except ValueError:
-        signal = extract_mode_time_series(_field_history(result), result.selection, method=mode_method_base)
+        signal = extract_mode_time_series(
+            _field_history(result), result.selection, method=mode_method_base
+        )
         gamma, omega, fit_tmin, fit_tmax = fit_growth_rate_auto(
             t,
             signal,
@@ -690,7 +737,9 @@ def _recompute_time_history_growth(args, result, *, mode_method: str):
         )
 
 
-def _interp_phi_t(phi_t: np.ndarray, t_src: np.ndarray, t_dst: np.ndarray) -> np.ndarray:
+def _interp_phi_t(
+    phi_t: np.ndarray, t_src: np.ndarray, t_dst: np.ndarray
+) -> np.ndarray:
     phi_src = np.asarray(phi_t, dtype=np.complex128)
     if np.array_equal(t_src, t_dst):
         return phi_src
@@ -703,7 +752,9 @@ def _interp_phi_t(phi_t: np.ndarray, t_src: np.ndarray, t_dst: np.ndarray) -> np
     return out.reshape((t_dst.size,) + phi_src.shape[1:])
 
 
-def _interp_real_tseries(data_t: np.ndarray, t_src: np.ndarray, t_dst: np.ndarray) -> np.ndarray:
+def _interp_real_tseries(
+    data_t: np.ndarray, t_src: np.ndarray, t_dst: np.ndarray
+) -> np.ndarray:
     data_src = np.asarray(data_t, dtype=float)
     if np.array_equal(t_src, t_dst):
         return data_src
@@ -742,8 +793,10 @@ def _recompute_time_history_growth_on_grid(
             result.selection,
             navg_fraction=float(args.gx_avg_fraction),
         )
-        fit_tmin = float(t_dst[-1]) * (1.0 - float(args.gx_avg_fraction)) if t_ref is not None else float(t_src[-1]) * (
-            1.0 - float(args.gx_avg_fraction)
+        fit_tmin = (
+            float(t_dst[-1]) * (1.0 - float(args.gx_avg_fraction))
+            if t_ref is not None
+            else float(t_src[-1]) * (1.0 - float(args.gx_avg_fraction))
         )
         fit_tmax = float(t_dst[-1]) if t_ref is not None else float(t_src[-1])
         return _replace_result(
@@ -764,7 +817,9 @@ def _recompute_time_history_growth_on_grid(
     phi_t = _interp_phi_t(_field_history(result), t_src, t_dst)
     sampled = _replace_result(result, t=t_dst, field_history=phi_t)
     updated = _recompute_time_history_growth(args, sampled, mode_method=mode_method)
-    return _replace_result(result, gamma=float(updated.gamma), omega=float(updated.omega))
+    return _replace_result(
+        result, gamma=float(updated.gamma), omega=float(updated.omega)
+    )
 
 
 def _run_candidate_cached(
@@ -783,11 +838,22 @@ def _run_candidate_cached(
     mode_method_use = str(mode_method_override or args.mode_method)
     cache_key: tuple[object, ...]
     if solver_name == "gx_time":
-        cache_key = ("gx_time", float(ky_value), float(beta_value), args.dt, args.steps, args.method)
+        cache_key = (
+            "gx_time",
+            float(ky_value),
+            float(beta_value),
+            args.dt,
+            args.steps,
+            args.method,
+        )
         if cache_key not in result_cache:
             traj_dir = getattr(args, "trajectory_dir", None)
             reuse_traj = bool(getattr(args, "reuse_trajectory", False))
-            traj_path = None if traj_dir is None else _trajectory_path(Path(traj_dir), float(ky_value))
+            traj_path = (
+                None
+                if traj_dir is None
+                else _trajectory_path(Path(traj_dir), float(ky_value))
+            )
             if reuse_traj and traj_path is not None and traj_path.exists():
                 result_cache[cache_key] = _load_trajectory(traj_path)
             else:
@@ -857,7 +923,9 @@ def _branch_gate_report_from_rows(
     overlap: np.ndarray | None = None
     if "eig_overlap_prev" in table.columns:
         overlap_values = np.asarray(table["eig_overlap_prev"], dtype=float)[1:]
-        if overlap_values.size == table.shape[0] - 1 and np.all(np.isfinite(overlap_values)):
+        if overlap_values.size == table.shape[0] - 1 and np.all(
+            np.isfinite(overlap_values)
+        ):
             overlap = overlap_values
     metrics = branch_continuity_metrics(
         np.asarray(table["ky"], dtype=float),
@@ -914,7 +982,9 @@ def _candidate_row(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Compare GX KBM output against GKX.")
-    parser.add_argument("--gx", type=Path, required=True, help="Path to GX .out.nc file")
+    parser.add_argument(
+        "--gx", type=Path, required=True, help="Path to GX .out.nc file"
+    )
     parser.add_argument(
         "--gx-big",
         type=Path,
@@ -934,8 +1004,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--solver", type=str, default="gx_time")
     parser.add_argument("--ntheta", type=int, default=32)
     parser.add_argument("--nperiod", type=int, default=2)
-    parser.add_argument("--y0", type=float, default=10.0, help="Fallback y0 when ky list is truncated.")
-    parser.add_argument("--gx-input", type=Path, default=None, help="Optional GX input file for exact benchmark contract overrides.")
+    parser.add_argument(
+        "--y0", type=float, default=10.0, help="Fallback y0 when ky list is truncated."
+    )
+    parser.add_argument(
+        "--gx-input",
+        type=Path,
+        default=None,
+        help="Optional GX input file for exact benchmark contract overrides.",
+    )
     parser.add_argument(
         "--nky",
         type=int,
@@ -1025,7 +1102,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--eigen-tmin", type=float, default=None)
     parser.add_argument("--eigen-tmax", type=float, default=None)
-    parser.add_argument("--out", type=Path, default=None, help="Optional CSV path for mismatch table")
+    parser.add_argument(
+        "--out", type=Path, default=None, help="Optional CSV path for mismatch table"
+    )
     parser.add_argument(
         "--candidate-out",
         type=Path,
@@ -1048,14 +1127,37 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    gx_time, gx_ky, gx_omega_series, beta, q_gx, shat_gx, eps_gx, rmaj_gx, nky_full, y0 = _prepare_gx_reference(
+    (
+        gx_time,
+        gx_ky,
+        gx_omega_series,
+        beta,
+        q_gx,
+        shat_gx,
+        eps_gx,
+        rmaj_gx,
+        nky_full,
+        y0,
+    ) = _prepare_gx_reference(
         args.gx,
         ky_arg=str(args.ky),
         y0_fallback=float(args.y0),
     )
-    gx_input_contract = None if args.gx_input is None else _load_kbm_reference_input_contract(args.gx_input)
-    args.Nl = int(args.Nl) if args.Nl is not None else int(16 if gx_input_contract is None else gx_input_contract.nlaguerre)
-    args.Nm = int(args.Nm) if args.Nm is not None else int(48 if gx_input_contract is None else gx_input_contract.nhermite)
+    gx_input_contract = (
+        None
+        if args.gx_input is None
+        else _load_kbm_reference_input_contract(args.gx_input)
+    )
+    args.Nl = (
+        int(args.Nl)
+        if args.Nl is not None
+        else int(16 if gx_input_contract is None else gx_input_contract.nlaguerre)
+    )
+    args.Nm = (
+        int(args.Nm)
+        if args.Nm is not None
+        else int(48 if gx_input_contract is None else gx_input_contract.nhermite)
+    )
     nky = int(args.nky) if args.nky is not None else nky_full
     ny = 3 * (nky - 1) + 1
 
@@ -1069,35 +1171,79 @@ def main() -> None:
 
     cfg = _build_cfg(
         beta=float(beta if gx_input_contract is None else gx_input_contract.beta),
-        q=float(q_gx if q_gx is not None else (args.q if gx_input_contract is None else gx_input_contract.q)),
-        shat=float(
-            shat_gx if shat_gx is not None else (args.shat if gx_input_contract is None else gx_input_contract.shat)
+        q=float(
+            q_gx
+            if q_gx is not None
+            else (args.q if gx_input_contract is None else gx_input_contract.q)
         ),
-        eps=float(eps_gx if eps_gx is not None else (args.eps if gx_input_contract is None else gx_input_contract.eps)),
+        shat=float(
+            shat_gx
+            if shat_gx is not None
+            else (args.shat if gx_input_contract is None else gx_input_contract.shat)
+        ),
+        eps=float(
+            eps_gx
+            if eps_gx is not None
+            else (args.eps if gx_input_contract is None else gx_input_contract.eps)
+        ),
         rmaj=float(
-            rmaj_gx if rmaj_gx is not None else (args.Rmaj if gx_input_contract is None else gx_input_contract.rmaj)
+            rmaj_gx
+            if rmaj_gx is not None
+            else (args.Rmaj if gx_input_contract is None else gx_input_contract.rmaj)
         ),
         ny=ny,
-        ntheta=int(args.ntheta if gx_input_contract is None else gx_input_contract.ntheta),
-        nperiod=int(args.nperiod if gx_input_contract is None else gx_input_contract.nperiod),
+        ntheta=int(
+            args.ntheta if gx_input_contract is None else gx_input_contract.ntheta
+        ),
+        nperiod=int(
+            args.nperiod if gx_input_contract is None else gx_input_contract.nperiod
+        ),
         y0=float(y0 if gx_input_contract is None else gx_input_contract.y0),
-        mass_ratio=float(3703.7037037037035 if gx_input_contract is None else gx_input_contract.mass_ratio),
-        ion_tprim=float(2.49 if gx_input_contract is None else gx_input_contract.ion_tprim),
-        ele_tprim=float(2.49 if gx_input_contract is None else gx_input_contract.ele_tprim),
-        ion_fprim=float(0.8 if gx_input_contract is None else gx_input_contract.ion_fprim),
-        ele_fprim=float(0.8 if gx_input_contract is None else gx_input_contract.ele_fprim),
-        te_over_ti=float(1.0 if gx_input_contract is None else gx_input_contract.te_over_ti),
-        init_field=str("all" if gx_input_contract is None else gx_input_contract.init_field),
-        gaussian_init=bool(True if gx_input_contract is None else gx_input_contract.gaussian_init),
-        init_electrons_only=bool(False if gx_input_contract is None else gx_input_contract.init_electrons_only),
+        mass_ratio=float(
+            3703.7037037037035
+            if gx_input_contract is None
+            else gx_input_contract.mass_ratio
+        ),
+        ion_tprim=float(
+            2.49 if gx_input_contract is None else gx_input_contract.ion_tprim
+        ),
+        ele_tprim=float(
+            2.49 if gx_input_contract is None else gx_input_contract.ele_tprim
+        ),
+        ion_fprim=float(
+            0.8 if gx_input_contract is None else gx_input_contract.ion_fprim
+        ),
+        ele_fprim=float(
+            0.8 if gx_input_contract is None else gx_input_contract.ele_fprim
+        ),
+        te_over_ti=float(
+            1.0 if gx_input_contract is None else gx_input_contract.te_over_ti
+        ),
+        init_field=str(
+            "all" if gx_input_contract is None else gx_input_contract.init_field
+        ),
+        gaussian_init=bool(
+            True if gx_input_contract is None else gx_input_contract.gaussian_init
+        ),
+        init_electrons_only=bool(
+            False
+            if gx_input_contract is None
+            else gx_input_contract.init_electrons_only
+        ),
     )
-    steps_use = int(args.steps) if args.steps is not None else max(int(np.ceil(float(gx_time[-1]) / float(args.dt))), 1)
+    steps_use = (
+        int(args.steps)
+        if args.steps is not None
+        else max(int(np.ceil(float(gx_time[-1]) / float(args.dt))), 1)
+    )
     args.steps = steps_use
 
     grid_full = build_spectral_grid(cfg.grid)
     use_legacy_auto = args.branch_policy in {"gx-ref-auto", "auto"}
     use_continuation = args.branch_policy == "continuation"
-    branch_candidates = [_parse_candidate_spec(s) for s in args.branch_solvers.split(",") if s.strip()]
+    branch_candidates = [
+        _parse_candidate_spec(s) for s in args.branch_solvers.split(",") if s.strip()
+    ]
     if (use_legacy_auto or use_continuation) and not branch_candidates:
         raise ValueError("No candidate solvers parsed from --branch-solvers")
 
@@ -1124,8 +1270,12 @@ def main() -> None:
                     gx_gamma=float(gx_gamma[i]),
                     gx_omega=float(gx_omega[i]),
                 )
-                rel_g = abs(float(result.gamma) - float(gx_gamma[i])) / max(abs(float(gx_gamma[i])), 1.0e-12)
-                rel_o = abs(float(result.omega) - float(gx_omega[i])) / max(abs(float(gx_omega[i])), 1.0e-12)
+                rel_g = abs(float(result.gamma) - float(gx_gamma[i])) / max(
+                    abs(float(gx_gamma[i])), 1.0e-12
+                )
+                rel_o = abs(float(result.omega) - float(gx_omega[i])) / max(
+                    abs(float(gx_omega[i])), 1.0e-12
+                )
                 obj = rel_g + rel_o
                 candidate_rows.append(
                     _candidate_row(
@@ -1147,7 +1297,9 @@ def main() -> None:
                     best_obj = obj
                     best_row = (solver_label, result)
             if best_row is None:
-                raise RuntimeError(f"No valid solver candidate for ky={float(ky_val):.4f}")
+                raise RuntimeError(
+                    f"No valid solver candidate for ky={float(ky_val):.4f}"
+                )
             solver_used, result = best_row
             for row in candidate_rows[candidate_start:]:
                 row["selected"] = row["solver"] == solver_used
@@ -1168,18 +1320,24 @@ def main() -> None:
                     gx_gamma=float(gx_gamma[i]),
                     gx_omega=float(gx_omega[i]),
                 )
-                _theta, mode_c, eig_overlap_c, eig_rel_l2_c, prev_overlap_c = _mode_metrics(
-                    result_c,
-                    grid_full=grid_full,
-                    ky_value=float(ky_val),
-                    gx_big=args.gx_big,
-                    eigen_method=args.eigen_method,
-                    eigen_tmin=args.eigen_tmin,
-                    eigen_tmax=args.eigen_tmax,
-                    prev_mode=prev_mode,
+                _theta, mode_c, eig_overlap_c, eig_rel_l2_c, prev_overlap_c = (
+                    _mode_metrics(
+                        result_c,
+                        grid_full=grid_full,
+                        ky_value=float(ky_val),
+                        gx_big=args.gx_big,
+                        eigen_method=args.eigen_method,
+                        eigen_tmin=args.eigen_tmin,
+                        eigen_tmax=args.eigen_tmax,
+                        prev_mode=prev_mode,
+                    )
                 )
-                rel_g = abs(float(result_c.gamma) - float(gx_gamma[i])) / max(abs(float(gx_gamma[i])), 1.0e-12)
-                rel_o = abs(float(result_c.omega) - float(gx_omega[i])) / max(abs(float(gx_omega[i])), 1.0e-12)
+                rel_g = abs(float(result_c.gamma) - float(gx_gamma[i])) / max(
+                    abs(float(gx_gamma[i])), 1.0e-12
+                )
+                rel_o = abs(float(result_c.omega) - float(gx_omega[i])) / max(
+                    abs(float(gx_omega[i])), 1.0e-12
+                )
                 obj = _candidate_objective(
                     rel_gamma=rel_g,
                     rel_omega=rel_o,
@@ -1208,10 +1366,21 @@ def main() -> None:
                     _write_rows(args.candidate_out, candidate_rows)
                 if obj < best_obj:
                     best_obj = obj
-                    best_candidate = (solver_label, result_c, mode_c, eig_overlap_c, eig_rel_l2_c, prev_overlap_c)
+                    best_candidate = (
+                        solver_label,
+                        result_c,
+                        mode_c,
+                        eig_overlap_c,
+                        eig_rel_l2_c,
+                        prev_overlap_c,
+                    )
             if best_candidate is None:
-                raise RuntimeError(f"No valid solver candidate for ky={float(ky_val):.4f}")
-            solver_used, result, mode_sp, eig_overlap, eig_rel_l2, prev_overlap = best_candidate
+                raise RuntimeError(
+                    f"No valid solver candidate for ky={float(ky_val):.4f}"
+                )
+            solver_used, result, mode_sp, eig_overlap, eig_rel_l2, prev_overlap = (
+                best_candidate
+            )
             branch_score = float(best_obj)
             for row in candidate_rows[candidate_start:]:
                 row["selected"] = row["solver"] == solver_used
@@ -1264,7 +1433,9 @@ def main() -> None:
         if not np.isfinite(fit_window_tmin) or not np.isfinite(fit_window_tmax):
             t_series = np.asarray(result.t, dtype=float)
             if t_series.size > 1 and solver_used == "gx_time":
-                fit_window_tmin = float(t_series[-1]) * (1.0 - float(args.gx_avg_fraction))
+                fit_window_tmin = float(t_series[-1]) * (
+                    1.0 - float(args.gx_avg_fraction)
+                )
                 fit_window_tmax = float(t_series[-1])
             elif args.tmin is not None and args.tmax is not None:
                 fit_window_tmin = float(args.tmin)
@@ -1275,10 +1446,12 @@ def main() -> None:
             "solver": solver_used,
             "gamma_gx": float(gx_gamma[i]),
             "gamma": float(result.gamma),
-            "rel_gamma": abs(float(result.gamma) - float(gx_gamma[i])) / max(abs(float(gx_gamma[i])), 1.0e-12),
+            "rel_gamma": abs(float(result.gamma) - float(gx_gamma[i]))
+            / max(abs(float(gx_gamma[i])), 1.0e-12),
             "omega_gx": float(gx_omega[i]),
             "omega": float(result.omega),
-            "rel_omega": abs(float(result.omega) - float(gx_omega[i])) / max(abs(float(gx_omega[i])), 1.0e-12),
+            "rel_omega": abs(float(result.omega) - float(gx_omega[i]))
+            / max(abs(float(gx_omega[i])), 1.0e-12),
             "eig_overlap_gx": eig_overlap,
             "eig_rel_l2": eig_rel_l2,
             "eig_overlap_prev": prev_overlap,

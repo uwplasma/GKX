@@ -54,9 +54,7 @@ def _tiny_runtime_config() -> RuntimeConfig:
             Ly=62.8,
             boundary="periodic",
         ),
-        time=replace(
-            base.time, t_max=0.04, dt=0.01, sample_stride=1
-        ),
+        time=replace(base.time, t_max=0.04, dt=0.01, sample_stride=1),
         species=(RuntimeSpeciesConfig(name="ion"),),
         normalization=RuntimeNormalizationConfig(
             contract="cyclone", diagnostic_norm="none"

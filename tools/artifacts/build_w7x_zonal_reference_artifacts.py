@@ -567,9 +567,7 @@ def build_comparison(
     trace_normalization: str = "summary_initial_level",
 ):
     if gkx_trace_dir is not None and gkx_traces is not None:
-        raise ValueError(
-            "gkx_trace_dir and gkx_traces are mutually exclusive"
-        )
+        raise ValueError("gkx_trace_dir and gkx_traces are mutually exclusive")
     summary = _load_gkx_summary(gkx_summary)
     ref_traces = pd.read_csv(reference_traces)
     ref_residuals = reference_residual_table(reference_residuals)
@@ -612,9 +610,7 @@ def build_comparison(
         )
         gates.extend([coverage_gate, residual_gate])
         trace_initial_level = None
-        trace_source_provided = (
-            gkx_trace_dir is not None or gkx_traces is not None
-        )
+        trace_source_provided = gkx_trace_dir is not None or gkx_traces is not None
         if (
             str(trace_normalization).strip().lower().replace("-", "_")
             == "summary_initial_level"

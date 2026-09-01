@@ -155,9 +155,7 @@ def _zonal_adiabatic_correction(
     qphi = tau + qneut
     denom_safe = jnp.where(qphi == 0.0, jnp.inf, qphi)
     jac = jnp.asarray(jacobian, dtype=denom_safe.dtype)[None, None, :]
-    numerator = jnp.sum(
-        jnp.where(jac == 0.0, 0.0, nbar / denom_safe * jac), axis=-1
-    )
+    numerator = jnp.sum(jnp.where(jac == 0.0, 0.0, nbar / denom_safe * jac), axis=-1)
     weight = jnp.sum(jac * qneut / denom_safe, axis=-1)
     weight_safe = jnp.where(weight == 0.0, jnp.inf, weight)
     ky0_mask = (jnp.asarray(ky) == 0.0)[:, None]
@@ -272,7 +270,9 @@ def _solve_phi_bpar(
         jacobian = jnp.asarray(cache.jacobian, dtype=coeffs.tau_e.dtype)
         jac = jacobian[None, None, :]
         source = ab * moments.nbar - qb * jperpbar
-        numerator = jnp.sum(jnp.where(jac == 0.0, 0.0, source / denom_safe * jac), axis=-1)
+        numerator = jnp.sum(
+            jnp.where(jac == 0.0, 0.0, source / denom_safe * jac), axis=-1
+        )
         weight = jnp.sum(jac * ab * coeffs.tau_e / denom_safe, axis=-1)
         total = jnp.sum(jacobian)
         avg_denom = total - weight

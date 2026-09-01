@@ -330,7 +330,6 @@ def _load_points(path: Path) -> list[dict]:
     return [dict(item) for item in data]
 
 
-
 def build_report_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Build a quasilinear calibration/holdout report from JSON points."
@@ -431,6 +430,7 @@ def _run_report(argv: list[str] | None = None) -> int:
     print(f"claim_level={report['claim_level']} passed={report['passed']}")
     return 0
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -445,7 +445,9 @@ def main(argv: list[str] | None = None) -> int:
     argv_list = list(sys.argv[1:] if argv is None else argv)
     if argv_list and argv_list[0] == "report":
         return _run_report(argv_list[1:])
-    if any(flag in argv_list for flag in ("--points", "--spectrum", "--nonlinear-summary")):
+    if any(
+        flag in argv_list for flag in ("--points", "--spectrum", "--nonlinear-summary")
+    ):
         return _run_report(argv_list)
     args = build_parser().parse_args(argv_list)
     paths = write_calibration_figure(args.report, out=args.out, title=args.title)

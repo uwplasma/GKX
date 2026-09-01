@@ -250,10 +250,7 @@ def test_boundary_chain_summary_from_probe_and_public_api() -> None:
     }
 
     assert gkx.build_boundary_chain_summary is build_boundary_chain_summary
-    assert (
-        gkx.boundary_chain_summary_from_probe
-        is boundary_chain_summary_from_probe
-    )
+    assert gkx.boundary_chain_summary_from_probe is boundary_chain_summary_from_probe
     summary = boundary_chain_summary_from_probe(payload, exact_relative_tolerance=0.1)
     assert summary["classification"] == "exact_fd_and_frozen_axis_replay_consistent"
     assert summary["passes"]["frozen_axis_convention_verified"] is True
@@ -1927,8 +1924,7 @@ def test_projected_line_search_public_api_exports() -> None:
         is sparse_descent_direction_from_gradient_report
     )
     assert (
-        gkx.projected_line_search_input_manifest
-        is projected_line_search_input_manifest
+        gkx.projected_line_search_input_manifest is projected_line_search_input_manifest
     )
     assert (
         gkx.select_projected_line_search_candidate
@@ -2213,10 +2209,7 @@ def test_vmex_transport_objective_nonlinear_proxy_is_positive_and_exported(
     )
 
     assert gkx.VMEXTransportObjectiveConfig is VMEXTransportObjectiveConfig
-    assert (
-        gkx.VMEXGKXTransportObjective
-        is VMEXGKXTransportObjective
-    )
+    assert gkx.VMEXGKXTransportObjective is VMEXGKXTransportObjective
     assert float(low) > 0.0
     assert float(high) > float(low)
 
@@ -2379,10 +2372,7 @@ def test_module_search_root_handles_paths_and_missing_modules(
     ) == namespace_root.resolve(strict=False)
     assert transport_config._module_search_root("missing_path_backend") is None
     assert transport_config._module_search_root("no_path_backend") is None
-    assert (
-        transport_config._module_search_root("gkx_missing_backend_for_test")
-        is None
-    )
+    assert transport_config._module_search_root("gkx_missing_backend_for_test") is None
 
 
 def test_pin_current_optional_backend_paths_respects_explicit_environment(

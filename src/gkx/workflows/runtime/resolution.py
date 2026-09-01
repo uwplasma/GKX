@@ -125,7 +125,9 @@ def geometry_class(features: GeometryFeatures) -> str:
 
     if features.nfp > 1:
         return "stellarator"
-    return "tokamak" if features.anisotropy <= _TOKAMAK_ANISOTROPY_MAX else "stellarator"
+    return (
+        "tokamak" if features.anisotropy <= _TOKAMAK_ANISOTROPY_MAX else "stellarator"
+    )
 
 
 def ky_max_target(features: GeometryFeatures, target_error: str = "standard") -> float:
@@ -215,14 +217,23 @@ def resolution_from_features(
     }
     t_max = _T_MAX_FACTOR * _SATURATION_TIME
     return {
-        "nx": nx, "ny": nx, "nz": nz, "nl": nl, "nm": nm,
+        "nx": nx,
+        "ny": nx,
+        "nz": nz,
+        "nl": nl,
+        "nm": nm,
         "t_max": 0.5 * t_max if target_error == "preview" else t_max,
-        "geometry_class": klass, "ky_max_target": ky_target, "rationale": rationale,
-        "features": features, "notes": notes,
+        "geometry_class": klass,
+        "ky_max_target": ky_target,
+        "rationale": rationale,
+        "features": features,
+        "notes": notes,
     }
 
 
-def _dt_hint(cfg: RuntimeConfig, geom: FluxTubeGeometryLike, est: dict[str, Any]) -> float:
+def _dt_hint(
+    cfg: RuntimeConfig, geom: FluxTubeGeometryLike, est: dict[str, Any]
+) -> float:
     """Initial-dt bound from the solver's own linear CFL frequency estimator."""
 
     grid_cfg = replace(cfg.grid, Nx=int(est["nx"]), Ny=int(est["ny"]))
@@ -266,12 +277,16 @@ def estimate_resolution(
         target_error=target_error,
         nz_default=int(grid.ntheta if grid.ntheta is not None else grid.Nz),
         hypercollisions=bool(cfg.physics.hypercollisions),
-        kinetic_electrons=any(sp.kinetic and float(sp.charge) < 0.0 for sp in cfg.species),
+        kinetic_electrons=any(
+            sp.kinetic and float(sp.charge) < 0.0 for sp in cfg.species
+        ),
     )
     est["dt"] = _dt_hint(cfg, geom, est)
     est["rationale"]["dt"] = (
         "explicit CFL bound cfl_fac*cfl/sum(omega_max) at this grid; "
         "the adaptive stepper raises it toward the measured ExB limit"
     )
-    est["torflux"] = None if cfg.geometry.torflux is None else float(cfg.geometry.torflux)
+    est["torflux"] = (
+        None if cfg.geometry.torflux is None else float(cfg.geometry.torflux)
+    )
     return est

@@ -162,8 +162,7 @@ if NU_SCAN:
 else:
     rows = [run_case(model, NU) for model in MODELS]
     width = max(len(model) for model in MODELS)
-    print(f"Cyclone ITG, nu = {NU}, (Nl, Nm) = "
-          f"({HERMITE_COUNT}, {LAGUERRE_COUNT})\n")
+    print(f"Cyclone ITG, nu = {NU}, (Nl, Nm) = ({HERMITE_COUNT}, {LAGUERRE_COUNT})\n")
     print(f"{'collision_operator':<{width}}  {'growth rate':>12}  {'|G|':>14}")
     for row in rows:
         print(

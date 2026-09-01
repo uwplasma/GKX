@@ -82,10 +82,14 @@ _PRODUCTION_CORE_ARRAY_NAMES = (
 
 def _normalized_max_abs(metrics: dict[str, object]) -> float:
     raw_value = metrics.get("normalized_max_abs")
-    return float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf
+    return (
+        float(raw_value) if isinstance(raw_value, int | float | np.floating) else np.inf
+    )
 
 
-def _array_metrics_from_pairs(pairs: dict[str, tuple[Any, Any]]) -> dict[str, dict[str, object]]:
+def _array_metrics_from_pairs(
+    pairs: dict[str, tuple[Any, Any]],
+) -> dict[str, dict[str, object]]:
     return {
         name: _array_parity_metrics(candidate, reference)
         for name, (candidate, reference) in pairs.items()
@@ -98,7 +102,10 @@ def _array_metrics_from_key_attrs(
     specs: tuple[tuple[str, str, str], ...],
 ) -> dict[str, dict[str, object]]:
     return _array_metrics_from_pairs(
-        {name: (candidate[candidate_key], getattr(reference, reference_attr)) for name, candidate_key, reference_attr in specs}
+        {
+            name: (candidate[candidate_key], getattr(reference, reference_attr))
+            for name, candidate_key, reference_attr in specs
+        }
     )
 
 
@@ -113,7 +120,9 @@ def _array_pairs_from_attrs(
     }
 
 
-def _worst_array_error(metrics_by_name: dict[str, dict[str, object]], names: tuple[str, ...] | None = None) -> float:
+def _worst_array_error(
+    metrics_by_name: dict[str, dict[str, object]], names: tuple[str, ...] | None = None
+) -> float:
     selected_names = tuple(metrics_by_name) if names is None else names
     values = [
         _normalized_max_abs(metrics_by_name[name])
@@ -170,17 +179,29 @@ def _equal_arc_core_profiles(
 def _equal_arc_array_metric_groups(
     equal_arc_core: dict[str, Any],
     imported: Any,
-) -> tuple[dict[str, dict[str, object]], dict[str, dict[str, object]], dict[str, dict[str, object]]]:
+) -> tuple[
+    dict[str, dict[str, object]],
+    dict[str, dict[str, object]],
+    dict[str, dict[str, object]],
+]:
     return (
         _array_metrics_from_key_attrs(equal_arc_core, imported, _EQUAL_ARC_CORE_FIELDS),
-        _array_metrics_from_key_attrs(equal_arc_core, imported, _EQUAL_ARC_METRIC_FIELDS),
-        _array_metrics_from_key_attrs(equal_arc_core, imported, _EQUAL_ARC_DRIFT_FIELDS),
+        _array_metrics_from_key_attrs(
+            equal_arc_core, imported, _EQUAL_ARC_METRIC_FIELDS
+        ),
+        _array_metrics_from_key_attrs(
+            equal_arc_core, imported, _EQUAL_ARC_DRIFT_FIELDS
+        ),
     )
 
 
-def _equal_arc_scalar_metrics(equal_arc_core: dict[str, Any], imported: Any) -> dict[str, dict[str, Any]]:
+def _equal_arc_scalar_metrics(
+    equal_arc_core: dict[str, Any], imported: Any
+) -> dict[str, dict[str, Any]]:
     return {
-        "gradpar": _scalar_parity_metrics(jnp.asarray(equal_arc_core["gradpar"])[0], imported.gradpar_value),
+        "gradpar": _scalar_parity_metrics(
+            jnp.asarray(equal_arc_core["gradpar"])[0], imported.gradpar_value
+        ),
         "q": _scalar_parity_metrics(equal_arc_core["q"], imported.q),
         "s_hat": _scalar_parity_metrics(equal_arc_core["s_hat"], imported.s_hat),
     }
@@ -216,7 +237,9 @@ def _pack_equal_arc_parity(
             core_worst <= float(core_tolerance)
             and core_worst_scalar <= float(core_tolerance)
         ),
-        "equal_arc_derivative_passed": bool(derivative_worst <= float(derivative_tolerance)),
+        "equal_arc_derivative_passed": bool(
+            derivative_worst <= float(derivative_tolerance)
+        ),
         "equal_arc_metric_passed": bool(metric_worst <= float(metric_tolerance)),
         "equal_arc_drift_passed": bool(drift_worst <= float(drift_tolerance)),
         "equal_arc_core_error": None,
@@ -439,7 +462,9 @@ def vmex_flux_tube_sensitivity_report(  # pragma: no cover
     )
 
 
-def _validate_vmec_parity_inputs(ntheta: int, mboz: int, nboz: int) -> tuple[int, int, int]:
+def _validate_vmec_parity_inputs(
+    ntheta: int, mboz: int, nboz: int
+) -> tuple[int, int, int]:
     ntheta_int = int(ntheta)
     if ntheta_int < 4:
         raise ValueError("ntheta must be >= 4")
@@ -470,7 +495,9 @@ def _vmec_array_parity_unavailable_report(
     }
 
 
-def _surface_index_and_torflux(ctx: Any, surface_index: int | None) -> tuple[int, float]:
+def _surface_index_and_torflux(
+    ctx: Any, surface_index: int | None
+) -> tuple[int, float]:
     ns = int(ctx.base_Rcos.shape[0])
     sidx = max(1, min(ns // 2, ns - 2)) if surface_index is None else int(surface_index)
     torflux = float(sidx) / float(max(ns - 1, 1))
@@ -591,10 +618,15 @@ def _production_parity_metrics(
     worst_core = _worst_array_error(array_metrics, _PRODUCTION_CORE_ARRAY_NAMES)
     worst_scalar = max(float(values["rel"]) for values in scalar_metrics.values())
     production_parity_passed = bool(
-        worst_core <= float(core_tolerance)
-        and worst_scalar <= float(scalar_tolerance)
+        worst_core <= float(core_tolerance) and worst_scalar <= float(scalar_tolerance)
     )
-    return array_metrics, scalar_metrics, worst_core, worst_scalar, production_parity_passed
+    return (
+        array_metrics,
+        scalar_metrics,
+        worst_core,
+        worst_scalar,
+        production_parity_passed,
+    )
 
 
 def _pack_vmec_array_parity_report(
@@ -767,7 +799,9 @@ def _vmec_array_parity_options(
     )
 
 
-def _vmec_array_parity_backend_unavailable_reason(info: dict[str, object]) -> str | None:
+def _vmec_array_parity_backend_unavailable_reason(
+    info: dict[str, object],
+) -> str | None:
     if not info.get("vmex_available", False):
         return "vmex is not available"
     from gkx.geometry.imported_vmec import internal_vmec_backend_available
@@ -906,7 +940,9 @@ def vmex_flux_tube_array_parity_report(  # pragma: no cover
     try:
         result = _vmec_array_parity_result(info=info, options=options)
     except Exception as exc:
-        return _vmec_array_parity_error_report(info=info, case_name=options.case_name, exc=exc)
+        return _vmec_array_parity_error_report(
+            info=info, case_name=options.case_name, exc=exc
+        )
 
     return _pack_vmec_array_parity_result_report(
         result=result,

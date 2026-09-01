@@ -161,25 +161,45 @@ _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS = (
 )
 
 __all__ = [
-    "RuntimeIndependentParallelPlan", "RuntimeLinearResult",
-    "RuntimeLinearScanResult", "RuntimeNonlinearResult",
-    "_build_gaussian_profile", "_build_initial_condition",
-    "_concat_runtime_diagnostics", "_enforce_full_ky_hermitian", "_expand_ky",
-    "_centered_glibc_random_pairs", "_default_hermite_hypercollision_exponent",
-    "_dealiased_initial_mode_pairs", "_periodic_zp_from_grid",
-    "_infer_runtime_nonlinear_steps", "_load_initial_state_from_file",
-    "_midplane_index", "_normalize_linear_solver_name",
-    "_require_full_gk_runtime_model", "_resolve_runtime_hl_dims",
-    "_reshape_netcdf_state", "_run_runtime_scan_batch",
-    "_runtime_default_krylov_config", "_runtime_external_phi",
-    "_runtime_independent_parallel_plan", "_runtime_model_key",
-    "_select_nonlinear_mode_indices", "_slice_runtime_diagnostics",
-    "_species_to_linear", "_stride_runtime_diagnostics",
+    "RuntimeIndependentParallelPlan",
+    "RuntimeLinearResult",
+    "RuntimeLinearScanResult",
+    "RuntimeNonlinearResult",
+    "_build_gaussian_profile",
+    "_build_initial_condition",
+    "_concat_runtime_diagnostics",
+    "_enforce_full_ky_hermitian",
+    "_expand_ky",
+    "_centered_glibc_random_pairs",
+    "_default_hermite_hypercollision_exponent",
+    "_dealiased_initial_mode_pairs",
+    "_periodic_zp_from_grid",
+    "_infer_runtime_nonlinear_steps",
+    "_load_initial_state_from_file",
+    "_midplane_index",
+    "_normalize_linear_solver_name",
+    "_require_full_gk_runtime_model",
+    "_resolve_runtime_hl_dims",
+    "_reshape_netcdf_state",
+    "_run_runtime_scan_batch",
+    "_runtime_default_krylov_config",
+    "_runtime_external_phi",
+    "_runtime_independent_parallel_plan",
+    "_runtime_model_key",
+    "_select_nonlinear_mode_indices",
+    "_slice_runtime_diagnostics",
+    "_species_to_linear",
+    "_stride_runtime_diagnostics",
     "_zero_kx_index",
-    "build_runtime_geometry", "build_runtime_linear_params",
-    "build_runtime_linear_terms", "build_runtime_term_config",
-    "run_runtime_linear", "run_runtime_nonlinear",
-    "run_runtime_scan", "solve", "prepare",
+    "build_runtime_geometry",
+    "build_runtime_linear_params",
+    "build_runtime_linear_terms",
+    "build_runtime_term_config",
+    "run_runtime_linear",
+    "run_runtime_nonlinear",
+    "run_runtime_scan",
+    "solve",
+    "prepare",
 ]
 
 
@@ -282,9 +302,7 @@ def _runtime_linear_time_fit_options(values: Mapping[str, Any]) -> dict[str, Any
     return {name: values[name] for name in _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS}
 
 
-def solve(
-    case: Case, **options: Any
-) -> RuntimeLinearResult | RuntimeNonlinearResult:
+def solve(case: Case, **options: Any) -> RuntimeLinearResult | RuntimeNonlinearResult:
     """Solve one case through its existing linear or nonlinear runtime owner."""
     if case.physics.nonlinear:
         return run_runtime_nonlinear(case, **options)
@@ -300,8 +318,11 @@ def prepare(case: Case, **options: Any) -> Any:
     if options.pop("diagnostics", True) is not True:
         raise ValueError("prepare requires diagnostics=True")
     return run_runtime_nonlinear_impl(
-        case, diagnostics=True, prepare_only=True,
-        deps=_runtime_nonlinear_dispatch_deps(), **options
+        case,
+        diagnostics=True,
+        prepare_only=True,
+        deps=_runtime_nonlinear_dispatch_deps(),
+        **options,
     )
 
 

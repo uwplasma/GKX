@@ -718,7 +718,9 @@ def make_nonlinear_diagnostic_tuple_fn(
     wphi_scale: float,
     resolved_diagnostics: bool,
     kernels: NonlinearDiagnosticKernels,
-) -> Callable[[jnp.ndarray, FieldState, jnp.ndarray, FieldState, jnp.ndarray], tuple[Any, ...]]:
+) -> Callable[
+    [jnp.ndarray, FieldState, jnp.ndarray, FieldState, jnp.ndarray], tuple[Any, ...]
+]:
     """Return a reusable state-to-diagnostic tuple closure for scan policies."""
 
     def compute_diag_from_state(

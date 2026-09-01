@@ -80,10 +80,18 @@ def _qa_gradient_drives(
 
     aln_ref = jnp.asarray(config.reference_density_gradient, dtype=dtype)
     alti_ref = jnp.asarray(config.reference_temperature_gradient, dtype=dtype)
-    aln = jnp.asarray(aln_ref if density_gradient is None else density_gradient, dtype=dtype)
-    alti = jnp.asarray(alti_ref if temperature_gradient is None else temperature_gradient, dtype=dtype)
-    density_drive = (aln - aln_ref) / jnp.maximum(aln_ref, jnp.asarray(1.0e-8, dtype=dtype))
-    temperature_drive = (alti - alti_ref) / jnp.maximum(alti_ref, jnp.asarray(1.0e-8, dtype=dtype))
+    aln = jnp.asarray(
+        aln_ref if density_gradient is None else density_gradient, dtype=dtype
+    )
+    alti = jnp.asarray(
+        alti_ref if temperature_gradient is None else temperature_gradient, dtype=dtype
+    )
+    density_drive = (aln - aln_ref) / jnp.maximum(
+        aln_ref, jnp.asarray(1.0e-8, dtype=dtype)
+    )
+    temperature_drive = (alti - alti_ref) / jnp.maximum(
+        alti_ref, jnp.asarray(1.0e-8, dtype=dtype)
+    )
     return density_drive, temperature_drive
 
 
@@ -179,7 +187,11 @@ def _qa_quasilinear_heat_flux(
     """Return the shipped reduced mixing-length heat-flux proxy."""
 
     ql_features = jnp.asarray(
-        [linear["growth_rate"], linear["kperp_eff2"], linear["linear_heat_flux_weight"]],
+        [
+            linear["growth_rate"],
+            linear["kperp_eff2"],
+            linear["linear_heat_flux_weight"],
+        ],
         dtype=dtype,
     )
     return quasilinear_feature_objective(
@@ -273,7 +285,9 @@ def qa_max_mode1_observables(
         density_gradient=density_gradient,
         temperature_gradient=temperature_gradient,
     )
-    nl_summary = nonlinear_heat_flux_window_metrics(times, heat_flux, tail_fraction=cfg.nonlinear_tail_fraction)
+    nl_summary = nonlinear_heat_flux_window_metrics(
+        times, heat_flux, tail_fraction=cfg.nonlinear_tail_fraction
+    )
 
     return {
         "aspect": core["aspect"],
@@ -334,7 +348,11 @@ def _sampled_qa_itg_fields(
         + 0.010 * shear_metric * jnp.sin(alphas + 0.4 * surface_delta)
     )
     growth_rate = smooth_positive(core["growth_rate"] + drive_shift, beta=22.0)
-    frequency = core["frequency"] * (1.0 + 0.08 * surface_delta) + 0.035 * (ky_ratio - 1.0) + 0.010 * alpha_sin
+    frequency = (
+        core["frequency"] * (1.0 + 0.08 * surface_delta)
+        + 0.035 * (ky_ratio - 1.0)
+        + 0.010 * alpha_sin
+    )
     linear_heat_flux_weight = core["linear_heat_flux_weight"] * (
         1.0
         + 0.11 * surface_delta**2
@@ -409,18 +427,26 @@ def nonlinear_heat_flux_trace(
     dt = jnp.asarray(cfg.nonlinear_dt, dtype=dtype)
     steps = int(cfg.nonlinear_steps)
     times = dt * jnp.arange(steps + 1, dtype=dtype)
-    equilibrium_energy = 2.0 * growth_rate / jnp.maximum(saturation, jnp.asarray(1.0e-12, dtype=dtype))
-    seed_floor = jnp.asarray(8.0e-4, dtype=dtype) * (1.0 + 0.5 * ripple**2 + 0.2 * elong_shift**2)
+    equilibrium_energy = (
+        2.0 * growth_rate / jnp.maximum(saturation, jnp.asarray(1.0e-12, dtype=dtype))
+    )
+    seed_floor = jnp.asarray(8.0e-4, dtype=dtype) * (
+        1.0 + 0.5 * ripple**2 + 0.2 * elong_shift**2
+    )
     e0 = jnp.maximum(seed_floor, 0.40 * equilibrium_energy)
 
     def rhs(energy: jnp.ndarray) -> jnp.ndarray:
         return 2.0 * growth_rate * energy - saturation * energy**2
 
-    def step_fn(energy: jnp.ndarray, _idx: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def step_fn(
+        energy: jnp.ndarray, _idx: jnp.ndarray
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
         k1 = rhs(energy)
         predictor = jnp.maximum(energy + dt * k1, jnp.asarray(0.0, dtype=dtype))
         k2 = rhs(predictor)
-        next_energy = jnp.maximum(energy + 0.5 * dt * (k1 + k2), jnp.asarray(0.0, dtype=dtype))
+        next_energy = jnp.maximum(
+            energy + 0.5 * dt * (k1 + k2), jnp.asarray(0.0, dtype=dtype)
+        )
         return next_energy, next_energy
 
     _, energy_tail = jax.lax.scan(step_fn, e0, jnp.arange(steps, dtype=jnp.int32))
@@ -441,7 +467,9 @@ def nonlinear_heat_flux_window_metrics(
     t = jnp.asarray(times)
     q = jnp.asarray(heat_flux)
     if int(t.ndim) != 1 or int(q.ndim) != 1 or int(t.shape[0]) != int(q.shape[0]):
-        raise ValueError("times and heat_flux must be one-dimensional arrays with matching length")
+        raise ValueError(
+            "times and heat_flux must be one-dimensional arrays with matching length"
+        )
     n = int(q.shape[0])
     start = max(0, min(n - 2, int(round((1.0 - float(tail_fraction)) * n))))
     tw = t[start:]
@@ -451,7 +479,11 @@ def nonlinear_heat_flux_window_metrics(
     denom = jnp.maximum(jnp.sum(centered_t**2), jnp.asarray(eps, dtype=qw.dtype))
     slope = jnp.sum(centered_t * (qw - mean)) / denom
     span = jnp.maximum(tw[-1] - tw[0], jnp.asarray(eps, dtype=qw.dtype))
-    trend = jnp.abs(slope) * span / jnp.maximum(jnp.abs(mean), jnp.asarray(eps, dtype=qw.dtype))
+    trend = (
+        jnp.abs(slope)
+        * span
+        / jnp.maximum(jnp.abs(mean), jnp.asarray(eps, dtype=qw.dtype))
+    )
     cv = jnp.std(qw) / jnp.maximum(jnp.abs(mean), jnp.asarray(eps, dtype=qw.dtype))
     return {
         "mean": mean,
@@ -494,9 +526,7 @@ def _conditioning_gate_from_covariance(
 
     singular = np.asarray(covariance.get("jacobian_singular_values", ()), dtype=float)
     rank = int(covariance.get("sensitivity_map_rank", 0))
-    condition_number = float(
-        covariance.get("jacobian_condition_number", float("inf"))
-    )
+    condition_number = float(covariance.get("jacobian_condition_number", float("inf")))
     finite_singular_values = bool(singular.size > 0 and np.all(np.isfinite(singular)))
     finite_condition = bool(np.isfinite(condition_number))
     smallest = float(singular[-1]) if finite_singular_values else 0.0
@@ -642,9 +672,7 @@ def stellarator_itg_residual_sensitivity_report(
         jac, residual, regularization=covariance_regularization
     )
     covariance["source"] = "weighted_objective_residual"
-    covariance["residual_names"] = list(
-        stellarator_itg_objective_residual_names(kind)
-    )
+    covariance["residual_names"] = list(stellarator_itg_objective_residual_names(kind))
     conditioning_gate = _conditioning_gate_from_covariance(
         covariance,
         min_rank=min_rank,

@@ -165,7 +165,9 @@ def _blocked_surface_payload(
         "reduction": reduction,
         "wall_seconds": float(wall_seconds),
         "holdout_split": {
-            "training_surface_indices": [int(item) for item in training_surface_indices],
+            "training_surface_indices": [
+                int(item) for item in training_surface_indices
+            ],
             "training_alphas": [float(item) for item in training_alphas],
             "training_selected_ky_indices": [
                 int(item) for item in training_selected_ky_indices
@@ -241,7 +243,9 @@ def build_vmec_boozer_aggregate_alpha_holdout_payload(
             None if item is None else int(item) for item in holdout_surface_indices
         ],
         "holdout_alphas": [float(item) for item in holdout_alphas],
-        "holdout_selected_ky_indices": [int(item) for item in holdout_selected_ky_indices],
+        "holdout_selected_ky_indices": [
+            int(item) for item in holdout_selected_ky_indices
+        ],
     }
     annotated["next_action"] = (
         "Repeat on a held-out surface and at least one second equilibrium before "
@@ -350,7 +354,9 @@ def build_vmec_boozer_aggregate_surface_holdout_payload(
     return annotated
 
 
-def _write_csv(payload: dict[str, object], csv_path: Path, *, kind: HoldoutKind) -> None:
+def _write_csv(
+    payload: dict[str, object], csv_path: Path, *, kind: HoldoutKind
+) -> None:
     split = (
         payload.get("holdout_split")
         if isinstance(payload.get("holdout_split"), dict)
@@ -360,7 +366,10 @@ def _write_csv(payload: dict[str, object], csv_path: Path, *, kind: HoldoutKind)
     rows = []
     for label, surface_key in (
         ("training", "training_surface_indices"),
-        ("heldout" if kind == "alpha" else "heldout_surface", "holdout_surface_indices"),
+        (
+            "heldout" if kind == "alpha" else "heldout_surface",
+            "holdout_surface_indices",
+        ),
     ):
         prefix = "training" if label == "training" else "heldout"
         samples = payload.get(f"{prefix}_samples", [])
@@ -375,9 +384,7 @@ def _write_csv(payload: dict[str, object], csv_path: Path, *, kind: HoldoutKind)
         if kind == "surface":
             surfaces = split.get(surface_key, [])
             surface_values = surfaces if isinstance(surfaces, list) else []
-            row["surface_indices"] = " ".join(
-                str(item) for item in surface_values
-            )
+            row["surface_indices"] = " ".join(str(item) for item in surface_values)
         rows.append(row)
     fieldnames = list(rows[0])
     if kind == "surface" and "surface_indices" not in fieldnames:
@@ -439,7 +446,9 @@ def _write_holdout_artifacts(
     width = 0.34
     initial_color = "#94d2bd" if kind == "alpha" else "#e9d8a6"
     final_color = "#005f73" if kind == "alpha" else "#0a9396"
-    reduction_colors = ["#0a9396", "#ee9b00"] if kind == "alpha" else ["#005f73", "#ca6702"]
+    reduction_colors = (
+        ["#0a9396", "#ee9b00"] if kind == "alpha" else ["#005f73", "#ca6702"]
+    )
     ax_obj.bar(
         x - width / 2.0,
         np.ones_like(x, dtype=float),
@@ -458,7 +467,9 @@ def _write_holdout_artifacts(
     )
     ax_obj.set_xticks(x, labels)
     ax_obj.set_ylabel("normalized objective")
-    ax_obj.set_title("Split objective" if kind == "alpha" else "Surface split objective")
+    ax_obj.set_title(
+        "Split objective" if kind == "alpha" else "Surface split objective"
+    )
     ax_obj.grid(axis="y", alpha=0.25)
     ax_obj.legend(frameon=False, fontsize=8)
 
@@ -476,13 +487,19 @@ def _write_holdout_artifacts(
     ax_red.axhline(0.0, color="#111827", linewidth=1.0)
     ax_red.set_xticks(x, labels)
     ax_red.set_ylabel("relative reduction")
-    ax_red.set_title("Generalization check" if kind == "alpha" else "Held-out surface check")
+    ax_red.set_title(
+        "Generalization check" if kind == "alpha" else "Held-out surface check"
+    )
     ax_red.grid(axis="y", alpha=0.25)
 
     passed = bool(payload.get("passed"))
     blocked = bool(payload.get("blocked"))
     status = "passed" if passed else "blocked" if blocked else "open"
-    split = payload.get("holdout_split") if isinstance(payload.get("holdout_split"), dict) else {}
+    split = (
+        payload.get("holdout_split")
+        if isinstance(payload.get("holdout_split"), dict)
+        else {}
+    )
     assert isinstance(split, dict)
     summary_lines = [
         f"status: {status}",
@@ -506,7 +523,9 @@ def _write_holdout_artifacts(
     )
     if kind == "surface":
         summary_lines.append(f"blockers: {payload.get('blockers')}")
-    summary_lines.append(f"wall seconds: {_finite_float(payload.get('wall_seconds')):.2f}")
+    summary_lines.append(
+        f"wall seconds: {_finite_float(payload.get('wall_seconds')):.2f}"
+    )
     ax_meta.axis("off")
     ax_meta.set_title("Claim boundary")
     ax_meta.text(
@@ -547,7 +566,12 @@ def _write_holdout_artifacts(
     fig.savefig(out_path, dpi=220)
     fig.savefig(pdf_path)
     plt.close(fig)
-    return {"png": str(out_path), "pdf": str(pdf_path), "json": str(json_path), "csv": str(csv_path)}
+    return {
+        "png": str(out_path),
+        "pdf": str(pdf_path),
+        "json": str(json_path),
+        "csv": str(csv_path),
+    }
 
 
 def write_vmec_boozer_aggregate_alpha_holdout_artifacts(
@@ -678,7 +702,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     surface = subparsers.add_parser("surface", help="Build the held-out surface gate.")
     surface.add_argument("--out", type=Path, default=DEFAULT_SURFACE_OUT)
-    surface.add_argument("--training-surface-indices", nargs="+", type=int, default=[18])
+    surface.add_argument(
+        "--training-surface-indices", nargs="+", type=int, default=[18]
+    )
     surface.add_argument("--holdout-surface-indices", nargs="+", type=int, default=[19])
     _add_common_args(surface)
     surface.set_defaults(holdout_alphas_default=[0.0])

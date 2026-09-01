@@ -577,9 +577,7 @@ def main_wide(argv: list[str] | None = None) -> int:
         for batch_idx, batch in enumerate(batches, start=1):
             label = f"running coverage shard {idx + 1}/{len(shards)}"
             if len(batches) > 1:
-                label += (
-                    f" node batch {batch_idx}/{len(batches)} ({len(batch)} tests)"
-                )
+                label += f" node batch {batch_idx}/{len(batches)} ({len(batch)} tests)"
             print(label, flush=True)
             _run(
                 [*coverage_cmd, *batch],

@@ -31,14 +31,27 @@ from gkx.benchmarking.shared import (
     _two_species_params,
 )
 from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig, KBMBaseCase
-from gkx.geometry import SlabGeometry, SAlphaGeometry, apply_imported_geometry_grid_defaults, load_imported_geometry_netcdf
+from gkx.geometry import (
+    SlabGeometry,
+    SAlphaGeometry,
+    apply_imported_geometry_grid_defaults,
+    load_imported_geometry_netcdf,
+)
 from gkx.core.grid import build_spectral_grid, select_ky_grid
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H
-from gkx.operators.linear.params import LinearParams, LinearTerms, linear_terms_to_term_config
+from gkx.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    linear_terms_to_term_config,
+)
 from gkx.operators.linear.params import _as_species_array
-from gkx.runtime import build_runtime_geometry, build_runtime_linear_params, build_runtime_term_config
+from gkx.runtime import (
+    build_runtime_geometry,
+    build_runtime_linear_params,
+    build_runtime_term_config,
+)
 from gkx.terms.linear_terms import (
     collisions_contribution,
     curvature_gradb_contribution,
@@ -352,14 +365,23 @@ def _manual_linear_contributions_from_fields(
         damp_amp=damp_amp,
         weight=w_damp,
     )
-    fields = compute_fields_cached(G_arr, cache, params, terms=term_cfg, use_custom_vjp=False)
+    fields = compute_fields_cached(
+        G_arr, cache, params, terms=term_cfg, use_custom_vjp=False
+    )
     return fields, contrib
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gx-dir", type=Path, required=True, help="Directory with rhs_stream.bin, rhs_linear.bin")
-    parser.add_argument("--gx-out", type=Path, required=True, help="GX .out.nc file to map ky indices")
+    parser.add_argument(
+        "--gx-dir",
+        type=Path,
+        required=True,
+        help="Directory with rhs_stream.bin, rhs_linear.bin",
+    )
+    parser.add_argument(
+        "--gx-out", type=Path, required=True, help="GX .out.nc file to map ky indices"
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -378,13 +400,30 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Imported GX geometry source (.out.nc/.eik.nc); required with --gx-input for non-slab cases.",
     )
-    parser.add_argument("--case", type=str, default="cyclone", choices=("cyclone", "kbm"))
+    parser.add_argument(
+        "--case", type=str, default="cyclone", choices=("cyclone", "kbm")
+    )
     parser.add_argument("--ky", type=float, default=0.3)
-    parser.add_argument("--Nl", type=int, default=None, help="Laguerre resolution (defaults to dump metadata)")
-    parser.add_argument("--Nm", type=int, default=None, help="Hermite resolution (defaults to dump metadata)")
+    parser.add_argument(
+        "--Nl",
+        type=int,
+        default=None,
+        help="Laguerre resolution (defaults to dump metadata)",
+    )
+    parser.add_argument(
+        "--Nm",
+        type=int,
+        default=None,
+        help="Hermite resolution (defaults to dump metadata)",
+    )
     parser.add_argument("--Ny", type=int, default=24)
     parser.add_argument("--Nz", type=int, default=96)
-    parser.add_argument("--y0", type=float, default=None, help="Perpendicular box parameter (defaults to GX ky grid)")
+    parser.add_argument(
+        "--y0",
+        type=float,
+        default=None,
+        help="Perpendicular box parameter (defaults to GX ky grid)",
+    )
     parser.add_argument("--ntheta", type=int, default=None)
     parser.add_argument("--nperiod", type=int, default=None)
     return parser
@@ -416,7 +455,9 @@ def _build_runtime_compare_context(
     grid_cfg = apply_imported_geometry_grid_defaults(geom, cfg_use.grid)
     grid_full = build_spectral_grid(grid_cfg)
     params = build_runtime_linear_params(cfg_use, Nm=nm, geom=geom)
-    term_cfg = replace(build_runtime_term_config(cfg_use), hypercollisions=0.0, end_damping=0.0)
+    term_cfg = replace(
+        build_runtime_term_config(cfg_use), hypercollisions=0.0, end_damping=0.0
+    )
     return cfg_use, geom, grid_full, params, term_cfg
 
 
@@ -441,19 +482,31 @@ def _build_imported_compare_context(
     if gx_contract.geo_option == "slab":
         gx_contract = replace(
             gx_contract,
-            zero_shat=_read_gx_output_bool(gx_out, "zero_shat", default=gx_contract.zero_shat),
+            zero_shat=_read_gx_output_bool(
+                gx_out, "zero_shat", default=gx_contract.zero_shat
+            ),
         )
         boundary_eff = _resolve_imported_boundary(
             str(gx_contract.boundary),
             zero_shat=bool(gx_contract.zero_shat),
         )
         geom = SlabGeometry.from_config(
-            GeometryConfig(model="slab", s_hat=float(gx_contract.s_hat), zero_shat=bool(gx_contract.zero_shat))
+            GeometryConfig(
+                model="slab",
+                s_hat=float(gx_contract.s_hat),
+                zero_shat=bool(gx_contract.zero_shat),
+            )
         )
     else:
         if geometry_file is None:
-            raise ValueError("--geometry-file is required with --gx-input for non-slab imported cases")
-        geom = load_imported_geometry_netcdf(_resolve_internal_geometry_source(geometry_file=geometry_file, runtime_config=None))
+            raise ValueError(
+                "--geometry-file is required with --gx-input for non-slab imported cases"
+            )
+        geom = load_imported_geometry_netcdf(
+            _resolve_internal_geometry_source(
+                geometry_file=geometry_file, runtime_config=None
+            )
+        )
 
     lx = 2.0 * np.pi * y0_use if boundary_eff == "periodic" else 62.8
     grid_cfg = GridConfig(
@@ -467,7 +520,9 @@ def _build_imported_compare_context(
         nperiod=max(1, int(gx_contract.nperiod)),
         ntheta=max(1, int(gx_contract.ntheta)),
     )
-    grid_full = build_spectral_grid(apply_imported_geometry_grid_defaults(geom, grid_cfg))
+    grid_full = build_spectral_grid(
+        apply_imported_geometry_grid_defaults(geom, grid_cfg)
+    )
     params = build_linear_params(
         gx_contract.species,
         tau_e=float(gx_contract.tau_e),
@@ -513,13 +568,69 @@ def run_compare(argv: list[str] | None = None) -> None:
     nz = shape.get("nz", args.Nz)
     gx_shape = (nspec, nl, nm, nyc, nx, nz)
 
-    gx_stream = _reshape_gx(_load_bin(stream_path, gx_shape), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz)
-    gx_linear = _reshape_gx(_load_bin(linear_path, gx_shape), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz)
-    gx_mirror = _reshape_gx(_load_bin(args.gx_dir / "rhs_mirror.bin", gx_shape), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz)
-    gx_curv = _reshape_gx(_load_bin(args.gx_dir / "rhs_curv.bin", gx_shape), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz)
-    gx_gradb = _reshape_gx(_load_bin(args.gx_dir / "rhs_gradb.bin", gx_shape), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz)
-    gx_dia = _reshape_gx(_load_bin(args.gx_dir / "rhs_diamagnetic.bin", gx_shape), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz)
-    gx_coll = _reshape_gx(_load_bin(args.gx_dir / "rhs_collisions.bin", gx_shape), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz)
+    gx_stream = _reshape_gx(
+        _load_bin(stream_path, gx_shape),
+        nspec=nspec,
+        nl=nl,
+        nm=nm,
+        nyc=nyc,
+        nx=nx,
+        nz=nz,
+    )
+    gx_linear = _reshape_gx(
+        _load_bin(linear_path, gx_shape),
+        nspec=nspec,
+        nl=nl,
+        nm=nm,
+        nyc=nyc,
+        nx=nx,
+        nz=nz,
+    )
+    gx_mirror = _reshape_gx(
+        _load_bin(args.gx_dir / "rhs_mirror.bin", gx_shape),
+        nspec=nspec,
+        nl=nl,
+        nm=nm,
+        nyc=nyc,
+        nx=nx,
+        nz=nz,
+    )
+    gx_curv = _reshape_gx(
+        _load_bin(args.gx_dir / "rhs_curv.bin", gx_shape),
+        nspec=nspec,
+        nl=nl,
+        nm=nm,
+        nyc=nyc,
+        nx=nx,
+        nz=nz,
+    )
+    gx_gradb = _reshape_gx(
+        _load_bin(args.gx_dir / "rhs_gradb.bin", gx_shape),
+        nspec=nspec,
+        nl=nl,
+        nm=nm,
+        nyc=nyc,
+        nx=nx,
+        nz=nz,
+    )
+    gx_dia = _reshape_gx(
+        _load_bin(args.gx_dir / "rhs_diamagnetic.bin", gx_shape),
+        nspec=nspec,
+        nl=nl,
+        nm=nm,
+        nyc=nyc,
+        nx=nx,
+        nz=nz,
+    )
+    gx_coll = _reshape_gx(
+        _load_bin(args.gx_dir / "rhs_collisions.bin", gx_shape),
+        nspec=nspec,
+        nl=nl,
+        nm=nm,
+        nyc=nyc,
+        nx=nx,
+        nz=nz,
+    )
     gx_g_path = args.gx_dir / "g_state.bin"
     gx_hyper_delta: np.ndarray | None = None
     hyper_shape_path = args.gx_dir / "hypercollisions_shape.txt"
@@ -561,15 +672,17 @@ def run_compare(argv: list[str] | None = None) -> None:
     cfg: Any
     if args.gx_input is not None:
         cfg = None
-        _gx_contract, geom, grid_full, params, term_cfg = _build_imported_compare_context(
-            args.gx_out,
-            args.gx_input,
-            args.geometry_file,
-            nx=nx,
-            nz=nz,
-            nm=Nm_use,
-            ky_vals=ky_vals,
-            y0_override=args.y0,
+        _gx_contract, geom, grid_full, params, term_cfg = (
+            _build_imported_compare_context(
+                args.gx_out,
+                args.gx_input,
+                args.geometry_file,
+                nx=nx,
+                nz=nz,
+                nm=Nm_use,
+                ky_vals=ky_vals,
+                y0_override=args.y0,
+            )
         )
     elif args.config is not None:
         cfg, geom, grid_full, params, term_cfg = _build_runtime_compare_context(
@@ -644,7 +757,15 @@ def run_compare(argv: list[str] | None = None) -> None:
     cache = build_linear_cache(grid, geom, params, Nl_use, Nm_use)
     cache = _cast_cache(cache, real_dtype=jnp.float32, complex_dtype=jnp.complex64)
     if gx_g_path.exists():
-        gx_g = _reshape_gx(_load_bin(gx_g_path, gx_shape), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz)
+        gx_g = _reshape_gx(
+            _load_bin(gx_g_path, gx_shape),
+            nspec=nspec,
+            nl=nl,
+            nm=nm,
+            nyc=nyc,
+            nx=nx,
+            nz=nz,
+        )
         gx_g = gx_g[:, :, :, ky_idx : ky_idx + 1, :, :]
         G0 = jnp.asarray(gx_g.astype(np.complex64))
     else:
@@ -676,7 +797,9 @@ def run_compare(argv: list[str] | None = None) -> None:
             bpar=bpar,
         )
     else:
-        _rhs_total, fields, contrib = assemble_rhs_terms_cached(G0, cache, params, terms=term_cfg)
+        _rhs_total, fields, contrib = assemble_rhs_terms_cached(
+            G0, cache, params, terms=term_cfg
+        )
 
     def _with_species(arr: jnp.ndarray | np.ndarray) -> np.ndarray:
         arr_np = np.asarray(arr)
@@ -692,9 +815,7 @@ def run_compare(argv: list[str] | None = None) -> None:
     gkx_coll = _with_species(contrib["collisions"])
     gkx_hyper = _with_species(contrib["hypercollisions"])
 
-    gkx_linear = (
-        gkx_mirror + gkx_curv + gkx_gradb + gkx_dia + gkx_coll
-    )
+    gkx_linear = gkx_mirror + gkx_curv + gkx_gradb + gkx_dia + gkx_coll
 
     _summary("streaming", gx_stream, gkx_stream)
     _summary("mirror", gx_mirror, gkx_mirror)

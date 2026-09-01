@@ -993,7 +993,9 @@ def build_convergence_parser() -> argparse.ArgumentParser:
 
 
 def build_time_horizon_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Build an external-VMEC time-horizon gate.")
+    parser = argparse.ArgumentParser(
+        description="Build an external-VMEC time-horizon gate."
+    )
     parser.add_argument(
         "--entry",
         action="append",

@@ -42,7 +42,9 @@ def _mapping_flag(payload: Any, key: str) -> bool:
     return bool(_mapping_value(payload, key))
 
 
-def _collection_row(payload: Mapping[str, Any], summary: Mapping[str, Any]) -> dict[str, Any]:
+def _collection_row(
+    payload: Mapping[str, Any], summary: Mapping[str, Any]
+) -> dict[str, Any]:
     """Build one JSON-safe row for a boundary-chain collection summary."""
 
     passes = summary.get("passes", {})
@@ -103,7 +105,9 @@ def _empty_boundary_chain_counts() -> dict[str, int]:
     return {key: 0 for key in _BOUNDARY_CHAIN_COUNT_KEYS}
 
 
-def _boundary_chain_collection_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+def _boundary_chain_collection_counts(
+    rows: Sequence[Mapping[str, Any]],
+) -> dict[str, int]:
     """Count boundary-chain collection gates in one policy-owned place."""
 
     counts = _empty_boundary_chain_counts()
@@ -359,10 +363,7 @@ def _boundary_chain_passes(
         "frozen_axis_linear_jvp_vjp_consistent": linear_jvp_vjp_ok,
         "frozen_axis_fd_vjp_matches_linear_vjp": fd_vjp_linear_ok,
         "frozen_axis_convention_verified": bool(
-            tangent_ok
-            and fd_jvp_linear_ok
-            and linear_jvp_vjp_ok
-            and fd_vjp_linear_ok
+            tangent_ok and fd_jvp_linear_ok and linear_jvp_vjp_ok and fd_vjp_linear_ok
         ),
         "raw_initial_matches_exact_fd": bool(
             raw is not None
@@ -450,9 +451,7 @@ def _boundary_chain_metrics_payload(
         "frozen_axis_replay_cost_gradient": _finite_float(
             frozen_axis_replay_cost_gradient
         ),
-        "frozen_axis_vjp_cost_gradient": _finite_float(
-            frozen_axis_vjp_cost_gradient
-        ),
+        "frozen_axis_vjp_cost_gradient": _finite_float(frozen_axis_vjp_cost_gradient),
         "frozen_axis_linear_replay_cost_gradient": _finite_float(
             frozen_axis_linear_replay_cost_gradient
         ),
@@ -483,12 +482,7 @@ def _required_boundary_chain_values(
     final = metrics["final_cot_dot_exact_final_fd"]
     frozen_jvp = metrics["frozen_axis_replay_cost_gradient"]
     frozen_vjp = metrics["frozen_axis_vjp_cost_gradient"]
-    if (
-        exact is None
-        or final is None
-        or frozen_jvp is None
-        or frozen_vjp is None
-    ):
+    if exact is None or final is None or frozen_jvp is None or frozen_vjp is None:
         return None
     return exact, final, frozen_jvp, frozen_vjp
 

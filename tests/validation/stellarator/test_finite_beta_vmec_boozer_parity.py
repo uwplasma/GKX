@@ -109,9 +109,7 @@ def test_pressure_moves_the_curvature_drift_and_leaves_the_grad_b_drift() -> Non
     # The invariant is exactness, so the tolerance tracks the working precision
     # rather than assuming float64: the suite runs both ways.
     tol = 8.0 * float(np.finfo(grad_b.dtype).eps)
-    np.testing.assert_allclose(
-        grad_b, np.asarray(vacuum.gbdrift), rtol=tol, atol=tol
-    )
+    np.testing.assert_allclose(grad_b, np.asarray(vacuum.gbdrift), rtol=tol, atol=tol)
     np.testing.assert_allclose(
         np.asarray(finite.cvdrift0), np.asarray(vacuum.cvdrift0), rtol=tol, atol=tol
     )
@@ -146,9 +144,7 @@ def test_pressure_gradient_is_exact_for_a_quadratic_vmec_profile() -> None:
     wout = SimpleNamespace(pres=pres)
 
     for s_value in (0.25, 0.64):
-        got = float(
-            boozer_pressure_gradient(wout, s_value=s_value, dtype=jnp.float64)
-        )
+        got = float(boozer_pressure_gradient(wout, s_value=s_value, dtype=jnp.float64))
         assert got == pytest.approx(-2.0 * p0 * (1.0 - s_value), rel=2e-3)
 
 
@@ -157,9 +153,7 @@ def test_pressure_gradient_vanishes_for_a_vacuum_equilibrium() -> None:
 
     assert (
         float(
-            boozer_pressure_gradient(
-                SimpleNamespace(), s_value=0.5, dtype=jnp.float64
-            )
+            boozer_pressure_gradient(SimpleNamespace(), s_value=0.5, dtype=jnp.float64)
         )
         == 0.0
     )
@@ -208,6 +202,7 @@ def _finite_beta_case_paths(directory: Path, case: str) -> tuple[Path, Path]:
 def _imported_runtime_geometry(wout_path: Path, *, torflux: float, ntheta: int):
     from gkx.geometry import load_imported_geometry_netcdf
     from gkx.geometry.imported_vmec import generate_vmec_eik_internal
+
     # The report builders moved to tools/campaigns; the default EIK request is
     # a constant this parity check needs, not report machinery.
     from gkx.geometry.vmec_eik import _VMEC_EIK_DEFAULT_REQUEST

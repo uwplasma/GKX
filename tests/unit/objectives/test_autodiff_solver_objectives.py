@@ -3746,10 +3746,16 @@ def test_reduced_stellarator_model_stays_deprecated_and_shallowly_depended_on() 
         "feature map, not gyrokinetics, and must stay marked until deleted"
     )
 
-    source = (REPO_ROOT / "src" / "gkx" / "objectives" / "vmec_transport.py").read_text()
+    source = (
+        REPO_ROOT / "src" / "gkx" / "objectives" / "vmec_transport.py"
+    ).read_text()
     imported: set[str] = set()
     for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.ImportFrom) and node.module and "stellarator" in node.module:
+        if (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and "stellarator" in node.module
+        ):
             imported.update(alias.name for alias in node.names)
 
     # Generic helpers only: a softplus and a portfolio-shape contract. Anything

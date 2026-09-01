@@ -24,21 +24,36 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools.comparison.compare_gx_rhs_terms import (
-    _infer_y0, _load_bin, _load_field, _load_shape, _reshape_gx, _summary,
+    _infer_y0,
+    _load_bin,
+    _load_field,
+    _load_shape,
+    _reshape_gx,
+    _summary,
 )
 from gkx.core.grid import build_spectral_grid, select_real_fft_ky_grid
 from gkx.diagnostics import (
-    magnetic_vector_potential_energy, distribution_free_energy,
-    electrostatic_field_energy, heat_flux_total, heat_flux_species,
-    particle_flux_total, particle_flux_species, fieldline_quadrature_weights,
+    magnetic_vector_potential_energy,
+    distribution_free_energy,
+    electrostatic_field_energy,
+    heat_flux_total,
+    heat_flux_species,
+    particle_flux_total,
+    particle_flux_species,
+    fieldline_quadrature_weights,
 )
 from gkx.geometry import (
-    apply_imported_geometry_grid_defaults, ensure_flux_tube_geometry_data,
+    apply_imported_geometry_grid_defaults,
+    ensure_flux_tube_geometry_data,
 )
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.runtime import (
-    _build_initial_condition, _species_to_linear, build_runtime_geometry,
-    build_runtime_linear_params, build_runtime_term_config, run_runtime_nonlinear,
+    _build_initial_condition,
+    _species_to_linear,
+    build_runtime_geometry,
+    build_runtime_linear_params,
+    build_runtime_term_config,
+    run_runtime_nonlinear,
 )
 from gkx.terms.assembly import compute_fields_cached
 from gkx.workflows.runtime.toml import load_runtime_from_toml
@@ -76,7 +91,9 @@ def _linear_stress_cases(repo: Path) -> dict[str, tuple[Path, Path]]:
 
 
 def build_stress_matrix_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run the linear comparison stress matrix.")
+    parser = argparse.ArgumentParser(
+        description="Run the linear comparison stress matrix."
+    )
     parser.add_argument(
         "--comparison-repo", "--gx-repo", dest="comparison_repo", type=Path
     )
@@ -103,12 +120,18 @@ def _run_linear_stress_case(
             sys.executable,
             str(Path(__file__).resolve().parent / "compare_gx_imported_linear.py"),
             "fields",
-            "--gx", str(output),
-            "--geometry-file", str(output),
-            "--gx-input", str(input_file),
-            "--Nl", str(nl),
-            "--Nm", str(nm),
-            "--out", str(out_csv),
+            "--gx",
+            str(output),
+            "--geometry-file",
+            str(output),
+            "--gx-input",
+            str(input_file),
+            "--Nl",
+            str(nl),
+            "--Nm",
+            str(nm),
+            "--out",
+            str(out_csv),
         ],
         check=True,
     )
@@ -152,7 +175,9 @@ def main_stress_matrix() -> None:
 
 def _select_ky_block(arr: np.ndarray, ky_idx: int) -> np.ndarray:
     if arr.ndim < 3:
-        raise ValueError("Expected an array with a ky axis in the third-to-last position")
+        raise ValueError(
+            "Expected an array with a ky axis in the third-to-last position"
+        )
     slicer = [slice(None)] * arr.ndim
     slicer[-3] = slice(ky_idx, ky_idx + 1)
     return arr[tuple(slicer)]
@@ -167,12 +192,31 @@ def _full_ny_from_positive_ky(ky_vals: np.ndarray) -> int:
 
 def build_startup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gx-dir", type=Path, required=True, help="Directory containing GX field dump binaries")
-    parser.add_argument("--gx-out", type=Path, required=True, help="GX .out.nc file for ky metadata")
-    parser.add_argument("--config", type=Path, required=True, help="Runtime TOML config used by GKX")
+    parser.add_argument(
+        "--gx-dir",
+        type=Path,
+        required=True,
+        help="Directory containing GX field dump binaries",
+    )
+    parser.add_argument(
+        "--gx-out", type=Path, required=True, help="GX .out.nc file for ky metadata"
+    )
+    parser.add_argument(
+        "--config", type=Path, required=True, help="Runtime TOML config used by GKX"
+    )
     parser.add_argument("--ky", type=float, required=True, help="ky value to compare")
-    parser.add_argument("--kx-target", type=float, default=0.0, help="kx target within the selected ky block")
-    parser.add_argument("--y0", type=float, default=None, help="Optional y0 override; defaults to GX ky metadata")
+    parser.add_argument(
+        "--kx-target",
+        type=float,
+        default=0.0,
+        help="kx target within the selected ky block",
+    )
+    parser.add_argument(
+        "--y0",
+        type=float,
+        default=None,
+        help="Optional y0 override; defaults to GX ky metadata",
+    )
     return parser
 
 
@@ -224,7 +268,9 @@ def main_startup() -> None:
     grid_cfg = apply_imported_geometry_grid_defaults(geom, cfg_use.grid)
     grid_full = build_spectral_grid(grid_cfg)
     ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - float(args.ky))))
-    kx_index = int(np.argmin(np.abs(np.asarray(grid_full.kx, dtype=float) - float(args.kx_target))))
+    kx_index = int(
+        np.argmin(np.abs(np.asarray(grid_full.kx, dtype=float) - float(args.kx_target)))
+    )
 
     params = build_runtime_linear_params(cfg_use, Nm=nm, geom=geom)
     g0 = _build_initial_condition(
@@ -245,13 +291,17 @@ def main_startup() -> None:
     gx_g_slice = _select_ky_block(gx_g, ky_idx_gx)
     gx_phi_slice = _select_ky_block(gx_phi, ky_idx_gx)
     sp_g_slice = _select_ky_block(np.asarray(g0, dtype=np.complex64), ky_index)
-    sp_phi_slice = _select_ky_block(np.asarray(sp_fields.phi, dtype=np.complex64), ky_index)
+    sp_phi_slice = _select_ky_block(
+        np.asarray(sp_fields.phi, dtype=np.complex64), ky_index
+    )
     _summary("g_state", gx_g_slice.astype(np.complex64), sp_g_slice)
     _summary("phi", gx_phi_slice.astype(np.complex64), sp_phi_slice)
 
     if gx_apar is not None and sp_fields.apar is not None:
         gx_apar_slice = _select_ky_block(gx_apar, ky_idx_gx)
-        sp_apar_slice = _select_ky_block(np.asarray(sp_fields.apar, dtype=np.complex64), ky_index)
+        sp_apar_slice = _select_ky_block(
+            np.asarray(sp_fields.apar, dtype=np.complex64), ky_index
+        )
         _summary("apar", gx_apar_slice.astype(np.complex64), sp_apar_slice)
 
 
@@ -298,7 +348,9 @@ def _load_species_state(
         path = gx_dir / f"diag_state_G_s{ispec}_t{time_index}.bin"
         raw = np.fromfile(path, dtype=np.complex64)
         if raw.size != n_expected:
-            raise ValueError(f"{path} size {raw.size} does not match expected {n_expected}")
+            raise ValueError(
+                f"{path} size {raw.size} does not match expected {n_expected}"
+            )
         pieces.append(raw)
     return _reshape_gx(
         np.stack(pieces, axis=0),
@@ -349,11 +401,37 @@ def _diag_row(
     bpar_j = jnp.asarray(bpar)
     return {
         "Wg": float(distribution_free_energy(G_j, grid, params, vol_fac)),
-        "Wphi": float(electrostatic_field_energy(phi_j, cache, params, vol_fac, wphi_scale=wphi_scale)),
+        "Wphi": float(
+            electrostatic_field_energy(
+                phi_j, cache, params, vol_fac, wphi_scale=wphi_scale
+            )
+        ),
         "Wapar": float(magnetic_vector_potential_energy(apar_j, cache, vol_fac)),
-        "heat": float(heat_flux_total(G_j, phi_j, apar_j, bpar_j, cache, grid, params, flux_fac, flux_scale=flux_scale)),
+        "heat": float(
+            heat_flux_total(
+                G_j,
+                phi_j,
+                apar_j,
+                bpar_j,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                flux_scale=flux_scale,
+            )
+        ),
         "pflux": float(
-            particle_flux_total(G_j, phi_j, apar_j, bpar_j, cache, grid, params, flux_fac, flux_scale=flux_scale)
+            particle_flux_total(
+                G_j,
+                phi_j,
+                apar_j,
+                bpar_j,
+                cache,
+                grid,
+                params,
+                flux_fac,
+                flux_scale=flux_scale,
+            )
         ),
         "heat_s": np.asarray(
             heat_flux_species(
@@ -393,12 +471,36 @@ def _rel_err(test: float, ref: float) -> float:
 
 def build_diagnostic_state_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gx-dir", type=Path, required=True, help="Directory containing GX diag_state dump binaries")
-    parser.add_argument("--gx-out", type=Path, required=True, help="GX .out.nc file for dimensions/diagnostics")
-    parser.add_argument("--config", type=Path, required=True, help="Runtime TOML config used by GKX")
-    parser.add_argument("--time-index", type=int, required=True, help="GX diagnostic time index to compare")
-    parser.add_argument("--y0", type=float, default=None, help="Optional y0 override; defaults to GX ky metadata")
-    parser.add_argument("--out", type=Path, default=None, help="Optional CSV summary output")
+    parser.add_argument(
+        "--gx-dir",
+        type=Path,
+        required=True,
+        help="Directory containing GX diag_state dump binaries",
+    )
+    parser.add_argument(
+        "--gx-out",
+        type=Path,
+        required=True,
+        help="GX .out.nc file for dimensions/diagnostics",
+    )
+    parser.add_argument(
+        "--config", type=Path, required=True, help="Runtime TOML config used by GKX"
+    )
+    parser.add_argument(
+        "--time-index",
+        type=int,
+        required=True,
+        help="GX diagnostic time index to compare",
+    )
+    parser.add_argument(
+        "--y0",
+        type=float,
+        default=None,
+        help="Optional y0 override; defaults to GX ky metadata",
+    )
+    parser.add_argument(
+        "--out", type=Path, default=None, help="Optional CSV summary output"
+    )
     return parser
 
 
@@ -411,7 +513,9 @@ def main_diagnostic_state() -> None:
         nm = int(root.dimensions["m"].size)
         nspec = int(root.dimensions["s"].size)
         if args.time_index < 0 or args.time_index >= int(root.dimensions["time"].size):
-            raise ValueError(f"time_index={args.time_index} outside [0, {int(root.dimensions['time'].size) - 1}]")
+            raise ValueError(
+                f"time_index={args.time_index} outside [0, {int(root.dimensions['time'].size) - 1}]"
+            )
         gx_diag = {
             "Wg": _gx_diag_scalar(diag, "Wg_kyst", args.time_index),
             "Wphi": _gx_diag_scalar(diag, "Wphi_kyst", args.time_index),
@@ -421,16 +525,26 @@ def main_diagnostic_state() -> None:
         }
         gx_heat_s = _gx_diag_species(diag, "HeatFlux_st", args.time_index)
         gx_pflux_s = _gx_diag_species(diag, "ParticleFlux_st", args.time_index)
-        t_val = float(np.asarray(root.groups["Grids"].variables["time"][args.time_index], dtype=float))
+        t_val = float(
+            np.asarray(
+                root.groups["Grids"].variables["time"][args.time_index], dtype=float
+            )
+        )
 
-    gx_kx = _load_real_vector_auto(args.gx_dir / f"diag_state_kx_t{args.time_index}.bin")
-    gx_ky = _load_real_vector_auto(args.gx_dir / f"diag_state_ky_t{args.time_index}.bin")
+    gx_kx = _load_real_vector_auto(
+        args.gx_dir / f"diag_state_kx_t{args.time_index}.bin"
+    )
+    gx_ky = _load_real_vector_auto(
+        args.gx_dir / f"diag_state_ky_t{args.time_index}.bin"
+    )
     nyc = int(gx_ky.size)
     nx = int(gx_kx.size)
-    phi_raw = np.fromfile(args.gx_dir / f"diag_state_phi_t{args.time_index}.bin", dtype=np.complex64)
+    phi_raw = np.fromfile(
+        args.gx_dir / f"diag_state_phi_t{args.time_index}.bin", dtype=np.complex64
+    )
     if phi_raw.size % max(nyc * nx, 1) != 0:
         raise ValueError(
-            f"diag_state_phi_t{args.time_index}.bin size {phi_raw.size} is not divisible by nyc*nx={nyc*nx}"
+            f"diag_state_phi_t{args.time_index}.bin size {phi_raw.size} is not divisible by nyc*nx={nyc * nx}"
         )
     nz = int(phi_raw.size // (nyc * nx))
 
@@ -444,11 +558,21 @@ def main_diagnostic_state() -> None:
         nz=nz,
         time_index=args.time_index,
     )
-    gx_phi = _load_field(args.gx_dir / f"diag_state_phi_t{args.time_index}.bin", nyc, nx, nz)
-    gx_apar = _maybe_load_field(args.gx_dir / f"diag_state_apar_t{args.time_index}.bin", nyc, nx, nz)
-    gx_bpar = _maybe_load_field(args.gx_dir / f"diag_state_bpar_t{args.time_index}.bin", nyc, nx, nz)
-    gx_kperp2 = _load_real_field(args.gx_dir / f"diag_state_kperp2_t{args.time_index}.bin", nyc, nx, nz)
-    gx_fluxfac = _load_real_vector(args.gx_dir / f"diag_state_fluxfac_t{args.time_index}.bin", nz)
+    gx_phi = _load_field(
+        args.gx_dir / f"diag_state_phi_t{args.time_index}.bin", nyc, nx, nz
+    )
+    gx_apar = _maybe_load_field(
+        args.gx_dir / f"diag_state_apar_t{args.time_index}.bin", nyc, nx, nz
+    )
+    gx_bpar = _maybe_load_field(
+        args.gx_dir / f"diag_state_bpar_t{args.time_index}.bin", nyc, nx, nz
+    )
+    gx_kperp2 = _load_real_field(
+        args.gx_dir / f"diag_state_kperp2_t{args.time_index}.bin", nyc, nx, nz
+    )
+    gx_fluxfac = _load_real_vector(
+        args.gx_dir / f"diag_state_fluxfac_t{args.time_index}.bin", nz
+    )
 
     cfg, _data = load_runtime_from_toml(args.config)
     y0_use = float(args.y0) if args.y0 is not None else _infer_y0(gx_ky)
@@ -487,11 +611,21 @@ def main_diagnostic_state() -> None:
         if sp_fields.bpar is not None
         else np.zeros_like(gx_phi, dtype=np.complex64)
     )
-    gx_apar_use = gx_apar if gx_apar is not None else np.zeros_like(gx_phi, dtype=np.complex64)
-    gx_bpar_use = gx_bpar if gx_bpar is not None else np.zeros_like(gx_phi, dtype=np.complex64)
+    gx_apar_use = (
+        gx_apar if gx_apar is not None else np.zeros_like(gx_phi, dtype=np.complex64)
+    )
+    gx_bpar_use = (
+        gx_bpar if gx_bpar is not None else np.zeros_like(gx_phi, dtype=np.complex64)
+    )
 
-    _summary("kperp2", gx_kperp2.astype(np.float32), np.asarray(cache.kperp2, dtype=np.float32))
-    _summary("fluxfac", gx_fluxfac.astype(np.float32), np.asarray(flux_fac, dtype=np.float32))
+    _summary(
+        "kperp2",
+        gx_kperp2.astype(np.float32),
+        np.asarray(cache.kperp2, dtype=np.float32),
+    )
+    _summary(
+        "fluxfac", gx_fluxfac.astype(np.float32), np.asarray(flux_fac, dtype=np.float32)
+    )
     if gx_kx.shape == grid.kx.shape:
         _summary("kx", gx_kx.astype(np.float32), np.asarray(grid.kx, dtype=np.float32))
     if gx_ky.shape == grid.ky.shape:
@@ -558,9 +692,19 @@ def main_diagnostic_state() -> None:
         )
 
     if gx_heat_s is not None:
-        print("heat_flux_species gx_out=", np.asarray(gx_heat_s, dtype=float), "gkx_dump=", sp_dump["heat_s"])
+        print(
+            "heat_flux_species gx_out=",
+            np.asarray(gx_heat_s, dtype=float),
+            "gkx_dump=",
+            sp_dump["heat_s"],
+        )
     if gx_pflux_s is not None:
-        print("particle_flux_species gx_out=", np.asarray(gx_pflux_s, dtype=float), "gkx_dump=", sp_dump["pflux_s"])
+        print(
+            "particle_flux_species gx_out=",
+            np.asarray(gx_pflux_s, dtype=float),
+            "gkx_dump=",
+            sp_dump["pflux_s"],
+        )
 
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -569,15 +713,54 @@ def main_diagnostic_state() -> None:
 
 def build_window_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--gx-dir", type=Path, required=True, help="Directory containing GX diag_state dump binaries")
-    parser.add_argument("--gx-out", type=Path, required=True, help="GX .out.nc file for dimensions/diagnostics")
-    parser.add_argument("--config", type=Path, required=True, help="Runtime TOML config used by GKX")
-    parser.add_argument("--time-index-start", type=int, required=True, help="GX diagnostic time index for the start state")
-    parser.add_argument("--time-index-stop", type=int, required=True, help="GX diagnostic time index for the target state")
-    parser.add_argument("--steps", type=int, default=None, help="Optional maximum step count override for the runtime audit")
-    parser.add_argument("--ky", type=float, default=None, help="Optional ky to use for gamma/omega diagnostics")
-    parser.add_argument("--y0", type=float, default=None, help="Optional y0 override; defaults to GX ky metadata")
-    parser.add_argument("--out", type=Path, default=None, help="Optional CSV summary output")
+    parser.add_argument(
+        "--gx-dir",
+        type=Path,
+        required=True,
+        help="Directory containing GX diag_state dump binaries",
+    )
+    parser.add_argument(
+        "--gx-out",
+        type=Path,
+        required=True,
+        help="GX .out.nc file for dimensions/diagnostics",
+    )
+    parser.add_argument(
+        "--config", type=Path, required=True, help="Runtime TOML config used by GKX"
+    )
+    parser.add_argument(
+        "--time-index-start",
+        type=int,
+        required=True,
+        help="GX diagnostic time index for the start state",
+    )
+    parser.add_argument(
+        "--time-index-stop",
+        type=int,
+        required=True,
+        help="GX diagnostic time index for the target state",
+    )
+    parser.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        help="Optional maximum step count override for the runtime audit",
+    )
+    parser.add_argument(
+        "--ky",
+        type=float,
+        default=None,
+        help="Optional ky to use for gamma/omega diagnostics",
+    )
+    parser.add_argument(
+        "--y0",
+        type=float,
+        default=None,
+        help="Optional y0 override; defaults to GX ky metadata",
+    )
+    parser.add_argument(
+        "--out", type=Path, default=None, help="Optional CSV summary output"
+    )
     return parser
 
 
@@ -592,9 +775,13 @@ def main_window() -> None:
         nspec = int(root.dimensions["s"].size)
         ntime = int(root.dimensions["time"].size)
         if args.time_index_start < 0 or args.time_index_start >= ntime:
-            raise ValueError(f"time_index_start={args.time_index_start} outside [0, {ntime - 1}]")
+            raise ValueError(
+                f"time_index_start={args.time_index_start} outside [0, {ntime - 1}]"
+            )
         if args.time_index_stop < 0 or args.time_index_stop >= ntime:
-            raise ValueError(f"time_index_stop={args.time_index_stop} outside [0, {ntime - 1}]")
+            raise ValueError(
+                f"time_index_stop={args.time_index_stop} outside [0, {ntime - 1}]"
+            )
         t_vals = np.asarray(grids.variables["time"][:], dtype=float)
         gx_diag_stop = {
             "Wg": _gx_diag_scalar(diag, "Wg_kyst", args.time_index_stop),
@@ -609,14 +796,20 @@ def main_window() -> None:
         t_stop = float(t_vals[args.time_index_stop])
         dt_window = float(t_stop - t_start)
 
-    gx_kx = _load_real_vector_auto(args.gx_dir / f"diag_state_kx_t{args.time_index_start}.bin")
-    gx_ky = _load_real_vector_auto(args.gx_dir / f"diag_state_ky_t{args.time_index_start}.bin")
+    gx_kx = _load_real_vector_auto(
+        args.gx_dir / f"diag_state_kx_t{args.time_index_start}.bin"
+    )
+    gx_ky = _load_real_vector_auto(
+        args.gx_dir / f"diag_state_ky_t{args.time_index_start}.bin"
+    )
     nyc = int(gx_ky.size)
     nx = int(gx_kx.size)
-    phi_raw = np.fromfile(args.gx_dir / f"diag_state_phi_t{args.time_index_start}.bin", dtype=np.complex64)
+    phi_raw = np.fromfile(
+        args.gx_dir / f"diag_state_phi_t{args.time_index_start}.bin", dtype=np.complex64
+    )
     if phi_raw.size % max(nyc * nx, 1) != 0:
         raise ValueError(
-            f"diag_state_phi_t{args.time_index_start}.bin size {phi_raw.size} is not divisible by nyc*nx={nyc*nx}"
+            f"diag_state_phi_t{args.time_index_start}.bin size {phi_raw.size} is not divisible by nyc*nx={nyc * nx}"
         )
     nz = int(phi_raw.size // (nyc * nx))
 
@@ -630,16 +823,24 @@ def main_window() -> None:
         nz=nz,
         time_index=args.time_index_start,
     )
-    gx_phi_start = _load_field(args.gx_dir / f"diag_state_phi_t{args.time_index_start}.bin", nyc, nx, nz)
-    gx_apar_start = _maybe_load_field(args.gx_dir / f"diag_state_apar_t{args.time_index_start}.bin", nyc, nx, nz)
-    gx_bpar_start = _maybe_load_field(args.gx_dir / f"diag_state_bpar_t{args.time_index_start}.bin", nyc, nx, nz)
+    gx_phi_start = _load_field(
+        args.gx_dir / f"diag_state_phi_t{args.time_index_start}.bin", nyc, nx, nz
+    )
+    gx_apar_start = _maybe_load_field(
+        args.gx_dir / f"diag_state_apar_t{args.time_index_start}.bin", nyc, nx, nz
+    )
+    gx_bpar_start = _maybe_load_field(
+        args.gx_dir / f"diag_state_bpar_t{args.time_index_start}.bin", nyc, nx, nz
+    )
 
     cfg, _data = load_runtime_from_toml(args.config)
     y0_use = float(args.y0) if args.y0 is not None else _infer_y0(gx_ky)
     full_ny = int(2 * (nyc - 1))
     cfg_use = replace(
         cfg,
-        grid=replace(cfg.grid, Nx=int(nx), Ny=int(full_ny), Nz=int(nz), y0=float(y0_use)),
+        grid=replace(
+            cfg.grid, Nx=int(nx), Ny=int(full_ny), Nz=int(nz), y0=float(y0_use)
+        ),
     )
 
     geom = build_runtime_geometry(cfg_use)
@@ -651,7 +852,9 @@ def main_window() -> None:
     cache = build_linear_cache(grid, geom_eff, params, nl, nm)
     term_cfg = build_runtime_term_config(cfg_use)
 
-    sp_fields_start = compute_fields_cached(jnp.asarray(gx_G_start, dtype=jnp.complex64), cache, params, terms=term_cfg)
+    sp_fields_start = compute_fields_cached(
+        jnp.asarray(gx_G_start, dtype=jnp.complex64), cache, params, terms=term_cfg
+    )
     sp_phi_start = np.asarray(sp_fields_start.phi, dtype=np.complex64)
     sp_apar_start = (
         np.asarray(sp_fields_start.apar, dtype=np.complex64)
@@ -663,10 +866,22 @@ def main_window() -> None:
         if sp_fields_start.bpar is not None
         else np.zeros_like(gx_phi_start, dtype=np.complex64)
     )
-    gx_apar_start_use = gx_apar_start if gx_apar_start is not None else np.zeros_like(gx_phi_start, dtype=np.complex64)
-    gx_bpar_start_use = gx_bpar_start if gx_bpar_start is not None else np.zeros_like(gx_phi_start, dtype=np.complex64)
+    gx_apar_start_use = (
+        gx_apar_start
+        if gx_apar_start is not None
+        else np.zeros_like(gx_phi_start, dtype=np.complex64)
+    )
+    gx_bpar_start_use = (
+        gx_bpar_start
+        if gx_bpar_start is not None
+        else np.zeros_like(gx_phi_start, dtype=np.complex64)
+    )
 
-    _summary("start_g_state", gx_G_start.astype(np.complex64), np.asarray(gx_G_start, dtype=np.complex64))
+    _summary(
+        "start_g_state",
+        gx_G_start.astype(np.complex64),
+        np.asarray(gx_G_start, dtype=np.complex64),
+    )
     _summary("start_phi", gx_phi_start.astype(np.complex64), sp_phi_start)
     if gx_apar_start is not None or sp_fields_start.apar is not None:
         _summary("start_apar", gx_apar_start_use.astype(np.complex64), sp_apar_start)
@@ -676,7 +891,11 @@ def main_window() -> None:
     ky_target = (
         float(args.ky)
         if args.ky is not None
-        else float(next((val for val in np.asarray(grid.ky, dtype=float) if abs(val) > 0.0), 0.0))
+        else float(
+            next(
+                (val for val in np.asarray(grid.ky, dtype=float) if abs(val) > 0.0), 0.0
+            )
+        )
     )
     cfg_run = replace(
         cfg_use,
@@ -688,7 +907,9 @@ def main_window() -> None:
         ),
         init=replace(
             cfg_use.init,
-            init_file=str(args.gx_dir / f"diag_state_G_s0_t{args.time_index_start}.bin"),
+            init_file=str(
+                args.gx_dir / f"diag_state_G_s0_t{args.time_index_start}.bin"
+            ),
             init_file_scale=1.0,
             init_file_mode="replace",
         ),
@@ -769,6 +990,7 @@ def main_window() -> None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame(rows).to_csv(args.out, index=False)
 
+
 _COMMANDS = {
     "startup": main_startup,
     "diagnostic-state": main_diagnostic_state,
@@ -788,7 +1010,9 @@ def main(argv: list[str] | None = None) -> None:
         command_main = _COMMANDS[command]
     except KeyError as exc:
         choices = ", ".join(_COMMANDS)
-        raise SystemExit(f"unknown command {command!r}; choose one of: {choices}") from exc
+        raise SystemExit(
+            f"unknown command {command!r}; choose one of: {choices}"
+        ) from exc
     previous_argv = sys.argv
     try:
         sys.argv = [f"{previous_argv[0]} {command}", *command_args]

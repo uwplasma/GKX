@@ -66,7 +66,9 @@ class _SolverReadyLinearContext:
             self.n_hermite,
         )
 
-    def rhs_phi(self, state: jnp.ndarray, cache: Any) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def rhs_phi(
+        self, state: jnp.ndarray, cache: Any
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
         return linear_rhs_cached(
             state,
             cache,
@@ -200,7 +202,11 @@ def _validate_branch_gradient_inputs(
     n_laguerre: int,
     n_hermite: int,
 ) -> tuple[jnp.ndarray, int, int]:
-    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
+    p = (
+        default_solver_geometry_design_params()
+        if params is None
+        else jnp.asarray(params)
+    )
     if p.ndim != 1 or int(p.size) != len(SOLVER_GEOMETRY_PARAMETER_NAMES):
         raise ValueError(
             f"params must be a length-{len(SOLVER_GEOMETRY_PARAMETER_NAMES)} vector"
@@ -262,7 +268,9 @@ def _base_branch_eigensystem(
     return base_eigs, base_index, base_value, base_gap
 
 
-def _branch_row_gap(eigs: np.ndarray, selected_index: int, selected_value: np.ndarray) -> float:
+def _branch_row_gap(
+    eigs: np.ndarray, selected_index: int, selected_value: np.ndarray
+) -> float:
     if eigs.size == 1:
         return float("inf")
     return float(np.min(np.abs(np.delete(eigs, selected_index) - selected_value)))
@@ -487,7 +495,11 @@ def solver_objective_branch_gradient_report(
 def _validate_linear_geometry_gradient_params(
     params: jnp.ndarray | np.ndarray | None,
 ) -> jnp.ndarray:
-    p = default_solver_geometry_design_params() if params is None else jnp.asarray(params)
+    p = (
+        default_solver_geometry_design_params()
+        if params is None
+        else jnp.asarray(params)
+    )
     if p.ndim != 1 or int(p.size) != 2:
         raise ValueError("params must be a length-2 vector")
     return p

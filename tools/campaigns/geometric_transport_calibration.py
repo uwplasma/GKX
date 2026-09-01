@@ -117,7 +117,9 @@ def sanity_check(features: dict[str, float]) -> str | None:
     if not np.isfinite(list(features.values())).all():
         return "non-finite feature"
     if features["connection_length"] > _MAX_CONNECTION_LENGTH:
-        return f"connection length {features['connection_length']:.3g} implies gradpar ~ 0"
+        return (
+            f"connection length {features['connection_length']:.3g} implies gradpar ~ 0"
+        )
     if features["local_shear_rms"] == 0.0:
         return "local shear identically zero"
     return None
@@ -176,7 +178,7 @@ def main() -> int:
     records, rejected = [], []
     for index, item in enumerate(plan):
         label = (
-            f"{item['device']}__{item['coefficient'].replace('(','').replace(')','').replace(',','')}"
+            f"{item['device']}__{item['coefficient'].replace('(', '').replace(')', '').replace(',', '')}"
             f"__f{item['fraction']:+.2f}".replace(".", "p")
         )
         text = Path(item["deck"]).read_text()
@@ -198,14 +200,19 @@ def main() -> int:
             )
             features = geometric_features(mapping)
         except Exception as err:
-            rejected.append({**item, "label": label, "reason": f"{type(err).__name__}: {err}"[:160]})
+            rejected.append(
+                {**item, "label": label, "reason": f"{type(err).__name__}: {err}"[:160]}
+            )
             print(f"  [{index + 1}/{len(plan)}] {label}: FAILED", flush=True)
             continue
 
         problem = sanity_check(features)
         if problem:
             rejected.append({**item, "label": label, "reason": problem})
-            print(f"  [{index + 1}/{len(plan)}] {label}: rejected -- {problem}", flush=True)
+            print(
+                f"  [{index + 1}/{len(plan)}] {label}: rejected -- {problem}",
+                flush=True,
+            )
             continue
 
         records.append(
@@ -239,13 +246,19 @@ def main() -> int:
         matrix = np.column_stack(
             [
                 np.log(np.abs([r["features"][n] for r in records]) + 1e-30)
-                for n in ("connection_length", "local_shear_rms",
-                          "bad_curvature_mean", "flux_expansion_mean")
+                for n in (
+                    "connection_length",
+                    "local_shear_rms",
+                    "bad_curvature_mean",
+                    "flux_expansion_mean",
+                )
             ]
             + [np.ones(len(records))]
         )
-        print(f"design condition number: {np.linalg.cond(matrix):.1f}"
-              "   (RBC(1,1)-only scan was 267)")
+        print(
+            f"design condition number: {np.linalg.cond(matrix):.1f}"
+            "   (RBC(1,1)-only scan was 267)"
+        )
     print(f"written: {args.output}")
     return 0
 

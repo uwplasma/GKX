@@ -173,7 +173,9 @@ def _device_z_rhs_identity_report(
     """Return the passed/blocked device-z RHS identity report."""
 
     identity_passed = bool(rhs_abs <= float(atol) and rhs_rel <= float(rtol))
-    blocked_reasons = () if identity_passed else ("device_z_pencil_rhs_identity_failed",)
+    blocked_reasons = (
+        () if identity_passed else ("device_z_pencil_rhs_identity_failed",)
+    )
     return NonlinearSpectralDevicePencilRHSIdentityReport(
         state_shape=state_shape,
         sharded_axis="z",

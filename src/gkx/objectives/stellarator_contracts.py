@@ -59,15 +59,32 @@ class StellaratorITGOptimizationConfig:
     scan_density_gradients: tuple[float, ...] = (0.8, 1.2, 1.6, 2.2, 3.0, 3.8, 4.8)
     fd_step: float = 1.0e-4
 
-    def with_kind_defaults(self, kind: StellaratorObjectiveKind) -> "StellaratorITGOptimizationConfig":
+    def with_kind_defaults(
+        self, kind: StellaratorObjectiveKind
+    ) -> "StellaratorITGOptimizationConfig":
         """Return conservative optimizer defaults for one objective family."""
 
         if kind == "growth":
-            return replace(self, learning_rate=0.045, steps=max(self.steps, 80), turbulence_weight=1.0)
+            return replace(
+                self,
+                learning_rate=0.045,
+                steps=max(self.steps, 80),
+                turbulence_weight=1.0,
+            )
         if kind == "quasilinear_flux":
-            return replace(self, learning_rate=0.030, steps=max(self.steps, 95), turbulence_weight=1.0)
+            return replace(
+                self,
+                learning_rate=0.030,
+                steps=max(self.steps, 95),
+                turbulence_weight=1.0,
+            )
         if kind == "nonlinear_heat_flux":
-            return replace(self, learning_rate=0.025, steps=max(self.steps, 110), turbulence_weight=1.0)
+            return replace(
+                self,
+                learning_rate=0.025,
+                steps=max(self.steps, 110),
+                turbulence_weight=1.0,
+            )
         raise ValueError(f"unknown stellarator objective kind {kind!r}")
 
 
@@ -122,8 +139,12 @@ class StellaratorITGSampleSet:
             "surfaces": list(self.surfaces),
             "alphas": list(self.alphas),
             "ky_values": list(self.ky_values),
-            "surface_weights": None if self.surface_weights is None else list(self.surface_weights),
-            "alpha_weights": None if self.alpha_weights is None else list(self.alpha_weights),
+            "surface_weights": None
+            if self.surface_weights is None
+            else list(self.surface_weights),
+            "alpha_weights": None
+            if self.alpha_weights is None
+            else list(self.alpha_weights),
             "ky_weights": None if self.ky_weights is None else list(self.ky_weights),
             "reduction": self.reduction,
             "n_samples": self.n_samples,
@@ -176,5 +197,7 @@ class StellaratorITGOptimizationResult:
                 ],
             }
         else:
-            payload["claim_level"] = "reduced_linear_or_quasilinear_objective_optimization"
+            payload["claim_level"] = (
+                "reduced_linear_or_quasilinear_objective_optimization"
+            )
         return payload

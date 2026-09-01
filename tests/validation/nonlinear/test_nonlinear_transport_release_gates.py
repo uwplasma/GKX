@@ -136,7 +136,15 @@ def test_progress_cli_uses_manifest_dt_tolerance_by_default(
     out_json = tmp_path / "progress.json"
     monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.927)
 
-    rc = mod.main(["matrix-progress", "--matrix-manifest", str(manifest), "--out-json", str(out_json)])
+    rc = mod.main(
+        [
+            "matrix-progress",
+            "--matrix-manifest",
+            str(manifest),
+            "--out-json",
+            str(out_json),
+        ]
+    )
     stdout = capsys.readouterr().out
     report = json.loads(out_json.read_text(encoding="utf-8"))
 
@@ -157,7 +165,9 @@ def test_skip_time_check_does_not_read_output_time(tmp_path: Path, monkeypatch) 
         raise AssertionError("skip_time_check should not read NetCDF times")
 
     monkeypatch.setattr(mod, "_read_output_tmax", fail_if_called)
-    report = mod.build_matrix_progress_report(matrix_manifest=manifest, skip_time_check=True)
+    report = mod.build_matrix_progress_report(
+        matrix_manifest=manifest, skip_time_check=True
+    )
 
     assert report["skip_time_check"] is True
     assert report["summary"]["complete_bundles"] == 2
@@ -267,7 +277,9 @@ def test_main_writes_json_and_exit_code(
     report = tmp_path / "report.json"
     _write_nonlinear_output(out)
 
-    rc = mod.main(["runtime-outputs", str(out), "--json-out", str(report), "--min-samples", "3"])
+    rc = mod.main(
+        ["runtime-outputs", str(out), "--json-out", str(report), "--min-samples", "3"]
+    )
 
     assert rc == 0
     assert report.exists()

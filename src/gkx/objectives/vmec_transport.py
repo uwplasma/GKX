@@ -65,9 +65,7 @@ def _pin_current_optional_backend_paths() -> None:
     environment-variable names are retained).
     """
 
-    if not (
-        os.environ.get("GKX_VMEX_PATH") or os.environ.get("VMEX_PATH")
-    ):
+    if not (os.environ.get("GKX_VMEX_PATH") or os.environ.get("VMEX_PATH")):
         root = _module_search_root("vmex")
         if root is not None:
             os.environ.setdefault("GKX_VMEX_PATH", str(root))

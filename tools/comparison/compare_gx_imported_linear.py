@@ -37,7 +37,11 @@ from gkx.diagnostics import (
     fieldline_quadrature_weights,
     magnetic_vector_potential_energy,
 )
-from gkx.diagnostics.analysis import ModeSelection, instantaneous_growth_rate_from_phi, select_ky_index
+from gkx.diagnostics.analysis import (
+    ModeSelection,
+    instantaneous_growth_rate_from_phi,
+    select_ky_index,
+)
 from gkx.solvers.time.explicit import (
     ExplicitTimeConfig,
     _instantaneous_growth_rate_step,
@@ -117,7 +121,9 @@ def _load_species_state(
         path = directory / f"diag_state_G_s{species_index}_t{time_index}.bin"
         raw = np.fromfile(path, dtype=np.complex64)
         if raw.size != expected:
-            raise ValueError(f"{path} size {raw.size} does not match expected {expected}")
+            raise ValueError(
+                f"{path} size {raw.size} does not match expected {expected}"
+            )
         pieces.append(raw)
     return _reshape_saved_state(
         np.stack(pieces), nspec=nspec, nl=nl, nm=nm, nyc=nyc, nx=nx, nz=nz
@@ -188,7 +194,16 @@ def _file_cache_token(path: Path | None) -> dict[str, str | int | None]:
 
 def _load_gx_reference(
     path: Path,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+]:
     def _read_ky_series(diag_group, name: str) -> np.ndarray:
         data = np.asarray(diag_group.variables[name][:], dtype=float)
         if data.ndim == 3:
@@ -249,7 +264,9 @@ def _infer_y0(ky: np.ndarray) -> float:
     return float(1.0 / np.min(positive))
 
 
-def _resolve_imported_real_fft_ny(gx_ky: np.ndarray, gx_contract: GXInputContract | None) -> int:
+def _resolve_imported_real_fft_ny(
+    gx_ky: np.ndarray, gx_contract: GXInputContract | None
+) -> int:
     """Return the full real-FFT ``Ny`` implied by the stored GX ``ky`` grid."""
 
     inferred = _infer_real_fft_ny(gx_ky)
@@ -311,7 +328,9 @@ def _load_gx_input_contract(path: Path) -> GXInputContract:
         if arr.ndim == 0:
             arr = np.full(nspecies, float(arr), dtype=float)
         if arr.size < nspecies:
-            raise ValueError(f"{path} species.{name} has {arr.size} entries, expected at least {nspecies}")
+            raise ValueError(
+                f"{path} species.{name} has {arr.size} entries, expected at least {nspecies}"
+            )
         return np.asarray(arr[:nspecies], dtype=float)
 
     charge = _species_array("z", default=1.0)
@@ -336,8 +355,16 @@ def _load_gx_input_contract(path: Path) -> GXInputContract:
 
     add_boltz = bool(boltz.get("add_Boltzmann_species", False))
     boltz_type = str(boltz.get("Boltzmann_type", "")).strip().lower()
-    tau_e = float(boltz.get("tau_fac", 0.0)) if add_boltz and boltz_type == "electrons" else 0.0
-    kpar_init = float(init["ikpar_init"]) if "ikpar_init" in init else float(init.get("kpar_init", 0.0))
+    tau_e = (
+        float(boltz.get("tau_fac", 0.0))
+        if add_boltz and boltz_type == "electrons"
+        else 0.0
+    )
+    kpar_init = (
+        float(init["ikpar_init"])
+        if "ikpar_init" in init
+        else float(init.get("kpar_init", 0.0))
+    )
 
     s_hat = float(geometry.get("shat", 0.0))
     zero_shat = zero_shear_enabled(
@@ -361,8 +388,12 @@ def _load_gx_input_contract(path: Path) -> GXInputContract:
         s_hat=s_hat,
         zero_shat=zero_shat,
         y0=float(domain["y0"]) if "y0" in domain else float("nan"),
-        fapar=float(physics.get("fapar", 1.0 if float(physics.get("beta", 0.0)) > 0.0 else 0.0)),
-        fbpar=float(physics.get("fbpar", 1.0 if float(physics.get("beta", 0.0)) > 0.0 else 0.0)),
+        fapar=float(
+            physics.get("fapar", 1.0 if float(physics.get("beta", 0.0)) > 0.0 else 0.0)
+        ),
+        fbpar=float(
+            physics.get("fbpar", 1.0 if float(physics.get("beta", 0.0)) > 0.0 else 0.0)
+        ),
         species=species,
         tau_e=tau_e,
         beta=float(physics.get("beta", 0.0)),
@@ -376,8 +407,12 @@ def _load_gx_input_contract(path: Path) -> GXInputContract:
         iky_single=int(expert.get("iky_single", 1)),
         gaussian_init=bool(init.get("gaussian_init", False)),
         gaussian_width=float(init.get("gaussian_width", 0.5)),
-        gaussian_envelope_constant=float(init.get("gaussian_envelope_constant_coefficient", 1.0)),
-        gaussian_envelope_sine=float(init.get("gaussian_envelope_sine_coefficient", 0.0)),
+        gaussian_envelope_constant=float(
+            init.get("gaussian_envelope_constant_coefficient", 1.0)
+        ),
+        gaussian_envelope_sine=float(
+            init.get("gaussian_envelope_sine_coefficient", 0.0)
+        ),
         kpar_init=kpar_init,
         random_seed=int(init.get("random_seed", 22)),
         init_electrons_only=bool(init.get("init_electrons_only", False)),
@@ -426,9 +461,15 @@ def _resolve_internal_geometry_source(
                     cfg,
                     geometry=replace(
                         cfg.geometry,
-                        alpha=float(gx_contract.alpha) if gx_contract.alpha is not None else cfg.geometry.alpha,
-                        torflux=float(gx_contract.torflux) if gx_contract.torflux is not None else cfg.geometry.torflux,
-                        npol=float(gx_contract.npol) if gx_contract.npol is not None else cfg.geometry.npol,
+                        alpha=float(gx_contract.alpha)
+                        if gx_contract.alpha is not None
+                        else cfg.geometry.alpha,
+                        torflux=float(gx_contract.torflux)
+                        if gx_contract.torflux is not None
+                        else cfg.geometry.torflux,
+                        npol=float(gx_contract.npol)
+                        if gx_contract.npol is not None
+                        else cfg.geometry.npol,
                     ),
                 )
         model = str(cfg.geometry.model).strip().lower()
@@ -446,7 +487,9 @@ def _resolve_internal_geometry_source(
     )
 
 
-def _runtime_species_tuple(species: tuple[Species, ...]) -> tuple[RuntimeSpeciesConfig, ...]:
+def _runtime_species_tuple(
+    species: tuple[Species, ...],
+) -> tuple[RuntimeSpeciesConfig, ...]:
     return tuple(
         RuntimeSpeciesConfig(
             name=f"species_{idx}",
@@ -530,7 +573,9 @@ def _build_imported_initial_condition(
     )
 
 
-def _mean_rel_error(lhs: np.ndarray, rhs: np.ndarray, *, floor_fraction: float) -> float:
+def _mean_rel_error(
+    lhs: np.ndarray, rhs: np.ndarray, *, floor_fraction: float
+) -> float:
     lhs = np.asarray(lhs, dtype=float)
     rhs = np.asarray(rhs, dtype=float)
     scale = max(float(np.nanmax(np.abs(rhs))), 1.0e-12)
@@ -585,7 +630,9 @@ def _species_array(val: float | jnp.ndarray, ns: int) -> jnp.ndarray:
     return arr
 
 
-def _distribution_free_energy_by_ky(G: jnp.ndarray, cache, params, vol_fac: jnp.ndarray, *, use_dealias: bool = True) -> jnp.ndarray:
+def _distribution_free_energy_by_ky(
+    G: jnp.ndarray, cache, params, vol_fac: jnp.ndarray, *, use_dealias: bool = True
+) -> jnp.ndarray:
     Gs = G if G.ndim == 6 else G[None, ...]
     ns = Gs.shape[0]
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
@@ -596,7 +643,9 @@ def _distribution_free_energy_by_ky(G: jnp.ndarray, cache, params, vol_fac: jnp.
     return jnp.sum(contrib, axis=(0, 1, 2, 4, 5))
 
 
-def _electrostatic_field_energy_by_ky(phi: jnp.ndarray, cache, params, vol_fac: jnp.ndarray, *, use_dealias: bool = True) -> jnp.ndarray:
+def _electrostatic_field_energy_by_ky(
+    phi: jnp.ndarray, cache, params, vol_fac: jnp.ndarray, *, use_dealias: bool = True
+) -> jnp.ndarray:
     fac = _gx_kyst_fac_mask_cached(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]
     rho = jnp.asarray(params.rho)
@@ -611,7 +660,9 @@ def _electrostatic_field_energy_by_ky(phi: jnp.ndarray, cache, params, vol_fac: 
     return wphi
 
 
-def _magnetic_vector_potential_energy_by_ky(apar: jnp.ndarray, cache, vol_fac: jnp.ndarray, *, use_dealias: bool = True) -> jnp.ndarray:
+def _magnetic_vector_potential_energy_by_ky(
+    apar: jnp.ndarray, cache, vol_fac: jnp.ndarray, *, use_dealias: bool = True
+) -> jnp.ndarray:
     fac = _gx_kyst_fac_mask_cached(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]
     bmag2 = cache.bmag[None, None, :] ** 2 if cache.kperp2_bmag else 1.0
@@ -641,7 +692,9 @@ def _integrate_target_mode_series(
     return_phi_samples: bool = False,
 ) -> tuple[np.ndarray, ...]:
     if mode_method not in {"z_index", "max", "project", "svd"}:
-        raise ValueError("mode_method must be one of {'z_index', 'max', 'project', 'svd'}")
+        raise ValueError(
+            "mode_method must be one of {'z_index', 'max', 'project', 'svd'}"
+        )
 
     term_cfg = _linear_term_config(terms)
     mask = jnp.asarray(grid.dealias_mask, dtype=bool)
@@ -683,7 +736,9 @@ def _integrate_target_mode_series(
     step = 0
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
-    omega_max = _linear_frequency_bound(grid, geom_eff, params, G.shape[-5], G.shape[-4])
+    omega_max = _linear_frequency_bound(
+        grid, geom_eff, params, G.shape[-5], G.shape[-4]
+    )
     wmax = float(np.sum(omega_max))
     if not time_cfg.fixed_dt and wmax > 0.0:
         dt_guess = float(time_cfg.cfl_fac) * float(time_cfg.cfl) / wmax
@@ -715,7 +770,9 @@ def _integrate_target_mode_series(
     phi_samples: list[np.ndarray] = []
     phi_sample_times: list[float] = []
     if collect_phi_samples:
-        phi0_sel = np.asarray(fields0.phi)[ky_index : ky_index + 1, kx_index : kx_index + 1, :]
+        phi0_sel = np.asarray(fields0.phi)[
+            ky_index : ky_index + 1, kx_index : kx_index + 1, :
+        ]
         phi_samples.append(np.asarray(phi0_sel, dtype=np.complex64))
         phi_sample_times.append(float(t))
 
@@ -763,7 +820,9 @@ def _integrate_target_mode_series(
             Wapar_list.append(float(np.asarray(Wapar)[ky_index]))
             Phi2_list.append(float(np.asarray(Phi2)[ky_index]))
             if collect_phi_samples:
-                phi_sel = np.asarray(phi)[ky_index : ky_index + 1, kx_index : kx_index + 1, :]
+                phi_sel = np.asarray(phi)[
+                    ky_index : ky_index + 1, kx_index : kx_index + 1, :
+                ]
                 phi_samples.append(np.asarray(phi_sel, dtype=np.complex64))
                 phi_sample_times.append(float(t))
             target_idx += 1
@@ -779,12 +838,14 @@ def _integrate_target_mode_series(
     if mode_method in {"project", "svd"}:
         phi_t = np.asarray(phi_samples, dtype=np.complex64)
         t_arr = np.asarray(phi_sample_times, dtype=float)
-        _gamma_avg, _omega_avg, gamma_t, omega_t, _t_mid = instantaneous_growth_rate_from_phi(
-            phi_t,
-            t_arr,
-            ModeSelection(ky_index=0, kx_index=0, z_index=z_index),
-            use_last=False,
-            mode_method=mode_method,
+        _gamma_avg, _omega_avg, gamma_t, omega_t, _t_mid = (
+            instantaneous_growth_rate_from_phi(
+                phi_t,
+                t_arr,
+                ModeSelection(ky_index=0, kx_index=0, z_index=z_index),
+                use_last=False,
+                mode_method=mode_method,
+            )
         )
         gamma_list = list(np.asarray(gamma_t, dtype=float))
         omega_list = list(np.asarray(omega_t, dtype=float))
@@ -803,7 +864,11 @@ def _integrate_target_mode_series(
         Phi2_arr[output_idx],
     )
     if return_phi_samples:
-        return (*out, np.asarray(phi_sample_times, dtype=float), np.asarray(phi_samples, dtype=np.complex64))
+        return (
+            *out,
+            np.asarray(phi_sample_times, dtype=float),
+            np.asarray(phi_samples, dtype=np.complex64),
+        )
     return out
 
 
@@ -875,7 +940,9 @@ def _write_scan_rows(rows: list[dict[str, float]], out: Path | None) -> pd.DataF
     return df
 
 
-def _infer_gx_linear_dt(gx_time: np.ndarray, gx_contract: GXInputContract | None) -> float:
+def _infer_gx_linear_dt(
+    gx_time: np.ndarray, gx_contract: GXInputContract | None
+) -> float:
     """Infer the underlying GX timestep from saved diagnostic times."""
 
     if gx_contract is not None and gx_contract.dt is not None:
@@ -950,7 +1017,9 @@ def _build_sample_steps(
         else:
             steps = steps[:nkeep]
     if steps.size == 0:
-        raise ValueError("Selected sample window is empty; increase --max-samples or lower --sample-step-stride")
+        raise ValueError(
+            "Selected sample window is empty; increase --max-samples or lower --sample-step-stride"
+        )
     return np.asarray(steps, dtype=int)
 
 
@@ -979,7 +1048,9 @@ def _series_cache_path(
         "rel_floor_fraction": float(rel_floor_fraction),
         "sample_steps": [int(v) for v in np.asarray(sample_steps, dtype=int)],
     }
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
     tag = f"{float(ky_target):0.4f}".replace(".", "p")
     return cache_dir / f"ky_{tag}_{digest}.npz"
 
@@ -1024,7 +1095,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Compare GX linear diagnostics against GKX using imported GX/VMEC geometry."
     )
-    parser.add_argument("--gx", type=Path, required=True, help="Path to the GX .out.nc file")
+    parser.add_argument(
+        "--gx", type=Path, required=True, help="Path to the GX .out.nc file"
+    )
     parser.add_argument(
         "--geometry-file",
         type=Path,
@@ -1050,7 +1123,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional raw GX state file to use as the exact initial condition.",
     )
-    parser.add_argument("--out", type=Path, default=None, help="Optional CSV output path")
+    parser.add_argument(
+        "--out", type=Path, default=None, help="Optional CSV output path"
+    )
     parser.add_argument(
         "--cache-dir",
         type=Path,
@@ -1062,7 +1137,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Reuse matching per-ky cached trajectory/result arrays when available.",
     )
-    parser.add_argument("--ky", type=float, nargs="*", default=None, help="Specific ky values to compare")
+    parser.add_argument(
+        "--ky",
+        type=float,
+        nargs="*",
+        default=None,
+        help="Specific ky values to compare",
+    )
     parser.add_argument(
         "--sample-step-stride",
         type=int,
@@ -1088,7 +1169,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tau-e", type=float, default=1.0, dest="tau_e")
     parser.add_argument("--damp-ends-amp", type=float, default=0.1)
     parser.add_argument("--damp-ends-widthfrac", type=float, default=1.0 / 8.0)
-    parser.add_argument("--mode-method", choices=("z_index", "max", "project", "svd"), default="z_index")
+    parser.add_argument(
+        "--mode-method", choices=("z_index", "max", "project", "svd"), default="z_index"
+    )
     parser.add_argument(
         "--rel-floor-fraction",
         type=float,
@@ -1102,9 +1185,22 @@ def run_fields(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    gx_time, gx_ky, gx_kx, gx_omega, distribution_free_energy, electrostatic_field_energy, magnetic_vector_potential_energy, gx_Phi2 = _load_gx_reference(args.gx)
+    (
+        gx_time,
+        gx_ky,
+        gx_kx,
+        gx_omega,
+        distribution_free_energy,
+        electrostatic_field_energy,
+        magnetic_vector_potential_energy,
+        gx_Phi2,
+    ) = _load_gx_reference(args.gx)
     positive_ky = gx_ky[gx_ky > 0.0]
-    ky_values = positive_ky if args.ky is None or len(args.ky) == 0 else np.asarray(args.ky, dtype=float)
+    ky_values = (
+        positive_ky
+        if args.ky is None or len(args.ky) == 0
+        else np.asarray(args.ky, dtype=float)
+    )
     sample_steps = _build_sample_steps(
         gx_time,
         sample_step_stride=int(args.sample_step_stride),
@@ -1158,10 +1254,16 @@ def run_fields(argv: list[str] | None = None) -> None:
     if gx_contract is not None and gx_contract.geo_option == "slab":
         gx_contract = replace(
             gx_contract,
-            zero_shat=_read_gx_output_bool(args.gx, "zero_shat", default=gx_contract.zero_shat),
+            zero_shat=_read_gx_output_bool(
+                args.gx, "zero_shat", default=gx_contract.zero_shat
+            ),
         )
         geom = SlabGeometry.from_config(
-            GeometryConfig(model="slab", s_hat=float(gx_contract.s_hat), zero_shat=bool(gx_contract.zero_shat))
+            GeometryConfig(
+                model="slab",
+                s_hat=float(gx_contract.s_hat),
+                zero_shat=bool(gx_contract.zero_shat),
+            )
         )
         nz = int(gx_contract.ntheta) if int(gx_contract.ntheta) > 0 else 16
     else:
@@ -1194,10 +1296,20 @@ def run_fields(argv: list[str] | None = None) -> None:
         nperiod=nperiod,
         ntheta=ntheta,
     )
-    grid_full = build_spectral_grid(apply_imported_geometry_grid_defaults(geom, grid_cfg))
+    grid_full = build_spectral_grid(
+        apply_imported_geometry_grid_defaults(geom, grid_cfg)
+    )
 
-    nl_use = int(args.Nl) if args.Nl is not None else int(gx_contract.nlaguerre if gx_contract is not None else 8)
-    nm_use = int(args.Nm) if args.Nm is not None else int(gx_contract.nhermite if gx_contract is not None else 16)
+    nl_use = (
+        int(args.Nl)
+        if args.Nl is not None
+        else int(gx_contract.nlaguerre if gx_contract is not None else 8)
+    )
+    nm_use = (
+        int(args.Nm)
+        if args.Nm is not None
+        else int(gx_contract.nhermite if gx_contract is not None else 16)
+    )
     init_state = None
     if args.init_file is not None:
         init_state = jnp.asarray(
@@ -1217,7 +1329,11 @@ def run_fields(argv: list[str] | None = None) -> None:
         tau_e=tau_e,
         kpar_scale=float(geom.gradpar()),
         beta=beta,
-        fapar=(float(gx_contract.fapar) if gx_contract is not None else (1.0 if beta > 0.0 else 0.0)),
+        fapar=(
+            float(gx_contract.fapar)
+            if gx_contract is not None
+            else (1.0 if beta > 0.0 else 0.0)
+        ),
     )
     terms = _build_imported_linear_terms(gx_contract)
     if gx_contract is not None:
@@ -1245,21 +1361,31 @@ def run_fields(argv: list[str] | None = None) -> None:
             (gx_contract is not None and gx_contract.dt is not None)
             or _gx_has_uniform_linear_dt(gx_time, gx_contract)
         ),
-        cfl_fac=resolve_cfl_fac((gx_contract.scheme if gx_contract is not None else "rk4"), None),
+        cfl_fac=resolve_cfl_fac(
+            (gx_contract.scheme if gx_contract is not None else "rk4"), None
+        ),
     )
 
     rows: list[dict[str, float]] = []
-    cache_dir = None if args.cache_dir is None else args.cache_dir.expanduser().resolve()
+    cache_dir = (
+        None if args.cache_dir is None else args.cache_dir.expanduser().resolve()
+    )
     for ky_target in ky_values:
         ky_idx = int(np.argmin(np.abs(gx_ky - float(ky_target))))
         gx_kx_idx = _select_gx_kx_index(gx_kx, gx_contract)
-        kx_idx = _match_local_kx_index(np.asarray(grid_full.kx), float(gx_kx[gx_kx_idx]))
+        kx_idx = _match_local_kx_index(
+            np.asarray(grid_full.kx), float(gx_kx[gx_kx_idx])
+        )
         cache_path = None
         if cache_dir is not None:
             cache_path = _series_cache_path(
                 cache_dir=cache_dir,
                 gx_path=args.gx,
-                geometry_file=(geometry_source if gx_contract is None or gx_contract.geo_option != "slab" else None),
+                geometry_file=(
+                    geometry_source
+                    if gx_contract is None or gx_contract.geo_option != "slab"
+                    else None
+                ),
                 gx_input=args.gx_input,
                 ky_target=float(ky_target),
                 Nl=nl_use,
@@ -1314,12 +1440,34 @@ def run_fields(argv: list[str] | None = None) -> None:
             "mean_rel_gamma": _mean_rel_error(
                 gamma, gamma_ref, floor_fraction=float(args.rel_floor_fraction)
             ),
-            "mean_abs_Wg": float(np.mean(np.abs(Wg - distribution_free_energy[sample_steps, ky_idx]))),
-            "mean_rel_Wg": _mean_rel_error(Wg, distribution_free_energy[sample_steps, ky_idx], floor_fraction=1.0e-6),
-            "mean_abs_Wphi": float(np.mean(np.abs(Wphi - electrostatic_field_energy[sample_steps, ky_idx]))),
-            "mean_rel_Wphi": _mean_rel_error(Wphi, electrostatic_field_energy[sample_steps, ky_idx], floor_fraction=1.0e-6),
-            "mean_abs_Wapar": float(np.mean(np.abs(Wapar - magnetic_vector_potential_energy[sample_steps, ky_idx]))),
-            "mean_rel_Wapar": _mean_rel_error(Wapar, magnetic_vector_potential_energy[sample_steps, ky_idx], floor_fraction=1.0e-6),
+            "mean_abs_Wg": float(
+                np.mean(np.abs(Wg - distribution_free_energy[sample_steps, ky_idx]))
+            ),
+            "mean_rel_Wg": _mean_rel_error(
+                Wg,
+                distribution_free_energy[sample_steps, ky_idx],
+                floor_fraction=1.0e-6,
+            ),
+            "mean_abs_Wphi": float(
+                np.mean(np.abs(Wphi - electrostatic_field_energy[sample_steps, ky_idx]))
+            ),
+            "mean_rel_Wphi": _mean_rel_error(
+                Wphi,
+                electrostatic_field_energy[sample_steps, ky_idx],
+                floor_fraction=1.0e-6,
+            ),
+            "mean_abs_Wapar": float(
+                np.mean(
+                    np.abs(
+                        Wapar - magnetic_vector_potential_energy[sample_steps, ky_idx]
+                    )
+                )
+            ),
+            "mean_rel_Wapar": _mean_rel_error(
+                Wapar,
+                magnetic_vector_potential_energy[sample_steps, ky_idx],
+                floor_fraction=1.0e-6,
+            ),
             "omega_last": float(omega[-1]),
             "omega_ref_last": float(omega_ref[-1]),
             "gamma_last": float(gamma[-1]),
@@ -1330,7 +1478,9 @@ def run_fields(argv: list[str] | None = None) -> None:
             row.update(
                 {
                     "mean_abs_Phi2": float(np.mean(np.abs(Phi2 - phi2_ref))),
-                    "mean_rel_Phi2": _mean_rel_error(Phi2, phi2_ref, floor_fraction=1.0e-6),
+                    "mean_rel_Phi2": _mean_rel_error(
+                        Phi2, phi2_ref, floor_fraction=1.0e-6
+                    ),
                     "Phi2_last": float(Phi2[-1]),
                     "Phi2_ref_last": float(phi2_ref[-1]),
                 }
@@ -1346,26 +1496,67 @@ def run_fields(argv: list[str] | None = None) -> None:
 
 def build_growth_dump_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--gx-dir-start", type=Path, required=True, help="Directory containing the start diag_state_* dump set.")
-    p.add_argument("--gx-dir-stop", type=Path, required=True, help="Directory containing the stop diag_state_* dump set.")
+    p.add_argument(
+        "--gx-dir-start",
+        type=Path,
+        required=True,
+        help="Directory containing the start diag_state_* dump set.",
+    )
+    p.add_argument(
+        "--gx-dir-stop",
+        type=Path,
+        required=True,
+        help="Directory containing the stop diag_state_* dump set.",
+    )
     p.add_argument(
         "--gx-restart-start",
         type=Path,
         default=None,
         help="Optional GX restart.nc file holding the exact start distribution state for late-window replay.",
     )
-    p.add_argument("--gx-out", type=Path, required=True, help="GX .out.nc file for times and omega_kxkyt.")
-    p.add_argument("--gx-input", type=Path, required=True, help="GX input file describing the imported contract.")
-    p.add_argument("--geometry-file", type=Path, required=True, help="Imported geometry file used by GKX.")
-    p.add_argument("--time-index-start", type=int, required=True, help="GX diagnostic start index.")
-    p.add_argument("--time-index-stop", type=int, required=True, help="GX diagnostic stop index.")
-    p.add_argument("--ky", type=float, default=None, help="Optional ky value to score. Defaults to the smallest positive ky.")
-    p.add_argument("--kx", type=float, default=0.0, help="Optional kx value to score. Defaults to 0.")
+    p.add_argument(
+        "--gx-out",
+        type=Path,
+        required=True,
+        help="GX .out.nc file for times and omega_kxkyt.",
+    )
+    p.add_argument(
+        "--gx-input",
+        type=Path,
+        required=True,
+        help="GX input file describing the imported contract.",
+    )
+    p.add_argument(
+        "--geometry-file",
+        type=Path,
+        required=True,
+        help="Imported geometry file used by GKX.",
+    )
+    p.add_argument(
+        "--time-index-start", type=int, required=True, help="GX diagnostic start index."
+    )
+    p.add_argument(
+        "--time-index-stop", type=int, required=True, help="GX diagnostic stop index."
+    )
+    p.add_argument(
+        "--ky",
+        type=float,
+        default=None,
+        help="Optional ky value to score. Defaults to the smallest positive ky.",
+    )
+    p.add_argument(
+        "--kx",
+        type=float,
+        default=0.0,
+        help="Optional kx value to score. Defaults to 0.",
+    )
     p.add_argument("--out", type=Path, default=None, help="Optional CSV output path.")
     return p
 
 
-def _gx_growth_pair(phi_now: np.ndarray, phi_prev: np.ndarray, dt: float) -> tuple[np.ndarray, np.ndarray]:
+def _gx_growth_pair(
+    phi_now: np.ndarray, phi_prev: np.ndarray, dt: float
+) -> tuple[np.ndarray, np.ndarray]:
     z_index = _diagnostic_midplane_index(phi_now.shape[-1])
     phi_now_j = jnp.asarray(phi_now)
     phi_prev_j = jnp.asarray(phi_prev)
@@ -1417,9 +1608,13 @@ def _expand_gx_restart_state_to_full_positive_ky(
     expected_naky = _gx_active_ky_count(int(ny_full))
     expected_nakx = _gx_active_kx_count(int(nx_full))
     if naky != expected_naky:
-        raise ValueError(f"restart Nky={naky} does not match ny_full={ny_full} (expected {expected_naky})")
+        raise ValueError(
+            f"restart Nky={naky} does not match ny_full={ny_full} (expected {expected_naky})"
+        )
     if nakx != expected_nakx:
-        raise ValueError(f"restart Nkx={nakx} does not match nx_full={nx_full} (expected {expected_nakx})")
+        raise ValueError(
+            f"restart Nkx={nakx} does not match nx_full={nx_full} (expected {expected_nakx})"
+        )
 
     out = np.zeros((nspec, nl, nm, nyc_full, int(nx_full), nz), dtype=np.complex64)
     split = 1 + ((int(nx_full) - 1) // 3)
@@ -1456,23 +1651,37 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
     gx_contract = _load_gx_input_contract(args.gx_input)
     with Dataset(args.gx_out, "r") as root:
         gx_time = np.asarray(root.groups["Grids"].variables["time"][:], dtype=float)
-        gx_omega = np.asarray(root.groups["Diagnostics"].variables["omega_kxkyt"][:], dtype=float)
+        gx_omega = np.asarray(
+            root.groups["Diagnostics"].variables["omega_kxkyt"][:], dtype=float
+        )
         nl = int(root.dimensions["l"].size)
         nm = int(root.dimensions["m"].size)
         nspec = int(root.dimensions["s"].size)
-    growth_phi_prev_path = args.gx_dir_stop / f"diag_growth_phi_prev_t{args.time_index_stop}.bin"
+    growth_phi_prev_path = (
+        args.gx_dir_stop / f"diag_growth_phi_prev_t{args.time_index_stop}.bin"
+    )
     growth_phi_path = args.gx_dir_stop / f"diag_growth_phi_t{args.time_index_stop}.bin"
     growth_dt_path = args.gx_dir_stop / f"diag_growth_dt_t{args.time_index_stop}.bin"
     growth_kx_path = args.gx_dir_stop / f"diag_growth_kx_t{args.time_index_stop}.bin"
     growth_ky_path = args.gx_dir_stop / f"diag_growth_ky_t{args.time_index_stop}.bin"
     stop_has_growth = all(
         path.exists()
-        for path in (growth_phi_prev_path, growth_phi_path, growth_dt_path, growth_kx_path, growth_ky_path)
+        for path in (
+            growth_phi_prev_path,
+            growth_phi_path,
+            growth_dt_path,
+            growth_kx_path,
+            growth_ky_path,
+        )
     )
-    start_has_state = (args.gx_dir_start / f"diag_state_G_s0_t{args.time_index_start}.bin").exists()
+    start_has_state = (
+        args.gx_dir_start / f"diag_state_G_s0_t{args.time_index_start}.bin"
+    ).exists()
     if stop_has_growth:
         if args.time_index_stop < args.time_index_start:
-            raise ValueError("time-index-stop must be >= time-index-start in growth-dump mode")
+            raise ValueError(
+                "time-index-stop must be >= time-index-start in growth-dump mode"
+            )
     elif args.time_index_stop <= args.time_index_start:
         raise ValueError("time-index-stop must be greater than time-index-start")
 
@@ -1480,14 +1689,24 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
         gx_kx = _load_real_vector_auto(growth_kx_path)
         gx_ky = _load_real_vector_auto(growth_ky_path)
     else:
-        gx_kx = _load_real_vector_auto(args.gx_dir_start / f"diag_state_kx_t{args.time_index_start}.bin")
-        gx_ky = _load_real_vector_auto(args.gx_dir_start / f"diag_state_ky_t{args.time_index_start}.bin")
+        gx_kx = _load_real_vector_auto(
+            args.gx_dir_start / f"diag_state_kx_t{args.time_index_start}.bin"
+        )
+        gx_ky = _load_real_vector_auto(
+            args.gx_dir_start / f"diag_state_ky_t{args.time_index_start}.bin"
+        )
     nyc = int(gx_ky.size)
     nx = int(gx_kx.size)
-    phi_seed_path = growth_phi_prev_path if stop_has_growth else args.gx_dir_start / f"diag_state_phi_t{args.time_index_start}.bin"
+    phi_seed_path = (
+        growth_phi_prev_path
+        if stop_has_growth
+        else args.gx_dir_start / f"diag_state_phi_t{args.time_index_start}.bin"
+    )
     phi_raw = np.fromfile(phi_seed_path, dtype=np.complex64)
     if phi_raw.size % max(nyc * nx, 1) != 0:
-        raise ValueError(f"{phi_seed_path.name} size {phi_raw.size} is not divisible by nyc*nx={nyc*nx}")
+        raise ValueError(
+            f"{phi_seed_path.name} size {phi_raw.size} is not divisible by nyc*nx={nyc * nx}"
+        )
     nz = int(phi_raw.size // (nyc * nx))
 
     if stop_has_growth:
@@ -1524,21 +1743,55 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
             nz=nz,
             time_index=args.time_index_start,
         )
-        gx_phi_start = _load_field(args.gx_dir_start / f"diag_state_phi_t{args.time_index_start}.bin", nyc, nx, nz)
-        gx_phi_stop = _load_field(args.gx_dir_stop / f"diag_state_phi_t{args.time_index_stop}.bin", nyc, nx, nz)
-        gx_apar_stop = _maybe_load_field(args.gx_dir_stop / f"diag_state_apar_t{args.time_index_stop}.bin", nyc, nx, nz)
-        gx_bpar_stop = _maybe_load_field(args.gx_dir_stop / f"diag_state_bpar_t{args.time_index_stop}.bin", nyc, nx, nz)
+        gx_phi_start = _load_field(
+            args.gx_dir_start / f"diag_state_phi_t{args.time_index_start}.bin",
+            nyc,
+            nx,
+            nz,
+        )
+        gx_phi_stop = _load_field(
+            args.gx_dir_stop / f"diag_state_phi_t{args.time_index_stop}.bin",
+            nyc,
+            nx,
+            nz,
+        )
+        gx_apar_stop = _maybe_load_field(
+            args.gx_dir_stop / f"diag_state_apar_t{args.time_index_stop}.bin",
+            nyc,
+            nx,
+            nz,
+        )
+        gx_bpar_stop = _maybe_load_field(
+            args.gx_dir_stop / f"diag_state_bpar_t{args.time_index_stop}.bin",
+            nyc,
+            nx,
+            nz,
+        )
 
-    y0 = float(gx_contract.y0) if np.isfinite(float(gx_contract.y0)) else _infer_y0(gx_ky)
+    y0 = (
+        float(gx_contract.y0)
+        if np.isfinite(float(gx_contract.y0))
+        else _infer_y0(gx_ky)
+    )
     ny_full = _resolve_imported_real_fft_ny(gx_ky, gx_contract)
     if gx_contract.geo_option == "slab":
         geom = SlabGeometry.from_config(
-            GeometryConfig(model="slab", s_hat=float(gx_contract.s_hat), zero_shat=bool(gx_contract.zero_shat))
+            GeometryConfig(
+                model="slab",
+                s_hat=float(gx_contract.s_hat),
+                zero_shat=bool(gx_contract.zero_shat),
+            )
         )
     else:
-        geom = load_imported_geometry_netcdf(_resolve_internal_geometry_source(geometry_file=args.geometry_file, runtime_config=None))
+        geom = load_imported_geometry_netcdf(
+            _resolve_internal_geometry_source(
+                geometry_file=args.geometry_file, runtime_config=None
+            )
+        )
 
-    boundary_eff = _resolve_imported_boundary(gx_contract.boundary, zero_shat=bool(gx_contract.zero_shat))
+    boundary_eff = _resolve_imported_boundary(
+        gx_contract.boundary, zero_shat=bool(gx_contract.zero_shat)
+    )
     lx = 2.0 * np.pi * y0 if boundary_eff == "periodic" else 62.8
     grid_cfg = apply_imported_geometry_grid_defaults(
         geom,
@@ -1559,13 +1812,17 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
 
     if stop_has_growth and args.gx_restart_start is not None:
         if restart_state_active is None:
-            raise ValueError("restart_state_active must be available for restart-based growth replay")
+            raise ValueError(
+                "restart_state_active must be available for restart-based growth replay"
+            )
         gx_G_start = _expand_gx_restart_state_to_full_positive_ky(
             restart_state_active,
             ny_full=ny_full,
             nx_full=int(nx),
         )
-        gx_G_start = np.asarray(gx_G_start, dtype=np.complex64) * np.complex64(gx_contract.restart_scale)
+        gx_G_start = np.asarray(gx_G_start, dtype=np.complex64) * np.complex64(
+            gx_contract.restart_scale
+        )
         if gx_contract.restart_with_perturb:
             gx_G_start = gx_G_start + np.asarray(
                 _build_imported_initial_condition(
@@ -1601,14 +1858,21 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
     dt = _infer_gx_linear_dt(gx_time, gx_contract)
     time_cfg = ExplicitTimeConfig(
         dt=dt,
-        t_max=float(gx_time[args.time_index_stop] - gx_time[args.time_index_start]) if not stop_has_growth else float(target),
+        t_max=float(gx_time[args.time_index_stop] - gx_time[args.time_index_start])
+        if not stop_has_growth
+        else float(target),
         method=str(gx_contract.scheme),
         sample_stride=max(1, int(gx_contract.nwrite)),
-        fixed_dt=bool((gx_contract.dt is not None) or _gx_has_uniform_linear_dt(gx_time, gx_contract)),
+        fixed_dt=bool(
+            (gx_contract.dt is not None)
+            or _gx_has_uniform_linear_dt(gx_time, gx_contract)
+        ),
         cfl_fac=resolve_cfl_fac(str(gx_contract.scheme), None),
     )
     dt_min = float(time_cfg.dt_min)
-    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else float(time_cfg.dt)
+    dt_max = (
+        float(time_cfg.dt_max) if time_cfg.dt_max is not None else float(time_cfg.dt)
+    )
 
     gamma_gx_dump, omega_gx_dump = _gx_growth_pair(gx_phi_stop, gx_phi_start, target)
     if stop_has_growth and gx_G_start is None:
@@ -1634,14 +1898,18 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
         term_cfg = _linear_term_config(terms)
         if stop_has_growth and args.gx_restart_start is not None:
             if restart_time is None:
-                raise ValueError("restart_time must be available for restart-based growth replay")
+                raise ValueError(
+                    "restart_time must be available for restart-based growth replay"
+                )
             target = float(gx_time[args.time_index_stop] - restart_time)
             step_dt = float(_load_growth_dt(growth_dt_path))
             if step_dt <= 0.0:
                 raise ValueError("growth dump dt must be > 0")
             nsteps_float = target / step_dt
             nsteps = int(np.rint(nsteps_float))
-            if nsteps < 1 or not np.isclose(target, step_dt * nsteps, rtol=1.0e-6, atol=1.0e-10):
+            if nsteps < 1 or not np.isclose(
+                target, step_dt * nsteps, rtol=1.0e-6, atol=1.0e-10
+            ):
                 raise ValueError(
                     "restart-based growth replay requires a uniform late window; "
                     f"got target={target:.12g}, step_dt={step_dt:.12g}, ratio={nsteps_float:.12g}"
@@ -1651,7 +1919,9 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
                 t += step_dt
                 if t < target - 0.5 * step_dt:
                     phi_prev_step = np.asarray(fields.phi, dtype=np.complex64)
-            gamma_sp_dump, omega_sp_dump = _gx_growth_pair(np.asarray(fields.phi, dtype=np.complex64), phi_prev_step, step_dt)
+            gamma_sp_dump, omega_sp_dump = _gx_growth_pair(
+                np.asarray(fields.phi, dtype=np.complex64), phi_prev_step, step_dt
+            )
         else:
             while t < target - 1.0e-12:
                 dt_step = float(time_cfg.dt)
@@ -1676,9 +1946,13 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
                 else np.zeros_like(gx_phi_stop, dtype=np.complex64)
             )
             _ = (gx_apar_stop, gx_bpar_stop, sp_apar_stop, sp_bpar_stop)
-            gamma_sp_dump, omega_sp_dump = _gx_growth_pair(sp_phi_stop, gx_phi_start, target)
+            gamma_sp_dump, omega_sp_dump = _gx_growth_pair(
+                sp_phi_stop, gx_phi_start, target
+            )
 
-    ky_target = float(args.ky) if args.ky is not None else float(np.min(gx_ky[gx_ky > 0.0]))
+    ky_target = (
+        float(args.ky) if args.ky is not None else float(np.min(gx_ky[gx_ky > 0.0]))
+    )
     ky_idx = _select_index(gx_ky, ky_target)
     kx_idx = _select_index(gx_kx, float(args.kx))
 
@@ -1686,7 +1960,11 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
         "time_index_start": int(args.time_index_start),
         "time_index_stop": int(args.time_index_stop),
         "t_start": float(gx_time[args.time_index_start]),
-        "t_restart_start": (float(restart_time) if stop_has_growth and args.gx_restart_start is not None else np.nan),
+        "t_restart_start": (
+            float(restart_time)
+            if stop_has_growth and args.gx_restart_start is not None
+            else np.nan
+        ),
         "t_stop": float(gx_time[args.time_index_stop]),
         "delta_t": float(target),
         "compare_mode": (
@@ -1711,8 +1989,12 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
     row["abs_gamma_out_vs_gx_dump"] = abs(row["gamma_out"] - row["gamma_gx_dump"])
     row["abs_omega_sp_vs_gx_dump"] = abs(row["omega_sp_dump"] - row["omega_gx_dump"])
     row["abs_gamma_sp_vs_gx_dump"] = abs(row["gamma_sp_dump"] - row["gamma_gx_dump"])
-    row["rel_omega_sp_vs_gx_dump"] = row["abs_omega_sp_vs_gx_dump"] / max(abs(row["omega_gx_dump"]), 1.0e-12)
-    row["rel_gamma_sp_vs_gx_dump"] = row["abs_gamma_sp_vs_gx_dump"] / max(abs(row["gamma_gx_dump"]), 1.0e-12)
+    row["rel_omega_sp_vs_gx_dump"] = row["abs_omega_sp_vs_gx_dump"] / max(
+        abs(row["omega_gx_dump"]), 1.0e-12
+    )
+    row["rel_gamma_sp_vs_gx_dump"] = row["abs_gamma_sp_vs_gx_dump"] / max(
+        abs(row["gamma_gx_dump"]), 1.0e-12
+    )
 
     df = pd.DataFrame([row])
     print(df.to_string(index=False))
@@ -1724,12 +2006,36 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
 
 def build_window_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--gx-dir", type=Path, required=True, help="Directory containing GX diag_state dump binaries")
-    p.add_argument("--gx-out", type=Path, required=True, help="GX .out.nc file for dimensions and times")
-    p.add_argument("--gx-input", type=Path, required=True, help="GX input file describing the imported contract")
-    p.add_argument("--geometry-file", type=Path, required=True, help="Imported geometry file used by GKX")
-    p.add_argument("--time-index-start", type=int, required=True, help="GX diag_state start index")
-    p.add_argument("--time-index-stop", type=int, required=True, help="GX diag_state stop index")
+    p.add_argument(
+        "--gx-dir",
+        type=Path,
+        required=True,
+        help="Directory containing GX diag_state dump binaries",
+    )
+    p.add_argument(
+        "--gx-out",
+        type=Path,
+        required=True,
+        help="GX .out.nc file for dimensions and times",
+    )
+    p.add_argument(
+        "--gx-input",
+        type=Path,
+        required=True,
+        help="GX input file describing the imported contract",
+    )
+    p.add_argument(
+        "--geometry-file",
+        type=Path,
+        required=True,
+        help="Imported geometry file used by GKX",
+    )
+    p.add_argument(
+        "--time-index-start", type=int, required=True, help="GX diag_state start index"
+    )
+    p.add_argument(
+        "--time-index-stop", type=int, required=True, help="GX diag_state stop index"
+    )
     p.add_argument("--out", type=Path, default=None, help="Optional CSV summary output")
     return p
 
@@ -1778,20 +2084,30 @@ def run_window(argv: list[str] | None = None) -> None:
         nspec = int(root.dimensions["s"].size)
         gx_time = np.asarray(root.groups["Grids"].variables["time"][:], dtype=float)
     if args.time_index_start < 0 or args.time_index_start >= gx_time.size:
-        raise ValueError(f"time-index-start={args.time_index_start} outside [0, {gx_time.size - 1}]")
+        raise ValueError(
+            f"time-index-start={args.time_index_start} outside [0, {gx_time.size - 1}]"
+        )
     if args.time_index_stop < 0 or args.time_index_stop >= gx_time.size:
-        raise ValueError(f"time-index-stop={args.time_index_stop} outside [0, {gx_time.size - 1}]")
+        raise ValueError(
+            f"time-index-stop={args.time_index_stop} outside [0, {gx_time.size - 1}]"
+        )
     if args.time_index_stop <= args.time_index_start:
         raise ValueError("time-index-stop must be greater than time-index-start")
 
-    gx_kx = _load_real_vector_auto(args.gx_dir / f"diag_state_kx_t{args.time_index_start}.bin")
-    gx_ky = _load_real_vector_auto(args.gx_dir / f"diag_state_ky_t{args.time_index_start}.bin")
+    gx_kx = _load_real_vector_auto(
+        args.gx_dir / f"diag_state_kx_t{args.time_index_start}.bin"
+    )
+    gx_ky = _load_real_vector_auto(
+        args.gx_dir / f"diag_state_ky_t{args.time_index_start}.bin"
+    )
     nyc = int(gx_ky.size)
     nx = int(gx_kx.size)
-    phi_raw = np.fromfile(args.gx_dir / f"diag_state_phi_t{args.time_index_start}.bin", dtype=np.complex64)
+    phi_raw = np.fromfile(
+        args.gx_dir / f"diag_state_phi_t{args.time_index_start}.bin", dtype=np.complex64
+    )
     if phi_raw.size % max(nyc * nx, 1) != 0:
         raise ValueError(
-            f"diag_state_phi_t{args.time_index_start}.bin size {phi_raw.size} is not divisible by nyc*nx={nyc*nx}"
+            f"diag_state_phi_t{args.time_index_start}.bin size {phi_raw.size} is not divisible by nyc*nx={nyc * nx}"
         )
     nz = int(phi_raw.size // (nyc * nx))
 
@@ -1805,9 +2121,15 @@ def run_window(argv: list[str] | None = None) -> None:
         nz=nz,
         time_index=args.time_index_start,
     )
-    gx_phi_start = _load_field(args.gx_dir / f"diag_state_phi_t{args.time_index_start}.bin", nyc, nx, nz)
-    gx_apar_start = _maybe_load_field(args.gx_dir / f"diag_state_apar_t{args.time_index_start}.bin", nyc, nx, nz)
-    gx_bpar_start = _maybe_load_field(args.gx_dir / f"diag_state_bpar_t{args.time_index_start}.bin", nyc, nx, nz)
+    gx_phi_start = _load_field(
+        args.gx_dir / f"diag_state_phi_t{args.time_index_start}.bin", nyc, nx, nz
+    )
+    gx_apar_start = _maybe_load_field(
+        args.gx_dir / f"diag_state_apar_t{args.time_index_start}.bin", nyc, nx, nz
+    )
+    gx_bpar_start = _maybe_load_field(
+        args.gx_dir / f"diag_state_bpar_t{args.time_index_start}.bin", nyc, nx, nz
+    )
     gx_G_stop = _load_species_state(
         args.gx_dir,
         nspec=nspec,
@@ -1818,20 +2140,40 @@ def run_window(argv: list[str] | None = None) -> None:
         nz=nz,
         time_index=args.time_index_stop,
     )
-    gx_phi_stop = _load_field(args.gx_dir / f"diag_state_phi_t{args.time_index_stop}.bin", nyc, nx, nz)
-    gx_apar_stop = _maybe_load_field(args.gx_dir / f"diag_state_apar_t{args.time_index_stop}.bin", nyc, nx, nz)
-    gx_bpar_stop = _maybe_load_field(args.gx_dir / f"diag_state_bpar_t{args.time_index_stop}.bin", nyc, nx, nz)
+    gx_phi_stop = _load_field(
+        args.gx_dir / f"diag_state_phi_t{args.time_index_stop}.bin", nyc, nx, nz
+    )
+    gx_apar_stop = _maybe_load_field(
+        args.gx_dir / f"diag_state_apar_t{args.time_index_stop}.bin", nyc, nx, nz
+    )
+    gx_bpar_stop = _maybe_load_field(
+        args.gx_dir / f"diag_state_bpar_t{args.time_index_stop}.bin", nyc, nx, nz
+    )
 
-    y0 = float(gx_contract.y0) if np.isfinite(float(gx_contract.y0)) else _infer_y0(gx_ky)
+    y0 = (
+        float(gx_contract.y0)
+        if np.isfinite(float(gx_contract.y0))
+        else _infer_y0(gx_ky)
+    )
     ny_full = _resolve_imported_real_fft_ny(gx_ky, gx_contract)
     if gx_contract.geo_option == "slab":
         geom = SlabGeometry.from_config(
-            GeometryConfig(model="slab", s_hat=float(gx_contract.s_hat), zero_shat=bool(gx_contract.zero_shat))
+            GeometryConfig(
+                model="slab",
+                s_hat=float(gx_contract.s_hat),
+                zero_shat=bool(gx_contract.zero_shat),
+            )
         )
     else:
-        geom = load_imported_geometry_netcdf(_resolve_internal_geometry_source(geometry_file=args.geometry_file, runtime_config=None))
+        geom = load_imported_geometry_netcdf(
+            _resolve_internal_geometry_source(
+                geometry_file=args.geometry_file, runtime_config=None
+            )
+        )
 
-    boundary_eff = _resolve_imported_boundary(gx_contract.boundary, zero_shat=bool(gx_contract.zero_shat))
+    boundary_eff = _resolve_imported_boundary(
+        gx_contract.boundary, zero_shat=bool(gx_contract.zero_shat)
+    )
     lx = 2.0 * np.pi * y0 if boundary_eff == "periodic" else 62.8
     grid_cfg = apply_imported_geometry_grid_defaults(
         geom,
@@ -1874,11 +2216,16 @@ def run_window(argv: list[str] | None = None) -> None:
         t_max=float(gx_time[args.time_index_stop] - gx_time[args.time_index_start]),
         method=str(gx_contract.scheme),
         sample_stride=max(1, int(gx_contract.nwrite)),
-        fixed_dt=bool((gx_contract.dt is not None) or _gx_has_uniform_linear_dt(gx_time, gx_contract)),
+        fixed_dt=bool(
+            (gx_contract.dt is not None)
+            or _gx_has_uniform_linear_dt(gx_time, gx_contract)
+        ),
         cfl_fac=resolve_cfl_fac(str(gx_contract.scheme), None),
     )
     dt_min = float(time_cfg.dt_min)
-    dt_max = float(time_cfg.dt_max) if time_cfg.dt_max is not None else float(time_cfg.dt)
+    dt_max = (
+        float(time_cfg.dt_max) if time_cfg.dt_max is not None else float(time_cfg.dt)
+    )
 
     G = jnp.asarray(gx_G_start, dtype=jnp.complex64)
     omega_max = _linear_frequency_bound(grid, geom, params, nl, nm)
@@ -1923,33 +2270,69 @@ def run_window(argv: list[str] | None = None) -> None:
         if fields.bpar is not None
         else np.zeros_like(gx_phi_stop, dtype=np.complex64)
     )
-    gx_apar_stop_use = gx_apar_stop if gx_apar_stop is not None else np.zeros_like(gx_phi_stop, dtype=np.complex64)
-    gx_bpar_stop_use = gx_bpar_stop if gx_bpar_stop is not None else np.zeros_like(gx_phi_stop, dtype=np.complex64)
+    gx_apar_stop_use = (
+        gx_apar_stop
+        if gx_apar_stop is not None
+        else np.zeros_like(gx_phi_stop, dtype=np.complex64)
+    )
+    gx_bpar_stop_use = (
+        gx_bpar_stop
+        if gx_bpar_stop is not None
+        else np.zeros_like(gx_phi_stop, dtype=np.complex64)
+    )
 
     print(
         f"time_index_start={args.time_index_start} t_start={gx_time[args.time_index_start]:.8f} "
         f"time_index_stop={args.time_index_stop} t_stop={gx_time[args.time_index_stop]:.8f} "
         f"delta_t={target:.8f} steps={step_count} t_match={t:.8f}"
     )
-    _print_array_summary("start_phi", gx_phi_start.astype(np.complex64), gx_phi_start.astype(np.complex64))
+    _print_array_summary(
+        "start_phi",
+        gx_phi_start.astype(np.complex64),
+        gx_phi_start.astype(np.complex64),
+    )
     if gx_apar_start is not None:
-        _print_array_summary("start_apar", gx_apar_start.astype(np.complex64), gx_apar_start.astype(np.complex64))
+        _print_array_summary(
+            "start_apar",
+            gx_apar_start.astype(np.complex64),
+            gx_apar_start.astype(np.complex64),
+        )
     if gx_bpar_start is not None:
-        _print_array_summary("start_bpar", gx_bpar_start.astype(np.complex64), gx_bpar_start.astype(np.complex64))
+        _print_array_summary(
+            "start_bpar",
+            gx_bpar_start.astype(np.complex64),
+            gx_bpar_start.astype(np.complex64),
+        )
     _print_array_summary("stop_g_state", gx_G_stop.astype(np.complex64), sp_G_stop)
     _print_array_summary("stop_phi", gx_phi_stop.astype(np.complex64), sp_phi_stop)
     if gx_apar_stop is not None or fields.apar is not None:
-        _print_array_summary("stop_apar", gx_apar_stop_use.astype(np.complex64), sp_apar_stop)
+        _print_array_summary(
+            "stop_apar", gx_apar_stop_use.astype(np.complex64), sp_apar_stop
+        )
     if gx_bpar_stop is not None or fields.bpar is not None:
-        _print_array_summary("stop_bpar", gx_bpar_stop_use.astype(np.complex64), sp_bpar_stop)
+        _print_array_summary(
+            "stop_bpar", gx_bpar_stop_use.astype(np.complex64), sp_bpar_stop
+        )
 
     vol_fac, _flux_fac = fieldline_quadrature_weights(geom, grid)
-    distribution_free_energy_stop = float(distribution_free_energy(jnp.asarray(gx_G_stop), grid, params, vol_fac))
-    sp_Wg_stop = float(distribution_free_energy(jnp.asarray(sp_G_stop), grid, params, vol_fac))
-    electrostatic_field_energy_stop = float(electrostatic_field_energy(jnp.asarray(gx_phi_stop), cache, params, vol_fac))
-    sp_Wphi_stop = float(electrostatic_field_energy(jnp.asarray(sp_phi_stop), cache, params, vol_fac))
-    magnetic_vector_potential_energy_stop = float(magnetic_vector_potential_energy(jnp.asarray(gx_apar_stop_use), cache, vol_fac))
-    sp_Wapar_stop = float(magnetic_vector_potential_energy(jnp.asarray(sp_apar_stop), cache, vol_fac))
+    distribution_free_energy_stop = float(
+        distribution_free_energy(jnp.asarray(gx_G_stop), grid, params, vol_fac)
+    )
+    sp_Wg_stop = float(
+        distribution_free_energy(jnp.asarray(sp_G_stop), grid, params, vol_fac)
+    )
+    electrostatic_field_energy_stop = float(
+        electrostatic_field_energy(jnp.asarray(gx_phi_stop), cache, params, vol_fac)
+    )
+    sp_Wphi_stop = float(
+        electrostatic_field_energy(jnp.asarray(sp_phi_stop), cache, params, vol_fac)
+    )
+    magnetic_vector_potential_energy_stop = float(
+        magnetic_vector_potential_energy(jnp.asarray(gx_apar_stop_use), cache, vol_fac)
+    )
+    sp_Wapar_stop = float(
+        magnetic_vector_potential_energy(jnp.asarray(sp_apar_stop), cache, vol_fac)
+    )
     gx_Phi2_stop = _gx_phi2_total(jnp.asarray(gx_phi_stop), vol_fac)
     sp_Phi2_stop = _gx_phi2_total(jnp.asarray(sp_phi_stop), vol_fac)
 
@@ -1958,17 +2341,42 @@ def run_window(argv: list[str] | None = None) -> None:
         {"metric": "phi", "rel": _rel_err(sp_phi_stop, gx_phi_stop)},
         {"metric": "apar", "rel": _rel_err(sp_apar_stop, gx_apar_stop_use)},
         {"metric": "bpar", "rel": _rel_err(sp_bpar_stop, gx_bpar_stop_use)},
-        {"metric": "Wg", "gx_stop": distribution_free_energy_stop, "gkx": sp_Wg_stop, "rel": abs(sp_Wg_stop - distribution_free_energy_stop) / max(abs(distribution_free_energy_stop), 1.0e-30)},
-        {"metric": "Wphi", "gx_stop": electrostatic_field_energy_stop, "gkx": sp_Wphi_stop, "rel": abs(sp_Wphi_stop - electrostatic_field_energy_stop) / max(abs(electrostatic_field_energy_stop), 1.0e-30)},
-        {"metric": "Wapar", "gx_stop": magnetic_vector_potential_energy_stop, "gkx": sp_Wapar_stop, "rel": abs(sp_Wapar_stop - magnetic_vector_potential_energy_stop) / max(abs(magnetic_vector_potential_energy_stop), 1.0e-30)},
-        {"metric": "Phi2", "gx_stop": gx_Phi2_stop, "gkx": sp_Phi2_stop, "rel": abs(sp_Phi2_stop - gx_Phi2_stop) / max(abs(gx_Phi2_stop), 1.0e-30)},
+        {
+            "metric": "Wg",
+            "gx_stop": distribution_free_energy_stop,
+            "gkx": sp_Wg_stop,
+            "rel": abs(sp_Wg_stop - distribution_free_energy_stop)
+            / max(abs(distribution_free_energy_stop), 1.0e-30),
+        },
+        {
+            "metric": "Wphi",
+            "gx_stop": electrostatic_field_energy_stop,
+            "gkx": sp_Wphi_stop,
+            "rel": abs(sp_Wphi_stop - electrostatic_field_energy_stop)
+            / max(abs(electrostatic_field_energy_stop), 1.0e-30),
+        },
+        {
+            "metric": "Wapar",
+            "gx_stop": magnetic_vector_potential_energy_stop,
+            "gkx": sp_Wapar_stop,
+            "rel": abs(sp_Wapar_stop - magnetic_vector_potential_energy_stop)
+            / max(abs(magnetic_vector_potential_energy_stop), 1.0e-30),
+        },
+        {
+            "metric": "Phi2",
+            "gx_stop": gx_Phi2_stop,
+            "gkx": sp_Phi2_stop,
+            "rel": abs(sp_Phi2_stop - gx_Phi2_stop) / max(abs(gx_Phi2_stop), 1.0e-30),
+        },
     ]
     print("metric     rel")
     for row in rows[:4]:
         print(f"{row['metric']:8s} {float(row['rel']): .3e}")
     print("diag       gx_stop       gkx      rel")
     for row in rows[4:]:
-        print(f"{row['metric']:8s} {float(row['gx_stop']): .6e} {float(row['gkx']): .6e} {float(row['rel']): .3e}")
+        print(
+            f"{row['metric']:8s} {float(row['gx_stop']): .6e} {float(row['gkx']): .6e} {float(row['rel']): .3e}"
+        )
 
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)

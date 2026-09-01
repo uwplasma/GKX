@@ -506,9 +506,7 @@ def electrostatic_phi_shard_map(
         axis_names={axis_name},
     )
     nbar = hermite_mapped(jax.device_put(arr, shard_ctx.sharding))
-    phi_avg = _zonal_adiabatic_correction(
-        nbar, qneut, tau_e, jacobian=jacobian, ky=ky
-    )
+    phi_avg = _zonal_adiabatic_correction(nbar, qneut, tau_e, jacobian=jacobian, ky=ky)
     phi = (nbar + jnp.asarray(tau_e, dtype=real_dtype) * phi_avg[..., None]) / den_safe
     if mask0 is not None:
         phi = jnp.where(jnp.asarray(mask0), 0.0, phi)

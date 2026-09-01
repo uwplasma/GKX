@@ -278,6 +278,48 @@ baseline_lines = 1099
 target_lines = 1000
 reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
 
+[[complexity_policy.exceptions]]
+path = "artifacts/plotting.py"
+# 869 -> 1078: whitespace only, from the one-time repo-wide `ruff format` sweep
+# at the pinned ruff 0.16.4. This is not new code: the module parses to an
+# identical AST before and after and carries identical comment text. The growth
+# is reflow at 43 separate sites -- long call signatures and argument lists
+# splitting onto one element per line. Unlike the api facade this is not a
+# single data literal, so no `fmt: off` guard recovers it and the budget has to
+# absorb the step.
+baseline_lines = 1078
+target_lines = 1000
+reason = "One plotting owner keeps the figure builders sharing axes, labels, and save policy; reduce the per-figure duplication rather than splitting the module."
+
+[[complexity_policy.exceptions]]
+path = "runtime.py"
+# 492 -> 513: whitespace only, from the same sweep. Almost all of it is the
+# __all__ list going from packed multi-name lines to one name per line.
+# Identical AST; no export was added or removed. One name per line is the better
+# form for a list that gets edited, so it is kept rather than guarded and the
+# facade budget absorbs the 13 lines.
+baseline_lines = 513
+target_lines = 500
+reason = "Public runtime facade; the overage is the exploded __all__ list, so shrink it by removing exports rather than by splitting the facade."
+
+[[complexity_policy.exceptions]]
+path = "workflows/nonlinear.py"
+# 999 -> 1007: whitespace only, from the same sweep. Three reflowed call sites,
+# identical AST. The module was already one line under the default budget, so
+# the sweep is what crossed it, not new behaviour.
+baseline_lines = 1007
+target_lines = 1000
+reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
+
+[[complexity_policy.exceptions]]
+path = "workflows/runtime/commands.py"
+# 1000 -> 1004: whitespace only, from the same sweep. Two reflowed call sites,
+# identical AST. The module sat exactly on the default budget, so the sweep is
+# what crossed it, not new behaviour.
+baseline_lines = 1004
+target_lines = 1000
+reason = "One command table keeps the CLI subcommands parsing and dispatching consistently; reduce the per-command duplication rather than splitting the table."
+
 [line_budget_policy]
 mode = "no_regression_until_target"
 description = "Track real code deletion rather than file reshuffling."
@@ -661,7 +703,13 @@ recursive = true
 # 91448 -> 89715: removing Diffrax from the base product. The four owner
 # modules carried 1,636 lines; the remainder is the config fields, the
 # runner and workflow branches, and the dead save-selector kwargs they fed.
-baseline = 88112
+# 88112 -> 88795: whitespace only, from the one-time repo-wide `ruff format` sweep
+# at the pinned ruff 0.16.4. This is not new code. Every reformatted module
+# parses to an identical AST and carries identical comment text before and
+# after; the delta is ruff splitting over-long calls, signatures, and collection
+# literals onto more physical lines. The budget counts physical lines, so it has
+# to absorb the one-time step. The target is deliberately left where it was.
+baseline = 88795
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -712,7 +760,13 @@ recursive = true
 # instead of calling it a mirror ratio, and centres the plotted parallel
 # profiles on the |B| minimum. Twenty-four lines buy a shipped figure and
 # record that no longer overstate what the case contains.
-baseline = 75804
+# 75804 -> 77418: whitespace only, from the one-time repo-wide `ruff format` sweep
+# at the pinned ruff 0.16.4. This is not new code. Every reformatted module
+# parses to an identical AST and carries identical comment text before and
+# after; the delta is ruff splitting over-long calls, signatures, and collection
+# literals onto more physical lines. The budget counts physical lines, so it has
+# to absorb the one-time step. The target is deliberately left where it was.
+baseline = 77418
 target = 0
 
 [[line_budget_policy.counts]]

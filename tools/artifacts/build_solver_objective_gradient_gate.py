@@ -59,6 +59,7 @@ VMEC_BOOZER_DEFAULT_ATOL: dict[VmecBoozerGradientKind, float] = {
     "nonlinear-window": 5.0e-2,
 }
 
+
 def _json_clean(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): _json_clean(item) for key, item in value.items()}
@@ -284,7 +285,8 @@ def build_vmec_boozer_parser() -> argparse.ArgumentParser:
     ):
         subparser = subparsers.add_parser(kind, help=help_text)
         _add_vmec_boozer_gradient_args(
-            subparser, kind=kind  # type: ignore[arg-type]
+            subparser,
+            kind=kind,  # type: ignore[arg-type]
         )
         if kind == "nonlinear-window":
             subparser.add_argument("--nonlinear-dt", type=float, default=0.18)

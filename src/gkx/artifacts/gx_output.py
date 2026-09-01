@@ -137,7 +137,9 @@ def _time_panels(series: dict[str, np.ndarray]) -> list[tuple[str, np.ndarray, b
     if "heat_flux" in series:
         panels.append((r"$Q/Q_{\mathrm{gB}}$", series["heat_flux"], False))
     if "particle_flux" in series:
-        panels.append((r"$\Gamma/\Gamma_{\mathrm{gB}}$", series["particle_flux"], False))
+        panels.append(
+            (r"$\Gamma/\Gamma_{\mathrm{gB}}$", series["particle_flux"], False)
+        )
     return panels
 
 

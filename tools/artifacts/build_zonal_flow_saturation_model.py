@@ -92,8 +92,15 @@ def write_input(template: Path, coefficient: float, destination: Path) -> Path:
 
 
 def zonal_residual(
-    equilibrium, *, kx: float, hermite: int, laguerre: int, t_max: float, dt: float,
-    s_index: int = 7, ntheta: int = 32,
+    equilibrium,
+    *,
+    kx: float,
+    hermite: int,
+    laguerre: int,
+    t_max: float,
+    dt: float,
+    s_index: int = 7,
+    ntheta: int = 32,
 ) -> dict[str, float]:
     """Collisionless Rosenbluth-Hinton residual for one equilibrium.
 
@@ -124,7 +131,11 @@ def zonal_residual(
     # Same VMEC -> flux-tube mapping the quasilinear objective uses, so the
     # zonal measurement and the proxy see identical geometry.
     geometry = turb.flux_tube_geometry(
-        equilibrium.state, equilibrium.runtime, s_index=s_index, alpha=0.0, ntheta=ntheta
+        equilibrium.state,
+        equilibrium.runtime,
+        s_index=s_index,
+        alpha=0.0,
+        ntheta=ntheta,
     )
     grid = build_spectral_grid(
         GridConfig(Nx=3, Ny=2, Nz=ntheta, Lx=2.0 * np.pi / max(kx, 1e-12), Ly=1.0e4)
@@ -143,10 +154,14 @@ def zonal_residual(
         hypercollisions=0.0,
         end_damping=0.0,
     )
-    state = jnp.zeros(
-        (1, laguerre, hermite, grid.ky.size, grid.kx.size, grid.z.size),
-        dtype=jnp.complex128,
-    ).at[0, 0, 0, 0, 1, :].set(1.0e-6)
+    state = (
+        jnp.zeros(
+            (1, laguerre, hermite, grid.ky.size, grid.kx.size, grid.z.size),
+            dtype=jnp.complex128,
+        )
+        .at[0, 0, 0, 0, 1, :]
+        .set(1.0e-6)
+    )
 
     unit = jnp.asarray([1.0])
     jacobian = np.asarray(cache.jacobian, dtype=float)
@@ -225,7 +240,9 @@ def zonal_residual(
         "residual": residual,
         "t_rec": float(t_rec),
         "gradpar": gradpar,
-        "final_signed_mean": float(signal[fit_mask][-len(signal[fit_mask]) // 4 :].mean()),
+        "final_signed_mean": float(
+            signal[fit_mask][-len(signal[fit_mask]) // 4 :].mean()
+        ),
     }
 
 
@@ -240,7 +257,9 @@ def main() -> int:
     parser.add_argument("--dt", type=float, default=0.005)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument(
-        "--output", type=Path, default=Path("docs/_static/zonal_flow_saturation_model.json")
+        "--output",
+        type=Path,
+        default=Path("docs/_static/zonal_flow_saturation_model.json"),
     )
     args = parser.parse_args()
 
@@ -269,7 +288,10 @@ def main() -> int:
                 dt=args.dt,
             )
         except Exception as err:  # pragma: no cover - reported, not hidden
-            measured = {"residual": float("nan"), "error": f"{type(err).__name__}: {err}"[:200]}
+            measured = {
+                "residual": float("nan"),
+                "error": f"{type(err).__name__}: {err}"[:200],
+            }
             print(f"  !! {label}: {measured['error']}", flush=True)
         point.update(measured)
         print(

@@ -207,9 +207,7 @@ def _fd_diagnostics(
     )
     finite = bool(np.all(np.isfinite(values)))
     response_resolved = bool(response_abs >= settings.response_atol)
-    finite_difference_consistent = bool(
-        curvature_ratio <= settings.max_curvature_ratio
-    )
+    finite_difference_consistent = bool(curvature_ratio <= settings.max_curvature_ratio)
     return {
         "passed": bool(finite and response_resolved and finite_difference_consistent),
         "perturbation_step": settings.step,
@@ -241,9 +239,7 @@ def _base_report_fields(
         "wout_path": ctx.bundle["wout_path"],
         "objective": str(objective),
         "parameter_name": ctx.parameter_name,
-        "parameter_indices": {
-            ctx.parameter_family: [ctx.radial_index, ctx.mode_index]
-        },
+        "parameter_indices": {ctx.parameter_family: [ctx.radial_index, ctx.mode_index]},
         "base_delta": ctx.base_delta,
         "objective_names": list(SOLVER_OBJECTIVE_NAMES),
         "options": options,

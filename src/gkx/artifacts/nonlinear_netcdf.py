@@ -99,14 +99,21 @@ def _write_geometry_group(
         grid, geom = _build_output_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
     for name, values in (
-        ("bmag", geom.bmag_profile), ("bgrad", geom.bgrad_profile),
-        ("gbdrift", geom.gb_profile), ("gbdrift0", geom.gb0_profile),
-        ("cvdrift", geom.cv_profile), ("cvdrift0", geom.cv0_profile),
-        ("gds2", geom.gds2_profile), ("gds21", geom.gds21_profile),
-        ("gds22", geom.gds22_profile), ("grho", geom.grho_profile),
+        ("bmag", geom.bmag_profile),
+        ("bgrad", geom.bgrad_profile),
+        ("gbdrift", geom.gb_profile),
+        ("gbdrift0", geom.gb0_profile),
+        ("cvdrift", geom.cv_profile),
+        ("cvdrift0", geom.cv0_profile),
+        ("gds2", geom.gds2_profile),
+        ("gds21", geom.gds21_profile),
+        ("gds22", geom.gds22_profile),
+        ("grho", geom.grho_profile),
         ("jacobian", geom.jacobian_profile),
     ):
-        group.createVariable(name, "f4", ("theta",))[:] = np.asarray(values, dtype=np.float32)
+        group.createVariable(name, "f4", ("theta",))[:] = np.asarray(
+            values, dtype=np.float32
+        )
     group.createVariable("gradpar", "f4", ())[:] = np.float32(geom.gradpar_value)
     group.createVariable("nperiod", "i4", ())[:] = np.int32(
         cfg.grid.nperiod if cfg.grid.nperiod is not None else 1

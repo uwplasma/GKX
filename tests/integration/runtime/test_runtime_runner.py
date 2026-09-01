@@ -94,9 +94,7 @@ pytestmark = pytest.mark.integration
 def _base_runtime_cfg() -> RuntimeConfig:
     return RuntimeConfig(
         grid=GridConfig(Nx=1, Ny=8, Nz=16, Lx=6.28, Ly=6.28, boundary="periodic"),
-        time=TimeConfig(
-            t_max=0.2, dt=0.01, method="rk2", sample_stride=1
-        ),
+        time=TimeConfig(t_max=0.2, dt=0.01, method="rk2", sample_stride=1),
         geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
         init=InitializationConfig(
             init_field="density", init_amp=1.0e-8, gaussian_init=False
@@ -561,9 +559,7 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     # eigenvalue of the discretized linear operator at this resolution.
     geom = build_runtime_geometry(runtime)
     grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, runtime.grid))
-    grid = select_ky_grid(
-        grid_full, select_ky_index(np.asarray(grid_full.ky), 0.3)
-    )
+    grid = select_ky_grid(grid_full, select_ky_index(np.asarray(grid_full.ky), 0.3))
     params = build_runtime_linear_params(runtime, Nm=8, geom=geom)
     term_cfg = linear_terms_to_term_config(build_runtime_linear_terms(runtime))
     cache = build_linear_cache(grid, geom, params, 8, 8)
@@ -856,9 +852,7 @@ def test_runtime_linear_forwards_velocity_parallel_config(
     cfg0 = _base_runtime_cfg()
     cfg = replace(
         cfg0,
-        time=replace(
-            cfg0.time, sample_stride=1, dt=0.01, t_max=0.03
-        ),
+        time=replace(cfg0.time, sample_stride=1, dt=0.01, t_max=0.03),
         parallel=RuntimeParallelConfig(
             strategy="velocity", axis="hermite", backend="auto", num_devices=1
         ),
@@ -1022,9 +1016,7 @@ def test_prepare_runtime_nonlinear_reuses_existing_execution_contract() -> None:
     cfg = replace(
         _base_runtime_cfg(),
         grid=GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0, boundary="periodic"),
-        time=TimeConfig(
-            t_max=0.02, dt=0.01, method="rk2", fixed_dt=True
-        ),
+        time=TimeConfig(t_max=0.02, dt=0.01, method="rk2", fixed_dt=True),
         species=(RuntimeSpeciesConfig(name="ion"),),
         physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
         terms=RuntimeTermsConfig(nonlinear=0.0, hypercollisions=0.0, end_damping=0.0),
@@ -2454,9 +2446,7 @@ def test_runtime_linear_accepts_vmec_model_via_generated_eik(
     sampled = sample_flux_tube_geometry(analytic, theta)
     _write_root_eik_geometry(path, sampled, Dataset)
 
-    monkeypatch.setattr(
-        "gkx.runtime.generate_runtime_vmec_eik", lambda cfg: path
-    )
+    monkeypatch.setattr("gkx.runtime.generate_runtime_vmec_eik", lambda cfg: path)
 
     cfg_vmec = replace(
         cfg,
@@ -2525,9 +2515,7 @@ def test_runtime_linear_accepts_miller_model_via_generated_eik(
     path = tmp_path / "miller.eiknc.nc"
     _write_root_eik_geometry(path, sampled, Dataset)
 
-    monkeypatch.setattr(
-        "gkx.runtime.generate_runtime_miller_eik", lambda cfg: path
-    )
+    monkeypatch.setattr("gkx.runtime.generate_runtime_miller_eik", lambda cfg: path)
 
     cfg_miller = replace(
         cfg,
@@ -4252,7 +4240,9 @@ def test_runtime_parameter_scan_warm_start_declines_a_large_step(
     np.testing.assert_allclose(result.gamma, [0.01, 0.011, 1.0])
 
 
-def test_multimode_seed_fills_a_ky_selected_grid_and_leaves_the_zonal_mode_alone() -> None:
+def test_multimode_seed_fills_a_ky_selected_grid_and_leaves_the_zonal_mode_alone() -> (
+    None
+):
     """A linear scan point seeds the one k_y it selected, not nothing at all.
 
     The dealiased startup loop skips binormal index 0 because on a full grid
@@ -4282,8 +4272,14 @@ def test_multimode_seed_fills_a_ky_selected_grid_and_leaves_the_zonal_mode_alone
 
     state = np.asarray(
         _build_initial_condition(
-            grid, build_runtime_geometry(cfg), cfg,
-            ky_index=0, kx_index=0, Nl=2, Nm=3, nspecies=1,
+            grid,
+            build_runtime_geometry(cfg),
+            cfg,
+            ky_index=0,
+            kx_index=0,
+            Nl=2,
+            Nm=3,
+            nspecies=1,
         )
     )
     assert np.max(np.abs(state)) > 0.0
@@ -4394,7 +4390,9 @@ def test_run_adaptive_runtime_chunk_loop_reports_wall_eta(
     np.testing.assert_allclose(np.asarray(result.fields.phi), np.asarray([2.0 + 0.0j]))
 
 
-def test_run_adaptive_runtime_chunk_loop_keeps_exact_terminal_sample_with_stride() -> None:
+def test_run_adaptive_runtime_chunk_loop_keeps_exact_terminal_sample_with_stride() -> (
+    None
+):
     chunks = iter(
         [
             (

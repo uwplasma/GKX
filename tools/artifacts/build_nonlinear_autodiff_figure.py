@@ -42,21 +42,23 @@ def _load(path: Path) -> dict:
 
 
 def _memory_megabytes(profile: dict) -> tuple[float, float]:
-    by_policy = {row["checkpoint"]: row["temp_bytes"] / 1.0e6 for row in profile["rows"]}
+    by_policy = {
+        row["checkpoint"]: row["temp_bytes"] / 1.0e6 for row in profile["rows"]
+    }
     return by_policy["step"], by_policy["block"]
 
 
 def main() -> int:
-    memory = np.asarray([_memory_megabytes(_load(path)) for _label, path in MEMORY_PROFILES])
+    memory = np.asarray(
+        [_memory_megabytes(_load(path)) for _label, path in MEMORY_PROFILES]
+    )
     labels = [label for label, _path in MEMORY_PROFILES]
 
     ladder = _load(LADDER)
     rows = ladder["rows"]
     steps = np.asarray([row["window"] for row in rows])
     adjoint = np.asarray([abs(row["gradient"]) for row in rows])
-    finite_difference = np.asarray(
-        [abs(row["centered_fd_gradient"]) for row in rows]
-    )
+    finite_difference = np.asarray([abs(row["centered_fd_gradient"]) for row in rows])
     relative = np.asarray([row["ad_fd_relative_error"] for row in rows])
     diverged = np.flatnonzero(relative > TOLERANCE)
     knee = int(steps[diverged[0] - 1]) if diverged.size else None
@@ -76,9 +78,7 @@ def main() -> int:
     axes[1].plot(steps, adjoint, "o-", label="discrete adjoint")
     axes[1].plot(steps, finite_difference, "x--", label="centered FD")
     if knee is not None:
-        axes[1].axvspan(
-            knee, steps[diverged[0]], color="0.9", label="divergence knee"
-        )
+        axes[1].axvspan(knee, steps[diverged[0]], color="0.9", label="divergence knee")
     axes[1].set(
         xlabel="window steps",
         ylabel=r"$|d\langle Q\rangle/dp|$",

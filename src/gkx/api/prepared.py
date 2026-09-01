@@ -63,9 +63,7 @@ class PreparedSimulation:
 
     # -- execution -------------------------------------------------------
 
-    def solve(
-        self, parameters: Any = None, initial_state: Any = None
-    ) -> Any:
+    def solve(self, parameters: Any = None, initial_state: Any = None) -> Any:
         """Run this simulation and return its typed result.
 
         ``parameters`` is reserved for the differentiable path and must be

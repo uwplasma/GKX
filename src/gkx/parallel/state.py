@@ -80,7 +80,9 @@ def resolve_state_sharding(
 
     target_dim = axis_map[key]
     if target_dim not in dims:
-        raise ValueError(f"Cannot shard along '{target_dim}' for state with dims {dims}")
+        raise ValueError(
+            f"Cannot shard along '{target_dim}' for state with dims {dims}"
+        )
 
     spec_list: list[str | None] = [None] * len(dims)
     spec_list[dims.index(target_dim)] = axis_name
@@ -125,7 +127,9 @@ def species_hermite_state_spec(ndim: int) -> PartitionSpec:
     """
 
     if ndim == 6:
-        return PartitionSpec(SPECIES_MESH_AXIS, None, HERMITE_MESH_AXIS, None, None, None)
+        return PartitionSpec(
+            SPECIES_MESH_AXIS, None, HERMITE_MESH_AXIS, None, None, None
+        )
     if ndim == 5:
         return PartitionSpec(None, HERMITE_MESH_AXIS, None, None, None)
     raise ValueError("packed state must have 5 or 6 dimensions")
@@ -140,8 +144,8 @@ def resolve_species_hermite_sharding(
 ) -> NamedSharding:
     """Return the ``NamedSharding`` that places a packed state on the mesh."""
 
-    resolved = mesh if mesh is not None else build_species_hermite_mesh(
-        plan, devices=devices
+    resolved = (
+        mesh if mesh is not None else build_species_hermite_mesh(plan, devices=devices)
     )
     return NamedSharding(resolved, species_hermite_state_spec(int(G0.ndim)))
 

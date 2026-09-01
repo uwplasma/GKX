@@ -209,8 +209,6 @@ def autodiff_finite_difference_report(
     }
 
 
-
-
 @dataclass(frozen=True)
 class _EigenBranchSelection:
     selector_key: str
@@ -577,7 +575,9 @@ def _implicit_eigenpair_tangents(
     left_eigenvector = data.left_eigenvector
     n = int(matrix.shape[0])
     identity = jnp.eye(n, dtype=matrix.dtype)
-    top = jnp.concatenate([matrix - eigenvalue * identity, -eigenvector[:, None]], axis=1)
+    top = jnp.concatenate(
+        [matrix - eigenvalue * identity, -eigenvector[:, None]], axis=1
+    )
     bottom = jnp.concatenate(
         [jnp.conj(left_eigenvector)[None, :], jnp.zeros((1, 1), dtype=matrix.dtype)],
         axis=1,
@@ -596,7 +596,9 @@ def _implicit_eigenpair_tangents(
     return solution[n, :], solution[:n, :]
 
 
-def _packed_eigenpair_base(eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray) -> jnp.ndarray:
+def _packed_eigenpair_base(
+    eigenvalue: jnp.ndarray, eigenvector: jnp.ndarray
+) -> jnp.ndarray:
     return jnp.concatenate(
         [
             jnp.asarray([jnp.real(eigenvalue), jnp.imag(eigenvalue)]),
@@ -824,8 +826,6 @@ def implicit_eigenpair_observable_sensitivity_report(
         atol=atol,
         gap_floor=gap_floor,
     )
-
-
 
 
 __all__ = [

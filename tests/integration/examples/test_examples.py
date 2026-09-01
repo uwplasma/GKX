@@ -9,8 +9,12 @@ import jax.numpy as jnp
 import numpy as np
 
 from support.paths import REPO_ROOT, load_repo_script
-from examples.theory_and_demos.autodiff_inverse_growth import run_demo as run_inverse_growth_demo
-from examples.theory_and_demos.autodiff_inverse_twomode import run_demo as run_twomode_demo
+from examples.theory_and_demos.autodiff_inverse_growth import (
+    run_demo as run_inverse_growth_demo,
+)
+from examples.theory_and_demos.autodiff_inverse_twomode import (
+    run_demo as run_twomode_demo,
+)
 from examples.theory_and_demos.quasilinear_implicit_sensitivity import (
     run_demo as run_implicit_sensitivity_demo,
 )

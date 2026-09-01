@@ -354,10 +354,9 @@ def _radial_drift_frequency(
     species: _SpeciesFrequencyScales,
     geometry: _GeometryFrequencyScales,
 ) -> float:
-    drift_strength = (
-        species.vpar_max * species.vpar_max * abs(geometry.cvdrift0_max)
-        + species.muB_max * abs(geometry.gbdrift0_max)
-    )
+    drift_strength = species.vpar_max * species.vpar_max * abs(
+        geometry.cvdrift0_max
+    ) + species.muB_max * abs(geometry.gbdrift0_max)
     shat = float(_host_cfl_value(geom.s_hat, "s_hat"))
     if abs(shat) == 0.0:
         kx_effective = grid_bounds.kx_max
@@ -375,9 +374,13 @@ def _binormal_drift_frequency(
     *,
     include_diamagnetic_drive: bool,
 ) -> float:
-    omega = species.tzmax * grid_bounds.ky_max * (
-        species.vpar_max * species.vpar_max * geometry.cvdrift_max
-        + species.muB_max * geometry.gbdrift_max
+    omega = (
+        species.tzmax
+        * grid_bounds.ky_max
+        * (
+            species.vpar_max * species.vpar_max * geometry.cvdrift_max
+            + species.muB_max * geometry.gbdrift_max
+        )
     )
     if include_diamagnetic_drive and species.etamax < 1.0e5:
         omega += grid_bounds.ky_max * (
@@ -418,7 +421,9 @@ def _parallel_streaming_frequency(
         else 0.0
     )
     kperprho2 = (
-        grid_bounds.kperp_min * grid_bounds.kperp_min / (geometry.bmag_max * geometry.bmag_max)
+        grid_bounds.kperp_min
+        * grid_bounds.kperp_min
+        / (geometry.bmag_max * geometry.bmag_max)
         if geometry.bmag_max > 0.0
         else 0.0
     )
@@ -480,9 +485,11 @@ def warn_if_fixed_dt_exceeds_cfl(
 
     try:
         geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
-        wmax = float(np.sum(_linear_frequency_bound(
-            grid, geom_eff, params, n_laguerre, n_hermite
-        )))
+        wmax = float(
+            np.sum(
+                _linear_frequency_bound(grid, geom_eff, params, n_laguerre, n_hermite)
+            )
+        )
     except Exception:  # noqa: BLE001 - a startup hint must never stop a run
         return
     if not np.isfinite(wmax) or wmax <= 0.0:

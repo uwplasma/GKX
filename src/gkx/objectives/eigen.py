@@ -78,7 +78,9 @@ def dominant_real_eigenvalue(matrix: jnp.ndarray) -> jnp.ndarray:
     if matrix_arr.ndim != 2 or matrix_arr.shape[0] != matrix_arr.shape[1]:
         raise ValueError("matrix must be square")
     if not jnp.iscomplexobj(matrix_arr):
-        complex_dtype = jnp.complex128 if matrix_arr.dtype == jnp.float64 else jnp.complex64
+        complex_dtype = (
+            jnp.complex128 if matrix_arr.dtype == jnp.float64 else jnp.complex64
+        )
         matrix_arr = matrix_arr.astype(complex_dtype)
     return _dominant_real_eigenvalue_complex(matrix_arr)
 
@@ -103,7 +105,9 @@ def _branch_gap(eigs: np.ndarray, index: int) -> float:
 
 
 def _relative_slope_difference(a: float, b: float, *, floor: float) -> float:
-    return abs(float(a) - float(b)) / max(abs(float(a)), abs(float(b)), float(floor), 1.0e-300)
+    return abs(float(a) - float(b)) / max(
+        abs(float(a)), abs(float(b)), float(floor), 1.0e-300
+    )
 
 
 @dataclass(frozen=True)
@@ -172,7 +176,9 @@ def _branch_locality_spectrum(
     plus_eigs = _eigenvalues_for_branch_report(plus_matrix, name="plus_matrix")
     minus_eigs = _eigenvalues_for_branch_report(minus_matrix, name="minus_matrix")
     if plus_eigs.size != base_eigs.size or minus_eigs.size != base_eigs.size:
-        raise ValueError("base, plus, and minus matrices must have the same eigenvalue count")
+        raise ValueError(
+            "base, plus, and minus matrices must have the same eigenvalue count"
+        )
     base_index = int(np.argmax(np.real(base_eigs)))
     base_value = base_eigs[base_index]
     return _BranchLocalitySpectrum(

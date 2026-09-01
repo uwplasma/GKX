@@ -36,7 +36,9 @@ def main() -> None:
             Nl=3,
             Nm=8,
         )
-        stage2_cfg = build_secondary_stage2_config(cfg, restart_file=restart_path, t_max=2.0)
+        stage2_cfg = build_secondary_stage2_config(
+            cfg, restart_file=restart_path, t_max=2.0
+        )
         rows = run_secondary_modes(
             stage2_cfg,
             modes=SECONDARY_MODES,

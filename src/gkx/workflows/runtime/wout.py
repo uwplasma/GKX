@@ -7,7 +7,11 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Callable
 
-from gkx.workflows.runtime.toml import RUNTIME_TOML_SCHEMA_VERSION, load_toml, resolve_runtime_path
+from gkx.workflows.runtime.toml import (
+    RUNTIME_TOML_SCHEMA_VERSION,
+    load_toml,
+    resolve_runtime_path,
+)
 
 WOUT_SIGNATURE_VARIABLES = ("rmnc", "zmns", "xm", "xn")
 WOUT_FLAG_NAMES = ("--vmec", "--vmex")
@@ -43,9 +47,7 @@ def is_wout_file(path: str | Path) -> bool:
             if all(name in variables for name in WOUT_SIGNATURE_VARIABLES):
                 return True
             attributes = {str(name).lower() for name in ds.ncattrs()}
-            return "version_" in variables or any(
-                "vmec" in name for name in attributes
-            )
+            return "version_" in variables or any("vmec" in name for name in attributes)
     except OSError:
         return False
 
@@ -156,7 +158,11 @@ def deck_text(data: dict[str, Any], *, header: tuple[str, ...] = ()) -> str:
         key: value
         for key, value in data.items()
         if isinstance(value, dict)
-        or (isinstance(value, list) and value and all(isinstance(v, dict) for v in value))
+        or (
+            isinstance(value, list)
+            and value
+            and all(isinstance(v, dict) for v in value)
+        )
     }
     for key, value in data.items():
         if key not in tables and value is not None:

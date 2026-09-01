@@ -272,7 +272,9 @@ def main_cyclone(argv: list[str] | None = None) -> int:
 
     from jax import profiler
 
-    from gkx.solvers.nonlinear.diagnostic_integration import prepare_nonlinear_explicit_diagnostics
+    from gkx.solvers.nonlinear.diagnostic_integration import (
+        prepare_nonlinear_explicit_diagnostics,
+    )
     from gkx.runtime import run_runtime_nonlinear
 
     cfg, _data = load_runtime_from_toml(args.config)

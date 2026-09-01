@@ -167,8 +167,6 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
     }
 
 
-
-
 def _booz_xform_jax_search_paths() -> list[Path]:
     repo_root = Path(__file__).resolve().parents[3]
     raw_paths: list[Path] = []
@@ -234,9 +232,7 @@ def _import_booz_xform_backend() -> Any:
 
 
 def _import_booz_backend(preferred: str | None = None) -> Any:
-    choice = (
-        (preferred or os.environ.get("GKX_BOOZ_BACKEND", "auto")).strip().lower()
-    )
+    choice = (preferred or os.environ.get("GKX_BOOZ_BACKEND", "auto")).strip().lower()
     aliases = {
         "auto": "auto",
         "booz_xform_jax": "booz_xform_jax",

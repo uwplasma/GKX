@@ -103,7 +103,11 @@ def _gate_reports(path: Path, data: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(data.get("gate_reports"), list):
         reports.extend(item for item in data["gate_reports"] if isinstance(item, dict))
     promotion = data.get("promotion_gate")
-    if data.get("gate_index_include") is True and not reports and isinstance(promotion, dict):
+    if (
+        data.get("gate_index_include") is True
+        and not reports
+        and isinstance(promotion, dict)
+    ):
         reports.append(
             {
                 "case": data.get("case", path.stem),
@@ -143,7 +147,11 @@ def _gate_reports(path: Path, data: dict[str, Any]) -> list[dict[str, Any]]:
 def collect_gate_entries(patterns: list[str]) -> list[dict[str, Any]]:
     """Collect gate-report rows from one or more recursive glob patterns."""
 
-    paths = {Path(item) for pattern in patterns for item in glob.glob(pattern, recursive=True)}
+    paths = {
+        Path(item)
+        for pattern in patterns
+        for item in glob.glob(pattern, recursive=True)
+    }
     rows: list[dict[str, Any]] = []
     for path in sorted(paths):
         try:
@@ -684,17 +692,21 @@ def _run_gate_index(argv: list[str]) -> int:
     )
     rows = list(index["reports"])
     args.out_csv.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = list(rows[0]) if rows else [
-        "artifact",
-        "case",
-        "source",
-        "passed",
-        "n_gates",
-        "n_failed",
-        "failed_metrics",
-        "max_abs_error",
-        "max_rel_error",
-    ]
+    fieldnames = (
+        list(rows[0])
+        if rows
+        else [
+            "artifact",
+            "case",
+            "source",
+            "passed",
+            "n_gates",
+            "n_failed",
+            "failed_metrics",
+            "max_abs_error",
+            "max_rel_error",
+        ]
+    )
     with args.out_csv.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()

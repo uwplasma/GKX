@@ -61,9 +61,17 @@ def run_stellarator_itg_adam(
     """Run the explicit constrained Adam workflow used by the example scripts."""
 
     backend_info = discover_differentiable_geometry_backends()
-    p0 = default_stellarator_initial_params() if initial_params is None else jnp.asarray(initial_params)
+    p0 = (
+        default_stellarator_initial_params()
+        if initial_params is None
+        else jnp.asarray(initial_params)
+    )
     p = jnp.asarray(p0)
-    value_and_grad = jax.jit(jax.value_and_grad(lambda x: stellarator_itg_objective(x, objective_kind, config)))
+    value_and_grad = jax.jit(
+        jax.value_and_grad(
+            lambda x: stellarator_itg_objective(x, objective_kind, config)
+        )
+    )
     obs_fn = jax.jit(lambda x: qa_observable_vector(x, config))
 
     beta1 = jnp.asarray(0.9, dtype=p.dtype)
@@ -96,7 +104,9 @@ def run_stellarator_itg_adam(
                 "gradient_norm": float(jnp.linalg.norm(grad)),
             }
         )
-        if progress and (step == 0 or step == int(config.steps) or step % report_stride == 0):
+        if progress and (
+            step == 0 or step == int(config.steps) or step % report_stride == 0
+        ):
             print(
                 f"  step {step:4d}: objective={float(value):.6e}, "
                 f"|grad|={float(jnp.linalg.norm(grad)):.3e}"
@@ -131,15 +141,21 @@ def run_stellarator_itg_adam(
         finite_difference_executor=finite_difference_executor,
     )
     covariance = dict(residual_sensitivity["covariance"])
-    covariance["residual_jacobian_gate"] = residual_sensitivity["finite_difference_gate"]
+    covariance["residual_jacobian_gate"] = residual_sensitivity[
+        "finite_difference_gate"
+    ]
     covariance["residual_sensitivity_passed"] = bool(residual_sensitivity["passed"])
 
     nonlinear_trace = None
     if objective_kind == "nonlinear_heat_flux":
         times0, heat0 = nonlinear_heat_flux_trace(p0, config)
         times1, heat1 = nonlinear_heat_flux_trace(p, config)
-        summary0 = nonlinear_heat_flux_window_metrics(times0, heat0, tail_fraction=config.nonlinear_tail_fraction)
-        summary1 = nonlinear_heat_flux_window_metrics(times1, heat1, tail_fraction=config.nonlinear_tail_fraction)
+        summary0 = nonlinear_heat_flux_window_metrics(
+            times0, heat0, tail_fraction=config.nonlinear_tail_fraction
+        )
+        summary1 = nonlinear_heat_flux_window_metrics(
+            times1, heat1, tail_fraction=config.nonlinear_tail_fraction
+        )
         nonlinear_trace = {
             "times": np.asarray(times1, dtype=float).tolist(),
             "initial_heat_flux": np.asarray(heat0, dtype=float).tolist(),
@@ -172,7 +188,9 @@ def run_stellarator_itg_adam(
         final_params=tuple(float(x) for x in np.asarray(p, dtype=float)),
         initial_objective=initial_value,
         final_objective=final_value,
-        initial_observables=tuple(float(x) for x in np.asarray(initial_obs, dtype=float)),
+        initial_observables=tuple(
+            float(x) for x in np.asarray(initial_obs, dtype=float)
+        ),
         final_observables=tuple(float(x) for x in np.asarray(final_obs, dtype=float)),
         history=tuple(history),
         gradient_gate=gradient_gate,
@@ -199,8 +217,12 @@ def write_optional_portfolio_artifacts(
 
     if not portfolio:
         return None
-    if objective_weights is not None and len(objective_weights) != len(PORTFOLIO_OBJECTIVES):
-        raise ValueError("objective_weights must provide two values: growth,quasilinear_flux")
+    if objective_weights is not None and len(objective_weights) != len(
+        PORTFOLIO_OBJECTIVES
+    ):
+        raise ValueError(
+            "objective_weights must provide two values: growth,quasilinear_flux"
+        )
     defaults = StellaratorITGSampleSet()
     sample_set = StellaratorITGSampleSet(
         surfaces=defaults.surfaces if surfaces is None else surfaces,
@@ -220,13 +242,17 @@ def write_optional_portfolio_artifacts(
     )
     payload["optimization_objective_kind"] = result.objective_kind
     payload["optimized_params"] = params.tolist()
-    payload["optimization_initial_params"] = [float(value) for value in np.asarray(result.initial_params, dtype=float)]
+    payload["optimization_initial_params"] = [
+        float(value) for value in np.asarray(result.initial_params, dtype=float)
+    ]
     out = out_base.with_name(f"{out_base.name}_portfolio_gate")
     write_portfolio_gate_artifacts(payload, out)
     return out
 
 
-def _run_compare_task(task: tuple[str, dict[str, Any]]) -> StellaratorITGOptimizationResult:
+def _run_compare_task(
+    task: tuple[str, dict[str, Any]],
+) -> StellaratorITGOptimizationResult:
     kind, kwargs = task
     return run_stellarator_itg_adam(kind, **kwargs)
 
@@ -243,7 +269,11 @@ def compare_scripted_stellarator_itg_objectives(
 ) -> dict[str, Any]:
     """Run ordered independent objective examples without using the compact package optimizer."""
 
-    initial_tuple = None if initial_params is None else tuple(float(x) for x in np.asarray(initial_params, dtype=float))
+    initial_tuple = (
+        None
+        if initial_params is None
+        else tuple(float(x) for x in np.asarray(initial_params, dtype=float))
+    )
     tasks = [
         (
             str(kind),
@@ -257,7 +287,9 @@ def compare_scripted_stellarator_itg_objectives(
         )
         for kind in kinds
     ]
-    results = independent_map(_run_compare_task, tasks, workers=workers, executor=parallel_executor)
+    results = independent_map(
+        _run_compare_task, tasks, workers=workers, executor=parallel_executor
+    )
     return {
         "claim_level": "reduced_objective_optimization_comparison_not_full_production_vmec_gk",
         "production_nonlinear_optimization_claim": False,
@@ -274,7 +306,9 @@ def compare_scripted_stellarator_itg_objectives(
             "effective_workers": int(min(max(int(workers), 1), max(len(tasks), 1))),
             "executor": str(parallel_executor).strip().lower(),
             "finite_difference_workers": int(finite_difference_workers),
-            "finite_difference_executor": str(finite_difference_executor).strip().lower(),
+            "finite_difference_executor": str(finite_difference_executor)
+            .strip()
+            .lower(),
             "identity_contract": "parallel objective reports must preserve serial ordering and values",
         },
     }

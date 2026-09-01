@@ -431,7 +431,9 @@ def _run_linear_explicit_loop(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     t, step = 0.0, 0
     history = _LinearHistory()
-    total_steps_est, progress_stride, progress_started_at = _linear_loop_progress_clock(t_max, dt)
+    total_steps_est, progress_stride, progress_started_at = _linear_loop_progress_clock(
+        t_max, dt
+    )
     stepper = _make_linear_stepper(method, jit_enabled=jit_enabled)
 
     _emit_linear_start_if_requested(
@@ -596,8 +598,16 @@ def integrate_linear_explicit_from_config(
     )
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
     t, phi, _gamma, _omega, _diagnostics = integrate_linear_explicit_diagnostics(
-        G0, grid, cache, params, geom, explicit_cfg, terms,
-        mode_method="z_index", z_index=z_index, jit=True,
+        G0,
+        grid,
+        cache,
+        params,
+        geom,
+        explicit_cfg,
+        terms,
+        mode_method="z_index",
+        z_index=z_index,
+        jit=True,
         show_progress=show_progress,
     )
     return t, phi

@@ -84,9 +84,7 @@ def _field_line_tube(geometry: Any, samples: int, *, turns: float = 1.5):
         target = np.linspace(0.0, 1.0, samples)
         R_line = np.interp(target, source, np.asarray(R, dtype=float))
         Z_line = np.interp(target, source, np.asarray(Z, dtype=float))
-        zeta_line = np.interp(
-            target, source, np.unwrap(np.asarray(zeta, dtype=float))
-        )
+        zeta_line = np.interp(target, source, np.unwrap(np.asarray(zeta, dtype=float)))
         centre = np.stack(
             [R_line * np.cos(zeta_line), R_line * np.sin(zeta_line), Z_line],
             axis=-1,
@@ -100,8 +98,14 @@ def _field_line_tube(geometry: Any, samples: int, *, turns: float = 1.5):
         theta = np.linspace(-turns * np.pi, turns * np.pi, samples)
         zeta_line = q * theta
         radius = major + minor * np.cos(theta)
-        centre = np.stack([radius * np.cos(zeta_line), radius * np.sin(zeta_line),
-                           minor * np.sin(theta)], axis=-1)
+        centre = np.stack(
+            [
+                radius * np.cos(zeta_line),
+                radius * np.sin(zeta_line),
+                minor * np.sin(theta),
+            ],
+            axis=-1,
+        )
         radial_R = minor * np.cos(theta)
         radial_Z = minor * np.sin(theta)
     tangent = np.gradient(centre, axis=0)

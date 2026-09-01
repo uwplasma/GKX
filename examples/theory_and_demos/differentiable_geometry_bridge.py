@@ -61,7 +61,9 @@ DEFAULT_PNG = REPO_ROOT / "docs" / "_static" / "differentiable_geometry_bridge.p
 DEFAULT_JSON = REPO_ROOT / "docs" / "_static" / "differentiable_geometry_bridge.json"
 
 
-def _mapping_from_boundary_params(params: jnp.ndarray, *, ntheta: int = 96) -> dict[str, Any]:
+def _mapping_from_boundary_params(
+    params: jnp.ndarray, *, ntheta: int = 96
+) -> dict[str, Any]:
     """Analytic field-line map with VMEC-like boundary controls.
 
     ``params[0]`` controls a mirror/ripple amplitude and ``params[1]`` controls
@@ -135,14 +137,18 @@ def _inverse_design(
         )
         if step == int(nsteps):
             break
-        jac = jax.jacfwd(lambda p: _observable_fn(p)[jnp.asarray(observable_indices)])(params)
+        jac = jax.jacfwd(lambda p: _observable_fn(p)[jnp.asarray(observable_indices)])(
+            params
+        )
         normal = jac.T @ jac + float(damping) * jnp.eye(int(params.shape[0]))
         delta = jnp.linalg.solve(normal, jac.T @ residual)
         params = params - delta
     return np.asarray(params), history
 
 
-def _covariance_ellipse(cov: np.ndarray, center: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _covariance_ellipse(
+    cov: np.ndarray, center: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     eigvals, eigvecs = np.linalg.eigh(cov)
     eigvals = np.maximum(eigvals, 0.0)
     angle = np.linspace(0.0, 2.0 * np.pi, 200)
@@ -193,7 +199,9 @@ def make_figure(payload: dict[str, Any], out_png: Path) -> None:
         vmec_text = f"VMEC boundary AD/FD: {float(vmec['max_abs_ad_fd_error']):.1e}"
     vmec_metric_text = "VMEC metric AD/FD: n/a"
     if isinstance(vmec_metric, dict) and vmec_metric.get("available"):
-        vmec_metric_text = f"VMEC metric AD/FD: {float(vmec_metric['max_abs_ad_fd_error']):.1e}"
+        vmec_metric_text = (
+            f"VMEC metric AD/FD: {float(vmec_metric['max_abs_ad_fd_error']):.1e}"
+        )
     vmec_field_line_text = "VMEC field-line AD/FD: n/a"
     if isinstance(vmec_field_line, dict) and vmec_field_line.get("available"):
         vmec_field_line_text = f"VMEC field-line AD/FD: {float(vmec_field_line['max_abs_ad_fd_error']):.1e}"
@@ -208,14 +216,38 @@ def make_figure(payload: dict[str, Any], out_png: Path) -> None:
         status = "pass" if vmec_array_parity.get("production_parity_passed") else "open"
         equal_arc_status = "core n/a"
         if vmec_array_parity.get("equal_arc_core_array_metrics"):
-            core_status = "pass" if vmec_array_parity.get("equal_arc_core_passed") else "open"
-            core_worst = float(vmec_array_parity.get("equal_arc_core_worst_normalized_max_abs", np.nan))
-            bgrad_status = "pass" if vmec_array_parity.get("equal_arc_derivative_passed") else "open"
-            bgrad_worst = float(vmec_array_parity.get("equal_arc_derivative_worst_normalized_max_abs", np.nan))
-            metric_status = "pass" if vmec_array_parity.get("equal_arc_metric_passed") else "open"
-            metric_worst = float(vmec_array_parity.get("equal_arc_metric_worst_normalized_max_abs", np.nan))
-            drift_status = "pass" if vmec_array_parity.get("equal_arc_drift_passed") else "open"
-            drift_worst = float(vmec_array_parity.get("equal_arc_drift_worst_normalized_max_abs", np.nan))
+            core_status = (
+                "pass" if vmec_array_parity.get("equal_arc_core_passed") else "open"
+            )
+            core_worst = float(
+                vmec_array_parity.get("equal_arc_core_worst_normalized_max_abs", np.nan)
+            )
+            bgrad_status = (
+                "pass"
+                if vmec_array_parity.get("equal_arc_derivative_passed")
+                else "open"
+            )
+            bgrad_worst = float(
+                vmec_array_parity.get(
+                    "equal_arc_derivative_worst_normalized_max_abs", np.nan
+                )
+            )
+            metric_status = (
+                "pass" if vmec_array_parity.get("equal_arc_metric_passed") else "open"
+            )
+            metric_worst = float(
+                vmec_array_parity.get(
+                    "equal_arc_metric_worst_normalized_max_abs", np.nan
+                )
+            )
+            drift_status = (
+                "pass" if vmec_array_parity.get("equal_arc_drift_passed") else "open"
+            )
+            drift_worst = float(
+                vmec_array_parity.get(
+                    "equal_arc_drift_worst_normalized_max_abs", np.nan
+                )
+            )
             equal_arc_status = (
                 f"Boozer core {core_status} {core_worst:.1e}, "
                 f"bgrad {bgrad_status} {bgrad_worst:.1e}, "
@@ -251,17 +283,26 @@ def make_figure(payload: dict[str, Any], out_png: Path) -> None:
         ),
         transform=axes[0, 0].transAxes,
         fontsize=5.75,
-        bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "alpha": 0.82, "edgecolor": "#c9c9c9"},
+        bbox={
+            "boxstyle": "round,pad=0.25",
+            "facecolor": "white",
+            "alpha": 0.82,
+            "edgecolor": "#c9c9c9",
+        },
     )
 
     scale = np.maximum(np.max(np.abs(sensitivity), axis=1, keepdims=True), 1.0e-14)
-    im = axes[0, 1].imshow(sensitivity / scale, cmap="coolwarm", vmin=-1.0, vmax=1.0, aspect="auto")
+    im = axes[0, 1].imshow(
+        sensitivity / scale, cmap="coolwarm", vmin=-1.0, vmax=1.0, aspect="auto"
+    )
     axes[0, 1].set_xticks([0, 1], ["ripple", "elongation"])
     axes[0, 1].set_yticks(np.arange(len(names)), names, fontsize=8)
     axes[0, 1].set_title("Normalized AD sensitivity map")
     fig.colorbar(im, ax=axes[0, 1], shrink=0.86, label="row-normalized derivative")
 
-    axes[1, 0].semilogy(np.arange(obj.size), np.maximum(obj, 1.0e-30), marker="o", color="#edae49")
+    axes[1, 0].semilogy(
+        np.arange(obj.size), np.maximum(obj, 1.0e-30), marker="o", color="#edae49"
+    )
     axes[1, 0].set_xlabel("Gauss-Newton step")
     axes[1, 0].set_ylabel("geometry objective")
     axes[1, 0].set_title("Two-parameter inverse design")
@@ -296,7 +337,9 @@ def make_figure(payload: dict[str, Any], out_png: Path) -> None:
     axes[1, 1].set_title("Local UQ covariance")
     axes[1, 1].legend(frameon=True, fontsize=9)
 
-    fig.suptitle("Differentiable geometry bridge: AD, inverse design, and UQ", fontsize=15)
+    fig.suptitle(
+        "Differentiable geometry bridge: AD, inverse design, and UQ", fontsize=15
+    )
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=220)
     plt.close(fig)
@@ -309,11 +352,17 @@ initial = jnp.asarray([0.035, 0.12], dtype=jnp.float64)
 target_params = jnp.asarray([0.085, 0.34], dtype=jnp.float64)
 final_params, history = _inverse_design(initial, target_params)
 
-sensitivity = geometry_sensitivity_report(_mapping_from_boundary_params, final_params, fd_step=2.0e-5)
+sensitivity = geometry_sensitivity_report(
+    _mapping_from_boundary_params, final_params, fd_step=2.0e-5
+)
 target_obs = np.asarray(_observable_fn(target_params))[[1, 2]]
 final_obs = np.asarray(_observable_fn(jnp.asarray(final_params)))[[1, 2]]
 residual = final_obs - target_obs
-jac = np.asarray(jax.jacfwd(lambda p: _observable_fn(p)[jnp.asarray([1, 2])])(jnp.asarray(final_params)))
+jac = np.asarray(
+    jax.jacfwd(lambda p: _observable_fn(p)[jnp.asarray([1, 2])])(
+        jnp.asarray(final_params)
+    )
+)
 uq = covariance_diagnostics(jac, residual, regularization=1.0e-8)
 workflow_report = geometry_inverse_design_report(
     _mapping_from_boundary_params,
@@ -336,7 +385,9 @@ vmec_state_boozer_flux_tube = vmex_boozer_flux_tube_sensitivity_report()
 
 payload: dict[str, Any] = {
     "backend_info": backend_info,
-    "booz_xform_jax_api_available": bool(backend_info.get("booz_xform_jax_api_available", False)),
+    "booz_xform_jax_api_available": bool(
+        backend_info.get("booz_xform_jax_api_available", False)
+    ),
     "booz_xform_flux_tube": booz_flux_tube,
     "booz_xform_spectral": booz_spectral,
     "vmex_boozer_flux_tube": vmec_state_boozer_flux_tube,
@@ -368,7 +419,9 @@ payload: dict[str, Any] = {
 }
 
 OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-OUT_JSON.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+OUT_JSON.write_text(
+    json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
 make_figure(payload, OUT_PNG)
 print(f"Wrote {OUT_PNG}")
 print(f"Wrote {OUT_JSON}")

@@ -170,7 +170,10 @@ def _status(message: str) -> None:
 
 def _print_intro(toml_path: Path) -> None:
     settings = DEFAULT_DEMO_SETTINGS
-    print("No input specified; running the default Cyclone initial-value demo.", flush=True)
+    print(
+        "No input specified; running the default Cyclone initial-value demo.",
+        flush=True,
+    )
     print(
         "The first run includes JAX compilation; progress reports elapsed time and ETA.",
         flush=True,
@@ -227,7 +230,9 @@ def run_default_linear_demo(*, deps: DefaultDemoDeps) -> int:
     )
     paths = deps.write_runtime_linear_artifacts(default_demo_artifact_base(), result)
     plot_path = _write_plot(deps, result)
-    print(f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True)
+    print(
+        f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True
+    )
     for path in paths.values():
         print(f"saved {path}", flush=True)
     print(f"saved {plot_path}", flush=True)

@@ -72,10 +72,7 @@ class _SpectralGeometryMixin:
         s_hat_safe = jnp.where(s_hat == 0.0, 1.0, s_hat)
         kx_hat = kx0 / s_hat_safe
         kx_hat = jnp.where(s_hat == 0.0, kx0, kx_hat)
-        kperp2 = (
-            ky * (ky * gds2 + 2.0 * kx_hat * gds21)
-            + (kx_hat * kx_hat) * gds22
-        )
+        kperp2 = ky * (ky * gds2 + 2.0 * kx_hat * gds21) + (kx_hat * kx_hat) * gds22
         if geometry.kperp2_bmag:
             bmag_inv = 1.0 / geometry.bmag(theta)
             return kperp2 * (bmag_inv * bmag_inv)
@@ -294,6 +291,7 @@ class SAlphaGeometry(_SpectralGeometryMixin):
         cv0 = scale * (-self.s_hat * jnp.sin(theta)) / self.R0
         gb0 = cv0
         return cv, gb, cv0, gb0
+
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)

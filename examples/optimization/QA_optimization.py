@@ -45,9 +45,7 @@ inp = vj.VmecInput.from_file(DATA)
 rbc, zbs = inp.rbc.copy(), inp.zbs.copy()
 rbc[inp.ntor + 1, 1] += SEED_PERTURBATION
 zbs[inp.ntor + 1, 1] += SEED_PERTURBATION
-inp = replace(
-    inp, rbc=rbc, zbs=zbs, am=np.zeros_like(inp.am), pres_scale=0.0
-)
+inp = replace(inp, rbc=rbc, zbs=zbs, am=np.zeros_like(inp.am), pres_scale=0.0)
 if ci_smoke:
     inp = replace(
         inp,
@@ -57,9 +55,7 @@ if ci_smoke:
         delt=0.5,
     ).change_resolution(mpol=3, ntor=3, ntheta=12, nzeta=10)
 
-grid = gkx.build_spectral_grid(
-    gkx.GridConfig(Nx=NX, Ny=NY, Nz=NZ, Lx=62.8, Ly=62.8)
-)
+grid = gkx.build_spectral_grid(gkx.GridConfig(Nx=NX, Ny=NY, Nz=NZ, Lx=62.8, Ly=62.8))
 terms = gkx.TermConfig(
     collisions=1.0,
     hypercollisions=1.0,
@@ -212,6 +208,7 @@ def report(label, local_equilibrium):
         f"iota={values['mean iota']:.4f}, GKX Q={values['GKX Q']:.6e}"
     )
     return values
+
 
 for max_mode, max_nfev in zip(MAX_MODES, MAX_NFEV):
     print(f"\n===== QA stage, max_mode = {max_mode} =====")

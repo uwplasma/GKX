@@ -425,7 +425,9 @@ def test_profile_linear_rhs_parallel_slices_builds_summary(monkeypatch) -> None:
     monkeypatch.setattr(linear_slices, "build_problem", fake_problem)
     monkeypatch.setattr("jax.devices", lambda _kind=None: [object(), object()])
     monkeypatch.setattr("gkx.operators.linear.rhs.linear_rhs_cached", fake_rhs)
-    monkeypatch.setattr("gkx.solvers.linear.parallel.linear_rhs_parallel_cached", fake_rhs)
+    monkeypatch.setattr(
+        "gkx.solvers.linear.parallel.linear_rhs_parallel_cached", fake_rhs
+    )
 
     summary = linear_slices.profile_linear_rhs_parallel_slices(
         platform="cpu",

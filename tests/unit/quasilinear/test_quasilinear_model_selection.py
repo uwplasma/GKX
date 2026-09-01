@@ -288,7 +288,9 @@ def _selection_extra_calibration_report(
     return report
 
 
-def _selection_extra_optimized_equilibrium_audit(*, passed: bool = True) -> dict[str, Any]:
+def _selection_extra_optimized_equilibrium_audit(
+    *, passed: bool = True
+) -> dict[str, Any]:
     return {
         "kind": "production_nonlinear_turbulent_flux_optimization_guard",
         "claim_level": "production_nonlinear_optimization_promoted_by_replicated_transport_windows",
@@ -368,9 +370,15 @@ def test_required_candidate_metrics_normalize_thresholds_and_payloads() -> None:
 def test_model_selection_path_inputs_reject_malformed_json_payloads(
     tmp_path: Path,
 ) -> None:
-    dataset = _selection_extra_write_json(tmp_path / "dataset.json", _selection_extra_dataset_payload())
-    candidate = _selection_extra_write_json(tmp_path / "candidate.json", _selection_extra_candidate_payload())
-    calibration = _selection_extra_write_json(tmp_path / "calibration.json", _selection_extra_calibration_report())
+    dataset = _selection_extra_write_json(
+        tmp_path / "dataset.json", _selection_extra_dataset_payload()
+    )
+    candidate = _selection_extra_write_json(
+        tmp_path / "candidate.json", _selection_extra_candidate_payload()
+    )
+    calibration = _selection_extra_write_json(
+        tmp_path / "calibration.json", _selection_extra_calibration_report()
+    )
 
     bad_json = tmp_path / "bad.json"
     bad_json.write_text("{not-json", encoding="utf-8")
@@ -433,11 +441,15 @@ def test_model_selection_fails_closed_on_absolute_flux_overclaim_without_holdout
     assert status["calibration_reports"][0]["holdout_mean_abs_relative_error"] is None
 
 
-def test_model_selection_fails_closed_for_selection_extra_calibration_report_missing_by_split() -> None:
+def test_model_selection_fails_closed_for_selection_extra_calibration_report_missing_by_split() -> (
+    None
+):
     status = build_quasilinear_model_selection_status(
         dataset_sufficiency=_selection_extra_dataset_payload(),
         candidate_uncertainty=_selection_extra_candidate_payload(),
-        calibration_reports=[_selection_extra_calibration_report(include_by_split=False)],
+        calibration_reports=[
+            _selection_extra_calibration_report(include_by_split=False)
+        ],
     )
 
     assert status["passed"] is False
@@ -449,8 +461,12 @@ def test_model_selection_fails_closed_for_selection_extra_calibration_report_mis
 
 
 def test_model_selection_path_wrapper_requires_path_payloads(tmp_path: Path) -> None:
-    candidate = _selection_extra_write_json(tmp_path / "candidate.json", _selection_extra_candidate_payload())
-    calibration = _selection_extra_write_json(tmp_path / "calibration.json", _selection_extra_calibration_report())
+    candidate = _selection_extra_write_json(
+        tmp_path / "candidate.json", _selection_extra_candidate_payload()
+    )
+    calibration = _selection_extra_write_json(
+        tmp_path / "calibration.json", _selection_extra_calibration_report()
+    )
 
     with pytest.raises(TypeError, match="dataset_sufficiency must be a path"):
         build_quasilinear_model_selection_status_from_paths(
@@ -459,7 +475,9 @@ def test_model_selection_path_wrapper_requires_path_payloads(tmp_path: Path) -> 
             calibration_reports=[calibration],
         )
 
-    dataset = _selection_extra_write_json(tmp_path / "dataset.json", _selection_extra_dataset_payload())
+    dataset = _selection_extra_write_json(
+        tmp_path / "dataset.json", _selection_extra_dataset_payload()
+    )
     with pytest.raises(TypeError, match=r"calibration_reports\[0\] must be a path"):
         build_quasilinear_model_selection_status_from_paths(
             dataset_sufficiency=dataset,
@@ -474,18 +492,27 @@ def test_model_selection_path_wrapper_requires_path_payloads(tmp_path: Path) -> 
             dataset_sufficiency=dataset,
             candidate_uncertainty=candidate,
             calibration_reports=[calibration],
-            optimized_equilibrium_nonlinear_audits=[_selection_extra_optimized_equilibrium_audit()],  # type: ignore[list-item]
+            optimized_equilibrium_nonlinear_audits=[
+                _selection_extra_optimized_equilibrium_audit()
+            ],  # type: ignore[list-item]
         )
 
 
 def test_model_selection_path_wrapper_accepts_selection_extra_optimized_equilibrium_audit(
     tmp_path: Path,
 ) -> None:
-    dataset = _selection_extra_write_json(tmp_path / "dataset.json", _selection_extra_dataset_payload())
-    candidate = _selection_extra_write_json(tmp_path / "candidate.json", _selection_extra_candidate_payload())
-    calibration = _selection_extra_write_json(tmp_path / "calibration.json", _selection_extra_calibration_report())
+    dataset = _selection_extra_write_json(
+        tmp_path / "dataset.json", _selection_extra_dataset_payload()
+    )
+    candidate = _selection_extra_write_json(
+        tmp_path / "candidate.json", _selection_extra_candidate_payload()
+    )
+    calibration = _selection_extra_write_json(
+        tmp_path / "calibration.json", _selection_extra_calibration_report()
+    )
     audit = _selection_extra_write_json(
-        tmp_path / "optimized_audit.json", _selection_extra_optimized_equilibrium_audit()
+        tmp_path / "optimized_audit.json",
+        _selection_extra_optimized_equilibrium_audit(),
     )
 
     status = build_quasilinear_model_selection_status_from_paths(

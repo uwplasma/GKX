@@ -127,8 +127,7 @@ def _gyrokinetic_moment_shape(
     if state.ndim == 6:
         return int(state.shape[1]), int(state.shape[2])
     raise ValueError(
-        f"{name} must have shape (Nl, Nm, Ny, Nx, Nz) or "
-        "(Ns, Nl, Nm, Ny, Nx, Nz)"
+        f"{name} must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
     )
 
 

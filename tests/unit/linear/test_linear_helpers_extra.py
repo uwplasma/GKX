@@ -22,9 +22,17 @@ import gkx.terms.linear_terms as linear_terms
 from gkx.operators.linear.cache_arrays import hypercollision_damping
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H, lenard_bernstein_eigenvalues
-from gkx.operators.linear.params import LinearParams, LinearTerms, linear_terms_to_term_config, term_config_to_linear_terms
+from gkx.operators.linear.params import (
+    LinearParams,
+    LinearTerms,
+    linear_terms_to_term_config,
+    term_config_to_linear_terms,
+)
 from gkx.operators.linear.rhs import linear_rhs, linear_rhs_cached
-from gkx.solvers.linear.integrators import integrate_linear, integrate_linear_diagnostics
+from gkx.solvers.linear.integrators import (
+    integrate_linear,
+    integrate_linear_diagnostics,
+)
 from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
 from gkx.operators.linear.cache_arrays import (
     _build_end_damping_profile_array,
@@ -124,9 +132,7 @@ def test_linear_validation_helpers_still_check_host_values_inside_a_trace() -> N
 
     def probe(x):
         seen["negative_scalar"] = verdict(_check_positive, -1.0, "vth")
-        seen["zero_in_array"] = verdict(
-            _check_positive, np.asarray([1.0, 0.0]), "dz"
-        )
+        seen["zero_in_array"] = verdict(_check_positive, np.asarray([1.0, 0.0]), "dz")
         seen["negative_nonneg"] = verdict(_check_nonnegative, -1.0, "tau_e")
         seen["good_scalar"] = verdict(_check_positive, 1.0, "vth")
         seen["traced"] = verdict(_check_positive, x, "vth")
@@ -194,7 +200,6 @@ def test_structured_tridiagonal_last_axis_matches_fused_reference_and_jvp() -> N
         rtol=tolerance,
         atol=tolerance,
     )
-
 
 
 def test_linear_dissipation_terms_have_single_canonical_owner() -> None:
@@ -649,8 +654,7 @@ def test_sheared_kx_cache_zero_shear_identity_and_tangent(spectral_grid) -> None
         )
 
     G = (
-        jnp.arange(2 * 3 * 4 * 4 * 8, dtype=jnp.float32).reshape(2, 3, 4, 4, 8)
-        / 1000.0
+        jnp.arange(2 * 3 * 4 * 4 * 8, dtype=jnp.float32).reshape(2, 3, 4, 4, 8) / 1000.0
     ).astype(jnp.complex64)
     rhs_base, phi_base = linear_rhs_cached(G, cache, params, use_jit=False)
     rhs_identity, phi_identity = linear_rhs_cached(
@@ -1000,18 +1004,21 @@ def test_integrate_linear_wrapper_routes_methods(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "gkx.solvers.linear.integrators._integrate_linear_cached",
-        lambda *args, **kwargs: calls.append(("cached", kwargs["method"]))
-        or ("G", "phi"),
+        lambda *args, **kwargs: (
+            calls.append(("cached", kwargs["method"])) or ("G", "phi")
+        ),
     )
     monkeypatch.setattr(
         "gkx.solvers.linear.integrators._integrate_linear_cached_donate",
-        lambda *args, **kwargs: calls.append(("donate", kwargs["method"]))
-        or ("Gd", "phid"),
+        lambda *args, **kwargs: (
+            calls.append(("donate", kwargs["method"])) or ("Gd", "phid")
+        ),
     )
     monkeypatch.setattr(
         "gkx.solvers.linear.integrators._integrate_linear_implicit_cached",
-        lambda *args, **kwargs: calls.append(("implicit", "implicit"))
-        or ("Gi", "phii"),
+        lambda *args, **kwargs: (
+            calls.append(("implicit", "implicit")) or ("Gi", "phii")
+        ),
     )
 
     assert integrate_linear(

@@ -163,15 +163,11 @@ def _weighted_centered_difference_1d_l(
         out = out.at[0].set(0.0)
         out = out.at[-1].set(0.0)
     else:
-        out = out.at[0].set(
-            (4.0 * x[1] - 3.0 * x[0] - x[2]) / (2.0 * (g[1] - g[0]))
-        )
+        out = out.at[0].set((4.0 * x[1] - 3.0 * x[0] - x[2]) / (2.0 * (g[1] - g[0])))
         out = out.at[-1].set(
             (-4.0 * x[-2] + 3.0 * x[-1] + x[-3]) / (2.0 * (g[-1] - g[-2]))
         )
-    center = _weighted_center_stencil(
-        x[:-2], x[1:-1], x[2:], g[:-2], g[1:-1], g[2:]
-    )
+    center = _weighted_center_stencil(x[:-2], x[1:-1], x[2:], g[:-2], g[1:-1], g[2:])
     return out.at[1:-1].set(center)
 
 
@@ -179,9 +175,7 @@ def _weighted_centered_difference_1d_r(x: jnp.ndarray, g: jnp.ndarray) -> jnp.nd
     out = jnp.zeros_like(x)
     out = out.at[0].set((2.0 * (x[1] - x[0])) / (2.0 * (g[1] - g[0])))
     out = out.at[-1].set((2.0 * (x[-1] - x[-2])) / (2.0 * (g[-1] - g[-2])))
-    center = _weighted_center_stencil(
-        x[:-2], x[1:-1], x[2:], g[:-2], g[1:-1], g[2:]
-    )
+    center = _weighted_center_stencil(x[:-2], x[1:-1], x[2:], g[:-2], g[1:-1], g[2:])
     return out.at[1:-1].set(center)
 
 
@@ -212,9 +206,7 @@ def _weighted_centered_difference_2d_l(
 
 def _weighted_centered_difference_2d_r(x: jnp.ndarray, g: jnp.ndarray) -> jnp.ndarray:
     out = jnp.zeros_like(x)
-    out = out.at[0, :].set(
-        (2.0 * (x[1, :] - x[0, :])) / (2.0 * (g[1, :] - g[0, :]))
-    )
+    out = out.at[0, :].set((2.0 * (x[1, :] - x[0, :])) / (2.0 * (g[1, :] - g[0, :])))
     out = out.at[-1, :].set(
         (2.0 * (x[-1, :] - x[-2, :])) / (2.0 * (g[-1, :] - g[-2, :]))
     )

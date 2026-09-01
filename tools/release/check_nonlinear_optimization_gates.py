@@ -660,7 +660,9 @@ def _control_status(
     )
     nested_manifest_path = _expected_nested_manifest(control)
     nested_manifest = (
-        _load_optional_json(nested_manifest_path) if nested_manifest_path is not None else None
+        _load_optional_json(nested_manifest_path)
+        if nested_manifest_path is not None
+        else None
     )
     runtime_outputs = _expected_runtime_outputs(nested_manifest)
     runtime_status = _runtime_output_status(
@@ -876,7 +878,9 @@ def main(argv: list[str] | None = None) -> int:
     command = tokens[0]
     if command not in COMMANDS:
         choices = ", ".join(sorted(COMMANDS))
-        raise SystemExit(f"unknown nonlinear optimization gate {command!r}; choose one of: {choices}")
+        raise SystemExit(
+            f"unknown nonlinear optimization gate {command!r}; choose one of: {choices}"
+        )
     return COMMANDS[command](tokens[1:])
 
 

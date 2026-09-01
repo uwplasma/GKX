@@ -10,7 +10,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.objectives.autodiff_validation import implicit_eigenpair_observable_sensitivity_report
+from gkx.objectives.autodiff_validation import (
+    implicit_eigenpair_observable_sensitivity_report,
+)
 from gkx.objectives.geometry import _objective_gate_rows
 from gkx.objectives.vmec_boozer_context import (
     _mode21_vmec_boozer_linear_context,
@@ -35,7 +37,6 @@ VMEC_BOOZER_NONLINEAR_WINDOW_OBJECTIVE_NAMES = (
     "nonlinear_window_heat_flux_cv",
     "nonlinear_window_heat_flux_trend",
 )
-
 
 
 def _reduced_nonlinear_window_metrics_from_linear_observables(
@@ -84,10 +85,14 @@ def _reduced_nonlinear_window_metrics_from_linear_observables(
         return energy_next, flux_scale * energy_next
 
     first_flux = flux_scale * energy0
-    _energy_final, stepped_flux = jax.lax.scan(rk2_step, energy0, None, length=steps_int)
+    _energy_final, stepped_flux = jax.lax.scan(
+        rk2_step, energy0, None, length=steps_int
+    )
     flux_trace = jnp.concatenate([jnp.reshape(first_flux, (1,)), stepped_flux])
     n_samples = steps_int + 1
-    start_index = max(0, min(n_samples - 2, int((1.0 - tail_fraction_float) * n_samples)))
+    start_index = max(
+        0, min(n_samples - 2, int((1.0 - tail_fraction_float) * n_samples))
+    )
     window = flux_trace[start_index:]
     mean = jnp.mean(window)
     centered_flux = window - mean
@@ -95,8 +100,14 @@ def _reduced_nonlinear_window_metrics_from_linear_observables(
     cv = std / jnp.maximum(jnp.abs(mean), eps)
     times = dt_arr * jnp.arange(window.size, dtype=dtype)
     centered_time = times - jnp.mean(times)
-    slope = jnp.sum(centered_time * centered_flux) / jnp.maximum(jnp.sum(centered_time * centered_time), eps)
-    normalized_trend = slope * (dt_arr * jnp.asarray(window.size, dtype=dtype)) / jnp.maximum(jnp.abs(mean), eps)
+    slope = jnp.sum(centered_time * centered_flux) / jnp.maximum(
+        jnp.sum(centered_time * centered_time), eps
+    )
+    normalized_trend = (
+        slope
+        * (dt_arr * jnp.asarray(window.size, dtype=dtype))
+        / jnp.maximum(jnp.abs(mean), eps)
+    )
     return jnp.asarray([mean, cv, normalized_trend], dtype=dtype)
 
 

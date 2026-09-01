@@ -1389,7 +1389,11 @@ def test_integrate_linear_donation_matches_nondonated(cyclone_world):
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
     shape = (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
-    G = jnp.arange(np.prod(shape), dtype=jnp.float32).reshape(shape).astype(jnp.complex64)
+    G = (
+        jnp.arange(np.prod(shape), dtype=jnp.float32)
+        .reshape(shape)
+        .astype(jnp.complex64)
+    )
     cache = build_linear_cache(grid, geom, params, shape[0], shape[1])
 
     state, phi = integrate_linear(
@@ -1783,9 +1787,7 @@ def test_implicit_standard_and_diagnostic_routes_match(cyclone_world, only_terms
         implicit_restart=2,
     )
 
-    standard, fields = integrate_linear(
-        state, grid, geom, params, **common
-    )
+    standard, fields = integrate_linear(state, grid, geom, params, **common)
     diagnostic, phi, density = integrate_linear_diagnostics(
         state, grid, geom, params, **common
     )
@@ -1979,9 +1981,7 @@ def test_linked_boundary_growth_gradient_matches_finite_difference() -> None:
     Nl, Nm = 2, 4
     tprim = jnp.asarray(6.9)
 
-    cache = build_linear_cache(
-        grid, geom, replace(base_params, tprim=tprim), Nl, Nm
-    )
+    cache = build_linear_cache(grid, geom, replace(base_params, tprim=tprim), Nl, Nm)
     assert bool(cache.use_twist_shift)
     assert int(cache.jtwist) != 0
 

@@ -84,7 +84,9 @@ W7X_EIGENFUNCTION_GATE_TOLERANCES = {
 DEFAULT_OVERLAP_CSV = (
     ROOT / "docs" / "_static" / "comparison" / "kbm_reference_candidates.csv"
 )
-DEFAULT_OVERLAP_OUT = ROOT / "docs" / "_static" / "kbm_eigenfunction_overlap_summary.png"
+DEFAULT_OVERLAP_OUT = (
+    ROOT / "docs" / "_static" / "kbm_eigenfunction_overlap_summary.png"
+)
 DEFAULT_REFERENCE_OVERLAY_OUT = (
     ROOT / "docs" / "_static" / "eigenfunction_reference_overlay.png"
 )
@@ -105,7 +107,9 @@ def load_eigenfunction_csv(path: Path) -> tuple[np.ndarray, np.ndarray]:
     required = {"z", "eigen_real", "eigen_imag"}
     names = set(data.dtype.names or ())
     if not required.issubset(names):
-        raise ValueError("eigenfunction CSV must contain z,eigen_real,eigen_imag columns")
+        raise ValueError(
+            "eigenfunction CSV must contain z,eigen_real,eigen_imag columns"
+        )
     theta = np.asarray(data["z"], dtype=float)
     mode = np.asarray(data["eigen_real"], dtype=float) + 1j * np.asarray(
         data["eigen_imag"], dtype=float
@@ -167,19 +171,27 @@ def plot_overlap_summary(
 
 
 def build_reference_overlay_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Plot a saved mode against a reference bundle.")
+    parser = argparse.ArgumentParser(
+        description="Plot a saved mode against a reference bundle."
+    )
     parser.add_argument("reference", type=Path)
     parser.add_argument("gkx", type=Path)
     parser.add_argument("--out", type=Path, default=DEFAULT_REFERENCE_OVERLAY_OUT)
-    parser.add_argument("--title", default="Eigenfunction overlay against frozen reference")
+    parser.add_argument(
+        "--title", default="Eigenfunction overlay against frozen reference"
+    )
     return parser
 
 
 def build_overlap_summary_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Plot eigenfunction candidate metrics.")
+    parser = argparse.ArgumentParser(
+        description="Plot eigenfunction candidate metrics."
+    )
     parser.add_argument("--csv", type=Path, default=DEFAULT_OVERLAP_CSV)
     parser.add_argument("--out", type=Path, default=DEFAULT_OVERLAP_OUT)
-    parser.add_argument("--title", default="KBM eigenfunction overlap against reference")
+    parser.add_argument(
+        "--title", default="KBM eigenfunction overlap against reference"
+    )
     return parser
 
 

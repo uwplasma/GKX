@@ -41,7 +41,9 @@ def main() -> None:
 
     cfg, _ = load_runtime_from_toml(CONFIG)
     ref = load_cyclone_reference()
-    ky_values = np.array([float(args.ky)]) if args.ky is not None else np.asarray(ref.ky)
+    ky_values = (
+        np.array([float(args.ky)]) if args.ky is not None else np.asarray(ref.ky)
+    )
 
     window_kw = dict(
         auto_window=False,
@@ -83,7 +85,12 @@ def main() -> None:
         **window_kw,
     )
 
-    if mode.eigenfunction is None or mode.z is None or mode.t is None or mode.signal is None:
+    if (
+        mode.eigenfunction is None
+        or mode.z is None
+        or mode.t is None
+        or mode.signal is None
+    ):
         raise RuntimeError("time-integrated runtime diagnostics are required")
     eig = normalize_eigenfunction(mode.eigenfunction, mode.z)
     panel = LinearValidationPanel(

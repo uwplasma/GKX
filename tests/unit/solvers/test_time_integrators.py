@@ -235,9 +235,7 @@ def test_native_diagonal_imex_step_matches_scalar_amplification(
     if method == "imex":
         expected = (1.0 + dt * explicit_rate) / (1.0 + dt * damping)
     else:
-        half = (1.0 + 0.5 * dt * explicit_rate) / (
-            1.0 + 0.5 * dt * damping
-        )
+        half = (1.0 + 0.5 * dt * explicit_rate) / (1.0 + 0.5 * dt * damping)
         expected = (1.0 + dt * explicit_rate * half) / (1.0 + dt * damping)
     assert calls == expected_calls
     np.testing.assert_allclose(np.asarray(result), [expected], rtol=1.0e-6)
@@ -253,13 +251,27 @@ def test_explicit_from_config_preserves_adaptive_controls(monkeypatch) -> None:
 
     monkeypatch.setattr(eti, "integrate_linear_explicit_diagnostics", fake_integrate)
     time_cfg = SimpleNamespace(
-        dt=0.02, t_max=2.0, sample_stride=3, fixed_dt=False,
-        dt_min=1.0e-6, dt_max=0.04, cfl=0.7, method="rk2", cfl_fac=None,
+        dt=0.02,
+        t_max=2.0,
+        sample_stride=3,
+        fixed_dt=False,
+        dt_min=1.0e-6,
+        dt_max=0.04,
+        cfl=0.7,
+        method="rk2",
+        cfl_fac=None,
         use_dealias_mask=True,
     )
     t, phi = eti.integrate_linear_explicit_from_config(
-        jnp.ones((1,)), object(), object(), object(), time_cfg,
-        Nl=2, Nm=3, z_index=1, show_progress=True,
+        jnp.ones((1,)),
+        object(),
+        object(),
+        object(),
+        time_cfg,
+        Nl=2,
+        Nm=3,
+        z_index=1,
+        show_progress=True,
     )
 
     config = captured["config"]
@@ -289,8 +301,12 @@ def test_integrate_linear_explicit_from_config_runs_full_rk4_loop() -> None:
     )
     geom = SAlphaGeometry.from_config(CycloneBaseCase().geometry)
     params = LinearParams(
-        omega_d_scale=0.0, omega_star_scale=0.0, nu=0.0, nu_hyper=0.0,
-        damp_ends_amp=0.0, damp_ends_widthfrac=0.0,
+        omega_d_scale=0.0,
+        omega_star_scale=0.0,
+        nu=0.0,
+        nu_hyper=0.0,
+        damp_ends_amp=0.0,
+        damp_ends_widthfrac=0.0,
     )
     n_l, n_m = 2, 3
     z = jnp.linspace(0.0, 2.0 * jnp.pi, grid.z.size, endpoint=False)
@@ -298,9 +314,7 @@ def test_integrate_linear_explicit_from_config_runs_full_rk4_loop() -> None:
         (n_l, n_m, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
     )
     g0 = g0.at[0, 0, 1, 0, :].set(1.0e-3 * jnp.exp(1j * z))
-    time_cfg = TimeConfig(
-        t_max=0.2, dt=0.02, method="rk4", sample_stride=1
-    )
+    time_cfg = TimeConfig(t_max=0.2, dt=0.02, method="rk4", sample_stride=1)
     t, phi = eti.integrate_linear_explicit_from_config(
         g0, grid, geom, params, time_cfg, Nl=n_l, Nm=n_m, z_index=grid.z.size // 2
     )
@@ -332,15 +346,23 @@ def test_format_wall_time_hours_minutes_and_clamped_branches() -> None:
 
 
 def test_adaptive_linear_dt_fixed_disabled_and_cfl_clamped() -> None:
-    fixed = eti.ExplicitTimeConfig(t_max=1.0, dt=0.02, fixed_dt=True, cfl=0.5, cfl_fac=2.0)
+    fixed = eti.ExplicitTimeConfig(
+        t_max=1.0, dt=0.02, fixed_dt=True, cfl=0.5, cfl_fac=2.0
+    )
     # fixed_dt short-circuits regardless of wmax.
-    assert eti._adaptive_linear_dt(fixed, dt=0.02, dt_min=1e-6, dt_max=0.04, wmax=1e3) == 0.02
+    assert (
+        eti._adaptive_linear_dt(fixed, dt=0.02, dt_min=1e-6, dt_max=0.04, wmax=1e3)
+        == 0.02
+    )
 
     adaptive = eti.ExplicitTimeConfig(
         t_max=1.0, dt=0.02, fixed_dt=False, cfl=0.5, cfl_fac=2.0
     )
     # Non-positive wmax cannot form a CFL estimate -> keep the requested dt.
-    assert eti._adaptive_linear_dt(adaptive, dt=0.02, dt_min=1e-6, dt_max=0.04, wmax=0.0) == 0.02
+    assert (
+        eti._adaptive_linear_dt(adaptive, dt=0.02, dt_min=1e-6, dt_max=0.04, wmax=0.0)
+        == 0.02
+    )
     # cfl_fac*cfl/wmax = 2*0.5/100 = 0.01, in range.
     assert eti._adaptive_linear_dt(
         adaptive, dt=0.02, dt_min=1e-6, dt_max=0.04, wmax=100.0
@@ -356,16 +378,24 @@ def test_adaptive_linear_dt_fixed_disabled_and_cfl_clamped() -> None:
 
 def test_should_emit_linear_progress_trigger_conditions() -> None:
     # First step, final step, and stride multiples emit; interior steps do not.
-    assert eti._should_emit_linear_progress(step=1, total_steps_est=100, progress_stride=10)
-    assert eti._should_emit_linear_progress(step=100, total_steps_est=100, progress_stride=10)
-    assert eti._should_emit_linear_progress(step=20, total_steps_est=100, progress_stride=10)
+    assert eti._should_emit_linear_progress(
+        step=1, total_steps_est=100, progress_stride=10
+    )
+    assert eti._should_emit_linear_progress(
+        step=100, total_steps_est=100, progress_stride=10
+    )
+    assert eti._should_emit_linear_progress(
+        step=20, total_steps_est=100, progress_stride=10
+    )
     assert not eti._should_emit_linear_progress(
         step=23, total_steps_est=100, progress_stride=10
     )
 
 
 def test_linear_loop_progress_clock_and_history_arrays() -> None:
-    total_steps_est, progress_stride, started_at = eti._linear_loop_progress_clock(0.2, 0.02)
+    total_steps_est, progress_stride, started_at = eti._linear_loop_progress_clock(
+        0.2, 0.02
+    )
     assert total_steps_est == 10
     assert progress_stride >= 1
     assert isinstance(started_at, float)
@@ -395,8 +425,12 @@ def _tiny_linear_case():
     )
     geom = SAlphaGeometry.from_config(CycloneBaseCase().geometry)
     params = LinearParams(
-        omega_d_scale=1.0, omega_star_scale=1.0, nu=0.0, nu_hyper=0.0,
-        damp_ends_amp=0.0, damp_ends_widthfrac=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        nu=0.0,
+        nu_hyper=0.0,
+        damp_ends_amp=0.0,
+        damp_ends_widthfrac=0.0,
     )
     n_l, n_m = 2, 3
     z = jnp.linspace(0.0, 2.0 * jnp.pi, grid.z.size, endpoint=False)
@@ -417,8 +451,15 @@ def test_integrate_linear_explicit_show_progress_and_max_mode(capsys) -> None:
         t_max=0.2, dt=0.02, method="rk4", sample_stride=1, fixed_dt=True
     )
     t, phi, gamma, omega = eti.integrate_linear_explicit(
-        g0, grid, cache, params, geom, time_cfg,
-        mode_method="max", jit=False, show_progress=True,
+        g0,
+        grid,
+        cache,
+        params,
+        geom,
+        time_cfg,
+        mode_method="max",
+        jit=False,
+        show_progress=True,
     )
     out = capsys.readouterr().out
     assert "linear initial-value integration started" in out
@@ -434,12 +475,25 @@ def test_integrate_linear_explicit_adaptive_dt_completes() -> None:
     # dt selection inside the stepping loop.
     g0, grid, geom, params, cache, _n_l, _n_m = _tiny_linear_case()
     time_cfg = eti.ExplicitTimeConfig(
-        t_max=0.1, dt=0.05, method="rk3", sample_stride=1,
-        fixed_dt=False, dt_min=1.0e-4, dt_max=0.05, cfl=0.8,
+        t_max=0.1,
+        dt=0.05,
+        method="rk3",
+        sample_stride=1,
+        fixed_dt=False,
+        dt_min=1.0e-4,
+        dt_max=0.05,
+        cfl=0.8,
     )
     t, phi, gamma, omega = eti.integrate_linear_explicit(
-        g0, grid, cache, params, geom, time_cfg,
-        mode_method="z_index", jit=False, show_progress=False,
+        g0,
+        grid,
+        cache,
+        params,
+        geom,
+        time_cfg,
+        mode_method="z_index",
+        jit=False,
+        show_progress=False,
     )
     t = np.asarray(t)
     assert t.shape[0] >= 1
@@ -530,9 +584,17 @@ def _closed_interval_copy(sampled):
         **{
             name: _wrap(name)
             for name in (
-                "bmag_profile", "bgrad_profile", "gds2_profile", "gds21_profile",
-                "gds22_profile", "cv_profile", "gb_profile", "cv0_profile",
-                "gb0_profile", "jacobian_profile", "grho_profile",
+                "bmag_profile",
+                "bgrad_profile",
+                "gds2_profile",
+                "gds21_profile",
+                "gds22_profile",
+                "cv_profile",
+                "gb_profile",
+                "cv0_profile",
+                "gb0_profile",
+                "jacobian_profile",
+                "grho_profile",
             )
         },
     )
@@ -561,15 +623,23 @@ def test_fixed_dt_cfl_hint_conforms_imported_geometry_instead_of_aborting() -> N
     )
     with pytest.warns(RuntimeWarning, match="exceeds the estimated"):
         warn_if_fixed_dt_exceeds_cfl(
-            grid=grid, geom=imported, params=params,
-            n_laguerre=n_l, n_hermite=n_m, tcfg=over_cfl,
+            grid=grid,
+            geom=imported,
+            params=params,
+            n_laguerre=n_l,
+            n_hermite=n_m,
+            tcfg=over_cfl,
         )
 
     # A step under the bound stays silent on the same imported geometry.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         warn_if_fixed_dt_exceeds_cfl(
-            grid=grid, geom=imported, params=params, n_laguerre=n_l, n_hermite=n_m,
+            grid=grid,
+            geom=imported,
+            params=params,
+            n_laguerre=n_l,
+            n_hermite=n_m,
             tcfg=replace_time_cfg(over_cfl, dt=1.0e-6),
         )
     assert not [w for w in caught if "exceeds the estimated" in str(w.message)]

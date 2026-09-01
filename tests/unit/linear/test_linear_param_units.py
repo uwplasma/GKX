@@ -92,9 +92,9 @@ def test_no_public_gradient_name_claims_a_normalization_that_is_never_applied():
     from gkx.operators.linear.params import LinearParams, Species
 
     classes = (LinearParams, Species, ModelConfig, KineticElectronModelConfig)
-    named = {
-        field.name for cls in classes for field in dataclasses.fields(cls)
-    } | set(api.__all__)
+    named = {field.name for cls in classes for field in dataclasses.fields(cls)} | set(
+        api.__all__
+    )
     offenders = sorted(name for name in named if name.startswith("R_over_L"))
     assert offenders == []
 

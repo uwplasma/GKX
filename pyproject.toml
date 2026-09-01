@@ -100,6 +100,15 @@ markers = [
   "slow: long-running literature or artifact validation tests kept out of bounded release coverage shards",
 ]
 
+[tool.ruff]
+# Markdown is out of scope for the formatter. ruff 0.16 reformats Python code
+# fences inside .md, which rewrites the README's hand-tuned examples: compact
+# imports and call sites split one argument per line, and PEP8 blank lines get
+# inserted between snippet-level defs. Those examples are written to be read in
+# a browser, not to satisfy a line limit, so they are excluded rather than
+# reflowed. This keeps `ruff format .` a Python-only pass.
+extend-exclude = ["*.md"]
+
 [tool.ruff.lint]
 # State the rule set explicitly instead of inheriting ruff's default, which is
 # not stable across ruff releases: ruff <= 0.15 defaulted to exactly the

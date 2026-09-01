@@ -158,12 +158,29 @@ def print_nonlinear_run_header(
         f"diagnostics={'on' if diagnostics else 'off'} "
         f"progress={'on' if show_progress else 'off'}"
     )
-    kinetic = ",".join(f"{s.name}(a/L_T={s.tprim:g},a/L_n={s.fprim:g})" for s in runtime_config.species if s.kinetic) or "none"
-    adiabatic = "electrons" if runtime_config.physics.adiabatic_electrons else "ions" if runtime_config.physics.adiabatic_ions else "none"
-    model = "electromagnetic" if runtime_config.physics.electromagnetic else "electrostatic"
+    kinetic = (
+        ",".join(
+            f"{s.name}(a/L_T={s.tprim:g},a/L_n={s.fprim:g})"
+            for s in runtime_config.species
+            if s.kinetic
+        )
+        or "none"
+    )
+    adiabatic = (
+        "electrons"
+        if runtime_config.physics.adiabatic_electrons
+        else "ions"
+        if runtime_config.physics.adiabatic_ions
+        else "none"
+    )
+    model = (
+        "electromagnetic" if runtime_config.physics.electromagnetic else "electrostatic"
+    )
     print(f"physics={model} kinetic={kinetic} adiabatic={adiabatic}")
     print("profiles: a/L_T=-a d(ln T)/dr; a/L_n=-a d(ln n)/dr")
-    print("signals: gamma=d ln|phi_k|/dt; omega=-d arg(phi_k)/dt (selected-mode diagnostics); Wphi=electrostatic field energy; Wg=distribution free energy; Q=radial heat flux/Q_gB (saturation uses Q/Wphi/Wg)")
+    print(
+        "signals: gamma=d ln|phi_k|/dt; omega=-d arg(phi_k)/dt (selected-mode diagnostics); Wphi=electrostatic field energy; Wg=distribution free energy; Q=radial heat flux/Q_gB (saturation uses Q/Wphi/Wg)"
+    )
 
 
 def print_nonlinear_run_summary(result: Any) -> bool:

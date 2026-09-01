@@ -134,9 +134,7 @@ def linear_growth_scan(
         started = time.time()
         previous = None
         for multiplier in descending:
-            params = dataclasses.replace(
-                base, tprim=base_drive * float(multiplier)
-            )
+            params = dataclasses.replace(base, tprim=base_drive * float(multiplier))
             matrix = np.asarray(
                 solver_linear_operator_matrix_from_geometry(
                     geometry,

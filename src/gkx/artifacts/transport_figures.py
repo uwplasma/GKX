@@ -391,9 +391,7 @@ def spectrum_cutoff_warnings(
     """Explain unresolved ``ky`` cutoffs in a saved nonlinear result."""
 
     diag, ky, _kx, kind = _coerce_nonlinear_source(source)
-    resolved = _resolved_spectra_or_error(
-        diag, name="spectrum cutoff check", kind=kind
-    )
+    resolved = _resolved_spectra_or_error(diag, name="spectrum cutoff check", kind=kind)
     if ky is None:
         return ()
     mask, _tmin, _tmax = _time_window(np.asarray(diag.t, dtype=float), window)

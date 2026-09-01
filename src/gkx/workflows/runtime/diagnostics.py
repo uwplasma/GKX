@@ -168,7 +168,9 @@ def finalize_runtime_linear_quasilinear(
     """Attach optional quasilinear diagnostics to a linear runtime result."""
 
     ql_payload = None
-    state_for_ql = state_for_quasilinear if state_for_quasilinear is not None else result.state
+    state_for_ql = (
+        state_for_quasilinear if state_for_quasilinear is not None else result.state
+    )
     if enabled:
         if state_for_ql is None:
             raise RuntimeError("quasilinear diagnostics require a final linear state")
@@ -622,9 +624,7 @@ def fit_runtime_linear_diagnostics(
         fit_window_tmax=fit.fit_window_tmax,
         deps=deps,
     )
-    gamma_stderr, omega_stderr, fit_r2 = _runtime_linear_fit_statistics(
-        inputs.t, fit
-    )
+    gamma_stderr, omega_stderr, fit_r2 = _runtime_linear_fit_statistics(inputs.t, fit)
     warn_if_growth_unresolved(
         gamma=fit.gamma,
         t=inputs.t,

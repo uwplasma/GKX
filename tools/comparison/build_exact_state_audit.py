@@ -396,20 +396,12 @@ def parse_diagnostic_csv(path: Path) -> list[dict[str, object]]:
                     "value": float(item[quantity]),
                     "max_ref": float(item["gx_out"]),
                     "max_test": float(
-                        item[
-                            "gkx_dump"
-                            if quantity == "rel_dump"
-                            else "gkx_solve"
-                        ]
+                        item["gkx_dump" if quantity == "rel_dump" else "gkx_solve"]
                     ),
                     "max_diff": abs(
                         float(item["gx_out"])
                         - float(
-                            item[
-                                "gkx_dump"
-                                if quantity == "rel_dump"
-                                else "gkx_solve"
-                            ]
+                            item["gkx_dump" if quantity == "rel_dump" else "gkx_solve"]
                         )
                     ),
                     "rms_rel": float("nan"),

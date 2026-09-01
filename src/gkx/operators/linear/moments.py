@@ -138,9 +138,7 @@ def quasineutrality_phi(
     """Solve electrostatic quasineutrality for phi with optional adiabatic closure."""
 
     _check_nonnegative(tau_e, "tau_e")
-    moments = _reduce_electrostatic_moments(
-        G, Jl, tau_e, charge, density, tz
-    )
+    moments = _reduce_electrostatic_moments(G, Jl, tau_e, charge, density, tz)
     return _solve_electrostatic_from_moments(moments, tau_e)
 
 

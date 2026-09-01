@@ -231,6 +231,7 @@ def generate_runtime_vmec_eik(
 
     return generate_vmec_eik_internal(output_path=resolved_path, request=request)
 
+
 # Default EIK request template. This is a geometry default rather than report
 # machinery, so it stays in the package even though the parity report builders
 # that consume it moved to tools/campaigns.

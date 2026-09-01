@@ -135,9 +135,7 @@ def test_load_vmec_state_context_exposes_differentiable_state_arrays(monkeypatch
     r_cos = np.array(
         [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0], [9.0, 10.0, 11.0, 12.0]]
     )
-    z_sin = np.array(
-        [[0.0, 0.1, 0.2, 0.3], [0.4, 0.5, 0.6, 0.7], [0.8, 0.9, 1.0, 1.1]]
-    )
+    z_sin = np.array([[0.0, 0.1, 0.2, 0.3], [0.4, 0.5, 0.6, 0.7], [0.8, 0.9, 1.0, 1.1]])
     bundle = _solved_case_bundle(r_cos, z_sin)
     seen: dict[str, str] = {}
 
@@ -176,7 +174,9 @@ def test_load_vmec_state_context_rejects_non_2d_state_arrays(monkeypatch):
     )
     monkeypatch.setattr(controls, "load_solved_vmex_case", lambda name: bundle)
 
-    with pytest.raises(RuntimeError, match="R_cos/Z_sin arrays must be two-dimensional"):
+    with pytest.raises(
+        RuntimeError, match="R_cos/Z_sin arrays must be two-dimensional"
+    ):
         controls._load_vmec_state_context("synthetic_case")
 
 
@@ -194,7 +194,9 @@ def test_load_vmec_state_context_rejects_non_2d_state_arrays(monkeypatch):
         ("Lsin", "L_sin"),
     ],
 )
-def test_vmec_state_family_attribute_maps_public_family_to_state_attr(family, attribute):
+def test_vmec_state_family_attribute_maps_public_family_to_state_attr(
+    family, attribute
+):
     assert controls._vmec_state_family_attribute(family) == attribute
 
 
@@ -267,15 +269,11 @@ def test_replace_vmec_boozer_state_coefficient_round_trips_single_entry():
 # ---------------------------------------------------------------------------
 def test_vmec_boozer_state_parameter_name_switches_on_mid_surface():
     assert (
-        controls._vmec_boozer_state_parameter_name(
-            "Rcos", 4, 2, default_mid_surface=4
-        )
+        controls._vmec_boozer_state_parameter_name("Rcos", 4, 2, default_mid_surface=4)
         == "Rcos_mid_surface_m2"
     )
     assert (
-        controls._vmec_boozer_state_parameter_name(
-            "Zsin", 3, 1, default_mid_surface=4
-        )
+        controls._vmec_boozer_state_parameter_name("Zsin", 3, 1, default_mid_surface=4)
         == "Zsin_r3_m1"
     )
 
@@ -284,7 +282,14 @@ def test_vmec_boozer_state_parameter_name_switches_on_mid_surface():
 # _resolve_vmec_state_indices (default resolution, clamps, validation)
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
-    ("shape", "radial_index", "mode_index", "surface_index", "surface_grid", "expected"),
+    (
+        "shape",
+        "radial_index",
+        "mode_index",
+        "surface_index",
+        "surface_grid",
+        "expected",
+    ),
     [
         # Default radial index is ns // 2; each grid has its own default surface.
         ((8, 5), None, 2, None, "half_mesh", (4, 2, 3)),
@@ -319,19 +324,33 @@ def test_resolve_vmec_state_indices_resolves_defaults_and_clamps(
     ("kwargs", "message"),
     [
         (
-            dict(radial_index=8, mode_index=0, surface_index=None, surface_grid="metric"),
+            dict(
+                radial_index=8, mode_index=0, surface_index=None, surface_grid="metric"
+            ),
             "radial_index is outside the VMEC state radial grid",
         ),
         (
-            dict(radial_index=-1, mode_index=0, surface_index=None, surface_grid="metric"),
+            dict(
+                radial_index=-1, mode_index=0, surface_index=None, surface_grid="metric"
+            ),
             "radial_index is outside the VMEC state radial grid",
         ),
         (
-            dict(radial_index=None, mode_index=5, surface_index=None, surface_grid="metric"),
+            dict(
+                radial_index=None,
+                mode_index=5,
+                surface_index=None,
+                surface_grid="metric",
+            ),
             "mode_index is outside the VMEC state mode table",
         ),
         (
-            dict(radial_index=None, mode_index=0, surface_index=None, surface_grid="bogus"),
+            dict(
+                radial_index=None,
+                mode_index=0,
+                surface_index=None,
+                surface_grid="bogus",
+            ),
             "unknown VMEC surface grid",
         ),
         (

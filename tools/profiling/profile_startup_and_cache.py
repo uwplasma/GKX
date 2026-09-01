@@ -27,7 +27,9 @@ class PhaseTiming:
 
 
 def build_runtime_startup_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Profile nonlinear runtime startup phases and first-compile costs.")
+    parser = argparse.ArgumentParser(
+        description="Profile nonlinear runtime startup phases and first-compile costs."
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -138,7 +140,9 @@ def main_runtime_startup(argv: list[str] | None = None) -> None:
     from gkx.core.grid import build_spectral_grid
     from gkx.workflows.runtime.toml import load_runtime_from_toml
     from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.solvers.nonlinear.diagnostic_integration import integrate_nonlinear_explicit_diagnostics_state
+    from gkx.solvers.nonlinear.diagnostic_integration import (
+        integrate_nonlinear_explicit_diagnostics_state,
+    )
     from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
     from gkx.runtime import (
         _build_initial_condition,
@@ -364,8 +368,6 @@ def main_runtime_startup(argv: list[str] | None = None) -> None:
             profiler.stop_trace()
 
 
-
-
 # Linear-cache subcommand implementation.
 @dataclass(frozen=True)
 class CachePhaseTiming:
@@ -402,7 +404,9 @@ def build_low_rank_moment_cache(
 
 
 def build_linear_cache_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Decompose build_linear_cache() into measured subphases.")
+    parser = argparse.ArgumentParser(
+        description="Decompose build_linear_cache() into measured subphases."
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -896,8 +900,6 @@ def main_linear_cache(argv: list[str] | None = None) -> None:
             profiler.stop_trace()
 
 
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -919,6 +921,7 @@ def build_parser() -> argparse.ArgumentParser:
     cache.set_defaults(func=main_linear_cache)
     return parser
 
+
 def main(argv: list[str] | None = None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
     if not raw or raw[0] in {"-h", "--help"}:
@@ -932,9 +935,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         runner = runners[command]
     except KeyError as exc:
-        raise SystemExit(f"unknown startup/cache profiler subcommand: {command}") from exc
+        raise SystemExit(
+            f"unknown startup/cache profiler subcommand: {command}"
+        ) from exc
     runner(raw)
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

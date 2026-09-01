@@ -44,7 +44,11 @@ from gkx.terms.linear_terms import (
     mirror_contribution,
     linked_streaming_contribution,
 )
-from gkx.operators.linear.streaming import abs_z_linked_fft, grad_z_linked_fft, shift_axis
+from gkx.operators.linear.streaming import (
+    abs_z_linked_fft,
+    grad_z_linked_fft,
+    shift_axis,
+)
 
 
 def _parse_args() -> argparse.Namespace:

@@ -31,11 +31,15 @@ class _ZonalPlotData:
     metrics: Any
 
 
-def _validated_zonal_trace(t: np.ndarray, response: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _validated_zonal_trace(
+    t: np.ndarray, response: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     t_arr = np.asarray(t, dtype=float)
     resp = np.asarray(response, dtype=float)
     if t_arr.ndim != 1 or resp.ndim != 1 or t_arr.size != resp.size:
-        raise ValueError("t and response must be one-dimensional arrays of equal length")
+        raise ValueError(
+            "t and response must be one-dimensional arrays of equal length"
+        )
     return t_arr, resp
 
 
@@ -44,7 +48,9 @@ def _array_metric(metrics: Any, name: str) -> np.ndarray:
     return np.asarray(value, dtype=float)
 
 
-def _zonal_plot_data(t: np.ndarray, response: np.ndarray, metrics: Any) -> _ZonalPlotData:
+def _zonal_plot_data(
+    t: np.ndarray, response: np.ndarray, metrics: Any
+) -> _ZonalPlotData:
     response_norm = response / float(metrics.initial_level)
     return _ZonalPlotData(
         t=t,
@@ -107,7 +113,9 @@ def _plot_normalized_response_panel(
     data: _ZonalPlotData,
     y_label: str,
 ) -> None:
-    ax.plot(data.t, data.response_norm, color="#0f4c81", linewidth=2.2, label="response")
+    ax.plot(
+        data.t, data.response_norm, color="#0f4c81", linewidth=2.2, label="response"
+    )
     ax.axhline(
         data.residual,
         color="#c44e52",
@@ -131,7 +139,9 @@ def _plot_normalized_response_panel(
     ax.legend(loc="best", frameon=False)
 
 
-def _combined_envelope_fit(data: _ZonalPlotData) -> tuple[np.ndarray, np.ndarray, str] | None:
+def _combined_envelope_fit(
+    data: _ZonalPlotData,
+) -> tuple[np.ndarray, np.ndarray, str] | None:
     fit_mask = _fit_window_mask(data.env_t, data)
     fit_env_t = data.env_t[fit_mask]
     fit_env_y = data.env_y[fit_mask]
@@ -143,8 +153,14 @@ def _combined_envelope_fit(data: _ZonalPlotData) -> tuple[np.ndarray, np.ndarray
 
     fit_n = min(data.fit_count, fit_env_t.size)
     fit_t = fit_env_t[:fit_n]
-    fit = fit_env_y[0] * np.exp(-float(data.metrics.gam_damping_rate) * (fit_t - fit_t[0]))
-    label = "envelope fit" if fit_n == fit_env_t.size else f"envelope fit (first {fit_n} peaks)"
+    fit = fit_env_y[0] * np.exp(
+        -float(data.metrics.gam_damping_rate) * (fit_t - fit_t[0])
+    )
+    label = (
+        "envelope fit"
+        if fit_n == fit_env_t.size
+        else f"envelope fit (first {fit_n} peaks)"
+    )
     return fit_t, fit, label
 
 
@@ -168,7 +184,9 @@ def _plot_envelope_panel(ax: plt.Axes, *, data: _ZonalPlotData) -> None:
     fit = _combined_envelope_fit(data)
     if fit is not None:
         fit_t, fit_y, label = fit
-        ax.plot(fit_t, fit_y, color="#2a9d8f", linestyle="--", linewidth=2.0, label=label)
+        ax.plot(
+            fit_t, fit_y, color="#2a9d8f", linestyle="--", linewidth=2.0, label=label
+        )
     ax.set_yscale("log")
     ax.set_xlabel("t")
     ax.set_ylabel("envelope")

@@ -25,9 +25,7 @@ class HermiteWindow:
     total: int
 
 
-def hermite_index_of(
-    window: HermiteWindow | None, local_count: int
-) -> jnp.ndarray:
+def hermite_index_of(window: HermiteWindow | None, local_count: int) -> jnp.ndarray:
     """Return the global Hermite index of every row of a local slab."""
 
     if window is None:

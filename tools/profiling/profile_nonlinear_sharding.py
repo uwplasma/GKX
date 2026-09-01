@@ -30,7 +30,10 @@ from gkx.geometry import SAlphaGeometry
 from gkx.core.grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers.nonlinear.state_integration import integrate_nonlinear_cached, nonlinear_rhs_cached
+from gkx.solvers.nonlinear.state_integration import (
+    integrate_nonlinear_cached,
+    nonlinear_rhs_cached,
+)
 from gkx.parallel.integrators import integrate_nonlinear_sharded
 from gkx.parallel.state import resolve_state_sharding
 from gkx.terms.config import TermConfig
@@ -625,9 +628,7 @@ def run_sweep(
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     profiles: dict[str, Any] = {}
-    with tempfile.TemporaryDirectory(
-        prefix="gkx-nonlinear-scaling-"
-    ) as tmp_name:
+    with tempfile.TemporaryDirectory(prefix="gkx-nonlinear-scaling-") as tmp_name:
         tmp = Path(tmp_name)
         for requested_devices in devices:
             profile_json = tmp / f"{backend}_{requested_devices}devices.json"

@@ -228,7 +228,9 @@ def _geometry_inverse_design_derivative_report(
         "jacobian_ad": np.asarray(jac_ad).tolist(),
         "jacobian_fd": np.asarray(jac_fd).tolist(),
         "max_abs_ad_fd_error": float(np.max(np.abs(np.asarray(diff)))),
-        "max_rel_ad_fd_error": float(np.max(np.abs(np.asarray(diff) / np.asarray(scale)))),
+        "max_rel_ad_fd_error": float(
+            np.max(np.abs(np.asarray(diff) / np.asarray(scale)))
+        ),
         "conditioning": _sensitivity_conditioning_metadata(
             jac_ad,
             jac_fd,
@@ -331,7 +333,9 @@ def geometry_inverse_design_report(
         fd_step=fd_step,
         regularization=regularization,
         observable_names=observable_names,
-        param_names=tuple(f"param_{idx}" for idx in range(int(problem.params.shape[0]))),
+        param_names=tuple(
+            f"param_{idx}" for idx in range(int(problem.params.shape[0]))
+        ),
     )
     return _pack_geometry_inverse_design_report(
         problem,

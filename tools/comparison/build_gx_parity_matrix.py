@@ -224,8 +224,7 @@ def run_case(
                 "gamma_half_time_shift": _relative(gamma_half, gamma),
                 "omega_half_time_shift": _relative(omega_half, omega),
                 "converged": bool(
-                    np.isfinite(gamma)
-                    and abs(_relative(gamma_half, gamma)) <= 0.05
+                    np.isfinite(gamma) and abs(_relative(gamma_half, gamma)) <= 0.05
                 ),
                 # True when the difference this row reports is inside the
                 # spread the reference itself shows between two legitimate
@@ -405,8 +404,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reference-dir", type=Path, default=None)
     parser.add_argument("--cases", nargs="*", default=None)
     parser.add_argument("--stem", type=Path, default=DEFAULT_STEM)
-    parser.add_argument("--merge", type=Path, default=None,
-                        help="Existing matrix JSON whose cases are kept when absent here.")
+    parser.add_argument(
+        "--merge",
+        type=Path,
+        default=None,
+        help="Existing matrix JSON whose cases are kept when absent here.",
+    )
     parser.add_argument(
         "--attach-costs",
         type=Path,
@@ -435,11 +438,13 @@ def attach_costs(stem: Path, costs_path: Path) -> None:
         reference_t = entry.get("reference_t_end")
         reference_s = entry.get("reference_seconds")
         if reference_t and reference_s:
-            cost["reference_seconds_per_unit_time"] = float(reference_s) / float(reference_t)
+            cost["reference_seconds_per_unit_time"] = float(reference_s) / float(
+                reference_t
+            )
         gkx_t = record["resolution"]["t_end"]
         if gkx_t:
-            cost["gkx_seconds_per_unit_time"] = (
-                float(cost["gkx_scan_seconds"]) / float(gkx_t)
+            cost["gkx_seconds_per_unit_time"] = float(cost["gkx_scan_seconds"]) / float(
+                gkx_t
             )
     json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     write_csv(payload["cases"], stem.with_suffix(".csv"))
@@ -493,7 +498,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.merge is not None and args.merge.exists():
         previous = json.loads(args.merge.read_text(encoding="utf-8"))
         keys = {record["key"] for record in records}
-        records = [c for c in previous.get("cases", []) if c["key"] not in keys] + records
+        records = [
+            c for c in previous.get("cases", []) if c["key"] not in keys
+        ] + records
         records.sort(key=lambda record: record.get("order", 0))
 
     stem = args.stem

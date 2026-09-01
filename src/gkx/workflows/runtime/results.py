@@ -256,6 +256,7 @@ class RuntimeNonlinearResult(_ResultArtifacts):
             attrs=self.summary(),
         )
 
+
 LinearResult = RuntimeLinearResult
 NonlinearResult = RuntimeNonlinearResult
 ScanResult = RuntimeLinearScanResult

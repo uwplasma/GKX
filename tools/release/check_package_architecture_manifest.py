@@ -295,12 +295,8 @@ def _validate_line_budget_policy(
         raise ValueError("line_budget_policy must be a TOML table")
     mode = _as_nonempty_string(policy.get("mode"), "line_budget_policy.mode")
     if mode != "no_regression_until_target":
-        raise ValueError(
-            "line_budget_policy.mode must be 'no_regression_until_target'"
-        )
-    _as_nonempty_string(
-        policy.get("description"), "line_budget_policy.description"
-    )
+        raise ValueError("line_budget_policy.mode must be 'no_regression_until_target'")
+    _as_nonempty_string(policy.get("description"), "line_budget_policy.description")
     counts = policy.get("counts")
     if not isinstance(counts, list) or not counts:
         raise ValueError("line_budget_policy.counts must be a non-empty list")
@@ -471,9 +467,7 @@ def validate_architecture_policy(
         ),
         "n_line_budget_counts": len(line_budget_counts),
         "line_budget_counts": line_budget_counts,
-        "line_budget_targets_met": all(
-            row["target_met"] for row in line_budget_counts
-        ),
+        "line_budget_targets_met": all(row["target_met"] for row in line_budget_counts),
         "status": str(metadata["status"]),
     }
 
@@ -536,11 +530,7 @@ def _area(rel: Path) -> str:
     if len(rel.parts) == 1:
         return "root"
     if rel.parts[0] == "src" and len(rel.parts) > 2 and rel.parts[1] == "gkx":
-        return (
-            "src/gkx"
-            if len(rel.parts) == 3
-            else f"src/gkx/{rel.parts[2]}"
-        )
+        return "src/gkx" if len(rel.parts) == 3 else f"src/gkx/{rel.parts[2]}"
     if rel.parts[0] in {"tests", "tools", "examples", "benchmarks", "docs"}:
         return rel.parts[0] if len(rel.parts) == 1 else f"{rel.parts[0]}/{rel.parts[1]}"
     return rel.parts[0]

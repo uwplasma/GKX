@@ -140,7 +140,9 @@ def _surface_geometry_kwargs(
     geom_kwargs = dict(base_geometry_kwargs)
     surface_index_raw = surface.get("surface_index")
     torflux_raw = surface.get("torflux")
-    surface_index = None if surface_index_raw is None else int(cast(Any, surface_index_raw))
+    surface_index = (
+        None if surface_index_raw is None else int(cast(Any, surface_index_raw))
+    )
     torflux = None if torflux_raw is None else float(cast(Any, torflux_raw))
     if surface_index is not None:
         geom_kwargs["surface_index"] = surface_index

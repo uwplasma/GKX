@@ -421,7 +421,9 @@ def _independent_map_tasks(
     )
 
 
-def _executor_class(executor: str) -> type[ThreadPoolExecutor] | type[ProcessPoolExecutor]:
+def _executor_class(
+    executor: str,
+) -> type[ThreadPoolExecutor] | type[ProcessPoolExecutor]:
     return ThreadPoolExecutor if executor == "thread" else ProcessPoolExecutor
 
 
