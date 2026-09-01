@@ -231,10 +231,19 @@ def _module_name(path: Path, source_root: Path) -> str:
     return name[: -len(suffix)] if name.endswith(suffix) else name
 
 
-def _module_consumers(source_root: Path) -> dict[str, set[str]]:
-    """Map each ``gkx`` module to the set of modules importing it."""
+def _module_consumers(
+    source_root: Path,
+) -> tuple[dict[str, set[str]], dict[tuple[str, str], set[str]]]:
+    """Map each ``gkx`` module to its importers, and each edge to the names it pulls.
+
+    The name count is what separates a real interface from a split module. A
+    module with one consumer that imports a single entry point is encapsulating
+    something; a module with one consumer that reaches for ten of its names is
+    half of one module that was cut in two.
+    """
 
     consumers: dict[str, set[str]] = {}
+    imported: dict[tuple[str, str], set[str]] = {}
     for path in sorted(source_root.rglob("*.py")):
         me = _module_name(path, source_root)
         try:
@@ -250,7 +259,11 @@ def _module_consumers(source_root: Path) -> dict[str, set[str]]:
             for target in targets:
                 if target.startswith("gkx"):
                     consumers.setdefault(target, set()).add(me)
-    return consumers
+                    if isinstance(node, ast.ImportFrom):
+                        imported.setdefault((target, me), set()).update(
+                            alias.name for alias in node.names
+                        )
+    return consumers, imported
 
 
 def _internal_cohesion(tree: ast.Module) -> tuple[int, float]:
@@ -325,7 +338,11 @@ def _validate_cohesion_policy(
         )
     )
 
-    consumers = _module_consumers(source_root)
+    min_names = _as_nonnegative_int(
+        policy.get("min_imported_names_for_split"),
+        "cohesion_policy.min_imported_names_for_split",
+    )
+    consumers, imported = _module_consumers(source_root)
     single: list[str] = []
     low: list[str] = []
     for path in sorted(source_root.rglob("*.py")):
@@ -335,7 +352,9 @@ def _validate_cohesion_policy(
         module = _module_name(path, source_root)
         seen = {name for name in consumers.get(module, set()) if name != module}
         if len(seen) == 1 and relative not in exempt:
-            single.append(relative)
+            only = next(iter(seen))
+            if len(imported.get((module, only), set())) >= min_names:
+                single.append(relative)
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
