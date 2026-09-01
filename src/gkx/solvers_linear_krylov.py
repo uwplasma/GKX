@@ -28,7 +28,7 @@ from gkx.solvers_linear_krylov_algorithms import (
 )
 from gkx.solvers_linear_krylov_algorithms import (
     _arnoldi,
-    _build_shift_invert_precond,
+    build_shift_invert_preconditioner,
     _mode_family_sign,
     _omega_scale,
     _physical_omega,
@@ -764,7 +764,7 @@ __all__ = [
     "_apply_operator",
     "_arnoldi",
     "_assemble_rhs_cached_novjp",
-    "_build_shift_invert_precond",
+    "build_shift_invert_preconditioner",
     "_compute_damping",
     "_mode_family_sign",
     "_normalize",

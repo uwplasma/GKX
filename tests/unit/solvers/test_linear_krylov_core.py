@@ -391,11 +391,11 @@ def test_shift_invert_selection_key_controls_cached_branch_flags(
     assert captured["v_ref"] is v0
 
 
-def test_build_shift_invert_preconditioner_modes() -> None:
+def testbuild_shift_invert_preconditioneritioner_modes() -> None:
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
     sigma = jnp.asarray(0.1j, dtype=v0.dtype)
 
-    precond, op = lk._build_shift_invert_precond(
+    precond, op = lk.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, None
     )
     assert precond is None and op is None
@@ -404,9 +404,11 @@ def test_build_shift_invert_preconditioner_modes() -> None:
     # unrecognized name disabled preconditioning while the solve reported itself
     # as preconditioned. Unknown names now raise; see the dedicated cases below.
     with pytest.raises(ValueError, match="unknown shift-invert preconditioner"):
-        lk._build_shift_invert_precond(v0, cache, params, term_cfg, sigma, "unknown")
+        lk.build_shift_invert_preconditioner(
+            v0, cache, params, term_cfg, sigma, "unknown"
+        )
 
-    precond, op = lk._build_shift_invert_precond(
+    precond, op = lk.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, "damping"
     )
     assert precond is not None and op is not None
@@ -414,7 +416,7 @@ def test_build_shift_invert_preconditioner_modes() -> None:
     assert y.shape == (v0.size,)
     assert jnp.all(jnp.isfinite(jnp.real(y)))
 
-    _precond, op = lk._build_shift_invert_precond(
+    _precond, op = lk.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, "hermite-line"
     )
     assert op is not None
@@ -422,7 +424,7 @@ def test_build_shift_invert_preconditioner_modes() -> None:
     assert y.shape == (v0.size,)
     assert jnp.all(jnp.isfinite(jnp.real(y)))
 
-    precond, op = lk._build_shift_invert_precond(
+    precond, op = lk.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, "hermite-line-coarse"
     )
     assert op is not None
@@ -444,7 +446,7 @@ def test_shifted_hermite_preconditioner_has_the_correct_complex_scaling() -> Non
     term_cfg = replace(term_cfg, streaming=0.0, collisions=0.0)
     sigma = jnp.asarray(0.3 - 0.7j, dtype=v0.dtype)
 
-    _precond, op = lk._build_shift_invert_precond(
+    _precond, op = lk.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, "hermite-line"
     )
 
@@ -489,10 +491,10 @@ def test_shifted_hermite_preconditioner_handles_a_zero_shift() -> None:
 
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
     sigma = jnp.asarray(0.0 + 0.0j, dtype=v0.dtype)
-    _diagonal, damping_op = lk._build_shift_invert_precond(
+    _diagonal, damping_op = lk.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, "damping"
     )
-    _precond, line_op = lk._build_shift_invert_precond(
+    _precond, line_op = lk.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, "hermite-line"
     )
 
@@ -531,7 +533,7 @@ def test_field_corrected_shifted_preconditioner_removes_low_moment_coupling() ->
     sigma = jnp.asarray(0.3 - 0.7j, dtype=v0.dtype)
 
     def preconditioned_residual(mode: str) -> jnp.ndarray:
-        _diagonal, preconditioner = lk._build_shift_invert_precond(
+        _diagonal, preconditioner = lk.build_shift_invert_preconditioner(
             v0,
             cache,
             params,
@@ -622,7 +624,7 @@ def test_field_corrected_preconditioner_covers_em_species_and_linked_layouts(
         )
     )
     sigma = jnp.asarray(0.3 - 0.7j, dtype=vector.dtype)
-    _diagonal, preconditioner = lk._build_shift_invert_precond(
+    _diagonal, preconditioner = lk.build_shift_invert_preconditioner(
         vector,
         cache,
         params,
@@ -642,10 +644,10 @@ def test_field_corrected_preconditioner_covers_em_species_and_linked_layouts(
     assert jnp.allclose(tangent, 0.2j * observed, rtol=1.0e-10, atol=1.0e-10)
 
 
-def test_build_shift_invert_preconditioner_linked_branch() -> None:
+def testbuild_shift_invert_preconditioneritioner_linked_branch() -> None:
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=True)
     sigma = jnp.asarray(0.2j, dtype=v0.dtype)
-    _precond, op = lk._build_shift_invert_precond(
+    _precond, op = lk.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, "hermite-line"
     )
     assert op is not None
@@ -663,7 +665,7 @@ def test_shift_invert_uses_right_preconditioning_and_physical_fgmres_residual(
     calls: list[tuple[bool, jnp.ndarray, int]] = []
     monkeypatch.setattr(
         ka,
-        "_build_shift_invert_precond",
+        "build_shift_invert_preconditioner",
         lambda *_args: (jnp.ones_like(v0), lambda value: 0.1 * value),
     )
     monkeypatch.setattr(ka, "_apply_operator", lambda value, *_args: value)
@@ -1640,7 +1642,7 @@ def test_dominant_eigenpair_reports_shift_invert_status(
     assert any("residual=" in item for item in messages)
 
 
-def test_build_shift_invert_preconditioner_rejects_unknown_mode() -> None:
+def testbuild_shift_invert_preconditioneritioner_rejects_unknown_mode() -> None:
     """An unsupported name must raise, not silently disable preconditioning.
 
     This function used to return ``(None, None)`` for anything outside its
@@ -1654,7 +1656,9 @@ def test_build_shift_invert_preconditioner_rejects_unknown_mode() -> None:
 
     for mode in ("unknown", "hermitline", "damping-diagonal"):
         with pytest.raises(ValueError, match="unknown shift-invert preconditioner"):
-            ka._build_shift_invert_precond(v0, cache, params, term_cfg, sigma, mode)
+            ka.build_shift_invert_preconditioner(
+                v0, cache, params, term_cfg, sigma, mode
+            )
 
     # "auto" is a real policy resolved by _automatic_shift_preconditioner one
     # level up, so reaching this function with it means that layer was bypassed.
@@ -1662,11 +1666,13 @@ def test_build_shift_invert_preconditioner_rejects_unknown_mode() -> None:
     # "damping" would hand a damping diagonal to a caller that asked for a
     # physics-aware line solve.
     with pytest.raises(ValueError, match="was bypassed"):
-        ka._build_shift_invert_precond(v0, cache, params, term_cfg, sigma, "auto")
+        ka.build_shift_invert_preconditioner(v0, cache, params, term_cfg, sigma, "auto")
 
 
 @pytest.mark.parametrize("mode", sorted(ka.SHIFT_PRECOND_NAMES - {"none"}))
-def test_build_shift_invert_preconditioner_documented_names_resolve(mode: str) -> None:
+def testbuild_shift_invert_preconditioneritioner_documented_names_resolve(
+    mode: str,
+) -> None:
     """Every advertised name builds a usable operator.
 
     Only ``"damping"`` returns a diagonal array; the line and field-corrected
@@ -1679,7 +1685,7 @@ def test_build_shift_invert_preconditioner_documented_names_resolve(mode: str) -
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
     sigma = jnp.asarray(0.1j, dtype=v0.dtype)
 
-    precond, operator = ka._build_shift_invert_precond(
+    precond, operator = ka.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, mode
     )
 
@@ -1691,18 +1697,18 @@ def test_build_shift_invert_preconditioner_documented_names_resolve(mode: str) -
     assert bool(jnp.all(jnp.isfinite(jnp.real(result))))
 
 
-def test_build_shift_invert_preconditioner_opt_out_and_normalisation() -> None:
+def testbuild_shift_invert_preconditioneritioner_opt_out_and_normalisation() -> None:
     """``None``/``"none"`` stay the opt-out; names are case- and space-tolerant."""
 
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
     sigma = jnp.asarray(0.1j, dtype=v0.dtype)
 
     for opt_out in (None, "none", "NONE", " none "):
-        assert ka._build_shift_invert_precond(
+        assert ka.build_shift_invert_preconditioner(
             v0, cache, params, term_cfg, sigma, opt_out
         ) == (None, None)
 
-    spaced, _ = ka._build_shift_invert_precond(
+    spaced, _ = ka.build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma, "  DAMPING "
     )
     assert spaced is not None
@@ -1757,7 +1763,7 @@ def test_line_and_field_preconditioners_are_not_the_damping_diagonal() -> None:
     sigma = jnp.asarray(0.1j, dtype=state.dtype)
 
     def applied(mode: str) -> jnp.ndarray:
-        _precond, operator = ka._build_shift_invert_precond(
+        _precond, operator = ka.build_shift_invert_preconditioner(
             state, cache, params, term_cfg, sigma, mode
         )
         return operator(state.reshape(-1))

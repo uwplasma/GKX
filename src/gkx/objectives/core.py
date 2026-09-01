@@ -31,7 +31,7 @@ from gkx.solvers_linear_krylov import (
     adaptive_propagator_eigenpair,
     certifiable_residual_tolerance,
 )
-from gkx.solvers_linear_krylov_algorithms import _build_shift_invert_precond
+from gkx.solvers_linear_krylov_algorithms import build_shift_invert_preconditioner
 
 
 SOLVER_OBJECTIVE_NAMES = (
@@ -501,7 +501,7 @@ def _matrix_free_dominant_linear_branch(
         right: jnp.ndarray,
         left: jnp.ndarray,
     ):
-        _diagonal, apply_flat = _build_shift_invert_precond(
+        _diagonal, apply_flat = build_shift_invert_preconditioner(
             right,
             cache,
             context.linear_params,

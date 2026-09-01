@@ -184,7 +184,7 @@ SHIFT_PRECOND_NAMES: frozenset[str] = (
 )
 
 
-def _build_shift_invert_precond(
+def build_shift_invert_preconditioner(
     v: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
@@ -366,7 +366,7 @@ def _shift_invert_apply_factory(
         )
     shape = v0.shape
     size = v0.size
-    _precond, precond_op = _build_shift_invert_precond(
+    _precond, precond_op = build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma_val, shift_preconditioner
     )
 
@@ -983,7 +983,7 @@ __all__ = [
     "_apply_operator",
     "_arnoldi",
     "_assemble_rhs_cached_novjp",
-    "_build_shift_invert_precond",
+    "build_shift_invert_preconditioner",
     "_compute_damping",
     "_mode_family_sign",
     "_normalize",

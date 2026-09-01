@@ -2516,7 +2516,26 @@ stellarator code with the linear solver, which is where it belongs.
    which revealed `stellarator_contracts` at six. A module can look
    double-consumed only because both consumers are halves of one split module.
 
-### 25d.5 Fusion hazards, from four completed fusions
+### 25d.5 Encapsulation is the next measurable problem
+
+Promoting `_build_shift_invert_precond` to
+`build_shift_invert_preconditioner` closed the seam between the objectives and
+linear communities, and the count behind it is worth recording: **216 imports
+reach across package boundaries for a private name**, dunders excluded. The
+most-reached-into modules are `artifacts/spectral_layout.py` (25),
+`solvers_time_explicit_steps` (20), `operators/linear/params.py` (15) and
+`solvers_linear_krylov_algorithms` (15).
+
+This is a different problem from layering and from cohesion, and it is the one
+that most directly obstructs the plan's other goals. A module whose private
+names are imported by four other packages cannot be refactored without breaking
+them, which is why so many fusions in this wave turned out to be blocked by a
+seam rather than by the physics. The honest programme is to promote the names
+that are genuinely part of a contract, as was done here, and to move the rest
+inside the one caller that needs them -- not to add a gate first, because a
+ratchet on 216 would freeze the current shape rather than improve it.
+
+### 25d.6 Fusion hazards, from four completed fusions
 
 None of these is visible to a grep, and each was caught by a checker or a test:
 
