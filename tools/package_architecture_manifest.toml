@@ -290,6 +290,23 @@ public_facades = [
 ]
 
 [[complexity_policy.exceptions]]
+path = "objectives/stellarator.py"
+# 1433 lines, above the 1200 tripwire, and the trade is deliberate. This file
+# absorbed stellarator_tables (five names), stellarator_contracts (six), and
+# stellarator_reduced (fourteen). The first was joined by a
+# _sync_table_dependencies seam that rebound an attribute both modules already
+# shared -- a no-op kept for monkeypatching no test performs) and then
+# stellarator_reduced (one consumer, FOURTEEN names). Fourteen names is not an
+# interface. stellarator_reduced only became visible as a split once the first
+# fusion removed its second consumer, which is the cohesion gate doing its job.
+# The target below is the honest next step: the fused file should be reduced by
+# removing duplication between the three former modules, not by splitting them
+# apart again along the seams that were just closed.
+baseline_lines = 1629
+target_lines = 1100
+reason = "Fused stellarator_tables and stellarator_reduced; reduce by deduplication, not by re-splitting."
+
+[[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
 baseline_lines = 1069
 target_lines = 1000

@@ -3739,7 +3739,7 @@ def test_reduced_stellarator_model_stays_deprecated_and_shallowly_depended_on() 
     """
 
     import ast
-    import gkx.objectives.stellarator_reduced as reduced
+    import gkx.objectives.stellarator as reduced  # fused: stellarator_reduced now lives here
 
     assert "deprecated" in (reduced.__doc__ or "").lower(), (
         "the reduced-model deprecation notice was removed; it is a fitted "

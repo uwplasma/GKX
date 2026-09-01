@@ -969,24 +969,8 @@ Stellarator ITG Objectives
    :members:
    :no-index:
 
-Stellarator ITG Objective Tables
---------------------------------
 
-.. automodule:: gkx.objectives.stellarator_tables
-   :members:
 
-Stellarator ITG Contracts
--------------------------
-
-.. automodule:: gkx.objectives.stellarator_contracts
-   :members:
-
-Stellarator Reduced ITG Model And Gates
----------------------------------------
-
-.. automodule:: gkx.objectives.stellarator_reduced
-   :members:
-   :private-members:
 
 Stellarator Objective Portfolios
 --------------------------------

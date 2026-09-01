@@ -2259,12 +2259,12 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.objectives.stellarator_tables"
-path = "src/gkx/objectives/stellarator_tables.py"
-owned_modules = [
-  "gkx.objectives.stellarator",
-  "gkx.objectives.stellarator_contracts",
-]
+# stellarator_tables was fused into stellarator: it had one consumer that
+# imported five of its names, and the seam between them (_sync_table_dependencies)
+# rebound an attribute the two modules already shared, so it was a no-op kept for
+# monkeypatching that no test performs. The row now owns the surviving module.
+module = "gkx.objectives.stellarator"
+path = "src/gkx/objectives/stellarator.py"
 owner_lane = "reduced and VMEC/Boozer stellarator ITG objective table and portfolio gates"
 status = "active"
 coverage_priority = "high"
@@ -2291,42 +2291,6 @@ artifact_paths = [
 ]
 next_tests = [
   "add direct VMEC/Boozer table fixtures that cover objective selection and sample-axis reshaping",
-]
-
-[[modules]]
-module = "gkx.objectives.stellarator_reduced"
-path = "src/gkx/objectives/stellarator_reduced.py"
-owner_lane = "reduced stellarator ITG model, residual, covariance, and finite-difference gates"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "reduced QA geometry and ITG screening observables before full VMEC/Boozer optimization",
-  "fixed-step nonlinear-envelope diagnostics kept separate from turbulent-transport claims",
-  "Gauss-Newton residual conditioning for differentiable stellarator optimization",
-  "finite-difference validation of every differentiated transport objective",
-]
-physics_contracts = [
-  "linear growth, quasilinear flux, and reduced nonlinear envelope remain distinct observables",
-  "density-gradient and temperature-gradient controls enter the same differentiable feature map used by objective scans",
-  "residual vectors must expose aspect, iota, quasisymmetry, regularization, and transport terms separately",
-  "nonlinear-window residuals remain reduced differentiability gates unless long post-transient transport artifacts pass",
-]
-numerics_contracts = [
-  "the reduced nonlinear envelope uses fixed-step RK2 and explicit late-window statistics",
-  "parameter vectors and objective kinds fail closed on invalid shapes or names",
-  "residual Jacobians pass AD/FD parity with precision-aware tolerances",
-  "covariance gates require finite singular values, sufficient rank, and bounded condition numbers",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/stellarator_itg_optimization_uq.png",
-  "docs/_static/stellarator_itg_portfolio_gate.json",
-]
-next_tests = [
-  "add residual-specific failure fixtures for rank-deficient and ill-conditioned sensitivity maps",
 ]
 
 [[modules]]
