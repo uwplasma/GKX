@@ -2271,6 +2271,15 @@ Functions classified by what their body does:
 
 1. Replace the flat 1,000-line cap with a cohesion rule, or raise it and gate on
    complexity. Nothing below can be done honestly while the cap rewards hiding.
+   **Done.** `[cohesion_policy]` in the architecture manifest now measures two
+   things and ratchets both downward: the number of modules imported by exactly
+   one other module (42 at `c23f6f94`, holding 18,361 lines, which is the
+   fingerprint of cap-driven splitting), and the number of modules with at least
+   six top-level definitions whose internal-reference ratio is below 0.30 (8).
+   `default_max_lines` moves 1000 -> 1200 and is demoted to a runaway tripwire.
+   Merging a single-consumer module back into its only caller now improves the
+   score instead of breaching a limit. Both arms were verified to fire by
+   tightening each baseline by one and confirming the checker raises.
 2. Collapse pure delegation, 381 functions and 4,633 lines, removing the hop.
 3. Inline single-use helpers of at most 40 lines where they do not name a real
    concept. Judgement is required per function; the 16,601-line pool is a list
