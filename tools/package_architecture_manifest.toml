@@ -891,7 +891,14 @@ recursive = true
 # readiness report names the version pyproject.toml declares. Both fail on the
 # committed 1.8.2 files and pass on the regenerated ones. The two tests are 52
 # lines; 14 of existing headroom absorbs the rest, so the baseline moves 38.
-baseline = 86257
+# 86257 -> 86377: recompute the README's published linear parity table from
+# the scans the benchmark atlas points at. The seven percentages were
+# transcribed by hand and nothing checked them, so a refreshed scan could
+# leave the published figure behind -- the failure mode that produced the
+# seeded mirror record and the generator-less performance file. All seven
+# reproduce today; the gate is so they keep doing so. Verified negatively:
+# editing KBM from 20.0% to 18.0% fails it.
+baseline = 86377
 target = 35000
 
 [[line_budget_policy.counts]]

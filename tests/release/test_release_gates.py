@@ -3932,6 +3932,126 @@ def _parity_cases() -> list[dict]:
     return tomllib.loads(_PARITY_MANIFEST.read_text(encoding="utf-8"))["case"]
 
 
+# The README publishes a linear parity percentage per case, as
+# 100 * max|GKX - ref| / max|ref| over each tracked scan. Those numbers were
+# transcribed by hand and nothing recomputed them, so a refreshed scan could
+# leave the published figure behind -- the same failure mode as the mirror
+# record and the generator-less performance file. Each row is recomputed here
+# from the CSV the benchmark atlas points at. The tolerance is the rounding the
+# table itself shows (three significant figures), not a physics tolerance.
+_README_PARITY_SOURCES: dict[str, tuple[str, str, str, str, str]] = {
+    "KAW": (
+        "kaw_exact_growth_dump.csv",
+        "gamma_ref",
+        "gamma_gkx",
+        "omega_ref",
+        "omega_gkx",
+    ),
+    "ETG": (
+        "etg_mismatch_table.csv",
+        "gamma_ref",
+        "gamma_gkx",
+        "omega_ref",
+        "omega_gkx",
+    ),
+    "W7-X": (
+        "w7x_linear_t2_scan.csv",
+        "gamma_ref_last",
+        "gamma_last",
+        "omega_ref_last",
+        "omega_last",
+    ),
+    "HSX": (
+        "hsx_linear_t2_scan.csv",
+        "gamma_ref_last",
+        "gamma_last",
+        "omega_ref_last",
+        "omega_last",
+    ),
+    "Cyclone Miller": (
+        "cyclone_miller_linear_mismatch.csv",
+        "gamma_gx",
+        "gamma",
+        "omega_gx",
+        "omega",
+    ),
+    "Cyclone ITG": (
+        "cyclone_mismatch_table.csv",
+        "gamma_ref",
+        "gamma_gkx",
+        "omega_ref",
+        "omega_gkx",
+    ),
+    "KBM": (
+        "kbm_mismatch_table.csv",
+        "gamma_ref",
+        "gamma_gkx",
+        "omega_ref",
+        "omega_gkx",
+    ),
+}
+
+
+def _peak_relative_percent(rows: list[dict], ref_key: str, gkx_key: str) -> float:
+    ref = [float(row[ref_key]) for row in rows]
+    gkx = [float(row[gkx_key]) for row in rows]
+    peak = max(abs(value) for value in ref)
+    worst = max(abs(a - b) for a, b in zip(ref, gkx))
+    return 100.0 * worst / peak
+
+
+def _readme_parity_table(root: Path) -> dict[str, tuple[float, float]]:
+    text = (root / "README.md").read_text(encoding="utf-8")
+    published: dict[str, tuple[float, float]] = {}
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip().strip("*` ") for cell in line.strip("|").split("|")]
+        if len(cells) != 3:
+            continue
+        label, gamma_cell, omega_cell = cells
+        if label not in _README_PARITY_SOURCES:
+            continue
+        try:
+            published[label] = (
+                float(gamma_cell.rstrip("%")),
+                float(omega_cell.rstrip("%")),
+            )
+        except ValueError:
+            continue
+    return published
+
+
+def test_readme_linear_parity_table_matches_its_tracked_scans() -> None:
+    """Every parity percentage the README publishes is recomputed from its scan."""
+
+    import csv
+
+    root = RUN_TO_REPO_ROOT
+    published = _readme_parity_table(root)
+    assert set(published) == set(_README_PARITY_SOURCES), (
+        "README parity table rows changed; update _README_PARITY_SOURCES so every "
+        f"published row stays recomputed. Parsed: {sorted(published)}"
+    )
+    for label, (gamma_pct, omega_pct) in sorted(published.items()):
+        name, gamma_ref, gamma_gkx, omega_ref, omega_gkx = _README_PARITY_SOURCES[label]
+        source = root / "docs" / "_static" / name
+        assert source.is_file(), f"{label}: {source} is missing"
+        rows = list(csv.DictReader(source.open(encoding="utf-8")))
+        assert rows, f"{label}: {name} has no rows"
+        for published_value, ref_key, gkx_key, quantity in (
+            (gamma_pct, gamma_ref, gamma_gkx, "gamma"),
+            (omega_pct, omega_ref, omega_gkx, "omega"),
+        ):
+            measured = _peak_relative_percent(rows, ref_key, gkx_key)
+            tolerance = max(0.02 * published_value, 0.005)
+            assert abs(measured - published_value) <= tolerance, (
+                f"README publishes {quantity} = {published_value}% for {label}, but "
+                f"{name} gives {measured:.3f}%. Either the scan was refreshed without "
+                "updating the README, or the README was edited away from its scan."
+            )
+
+
 def test_kbm_miller_parity_floor_covers_its_measured_two_build_spread() -> None:
     """The one case with a measured floor keeps a floor that covers it."""
 
