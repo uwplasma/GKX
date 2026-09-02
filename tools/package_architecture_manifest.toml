@@ -805,7 +805,14 @@ recursive = true
 # 45 lines are the three namespace helpers and the docstrings recording which
 # operations may cross to the host at all -- IEEE-754 pins arithmetic, sqrt and
 # casts, so exp and gammaln stay on the device and the cache stays bit-identical.
-baseline = 88840
+# 88840 -> 88852: stopping the scan-level parallel strategy from leaking into
+# the per-ky solve. ``[parallel] strategy="batch"`` says how the SCAN is
+# dispatched; it was forwarded verbatim into each worker's RuntimeConfig, so
+# the inner single-ky solve took the sharded linear-RHS path, which accepts
+# only strategy="velocity" and raised NotImplementedError. That made the
+# shipped examples/parallelization deck unrunnable -- invisible because the
+# only test of it mocked the solver out. Three lines of guard, nine of comment.
+baseline = 88852
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -830,7 +837,17 @@ recursive = true
 # the dedicated coverage suites that existed only to cover them.
 # 88110 -> 86902: deleting the 935-line Diffrax integrator suite and the
 # Diffrax-only runtime/example cases, net of the new removed-key deck gate.
-baseline = 85393
+# 85393 -> 85894: shipped-example execution coverage in the existing
+# tests/integration/examples/test_examples.py. No new test FILE: the topology
+# count stays at 76. The Phase D gate asks that every canonical example run in
+# CI, and only four of the 36 did; sixteen now execute at smoke resolution and
+# the other sixteen are registered with the data file or the run length that
+# blocks them, so the gap is a reported skip instead of silence. Roughly half
+# the lines are that registry and its reasons rather than test bodies, and it
+# is what makes the coverage non-vacuous: eleven examples hide their run behind
+# a __main__ guard, where an import-only harness would pass having executed no
+# physics at all.
+baseline = 85894
 target = 35000
 
 [[line_budget_policy.counts]]
