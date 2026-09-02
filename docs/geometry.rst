@@ -393,7 +393,7 @@ lane is benchmarked against the kinetic open-mirror programs of Francisquez
 missing open-boundary physics:
 
 * `Xanthopoulos et al., Phys. Plasmas 16, 082303 (2009)
-  <https://doi.org/10.1063/1.3212262>`__;
+  <https://doi.org/10.1063/1.3187907>`__;
 * `Rodríguez, Helander, and Goodman, J. Plasma Phys. 90, 905900212 (2024)
   <https://doi.org/10.1017/S0022377824000345>`__;
 * `Francisquez et al., Phys. Plasmas 30, 103505 (2023)

@@ -86,7 +86,7 @@ References
 .. [Stephens21] C. D. Stephens et al., "Quasilinear gyrokinetic theory: A
    derivation of QuaLiKiz," Journal of Plasma Physics 87, 905870409 (2021).
    `arXiv <https://arxiv.org/abs/2103.10569>`__,
-   `DOI <https://doi.org/10.1017/S0022377821000804>`__.
+   `DOI <https://doi.org/10.1017/S0022377821000763>`__.
 
 .. [Parker23] J. B. Parker et al., "Comparison of Saturation Rules Used for
    Gyrokinetic Quasilinear Transport Modeling," Plasma 6, 611 (2023).
