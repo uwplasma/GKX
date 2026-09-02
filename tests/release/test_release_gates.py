@@ -3980,3 +3980,133 @@ def test_parity_builder_reads_the_declared_floor() -> None:
     assert 'case.get("build_reproducibility_floor")' in source
     assert '"build_reproducibility_floor": floor' in source
     assert '"within_build_reproducibility_floor"' in source
+
+
+# ---- closed VMEX mirror: a solved equilibrium, never the seed ----
+
+"""The shipped closed VMEX mirror case must be an equilibrium, not a guess.
+
+``tools/artifacts/build_vmex_mirror_gkx_artifacts.py`` built its record on
+``setup.discretization.evaluate_state(setup.initial_state)`` -- the seeded stream
+function on the prescribed nested-ellipse surfaces, at a normalized MHD force
+residual of 0.61 -- and published that state's growth rate, frequency,
+quasilinear proxy, field-strength modulation and every figure panel as
+properties of a VMEX equilibrium. Solving the same inputs moves the
+mixing-length proxy by a factor of 4.6, so this was never cosmetic.
+
+Nothing caught it, and that is the part these gates fix: the record sat in no
+manifest and was read by no test, so the state it was built on was invisible.
+The bars are pinned here as well as in the builder on purpose. A gate that only
+read the builder's own constants could be satisfied by loosening them.
+"""
+
+from pathlib import Path as _VmexMirrorPath
+import json as _vmex_mirror_json
+
+_VMEX_MIRROR_ROOT = _VmexMirrorPath(__file__).resolve().parents[2]
+_VMEX_MIRROR_RECORD = (
+    _VMEX_MIRROR_ROOT / "docs" / "_static" / "vmex_mirror_gkx_showcase.json"
+)
+_VMEX_MIRROR_BUILDER = (
+    _VMEX_MIRROR_ROOT / "tools" / "artifacts" / "build_vmex_mirror_gkx_artifacts.py"
+)
+
+# The bars the shipped record has to clear. The three weak-form ones are the
+# bars VMEX's own closed lane asserts in
+# tests/mirror/test_splines.py::test_closed_circular_limit_reaches_ftol_with_independent_strong_force
+# and this case meets them at machine precision. The strong-form one is ours and
+# is deliberately loose: on this racetrack force.normalized_rms plateaus between
+# 4.6e-3 and 5.1e-3 across ns 5-9, mpol 4-6 and coefficient_count 16-64 with no
+# downward trend, so VMEX's 1.6e-4 circular-limit figure is not reachable here.
+# uwplasma/vmex#211 asks whether that plateau is the leg-return curvature
+# junction and is unanswered, so this bar certifies only the two orders of
+# magnitude between a solved state and the 0.61 seed -- not an accuracy claim.
+_VMEX_MIRROR_BARS = {
+    "force_residual_normalized_rms": 1.0e-2,
+    "variational_maximum": 1.0e-12,
+    "staggered_weak_force_maximum": 1.0e-12,
+    "normalized_divergence_rms": 1.0e-12,
+}
+
+
+def _vmex_mirror_equilibrium() -> dict:
+    record = _vmex_mirror_json.loads(_VMEX_MIRROR_RECORD.read_text(encoding="utf-8"))
+    equilibrium = record.get("equilibrium")
+    assert equilibrium is not None, (
+        "the shipped closed VMEX mirror record carries no 'equilibrium' block, "
+        "so nothing states which state its numbers describe. That is exactly "
+        "the condition under which the seeded initial guess was published as an "
+        "equilibrium"
+    )
+    return equilibrium
+
+
+def test_shipped_vmex_mirror_case_is_a_converged_equilibrium() -> None:
+    equilibrium = _vmex_mirror_equilibrium()
+
+    assert equilibrium["converged"] is True, (
+        "the shipped closed VMEX mirror record does not report a converged "
+        "solve, so its objectives and figure panels are properties of whatever "
+        "state the builder happened to stop at"
+    )
+    assert equilibrium["solve_lambda"] is True, (
+        "solve_lambda must be True. With the default the solve reports "
+        "converged after four iterations at a residual of 0.55 and leaves "
+        "|B|max/min at 1.614: it is not a solve"
+    )
+    assert equilibrium["iterations"] > 0, (
+        "a record with no solver iteration is the initial guess"
+    )
+    for name, bar in _VMEX_MIRROR_BARS.items():
+        assert float(equilibrium[name]) < bar, (
+            f"{name} is {equilibrium[name]!r}, at or above the admission bar "
+            f"{bar:g}; the shipped case is not a publishable equilibrium"
+        )
+
+
+def test_shipped_vmex_mirror_record_shows_the_solve_moved_the_state() -> None:
+    """The published residual must be far below the seed the solve started at."""
+
+    equilibrium = _vmex_mirror_equilibrium()
+    seed = float(equilibrium["seed_force_residual_normalized_rms"])
+    solved = float(equilibrium["force_residual_normalized_rms"])
+
+    assert seed > 0.1, (
+        "the recorded seed residual no longer looks like the seeded state this "
+        f"gate exists to exclude ({seed!r}); re-derive the separation below"
+    )
+    assert solved * 25.0 < seed, (
+        f"the published residual {solved!r} is not 25x below the seed's "
+        f"{seed!r}. The shipped state is then indistinguishable from the "
+        "solver's initial guess, which is what #173 fixed"
+    )
+
+
+def test_vmex_mirror_record_bars_match_the_builder_that_writes_them() -> None:
+    """A record that declares its own bars must declare the pinned ones."""
+
+    declared = _vmex_mirror_equilibrium()["admission_bars"]
+
+    assert {key: float(value) for key, value in declared.items()} == (
+        _VMEX_MIRROR_BARS
+    ), (
+        "the shipped record's admission bars differ from the ones pinned here. "
+        "Loosening a bar in the builder must not be able to make a worse "
+        "equilibrium pass; change both, with the measurement that justifies it"
+    )
+
+
+def test_vmex_mirror_builder_solves_before_it_measures() -> None:
+    """The generator, not just its output, has to refuse the seeded state."""
+
+    source = _VMEX_MIRROR_BUILDER.read_text(encoding="utf-8")
+
+    assert "solve_fixed_boundary(" in source
+    assert "solve_lambda=True" in source
+    assert "require_convergence=True" in source
+    assert "equilibrium_admission_failures" in source
+    assert "state = solved.state" in source, (
+        "the builder must hand the solved state to from_vmex_mirror and "
+        "gk_closed_fieldline_geometry; building on "
+        "discretization.evaluate_state(setup.initial_state) is the regression"
+    )

@@ -297,72 +297,104 @@ normalizations, validation ladder, and open-lane literature are maintained in
 VMEX's ``mirror-gyrokinetics`` explanation page.
 
 .. image:: _static/vmex_mirror_gkx_showcase.webp
-   :alt: Closed VMEX mirror field line, its two-level magnetic-field profile
-         centred on the low-field leg, and the GKX perpendicular metric
+   :alt: Closed VMEX mirror field line on a solved equilibrium, its
+         magnetic-field profile centred on the field-strength minimum, and the
+         GKX perpendicular metric
    :width: 100%
 
 The shipped case: field-strength modulation, not a mirror ratio
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+The case is evaluated on a solved fixed-boundary equilibrium. The builder runs
+``solve_fixed_boundary(..., solve_lambda=True, require_convergence=True)``, as
+VMEX's own ``examples/mirror/stellarator_mirror_hybrid.py`` does before it
+plots, and hands the solved state to ``from_vmex_mirror`` and
+``gk_closed_fieldline_geometry``. At the shipped resolution it converges in 979
+iterations to a normalized strong-form MHD force residual of
+:math:`4.84\times10^{-3}`, with ``variational.maximum``
+:math:`8.67\times10^{-17}`, ``staggered_weak_force.maximum``
+:math:`9.07\times10^{-17}` and ``normalized_divergence_rms``
+:math:`1.40\times10^{-14}`. The record carries all of these, together with
+``converged``, ``iterations`` and the resolution that achieved them, so the
+state can be checked rather than assumed. ``solve_lambda`` is not optional:
+with the default the solve reports converged after four iterations at a
+residual of 0.55 and leaves the field-strength ratio at 1.614.
+
+This page previously described this case on ``setup.initial_state``, the seeded
+minimum-energy stream function on the prescribed nested-ellipse surfaces, whose
+residual is 0.61. Every number below moved when the case was solved, several of
+them by more than a factor of four, and the paragraphs that follow describe the
+solved equilibrium only.
+
 The pictured racetrack is planar. Its axis lies in a single plane, with two
 straight legs at :math:`x=\pm2` and the two return bends at :math:`z=\pm3.797`.
-Along the sampled field line ``bmag`` is a two-level step. Nine of the
-thirty-two samples sit on each plateau, flat to 0.73% on the low leg and 0.51%
-on the high leg, and the transition between them is confined to the two bends.
-So is the mirror force: ``bgrad`` peaks at 0.069 in the bends and stays below
-0.007 on either plateau. One circuit carries exactly one low-field leg and one
-high-field leg, so a trapped particle bounces inside the low leg and the high
-leg closes that well on both sides.
+Along the sampled field line ``bmag`` carries a maximum at each of the two
+return bends and a minimum on each straight leg, so one circuit closes two
+wells rather than one. The profile is smooth rather than a two-level step: its
+second harmonic is eight times its fundamental, the two maxima agree to
+round-off at 1.03426, and the two minima differ by 0.14% (0.99639 and 0.99776).
+The mirror force follows it, with ``bgrad`` peaking at 0.0056. The two-level
+step this page used to report, nine samples flat on each of a low and a high
+leg with the transition confined to the bends, is a property of the seed and
+does not survive force balance.
 
-The recorded ``bmag_max_over_min`` is the ratio between those two flat legs. It
+The recorded ``bmag_max_over_min`` is that modulation depth. It
 is not a mirror ratio in the usual sense of a well minimum over a localized
 throat maximum, and this page already uses :math:`R_m` with that standard
 meaning in the loss-cone boundary below, so the closed case does not reuse the
-symbol. What the number measures is the rotating elliptical cross-section, not
-a mirror. On this configuration:
+symbol. Neither is it the rotating elliptical cross-section. On the seeded
+state the ratio equalled
+:math:`(\mathrm{semi\_major}/\mathrm{semi\_minor})^2` to five digits and was
+independent of every length in the configuration; that identity is a seed
+artifact. Sampling the same field line on solved equilibria:
 
-* it converges to :math:`(\mathrm{semi\_major}/\mathrm{semi\_minor})^2`,
-  and follows that square as the pair is varied: sampled on the surface, the
-  ``0.4/0.3`` section of this case gives 1.77778, ``0.45/0.3`` gives 2.25000,
-  and both ``0.5/0.25`` and ``0.4/0.2`` give 4.00000. The 1.77849 that the
-  equal-arc field-line remap returns at ``coefficient_count=16`` is that same
-  1.777778 resolved on a finite axial basis; refining to
-  ``coefficient_count=32`` returns 1.777799;
-* it does not move at all when ``straight_length`` runs from 2.0 to 16.0 or
-  ``return_radius`` from 1.0 to 4.0 --- the two lengths a mirror ratio would be
-  built from;
-* it is exactly 1.0000 for a circular section
-  (``semi_major == semi_minor``), so the configuration then has no parallel
-  field-strength modulation at all;
-* it is 1.004 on the magnetic axis and ranges over 1.27 to 1.78 across the
-  field lines of the sampled surface, so it labels one flux tube rather than
-  the device.
+* it is 1.03801 where the elongation squared is 1.77778, and it is not a
+  function of the elongation alone: ``0.5/0.25`` and ``0.4/0.2`` share an
+  elongation squared of 4.00000 and give 1.11730 and 1.09976;
+* it still grows with elongation, but far more weakly --- ``0.4/0.3`` 1.03801,
+  ``0.45/0.3`` 1.05920, ``0.4/0.2`` 1.09976, ``0.5/0.25`` 1.11730;
+* a circular section (``semi_major == semi_minor``) gives 1.00743 rather than
+  the seed's exact 1.00000, so the solved configuration retains a small
+  parallel field-strength modulation that the seed had none of;
+* it now moves with ``return_radius`` --- one of the two lengths a mirror ratio
+  would be built from --- giving 1.07587, 1.03801 and 1.02031 at 1.0, 2.0 and
+  4.0. It stays nearly flat in ``straight_length``, spanning 1.03603 to 1.03801
+  as that runs from 2.0 to 16.0;
+* it ranges over 1.010 to 1.221 across the field lines of the sampled surface
+  and over 1.023 to 1.039 across its radial stations, so it labels one flux
+  tube rather than the device.
 
-The recorded value 1.77849 is therefore a flux-tube field-strength modulation
+The recorded value 1.03801 is therefore a flux-tube field-strength modulation
 depth, and the loss-cone formula below must not be applied to it.
 
 The ``bmag`` and metric panels are drawn with the parallel origin at the
-``bmag`` minimum. The equal-arc grid otherwise lands ``z=0`` on the high-field
-leg, which draws a periodic circuit as a central barrier with half a well at
-each edge; centering on the low-field leg shows the same data as the single
-well the periodicity implies. The convention changes no computed quantity. The
+``bmag`` minimum. The equal-arc grid otherwise lands ``z=0`` on a return bend,
+which draws a periodic circuit as a central barrier with half a well at each
+edge; centering on the field-strength minimum shows the same data as the well
+the periodicity implies. The convention changes no computed quantity. The
 parallel domain is periodic, and shifting the origin by 1, 8, 16, or -5 of the
-32 grid points moves every solver objective by at most :math:`8.4\times10^{-15}`
+32 grid points moves every solver objective by at most :math:`9.8\times10^{-15}`
 --- ``gamma``, ``omega``, and the mixing-length proxy are identical to
-round-off whichever leg carries ``z=0``.
+round-off wherever ``z=0`` falls.
 
-Finally, the case is evaluated on ``setup.initial_state``: the seeded
-minimum-energy stream function on the prescribed nested-ellipse surfaces, not a
-solved fixed-boundary equilibrium. Its normalized MHD force residual is 0.61,
-recorded as ``seed_force_residual_normalized_rms``, and VMEX's own
-``examples/mirror/stellarator_mirror_hybrid.py`` runs ``solve_fixed_boundary``
-before it plots. The quoted growth rate, frequency, and quasilinear proxy are
-correct for the seeded state and reproduce to :math:`10^{-15}`; they are not
-properties of a converged VMEX equilibrium, and solving this configuration
-changes them.
+Refining the axial basis converges the physics rather than moving it about:
+``coefficient_count`` 16 to 32 takes ``gamma`` from 0.07959 to 0.07425,
+``omega`` from -0.11279 to -0.09383, and the mixing-length proxy from 0.21721
+to 0.21158, while the residual stays at :math:`4.8\times10^{-3}`. That residual
+is the one quantity here that does not improve with resolution: on this
+racetrack the strong-form ``force.normalized_rms`` sits between
+:math:`4.6\times10^{-3}` and :math:`5.1\times10^{-3}` across every resolution
+measured, with no downward trend, while the weak-form measures and
+:math:`\nabla\cdot\mathbf{B}` reach machine precision. VMEX's closed lane
+asserts :math:`1.6\times10^{-4}` for its circular limit, which this
+leg-and-bend axis does not reach. Whether that plateau is the curvature
+junction or something undriven is asked upstream in `uwplasma/vmex#211
+<https://github.com/uwplasma/vmex/issues/211>`__ and is not yet answered, so
+the residual is published as a measurement and the shipped case is gated only
+against being an unsolved state.
 
-This page also tracks a 15 kB :download:`poster snapshot
-<_static/vmex_mirror_gkx_snapshot.webp>` and a 110 kB, 36-frame
+This page also tracks a 19 kB :download:`poster snapshot
+<_static/vmex_mirror_gkx_snapshot.webp>` and a 137 kB, 36-frame
 :download:`animated WebP loop <_static/vmex_mirror_gkx_loop.webp>`. The
 companion :download:`rotating field-line movie
 <_static/vmex_mirror_gkx_rotation.mp4>` follows the equal-arc marker around the
@@ -375,14 +407,14 @@ machine-readable :download:`run record
    PYTHONPATH=/path/to/GKX/src:/path/to/VMEX \
      python tools/artifacts/build_vmex_mirror_gkx_artifacts.py
 
-The tracked :download:`CPU/GPU performance and derivative record
-<_static/vmex_mirror_gkx_performance.json>` uses the smaller
-``(N_l,N_m,N_z)=(2,3,16)`` acceptance case. It records float64 parity between
-an Apple CPU and an NVIDIA RTX A4000, a centered-finite-difference check of the
-radius sensitivity, cold/warm JIT timing, and device allocation. The tiny
-acceptance case is deliberately latency-bound: its warm CPU evaluation is
-faster than its warm GPU evaluation, so the result is evidence for parity and
-accelerator readiness rather than a GPU-speedup claim.
+This page carried a second record, ``vmex_mirror_gkx_performance.json``, which
+reported CPU/GPU float64 parity, a centered-finite-difference derivative check,
+JIT timings, and device allocation for a smaller acceptance case. It has been
+deleted. No generator for it was ever committed on any branch, it stamped no
+commit, jax version, or date, and its parity quantities were evaluated on the
+seeded state rather than an equilibrium. GKX's CPU/GPU float64 parity evidence
+is the tracked ``nonlinear_window_device_parity.json`` record described in
+:doc:`nonlinear_autodiff`, which has a generator, a gate, and a stated case.
 
 The closed-field-line construction follows the straight-field-line mirror
 coordinates of Ågren and Savenko and the paraxial rotating-ellipse fixtures in

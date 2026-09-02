@@ -847,7 +847,17 @@ recursive = true
 # is what makes the coverage non-vacuous: eleven examples hide their run behind
 # a __main__ guard, where an import-only harness would pass having executed no
 # physics at all.
-baseline = 85894
+# 85894 -> 86024: the closed VMEX mirror equilibrium gates in
+# tests/release/test_release_gates.py. The seeded initial guess shipped as an
+# equilibrium for as long as it did because the record sat in no manifest and
+# was read by no test (#173, #178), so the fix is not finished until something
+# reads it. The 130 lines pin four things: the record reports a converged solve
+# with solve_lambda, its four residual measures clear their bars, its residual
+# is 25x below the seed's, and the bars it declares are the bars pinned in the
+# test -- the last so that loosening a constant in the builder cannot by itself
+# make a worse state pass. They go in the existing file because the test file
+# count is budgeted too.
+baseline = 86024
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -893,7 +903,20 @@ recursive = true
 # by hand in the plan, enforced by nothing -- so the ten edges just removed
 # could have come back silently. It ratchets a count rather than forbidding
 # upward imports, because several remaining edges are genuine.
-baseline = 77677
+# 77677 -> 77818: the VMEX closed-mirror builder solves the shipped case before
+# it measures it. It had been publishing setup.initial_state -- the solver's
+# seed, at a normalized force residual of 0.61 -- as an equilibrium, which moved
+# the mixing-length proxy by a factor of 4.6 (#173). The 140 lines are the
+# solve, the converged/iterations/residual block the record now carries so a
+# reader can check the state rather than trust it, the seed residual measured
+# alongside it as the contrast, and equilibrium_admission_failures, which makes
+# the builder refuse to write a record it cannot certify. The gate has to live
+# in the generator: the regression was invisible precisely because the only
+# thing that knew which state was used was the code that used it. The last few
+# are the |B| panel's second y-axis: on the solved equilibrium bgrad peaks at
+# 0.0056 against a |B| of 1.0, so a shared axis drew the mirror force the panel
+# is named for as a flat line on zero.
+baseline = 77818
 target = 0
 
 [[line_budget_policy.counts]]
