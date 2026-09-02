@@ -2671,17 +2671,36 @@ Measured directly, same element count and same transform:
 | current, `(..., ky, kx, z)` over axes `(-2,-3)` | 38.1 ms | 114.4 MB |
 | proposed, `(..., z, ky, kx)` over axes `(-2,-1)` | **18.0 ms** | **57.8 MB** |
 
-**2.1x faster at half the temporary memory**, from axis order alone. It is the
-largest single lever measured, and it moves runtime and memory together.
+2.1x faster at half the temporary memory **on the transform alone**. That is
+where the microbenchmark ends and the verification begins, because a research
+thread had already reported the same isolated win evaporating inside a full
+bracket.
 
-It is also the most invasive change available, because the axis order is part of
-the state contract: every module that indexes the state, the artifact writers,
-the restart format and the parallel decomposition all assume the present order.
-It should be one PR that does nothing else, gated on the collected node-ID set,
-the physics gates and a restart round-trip, and it should be measured end to end
-rather than on this microbenchmark -- the research thread found the same layout
-win in isolation and then could not reproduce it inside a full bracket, because
-it interacts with the FFT threading effect in §25e.3.
+It does evaporate. Measured on a bracket that reproduces the real op sequence --
+two stacked derivative transforms, the product, the forward transform, the mask
+and the Hermitian completion:
+
+| layout | bracket time | temp memory |
+| --- | ---: | ---: |
+| current, `(..., ky, kx, z)` | 175.4 ms | 344.5 MB |
+| proposed, `(..., z, kx, ky)` | 146.6 ms | 344.5 MB |
+
+**1.20x, and the memory saving disappears entirely.** The transposes the layout
+removes are a small part of a bracket dominated by the completion and the
+transforms themselves, and the temporaries are set by the real-space product,
+which the layout does not touch.
+
+A second thing surfaced while building that comparison, and it matters more than
+the timing. The change is **not a permutation**: `rfft2` halves the *last*
+transformed axis, so moving `z` inward without care moves the half-spectrum from
+`ky` to `kx`. The honest proposal is `(..., z, kx, ky)`, keeping `ky` last.
+
+So the recommendation is now the opposite of what this section first recorded.
+1.20x with no memory gain does not justify changing the state contract, which
+the artifact writers, the restart format and the parallel decomposition all
+depend on. **Do not do the layout change for performance.** If it is ever done
+it should be for a different reason, and this measurement should be redone
+end to end first.
 
 ### 25e.5 A negative result worth not repeating
 
