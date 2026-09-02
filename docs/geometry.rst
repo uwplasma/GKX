@@ -375,14 +375,14 @@ machine-readable :download:`run record
    PYTHONPATH=/path/to/GKX/src:/path/to/VMEX \
      python tools/artifacts/build_vmex_mirror_gkx_artifacts.py
 
-The tracked :download:`CPU/GPU performance and derivative record
-<_static/vmex_mirror_gkx_performance.json>` uses the smaller
-``(N_l,N_m,N_z)=(2,3,16)`` acceptance case. It records float64 parity between
-an Apple CPU and an NVIDIA RTX A4000, a centered-finite-difference check of the
-radius sensitivity, cold/warm JIT timing, and device allocation. The tiny
-acceptance case is deliberately latency-bound: its warm CPU evaluation is
-faster than its warm GPU evaluation, so the result is evidence for parity and
-accelerator readiness rather than a GPU-speedup claim.
+This page carried a second record, ``vmex_mirror_gkx_performance.json``, which
+reported CPU/GPU float64 parity, a centered-finite-difference derivative check,
+JIT timings, and device allocation for a smaller acceptance case. It has been
+deleted. No generator for it was ever committed on any branch, it stamped no
+commit, jax version, or date, and its parity quantities were evaluated on the
+seeded state rather than an equilibrium. GKX's CPU/GPU float64 parity evidence
+is the tracked ``nonlinear_window_device_parity.json`` record described in
+:doc:`nonlinear_autodiff`, which has a generator, a gate, and a stated case.
 
 The closed-field-line construction follows the straight-field-line mirror
 coordinates of Ågren and Savenko and the paraxial rotating-ellipse fixtures in
