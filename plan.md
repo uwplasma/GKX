@@ -2716,7 +2716,33 @@ depend on. **Do not do the layout change for performance.** If it is ever done
 it should be for a different reason, and this measurement should be redone
 end to end first.
 
-### 25e.5 A negative result worth not repeating
+### 25e.5 The 41.9 per cent has no contained fix
+
+Two attempts were made to reduce the completion cheaply and both failed, which
+is worth recording because the function is the single largest item in the
+profile.
+
+The index gather that reverses `kx` was replaced with a slice, a reverse and a
+concatenate -- the change that gave 1.35x in `streaming.py`. In
+`_complete_hermitian_ky` it gives nothing: 4.31 ms against 4.35 ms at
+`(4,8,49,96,48)`, with byte-identical output. XLA lowers both the same way here
+because the concatenate dominates and the gather fuses into it.
+
+So the cost is the materialisation, not the indexing, and the materialisation is
+intrinsic to the present representation: the bracket computes in half-ky because
+it uses a real FFT, and it must return full-ky because the state is full-ky. The
+only fix is to stop the round trip, which means carrying the state in half-ky
+through the linear RHS. That is a state-contract change of the same class as the
+layout change, and it must be justified end to end rather than on the profile
+share -- the layout change looked like 2.1x in isolation and was 1.20x in a real
+bracket.
+
+The projector in `operators/nonlinear/projection.py` is a separate user of the
+same helper, reached from the RK4 in `objectives/core.py` rather than from the
+production step, and its truncate-then-re-expand is symmetry *enforcement*
+rather than a representation change.
+
+### 25e.6 A negative result worth not repeating
 
 `_complete_hermitian_ky` rebuilds the full ky spectrum from the half spectrum
 with a slice, a conjugate, a reverse, an index gather and a concatenate. The
