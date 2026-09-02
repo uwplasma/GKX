@@ -588,7 +588,7 @@ The exact Bessel--Laguerre kernel entering those sums is already implemented as
 ``core.velocity.bessel_laguerre_kernels``. Its recurrence is differentiable,
 avoids factorial overflow, and is independently checked by velocity-space
 quadrature and the finite-:math:`b` truncation behavior reported by
-`Frei et al. (2021) <https://doi.org/10.1017/S0022377821000761>`_. The
+`Frei et al. (2021) <https://doi.org/10.1017/S0022377821000830>`_. The
 associated-Laguerre prefactors for :math:`J_m`, :math:`m=0,1,2`, additionally
 reconstruct the independent Bessel functions over velocity space. The
 Appendix-A Coulomb speed integrals :math:`e_k` and :math:`E_k` are generated at

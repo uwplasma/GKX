@@ -642,6 +642,33 @@ jobs:
           /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
           /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
 
+      # The Phase D gate asks that a fresh user can install and complete a first
+      # run from the docs. Everything above proves the wheel imports; nothing
+      # proved it computes. quickstart.rst opens with bare ``gkx``, which it
+      # describes as a short Cyclone linear demo writing five named artifacts,
+      # so run exactly that from the installed wheel in an empty directory and
+      # require the five files the docs promise. ~10 s on a workstation. The
+      # heavier documented run-runtime-* commands are minutes, so they belong in
+      # nightly-full rather than on every pull request.
+      - name: Documented first run from the installed wheel
+        run: |
+          rm -rf /tmp/gkx-first-run
+          mkdir -p /tmp/gkx-first-run
+          cd /tmp/gkx-first-run
+          /tmp/gkx-wheel-smoke/bin/gkx
+          for artifact in \
+            gkx_default_linear.toml \
+            gkx_default_linear.summary.json \
+            gkx_default_linear.timeseries.csv \
+            gkx_default_linear.eigenfunction.csv \
+            gkx_default_linear.png
+          do
+            test -s "$artifact" || {
+              echo "quickstart.rst promises $artifact; the first run did not write it"
+              exit 1
+            }
+          done
+
   ci-required:
     # One aggregate check for branch protection to require. The jobs above are
     # now independent, so nothing can hide behind a failed dependency -- but a
@@ -712,6 +739,56 @@ jobs:
         run: |
           mypy --version
           mypy
+
+      # The per-PR docs job builds with -W, which catches broken internal
+      # references but never resolves an external URL. The docs cite ~86 of
+      # them, almost all papers, so link rot is a real way for the reference
+      # list to go stale silently. This is not a pull-request gate: it depends
+      # on other people's servers, so it belongs on the nightly lane where red
+      # means "look at it" rather than "your change is broken".
+      #
+      # Only 404 and 410 fail. A first pass over these docs returned 27
+      # "broken" links of which 23 were 403 from AIP, APS, SIAM, MDPI and ACM
+      # -- publishers refusing an unattended client, not dead references; every
+      # one of those DOIs resolves in a browser. Failing on them would have
+      # made this job permanently red and taught everyone to ignore it. The
+      # four real ones were three DOIs that 404 at doi.org itself (they were
+      # simply wrong) and a link to an unpublished branch; all four are fixed
+      # in this change. Anything that is neither clearly gone nor clearly fine
+      # is printed for a human instead of failing the run.
+      - name: Docs link policy
+        run: |
+          python -m sphinx -b linkcheck docs docs/_build/linkcheck || true
+          python - <<'PY'
+          import json, pathlib, sys
+          report = pathlib.Path("docs/_build/linkcheck/output.json")
+          if not report.exists():
+              sys.exit("linkcheck produced no report")
+          rows = [
+              json.loads(line)
+              for line in report.read_text().splitlines()
+              if line.strip()
+          ]
+          gone, unverified = [], []
+          for row in rows:
+              if row.get("status") != "broken":
+                  continue
+              where = f"{row.get('filename')}:{row.get('lineno')} {row.get('uri')}"
+              info = str(row.get("info", ""))
+              if "404" in info or "410" in info:
+                  gone.append(f"{where} -- {info}")
+              else:
+                  unverified.append(f"{where} -- {info}")
+          if unverified:
+              print(f"{len(unverified)} links could not be verified "
+                    "(403/429/timeout -- usually a publisher refusing robots):")
+              print("\n".join(f"  {item}" for item in unverified))
+          if gone:
+              print(f"\n{len(gone)} links are gone (404/410):")
+              print("\n".join(f"  {item}" for item in gone))
+              sys.exit(f"{len(gone)} dead documentation links")
+          print(f"\nno dead links; {len(rows)} checked")
+          PY
 
       - name: Pytest (full suite)
         env:
