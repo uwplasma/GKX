@@ -567,6 +567,26 @@ class RuntimeQuasilinearConfig:
         return asdict(self)
 
 
+# Every strategy a deck may name. Named rather than inlined because consumers
+# have to classify the whole set, not just the value in front of them: the ky
+# scan decides per strategy whether it describes the scan or the solve, and it
+# checks that decision against this set so a strategy added here cannot reach a
+# worker unclassified.
+PARALLEL_STRATEGIES = frozenset(
+    {
+        "serial",
+        "batch",
+        "combined_ky",
+        "device_batch",
+        "pmap",
+        "pjit",
+        "shard_map",
+        "state",
+        "velocity",
+    }
+)
+
+
 @dataclass(frozen=True)
 class RuntimeParallelConfig:
     """Parallel-execution policy for independent scans and future sharded paths."""
@@ -589,18 +609,7 @@ class RuntimeParallelConfig:
             "combinedky": "combined_ky",
         }
         strategy = strategy_aliases.get(strategy, strategy)
-        allowed_strategies = {
-            "serial",
-            "batch",
-            "combined_ky",
-            "device_batch",
-            "pmap",
-            "pjit",
-            "shard_map",
-            "state",
-            "velocity",
-        }
-        if strategy not in allowed_strategies:
+        if strategy not in PARALLEL_STRATEGIES:
             raise ValueError(f"Unknown parallel strategy '{self.strategy}'")
 
         axis = str(self.axis).strip().lower().replace("-", "_")

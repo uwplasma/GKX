@@ -812,7 +812,20 @@ recursive = true
 # only strategy="velocity" and raised NotImplementedError. That made the
 # shipped examples/parallelization deck unrunnable -- invisible because the
 # only test of it mocked the solver out. Three lines of guard, nine of comment.
-baseline = 88852
+# 88852 -> 88908: turning that guard into a total classification. The blacklist
+# above asked one question, "is it batch?", and device_batch, pmap and pjit were
+# then measured failing in the same worker with the same NotImplementedError,
+# because they are scan-level too. The replacement names both sets, so a
+# strategy added to PARALLEL_STRATEGIES without being classified raises instead
+# of defaulting -- neither default is safe, since forwarding an unclassified
+# scan-level strategy repeats this bug and neutralising an unclassified
+# solver-level one silently drops the decomposition it asked for. Nearly all of
+# it is the comment recording which layer reads `strategy` and why state and
+# shard_map must keep reaching the solve to be refused there, including that
+# combined_ky belongs in the scan-level set for a measured reason and not a
+# defensive one: it routes to the combined-ky solver only for axis="ky", so
+# axis="hermite" reaches the worker and failed there too.
+baseline = 88910
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -857,7 +870,18 @@ recursive = true
 # test -- the last so that loosening a constant in the builder cannot by itself
 # make a worse state pass. They go in the existing file because the test file
 # count is budgeted too.
-baseline = 86024
+# 86024 -> 86219: one test per parallel strategy for the scan-level/solver-level
+# classification, in the existing tests/integration/runtime/test_runtime_runner.py.
+# No new test FILE: the topology count stays at 76. The nine strategies are
+# parametrized over two cheap worker-config assertions, and the four scan-level
+# ones that reach the independent-worker path also run a real two-point ky scan
+# and are compared to serial exactly. That last gate is the expensive half and
+# the only non-vacuous one: it uses solver="time" with fit_signal="phi", the
+# path whose RHS actually reads cfg.parallel, because a krylov scan never reads
+# it and would pass with the defect present. The last of them covers combined_ky
+# at axis="hermite", the axis on which it does not route to the combined-ky
+# solver and so reaches the worker like the others.
+baseline = 86219
 target = 35000
 
 [[line_budget_policy.counts]]

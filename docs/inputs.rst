@@ -557,6 +557,18 @@ the worker policy came from the TOML file or from explicit executable
 arguments, together with the requested/effective worker counts and the
 ordering-preservation identity contract.
 
+A ``k_y`` scan reads ``strategy`` at two levels, and each strategy belongs to
+exactly one of them. ``"batch"``, ``"combined_ky"``, ``"device_batch"``,
+``"pmap"`` and ``"pjit"`` are *scan-level*: they say how the ``k_y`` points are
+dispatched, the scan honours them itself, and each worker then runs an ordinary
+single-``k_y`` solve with ``strategy = "serial"``. Their reported growth rates
+are bit-identical to a serial scan. ``"velocity"``, ``"state"`` and
+``"shard_map"`` are *solver-level*: they say how one solve is decomposed, so
+they reach the per-``k_y`` solve unchanged and are honoured or refused there on
+the solver's own terms. Only ``"velocity"`` has a linear RHS route today, so a
+``k_y`` scan requesting ``"state"`` or ``"shard_map"`` raises rather than
+quietly running unsharded.
+
 The only velocity-space RHS route exposed at this stage is deliberately
 diagnostic: ``strategy = "velocity"``, ``axis = "hermite"``, and
 ``backend = "streaming_only"``, ``backend = "streaming_electrostatic"``, or
