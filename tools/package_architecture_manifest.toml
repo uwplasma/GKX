@@ -847,7 +847,17 @@ recursive = true
 # is what makes the coverage non-vacuous: eleven examples hide their run behind
 # a __main__ guard, where an import-only harness would pass having executed no
 # physics at all.
-baseline = 85894
+# 85894 -> 86024: the closed VMEX mirror equilibrium gates in
+# tests/release/test_release_gates.py. The seeded initial guess shipped as an
+# equilibrium for as long as it did because the record sat in no manifest and
+# was read by no test (#173, #178), so the fix is not finished until something
+# reads it. The 130 lines pin four things: the record reports a converged solve
+# with solve_lambda, its four residual measures clear their bars, its residual
+# is 25x below the seed's, and the bars it declares are the bars pinned in the
+# test -- the last so that loosening a constant in the builder cannot by itself
+# make a worse state pass. They go in the existing file because the test file
+# count is budgeted too.
+baseline = 86024
 target = 35000
 
 [[line_budget_policy.counts]]
