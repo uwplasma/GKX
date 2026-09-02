@@ -1919,6 +1919,33 @@ Exit gates:
 - strict docs build and link policy pass;
 - tracked repository remains below size target.
 
+Gate status, measured 2026-09-01:
+
+- *fresh user first run*: enforced. The wheel smoke test proved only that the
+  wheel imports; it now runs bare ``gkx`` from the installed wheel in an empty
+  directory and requires the five artifacts quickstart.rst names, ~10 s. The
+  documented ``run-runtime-linear`` on the Cyclone deck is not a quickstart
+  command by any reasonable reading -- it was still running after seven minutes
+  at 361% CPU on a workstation -- so it stays off the pull-request lane.
+- *every canonical example executes*: 16 of 36 execute at smoke resolution, up
+  from 4. The other 16 are registered against the specific thing that blocks
+  them (an untracked ``*.eik.nc``, a ``wout_*.nc`` from a full VMEC solve,
+  eight devices), and a static guard fails if an example is neither executed
+  nor skipped-with-a-reason. Running them found two bugs that the mocked
+  coverage could not: the parallelization deck never ran at all, and
+  linear_rhs_demo integrates an identically zero state because its seed index
+  is out of bounds on an ``Nx == 1`` grid and JAX drops the scatter silently.
+- *no private-API imports, no argparse/main guards*: half met. Zero examples
+  import a private name and zero use argparse. Eleven still carry a ``__main__``
+  guard; the registry pins the entrypoint shape so a module-body example cannot
+  grow one, but converting the remaining eleven is open.
+- *strict docs build and link policy*: enforced. ``sphinx -W`` was already
+  gated; linkcheck now runs nightly. Its first pass found 27 broken links of
+  which 23 were publisher 403s rather than rot, so the gate fails only on
+  404/410. The four real ones were three unregistered DOIs and a link to an
+  unpublished branch, all fixed.
+- *repository below size target*: met, 19.9 MB tracked against a 50 MB ceiling.
+
 ### Phase E: core physics validation
 
 Tasks:
