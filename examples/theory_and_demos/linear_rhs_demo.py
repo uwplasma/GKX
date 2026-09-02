@@ -15,7 +15,7 @@ def main():
 
     Nl, Nm = 2, 4
     G = jnp.zeros((Nl, Nm, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
-    G = G.at[0, 0, 0, 1, :].set(1e-3 + 0.0j)
+    G = G.at[0, 0, 1, 0, :].set(1e-3 + 0.0j)
 
     _, phi_t = integrate_linear(G, grid, geom, params, dt=0.05, steps=10)
     print("linear_rhs demo")
