@@ -2593,9 +2593,23 @@ So the fix is not one decorator. The candidates are to compute the one-shot
 setup arrays with `numpy`, which removes XLA from the path entirely but must not
 break the differentiable geometry route that reaches this build through
 `objectives/core.py`; or to split the structural decisions from the array
-construction and jit only the latter. Which is right depends on whether the
-build is ever genuinely traced in production, which is the next thing to
-measure rather than assume.
+construction and jit only the latter.
+
+**That question is now answered by measurement, and it removes the constraint.**
+Instrumenting `build_linear_cache` to record whether its geometry and parameters
+arrive as tracers, then running the autodiff objective gradient tests -- the very
+path the concern was about -- gives **traced = 0, concrete = 42**. The cache is
+never built under a trace, not even when a gradient is being taken. The
+differentiable geometry route gets its derivatives through the implicit
+eigensolve VJP rather than by differentiating the cache construction.
+
+So nothing in the differentiable path depends on those 278 primitive
+compilations, and the `numpy` route is available: compute the one-shot arrays
+with `numpy` and convert once at the boundary. The gate on that change is the
+autodiff objective suite, which must still produce identical gradients, plus the
+physics gates -- the point being that a value computed in `numpy` and handed to
+the solver is the same value, and the only thing lost is 278 XLA compilations
+nobody wanted.
 
 ### 25e.3 The FFTs are losing their thread pool, and the obvious fix is worse
 
