@@ -320,7 +320,7 @@ LANES: dict[str, tuple[EvidenceCheck, ...]] = {
             "src/gkx/benchmarking_shared.py",
             "CYCLONE_KRYLOV_DEFAULT",
         ),
-        EvidenceCheck("diagnostic moment kernels", "src/gkx/diagnostics/moments.py"),
+        EvidenceCheck("diagnostic moment kernels", "src/gkx/operators/moments.py"),
         EvidenceCheck(
             "coverage manifest",
             "tools/validation_coverage_manifest.toml",

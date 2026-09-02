@@ -22,6 +22,7 @@
         "equal_arc_drift_passed": true,
         "equal_arc_metric_passed": true
       },
+      "removed_boozer_bridges": [],
       "vmex_boozer_available": true
     },
     "finite_beta_frequency_gate": {
@@ -204,6 +205,6 @@
   "minimum_boozer_mode_count": 21,
   "minimum_gradient_cases": 2,
   "passed": true,
-  "root": "/Users/rogeriojorge/local/GKX",
+  "root": "/Users/rogeriojorge/local/GKX-worktrees/r4",
   "scope": "Passes only the release-level reduced differentiability claim: VMEC/Boozer equal-arc parity and AD/finite-difference gradients for linear, quasilinear, and nonlinear-window estimator objectives, plus finite-beta shaped-pressure eigenfrequency, quasilinear, and reduced nonlinear-window estimator gradients. Direct VMEC tensor-vs-imported-EIK parity and converged nonlinear transport-gradient optimization remain explicitly out of scope."
 }
