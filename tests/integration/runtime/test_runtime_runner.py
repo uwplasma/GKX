@@ -64,6 +64,7 @@ from gkx.workflows.runtime.chunks import (
 )
 from gkx.workflows.runtime.commands import run_linear_case, run_nonlinear_case
 from gkx.config import (
+    PARALLEL_STRATEGIES,
     RuntimeCollisionConfig,
     RuntimeConfig,
     RuntimeExpertConfig,
@@ -75,7 +76,12 @@ from gkx.config import (
     RuntimeTermsConfig,
 )
 from gkx.workflows.runtime.diagnostics import refit_runtime_linear_trajectory
-from gkx.workflows.runtime.orchestration_scan import run_runtime_parameter_scan
+from gkx.workflows.runtime.orchestration_scan import (
+    _runtime_scan_options,
+    _scan_worker_tasks,
+    _worker_parallel_strategy,
+    run_runtime_parameter_scan,
+)
 from gkx.workflows.runtime.results import RuntimeParameterScanResult
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from pathlib import Path
@@ -3675,6 +3681,195 @@ def test_run_runtime_scan_explicit_workers_override_parallel_config(
     assert out.parallel["source"] == "arguments"
     assert out.parallel["requested_workers"] == 2
     assert out.parallel["effective_workers"] == 2
+
+
+# ---- which [parallel] strategies a per-ky worker may inherit ----
+# strategy="batch" once reached the worker's own solve and killed the shipped
+# examples/parallelization deck with NotImplementedError, because the sharded
+# linear RHS implements only strategy="velocity". device_batch, pmap, pjit and
+# combined_ky (on the axes where it does not route to the combined-ky solver)
+# were then measured failing in that worker with the identical error. These pin
+# the classification that keeps all five out of the inner solve, and that keeps
+# the solver-level strategies in it.
+
+_SCAN_LEVEL_STRATEGIES = ("batch", "combined_ky", "device_batch", "pjit", "pmap")
+_SOLVER_LEVEL_STRATEGIES = ("serial", "shard_map", "state", "velocity")
+
+
+def _scan_worker_strategies(cfg: RuntimeConfig, ky_values: list[float]) -> list[str]:
+    """Return the strategy each per-ky worker would actually solve with."""
+
+    tasks = _scan_worker_tasks(
+        cfg,
+        np.asarray(ky_values, dtype=float),
+        Nl=2,
+        Nm=3,
+        solver="time",
+        krylov_cfg=None,
+        options=_runtime_scan_options(
+            method="rk2",
+            dt=None,
+            steps=None,
+            sample_stride=None,
+            auto_window=True,
+            tmin=None,
+            tmax=None,
+            window_fraction=0.4,
+            min_points=4,
+            start_fraction=0.2,
+            growth_weight=0.2,
+            require_positive=False,
+            min_amp_fraction=0.0,
+            window_method="stationary",
+            mode_method="project",
+            fit_signal="phi",
+            show_progress=False,
+        ),
+    )
+    return [str(task["cfg"].parallel.strategy) for task in tasks]
+
+
+@pytest.mark.parametrize("strategy", _SCAN_LEVEL_STRATEGIES)
+def test_scan_level_strategy_is_not_forwarded_into_the_per_ky_worker(
+    strategy: str,
+) -> None:
+    """A scan-level strategy is honoured by the scan, not by each worker."""
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+        parallel=RuntimeParallelConfig(strategy=strategy, axis="ky", num_devices=2),
+    )
+
+    assert _scan_worker_strategies(cfg, [0.15, 0.35]) == ["serial", "serial"]
+
+
+@pytest.mark.parametrize("strategy", _SOLVER_LEVEL_STRATEGIES)
+def test_solver_level_strategy_reaches_the_per_ky_worker_untouched(
+    strategy: str,
+) -> None:
+    """A solver-level strategy must be honoured or refused by the solve itself.
+
+    Rewriting these to "serial" would answer a sharding request with an
+    unsharded run and still report success.
+    """
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+        parallel=RuntimeParallelConfig(strategy=strategy, axis="hermite"),
+    )
+
+    assert _scan_worker_strategies(cfg, [0.15, 0.35]) == [strategy, strategy]
+
+
+def test_every_allowed_parallel_strategy_is_classified_for_ky_workers() -> None:
+    """A strategy added to the deck vocabulary cannot reach a worker unclassified."""
+
+    classified = set(_SCAN_LEVEL_STRATEGIES) | set(_SOLVER_LEVEL_STRATEGIES)
+    assert classified == set(PARALLEL_STRATEGIES)
+
+
+def test_an_unclassified_strategy_fails_closed_instead_of_guessing() -> None:
+    """Neither default is safe, so an unclassified strategy raises."""
+
+    with pytest.raises(NotImplementedError, match="not classified as scan-level"):
+        _worker_parallel_strategy("some_future_strategy")
+
+
+@pytest.mark.parametrize("strategy", ["batch", "device_batch", "pjit", "pmap"])
+def test_scan_level_strategy_solves_every_ky_point_exactly_like_serial(
+    strategy: str,
+) -> None:
+    """The regression gate: a real scan, no mocks, matching the serial answer.
+
+    Deliberately the time solver with fit_signal="phi": that is the path whose
+    RHS reads cfg.parallel, so a forwarded strategy raises there. The krylov
+    solver never reads it, so a krylov scan would pass either way and gate
+    nothing.
+
+    combined_ky is excluded because at axis="ky" it is routed to the combined-ky
+    solver, so it is a different scan rather than a differently dispatched one.
+    Its fall-through axis is covered by the test below.
+    """
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion", tprim=3.0, fprim=1.0),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+    )
+    ky_values = [0.2, 0.4]
+    shared = dict(
+        Nl=2,
+        Nm=4,
+        solver="time",
+        method="rk4",
+        dt=0.05,
+        steps=200,
+        sample_stride=2,
+        fit_signal="phi",
+    )
+
+    serial = run_runtime_scan(cfg, ky_values=ky_values, **shared)
+    dispatched = run_runtime_scan(
+        replace(
+            cfg,
+            parallel=RuntimeParallelConfig(
+                strategy=strategy, axis="ky", num_devices=2, backend="thread"
+            ),
+        ),
+        ky_values=ky_values,
+        **shared,
+    )
+
+    np.testing.assert_array_equal(dispatched.ky, serial.ky)
+    np.testing.assert_array_equal(dispatched.gamma, serial.gamma)
+    np.testing.assert_array_equal(dispatched.omega, serial.omega)
+    assert dispatched.parallel["strategy"] == strategy
+
+
+def test_combined_ky_on_its_fall_through_axis_still_reaches_the_worker() -> None:
+    """combined_ky routes away only for axis="ky"; the other axes land here.
+
+    So its place in the scan-level set is load-bearing, not defensive: with
+    axis="hermite" the scan runs the independent-worker path, and forwarding
+    the strategy raised in the worker exactly like batch did.
+    """
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion", tprim=3.0, fprim=1.0),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+    )
+    ky_values = [0.2, 0.4]
+    shared = dict(
+        Nl=2,
+        Nm=4,
+        solver="time",
+        method="rk4",
+        dt=0.05,
+        steps=200,
+        sample_stride=2,
+        fit_signal="phi",
+    )
+    dispatched = run_runtime_scan(
+        replace(
+            cfg,
+            parallel=RuntimeParallelConfig(strategy="combined_ky", axis="hermite"),
+        ),
+        ky_values=ky_values,
+        **shared,
+    )
+
+    # parallel is populated by the independent-worker path and left unset by the
+    # combined-ky solver, so this is the assertion that the fall-through is real.
+    assert dispatched.parallel is not None
+    assert dispatched.parallel["strategy"] == "combined_ky"
+    serial = run_runtime_scan(cfg, ky_values=ky_values, **shared)
+    np.testing.assert_array_equal(dispatched.gamma, serial.gamma)
+    np.testing.assert_array_equal(dispatched.omega, serial.omega)
 
 
 def test_run_runtime_scan_parallel_config_batch_rejects_non_ky_axis() -> None:

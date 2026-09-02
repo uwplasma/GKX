@@ -230,6 +230,60 @@ def _combined_ky_scan_requested(
     return requested
 
 
+# ``[parallel] strategy`` answers two different questions depending on which
+# layer reads it, so a per-ky worker cannot simply inherit the scan's copy.
+#
+# A SCAN-level strategy says how the ky points are dispatched, and the scan
+# honours it before any worker starts: ``combined_ky`` routes to the combined-ky
+# solver, and the rest resolve through ``runtime_independent_parallel_plan`` into
+# an independent worker pool. Each worker then runs an ordinary single-ky solve,
+# so forwarding the strategy sent that inner solve down the sharded linear-RHS
+# path, which implements only ``strategy="velocity"``. That is how the shipped
+# examples/parallelization deck died in the worker with NotImplementedError under
+# ``strategy="batch"``; ``device_batch``, ``pmap`` and ``pjit`` were measured
+# failing in the same worker with the same error, so they are neutralised the
+# same way. ``combined_ky`` belongs here too and is not merely defensive: it
+# routes away only for ``axis="ky"``, so ``axis="hermite"`` reaches this helper
+# and was measured failing here as well.
+_SCAN_LEVEL_WORKER_STRATEGIES = frozenset(
+    {"batch", "combined_ky", "device_batch", "pjit", "pmap"}
+)
+
+# A SOLVER-level strategy says how one solve is decomposed, so it has to reach
+# the inner solve untouched. ``velocity`` is the one route the linear RHS
+# implements. ``state`` and ``shard_map`` name velocity-space decompositions the
+# linear RHS has no route for yet -- ``shard_map`` with ``axis="species_hermite"``
+# is the production nonlinear route -- so forwarding them makes the solver refuse
+# on its own terms, which is the honest answer. Neutralising them would answer a
+# sharding request with an unsharded run and report success.
+_SOLVER_LEVEL_WORKER_STRATEGIES = frozenset(
+    {"serial", "shard_map", "state", "velocity"}
+)
+
+
+def _worker_parallel_strategy(strategy: str) -> str:
+    """Return the ``[parallel] strategy`` one per-ky worker may run with.
+
+    Forwarding is a whitelist, not a blacklist, because neither default is safe
+    for a strategy nobody has classified: forwarding an unclassified scan-level
+    strategy repeats the bug above, and neutralising an unclassified
+    solver-level one silently drops the decomposition it asked for. So an
+    unclassified strategy raises here rather than picking one of the two.
+    """
+
+    if strategy in _SOLVER_LEVEL_WORKER_STRATEGIES:
+        return strategy
+    if strategy in _SCAN_LEVEL_WORKER_STRATEGIES:
+        return "serial"
+    raise NotImplementedError(
+        f"[parallel] strategy='{strategy}' is not classified as scan-level or "
+        "solver-level for independent ky workers; add it to "
+        "_SCAN_LEVEL_WORKER_STRATEGIES (the scan dispatches it and the worker "
+        "runs an ordinary single-ky solve) or to "
+        "_SOLVER_LEVEL_WORKER_STRATEGIES (the worker's own solve honours it)"
+    )
+
+
 def _scan_worker_tasks(
     cfg: RuntimeConfig,
     ky_arr: np.ndarray,
@@ -240,17 +294,12 @@ def _scan_worker_tasks(
     krylov_cfg: Any,
     options: _RuntimeScanOptions,
 ) -> list[dict[str, Any]]:
-    # ``strategy="batch"`` says how the SCAN is dispatched -- one independent
-    # worker per ky point -- and each worker then runs an ordinary single-ky
-    # solve. Forwarding it into the per-ky config sent that inner solve down the
-    # sharded linear-RHS path, which accepts only ``strategy="velocity"``, so the
-    # shipped examples/parallelization deck died in the worker with
-    # NotImplementedError. Solver-level strategies (velocity and friends) still
-    # reach the inner solve untouched.
+    strategy = str(getattr(cfg.parallel, "strategy", "serial"))
+    worker_strategy = _worker_parallel_strategy(strategy)
     worker_cfg = (
-        replace(cfg, parallel=replace(cfg.parallel, strategy="serial"))
-        if str(getattr(cfg.parallel, "strategy", "serial")) == "batch"
-        else cfg
+        cfg
+        if worker_strategy == strategy
+        else replace(cfg, parallel=replace(cfg.parallel, strategy=worker_strategy))
     )
     return [
         {
