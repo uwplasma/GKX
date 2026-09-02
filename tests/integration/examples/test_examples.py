@@ -553,41 +553,32 @@ def test_runtime_nonlinear_examples_stream_finite_diagnostics(
 
 
 @pytest.mark.parametrize(
-    "relative, owner, attribute, seeded",
+    "relative, owner, attribute",
     [
         (
             "examples/theory_and_demos/example.py",
             "gkx",
             "integrate_linear_from_config",
-            True,
         ),
         (
             "examples/theory_and_demos/gradB_coupling_hl_1d.py",
             "gkx.solvers_linear_integrators",
             "integrate_linear",
-            True,
         ),
-        # seeded=False records a defect, not an intent: linear_rhs_demo.py
-        # seeds G.at[0, 0, 0, 1, :] on the Cyclone grid, whose Nx is 1, so the
-        # kx index is out of bounds. JAX drops an out-of-bounds scatter, and
-        # the demo integrates an identically zero state and prints
-        # "phi_t min/max: 0j 0j". Flip this to True when the index is fixed.
         (
             "examples/theory_and_demos/linear_rhs_demo.py",
             "gkx.solvers_linear_integrators",
             "integrate_linear",
-            False,
         ),
         (
             "examples/theory_and_demos/two_stream_hermite_1d.py",
             "gkx.solvers_linear_integrators",
             "integrate_linear",
-            True,
         ),
     ],
 )
 def test_linear_demo_examples_drive_the_real_solver(
-    monkeypatch, relative: str, owner: str, attribute: str, seeded: bool
+    monkeypatch, relative: str, owner: str, attribute: str
 ) -> None:
     import importlib
 
@@ -615,12 +606,7 @@ def test_linear_demo_examples_drive_the_real_solver(
     # phi itself is identically zero for the ky=0 slab demos (adiabatic
     # quasineutrality), so the distribution is what proves the run advanced.
     norm = float(np.linalg.norm(state))
-    if seeded:
-        assert norm > 0.0
-    else:
-        assert norm == 0.0, (
-            f"{relative} now seeds a reachable mode; set seeded=True for it"
-        )
+    assert norm > 0.0, f"{relative} never moved its initial condition"
 
 
 def test_cyclone_geometry_example_reports_a_varying_kperp2(capsys) -> None:
