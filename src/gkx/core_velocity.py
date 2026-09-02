@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 from jax.scipy.special import gammaln, i0e
@@ -91,11 +93,18 @@ def gamma0(b: jnp.ndarray) -> jnp.ndarray:
     return i0e(b)
 
 
-def bessel_j0(x: jnp.ndarray) -> jnp.ndarray:
-    """Return J0(x) using a Cephes-style approximation (Cephes-compatible)."""
+def bessel_j0(x: jnp.ndarray, *, xp: Any = jnp) -> jnp.ndarray:
+    """Return J0(x) using a Cephes-style approximation (Cephes-compatible).
 
-    x = jnp.asarray(x)
-    ax = jnp.abs(x)
+    ``xp`` selects the array namespace. The default stages the evaluation onto
+    the device; passing ``numpy`` evaluates the identical expression on the
+    host, which one-shot cache construction uses to avoid compiling a kernel
+    per polynomial term. Every operation here is arithmetic, ``sqrt``, ``cos``
+    or ``sin``, which both libraries evaluate identically in float64.
+    """
+
+    x = xp.asarray(x)
+    ax = xp.abs(x)
     y = x * x
     r = 57568490574.0 + y * (
         -13362590354.0
@@ -105,7 +114,7 @@ def bessel_j0(x: jnp.ndarray) -> jnp.ndarray:
         1029532985.0 + y * (9494680.718 + y * (59272.64853 + y * (267.8532712 + y)))
     )
     res_small = r / s
-    z = 8.0 / jnp.maximum(ax, 1.0e-30)
+    z = 8.0 / xp.maximum(ax, 1.0e-30)
     y2 = z * z
     xx = ax - 0.785398164
     p = 1.0 + y2 * (
@@ -116,18 +125,21 @@ def bessel_j0(x: jnp.ndarray) -> jnp.ndarray:
         0.1430488765e-3
         + y2 * (-0.6911147651e-5 + y2 * (0.7621095161e-6 + y2 * -0.934945152e-7))
     )
-    res_large = jnp.sqrt(0.636619772 / jnp.maximum(ax, 1.0e-30)) * (
-        jnp.cos(xx) * p - z * jnp.sin(xx) * q
+    res_large = xp.sqrt(0.636619772 / xp.maximum(ax, 1.0e-30)) * (
+        xp.cos(xx) * p - z * xp.sin(xx) * q
     )
-    out = jnp.where(ax < 8.0, res_small, res_large)
-    return jnp.where(jnp.isfinite(out), out, res_small)
+    out = xp.where(ax < 8.0, res_small, res_large)
+    return xp.where(xp.isfinite(out), out, res_small)
 
 
-def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
-    """Return J1(x) using a Cephes-style approximation (Cephes-compatible)."""
+def bessel_j1(x: jnp.ndarray, *, xp: Any = jnp) -> jnp.ndarray:
+    """Return J1(x) using a Cephes-style approximation (Cephes-compatible).
 
-    x = jnp.asarray(x)
-    ax = jnp.abs(x)
+    ``xp`` selects the array namespace, as in :func:`bessel_j0`.
+    """
+
+    x = xp.asarray(x)
+    ax = xp.abs(x)
     y = x * x
     r = 72362614232.0 + y * (
         -7895059235.0
@@ -137,7 +149,7 @@ def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
         2300535178.0 + y * (18583304.74 + y * (99447.43394 + y * (376.9991397 + y)))
     )
     res_small = x * (r / s)
-    z = 8.0 / jnp.maximum(ax, 1.0e-30)
+    z = 8.0 / xp.maximum(ax, 1.0e-30)
     y2 = z * z
     xx = ax - 2.356194491
     p = 1.0 + y2 * (
@@ -148,27 +160,32 @@ def bessel_j1(x: jnp.ndarray) -> jnp.ndarray:
         -0.2002690873e-3
         + y2 * (0.8449199096e-5 + y2 * (-0.88228987e-6 + y2 * 0.105787412e-6))
     )
-    res_large = jnp.sqrt(0.636619772 / jnp.maximum(ax, 1.0e-30)) * (
-        jnp.cos(xx) * p - z * jnp.sin(xx) * q
+    res_large = xp.sqrt(0.636619772 / xp.maximum(ax, 1.0e-30)) * (
+        xp.cos(xx) * p - z * xp.sin(xx) * q
     )
-    res_large = jnp.where(x < 0.0, -res_large, res_large)
-    out = jnp.where(ax < 8.0, res_small, res_large)
-    return jnp.where(jnp.isfinite(out), out, res_small)
+    res_large = xp.where(x < 0.0, -res_large, res_large)
+    out = xp.where(ax < 8.0, res_small, res_large)
+    return xp.where(xp.isfinite(out), out, res_small)
 
 
-def _gyro_bessel_factors(alpha2: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Return ``J0(sqrt(alpha2))`` and ``J1(sqrt(alpha2))/sqrt(alpha2)``."""
+def _gyro_bessel_factors(
+    alpha2: jnp.ndarray, *, xp: Any = jnp
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Return ``J0(sqrt(alpha2))`` and ``J1(sqrt(alpha2))/sqrt(alpha2)``.
 
-    alpha2 = jnp.asarray(alpha2)
+    ``xp`` selects the array namespace, as in :func:`bessel_j0`.
+    """
+
+    alpha2 = xp.asarray(alpha2)
     small = alpha2 < 1.0e-4
-    safe_alpha = jnp.sqrt(jnp.where(small, 1.0, alpha2))
+    safe_alpha = xp.sqrt(xp.where(small, 1.0, alpha2))
     alpha4 = alpha2 * alpha2
     alpha6 = alpha4 * alpha2
     j0_series = 1.0 - 0.25 * alpha2 + alpha4 / 64.0 - alpha6 / 2304.0
     j1_over_alpha_series = 0.5 - alpha2 / 16.0 + alpha4 / 384.0 - alpha6 / 18432.0
-    j0 = jnp.where(small, j0_series, bessel_j0(safe_alpha))
-    j1_over_alpha = jnp.where(
-        small, j1_over_alpha_series, bessel_j1(safe_alpha) / safe_alpha
+    j0 = xp.where(small, j0_series, bessel_j0(safe_alpha, xp=xp))
+    j1_over_alpha = xp.where(
+        small, j1_over_alpha_series, bessel_j1(safe_alpha, xp=xp) / safe_alpha
     )
     return j0, j1_over_alpha
 

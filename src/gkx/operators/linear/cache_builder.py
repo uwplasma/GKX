@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -24,36 +25,106 @@ from gkx.operators.linear.linked import (
 from gkx.operators.linear.params import LinearParams, _is_tracer, _x64_enabled
 
 
+def _array_namespace(*values: Any) -> Any:
+    """``numpy`` while every operand is concrete, ``jax.numpy`` under a trace.
+
+    Cache construction is a one-shot host computation. Nothing built here is
+    differentiated -- the differentiable geometry route takes its derivatives
+    from the implicit eigensolve VJP, not from cache assembly -- and the build
+    already reads concrete geometry scalars to decide whether a twist-shift
+    cache is resolvable at all. Under op-by-op dispatch, though, every ``jnp``
+    primitive on this path is its own XLA compilation, so a cold build spent
+    seconds compiling one kernel per multiply. ``numpy`` evaluates the same
+    IEEE-754 arithmetic on the host with no compiler in the path, and
+    :func:`_pack_linear_cache` moves the finished arrays to the device in one
+    pass. A traced operand still selects ``jax.numpy``, so a cache built inside
+    a trace stages out exactly as it did before.
+
+    Only operations both libraries define identically are routed to the host:
+    arithmetic, ``sqrt``, comparisons and casts are pinned by IEEE-754, while
+    ``exp`` and ``gammaln`` are not and stay on the device.
+    """
+
+    return jnp if any(_is_tracer(value) for value in values) else np
+
+
+def _as_device_dtype(xp: Any, value: Any, real_dtype: Any) -> Any:
+    """``asarray`` reproducing ``jnp.asarray``'s dtype rule on the host.
+
+    ``jnp.asarray`` gives a Python scalar JAX's default float dtype and narrows
+    a wider float array when x64 is off, while ``np.asarray`` keeps float64
+    throughout. The two agree in double precision and disagree in single, where
+    letting the host contract a float32 metric in float64 would move the cache
+    by an ulp. Pin the width here instead.
+    """
+
+    if xp is not np:
+        return xp.asarray(value)
+    array = np.asarray(value)
+    narrow = np.dtype(real_dtype)
+    if (
+        np.issubdtype(array.dtype, np.floating)
+        and array.dtype.itemsize > narrow.itemsize
+    ):
+        return array.astype(narrow)
+    return array
+
+
+def _fft_frequencies(xp: Any, n: int, spacing: Any, dtype: Any) -> Any:
+    """FFT sample frequencies, matching :func:`jax.numpy.fft.fftfreq` exactly.
+
+    ``numpy.fft.fftfreq`` scales the index by the reciprocal of ``n * d`` where
+    JAX divides by it, which rounds differently in single precision. Spelling
+    the shared definition out here keeps the host and device routes on the same
+    values in both precisions.
+    """
+
+    index = xp.arange(n, dtype=dtype)
+    wrapped = (index + n // 2) % n - n // 2
+    return wrapped.astype(dtype) / xp.asarray(spacing * n, dtype=dtype)
+
+
 @dataclass(frozen=True)
 class _GridCacheArrays:
+    """Grid-derived cache arrays, on the host unless the grid is traced."""
+
     real_dtype: Any
-    dz: jnp.ndarray
-    kz: jnp.ndarray
-    rho_star: jnp.ndarray
-    kx_raw: jnp.ndarray
-    ky_raw: jnp.ndarray
-    kx_eff: jnp.ndarray
-    ky_eff: jnp.ndarray
-    kx_grid: jnp.ndarray
-    ky_grid: jnp.ndarray
-    dealias_mask: jnp.ndarray
-    theta: jnp.ndarray
+    dz: Any
+    kz: Any
+    rho_star: Any
+    kx_raw: Any
+    ky_raw: Any
+    kx_eff: Any
+    ky_eff: Any
+    kx_grid: Any
+    ky_grid: Any
+    dealias_mask: Any
+    theta: Any
 
 
 @dataclass(frozen=True)
 class _GeometryCacheArrays:
+    """Sampled geometry profiles, on the host unless the geometry is traced.
+
+    ``bmag_raw`` is the profile as the geometry returned it and ``bmag`` is the
+    same profile cast to the cache dtype. The metric contraction below consumes
+    the raw profile because :meth:`_SpectralGeometryMixin.k_perp2` does, and an
+    imported geometry may carry a wider dtype than the cache stores.
+    """
+
     geom_data: Any
-    gds2: jnp.ndarray
-    gds21: jnp.ndarray
-    gds22: jnp.ndarray
-    gds22_arr: jnp.ndarray
-    bmag: jnp.ndarray
-    bgrad: jnp.ndarray
-    jacobian: jnp.ndarray
-    cv: jnp.ndarray
-    gb: jnp.ndarray
-    cv0: jnp.ndarray
-    gb0: jnp.ndarray
+    gds2: Any
+    gds21: Any
+    gds22: Any
+    gds22_arr: Any
+    bmag_raw: Any
+    bmag: Any
+    bgrad: Any
+    jacobian: Any
+    cv: Any
+    gb: Any
+    cv0: Any
+    gb0: Any
 
 
 @dataclass(frozen=True)
@@ -62,32 +133,32 @@ class _TwistShiftCachePolicy:
     use_twist_shift: bool
     use_ntft: bool
     y0: float
-    shat_arr: jnp.ndarray
+    shat_arr: Any
     x0_eff: float
     jtwist: int
     kxfac_val: float
-    kx_eff: jnp.ndarray
-    kx_grid: jnp.ndarray
+    kx_eff: Any
+    kx_grid: Any
 
 
 @dataclass(frozen=True)
 class _LaguerreGyroCache:
-    b: jnp.ndarray
-    Jl: jnp.ndarray
-    JlB: jnp.ndarray
-    laguerre_to_grid: jnp.ndarray
-    laguerre_to_spectral: jnp.ndarray
-    laguerre_roots: jnp.ndarray
-    laguerre_j0: jnp.ndarray
-    laguerre_j1_over_alpha: jnp.ndarray
+    b: Any
+    Jl: Any
+    JlB: Any
+    laguerre_to_grid: Any
+    laguerre_to_spectral: Any
+    laguerre_roots: Any
+    laguerre_j0: Any
+    laguerre_j1_over_alpha: Any
 
 
 @dataclass(frozen=True)
 class _KxLinkCache:
-    kx_link_plus: jnp.ndarray
-    kx_link_minus: jnp.ndarray
-    kx_link_mask_plus: jnp.ndarray
-    kx_link_mask_minus: jnp.ndarray
+    kx_link_plus: Any
+    kx_link_minus: Any
+    kx_link_mask_plus: Any
+    kx_link_mask_minus: Any
     jtwist: int
 
 
@@ -95,24 +166,29 @@ class _KxLinkCache:
 class _LinkedFFTCache:
     linked_indices: tuple[np.ndarray, ...]
     linked_kz: tuple[np.ndarray, ...]
-    linked_inverse_permutation: jnp.ndarray
+    linked_inverse_permutation: np.ndarray
     linked_full_cover: bool
-    linked_gather_map: jnp.ndarray
-    linked_gather_mask: jnp.ndarray
+    linked_gather_map: np.ndarray
+    linked_gather_mask: np.ndarray
     linked_use_gather: bool
 
 
 def _build_grid_cache_arrays(
     grid: SpectralGrid, params: LinearParams
 ) -> _GridCacheArrays:
-    real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
-    dz = jnp.asarray(grid.z[1] - grid.z[0], dtype=real_dtype)
-    kz = jnp.asarray(
-        2.0 * jnp.pi * jnp.fft.fftfreq(grid.z.size, d=dz), dtype=real_dtype
+    xp = _array_namespace(
+        grid.z, grid.kx, grid.ky, grid.kx_grid, grid.ky_grid, params.rho_star
     )
-    rho_star = jnp.asarray(params.rho_star, dtype=real_dtype)
-    kx_raw = jnp.asarray(grid.kx, dtype=real_dtype)
-    ky_raw = jnp.asarray(grid.ky, dtype=real_dtype)
+    real_dtype = jnp.float64 if _x64_enabled() else jnp.float32
+    z_raw = xp.asarray(grid.z)
+    dz = xp.asarray(z_raw[1] - z_raw[0], dtype=real_dtype)
+    kz = xp.asarray(
+        2.0 * np.pi * _fft_frequencies(xp, int(grid.z.size), dz, real_dtype),
+        dtype=real_dtype,
+    )
+    rho_star = xp.asarray(params.rho_star, dtype=real_dtype)
+    kx_raw = xp.asarray(grid.kx, dtype=real_dtype)
+    ky_raw = xp.asarray(grid.ky, dtype=real_dtype)
     return _GridCacheArrays(
         real_dtype=real_dtype,
         dz=dz,
@@ -122,36 +198,47 @@ def _build_grid_cache_arrays(
         ky_raw=ky_raw,
         kx_eff=rho_star * kx_raw,
         ky_eff=rho_star * ky_raw,
-        kx_grid=jnp.asarray(grid.kx_grid, dtype=real_dtype) * rho_star,
-        ky_grid=jnp.asarray(grid.ky_grid, dtype=real_dtype) * rho_star,
-        dealias_mask=jnp.asarray(grid.dealias_mask, dtype=bool),
-        theta=jnp.asarray(grid.z, dtype=real_dtype),
+        kx_grid=xp.asarray(grid.kx_grid, dtype=real_dtype) * rho_star,
+        ky_grid=xp.asarray(grid.ky_grid, dtype=real_dtype) * rho_star,
+        dealias_mask=xp.asarray(grid.dealias_mask, dtype=bool),
+        theta=xp.asarray(z_raw, dtype=real_dtype),
     )
 
 
 def _build_geometry_cache_arrays(
     geom: FluxTubeGeometryLike,
     *,
-    theta: jnp.ndarray,
+    theta: Any,
     real_dtype: Any,
 ) -> _GeometryCacheArrays:
     geom_data = ensure_flux_tube_geometry_data(geom, theta)
     gds2, gds21, gds22 = geom_data.metric_coeffs(theta)
-    gds22_arr = gds22 if gds22.ndim else jnp.full_like(theta, gds22)
     cv, gb, cv0, gb0 = geom_data.drift_coeffs(theta)
+    bmag_raw = geom_data.bmag(theta)
+    xp = _array_namespace(theta, gds2, cv, bmag_raw, geom_data.s_hat)
+
+    def host(value: Any) -> Any:
+        return _as_device_dtype(xp, value, real_dtype)
+
+    gds2 = host(gds2)
+    gds21 = host(gds21)
+    gds22 = host(gds22)
+    gds22_arr = gds22 if gds22.ndim else xp.full_like(theta, gds22)
+    bmag_raw = host(bmag_raw)
     return _GeometryCacheArrays(
         geom_data=geom_data,
         gds2=gds2,
         gds21=gds21,
         gds22=gds22,
         gds22_arr=gds22_arr,
-        bmag=geom_data.bmag(theta).astype(real_dtype),
-        bgrad=geom_data.bgrad(theta).astype(real_dtype),
-        jacobian=geom_data.jacobian(theta).astype(real_dtype),
-        cv=cv,
-        gb=gb,
-        cv0=cv0,
-        gb0=gb0,
+        bmag_raw=bmag_raw,
+        bmag=bmag_raw.astype(real_dtype),
+        bgrad=host(geom_data.bgrad(theta)).astype(real_dtype),
+        jacobian=host(geom_data.jacobian(theta)).astype(real_dtype),
+        cv=host(cv),
+        gb=host(gb),
+        cv0=host(cv0),
+        gb0=host(gb0),
     )
 
 
@@ -195,7 +282,7 @@ def _host_edge_scalar(value: Any, *, dtype: Any = None) -> float | None:
 
 
 def _twist_shift_geometric_factor(
-    shat: float, *, gds21: jnp.ndarray, gds22: jnp.ndarray
+    shat: float, *, gds21: Any, gds22: Any
 ) -> float | None:
     gds22_min = _host_edge_scalar(gds22)
     if gds22_min == 0.0:
@@ -231,9 +318,9 @@ def _scaled_twist_shift_kx(
     use_ntft: bool,
     x0_eff: float,
     x0_target: float,
-    kx_eff: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray, float]:
+    kx_eff: Any,
+    kx_grid: Any,
+) -> tuple[Any, Any, float]:
     grid_x0 = float(getattr(grid, "x0", x0_eff))
     if use_ntft:
         if grid_x0 != 0.0:
@@ -249,16 +336,17 @@ def _resolve_twist_shift_policy(
     grid: SpectralGrid,
     geom_data: Any,
     *,
-    gds21: jnp.ndarray,
-    gds22: jnp.ndarray,
-    kx_eff: jnp.ndarray,
-    kx_grid: jnp.ndarray,
+    gds21: Any,
+    gds22: Any,
+    kx_eff: Any,
+    kx_grid: Any,
 ) -> _TwistShiftCachePolicy:
     boundary = str(getattr(grid, "boundary", "periodic")).lower()
     use_twist_shift = boundary in {"linked", "fix aspect", "continuous drifts"}
     use_ntft = bool(getattr(grid, "non_twist", False))
     y0 = _default_twist_y0(grid)
-    shat_arr = jnp.asarray(geom_data.s_hat, dtype=kx_eff.dtype)
+    xp = _array_namespace(kx_eff, kx_grid, geom_data.s_hat)
+    shat_arr = xp.asarray(geom_data.s_hat, dtype=kx_eff.dtype)
     shat_host = _host_edge_scalar(geom_data.s_hat, dtype=kx_eff.dtype)
     x0_eff = float(getattr(grid, "x0", 1.0))
     jtwist = 0
@@ -303,34 +391,35 @@ def _build_ntft_kperp_and_drift_arrays(
     grid: SpectralGrid,
     geom_data: Any,
     *,
-    kx_eff: jnp.ndarray,
-    ky_eff: jnp.ndarray,
-    ky_raw: jnp.ndarray,
-    rho_star: jnp.ndarray,
-    gds2: jnp.ndarray,
-    gds21: jnp.ndarray,
-    gds22_arr: jnp.ndarray,
-    bmag: jnp.ndarray,
-    cv: jnp.ndarray,
-    gb: jnp.ndarray,
-    cv0: jnp.ndarray,
-    gb0: jnp.ndarray,
-    shat_arr: jnp.ndarray,
+    kx_eff: Any,
+    ky_eff: Any,
+    ky_raw: Any,
+    rho_star: Any,
+    gds2: Any,
+    gds21: Any,
+    gds22_arr: Any,
+    bmag: Any,
+    cv: Any,
+    gb: Any,
+    cv0: Any,
+    gb0: Any,
+    shat_arr: Any,
     x0_eff: float,
     kperp2_bmag: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> tuple[Any, Any, Any, Any]:
+    xp = _array_namespace(kx_eff, ky_eff, gds2, gds21, gds22_arr, shat_arr)
     ftwist = (geom_data.s_hat * gds21 / gds22_arr).astype(kx_eff.dtype)
-    delta = jnp.asarray(0.01313, dtype=kx_eff.dtype)
-    ftwist_next = jnp.roll(ftwist, -1)
+    delta = xp.asarray(0.01313, dtype=kx_eff.dtype)
+    ftwist_next = xp.roll(ftwist, -1)
     mid_idx = int(grid.z.size // 2)
     mid_next = (mid_idx + 1) % grid.z.size
     ftwist_mid = ftwist[mid_idx]
     ftwist_mid_next = ftwist[mid_next]
-    m0 = -jnp.rint(
+    m0 = -xp.rint(
         float(x0_eff)
         * ky_raw[:, None]
         * ((1.0 - delta) * ftwist[None, :] + delta * ftwist_next[None, :])
-    ) + jnp.rint(
+    ) + xp.rint(
         float(x0_eff)
         * ky_raw[:, None]
         * ((1.0 - delta) * ftwist_mid + delta * ftwist_mid_next)
@@ -363,19 +452,46 @@ def _build_ntft_kperp_and_drift_arrays(
 
 
 def _build_standard_kperp_and_drift_arrays(
-    geom_data: Any,
+    geom_arrays: _GeometryCacheArrays,
     *,
-    theta: jnp.ndarray,
-    kx_eff: jnp.ndarray,
-    ky_eff: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    kx_eff: Any,
+    ky_eff: Any,
+    kperp2_bmag: bool,
+) -> tuple[Any, Any, Any, Any]:
+    """Contract the sampled metric with ``(kx, ky)`` on a standard flux tube.
+
+    This is :meth:`_SpectralGeometryMixin.k_perp2` and
+    :meth:`_SpectralGeometryMixin.drift_components` evaluated on the profiles
+    :class:`_GeometryCacheArrays` already holds. Calling the geometry methods
+    would re-broadcast the same profiles through ``jax.numpy`` and force the
+    whole contraction onto the device; written here it follows the namespace of
+    its operands, which is ``numpy`` for every concrete geometry.
+    """
+
+    xp = _array_namespace(kx_eff, ky_eff, geom_arrays.gds2, geom_arrays.geom_data.s_hat)
     kx0 = kx_eff[None, :, None]
     ky0 = ky_eff[:, None, None]
-    theta_b = theta[None, None, :]
-    kperp2 = geom_data.k_perp2(kx0, ky0, theta_b).astype(kx_eff.dtype)
-    cv_d, gb_d = geom_data.drift_components(kx_eff, ky_eff, theta)
-    cv_d = cv_d.astype(kx_eff.dtype)
-    gb_d = gb_d.astype(kx_eff.dtype)
+    s_hat = _as_device_dtype(xp, geom_arrays.geom_data.s_hat, kx_eff.dtype)
+    s_hat_safe = xp.where(s_hat == 0.0, 1.0, s_hat)
+    kx_hat = xp.where(s_hat == 0.0, kx0, kx0 / s_hat_safe)
+    kperp2 = (
+        ky0
+        * (
+            ky0 * geom_arrays.gds2[None, None, :]
+            + 2.0 * kx_hat * geom_arrays.gds21[None, None, :]
+        )
+        + (kx_hat * kx_hat) * geom_arrays.gds22_arr[None, None, :]
+    )
+    if kperp2_bmag:
+        bmag_inv = 1.0 / geom_arrays.bmag_raw[None, None, :]
+        kperp2 = kperp2 * (bmag_inv * bmag_inv)
+    kperp2 = kperp2.astype(kx_eff.dtype)
+    cv_d = (
+        ky0 * geom_arrays.cv[None, None, :] + kx_hat * geom_arrays.cv0[None, None, :]
+    ).astype(kx_eff.dtype)
+    gb_d = (
+        ky0 * geom_arrays.gb[None, None, :] + kx_hat * geom_arrays.gb0[None, None, :]
+    ).astype(kx_eff.dtype)
     omega_d = (cv_d + gb_d).astype(kx_eff.dtype)
     return kperp2, cv_d, gb_d, omega_d
 
@@ -458,12 +574,12 @@ def update_linear_cache_for_sheared_kx(
 def _apply_dealias_to_kperp_and_drifts(
     *,
     grid: SpectralGrid,
-    dealias_mask: jnp.ndarray,
-    kperp2: jnp.ndarray,
-    cv_d: jnp.ndarray,
-    gb_d: jnp.ndarray,
-    omega_d: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    dealias_mask: Any,
+    kperp2: Any,
+    cv_d: Any,
+    gb_d: Any,
+    omega_d: Any,
+) -> tuple[Any, Any, Any, Any]:
     apply_dealias_mask = dealias_mask is not None and int(grid.ky.size) > 1
     if not apply_dealias_mask:
         return kperp2, cv_d, gb_d, omega_d
@@ -477,75 +593,73 @@ def _apply_dealias_to_kperp_and_drifts(
 
 def _build_kperp_and_drift_arrays(
     grid: SpectralGrid,
-    geom_data: Any,
     *,
-    theta: jnp.ndarray,
-    kx_eff: jnp.ndarray,
-    ky_eff: jnp.ndarray,
-    ky_raw: jnp.ndarray,
-    rho_star: jnp.ndarray,
-    gds2: jnp.ndarray,
-    gds21: jnp.ndarray,
-    gds22_arr: jnp.ndarray,
-    bmag: jnp.ndarray,
-    cv: jnp.ndarray,
-    gb: jnp.ndarray,
-    cv0: jnp.ndarray,
-    gb0: jnp.ndarray,
-    shat_arr: jnp.ndarray,
-    x0_eff: float,
+    grid_arrays: _GridCacheArrays,
+    geom_arrays: _GeometryCacheArrays,
+    twist: _TwistShiftCachePolicy,
     kperp2_bmag: bool,
-    use_ntft: bool,
-    dealias_mask: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    if use_ntft:
+) -> tuple[Any, Any, Any, Any]:
+    if twist.use_ntft:
         kperp2, cv_d, gb_d, omega_d = _build_ntft_kperp_and_drift_arrays(
             grid,
-            geom_data,
-            kx_eff=kx_eff,
-            ky_eff=ky_eff,
-            ky_raw=ky_raw,
-            rho_star=rho_star,
-            gds2=gds2,
-            gds21=gds21,
-            gds22_arr=gds22_arr,
-            bmag=bmag,
-            cv=cv,
-            gb=gb,
-            cv0=cv0,
-            gb0=gb0,
-            shat_arr=shat_arr,
-            x0_eff=x0_eff,
+            geom_arrays.geom_data,
+            kx_eff=twist.kx_eff,
+            ky_eff=grid_arrays.ky_eff,
+            ky_raw=grid_arrays.ky_raw,
+            rho_star=grid_arrays.rho_star,
+            gds2=geom_arrays.gds2,
+            gds21=geom_arrays.gds21,
+            gds22_arr=geom_arrays.gds22_arr,
+            bmag=geom_arrays.bmag,
+            cv=geom_arrays.cv,
+            gb=geom_arrays.gb,
+            cv0=geom_arrays.cv0,
+            gb0=geom_arrays.gb0,
+            shat_arr=twist.shat_arr,
+            x0_eff=twist.x0_eff,
             kperp2_bmag=kperp2_bmag,
         )
     else:
         kperp2, cv_d, gb_d, omega_d = _build_standard_kperp_and_drift_arrays(
-            geom_data,
-            theta=theta,
-            kx_eff=kx_eff,
-            ky_eff=ky_eff,
+            geom_arrays,
+            kx_eff=twist.kx_eff,
+            ky_eff=grid_arrays.ky_eff,
+            kperp2_bmag=kperp2_bmag,
         )
-    kperp2, cv_d, gb_d, omega_d = _apply_dealias_to_kperp_and_drifts(
+    return _apply_dealias_to_kperp_and_drifts(
         grid=grid,
-        dealias_mask=dealias_mask,
+        dealias_mask=grid_arrays.dealias_mask,
         kperp2=kperp2,
         cv_d=cv_d,
         gb_d=gb_d,
         omega_d=omega_d,
     )
-    return kperp2, cv_d, gb_d, omega_d
+
+
+def _bessel_namespace(xp: Any, real_dtype: Any) -> Any:
+    """Namespace for the Bessel factors: the host only in double precision.
+
+    ``bessel_j0``/``bessel_j1`` reach ``cos`` and ``sin`` for arguments above
+    eight. NumPy and XLA agree bit for bit on the float64 kernels, so the host
+    reproduces the device answer exactly there; their float32 kernels differ in
+    the last place, so single precision keeps the device route rather than
+    quietly moving the cache by an ulp.
+    """
+
+    return xp if xp is np and np.dtype(real_dtype) == np.float64 else jnp
 
 
 def _build_laguerre_gyro_cache(
     params: LinearParams,
     *,
     geom_data: Any,
-    kperp2: jnp.ndarray,
-    bmag: jnp.ndarray,
+    kperp2: Any,
+    bmag: Any,
     Nl: int,
     real_dtype: Any,
+    xp: Any = jnp,
 ) -> _LaguerreGyroCache:
-    rho = jnp.asarray(params.rho, dtype=real_dtype)
+    rho = xp.asarray(params.rho, dtype=real_dtype)
     if rho.ndim == 0:
         rho = rho[None]
     b = (rho[:, None, None, None] * rho[:, None, None, None]) * kperp2[None, ...]
@@ -555,14 +669,16 @@ def _build_laguerre_gyro_cache(
         b = b * bmag_factor
     Jl, JlB = _build_gyroaverage_cache_arrays(b, Nl, real_dtype)
     lag_to_grid_np, lag_to_spec_np, lag_roots_np = laguerre_transform(Nl)
-    laguerre_to_grid = jnp.asarray(lag_to_grid_np, dtype=real_dtype)
-    laguerre_to_spectral = jnp.asarray(lag_to_spec_np, dtype=real_dtype)
-    laguerre_roots = jnp.asarray(lag_roots_np, dtype=real_dtype)
-    alpha2 = jnp.maximum(
+    laguerre_to_grid = xp.asarray(lag_to_grid_np, dtype=real_dtype)
+    laguerre_to_spectral = xp.asarray(lag_to_spec_np, dtype=real_dtype)
+    laguerre_roots = xp.asarray(lag_roots_np, dtype=real_dtype)
+    alpha2 = xp.maximum(
         0.0,
         2.0 * laguerre_roots[None, :, None, None, None] * b[:, None, ...],
     )
-    laguerre_j0, laguerre_j1_over_alpha = _gyro_bessel_factors(alpha2)
+    laguerre_j0, laguerre_j1_over_alpha = _gyro_bessel_factors(
+        alpha2, xp=_bessel_namespace(xp, real_dtype)
+    )
     laguerre_j0 = laguerre_j0.astype(real_dtype)
     laguerre_j1_over_alpha = laguerre_j1_over_alpha.astype(real_dtype)
     return _LaguerreGyroCache(
@@ -584,25 +700,26 @@ def _build_kx_link_cache(
     y0: float,
     jtwist: int,
 ) -> _KxLinkCache:
+    xp = _array_namespace(grid.kx, grid.ky)
     if use_twist_shift:
-        iky = jnp.rint(grid.ky * float(y0)).astype(jnp.int32)
-        shift = jnp.asarray(jtwist, dtype=jnp.int32) * iky
-        kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
+        iky = xp.rint(xp.asarray(grid.ky) * float(y0)).astype(jnp.int32)
+        shift = xp.asarray(jtwist, dtype=jnp.int32) * iky
+        kx_idx = xp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
         kx_link_plus = kx_idx + shift[:, None]
         kx_link_minus = kx_idx - shift[:, None]
         kx_link_mask_plus = (kx_link_plus >= 0) & (kx_link_plus < grid.kx.size)
         kx_link_mask_minus = (kx_link_minus >= 0) & (kx_link_minus < grid.kx.size)
         return _KxLinkCache(
-            kx_link_plus=jnp.clip(kx_link_plus, 0, grid.kx.size - 1),
-            kx_link_minus=jnp.clip(kx_link_minus, 0, grid.kx.size - 1),
+            kx_link_plus=xp.clip(kx_link_plus, 0, grid.kx.size - 1),
+            kx_link_minus=xp.clip(kx_link_minus, 0, grid.kx.size - 1),
             kx_link_mask_plus=kx_link_mask_plus,
             kx_link_mask_minus=kx_link_mask_minus,
             jtwist=jtwist,
         )
 
-    kx_idx = jnp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
-    kx_link = jnp.broadcast_to(kx_idx, (grid.ky.size, grid.kx.size))
-    kx_mask = jnp.ones((grid.ky.size, grid.kx.size), dtype=bool)
+    kx_idx = xp.arange(grid.kx.size, dtype=jnp.int32)[None, :]
+    kx_link = xp.broadcast_to(kx_idx, (grid.ky.size, grid.kx.size))
+    kx_mask = xp.ones((grid.ky.size, grid.kx.size), dtype=bool)
     return _KxLinkCache(
         kx_link_plus=kx_link,
         kx_link_minus=kx_link,
@@ -617,10 +734,10 @@ def _empty_linked_fft_cache(real_dtype: Any) -> _LinkedFFTCache:
     return _LinkedFFTCache(
         linked_indices=(),
         linked_kz=(),
-        linked_inverse_permutation=jnp.asarray([], dtype=jnp.int32),
+        linked_inverse_permutation=np.asarray([], dtype=np.int32),
         linked_full_cover=False,
-        linked_gather_map=jnp.asarray([], dtype=jnp.int32),
-        linked_gather_mask=jnp.asarray([], dtype=bool),
+        linked_gather_map=np.asarray([], dtype=np.int32),
+        linked_gather_mask=np.asarray([], dtype=bool),
         linked_use_gather=False,
     )
 
@@ -629,13 +746,13 @@ def _linked_fft_gather_metadata(
     linked_indices: tuple[np.ndarray, ...],
     *,
     n_modes: int,
-) -> tuple[jnp.ndarray, bool, jnp.ndarray, jnp.ndarray, bool]:
+) -> tuple[np.ndarray, bool, np.ndarray, np.ndarray, bool]:
     if not linked_indices:
         return (
-            jnp.asarray([], dtype=jnp.int32),
+            np.asarray([], dtype=np.int32),
             False,
-            jnp.asarray([], dtype=jnp.int32),
-            jnp.asarray([], dtype=bool),
+            np.asarray([], dtype=np.int32),
+            np.asarray([], dtype=bool),
             False,
         )
 
@@ -643,22 +760,20 @@ def _linked_fft_gather_metadata(
         [np.asarray(idx, dtype=np.int32).reshape(-1) for idx in linked_indices],
         axis=0,
     )
-    linked_inverse_permutation = jnp.asarray([], dtype=jnp.int32)
+    linked_inverse_permutation = np.asarray([], dtype=np.int32)
     linked_full_cover = False
     if idx_flat.size == n_modes:
         ref = np.arange(n_modes, dtype=np.int32)
         if np.array_equal(np.sort(idx_flat), ref):
-            linked_inverse_permutation = jnp.asarray(
-                np.argsort(idx_flat).astype(np.int32)
-            )
+            linked_inverse_permutation = np.argsort(idx_flat).astype(np.int32)
             linked_full_cover = True
 
     if idx_flat.size == 0:
         return (
             linked_inverse_permutation,
             linked_full_cover,
-            jnp.asarray([], dtype=jnp.int32),
-            jnp.asarray([], dtype=bool),
+            np.asarray([], dtype=np.int32),
+            np.asarray([], dtype=bool),
             False,
         )
 
@@ -669,8 +784,8 @@ def _linked_fft_gather_metadata(
     return (
         linked_inverse_permutation,
         linked_full_cover,
-        jnp.asarray(gather_map, dtype=jnp.int32),
-        jnp.asarray(gather_mask, dtype=bool),
+        gather_map,
+        gather_mask,
         True,
     )
 
@@ -730,10 +845,10 @@ def _build_linked_damp_profile(
     boundary: str,
     linked_indices: tuple[np.ndarray, ...],
     real_dtype: Any,
-) -> jnp.ndarray:
+) -> np.ndarray:
     if boundary == "periodic":
-        return jnp.asarray([], dtype=real_dtype)
-    return jnp.asarray(
+        return np.asarray([], dtype=real_dtype)
+    return np.asarray(
         _build_linked_end_damping_profile(
             linked_indices=linked_indices,
             ny=int(grid.ky.size),
@@ -788,7 +903,7 @@ def _build_linked_boundary_cache(
             real_dtype=real_dtype,
         )
         if use_twist_shift
-        else jnp.asarray([], dtype=real_dtype)
+        else np.asarray([], dtype=real_dtype)
     )
 
     return {
@@ -804,13 +919,26 @@ def _build_linked_boundary_cache(
         "linked_gather_mask": linked_fft.linked_gather_mask,
         "linked_use_gather": linked_fft.linked_use_gather,
         "linked_indices": tuple(
-            jnp.asarray(idx, dtype=jnp.int32) for idx in linked_fft.linked_indices
+            np.asarray(idx, dtype=np.int32) for idx in linked_fft.linked_indices
         ),
         "linked_kz": tuple(
-            jnp.asarray(kz, dtype=real_dtype) for kz in linked_fft.linked_kz
+            np.asarray(kz, dtype=real_dtype) for kz in linked_fft.linked_kz
         ),
         "jtwist": kx_links.jtwist,
     }
+
+
+def _to_device_cache(cache: LinearCache) -> LinearCache:
+    """Move a host-built cache onto the device in a single pass.
+
+    The builder works in ``numpy`` so that no XLA kernel is compiled for a
+    one-shot constant, but the solver consumes the cache under ``jit`` and its
+    fields are declared as device arrays. Every array leaf already carries its
+    final dtype, so this is a transfer and not a cast.
+    """
+
+    leaves, treedef = jax.tree_util.tree_flatten(cache)
+    return jax.tree_util.tree_unflatten(treedef, [jnp.asarray(x) for x in leaves])
 
 
 def _pack_linear_cache(
@@ -819,16 +947,19 @@ def _pack_linear_cache(
     grid_arrays: _GridCacheArrays,
     geom_arrays: _GeometryCacheArrays,
     twist: _TwistShiftCachePolicy,
-    kperp2: jnp.ndarray,
-    cv_d: jnp.ndarray,
-    gb_d: jnp.ndarray,
-    omega_d: jnp.ndarray,
+    kperp2: Any,
+    cv_d: Any,
+    gb_d: Any,
+    omega_d: Any,
     kperp2_bmag: bool,
     gyro: _LaguerreGyroCache,
-    moment_cache: dict[str, jnp.ndarray],
+    moment_cache: dict[str, Any],
     linked_cache: dict[str, Any],
 ) -> LinearCache:
-    mask0 = (grid.ky == 0.0)[:, None, None] & (grid.kx == 0.0)[None, :, None]
+    xp = _array_namespace(grid.kx, grid.ky)
+    ky_host = xp.asarray(grid.ky)
+    kx_host = xp.asarray(grid.kx)
+    mask0 = (ky_host == 0.0)[:, None, None] & (kx_host == 0.0)[None, :, None]
     real_dtype = grid_arrays.real_dtype
     return LinearCache(
         Jl=gyro.Jl,
@@ -849,9 +980,9 @@ def _pack_linear_cache(
         kx_grid=twist.kx_grid,
         ky_grid=grid_arrays.ky_grid,
         dealias_mask=grid_arrays.dealias_mask,
-        kxfac=jnp.asarray(twist.kxfac_val, dtype=real_dtype),
+        kxfac=xp.asarray(twist.kxfac_val, dtype=real_dtype),
         lb_lam=moment_cache["lb_lam"],
-        collision_lam=jnp.asarray([], dtype=real_dtype),
+        collision_lam=xp.asarray([], dtype=real_dtype),
         hyper_ratio=moment_cache["hyper_ratio"].astype(real_dtype),
         ratio_l=moment_cache["ratio_l"].astype(real_dtype),
         ratio_m=moment_cache["ratio_m"].astype(real_dtype),
@@ -917,25 +1048,10 @@ def build_linear_cache(
     kperp2_bmag = bool(getattr(geom_arrays.geom_data, "kperp2_bmag", True))
     kperp2, cv_d, gb_d, omega_d = _build_kperp_and_drift_arrays(
         grid,
-        geom_arrays.geom_data,
-        theta=grid_arrays.theta,
-        kx_eff=twist.kx_eff,
-        ky_eff=grid_arrays.ky_eff,
-        ky_raw=grid_arrays.ky_raw,
-        rho_star=grid_arrays.rho_star,
-        gds2=geom_arrays.gds2,
-        gds21=geom_arrays.gds21,
-        gds22_arr=geom_arrays.gds22_arr,
-        bmag=geom_arrays.bmag,
-        cv=geom_arrays.cv,
-        gb=geom_arrays.gb,
-        cv0=geom_arrays.cv0,
-        gb0=geom_arrays.gb0,
-        shat_arr=twist.shat_arr,
-        x0_eff=twist.x0_eff,
+        grid_arrays=grid_arrays,
+        geom_arrays=geom_arrays,
+        twist=twist,
         kperp2_bmag=kperp2_bmag,
-        use_ntft=twist.use_ntft,
-        dealias_mask=grid_arrays.dealias_mask,
     )
     gyro = _build_laguerre_gyro_cache(
         params,
@@ -944,6 +1060,7 @@ def build_linear_cache(
         bmag=geom_arrays.bmag,
         Nl=Nl,
         real_dtype=grid_arrays.real_dtype,
+        xp=_array_namespace(kperp2, geom_arrays.bmag, params.rho),
     )
     moment_cache = _build_low_rank_moment_cache_arrays(
         Nl, Nm, params, grid_arrays.real_dtype
@@ -957,17 +1074,19 @@ def build_linear_cache(
         jtwist=twist.jtwist,
         real_dtype=grid_arrays.real_dtype,
     )
-    return _pack_linear_cache(
-        grid,
-        grid_arrays=grid_arrays,
-        geom_arrays=geom_arrays,
-        twist=twist,
-        kperp2=kperp2,
-        cv_d=cv_d,
-        gb_d=gb_d,
-        omega_d=omega_d,
-        kperp2_bmag=kperp2_bmag,
-        gyro=gyro,
-        moment_cache=moment_cache,
-        linked_cache=linked_cache,
+    return _to_device_cache(
+        _pack_linear_cache(
+            grid,
+            grid_arrays=grid_arrays,
+            geom_arrays=geom_arrays,
+            twist=twist,
+            kperp2=kperp2,
+            cv_d=cv_d,
+            gb_d=gb_d,
+            omega_d=omega_d,
+            kperp2_bmag=kperp2_bmag,
+            gyro=gyro,
+            moment_cache=moment_cache,
+            linked_cache=linked_cache,
+        )
     )

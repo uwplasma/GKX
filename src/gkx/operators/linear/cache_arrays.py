@@ -103,8 +103,12 @@ def _build_end_damping_profile_array(
     widthfrac: float,
     boundary: str,
     real_dtype: jnp.dtype,
-) -> jnp.ndarray:
-    """Build the one-dimensional end-damping profile as one host array."""
+) -> np.ndarray:
+    """Build the one-dimensional end-damping profile as one host array.
+
+    The result stays on the host; :func:`_pack_linear_cache` moves the finished
+    cache to the device in a single pass.
+    """
 
     np_dtype = np.float32
     width = max(1, int(np.floor(float(widthfrac) * int(Nz))))
@@ -121,7 +125,7 @@ def _build_end_damping_profile_array(
     damp_profile_np = np.maximum(nu_left, nu_right).astype(np_dtype)
     if boundary == "periodic":
         damp_profile_np = np.zeros_like(damp_profile_np)
-    return jnp.asarray(damp_profile_np, dtype=real_dtype)
+    return damp_profile_np.astype(real_dtype)
 
 
 def _build_gyroaverage_cache_arrays(

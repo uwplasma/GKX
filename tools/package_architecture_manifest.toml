@@ -797,7 +797,15 @@ recursive = true
 # after; the delta is ruff splitting over-long calls, signatures, and collection
 # literals onto more physical lines. The budget counts physical lines, so it has
 # to absorb the one-time step. The target is deliberately left where it was.
-baseline = 88795
+# 88795 -> 88840: taking XLA out of linear-cache construction. build_linear_cache
+# is a one-shot host computation that op-by-op dispatch was compiling one kernel
+# per multiply -- 123 XLA compilations and 1.7 s on every cold run, re-paid per
+# grid shape. The arithmetic itself is line-neutral: it now runs through an array
+# namespace that is numpy for concrete operands and jax.numpy under a trace. The
+# 45 lines are the three namespace helpers and the docstrings recording which
+# operations may cross to the host at all -- IEEE-754 pins arithmetic, sqrt and
+# casts, so exp and gammaln stay on the device and the cache stays bit-identical.
+baseline = 88840
 target = 45000
 
 [[line_budget_policy.counts]]

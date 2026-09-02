@@ -4411,3 +4411,53 @@ Outcome:
 - next: the profile's own first recommendation, which is to stop round-tripping
   the ky spectrum -- keep the half-ky rfft layout through the linear RHS rather
   than expanding to full ky and re-completing the symmetry every stage.
+
+## 2026-09-01 — PR P1-2 remove the cold-start compilations (`refactor/r4-flatten-and-fuse`)
+
+Scope:
+- §25e.1: `build_linear_cache` cost 2.4 s of pure XLA compilation on every cold
+  run, per distinct grid shape, from hundreds of per-primitive compilations
+  under op-by-op dispatch.
+
+What made it safe:
+- the open question was whether a numpy rewrite would break the differentiable
+  geometry route. Instrumenting the builder and running the autodiff objective
+  **gradient** tests answers it: **traced = 0, concrete = 42**. The cache is
+  never built under a trace, even while a gradient is taken; the differentiable
+  route takes its derivatives from the implicit eigensolve VJP.
+
+Changes:
+- a single `_array_namespace(*values)` helper returns `numpy` when every operand
+  is concrete and `jax.numpy` when any is a tracer, so the staged-out route is
+  byte-for-byte the code it was and only the concrete route leaves XLA. The
+  one-shot arrays move to the device once, at the boundary.
+
+Evidence:
+- compilations 139 -> 71 and first call 2,175 -> 1,340 ms, measured
+  independently of the agent that made the change.
+- **bitwise identical output**: 515 arrays across nine configurations --
+  periodic, linked and twist-shift, non-twist, zero shear, slab, multi-species,
+  single-ky -- with a maximum deviation of exactly 0.0, in x64 and x32. The
+  traced branch was checked separately and is 16/16 fields identical including
+  gradients.
+- `tests/unit/linear`, `tests/unit/operators`, `tests/unit/objectives`:
+  501 passed with the same four known-environment jax `eig()` failures,
+  unchanged in number and identity.
+- `ruff`, `ruff format --check`, `sphinx -W`, three release checkers clean;
+  2,631 tests still collect.
+
+Three things worth keeping:
+- **`jax.jit` is not the conservative choice here.** A jitted `kperp2` differs by
+  1.1e-13 and jitted Bessel factors by 2.0e-15, because XLA fuses and contracts.
+  numpy is the exact route, which reverses the usual intuition.
+- two exactness traps: `np.fft.fftfreq` scales by the reciprocal where JAX
+  divides, which differs in float32; and `np.asarray(0.8)` is float64 where
+  `jnp.asarray(0.8)` follows JAX's default dtype. Without pinning the second,
+  x32 moved by about one ulp in `kperp2` and the drifts.
+- two regions deliberately left on the device rather than forced: `J_l_all`,
+  which uses `exp` and `gammaln` where numpy and XLA disagree by an ulp, and the
+  float32 Bessel factors, where numpy's float32 `cos`/`sin` differ from XLA's.
+  Their float64 path was verified bit-identical and did move.
+
+Outcome:
+- accepted. The remaining compilations are exactly those two regions.
