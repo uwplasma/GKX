@@ -56,7 +56,7 @@ from gkx.geometry import (  # noqa: E402
     apply_geometry_grid_defaults,
     ensure_flux_tube_geometry_data,
 )
-from gkx.solvers.nonlinear.diagnostic_integration import (  # noqa: E402
+from gkx.solvers_nonlinear_diagnostic_integration import (  # noqa: E402
     prepare_nonlinear_explicit_diagnostics,
 )
 from gkx.workflows.runtime.policies import (  # noqa: E402
@@ -288,7 +288,7 @@ def run(
             f"{config} sets [terms] nonlinear = 0.0; there is no turbulence to film"
         )
 
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.workflows.runtime.startup import _resolve_runtime_hl_dims
 

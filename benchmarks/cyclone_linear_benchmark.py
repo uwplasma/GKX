@@ -13,7 +13,7 @@ from gkx import (
     run_runtime_scan,
     scan_comparison_figure,
 )
-from gkx.benchmarking.shared import load_cyclone_reference
+from gkx.benchmarking_shared import load_cyclone_reference
 
 
 CONFIG = Path("examples/linear/axisymmetric/cyclone.toml")

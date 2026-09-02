@@ -288,7 +288,7 @@
           "exists": true,
           "name": "linear solver package",
           "passed": true,
-          "path": "src/gkx/solvers/linear/__init__.py",
+          "path": "src/gkx/solvers_linear.py",
           "required": true,
           "snippet": "KrylovConfig"
         },
@@ -304,7 +304,7 @@
           "exists": true,
           "name": "nonlinear solver package",
           "passed": true,
-          "path": "src/gkx/solvers/nonlinear/__init__.py",
+          "path": "src/gkx/solvers_nonlinear.py",
           "required": true,
           "snippet": "solve_imex_step"
         },
@@ -352,7 +352,7 @@
           "exists": true,
           "name": "linear parallel module",
           "passed": true,
-          "path": "src/gkx/solvers/linear/parallel.py",
+          "path": "src/gkx/solvers_linear_parallel.py",
           "required": true,
           "snippet": null
         },
@@ -368,7 +368,7 @@
           "exists": true,
           "name": "benchmark policy module",
           "passed": true,
-          "path": "src/gkx/benchmarking/shared.py",
+          "path": "src/gkx/benchmarking_shared.py",
           "required": true,
           "snippet": "CYCLONE_KRYLOV_DEFAULT"
         },
@@ -376,7 +376,7 @@
           "exists": true,
           "name": "diagnostic moment kernels",
           "passed": true,
-          "path": "src/gkx/diagnostics/moments.py",
+          "path": "src/gkx/operators/moments.py",
           "required": true,
           "snippet": null
         },
@@ -476,7 +476,7 @@
     }
   },
   "passed": true,
-  "root": "/Users/rogeriojorge/local/GKX",
+  "root": "/Users/rogeriojorge/local/GKX-worktrees/r4",
   "scope": "Technical release readiness for CI, refactor, docs/release hygiene, parallelization artifacts, performance artifacts, and guardrails. Deferred manuscript physics lanes remain scoped separately.",
   "target_percent": 98.0,
   "technical_release_completion_percent": 100.0

@@ -59,7 +59,7 @@ from gkx.artifacts.figure_style import (
     save_figure,
 )
 from gkx.config import GeometryConfig, GridConfig
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SlabGeometry
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearTerms, linear_params_for_geometry

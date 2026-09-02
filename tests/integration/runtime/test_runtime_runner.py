@@ -14,7 +14,7 @@ from gkx.config import (
     InitializationConfig,
     TimeConfig,
 )
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics import SimulationDiagnostics, ResolvedDiagnostics
 from gkx.diagnostics.modes import ModeSelection
 from gkx.geometry import (
@@ -63,7 +63,7 @@ from gkx.workflows.runtime.chunks import (
     run_adaptive_runtime_chunk_loop,
 )
 from gkx.workflows.runtime.commands import run_linear_case, run_nonlinear_case
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeCollisionConfig,
     RuntimeConfig,
     RuntimeExpertConfig,
@@ -538,8 +538,8 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     """
 
     from gkx.operators.linear.params import linear_terms_to_term_config
-    from gkx.solvers.linear.krylov_algorithms import _apply_operator
-    from gkx.core.grid import select_ky_grid
+    from gkx.solvers_linear_krylov_algorithms import _apply_operator
+    from gkx.core_grid import select_ky_grid
     from gkx.diagnostics.modes import select_ky_index
 
     runtime, _raw = load_runtime_from_toml(
@@ -3256,7 +3256,7 @@ def test_run_linear_case_toml_velocity_auto_reaches_parallel_rhs(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    import gkx.solvers.linear.integrators as linear_integrators
+    import gkx.solvers_linear_integrators as linear_integrators
 
     cfg_path = tmp_path / "velocity_auto.toml"
     cfg_path.write_text(
@@ -3802,8 +3802,8 @@ def test_runtime_linear_explicit_time_rejects_return_state_before_setup(
 
 
 def test_direct_linear_and_nonlinear_integrators_fast_smoke() -> None:
-    from gkx.solvers.nonlinear.state_integration import integrate_nonlinear
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
+    from gkx.solvers_linear_integrators import integrate_linear
 
     grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     cfg = CycloneBaseCase(grid=grid_cfg)
@@ -4253,7 +4253,7 @@ def test_multimode_seed_fills_a_ky_selected_grid_and_leaves_the_zonal_mode_alone
     the selected grid seeds, and the full grid still leaves the zonal mode out.
     """
 
-    from gkx.core.grid import select_ky_grid
+    from gkx.core_grid import select_ky_grid
     from gkx.diagnostics.modes import select_ky_index
 
     cfg = _base_runtime_cfg()

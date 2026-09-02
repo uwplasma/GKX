@@ -5,10 +5,10 @@ import gkx.operators.linear as linear_operators
 import gkx.operators.nonlinear as nonlinear_operators
 import gkx.operators.nonlinear.diagnostic_state as operator_diagnostics
 import gkx.operators.nonlinear.rhs as operator_rhs
-import gkx.solvers.nonlinear as nonlinear_solvers
-import gkx.solvers.nonlinear.diagnostics as solver_diagnostics
-import gkx.solvers.nonlinear.explicit as solver_explicit
-import gkx.solvers.nonlinear.imex as solver_imex
+import gkx.solvers_nonlinear as nonlinear_solvers
+import gkx.solvers_nonlinear_diagnostics as solver_diagnostics
+import gkx.solvers_nonlinear_explicit as solver_explicit
+import gkx.solvers_nonlinear_imex as solver_imex
 from gkx.terms.assembly import linear_rhs_jit_for_terms
 
 

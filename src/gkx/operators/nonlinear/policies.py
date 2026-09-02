@@ -9,8 +9,8 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
-from gkx.core.grid import SpectralGrid, _gyrokinetic_moment_shape, real_fft_mesh
-from gkx.solvers.linear.implicit import _build_implicit_operator
+from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape, real_fft_mesh
+from gkx.solvers_linear_implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
     LinearParams,

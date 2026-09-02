@@ -1,8 +1,8 @@
 """Time-advance schemes: linear explicit tableaus, nonlinear explicit, IMEX.
 
 One module for everything that steps the state forward. The linear half covers
-gkx.solvers.time.explicit -- native tableaus, adaptive-CFL controls, progress and
-error paths. The nonlinear half covers gkx.solvers.nonlinear: the per-stage
+gkx.solvers_time_explicit -- native tableaus, adaptive-CFL controls, progress and
+error paths. The nonlinear half covers gkx.solvers_nonlinear: the per-stage
 explicit update and its method dispatch, the checkpointed scan whose block
 schedule must not change the discrete RK map, and the IMEX split, which lives
 here rather than with the linear solver because it reuses the same
@@ -15,7 +15,7 @@ and test_nonlinear_imex.py; the origin markers below delimit each block.
 from __future__ import annotations
 
 from gkx.diagnostics.analysis import estimate_observed_order
-from gkx.solvers.nonlinear.explicit import (
+from gkx.solvers_nonlinear_explicit import (
     _checkpoint_block_size,
     advance_explicit_nonlinear_state,
     checkpointed_explicit_scan,
@@ -24,7 +24,7 @@ from gkx.solvers.nonlinear.explicit import (
     make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
 )
-from gkx.solvers.nonlinear.imex import (
+from gkx.solvers_nonlinear_imex import (
     advance_imex_nonlinear_state,
     imex_fixed_point_guess,
     integrate_cached_imex_scan,
@@ -34,7 +34,7 @@ from gkx.solvers.nonlinear.imex import (
     run_imex_diagnostic_scan,
     solve_imex_step,
 )
-from gkx.solvers.time.explicit_steps import (
+from gkx.solvers_time_explicit_steps import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )
@@ -44,10 +44,10 @@ from gkx.terms.nonlinear import (
     placeholder_nonlinear_contribution,
 )
 from types import SimpleNamespace
-import gkx.solvers.nonlinear.imex as imex_module
-import gkx.solvers.nonlinear.imex_diagnostics as imex_diagnostics
-import gkx.solvers.time.explicit as eti
-import gkx.solvers.time.explicit_diagnostics as explicit_diagnostics
+import gkx.solvers_nonlinear_imex as imex_module
+import gkx.solvers_nonlinear_imex_diagnostics as imex_diagnostics
+import gkx.solvers_time_explicit as eti
+import gkx.solvers_time_explicit_diagnostics as explicit_diagnostics
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -292,7 +292,7 @@ def test_integrate_linear_explicit_from_config_runs_full_rk4_loop() -> None:
     # End-to-end explicit linear rk4 loop (public API) on a tiny Cyclone case,
     # exercising _run_linear_explicit_loop and its stepper/progress helpers.
     from gkx.config import CycloneBaseCase, GridConfig, TimeConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.params import LinearParams
 
@@ -416,7 +416,7 @@ def test_linear_loop_progress_clock_and_history_arrays() -> None:
 
 def _tiny_linear_case():
     from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.params import LinearParams
 
@@ -612,7 +612,7 @@ def test_fixed_dt_cfl_hint_conforms_imported_geometry_instead_of_aborting() -> N
     """
 
     from gkx.geometry import ensure_flux_tube_geometry_data
-    from gkx.solvers.time.explicit_cfl import warn_if_fixed_dt_exceeds_cfl
+    from gkx.solvers_time_explicit_cfl import warn_if_fixed_dt_exceeds_cfl
 
     _g0, grid, geom, params, _cache, n_l, n_m = _tiny_linear_case()
     imported = _closed_interval_copy(ensure_flux_tube_geometry_data(geom, grid.z))
@@ -1275,7 +1275,7 @@ def test_integrate_nonlinear_scan_k10_branch_is_finite_and_shape_preserving() ->
 
 
 def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> None:
-    from gkx.utils import callbacks
+    import gkx.callbacks as callbacks
 
     callback_calls: list[int] = []
 
@@ -1819,7 +1819,7 @@ def test_integrate_cached_imex_scan_owns_cached_scan_policy(monkeypatch) -> None
         return jnp.asarray(0.0, dtype=jnp.float32)
 
     monkeypatch.setattr(
-        "gkx.solvers.nonlinear.imex.jax.scipy.sparse.linalg.gmres",
+        "gkx.solvers_nonlinear_imex.jax.scipy.sparse.linalg.gmres",
         lambda matvec, rhs, **kwargs: (rhs, SimpleNamespace(success=True)),
     )
 

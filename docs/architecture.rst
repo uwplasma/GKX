@@ -4,17 +4,17 @@ Architecture
 Core modules
 ------------
 
-- ``gkx.core.velocity``: Hermite/Laguerre basis functions, gyroaverage
+- ``gkx.core_velocity``: Hermite/Laguerre basis functions, gyroaverage
   coefficients, and polarization helpers.
 - ``gkx.geometry``: analytic s-alpha flux-tube geometry.
 - ``gkx.terms``: term-wise RHS kernels (streaming, mirror, drifts, drive, collisions, fields).
 - ``gkx.operators.linear``: cache construction, linked-boundary maps,
   Hermite/Laguerre moment operators, linear parameter pytrees, and cached RHS
   assembly entry points.
-- ``gkx.solvers.linear``: matrix-free eigensolver policy, linear
+- ``gkx.solvers_linear``: matrix-free eigensolver policy, linear
   fixed-step/diagnostic integration policy, implicit GMRES/preconditioner
   policy, and gated velocity-parallel linear RHS dispatch.
-- ``gkx.solvers.nonlinear``: explicit RK/SSP/K10 and IMEX fixed-point,
+- ``gkx.solvers_nonlinear``: explicit RK/SSP/K10 and IMEX fixed-point,
   GMRES, and stage-composition policy.
 - ``gkx.operators.nonlinear.diagnostics``: sampling, resolved-diagnostic
   packing, and ``SimulationDiagnostics`` construction shared by nonlinear
@@ -28,10 +28,10 @@ Core modules
   setup, adaptive time-step policy, fixed-mode omega masks used by comparison
   parity audits, reusable nonlinear IMEX operator construction, and public
   facades for the focused projection/collision owners.
-- ``gkx.runtime`` / ``gkx.workflows.runtime.config``: user-facing runtime entrypoints and configuration schema.
+- ``gkx.runtime`` / ``gkx.config``: user-facing runtime entrypoints and configuration schema.
 - ``gkx.workflows.runtime.policies``: pure runtime selection policies for solver names, scan modes, nonlinear monitored modes, external fields, and step-count inference.
 - ``gkx.workflows.runtime.orchestration_scan``, ``gkx.workflows.runtime.chunks``, and ``gkx.workflows.runtime.orchestration_artifacts``: runtime scan batching, progress/ETA formatting, and nonlinear restart/checkpoint artifact handoff behind injectable seams.
-- ``gkx.benchmarking.shared``: reviewed reference tables,
+- ``gkx.benchmarking_shared``: reviewed reference tables,
   normalization constants, and comparison-only branch policies.
 - ``gkx.diagnostics.growth_rates``: reusable growth/frequency fitting.
 - ``gkx.artifacts.plotting``: reusable, publication-ready plotting utilities.

@@ -124,7 +124,7 @@ def _build_species_problem(*, nx: int, ny: int, nz: int, nl: int, nm: int):
     import jax.numpy as jnp
 
     from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams
@@ -197,8 +197,8 @@ def profile_linear_rhs_parallel_slices(
 
     import jax
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.config import RuntimeParallelConfig
 
     platform_name = str(platform).lower()
     device_list = list(jax.devices(platform_name))[: int(requested_devices)]
@@ -251,7 +251,7 @@ def profile_linear_rhs_parallel_slices(
     serial_cache, serial_params = cache, params
     sharded_cache, sharded_params = cache, params
     if axis_name == "species":
-        from gkx.solvers.linear.parallel_electrostatic import (
+        from gkx.solvers_linear_parallel_electrostatic import (
             prepare_electrostatic_species_inputs,
         )
 
@@ -367,7 +367,7 @@ def profile_linear_rhs_parallel_slices(
 
     integration: dict[str, object] | None = None
     if axis_name in {"species", "species_hermite"} and int(integration_steps) > 0:
-        from gkx.solvers.linear.integrators import integrate_linear
+        from gkx.solvers_linear_integrators import integrate_linear
 
         def integrate(parallel):
             return integrate_linear(

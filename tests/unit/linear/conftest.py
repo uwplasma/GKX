@@ -22,7 +22,7 @@ import jax.numpy as jnp
 import pytest
 
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.core.grid import SpectralGrid, build_spectral_grid
+from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.params import LinearTerms
 from gkx.terms.config import TermConfig
@@ -168,11 +168,11 @@ def patch_diagnostics_kernels(monkeypatch):
 
     def _patch(rhs=jnp.ones_like) -> None:
         monkeypatch.setattr(
-            "gkx.solvers.linear.integrator_diagnostics.hypercollision_damping",
+            "gkx.solvers_linear_integrator_diagnostics.hypercollision_damping",
             lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
         )
         monkeypatch.setattr(
-            "gkx.solvers.linear.integrator_diagnostics.linear_rhs_cached",
+            "gkx.solvers_linear_integrator_diagnostics.linear_rhs_cached",
             lambda G, cache, params, **kwargs: (
                 rhs(G),
                 jnp.ones((1, 1, 2), dtype=jnp.complex64),

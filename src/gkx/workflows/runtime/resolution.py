@@ -29,14 +29,14 @@ from typing import Any
 import numpy as np
 
 from gkx.config import resolve_cfl_fac
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.geometry.core import (
     apply_geometry_grid_defaults,
     ensure_flux_tube_geometry_data,
 )
-from gkx.solvers.time.explicit_cfl import _linear_frequency_bound
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
+from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.startup import (
     build_runtime_geometry,
     build_runtime_linear_params,

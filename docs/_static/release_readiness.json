@@ -453,7 +453,7 @@
     "scripts": [
       "gkx"
     ],
-    "version": "1.7.1"
+    "version": "1.8.2"
   },
   "release_target": {
     "status_source": "benchmarks/references/gkx_1_7_release_contract.json:release_lanes",
@@ -526,7 +526,7 @@
     "docs/_static/nonlinear_campaign_admission_report.json",
     "docs/_static/strict_qa_top12_edge_prelaunch_gate.json"
   ],
-  "root": "/Users/rogeriojorge/local/GKX",
+  "root": "/Users/rogeriojorge/local/GKX-worktrees/r4",
   "technical_status": {
     "completion_percent": 100.0,
     "failed_required": [],
@@ -538,9 +538,9 @@
     "checked_pypi": false,
     "duplicate_on_pypi": false,
     "package": "gkx",
-    "project_version": "1.7.1",
+    "project_version": "1.8.2",
     "require_tag": false,
-    "source_version": "1.7.1",
+    "source_version": "1.8.2",
     "tag": null
   }
 }

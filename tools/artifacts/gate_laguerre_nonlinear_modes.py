@@ -21,7 +21,7 @@ import numpy as np
 from gkx.config import GeometryConfig  # type: ignore[import-untyped]
 from gkx.workflows.runtime.toml import load_runtime_from_toml  # type: ignore[import-untyped]
 from gkx.runtime import run_runtime_nonlinear  # type: ignore[import-untyped]
-from gkx.workflows.runtime.config import RuntimeConfig  # type: ignore[import-untyped]
+from gkx.config import RuntimeConfig  # type: ignore[import-untyped]
 
 
 @dataclass(frozen=True)

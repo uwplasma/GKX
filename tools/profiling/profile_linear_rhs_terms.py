@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.geometry import apply_imported_geometry_grid_defaults
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H

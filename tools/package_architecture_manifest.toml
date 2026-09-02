@@ -18,9 +18,17 @@ blocked_prefixes = [
 allowed_root_prefix_modules = []
 
 [package_policy]
+# Section 25c replaces the directory-shaped layout with flat modules. A package
+# is required here only while it still holds more than a couple of modules;
+# gkx.core held two (grid, velocity) and is now gkx/core_grid.py and
+# gkx/core_velocity.py, so requiring the package would mandate an empty
+# directory. Same for gkx.utils and gkx.benchmarking, which were never listed.
+# The gkx.solvers tree went the same way: its package __init__ was one line of
+# docstring over three subpackages, and linear, time and nonlinear are now flat
+# modules that re-export from their flat siblings, so none of the four is a
+# package any more.
 required_domain_packages = [
   "gkx.artifacts",
-  "gkx.core",
   "gkx.diagnostics",
   "gkx.geometry",
   "gkx.objectives",
@@ -28,10 +36,6 @@ required_domain_packages = [
   "gkx.operators.linear",
   "gkx.operators.nonlinear",
   "gkx.parallel",
-  "gkx.solvers",
-  "gkx.solvers.linear",
-  "gkx.solvers.nonlinear",
-  "gkx.solvers.time",
   "gkx.workflows",
   "gkx.workflows.runtime",
 ]
@@ -239,6 +243,38 @@ recursive = false
 baseline = 0
 target = 0
 
+[layer_policy]
+description = "Ratchet down imports that run against the layering. The model was analytic until now: the plan measured it by hand and nothing enforced it, so every edge fixed could silently return."
+# Ten edges were removed by putting the diagnostics contract and the flux
+# kernels in the layers that own them. SimulationDiagnostics is the solvers'
+# return type, not an analysis product, and the flux kernels run inside the
+# traced step under jit and psum -- computing them outside the timed route costs
+# up to 118x, so they are RHS-route code that was merely filed under a
+# diagnostics name. The remaining edges are counted, not forbidden: several are
+# genuine and deserve an argument rather than a workaround.
+violation_baseline = 5
+
+[layer_policy.layers]
+config = 0
+core_grid = 0
+core_velocity = 0
+callbacks = 0
+compilation_cache = 0
+diagnostics_contract = 0
+geometry = 1
+terms = 2
+operators = 2
+solvers = 3
+parallel = 3
+diagnostics = 4
+objectives = 5
+artifacts = 6
+benchmarking_shared = 6
+workflows = 7
+runtime = 7
+cli = 8
+api = 8
+
 [cohesion_policy]
 description = "Promote cohesion instead of capping file length. A per-file line cap does not reduce complexity, it relocates it: a module that outgrows the cap gets split and the offcut becomes a helper with exactly one consumer."
 # Measured at c23f6f94 on 2026-08-31, and both numbers ratchet DOWN:
@@ -255,7 +291,7 @@ description = "Promote cohesion instead of capping file length. A per-file line 
 # consumer that reaches for ten of its names: that is one module cut in two.
 # Only the second kind is counted, which is why the baseline is 8 and not 42.
 min_imported_names_for_split = 6
-single_consumer_baseline = 5
+single_consumer_baseline = 1
 single_consumer_target = 0
 low_cohesion_baseline = 8
 low_cohesion_target = 0
@@ -284,6 +320,23 @@ public_facades = [
   "quasilinear.py",
   "runtime.py",
 ]
+
+[[complexity_policy.exceptions]]
+path = "objectives/stellarator.py"
+# 1433 lines, above the 1200 tripwire, and the trade is deliberate. This file
+# absorbed stellarator_tables (five names), stellarator_contracts (six), and
+# stellarator_reduced (fourteen). The first was joined by a
+# _sync_table_dependencies seam that rebound an attribute both modules already
+# shared -- a no-op kept for monkeypatching no test performs) and then
+# stellarator_reduced (one consumer, FOURTEEN names). Fourteen names is not an
+# interface. stellarator_reduced only became visible as a split once the first
+# fusion removed its second consumer, which is the cohesion gate doing its job.
+# The target below is the honest next step: the fused file should be reduced by
+# removing duplication between the three former modules, not by splitting them
+# apart again along the seams that were just closed.
+baseline_lines = 1663
+target_lines = 1100
+reason = "Fused stellarator_tables and stellarator_reduced; reduce by deduplication, not by re-splitting."
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
@@ -330,7 +383,10 @@ path = "runtime.py"
 # Identical AST; no export was added or removed. One name per line is the better
 # form for a list that gets edited, so it is kept rather than guarded and the
 # facade budget absorbs the 13 lines.
-baseline_lines = 513
+# 513 -> 781: absorbs workflows/runtime/execution.py, which had exactly one consumer -- this
+# file -- and handed it most of its names. That is a split module, not an
+# interface, so the two rejoin. No definition changed and no export moved.
+baseline_lines = 781
 target_lines = 500
 reason = "Public runtime facade; the overage is the exploded __all__ list, so shrink it by removing exports rather than by splitting the facade."
 
@@ -741,7 +797,22 @@ recursive = true
 # after; the delta is ruff splitting over-long calls, signatures, and collection
 # literals onto more physical lines. The budget counts physical lines, so it has
 # to absorb the one-time step. The target is deliberately left where it was.
-baseline = 88795
+# 88795 -> 88840: taking XLA out of linear-cache construction. build_linear_cache
+# is a one-shot host computation that op-by-op dispatch was compiling one kernel
+# per multiply -- 123 XLA compilations and 1.7 s on every cold run, re-paid per
+# grid shape. The arithmetic itself is line-neutral: it now runs through an array
+# namespace that is numpy for concrete operands and jax.numpy under a trace. The
+# 45 lines are the three namespace helpers and the docstrings recording which
+# operations may cross to the host at all -- IEEE-754 pins arithmetic, sqrt and
+# casts, so exp and gammaln stay on the device and the cache stays bit-identical.
+# 88840 -> 88852: stopping the scan-level parallel strategy from leaking into
+# the per-ky solve. ``[parallel] strategy="batch"`` says how the SCAN is
+# dispatched; it was forwarded verbatim into each worker's RuntimeConfig, so
+# the inner single-ky solve took the sharded linear-RHS path, which accepts
+# only strategy="velocity" and raised NotImplementedError. That made the
+# shipped examples/parallelization deck unrunnable -- invisible because the
+# only test of it mocked the solver out. Three lines of guard, nine of comment.
+baseline = 88852
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -766,7 +837,17 @@ recursive = true
 # the dedicated coverage suites that existed only to cover them.
 # 88110 -> 86902: deleting the 935-line Diffrax integrator suite and the
 # Diffrax-only runtime/example cases, net of the new removed-key deck gate.
-baseline = 85393
+# 85393 -> 85894: shipped-example execution coverage in the existing
+# tests/integration/examples/test_examples.py. No new test FILE: the topology
+# count stays at 76. The Phase D gate asks that every canonical example run in
+# CI, and only four of the 36 did; sixteen now execute at smoke resolution and
+# the other sixteen are registered with the data file or the run length that
+# blocks them, so the gap is a reported skip instead of silence. Roughly half
+# the lines are that registry and its reasons rather than test bodies, and it
+# is what makes the coverage non-vacuous: eleven examples hide their run behind
+# a __main__ guard, where an import-only harness would pass having executed no
+# physics at all.
+baseline = 85894
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -808,7 +889,11 @@ recursive = true
 # cap as the instrument that shapes module boundaries. It computes each
 # module's consumer count and its internal-reference ratio, and ratchets both
 # downward. The lines buy back an 18,361-line pile of single-consumer offcuts.
-baseline = 77602
+# 77602 -> 77674: the layer gate. The layer model was analytic only -- measured
+# by hand in the plan, enforced by nothing -- so the ten edges just removed
+# could have come back silently. It ratchets a count rather than forbidding
+# upward imports, because several remaining edges are genuine.
+baseline = 77677
 target = 0
 
 [[line_budget_policy.counts]]

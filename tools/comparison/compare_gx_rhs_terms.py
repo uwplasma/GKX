@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import jax
 from netCDF4 import Dataset
 
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     CYCLONE_OMEGA_D_SCALE,
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
@@ -37,7 +37,7 @@ from gkx.geometry import (
     apply_imported_geometry_grid_defaults,
     load_imported_geometry_netcdf,
 )
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H

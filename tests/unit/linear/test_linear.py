@@ -10,7 +10,7 @@ import pytest
 from gkx.config import CycloneBaseCase, GridConfig, GeometryConfig
 from gkx.diagnostics.analysis import estimate_observed_order
 from gkx.geometry import SAlphaGeometry, SlabGeometry, sample_flux_tube_geometry
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.moments import (
@@ -26,16 +26,16 @@ from gkx.operators.linear.moments import (
 )
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.rhs import linear_rhs, linear_rhs_cached
-from gkx.solvers.linear.integrators import (
+from gkx.solvers_linear_integrators import (
     integrate_linear,
     integrate_linear_diagnostics,
 )
 from gkx.operators.linear.linked import _build_linked_fft_maps
 from gkx.operators.linear.params import _x64_enabled
 from gkx.operators.linear.streaming import grad_z_linked_fft
-from gkx.core.velocity import J_l_all
-from gkx.solvers.linear.krylov import dominant_eigenpair
-from gkx.solvers.linear.implicit import _build_implicit_operator
+from gkx.core_velocity import J_l_all
+from gkx.solvers_linear_krylov import dominant_eigenpair
+from gkx.solvers_linear_implicit import _build_implicit_operator
 from gkx.terms.linear_terms import (
     collision_invariant_rates,
     collision_quadratic_rate,
@@ -82,7 +82,7 @@ def test_build_linked_fft_maps_keeps_real_fft_positive_ky_modes():
 def test_build_linear_cache_zero_shat_periodic_uses_periodic_fft_without_end_damping():
     from gkx.geometry import SlabGeometry, apply_geometry_grid_defaults
     from gkx.config import GeometryConfig
-    from gkx.core.grid import select_real_fft_ky_grid
+    from gkx.core_grid import select_real_fft_ky_grid
     from gkx.operators.linear.params import Species, build_linear_params
 
     geom = SlabGeometry.from_config(

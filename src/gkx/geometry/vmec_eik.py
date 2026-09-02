@@ -14,7 +14,7 @@ from gkx.geometry.imported_vmec import (
     generate_vmec_eik_internal,
     internal_vmec_backend_available,
 )
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]

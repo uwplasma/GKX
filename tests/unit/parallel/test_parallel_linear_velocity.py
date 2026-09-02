@@ -10,10 +10,10 @@ from types import SimpleNamespace
 import jax.numpy as jnp
 import pytest
 
-from gkx.solvers.linear import parallel as linear_parallel
-import gkx.solvers.linear.parallel_common as linear_parallel_common
-import gkx.solvers.linear.parallel_electrostatic as linear_parallel_electrostatic
-import gkx.solvers.linear.parallel_streaming as linear_parallel_streaming
+import gkx.solvers_linear_parallel as linear_parallel
+import gkx.solvers_linear_parallel_common as linear_parallel_common
+import gkx.solvers_linear_parallel_electrostatic as linear_parallel_electrostatic
+import gkx.solvers_linear_parallel_streaming as linear_parallel_streaming
 from gkx.operators.linear.params import LinearParams, LinearTerms
 
 
@@ -1106,7 +1106,7 @@ def test_species_field_reduce_shard_map_matches_reference_when_devices_available
 def _small_periodic_field_problem():
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.geometry import SAlphaGeometry
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams
 
@@ -1129,7 +1129,7 @@ def _small_periodic_field_problem():
 def _small_kinetic_electron_problem(*, linked: bool = False):
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.geometry import SAlphaGeometry
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams
 
@@ -1177,7 +1177,7 @@ def _small_kinetic_electron_problem(*, linked: bool = False):
 
 def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> None:
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_linear_integrators import integrate_linear
 
     devices = jax.devices()
     if len(devices) < 4:
@@ -1417,7 +1417,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
     None
 ):
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_linear_integrators import integrate_linear
 
     devices = jax.devices()
     if len(devices) < 4:
@@ -1760,7 +1760,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
     )
     assert_species_close(routed_rhs, expected_rhs, rtol=3e-5, atol=3e-5)
 
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_linear_integrators import integrate_linear
 
     serial_state, serial_phi = integrate_linear(
         state,
@@ -1930,7 +1930,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
 
 
 def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_linear_integrators import integrate_linear
     from gkx.operators.linear.params import linear_terms_to_term_config
     from gkx.terms.assembly import compute_fields_cached
 
@@ -1986,7 +1986,7 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
 
 
 def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_linear_integrators import integrate_linear
     from gkx.operators.linear.dissipation import _laguerre_temperature_coupling
 
     if len(jax.devices()) < 2:
@@ -2060,7 +2060,7 @@ def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:
 
 
 def test_species_pmap_parameter_gradient_matches_centered_difference() -> None:
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_linear_integrators import integrate_linear
 
     devices = jax.devices()
     if len(devices) < 2:
@@ -2616,7 +2616,7 @@ def test_hermite_streaming_ladder_shard_map_matches_reference_when_logical_devic
 
 
 def test_periodic_streaming_reference_matches_production_streaming_term() -> None:
-    from gkx.core.velocity import hermite_ladder_coeffs
+    from gkx.core_velocity import hermite_ladder_coeffs
     from gkx.operators.linear.streaming import streaming_ladder_term
 
     ns, nl, nm, ny, nx, nz = 1, 2, 4, 2, 1, 8
@@ -2691,12 +2691,12 @@ def test_periodic_streaming_shard_map_matches_reference_when_logical_devices_ava
 def test_linear_rhs_parallel_cached_streaming_only_matches_serial_call_graph() -> None:
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.geometry import SAlphaGeometry
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.config import RuntimeParallelConfig
 
     cfg = CycloneBaseCase(
         grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0, boundary="periodic")
@@ -2750,8 +2750,8 @@ def test_linear_rhs_parallel_cached_streaming_only_matches_serial_call_graph() -
 
 def test_linear_rhs_parallel_cached_rejects_non_streaming_velocity_route() -> None:
     from gkx.operators.linear.params import LinearParams, LinearTerms
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.config import RuntimeParallelConfig
 
     class Cache:
         kz = jnp.asarray([0.0, 1.0, -1.0])
@@ -2772,12 +2772,12 @@ def test_linear_rhs_parallel_cached_electrostatic_streaming_matches_serial_call_
 ):
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.geometry import SAlphaGeometry
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.config import RuntimeParallelConfig
 
     cfg = CycloneBaseCase(
         grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0, boundary="periodic")
@@ -2843,8 +2843,8 @@ def test_linear_rhs_parallel_cached_electrostatic_linear_slices_match_serial_cal
 ):
     from gkx.operators.linear.params import LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.config import RuntimeParallelConfig
 
     state, cache, params = _small_periodic_field_problem()
     z = jnp.linspace(0.0, 2.0 * jnp.pi, state.shape[-1], endpoint=False)
@@ -2900,8 +2900,8 @@ def test_linear_rhs_parallel_cached_auto_backend_selects_gated_electrostatic_sli
 ):
     from gkx.operators.linear.params import LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.config import RuntimeParallelConfig
 
     state, cache, params = _small_periodic_field_problem()
     z = jnp.linspace(0.0, 2.0 * jnp.pi, state.shape[-1], endpoint=False)
@@ -2947,8 +2947,8 @@ def test_linear_rhs_parallel_cached_electrostatic_linear_slices_rejects_ungated_
     None
 ):
     from gkx.operators.linear.params import LinearParams, LinearTerms
-    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.config import RuntimeParallelConfig
 
     class Cache:
         use_twist_shift = False
@@ -3201,8 +3201,8 @@ def _species_hermite_problem(ns: int = 2, nl: int = 2, nm: int = 8, n: int = 4):
     import numpy as np
 
     from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core.grid import build_spectral_grid
-    from gkx.diagnostics.moments import fieldline_quadrature_weights
+    from gkx.core_grid import build_spectral_grid
+    from gkx.operators.moments import fieldline_quadrature_weights
     from gkx.geometry import SAlphaGeometry
     from gkx.operators.linear.cache_builder import build_linear_cache
 
@@ -3317,7 +3317,7 @@ def test_species_hermite_rhs_reproduces_the_serial_nonlinear_rhs():
 
     from gkx.parallel.integrators import species_hermite_nonlinear_rhs
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
     from gkx.terms.config import TermConfig
 
     devices = len(jax.devices())
@@ -3473,15 +3473,15 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
     import jax
     import numpy as np
 
-    from gkx.diagnostics.moments import (
+    from gkx.operators.moments import (
         distribution_free_energy,
         electrostatic_field_energy,
     )
-    from gkx.diagnostics.transport import heat_flux_species, particle_flux_species
+    from gkx.operators.fluxes import heat_flux_species, particle_flux_species
     from gkx.operators.nonlinear.projection import _make_hermitian_projector
     from gkx.parallel.integrators import integrate_nonlinear_species_hermite
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
     from gkx.terms.config import TermConfig
 
     if len(jax.devices()) < 2:

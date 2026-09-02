@@ -30,7 +30,7 @@ from gkx.operators.collision import (
     CollisionOperator,
     SplitCollisionOperator,
 )
-from gkx.core.grid import (
+from gkx.core_grid import (
     SpectralGrid,
     _gyrokinetic_moment_shape,
     build_spectral_grid,
@@ -39,7 +39,7 @@ from gkx.core.grid import (
     select_ky_grid,
     select_real_fft_ky_grid,
 )
-from gkx.utils.callbacks import (
+from gkx.callbacks import (
     _PROGRESS_START,
     _emit_progress,
     _format_duration,
@@ -154,7 +154,7 @@ def test_nonlinear_operator_facade_resolves_lazy_public_exports() -> None:
 
 
 def test_velocity_basis_orthonormality_and_validation() -> None:
-    from gkx.core.velocity import hermite_ladder_coeffs, hermite_normed, laguerre
+    from gkx.core_velocity import hermite_ladder_coeffs, hermite_normed, laguerre
 
     xh = jnp.linspace(-6.0, 6.0, 4001)
     dxh = xh[1] - xh[0]
@@ -195,7 +195,7 @@ def test_laguerre_transform_roundtrip_is_exact_at_high_resolution(nl: int) -> No
     with no error and no obvious symptom in the physics, so any run at
     ``Nl >= 20`` was quietly wrong.
     """
-    from gkx.core.velocity import laguerre_quadrature_count, laguerre_transform
+    from gkx.core_velocity import laguerre_quadrature_count, laguerre_transform
 
     to_grid, to_spectral, roots = laguerre_transform(nl)
     nj = laguerre_quadrature_count(nl)
@@ -234,7 +234,7 @@ def test_laguerre_transform_sign_convention_is_unchanged() -> None:
     ``laguerre_convention`` fields under ``gkx/data``), so a flip here would
     corrupt them silently rather than fail loudly.
     """
-    from gkx.core.velocity import laguerre_transform
+    from gkx.core_velocity import laguerre_transform
 
     nl = 12
     to_grid, to_spectral, roots = laguerre_transform(nl)
@@ -251,7 +251,7 @@ def test_laguerre_transform_sign_convention_is_unchanged() -> None:
 
 def test_laguerre_transform_rejects_a_degraded_pair() -> None:
     """The round-trip guard must fire rather than return an unusable transform."""
-    from gkx.core import velocity
+    import gkx.core_velocity as velocity
 
     to_grid, to_spectral, _ = velocity.laguerre_transform(8)
     with pytest.raises(ValueError, match="round-trip identity error"):
@@ -278,8 +278,8 @@ def test_species_builder_core_contracts() -> None:
 
 
 def test_normalization_and_benchmark_public_contracts() -> None:
-    import gkx.benchmarking.shared as benchmark_defaults
-    from gkx.benchmarking import shared as benchmarks
+    import gkx.benchmarking_shared as benchmark_defaults
+    import gkx.benchmarking_shared as benchmarks
     from gkx.diagnostics.normalization import (
         apply_diagnostic_normalization,
         get_normalization_contract,
@@ -436,7 +436,7 @@ def test_gkx3_product_contracts_preserve_identity_immutability_and_arrays() -> N
 
     import gkx
     from gkx.diagnostics.modes import ModeSelection
-    from gkx.workflows.runtime.config import Case, RuntimeConfig
+    from gkx.config import Case, RuntimeConfig
     from gkx.workflows.runtime.results import (
         LinearResult,
         NonlinearResult,
@@ -488,7 +488,7 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
 
     import gkx
     import gkx.runtime as runtime
-    from gkx.workflows.runtime.config import Case, RuntimeConfig
+    from gkx.config import Case, RuntimeConfig
 
     path = tmp_path / "case.toml"
     path.write_text('[geometry]\ngeometry_file = "relative.eik"\n', encoding="utf-8")
@@ -606,7 +606,7 @@ def test_should_emit_progress_sanitizes_steps_and_targets() -> None:
 
 def test_emit_progress_handles_time_variants_and_metric_labels(monkeypatch) -> None:
     ticks = iter([10.0, 12.0])
-    monkeypatch.setattr("gkx.utils.callbacks.time.perf_counter", lambda: next(ticks))
+    monkeypatch.setattr("gkx.callbacks.time.perf_counter", lambda: next(ticks))
     _PROGRESS_START.clear()
 
     first = io.StringIO()
@@ -637,7 +637,7 @@ def test_print_callback_returns_state_and_forwards_values(monkeypatch) -> None:
         calls.append(args)
         fn(*args)
 
-    monkeypatch.setattr("gkx.utils.callbacks.jax.debug.callback", fake_callback)
+    monkeypatch.setattr("gkx.callbacks.jax.debug.callback", fake_callback)
 
     state = {"unchanged": True}
     buf = io.StringIO()

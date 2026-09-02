@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 import tomllib
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     Case,
     RuntimeCollisionConfig,
     RuntimeConfig,

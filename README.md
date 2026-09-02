@@ -203,9 +203,10 @@ profiler artifacts: [performance](docs/performance.rst).
 
 On an Apple M3 Max (JAX CPU, float32) the shipped default deck at `96x96x48`
 runs `t_max = 200` in roughly 1.0–1.6 hours, about 97% of it time stepping.
-Cost is linear in degrees of freedom at 72–80 ns per `Nx*Ny*Nz*Nl*Nm` element
-per step across every grid measured. Within a step, about 59% is data movement,
-31% FFTs, and under 10% physics arithmetic.
+Cost is linear in degrees of freedom at about 196 ns per `Nx*Ny*Nz*Nl*Nm`
+element per step, flat from 64x64x24 to 96x96x48. Within a step, about 60% is
+data movement and 39% the FFTs; physics arithmetic is not separately measurable
+because XLA fuses it into those kernels.
 
 Parallelism is production for independent `k_y` scans, quasilinear/UQ ensembles,
 and file-backed tasks, all deterministically ordered and serial-identity gated.
@@ -220,7 +221,7 @@ diagnostic only. Details: [parallelization](docs/parallelization.rst).
 import jax.numpy as jnp
 
 from gkx import CycloneBaseCase, LinearParams, integrate_linear_from_config
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 
 cfg = CycloneBaseCase()
@@ -237,7 +238,7 @@ For repeated nonlinear calls with fixed geometry and numerical policy, prepare
 the compiled simulation once and reuse it:
 
 ```python
-from gkx.solvers.nonlinear.diagnostic_integration import prepare_nonlinear_explicit_diagnostics
+from gkx.solvers_nonlinear_diagnostic_integration import prepare_nonlinear_explicit_diagnostics
 
 simulation = prepare_nonlinear_explicit_diagnostics(
     initial_state, grid, geometry, parameters,

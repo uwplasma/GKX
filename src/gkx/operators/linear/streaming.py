@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from gkx.core.velocity import hermite_ladder_coeffs
+from gkx.core_velocity import hermite_ladder_coeffs
 
 # One positivity guard for the whole linear operator. The local copy asked
 # whether a ``jnp`` round trip of its argument was traced, which is true of every
@@ -89,6 +89,23 @@ def _grad_z_linked_fd(
     return (f_roll_p1 - f_roll_m1) / (2.0 * dz_val)
 
 
+def _reverse_from_one(x: jnp.ndarray, axis: int) -> jnp.ndarray:
+    """Return ``x`` reindexed as ``[0, n-1, n-2, ..., 1]`` along ``axis``.
+
+    This is the conjugate partner index for a real-FFT half spectrum. Written as
+    ``jnp.take`` with that index vector, XLA lowers it as a general gather and
+    materialises the result: profiling on 2026-09-01 attributed a transpose, a
+    full-array copy, the gather and a transpose back to each such call. Written
+    as a slice, a reverse and a concatenate the same permutation fuses, and
+    measures 9.6 ms against 13.0 ms on a ``(2,4,8,96,96,48)`` complex64 state
+    with byte-identical output.
+    """
+
+    head = jax.lax.slice_in_dim(x, 0, 1, axis=axis)
+    tail = jax.lax.rev(jax.lax.slice_in_dim(x, 1, x.shape[axis], axis=axis), (axis,))
+    return jnp.concatenate([head, tail], axis=axis)
+
+
 def _restore_linked_real_fft_conjugates(
     out: jnp.ndarray,
     *,
@@ -110,16 +127,10 @@ def _restore_linked_real_fft_conjugates(
     covered = jnp.asarray(covered_rows, dtype=bool)
     source_covered = jnp.take(covered, src_rows, axis=0)
     fill_mask = (~covered) & source_covered & (row_idx != 0)
-    mirrored = jnp.take(out, src_rows, axis=-3)
+    mirrored = _reverse_from_one(out, axis=out.ndim - 3)
     Nx = out.shape[-2]
     if Nx > 1:
-        kx_neg = jnp.concatenate(
-            (
-                jnp.asarray([0], dtype=jnp.int32),
-                jnp.arange(Nx - 1, 0, -1, dtype=jnp.int32),
-            )
-        )
-        mirrored = jnp.take(mirrored, kx_neg, axis=-2)
+        mirrored = _reverse_from_one(mirrored, axis=mirrored.ndim - 2)
     mirrored = jnp.conj(mirrored)
     mask_shape = (1,) * (out.ndim - 3) + (Ny, 1, 1)
     return jnp.where(fill_mask.reshape(mask_shape), mirrored, out)
@@ -494,7 +505,7 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
     ``x L_l = (2l+1) L_l - (l+1) L_{l+1} - l L_{l-1}`` gives negative
     off-diagonal couplings. The runtime state stores Laguerre coefficients in
     the alternating ``(-1)**l`` basis (the convention of
-    ``gkx.core.velocity.J_l_all``), which flips the sign of both off-diagonal
+    ``gkx.core_velocity.J_l_all``), which flips the sign of both off-diagonal
     terms; composing with runtime states requires the alternating-basis
     counterparts used by the production RHS (see the positive-neighbor
     couplings in ``gkx.terms.linear_terms``, e.g.

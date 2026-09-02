@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core.velocity import hermite_normed, laguerre, laguerre_transform
+from gkx.core_velocity import hermite_normed, laguerre, laguerre_transform
 
 
 def hermite_check(n_max: int = 6, x_max: float = 6.0, nx: int = 8001) -> None:

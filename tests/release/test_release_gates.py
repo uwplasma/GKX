@@ -2297,7 +2297,7 @@ def test_large_modules_have_direct_manifest_rows() -> None:
 
 
 def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
-    _write_package(tmp_path, "gkx.runtime", "gkx.workflows.runtime.config")
+    _write_package(tmp_path, "gkx.runtime", "gkx.config")
     _write_fast_inputs(tmp_path)
 
     summary = _validate_tmp_coverage_manifest(
@@ -2305,7 +2305,7 @@ def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
         _coverage_manifest(
             _coverage_row(
                 "gkx.runtime",
-                owned_modules=["gkx.workflows.runtime.config"],
+                owned_modules=["gkx.config"],
             )
         ),
     )
@@ -2313,13 +2313,11 @@ def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
     assert summary["n_direct_modules"] == 1
     assert summary["n_owned_modules"] == 1
     assert summary["n_excluded_modules"] == 1
-    assert summary["owned_modules_by_owner"]["gkx.runtime"] == [
-        "gkx.workflows.runtime.config"
-    ]
+    assert summary["owned_modules_by_owner"]["gkx.runtime"] == ["gkx.config"]
 
 
 def test_manifest_rejects_unowned_package_modules(tmp_path: Path) -> None:
-    _write_package(tmp_path, "gkx.runtime", "gkx.workflows.runtime.config")
+    _write_package(tmp_path, "gkx.runtime", "gkx.config")
     _write_fast_inputs(tmp_path)
 
     with pytest.raises(ValueError, match="package modules lack coverage ownership"):
@@ -2333,13 +2331,13 @@ def test_manifest_rejects_duplicate_owned_modules(tmp_path: Path) -> None:
         tmp_path,
         "gkx.runtime",
         "gkx.linear",
-        "gkx.workflows.runtime.config",
+        "gkx.config",
     )
     _write_fast_inputs(tmp_path)
 
     manifest = _coverage_manifest(
-        _coverage_row("gkx.runtime", owned_modules=["gkx.workflows.runtime.config"]),
-        _coverage_row("gkx.linear", owned_modules=["gkx.workflows.runtime.config"]),
+        _coverage_row("gkx.runtime", owned_modules=["gkx.config"]),
+        _coverage_row("gkx.linear", owned_modules=["gkx.config"]),
     )
     with pytest.raises(ValueError, match="duplicate coverage ownership"):
         _validate_tmp_coverage_manifest(tmp_path, manifest)
@@ -2473,7 +2471,7 @@ def test_readme_python_quickstart_imports_exist() -> None:
         LinearParams,
         integrate_linear_from_config,
     )
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
 
     assert CycloneBaseCase is not None
@@ -2920,7 +2918,7 @@ def test_repository_validation_manifest_is_well_formed() -> None:
     assert rows["gkx.operators.linear.moments"]["n_numerics_contracts"] >= 2
     assert rows["gkx.operators.linear.params"]["n_physics_contracts"] >= 2
     assert rows["gkx.operators.linear.linked"]["n_owned_modules"] == 0
-    assert rows["gkx.solvers.linear.parallel"]["coverage_target_percent"] == 95.0
+    assert rows["gkx.solvers_linear_parallel"]["coverage_target_percent"] == 95.0
     assert rows["gkx.operators.nonlinear.rhs"]["coverage_target_percent"] == 95.0
     assert rows["gkx.operators.nonlinear.rhs"]["n_numerics_contracts"] >= 2
     assert (
@@ -2930,14 +2928,17 @@ def test_repository_validation_manifest_is_well_formed() -> None:
     assert rows["gkx.operators.nonlinear.diagnostic_state"]["n_physics_contracts"] >= 2
     spectral_core = rows["gkx.operators.nonlinear.spectral_core"]
     assert spectral_core["coverage_target_percent"] == 95.0
-    assert spectral_core["n_owned_modules"] >= 4
+    # 4 -> 3 owned modules: spectral_layout was absorbed INTO spectral_core, so
+    # it is no longer a separate module to own. Its code and coverage did not
+    # move out of the package, they moved inside this row's own file.
+    assert spectral_core["n_owned_modules"] >= 3
     assert spectral_core["n_numerics_contracts"] >= 2
     assert spectral_core["n_physics_contracts"] >= 2
-    assert rows["gkx.solvers.nonlinear.explicit"]["coverage_target_percent"] == 95.0
-    assert rows["gkx.solvers.nonlinear.explicit"]["n_numerics_contracts"] >= 2
-    assert rows["gkx.solvers.nonlinear.imex"]["coverage_target_percent"] == 95.0
-    assert rows["gkx.solvers.nonlinear.imex"]["n_physics_contracts"] >= 2
-    assert "gkx.solvers.nonlinear.state_integration" in summary["high_priority_open"]
+    assert rows["gkx.solvers_nonlinear_explicit"]["coverage_target_percent"] == 95.0
+    assert rows["gkx.solvers_nonlinear_explicit"]["n_numerics_contracts"] >= 2
+    assert rows["gkx.solvers_nonlinear_imex"]["coverage_target_percent"] == 95.0
+    assert rows["gkx.solvers_nonlinear_imex"]["n_physics_contracts"] >= 2
+    assert "gkx.solvers_nonlinear_state_integration" in summary["high_priority_open"]
 
 
 def test_validation_manifest_main_writes_summary_json(tmp_path: Path) -> None:
@@ -3845,7 +3846,7 @@ def test_recorded_cfl_margins_are_under_the_warn_ratio() -> None:
     bound would have failed here on the commit that introduced them.
     """
 
-    from gkx.solvers.time.explicit_cfl import FIXED_DT_CFL_WARN_RATIO
+    from gkx.solvers_time_explicit_cfl import FIXED_DT_CFL_WARN_RATIO
 
     for relative, margin in sorted(_CFL_MARGIN_MEASURED.items()):
         if margin <= FIXED_DT_CFL_WARN_RATIO:
@@ -3872,7 +3873,7 @@ def test_the_cfl_warn_ratio_sits_between_the_measured_good_and_bad_decks() -> No
     deck known to be fine, so moving it needs new measurements, not an edit.
     """
 
-    from gkx.solvers.time.explicit_cfl import FIXED_DT_CFL_WARN_RATIO
+    from gkx.solvers_time_explicit_cfl import FIXED_DT_CFL_WARN_RATIO
 
     assert 1.33 < FIXED_DT_CFL_WARN_RATIO < 1.60
 

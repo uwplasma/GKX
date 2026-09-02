@@ -20,7 +20,7 @@ import jax.numpy as jnp
 from gkx import build_linear_cache, build_linear_params
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.parallel.state import resolve_state_sharding
 from gkx.parallel.integrators import integrate_linear_sharded
 from gkx.operators.linear.params import Species

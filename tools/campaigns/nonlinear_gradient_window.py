@@ -13,7 +13,7 @@ point, not a re-implementation -- through ``N`` steps of the production map. It
 reports, per rung, the reverse-mode gradient, a centered finite difference of
 the same function, and their relative disagreement. The largest rung that still
 agrees is the divergence knee, and it is what
-``gkx.solvers.nonlinear.state_integration.DIVERGENCE_KNEE_STEPS`` records.
+``gkx.solvers_nonlinear_state_integration.DIVERGENCE_KNEE_STEPS`` records.
 
 This regenerates the AD/FD ladder and the knee behind ``docs/nonlinear_autodiff
 .rst`` and the right-hand panel of ``docs/_static/nonlinear_autodiff_validation
@@ -90,7 +90,7 @@ def build_window_case(
 ) -> dict[str, Any]:
     """Load a shipped nonlinear case as arguments for the production window."""
 
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.geometry import ensure_flux_tube_geometry_data
     from gkx.runtime import (
         build_runtime_geometry,
@@ -176,7 +176,7 @@ def make_window(
 
     import jax.numpy as jnp
 
-    from gkx.solvers.nonlinear.state_integration import nonlinear_heat_flux_window
+    from gkx.solvers_nonlinear_state_integration import nonlinear_heat_flux_window
 
     base_drive = jnp.asarray(case["params"].tprim)
 

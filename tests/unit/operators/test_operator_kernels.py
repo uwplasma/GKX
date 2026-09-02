@@ -14,8 +14,8 @@ from scipy.special import eval_genlaguerre, eval_laguerre, j0, jv
 
 from gkx.config import GridConfig
 from gkx.operators.collision import CollisionContext
-from gkx.core.grid import build_spectral_grid
-from gkx.core.velocity import (
+from gkx.core_grid import build_spectral_grid
+from gkx.core_velocity import (
     J_l_all,
     associated_bessel_laguerre_coefficients,
     bessel_laguerre_kernels,
@@ -28,7 +28,7 @@ from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.linear.integrators import integrate_linear
+from gkx.solvers_linear_integrators import integrate_linear
 from gkx.operators import hermite_streaming
 from gkx.operators.linear import (
     apply_collision_moment_matrix,

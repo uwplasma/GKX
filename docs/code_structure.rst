@@ -58,7 +58,7 @@ on:
 - ``gkx.geometry``
 - ``gkx.cli``
 - ``gkx.runtime``
-- ``gkx.workflows.runtime.config``
+- ``gkx.config``
 - ``gkx.workflows.runtime.artifacts``
 - ``gkx.artifacts.plotting``
 - ``gkx.parallel``
@@ -124,7 +124,7 @@ The executable-facing runtime path is split conceptually into four layers:
    - ``workflows/demo.py``
    - ``cli.py``
 5. **benchmark and validation tooling**
-   - ``gkx.benchmarking.shared``
+   - ``gkx.benchmarking_shared``
    - root ``benchmarks/`` drivers
    - purpose-specific ``tools/`` commands
    - ``tests/validation`` physics and benchmark gates
@@ -169,7 +169,7 @@ Physics / Numerics / IO Map
      - ``workflows/runtime/artifacts.py``, ``artifacts/``, ``artifacts/spectral_layout.py``, ``artifacts/runtime_plots.py``, ``artifacts/benchmark_plots.py``, ``artifacts/diagnostic_plots.py``, ``artifacts/zonal_plots.py``, ``artifacts/plotting.py``
      - serialization, reload, restart append schema, dealiased-axis contracts, runtime-output plots, benchmark/scan panels, diagnostic/eigenfunction figures, zonal-response figures, plotting contract tests
    * - Benchmark harness
-     - ``config.py``, ``gkx.benchmarking.shared``, ``diagnostics/modes.py``, ``diagnostics/validation_gates.py``, ``diagnostics/zonal_validation.py``
+     - ``config.py``, ``gkx.benchmarking_shared``, ``diagnostics/modes.py``, ``diagnostics/validation_gates.py``, ``diagnostics/zonal_validation.py``
      - late-time/windowed gate tests, eigenfunction reference/phase utilities, diagnostics time-series loading, benchmark case presets, physics metric extraction, scan/eigenmode orchestration, reference loading, fallback policy tests
 
 Refactor Mapping
@@ -522,7 +522,7 @@ Completed extractions:
   spectra/channel schema packing while preserving the
   explicit/IMEX scan tuple schema. The old root nonlinear helper shims were
   removed; normal users should use the top-level ``gkx`` public API and
-  developer helpers should import from ``gkx.solvers.nonlinear`` and
+  developer helpers should import from ``gkx.solvers_nonlinear`` and
   ``gkx.operators.nonlinear``.
 - full-GK nonlinear executable orchestration lives in
   ``workflows/nonlinear.py`` behind the public ``gkx.runtime`` facade.
@@ -553,7 +553,7 @@ Completed extractions:
   fixed-point/GMRES solve policy: ``solvers/nonlinear/explicit.py``,
   ``solvers/nonlinear/diagnostics.py``, ``solvers/nonlinear/imex_diagnostics.py``,
   and ``solvers/nonlinear/imex.py``. Developer helpers should import from
-  ``gkx.solvers.nonlinear``.
+  ``gkx.solvers_nonlinear``.
 - linear cache, linked-boundary maps, Hermite-Laguerre moments, parameter
   pytrees, cache-backed RHS assembly, implicit linear GMRES/preconditioner
   policy, fixed-step/diagnostic integration policy, eigenmode policy/operator/
@@ -699,14 +699,14 @@ one long branch.
 
 The benchmark stack has two explicit roles:
 
-- ``gkx.benchmarking.shared`` owns compact reference containers, CSV
+- ``gkx.benchmarking_shared`` owns compact reference containers, CSV
   loaders, normalization constants, and comparison-only defaults.
 - Canonical TOML inputs plus ``run_runtime_linear`` and ``run_runtime_scan``
   own promoted solver execution. ETG and Cyclone use only this path; artifact
   figures consume reviewed tables rather than launching a second hidden solve.
 
 Reviewed reference data and comparison policies live in
-``gkx.benchmarking.shared``. KBM time histories and fixed-beta ``k_y`` scans use
+``gkx.benchmarking_shared``. KBM time histories and fixed-beta ``k_y`` scans use
 generic runtime orchestration. The former ``kbm_beta_scan.py`` was removed
 after audit showed that it incorrectly interpreted a ``k_y`` reference table
 as beta values. TEM and kinetic-electron execution also use canonical runtime

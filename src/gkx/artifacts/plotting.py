@@ -10,7 +10,7 @@ from typing import Any, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
-from gkx.benchmarking.shared import CycloneReference, CycloneScanResult
+from gkx.benchmarking_shared import CycloneReference, CycloneScanResult
 from gkx.diagnostics.growth_rates import fit_growth_rate
 
 

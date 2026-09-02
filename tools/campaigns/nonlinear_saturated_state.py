@@ -722,7 +722,7 @@ def main() -> int:
         f"dirty={source_provenance['git_dirty']}",
         flush=True,
     )
-    from gkx.utils.compilation_cache import enable_persistent_compilation_cache
+    from gkx.compilation_cache import enable_persistent_compilation_cache
 
     cache_dir = enable_persistent_compilation_cache()
     print(f"compilation cache: {cache_dir or 'off'}", flush=True)

@@ -16,7 +16,7 @@ from gkx.parallel.velocity_plan import VelocityShardingPlan, _state_dims
 def _hermite_ladder_coefficients(state: Any) -> tuple[Any, Any, int]:
     import jax.numpy as jnp
 
-    from gkx.core.velocity import hermite_ladder_coeffs
+    from gkx.core_velocity import hermite_ladder_coeffs
 
     arr = jnp.asarray(state)
     dims = _state_dims(arr.ndim)

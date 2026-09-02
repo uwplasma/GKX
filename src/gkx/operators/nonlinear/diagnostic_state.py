@@ -1,7 +1,7 @@
 """Diagnostic tuple assembly for nonlinear time integration.
 
 This module owns the pure state-to-diagnostics assembly logic, with diagnostic
-kernels injected by :mod:`gkx.solvers.nonlinear.diagnostic_integration`
+kernels injected by :mod:`gkx.solvers_nonlinear_diagnostic_integration`
 so tests and interactive debugging can still monkeypatch the module-level
 functions.
 """
@@ -14,7 +14,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core.grid import SpectralGrid
+from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import FieldState

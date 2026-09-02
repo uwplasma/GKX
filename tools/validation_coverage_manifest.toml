@@ -10,20 +10,16 @@ require_all_package_modules_owned = true
 excluded_modules = [
   "gkx.__init__",
   "gkx._version",
-  "gkx.benchmarking.__init__",
-  "gkx.core.__init__",
   "gkx.diagnostics.__init__",
   "gkx.geometry.__init__",
   "gkx.objectives.__init__",
   "gkx.operators.__init__",
   "gkx.operators.linear.__init__",
   "gkx.operators.nonlinear.__init__",
-  "gkx.solvers.__init__",
-  "gkx.solvers.linear.__init__",
-  "gkx.solvers.nonlinear.__init__",
-  "gkx.solvers.time.__init__",
+  "gkx.solvers_linear",
+  "gkx.solvers_nonlinear",
+  "gkx.solvers_time",
   "gkx.terms.__init__",
-  "gkx.utils.__init__",
   "gkx.workflows.__init__",
   "gkx.workflows.runtime.__init__",
 ]
@@ -129,20 +125,17 @@ path = "src/gkx/runtime.py"
 owned_modules = [
   "gkx.cli",
   "gkx.config",
-  "gkx.solvers.time.explicit",
-  "gkx.solvers.time.explicit_diagnostics",
-  "gkx.solvers.time.explicit_cfl",
-  "gkx.solvers.time.explicit_steps",
+  "gkx.solvers_time_explicit",
+  "gkx.solvers_time_explicit_diagnostics",
+  "gkx.solvers_time_explicit_cfl",
+  "gkx.solvers_time_explicit_steps",
   "gkx.workflows.runtime.toml",
   "gkx.workflows.runtime.wout",
   "gkx.workflows.runtime.resolution",
-  "gkx.utils.compilation_cache",
-  "gkx.solvers.time.runners",
-  "gkx.workflows.runtime.config",
+  "gkx.compilation_cache",
+  "gkx.solvers_time_runners",
   "gkx.workflows.runtime.diagnostic_arrays",
   "gkx.workflows.runtime.diagnostics",
-  "gkx.workflows.runtime.execution",
-  "gkx.workflows.runtime.initial_conditions",
   "gkx.workflows.runtime.initial_phi",
   "gkx.workflows.runtime.startup",
   "gkx.workflows.runtime.commands",
@@ -257,15 +250,16 @@ owned_modules = [
   "gkx.diagnostics.growth_rates",
   "gkx.diagnostics.growth_windows",
   "gkx.diagnostics.modes",
-  "gkx.core.velocity",
-  "gkx.core.grid",
-  "gkx.solvers.linear.adaptive_propagator",
-  "gkx.solvers.linear.krylov_algorithms",
-  "gkx.solvers.linear.krylov",
-  "gkx.solvers.linear.krylov_propagator",
+  "gkx.core_velocity",
+  "gkx.core_grid",
+  "gkx.solvers_linear_adaptive_propagator",
+  "gkx.solvers_linear_krylov_algorithms",
+  "gkx.solvers_linear_krylov",
+  "gkx.solvers_linear_krylov_propagator",
   "gkx.terms.config",
   "gkx.terms.fields",
   "gkx.operators.linear.dissipation",
+  "gkx.operators.linear.collision_factory",
   "gkx.terms.linear_terms",
   "gkx.operators.linear.streaming",
 ]
@@ -446,8 +440,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.linear.implicit"
-path = "src/gkx/solvers/linear/implicit.py"
+module = "gkx.solvers_linear_implicit"
+path = "src/gkx/solvers_linear_implicit.py"
 owner_lane = "implicit linear operator and GMRES integration policy"
 status = "active"
 coverage_priority = "medium"
@@ -480,10 +474,10 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.linear.integrators"
-path = "src/gkx/solvers/linear/integrators.py"
+module = "gkx.solvers_linear_integrators"
+path = "src/gkx/solvers_linear_integrators.py"
 owned_modules = [
-  "gkx.solvers.linear.integrator_diagnostics",
+  "gkx.solvers_linear_integrator_diagnostics",
 ]
 owner_lane = "linear fixed-step integration, implicit dispatch, and diagnostic sampling"
 status = "active"
@@ -614,12 +608,12 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.linear.parallel"
-path = "src/gkx/solvers/linear/parallel.py"
+module = "gkx.solvers_linear_parallel"
+path = "src/gkx/solvers_linear_parallel.py"
 owned_modules = [
-  "gkx.solvers.linear.parallel_common",
-  "gkx.solvers.linear.parallel_electrostatic",
-  "gkx.solvers.linear.parallel_streaming",
+  "gkx.solvers_linear_parallel_common",
+  "gkx.solvers_linear_parallel_electrostatic",
+  "gkx.solvers_linear_parallel_streaming",
 ]
 owner_lane = "gated velocity-parallel linear RHS dispatch and Hermite shard-map helpers"
 status = "active"
@@ -651,10 +645,10 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.nonlinear.state_integration"
-path = "src/gkx/solvers/nonlinear/state_integration.py"
+module = "gkx.solvers_nonlinear_state_integration"
+path = "src/gkx/solvers_nonlinear_state_integration.py"
 owned_modules = [
-  "gkx.solvers.nonlinear.diagnostic_integration",
+  "gkx.solvers_nonlinear_diagnostic_integration",
   "gkx.operators.nonlinear.brackets",
   "gkx.terms.nonlinear",
 ]
@@ -772,8 +766,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.nonlinear.explicit"
-path = "src/gkx/solvers/nonlinear/explicit.py"
+module = "gkx.solvers_nonlinear_explicit"
+path = "src/gkx/solvers_nonlinear_explicit.py"
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"
 coverage_priority = "high"
@@ -805,8 +799,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.nonlinear.diagnostics"
-path = "src/gkx/solvers/nonlinear/diagnostics.py"
+module = "gkx.solvers_nonlinear_diagnostics"
+path = "src/gkx/solvers_nonlinear_diagnostics.py"
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"
 coverage_priority = "high"
@@ -840,10 +834,10 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers.nonlinear.imex"
-path = "src/gkx/solvers/nonlinear/imex.py"
+module = "gkx.solvers_nonlinear_imex"
+path = "src/gkx/solvers_nonlinear_imex.py"
 owned_modules = [
-  "gkx.solvers.nonlinear.imex_diagnostics",
+  "gkx.solvers_nonlinear_imex_diagnostics",
 ]
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"
@@ -930,7 +924,6 @@ owned_modules = [
   "gkx.operators.nonlinear.spectral_identity_reports",
   "gkx.operators.nonlinear.spectral_identity_rhs",
   "gkx.operators.nonlinear.spectral_identity_integrator",
-  "gkx.operators.nonlinear.spectral_layout",
 ]
 owner_lane = "communication-aware nonlinear domain decomposition and fail-closed parallel routing"
 status = "active"
@@ -964,9 +957,6 @@ next_tests = [
 [[modules]]
 module = "gkx.operators.nonlinear.device_z"
 path = "src/gkx/operators/nonlinear/device_z.py"
-owned_modules = [
-  "gkx.operators.nonlinear.device_z_reports",
-]
 owner_lane = "communication-aware nonlinear domain decomposition and fail-closed parallel routing"
 status = "active"
 coverage_priority = "high"
@@ -1285,8 +1275,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.benchmarking.shared"
-path = "src/gkx/benchmarking/shared.py"
+module = "gkx.benchmarking_shared"
+path = "src/gkx/benchmarking_shared.py"
 owned_modules = [
   "gkx.diagnostics.normalization",
 ]
@@ -1321,11 +1311,13 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.diagnostics.moments"
-path = "src/gkx/diagnostics/moments.py"
+module = "gkx.operators.moments"
+path = "src/gkx/operators/moments.py"
 owned_modules = [
   "gkx.diagnostics.metadata",
   "gkx.diagnostics.transport",
+  "gkx.diagnostics_contract",
+  "gkx.operators.fluxes",
 ]
 owner_lane = "quadrature, energy, transport-channel, resolved, and metadata diagnostics"
 status = "active"
@@ -1780,7 +1772,7 @@ module = "gkx.parallel.state"
 path = "src/gkx/parallel/state.py"
 owned_modules = [
   "gkx.parallel.integrators",
-  "gkx.utils.callbacks",
+  "gkx.callbacks",
   "gkx.parallel.velocity",
   "gkx.parallel.velocity_drive",
   "gkx.parallel.velocity_hermite",
@@ -2269,12 +2261,12 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.objectives.stellarator_tables"
-path = "src/gkx/objectives/stellarator_tables.py"
-owned_modules = [
-  "gkx.objectives.stellarator",
-  "gkx.objectives.stellarator_contracts",
-]
+# stellarator_tables was fused into stellarator: it had one consumer that
+# imported five of its names, and the seam between them (_sync_table_dependencies)
+# rebound an attribute the two modules already shared, so it was a no-op kept for
+# monkeypatching that no test performs. The row now owns the surviving module.
+module = "gkx.objectives.stellarator"
+path = "src/gkx/objectives/stellarator.py"
 owner_lane = "reduced and VMEC/Boozer stellarator ITG objective table and portfolio gates"
 status = "active"
 coverage_priority = "high"
@@ -2301,42 +2293,6 @@ artifact_paths = [
 ]
 next_tests = [
   "add direct VMEC/Boozer table fixtures that cover objective selection and sample-axis reshaping",
-]
-
-[[modules]]
-module = "gkx.objectives.stellarator_reduced"
-path = "src/gkx/objectives/stellarator_reduced.py"
-owner_lane = "reduced stellarator ITG model, residual, covariance, and finite-difference gates"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "reduced QA geometry and ITG screening observables before full VMEC/Boozer optimization",
-  "fixed-step nonlinear-envelope diagnostics kept separate from turbulent-transport claims",
-  "Gauss-Newton residual conditioning for differentiable stellarator optimization",
-  "finite-difference validation of every differentiated transport objective",
-]
-physics_contracts = [
-  "linear growth, quasilinear flux, and reduced nonlinear envelope remain distinct observables",
-  "density-gradient and temperature-gradient controls enter the same differentiable feature map used by objective scans",
-  "residual vectors must expose aspect, iota, quasisymmetry, regularization, and transport terms separately",
-  "nonlinear-window residuals remain reduced differentiability gates unless long post-transient transport artifacts pass",
-]
-numerics_contracts = [
-  "the reduced nonlinear envelope uses fixed-step RK2 and explicit late-window statistics",
-  "parameter vectors and objective kinds fail closed on invalid shapes or names",
-  "residual Jacobians pass AD/FD parity with precision-aware tolerances",
-  "covariance gates require finite singular values, sufficient rank, and bounded condition numbers",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/stellarator_itg_optimization_uq.png",
-  "docs/_static/stellarator_itg_portfolio_gate.json",
-]
-next_tests = [
-  "add residual-specific failure fixtures for rank-deficient and ill-conditioned sensitivity maps",
 ]
 
 [[modules]]

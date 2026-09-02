@@ -32,13 +32,31 @@ float32) with the shipped default deck at ``96x96x48``:
 
 - A full ``t_max = 200`` run takes roughly 1.0--1.6 hours, of which about
   97 per cent is time stepping. Cost is linear in degrees of freedom at
-  72--80 ns per ``Nx*Ny*Nz*Nl*Nm`` element per step across every grid measured,
+  about 196 ns per ``Nx*Ny*Nz*Nl*Nm`` element per step, flat from 64x64x24 to
+  96x96x48 and so converged rather than a small-grid artifact (an earlier
+  72--80 ns figure did not survive re-measurement),
   so a 4-core laptop extrapolates to several hours.
-- Within one step, about 59 per cent of the time is data movement (dealias
-  padding, twist-shift and linked-``z`` gathers, real-FFT packing copies),
-  about 31 per cent is the FFTs themselves, and under 10 per cent is physics
-  arithmetic. Reducing that movement is the largest available lever and is
+- Within one step, about 60 per cent of the time is data movement, about 39 per
+  cent is the FFTs themselves, and physics arithmetic is not separately
+  measurable. Reducing that movement is the largest available lever and is
   tracked on the roadmap.
+
+  Two details in an earlier version of this paragraph were wrong and are
+  corrected here from an XLA profile taken on 2026-09-01. **There is no dealias
+  zero-padding**: the 2/3 rule is a mask multiply, and the only two ``pad``
+  operations in the whole step come from ``jnp.fft``'s ``s=`` argument and have
+  zero width. And the arithmetic share cannot be quoted at this granularity,
+  because XLA fuses the physics math *into* the movement and FFT kernels; the
+  0.8 per cent that appears as arithmetic is only the residue that failed to
+  fuse.
+
+  The movement is dominated by one construct. Four ``copy_concatenate_fusion``
+  kernels rooted at the ``jnp.concatenate`` in ``_complete_hermitian_ky``
+  (``operators/nonlinear/brackets.py``) account for **41.9 per cent of step
+  time**, running four times per RK3 step. One of them costs 6.9 ms against
+  2.8 ms for a same-sized FFT while doing strictly less arithmetic. Those
+  kernels also carry ``outer_dimension_partitions:["1","2","3"]``, so XLA
+  threads them three ways regardless of core count.
 - Geometry construction, compilation, plotting, and I/O are seconds each and
   are not worth optimizing against the stepping cost.
 
@@ -1329,7 +1347,7 @@ evaluation:
 
 .. code-block:: python
 
-   from gkx.solvers.nonlinear.diagnostic_integration import prepare_nonlinear_explicit_diagnostics
+   from gkx.solvers_nonlinear_diagnostic_integration import prepare_nonlinear_explicit_diagnostics
 
    simulation = prepare_nonlinear_explicit_diagnostics(
        initial_state, grid, geometry, parameters,

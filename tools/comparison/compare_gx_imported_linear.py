@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
 
-from gkx.benchmarking.shared import _apply_reference_hypercollisions
+from gkx.benchmarking_shared import _apply_reference_hypercollisions
 from gkx.config import GeometryConfig, GridConfig, InitializationConfig, resolve_cfl_fac
 from gkx.geometry import (
     SlabGeometry,
@@ -25,8 +25,8 @@ from gkx.geometry import (
     zero_shear_enabled,
     load_imported_geometry_netcdf,
 )
-from gkx.core.velocity import gamma0
-from gkx.core.grid import (
+from gkx.core_velocity import gamma0
+from gkx.core_grid import (
     build_spectral_grid,
     select_ky_grid,
     select_real_fft_ky_grid,
@@ -42,7 +42,7 @@ from gkx.diagnostics.analysis import (
     instantaneous_growth_rate_from_phi,
     select_ky_index,
 )
-from gkx.solvers.time.explicit import (
+from gkx.solvers_time_explicit import (
     ExplicitTimeConfig,
     _instantaneous_growth_rate_step,
     _linear_frequency_bound,
@@ -59,7 +59,7 @@ from gkx.runtime import (
 )
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from gkx.geometry.miller_eik import generate_runtime_miller_eik
-from gkx.workflows.runtime.config import RuntimeConfig, RuntimeSpeciesConfig
+from gkx.config import RuntimeConfig, RuntimeSpeciesConfig
 from gkx.operators.linear.params import Species, build_linear_params
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.geometry.vmec_eik import generate_runtime_vmec_eik

@@ -151,7 +151,7 @@ Representative unit checks include:
   :func:`gkx.diagnostics.growth_rates.select_fit_window`,
   :func:`gkx.diagnostics.growth_rates.fit_growth_rate_auto`.
 - **Grid construction and normalization**:
-  :func:`gkx.core.grid.build_spectral_grid`.
+  :func:`gkx.core_grid.build_spectral_grid`.
 - **Normalization contract consistency**:
   :func:`gkx.diagnostics.normalization.get_normalization_contract`,
   :func:`gkx.diagnostics.normalization.apply_diagnostic_normalization`.
@@ -191,7 +191,7 @@ Benchmark regression tests
 Benchmark regression tests validate the Cyclone base case reference dataset and
 growth-rate extraction pipeline:
 
-- Loading the reference CSV via :func:`gkx.benchmarking.shared.load_cyclone_reference`.
+- Loading the reference CSV via :func:`gkx.benchmarking_shared.load_cyclone_reference`.
 - Running short linear scans from the canonical
   ``examples/linear/axisymmetric/cyclone.toml`` input via
   :func:`gkx.runtime.run_runtime_scan`.
@@ -1574,7 +1574,7 @@ Core solver coverage gates
 CI also enforces a dedicated per-module threshold for the linear solver engine
 that is most likely to regress during algorithm work:
 
-- ``gkx.solvers.linear.krylov`` (matrix-free Arnoldi/shift-invert path)
+- ``gkx.solvers_linear_krylov`` (matrix-free Arnoldi/shift-invert path)
 
 The gate runs focused tests and checks the module from ``coverage-core.xml``:
 

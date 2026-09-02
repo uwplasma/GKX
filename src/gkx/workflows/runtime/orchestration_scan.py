@@ -9,7 +9,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence, cast
 import numpy as np
 
 from gkx.diagnostics.modes import ModeSelection
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.diagnostics import (
     _RuntimeLinearFitOptions,
     ensure_finite_linear_history,
@@ -240,9 +240,21 @@ def _scan_worker_tasks(
     krylov_cfg: Any,
     options: _RuntimeScanOptions,
 ) -> list[dict[str, Any]]:
+    # ``strategy="batch"`` says how the SCAN is dispatched -- one independent
+    # worker per ky point -- and each worker then runs an ordinary single-ky
+    # solve. Forwarding it into the per-ky config sent that inner solve down the
+    # sharded linear-RHS path, which accepts only ``strategy="velocity"``, so the
+    # shipped examples/parallelization deck died in the worker with
+    # NotImplementedError. Solver-level strategies (velocity and friends) still
+    # reach the inner solve untouched.
+    worker_cfg = (
+        replace(cfg, parallel=replace(cfg.parallel, strategy="serial"))
+        if str(getattr(cfg.parallel, "strategy", "serial")) == "batch"
+        else cfg
+    )
     return [
         {
-            "cfg": cfg,
+            "cfg": worker_cfg,
             "ky": float(ky),
             "Nl": Nl,
             "Nm": Nm,
@@ -471,7 +483,7 @@ def _run_batch_diagnostics(
     show_progress: bool,
     deps: RuntimeScanBatchDeps,
 ) -> _BatchDiagnostics:
-    from gkx.solvers.time.runners import _resolve_config_collision_operator
+    from gkx.solvers_time_runners import _resolve_config_collision_operator
 
     steps_val = int(round(tcfg.t_max / tcfg.dt))
     # The runtime linear scan is the path the executable takes, so the TOML

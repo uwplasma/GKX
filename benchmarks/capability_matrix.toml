@@ -37,7 +37,7 @@ evidence = "adiabatic-electron ITG atlas plus kinetic-electron Cyclone/TEM stres
 id = "hermite_laguerre_velocity_basis"
 group = "required_core"
 status = "validated"
-gkx_owner = "gkx.core.velocity and gkx.terms.gyroaveraging"
+gkx_owner = "gkx.core_velocity and gkx.terms.gyroaveraging"
 comparison_owner = "src/moments.cu and src/laguerre_transform.cu"
 evidence = "basis orthonormality, streaming, gyroaverage, and velocity-resolution gates"
 
@@ -77,7 +77,7 @@ evidence = "operator identity, de-aliasing, invariant, and nonlinear transport-w
 id = "equilibrium_exb_flow_shear"
 group = "optional_extension"
 status = "planned_research_lane"
-gkx_owner = "gkx.operators.nonlinear.projection, gkx.operators.linear.cache_builder, and gkx.solvers.nonlinear.state_integration"
+gkx_owner = "gkx.operators.nonlinear.projection, gkx.operators.linear.cache_builder, and gkx.solvers_nonlinear_state_integration"
 comparison_owner = "src/exb.cu plus sheared perpendicular-grid phase updates"
 evidence = "coordinate, periodic/linked cache, split-phase and canonical compressed brackets, Hermitian stage projection, fixed/adaptive/restartable RK2/Heun-RK3, fixed-step IMEX, and canonical heat-flux trace pass zero-shear trajectory identity, analytic kx evolution, integer/fractional remap/dealias, linked-chain invariance, machine-zero Hermitian residual, inverse-remap, designed-order, linear-suppression, adaptive-CFL accepted-time/JVP/finite-difference, chunk-restart, fast/differentiable identity, endpoint-IMEX transport, and transport JVP/gradient/finite-difference gates; an adaptive 64x64x24 periodic x64 campaign gave a 6.10% gamma_E=0.01 reduction, while an adaptive comparison gave -0.084% under a different stage-time policy; the final fixed-step campaign rejects physical-model promotion: internal fixed-IMEX t=[240,300] windows drift and give a 4.82% increase, while independently stationary fixed-RK4 comparison windows give a 24.82% increase with -11.29-SEM reduction separation; the compact negative-evidence artifact is docs/_static/flow_shear_fixed_step_response_gate.json, and no input-file option is exposed"
 
@@ -85,7 +85,7 @@ evidence = "coordinate, periodic/linked cache, split-phase and canonical compres
 id = "initial_value_time_integration"
 group = "required_core"
 status = "validated"
-gkx_owner = "gkx.solvers.time and gkx.solvers.nonlinear"
+gkx_owner = "gkx.solvers_time and gkx.solvers_nonlinear"
 comparison_owner = "src/ts_rk3.cu, src/ts_rk4.cu, src/ts_sspx2.cu, and src/ts_sspx3.cu"
 evidence = "observed-order, stability, restart, and benchmark-window gates"
 
@@ -93,7 +93,7 @@ evidence = "observed-order, stability, restart, and benchmark-window gates"
 id = "explicit_and_adaptive_time_policy"
 group = "required_core"
 status = "validated_scoped"
-gkx_owner = "gkx.solvers.time and gkx.workflows.runtime"
+gkx_owner = "gkx.solvers_time and gkx.workflows.runtime"
 comparison_owner = "src/ts_rk3.cu, src/ts_rk4.cu, src/ts_sspx2.cu, src/ts_sspx3.cu, and src/ts_k10.cu"
 evidence = "Euler/RK2/RK3/RK4/SSPx3/K10 observed-order tests plus fixed-CFL gates; identical method names are not assumed to imply identical tableaux"
 
@@ -101,7 +101,7 @@ evidence = "Euler/RK2/RK3/RK4/SSPx3/K10 observed-order tests plus fixed-CFL gate
 id = "dominant_eigenmode_solver"
 group = "differentiable_extension"
 status = "validated_scoped"
-gkx_owner = "gkx.solvers.linear"
+gkx_owner = "gkx.solvers_linear"
 comparison_owner = "initial-value branch extraction"
 evidence = "Krylov-versus-time evolution, residual, branch-continuity, and eigenfunction gates"
 

@@ -59,7 +59,7 @@ Two transferable lessons drive this design:
 2. **Diagnostics dominate unless fused.** The 118x observable overhead came
    from recomputing the bracket outside the timed route. The production
    integrator already accumulates scalars in the scan carry
-   (`src/gkx/solvers/nonlinear/state_integration.py:308-347`); the sharded
+   (`src/gkx/solvers_nonlinear_state_integration.py:308-347`); the sharded
    route must keep that structure and add only scalar `psum`s.
 
 ---

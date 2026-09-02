@@ -17,7 +17,7 @@ from gkx.diagnostics import (
     particle_flux_species,
 )
 from gkx.diagnostics.quasilinear_transport import effective_kperp2, phi_norm2
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.objectives.autodiff_validation import explicit_complex_operator_matrix
 from gkx.objectives.eigen import dominant_real_eigenvalue
 from gkx.operators.linear.cache_builder import build_linear_cache
@@ -27,11 +27,11 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers.linear.krylov import (
+from gkx.solvers_linear_krylov import (
     adaptive_propagator_eigenpair,
     certifiable_residual_tolerance,
 )
-from gkx.solvers.linear.krylov_algorithms import _build_shift_invert_precond
+from gkx.solvers_linear_krylov_algorithms import build_shift_invert_preconditioner
 
 
 SOLVER_OBJECTIVE_NAMES = (
@@ -501,7 +501,7 @@ def _matrix_free_dominant_linear_branch(
         right: jnp.ndarray,
         left: jnp.ndarray,
     ):
-        _diagonal, apply_flat = _build_shift_invert_precond(
+        _diagonal, apply_flat = build_shift_invert_preconditioner(
             right,
             cache,
             context.linear_params,

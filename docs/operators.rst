@@ -70,7 +70,7 @@ Nonlinear electromagnetic terms additionally use :math:`J_0(\alpha)` and
 
 Source mapping:
 
-- ``src/gkx/core/velocity.py``
+- ``src/gkx/core_velocity.py``
 - ``src/gkx/terms/nonlinear.py``
 
 Streaming
@@ -1244,7 +1244,7 @@ Source Mapping
 - low-level parameter container:
   ``src/gkx/linear.py``
 - runtime parameter surface:
-  ``src/gkx/workflows/runtime/config.py``
+  ``src/gkx/config.py``
 
 Parameter Surface
 -----------------

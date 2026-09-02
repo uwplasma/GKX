@@ -2993,7 +2993,7 @@ kinetic-electron physics claim.
 
 ## 2026-08-29 — Phase 2 native linear-step consolidation scope
 
-Task: make `gkx.solvers.time.explicit_steps._linear_native_step` the single
+Task: make `gkx.solvers_time_explicit_steps._linear_native_step` the single
 owner of explicit and diagonal-IMEX linear step algebra. The standard cached
 integrator and its diagnostics-rich sibling currently duplicate the complete
 Euler/RK dispatch, IMEX Euler update, and two-stage `imex2` update; the
@@ -3658,7 +3658,7 @@ paths that refused it. The gate in §11.2 therefore selects native ownership
 and no unique promoted capability remains.
 
 Changes:
-- files removed: `src/gkx/solvers/time/diffrax_core.py` (188),
+- files removed: `src/gkx/solvers_time/diffrax_core.py` (188),
   `diffrax_linear.py` (449), `diffrax_nonlinear.py` (427),
   `diffrax_streaming.py` (572) — 1,636 lines;
   `tests/unit/solvers/test_diffrax_integrators_core.py` (935);
@@ -4120,3 +4120,344 @@ Outcome:
   utility that needs a prior run's bundle.
 - next task: put the canonical examples in CI at smoke resolution, which is the
   Phase D exit gate that would have caught this on the day it broke.
+## 2026-08-31 — PR R2-1 merge modules that were split rather than encapsulated (`refactor/r2-merge-split-modules`)
+
+Baseline:
+- GKX SHA: built on `plan/r1-source-simplification`, which replaces the flat
+  per-file line cap with the cohesion gate this PR is measured by
+- `src/gkx` 193 files; cohesion gate reports 5 single-consumer split modules
+
+Scope:
+- intended change: rejoin modules whose only consumer imports most of their
+  names. Interface width is the discriminator, not consumer count.
+- explicitly out of scope: `workflows/runtime/policies.py`, which qualifies on
+  width but is imported directly by two test modules, one of which monkeypatches
+  it as a module object. Merging changes what that test patches, so it needs the
+  test repointed first and is a different change with different risk.
+
+Changes:
+- `workflows/runtime/initial_conditions.py` -> `startup.py` (10 names)
+- `operators/nonlinear/spectral_layout.py` -> `spectral_core.py` (10 names)
+- `operators/nonlinear/device_z_reports.py` -> `device_z.py` (8 names)
+- `workflows/runtime/execution.py` -> `runtime.py` (6 names)
+
+Evidence:
+- feature preservation, all three arms: advertised `gkx.api.__all__` stays 15,
+  the lazy `_EXPORT_TARGETS` registry stays 346, and every module named in that
+  registry still imports.
+- `tests/integration/runtime`, `tests/unit/nonlinear`, `tests/release`:
+  703 passed, 1 skipped, and one release-gate assertion updated (below).
+- cohesion: single-consumer split modules 5 -> 1; source files 193 -> 189. The
+  baseline is tightened to 1 in the same PR so the gain cannot be given back.
+- `ruff check`, `ruff format --check`, `sphinx -W`, release readiness,
+  validation coverage, repository size: all clean.
+- physics/mathematics/numerics gates: none re-run and none claimed. No
+  definition changed; the merges move code between files.
+
+Outcome:
+- accepted
+- one release-gate assertion was lowered deliberately:
+  `spectral_core["n_owned_modules"] >= 4` becomes `>= 3`, because
+  `spectral_layout` was absorbed INTO `spectral_core` and is no longer a
+  separate module to own. Its coverage did not leave the package, it moved
+  inside the owning row's own file. The reason is recorded at the assertion.
+- `runtime.py` crossed its per-file complexity baseline, 513 -> 781, and took a
+  named exception with a written reason. That is the mechanism working as
+  designed: a merge past a budget is a recorded judgement, not a silent pass.
+- four dangling references were found and fixed, each of which would have broken
+  CI: two `owned_modules` entries naming merged modules, one `owned_modules`
+  list left empty which broke TOML parsing, and a stale `automodule` block that
+  failed `sphinx -W`.
+- next task: repoint the two tests that import `workflows/runtime/policies.py`
+  directly, then merge it, which takes the gate to zero.
+
+## 2026-08-31 — PR R2-2 flatten the container-only directories (`refactor/r2-merge-split-modules`)
+
+Baseline:
+- continues the module merges in the same branch; `src/gkx` had 20 directories
+- relevant existing gate: the cohesion policy from section 25b, and the
+  architecture manifest's `required_domain_packages` list
+
+Scope:
+- intended change: remove directories that exist to hold one or two modules,
+  per section 25c.4 step 2, and rename by what the code is rather than where it
+  sat.
+- explicitly out of scope: the two-level nests under `operators/`, `solvers/`,
+  and `workflows/`, and the `objectives/` proportion problem.
+
+Changes:
+- `benchmarking/shared.py` -> `benchmarking_shared.py`; the package held one
+  real module.
+- `core/{grid,velocity}.py` -> `core_grid.py`, `core_velocity.py`.
+- `utils/{callbacks,compilation_cache}.py` -> `callbacks.py`,
+  `compilation_cache.py`. The directory name described neither module.
+- 152 files repointed across source, tests, tools, examples, and docs.
+
+Evidence:
+- feature preservation: advertised API stays 15, lazy registry stays 346, and
+  every module named in the registry still resolves.
+- `tests/release`, `tests/unit/core`, `tests/unit/operators`,
+  `tests/integration/runtime`, `tests/unit/solvers`: 864 passed, 1 skipped.
+- gates: `ruff check`, `ruff format --check`, `sphinx -W`, release readiness,
+  validation coverage, architecture manifest, repository size all clean.
+- physics/mathematics/numerics gates: none re-run and none claimed. Files moved;
+  no definition changed.
+
+Outcome:
+- accepted. Directories 20 -> 17.
+- two policies had to change and both are documented in place rather than
+  bypassed. The coverage manifest listed three package `__init__` modules that
+  no longer exist. The architecture manifest *required* `gkx.core` to exist as a
+  package, which is the directory-shaped rule the flat layout replaces;
+  requiring it now would mandate an empty directory.
+- a repointing miss cost one round: substituting `gkx.utils.callbacks` does not
+  catch `from gkx.utils import callbacks`, and seven tests failed on the
+  difference. This is the same shape as the `data/` mistake earlier the same
+  day -- searching for one spelling of a reference and concluding from its
+  absence. Both were caught by running tests rather than by re-reading the
+  grep, which is the only reason they did not ship.
+- one failure in the wide run is NOT from this work.
+  `test_public_api_facades_and_lazy_import_contracts` asserts that lazily
+  exported names are absent from `dir(gkx)`, but the loader caches resolved
+  names into the module, so any earlier test that touches one makes the
+  assertion fail. Confirmed identical on `main`: the same five-domain
+  combination gives `1 failed, 864 passed, 1 skipped` there too. CI shards do
+  not run that combination, so it sits latent. Filed separately rather than
+  folded in here.
+- next task: the two-level nests under `operators/`, `solvers/`, `workflows/`.
+
+## 2026-08-31 — PR R2-3 flatten the solvers tree (`refactor/r2-merge-split-modules`)
+
+Scope:
+- intended change: section 25c.4 step 2 continued. `gkx.solvers` was a one-line
+  docstring package over three subpackages holding 25 modules.
+- explicitly out of scope: the `operators/` and `workflows/` nests.
+
+Changes:
+- 25 modules flattened: `solvers/{linear,time,nonlinear}/x.py` becomes
+  `solvers_{linear,time,nonlinear}_x.py`, and each subpackage `__init__` becomes
+  a flat re-export module. 99 files repointed.
+- four `required_domain_packages` entries dropped, because none of
+  `gkx.solvers`, `.linear`, `.time`, `.nonlinear` is a package any more.
+
+Evidence:
+- `tests/unit/solvers`, `tests/unit/parallel`, `tests/release`,
+  `tests/integration/runtime`: 907 passed, 42 skipped.
+- advertised API 15, lazy registry 346, every registry target resolves.
+- `ruff check`, `ruff format --check`, `sphinx -W`, and all four release
+  checkers clean.
+- physics/mathematics/numerics gates: two precision guards were repointed, not
+  weakened. See below.
+
+Outcome:
+- accepted. Directories 20 -> 13 across this branch; source files 193 -> 185.
+- five package-to-module hazards appeared, none visible to a grep:
+  `from <pkg> import <submodule>` is meaningless once the package is a module;
+  a converter produced a double alias; `__all__` fails F822 in a regular module
+  where a package `__init__` resolved the name through its submodule; four
+  manifest entries required the packages to exist; and two precision guards are
+  keyed by file name.
+- the precision guards are the ones that matter.
+  `ALLOWED_UNPINNED_MATRIX_DOTS` is keyed `filename:line`, and
+  `test_propagator_candidate_lift_pins_exact_dot_precision` filters
+  contractions by a module-name prefix. Both pin TF32 behaviour on Ampere and
+  later NVIDIA GPUs. The prefix filter failed with "the candidate lift lowered
+  to no matrix dot; the guard is vacuous", which is the test detecting its own
+  hollowing-out. Without that assertion the rename would have left a numerics
+  guard inspecting nothing while the suite stayed green. Both were repointed
+  with the exemption text and the measurement behind it unchanged.
+- next task: the `operators/` and `workflows/` nests.
+
+## 2026-08-31 — PR R4-1 lift the case type out of the deepest layer (`refactor/r4-flatten-and-fuse`)
+
+Baseline:
+- built on the fusion work in the same branch; the dependency graph at
+  `f9e5e97a` had 17 layer violations across 667 edges
+- relevant existing gate: cohesion policy, and the layer measurement in §25d
+
+Scope:
+- intended change: §25d.4 step 1. `RuntimeConfig`, aliased `Case`, lived in
+  `workflows/runtime/config.py` at the deepest layer while `geometry/vmec_eik.py`
+  and `geometry/miller_eik.py` imported it from among the shallowest.
+- explicitly out of scope: deciding whether two configuration systems are
+  wanted, which is §25d.4 step 2 and a scope question rather than a move.
+
+Changes:
+- the deck configuration module merged into `gkx/config.py`. It imported
+  nothing but that file, so the move was safe by construction rather than by
+  hope: `gkx/config.py` has no `gkx` imports at all.
+- `deck_text` and its `_toml_value` helper moved down with it. `Case.to_toml`
+  had reached back up into `workflows.runtime.wout` through a deferred import,
+  which is a cycle-breaker and therefore a symptom. `wout.py` now imports the
+  renderer downhill, and the two modules share one object rather than a copy.
+- 48 files repointed.
+
+Evidence:
+- layer violations 17 -> 15; both `geometry -> workflows` edges are gone, and
+  the `config -> workflows` edge the move briefly introduced was removed by
+  taking the renderer with it rather than left as a deferred import.
+- advertised API 15, lazy registry 346, every registry target resolves,
+  `gkx.Case is gkx.config.Case`, and `deck_text` is one shared object.
+- `tests/release`, `tests/unit/api`, `tests/integration/runtime`: 585 passed,
+  1 skipped, plus 127 release gates.
+- `ruff`, `ruff format --check`, `sphinx -W`, and all four release checkers
+  clean.
+- physics/mathematics/numerics gates: none re-run and none claimed. No
+  definition changed.
+
+Outcome:
+- accepted.
+- the remaining 15 violations are dominated by `solvers -> diagnostics`, seven
+  edges. That is a different question from a misplaced type: it asks whether
+  diagnostics belong below solvers rather than above them, and it should be
+  answered by reading what those seven imports actually need before anything
+  moves.
+- a release gate failed twice in this session for the same reason: it reads
+  git-tracked files, so deleting a module without staging leaves it scanning a
+  path that no longer exists. Staging is part of verification, not bookkeeping.
+- next task: §25d.4 step 2, the two configuration systems.
+
+## 2026-08-31 — PR R4-2 put the diagnostics kernels in the layer that owns them
+
+Scope:
+- §25d.4: the ten upward edges from solvers, parallel and operators into
+  diagnostics.
+
+Changes:
+- `gkx/diagnostics_contract.py` (new, layer 0, zero `gkx` imports) takes
+  `ArrayLike`, `CFL_SCALE_LABELS`, `ResolvedDiagnostics`, `SimulationDiagnostics`.
+- `diagnostics/moments.py` -> `operators/moments.py`.
+- `diagnostics/transport.py` lines 41-309 -> `operators/fluxes.py`, split at the
+  file's own `finite-difference evidence reports` marker.
+- re-export shims keep every public import site unchanged; two function-local
+  imports in `parallel/integrators.py` hoisted to module level.
+- a new `[layer_policy]` in the architecture manifest ratchets upward imports.
+
+Evidence:
+- the finding behind it: `gkx.diagnostics` is two packages under one name.
+  Importing it loads `metadata`, `moments` and `transport` and none of the other
+  fourteen analysis modules, and no solver touches the analysis half.
+  `SimulationDiagnostics` is the solvers' *return type*, and the flux kernels run
+  inside the traced step under `jit` and `lax.psum`, where the module's own
+  docstring records that computing them outside the timed route costs up to 118x.
+  They were RHS-route code filed under a diagnostics name.
+- all ten target edges removed; the new gate measures 5 upward imports and its
+  baseline is pinned there, verified to fire at 4.
+- 1,033 passed and 42 skipped across release, diagnostics, solvers, parallel and
+  runtime; `tests/unit/nonlinear` 167 passed.
+- advertised API 15, lazy registry 346, every target importable. `ruff`,
+  `ruff format --check`, `sphinx -W` and all four release checkers clean.
+- physics/mathematics/numerics gates: none re-run and none claimed. The traced
+  route is byte-identical; only the module a kernel lives in changed.
+
+Outcome:
+- accepted, and one regression of mine was found in the process. The solvers
+  flatten had broken `tests/unit/nonlinear/test_nonlinear_helpers_extra.py`: a
+  multiline `from gkx.solvers_nonlinear import (state_integration as ...)` that
+  my converter's pattern missed. **82 tests had stopped running silently**, and
+  my verification had covered the domains I touched but not that one, so
+  "907 passed" was true and misleading at once. A collection error in a file you
+  do not run looks exactly like success. `pytest --collect-only` over the whole
+  suite takes three seconds, collects 2,631 tests, and is now part of the gate
+  after any rename.
+- the layer model was analytic until this PR: measured by hand in the plan and
+  enforced by nothing, so every edge fixed could have returned unnoticed.
+
+## 2026-09-01 — PR P1-1 first measured performance changes (`refactor/r4-flatten-and-fuse`)
+
+Scope:
+- correct two wrong performance figures in the docs, and land the first change
+  that a profile justifies.
+
+Evidence gathered:
+- an XLA profile on the office box (36-core CPU, RTX A4000, jax 0.9.2) at
+  32x32x16, 64x64x24 and 96x96x48 measured **196 ns per element per step**, flat
+  across the two larger grids and so converged. The documented 72--80 ns did not
+  survive re-measurement and is corrected in `docs/performance.rst` and README.
+- the movement share is confirmed at **60.0 per cent movement, 38.9 per cent
+  FFT**, but the documented "under 10 per cent arithmetic" is not measurable:
+  XLA fuses the physics into the movement and FFT kernels, so the 0.8 per cent
+  that shows as arithmetic is only the residue that failed to fuse.
+- **there is no dealias zero-padding.** The 2/3 rule is a mask multiply, and the
+  only two `pad` operations in the step come from `jnp.fft`'s `s=` argument with
+  zero width. The docs had named padding as a primary movement cost.
+- **41.9 per cent of step time is four `copy_concatenate_fusion` kernels** rooted
+  at the concatenate in `_complete_hermitian_ky`, running four times per RK3
+  step; one costs 6.9 ms against 2.8 ms for a same-sized FFT while doing less
+  arithmetic. Those kernels carry `outer_dimension_partitions:["1","2","3"]`, so
+  XLA threads them three ways whatever the core count.
+- **157 of 160 compilations are setup**, matching the cold-start measurement in
+  §25e. The stepper compiles once; there is no recompilation bug.
+
+Changes:
+- the two `jnp.take` index reversals in `operators/linear/streaming.py` become
+  slice, reverse and concatenate. XLA lowers the index form as a general gather
+  and materialises it; the sliced form fuses. Measured 13.0 -> 9.6 ms on a
+  `(2,4,8,96,96,48)` complex64 state, **1.35x**, with byte-identical output.
+
+Evidence for the change itself:
+- `tests/unit/linear`, `tests/unit/operators`, `tests/unit/nonlinear`: 414 passed.
+- `ruff`, `ruff format --check`, `sphinx -W` clean; release gates 138 passed.
+- physics/mathematics/numerics gates: the permutation is proved identical by
+  construction and by `allclose` against the original, and no tolerance moved.
+
+Outcome:
+- accepted.
+- one correction to my own earlier work: §25e.4 records that
+  `_complete_hermitian_ky`'s *gather* is not a bottleneck, which the profile
+  confirms -- but the *concatenate* rooted in the same function is 41.9 per cent
+  of the step. The isolated benchmark was right and the conclusion drawn from it
+  was too narrow.
+- next: the profile's own first recommendation, which is to stop round-tripping
+  the ky spectrum -- keep the half-ky rfft layout through the linear RHS rather
+  than expanding to full ky and re-completing the symmetry every stage.
+
+## 2026-09-01 — PR P1-2 remove the cold-start compilations (`refactor/r4-flatten-and-fuse`)
+
+Scope:
+- §25e.1: `build_linear_cache` cost 2.4 s of pure XLA compilation on every cold
+  run, per distinct grid shape, from hundreds of per-primitive compilations
+  under op-by-op dispatch.
+
+What made it safe:
+- the open question was whether a numpy rewrite would break the differentiable
+  geometry route. Instrumenting the builder and running the autodiff objective
+  **gradient** tests answers it: **traced = 0, concrete = 42**. The cache is
+  never built under a trace, even while a gradient is taken; the differentiable
+  route takes its derivatives from the implicit eigensolve VJP.
+
+Changes:
+- a single `_array_namespace(*values)` helper returns `numpy` when every operand
+  is concrete and `jax.numpy` when any is a tracer, so the staged-out route is
+  byte-for-byte the code it was and only the concrete route leaves XLA. The
+  one-shot arrays move to the device once, at the boundary.
+
+Evidence:
+- compilations 139 -> 71 and first call 2,175 -> 1,340 ms, measured
+  independently of the agent that made the change.
+- **bitwise identical output**: 515 arrays across nine configurations --
+  periodic, linked and twist-shift, non-twist, zero shear, slab, multi-species,
+  single-ky -- with a maximum deviation of exactly 0.0, in x64 and x32. The
+  traced branch was checked separately and is 16/16 fields identical including
+  gradients.
+- `tests/unit/linear`, `tests/unit/operators`, `tests/unit/objectives`:
+  501 passed with the same four known-environment jax `eig()` failures,
+  unchanged in number and identity.
+- `ruff`, `ruff format --check`, `sphinx -W`, three release checkers clean;
+  2,631 tests still collect.
+
+Three things worth keeping:
+- **`jax.jit` is not the conservative choice here.** A jitted `kperp2` differs by
+  1.1e-13 and jitted Bessel factors by 2.0e-15, because XLA fuses and contracts.
+  numpy is the exact route, which reverses the usual intuition.
+- two exactness traps: `np.fft.fftfreq` scales by the reciprocal where JAX
+  divides, which differs in float32; and `np.asarray(0.8)` is float64 where
+  `jnp.asarray(0.8)` follows JAX's default dtype. Without pinning the second,
+  x32 moved by about one ulp in `kperp2` and the drifts.
+- two regions deliberately left on the device rather than forced: `J_l_all`,
+  which uses `exp` and `gammaln` where numpy and XLA disagree by an ulp, and the
+  float32 Bessel factors, where numpy's float32 `cos`/`sin` differ from XLA's.
+  Their float64 path was verified bit-identical and did move.
+
+Outcome:
+- accepted. The remaining compilations are exactly those two regions.

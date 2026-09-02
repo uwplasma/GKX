@@ -8,18 +8,18 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.benchmarking.shared import LinearRunResult, LinearScanResult
-from gkx.core.grid import SpectralGrid, build_spectral_grid
+from gkx.benchmarking_shared import LinearRunResult, LinearScanResult
+from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.analysis import fit_growth_rate_auto
 from gkx.diagnostics.modes import (
     ModeSelection,
     extract_eigenfunction,
     extract_mode_time_series,
 )
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
 from gkx.workflows.runtime.results import RuntimeLinearResult
-from gkx.solvers.time.explicit import integrate_linear_explicit_from_config
+from gkx.solvers_time_explicit import integrate_linear_explicit_from_config
 
 
 @dataclass(frozen=True)
@@ -332,7 +332,7 @@ def _resolve_linear_time_config(
 def _warn_if_linear_dt_exceeds_cfl(ctx: _LinearRuntimeContext, tcfg: Any) -> None:
     """Delegate the fixed-step CFL hint to the module that owns the bound."""
 
-    from gkx.solvers.time.explicit_cfl import warn_if_fixed_dt_exceeds_cfl
+    from gkx.solvers_time_explicit_cfl import warn_if_fixed_dt_exceeds_cfl
 
     warn_if_fixed_dt_exceeds_cfl(
         grid=ctx.grid,
@@ -365,7 +365,7 @@ def _integrate_linear_density_path(
     n_steps: int,
     show_progress: bool,
 ) -> _LinearTrajectory:
-    from gkx.solvers.time.runners import _resolve_config_collision_operator
+    from gkx.solvers_time_runners import _resolve_config_collision_operator
 
     # This is the executable's density-diagnostic path, so the TOML
     # collision_operator selection has to be resolved here as well as on the

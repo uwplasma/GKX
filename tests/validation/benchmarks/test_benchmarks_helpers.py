@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from gkx.diagnostics.analysis import ModeSelection
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     _is_array_like,
     _iter_ky_batches,
     _resolve_streaming_window,
@@ -18,11 +18,11 @@ from gkx.diagnostics.growth_rates import (
     _select_fit_signal,
     _select_fit_signal_auto,
 )
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     _build_gaussian_profile,
     _build_initial_condition,
 )
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     CycloneReference,
     CycloneRunResult,
     _load_reference_with_header,
@@ -33,12 +33,12 @@ from gkx.benchmarking.shared import (
     load_kbm_reference,
     load_tem_reference,
 )
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     _kbm_use_multi_target_krylov,
     _midplane_index,
     select_kbm_solver_auto,
 )
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     _apply_reference_hypercollisions,
     _electron_only_params,
     _linked_boundary_end_damping,
@@ -47,7 +47,7 @@ from gkx.benchmarking.shared import (
 )
 from gkx.config import InitializationConfig
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers.linear.krylov import KrylovConfig
+from gkx.solvers_linear_krylov import KrylovConfig
 
 
 def _linear_params() -> LinearParams:
@@ -155,7 +155,7 @@ def test_load_reference_with_header_reads_named_columns(tmp_path, monkeypatch) -
             return data_dir / parts[-1]
 
     monkeypatch.setattr(
-        "gkx.benchmarking.shared.resources.files",
+        "gkx.benchmarking_shared.resources.files",
         lambda _pkg: FakeFiles(),
     )
     ref = _load_reference_with_header("demo.csv")

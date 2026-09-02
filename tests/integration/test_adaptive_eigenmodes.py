@@ -12,7 +12,7 @@ import pytest
 import solvax
 
 from gkx.config import CycloneBaseCase, GridConfig
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.geometry.flux_tube import FluxTubeGeometryData, sample_flux_tube_geometry
 from gkx.objectives.autodiff_validation import explicit_complex_operator_matrix
@@ -28,7 +28,7 @@ from gkx.runtime import (
     build_runtime_linear_params,
     build_runtime_linear_terms,
 )
-from gkx.solvers.linear import adaptive_propagator_eigenpair, dominant_eigenpair
+from gkx.solvers_linear import adaptive_propagator_eigenpair, dominant_eigenpair
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from support.paired_solvax import requires_paired_solvax
 

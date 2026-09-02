@@ -296,6 +296,79 @@ def _internal_cohesion(tree: ast.Module) -> tuple[int, float]:
     return len(defs), len(used) / len(defs)
 
 
+def _validate_layer_policy(
+    data: dict[str, Any],
+    *,
+    source_root: Path,
+) -> dict[str, Any]:
+    """Ratchet downward the number of imports that run against the layering.
+
+    The layer model was analytic until now: sections 25d of the plan measured it
+    by hand and nothing in the repository enforced it, so every edge fixed could
+    silently come back. Ten edges were removed by moving the diagnostics
+    contract and the flux kernels to the layers that actually own them; this
+    keeps that from being undone quietly.
+
+    An edge is a violation when a module in a lower layer imports one in a
+    higher layer. The count ratchets rather than being forbidden outright,
+    because several remaining edges are genuine and deserve an argument rather
+    than a workaround.
+    """
+
+    policy = data.get("layer_policy")
+    if policy is None:
+        return {}
+    if not isinstance(policy, dict):
+        raise ValueError("layer_policy must be a TOML table")
+    _as_nonempty_string(policy.get("description"), "layer_policy.description")
+    baseline = _as_nonnegative_int(
+        policy.get("violation_baseline"), "layer_policy.violation_baseline"
+    )
+    raw = policy.get("layers")
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError("layer_policy.layers must be a non-empty TOML table")
+    layers = {
+        str(k): _as_nonnegative_int(v, f"layer_policy.layers.{k}")
+        for k, v in raw.items()
+    }
+
+    def rank(module: str) -> int | None:
+        name = module[len("gkx.") :] if module.startswith("gkx.") else module
+        for key in sorted(layers, key=len, reverse=True):
+            if name == key or name.startswith(key + ".") or name.startswith(key + "_"):
+                return layers[key]
+        return None
+
+    violations: list[str] = []
+    for path in sorted(source_root.rglob("*.py")):
+        me = _module_name(path, source_root)
+        mine = rank(me)
+        if mine is None:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            targets: list[str] = []
+            if isinstance(node, ast.ImportFrom) and node.module:
+                targets = [node.module]
+            elif isinstance(node, ast.Import):
+                targets = [alias.name for alias in node.names]
+            for target in targets:
+                if not target.startswith("gkx"):
+                    continue
+                theirs = rank(target)
+                if theirs is not None and theirs > mine:
+                    violations.append(f"{me} -> {target}")
+    if len(violations) > baseline:
+        raise ValueError(
+            f"layering regressed: {len(violations)} upward imports, above "
+            f"baseline {baseline}"
+        )
+    return {"upward_imports": len(violations), "violation_baseline": baseline}
+
+
 def _validate_cohesion_policy(
     data: dict[str, Any],
     *,
@@ -617,9 +690,11 @@ def validate_architecture_policy(
         require_targets=require_line_targets,
     )
     cohesion = _validate_cohesion_policy(data, source_root=source_root)
+    layering = _validate_layer_policy(data, source_root=source_root)
 
     return {
         "cohesion": cohesion,
+        "layering": layering,
         "layout_authority": str(metadata["layout_authority"]),
         "n_blocked_prefixes": len(blocked_prefixes),
         "n_allowed_root_prefix_modules": len(allowed_modules),

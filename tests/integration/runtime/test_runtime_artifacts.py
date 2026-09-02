@@ -14,12 +14,12 @@ from gkx.artifacts.io import (
     validate_finite_array,
     validate_finite_runtime_result,
 )
-from gkx.benchmarking.shared import _build_initial_condition
+from gkx.benchmarking_shared import _build_initial_condition
 from gkx.config import CycloneBaseCase
 from gkx.config import GridConfig, TimeConfig
 from gkx.config import InitializationConfig
-from gkx.core.grid import build_spectral_grid, select_ky_grid
-from gkx.core.velocity import gamma0
+from gkx.core_grid import build_spectral_grid, select_ky_grid
+from gkx.core_velocity import gamma0
 from gkx.diagnostics import (
     ResolvedDiagnostics,
     SimulationDiagnostics,
@@ -68,7 +68,7 @@ from gkx.operators.linear.params import (
 )
 from gkx.operators.linear.params import Species, build_linear_params
 from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
-from gkx.solvers.time.explicit import (
+from gkx.solvers_time_explicit import (
     ExplicitTimeConfig,
     _apply_completed_step_state_mask,
     _growth_rate_mode_mask,
@@ -138,7 +138,7 @@ from gkx.workflows.runtime.artifacts import (
     write_runtime_linear_artifacts,
     write_runtime_nonlinear_artifacts,
 )
-from gkx.workflows.runtime.config import RuntimeConfig, RuntimeOutputConfig
+from gkx.config import RuntimeConfig, RuntimeOutputConfig
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
 )
@@ -159,8 +159,8 @@ import gkx.artifacts.nonlinear_netcdf as nonlinear_netcdf
 import gkx.artifacts.spectral_layout as spectral_layout
 import gkx.diagnostics as diagnostics_module
 import gkx.diagnostics.metadata as diagnostics_metadata
-import gkx.diagnostics.moments as diagnostics_moments
-import gkx.solvers.time.explicit as explicit_time_integrators
+import gkx.operators.moments as diagnostics_moments
+import gkx.solvers_time_explicit as explicit_time_integrators
 import gkx.workflows.runtime.artifacts as runtime_artifacts
 import jax.numpy as jnp
 import json

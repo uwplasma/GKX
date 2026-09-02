@@ -152,7 +152,7 @@ with ``x0 = Lx / (2π)`` and ``y0 = Ly / (2π)``. The parallel wave number is
 where :math:`Z_p` sets the field-line length
 (:math:`z \in [-\pi Z_p, \pi Z_p)`), and :math:`k_z` is defined *without* the
 ``gradpar`` factor. These definitions are implemented by
-``gkx.core.grid.build_spectral_grid`` and are consistent with the
+``gkx.core_grid.build_spectral_grid`` and are consistent with the
 audited reference-grid convention.
 
 The midplane index used by the reference growth-rate diagnostic corresponds to

@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import gkx
-from gkx.workflows.runtime.config import RuntimeConfig
+from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,
     RuntimeLinearScanResult,

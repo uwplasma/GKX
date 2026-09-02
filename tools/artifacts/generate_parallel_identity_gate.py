@@ -20,7 +20,7 @@ import numpy as np
 from gkx.config import GeometryConfig, GridConfig, InitializationConfig, TimeConfig
 from gkx.artifacts.plotting import set_plot_style
 from gkx.runtime import RuntimeLinearScanResult, run_runtime_scan
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeNormalizationConfig,
     RuntimeQuasilinearConfig,
@@ -429,7 +429,7 @@ def build_logical_cpu_parallel_scan_gate(
 ) -> dict[str, object]:
     """Compare serial and logical-CPU device-batched independent scans."""
 
-    from gkx.workflows.runtime.config import RuntimeParallelConfig
+    from gkx.config import RuntimeParallelConfig
 
     devices = _select_devices(requested_devices)
     serial_config = RuntimeParallelConfig(

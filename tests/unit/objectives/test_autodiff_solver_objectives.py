@@ -33,7 +33,7 @@ from gkx.objectives.autodiff_validation import (
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
 from gkx.geometry.flux_tube import sample_flux_tube_geometry
-from gkx.core.grid import build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
     LinearParams,
@@ -3739,7 +3739,7 @@ def test_reduced_stellarator_model_stays_deprecated_and_shallowly_depended_on() 
     """
 
     import ast
-    import gkx.objectives.stellarator_reduced as reduced
+    import gkx.objectives.stellarator as reduced  # fused: stellarator_reduced now lives here
 
     assert "deprecated" in (reduced.__doc__ or "").lower(), (
         "the reduced-model deprecation notice was removed; it is a fitted "

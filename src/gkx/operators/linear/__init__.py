@@ -45,13 +45,16 @@ _EXPORTS = {
         "quasineutrality_phi",
         "streaming_term",
     ],
+    # The factory moved out of the type module: params is the package's highest
+    # fan-in module and a factory reaching forward into the collision tables was
+    # the only reason it imported upward at all.
+    "collision_factory": ["collision_operator_from_config"],
     "params": [
         "COLLISION_OPERATOR_NAMES",
         "LinearParams",
         "LinearTerms",
         "Preconditioner",
         "PreconditionerSpec",
-        "collision_operator_from_config",
         "linear_terms_to_term_config",
         "term_config_to_linear_terms",
     ],

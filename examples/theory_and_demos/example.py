@@ -10,7 +10,7 @@ from gkx import (
     integrate_linear_from_config,
 )
 from gkx.geometry import SAlphaGeometry
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 
 
 def main() -> None:

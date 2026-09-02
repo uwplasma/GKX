@@ -122,7 +122,7 @@ def zonal_residual(
     from vmex.core import turbulence as turb
 
     from gkx.config import GridConfig
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearTerms, linear_params_for_geometry
     from gkx.operators.linear.rhs import linear_rhs_cached

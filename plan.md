@@ -2400,6 +2400,356 @@ The gate from section 25b applies unchanged: the advertised API and lazy
 registry may not shrink except by a recorded decision, the collected test
 node-ID set is unchanged, and the physics gates are untouched. Moving code
 between files must not move anything out of the package.
+## 25d. Architecture, tested against the dependency graph
+
+Sections 25b and 25c measured lines and directories. This one measures the
+*connections*: a weighted import graph over 182 modules, 667 edges and 1,644
+imported names, built at `f9e5e97a` on 2026-08-31. Several candidate
+rearrangements were tested against it before proposing any.
+
+### 25d.1 The layering is already sound
+
+Assigning each package a layer (configuration, geometry, terms and operators,
+solvers, diagnostics, objectives, artifacts, workflows, entry points) and
+counting edges that run downhill gives **17 violating edges out of 667**. The
+package is not tangled. Any proposal that reorganises everything is solving a
+problem the code does not have, and the earlier instinct to flatten wholesale
+should be tempered by that.
+
+### 25d.2 The one structural inversion worth fixing
+
+`RuntimeConfig`, aliased as the public `Case`, lives in
+`workflows/runtime/config.py`, the deepest layer, and is imported by
+`geometry/vmec_eik.py` and `geometry/miller_eik.py`, among the shallowest.
+That is the worst inversion in the graph, and it is a symptom rather than an
+accident: **GKX has two parallel configuration systems.**
+
+| | Module | Holds |
+| --- | --- | --- |
+| physics configs | `gkx/config.py` | `GridConfig`, `TimeConfig`, `GeometryConfig`, `ModelConfig`, `CycloneBaseCase` |
+| deck configs | `gkx/config.py` | `RuntimeSpeciesConfig`, `RuntimePhysicsConfig`, ..., `RuntimeConfig` alias `Case` |
+
+The split is mostly clean -- 20 modules under `workflows/runtime` use the deck
+family, 23 elsewhere use the physics family -- but the deck family leaks into
+**10 modules outside its own package**, and geometry is one of them. The public
+entry type a user touches first therefore sits below everything, and pulling it
+upward drags the runtime layer with it.
+
+### 25d.3 What the graph says the pieces are
+
+The highest fan-in module is `operators/linear/params.py`: 528 lines, from
+which 99 names are imported. That is the real core type module.
+
+**The clustering claim first written here was wrong, and the method was the
+reason.** Weighted label propagation was run once, with one seed, and its output
+reported as measurement. Repeating it across twenty seeds gives a largest
+cluster ranging from 14 modules and 9,299 lines to 75 modules and 34,977 lines:
+the algorithm is not reproducible at this size and a single run says almost
+nothing. A 300-seed consensus, scored by co-association, gives the durable
+answer.
+
+What is actually there is a 39-module, 18,027-line community around the linear
+operator and linear solver -- "assemble a linear operator and advance or solve
+it". It has **zero import cycles** and is a clean twelve-deep DAG. The
+stellarator objectives are **not** part of it: they never co-clustered in 300 of
+300 runs, and form their own 17-module, 9,257-line community. The single seed
+had merged the two across a seam of seven name-imports.
+
+`params.py`'s fan-in is the reason that community coheres, not a defect. Its 100
+imports resolve to only fifteen distinct names -- `LinearParams` thirty-eight
+times, `LinearTerms` eighteen -- which is shared vocabulary rather than a
+grab-bag. It is not a cut vertex either: removing it leaves the rest connected.
+Splitting it would be actively harmful.
+
+Two earlier readings were wrong and are corrected here. `artifacts/spectral_layout.py`
+looked misplaced on fan-in alone; its 50 imported names come from only three
+consumers, so it is a cohesive cluster rather than a stray. And the
+`objectives` package is not experimental: the cluster analysis puts its
+stellarator code with the linear solver, which is where it belongs.
+
+### 25d.4 Revised program, in priority order
+
+1. **Lift the case type.** Move `RuntimeConfig` and its `Case` alias to the
+   configuration layer, so geometry and the rest stop importing downward from
+   `workflows.runtime`. This removes the deepest inversion and is the single
+   highest-value structural change available.
+2. ~~Decide whether two configuration systems are wanted.~~ **Answered, and the
+   premise was wrong.** There are not two systems. `RuntimeConfig` *composes* the
+   physics configs -- `grid: GridConfig`, `time: TimeConfig`,
+   `geometry: GeometryConfig`, `init: InitializationConfig` are four of its
+   thirteen fields -- and the two families share only six field names out of
+   about a hundred each, which are the composition points themselves. There is
+   no duplicated surface to remove, and the translation layer this section
+   assumed does not exist: composition means there is nothing to translate.
+   Merging them would push deck concerns such as output paths and quasilinear
+   settings into the solver-facing model, and would turn a change of file format
+   into a change of physics code. The boundary is load-bearing and stays.
+   The nearby simplification that section suggested -- consolidating the nine
+   deck-only `Runtime*Config` classes -- was measured and rejected too. Every one
+   maps 1:1 onto a TOML table on both paths: `toml.py` holds a literal
+   `(section_name, constructor)` table keyed by the `RuntimeConfig` field name,
+   and `to_dict` plus `deck_text` render one table per class. Merging any two
+   renames a user-visible section and breaks `Case.to_toml` round-tripping
+   through `gkx.load`. Even the thinnest, `RuntimeExpertConfig` at 13 lines, is
+   a documented section used by two tracked benchmark decks. Three others carry
+   `__post_init__` validation and are not passive field bags. **No consolidation
+   is safe here; the nine stay.**
+
+   One real duplication was found and deliberately left: `to_dict` returning
+   `asdict(self)` is repeated verbatim in seventeen classes. A shared mixin would
+   have to cross the physics/deck boundary that this section just established as
+   load-bearing, so it is recorded rather than done.
+3. **Do not split the linear community.** It is one concept and the data says
+   so. The payoff there is not decomposition but five edge fixes totalling seven
+   imports, after which it is a strictly layered DAG that documents itself:
+   move the `collision_operator_from_config` factory out of the type module into
+   `operators/linear/collision_factory.py`; promote two preconditioner builders
+   from `solvers.linear.implicit` into a `preconditioners` module; promote
+   `_linear_native_step` to a public stepping entry point; and narrow
+   `objectives.core`, which reaches into `solvers.linear.krylov_algorithms` for
+   the private `_build_shift_invert_precond`. That last one is the whole seam
+   joining the objectives community to the linear one.
+4. Continue flattening only where a directory is a container. Directory count
+   fell 20 -> 13 and the remaining ones hold real clusters.
+5. Fuse only where the consumer imports six or more names, and expect chains:
+   fusing `stellarator_tables` revealed `stellarator_reduced` at fourteen names,
+   which revealed `stellarator_contracts` at six. A module can look
+   double-consumed only because both consumers are halves of one split module.
+
+### 25d.5 Encapsulation is the next measurable problem
+
+Promoting `_build_shift_invert_precond` to
+`build_shift_invert_preconditioner` closed the seam between the objectives and
+linear communities, and the count behind it is worth recording: **216 imports
+reach across package boundaries for a private name**, dunders excluded. The
+most-reached-into modules are `artifacts/spectral_layout.py` (25),
+`solvers_time_explicit_steps` (20), `operators/linear/params.py` (15) and
+`solvers_linear_krylov_algorithms` (15).
+
+This is a different problem from layering and from cohesion, and it is the one
+that most directly obstructs the plan's other goals. A module whose private
+names are imported by four other packages cannot be refactored without breaking
+them, which is why so many fusions in this wave turned out to be blocked by a
+seam rather than by the physics. The honest programme is to promote the names
+that are genuinely part of a contract, as was done here, and to move the rest
+inside the one caller that needs them -- not to add a gate first, because a
+ratchet on 216 would freeze the current shape rather than improve it.
+
+### 25d.6 Fusion hazards, from four completed fusions
+
+None of these is visible to a grep, and each was caught by a checker or a test:
+
+- a facade and its implementation colliding by name, so the later definition
+  silently wins and the facade's own logic never runs;
+- a constant used in a **default argument**, which evaluates at definition time,
+  so an appended body raises `NameError`;
+- a module docstring carrying a **scope claim** -- the reduced stellarator model
+  is a fitted feature map with an ODE envelope, not gyrokinetics -- which fusion
+  would have deleted;
+- precision guards keyed by file name, one of which failed with "the guard is
+  vacuous" because it was written to detect its own hollowing-out.
+
+## 25e. Cold-start cost, measured
+
+The performance work starts from what is already recorded in
+`docs/performance.rst`: about 97 per cent of a run is time stepping, and within
+one step about 59 per cent is data movement, 31 per cent the FFTs themselves,
+and under 10 per cent physics arithmetic. That is the *warm* picture. Cold runs
+were measured separately on 2026-08-31 and have a different bottleneck.
+
+### 25e.1 The cache build is 278 compilations, not a computation
+
+Cold setup at a deliberately tiny grid, 16x16x8 with `Nl=2, Nm=4`, on CPU:
+
+| stage | time | share |
+| --- | ---: | ---: |
+| `build_linear_cache` | 2,619 ms | 74.6% |
+| `import jax` | 618 ms | 17.6% |
+| `build_spectral_grid` | 262 ms | 7.5% |
+| everything else | 14 ms | 0.4% |
+
+At that grid the arithmetic is trivial, so the time is not computation, and a
+second call proves it: **2,373 ms first, 10 ms second**. Changing the grid to
+32x32x16 re-pays it in full at 2,166 ms, so the cost is per distinct shape.
+
+Counting compilation events during one build gives the mechanism: **278 separate
+XLA compilations**, led by 56 `jit(multiply)`, 36 `jit(broadcast_in_dim)`, 22
+`jit(add)`, 18 each of `subtract`, `true_divide` and `convert_element_type`.
+There is no `jax.jit` anywhere in that path, so every primitive is being
+compiled on its own under op-by-op dispatch. This is the textbook cost of
+unjitted `jnp` in a setup path, and it is paid before a single time step.
+
+### 25e.2 Why the obvious fix does not apply
+
+Wrapping the build in `jax.jit` fails twice, and both failures are informative.
+`SpectralGrid` is not hashable, so it cannot be a static argument; and passing
+it as a traced pytree raises `ConcretizationTypeError`, because the build
+deliberately calls `float()` on geometry values to decide whether a twist-shift
+cache is resolvable. Those are *structural* decisions made from concrete values,
+not arithmetic, and they are the reason the module already carries an
+`_is_tracer` helper.
+
+So the fix is not one decorator. The candidates are to compute the one-shot
+setup arrays with `numpy`, which removes XLA from the path entirely but must not
+break the differentiable geometry route that reaches this build through
+`objectives/core.py`; or to split the structural decisions from the array
+construction and jit only the latter.
+
+**That question is now answered by measurement, and it removes the constraint.**
+Instrumenting `build_linear_cache` to record whether its geometry and parameters
+arrive as tracers, then running the autodiff objective gradient tests -- the very
+path the concern was about -- gives **traced = 0, concrete = 42**. The cache is
+never built under a trace, not even when a gradient is being taken. The
+differentiable geometry route gets its derivatives through the implicit
+eigensolve VJP rather than by differentiating the cache construction.
+
+So nothing in the differentiable path depends on those 278 primitive
+compilations, and the `numpy` route is available: compute the one-shot arrays
+with `numpy` and convert once at the boundary. The gate on that change is the
+autodiff objective suite, which must still produce identical gradients, plus the
+physics gates -- the point being that a value computed in `numpy` and handed to
+the solver is the same value, and the only thing lost is 278 XLA compilations
+nobody wanted.
+
+### 25e.3 The FFTs are losing their thread pool, and the obvious fix is worse
+
+Research into XLA:CPU turned up a mechanism worth verifying: an FFT thunk is
+handed the intra-op thread pool only under some conditions, and an FFT fed by an
+elementwise fusion appears to lose it. GKX multiplies by `i*kx` and `i*ky`
+immediately before every `irfft2` in the bracket, so if true every transform in
+the step is affected.
+
+Verified on this machine at GKX's own shapes, `(2,4,8,49,96,48)` complex64:
+
+| form | time |
+| --- | ---: |
+| `irfft2` of a jit **parameter** | 52.3 ms |
+| `irfft2` of a **fusion result**, same values | 83.0 ms |
+
+So the penalty is real and is about **1.6x**, against 5.4x reported on proxy
+code elsewhere. That is very likely part of what the warm profile attributes to
+"data movement": stalled wall time around the transforms rather than bytes moved.
+
+**The obvious fix makes it worse.** Splitting the multiply and the transform into
+two `jit` calls, so the transform is fed by a parameter, measures 89.5 ms against
+66.3 ms for the fused form: materialising the 113 MB intermediate costs more than
+the threading recovers. An earlier version of this measurement was wrong in the
+other direction because the `jit` wrappers were constructed inside the timing
+loop and retraced on every call; that error is recorded here because the
+corrected numbers reverse its conclusion.
+
+Any real fix therefore has to move the multiply to the other side of an existing
+transform, not insert a new materialisation. The structural candidate is packing
+the two derivative components into one complex array and taking a single c2c
+inverse instead of a stacked pair, recovering the two real fields as real and
+imaginary parts -- halving the transform count rather than rearranging it. That
+was then measured, on GKX's own shapes:
+
+| form | time | temp memory |
+| --- | ---: | ---: |
+| today: stack two components, one batched `irfft2` | 83.1 ms | 228.9 MB |
+| packed: one c2c `ifft2`, components as real and imaginary parts | **58.0 ms** | 226.5 MB |
+
+**That measurement was invalid and the technique does not apply here.** Checking
+the identity rather than the timing settles it: recovering two real fields from
+one complex inverse transform requires the **full** complex spectra of both. On
+half spectra it is simply wrong -- maximum error 2.38 against a field of order
+one, where the ordinary `irfft2` of the same half spectrum recovers the field to
+4.8e-7.
+
+The 1.43x came from comparing a stacked two-component `irfft2` against a
+single-component `ifft2`: half the work, and the wrong answer. Correctness was
+labelled unverified at the time, which was not enough -- the comparison was not
+like-for-like, so the timing did not mean anything either.
+
+The deeper reason is structural. Packing two real fields into one complex
+transform is how a code that works in **full** complex spectra buys back the
+factor of two that reality gives it. GKX already takes that factor by using
+`rfft`, so there is nothing left to pack: one complex transform of a given size
+costs about what two real transforms of that size cost. gyaradax report a gain
+because their transforms are c2c throughout. **Do not implement this.**
+
+### 25e.4 The array layout is the largest measured lever
+
+The state is laid out `(species, l, m, ky, kx, z)` and the perpendicular
+transforms run over axes `(-2, -3)`, so the Fourier axes are **not** innermost.
+XLA transforms only innermost axes, so `jnp.fft` inserts a `moveaxis` before and
+after every call. The profile attributes 7.9 per cent of step time to
+`transpose_copy_fusion` before counting what was absorbed into larger kernels,
+and finds that 18 of 25 transposes in the module come from three lines.
+
+Measured directly, same element count and same transform:
+
+| layout | time | temp memory |
+| --- | ---: | ---: |
+| current, `(..., ky, kx, z)` over axes `(-2,-3)` | 38.1 ms | 114.4 MB |
+| proposed, `(..., z, ky, kx)` over axes `(-2,-1)` | **18.0 ms** | **57.8 MB** |
+
+2.1x faster at half the temporary memory **on the transform alone**. That is
+where the microbenchmark ends and the verification begins, because a research
+thread had already reported the same isolated win evaporating inside a full
+bracket.
+
+It does evaporate. Measured on a bracket that reproduces the real op sequence --
+two stacked derivative transforms, the product, the forward transform, the mask
+and the Hermitian completion:
+
+| layout | bracket time | temp memory |
+| --- | ---: | ---: |
+| current, `(..., ky, kx, z)` | 175.4 ms | 344.5 MB |
+| proposed, `(..., z, kx, ky)` | 146.6 ms | 344.5 MB |
+
+**1.20x, and the memory saving disappears entirely.** The transposes the layout
+removes are a small part of a bracket dominated by the completion and the
+transforms themselves, and the temporaries are set by the real-space product,
+which the layout does not touch.
+
+A second thing surfaced while building that comparison, and it matters more than
+the timing. The change is **not a permutation**: `rfft2` halves the *last*
+transformed axis, so moving `z` inward without care moves the half-spectrum from
+`ky` to `kx`. The honest proposal is `(..., z, kx, ky)`, keeping `ky` last.
+
+So the recommendation is now the opposite of what this section first recorded.
+1.20x with no memory gain does not justify changing the state contract, which
+the artifact writers, the restart format and the parallel decomposition all
+depend on. **Do not do the layout change for performance.** If it is ever done
+it should be for a different reason, and this measurement should be redone
+end to end first.
+
+### 25e.5 The 41.9 per cent has no contained fix
+
+Two attempts were made to reduce the completion cheaply and both failed, which
+is worth recording because the function is the single largest item in the
+profile.
+
+The index gather that reverses `kx` was replaced with a slice, a reverse and a
+concatenate -- the change that gave 1.35x in `streaming.py`. In
+`_complete_hermitian_ky` it gives nothing: 4.31 ms against 4.35 ms at
+`(4,8,49,96,48)`, with byte-identical output. XLA lowers both the same way here
+because the concatenate dominates and the gather fuses into it.
+
+So the cost is the materialisation, not the indexing, and the materialisation is
+intrinsic to the present representation: the bracket computes in half-ky because
+it uses a real FFT, and it must return full-ky because the state is full-ky. The
+only fix is to stop the round trip, which means carrying the state in half-ky
+through the linear RHS. That is a state-contract change of the same class as the
+layout change, and it must be justified end to end rather than on the profile
+share -- the layout change looked like 2.1x in isolation and was 1.20x in a real
+bracket.
+
+The projector in `operators/nonlinear/projection.py` is a separate user of the
+same helper, reached from the RK4 in `objectives/core.py` rather than from the
+production step, and its truncate-then-re-expand is symmetry *enforcement*
+rather than a representation change.
+
+### 25e.6 A negative result worth not repeating
+
+`_complete_hermitian_ky` rebuilds the full ky spectrum from the half spectrum
+with a slice, a conjugate, a reverse, an index gather and a concatenate. The
+gather has an algebraically identical `roll` formulation, and the two were
+benchmarked on CPU at two grid sizes: identical outputs, and the roll is 4 to 9
+per cent faster, which is inside the noise. **The gather is not the bottleneck
+and XLA lowers it fine.** Recorded so the experiment is not repeated.
 
 ## 26. Risk register
 

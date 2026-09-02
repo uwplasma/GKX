@@ -137,13 +137,13 @@ def main_runtime_startup(argv: list[str] | None = None) -> None:
     import numpy as np
     from jax import profiler
     from gkx.geometry import apply_imported_geometry_grid_defaults
-    from gkx.core.grid import build_spectral_grid
+    from gkx.core_grid import build_spectral_grid
     from gkx.workflows.runtime.toml import load_runtime_from_toml
     from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.solvers.nonlinear.diagnostic_integration import (
+    from gkx.solvers_nonlinear_diagnostic_integration import (
         integrate_nonlinear_explicit_diagnostics_state,
     )
-    from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
     from gkx.runtime import (
         _build_initial_condition,
         _runtime_external_phi,
@@ -489,8 +489,8 @@ def main_linear_cache(argv: list[str] | None = None) -> None:
         apply_imported_geometry_grid_defaults,
         ensure_flux_tube_geometry_data,
     )
-    from gkx.core.grid import build_spectral_grid
-    from gkx.core.velocity import bessel_j0, bessel_j1, laguerre_transform
+    from gkx.core_grid import build_spectral_grid
+    from gkx.core_velocity import bessel_j0, bessel_j1, laguerre_transform
     from gkx.workflows.runtime.toml import load_runtime_from_toml
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.cache_arrays import (

@@ -12,7 +12,7 @@ import runpy
 
 import numpy as np
 
-from gkx.benchmarking.shared import CycloneReference, CycloneScanResult
+from gkx.benchmarking_shared import CycloneReference, CycloneScanResult
 import matplotlib.pyplot as plt
 import pytest
 import gkx.artifacts.plotting as plotting

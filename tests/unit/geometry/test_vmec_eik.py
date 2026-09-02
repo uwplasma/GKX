@@ -15,7 +15,7 @@ from gkx.config import (
     InitializationConfig,
     TimeConfig,
 )
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeNormalizationConfig,
     RuntimePhysicsConfig,

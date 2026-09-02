@@ -10,6 +10,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from gkx.operators.fluxes import heat_flux_species, particle_flux_species
+from gkx.operators.moments import (
+    distribution_free_energy,
+    electrostatic_field_energy,
+)
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
@@ -17,7 +22,7 @@ from gkx.operators.linear.params import (
     LinearTerms,
     _SPECIES_PARAM_NAMES,
 )
-from gkx.solvers.nonlinear.state_integration import nonlinear_rhs_cached
+from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
 
@@ -421,12 +426,6 @@ def _fused_scalar_diagnostics(
     because the head and the fields are already Hermite-complete on every shard.
     """
 
-    from gkx.diagnostics.moments import (
-        distribution_free_energy,
-        electrostatic_field_energy,
-    )
-    from gkx.diagnostics.transport import heat_flux_species, particle_flux_species
-
     zero = jnp.zeros_like(fields.phi)
     apar = fields.apar if fields.apar is not None else zero
     bpar = fields.bpar if fields.bpar is not None else zero
@@ -673,7 +672,7 @@ def _resolve_species_hermite_placement(
         species_hermite_state_spec,
     )
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
+    from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
 
     if G0.ndim != 6:
         raise ValueError(

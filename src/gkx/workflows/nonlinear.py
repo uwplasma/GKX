@@ -14,15 +14,15 @@ import numpy as np
 from jax.typing import ArrayLike
 
 from gkx.artifacts.io import write_netcdf_restart_state
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics.analysis import fit_growth_rate
 from gkx.diagnostics.saturation import (
     SaturationStopConfig,
     saturation_stop_decision,
 )
 from gkx.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry
-from gkx.solvers.time.explicit_cfl import FIXED_DT_CFL_WARN_RATIO
-from gkx.workflows.runtime.config import RuntimeConfig, RuntimeExpertConfig
+from gkx.solvers_time_explicit_cfl import FIXED_DT_CFL_WARN_RATIO
+from gkx.config import RuntimeConfig, RuntimeExpertConfig
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
 )
@@ -302,7 +302,7 @@ def _nonlinear_cfl_margin(
 
     from gkx.config import resolve_cfl_fac
     from gkx.geometry import ensure_flux_tube_geometry_data
-    from gkx.solvers.time.explicit_cfl import _linear_frequency_bound
+    from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
 
     try:
         geom = ensure_flux_tube_geometry_data(ctx.geom, ctx.grid.z)

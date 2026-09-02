@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from gkx.diagnostics.analysis import ModeSelection
-from gkx.benchmarking.shared import (
+from gkx.benchmarking_shared import (
     LinearRunResult,
     LinearScanResult,
 )

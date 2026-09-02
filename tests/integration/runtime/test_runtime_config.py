@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from gkx.workflows.runtime import wout as runtime_wout
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeParallelConfig,
     RuntimeQuasilinearConfig,

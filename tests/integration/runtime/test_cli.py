@@ -21,7 +21,7 @@ from gkx.config import (
     InitializationConfig,
     TimeConfig,
 )
-from gkx.core.grid import build_spectral_grid
+from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics import ResolvedDiagnostics, SimulationDiagnostics
 from gkx.diagnostics.analysis import ModeSelection
 from gkx.diagnostics.growth_rates import (
@@ -70,7 +70,7 @@ from gkx.workflows.runtime.chunks import (
     build_runtime_progress_message,
     format_duration,
 )
-from gkx.workflows.runtime.config import (
+from gkx.config import (
     RuntimeConfig,
     RuntimeExpertConfig,
     RuntimeNormalizationConfig,
@@ -2556,7 +2556,7 @@ def test_cli_global_plot_titles_gx_data_as_gx(tmp_path: Path) -> None:
 
 
 def test_compilation_cache_directory_honours_the_environment(tmp_path: Path) -> None:
-    from gkx.utils import compilation_cache as cache
+    import gkx.compilation_cache as cache
 
     override = tmp_path / "elsewhere"
     assert (
@@ -2573,7 +2573,7 @@ def test_compilation_cache_directory_honours_the_environment(tmp_path: Path) -> 
 
 
 def test_compilation_cache_can_be_switched_off(tmp_path: Path) -> None:
-    from gkx.utils import compilation_cache as cache
+    import gkx.compilation_cache as cache
 
     assert cache.compilation_cache_enabled({}) is True
     for value in ("0", "off", "false", "no"):
@@ -2591,7 +2591,7 @@ def test_compilation_cache_is_namespaced_by_jax_version(tmp_path: Path) -> None:
 
     import jax
 
-    from gkx.utils import compilation_cache as cache
+    import gkx.compilation_cache as cache
 
     previous = jax.config.values.get("jax_compilation_cache_dir")
     try:

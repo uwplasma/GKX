@@ -411,8 +411,8 @@ def _build_collisional_zonal_problem(
 ) -> _CollisionalZonalProblem:
     """Build the common paper-geometry state used by every collision model."""
 
-    from gkx.core.grid import build_spectral_grid
-    from gkx.diagnostics.moments import fieldline_quadrature_weights
+    from gkx.core_grid import build_spectral_grid
+    from gkx.operators.moments import fieldline_quadrature_weights
     from gkx.geometry import apply_geometry_grid_defaults
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.workflows.runtime.startup import (
@@ -500,7 +500,7 @@ def _integrate_collisional_zonal_trace(
     import jax
     import jax.numpy as jnp
 
-    from gkx.solvers.linear.integrators import integrate_linear
+    from gkx.solvers_linear_integrators import integrate_linear
     from gkx.terms.assembly import compute_fields_cached
 
     initial_phi = compute_fields_cached(

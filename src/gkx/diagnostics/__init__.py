@@ -1,13 +1,11 @@
 """Simulation diagnostics, transport moments, and runtime containers."""
 
-from gkx.diagnostics.metadata import (
+from gkx.diagnostics_contract import (
     ArrayLike,
     ResolvedDiagnostics,
     SimulationDiagnostics,
 )
-from gkx.diagnostics.moments import *  # noqa: F403
-from gkx.diagnostics.moments import __all__ as _moment_exports
-from gkx.diagnostics.transport import (
+from gkx.operators.fluxes import (
     heat_flux_channel_species,
     heat_flux_species,
     heat_flux_total,
@@ -17,6 +15,8 @@ from gkx.diagnostics.transport import (
     turbulent_heating_species,
     turbulent_heating_total,
 )
+from gkx.operators.moments import *  # noqa: F403
+from gkx.operators.moments import __all__ as _moment_exports
 
 __all__ = [
     "ArrayLike",
