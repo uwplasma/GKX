@@ -643,13 +643,18 @@ jobs:
           /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
 
       # The Phase D gate asks that a fresh user can install and complete a first
-      # run from the docs. Everything above proves the wheel imports; nothing
-      # proved it computes. quickstart.rst opens with bare ``gkx``, which it
-      # describes as a short Cyclone linear demo writing five named artifacts,
-      # so run exactly that from the installed wheel in an empty directory and
-      # require the five files the docs promise. ~10 s on a workstation. The
-      # heavier documented run-runtime-* commands are minutes, so they belong in
-      # nightly-full rather than on every pull request.
+      # linear and nonlinear run from the docs. Everything above proves the
+      # wheel imports; nothing proved it computes.
+      #
+      # quickstart.rst opens with bare ``gkx``, described as a short Cyclone
+      # linear demo writing five named artifacts, so run exactly that from the
+      # installed wheel in an empty directory and require the five files by
+      # name (~10 s), then the documented nonlinear command (~38 s).
+      #
+      # The third documented command, run-runtime-linear on the Cyclone deck,
+      # is deliberately NOT here: it is 970 s. It sits in the same quickstart
+      # block as the ten-second demo while being a sixteen-minute production
+      # run, which is worth fixing in the docs rather than working around here.
       - name: Documented first run from the installed wheel
         run: |
           rm -rf /tmp/gkx-first-run
@@ -668,6 +673,15 @@ jobs:
               exit 1
             }
           done
+          cd "$GITHUB_WORKSPACE"
+          /tmp/gkx-wheel-smoke/bin/gkx run-runtime-nonlinear \
+            --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+            --steps 50 \
+            --out /tmp/gkx-first-run/cyclone_nonlinear.out.nc
+          test -s /tmp/gkx-first-run/cyclone_nonlinear.out.nc || {
+            echo "quickstart.rst promises a nonlinear output bundle; none was written"
+            exit 1
+          }
 
   ci-required:
     # One aggregate check for branch protection to require. The jobs above are

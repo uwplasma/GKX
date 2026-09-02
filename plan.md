@@ -1921,12 +1921,14 @@ Exit gates:
 
 Gate status, measured 2026-09-01:
 
-- *fresh user first run*: enforced. The wheel smoke test proved only that the
-  wheel imports; it now runs bare ``gkx`` from the installed wheel in an empty
-  directory and requires the five artifacts quickstart.rst names, ~10 s. The
-  documented ``run-runtime-linear`` on the Cyclone deck is not a quickstart
-  command by any reasonable reading -- it was still running after seven minutes
-  at 361% CPU on a workstation -- so it stays off the pull-request lane.
+- *fresh user first run*: enforced for both halves. The wheel smoke test
+  proved only that the wheel imports; it now runs bare ``gkx`` from the
+  installed wheel in an empty directory and requires the five artifacts
+  quickstart.rst names (10 s), then the documented nonlinear command (38 s).
+  The third documented command, ``run-runtime-linear`` on the Cyclone deck,
+  measured 970 s -- sixteen minutes of multicore work sitting in the same
+  quickstart block as the ten-second demo. It stays off the pull-request lane,
+  and the quickstart should stop presenting it as a first command.
 - *every canonical example executes*: 16 of 36 execute at smoke resolution, up
   from 4. The other 16 are registered against the specific thing that blocks
   them (an untracked ``*.eik.nc``, a ``wout_*.nc`` from a full VMEC solve,
