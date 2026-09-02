@@ -82,5 +82,39 @@ jobs:
           /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
           /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
 
+      # Everything above proves the wheel imports and parses arguments; none of
+      # it proves the artifact we are about to publish computes anything. CI
+      # gained this gate for pull requests; the release path is where it
+      # matters most, because this is the wheel users get. quickstart.rst opens
+      # with bare ``gkx``, a short Cyclone linear demo that writes five named
+      # artifacts (~10 s), followed by the documented nonlinear run (~38 s).
+      - name: Documented first run from the release wheel
+        run: |
+          rm -rf /tmp/gkx-release-first-run
+          mkdir -p /tmp/gkx-release-first-run
+          cd /tmp/gkx-release-first-run
+          /tmp/gkx-wheel-smoke/bin/gkx
+          for artifact in \
+            gkx_default_linear.toml \
+            gkx_default_linear.summary.json \
+            gkx_default_linear.timeseries.csv \
+            gkx_default_linear.eigenfunction.csv \
+            gkx_default_linear.png
+          do
+            test -s "$artifact" || {
+              echo "quickstart.rst promises $artifact; the release wheel did not write it"
+              exit 1
+            }
+          done
+          cd "$GITHUB_WORKSPACE"
+          /tmp/gkx-wheel-smoke/bin/gkx run-runtime-nonlinear \
+            --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+            --steps 50 \
+            --out /tmp/gkx-release-first-run/cyclone_nonlinear.out.nc
+          test -s /tmp/gkx-release-first-run/cyclone_nonlinear.out.nc || {
+            echo "the release wheel wrote no nonlinear output bundle"
+            exit 1
+          }
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
