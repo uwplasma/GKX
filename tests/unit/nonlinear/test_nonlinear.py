@@ -39,6 +39,7 @@ from gkx.terms.config import TermConfig
 from types import SimpleNamespace
 import jax
 import jax.numpy as jnp
+import jaxlib
 import numpy as np
 import pytest
 
@@ -1054,6 +1055,47 @@ def test_linked_boundary_heat_flux_window_gradient_matches_finite_difference() -
     )
 
 
+def _ynn_rank7_f32_fusion_segfaults() -> bool:
+    """Whether this stack dies on the fusions this test's backward pass emits.
+
+    jaxlib 0.10.2 runs f32 elementwise-plus-reduce fusions through XLA:CPU's
+    YNN/slinky path. When such a fusion has rank 7 and carries a size-1
+    dimension that is not the reduced axis, ``slinky::can_fuse`` walks off the
+    end of an eight-slot static buffer and the process takes SIGSEGV inside
+    ``YnnFusionThunk::Execute`` on an Eigen worker thread. The fault is
+    asynchronous, so the Python traceback lands wherever the main thread
+    happened to be -- compiling the next module, hashing a sharding,
+    materialising an array -- and it kills the interpreter rather than failing
+    one test, taking every later test in the session with it.
+
+    The compressed real-FFT bracket hands its multi-field kernel a rank-7
+    ``chi`` stack shaped ``(3, 1, 2, 1, ny, nx, nz)``, and reverse mode turns
+    the field broadcast into exactly that reduce. The full-complex bracket next
+    door never builds one, which is why only the compressed test is hit, and
+    why Nx=Ny=8 is: at 4 and 6 the fusion is too small for XLA to route it to
+    YNN. Neither GKX nor autodiff is needed to reproduce the defect::
+
+        S = (3, 1, 2, 2, 8, 8, 8)
+        u = jax.random.normal(jax.random.PRNGKey(0), S, dtype=jnp.float32)
+        v = jax.random.normal(jax.random.PRNGKey(1), S, dtype=jnp.float32)
+        jax.jit(lambda a, b: jnp.sum(a * b, axis=3))(u, v)   # SIGSEGV
+
+    jaxlib 0.10.1 runs all of it, and so does float64 on 0.10.2: the YNN path
+    is f32-only, which is why CI stays green on the very same jaxlib -- every
+    test job there exports ``JAX_ENABLE_X64=1``. The bound below is a lower
+    bound on the releases known to crash, not a claim about where it is fixed;
+    narrow it once an upstream release is confirmed good.
+    """
+
+    if bool(jax.config.read("jax_enable_x64")):
+        return False
+    # Every faulting frame is ``xla::cpu::``. No other backend takes this path.
+    if jax.default_backend() != "cpu":
+        return False
+    parts = jaxlib.__version__.split(".")
+    return tuple(int(p) for p in parts[:3] if p.isdigit()) >= (0, 10, 2)
+
+
 @pytest.mark.parametrize("boundary", ["periodic", "linked"])
 def test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference(
     boundary: str,
@@ -1067,6 +1109,13 @@ def test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference
     instead. The layout the projector actually needs is grid topology, so both
     boundaries now differentiate on the compressed path as well.
     """
+
+    if _ynn_rank7_f32_fusion_segfaults():
+        pytest.skip(
+            f"jaxlib {jaxlib.__version__} segfaults on XLA:CPU rank-7 f32 YNN "
+            "fusions, killing the whole session; run under JAX_ENABLE_X64=1 "
+            "as CI does, or on jaxlib 0.10.1"
+        )
 
     grid_cfg = GridConfig(Nx=8, Ny=8, Nz=8, Lx=6.0, Ly=6.0, boundary=boundary)
     cfg = CycloneBaseCase(grid=grid_cfg)
