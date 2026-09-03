@@ -4110,3 +4110,55 @@ def test_vmex_mirror_builder_solves_before_it_measures() -> None:
         "gk_closed_fieldline_geometry; building on "
         "discretization.evaluate_state(setup.initial_state) is the regression"
     )
+
+
+# ---- tracked release artifacts: reproducible, and current ----
+
+# ci.yml regenerates exactly these four in place and then diffs them against
+# the commit, so exactly these four have to come out byte-identical on any
+# checkout. The rest of docs/_static records expensive physics runs and keeps
+# whatever provenance the run recorded, absolute paths included.
+CI_REGENERATED_RELEASE_ARTIFACTS = (
+    "docs/_static/quasilinear_promotion_guardrails.json",
+    "docs/_static/vmec_boozer_differentiability_claim_guard.json",
+    "docs/_static/technical_release_status.json",
+    "docs/_static/release_readiness.json",
+)
+
+
+def test_ci_regenerated_release_artifacts_carry_no_absolute_path() -> None:
+    """An artifact that stamps its generating checkout is not reproducible.
+
+    Three of these carried ``"root": "/Users/<someone>/..."``, so running the
+    documented regeneration command produced a diff containing whoever ran it.
+    """
+
+    for relative in CI_REGENERATED_RELEASE_ARTIFACTS:
+        text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        assert str(REPO_ROOT) not in text, (
+            f"{relative} records the checkout it was generated in; "
+            "the generator must emit repository-relative paths only"
+        )
+        for prefix in ('"/Users/', '"/home/', '"/private/', '"/tmp/'):
+            assert prefix not in text, f"{relative} embeds an absolute path {prefix}"
+
+
+def test_tracked_release_readiness_matches_the_current_project_version() -> None:
+    """1.8.2 survived the 2.0.0 bump because nothing ever compared the two.
+
+    The CI diff gate catches this too, but only after running every generator.
+    This is the cheap local copy of the same question.
+    """
+
+    project_version = tomllib.loads(
+        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+    payload = json.loads(
+        (REPO_ROOT / "docs" / "_static" / "release_readiness.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert payload["project"]["version"] == project_version
+    assert payload["version"]["project_version"] == project_version
+    assert payload["version"]["source_version"] == project_version

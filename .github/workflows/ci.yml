@@ -64,6 +64,26 @@ jobs:
           python tools/release/check_release_readiness.py \
             --out-json docs/_static/release_readiness.json
 
+      - name: Tracked release artifacts are up to date
+        run: |
+          # The step above regenerates four tracked artifacts in place. Every
+          # one of those checkers exits 0 on a stale file and simply rewrites
+          # it, so until this gate existed the rewrite was thrown away with the
+          # runner and staleness was invisible: release_readiness.json,
+          # technical_release_status.json and the differentiability guard all
+          # still carried version 1.8.2 and one contributor's absolute checkout
+          # path days after the 2.0.0 bump in #188. Diffing the regenerated
+          # files against the commit is what turns that into a failure.
+          if ! git diff --exit-code -- \
+            docs/_static/quasilinear_promotion_guardrails.json \
+            docs/_static/vmec_boozer_differentiability_claim_guard.json \
+            docs/_static/technical_release_status.json \
+            docs/_static/release_readiness.json
+          then
+            echo "::error::Tracked release artifacts are stale. Run the generator commands in the 'Repository size manifest' step above and commit the result."
+            exit 1
+          fi
+
   python-floor:
     # Every other job pins 3.11, which is why a stdlib-only-from-3.11 import
     # could sit in twelve modules while pyproject advertised a lower floor. This

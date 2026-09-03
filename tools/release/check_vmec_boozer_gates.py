@@ -797,7 +797,8 @@ def build_vmec_boozer_differentiability_claim_guard(
             "transport-gradient optimization remain explicitly "
             "out of scope."
         ),
-        "root": str(root),
+        # The generating checkout's absolute path is deliberately absent: this
+        # guard is tracked, and stamping it made every regeneration a diff.
     }
 
 

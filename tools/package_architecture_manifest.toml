@@ -881,7 +881,17 @@ recursive = true
 # it and would pass with the defect present. The last of them covers combined_ky
 # at axis="hermite", the axis on which it does not route to the combined-ky
 # solver and so reaches the worker like the others.
-baseline = 86219
+# 86219 -> 86257: two guards on the four release artifacts CI regenerates in
+# place. Nothing ever compared a tracked artifact against the tree it
+# describes, so release_readiness.json, technical_release_status.json and the
+# VMEC/Boozer differentiability guard all still said version 1.8.2 and carried
+# one contributor's absolute checkout path after the 2.0.0 bump in #188 -- the
+# checkers exit 0 on a stale file and rewrite it, so CI saw nothing. One test
+# asserts no absolute path survives into those four, the other that the tracked
+# readiness report names the version pyproject.toml declares. Both fail on the
+# committed 1.8.2 files and pass on the regenerated ones. The two tests are 52
+# lines; 14 of existing headroom absorbs the rest, so the baseline moves 38.
+baseline = 86257
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -940,7 +950,13 @@ recursive = true
 # are the |B| panel's second y-axis: on the solved equilibrium bgrad peaks at
 # 0.0056 against a |B| of 1.0, so a shared axis drew the mirror force the panel
 # is named for as a flat line on zero.
-baseline = 77818
+# 77818 -> 77823: dropping the absolute "root" key from the three tracked
+# release artifacts, which cost three lines and bought eight of comment. The
+# key served nothing -- no consumer in src, tools or tests ever read it -- and
+# made every regeneration of a tracked file a diff carrying whoever ran it. The
+# comment is longer than the deletion because the reason a provenance field is
+# absent has to live where someone would otherwise re-add it.
+baseline = 77823
 target = 0
 
 [[line_budget_policy.counts]]
