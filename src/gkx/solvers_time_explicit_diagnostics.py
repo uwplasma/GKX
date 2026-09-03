@@ -385,7 +385,7 @@ def integrate_linear_explicit_diagnostics(
     policy = _diagnostic_policy(
         grid, geom_eff, params, G, time_cfg, mode_method=mode_method, z_index=z_index
     )
-    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg)
+    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=policy.dt)
     phi_prev = fields0.phi
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     stepper = _make_stepper(

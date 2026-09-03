@@ -72,6 +72,7 @@ def _serial_linear_rhs_cached(
     *,
     use_jit: bool,
     use_custom_vjp: bool,
+    dt: jnp.ndarray | float | None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     from gkx.operators.linear.rhs import linear_rhs_cached
 
@@ -82,6 +83,7 @@ def _serial_linear_rhs_cached(
         terms=terms,
         use_jit=use_jit,
         use_custom_vjp=use_custom_vjp,
+        dt=dt,
     )
 
 
@@ -218,6 +220,7 @@ def _velocity_parallel_rhs_cached(
     route: _ParallelLinearRoute,
     *,
     use_custom_vjp: bool,
+    dt: jnp.ndarray | float | None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     route = _resolve_velocity_backend(route, terms, state_ndim=G.ndim)
     if route.backend == "electrostatic_species_hermite":
@@ -242,6 +245,7 @@ def _velocity_parallel_rhs_cached(
             cache,
             params,
             terms=terms,
+            dt=dt,
             species_chunks=2,
             hermite_chunks=2,
         )
@@ -280,6 +284,7 @@ def linear_rhs_parallel_cached(
     parallel: Any | None = None,
     use_jit: bool = True,
     use_custom_vjp: bool = True,
+    dt: jnp.ndarray | float | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute linear RHS with an explicit, disabled-by-default parallel route.
 
@@ -297,6 +302,7 @@ def linear_rhs_parallel_cached(
             terms=terms,
             use_jit=use_jit,
             use_custom_vjp=use_custom_vjp,
+            dt=dt,
         )
 
     route = _parallel_linear_route(parallel)
@@ -308,6 +314,7 @@ def linear_rhs_parallel_cached(
             terms,
             route,
             use_custom_vjp=use_custom_vjp,
+            dt=dt,
         )
 
     raise NotImplementedError(

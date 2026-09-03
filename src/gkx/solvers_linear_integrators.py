@@ -91,6 +91,7 @@ def _linear_rhs_callable(
     cache: LinearCache,
     params: LinearParams,
     terms: LinearTerms,
+    dt_val: jnp.ndarray,
     parallel: Any | None,
     parallel_strategy: str,
     force_electrostatic_fields: bool,
@@ -103,11 +104,12 @@ def _linear_rhs_callable(
                 cache,
                 params,
                 terms=terms,
+                dt=dt_val,
                 force_electrostatic_fields=force_electrostatic_fields,
                 collision_operator=collision_operator,
             )
         return linear_rhs_parallel_cached(
-            G_in, cache, params, terms=terms, parallel=parallel
+            G_in, cache, params, terms=terms, parallel=parallel, dt=dt_val
         )
 
     return rhs
@@ -213,6 +215,7 @@ def _integrate_linear_cached_impl(
         cache=cache,
         params=params,
         terms=terms,
+        dt_val=dt_val,
         parallel=parallel,
         parallel_strategy=parallel_strategy,
         force_electrostatic_fields=force_electrostatic_fields,

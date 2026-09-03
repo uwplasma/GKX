@@ -23,6 +23,7 @@ def linear_rhs(
     params: LinearParams,
     terms: LinearTerms | None = None,
     *,
+    dt: jnp.ndarray | float | None = None,
     collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the linear RHS and electrostatic potential from grid/geometry inputs."""
@@ -34,6 +35,7 @@ def linear_rhs(
         cache,
         params,
         terms=terms,
+        dt=dt,
         collision_operator=collision_operator,
     )
 
@@ -46,6 +48,7 @@ def linear_rhs_cached(
     *,
     use_jit: bool = True,
     use_custom_vjp: bool = True,
+    dt: jnp.ndarray | float | None = None,
     force_electrostatic_fields: bool = False,
     collision_operator: CollisionOperator | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -61,6 +64,7 @@ def linear_rhs_cached(
         terms=term_cfg,
         use_jit=use_jit,
         use_custom_vjp=use_custom_vjp,
+        dt=dt,
         electrostatic_fields=force_electrostatic_fields,
         collision_operator=collision_operator,
     )

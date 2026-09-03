@@ -1186,7 +1186,12 @@ The field-line end damping is
 
 .. math::
 
-   \mathcal{R}_{end} = -w_{end}\,A_{end}\,d(z)\,H.
+   \mathcal{R}_{end} = -w_{end}\,\frac{A_{end}}{\Delta t}\,d(z)\,H,
+
+so that the :math:`G \to G + \Delta t\,\mathcal{R}` update removes the
+fraction :math:`A_{end}` of the end-cap amplitude on every step, independently
+of :math:`\Delta t`. :math:`\Delta t` is the *instantaneous* step, so an
+adaptive run keeps the fraction fixed while its step size varies.
 
 Controls:
 

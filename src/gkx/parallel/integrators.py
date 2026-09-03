@@ -80,9 +80,9 @@ def integrate_linear_sharded(
 
     def step(G, _):
         G = _maybe_shard(G)
-        dG, _ = linear_rhs_cached(G, cache, params, terms=terms)
+        dG, _ = linear_rhs_cached(G, cache, params, terms=terms, dt=dt_val)
         G_half = G + 0.5 * dt_val * dG
-        dG_half, _ = linear_rhs_cached(G_half, cache, params, terms=terms)
+        dG_half, _ = linear_rhs_cached(G_half, cache, params, terms=terms, dt=dt_val)
         G_next = G + dt_val * dG_half
         return _maybe_shard(G_next), None
 
