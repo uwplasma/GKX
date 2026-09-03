@@ -420,9 +420,12 @@ def build_technical_release_status(root: Path = REPO_ROOT) -> dict[str, Any]:
             "checks": evaluated,
         }
     overall = sum(scores) / max(len(scores), 1)
+    # No absolute path goes into the payload. This report is tracked in the
+    # tree it describes, so recording the generating checkout only stamped
+    # whichever machine last ran it and made every contributor's regeneration
+    # a spurious diff.
     return {
         "kind": "gkx_technical_release_status",
-        "root": str(root),
         "technical_release_completion_percent": overall,
         "target_percent": 98.0,
         "passed": overall >= 98.0 and not failed_required,
@@ -1240,9 +1243,10 @@ def check_release_readiness(root: Path = REPO_ROOT) -> dict[str, Any]:
         }
         failures.append(str(exc))
 
+    # Reproducible payload: see build_technical_release_status on why the
+    # generating checkout's absolute path is not recorded.
     report = {
         "kind": "gkx_release_readiness",
-        "root": str(root),
         "project": project,
         "version": version_report,
         "release_target": {

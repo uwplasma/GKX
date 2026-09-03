@@ -476,7 +476,6 @@
     }
   },
   "passed": true,
-  "root": "/Users/rogeriojorge/local/GKX-worktrees/r4",
   "scope": "Technical release readiness for CI, refactor, docs/release hygiene, parallelization artifacts, performance artifacts, and guardrails. Deferred manuscript physics lanes remain scoped separately.",
   "target_percent": 98.0,
   "technical_release_completion_percent": 100.0

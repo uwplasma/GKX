@@ -40,8 +40,11 @@ jobs:
           python tools/release/check_parallel_scaling_artifacts.py
           python tools/release/check_quasilinear_promotion_guardrails.py \
             --out-json /tmp/quasilinear_promotion_guardrails.json
+          # /tmp, not docs/_static: the release must validate the committed
+          # guard, not a copy it just rewrote over it. ci.yml already proves
+          # the committed copy is what these generators produce.
           python tools/release/check_vmec_boozer_gates.py differentiability-claim \
-            --out-json docs/_static/vmec_boozer_differentiability_claim_guard.json
+            --out-json /tmp/vmec_boozer_differentiability_claim_guard.json
           python tools/release/check_release_readiness.py technical-status \
             --out-json /tmp/technical_release_status.json \
             --fail-under 98
