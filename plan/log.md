@@ -8704,3 +8704,71 @@ from a large eigenmode residual without that control. Nm convergence still fails
 Resume: review terminal CI; implement no collision change before the signed/
 source/basis/whole-grid gates above; isolate remaining same-state GX residual.
 Plan remains the authoritative logbook. R0–R9 goal active.
+
+### 2026-09-05: same-state residual localized to Nyquist convention
+
+Previous turn classified progress: completed repaired GX reference and committed
+analytic collision limits. This turn leaves code17ff384a unchanged and all probes
+terminal. CI33967886511 last observed two pending/no failed jobs. No merges.
+
+Remote scratch `/home/rjorge/gx-own-rhs-20260905.0Qzs0L`, local mirror
+`/tmp/gkx-gx-own-rhs-20260905.wbfjWQ`. The unchanged repaired binary96a53403...
+restarts the completed T300 distribution for exactly one RK4 step in separate
+output stems probe/probe-half. nstep=1, t_max=301, restart_with_perturb=false,
+append_on_restart=false, nwrite=1. dt=.002/.001 paired with end amplitudes
+.1/.05 to keep rate50. Original reference files are read-only inputs, not replaced.
+Both probes93195 exit0, wall2.51/2.39s; observed time increments match their
+float32 dt exactly. No long integration, new build, or production mutation.
+
+For the normalized original state g and one-step map F_h,
+`r_h=(F_h(g)-g)/h`; `r*=2*r_(h/2)-r_h` cancels the leading secant bias.
+This is a finite-difference estimate, not an exact GX RHS; float32 cancellation
+limits accuracy as h decreases. Norms use the same full moment distribution,
+ky=.550000011920929, one kx, Nz96/Nl32/Nm96, and normalization as earlier.
+
+| Probe | Rayleigh real / imaginary | Minimum eigenmode residual | Relative difference to GKX RHS |
+|---|---|---|---|
+| h=.002 | .0246116890 / −.504972528 | .0001277905 | .320166725 |
+| h=.001 | .0247385578 / −.504959849 | .0001632117 | .320171405 |
+| extrapolated | .0248654266 / −.504947171 | .0002478193 | .320176297 |
+
+Secant refinement norm difference=.0002753863. Thus the~32% discrepancy is
+not explained by the distribution still evolving away from an eigenmode or by
+the finite-difference step. Localization:99.9999529400% of squared RHS difference
+is Fourier index48 (Nyquist) on Nz96; real-space difference power is nearly
+uniform. This is much more discriminating than projecting onto term norms.
+
+Source evidence: repaired GX src/device_funcs.cu:2475 init_kzLinked sets
+`k[i]=i/(zp*nLinks)` through i=N/2, positive Nyquist. GKX uses fftfreq's
+negative Nyquist in core_grid/cache and streaming maps. The ambiguity follows
+`exp(+i*pi*j)=exp(-i*pi*j)` at sample points, while their derivatives have
+opposite signs. See the primary [NumPy FFT documentation](https://numpy.org/doc/2.2/reference/routines.fft.html).
+This convention mismatch is not by itself proof that either sign is a physics bug.
+
+Diagnostic-only dataclass replacement flips the Nyquist sign in cache.kz and
+each even-length cache.linked_kz, without changing any other term/state/field:
+Rayleigh=.02486704448349−.504947708857859i,
+minimum eigenmode residual=.00011427234,
+relative difference to extrapolated GX RHS=.00022059425 (0.02206%).
+The remaining discrepancy is comparable to the secant refinement/cancellation
+scale; an exact instrumented GX RHS is required for a stronger bound. No
+whole-operator equivalence or resolution-convergence claim is made.
+
+Reproduction: use audit-own-rhs.py --root with the completed repaired reference
+directory and --stem salpha_nl32_nm96_t300. Same office venv/cwd/PYTHONPATH/
+GX_PARITY_REF_DIR/JAX_ENABLE_X64/CUDA_VISIBLE_DEVICES=0 as previous checkpoint.
+Audit74588, localization7219 and final sign-control69657 all exit0; final output
+audit-nyquist.log retained separately from earlier diagnostic logs.
+
+| Remote artifact | SHA256 |
+|---|---|
+| probe.in | d71a189e80746c8ce51e04e0f535cf5e1ef46807c8fd47a0db696cd5744fb950 |
+| probe-half.in | ba1cd568305e9a7fc7886a18d7da5816b4e497bb1db9b71aa20f1b1bd4f4a45d |
+| audit-own-rhs.py | 3c8b086bd53532397aa705d8fd43f1140a76385c9f3c7ac0443a2b28d51c2a8d |
+| audit-nyquist.log | 2b1570ae13d04422670baebf91b9d4062aeb21b8f3c2c379616bed9e36b7df25 |
+
+Next: manufacture even/odd-grid mode tests (including linked chains and AD),
+document parity conventions, and evaluate Nyquist truncation/spatial-resolution
+sensitivity before any production-policy choice. Do not silently make GKX match
+GX by flipping its default. Collision scaling/source gates remain unchanged.
+All research probes terminal; both GPUs free. Full R0–R9 goal remains active.

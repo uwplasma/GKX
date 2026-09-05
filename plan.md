@@ -175,6 +175,11 @@ At ky=.55, corrected GX gamma=.0249083096362 versus GKX=.0248520921245
 (−.2257%); omega differs−.009894%. The same-state Rayleigh discrepancy is
 small, but the normalized full-state residual remains .30498. Do not equate
 frequency agreement with operator equivalence or velocity convergence.
+Follow-up one-step GX controls identify the dominant residual as an even-grid
+Nyquist-sign convention mismatch:99.999953% of difference power lies at kz index48.
+GX uses positive Nyquist; GKX uses negative FFT frequency. Diagnostic-only sign
+matching reduces RHS disagreement from32.018% to.02206%, and the minimum
+eigenmode residual to.0001143. Neither production solver was changed.
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -184,8 +189,9 @@ uses a separate grid-verified reporter from1571a9e6; no running copy overwritten
 Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** inspect the remaining same-state operator residual, including
-GX's own residual on its final distribution, before further high-order parity runs.
+**Next actions:** add manufactured even/odd-grid Nyquist convention tests and
+make external parity comparisons convention-aware. Evaluate truncation/resolution
+sensitivity before choosing a production policy; do not silently flip GKX's default.
 Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
 completed11457 exit0 in54:11.43: gamma=.02410635371563277,omega=.5058500630938944.
 Nm128→160 changes gamma+5.596% and omega+.4566%; velocity convergence still fails.
