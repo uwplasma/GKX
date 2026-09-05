@@ -32,6 +32,30 @@ round, rather than an undifferentiated reading list.
 | [Pyrokinetics](https://pyrokinetics.readthedocs.io/en/latest/) | Input/output and normalization interoperability, subject to an explicit model-matching test. |
 | [Diátaxis](https://diataxis.fr/) | Separate tutorials, task instructions, explanation and reference; no mandatory theme or markup migration. |
 
+### Broad-physics scope amendment
+
+The destination includes non-flux geometry/islands, not only nested local tubes.
+These additional primary sources define explicit model-development gates; no
+new GKX physics is certified by adding them to the plan.
+
+| Source | Decision and benchmark to extract |
+|---|---|
+| [Jorge–Frei–Ricci, nonlinear Coulomb (2019)](https://arxiv.org/abs/1906.03252) | C4 bilinear gyroaveraged moments; derive truncation/order and evolving-background consistency. Recover the linearized operator, test pair conservation/entropy and measure high-order contraction cost. |
+| [Frei et al., linearized collision operators (2021)](https://arxiv.org/abs/2104.11480) | C1–C3 arbitrary-k, mass/temperature-ratio coefficients, DK limit, ITG and zonal damping. Existing 8/18 like-species tables are a restricted implementation, not this entire capability. |
+| [Frei et al., improved Sugama (2022)](https://arxiv.org/abs/2202.06293) | Conductivity, TEM and collisional comparisons distinguish original/improved Sugama from Coulomb; do not collapse them into interchangeable model names. |
+| [McMillan–Ball–Brunner, corrected remap](https://arxiv.org/abs/1711.03830) | E0 analytic nonlinear coupling test, fractional-phase correction and convergence; integer-only remap is not an adequate reference. Add event-crossing derivative/refinement checks. |
+| [Sánchez et al., global-code perspective](https://arxiv.org/abs/2210.05467) | E1 background Er and surface localization need domain-aware tests beyond one homogeneous local tube. Use EUTERPE/GENE-3D comparisons for the appropriate model. |
+| [St-Onge–Barnes–Parra, radially global stella](https://arxiv.org/abs/2201.01506) | A controlled intermediate route to radial profile variation while retaining Fourier machinery. It does not by itself remove nested-surface assumptions or handle islands. |
+| [Finkbeiner et al., GENE-X stellarator extension (2026)](https://www.sciencedirect.com/science/article/abs/pii/S0010465526001207) | R8 non-flux geometry/FCI, MMS and island-divertor application. Compare ordering, gyroaverage, field solve and boundaries explicitly. Upstream identifies GENE-X 2026.1 and PARALLAX 1.1.0; source access/license must be checked before reuse. |
+| [Cole et al., XGC-S verification](https://arxiv.org/abs/1905.05653) | Independent non-axisymmetric linear ITG geometry/code test. This paper is not a nonlinear island-transport benchmark. |
+| [GENE/GKV electromagnetic comparison](https://www.jstage.jst.go.jp/article/pfr/11/0/11_2403011/_article), [STEP linear EM benchmark](https://arxiv.org/abs/2307.01670) | Concrete microtearing/KBM benchmark candidates beyond simply enabling EM fields. Extract frozen cases/normalizations and convergence from the papers before running; STEP is a later high-beta stress test, not the first EM gate. |
+
+GX office source and upstream HEAD were checked at
+`3865a53778862e1686f414bf6f416339e24887c9`. Its `parameters.cu` exposes ExB shear,
+Apar/Bpar, kinetic/Boltzmann species and closure selection; audit actual RHS and
+reference decks before treating a parameter name as a validated capability.
+Preserve GX's license and the two local untracked office Makefiles.
+
 Textbooks for R1 derivations: Helander–Sigmar,
 [*Collisional Transport in Magnetized Plasmas* (publisher excerpt)](https://assets.cambridge.org/97805210/20985/excerpt/9780521020985_excerpt.pdf),
 and Canuto et al.,

@@ -19,12 +19,20 @@ because an old baseline describes them as unfinished.
 
 ## 1. Destination and current truth
 
-Deliver a small, reproducible local gyrokinetic research code, usable on a laptop
-and NVIDIA GPUs, with auditable derivatives and parallel execution. Demonstrate
-stellarator optimization in three distinct stages: **linear microstability →
-quasilinear screening → independently validated nonlinear transport**. Connect
-VMEX equilibria to ESSOS coil realization without confusing a coil field with a
-validated flux-tube equilibrium.
+Deliver a **research-grade, predictive, differentiable gyrokinetic code**, with
+CPU/GPU parallel execution: electrostatic/electromagnetic; linear, quasilinear
+and nonlinear; adiabatic/kinetic multispecies; several physical collision and
+closure models; with/without equilibrium radial electric fields. Cover vacuum
+and finite-beta fusion configurations, VMEX equilibria and ESSOS coil fields,
+including an explicitly developed model for islands. Match GX's relevant
+physics/numerics portfolio and extend it where independently verified science
+and measured performance justify the extension. Compact implementation is a
+means to maintain this capability, **not a restriction to a small local solver**.
+
+Demonstrate stellarator optimization in three stages: **linear microstability →
+quasilinear screening → independently validated nonlinear transport**. Retain
+the efficient local model while developing broader geometry/background models;
+do not advertise planned extensions as current release capabilities.
 
 | Area | Current evidence | Remaining acceptance |
 |---|---|---|
@@ -40,20 +48,43 @@ validated flux-tube equilibrium.
 The audit distinguishes fresh measurements, source inspection, historical
 artifacts and PR-author reports. None substitutes for a rerun of all physics.
 
-### Scope boundaries
+### Current model versus target scope
 
-- Core: radially local, low-frequency δf gyrokinetics about Maxwellians; nested
+- Current core: radially local, low-frequency δf gyrokinetics about Maxwellians; nested
   surfaces; appropriate periodic or twist-and-shift parallel boundary.
 - Vacuum VMEC with prescribed finite GKX density/temperature drives is an
   **electrostatic test model**, not a self-consistent finite-pressure equilibrium.
 - Closed periodic VMEX mirror tubes need the validated closure/metric adapter.
-  Open mirrors, sheaths/loss cones, full-f, global turbulence and strong rotation
-  are separate models, not missing switches in the local solver.
+  Islands/non-flux geometry and nonlocal backgrounds are explicit R8 targets.
+  Full-f/nonlinear collisions require consistent additional equations (C4/R8),
+  not a switch in the local solver. Open-field/sheath and strong-rotation models
+  need their own ordering and boundaries before those regimes can be claimed.
 - Adiabatic-ion ETG, adiabatic-electron ITG, TEM, EM and multiscale turbulence
   require separate evidence. Equilibrium E×B shear remains a separately gated
   extension; sheared-coordinate infrastructure is not the full rotation model.
 - CPU and NVIDIA GPU are required. Logical CPU devices test collective semantics,
   not multi-socket scaling. Multi-node, AMD and TPU performance remain unclaimed.
+
+### Capability ledger and GX comparison
+
+R1 maintains **one** equation→implementation→test→benchmark ledger, consumed by
+the public verification matrix. For each *combination* record geometry, species,
+fields, collisions, closure, Er, stepping, precision, primal/AD and device layout.
+Use `planned / implemented / verified / benchmarked`; reserve **predictive** for
+a declared domain with quantified uncertainty and independent validation.
+Never infer the Cartesian product from individual feature checkmarks. Unsupported
+combinations fail before tracing; no silent collision/field/precision substitution.
+
+GX reference: office and upstream HEAD both
+`3865a53778862e1686f414bf6f416339e24887c9` on 2026-09-04. Recheck before each
+campaign. Audit `parameters.cu`, `linear.cu`, `exb.cu`, `fields.cu`,
+`grad_parallel*`, `closures.cu`, tests and example decks against the
+[GX formulation](https://arxiv.org/abs/2209.06731) and
+[input/numerics reference](https://gx.readthedocs.io/en/latest/Reference.html).
+Its source exposes kinetic species, phi/Apar/Bpar, ExB shear, moment closures
+and model collisions; this is an inventory, not an independent GX validation.
+Normalize equations, enabled terms, collision frequencies, dissipation, boundary,
+box and flux units before either accuracy or equal-accuracy timing comparisons.
 
 ## 2. Execution order
 
@@ -63,8 +94,10 @@ R0 release correctness + evidence baseline
  ├─ R3 profiling + CPU/GPU sharding ──────────────────────────────┐
  └─ R4 source/data slimming + R5 docs/examples                    │
 R1 + R2 ─ R6 linear/QL optimization ─ R7 nonlinear optimization
-R6 + R7 ─ R8 ESSOS realization/robustness
-R0–R7 evidence ─ R9 methods/design papers; R8 adds coil-realizable design
+R1 + R2 ─ R8b–d island/background model development (can start independently)
+R6 + R7 ─ R8a ESSOS nested-field realization/robustness
+R8a + verified R8b–d ─ R8e direct-coil/island transport optimization
+R0–R7 evidence ─ R9 methods/design papers; R8 adds coil/geometry papers
 ```
 
 R4/R5 can proceed during long R2/R3 experiments, but must not change equations
@@ -74,14 +107,14 @@ acceptance criteria are frozen.
 | ID | Status | Exit condition |
 |---|---|---|
 | R0 | **next** | Damping/precision repairs reviewed; release claims regenerated from repaired operator; clean-install f32/f64 probes |
-| R1 | open | Equation→code→falsification matrix; independent manufactured forcing; fields, boundaries, collisions, transposes |
+| R1 | open | Combination ledger; independent manufactured forcing; ES/EM, multispecies, C0–C4 collisions, closures, E0–E2 Er, boundaries and transposes |
 | R2 | open | Tokamak + QA/QH/QI portfolio; stopping tested against future data; transport and full resolution ladders |
 | R3 | diagnostic baseline measured | Phase/memory profiles; working CPU/GPU distributed primal+VJP; useful layouts selected by measurement |
 | R4 | partially landed | Fewer duplicate implementations/artifacts, measured size reduction, preserved public contracts and defect detection |
 | R5 | partially landed | Organized docs and runnable student/research examples; equations, commands, results and scope agree |
 | R6 | reduced examples only | VMEX ITG/QL design examples with held-out modes/surfaces/families and certified derivatives |
 | R7 | finite-window AD implemented | Independently resolved nonlinear QA reduction, including convergence and constraints |
-| R8 | planned | ESSOS fitting plus realized-field topology/equilibrium/transport robustness |
+| R8 | planned | Nested realized-field robustness; verified non-flux geometry/island/background model; direct-coil transport/AD |
 | R9 | planned | Reproducible manuscript bundles; every abstract/README claim linked to current evidence |
 
 ### R0: immediate small-PR queue
@@ -171,6 +204,7 @@ variables. A distribution norm alone is not automatically the total invariant.
 | C1 | Arbitrary-order drift-kinetic moments | Independent analytic/quadrature reference, Spitzer–Härm/relaxation ladders, cost scaling |
 | C2 | Finite-k like-species | Field terms/metric, b→0, k-interpolation convergence/AD, moments beyond shipped 8/18 tables |
 | C3 | Finite-k multispecies | Pair momentum/energy exchange, mass/temperature limits, projected entropy balance |
+| C4 | Jorge–Frei–Ricci nonlinear Coulomb | Bilinear moments with controlled truncation/cost; linearization recovers C1–C3; consistent evolving background/full-f contract, conservation and entropy |
 
 Tabulated Coulomb support is not arbitrary-order or arbitrary-species validation.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
@@ -182,6 +216,43 @@ Measure recurrence versus moments, collisions and closure. The free-streaming
 estimate `t_rec ∝ sqrt(Nm)/(|k_parallel| v_th)` depends on Hermite normalization;
 it is not a universal turbulent validity horizon. Do not tune damping to hide a
 bad zonal-flow result.
+
+For each collision family document what is exact, modeled and truncated:
+conserving Lenard–Bernstein/Dougherty, original/improved Sugama, linearized
+Frei Coulomb, and nonlinear Jorge Coulomb. C4 is not implemented by evaluating
+a linearized matrix on a nonlinear turbulent state. Derive
+`C[F0+δf,F0+δf] = C[F0,F0] + C[F0,δf] + C[δf,F0] + C[δf,δf]` pairwise;
+retain or order out terms consistently with the kinetic/background equations.
+Test common-equilibrium nullspaces, pair exchange and entropy separately from
+unequal-temperature relaxation. Inspect coefficient conditioning and assembly,
+application, communication and VJP cost at research moment counts before
+choosing tables, recurrences or matrix-free contractions.
+
+Closures get a separate ladder: resolved/high-moment reference → truncation →
+hypercollision → kinetic/gyrofluid closure. Compare phase mixing, echoes, zonal
+response, linear modes and nonlinear flux at fixed physical collisions. Record
+irreversible closure error and its effect on gradients, not only speedup.
+
+### Electromagnetics, species and radial electric field
+
+Promote phi, Apar and Bpar as a coupled energy-consistent system. Derive the
+beta→0 limit, zonal/gauge nullspaces, magnetic flutter, magnetic compression,
+species current and field-energy exchange. Separate equilibrium beta/pressure
+gradient from fluctuating-field beta; test finite-beta VMEX geometry and real
+electron mass ratio. Include impurities and unequal temperatures with charge
+neutrality and matched collisions. Kinetic-electron stiffness must appear in
+both accuracy and time-to-solution measurements.
+
+| Step | Model | Required evidence |
+|---|---|---|
+| E0 | Prescribed local perpendicular ExB shear | Corrected remap `kx(t)=kx(0)-ky γE t`, stage/cache/field consistency, band-loss budget, zero-shear limit; analytic waves and matched GX shear scan |
+| E1 | Stellarator equilibrium `Φ0` and `Er=-dΦ0/dr` | Derive normalized drift, radial/field-line coupling and local-ordering limits; distinguish Er from its shear; zonal response and full-surface/global comparison where needed |
+| E2 | Transport-consistent Er | Prescribed profiles versus ambipolar root `Σs qs Γs(Er)=0` explicitly separated; include required neoclassical transport, root multiplicity/stability and implicit-derivative conditioning |
+
+Current shearing-wave kernels/research integration are evidence for parts of E0,
+not E1/E2 or toroidal rotation/PVG. Do not stop the tangent of a physically
+moving event without measuring the resulting gradient contract: test across
+remaps, finite-step perturbations and refinement, as well as between events.
 
 ## 4. R2: benchmarks and statistical validation
 
@@ -199,10 +270,13 @@ observable, tolerance, runtime tier and regeneration command. Separate equation
 | TEM / kinetic-electron ITG | Trapping/streaming/species response | stella/GENE/GX; matched collisions, real mass ratio and electron resolution |
 | ETG | Electron scales/normalization | GX/GENE; distinguish adiabatic/kinetic ions; no multiscale claim |
 | KAW / KBM | EM fields, cancellation, branch transition | Analytic KAW, beta scan; mass ratio, eigenfunctions and residuals |
+| Microtearing / nonlinear EM | Parity, electron collisions, flutter heat flux | [GENE/GKV benchmark](https://www.jstage.jst.go.jp/article/pfr/11/0/11_2403011/_article), [STEP linear comparison](https://arxiv.org/abs/2307.01670); beta/collisionality/mass-ratio ladders, ES limit and total energy balance |
 | Collision relaxation/conductivity | Invariants, entropy, collisional transport | Frei/Sugama/Spitzer–Härm; moment/k/species ladders |
+| Equilibrium Er / ExB shear | Advection, remap, decorrelation and zonal response | Analytic shearing wave; corrected-remap/GX comparison; E1 stellarator/global reference; E2 ambipolar-root residual |
 | Nonlinear Cyclone / Dimits | Saturation and zonal regulation | [Hoffmann–Frei–Ricci](https://arxiv.org/abs/2308.01016); seeds, gradient scan, hysteresis/cold–warm starts |
 | W7-X/HSX and VMEX QA/QH/QI | Stellarator transport/domain coverage | [stella–GENE](https://arxiv.org/abs/2107.06060)/GX; surfaces, alphas, tube lengths and all resolutions |
 | Linear/QL/nonlinear gradients | Declared numerical derivative | Analytic small systems, directional Taylor/FD, CPU/GPU/sharded transpose identity |
+| ESSOS fields / islands | Geometry, equilibrium and parallel/perpendicular transport | Analytic Biot–Savart and island fields; MMS and nested limit; R8 matched GENE-X/XGC-S model, topology/mesh/background ladders |
 
 Set tolerances before comparison using numerical, published, digitization and
 normalization uncertainty. Proposed starting targets: ≤1% resolved linear
@@ -276,6 +350,17 @@ temporary bytes are not measured peak memory.
 First make provenance work for archive installs and separate warm traces from
 compilation. Do not call a cross-JAX-version CPU/GPU ratio a hardware-only speedup.
 
+Use a matched JAX/dependency environment when possible, with the existing dated
+profiles as a baseline, not a substitute for a full workload sweep. First profile
+one nonzero-transport ES case, one kinetic-electron EM case and one advanced
+collision case on each backend. Trace streaming/mirror/drifts, collision setup
+and application, field solve, FFT/bracket, projector, diagnostics, transfers and
+collectives separately. Record bytes/state and retained checkpoints as well as
+allocation peaks. Build a measured cost model before changing layout or algebra.
+Expand to QA/QH/QI, resolution and parameter-count ladders only after these
+profiles explain the dominant cost. Every performance PR repeats affected
+end-to-end cases; a faster RHS with a slower accepted mean is not a win.
+
 ### Sharding acceptance ladder
 
 1. Share RK/projector/field/damping/collision semantics. Exercise nonlinear terms,
@@ -283,6 +368,14 @@ compilation. Do not call a cross-JAX-version CPU/GPU ratio a hardware-only speed
 2. First candidate: species×Hermite ownership, local perpendicular FFTs, low-order
    field reductions and width-two Hermite halos. Verify global moment indices,
    Laguerre truncation, species coupling and reduction precision.
+   Exercise meshes `(1,2)` and `(2,2)` where devices permit, not only `(2,1)`:
+   splitting species alone never tests an inter-device Hermite halo. Dense
+   collision coupling may require a different communication plan; sparse
+   streaming does not make all collisions nearest-neighbor.
+   Current `_reject_unsharded_hermite_terms` rejects conserving collisions when
+   m is split: first implement global low-order moment reduction and its VJP,
+   with collision-on/off and supported-species tests. Include staging/resharding
+   overhead and test the traced path separately from host initialization.
 3. For spatial decomposition specify pencil layouts, transforms and boundaries.
    Split/reassemble metadata is not a distributed nonlinear solve. Compare
    communication/memory with velocity decomposition on office's PCIe topology.
@@ -320,7 +413,8 @@ Use current [JAX sharding](https://docs.jax.dev/en/latest/201/sharding.html),
 
 Measure tracked bytes, fresh-clone pack, wheel, physical/AST lines, files,
 dependency graph, import and collection/runtime separately. The original
-**<10 MiB clone** goal remains; a <20 MiB working tree is not its replacement.
+**<10 MB ordinary full clone** goal remains (use the stricter 10,000,000-byte
+transfer target and also report MiB); a <20 MiB working tree is not its replacement.
 History reduction needs backup, ref inventory, tested rewrite and old→new map.
 Deleting blobs or changing authors cannot preserve identical full history.
 
@@ -374,16 +468,24 @@ a research convergence verdict.
 | ITG eigenmode | Gamma/omega/eigenfunction with units | ky/gradient threshold and convergence |
 | Nonlinear Cyclone | Q/Wphi/Wg and accepted/rejected window | Dimits/closure/cost ladder; seeds |
 | Kinetic/EM | Species response, KAW/KBM/TEM | Real mass ratio, beta/collision scans |
+| Collisions/closures | Relaxation, entropy, recurrence | C1–C4 support/convergence; transport sensitivity at fixed physical collisionality |
+| Er/shear | Analytic shearing wave and suppressed/enhanced response | E0–E2 scans; no universal suppression claim; stellarator root/ordering checks |
 | VMEX→GKX | 3-D surface, geometry, linear spectrum | QA/QH/QI, surfaces/alphas |
 | Linear QA optimization | VMEX tuples + ITG term | Mode tracking, constraints, held-out unstable branches |
 | QL QA optimization | Normalized spectral-flux objective | Family holdout/ranking and nonlinear follow-up |
 | Nonlinear QA | Saturate→detach→window value/grad | R7 restartable campaign and independent acceptance |
-| ESSOS coils | Fit accepted target surface | R8 topology/transport robustness |
+| ESSOS coils | Fit accepted target surface | R8a topology/transport robustness |
+| Coil-field/island geometry | Poincaré plot, manufactured streaming | R8b–e nested limit, physical background and converged transport/gradient |
 | Parallel scan/window | Serial/distributed identity | CPU/GPU crossover and memory |
 
 Expose physics, seed, resolution, devices and output path without new one-off
 CLIs. Test smoke scripts out of tree from an installed wheel; optional dependency
 failures must be clear. Research presets state hardware, wall time and output size.
+Each tutorial changes one physical question, explains a failed convergence check,
+and offers one short exercise. Use shared library/campaign components for restart,
+UQ and plotting; an example should not contain a second solver. Generate the
+capability/limitations table from the canonical ledger and link unsupported
+presets to the corresponding milestone rather than shipping plausible outputs.
 
 README order: purpose/scope → install/result → equilibrium → Python/AD →
 parallel/performance → validation/limitations → examples/docs/citation.
@@ -480,7 +582,7 @@ finite and fixed in vacuum QA tests; drives must not become escape parameters.
 7. Publish inputs, WOUT/geometry/seed hashes, Q(t), spectra, UQ and initial/final
    panels, including failures. Independently reproduce one matched-model result.
 
-## 9. R8: ESSOS and application breadth
+## 9. R8: ESSOS, non-flux geometry and islands
 
 ```text
 boundary x → solved VMEX → validated flux-tube geometry → GKX J(x)
@@ -490,17 +592,51 @@ ESSOS coils c → Biot–Savart B(c) → normal-field/topology checks
        → new geometry → held-out GKX transport
 ```
 
-First fit coils with normal-field, length, curvature, separation, current and
+**R8a — nested realization.** First fit coils with normal-field, length,
+curvature, separation, current and
 manufacturability constraints. Then check Poincaré surfaces, islands/iota and
 stochastic regions: small surface B·n alone does not validate the interior.
 Recompute transport on the realized nested equilibrium and under coil/current
 errors. Free-boundary VMEX or a validated vacuum-surface adapter is a prerequisite,
-not an assumed capability; reject unsupported topologies.
+not an assumed capability. This route rejects islands; the following route is
+specifically responsible for supporting them. Start its model work alongside
+R1/R2, not after the final nonlinear optimization campaign.
 
-Only then consider joint coil/equilibrium/GKX AD, after establishing the implicit
-reconstruction Jacobian. Extend gradually to QH/QI, finite beta, kinetic electrons
-and transport coupling. Pyrokinetics can help interchange/normalization, but an
-adapter success flag does not replace a matched-input audit.
+| Step | Deliverable | Exit before promotion |
+|---|---|---|
+| R8b | Direct-field geometry from ESSOS `B(x;c)` and derivatives | Analytic coil tests, div B, Jacobians/metric/orientation, Poincaré/iota/island widths; smooth-coil AD against FD; no nested-surface assumption |
+| R8c | Non-flux spatial representation | Compare FCI/field-line interpolation with suitable global meshes; derive conservative parallel derivative, gyroaverage and polarization/Ampère solve, boundaries and transposes; MMS including an island/separatrix and nested limit |
+| R8d | Consistent background and nonlinear evolution | State δf validity, profiles/sources and equilibrium residual or implement required evolving-background/full-f extension; ES then EM; conservation, topology/mesh/velocity/dt convergence and independent code comparison |
+| R8e | Coil-field transport optimization | R8b–d + R7 statistics; gradients away from topology transitions, documented event/non-smooth limits, held-out coil errors and transport; direct versus reconstructed field comparison |
+
+In an island, a globally nested flux label need not exist. A prescribed
+`F0(ψ)` from VMEC cannot simply be pasted onto that field. For a proposed
+background, explicitly evaluate its kinetic residual
+
+\[
+ R_{0s}=\dot{\mathbf R}_0\cdot\nabla F_{0s}
+       +\dot v_{\parallel0}\partial_{v_\parallel}F_{0s}
+       -\sum_b C_{sb}[F_{0s},F_{0b}]-S_{0s}.
+\]
+
+Report its size relative to the retained ordering. A uniform Maxwellian with
+manufactured forcing is a verification case, not a physical island transport
+prediction. Finite-beta ESSOS coil fields alone omit plasma-current response:
+specify total equilibrium field/force balance or a justified kinetic background.
+Open field lines need explicit particle/energy boundary conditions; a periodic
+cut must not silently replace losses. Preserve the optimized local Fourier
+backend; introduce only the spatial abstraction needed by the verified model.
+
+Use [GENE-X's stellarator extension](https://doi.org/10.1016/j.cpc.2026.110138)
+and [XGC-S verification](https://arxiv.org/abs/1905.05653) to design independent
+geometry/transport checks, not to assert identical physical models. FCI still
+requires conservative interpolation and an appropriate perpendicular field
+solve; it is not just a replacement for the parallel derivative.
+
+Joint coil/equilibrium/GKX AD requires the reconstruction/field-map Jacobian and
+topology-aware perturbation tests. Extend the accepted applications to QH/QI,
+finite beta, kinetic electrons and transport coupling. Pyrokinetics can help
+interchange/normalization, but adapter success does not replace a matched-model audit.
 
 ## 10. R9: publication and release
 
@@ -509,9 +645,16 @@ adapter success flag does not replace a matched-input audit.
 | Methods/code | JAX moment GK, verified algorithms, bounded-memory AD, CPU/GPU execution | R0–R5; equations, MMS/linear/zonal/nonlinear convergence, measured time/memory and primal/VJP scaling |
 | Differentiable design | Useful high-dimensional gradients and resolved QA reduction | R6–R7; Taylor/window/variance, equal-budget controls, held-out Q, constraints/geometry |
 | Coil-realizable design | Benefit survives coils/errors | R8; coils, normal field/topology, realized equilibrium and robust transport |
+| Collision/geometry methods, if novel | Efficient advanced Coulomb or differentiable non-flux GK | C1–C4 or R8b–e; independent coefficient/operator/physics checks, conservative limits, accuracy-cost/AD scaling; separate from a generic code-feature claim |
 
 These are candidates, not promised novelty. Combine papers if contributions do
 not justify separation. Experimental validation needs its own measurement study.
+After benchmark closure, select a device/discharge with equilibrium, profiles,
+uncertainties, heating and fluctuation/transport diagnostics. Predeclare synthetic
+diagnostics and validation metrics; propagate input and numerical uncertainty,
+retain discrepancies and use held-out conditions. Agreement with GX alone is
+not predictive experimental validation. A code/methods paper need not wait for
+all future models, but its abstract must state the validated model subset.
 
 ### Test and CI tiers
 

@@ -4504,3 +4504,41 @@ Outcome: revised plan ready for maintainer review. Next: **R0**, independently
 review damping compatibility/rate migration and default-precision coverage,
 then rebaseline affected physics. Preserve the negative sharding/optimization
 evidence. Do not restart the already-landed public API or Diffrax removal work.
+
+## 2026-09-04 — broad-physics destination and execution gates
+
+Follow-up to the same-day review on `plan/research-publication-20260904`, PR #198.
+The maintainer clarified the destination: research-grade ES/EM multispecies GK,
+advanced collisions/closures/Er and direct ESSOS fields with islands, not a
+deliberately small local solver. No solver or numerical reference changed.
+
+Changes and evidence:
+- Revised the destination and combination-level capability ledger; added C4
+  nonlinear Jorge Coulomb, E0–E2 shear/Er/ambipolarity, coupled finite-beta EM
+  gates and R8a–e nested realization/non-flux geometry/background/island AD.
+- Kept efficient local GK and made island-model development independent of
+  completing R7 optimization. Added conservative field/spatial operators,
+  equilibrium residual, finite-beta plasma-current and topology-event contracts.
+- Added collision/Er/island student/research presets, concrete EM benchmark
+  sources, experimental-validation criteria and publication-scope boundaries.
+- Confirmed office GX equals upstream HEAD `3865a537`; preserved its local
+  Makefiles. Found the explicit m-split conserving-collision rejection and
+  recorded historical species-route speedup separately from whole-state timings.
+- Broadened primary-source references. Direct GENE-X publisher access blocked;
+  indexed excerpts/preprint abstract suffice for this architectural plan, not
+  for the future detailed derivation audit.
+- Corrected README's blanket collision-validation statement to the artifact's
+  actual offline eight-moment algebra scope and shipped like-species table limits.
+- Kept the <10 MB clone goal, explicitly 10,000,000 bytes, distinct from tree size.
+
+Checks: Sphinx HTML with `-W --keep-going` passed after correcting a heading
+underline; package architecture and repository-size policy checks passed;
+`test_species_hermite_plan_factors_species_first_with_exact_hermite_division`
+passed (`-k species_hermite_plan`); `git diff --check` passed. The local amendment
+checks used `/opt/local/bin/python` (JAX 0.9.2, Sphinx 9.0.4), not the different
+environment of the earlier timing probes. No new trajectory, GPU scaling or
+physics-validation claim follows from this planning-only test.
+
+Next remains R0; R1 contracts now cover the full scientific destination. Full
+workload profiling, independent physics campaigns and predictive/optimization
+acceptance remain explicit open milestones. Keep PR #198 open; do not merge.
