@@ -331,7 +331,7 @@ therefore insufficient: converge radial, spherical, Bessel and output-moment
 truncations separately before regenerating or promoting these research tables.
 
 Independent test-particle quadrature
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For like species, the particle test operator's Dirichlet form and the Fourier
 gyrocentre pullback give, with normalized basis :math:`\psi_i(r,\xi)`,
