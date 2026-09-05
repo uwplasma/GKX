@@ -454,6 +454,9 @@ and holdout gates: [quasilinear](docs/quasilinear.rst).
 
 Collision evidence covers tested like-species drift-kinetic matrices and cached
 runtime algebra; finite-wavelength physical identities remain unverified.
+The shipped eight-moment finite-wavelength test-particle block fails independent
+quadrature checks (22.9% error at Bessel argument 1, 84.1% at 4); do not use it
+for predictive transport until the tables are repaired and converged.
 W7-X zonal long-window recurrence/damping and
 W7-X TEM / kinetic-electron extensions are deferred. Production nonlinear
 domain decomposition and equilibrium ExB flow shear remain open.

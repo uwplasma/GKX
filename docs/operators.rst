@@ -330,6 +330,33 @@ the matrix by 21.12% and 1.65% in relative Frobenius norm. Symmetry alone is
 therefore insufficient: converge radial, spherical, Bessel and output-moment
 truncations separately before regenerating or promoting these research tables.
 
+Independent test-particle quadrature
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For like species, the particle test operator's Dirichlet form and the Fourier
+gyrocentre pullback give, with normalized basis :math:`\psi_i(r,\xi)`,
+
+.. math::
+
+   C^T_{ij}(B)=-\left\langle
+   \nu_\parallel r^2\partial_r\psi_i\partial_r\psi_j
+   +\nu_D(1-\xi^2)\partial_\xi\psi_i\partial_\xi\psi_j
+   +\frac{B^2r^2}{2}[\nu_D(1+\xi^2)+\nu_\parallel(1-\xi^2)]\psi_i\psi_j
+   \right\rangle_M.
+
+Here :math:`r=v/v_T`, :math:`\xi=v_\parallel/v`, and the brackets use the
+normalized Maxwellian velocity measure. This independently derived expression
+uses the differential operator and pullback, not the spherical-moment generator.
+Gauss--Laguerre quadrature in :math:`r^2` (48/96/192 nodes) and 32-point
+Gauss--Legendre quadrature in :math:`\xi` give stable eight-moment results.
+The :math:`B=0` test matrix matches the shipped matrix within
+:math:`6.1\times10^{-15}` relative Frobenius norm, without fitted normalization.
+At :math:`B=1,4`, the shipped test blocks differ by 22.9% and 84.1%.
+The refined spherical13/radial12/Bessel24 generator agrees at :math:`B=1`
+within :math:`2.55\times10^{-9}`. This diagnoses a shipped-table limitation;
+it does not validate the field-particle/polarization blocks or transport.
+In particular, symmetry restored by radial refinement is not sufficient.
+
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
 
