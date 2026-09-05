@@ -193,19 +193,6 @@ def main(argv: list[str] | None = None) -> int:
     start = time.time()
     blocks = build_tables(args.digits, args.workers, args.hermite, args.laguerre)
     diagonals = stack_blocks(blocks)
-    data_path, metadata_path = write_artifacts(
-        diagonals, args.digits, args.hermite, args.laguerre, stem
-    )
-    elapsed = time.time() - start
-
-    print(f"generated {moments} moments in {elapsed:.1f}s at {args.digits} digits")
-    for name, value in diagonals.items():
-        print(f"  {name}: {value.shape}")
-    print(
-        f"wrote {data_path.relative_to(REPO_ROOT)} ({data_path.stat().st_size} bytes)"
-    )
-    print(f"wrote {metadata_path.relative_to(REPO_ROOT)}")
-
     if args.check:
         from build_linear_validation_artifacts import (
             coulomb_drift_kinetic_moment_matrices,
@@ -232,10 +219,22 @@ def main(argv: list[str] | None = None) -> int:
         test_error = np.abs(diagonals["test_matrix"][0] * convention - dk_test).max()
         field_error = np.abs(diagonals["field_matrix"][0] * convention - dk_field).max()
         print(f"b->0 reduction: test {test_error:.3e}, field {field_error:.3e}")
-        if max(test_error, field_error) > 1.0e-6:
+        if not (test_error <= 1.0e-6 and field_error <= 1.0e-6):
             print("FAIL: b->0 limit does not match the drift-kinetic operator")
             return 1
         print("b->0 reduction OK")
+    data_path, metadata_path = write_artifacts(
+        diagonals, args.digits, args.hermite, args.laguerre, stem
+    )
+    elapsed = time.time() - start
+
+    print(f"generated {moments} moments in {elapsed:.1f}s at {args.digits} digits")
+    for name, value in diagonals.items():
+        print(f"  {name}: {value.shape}")
+    print(
+        f"wrote {data_path.relative_to(REPO_ROOT)} ({data_path.stat().st_size} bytes)"
+    )
+    print(f"wrote {metadata_path.relative_to(REPO_ROOT)}")
     return 0
 
 

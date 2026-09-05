@@ -939,7 +939,8 @@ recursive = true
 # +10: imported sampling overrides requested Nz in parity provenance.
 # +29: full/prefix sampling equivalence with even/odd horizons and two integrators.
 # +9: refuse reference modes absent from the effective solver grid before scans.
-baseline = 86947
+# +21 net: preserve existing collision artifacts when finite/NaN/Inf checks fail.
+baseline = 86968
 target = 35000
 
 [[line_budget_policy.counts]]

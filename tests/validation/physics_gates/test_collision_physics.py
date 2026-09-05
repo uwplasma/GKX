@@ -45,6 +45,34 @@ from build_linear_validation_artifacts import (  # noqa: E402
 MOMENT_COUNT = 8
 
 
+@pytest.mark.parametrize("error", [0.0, 1e-5, np.nan, np.inf])
+@pytest.mark.parametrize("component", [0, 1])
+def test_collision_table_check_precedes_publication(
+    monkeypatch, tmp_path, error, component
+):
+    import build_finite_wavelength_coulomb_data as generator
+    import build_linear_validation_artifacts as reference
+
+    count = len(generator.BESSEL_ARGUMENTS)
+    blocks = [np.zeros((count, count, 8, 8)) for _ in range(2)]
+    blocks += [np.zeros((count, count, 8)) for _ in range(4)]
+    blocks[component][0, 0, 0, 0] = error
+    monkeypatch.setattr(generator, "build_tables", lambda *args: tuple(blocks))
+    monkeypatch.setattr(
+        reference,
+        "coulomb_drift_kinetic_moment_matrices",
+        lambda *args, **kwargs: (np.zeros((8, 8)),) * 2,
+    )
+    monkeypatch.setattr(generator, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(generator, "REPO_ROOT", tmp_path)
+    paths = [tmp_path / f"{generator.STEM}.{suffix}" for suffix in ("npz", "json")]
+    for path in paths:
+        path.write_bytes(b"existing table")
+    assert generator.main(["--check"]) == (0 if error == 0 else 1)
+    for path in paths:
+        assert (path.read_bytes() == b"existing table") == (error != 0)
+
+
 def conservation_tolerance() -> float:
     """Return a tolerance matched to the ambient JAX precision.
 
