@@ -6419,3 +6419,32 @@ Do not replace current running reporter mid-campaign. Added this scoped R3 task.
 
 Latest live handles: dt-control73383/PID1729118 RNl6m48s; kinetic40474/PID1729837
 RNl3m12s. Resume these, no restart. No source edits or merges; full scope active.
+
+## 2026-09-05 — Reusable-prefix regression contract committed
+
+Previous turn progressed with actual trajectory-reuse pilot. Inspected public
+scan facade/options/batch dependency path: histories exist only inside batch
+orchestration and current return type contains fitted spectra. Multi-window
+support still needs deliberate API work; no monkeypatch capture or second solver
+implementation added. Committed **8bae97a2** to draft PR202:29-line regression in
+existing tests/unit/linear/test_linear.py, explicitly budgeted, no new files.
+
+test_diagnostic_prefix_and_cadence_preserve_trajectory executes real streaming
+and fixed-rate end damping on nonzero fields/density, RK4 and IMEX2, horizons24
+and25, full diagnostic strides3/5 and half-horizon stride2. Compares sampled
+dense histories to separately integrated trajectories; nondividing stride is
+explicitly rejected. Does not yet test window-specific project/auto mode fits,
+GPU equivalence, multi-window API or actual time savings.
+
+Local CPU/JAX0.11.1 PYTHONPATH=src, separate JAX_ENABLE_X64=true/false commands:
+python -m pytest -q tests/unit/linear/test_linear.py -k diagnostic_prefix_and_cadence
+--junitxml=<scratch>/prefix-cadence-f64.xml (or f32). **4pass each precision**;
+sessions24974/66279 terminal exit0. Scratch=/tmp/gkx-coupled-rate-20260905.shBvlR.
+Hashes f64 `89e79117073e9de7d9dbaf9275188d1f98c4f7952ed60d08a31f2c45130d5c76`,
+f32 `ab1334b1929712462fb6bcb3e8e8df1f53741b18244a5e9d0c17e92653e580ee`.
+Ruff lint/format406files, architecture and whitespace pass; commit/push17967exit0.
+Production source and active campaign unchanged; optimization remains pending.
+
+Latest verified live: dt-half73383/PID1729118 RNl10m42s; matched kinetic
+40474/PID1729837 RNl7m06s. Resume these; two-GPU derivative test still pending
+until both free. No restart, snapshot overwrite or merge; full scope active.
