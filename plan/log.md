@@ -7005,3 +7005,31 @@ logging, not a completed finite-history audit. CI33956493988 has36successful job
 1skip and only nonlinear-core101280712503/parallel-autodiff101280712595 still
 running, no failures. Keep local9fc6e42d unpushed until this finishes; original
 GKX checkout untouched, no merges. Full R0–R9 roadmap remains active.
+
+## 2026-09-05 — Coupled velocity-refinement preflight; CI allowed to finish
+
+Previous turn progressed with reproducible GX patch/audit bundle. Prepared next
+GKX control at Nl32/Nm128/Nz96/T300/dt.001/rate50, not launched. The earlier
+Nm96→128 result usedNl16; it cannot certify Hermite convergence after increasing
+Nl to32. New salpha_nl32_nm128_t300.toml is in campaign and local recent scratch,
+SHA256 `09dab70e0a8cee45f434294acb2b8183b9d9442cc5b9bc2d8c3b8722a8357d0f`.
+Key cyclone_salpha_itg_nl32_nm128_t300, exactreferenceky.550000011920929,
+RK4/300000steps/latefraction.7. Compare against completed Nl32/Nm96 dt-half
+control, not against Nl16 or a changed horizon. The p20 regularization prescription
+is retained but its coefficient depends on Nm; no fixed-operator claim.
+
+Local CPU x64 preflight with GX_PARITY_REF_DIR=<scratch>/matched_refs,
+PYTHONPATH=src: load parity s-alpha config, import geometry, apply grid defaults,
+select nearest stored highky, build_runtime_linear_params(Nm=128), evaluate
+_linear_frequency_bound(grid,geom,params,32,128). Actualky.55, Nz96;
+frequencies[0,1246.14853652,93.09558798], .9*2.82/sum=.0018950988498382464.
+Chosen dt.001 is below the heuristic bound; this is not an executed stability
+or convergence test. No production/source changes and no new long job this turn.
+
+CI33956493988 progressed to only nonlinear-core101280712503 in progress;
+parallel-autodiff completed without failure. One bounded30s wait and requery
+confirmed that exact CI job remains live; no cancellation or held-commit push.
+Local9fc6e42d still ahead1 of pushedb734e19d. Latest process checks: kinetic
+40474/PID1729837 RNl1h16m14s; patchedGX95001/PID1738946 RNl8m25s. Resume these;
+do not infer stalled/terminal state from buffered GKX output. No PR merge;
+full research/publication roadmap active.

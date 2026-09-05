@@ -176,6 +176,9 @@ Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
 **Next actions:** inspect both exits, hashes, finite histories and all rows.
+Prepared next GKX velocity control: `salpha_nl32_nm128_t300.toml` in campaign,
+not running. Compare against the completed Nl32/Nm96 dt.001/T300 control;
+the earlier Nm96→128 result at Nl16 cannot establish convergence at Nl32.
 GX95001 is now running with an isolated normalized-power repair, explicitly
 labeled as a modified reference (original checkout/binary unchanged). The failed
 original high-order startup and repaired finite startup are retained; low-order
