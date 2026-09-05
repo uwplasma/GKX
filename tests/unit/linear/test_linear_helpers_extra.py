@@ -424,15 +424,11 @@ def test_signed_to_index_and_linked_end_damping_profile() -> None:
     assert np.allclose(profile_zero_width, 0.0)
 
 
-def test_linked_fft_maps_validate_ky_mode_and_empty_maps() -> None:
+@pytest.mark.parametrize("nz", [3, 4])
+def test_linked_fft_maps_validate_ky_mode_and_empty_maps(nz) -> None:
+    kwargs = dict(y0=1.0, nz=nz, dz=0.5, jtwist=1, real_dtype=jnp.float32)
     empty_indices, empty_kz = _build_linked_fft_maps(
-        ky=np.asarray([]),
-        kx=np.asarray([]),
-        y0=1.0,
-        nz=4,
-        dz=0.5,
-        jtwist=1,
-        real_dtype=jnp.float32,
+        ky=np.asarray([]), kx=np.asarray([]), **kwargs
     )
     assert empty_indices == ()
     assert empty_kz == ()
@@ -440,15 +436,19 @@ def test_linked_fft_maps_validate_ky_mode_and_empty_maps() -> None:
     indices, kz = _build_linked_fft_maps(
         ky=np.asarray([0.0, 0.1, 0.2]),
         kx=np.asarray([0.0, 0.2, -0.2, 0.4]),
-        y0=1.0,
-        nz=4,
-        dz=0.5,
-        jtwist=1,
-        real_dtype=jnp.float32,
+        **kwargs,
         ky_mode=np.asarray([0, 1, 2]),
     )
-    assert len(indices) == len(kz)
-    assert all(idx.ndim == 2 for idx in indices)
+    assert [idx.tolist() for idx in indices] == [
+        [[0], [3], [9], [2]],
+        [[5, 11]],
+        [[4, 1, 10]],
+    ]
+    assert len(kz) == 3
+    for chain, frequencies in zip(indices, kz):
+        n = chain.shape[1] * nz
+        modes = np.r_[np.arange((n + 1) // 2), np.arange(-(n // 2), 0)]
+        np.testing.assert_allclose(frequencies, 4 * np.pi * modes / n, rtol=1e-6)
 
     profile = _build_linked_end_damping_profile(
         linked_indices=(jnp.asarray([1, 2], dtype=jnp.int32),),
