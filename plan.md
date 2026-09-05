@@ -163,13 +163,18 @@ ky. Hypercollision coefficients depend on Nm: fixed input does not imply fixed
 damping at retained moments. Temporal settling, cross-code parity, resolution
 convergence and experimental validation are distinct claims.
 
-**Only live research job:** corrected GX Nm96/Nl32/Nz96 dt.002/T300 reference,
+**Completed reference (no live research jobs):** corrected GX Nm96/Nl32/Nz96 dt.002/T300 reference,
 GPU1, **7690/PID1753613** (time1753612), in
 `/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`.
 Input `salpha_nl32_nm96_t300.in`; logs `run.log`, `time.log`. Binary in the parent
 scratch root includes normalized hypercollision powers AND damping stride repair.
 Nm16011457, field12758, RHS probes63632/68046/95262, build80927 and startup50025
-are terminal exit0. Do not restart them. GPU0 is free; code CI not yet certified.
+are terminal exit0. Do not restart them. GX7690 also exited0 in1:44:56;
+artifact/time/finite-array audits pass. Both GPUs are free; code CI not yet certified.
+At ky=.55, corrected GX gamma=.0249083096362 versus GKX=.0248520921245
+(−.2257%); omega differs−.009894%. The same-state Rayleigh discrepancy is
+small, but the normalized full-state residual remains .30498. Do not equate
+frequency agreement with operator equivalence or velocity convergence.
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -179,8 +184,8 @@ uses a separate grid-verified reporter from1571a9e6; no running copy overwritten
 Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** repair and verify reference launch coverage before further
-high-order parity runs; inspect the remaining same-state operator residual.
+**Next actions:** inspect the remaining same-state operator residual, including
+GX's own residual on its final distribution, before further high-order parity runs.
 Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
 completed11457 exit0 in54:11.43: gamma=.02410635371563277,omega=.5058500630938944.
 Nm128→160 changes gamma+5.596% and omega+.4566%; velocity convergence still fails.
@@ -231,7 +236,7 @@ retain original outputs and do not reproduce the defect in GKX. An isolated
 actual-kernel regression now reproduces1966/54958 missed updates for73728/294912
 indices; the stride repair passes all cases, including the6144-index control.
 New build96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
-passes the T1 finite-state smoke test. Corrected matched run7690 is live; its
+passes the T1 finite-state smoke test. Corrected matched run7690 completed exit0; its
 input SHA remainsfb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
 The updated audit-refined-gx.py in the new scratch root now requires explicit
 --root/--stem/--binary/--binary-sha256/--input-sha256/--gkx-csv and rejects a
@@ -486,7 +491,9 @@ Any finite linear grid retains the wrong power as b→0. Before adding more
 nodes, investigate a density-scaled congruence C=D A D, D=diag(b,1,...), with
 the b=0 limit of A derived and independently checked; positive-weight interpolation
 of a negative-semidefinite A would preserve dissipativity and density scaling.
-This is a proposal, not implemented or certified. Check all source-vector
+The bounded prototype now derives A(0) and the source limit analytically and
+passes independent small-b checks for8/18 moments; see the logbook's scaled
+congruence checkpoint. This is not implemented or globally certified. Check all source-vector
 limits separately, smooth derivative accuracy, endpoints and CPU/GPU cost;
 do not repair one entry by hand at the expense of matrix entropy.
 Record quadrature provenance (not fictional high-precision decimal digits),

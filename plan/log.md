@@ -8604,5 +8604,103 @@ released to the review branch after the previous CI completed.
 | density-quartic-audit.py | 81bda9eae6fdc4b19af692c0bc5e64906b5c897d89ac79fbb4b33ab4bc2e6932 |
 | density-quartic-audit.log | 4b892409461ecb6c10561dc0238cee762bd1dbfe2e504d08043beaad6b3150fe |
 
-Only GX7690 remains live. Continue its explicit-path terminal audits after
-success; current observation is not terminal. Full R0–R9 goal active.
+Only GX7690 remains live at this checkpoint. Continue its explicit-path terminal
+audits after success; this observation is not terminal. Full R0–R9 goal active.
+
+### 2026-09-05: analytic scaled-congruence limits; repaired GX reference terminal
+
+Code remains17ff384a, no production interpolation change. CI33967886511 is
+in_progress with two pending jobs (parallel-autodiff and nonlinear-core), no
+failures at this checkpoint. No merges. All research processes below are terminal;
+both office GPUs are free. Do not restart the completed reference.
+
+**Collision prototype.** Local scratch root
+`/tmp/gkx-collision-candidates-20260905.XqBQZb`;
+`scaled-congruence-study.py` SHA256
+`98c3d9bc866e8c76b7f0ff7a7012d13931b3510f9ffe8f6a22363b744043a02f`,
+analytic log SHA256
+`6e5d20bb000317ddf0aefe50dc7863cfa503917a0c3b0ce54def618df42081c1`.
+Run from code worktree with PYTHONPATH=src:tools/artifacts and local JAX0111
+venv Python. Session44844 completed; log contains both8/18-moment results.
+Earlier extrapolated-endpoint output remains in scaled-congruence-study.log;
+the script now uses exact analytic endpoints, not a fitted small-b value.
+
+For unsigned paper Laguerre convention, K=C(0), density index0 and first
+Laguerre index1, define b=B²/2, D=diag(b,1,...), C=D A D. Derived limits:
+
+```
+A(0)[i,j] = K[i,j]                 (i,j>0)
+A(0)[0,j] = K[1,j]/2               (j>0; symmetric column)
+A(0)[0,0] = K[1,1] = -8*sqrt(2/pi)/15
+T = identity with column0 replaced by e1/2
+A(0) = T.T K T + (3/4)*K[1,1]*e0 e0.T
+p = b D q                         (full-J0 collision source)
+q(0) = A(0)*(e0+e1/2)
+q(0)[0] = (5/4)*K[1,1]; q(0)[i] = K[i,1] (i>0)
+```
+
+Derivation uses the particle Landau Dirichlet form, rotational invariance,
+its density/momentum/energy null modes, and expansion of exp(-i B vx).
+For an axisymmetric target, vx² averages to (1-L1)/2; rotational invariance
+gives Q(vx²,vx²)=Q(vz²,vz²)=K[p2,p2]/2=K[1,1].
+The displayed decomposition proves A(0) negative-semidefinite whenever K is;
+convex interpolation and congruence then preserve matrix dissipation.
+This does NOT prove dissipation in the coupled solved-field metric.
+
+Important implementation contract: runtime signed Laguerre reverses the
+off-diagonal density limits: A0[0,j]=-K_runtime[1,j]/2 and q0[i]=-K_runtime[i,1]
+for i,j>0; A00/q00 unchanged. The prototype uses unsigned paper convention.
+Index1 is Laguerre only when Nl>=2; do not silently impose this on generic
+one-Laguerre/one-moment constructors. Such basis/API cases need explicit tests.
+
+Analytic versus extrapolated A0 discrepancy falls from~9.5e-8 at h1e-3 to
+~9.6e-12 at h1e-5. Source discrepancy reaches~2.4e-9 at h1e-4 and then stalls
+near1.8e-9 from cancellation. Analytic q00=-.531923040535... avoids this fit.
+Maximum eigenvalue over controls and1001 sampled b values is<7.6e-15.
+At b1e-8, density value/derivative ratios to the stable independent integral
+are1+4.95e-12 /1+7.43e-12; at first-interval midpoint .00390625,
+both differ by~9.68e-7 relative. This fixes the limiting power in a prototype,
+NOT the whole-grid derivative defect. Next: signed-runtime JVP/VJP, source
+limits and basis contracts, off-midpoint/endpoint errors, then cost comparison.
+Do not promote linear interpolation as globally accurate or repair C00 alone.
+
+**GX completion.** GX7690/PID1753613 exited0 in1:44:56, maxRSS1692920KiB.
+Root `/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`,
+stem salpha_nl32_nm96_t300. Binary96a53403... and inputfb3e49f... match the
+full expected hashes in the preceding checkpoint. Explicit artifact audit72318
+exited0: 264/42/2 numeric arrays finite in out/big/restart;1501 diagnostic
+samples,150000 steps, dt=.002000000095, terminal t=300.0000142492354.
+Finite arrays do not certify GX's known uninitialized scalar geometry metadata.
+
+| Artifact | SHA256 |
+|---|---|
+| out.nc | d5d834349e2ac3b8c8c4aae3a0e0ad8e2b5a779bc9c32a6e64196437e468a4f9 |
+| big.nc | 6cf195f08eefc5a8da029535c4b97071b30dfc78007228d0c4b74360c7b7a189 |
+| restart.nc | 2647207698043658107ba548197ab96c3de87bc5341f8eceb11fa340da874aac |
+
+10/11 positive modes pass the audit's temporal screen; ky=.05 fails
+(gamma half-shift−8.461%, omega−1.209%). At ky=.55, GX window mean
+gamma=.024908309636238253, omega=.5049831325141155; GKX dt-half control
+gamma=.02485209212445021, omega=.5049331701718064. Relative differences
+−.2256978% and−.00989386%, substantially smaller than the invalid old~4% gap.
+Using the audit's70%-start window instead gives gamma=.02487663027237762,
+omega=.5049278882813295 and differences−.0986394%,+.00104607%.
+Window dependence is not a statistical confidence interval or convergence proof.
+
+Same-state GPU0 x64 audit92620 exited0, diagnostic/restart/field timestamps
+match. Run updated audit-gx-final-state-rhs.py with explicit --root/--stem,
+cwd `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`, PYTHONPATH=src,
+GX_PARITY_REF_DIR=<cwd>/matched_refs, JAX_ENABLE_X64=true, CUDA_VISIBLE_DEVICES=0.
+GX last eigenvalue=.024950768798589706−.5049121379852295i;
+GKX Rayleigh=.024866607716735115−.5048557653340449i.
+Field relative difference8.20556e-8, but residual at GX=.30497635 and minimum
+scalar residual=.30497629. Old launch-coverage emulation worsens residual
+to.31552105 and Rayleigh to.02691289824−.50485576533i.
+This confirms the repaired coverage matters but DOES NOT establish full-state
+operator equivalence. Next compute GX's own RHS residual on this distribution,
+then compare termwise and temporal shape settling; do not infer another bug
+from a large eigenmode residual without that control. Nm convergence still fails.
+
+Resume: review terminal CI; implement no collision change before the signed/
+source/basis/whole-grid gates above; isolate remaining same-state GX residual.
+Plan remains the authoritative logbook. R0–R9 goal active.
