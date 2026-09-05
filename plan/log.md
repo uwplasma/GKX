@@ -6161,3 +6161,33 @@ Strict Sphinx -W build and git diff --check pass. Command PYTHONPATH=src
 Reverified both office jobs RNl: kinetic session6455/PID1722824 at41m12s;
 Nl32 session26034/PID1727418 at2m45s. Running reporter remains0acbd221.
 Resume these handles; no restart or snapshot changes. No merge; full scope active.
+
+## 2026-09-05 — Memory/timing scope audit for publication evidence
+
+Previous turn progressed with corrected historical public parity claims.
+Read completed JSON cost records in office campaign results: Nm96T300 primary
+scan306.378781s, RSS1496.933594MiB, allocator peak68.673828MiB; Nm128T300
+392.785458s/1490.796875MiB/70.188477MiB; Nl24Nm96T300
+422.990467s/1498.718750MiB/71.000977MiB. These are triage records, not isolated
+equal-accuracy performance claims (the cases differ in resolution and accuracy).
+
+Source audit: elapsed wraps primary scan only; half-horizon check is outside.
+RSS uses RUSAGE_SELF lifetime maximum; device counter is first visible device
+peak_bytes_in_use, neither reset per case nor all-device reserved memory.
+Both denominators are1024² despite historical mb field names. Previous
+nvidia-smi12168MiB usage cannot be compared directly to these allocator peaks.
+Checked primary JAX documentation https://docs.jax.dev/en/latest/gpu_memory_allocation.html:
+default75% GPU preallocation, alternative allocator/fragmentation/runtime tradeoffs.
+This supports distinguishing reservation from storage, not a measured decomposition
+of the observed12168MiB or a reason to alter active-run allocator settings.
+
+Committed/pushed **20bb9600** to draft PR202: concise performance documentation
+of timing scope, lifetime/first-device counters, MiB, fresh-process attribution,
+and prohibition on comparing mismatched GX/JAX memory metrics. Strict Sphinx -W
+and whitespace pass, session14949 exit0. Build log
+/tmp/gkx-coupled-rate-20260905.shBvlR/docs-memory-scope.log. No solver or measurement
+implementation change. Full phase/memory profiling remains R3 work.
+
+Latest authoritative process check: GX kinetic6455/PID1722824 RNl43m00s;
+Nl32 GPU126034/PID1727418 RNl4m33s (session26034, GPU1). Resume both; no restart.
+Initial CI202 failure query empty, not evidence all checks finished. Nothing merged.
