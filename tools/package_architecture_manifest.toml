@@ -930,7 +930,8 @@ recursive = true
 # 86668 -> 86718: execute reporting gates with drifting/nonfinite frequencies
 # and zero reference growth rates; preserve total and error-coverage counts.
 # +43: exercise reference probes, terminal writes and joint reporting unknowns.
-baseline = 86761
+# +10: preserve demo horizon and fixed damping while refining its timestep.
+baseline = 86771
 target = 35000
 
 [[line_budget_policy.counts]]

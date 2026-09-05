@@ -13,8 +13,9 @@ DEFAULT_DEMO_SETTINGS: dict[str, float | int | str] = {
     "Nm": 14,
     "solver": "time",
     "method": "rk4",
-    "dt": 0.03,
-    "steps": 500,
+    "dt": 0.02,
+    "steps": 750,
+    "damp_ends_rate": 0.1 / 0.03,
     "sample_stride": 5,
     "fit_signal": "phi",
 }
@@ -125,7 +126,7 @@ nu_hyper = 0.0
 p_hyper = 4.0
 hypercollisions_const = 0.0
 hypercollisions_kz = 1.0
-damp_ends_amp = {0.1 / float(settings["dt"])} # Fixed rate at this preset's reference timestep.
+damp_ends_amp = {settings["damp_ends_rate"]} # Fixed rate; independent of the integration step.
 damp_ends_widthfrac = 0.125
 
 [normalization]
@@ -174,6 +175,7 @@ def _print_intro(toml_path: Path) -> None:
         "No input specified; running the default Cyclone initial-value demo.",
         flush=True,
     )
+    print("Short transient illustration, not a converged growth-rate benchmark.", flush=True)
     print(
         "The first run includes JAX compilation; progress reports elapsed time and ETA.",
         flush=True,
