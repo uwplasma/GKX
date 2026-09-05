@@ -940,7 +940,8 @@ recursive = true
 # +29: full/prefix sampling equivalence with even/odd horizons and two integrators.
 # +9: refuse reference modes absent from the effective solver grid before scans.
 # +21 net: preserve existing collision artifacts when finite/NaN/Inf checks fail.
-baseline = 86968
+# +18: reject nonfinite values in all six published coefficient blocks.
+baseline = 86986
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1015,7 +1016,8 @@ recursive = true
 # +10: explicit joint temporal-screen error coverage and console headline.
 # +9: resolve actual spectral-grid Nz while retaining the requested value.
 # +6: move grid resolution to preflight and validate actual solver ky.
-baseline = 77973
+# +1 net: reject nonfinite collision coefficients before publication.
+baseline = 77974
 target = 0
 
 [[line_budget_policy.counts]]

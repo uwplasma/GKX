@@ -73,6 +73,24 @@ def test_collision_table_check_precedes_publication(
         assert (path.read_bytes() == b"existing table") == (error != 0)
 
 
+@pytest.mark.parametrize("component", range(6))
+@pytest.mark.parametrize("error", [np.nan, np.inf])
+def test_collision_table_publication_rejects_nonfinite(
+    monkeypatch, tmp_path, component, error
+):
+    import build_finite_wavelength_coulomb_data as generator
+
+    blocks = {name: np.zeros(2) for name in generator.BLOCK_NAMES}
+    blocks[generator.BLOCK_NAMES[component]][-1] = error
+    monkeypatch.setattr(generator, "DATA_DIR", tmp_path)
+    paths = [tmp_path / f"{generator.STEM}.{suffix}" for suffix in ("npz", "json")]
+    for path in paths:
+        path.write_bytes(b"existing table")
+    with pytest.raises(ValueError, match="non-finite"):
+        generator.write_artifacts(blocks, digits=40)
+    assert all(path.read_bytes() == b"existing table" for path in paths)
+
+
 def conservation_tolerance() -> float:
     """Return a tolerance matched to the ambient JAX precision.
 

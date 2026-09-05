@@ -119,6 +119,8 @@ def write_artifacts(
 ) -> tuple[Path, Path]:
     """Write the checksummed ``.npz``/``.json`` pair into the package data."""
 
+    if any(not np.isfinite(value).all() for value in diagonals.values()):
+        raise ValueError("Coulomb candidate contains non-finite coefficients")
     buffer = io.BytesIO()
     np.savez(
         buffer,
