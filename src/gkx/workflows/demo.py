@@ -175,7 +175,10 @@ def _print_intro(toml_path: Path) -> None:
         "No input specified; running the default Cyclone initial-value demo.",
         flush=True,
     )
-    print("Short transient illustration, not a converged growth-rate benchmark.", flush=True)
+    print(
+        "Short transient illustration, not a converged growth-rate benchmark.",
+        flush=True,
+    )
     print(
         "The first run includes JAX compilation; progress reports elapsed time and ETA.",
         flush=True,
