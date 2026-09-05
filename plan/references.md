@@ -1,8 +1,71 @@
 # Literature and code survey
 
-Only primary papers and upstream project documentation are used for technical
-decisions. Access was available for the sources below; no inaccessible paper is
-currently blocking the audit.
+Only primary papers and upstream project documentation inform technical
+decisions. Entries are references, not evidence that GKX implements or validates
+every result. Open sources suffice for the current plan; textbook full-text
+access is distinguished from publisher previews below.
+
+## September 2026 review update
+
+Checked on 2026-09-04. The execution priorities are in [the roadmap](../plan.md);
+the dated [audit](baseline/review_2026_09_04.md) separates new experiments from
+historical evidence. These are the sources with direct consequences for the next
+round, rather than an undifferentiated reading list.
+
+| Primary source | Use in GKX / boundary of the inference |
+|---|---|
+| [Mandell–Dorland–Landreman, moment formulation](https://arxiv.org/abs/1708.04029) and [GX](https://arxiv.org/abs/2209.06731) | Moment/field/closure equations and matched CPU/GPU workloads. Shared heritage makes an independent analytic or stella/GENE check important. |
+| [GX nonlinear tutorial](https://gx.readthedocs.io/en/latest/Nonlinear.html) | A short runnable deck followed by physical interpretation/convergence; copy the teaching structure, not an unqualified grid default. |
+| [stella implementation](https://github.com/stellaGK/stella) and [W7-X stella/GENE benchmark](https://arxiv.org/abs/2107.06060) | Independent stellarator/zonal/kinetic-electron comparison and matched boundary/normalization audit. |
+| [Hoffmann–Frei–Ricci, Dimits shift](https://arxiv.org/abs/2308.01016) | Nonlinear threshold and moment/closure convergence. Published velocity dissipation can affect flux; refine closure as well as moments. |
+| [Sugama et al. 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and [improved operator 2019](https://arxiv.org/abs/1906.07427) | Distinguish original/improved operators and temperature-dependent adjointness conditions; derive weighted entropy tests. |
+| [Oberparleiter et al. stopping rule](https://publications.lib.chalmers.se/records/fulltext/247070/local_247070.pdf), [Vaezi–Holland](https://arxiv.org/abs/1902.10879), [Flegal–Jones](https://arxiv.org/abs/0811.1729) | Stationarity then correlated uncertainty; compare batch/spectral estimates and calibrate causal stopping. MCMC asymptotics are not automatically a finite-turbulence coverage theorem. |
+| [Sánchez et al., computational domains](https://arxiv.org/abs/2106.02828) | Test field-line length/label, not just Nz on one tube. Flux-tube fidelity has configuration-dependent limits. |
+| [Acton et al., gyrokinetic adjoint](https://arxiv.org/abs/2403.12621) | Linear microstability design baseline; certify eigenpairs/conditioning and compare derivative cost. |
+| [Kim et al., nonlinear stellarator optimization](https://arxiv.org/abs/2310.18842) | Nonlinear-in-the-loop design precedent; frozen-candidate independent forward evaluation is essential. |
+| [Artigues–Merlo–Jenko, iGENE, 2026 preprint](https://arxiv.org/html/2605.03086v1) | Truncated backpropagation can give useful directions but exhibits bias and eventual divergence. Its reported window is case-specific; GKX must measure its own. |
+| [Galletti et al., gyaradax, 2026 preprint](https://arxiv.org/html/2604.06085v1) | Existing JAX local-GK/AD work means GKX novelty must be specific and benchmarked, not simply “uses JAX/AD”. |
+| [Wang–Hu–Blonigan, shadowing](https://arxiv.org/abs/1204.0159) | A research alternative to ill-conditioned long-time initial-value sensitivity; no automatic guarantee of feasibility for high-dimensional GK. |
+| [JAX profiling](https://docs.jax.dev/en/latest/201/profiling.html), [checkpointing](https://docs.jax.dev/en/latest/gradient-checkpointing.html) | Synchronize execution; separate compilation, warm runtime and allocator/compiler memory. Checkpointing changes storage/recomputation, not statistical bias. |
+| [JAX distributed arrays](https://docs.jax.dev/en/latest/201/sharding.html), [shard_map](https://docs.jax.dev/en/latest/201/shard-map.html), [AD with sharding](https://docs.jax.dev/en/latest/301/sharding-ad.html) | Current mesh/collective/transpose contracts. Validate real distributed primal/VJP, not only logical reassembly. |
+| [VMEX](https://github.com/uwplasma/vmex), [ESSOS](https://github.com/uwplasma/ESSOS), [SOLVAX](https://github.com/uwplasma/SOLVAX) | Reuse equilibrium AD, coil fitting and structured algebra through tested ownership boundaries; do not infer a complete coil-to-transport derivative chain. |
+| [Pyrokinetics](https://pyrokinetics.readthedocs.io/en/latest/) | Input/output and normalization interoperability, subject to an explicit model-matching test. |
+| [Diátaxis](https://diataxis.fr/) | Separate tutorials, task instructions, explanation and reference; no mandatory theme or markup migration. |
+
+### Broad-physics scope amendment
+
+The destination includes non-flux geometry/islands, not only nested local tubes.
+These additional primary sources define explicit model-development gates; no
+new GKX physics is certified by adding them to the plan.
+
+| Source | Decision and benchmark to extract |
+|---|---|
+| [Jorge–Frei–Ricci, nonlinear Coulomb (2019)](https://arxiv.org/abs/1906.03252) | C4 bilinear gyroaveraged moments; derive truncation/order and evolving-background consistency. Recover the linearized operator, test pair conservation/entropy and measure high-order contraction cost. |
+| [Frei et al., linearized collision operators (2021)](https://arxiv.org/abs/2104.11480) | C1–C3 arbitrary-k, mass/temperature-ratio coefficients, DK limit, ITG and zonal damping. Existing 8/18 like-species tables are a restricted implementation, not this entire capability. |
+| [Frei et al., improved Sugama (2022)](https://arxiv.org/abs/2202.06293) | Conductivity, TEM and collisional comparisons distinguish original/improved Sugama from Coulomb; do not collapse them into interchangeable model names. |
+| [McMillan–Ball–Brunner, corrected remap](https://arxiv.org/abs/1711.03830) | E0 analytic nonlinear coupling test, fractional-phase correction and convergence; integer-only remap is not an adequate reference. Add event-crossing derivative/refinement checks. |
+| [Sánchez et al., global-code perspective](https://arxiv.org/abs/2210.05467) | E1 background Er and surface localization need domain-aware tests beyond one homogeneous local tube. Use EUTERPE/GENE-3D comparisons for the appropriate model. |
+| [St-Onge–Barnes–Parra, radially global stella](https://arxiv.org/abs/2201.01506) | A controlled intermediate route to radial profile variation while retaining Fourier machinery. It does not by itself remove nested-surface assumptions or handle islands. |
+| [Finkbeiner et al., GENE-X stellarator extension (2026)](https://www.sciencedirect.com/science/article/abs/pii/S0010465526001207) | R8 non-flux geometry/FCI, MMS and island-divertor application. Compare ordering, gyroaverage, field solve and boundaries explicitly. Upstream identifies GENE-X 2026.1 and PARALLAX 1.1.0; source access/license must be checked before reuse. |
+| [Cole et al., XGC-S verification](https://arxiv.org/abs/1905.05653) | Independent non-axisymmetric linear ITG geometry/code test. This paper is not a nonlinear island-transport benchmark. |
+| [GENE/GKV electromagnetic comparison](https://www.jstage.jst.go.jp/article/pfr/11/0/11_2403011/_article), [STEP linear EM benchmark](https://arxiv.org/abs/2307.01670) | Concrete microtearing/KBM benchmark candidates beyond simply enabling EM fields. Extract frozen cases/normalizations and convergence from the papers before running; STEP is a later high-beta stress test, not the first EM gate. |
+
+GX office source and upstream HEAD were checked at
+`3865a53778862e1686f414bf6f416339e24887c9`. Its `parameters.cu` exposes ExB shear,
+Apar/Bpar, kinetic/Boltzmann species and closure selection; audit actual RHS and
+reference decks before treating a parameter name as a validated capability.
+Preserve GX's license and the two local untracked office Makefiles.
+
+Textbooks for R1 derivations: Helander–Sigmar,
+[*Collisional Transport in Magnetized Plasmas* (publisher excerpt)](https://assets.cambridge.org/97805210/20985/excerpt/9780521020985_excerpt.pdf),
+and Canuto et al.,
+[*Spectral Methods: Fundamentals in Single Domains*](https://link.springer.com/book/10.1007/978-3-540-30726-6).
+Only previews/publisher descriptions were available in this review; full chapters
+on collision entropy and spectral projection/aliasing would be useful for the
+detailed derivation audit. No missing paywalled source blocks the present roadmap.
+
+The entries below preserve the broader earlier survey. Case-specific claims
+there must be checked against their dated artifacts before reuse.
 
 ## Gyrokinetics and moment representation
 

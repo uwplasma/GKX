@@ -8,7 +8,15 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue.svg)](pyproject.toml)
 [![Docs](https://readthedocs.org/projects/gkx/badge/?version=latest)](https://gkx.readthedocs.io)
 
-GKX is a JAX-native gyrokinetic solver for tokamak and stellarator flux tubes: it takes a VMEC equilibrium or an analytic geometry, computes linear stability and nonlinear turbulence in a Hermite-Laguerre velocity basis, and differentiates the whole path end to end on CPUs and GPUs.
+GKX is a JAX-native gyrokinetic solver for tokamak and stellarator flux tubes: it takes a VMEC equilibrium or an analytic geometry, computes linear stability and nonlinear turbulence in a Hermite-Laguerre velocity basis, and supports differentiable objectives on CPUs and GPUs. Nonlinear derivatives are of a declared finite window; validated long-time transport optimization remains an open research goal.
+
+**Research status (2026-09-04):** 2.0.0 has an open [end-damping regression](https://github.com/uwplasma/GKX/issues/192). Affected benchmarks need a repaired operator and revalidation. The [roadmap](plan.md) and [research-readiness checklist](docs/research_grade_plan.rst) separate implemented features, current evidence and the remaining work.
+
+**Direction:** research-grade ES/EM multispecies turbulence and optimization,
+with advanced collisions, radial electric fields and scalable derivatives—from
+VMEX equilibria to ESSOS coil fields, including islands. The local solver is the
+starting point; the [model-development gates](docs/research_grade_program.rst)
+identify what must be built and validated before those broader regimes are supported.
 
 <img src="docs/_static/turbulence_loop.webp" width="720" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
 
@@ -304,14 +312,15 @@ tuning but does not beat a well-tuned hypercollision. Tables and scans:
 
 ![Collision operator comparison](docs/_static/collision_operator_comparison.png)
 
-The models agree in the collisionless limit and separate as collisionality
-rises. Every shipped matrix is checked against the published closed forms:
-conservation and Onsager self-adjointness at 5.6e-17 and 8.3e-17 against a
-5e-12 gate, published Appendix-C coefficients at 1.1e-16, and an H-theorem
-maximum eigenvalue of 9.0e-18. Coulomb tables are generated for like-species
-collisions; a multispecies request is refused rather than silently
-extrapolated. Equations and convergence panels: [operators](docs/operators.rst),
-metrics in
+The models approach the collisionless limit and separate as collisionality
+rises. The archived verification report checks selected coefficients,
+invariants and projections in an eight-moment basis; it explicitly covers
+**offline operator algebra, not runtime transport**. Shipped Coulomb tables
+are like-species: eight moments in the drift-kinetic limit and 8/18 at finite
+perpendicular wavelength. Unsupported requests are rejected. General
+multispecies/high-order support and the complete finite-k weighted entropy
+balance remain [validation work](plan.md#collisions-and-closure).
+Equations and convergence panels: [operators](docs/operators.rst), metrics in
 [`collision_operator_verification.json`](docs/_static/collision_operator_verification.json).
 
 ## Validation
@@ -451,8 +460,9 @@ gate, and the positive-growth mixing-length rule predicts zero for HSX and W7-X
 where the tracked nonlinear windows are finite. Derivations, calibration splits,
 and holdout gates: [quasilinear](docs/quasilinear.rst).
 
-Collision operators are validated for like-species collisions and run on the
-fixed-step cached integrator. W7-X zonal long-window recurrence/damping and
+Advanced collision evidence is restricted to supported tables/models on the
+fixed-step cached integrator; it does not establish general collisional transport.
+W7-X zonal long-window recurrence/damping and
 W7-X TEM / kinetic-electron extensions are deferred. Production nonlinear
 domain decomposition and equilibrium ExB flow shear remain open.
 

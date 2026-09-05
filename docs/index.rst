@@ -9,63 +9,59 @@ launch the default linear Cyclone demo. The same executable also accepts
 checked-in TOMLs directly and can plot saved runtime outputs with
 ``gkx --plot <artifact>``.
 
-Documentation map
------------------
-
-The documentation is organized so that the core physics, equations, numerical
-methods, and model-specific paths are easy to locate:
-
-- :doc:`theory` summarizes the gyrokinetic ordering, field equations, and
-  flux-tube assumptions.
-- :doc:`linear_model` gives the operator-level derivation tied directly to the
-  implemented linear equations and diagnostics.
-- :doc:`operators` lists every implemented term, collision model,
-  hyperdiffusion/hypercollision control, and the runtime parameters that select
-  them.
-- :doc:`numerics` documents discretization, time integration, FFT brackets,
-  solver contracts, and JAX parallelization.
-- :doc:`geometry` and :doc:`inputs` cover the supported model paths
-  (analytic s-alpha, Miller, VMEC/imported geometry, slab) together with the
-  TOML schema used by the executable and Python drivers.
-
-For a first technical read, start with :doc:`theory`, then move to
-:doc:`operators` and :doc:`numerics`. That path gives the governing equations,
-the term-by-term implementation contract, and the numerical approximations in
-the same order they appear in the code.
+Start with :doc:`quickstart` for a first result or :doc:`examples` for a task.
+For the equations, read :doc:`theory`, :doc:`normalization` and :doc:`numerics`.
+Before using a result in research, check :doc:`research_grade_plan` and
+:doc:`release_scope` for its validation boundary and known limitations.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents
+   :caption: Learn and run
 
    quickstart
+   examples
    inputs
    outputs
+   stellarator_optimization
+   parallelization
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Physics and algorithms
+
    theory
+   normalization
    linear_model
    operators
-   numerics
-   differentiable_eigensolver
-   parallelization
-   normalization
-   quasilinear
-   stellarator_optimization
    geometry
+   numerics
    algorithms
    solvers
-   research_grade_program
-   research_grade_plan
-   solvax_defaults
+   differentiable_eigensolver
    nonlinear_autodiff
-   architecture
+   quasilinear
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Research evidence and reference
+
+   research_grade_plan
+   release_scope
    benchmarks
-   examples
+   verification_matrix
    codes
    performance
-   testing
    validation_strategy
-   verification_matrix
-   release_scope
-   code_structure
-   manuscript_figures
    references
    api
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Development
+
+   research_grade_program
+   architecture
+   testing
+   code_structure
+   solvax_defaults
+   manuscript_figures
