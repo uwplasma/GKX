@@ -1150,8 +1150,25 @@ optional :math:`|k_z|`-scaled branch:
 .. math::
 
    \mathcal{R}_{hyper}^{|k_z|}
-   \propto
-   -w_{hyper}\,\nu_{k_z}\,|k_z|\,m^{p_m}\,G.
+   = -2.3\,w_{hyper}\,\nu_{k_z}\,\nu_m
+     \frac{p_m+1/2}{\sqrt{M}}
+     \mathcal{D}_{|k_z|}\!\left[
+       v_{th,s}|k_\parallel(z)|\,
+       \mathbf{1}_{m>2}\left(\frac{m}{M}\right)^{p_m}G
+     \right],\qquad M=\max(N_m-1,1).
+
+Here :math:`\nu_{k_z}` is ``hypercollisions_kz``, :math:`\nu_m` is
+``nu_hyper_m``, and :math:`\mathcal{D}_{|k_z|}` uses the configured parallel
+boundary operator. The coefficient is inside that operator; spatially varying
+geometry cannot generally be commuted through it. Runtime defaults use
+:math:`p_m=\min(20,\max(\lfloor N_m/2\rfloor,1))`.
+
+Increasing :math:`N_m` therefore changes the truncation **and** artificial
+damping at retained moments, even with unchanged input coefficients. At fixed
+:math:`p_m,m`, its coefficient scales as :math:`M^{-p_m-1/2}`. A resolution
+study must converge the low moments/transport with this regularization, not
+equate finite temporal settling or cross-code agreement at one resolution with
+velocity-space convergence. Recheck timestep stability after refinement.
 
 Controls:
 
