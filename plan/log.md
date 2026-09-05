@@ -6133,3 +6133,31 @@ Logs gkx-salpha-nl32-nm96-t300.stdout.log/stderr.log. Local manifest in previous
 scratch and remote campaign root. GX kinetic6455/PID1722824 RNl38m32s remains
 live. Resume these two only; finer geometry ready for subsequent spatial test.
 No production code change, snapshot overwrite, restart or merge; full scope active.
+
+## 2026-09-05 — Public parity claims now distinguish historical evidence
+
+Previous turn progressed with completed Laguerre experiment, independently
+generated/checked fine geometry and next Nl32 launch. Reviewed the public
+verification_matrix.rst against these findings. Its older parity narrative
+still attributed Cyclone errors solely to integration length, treated shared
+finite-resolution agreement as convergence, and identified a kinetic branch
+from a frequency mismatch despite the subsequently found initialization gap.
+
+**57cf786b** pushed to draft PR202: mark table historical/pending fixed-rate
+regeneration; preserve old numerical records, remove those exclusive causal
+claims, and leave kinetic branch identification open until matched inputs,
+eigenfunctions and branch continuity support it. Explain current full/half
+growth-and-frequency screens, unknown reference status and joint finite-error
+coverage. Separate temporal, spatial/velocity, cross-code and predictive
+requirements; explain requested versus imported effective Nz. No replacement
+matrix or broader physics validation claimed. Active plan/logbook linked.
+
+Strict Sphinx -W build and git diff --check pass. Command PYTHONPATH=src
+<local jax0111 python> -m sphinx -b html -W docs
+/tmp/gkx-rate-wheel-20260905.aBK527/docs; log
+/tmp/gkx-coupled-rate-20260905.shBvlR/docs-parity-scope.log. Session74242
+(build/commit/push) terminal exit0. Documentation-only commit, no solver changes.
+
+Reverified both office jobs RNl: kinetic session6455/PID1722824 at41m12s;
+Nl32 session26034/PID1727418 at2m45s. Running reporter remains0acbd221.
+Resume these handles; no restart or snapshot changes. No merge; full scope active.
