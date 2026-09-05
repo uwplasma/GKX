@@ -937,7 +937,8 @@ recursive = true
 # +16: explicit profiler state precision and disabled-x64 rejection.
 # +11: distinguish jointly settled finite errors from absent/undefined coverage.
 # +10: imported sampling overrides requested Nz in parity provenance.
-baseline = 86883
+# +29: full/prefix sampling equivalence with even/odd horizons and two integrators.
+baseline = 86912
 target = 35000
 
 [[line_budget_policy.counts]]

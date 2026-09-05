@@ -1961,6 +1961,35 @@ def test_implicit_standard_and_diagnostic_routes_match(cyclone_world, only_terms
     assert density.shape[0] == 2
 
 
+@pytest.mark.parametrize("method", ["rk4", "imex2"])
+@pytest.mark.parametrize("steps,stride", [(24, 3), (25, 5)])
+def test_diagnostic_prefix_and_cadence_preserve_trajectory(
+    cyclone_world, only_terms, method, steps, stride
+):
+    """One dense history must reproduce separate full/prefix diagnostic runs."""
+    _, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=8, Lx=6.0, Ly=6.0)
+    state = jnp.zeros((1, 2, 4, grid.ky.size, grid.kx.size, grid.z.size), complex)
+    state = state.at[0, 0, 0, -1, 0, :].set(1e-3 * jnp.cos(grid.z))
+    params = LinearParams(nu=0.1, damp_ends_amp=0.7)
+    common = dict(dt=0.001, method=method, terms=only_terms(streaming=1, end_damping=1))
+    dense = integrate_linear_diagnostics(
+        state, grid, geom, params, steps=steps, sample_stride=1, **common
+    )
+    tolerance = 1e-12 if _x64_enabled() else 5e-6
+    for horizon, cadence in ((steps, stride), (steps // 2, 2)):
+        separate = integrate_linear_diagnostics(
+            state, grid, geom, params, steps=horizon, sample_stride=cadence, **common
+        )
+        for observed, reference in zip(dense[1:3], separate[1:3]):
+            selected = np.asarray(observed)[cadence - 1 : horizon : cadence]
+            assert np.isfinite(selected).all() and np.linalg.norm(selected) > 0
+            np.testing.assert_allclose(selected, reference, rtol=tolerance, atol=1e-15)
+    with pytest.raises(ValueError, match="divisible"):
+        integrate_linear_diagnostics(
+            state, grid, geom, params, steps=25, sample_stride=2, **common
+        )
+
+
 def test_apply_hermite_v_simple():
     """Hermite v operator should map a single mode to neighbors."""
     G = jnp.zeros((1, 3, 1, 1, 1))
