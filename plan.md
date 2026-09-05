@@ -125,8 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local **b7cd526e**, pushed **2c440b0e**
-(one held commit while CI33961508920 completes), worktree
+`fix/r0-end-damping-rate`, local/pushed **b7cd526e**
+(pushed after CI33961508920 at2c440b0e completed success), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -163,12 +163,9 @@ ky. Hypercollision coefficients depend on Nm: fixed input does not imply fixed
 damping at retained moments. Temporal settling, cross-code parity, resolution
 convergence and experimental validation are distinct claims.
 
-**Only current live jobs** (verify the handle/process before any restart):
-
-| Job | Office GPU | Session / PID | Files in campaign directory |
-|---|---|---|---|
-| GKX s-alpha Nl32 Nm160 Nz96, RK4 dt=.001, T300, rate50 | 0 | **11457 / 1744614** | `salpha_nl32_nm160_t300.toml`, `gkx-salpha-nl32-nm160-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm160_t300` |
-| Collision B4 spherical19/21 control, radial32/Bessel48, fixed8 moments | Local CPU | **12758 / 58452** | `/tmp/gkx-coupled-rate-20260905.shBvlR/collision-field-angular-fine.{py,log}`; continues from saved spherical17 field |
+**Current live research jobs:** none. Nm16011457 and field12758 completed exit0;
+same-state RHS probes63632/68046/95262 also completed exit0. Do not restart old
+handles. New-head CI is not yet certified; both office GPUs are free.
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -178,9 +175,12 @@ uses a separate grid-verified reporter from1571a9e6; no running copy overwritten
 Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** inspect both live exits, hashes, finite histories and all rows.
+**Next actions:** repair and verify reference launch coverage before further
+high-order parity runs; inspect the remaining same-state operator residual.
 Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
-running as11457. Nm128 run68484 completed exit0 in43:47.41: atNl32,
+completed11457 exit0 in54:11.43: gamma=.02410635371563277,omega=.5058500630938944.
+Nm128→160 changes gamma+5.596% and omega+.4566%; velocity convergence still fails.
+Nm128 run68484 completed exit0 in43:47.41: atNl32,
 Nm96→128 changes gamma−8.141% and omega−0.274%, so velocity convergence fails.
 Compare the new run against Nm128 at matched dt.001/T300;
 the earlier Nm96→128 result at Nl16 cannot establish convergence at Nl32.
@@ -214,6 +214,17 @@ exactly for all96 moments, and imported coefficient profiles/theta are identical
 Other GX scalar metadata are not reliable: the audited S_alpha constructor does
 not initialize exported nperiod/aminor/alpha/zeta_center. Retain this provenance
 debt; finite-value audits alone cannot certify geometry metadata or 3-D plots.
+**Reference coverage defect:** GX GradParallelLinked caps dG_all.z at65535;
+dampEnds_linked lacks the grid-stride loop used by neighboring copy kernels.
+At Nz96/Nl32/Nm96 it covers65535 of294912 z/moment indices. On the saved GX
+state, GKX's field solve matches Phi to7.77e-8, but full-damping Rayleigh growth
+is−.370115. Emulating precisely the missing-coverage mask yields+.0238632 versus
+GX+.0238779. A30.4% full-state residual remains, so this is not a complete
+operator-equivalence proof. Existing high-order reference results are provisional;
+the normalized-hypercollision patch alone is insufficient. Even baseline
+Nz96/Nl16/Nm48 exceeds the cap (73728 indices). Audit every reference case;
+retain original outputs, add an isolated kernel-coverage regression/repair,
+then rerun matched controls without reproducing the defect in GKX.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly
@@ -390,7 +401,9 @@ Its spherical19 rung is complete: field change6.004e-7 while independent test
 error remains2.61146e-4. Field source-ladder45346 completed exit0: matrix action
 on a source resolved toJ7 agrees with B1 polarization-vector assembly to8.71e-12
 (test6.60e-12). Shared speed coefficients mean agreement cannot independently
-validate the kernel. Do not restart either the source ladder or f32 control.
+validate the kernel. Spherical21 control12758 is now terminal exit0: field
+change2.3033e-8, test-block error2.7282e-5. Do not restart the field, source,
+Nm160 or f32 controls. Independent field-kernel validation remains open.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and

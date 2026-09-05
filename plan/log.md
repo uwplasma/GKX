@@ -7834,3 +7834,83 @@ assertions; both initial failure and narrowed justified scope are retained.
 
 Only Nm16011457/PID1744614 and field19/21 control12758/PID58452 remain live;
 last verified RNl48m42s and Rs18m51s. GPU1 is free. Full R0–R9 goal active.
+
+## 2026-09-05 — Reference damping launch-coverage defect and terminal controls
+
+Previous turn: progress (completed precision/source checks and metadata audit).
+All remaining research jobs are now terminal: Nm16011457/PID1744614 exit0;
+field12758/PID58452 exit0. No restart. CI33961508920 at2c440b0e completed success;
+only then pushed heldb7cd526e to PR202. New-head CI remains uncertified. No merges.
+
+Nm160 Nl32/Nz96 RK4dt.001/T300/rate50:54:11.43 wall,RSS1556488kB,
+gamma=.02410635371563277,omega=.5058500630938944. Temporal half shifts
+−.01609524215956025/−.001790586088472738 pass5%, but Nm128→160 changes
+gamma+.05596055140397027,omega+.004566008855023451. Velocity convergence fails.
+Do not use the reporter's historicalNm48-reference columns as matched parity.
+CSV SHA256c9ceadd362a64a7c30f0d13010526fe5fec465d25300853ed5f13b42d990843a.
+
+Field spherical21 B4/P3J1/R32/K48/digits50: test-block Gram relative error
+2.7281845706059743e-5; field norm2.6971434629402586; asymmetry3.710952637038971e-15;
+field successive change2.3033336693731286e-8;996.260836s. Log
+collision-field-angular-fine.log SHA4a3fcbbc09e7d471548032dc3ce0468fb52c8d118d11708241d45c7138238c66;
+collision-b4-s21-r32-k48.npz SHA95f3d118538443ff80c8a6e2002b695f825b46ea67be222b8eb78f18b62afacf.
+Separate field/test accuracy statements remain essential; no coefficient replacement.
+
+### Same-state operator probe
+
+Loaded the completed GX Nm96 restart (time300.0000142492354), selected exact
+ky=.550000011920929, and transposed documented GX (s,m,l,z,kx,ky,ri) to GKX
+(s,l,m,ky,kx,z). No Laguerre sign conversion: both runtime conventions agree,
+also checked by the resulting field. Normalize G by its Euclidean norm
+4.2528513894334103e-7, build actual imported geometry and matched runtime
+params/term config, and JIT assemble all GKX RHS terms on GPU1. No integration.
+Script audit-gx-final-state-rhs.py in local recent scratch and office refined
+directory; campaign cwd, usual GX_PARITY_REF_DIR/PYTHONPATH=src,
+CUDA_VISIBLE_DEVICES=1,JAX_ENABLE_X64=true, officevenv Python.
+Initial63632, field-extension68046 and coverage-extension95262 all exit0.
+
+GX final diagnostic lambda=.023877935484051704−.5050777792930603i. Applying
+GKX to this state gives Rayleigh lambda=−.37011547913743326−.5052176344515562i,
+relative residual ||AG−lambda_GX G||/||AG||=.9918722810421208. End-damping
+alone has norm3.7920701874316105 and real Rayleigh contribution−.3963824372281995.
+This prompted inspecting damping action, rather than assuming the same nominal
+rate means equal operators. GKX field Phi matches GX final big.nc Phi at the
+same timestamp to7.76793443426897e-8 relative norm; complex scale ratio
+.9999999728960297+1.073359059468334e-8i. Both state/Phi peaks are atz index48.
+Thus simple layout/field normalization failure is not supported by this probe.
+
+### Concrete launch-coverage finding
+
+Scratch GX source grad_parallel_linked.cu149–170 uses nt3=1 and
+dG_all.z=min(65535,Nz*Nm*Nl). Its comment explicitly says the neighboring
+linkedCopyBackAll/linkedAccumulateBackAll kernels use a z grid-stride loop.
+However device_funcs.cu dampEnds_linked around2825–2880 only handles
+idzlm=get_id3() once. GradParallelLinked::applyBCs382 launches that kernel with
+the same capped dG_all. Thus at Nz96/Nl32/Nm96, damping covers only65535 of
+294912 z/moment indices. This is independent of the previously repaired
+hypercollision power overflow. Original GX and scratch source were not changed.
+
+Emulate only this coverage defect in the diagnostic result, keeping GKX's full
+physical implementation unchanged: replace end contribution by itself times
+`z+Nz*(l+Nl*m)<65535`. Rayleigh lambda then becomes
+.023863177234092165−.5052176344515562i, close in growth to the GX diagnostic.
+Relative full-state residual remains .3039369619880524 (best-scalar .3039368465541684).
+This strongly implicates missing damping coverage but does NOT prove it explains
+every discrepancy or establish that the saved finite-time state is a pure mode.
+Both full-state residual and corrected-reference evolution still need validation.
+
+Even Nz96/Nl16/Nm48=73728 exceeds the cap. All affected existing parity results
+must remain conditional on the actual reference operator; the earlier normalized
+hypercollision patch is insufficient to certify high-order GX. Do not "fix"
+GKX to omit damping. Next: isolated actual-kernel coverage regression, grid-stride
+repair in a new scratch reference build preserving existing binary/outputs, then
+short same-state and matched long-run controls. Audit other capped launch users.
+
+| Local scratch artifact | SHA256 |
+|---|---|
+| audit-gx-final-state-rhs.py (final coverage extension) | 1f075af8901f713dcab0d78e197eddf11b9b2678c7c6cc18b4d528a7cafa3ae0 |
+| audit-gx-final-state-rhs.log (initial) | 234f5dc2e031ff8c8b90ed01dbd60902af19ce37d0fade71e5567d7030208507 |
+| audit-gx-final-state-rhs-fields.log | a36eb65837790a215ab8ecf6f684e078e0a5790748d3338baf1311d437616d34 |
+| audit-gx-final-state-rhs-coverage.log | 13c22e8e4b7f286cc05dde48771c5c75abc7ce52690190a494f20c44bbfaab69 |
+
+No live research processes now; both GPUs free. Full R0–R9 goal remains active.
