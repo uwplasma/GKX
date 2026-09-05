@@ -7495,3 +7495,65 @@ Latest local field-control50209 verified Rs5m53s; initial assembly still active.
 CI33959939110 has one pending job and no failures in the latest query.
 No production changes, no restarts or merges. Local9e05ba52 remains held while
 CI33959939110 completes; the full research/publication goal is active.
+
+## 2026-09-05 — Quadratic collision interpolation repair and resumed checkpoint
+
+Code commit **2c440b0e** repairs the preceding counterexample. The generic
+diagonal interpolation helper retains B-linear behavior by default. Its new
+`squared=True` contract accepts B² directly and squares the stored B grid;
+like-species Coulomb and Sugama callers pass `2*cache.b`, avoiding sqrt at zero.
+Strict outside-boundary comparisons retain the interior one-sided derivative
+at either endpoint, with zero derivative outside the table. Generic and unlike
+full-pair interpolation are unchanged. Off-node like-species approximations
+deliberately change; shared table-node values do not. This repairs the synthetic
+quadratic limit, not inaccurate physical coefficients or full-operator AD.
+
+Twelve regressions cover both models and b=[−.1,0,1e-8,.003,.25,.5], using
+exact C(B)=−B² on B=[0,.125,1]. Outer-jit reverse AD and forward JVP check
+the expected −2 slope in range and finite clipped behavior below range.
+An explicit old-formula wrapper replay fails all12 cases; it is not an old
+checkout run. Existing compact/full comparisons now use shared nodes, while
+the generic finite-difference test retains its original interior coordinates.
+The Sugama synthetic expectation was updated to the new quadratic contract,
+not relaxed by widening tolerances. No solver rates or NPZ coefficients changed.
+
+Verification (local recent scratch `/tmp/gkx-coupled-rate-20260905.shBvlR`):
+
+| Check | Result | JUnit SHA256 |
+|---|---|---|
+| CPU x64 collision/operator selection | 42 passed, 0 skipped, 22.317s, session88282 exit0 | a5bf9276eb133ee11aa5746f8d69c6aeefae1152199c834d4aca8af9d302b406 |
+| CPU f32 selection | 42 passed, 0 skipped, 21.384s, session83856 exit0 | ef3f8aa103d4e8b592b9108aea871c31eea3feeb066a09ac24316a8f08d6c100 |
+| Office GPU x64 quadratic-limit cases | 12 passed, 0 skipped, 8.545s, session47850 exit0 | f2aa5b4235f0499e202321abb451dfb5226ada1fee00fdb1931efeeb80f04a67 |
+| Old-formula replay | 12 failed as expected | 0c093b6800555fdb5ad7e969ee9bba5d5bc658ddb91a6e4969ff6645276ac6e2 |
+
+Files: collision-squared-{final,f32,gpu,legacy}.xml; replay script
+collision-squared-legacy-probe.py. CPU selection is tests/unit/operators/
+test_operator_kernels.py plus test_linear_collisions_coverage.py with
+`-k 'collision or finite_wavelength or interpolate'`. GPU uses the first file
+with `-k quadratic_limit`, CUDA_VISIBLE_DEVICES=1, memory fraction .08 in
+the dedicated `/home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo` archive.
+CPU f32 preceded restoration of the generic test's interior coordinates;
+final CPU x64 retains that coverage. Production code was identical.
+Ruff, format, architecture, diff checks passed; strict Sphinx session86153
+exit0 (collision-squared-docs.log). Budgets now source88981/tests87054/
+tools78038; no new files. Documentation states endpoint and coefficient limits.
+
+CI33959939110 at e9b7b67f completed **success**, no pending or failed jobs.
+Only after its completion pushed held9e05ba52 and2c440b0e together to PR202;
+new-head CI remains uncertified. No merges.
+
+Live processes revalidated, not restarted: GKX11457/PID1744614 RNl23m12s;
+patchedGX95001/PID1738946 RNl1h37m07s; local45671/PID50209 Rs22m10s.
+Local field angular partial results, fixed B4/P3J1/R32/K48/digits50:
+
+| Spherical cutoff | Test-block Gram relative error | Field norm | Field asymmetry | Assembly seconds |
+|---:|---:|---:|---:|---:|
+| 13 | .03908658928861847 | 2.6970971396621914 | 3.744020366828693e-15 | 409.171155 |
+| 15 | .010017207538561418 | 2.6971399301154007 | 3.72834976452174e-15 | 527.006639 |
+
+Field successive relative change .00012418653363288436; spherical17 pending.
+Small field change and symmetry do not certify the still1%-wrong test block,
+polarization, or full collision physics. Next: inspect terminal results/hashes
+without duplicates; compare Nm160 against matched Nm128; independently audit
+the patched GX output and dt before parity; finish coefficient/polarization
+convergence before replacing tables. Full R0–R9 roadmap remains active.
