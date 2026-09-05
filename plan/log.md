@@ -7238,3 +7238,39 @@ GPUjobs unchanged:95001/PID1738946 RNl44m13s,68484/PID1740480 RNl17m56s.
 CI33958341219 has only parallel-autodiff101285631063 and nonlinear-core101285631242
 in progress, no failures. Local code73ec5820 remains4ahead of9fc6e42d; hold push
 until CI completes. No source changes or merges this turn. Full roadmap active.
+
+## 2026-09-05 — Validate collision candidate before writing artifacts
+
+Previous turn completed B1 controls and launched B4. Revalidated all live jobs.
+Audited the production artifact CLI while numerical jobs run: --check wrote
+NPZ/metadata before computing the drift-kinetic reduction. Furthermore,
+max(error_test,error_field)>tol allowed NaNs to bypass failure. This could
+replace existing files with a rejected candidate.
+
+65f92b06 moves publication after the check and requires both errors<=1e-6,
+which rejects NaN/Inf without changing the numerical tolerance. Runtime
+coefficients are untouched. Eight parameterized regressions inject zero,
+finite mismatch, NaN and Inf in either test/field block; sentinel files in
+pytest temporary directories must survive rejection, while accepted candidates
+replace them. Against pre-fix73ec5820, six invalid cases fail this regression;
+the two valid cases pass. All eight pass after the fix. These tests are about
+check-before-write behavior, not finite-k physics or crash-atomic publication.
+
+Before reproducer local recent scratch/check-old-collision-publication.py pins
+73ec5820 via git show and executes its CLI in memory, with mocked coefficients
+and temporary output paths; no old source installed in the worktree. SHA256
+665b7e9a5d084d5a13371a3e682f77555d350217decb3e197fba44dba2fe37e4;
+before log bae0fda855be16fdbf5e5f70ca33b31c2d6c2850f5b03d7fbf60904f9508ef8b.
+Final collision tests excluding overhead/cost:32passed0skipped10.471s,
+91958exit0, collision-publication-final.xml SHA256
+78dcdf1499c664b54f4bd2be3519d9a7741b4ab0690e1c6e8ca771c5a857382d.
+Ruff check/format, diff and architecture policy pass. No new files; production
+generator−1line, tests+28lines. Adjusted documented test budget+21net after prior
+slimming (86968), with target35000 unchanged. No scientific gate relaxed.
+
+B4 first radial16 assembly completed finite in163.609s: normC21.0509399211,
+asymmetry1.478004548e-5. Radial24/32 controls still running, local58082/PID41100
+verified Rs4m38s; do not restart. GX95001/PID1738946 and GKX68484/PID1740480
+remain live. CI33958341219 now only nonlinear-core101285631242 in progress;
+parallel-autodiff101285631063 passed. Local65f92b06 is5ahead of9fc6e42d, held
+until CI completes. No merges. Full research/publication roadmap active.
