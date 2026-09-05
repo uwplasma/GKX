@@ -5,7 +5,7 @@ This is the execution plan, not a statement that the work below is complete.
 
 ## Start here
 
-1. Read the [current audit](plan/baseline/review_2026_09_04.md), then start **R0**.
+1. Read the [current audit](plan/baseline/review_2026_09_04.md), then resume **R0**.
 2. Follow the dependencies below. Take one small, reviewable change at a time.
 3. Update the relevant status here and append a short result to [the log](plan/log.md).
 4. Keep PRs open for maintainer review; **do not merge them**. History rewriting is a separate reviewed operation.
@@ -106,7 +106,7 @@ acceptance criteria are frozen.
 
 | ID | Status | Exit condition |
 |---|---|---|
-| R0 | **next** | Damping/precision repairs reviewed; release claims regenerated from repaired operator; clean-install f32/f64 probes |
+| R0 | **in progress** | Damping/precision repairs reviewed; release claims regenerated from repaired operator; clean-install f32/f64 probes |
 | R1 | open | Combination ledger; independent manufactured forcing; ES/EM, multispecies, C0–C4 collisions, closures, E0–E2 Er, boundaries and transposes |
 | R2 | open | Tokamak + QA/QH/QI portfolio; stopping tested against future data; transport and full resolution ladders |
 | R3 | diagnostic baseline measured | Phase/memory profiles; working CPU/GPU distributed primal+VJP; useful layouts selected by measurement |
@@ -118,6 +118,15 @@ acceptance criteria are frozen.
 | R9 | planned | Reproducible manuscript bundles; every abstract/README claim linked to current evidence |
 
 ### R0: immediate small-PR queue
+
+Resume checkpoint (2026-09-04): plan approved. Worktree
+`/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`, branch
+`fix/r0-damping-path-consistency`, starts from PR #197 `9074dd87`. Independently
+audit the restoring patch, especially missing dt in field-supplied/sharded RHS
+and the distinction between RK stage strength and exact removed fraction.
+PR #196's open-ended backend skip is the next precision audit. No merge is
+authorized; update this checkpoint and append commands/results to `plan/log.md`
+before changing workstreams. User checkout and other existing worktrees remain untouched.
 
 1. **Damping:** review #197 against #192 independently. Compatibility restores
    the old per-step map; it is not #194's continuous-rate migration. Audit serial,
