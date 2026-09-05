@@ -171,9 +171,13 @@ Broader f32,
 sharded AD and production-horizon validation remain open.
 Active validation: fresh committed #202 snapshot at office
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz` (3565ecdc). A new GX s-alpha
-reference runs at explicit dt=.002, rate .1/.002=50, t=150 under
-`matched_refs/ITG_cyclone`, SSH execution handle 26100. Verify the handle/process
-before resuming; never restart from a stale log. Existing `/home/rjorge/gx_refs_lin`
+reference used explicit dt=.002, rate .1/.002=50, t=150 under
+`matched_refs/ITG_cyclone`: GX session26100 completed successfully at
+t=150.000007, 751 samples, no nonfinite diagnostics. GKX full/half-horizon
+comparison now runs in session **32453**, logs `gkx-salpha.stdout.log` and
+`gkx-salpha.stderr.log`, output stem `results/salpha_rate50` in the snapshot.
+Verify the current handle/process before resuming; never restart from a stale log.
+Existing `/home/rjorge/gx_refs_lin`
 contains five outputs, but its s-alpha run uses dt≈.00466 and KBM≈.00065, not
 the manifest timesteps; HSX is missing. Do not call that a matched-rate matrix.
 Check remote CI on #200–#202 before relying

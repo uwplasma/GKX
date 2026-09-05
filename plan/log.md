@@ -5149,3 +5149,48 @@ then run the full+half-horizon GKX comparison using the previous entry's command
 The head change adds a test/doc only, so the snapshot's production source is
 still exact for that run. Keep #202 draft; external matrix and broad AD/physics
 validation remain incomplete. No merge.
+
+## 2026-09-05 — GX reference finished; GKX comparison live
+
+Previous turn progressed with the coupled-field gate. This turn verified the
+same GX PID/session repeatedly while it finished (no restart), and ran the
+**complete** `tests/unit/linear/test_linear.py` locally at head6bf824b5,
+JAX0.11.1, JAX_ENABLE_X64=true, PYTHONPATH=src: **88 passed**.
+Local session44302 exited0. Report
+`/tmp/gkx-coupled-rate-20260905.shBvlR/linear-full.xml`, SHA256
+`0b5b0c724e95b64cec487989fa425f149f8816c2244702d9f46bddd0ef6d4b5d`.
+This is CPU linear-file coverage, not the whole repository or all precisions.
+
+GX session26100 exited0, `/usr/bin/time` also reports exit0. The completed
+NetCDF was read only after termination using load_reference_spectrum from the
+committed GKX snapshot. Assertions: final time in [149.8,150.01], nonfinite
+diagnostic count zero, all positive-ky gamma/omega finite. Results:
+- t_end=150.0000071246177, 751 samples, 11 positive ky values .05 through .55.
+- Late-half mean peak gamma=.09305833 at ky≈.3, omega=.28203376 there.
+- These are reference measurements, not yet a GKX agreement claim; low-ky
+  settling and temporal/spatial refinement still need assessment.
+- Output `<snapshot>/matched_refs/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc`
+  SHA256 `633742b0da84e3e8cf1d0a7638fccd7b52fa90ce71ac166021f3bdcb657cf24a`.
+  Input/binary hashes and concurrent-hardware caveat are in previous entries.
+
+Launched the full+half-horizon GKX s-alpha matrix command from the prior entry,
+with CUDA_VISIBLE_DEVICES=0, JAX_ENABLE_X64=true, PYTHONPATH=src, MPLBACKEND=Agg,
+GX_PARITY_REF_DIR pointing to matched_refs. Verified the snapshot fixture rate
+is50 and its `terms/assembly.py` hash equals committed3565ecdc:
+`e8eeeda61da6763b07dcb55c0cc178353c49df762bfabf507eeaf5dffb88ffb5`.
+Production source remains equivalent at head6bf824b5 (test/doc additions only).
+
+**Live resume handle:** SSH session **32453**, Python PID **1716124**, time
+parent1716123. Snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`;
+logs `gkx-salpha.stdout.log`, `gkx-salpha.stderr.log`; stem
+`results/salpha_rate50`. Command uses `--manifest matched_manifest.toml --cases
+cyclone_salpha_itg`, no --merge and no public artifact overwrite. Verify process
+or same handle before deciding whether it is terminal. Empty/buffered logs do
+not justify a restart. No local test jobs remain active.
+
+Next: inspect exit status and every comparison row, including unsettled or
+failed modes, half-horizon drift, normalization and reference provenance. A
+successful program exit alone does not establish predictive parity. Continue
+matched-rate refinement and the other cases; HSX reference remains missing.
+#202 remains draft, unmerged. No full-CI claim (latest query showed no failures
+but did not certify completion).
