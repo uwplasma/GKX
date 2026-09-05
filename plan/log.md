@@ -8159,3 +8159,88 @@ and interpolation/AD convergence before changing runtime coefficients. Keep
 unlike-species validation separate. Corrected GX7690/PID1753613 remains the
 ONLY live research job (last verified RNl25m02s); use the preceding explicit-path
 audits only after terminal success. Do not restart completed controls. Goal active.
+
+## 2026-09-05 — Full coefficient-grid audit and finite-H projection gate
+
+Previous turn classified progress (committed independent Fourier oracle and
+resumable evidence). Revalidated code at6d645f3f, clean; GX7690/PID1753613 RNl
+29m44s initially and36m40s at last check. Only live research job; no restart.
+CI33964841954 still pending (last10 jobs, no failures). New docs-only local
+commitac8d4ec7 is held for that CI; pushed source remains6d645f3f. No merges.
+
+Completed three scratch controls under
+`/tmp/gkx-coupled-rate-20260905.shBvlR`, using localvenv-python
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python` from the code worktree with
+PYTHONPATH=src:tools/artifacts. Commands are <python> followed by each full
+scratch script path; stdout/stderr retained in its same-stem .log.
+
+1. collision-field-source-fourier-ladder.py,15722exit0. B4/P3 outputJ1,
+   sourceJ4/8/12/16/24, Fourier nodes96/64/96. Direct I0/I1 source versus matrix
+   applied to exp(-4)*4^j/j! Laguerre coefficients. Errors6.3179e-2,
+   2.4889e-4,2.4143e-7,6.1204e-11,2.6520e-15. Last rung2.39s, no runtime-speed
+   claim. Individual projected/reference arrays retained in
+   collision-field-source-fourier-j{4,8,12,16,24}.npz. This is an independent
+   source representation with the same kernel, not a second field-kernel proof.
+2. collision-full-table-audit.py,30863exit0. All14 shipped wavelengths and both
+   8/18 bases. Load via checksum-validating bundle; assert signed convention,
+   undo row/column (-1)^j signs explicitly. Compare four nonzero blocks with
+   independent test/field oracles; separately measure both zero phi1 arrays.
+   Refine field64/48/48→96/64/64 and test96/48→192/64. All28 cases pass
+   coefficient refinement at rtol1e-10/atol1e-12; max absolute quadrature
+   difference8.7171e-13. Both phi1 arrays exactly zero at every node.
+   CSV collision-full-table-audit.csv and reference arrays
+   collision-independent-reference-{8,18}.npz retained outside repository.
+3. collision-field-metric-audit.py,exit0. Restricted single-unit-species,
+   nonzonal electrostatic tau_e=1; use corrected independent coefficients.
+   G-field contract from terms/fields.py:_reduce_electrostatic_moments and
+   operators/linear/moments.py:build_H; table application from collisions.py
+   apply_finite_wavelength_coulomb_moment_operator. In paper convention,
+   s is the retained J0 coefficient column, d=2-s^T s, phi=s^T G/d,
+   M=I+ss^T/d, H=MG. Table-like L=C+ps^T/d versus retained-H projection C M.
+
+| Moments/B | Test matrix error | Field matrix error | Test-phi2 error | Field-phi2 error |
+|---|---|---|---|---|
+| 8/1 | .228568 | .0857124 | .0374029 | .0291005 |
+| 8/4 | .841159 | .665944 | .957948 | .833485 |
+| 18/1 | .129818 | .0560996 | .00173584 | .000793777 |
+| 18/4 | .641714 | .464349 | .864026 | .699396 |
+
+All errors above are relative Euclidean/Frobenius norms, NOT percentage units.
+For corrected C and p, ||p-Cs||/||p|| = .0460617/.517259 (8 moments B1/B4)
+and .0058508/.417911 (18). The symmetric part of M L remains negative in these
+samples, but relative antisymmetry is .00264526/.000272411 (8) and
+.000174171/.000765069 (18). M C M is symmetric to≤1.76e-15. Thus coefficient
+correction does not alone establish a consistent finite-H field/entropy map.
+This does not prove an instability, a general EM law, or that projecting away
+the source tail is always the right closure; choose and validate the discrete
+contract explicitly. Do not fix it by manual operator symmetrization.
+
+Primary literature re-read online:
+[Mandell2017](https://arxiv.org/html/1708.04029), Section4/Eq48–49 discusses
+retained-H free energy and closure by truncation; its model collision operator
+is not full-Coulomb validation. [Frei2021](https://arxiv.org/html/2104.11480),
+Section5 discusses separately the collisional polarization contribution and
+resolved gyro-moment/GENE comparisons. Our finite matrix/metric algebra above
+is an inference from the implemented field contract, not an attribution of
+our numerical findings to those papers.
+
+Documentationac8d4ec7 adds the measured field errors and discrete projection
+gate. Also repaired theory.rst: erroneous J_l=exp(-b/2)*L_l(b) replaced by the
+actual signed-Poisson exp(-b/2)*(-b/2)^l/l! from core_velocity.J_l_all and
+linear_model.rst; velocity x=mu*B/T distinguished from spatial b=kperp²rho².
+Strict Sphinx29449 and final93270 both exit0; diff-check passes. No runtime,
+table, test, file-count or Python-line growth this turn.
+
+| Scratch artifact | SHA256 |
+|---|---|
+| collision-full-table-audit.py | 382742be2634e72a8477b23efebc96d1ca55c97da2d0d69c5ef9b25a5ebf05e0 |
+| collision-full-table-audit.csv | 58fdcff33375c823ac0cef6b84573fa4f74bab9fdc84c16db3139a59c587f801 |
+| collision-field-source-fourier-ladder.py | 4ea2e7b8fdd6111518a9864a7eda330251dfaf1a1bffd373a1ae94901a8f584e |
+| collision-field-source-fourier-ladder.log | 7725450911f08fc49a2cf03f28646542f44ea4f1ae40a1617d556a1ec0eedd86 |
+| collision-field-metric-audit.py | b2be0b6a9d15a626b0a1edb1ec372cf6016dec07581038978f6c89950b164efd |
+| collision-field-metric-audit.log | 5e47b7195cbce8847223d66384b48ccc212598470b3ce88caff897c5b5473104 |
+
+Next: resolve and test the retained-H versus full-source closure contract with
+actual runtime field maps and larger Laguerre bases, then interpolation/AD and
+complete coefficient replacement. Corrected GX reference still live; use the
+explicit-path terminal audits above after successful completion. Goal active.

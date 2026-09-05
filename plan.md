@@ -125,8 +125,9 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local/pushed **6d645f3f**
-(CI33963277695 at b7cd526e passed; new CI33964841954 pending), worktree
+`fix/r0-end-damping-rate`, local **ac8d4ec7**, pushed **6d645f3f**
+(one documentation commit held for CI33964841954; no failures observed;
+CI33963277695 at b7cd526e passed), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -363,8 +364,8 @@ Tabulated Coulomb support is not arbitrary-order or arbitrary-species validation
 Finite-wavelength defect-scaling tests alone do not prove a conservation law or
 weighted self-adjointness: derive the physical functionals/metric and test those
 identities directly for each supported model and species combination.
-The finite-k runtime includes four nonzero polarization vectors omitted by the
-matrix-only defect tests; audit the coupled distribution/field map, not just
+The finite-k runtime carries four polarization vectors omitted by the
+matrix-only defect tests (both equal-species phi1 arrays are zero); audit the coupled distribution/field map, not just
 the sum of its test-particle and field-particle matrix blocks.
 The scalar-potential term alone cannot restore Euclidean symmetry: with
 `phi=r^T G` and `P=I−pp^T/(p^Tp)`, the projected antisymmetric part of
@@ -424,10 +425,24 @@ reference6.48e-10; B1 field-phi2 difference6.44e-14. The streamed helper passes
 32-pitch-node trial is retained; 48 pitch nodes remove its 1.07e-10 relative
 32-moment/B4 error. 35 selected tests pass under both JAX precision flags, but
 the oracle itself is NumPy float64. No runtime table or model has changed.
-Next: independently resolve field polarization at B4 and across the full table
-grid; compare all shipped blocks, establish the coupled field/free-energy
-metric and interpolation/AD accuracy, then propose a complete like-species
-replacement. Unequal species, temperature relaxation and runtime transport
+The full14-node audit for both shipped tables is now complete; refined field
+matrix/field-phi2 errors atB4 are66.59%/83.35% (8) and46.43%/69.94% (18).
+B4 field source J4→8→12→16→24 converges to the direct source to2.65e-15;
+this independently checks the source expansion, but shares the Fourier kernel.
+
+**Next blocking scientific gate: finite-basis/field consistency.** Runtime
+electrostatic quasineutrality uses retained s=J_l and H=MG. For unit single
+species/nonzonal tau_e=1, d=2-s^Ts and M=I+ss^T/d. Retained-H Galerkin
+collisions give L=C_N M and M L=M C_N M symmetric negative-semidefinite.
+The full J0 source p=P_N C J0 used by the table route differs from C_N s:
+atB4 the discrepancy is51.73%/41.79% for8/18 moments, even with converged
+coefficients. This mixes a full source with a truncated field closure. Sampled
+maps remain dissipative, but lose exact self-adjointness in this candidate
+metric. Use Mandell2017 Section4's retained-H closure/free-energy analysis
+to resolve the discrete contract; test larger Laguerre bases, zonal and
+multispecies cases, interpolation and AD before proposing a complete runtime
+replacement. Do not impose symmetry or drop polarization by hand.
+Unequal species, temperature relaxation and runtime transport
 remain separate open gates. Equations and API are in docs/operators.rst;
 commands, failures and hashes are in the logbook.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
