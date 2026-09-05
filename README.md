@@ -8,7 +8,9 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue.svg)](pyproject.toml)
 [![Docs](https://readthedocs.org/projects/gkx/badge/?version=latest)](https://gkx.readthedocs.io)
 
-GKX is a JAX-native gyrokinetic solver for tokamak and stellarator flux tubes: it takes a VMEC equilibrium or an analytic geometry, computes linear stability and nonlinear turbulence in a Hermite-Laguerre velocity basis, and differentiates the whole path end to end on CPUs and GPUs.
+GKX is a JAX-native gyrokinetic solver for tokamak and stellarator flux tubes: it takes a VMEC equilibrium or an analytic geometry, computes linear stability and nonlinear turbulence in a Hermite-Laguerre velocity basis, and supports differentiable objectives on CPUs and GPUs. Nonlinear derivatives are of a declared finite window; validated long-time transport optimization remains an open research goal.
+
+**Research status (2026-09-04):** 2.0.0 has an open [end-damping regression](https://github.com/uwplasma/GKX/issues/192). Affected benchmarks need a repaired operator and revalidation. The [roadmap](plan.md) and [research-readiness checklist](docs/research_grade_plan.rst) separate implemented features, current evidence and the remaining work.
 
 <img src="docs/_static/turbulence_loop.webp" width="720" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
 

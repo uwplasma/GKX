@@ -4461,3 +4461,46 @@ Three things worth keeping:
 
 Outcome:
 - accepted. The remaining compilations are exactly those two regions.
+
+## 2026-09-04 — Current-state review and publication roadmap
+
+Baseline: `a99dac898334414d31733f6d286bd4c36983702e` (2.0.0).
+Branch: `plan/research-publication-20260904`. No solver changes or merges.
+
+Scope: reconcile code/PRs/plans and scientific claims; run bounded CPU/GPU
+diagnostics; replace the accumulated queue with an actionable research plan.
+Full long-run validation and implementation of the new milestones are not
+claimed complete by this review.
+
+Changes:
+- root plan reduced from 2,881 lines; R0–R9 dependencies, numerical/physics benchmark
+  matrix, CPU/GPU sharded primal/VJP gates, statistical stopping, source/data
+  slimming, student/research examples, VMEX/ESSOS and publication acceptance;
+- old public program reduced to a roadmap link; false QA “passes all gates”
+  statement removed; README/public scope flags the current damping regression;
+- grouped documentation navigation; ledger through #197 and primary literature
+  update including iGENE/gyaradax, JAX sharding/AD and companion interfaces;
+- compact dated audit with commands, numbers, scope and raw-probe hashes;
+  no new tracked JSON, generated media, solver or test implementation.
+
+Evidence:
+- 191 PRs: 180 merged, 9 closed, 2 open (#196/#197). Main CI green despite the
+  reported end-damping/default-f32 issues; their repairs remain review work.
+- 2,738 tests collected; 12 selected analytic collision tests passed.
+- all 346 lazy root API names resolve in a fresh interpreter.
+- species/Hermite bounded trajectory and traced-projector tests: 2 passed on
+  local logical CPUs, 2 passed on office GPUs; no distributed gradient claim.
+- whole-state large probe: one GPU 0.495 s; two GPUs auto 2.538 s / kx 1.799 s;
+  identity passes, no speedup. Four-logical-CPU whole-state route safely skips.
+- tiny f64 finite-window compiler-memory check: block/plain value/gradient
+  parity on CPU/GPU; temporary memory 3.25×/6.17× smaller, runtime 1.78×/1.67×
+  higher. Tiny unsaturated seed and one timing sample; not physics validation.
+- normal full clone 14.53 MiB pack; mirror 276.66 MiB. Both differ from tracked
+  tree size; the <10 MiB ordinary-clone goal remains open.
+- Sphinx HTML `-W --keep-going`, `git diff --check`, package architecture and
+  repository-size checks pass. These checks do not close the physics gaps.
+
+Outcome: revised plan ready for maintainer review. Next: **R0**, independently
+review damping compatibility/rate migration and default-precision coverage,
+then rebaseline affected physics. Preserve the negative sharding/optimization
+evidence. Do not restart the already-landed public API or Diffrax removal work.

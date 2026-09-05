@@ -1,70 +1,67 @@
-Research-grade checklist
-========================
+Research readiness
+==================
 
-GKX separates algorithm verification from physics claims. A feature is ready
-only when its numerical result, physical observable, and performance envelope
-are all tested.
+GKX distinguishes implemented algorithms from validated scientific claims.
+The :download:`execution roadmap <../plan.md>` gives the ordered work;
+this page summarizes the acceptance boundary at ``a99dac89`` (2026-09-04).
 
-Nonlinear derivatives
----------------------
+.. warning::
 
-Status: **implemented**. :func:`gkx.nonlinear_heat_flux_window` differentiates
-the physical post-saturation heat flux through the exact projected Runge--Kutta
-map. Block checkpointing retains :math:`O(\sqrt N)` states.
+   GKX 2.0.0 has an open end-damping compatibility regression
+   (`issue 192 <https://github.com/uwplasma/GKX/issues/192>`_).
+   The proposed repair (`PR 197 <https://github.com/uwplasma/GKX/pull/197>`_)
+   was not merged at this audit. Affected benchmark claims require a repaired
+   operator, explicit damping units and regenerated evidence.
 
-Required gates:
+.. list-table:: Capability and evidence still required
+   :header-rows: 1
+   :widths: 22 30 48
 
-* blocked and plain values and derivatives agree;
-* automatic differentiation agrees with centered finite differences below the
-  measured trajectory-divergence knee;
-* CPU and GPU results agree within the selected precision;
-* the optimizer uses the physical heat flux, not a state norm or linear
-  saturation rule.
+   * - Capability
+     - Current boundary
+     - Acceptance
+   * - Nonlinear derivatives
+     - Checkpointed AD of a fixed post-spin-up window
+     - Same-map value/gradient parity, Taylor tests, CPU/GPU checks and useful
+       direction across independent saturated states
+   * - QA transport optimization
+     - Preliminary campaign; not promotion-ready
+     - Per-trace stationarity, correlated uncertainty, new seeds, timestep,
+       box/spatial/moment/closure convergence and equilibrium constraints
+   * - Parallelism
+     - Independent work; diagnostic single-trajectory decompositions
+     - Actual distributed primal/VJP, fields/flux/conservation checks and
+       matched CPU/GPU performance; metadata identity alone is insufficient
+   * - Collisions and EM
+     - Model- and resolution-specific support
+     - Correct entropy/invariant identities, supported species/moment ranges,
+       kinetic-electron and electromagnetic benchmark closure
+   * - Research release
+     - Runnable product and scoped historical evidence
+     - Current physics gates, clean-wheel examples, reproducible data and
+       explicit unsupported regimes; CI coverage alone is insufficient
 
-See :doc:`nonlinear_autodiff` for equations, measurements, and usage.
+What the nonlinear derivative means
+-----------------------------------
 
-Transport claims
-----------------
+.. math::
 
-An optimizer window gives a local design direction. A reported transport
-reduction additionally requires:
+   J_N(x;G_0)=\frac{1}{N_w}\sum_{n\in W}Q(G_n,x),\qquad
+   G_{n+1}=\Phi_{\Delta t}(G_n,x),\qquad
+   G_0=\operatorname{stop\_gradient}(G_{sat}).
 
-* stationary post-transient running means;
-* correlation-corrected uncertainty using an effective sample count;
-* independent seeds and timestep repeats;
-* perpendicular, parallel, Laguerre, and Hermite convergence;
-* matched baseline and candidate equilibria that satisfy aspect, iota, and
-  quasisymmetry constraints.
+The derivative is exact for this declared discrete window, within numerical
+accuracy. It excludes the derivative of spin-up and adaptive stopping. It is
+not automatically the derivative of infinite-time mean turbulent transport.
+Block checkpointing reduces retained state storage to :math:`O(\sqrt N)`;
+caches, temporaries and requested outputs have additional costs.
+See :doc:`nonlinear_autodiff` for implementation and measurements.
 
-The selected vacuum QA direction passes these gates. Its scope, including the
-rejected short-horizon control, is in :doc:`stellarator_optimization`.
+The retained QA results do **not** pass all transport gates: some traces fail
+stationarity and the compact data cannot establish spectral convergence.
+:doc:`stellarator_optimization` preserves the measurements and rejected cases.
 
-Open numerical work
--------------------
-
-Electromagnetic parity
-   Close the KBM benchmark discrepancy against an independent code.
-
-Velocity-space recurrence
-   Report :math:`t_{rec}` beside each nonlinear averaging interval and verify
-   closure convergence.
-
-Precision
-   Keep single precision as the fast default; test ensemble observables in
-   double precision where cancellation or long integrations demand it.
-
-Performance
-   Measure Hermite--Laguerre block preconditioners, mixed-precision iterative
-   refinement, and distributed windows on production CPU and GPU cases. Adopt
-   a method only when wall time and peak memory improve without changing the
-   validated observable.
-
-Testing rule
-------------
-
-Each test must name a result that could falsify the implementation:
-
-* mathematics: identities, manufactured maps, and derivative comparisons;
-* numerics: order, convergence, conditioning, and conservation;
-* physics: literature benchmarks and independent-code parity;
-* regression: stable public outputs and performance budgets.
+Tests should falsify the implementation: analytic identities, independently
+manufactured forcing, numerical convergence, literature physics, matched-code
+observables, derivative checks and regression/performance limits. A passing
+small test establishes only its tested model, precision and resolution.
