@@ -5769,3 +5769,20 @@ prevents stale completed process IDs from being mistaken for live work.
 Current jobs remain GX kinetic GPU0 session6455/PID1722824 and Nm128RK4 GPU1
 session17139/PID1723101. Verify current state before any restart. No source
 commit, benchmark promotion or merge this turn; proceed to their actual results.
+
+**Late-turn result supersedes the just-written live status above:** session17139
+completed exit0; PID1723101 terminal. Nm128 RK4 T150 gamma=.03573994271997718,
+omega=.4853682308408486. Growth half-horizon shift -.04612233489; both temporal
+screens pass5%, but this is too large to interpret the ~0.52% Nm96→128 change
+as resolved velocity convergence. CSV results/salpha_rate50_nm128_rk4.csv hash
+`6d63defff6caf3f66da5c8df602dea966c4309cb5c35fb6650818f7af288ee07`.
+
+Started horizon extension only, **session37619/PID1723912** (time1723911),
+GPU1, Nm128/RK4/dt.002/Nl16/rate50/exact ky unchanged, T300/150000 steps.
+Manifest salpha_nm128_t300.toml hash
+`4c6c9d259a245501db92ff98063c02217965b5a249ddf36997126c2f41e44d62`.
+Same owned snapshot/env/current reporter; --manifest salpha_nm128_t300.toml
+--cases cyclone_salpha_itg_nm128_t300 --stem results/salpha_rate50_nm128_t300,
+logs gkx-salpha-nm128-t300.stdout.log/stderr.log. Verified PID live. GX reference
+remains Nm48/T150, deliberately not a matched-resolution/horizon claim. Assess
+GKX temporal sensitivity first. New checkpoint updated; old17139 must not restart.
