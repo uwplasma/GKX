@@ -5296,3 +5296,58 @@ named matched Miller manifest (do not retroactively alter s-alpha provenance),
 then run GKX comparison. S-alpha session32453 is terminal, do not poll/restart.
 Continue external cases, independent temporal/resolution checks, #202 CI and
 remaining R0 validation. No benchmark/README artifact promoted, no merge.
+
+## 2026-09-05 — reference settling qualification and fixed-rate dt refinement
+
+Previous turn was progress (completed comparison, committed checkpoint, new GX
+reference). This turn verified Miller PID1717513 live/advancing, 3m03s at last
+check. #202 at c979989f clean; CI query shows no failed checks, several pending,
+so still no full-CI assertion. Plan started clean at768dcada.
+
+Inspected reference loader: it averages the last half of the GX diagnostic
+trace but calls the result "converged" without testing reference settling.
+Read-only independent audit script in owned office snapshot
+`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/audit_reference.py` (local
+copy `/tmp/gkx-damping-route-20260905.Xk4sat/audit_reference.py`) compares GX
+mean instantaneous complex frequency over [T/4,T/2] and [T/2,T], float64
+accumulation, preserving all positive ky. This probes the existing estimator;
+it is not a new GX run or a statistical confidence interval. Existing output
+has uniform fixed-dt diagnostic sampling; do not generalize sample means to
+arbitrarily sampled adaptive traces. Command:
+`/home/rjorge/venvs/gkx-nl/bin/python audit_reference.py
+matched_refs/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc
+> results/salpha_reference_temporal.csv` (metadata line precedes CSV header).
+Script SHA256 `e5840d49d118959a8fa06ab1881f000aa2f00c1ecfce7d38c8ed8eb86fe56a4e`;
+result SHA256 `d7fd35cc808767fd9ccf7f70e24ce37647ab895d0a5028188123fb0259ce32c7`.
+
+GX growth relative shifts at ky=.05/.10 are -.2040967934/-.0595856369;
+all remaining modes pass both 5% growth and frequency screens. Thus **9/11
+pass both codes' temporal screens**, not 10/11 reference-certified modes.
+Prior 10/11 was correctly GKX-only; do not use it as a joint validation count.
+GKX fits [0.7T,T] at T and T/2, while GX here averages its own diagnostics:
+different estimators/windows are explicit. Resolution convergence remains open.
+Next reporting repair should expose reference temporal diagnostics/status;
+do not label any loaded spectrum converged merely because its values are finite.
+
+Launched fixed-operator timestep refinement on GPU0, **session57878**, Python
+**PID1717879** (time parent1717878), verified live with no stderr. Same source
+snapshot3565, no changes to running code. Manifest `salpha_dt_refinement.toml`
+selects ky=.15/.30/.55, dt=.001, 150000 steps (T150), Nl16/Nm48, explicit
+rate50, IMEX2, original matched GX reference. Original baseline retained.
+Manifest SHA256 `aee947066f77edb46688e0f3d5935c0a79281dd0d392d46cc7dd5ba27e2e7b3a`.
+Command from snapshot:
+`GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs
+CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
+/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python
+tools/comparison/build_gx_parity_matrix.py --manifest salpha_dt_refinement.toml
+--cases cyclone_salpha_itg_dt_half --stem results/salpha_rate50_dt_half
+> gkx-salpha-dt-half.stdout.log 2> gkx-salpha-dt-half.stderr.log`.
+Reporter is old3565: audit both temporal shifts manually, not just its flag.
+Concurrent GPU1 GX means no isolated performance claim. Chosen three modes
+sample low/peak/high growth-spectrum regions, not a full-spectrum refinement.
+
+Resume both live handles, never restart solely for empty buffered logs. Miller
+session97329/PID1717513; GKX refinement session57878/PID1717879. Record actual
+exit/artifacts before interpreting. Continue slow-mode extension, spatial and
+velocity refinement, broader matrix and reference-status repair. No merge,
+public artifact promotion, or validation-debt closure in this turn.

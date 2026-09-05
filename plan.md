@@ -179,7 +179,10 @@ comparison completed (session **32453**, exit0), logs `gkx-salpha.stdout.log` an
 `gkx-salpha.stderr.log`, output stem `results/salpha_rate50` in the snapshot.
 Its reporting code predates c979989f. Independent CSV audit requires finite
 growth/frequency and both half-horizon shifts <=5%: **10/11 pass**, ky=.05
-unsettled. Maximum settled relative errors: gamma1.904%, omega0.2591%; peak
+unsettled on GKX. Independent GX [T/4,T/2] versus [T/2,T] diagnostic means
+also fail the 5% growth screen at ky=.05 and .10: **only 9/11 modes pass
+temporal screens in both codes**. These screens use each code's estimator,
+not identical windows. Maximum GKX-settled relative errors: gamma1.904%, omega0.2591%; peak
 gamma error0.01449%. This is temporal parity evidence, not resolution convergence.
 All original rows and artifacts retained. Next GX Miller reference is live on
 GPU1, session **97329**, PID **1717513**, fixed dt=.002, tmax150, rate50.
@@ -187,6 +190,13 @@ Input/output directory is the same `matched_refs/ITG_cyclone`; logs
 `miller-gx.stdout.log`, `miller-gx.time.log`. Geometry generation succeeded.
 After exit, validate its trace/provenance, prepare a separate matched Miller
 manifest and run GKX; do not call an in-flight reference complete.
+GKX fixed-rate timestep refinement is also live: GPU0, session **57878**, PID
+**1717879**, `salpha_dt_refinement.toml`, dt=.001, T=150, ky=.15/.30/.55,
+rate50 unchanged; logs `gkx-salpha-dt-half.{stdout,stderr}.log`, result stem
+`results/salpha_rate50_dt_half`. Compare to the original rows, audit both
+temporal shifts, and distinguish timestep error from reference-window drift.
+The parity tool still lacks reference-side temporal status: repair this before
+public promotion; a reference mean is not automatically a converged spectrum.
 Verify the current handle/process before resuming; never restart from a stale log.
 Existing `/home/rjorge/gx_refs_lin`
 contains five outputs, but its s-alpha run uses dt≈.00466 and KBM≈.00065, not
