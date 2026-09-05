@@ -931,7 +931,8 @@ recursive = true
 # and zero reference growth rates; preserve total and error-coverage counts.
 # +43: exercise reference probes, terminal writes and joint reporting unknowns.
 # +10: preserve demo horizon and fixed damping while refining its timestep.
-baseline = 86771
+# +9: pin the kinetic reference decks' species-selective initial condition.
+baseline = 86780
 target = 35000
 
 [[line_budget_policy.counts]]

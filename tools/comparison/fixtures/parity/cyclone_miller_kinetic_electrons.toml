@@ -50,6 +50,7 @@ model = "eik"
 geometry_file = "$GX_PARITY_REF_DIR/ITG_cyclone/itg_miller_kinetic_electrons.out.nc"
 
 [init]
+init_electrons_only = true # Match the reference deck's species-selective seed.
 init_field = "density"
 init_amp = 1.0e-10
 gaussian_init = true

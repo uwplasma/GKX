@@ -4096,6 +4096,15 @@ def test_parity_reference_probe_reads_real_trace(tmp_path, sampling):
         assert spectrum.gamma_half is spectrum.omega_half is None
 
 
+@pytest.mark.parametrize("key", ["cyclone_miller_kinetic_electrons", "kbm_miller"])
+def test_kinetic_parity_decks_preserve_electron_only_seed(key):
+    from gkx import load_runtime_from_toml
+
+    case = next(c for c in _parity_cases() if c["key"] == key)
+    cfg, _ = load_runtime_from_toml(RUN_TO_REPO_ROOT / case["config"])
+    assert cfg.init.init_electrons_only is True
+
+
 def test_parity_builder_reads_the_declared_floor() -> None:
     """A manifest key nothing reads is documentation pretending to be a gate."""
 
