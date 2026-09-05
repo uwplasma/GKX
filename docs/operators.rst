@@ -1167,6 +1167,13 @@ boundary operator. The coefficient is inside that operator; spatially varying
 geometry cannot generally be commuted through it. Runtime defaults use
 :math:`p_m=\min(20,\max(\lfloor N_m/2\rfloor,1))`.
 
+The prefactor 2.3 matches the inspected GX implementation (commit3865a537,
+``src/linear.cu``); the `GX paper, equation (4.28)
+<https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA>`_
+uses 2.5. Code parity and paper-model reproduction are distinct targets: record
+the chosen coefficient and test regularization sensitivity, rather than silently
+changing it between resolutions.
+
 Increasing :math:`N_m` therefore changes the truncation **and** artificial
 damping at retained moments, even with unchanged input coefficients. At fixed
 :math:`p_m,m`, its coefficient scales as :math:`M^{-p_m-1/2}`. A resolution
