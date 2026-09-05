@@ -168,9 +168,7 @@ convergence and experimental validation are distinct claims.
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
 | GKX s-alpha Nl32 Nm160 Nz96, RK4 dt=.001, T300, rate50 | 0 | **11457 / 1744614** | `salpha_nl32_nm160_t300.toml`, `gkx-salpha-nl32-nm160-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm160_t300` |
-| GKX matched Nm96 float32 control, Nl32 Nz96 dt=.001 T300 rate50 | 1 | **72033 / 1748122** | `salpha_nl32_nm96_t300_f32.toml`, `gkx-salpha-nl32-nm96-t300-f32.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm96_t300_f32` |
 | Collision B4 spherical19/21 control, radial32/Bessel48, fixed8 moments | Local CPU | **12758 / 58452** | `/tmp/gkx-coupled-rate-20260905.shBvlR/collision-field-angular-fine.{py,log}`; continues from saved spherical17 field |
-| Collision B1 field-polarization sourceJ3/5/7 projection identity, fixed S13/R12/K24 | Local CPU | **45346 / 62787** | `/tmp/gkx-coupled-rate-20260905.shBvlR/collision-field-source-ladder.{py,log}`; not an independent kernel oracle |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -180,7 +178,7 @@ uses a separate grid-verified reporter from1571a9e6; no running copy overwritten
 Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** inspect all four live exits, hashes, finite histories and all rows.
+**Next actions:** inspect both live exits, hashes, finite histories and all rows.
 Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
 running as11457. Nm128 run68484 completed exit0 in43:47.41: atNl32,
 Nm96→128 changes gamma−8.141% and omega−0.274%, so velocity convergence fails.
@@ -203,13 +201,19 @@ Prepared input now explicitly pins fixed_dt=true and Expert damping values;
 its current SHA256 is fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
 Spatial77271, dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
 The small derivative test completed beside the kinetic run with an8% memory pool;
-no performance claim. Patched GX95001 is terminal; GPU1 now runs the matched
-GKX float32 precision control72033. Its imported grid is confirmed float32 with
-x64 disabled; compare to the saved Nm96 x64 result, not the running Nm160.
+no performance claim. Patched GX95001 and GKX float32 control72033 are terminal
+exit0; GPU1 is free. Matched Nm96 f32 gamma=.024852321437161786 differs from
+x64 by9.2271e-6 relative, omega by2.3044e-7: precision does not explain this
+case's cross-code discrepancy. The7:02.13 wall time is concurrent, not an isolated
+speedup benchmark or general permission to demote scientific runs to float32.
 Independent GX energy fits at last30% give gamma=.0238429354 fromPhi2 and
 .0238471208 fromWg, leaving4.233% GKX/Phi2 discrepancy. The instantaneous-growth
-estimator is therefore insufficient to explain the difference; precision and
-operator differences remain to be isolated.
+estimator is therefore insufficient to explain the difference; operator/action
+differences remain to be isolated. Resolved kz-hypercollision coefficients match
+exactly for all96 moments, and imported coefficient profiles/theta are identical.
+Other GX scalar metadata are not reliable: the audited S_alpha constructor does
+not initialize exported nperiod/aminor/alpha/zeta_center. Retain this provenance
+debt; finite-value audits alone cannot certify geometry metadata or 3-D plots.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly
@@ -383,9 +387,10 @@ B4 angular13/15/17 control45671 completed exit0: at17 the field changes1.07e-5,
 while the test block still differs from its Gram oracle by.1881%. Continue the
 new19/21 control12758, not the completed13/15/17 process. No tables replaced.
 Its spherical19 rung is complete: field change6.004e-7 while independent test
-error remains2.61146e-4. Field source-ladder45346 separately checks the matrix
-action on a resolved J0 source against the polarization-vector assembly at B1;
-shared speed coefficients mean agreement cannot independently validate the kernel.
+error remains2.61146e-4. Field source-ladder45346 completed exit0: matrix action
+on a source resolved toJ7 agrees with B1 polarization-vector assembly to8.71e-12
+(test6.60e-12). Shared speed coefficients mean agreement cannot independently
+validate the kernel. Do not restart either the source ladder or f32 control.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and

@@ -7755,3 +7755,82 @@ Latest processes: field12758/PID58452 Rs15m05s; source45346/PID62787 Rs38s;
 officeNm16011457/PID1744614 RNl44m56s; officef32Nm9672033/PID1748122 RNl3m56s.
 Four live jobs; no new repo source edits, no merges. Continue these controls,
 collect and audit terminal results before choosing any subsequent scans.
+
+## 2026-09-05 — Completed f32 and field-source controls; metadata audit finding
+
+Previous turn: progress (new angular rung and source-control launch). Revalidated
+all four processes; source45346/PID62787 and f3272033/PID1748122 then completed
+exit0. Do not restart them. CI33961508920 still only nonlinear-core pending,
+no failures; b7cd526e remains held one ahead of pushed2c440b0e. No merges.
+
+Field-source ladder terminal results, fixed B1/P3J1 outputs/S13/R12/K24/digits40:
+
+| Source maximum J | Test-phi2 relative error | Field-phi2 relative error | Seconds |
+|---:|---:|---:|---:|
+| 3 | 4.684542479110145e-5 | 5.34367599931973e-5 | 41.048166 |
+| 5 | 2.395644987561406e-8 | 3.00193629325671e-8 | 50.213049 |
+| 7 | 6.604769038061571e-12 | 8.705161174013638e-12 | 60.496323 |
+
+The resolved-source matrix action agrees with separate polarization assembly.
+This checks assembly/source truncation only: speed coefficients are shared,
+so the field-particle kernel still lacks independent physical validation.
+collision-field-source-ladder.log SHA256
+5ceabc8132b2125962c10c7849141a3038abe313d28db8f60a792c972d39a990.
+
+Matched f32 Nm96/Nl32/Nz96 RK4dt.001/T300/rate50 run72033 exited0 in7:02.13,
+RSS1586424kB. gamma=.024852321437161786,omega=.5049332865274092; half-time
+relative shifts .0057399234933239495/−.00022147858927143319, both pass.
+Compared with saved matched x64 gamma/omega, relative differences
+9.227098886732676e-6 / 2.304376296446975e-7. This small precision effect cannot
+explain the4% GX discrepancy in this case. No general f32 scientific-accuracy,
+AD or isolated speedup claim. The x64 control's recorded32:55.72 and this7:02.13
+ran under different concurrent load; use them only to motivate controlled R3
+profiling. CSV copied locally, SHA256
+adadc451a26ae460540a98b1a11c96a8d266c92f0ef981de5b89a9c39849641c.
+Its historical Nm48-reference differences remain inapplicable to matched parity.
+
+### Resolved coefficients versus exported geometry metadata
+
+New read-only audit-refined-gx-parameters.py compares the actual baseline geometry
+file consumed by GKX with completed patched-GX Nm96 output, then builds GKX
+parameters/small moment cache on CPU. First transfer used a gkx/gx directory
+typo and failed; corrected it, no reference files altered. Initial audit asserted
+all exported Geometry variables identical and FAILED: coefficient arrays match,
+but scalar metadata nperiod/aminor/alpha/zeta_center differ. Preserve the failed
+log, do not describe all geometry fields as matched. Initial CUDA-hidden CPU
+fallback warning was avoided on the rerun with explicit JAX_PLATFORMS=cpu.
+
+The refined audit separates consumed linear coefficients from metadata: theta,
+bmag,bgrad,gbdrift{,0},cvdrift{,0},gds2/gds21/gds22,grho,jacobian,gradpar,q,
+shat,rmaj,kxfac,drhodpsi,theta_scale are exactly equal. Resolved GX Numerical_Diss
+has nu_hyper_m=1,p_hyper_m=20,kz=true,const=false; GKX matches these and vth=1,
+kpar_scale=.25714266300201416. Both use (m/95)^20 with m>2 and prefactor
+2.3*(20+.5)/sqrt(95)*abs(gradpar). All96 pre-|kz| coefficients match exactly;
+the m95 coefficient is1.2439245285812583. This checks factors, not the full
+linked |kz| action or every RHS term. Physical end-profile action remains a
+separate gate; no claim from absent exported Expert damping variables.
+
+Absolute metadata differences: nperiod2067095552,aminor4.417032889398256e-41,
+alpha2.3825493031289572e33,zeta_center4.417032889398256e-41. Inspected scratch
+GX geometry.cu base constructor and complete S_alpha_geo constructor305–435:
+these scalar members are not initialized there, unlike the actual coefficient
+profiles. This explains why finite but nonsensical metadata can pass a generic
+finite-array audit. GKX flux_tube.py reads aminor into epsilon and alpha into
+metadata; its coefficient profiles are imported directly. Do not infer physical
+3-D geometry from these scalars without verified paired inputs/source metadata.
+No sanitization, invented defaults or GX modifications made. Add a validated
+source-specific metadata contract before reusing such files for visualization.
+
+Audit runs92130/65088 shell sessions ended0 because their final scp succeeded;
+the INITIAL Python audit failed AssertionError, explicitly visible in preserved
+audit-refined-gx-parameters.log. The final log shows successful coefficient
+assertions; both initial failure and narrowed justified scope are retained.
+
+| Local scratch artifact | SHA256 |
+|---|---|
+| audit-refined-gx-parameters.py (final) | fca43e2c4810f746f24ad2c915b6280281b149cc327179ac4b28875a7cc9b331 |
+| audit-refined-gx-parameters.log (initial failure) | 9605af06cd3553101cba0f53f1cd3853edf7bb9ce7ea37918ff174794c4ee595 |
+| audit-refined-gx-parameters-final.log | 0b3c6fae108f7d5a1b876d76e4df822fcf16923b6ff14ba4d15f68c8f84205ca |
+
+Only Nm16011457/PID1744614 and field19/21 control12758/PID58452 remain live;
+last verified RNl48m42s and Rs18m51s. GPU1 is free. Full R0–R9 goal active.
