@@ -9158,3 +9158,51 @@ Next: measure generated contraction/gather costs or a memory-fused candidate,
 GPU after controls finish, arbitrary-direction state/field AD, and narrow scalar
 density limit in f32. Avoid spending implementation complexity on noisy timing
 differences. Production promotion still requires all scientific gates. Goal active.
+
+### 2026-09-05: narrow density precision and complete state/field Jacobians
+
+Previous turn progress: interleaved timing qualified performance claims.
+Code unchanged local48b90099/pushedf4d5d1b5; CI33969411628 in_progress with
+last observed only nonlinear-core pending/no failures. GX exact PIDs1767040/
+1767078 running24:39/24:37. Subsequent stdout reaches t215.20201/Nz96 and
+t112.80201/Nz192, not terminal. No live NetCDF reads or restarts.
+
+Two CPU prototype gates use existing signed53-node18-moment spline coefficients:
+
+1. scaled-density-precision.py (65135 exit0): density entry b²*A00 and its JAX
+   b-JVP versus the stable independent128-node Legendre integral, not a block
+   norm. b0 plus27 log-spaced positive values1e-16→1e-3. Reference evaluated
+   at dtype-represented b, avoiding decimal-rounding error. Both value and
+   derivative are exactly0 at b0. f32 maximum relative errors8.3375e-8/value,
+   7.6307e-8/derivative; f64 5.4756e-12/6.8975e-12. Smallest f32 value
+   −4.2553843242e-33, derivative−8.5107686783e-17. This range avoids f32
+   underflow; no arbitrary-below-range claim. Confirms the small density entry
+   is not hidden by the whole-matrix norm. Tolerances2e-6/f32,1e-8/f64.
+
+2. scaled-state-ad.py (80507 exit0): full realified36-output/38-input Jacobian
+   for18 complex moments plus one independently supplied complex phi. Analytic
+   block matrix [[C,0,p,0],[0,C,0,p]] from spline C=DAD,p=bDq compared to
+   both JIT jacfwd and jacrev at b0,1e-12,.001953125,.71,4.2,8. Random
+   inputs seed81. Maximum relative errors4.4680e-8/f32,1.0322e-16/f64;
+   tolerances2e-6/2e-12. This covers every real/imaginary state/field direction,
+   superseding the previous two-scaling-direction check in scope, but still
+   not a solved-field Jacobian, species-frequency/tz derivative, generic basis
+   constructor, or nonlinear trajectory validation. HIGHEST dot precision used.
+
+Reproduce from code worktree, PYTHONPATH=src:tools/artifacts local JAX0111
+Python and named scratch scripts. Both reuse scaled-jax-contract.py through
+runpy (its earlier tests run first). RootXqBQZb, same-stem logs.
+
+| Artifact | SHA256 |
+|---|---|
+| scaled-density-precision.py | 1e925265ce156fcf0c73a9f6c14bb959f075c36bf0409beb23bb344f2289dbe0 |
+| scaled-density-precision.log | 52f2072b17961bdeb85fe989deba261a241b2c9d0a5889e48cdd0db3c21c67b5 |
+| scaled-state-ad.py | 2ee030e4d0c0ddc61ada2e01ac6bc93de236ef0bb9a9520435a4f7785f1445fb |
+| scaled-state-ad.log | 6820812d5bef211ba77694a3a532fcb0b897baf6e5a8589a435e75d271858076 |
+
+Next: integrate a candidate only behind the existing research-only equal-species
+contract, preserving unit-rate scaling/full-J0 source and unsupported-basis
+behavior; carry mandatory generation/accuracy/Bernstein gates into tests.
+Before promotion require actual factory/runtime CPU/GPU comparisons and coupled
+field checks. Keep performance unresolved and preserve the smaller baseline
+until reviewed. Monitor the two existing GX controls and CI. No merges; goal active.

@@ -537,6 +537,10 @@ speedup or end-to-end claim; repeat with controlled timing and GPU before select
 Interleaved repeats do NOT reproduce the large gradient gain: medians at4096
 points are13.23→14.19ms (f32),20.58→21.00ms (f64), with broad batch variation.
 Treat performance as unresolved; the initial single-batch result is not a speed claim.
+Density-only f32 gate now resolves b1e-16→1e-3 against the stable scalar integral
+with value/derivative relative errors<8.4e-8. Full realified18-moment state/field
+Jacobian (36x38) matches analytic spline blocks to4.47e-8 f32/1.04e-16 f64.
+These remain isolated-prototype checks, not self-consistent-field or trajectory AD.
 Record quadrature provenance (not fictional high-precision decimal digits),
 independently recheck all nodes, update coefficient regressions and audit the
 interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H
