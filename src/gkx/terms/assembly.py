@@ -248,20 +248,14 @@ def _scalar_params(
     real_dtype: Any,
     dt: jnp.ndarray | float | None,
 ) -> _ScalarParams:
-    """Collect scalar RHS parameters and the dt-scaled end-damping amplitude.
+    """Resolve end damping for the caller's legacy timestep contract.
 
-    ``damp_ends_amp`` is a per-STEP fraction, not a per-unit-time rate. The
-    integrators apply ``G += dt * RHS``, so dividing the amplitude by the step
-    size here is what makes a step remove ``damp_ends_amp`` of the amplitude at
-    the parallel-domain ends regardless of ``dt``. Every shipped deck and every
-    published spectrum is tuned against that meaning. Reading the amplitude as a
-    rate instead -- which 2.0.0 did -- leaves end damping weaker by a factor
-    ``dt``: 500x at the tokamak decks' ``dt=0.002``, enough for the boundary
-    modes to run away and take the whole batched scan to a non-finite field
-    (uwplasma/GKX#192). ``dt`` is the *instantaneous* step, so an adaptive run
-    keeps the fraction fixed while its step size varies. See uwplasma/GKX#194
-    for the redesign that makes the amplitude a genuine rate; that one has to
-    rescale every deck and regenerate every reference, so it is not a patch.
+    With nonzero ``dt``, amplitude A gives RHS strength A/dt. For the isolated
+    scalar damping equation an explicit RK step multiplies by R(-A*d(z)),
+    where R is its stability polynomial: only Euler removes exactly A*d(z).
+    Without ``dt`` (including the nonlinear RHS), A remains a rate. PR #197
+    restores the linear benchmark contract; #194 must reconcile these routes
+    and migrate decks/references before claiming a single dt-convergent model.
     """
 
     damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
