@@ -125,16 +125,15 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local head **9fc6e42d** (one commit ahead of pushed
-**b734e19d**; hold push until current CI finishes), worktree
+`fix/r0-end-damping-rate`, local/pushed head **9fc6e42d**, worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
 repairs CPU singleton-rank lowering without changing the GPU layout.
-PR200/201 last checks: no failures or pending checks. PR202: no failures in the
-latest query, several checks pending. Its earlier formatting failure was fixed
-in02536eef; do not infer full-CI completion from local gates.
-Current CI run33956493988 targets b734e19d. Frequent earlier pushes cancelled
+PR200/201 last checks: no failures or pending checks. PR202's earlier formatting
+failure was fixed in02536eef; CI status is tied to the exact commit below.
+CI run33956493988 at b734e19d completed successfully; after that, pushed9fc6e42d.
+New run33958341219 is queued, not yet certified. Frequent earlier pushes cancelled
 superseded runs before completion; avoid restarting CI for every microcommit.
 
 **Current contract and evidence.**
@@ -164,7 +163,7 @@ convergence and experimental validation are distinct claims.
 
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
-| GKX kinetic Miller matched reference, dt=.0002, T40, rate500 | 0 | **40474 / 1729837** | `matched_kinetic_manifest.toml`, `gkx-kinetic-rate500-matched-t40.{stdout,stderr}.log`, stem `results/kinetic_rate500_matched_t40` |
+| GKX s-alpha Nl32 Nm128 Nz96, RK4 dt=.001, T300, rate50 | 0 | **68484 / 1740480** | `salpha_nl32_nm128_t300.toml`, `gkx-salpha-nl32-nm128-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm128_t300` |
 | Patched GX s-alpha Nl32 Nm96 Nz96, RK4 dt=.002 fixed, T300, rate50 | 1 | **95001 / 1738946** | Different directory: `/home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined`, `salpha_nl32_nm96_t300.in`, `run.log`, `time.log` |
 
 Office campaign directory:
@@ -176,8 +175,8 @@ Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
 **Next actions:** inspect both exits, hashes, finite histories and all rows.
-Prepared next GKX velocity control: `salpha_nl32_nm128_t300.toml` in campaign,
-not running. Compare against the completed Nl32/Nm96 dt.001/T300 control;
+Current GKX velocity control: `salpha_nl32_nm128_t300.toml` in campaign,
+running as68484. Compare against the completed Nl32/Nm96 dt.001/T300 control;
 the earlier Nm96→128 result at Nl16 cannot establish convergence at Nl32.
 GX95001 is now running with an isolated normalized-power repair, explicitly
 labeled as a modified reference (original checkout/binary unchanged). The failed
@@ -193,7 +192,10 @@ The small derivative test completed beside the kinetic run with an8% memory pool
 no performance claim. Patched GX95001 now occupies GPU1.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
-T40/electron-only-seed run is active; do not reuse the old T20 harness or
+T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly
+settled (ky.4: gamma−0.4105%, omega+0.1291%). Other modes require longer horizons;
+neither temporal agreement nor this single mode establishes resolution convergence.
+Do not reuse the old T20 harness or
 restart terminal GX6455. Extend unsettled reference modes before promotion.
 Continue slow-mode/velocity/parallel-resolution and regularization checks, then
 remaining kinetic/EM/stellarator matrix and the numbered R0 queue below.

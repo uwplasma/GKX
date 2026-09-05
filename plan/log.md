@@ -7033,3 +7033,45 @@ Local9fc6e42d still ahead1 of pushedb734e19d. Latest process checks: kinetic
 40474/PID1729837 RNl1h16m14s; patchedGX95001/PID1738946 RNl8m25s. Resume these;
 do not infer stalled/terminal state from buffered GKX output. No PR merge;
 full research/publication roadmap active.
+
+## 2026-09-05 — Kinetic T40 result; completed CI; coupled refinement launched
+
+CI33956493988 at b734e19d completed success, no failed/pending jobs. Only then
+pushed the held cache-independent startup-test commit9fc6e42d to PR202.
+New run33958341219 queued; do not infer its success from the preceding run.
+No merges, original checkout unchanged.
+
+Kinetic matched GKX40474/PID1729837 is terminal: time log exit0, wall1:21:52.
+All seven CSV rows inspected. Joint temporal screen passes only ky.40000000596:
+gammaGKX=.2640189338083527 vs GX=.26510718634554914 (−.4104953%);
+omegaGKX=.35246389712429327 vs GX=.35200954266599604 (+.1290745%).
+GKX full/half gamma shift there is−4.942%, close to the5% screen boundary.
+At ky.5, reference settles but GKX growth shifts8.205%; remaining modes also fail
+at least one screen. Do not promote the seven-mode comparison as validated.
+Extend unsettled modes with matched seeds/rates/timesteps before parity claims.
+Reporter primary scan3263.274s excludes the half-horizon probe; concurrent GPU
+work means neither this nor total wall time is an isolated performance result.
+CSV SHA256 aacc31a25b7343b62a89c5a36e52290f0c6a58de486b83326cbe44be8490417f;
+JSON a591f600af3e2d3a13a3c06ee8b93eddf692d0702419644dcf7fddfc4c72efa2.
+Both copied from campaign/results to /tmp/gkx-coupled-rate-20260905.shBvlR.
+
+Outer-JIT scratch EM homogeneity probe completed: jax.jit(jax.value_and_grad)
+gives serial/species values .7157894655052524/.7157894655052525 and derivative
+1.4315789310105052 on both two-logical-CPU routes, relative residual<=3.11e-16.
+Same command/environment as em-state-ad.py, replacing its derivative wrapper.
+Script em-state-ad-jit.py SHA256
+25cde2518f542f85ab2684683581cd3ecba73a6250049b8d7c24640af09e8ed6;
+log d9830fd7167047d60db216d39cecab6c90cca33b6b34da4139c044b3a2e498c4.
+Fixture emits complex128→complex64 scatter FutureWarning before promotion;
+this scratch result is not a broad precision or nonlinear transport AD claim.
+
+After kinetic exit, launched the prepared Nl32/Nm128 control on GPU0:
+session68484/PID1740480 (time1740479), campaign cwd; GX_PARITY_REF_DIR=campaign/
+matched_refs CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
+/usr/bin/time -v office-venv-python tools/comparison/build_gx_parity_matrix_grid_verified.py
+--manifest salpha_nl32_nm128_t300.toml --cases cyclone_salpha_itg_nl32_nm128_t300
+--stem results/salpha_rate50_nl32_nm128_t300. Output gkx-salpha-nl32-nm128-t300.
+{stdout,stderr}.log; process verified, initial stderr empty. Input/reporter hashes
+unchanged from prior preflight. Compare Nl32/Nm96 dt-half result; do not useNl16
+Hermite refinement as a substitute. Only other live job: patchedGX95001/PID1738946
+on GPU1, verified RNl25m46s. Do not restart terminal kinetic40474.
