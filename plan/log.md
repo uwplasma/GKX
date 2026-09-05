@@ -8807,3 +8807,51 @@ No production sign change or whole-operator convergence claim.
 Resume: review new CI, extend comparison metadata/cache-map/distributed contracts,
 then Nyquist-policy spatial sensitivity; collision scaled-congruence/source gates
 remain open. No live research processes. Full roadmap remains active.
+
+### 2026-09-05: Nyquist state-projection sensitivity; cache-frequency contract
+
+Previous turn progress: committed manufactured mode/AD tests. Current code local
+447d724f, pushed f4d5d1b5. CI33969411628 atf4d5d1b5 last observed queued;
+hold this small follow-up push until terminal CI to avoid cancellation. Source
+operator unchanged. No merges, no live research process.
+
+GPU0 x64 sensitivity audit41724 completed exit0, using unchanged previous
+restart controls and snapshot. Script/local mirror:
+`/tmp/gkx-gx-own-rhs-20260905.wbfjWQ/audit-nyquist-sensitivity.py`;
+remote root `/home/rjorge/gx-own-rhs-20260905.0Qzs0L` contains script and
+audit-sensitivity.log. Invocation/environment/reference paths identical to the
+previous own-RHS audit. Additional diagnostics Fourier-project the original
+distribution before recomputing the full GKX RHS and its sign-matched variant.
+No projected state was time evolved or called a converged solution.
+
+| Retained absolute mode cutoff | Removed squared state norm fraction | Convention RHS difference | Matched minimum eigenmode residual |
+|---|---|---|---|
+| 48 (all) | 0 | .320174 | .000114272 |
+| 47 | .0000995778 | .000910559 | .363629 |
+| 40 | .00198539 | .0000369461 | .621521 |
+| 32 | .00908851 | .00000355422 | .757874 |
+| 24 | .0297500 | .00000402380 | .857444 |
+
+Nyquist power alone is9.957778911381208e-5 of the state norm squared. Removing
+it nearly removes sign sensitivity but disrupts the eigenmode balance: matched
+Rayleigh real changes .02486704448→.02427675971, while residual grows to.364.
+These Rayleigh values are NOT new growth rates. Position-dependent coefficients
+and field coupling can regenerate cutoff content; the remaining convention
+difference need not vanish merely because the input Nyquist coefficient is zero.
+Conclusion: reject filtering as an evidence-backed production repair; obtain
+new solutions at finer resolution/policy controls instead. This projection study
+does not replace a spatial-convergence ladder.
+
+SHA256 script6ec521b6e466c00490849d9994f284dd1a688ad1f4fb182cd50578e719576e7b;
+log1916e8b671d30064ce353b24234d28a39eb3bb7431c80a7dd939abfc5a3b0743.
+
+447d724f strengthens the existing test_build_linked_fft_maps_keeps_real_fft_positive_ky_modes:
+Nz31/32 parameterization checks the whole signed frequency vector against integer
+mode labels, replacing shape-only validation. Both cases passed CPU73353;
+Ruff check/format, unchanged architecture budget87264, diff-check and strict
+Sphinx26399 passed. docs/operators.rst records projection caveats. This is a
+host cache-map test, not a new distributed/GPU validation claim.
+
+Resume: inspect CI33969411628; push447d724f only after the older run is terminal.
+Continue multi-link/distributed convention contracts and actual resolution/policy
+solves, plus the outstanding collision interpolation/source gates. Goal active.
