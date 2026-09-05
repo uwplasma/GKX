@@ -6973,3 +6973,35 @@ histories, actualdt, geometry, all modes and temporal settling before using it.
 Kinetic40474/PID1729837 still RNl1h08m00s. Only these two jobs live; no restart
 of spatial77271. GKX local9fc6e42d remains ahead1; CI b734 last26success/11pending/
 1skip, no failures. No GX commits/pushes or PR merges; full roadmap active.
+
+## 2026-09-05 — Reproducible patched-GX evidence bundle
+
+Previous turn progressed with spatial result and scratch GX repair/controls.
+Saved exact git diff of the two GX source files as gx-normalized-hyper.patch
+in both /tmp/gkx-coupled-rate-20260905.shBvlR and the isolated GX root
+/home/rjorge/gx-normalized-hyper-20260905.JZDbbo. `git apply --reverse --check`
+passes against the built scratch source, without applying anything. Patch SHA256
+`02f39ab57967b68c5e490d2f51a00a8db103a624923f9d3c2c56a3b4454585a0`.
+Build provenance: CUDA11.5.119, g++10.4.0, Makefiles/Makefile.office SHA256
+`adce5f6b950b447d16392b5713cddbd7aed1f4fd6a9e322e7855bea934597d54`,
+normalized-build.log SHA256
+`d7835ea8ef6ddb67c08a2ffa42161c0b388bd55525277675144af229b59f6b44`.
+The rebuilt executable reports3865a537-dirty, compiled2026-09-05, rather than
+masquerading as the original binary. Binary/source/output hashes in prior entry.
+
+Added a read-only rerunnable audit in both scratch roots: audit-normalized-gx.py
+SHA256 `1adfb7d48208036eba96354afa0279ac05f6f38503aacc21633dedcfc630c34d`.
+Run office venv Python <script> <isolatedGX>/r0_validation. It asserts all numeric
+arrays finite and matching original/normalized low-order schemas/shapes, hashes
+outputs, and reports the largest physical diagnostic/grid relativeL2 differences.
+It deliberately does not convert the observed difference into a post-hoc
+long-run parity threshold. Execution exit0; local audit-normalized-gx.log SHA256
+`337f1eaafff4ef105ccd872a775e20f805e2abb1c50848124a50ec08cd0a0f10`.
+No scratch source/binary or running input changed this turn.
+
+Latest live: kinetic40474/PID1729837 RNl1h11m32s; GX95001/PID1738946 RNl3m43s,
+printed step5201/t10.402/dt.002 with finite Phi2 and flux outputs. This is progress
+logging, not a completed finite-history audit. CI33956493988 has36successful jobs,
+1skip and only nonlinear-core101280712503/parallel-autodiff101280712595 still
+running, no failures. Keep local9fc6e42d unpushed until this finishes; original
+GKX checkout untouched, no merges. Full R0–R9 roadmap remains active.
