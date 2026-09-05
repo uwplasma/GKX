@@ -442,7 +442,7 @@ which makes GX the closest algorithmic and parity reference.
 | | GKX | GX | GENE |
 | --- | --- | --- | --- |
 | Velocity space | Hermite-Laguerre moments | Hermite-Laguerre moments | grid in `(v_par, mu)` |
-| Collision models | 5, through gyrokinetic Coulomb | Dougherty + hypercollisions | Landau and model operators |
+| Collision models | Lenard–Bernstein/Dougherty, Sugama, improved Sugama; finite-k Coulomb tables are research-only, under coefficient repair | Dougherty + hypercollisions | Landau and model operators |
 | Differentiable | JAX autodiff end to end | not a design goal | not a design goal |
 
 This records scope, not quality: both codes are mature and each is stronger than

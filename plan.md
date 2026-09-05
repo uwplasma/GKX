@@ -38,12 +38,13 @@ do not advertise planned extensions as current release capabilities.
 |---|---|---|
 | Product | `load/solve/scan/plot/prepare`; real Case/results/prepared object; six CLI commands; native integration; first-run wheel gate | Simplify internal ownership; preserve working scripts/schemas |
 | Physics | Local Maxwellian δf, Hermite–Laguerre/Fourier, ES/EM terms, adiabatic/kinetic species, analytic/imported/VMEX geometry | Per-model verification; kinetic-electron, EM, collision, zonal and nonlinear convergence gaps |
-| Release correctness | Main CI green at audited SHA | Damping regression #192; proposed #197 is **open**, not landed; rate migration #194; f32 backend/tolerance coverage #196 |
+| Release correctness | Main CI green at audited SHA; release wheel runs the documented first run before publish (#188, passed on 2.0.0); regenerated release artifacts fail CI on staleness (#195) | Damping regression #192: #197 (per-step contract, bit-identical to the recorded artifact) is the exit and is **open**; #202 rate migration is R1; f32 backend coverage #196/#200/#201 |
 | Autodiff | Eigenmode sensitivities; checkpointed finite-window physical heat-flux derivative | Useful gradient horizons, geometry/mesh derivatives, held-out nonlinear descent; no invariant-measure derivative claim |
 | Optimization | Reduced examples, local derivatives, extensive positive and negative campaign records | No promotion-ready, resolution-resolved QA transport reduction; no completed GKX–ESSOS transport workflow |
 | Parallelism | Independent scans/ensembles; diagnostic state, velocity and domain routes | Actual CPU/GPU distributed trajectories **and VJPs**, conservation, transport equivalence and performance |
 | Size | 184 source Python files / 88,910 lines; 76 test files / 86,377 lines; 95 tools / 77,823 lines | Remove duplicate responsibilities, not assertions; audit 562 JSON files |
-| Documentation | 33 RST pages / 18,857 lines; useful equations/figures | One task-oriented map; no contradictory claims or duplicate governance |
+| Documentation | 33 RST pages / 18,857 lines; useful equations/figures; nightly linkcheck with three unregistered DOIs corrected (#186); README parity table recomputed from its scans, all seven rows reproduce (#193) | One task-oriented map; no contradictory claims or duplicate governance |
+| Landed since the audit | 16 of 36 examples execute in CI at smoke resolution, two bugs found by running them (#185); closed VMEX mirror rebuilt on a solved equilibrium, Q_QL 0.998→0.217, generator-less record deleted (#191) | Remaining 16 examples need an untracked eik/wout or eight devices; 11 still carry a `__main__` guard |
 
 The audit distinguishes fresh measurements, source inspection, historical
 artifacts and PR-author reports. None substitutes for a rerun of all physics.
@@ -119,180 +120,48 @@ acceptance criteria are frozen.
 
 ### R0: immediate small-PR queue
 
-Resume checkpoint (2026-09-05): R0 remains open. Full commands, hashes,
-rejected trials and terminal handles are retained in [the logbook](plan/log.md).
-Do not merge PRs or modify the user's original checkout.
+Evidence, run numbers, digests, scratch paths and the per-item established/required
+table for R0 live in [the logbook](plan/log.md#r0-resume-checkpoint-and-evidence-table-moved-2026-09-05-external-review).
+This section states only the contract and the order of work.
 
-**Review branches.** Plan PR198: `plan/research-publication-20260904`.
-Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, pushed **f4d5d1b5**, local **48b90099**
-(CI33967886511 at17ff384a completed success; new HEAD CI not certified), worktree
-`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
-PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
-PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
-repairs CPU singleton-rank lowering without changing the GPU layout.
-PR200/201 last checks: no failures or pending checks. PR202's earlier formatting
-failure was fixed in02536eef; CI status is tied to the exact commit below.
-CI run33956493988 at b734e19d completed successfully; after that, pushed9fc6e42d.
-Run33958341219 at9fc6e42d completed success; only then pushed the accumulated
-followups. The subsequent new documentation heading warning was fixed and the
-strict local build passes; CI33959939110 at e9b7b67f completed success.
-New HEAD CI is not yet certified. Frequent earlier pushes cancelled
-superseded runs before completion; avoid restarting CI for every microcommit.
+**Release contract for end damping.** The parallel wave-absorbing layer is a
+**per-step fraction**: the amplitude applied to the RHS is `A/dt`, so one step
+removes `A` of the boundary amplitude regardless of `dt`. This is GX's published
+contract — `d(ẑ)=A[1−2ẑ²/(1+ẑ⁴)]`, `z_width=L_z/8`, `A=0.1/Δt` (Mandell et al.
+2024, eq. 4.30) — and GX's own convergence study is in the product `AΔt`
+(Appendix C: converged for `AΔt ≳ 0.05`). #197 restores it and reproduces the
+recorded `cyclone_salpha_itg` artifact bit-identically at all 11 ky. **#197 is
+the R0 exit.** A dt-independent *rate* (#202, issue #194) is a legitimate
+research migration — a rate converges as `dt→0` where a per-step fraction does
+not — but it changes every deck and every reference, and it is not the parity
+contract; it moves to R1 behind an explicit input flag with rescaled decks and
+regenerated references, never as a silent default.
 
-**Current contract and evidence.**
+**R0 first actions, before any other R0 item:**
 
-| Item | Established | Still required |
-|---|---|---|
-| End damping | PR202 uses a fixed rate across audited routes; native-time decks migrated explicitly, existing nonlinear rates retained; old scale-by-dt input rejected | External matrix, adaptive calibration, broader precision/sharded AD validation |
-| GX adapters | Active damping requires positive reference dt and explicit Time.fixed_dt=true; three completed campaign references independently pass observed-dt audit at their ceilings; kinetic seed corrected | Input dt alone remains insufficient for arbitrary references; retain historical inputs and audit provenance |
-| Parity coordinates | Requested/reference ky and actual effective GKX grid matched before solves within float32 roundoff; missing/invalid/duplicate requests rejected | Old running reporter lacks preflight; current campaign coordinates already match its solver grids |
-| Tests/startup | CPU/GPU boundary and route probes; coupled reverse AD vs matrix exponential; 88 linear, 85 time-integrator, 198 release, 148 CLI tests passed in recorded runs; nonfinite Laguerre transform errors rejected, 50 core numerics tests pass; explicit linear facades clip the final step to t_max | Fresh full CI; direct JVP through custom-VJP field solve remains unsupported |
-| Sharded AD | Fixed-rate reverse derivatives pass on two CPUs/two GPUs; traced initial-state rejection repaired; short EM initial-state homogeneity derivative passes on both | Neither field-free damping nor short EM homogeneity validates nonlinear transport AD or general EM parameter derivatives |
-| Demo | dt=.02/750 steps, T15 and fixed rate preserved; wheel writes all artifacts, no CFL warning; short nonlinear wheel run also completes | Transient demo is not stationary physics validation; under-resolved-fit/cutoff warnings remain |
-| s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
-| Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
-| High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; at T300 Nm96→128 changes gamma0.468%, omega0.192%, with temporal shifts0.168%/0.219% | Laguerre/parallel resolution and regularization sensitivity; two fine Hermite points alone do not establish convergence |
-| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713%; halving dt has negligible effect; Nz96→192 changes gamma+0.3467%, omega−0.0306%; patched-GX Nm96 reference completed, high-ky growth discrepancy ~4% | Velocity convergence and residual cross-code discrepancy remain open |
-| Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
-| RHS profiling | Explicit state precision and observed state/RHS dtypes; 36 profiler tests pass; CPU z-wave warm means17.8ms f32/41.8ms f64 | Artificial-state triage only; no end-to-end speedup, peak-memory or f32 scientific-accuracy claim |
-
-The Nm48 half-step pilot rounded ky by <=1.2e-8; it is sensitivity evidence,
-not an exact-coordinate Richardson pair. Subsequent refinement uses exact stored
-ky. Hypercollision coefficients depend on Nm: fixed input does not imply fixed
-damping at retained moments. Temporal settling, cross-code parity, resolution
-convergence and experimental validation are distinct claims.
-
-**Live resolution controls:** GX single-mode ky=.550000011920929,
-Nl32/Nm96/dt.002/rate50/T300 at Nz96 and192 in
-`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`.
-GPU0 full96: session85194/PID1767040; GPU1 full192:42690/PID1767078.
-Both verified running; do not restart. Logs `<stem>.log`, `<stem>.time`.
-Accept reduced-mode layout only after full96 reproduces the earlier multi-mode
-reference; then compare full192 to the existing GKX spatial control. No results yet.
-
-**Completed reference:** corrected GX Nm96/Nl32/Nz96 dt.002/T300 reference,
-GPU1, **7690/PID1753613** (time1753612), in
-`/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`.
-Input `salpha_nl32_nm96_t300.in`; logs `run.log`, `time.log`. Binary in the parent
-scratch root includes normalized hypercollision powers AND damping stride repair.
-Nm16011457, field12758, RHS probes63632/68046/95262, build80927 and startup50025
-are terminal exit0. Do not restart them. GX7690 also exited0 in1:44:56;
-artifact/time/finite-array audits pass. Both GPUs now run the spatial controls above;
-new code CI is not yet certified.
-At ky=.55, corrected GX gamma=.0249083096362 versus GKX=.0248520921245
-(−.2257%); omega differs−.009894%. The same-state Rayleigh discrepancy is
-small, but the normalized full-state residual remains .30498. Do not equate
-frequency agreement with operator equivalence or velocity convergence.
-Follow-up one-step GX controls identify the dominant residual as an even-grid
-Nyquist-sign convention mismatch:99.999953% of difference power lies at kz index48.
-GX uses positive Nyquist; GKX uses negative FFT frequency. Diagnostic-only sign
-matching reduces RHS disagreement from32.018% to.02206%, and the minimum
-eigenmode residual to.0001143. Neither production solver was changed.
-
-Office campaign directory:
-`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
-Production snapshot3565 remains solver-equivalent for these scans; kinetic reporter
-copy is0acbd221, and its fixture includes8ce22e33's seed correction. Spatial run
-uses a separate grid-verified reporter from1571a9e6; no running copy overwritten.
-Existing reference bundle
-`/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
-
-Manufactured even/odd periodic and reordered-linked mode/JVP/pullback tests
-now pass CPU x64/f32 and GPU x64 in f4d5d1b5; runtime convention unchanged.
-Cache-built single-link signed frequencies now pass odd/even checks in447d724f.
-Filtering only the Nyquist mode removes9.96e-5 of state power but raises the
-matched eigenmode residual to.364; filtering is not a validated repair.
-**Next actions:** make external parity comparisons convention-aware, including
-distributed routes. Host one/two/three-link topology and signed-frequency tests
-pass in48b90099. Evaluate truncation/resolution
-sensitivity before choosing a production policy; do not silently flip GKX's default.
-Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
-completed11457 exit0 in54:11.43: gamma=.02410635371563277,omega=.5058500630938944.
-Nm128→160 changes gamma+5.596% and omega+.4566%; velocity convergence still fails.
-Nm128 run68484 completed exit0 in43:47.41: atNl32,
-Nm96→128 changes gamma−8.141% and omega−0.274%, so velocity convergence fails.
-Compare the new run against Nm128 at matched dt.001/T300;
-the earlier Nm96→128 result at Nl16 cannot establish convergence at Nl32.
-GX95001 completed exit0 in1:44:10 with an isolated normalized-power repair, explicitly
-labeled as a modified reference (original checkout/binary unchanged). The failed
-original high-order startup and repaired finite startup are retained; low-order
-potential traces agree within1.42e-7 relative L2. Do not launch a duplicate or use
-unmodified GX3865a537 at high Nm: its separate float32 powers overflow. Use a valid reference to compare
-the high-order GKX result at matched velocity resolution, not the old Nl16/Nm48
-reference. Preserve both references. The completed audit verifies1501 samples,
-dt=.0020000000949949026 toT300.0000142492354, and finite264/42/2 numeric
-arrays in out/big/restart. Atky.550000011920929, late-half GX gamma=.023903807575570125,
-omega=.5051693808381631; half-window shifts−.967%/−.126% pass the temporal screen.
-Matched GKX Nm96 gamma is3.967% higher (4.112% against the reference's last30%);
-this residual is not erased by temporal settling. Audit estimator/precision/operator
-differences before claiming resolved parity. Lowestky still fails the5% growth screen.
-Prepared input now explicitly pins fixed_dt=true and Expert damping values;
-its current SHA256 is fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
-Spatial77271, dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
-The small derivative test completed beside the kinetic run with an8% memory pool;
-no performance claim. Patched GX95001 and GKX float32 control72033 are terminal
-exit0; GPU1 is free. Matched Nm96 f32 gamma=.024852321437161786 differs from
-x64 by9.2271e-6 relative, omega by2.3044e-7: precision does not explain this
-case's cross-code discrepancy. The7:02.13 wall time is concurrent, not an isolated
-speedup benchmark or general permission to demote scientific runs to float32.
-Independent GX energy fits at last30% give gamma=.0238429354 fromPhi2 and
-.0238471208 fromWg, leaving4.233% GKX/Phi2 discrepancy. The instantaneous-growth
-estimator is therefore insufficient to explain the difference; operator/action
-differences remain to be isolated. Resolved kz-hypercollision coefficients match
-exactly for all96 moments, and imported coefficient profiles/theta are identical.
-Other GX scalar metadata are not reliable: the audited S_alpha constructor does
-not initialize exported nperiod/aminor/alpha/zeta_center. Retain this provenance
-debt; finite-value audits alone cannot certify geometry metadata or 3-D plots.
-**Reference coverage defect:** GX GradParallelLinked caps dG_all.z at65535;
-dampEnds_linked lacks the grid-stride loop used by neighboring copy kernels.
-At Nz96/Nl32/Nm96 it covers65535 of294912 z/moment indices. On the saved GX
-state, GKX's field solve matches Phi to7.77e-8, but full-damping Rayleigh growth
-is−.370115. Emulating precisely the missing-coverage mask yields+.0238632 versus
-GX+.0238779. A30.4% full-state residual remains, so this is not a complete
-operator-equivalence proof. Existing high-order reference results are provisional;
-the normalized-hypercollision patch alone is insufficient. Even baseline
-Nz96/Nl16/Nm48 exceeds the cap (73728 indices). Audit every reference case;
-retain original outputs and do not reproduce the defect in GKX. An isolated
-actual-kernel regression now reproduces1966/54958 missed updates for73728/294912
-indices; the stride repair passes all cases, including the6144-index control.
-New build96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
-passes the T1 finite-state smoke test. Corrected matched run7690 completed exit0; its
-input SHA remainsfb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
-The updated audit-refined-gx.py in the new scratch root now requires explicit
---root/--stem/--binary/--binary-sha256/--input-sha256/--gkx-csv and rejects a
-nonterminal run before reading NetCDF. It reproduces old results and rejects
-the live corrected run and a wrong binary hash. The RHS probe now requires
---root/--stem and checks diagnostic/restart/field timestamps. Use these updated
-copies, not old hard-coded ones; keep old/new records separately labeled.
-GX kinetic reference completed exit0 with finite inspected diagnostics and
-2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
-T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly
-settled (ky.4: gamma−0.4105%, omega+0.1291%). Other modes require longer horizons;
-neither temporal agreement nor this single mode establishes resolution convergence.
-Do not reuse the old T20 harness or
-restart terminal GX6455. Extend unsettled reference modes before promotion.
-Continue slow-mode/velocity/parallel-resolution and regularization checks, then
-remaining kinetic/EM/stellarator matrix and the numbered R0 queue below.
-For imported parity geometry, editing grid.Nz alone does **not** refine the
-solve: geometry-file sampling overrides it. PR202 now reports effective Nz and
-requested_Nz separately. Independently generated192-point GX geometry now passes
-finite/shared-point checks (see log); use it after isolating Laguerre refinement.
-The older kinetic reporter has not been replaced.
-GPU wall times from concurrent runs are not isolated performance benchmarks.
-Update this checkpoint and append evidence to the logbook before switching work.
+- **R0.a Re-run the Hermite/Laguerre ladder on #197.** The recorded
+  velocity-convergence failure (Nl 16→24: −7.0%, Nl 24→32: −24.7%,
+  Nm 128→160: +5.6% at Nl=32) was measured on time-integrated runs at
+  dt=0.002/0.001 with end damping active — the population #192 breaks, with
+  severity ∝ 1/dt. Hoffmann, Frei & Ricci (2023) converge this case at
+  (P,J) ≳ (16,8); GX converges the nonlinear flux at (Nl,Nm) ≥ (4,6) with
+  hypercollisions. A −25% swing at Nl 24→32 is a defect hypothesis, not a
+  result. No reference migrates from those runs; no convergence statement is
+  made until the ladder is repeated on the repaired operator.
+- **R0.b Declare GX reference validity.** `GradParallelLinked` caps `dG_all.z`
+  at 65,535 and `dampEnds_linked` lacks the grid-stride loop; even the
+  baseline Nz=96/Nl=16/Nm=48 reference (73,728 indices) exceeds the cap. No
+  parity row is promoted against an unrepaired GX output. Use the repaired
+  build as the declared reference, label it, retain the original, and report
+  the defect upstream to GX.
+- **R0.c Correct the public collision claim** (README "5, through gyrokinetic
+  Coulomb") to the research-only status R1 records. Done on this branch.
 
 1. **Damping:** review #197 against #192 independently. Compatibility restores
    the old per-step map; it is not #194's continuous-rate migration. Audit serial,
    adaptive, eigenoperator, implicit, Hermite-sharded and field-supplied RHS
    together. Freeze units in inputs/outputs; migrate affected decks explicitly.
-   **Migration correction (measured 2026-09-05):** issue #194 is not permission
-   to rescale every nonlinear deck by 1/dt. Their production RHS already uses a
-   rate. Preserve A for these decks; convert legacy native-linear inputs using
-   A/dt_reference, then require every solver to evaluate the same fixed operator.
-   The two parity fixtures with deck dt=.0005 but harness dt=.0002 need explicit
-   provenance-preserving rate overrides (200 standalone versus 500 in harness
-   for A=.1), not an undocumented global choice. Audit inherited defaults,
+   **Migration note:** issue #194 is not permission to treat the nonlinear decks' current rate as a design. That rate *is* the 79064c4d regression: the decks were tuned to the per-step fraction and their references were produced under it. Under #197 they return to that contract without rescaling. A rate migration converts inputs explicitly with `A/dt_reference`, records the provenance, regenerates references, and rejects the old scale-by-dt input with a migration error rather than a silently ignored key. Audit inherited defaults,
    demo-generated decks and caller overrides as well as explicit TOML values.
    Remove the scale-by-dt input with a clear migration error; it must not become
    a silently ignored unknown key. Require nonzero-damping serial/species-pmap,
@@ -397,142 +266,19 @@ The scalar-potential term alone cannot restore Euclidean symmetry: with
 `C+p r^T` is `P(C−C^T)P`, measured nonzero for both shipped tables. Derive the
 physical metric and audit coefficient/projection assembly; do not symmetrize
 tables or call a finite-k defect-scaling regression a validation proof.
-At fixed8 output moments/B1, radial cutoff2→4→12 removes the asymmetry down
-to roundoff, but spherical5→7→9 still changes C by21.12%/1.65%. Independent
-intermediate radial/spherical/Bessel and output-moment ladders are required;
-the default intermediate degree inferred solely from output moments is not
-a convergence guarantee. Extend this ladder before regenerating shipped tables.
-At B1, spherical9→11→13 changes C by0.02521%/0.000132%; radial12→16 is
-roundoff and Bessel24→32 unchanged in float64. B4 endpoint58082 finished exit0:
-radial24→32 changes C by2.25e-13 at fixed spherical13/Bessel48. Both CPU collision
-controls58082/67222 are terminal; do not restart them.
-Independent like-species test-particle Dirichlet quadrature matches the shipped
-DK limit to6.1e-15 but finds22.9%/84.1% errors in the shipped8-moment test block
-atB1/B4. Refined spherical13/radial12/Bessel24 agrees atB1 to2.55e-9. This isolates
-shipped truncation debt and motivates an efficient C_test(B)=C_test(0)−B²D
-representation; independently validate D, normalization, AD and larger moment
-orders before runtime use. Field/polarization blocks still need their own
-convergence and physical checks. No shipped table regenerated.
-The independent offline Gram oracle is now committed with8/18/32-moment
-quadrature/spectral gates and8/18 DK coefficient comparisons;51 selected
-collision tests pass in both JAX precision configurations. It remains NumPy
-float64 offline code, not a deployed runtime replacement. Shipped18-moment
-test-block errors are13.0%/64.2% atB1/B4 as well; both tables remain research-only.
-Interpolation has a separate near-zero derivative defect: even exact samples
-of C(B)=−B², linearly interpolated in B then evaluated at sqrt(2b), give
-dC/db=−883.9 atb1e-8 and−Inf atzero instead of−2. The generic interpolator
-differentiates its declared approximation correctly, but that approximation
-does not preserve the like-species quadratic limit. Commit2c440b0e switches
-only like-species diagonal callers to B² coordinates, preserving the synthetic
-quadratic limit with interior one-sided endpoint derivatives and zero slopes
-outside the table. Twelve forward/reverse derivative cases pass on CPU/GPU;
-generic and unlike-species semantics remain unchanged. Still required: physical
-interpolation/AD convergence for field/polarization coefficients, and a validated
-runtime Gram polynomial for the test block. Neither this interpolation repair
-nor coefficient repair alone closes physical AD validation.
-New independent test-polarization quadrature (b7cd526e) agrees with the refined
-B1 spherical13/radial12/Bessel24 generator to1.51e-11, but the shipped B4
-test-phi2 errors are95.79%/86.40% for8/18 moments. Quadrature refinement and
-the independent J0 source-moment ladder pass.
-B4 field angular13→15→17→19→21 controls45671/12758 are terminal exit0.
-Last field change2.3033e-8; test-block error2.7282e-5. Source-ladder45346 is
-also terminal: source J7 reproduces B1 vector assembly to8.71e-12 (test6.60e-12),
-an assembly identity using shared coefficients, not independent kernel proof.
-Do not restart these controls, Nm160 or f32.
+Coefficient ladders, quadrature audits, interpolation-derivative defects, the
+offline Gram oracle, candidate tables and their digests are in
+[the logbook](plan/log.md#r1-collision-table-evidence-moved-2026-09-05-external-review).
+The standing conclusions: the shipped 8/18-moment finite-k Coulomb tables
+carry test-block errors of 22.9%/84.1% and 13.0%/64.2% at B1/B4 and
+field-phi2 errors up to 95.8%; they are **research-only** and the public
+capability table must say so (R0.c). A repaired generator and candidate
+tables exist but have no runtime, interpolation-derivative or transport
+validation. The `b→0` density entry needs the scaled congruence `C=DAD`
+rather than more nodes. Unequal species, temperature relaxation and runtime
+transport remain separate open gates. Equations and API are in
+docs/operators.rst.
 
-**Independent field reference now implemented offline (6d645f3f).** Fourier
-Landau kernel `Uhat=8*pi*q*q^T/|q|^4` gives a positive-weight field Gram matrix;
-analytic Fourier transforms supply both moment columns and the J0 polarization
-source. No spherical speed coefficients, fitted normalization or symmetrization.
-At8 moments: DK matrix error2.13e-13; B4 full-matrix difference from spherical21
-reference6.48e-10; B1 field-phi2 difference6.44e-14. The streamed helper passes
-8/18/32-moment B0/1/4 node, matrix-entropy and DK nullspace gates. A rejected
-32-pitch-node trial is retained; 48 pitch nodes remove its 1.07e-10 relative
-32-moment/B4 error. 35 selected tests pass under both JAX precision flags, but
-the oracle itself is NumPy float64. No runtime table or model has changed.
-The full14-node audit for both shipped tables is now complete; refined field
-matrix/field-phi2 errors atB4 are66.59%/83.35% (8) and46.43%/69.94% (18).
-B4 field source J4→8→12→16→24 converges to the direct source to2.65e-15;
-this independently checks the source expansion, but shares the Fourier kernel.
-
-**Finite-basis/field validation gate, not a demonstrated instability.** Runtime
-electrostatic quasineutrality uses retained s=J_l and H=MG. For unit single
-species/nonzonal tau_e=1, d=2-s^Ts and M=I+ss^T/d. Retained-H Galerkin
-collisions give L=C_N M and M L=M C_N M symmetric negative-semidefinite.
-The full J0 source p=P_N C J0 used by the table route differs from C_N s:
-atB4 the discrepancy is51.73%/41.79% for8/18 moments, even with converged
-coefficients. This mixes a full source with a truncated field closure. Sampled
-maps remain dissipative, but lose exact self-adjointness in this candidate
-metric. Use Mandell2017 Section4's retained-H closure/free-energy analysis
-to resolve the discrete contract; test larger Laguerre bases, zonal and
-multispecies cases, interpolation and AD before proposing a complete runtime
-replacement. Do not impose symmetry or drop polarization by hand.
-Actual runtime field/H/collision probes now confirm these relations for
-8/18 moments, nonzonal and genuinely nonzero-kx zonal modes with three z points
-and nonuniform Jacobian. State JVP/VJP comparisons pass. A rejected kx0-only
-probe did not exercise zonal correction and is retained in the logbook.
-At fixed Nm4/B4, Nl2→3→5→9→13→17→25 reduces the full/retained source gap
-from.5173 to2.75e-12; independent endpoint quadrature changes the matrix/source
-by1.25e-13/9.05e-14. This is source-truncation convergence, not a resolved
-collision spectrum, transport calculation or electromagnetic energy law.
-
-**Next implementation:** isolate coefficient repair from closure changes.
-Generator repairad47d3be is committed: direct equal-species diagonals, mandatory
-all-node quadrature refinement, full-J0 source, signed convention and honest
-float64 provenance. Final candidates are in
-`/tmp/gkx-collision-candidates-20260905.XqBQZb/final`; both pass independent
-DK and saved-file/all-node audits. **Local commitb05b3949 replaces packaged
-data**, exactly matching all four candidate files. Legacy arrays remain in
-ad47d3be history. New coefficient symmetry/entropy/reference gates reject both
-old archives. CPU:90 full physics and33 selected operator tests pass in x64;
-124 selected tests pass in f32 mode. GPU:33 selected operator tests pass at
-exact b05b3949 in isolated office root documented below. No runtime formulation
-or interpolation change; README/operator error tables now label legacy results.
-
-**Next:** refine the table-grid accuracy before optimization claims. Runtime
-JVPs equal declared segment slopes, but three sampled b-midpoints give up to
-1.87% value /2.66% physical-derivative error in field/polarization blocks;
-independent FD step refinement is below4e-9 relative. The quadratic test block
-is preserved to roundoff. Compare refined grids across every interval and
-off-midpoint holdouts; preserve entropy signs and measure table/runtime cost.
-The finite-source/H closure and predictive transport gates remain open.
-The wider all-interval holdout study now supersedes that three-midpoint sample
-as an error estimate: 14/27/53-node maxima reach71.86%/32.49%/15.67% derivative
-error for8 moments and50.84%/23.93%/11.16% for18. All use three fractions per
-interval and both endpoints; FD reference refinement is below1e-8 relative.
-Simple grid refinement is not yet an adequate gradient-accuracy solution.
-
-**Structural zero-wavenumber requirement:** the unit-rate density Dirichlet
-entry has stable analytic representation
-`C00=2*sqrt(2/pi)*b*integral[-1,1] x²*expm1(-b*(1-x²)) dx`, hence
-`C00=-(8/15)*sqrt(2/pi)*b²+O(b³)`. Linear interpolation gives O(b) in its
-first interval; atb1e-6 its value/derivative ratios are7795/3898. This is a
-cancellation-sensitive coefficient defect, not an observed transport instability.
-Any finite linear grid retains the wrong power as b→0. Before adding more
-nodes, investigate a density-scaled congruence C=D A D, D=diag(b,1,...), with
-the b=0 limit of A derived and independently checked; positive-weight interpolation
-of a negative-semidefinite A would preserve dissipativity and density scaling.
-The bounded prototype now derives A(0) and the source limit analytically and
-passes independent small-b checks for8/18 moments; see the logbook's scaled
-congruence checkpoint. This is not implemented or globally certified. Check all source-vector
-limits separately, smooth derivative accuracy, endpoints and CPU/GPU cost;
-do not repair one entry by hand at the expense of matrix entropy.
-Full-range follow-up favors scaled cubic over scaled linear: at53 nodes, sampled
-combined-matrix/source derivative errors are .01373%/.29030% (8 moments) and
-.01052%/.25718% (18). All cubic Bernstein control matrices satisfy the sufficient
-negative-semidefinite condition to roundoff (<6.9e-15), including14/27-node grids.
-This is an interval-wise matrix certificate to numerical tolerance, not a coupled
-field-energy proof. No production interpolation change; require signed-runtime
-JVP/VJP, endpoint/clipping contracts, f32 and cost gates before promotion.
-Record quadrature provenance (not fictional high-precision decimal digits),
-independently recheck all nodes, update coefficient regressions and audit the
-interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H
-closure in a separate review with resolution and field-metric evidence; do not
-change it silently while repairing coefficients. The now-measured source-tail
-convergence supports this staged correction rather than conflating two changes.
-Unequal species, temperature relaxation and runtime transport
-remain separate open gates. Equations and API are in docs/operators.rst;
-commands, failures and hashes are in the logbook.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
@@ -601,6 +347,8 @@ observable, tolerance, runtime tier and regeneration command. Separate equation
 | Equilibrium Er / ExB shear | Advection, remap, decorrelation and zonal response | Analytic shearing wave; corrected-remap/GX comparison; E1 stellarator/global reference; E2 ambipolar-root residual |
 | Nonlinear Cyclone / Dimits | Saturation and zonal regulation | [Hoffmann–Frei–Ricci](https://arxiv.org/abs/2308.01016); seeds, gradient scan, hysteresis/cold–warm starts |
 | W7-X/HSX and VMEX QA/QH/QI | Stellarator transport/domain coverage | [stella–GENE](https://arxiv.org/abs/2107.06060)/GX; surfaces, alphas, tube lengths and all resolutions |
+| GX reference validity | Every linked-boundary reference used for parity | Gate: index count ≤ 65,535 or a labeled repaired build; original retained; defect reported upstream. Applies to every existing high-Nm row |
+| `hsx_itg` | Reproducibility of a published parity row | No HSX reference, deck or wout exists anywhere. Regenerate with provenance or delete the row and the README claim (the #178 rule) |
 | Linear/QL/nonlinear gradients | Declared numerical derivative | Analytic small systems, directional Taylor/FD, CPU/GPU/sharded transpose identity |
 | ESSOS fields / islands | Geometry, equilibrium and parallel/perpendicular transport | Analytic Biot–Savart and island fields; MMS and nested limit; R8 matched GENE-X/XGC-S model, topology/mesh/background ladders |
 
@@ -859,13 +607,31 @@ minimized near `b≈sqrt(N)`, plus caches/temporaries/requested outputs. It does
 remove chaos. An implicit steady-state adjoint assumes a converged residual;
 a turbulent stationary distribution is not a fixed point `F(G)=0`.
 
-[iGENE](https://arxiv.org/abs/2605.03086) reports biased useful short-window
-directions and eventual divergence; [gyaradax](https://arxiv.org/abs/2604.06085)
-is another 2026 differentiable GK code. Neither “first differentiable GK code”
-nor “exact saturated transport gradients in almost all cases” is an acceptable
-novelty claim. Shadowing/linear response remain research alternatives if window
-directions fail, requiring assumptions, unstable-subspace cost and independent
-derivative evidence before adding a second public method.
+The differentiable-gyrokinetics field in 2026 is not empty:
+[iGENE](https://arxiv.org/abs/2605.03086) (TensorFlow, Phys. Plasmas 2026),
+[gyaradax](https://arxiv.org/abs/2604.06085) (JAX, GKW-derived),
+[GANDALF](https://arxiv.org/abs/2511.21891) (JAX kinetic RMHD),
+[JAX-in-Cell](https://arxiv.org/abs/2512.12160), and a
+[2026 review of differentiable plasma physics](https://arxiv.org/abs/2603.11231)
+in which GKX does not appear. Neither "first differentiable GK code" nor "exact
+saturated transport gradients" is available as a claim. iGENE reports useful
+directions only over short windows, with magnitudes 15–50% of finite differences
+and divergence beyond ~512 RK4 steps; that is the bar for the word "useful".
+
+The niche GKX can earn, stated as a hypothesis for R7 to test: a Hermite–Laguerre
+code with physical Coulomb collisions and a VMEX/ESSOS geometry chain that
+performs **adjoint-based nonlinear stellarator transport optimization with
+held-out validation**. The only published nonlinear stellarator optimization
+([Kim et al. 2024](https://arxiv.org/abs/2310.18842)) is gradient-free SPSA —
+two evaluations per step, ~70 iterations, 2–4× reduction — with a documented
+~50% heat-flux variation across the field-line label and an ι that drifted to a
+low-order rational. The linear adjoint exists
+([Acton et al. 2024](https://arxiv.org/abs/2403.12621)). No adjoint or AD-based
+nonlinear result was found. The claim is available only after R7's held-out,
+resolution-resolved evidence; until then it is a direction, not a result.
+Shadowing/linear response remain research alternatives if window directions
+fail, requiring assumptions, unstable-subspace cost and independent derivative
+evidence before adding a second public method.
 
 ### Linear and QL
 
