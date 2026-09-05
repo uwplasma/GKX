@@ -6645,3 +6645,51 @@ Nl32/Nm96/Nz192/dt.002/T300/rate50; input hashes in preceding entry. Reporter no
 records actual192-point geometry and retains requested96-point deck metadata.
 Latest confirmed RNl10s, stderr empty. Kinetic40474/PID1729837 RNl34m09s. Only
 these two jobs live; no restarts of completed controls, no merges. Full scope active.
+
+## 2026-09-05 — Species-parallel traced initial-state AD failure repaired
+
+Previous turn progressed with two-GPU rate AD and spatial-control launch. A
+new coupled electromagnetic probe differentiated initial-state amplitude, rather
+than a parameter with fixed state. Serial passes the exact homogeneity identity;
+species parallel failed before integration with `species inputs must be prepared
+outside jax.jit` (session71403exit1). Preparation rejected the state tracer even
+though its own from_host helper already preserves traced parameter arrays.
+**19e066dd** removes that inconsistent state rejection, retaining dimensionality
+and device-count checks and all concrete host-placement behavior. Traced inputs
+stay in JAX without a device-to-host conversion. Running campaigns unchanged.
+
+Extended existing test_species_pmap_electromagnetic_trajectory_matches_serial:
+active Apar/Bpar, Euler3steps dt1e-6, J=||G3||²+||phi_history||² requires
+dJ(sG0)/ds at1 =2J(G0). Both serial/species routes must satisfy the identity,
+have nonzero J, and agree; rtol8e-5/atol1e-7 covers the fixture's complex64 state.
+This is a short coupled AD regression, not a physical EM benchmark. Independent
+complex128 scratch probe gives relative identity defects3.10e-16 serial and
+1.55e-16 species; value.7157894655052524/.7157894655052525,
+derivative1.4315789310105052, Apar norm.00174925, Bpar norm.00220207.
+Probe at /tmp/gkx-coupled-rate-20260905.shBvlR/em-state-ad.py; original/fixed
+logs em-state-ad.log/em-state-ad-fixed.log. Fixed probe72435exit0.
+
+Targeted test command: pytest -q tests/unit/parallel/test_parallel_linear_velocity.py
+-k 'electromagnetic_trajectory_matches_serial or species_pmap_parameter_gradient or end_damping_rate_matches'.
+CPU XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu,
+JAX_ENABLE_X64=true PYTHONPATH=src; JAX0.11.1. GPU CUDA_VISIBLE_DEVICES=0,1
+JAX_PLATFORMS=cuda JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_MEM_FRACTION=.08,
+JAX0.10.2 in /home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo (1571 archive plus
+the two changed source/test files, copied only after earlier test had exited).
+
+| Gate | Result / terminal session | XML SHA256 |
+|---|---|---|
+| CPU x64 targeted | 4pass,0skip,13.876s /11827 | `7967d80540f374bd7a7d413467d40beca44bd71cc77dea7fc86f8f11a03fa074` |
+| CPU f32 EM only | 1pass,0skip,5.483s /97698 | `9ef36474f1912e04af68129ba3a83d3b93391695280b7ace61ad31f193c37851` |
+| Two RTX A4000 targeted | 4pass,0skip,55.362s /54331 | `7650bf66ef24de7d0115786ebab1f5e018cfdef11ee446f5e4142ce7e958d1cd` |
+
+XMLs in local scratch: em-traced-state-f64.xml, em-traced-state-f32.xml,
+em-traced-state-gpu.xml; GPU original/log in test archive. All sessions exit0.
+Docs parallelization now state the formulas, commands, device evidence and
+claim limits. Warning-strict Sphinx, Ruff lint/format406files, architecture and
+whitespace pass; explicit test-budget+20 lines, source−2 lines. Commit/push8742
+exit0. Full CI needs fresh result; no global green claim.
+
+Latest live checks: kinetic40474/PID1729837 RNl41m25s; spatial77271/PID1733704
+RNl7m26s. Both unchanged; no pending test process, no merge. Continue physics
+controls and the full R0–R9 roadmap, not just these AD microgates.

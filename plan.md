@@ -125,7 +125,7 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, head **1571a9e6**, worktree
+`fix/r0-end-damping-rate`, head **19e066dd**, worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -142,7 +142,7 @@ in02536eef; do not infer full-CI completion from local gates.
 | GX adapters | Active damping requires explicit reference dt; kinetic Miller electron-only seed corrected | Do not reuse old unmatched-rate/initial-condition results |
 | Parity coordinates | Requested/reference ky and actual effective GKX grid matched before solves within float32 roundoff; missing/invalid/duplicate requests rejected | Old running reporter lacks preflight; current campaign coordinates already match its solver grids |
 | Tests/startup | CPU/GPU boundary and route probes; coupled reverse AD vs matrix exponential; 88 linear, 85 time-integrator, 198 release, 148 CLI tests passed in recorded runs; nonfinite Laguerre transform errors rejected, 50 core numerics tests pass; explicit linear facades clip the final step to t_max | Fresh full CI; direct JVP through custom-VJP field solve remains unsupported |
-| Sharded rate AD | Exact three-step serial/species-pmap reverse derivatives pass at two dt values on two logical CPUs and two RTX A4000 GPUs | This field-free gate is not nonlinear transport AD; broader coupled/distributed validation remains |
+| Sharded AD | Fixed-rate reverse derivatives pass on two CPUs/two GPUs; traced initial-state rejection repaired; short EM initial-state homogeneity derivative passes on both | Neither field-free damping nor short EM homogeneity validates nonlinear transport AD or general EM parameter derivatives |
 | Demo | dt=.02/750 steps, T15 and fixed rate preserved; wheel writes all artifacts, no CFL warning; short nonlinear wheel run also completes | Transient demo is not stationary physics validation; under-resolved-fit/cutoff warnings remain |
 | s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
 | Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
