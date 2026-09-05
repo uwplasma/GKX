@@ -5892,3 +5892,37 @@ do not infer f64 state solely from an enabled-x64 flag in future profiles.
 
 Resume current kinetic GX and Nm96T300 handles. Two-GPU rate-AD test remains
 pending until both GPUs free. Continue full roadmap; no merge or public promotion.
+
+## 2026-09-05 — Explicit precision for full-RHS profiling
+
+Committed and pushed **8d41d7d5** to draft PR202. Full linear/nonlinear RHS
+profilers now accept --state-dtype native/complex64/complex128, preserve native
+by default, and reject explicit complex128 if JAX x64 is disabled. Summaries
+record actual state_dtype, rhs_dtype and jax_enable_x64. Seed construction is
+not recomputed in higher precision; no claim that every coefficient shares the
+state dtype. Documented this contract in docs/performance.rst. No solver change.
+
+All36 tests in tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
+passed with local JAX0.11.1, PYTHONPATH=src. XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/profile-precision-tests.xml SHA256
+`140c59d75c3e421dfd50df5154db824a99c773c4cf01e66f1906bcd2dd2da7fb`.
+Full Ruff lint/format406files, architecture manifest, Sphinx -W and whitespace
+checks pass. Explicit budgets increased16 test/22 tool lines. Commit/push
+session24373 exited0. PR202 latest checks: no failures, multiple pending;
+not a full-CI completion claim.
+
+Repeated preceding CPU full-linear-rhs command with JAX_ENABLE_X64=true and
+--state-dtype complex128, same z_wave/Nl16/Nm48/20 repeats and local reference.
+Session41472 exited0. Both state and RHS complex128. First-call compile+execute
+.329830833s; synchronized warm mean **.041784449999s**, RHS norm
+.15649053450845635. Summary cpu-f64-rhs-profile.json in the same scratch:
+SHA256 `4383c2bac5ee9074e9c6d62bc691a3c734422f4e642300c0b8e4ea23ca6543c2`.
+This and f32's17.8ms are single artificial-state kernel profiles, not isolated
+repeat distributions, end-to-end timings or an accuracy-based precision choice.
+
+Both office jobs reverified live: GX session6455/PID1722824 at25m01s; GKX
+Nm96T300 session86753/PID1724990 at7m32s. No restart or modification of either
+running snapshot. Resume by checking these exact processes and exits; then
+compare matched-horizon Nm96/128 estimates and audit complete kinetic reference
+before launching the prepared matched kinetic solve. Two-GPU AD repeat remains
+pending until both GPUs free. Full R0–R9 scope remains active; nothing merged.

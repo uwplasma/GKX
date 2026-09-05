@@ -125,7 +125,7 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, head **3d78fbf0**, worktree
+`fix/r0-end-damping-rate`, head **8d41d7d5**, worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -148,6 +148,7 @@ in02536eef; do not infer full-CI completion from local gates.
 | Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
 | High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; Nm128 T300 reduces temporal shift to0.219% | Match Nm96 at T300 before Hermite claims; then Laguerre/parallel resolution and regularization sensitivity |
 | Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
+| RHS profiling | Explicit state precision and observed state/RHS dtypes; 36 profiler tests pass; CPU z-wave warm means17.8ms f32/41.8ms f64 | Artificial-state triage only; no end-to-end speedup, peak-memory or f32 scientific-accuracy claim |
 
 The Nm48 half-step pilot rounded ky by <=1.2e-8; it is sensitivity evidence,
 not an exact-coordinate Richardson pair. Subsequent refinement uses exact stored
