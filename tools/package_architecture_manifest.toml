@@ -989,7 +989,8 @@ recursive = true
 # made every regeneration of a tracked file a diff carrying whoever ran it. The
 # comment is longer than the deletion because the reason a provenance field is
 # absent has to live where someone would otherwise re-add it.
-baseline = 77823
+# 77823 -> 77833: explicit fixed-rate parity override and recorded resolved rate.
+baseline = 77833
 target = 0
 
 [[line_budget_policy.counts]]
