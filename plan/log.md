@@ -6448,3 +6448,27 @@ Production source and active campaign unchanged; optimization remains pending.
 Latest verified live: dt-half73383/PID1729118 RNl10m42s; matched kinetic
 40474/PID1729837 RNl7m06s. Resume these; two-GPU derivative test still pending
 until both free. No restart, snapshot overwrite or merge; full scope active.
+
+## 2026-09-05 — Current-head end damping and core nonlinear regressions
+
+Previous turn progressed with cross-precision diagnostic-prefix regression.
+At clean code8bae97a2, ran local CPU/JAX0.11.1, PYTHONPATH=src,
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=true:
+
+| Test file | Result | XML SHA256 |
+|---|---|---|
+| tests/validation/physics_gates/test_end_damping_physics.py | 1pass,14.183s | `2282192f543560f99078ae9fe31a5e80490466575e0e3cf1e8e082fe89273bd1` |
+| tests/unit/nonlinear/test_nonlinear.py | 39pass,0skip,122.618s | `55ffd1c25925d172222411701f60e115186da659518aafe074f38f718ae69585` |
+
+Commands python -m pytest -q <file> --junitxml=<scratch>/<name>.xml; scratch
+/tmp/gkx-coupled-rate-20260905.shBvlR, names end-damping-physics-current and
+nonlinear-core-current. Nonlinear stdout saved in matching .log. Sessions5238
+and77010 terminal exit0. The first is a measured linked-end compatibility gate,
+not literature validation. Nonlinear coverage includes checkpoint/IMEX routes,
+adaptive eager/compiled equivalence and short linked/compressed-FFT physical
+heat-flux gradient checks, not saturated transport or distributed GPU validation.
+
+CI202 early query1success,15running,21queued,1skipped: new commit checks remain
+in flight, not a global green claim. Latest process check during tests:
+dt-half73383/PID1729118 RNl13m53s; kinetic40474/PID1729837 RNl10m17s. Both
+remain current handles; no restarts, source edits or merges. Full scope active.
