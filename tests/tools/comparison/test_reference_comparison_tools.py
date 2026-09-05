@@ -577,16 +577,14 @@ def test_gx_has_uniform_linear_dt_ignores_single_truncated_final_interval() -> N
     assert _gx_has_uniform_linear_dt(gx_time, contract) is True
 
 
-@pytest.mark.skipif(
-    not Path(".cache/gx_clean_main/linear/hsx/hsx_linear.in").exists(),
-    reason="Requires local cache file",
-)
-def test_build_imported_initial_condition_uses_runtime_multikx_startup() -> None:
-    class DummyGeom:
-        s_hat = 1.0
-
-    contract = _load_gx_input_contract(
-        Path(".cache/gx_clean_main/linear/hsx/hsx_linear.in")
+@pytest.mark.parametrize("init_single", [False, True])
+@pytest.mark.parametrize("gaussian_init", [False, True])
+def test_build_imported_initial_condition_uses_runtime_multikx_startup(
+    init_single, gaussian_init
+) -> None:
+    """Self-contained startup routing, not an HSX geometry or physics benchmark."""
+    contract = replace(
+        _dummy_gx_contract(init_single=init_single), gaussian_init=gaussian_init
     )
     grid_full = build_spectral_grid(
         GridConfig(
@@ -603,7 +601,7 @@ def test_build_imported_initial_condition_uses_runtime_multikx_startup() -> None
     )
     g0 = _build_imported_initial_condition(
         grid=grid_full,
-        geom=DummyGeom(),
+        geom=SimpleNamespace(s_hat=1.0),
         gx_contract=contract,
         species=contract.species,
         ky_index=1,
@@ -613,7 +611,8 @@ def test_build_imported_initial_condition_uses_runtime_multikx_startup() -> None
     )
     g0_np = np.asarray(g0)
     nonzero_kx = np.flatnonzero(np.any(np.abs(g0_np[0, 0, 0, 1]) > 0.0, axis=-1))
-    assert nonzero_kx.size > 1
+    assert np.all(np.isfinite(g0_np))
+    assert nonzero_kx.size == 1 if init_single else nonzero_kx.size > 1
 
 
 def test_match_local_kx_index_uses_kx_value_not_raw_index() -> None:
