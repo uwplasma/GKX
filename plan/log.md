@@ -5399,3 +5399,61 @@ and hashes remain in preceding entries. Read exits and complete traces before
 interpreting; finish matched Miller comparison and timestep/spatial/velocity
 refinement. Slow-mode extension and broader R0 work remain open. Keep #202 draft
 and all PRs unmerged; no public evidence promoted.
+
+## 2026-09-05 — timestep sensitivity measured; Hermite refinement running
+
+Previous turn progressed (reporting repair/tests/pushed checkpoints). This turn
+completed the **full release-gate file: 188 passed, no skips/failures** on local
+JAX0.11.1 f64, at source0acbd221. Command uses the same local python/PYTHONPATH
+as above, `-m pytest -q tests/release/test_release_gates.py
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/release-full-reference-gates.xml`.
+XML SHA256 `6cc43368598a39d5ae3ff2e2cad56a281323d25f5eb133553a7f752945ae4fd5`.
+Session4340 terminal. Read README QA section: it already explicitly says the
+12.26% conditional reduction is not statistically resolved (4/48 drift failures).
+No need to repeat that earlier correction. PR202 confirmed open/draft at0acbd221,
+no failed CI checks at query, many pending. No full-CI claim.
+
+**GKX dt refinement session57878 completed exit0**, PID1717879 terminal.
+Original result retained at office snapshot `results/salpha_rate50_dt_half.csv`,
+SHA256 `03744b68b05e42c937fde865760ee59b65781cabe511340f07a7730be7dffb2f`;
+local copy in `/tmp/gkx-damping-route-20260905.Xk4sat/`. Against dt=.002 rows,
+relative gamma changes at ky=.15/.30/.55 are
+`5.5874703e-7, -8.3410629e-7, -2.9919959e-5`; omega changes
+`-1.0257238e-7, 1.4879404e-7, 1.3003040e-5`. All three growth/frequency
+half-horizon shifts pass5%; ky=.55 growth shift remains -4.5605%, and relative
+GX gamma discrepancy remains1.90098%. Timestep sensitivity is much smaller,
+but this is not resolution convergence or a proof of asymptotic order.
+**Qualification:** manifest's decimal ky differ from stored f32 reference/baseline
+coordinates by -5.96e-9/-1.192e-8/-1.192e-8. Do not present this as a perfectly
+fixed-coordinate Richardson pair; use exact baseline coordinates henceforth.
+Comparison computed from preserved CSV rows using nearest ky, relative change
+(fine-base)/abs(base); no solver output rewritten.
+
+Started **Hermite-only refinement**, GPU0, session **92932**, Python
+**PID1719126** (time parent1719125), verified live/no stderr. Owned snapshot
+`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`; manifest
+`salpha_hermite_refinement.toml`, SHA256
+`dc3101e90553ebf101a55794ed7606e1b5745312ee1955bbf69cb3839630f14c`.
+Nm64 vs baseline48; Nl16, dt=.002, T150, rate50 unchanged. Exact ky
+`.15000000596046448, .30000001192092896, .550000011920929`.
+GX reference intentionally remains Nm48; this is a GKX resolution probe,
+not a newly matched velocity-resolution parity claim. Hypercollision model is
+unchanged but truncation effects remain part of the resolution question.
+Command uses previous env, GPU0, current reporter copy
+`tools/comparison/build_gx_parity_matrix_current.py --manifest
+salpha_hermite_refinement.toml --cases cyclone_salpha_itg_nm64 --stem
+results/salpha_rate50_nm64 > gkx-salpha-nm64.stdout.log
+2> gkx-salpha-nm64.stderr.log`, under /usr/bin/time -v.
+Reporter SHA256 `2464af5789be4a11d730e44b2b0fa9599b5895c1f9f31b8a7389c70203af8d5e`
+matches0acbd221; source still3565 production-equivalent. No running tool overwritten.
+
+Miller GX session97329/PID1717513 remains live (11m42s, RNl last check).
+Prepared separate `matched_miller_manifest.toml` in snapshot, hash
+`7bacfe949049cba8d6d80ff609a15980ce7d39d7ca053139de905109e0103e4b`;
+explicit fixed rate50/dt.002/T150/Nl16/Nm48 and campaign provenance. Verified
+Miller fixture imports geometry from this reference NetCDF, matching coefficients.
+**Not launched yet:** after GX exits0, check full trace/finiteness/hash, then run
+this manifest with current reporter on freed GPU1. Do not treat an in-flight
+reference as finished. Keep both current live handles; no restart of terminal
+session57878. Remaining slow-mode, velocity/spatial refinement and full matrix
+are open. No source changes or public artifact promotion this turn; no merge.

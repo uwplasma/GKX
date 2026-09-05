@@ -190,11 +190,20 @@ Input/output directory is the same `matched_refs/ITG_cyclone`; logs
 `miller-gx.stdout.log`, `miller-gx.time.log`. Geometry generation succeeded.
 After exit, validate its trace/provenance, prepare a separate matched Miller
 manifest and run GKX; do not call an in-flight reference complete.
-GKX fixed-rate timestep refinement is also live: GPU0, session **57878**, PID
+GKX fixed-rate timestep refinement completed exit0: session **57878**, old PID
 **1717879**, `salpha_dt_refinement.toml`, dt=.001, T=150, ky=.15/.30/.55,
 rate50 unchanged; logs `gkx-salpha-dt-half.{stdout,stderr}.log`, result stem
 `results/salpha_rate50_dt_half`. Compare to the original rows, audit both
 temporal shifts, and distinguish timestep error from reference-window drift.
+Maximum observed relative gamma change is 2.992e-5 (0.002992%); omega1.3003e-5.
+This pilot also changed ky by <=1.2e-8 through decimal rounding, so do not claim
+an exact fixed-coordinate convergence order. All three pass temporal screens.
+Hermite-only refinement is now live on GPU0, **session92932/PID1719126**,
+`salpha_hermite_refinement.toml`: Nm48→64, Nl16, dt=.002, T150, rate50,
+three exact stored baseline ky. Logs `gkx-salpha-nm64.{stdout,stderr}.log`;
+stem `results/salpha_rate50_nm64`. It uses the current0acbd221 reporter copy,
+not the old running tool. Miller manifest is prepared (not launched) as
+`matched_miller_manifest.toml`; verify GX completion before running it on GPU1.
 The parity tool now reports reference-side temporal status separately (0acbd221,
 55 focused tests). Unsupported sampling is unknown; regular sampling may have
 one shortened terminal interval, as observed in GX. `converged` remains GKX-only
