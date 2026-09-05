@@ -136,9 +136,22 @@ x86-64/0.10.2 (f64 passes). Replaced the blanket future-version skip by isolated
 execution, an exact observed-failure bound, and default-f32 CI coverage. This is
 containment, not a solver repair. Probe environments
 and reports: `/tmp/gkx-f32-20260905.alM6Fy`; office
-`/home/rjorge/gkx-r0-f32-20260905.qIKcGz`. **Next:** probe newer Linux backend and
-investigate a measured kernel/backend repair; then finish damping route coverage.
-No local/SSH tests remain active. Check remote CI on #199/#200 before relying
+`/home/rjorge/gkx-r0-f32-20260905.qIKcGz`. Third R0 slice:
+[PR #201](https://github.com/uwplasma/GKX/pull/201), **open**, repair in
+`/Users/rogeriojorge/local/GKX-worktrees/r0-f32-bracket-rank`, branch
+`fix/r0-f32-bracket-rank`, commit `53d86f01`, based on #200 e36e5bd8.
+Squeezing shared singleton batch axes cures both Linux 0.10.2 f32 AD crashes,
+but unconditional squeezing regresses GPU VJP time/temporary memory; reject that
+variant. CPU-only lowering passes actual Linux/Mac/GPU f32 gradient checks,
+51 bracket cases and two-device CPU/GPU RHS/trajectory parity. Short nonzero
+heat-flux window values/gradients match, with unchanged temporary memory;
+no material speedup claim. Removed the crash exemption. Linux 0.11.1
+passes the minimal rank-7 reproducer, not yet the application test.
+Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
+the rejected experiment; full commands/results are in the logbook.
+**Next:** review #199–#201 CI and finish damping route coverage. Broader f32,
+sharded AD and production-horizon validation remain open.
+No local/SSH tests remain active. Check remote CI on #199–#201 before relying
 on full-suite status; both were still awaiting complete CI during this slice.
 No merge is authorized; update this
 checkpoint and append commands/results to `plan/log.md` before changing workstreams.

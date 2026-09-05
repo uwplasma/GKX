@@ -4663,3 +4663,114 @@ physics identity and performance checks. Do not stop at xfail as the research
 solution. Finish damping route audit and rate/deck migration before rebaselining
 release physics. R0 stays in progress; no evidence here establishes all default
 precision workflows, a production nonlinear gradient horizon, or Linux 0.11.1 safety.
+
+## 2026-09-05 — R0 CPU bracket VJP repair, GPU regression rejected
+
+PR **#201**, `fix/r0-f32-bracket-rank`, commit
+`53d86f01e40fb5acb81eff9b1fd3af7205eeec06`, stacked on #200 e36e5bd8.
+Worktree `/Users/rogeriojorge/local/GKX-worktrees/r0-f32-bracket-rank`.
+Author/committer Rogerio Jorge; no merge. Five edited files, no new files;
+source +15 and test net +28 lines, explicit budget updates.
+
+Repair: squeeze only shared singleton batch axes of the multi-field compressed
+real-FFT bracket, then restore them. For squeeze maps Sg, Sc, So and original
+bracket B, the CPU expression is `So^-1 B(Sg g, Sc chi)`. Singleton reshapes
+are bijective and do not alter the spatial FFT axes, bracket arithmetic or
+broadcasted Hermite extent. Both operand VJPs are tested, including complex
+cotangents and five species/Laguerre/Hermite shapes. GPU uses original B.
+Selection uses [JAX platform_dependent](https://docs.jax.dev/en/latest/_autosummary/jax.lax.platform_dependent.html),
+resolved at lowering (not a Python default-backend check); official API docs
+were checked against the installed JAX implementation. Removed all SIGSEGV
+exemptions from the isolated actual f32 test. Quickstart explains the repair
+without claiming universal backend safety.
+
+**Rejected experiment:** unconditional squeeze cured the Linux 0.10.2 CPU
+application crash but worsened GPU VJP time and compiler temporary memory.
+Bracket benchmark: grid32^3, Ns=1,Nl=4,Nm=8, three fields, complex64, seed4,
+one warmup then seven synchronized samples. Office RTX A4000/JAX0.10.2:
+
+| Variant | Primal median (ms) | Value/VJP median (ms) | VJP temporary bytes |
+|---|---:|---:|---:|
+| Original, first experiment | 0.9203 | 3.0444 | 44,433,408 |
+| Unconditional squeeze (rejected) | 0.9949 | 3.4661 | 62,914,576 |
+| Original, CPU-only comparison | 0.9675 | 3.0594 | 44,433,408 |
+| Accepted CPU-only lowering | 0.9204 | 3.1302 | 44,433,408 |
+
+Do not claim a GPU speedup from this noisy microbenchmark. CPU Mac JAX0.11.1
+unconditional squeeze measured 20.06→17.98 ms/VJP at the same 125,829,120
+temporary bytes; that microkernel gain did not become a whole-window gain.
+
+Application profile reuses `build_window_case` and `make_window` from
+`tools/campaigns/nonlinear_gradient_window.py` with the shipped Cyclone t400
+deck overridden to 16^3, checkpoint=True, 32 steps, dt=.001, seed7 and complex64
+Gaussian amplitude .1. Compare original core (temporary alias replacement in
+`gkx.terms.nonlinear`) against repaired wrapper; clear JAX caches per variant,
+compile separately, one warmup, seven synchronized evaluations. This is a
+short, unsaturated nonzero-transport check, **not** a predictive transport or
+gradient-horizon benchmark. Compiler temporary bytes are not peak device RSS.
+
+| Backend | Old/new median (s) | Old/new temp bytes | Q / dQ per drive multiplier (both variants) |
+|---|---|---|---|
+| Mac CPU, JAX0.11.1 | 1.14516 / 1.16525 | 63,270,184 / same | -0.001556194853 / 0.001344901277 |
+| A4000, JAX0.10.2 | .090094 / .090297 | 27,522,176 / same | -0.001556183561 / 0.001344907796 |
+
+Reproduction/provenance:
+- Local scratch remains `/tmp/gkx-f32-20260905.alM6Fy`; interpreters
+  `jax0102/bin/python` and `jax0111/bin/python` as previous entry. Always use
+  `PYTHONPATH=src` from this worktree: the editable 0.11.1 install still points
+  at parent #200, so omitting it tests the wrong source.
+- Office snapshot `/home/rjorge/gkx-r0-f32-20260905.qIKcGz` now has #201
+  `brackets.py` and `test_nonlinear.py` copied over the earlier snapshot.
+  Bracket SHA256 `0ea48ced187f40b7867aa6138bd6a08561fdf8a2ba258420f64a689a98aae0c9`.
+  All reported office application tests use `/home/rjorge/venvs/gkx-nl/bin/python`.
+- `JAX_ENABLE_X64=false PYTHONPATH=src <python> -m pytest -q
+  tests/unit/nonlinear/test_nonlinear.py -k
+  'compressed_real_fft_heat_flux_window_gradient or isolation_does_not_hide'`:
+  **5 passed each** on Mac0.10.2, office CPU0.10.2 (`JAX_PLATFORMS=cpu`),
+  office GPU0.10.2 (`CUDA_VISIBLE_DEVICES=0`). No xfails.
+  An earlier selector matched only the three guards; that run is not used as
+  gradient evidence. `cpu-lowering-f32-actual.xml` is the corrected five-test run.
+- Mac0.11.1 `JAX_ENABLE_X64=true ... pytest -q
+  tests/unit/nonlinear/test_nonlinear_exb.py`: **51 passed**.
+- `JAX_ENABLE_X64=false ... pytest -q
+  tests/unit/parallel/test_parallel_linear_velocity.py -k
+  'species_hermite_rhs_reproduces or species_hermite_trajectory_and_fused'`:
+  **2 passed each**, Mac0.11.1 with
+  `XLA_FLAGS=--xla_force_host_platform_device_count=2`, office0.10.2 with
+  `CUDA_VISIBLE_DEVICES=0,1`. These establish primal sharded parity, not
+  arbitrary distributed VJP validity or scaling speedup.
+- Profilers in both scratch roots: `rank_profile.py 32 1 4 8` and
+  `window_rank_profile.py`, invoked with the same PYTHONPATH/precision/device
+  selection as above. CSVs retain compile time, all timing extrema and memory.
+- Separate clean office `jax0111/bin/python` (Python3.12/JAX0.11.1) passes the
+  tiny rank7 multiply/reduce proxy; application deps not installed there.
+  Do not infer application safety or change supported versions from this proxy.
+
+Selected raw evidence SHA256 (local L / office O scratch roots above):
+
+| File | SHA256 |
+|---|---|
+| L cpu-lowering-exb.xml | 479b687fa4b62a21b9038dc3f2e8fe732e9186999965afe849b680a9b9c06d93 |
+| L cpu-lowering-sharded-f32.xml | 6fe7494c05fac8e703e81100b9a1fd39c54003edc2c0cecd9cf549d32ab5b273 |
+| L mac0102-cpu-lowering-f32.xml | 028f50e7f24c589de88214411cde269eae5ad43b8b78b9e646d4ffeb9e79cca7 |
+| O cpu-lowering-f32-actual.xml | 83f1730d875483714829a5204104a2da485962dab5d5e42ff1ccb5929a82f614 |
+| O gpu-cpu-lowering-f32.xml | 9b350f5538c1448c0490d0f352c2d8b3061c21d38441350d2d7e03ccc3c50233 |
+| O gpu-cpu-lowering-sharded-f32.xml | 0a48c46e2121fa55d9a598e372cbfc20ea38f9be928991c079b71e572d6ff217 |
+| L rank_profile.py | ff3b1ac2e11c884e87407ba4953a4bcb9a1a46504475fa1bea98ac9aa1fd17c0 |
+| L window_rank_profile.py | 22f68f17c850c1025801a0870d96f26b924e6bd86077048fd8e9eef74d969865 |
+| O rank-gpu-f32.csv (rejected) | 56b0c81b6194e9d82b2857371de428b7828f940f5042fdbeace64de338b2007c |
+| O rank-gpu-cpu-lowering-f32.csv | d18cc1132ebf498cdfa929f527d60ce72c9276f96d7edc512ccf7ac76b0a5cac |
+| L window-mac-cpu-lowering-f32.csv | 5d6143f712e36014d3875cafa7fe4367ef4a41c9af830028fcee15ef4e4c342d |
+| O window-gpu-cpu-lowering-f32.csv | 8eb9252555e326fee9e86eada5554eb15ef48c2ef5c7b68b3b21bfeb0a6468cf |
+
+Ruff0.16.4 check/format, whitespace, architecture and repository-size gates,
+Sphinx HTML `-q -W` pass. First Sphinx run caught a short heading underline;
+fixed and rerun successfully. #199 still had two running test jobs and #200
+several queued/running at inspection; no observed failed checks, **not** a
+full-CI pass. #201 newly dispatched. No local/SSH jobs remain active.
+
+Next: inspect #199–#201 CI and their stack bases before any further work.
+Then complete the damping route audit (nonlinear, four field-supplied routes,
+eigen/implicit/sharded paths) and reconcile #194's rate migration separately.
+R0 remains open; broader precision/sharded AD and physics validation are not
+replaced by this targeted backend repair. Keep all PRs unmerged.
