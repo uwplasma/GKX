@@ -8855,3 +8855,53 @@ host cache-map test, not a new distributed/GPU validation claim.
 Resume: inspect CI33969411628; push447d724f only after the older run is terminal.
 Continue multi-link/distributed convention contracts and actual resolution/policy
 solves, plus the outstanding collision interpolation/source gates. Goal active.
+
+### 2026-09-05: launch actual single-mode GX spatial controls
+
+Previous turn progress: rejected simple filtering as a justified repair and
+committed cache-frequency checks. Current local447d724f/pushedf4d5d1b5 unchanged.
+CI33969411628 still queued/incomplete with no failed jobs; do not supersede it.
+Prioritized actual spatial controls over further test-only work this turn.
+
+New office root `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`;
+local decks `/tmp/gkx-gx-own-rhs-20260905.wbfjWQ/{single96,full96,full192}.in`.
+Same corrected GX binary96a53403... in gx-damping-coverage-20260905.8w5DhH.
+Compared with the full reference: nky12→2, y0=1.8181817787737895 so sole positive
+ky is EXACTLY .550000011920929; linear mode means modes should decouple, but
+this is an assumption to validate against the full reference, not a certified
+shortcut. No changed gradients/species/collisions/end rate or timestep.
+The full192 deck changes ntheta32→64 with nperiod2, hence total Nz192.
+Nl32/Nm96/RK4/dt.002/end amplitude.1/rate50/T300 unchanged.
+
+Preflight single96.in T1 completed51039 exit0 before full launches; terminal
+NetCDF read confirms ky[0,.550000011920929], theta length96 and times
+[.002,.20200001,.40200002,.60200003,.80200004,1.00000005].
+Fresh initialization, restart=false, append_on_restart=false, separate stems;
+original completed reference not overwritten. Full192 startup is running, but
+its effective-grid/time/finite-array audit must wait for terminal output.
+
+| Live control | GPU | Session / PID | Input SHA256 |
+|---|---|---|---|
+| full96 | 0 | 85194 /1767040 (time1767039) | a2653c8d619ae67e49b7b4ac92a437bb2eadcf0dfa6f1b8b29280f0110f5de05 |
+| full192 | 1 | 42690 /1767078 (time1767077) | ca003b7f1a78c70d390aa2213c5347a7da7ddae6922b6081c9e5ccdf3bf673dc |
+
+Both RNl at16/14 seconds on last process check; stdout contains live diagnostic
+rows. Command for each, cwd newroot:
+`CUDA_VISIBLE_DEVICES=<gpu> /usr/bin/time -v <corrected-root>/gx <stem>.in
+> <stem>.log 2> <stem>.time`. Do not restart on an observation timeout or read
+live NetCDF. Both GPUs now occupied. No performance claim from reduced layout.
+
+Terminal gates: Exit0, exact binary/input hashes, actual ky/Nz/Nl/Nm/dt/T,
+finite diagnostics and restart/field timestamps; temporal window stability.
+First require full96 agreement with completed12-ky GX reference (same windows,
+initialization normalization differences audited). Then compare Nz96→192,
+and full192 with existing GKX Nz192 control gamma=.024938243056538495,
+omega=.5047786677125604 at dt.002 (do not compare unmatched dt by accident).
+That GKX CSV hash94592ebea869f2096cff94bbeec58426eb8a4b7ebdf4c989e0dab537e37f2bc1
+is in campaign results/salpha_rate50_nl32_nm96_nz192_t300.csv.
+Apply same-state Nyquist residual checks at192 only after completed-artifact
+audit, generalizing hard-coded96 dimensions explicitly. Velocity convergence
+and collision interpolation remain open; these controls cannot certify them.
+
+Resume: monitor these exact handles and CI; continue multi-link/distributed
+contract checks or collision analysis while they run. Goal remains active.

@@ -163,7 +163,15 @@ ky. Hypercollision coefficients depend on Nm: fixed input does not imply fixed
 damping at retained moments. Temporal settling, cross-code parity, resolution
 convergence and experimental validation are distinct claims.
 
-**Completed reference (no live research jobs):** corrected GX Nm96/Nl32/Nz96 dt.002/T300 reference,
+**Live resolution controls:** GX single-mode ky=.550000011920929,
+Nl32/Nm96/dt.002/rate50/T300 at Nz96 and192 in
+`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`.
+GPU0 full96: session85194/PID1767040; GPU1 full192:42690/PID1767078.
+Both verified running; do not restart. Logs `<stem>.log`, `<stem>.time`.
+Accept reduced-mode layout only after full96 reproduces the earlier multi-mode
+reference; then compare full192 to the existing GKX spatial control. No results yet.
+
+**Completed reference:** corrected GX Nm96/Nl32/Nz96 dt.002/T300 reference,
 GPU1, **7690/PID1753613** (time1753612), in
 `/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`.
 Input `salpha_nl32_nm96_t300.in`; logs `run.log`, `time.log`. Binary in the parent
