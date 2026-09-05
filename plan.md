@@ -125,8 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local/pushed **17ff384a**
-(CI33966229536 atad47d3be passed; new CI33967886511 pending), worktree
+`fix/r0-end-damping-rate`, local/pushed **f4d5d1b5**
+(CI33967886511 at17ff384a completed success; new HEAD CI not certified), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -189,8 +189,10 @@ uses a separate grid-verified reporter from1571a9e6; no running copy overwritten
 Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** add manufactured even/odd-grid Nyquist convention tests and
-make external parity comparisons convention-aware. Evaluate truncation/resolution
+Manufactured even/odd periodic and reordered-linked mode/JVP/pullback tests
+now pass CPU x64/f32 and GPU x64 in f4d5d1b5; runtime convention unchanged.
+**Next actions:** make external parity comparisons convention-aware, including
+cache-built linked maps and distributed routes. Evaluate truncation/resolution
 sensitivity before choosing a production policy; do not silently flip GKX's default.
 Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
 completed11457 exit0 in54:11.43: gamma=.02410635371563277,omega=.5058500630938944.

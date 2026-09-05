@@ -8772,3 +8772,38 @@ document parity conventions, and evaluate Nyquist truncation/spatial-resolution
 sensitivity before any production-policy choice. Do not silently make GKX match
 GX by flipping its default. Collision scaling/source gates remain unchanged.
 All research probes terminal; both GPUs free. Full R0–R9 goal remains active.
+
+### 2026-09-05: manufactured Nyquist/AD contract committed
+
+Previous turn progress: localized same-state residual by two restart steps and
+diagnostic cache sign control. This turn code commit f4d5d1b5 pushed to draft
+PR202; no runtime/source changes, no merges. CI33967886511 at17ff384a completed
+success before pushing; new HEAD CI not yet certified.
+
+tests/unit/operators/test_linear_streaming.py now parameterizes analytic
+highest positive/negative DFT eigenmodes over chain lengths7,8,9,8, both
+periodic and linked. Linked tests reverse segment order to exercise mapping.
+Even Nyquist is explicitly negative, odd chains have distinct signed endpoints.
+JIT primal, state JVP and real-amplitude reverse pullback compare with the
+analytic integer-mode eigenvalue, not a second FFT implementation. Explicit-kz
+and dz-built periodic paths are also compared. Replaces two older tests,
+including a linked-vs-periodic implementation comparison; no budget increase.
+
+Validation: full streaming CPU x64 module24 passed (4297); selected CPU
+f32-mode8 passed (59994). Final GPU x64 selected8 passed/16 deselected in15.82s
+(1111), backend independently confirmed CudaDevice0. GPU snapshot source
+b05b3949 in `/home/rjorge/gkx-collision-coefficients-20260905.yLNpmZ` has unchanged
+streaming code; final test copied to
+`/home/rjorge/gx-own-rhs-20260905.0Qzs0L/test_nyquist_contract.py`.
+Initial pre-consolidation checks also passed but are superseded by these results.
+Strict Sphinx91772 exit0, Ruff check/format pass, diff-check pass.
+
+Architecture first rejected+38 counted test lines, then+2 after consolidation;
+final test line count87262 <= unchanged87264 budget passes. No new files or
+runtime branches. Documentation records the mathematical sign ambiguity,
+observed32.018%→.02206% diagnostic improvement and its finite-difference limits.
+No production sign change or whole-operator convergence claim.
+
+Resume: review new CI, extend comparison metadata/cache-map/distributed contracts,
+then Nyquist-policy spatial sensitivity; collision scaled-congruence/source gates
+remain open. No live research processes. Full roadmap remains active.
