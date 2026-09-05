@@ -125,9 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local **ac8d4ec7**, pushed **6d645f3f**
-(one documentation commit held for CI33964841954; no failures observed;
-CI33963277695 at b7cd526e passed), worktree
+`fix/r0-end-damping-rate`, local/pushed **ad47d3be**
+(CI33964841954 at6d645f3f passed; new CI33966229536 pending), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -452,8 +451,15 @@ by1.25e-13/9.05e-14. This is source-truncation convergence, not a resolved
 collision spectrum, transport calculation or electromagnetic energy law.
 
 **Next implementation:** isolate coefficient repair from closure changes.
-Regenerate the two like-species tables with the independently checked Gram/
-Fourier references, retaining the present full-J0 source and signed convention.
+Generator repairad47d3be is committed: direct equal-species diagonals, mandatory
+all-node quadrature refinement, full-J0 source, signed convention and honest
+float64 provenance. Final candidates are in
+`/tmp/gkx-collision-candidates-20260905.XqBQZb/final`; both pass independent
+DK and saved-file/all-node audits. Packaged data is NOT replaced yet.
+Next promote the two verified candidates in a separate coefficient commit;
+replace the legacy asymmetry-defect regression with physical symmetry/entropy
+and independent-coefficient gates, and update provenance expectations. Run the
+full collision suites and runtime interpolation/AD checks before pushing.
 Record quadrature provenance (not fictional high-precision decimal digits),
 independently recheck all nodes, update coefficient regressions and audit the
 interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H

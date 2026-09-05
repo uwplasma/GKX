@@ -8334,3 +8334,92 @@ field-consistency gate is closed.
 Only GX7690 remains live. Revalidate it, then run explicit-path completion/
 dt/temporal/state audits after success. Do not restart completed scratch probes.
 Full R0–R9 goal active; next code action is the scoped like-species generator repair.
+
+## 2026-09-05 — Direct verified like-species candidate generator
+
+Previous turn: progress (actual runtime maps and resolved source-tail ladder).
+Code committed/pushedad47d3be, including prior heldac8d4ec7 docs, only after
+CI33964841954 at6d645f3f completed success. New CI33966229536 pending. No merges;
+original checkout untouched. GX7690/PID1753613 RNl48m05s initially and56m53s
+at last check. Still only live research job; do not read unfinished NetCDF.
+
+Replaced the equal-species generator's full two-wavelength pair assembly plus
+diagonal extraction with direct diagonal Gram/Fourier quadrature. No unreachable
+off-diagonal storage or wasted pair evaluations. Other/unlike-species generators
+are unchanged. The current full-J0 polarization source and signed Hermite-major
+convention are preserved; no finite-H closure or runtime table change this turn.
+
+Every node/block must be finite and pass coarse/refined comparison:
+test96/48→192/64 and field64/48/48→96/64/64, rtol1e-10/atol1e-12. Publish the
+refined result. --check performs an independent multiprecision DK comparison,
+now bounded by1e-10 maximum coefficient error instead of1e-6. --digits controls
+that reference only. --workers remains accepted/positive for command compatibility,
+with help explicitly stating serial streamed quadrature. New --output-dir permits
+candidate generation without touching package data. Publication remains after
+all selected checks; a failed refinement never writes files.
+
+Metadata: working decimal precision15 (NumPy float64), separate requested DK
+reference digits, explicit drift_kinetic_check_passed boolean, method, both node
+sets, tolerances and full_J0_not_truncated_H source contract. No false 60-digit
+quadrature claim. Writers default the optional DK-check status to false.
+No new repo files. Budget accounting tools+44/test+82 lines, source unchanged;
+final slimming targets unchanged. Doc command now generates outside the package.
+
+Candidate root `/tmp/gkx-collision-candidates-20260905.XqBQZb`:
+initial86831/75598 terminal exit0; final8910/42933 terminal exit0 after adding
+explicit DK-check provenance and tightening the DK gate. Use **final/** files,
+not the initial root files, for promotion. Initial/final logs retained separately.
+
+From code worktree, localvenv-python
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`, commands:
+
+```
+PYTHONPATH=src <python> tools/artifacts/build_finite_wavelength_coulomb_data.py --check --output-dir /tmp/gkx-collision-candidates-20260905.XqBQZb/final
+PYTHONPATH=src <python> tools/artifacts/build_finite_wavelength_coulomb_data.py --hermite 5 --laguerre 2 --check --output-dir /tmp/gkx-collision-candidates-20260905.XqBQZb/final
+```
+
+| Candidate | Generation wall | DK test/field max errors | NPZ bytes |
+|---|---|---|---|
+| 8 moments | 2.0s | 2.531e-14 / 1.976e-14 | 19840 |
+| 18 moments | 4.5s | 4.051e-14 / 2.220e-14 | 82560 |
+
+These are build-time controls, not runtime CPU/GPU speedups. Both have14 nodes,
+two (14,N,N) matrices and four (14,N) vectors; phi1 arrays exactly zero.
+audit-candidates.py terminalexit0 independently reloads final NPZ/JSON, checks
+hashes/schema/convention/precision/check status, and compares every stored node
+against prior full-grid reference arrays in the other scratch root. Max absolute
+differences by test matrix/field matrix/test phi2/field phi2:
+8:1.288e-13/2.398e-14/6.108e-14/7.216e-15;
+18:1.654e-13/3.308e-14/6.108e-14/7.327e-15. This verifies saved assembly as well
+as in-memory coefficients; the underlying independent derivations/cutoff checks
+remain documented in preceding entries, not inferred from matching checksums.
+
+Tests: 27 generator/publication tests pass in x64 session56042, no skips.
+62 generator+oracle tests pass under JAX_ENABLE_X64=false session20290, no skips
+(all quadrature remains NumPy float64). Injected finite error1e-3 and NaN into
+refined field matrix/source at B1 fail mandatory refinement, even without
+--check, and preserve existing output bytes. DK errors1e-9 are now rejected.
+Signed source fixtures, zero vectors, honest provenance and file SHA tested.
+Strict Sphinx19627exit0; Ruff/diff-check and architecture pass.
+
+| Artifact relative to candidate root | SHA256 |
+|---|---|
+| final/finite_wavelength_coulomb.npz | 38726a95514ae9e8fe5db345752606cc5c430bf0088f4f4c61a4fdb3c519cf1d |
+| final/finite_wavelength_coulomb_18.npz | fb282d85656a1186023b9500b1108c15f11386878f5241b01ed1a6428aa7f65b |
+| final/finite_wavelength_coulomb.json | c7c4067777a10ef25cac547d9bb8af9dd0ecb5f0dadb2796bca37c2d6ffb0cd0 |
+| final/finite_wavelength_coulomb_18.json | bee0717db1a17a74638d63ebdc65e0daa16ee91191852e57740eddc2e0c35b23 |
+| audit-candidates.py | ec3f71b6420541c8bebb5a05d71eb77db61440812a174eabd37294d1fd0d92ab |
+| audit-candidates.log | 7cd3df288e7eb55713ca43df0c30a816fc8214485e7557a9eaf2e7b0944b33ad |
+| generator-final-tests.xml | 878286603c036482a75fdbf6fcf9fb9b2d624f534bdda39cbb57840829b4ccdc |
+| generator-oracles-f32mode-tests.xml | 18e3c632ed4ab6b14cc5d87fbeda09a619784868aab367036729f3f66e0b3633 |
+
+Next code action: promote final candidates in a separate coefficient commit.
+Update test_finite_larmor_self_adjointness_breaks_at_first_order_in_b, which
+deliberately regresses a known legacy defect, to a real independent symmetry/
+entropy gate. Update test_finite_wavelength_coulomb_tables_load_with_provenance
+(currently demands multiprecision>=40). Re-run full collision tests; investigate
+every changed physical/numerical result rather than adjusting tolerances to fit.
+Keep research-only scope, historical defect measurements labeled as historical,
+and audit interpolation/parameter derivatives after coefficient replacement.
+Check GX completion and current CI before starting more long jobs or pushing.
+Full goal active.
