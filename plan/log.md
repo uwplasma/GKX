@@ -8905,3 +8905,27 @@ and collision interpolation remain open; these controls cannot certify them.
 
 Resume: monitor these exact handles and CI; continue multi-link/distributed
 contract checks or collision analysis while they run. Goal remains active.
+
+### 2026-09-05: multi-link host cache contract verified
+
+Previous turn progress: preflighted and launched actual spatial controls.
+This turn both exact PIDs1767040/1767078 revalidated RNl at3:16/3:14; no
+restarts or live NetCDF reads. Sessions85194/42690 remain their launch handles.
+CI33969411628 still queued/incomplete; pushed code remainsf4d5d1b5.
+Local48b90099 adds a second held commit after447d724f; preserve both and push
+after prior CI is terminal. No merges, no runtime-policy change.
+
+Strengthened existing test_linked_fft_maps_validate_ky_mode_and_empty_maps in
+tests/unit/linear/test_linear_helpers_extra.py: parameterize Nz3/4, assert exact
+one/two/three-link topology [[0],[3],[9],[2]], [[5,11]], [[4,1,10]], then check
+every signed frequency against integer Fourier labels scaled by full chain
+length. Includes odd chains3/9 and even chains4/6/8/12. Empty-map and invalid
+damping-profile checks retained. Common kwargs replace repeated setup; diff
+15 insertions/15 deletions, no new file or raised budget.
+
+Full helper module61 tests passed65274; count independently collected.
+Ruff format/check, architecture and diff-check passed. This validates host
+topology/frequency construction, not distributed runtime derivatives.
+Plan checkpoint corrected stale GPU-free wording. Next: terminal spatial
+artifact audits when ready, distributed derivative conventions, and the open
+collision/source gates. Goal active; both GPUs occupied by existing controls.

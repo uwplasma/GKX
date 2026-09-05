@@ -125,7 +125,7 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, pushed **f4d5d1b5**, local **447d724f**
+`fix/r0-end-damping-rate`, pushed **f4d5d1b5**, local **48b90099**
 (CI33967886511 at17ff384a completed success; new HEAD CI not certified), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
@@ -178,7 +178,8 @@ Input `salpha_nl32_nm96_t300.in`; logs `run.log`, `time.log`. Binary in the pare
 scratch root includes normalized hypercollision powers AND damping stride repair.
 Nm16011457, field12758, RHS probes63632/68046/95262, build80927 and startup50025
 are terminal exit0. Do not restart them. GX7690 also exited0 in1:44:56;
-artifact/time/finite-array audits pass. Both GPUs are free; code CI not yet certified.
+artifact/time/finite-array audits pass. Both GPUs now run the spatial controls above;
+new code CI is not yet certified.
 At ky=.55, corrected GX gamma=.0249083096362 versus GKX=.0248520921245
 (−.2257%); omega differs−.009894%. The same-state Rayleigh discrepancy is
 small, but the normalized full-state residual remains .30498. Do not equate
@@ -203,7 +204,8 @@ Cache-built single-link signed frequencies now pass odd/even checks in447d724f.
 Filtering only the Nyquist mode removes9.96e-5 of state power but raises the
 matched eigenmode residual to.364; filtering is not a validated repair.
 **Next actions:** make external parity comparisons convention-aware, including
-multi-link cache maps and distributed routes. Evaluate truncation/resolution
+distributed routes. Host one/two/three-link topology and signed-frequency tests
+pass in48b90099. Evaluate truncation/resolution
 sensitivity before choosing a production policy; do not silently flip GKX's default.
 Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
 completed11457 exit0 in54:11.43: gamma=.02410635371563277,omega=.5058500630938944.
