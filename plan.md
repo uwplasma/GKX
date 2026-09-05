@@ -151,7 +151,7 @@ Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
 **In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `7f3424fa`, based on #199 b5dca15a.
+`fix/r0-end-damping-rate`, head `8ce22e33`, based on #199 b5dca15a.
 Source, route-aware deck migration, fixed-rate parity overrides, docs and
 cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
 and route checks pass. Full external reference regeneration, adaptive calibration,
@@ -232,6 +232,12 @@ contains five outputs, but its s-alpha run uses dt≈.00466 and KBM≈.00065, no
 the manifest timesteps; HSX is missing. Do not call that a matched-rate matrix.
 Check remote CI on #200–#202 before relying
 on full-suite status; they were still awaiting complete CI during this slice.
+Latest #202 repo-hygiene failure was the unformatted demo print; corrected in
+02536eef, full Ruff lint+format now pass locally (406 files); remote rerun pending.
+Kinetic Miller fixture's missing electron-only seed corrected in8ce22e33; KBM
+already matched. Prepared new GX kinetic input in matched_refs/ITG_cyclone with
+dt=.0002/rate500/T40, **not launched**. Start after a GPU frees, then match the
+GKX horizon to T40 instead of reusing the old T20 harness unchanged.
 No merge is authorized; update this
 checkpoint and append commands/results to `plan/log.md` before changing workstreams.
 User checkout and other existing worktrees remain untouched.

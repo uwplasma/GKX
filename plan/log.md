@@ -5650,3 +5650,41 @@ Resume current RK4 and Miller handles; compare integrator/temporal sensitivities
 then continue Hermite/Laguerre/spatial and other parity cases. Keep raw failures,
 do not merge or promote public benchmarks. Source worktree unchanged apart from
 the committed numerical-method qualification.
+
+## 2026-09-05 — CI formatting repaired; kinetic initial-condition mismatch fixed
+
+Previous turn progressed (finite Nm96 trial, numerical audit, RK4 control).
+Both jobs verified live this turn; final check Miller PID1719945 at15m30s,
+RK4 PID1722017 at3m36s. No restart, no terminal result yet.
+
+Current #202 CI exposed repo-hygiene failure on7f3424fa. Read authoritative job
+101266023078 logs via gh api (run33951126955 still active, gh run --log-failed
+unavailable): ruff format rejected demo.py's long print. Earlier local ruff
+check was lint only. **02536eef** formats it; full `ruff check .` and
+`ruff format --check .` pass (406 files), architecture and whitespace gates pass.
+Fix pushed; do not claim the remote rerun is complete.
+
+Prepared next reference from /home/rjorge/gx_refs_lin/ITG_cyclone/
+itg_miller_kinetic_electrons.in. Added only Time.dt=.0002, preserving T40,
+nwrite100,Nl16,Nm48,7positiveky,two species,beta1e-5. Default A.1 implies rate500.
+Input copied to owned snapshot matched_refs/ITG_cyclone with original basename;
+SHA256 `1fee7d656a4353ccda20934b9c1ddeb2820b9eaf1732ac707e48e070555fc2da`.
+Local /tmp/gkx-damping-route-20260905.Xk4sat/matched_kinetic.in. **Not launched**:
+both GPUs occupied. After a GPU frees, run GX using prior scoped PATH and log
+kinetic-gx.stdout.log/kinetic-gx.time.log. Match future GKX T40, not old T20.
+
+Input audit found GX kinetic Miller sets init_electrons_only=true, while GKX
+parity fixture omitted it (defaultfalse). KBM already sets true on both sides.
+**8ce22e33** corrects kinetic Miller fixture and adds two loaded-config tests
+pinning this contract. Full Ruff lint/format, two focused tests and architecture
+gate pass; explicit test-line allowance+9, no new files. Existing species-target
+execution tests remain in tests/integration/runtime/test_runtime_runner.py;
+this new gate checks the actual parity decks. No running adiabatic job affected.
+Copied only corrected kinetic fixture into owned snapshot for future comparison;
+source production remains3565-equivalent, reporter0acbd221. Do not claim old
+kinetic transient comparisons were identically initialized or relabel old output.
+
+Resume **95639/PID1722017** (Nm96RK4 GPU0), **31885/PID1719945** (Miller GPU1).
+Inspect complete outputs, then start the prepared kinetic reference with scoped
+GPU selection. Record exit/hash/trace before comparison. CI still in progress;
+no merge, no benchmark artifact promoted. User checkout untouched.
