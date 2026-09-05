@@ -9004,3 +9004,59 @@ endpoint/out-of-grid behavior, f32 certificate tolerance and measured runtime/
 storage cost. Full-J0 versus retained-H field metric remains a separate gate.
 All local studies terminal; only two previously launched GX controls are live.
 No merge; full R0–R9 goal active.
+
+### 2026-09-05: signed scaled-cubic JAX and precision prototype
+
+Previous turn progress: full-range accuracy and Bernstein matrix evidence.
+Code remains local48b90099/pushedf4d5d1b5; no production changes this turn.
+CI33969411628 last queued/incomplete. GX controls1767040/1767078 revalidated
+RNl at13:34/13:32, exact sessions85194/42690 retained; no live NetCDF reads.
+
+Scratch scaled-jax-contract.py in collision candidate rootXqBQZb builds53-node
+scaled cubic coefficients from quadrature, transforming matrix by S C S and
+source by S, S=(-1)^Laguerre. Analytic signed limits use negative first-Laguerre
+off-diagonal row/column and q0 tail, with unchanged density diagonal. No division
+by b at runtime: Horner evaluates A/q and returns D A D g+b D q phi.
+Deterministic random complex g (seed71), fixed complex phi=.3−.4i; this is NOT
+a self-consistent field solve, state-VJP validation, or production apply path.
+
+Checks: b=0,1e-8,1e-6, all interior knots and interval midpoints, upper b8.
+JIT values/JVP with respect to b compared against NumPy analytic derivatives of
+the same SciPy spline; this validates execution/AD, not independent physics
+accuracy (the prior quadrature holdout study supplies that distinct evidence).
+Reverse real-parameter derivative of Re<w,value> compared to the JVP contraction.
+Endpoint policy uses strict where(b<0,0,where(b>8,8,b)), yielding interior
+derivative at endpoints and zero outside; outside b−1/9 derivatives asserted
+exactly zero. This proposed contract is not silently imposed on production.
+
+| Moments / dtype | Max relative value error | Derivative error | Forward/reverse discrepancy |
+|---|---|---|---|
+| 8 / f32 | 1.23e-7 | 1.03e-7 | 2.10e-7 |
+| 18 / f32 | 1.05e-7 | 1.03e-7 | 6.98e-7 |
+| 8 / f64 | 2.87e-16 | 2.53e-16 | 3.94e-16 |
+| 18 / f64 | 2.21e-16 | 2.19e-16 | 1.47e-15 |
+
+AD tolerances2e-5/f32 and2e-12/f64; errors all comfortably below. Reverse
+discrepancy denominator max(abs(contraction),1), so not uniformly relative near0.
+Initial39114 and final quantization11066 both terminalexit0 on localCPU JAX0111.
+
+Quantization follow-up casts spline coefficients/nodes to runtime dtype before
+forming Bernstein controls in double arithmetic. f32 maximum positive control
+eigenvalue2.26734e-8, relative to largest matrix norm2.34e-9(8)/1.92e-9(18).
+Passes the explicitly chosen32*eps*matrix-norm numerical criterion, but this
+does NOT prove exact negative-semidefiniteness after rounding or bound every
+Horner arithmetic error. f64 maxima6.65e-15/6.84e-15. No clipping, projection,
+or symmetrization hides these positive values. A production generator/runtime
+gate must state precision-scaled tolerance and protect physical null modes.
+
+Reproduce with PYTHONPATH=src:tools/artifacts localvenv Python
+scaled-jax-contract.py; stdout final scaled-jax-quantized.log.
+Script SHA2569f1472493d94c12861cca828cc7f06d32bc50f8ad0f3010408c0d78f732a0a00;
+log212f03e7e3d60a1d6814d098a8b890c1363434a42dbd13c9be02d4aaaed36004.
+Earlier unquantized output remains scaled-jax-contract.log.
+
+Next: benchmark a dynamic-state, spatially batched implementation against the
+current operator (avoid constant-state compiler folding), storage/generation
+cost, state/field VJPs, scalar density-limit errors in f32, GPU once free, and
+actual factory/basis/input contracts. Coupled-field entropy and unlike-species
+remain separate open gates. Both GPU controls still live; goal active.

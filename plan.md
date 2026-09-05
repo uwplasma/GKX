@@ -524,6 +524,12 @@ negative-semidefinite condition to roundoff (<6.9e-15), including14/27-node grid
 This is an interval-wise matrix certificate to numerical tolerance, not a coupled
 field-energy proof. No production interpolation change; require signed-runtime
 JVP/VJP, endpoint/clipping contracts, f32 and cost gates before promotion.
+Signed-convention JAX prototype now passes value/JVP/real-parameter pullback
+checks against analytic spline formulas on53 nodes, in f32/f64, including b0,
+tiny b, knots and endpoints. Outside-range derivatives are explicitly zero;
+endpoint derivatives are interior one-sided. These are prototype contracts, not
+yet the production API. Quantized f32 controls have positive eigenvalues~2.27e-8
+(~2e-9 relative matrix scale): numerical-tolerance dissipation only, not exact NSD.
 Record quadrature provenance (not fictional high-precision decimal digits),
 independently recheck all nodes, update coefficient regressions and audit the
 interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H
