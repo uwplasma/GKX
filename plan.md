@@ -151,7 +151,7 @@ Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
 **In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `57485da2`, based on #199 b5dca15a.
+`fix/r0-end-damping-rate`, head `7f3424fa`, based on #199 b5dca15a.
 Source, route-aware deck migration, fixed-rate parity overrides, docs and
 cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
 and route checks pass. Full external reference regeneration, adaptive calibration,
@@ -208,12 +208,19 @@ stem `results/salpha_rate50_nm64`. It uses the current0acbd221 reporter copy,
 not the old running tool. At ky=.55, gamma changes **8.096%** from Nm48 to64:
 the high-ky mode is not Hermite-converged. Nm96 at dt=.002 failed with a nonfinite
 field history (session86304/old PID1720507, exit1); preserve its logs, no result.
-Separate half-step trial is live on GPU0: **session42644/PID1721120**,
+Separate half-step trial completed exit0: **session42644/old PID1721120**,
 `salpha_nm96_dt_half.toml`, dt=.001/150k steps, same rate/T/Nl/ky;
 stem `results/salpha_rate50_nm96_dt_half`, logs
-`gkx-salpha-nm96-dt-half.{stdout,stderr}.log`. Failure cause not yet established.
+`gkx-salpha-nm96-dt-half.{stdout,stderr}.log`. Gamma=.03555382534,
+omega=.48452886591, both temporal screens pass; resolution remains open.
+RK4 control at Nm96/dt=.002 is now live GPU0, **session95639/PID1722017**,
+`salpha_nm96_rk4.toml`, stem `results/salpha_rate50_nm96_rk4`, logs
+`gkx-salpha-nm96-rk4.{stdout,stderr}.log`. Failure cause not fully established.
 57485da2 documents the GX-matched resolution dependence of hypercollisions;
 fixed input coefficients do not mean fixed damping at retained Hermite moments.
+7f3424fa documents native imex2's actual scalar amplification: first-order pure
+diagonal damping and explicit-midpoint undamped oscillations. Compare integrators
+and establish stability/order before selecting the production scan default.
 The parity tool now reports reference-side temporal status separately (0acbd221,
 55 focused tests). Unsupported sampling is unknown; regular sampling may have
 one shortened terminal interval, as observed in GX. `converged` remains GKX-only

@@ -5602,3 +5602,51 @@ This source audit does not establish the Nm96 failure cause or close convergence
 Resume both current live handles; record exits/evidence before promotion.
 Remaining matrix, Laguerre/spatial/temporal refinement and R0 work stay open.
 No PR merged, no public benchmark artifacts changed.
+
+## 2026-09-05 — finite Nm96 half-step result; RK4 control and IMEX audit
+
+Previous turn progressed (failure provenance, stability trial, operator docs).
+**Session42644/PID1721120 completed exit0.** Nm96/dt.001 gives
+gamma=.03555382534327573, omega=.4845288659123776 at exact ky=.550000011920929.
+Growth/frequency half shifts -.02904581221/-.001207343917; both reference and
+GKX temporal screens pass. CSV results/salpha_rate50_nm96_dt_half.csv SHA256
+`98d17f6820241f3e3f385470b5e0b6ba698e46b73eaef3b01b03b66723cd91d4`.
+Still ~4.95% gamma disagreement with Nm48 GX and a material shift from Nm64
+GKX; neither cross-code nor Hermite convergence established. The smaller step
+removes observed nonfiniteness, but do not infer an exact stability boundary.
+
+Started **RK4 control**, same Nm96,Nl16,ky,rate50,T150, dt=.002/75k steps:
+GPU0, **session95639/PID1722017** (time parent1722016), verified live.
+Manifest salpha_nm96_rk4.toml SHA256
+`d4e9b06c622de191ac7d7740775852b08147af27d23961a9a69247cd9176757f`.
+Same owned snapshot/env/current reporter as prior runs; --manifest
+salpha_nm96_rk4.toml --cases cyclone_salpha_itg_nm96_rk4 --stem
+results/salpha_rate50_nm96_rk4; logs gkx-salpha-nm96-rk4.stdout.log/stderr.log.
+Miller session31885/PID1719945 still live at12m00s. Old42644 terminal, no restart.
+
+Audited solvers_time_explicit_steps.py:_linear_native_step, not method naming.
+For u'=(a-d)u, implemented imex2 has R=[1+ha(1+ha/2)/(1+hd/2)]/(1+hd).
+Pure diagonal damping is backward Euler; d0/a=i omega is explicit midpoint,
+|R|^2=1+(h omega)^4/4. **7f3424fa** documents these qualifications in numerics;
+Sphinx HTML -W and diff checks pass, documentation-only, no method replacement.
+Executed actual step function locally JAX0.11.1f64 at d=.7,T1,N8/16/32/64:
+absolute errors against exp(-.7): .01458530514,.00744446130,.00376160512,
+.001890832668 (first-order trend). Single oscillator step h=.1 gives
+|u|²=1.0000250000000002, analytic1.000025. Existing scalar amplification unit
+test covers the formula, but is not a proof of uniform second order. These
+limiting cases do not by themselves diagnose the full high-Nm operator.
+
+Installed-wheel nonlinear startup also completed exit0, **session30211 terminal**.
+Used repaired wheel target and existing JAX0.11.1f64 dependency environment,
+from empty-wheel-run directory: bin/gkx run-runtime-nonlinear --config
+<worktree>/examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml
+--steps50 --out /tmp/gkx-rate-wheel-20260905.aBK527/cyclone_nonlinear.out.nc.
+Log nonlinear-wheel.log beside output. Reached t=.5,4samples; NetCDF time and
+HeatFlux_st finite. Unresolved cutoff warnings retained (heat32%, potential21%
+of spectral peak). This proves short installed execution, not saturated or
+resolution-converged transport. No clean dependency-install claim.
+
+Resume current RK4 and Miller handles; compare integrator/temporal sensitivities,
+then continue Hermite/Laguerre/spatial and other parity cases. Keep raw failures,
+do not merge or promote public benchmarks. Source worktree unchanged apart from
+the committed numerical-method qualification.
