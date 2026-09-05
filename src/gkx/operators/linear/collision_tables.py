@@ -271,12 +271,18 @@ class EqualSpeciesFiniteWavelengthSugamaOperator:
             raise ValueError(
                 "equal-species finite-wavelength Sugama tables require one species"
             )
-        bessel_argument = jnp.sqrt(2.0 * jnp.maximum(jnp.asarray(context.cache.b), 0.0))
-        if bessel_argument.ndim < 1 or int(bessel_argument.shape[0]) != 1:
+        bessel_argument_squared = 2.0 * jnp.asarray(context.cache.b)
+        if (
+            bessel_argument_squared.ndim < 1
+            or int(bessel_argument_squared.shape[0]) != 1
+        ):
             raise ValueError("collision Bessel argument must have one species axis")
         test, field = (
             interpolate_collision_diagonal_table(
-                self.bessel_argument_grid, table, bessel_argument[0]
+                self.bessel_argument_grid,
+                table,
+                bessel_argument_squared[0],
+                squared=True,
             )
             for table in (self.test_table, self.field_table)
         )

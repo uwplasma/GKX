@@ -633,12 +633,18 @@ class EqualSpeciesFiniteWavelengthCoulombOperator:
             raise ValueError(
                 "equal-species finite-wavelength Coulomb tables require one species"
             )
-        bessel_argument = jnp.sqrt(2.0 * jnp.maximum(jnp.asarray(context.cache.b), 0.0))
-        if bessel_argument.ndim < 1 or int(bessel_argument.shape[0]) != 1:
+        bessel_argument_squared = 2.0 * jnp.asarray(context.cache.b)
+        if (
+            bessel_argument_squared.ndim < 1
+            or int(bessel_argument_squared.shape[0]) != 1
+        ):
             raise ValueError("collision Bessel argument must have one species axis")
         resolved = tuple(
             interpolate_collision_diagonal_table(
-                self.bessel_argument_grid, table, bessel_argument[0]
+                self.bessel_argument_grid,
+                table,
+                bessel_argument_squared[0],
+                squared=True,
             )[None, None, ...]
             for table in (
                 self.test_table,
@@ -684,12 +690,16 @@ def interpolate_collision_diagonal_table(
     bessel_argument_grid: jnp.ndarray,
     table: jnp.ndarray,
     bessel_argument: jnp.ndarray,
+    *,
+    squared: bool = False,
 ) -> jnp.ndarray:
     """Interpolate one equal-species vector or matrix table along its diagonal.
 
     ``table`` has shape ``(B, moment)`` or ``(B, output_moment, input_moment)``.
     Coefficient axes are moved before the spatial axes in the returned array.
     Values outside the tabulated interval use the nearest endpoint.
+    With ``squared=True``, the target is B² and interpolation uses squared grid
+    coordinates, with interior one-sided derivatives at both endpoints.
     """
 
     grid = jnp.asarray(bessel_argument_grid)
@@ -716,7 +726,15 @@ def interpolate_collision_diagonal_table(
                 "collision Bessel-argument grid must be finite and strictly increasing"
             )
 
-    clipped = jnp.clip(target, grid[0], grid[-1])
+    if squared:
+        if not isinstance(grid, jax.core.Tracer) and np.any(np.asarray(grid) < 0):
+            raise ValueError("squared collision coordinates require a nonnegative grid")
+        grid = grid**2
+        clipped = jnp.where(
+            target < grid[0], grid[0], jnp.where(target > grid[-1], grid[-1], target)
+        )
+    else:
+        clipped = jnp.clip(target, grid[0], grid[-1])
     left = jnp.clip(jnp.searchsorted(grid, clipped, side="right") - 1, 0, grid.size - 2)
     fraction = (clipped - grid[left]) / (grid[left + 1] - grid[left])
     coefficient_ndim = coefficients.ndim - 1

@@ -373,9 +373,13 @@ Tabulated resolutions
 Finite-Larmor tables ship at 8 and 18 Hermite-Laguerre moments, generated in
 60-digit arithmetic on a 14-point Bessel-argument grid
 :math:`B = k_\perp v_{\mathrm{th}}/\Omega \in [0, 4]` and stored as
-checksummed float64. The runtime interpolates at :math:`B=\sqrt{2b}` from the
-cached :math:`b`, so one table covers every perpendicular wavenumber, and it
-selects the table matching the run's ``Nl*Nm`` automatically.
+checksummed float64. Like-species Coulomb/Sugama paths interpolate in
+:math:`B^2=2b` directly, preserving quadratic limits without differentiating a
+square root at zero. They use interior one-sided derivatives at table endpoints;
+values outside the interval remain clamped. The generic B-linear and full-pair
+interpolators are unchanged, so their off-node approximations differ.
+The table matching ``Nl*Nm`` is selected automatically. This interpolation repair
+does not correct the independently measured coefficient/truncation errors above.
 
 Cost and the resolution ceiling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

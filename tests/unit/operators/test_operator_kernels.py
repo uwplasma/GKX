@@ -742,7 +742,7 @@ def test_finite_wavelength_coulomb_uses_thermal_bessel_argument() -> None:
 
 
 def test_equal_species_finite_wavelength_table_matches_full_pair_diagonal() -> None:
-    """The compact like-species path retains the full Coulomb pair equations."""
+    """The compact and full-pair equations agree at shared coefficient nodes."""
 
     grid = jnp.asarray([0.0, 1.0, 2.0], dtype=jnp.float32)
     matrix = (1.0 + 0.3 * grid)[:, None, None]
@@ -774,7 +774,7 @@ def test_equal_species_finite_wavelength_table_matches_full_pair_diagonal() -> N
         jnp.zeros((1, 1, 3, 3, 1)),
     )
     state = jnp.asarray([[[[[[1.0, 1.5]]]]]], dtype=jnp.complex64)
-    b_argument = jnp.asarray([0.4, 1.6], dtype=jnp.float32)
+    b_argument = jnp.asarray([1.0, 2.0], dtype=jnp.float32)
     context = CollisionContext(
         distribution=state,
         hamiltonian=state,
@@ -792,6 +792,7 @@ def test_equal_species_finite_wavelength_table_matches_full_pair_diagonal() -> N
     )
     assert len(jax.tree_util.tree_leaves(diagonal)) == 8
 
+    b_argument = jnp.asarray([0.4, 1.6], dtype=jnp.float32)
     direction = jnp.asarray([0.1, -0.2], dtype=jnp.float32)
     tangent = jax.jvp(
         lambda values: interpolate_collision_diagonal_table(grid, matrix, values),
@@ -814,6 +815,47 @@ def test_equal_species_finite_wavelength_table_matches_full_pair_diagonal() -> N
     )
     with pytest.raises(ValueError, match="require one species"):
         diagonal.apply(multispecies)
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        EqualSpeciesFiniteWavelengthCoulombOperator,
+        EqualSpeciesFiniteWavelengthSugamaOperator,
+    ],
+)
+@pytest.mark.parametrize("b", [-0.1, 0.0, 1e-8, 0.003, 0.25, 0.5])
+def test_equal_species_collision_quadratic_limit_and_derivative(model, b):
+    grid = jnp.asarray([0.0, 0.125, 1.0])
+    matrix = -(grid**2)[:, None, None]
+    vectors = (
+        (jnp.zeros((3, 1)),) * 4
+        if model is EqualSpeciesFiniteWavelengthCoulombOperator
+        else ()
+    )
+    operator = model(grid, jnp.ones((1, 1)), matrix, jnp.zeros_like(matrix), *vectors)
+    state = jnp.ones((1, 1, 1, 1, 1))
+
+    def objective(value):
+        context = CollisionContext(
+            distribution=state,
+            hamiltonian=state,
+            fields=FieldState(phi=jnp.zeros((1, 1, 1)), apar=None, bpar=None),
+            cache=SimpleNamespace(b=value.reshape((1, 1, 1, 1))),
+            parameters=SimpleNamespace(tz=jnp.ones(1)),
+        )
+        return jnp.real(operator.apply(context)).sum()
+
+    value, derivative = jax.jit(jax.value_and_grad(objective))(jnp.asarray(b))
+    expected = 0.0 if b < 0 else -2.0
+    np.testing.assert_allclose(value, expected * b, rtol=1e-6, atol=1e-9)
+    np.testing.assert_allclose(derivative, expected, rtol=1e-6, atol=1e-9)
+    np.testing.assert_allclose(
+        jax.jvp(objective, (jnp.asarray(b),), (jnp.asarray(1.0),))[1],
+        expected,
+        rtol=1e-6,
+        atol=1e-9,
+    )
 
 
 def test_equal_species_finite_wavelength_sugama_uses_hamiltonian_and_jvp() -> None:
@@ -842,7 +884,7 @@ def test_equal_species_finite_wavelength_sugama_uses_hamiltonian_and_jvp() -> No
         return operator.apply(context)
 
     argument = jnp.asarray([0.25, 0.75], dtype=jnp.float32)
-    expected = 0.4 * (-0.75 - 0.75 * argument) * hamiltonian
+    expected = 0.4 * (-0.75 - 0.75 * argument**2) * hamiltonian
     np.testing.assert_allclose(jax.jit(evaluate)(argument), expected, rtol=2.0e-6)
     direction = jnp.asarray([0.1, -0.2], dtype=jnp.float32)
     tangent = jax.jvp(evaluate, (argument,), (direction,))[1]

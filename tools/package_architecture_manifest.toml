@@ -847,7 +847,8 @@ recursive = true
 # fraction rather than the rate its name and the docs suggest, so the comment is
 # the part that stops it happening again, and it points at #194 for the redesign
 # that would make the name true.
-baseline = 88968
+# +13 net: diagonal B² interpolation with finite one-sided endpoint derivatives.
+baseline = 88981
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -942,7 +943,8 @@ recursive = true
 # +21 net: preserve existing collision artifacts when finite/NaN/Inf checks fail.
 # +18: reject nonfinite values in all six published coefficient blocks.
 # +26: independent test-particle Gram quadrature and order/entropy gates.
-baseline = 87012
+# +42: like-species quadratic values/JVP/VJP at zero, interior and endpoints.
+baseline = 87054
 target = 35000
 
 [[line_budget_policy.counts]]
