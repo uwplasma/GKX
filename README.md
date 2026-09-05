@@ -33,8 +33,8 @@ accelerator-enabled JAX wheel from the
 file, no data download. It takes about 20 s on a laptop CPU, prints the fitted
 `gamma` and `omega`, and writes
 `gkx_default_linear.{toml,summary.json,timeseries.csv,eigenfunction.csv,png}`.
-It is a smoke test, not a converged result, and emits CFL and under-resolution
-warnings to say so.
+It is a smoke test, not a converged result; fit and spectral-resolution warnings
+identify its limits. The default timestep passes the startup CFL check.
 
 Development checkout:
 
