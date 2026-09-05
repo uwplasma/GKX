@@ -233,8 +233,12 @@ indices; the stride repair passes all cases, including the6144-index control.
 New build96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
 passes the T1 finite-state smoke test. Corrected matched run7690 is live; its
 input SHA remainsfb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
-Existing audit scripts hard-code the OLD scratch root: explicitly retarget them
-before auditing new outputs, and keep old/new records separately labeled.
+The updated audit-refined-gx.py in the new scratch root now requires explicit
+--root/--stem/--binary/--binary-sha256/--input-sha256/--gkx-csv and rejects a
+nonterminal run before reading NetCDF. It reproduces old results and rejects
+the live corrected run and a wrong binary hash. The RHS probe now requires
+--root/--stem and checks diagnostic/restart/field timestamps. Use these updated
+copies, not old hard-coded ones; keep old/new records separately labeled.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly

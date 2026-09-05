@@ -8001,3 +8001,66 @@ CI33963277695 completes (latest9pending/no failures), avoiding cancellation.
 Only live research process is corrected GX7690, GPU1; GPU0 free. No merges.
 Full R0–R9 goal active; next full-state/dt/temporal audit and matched comparison
 must precede any corrected-reference validation claim.
+
+## 2026-09-05 — Explicit reference-audit selection and negative controls
+
+Previous turn: progress (actual-kernel repair, finite smoke test and corrected
+reference launch). Corrected GX7690/PID1753613 revalidated RNl6m48s; still live.
+CI33963277695 remains pending (last runtime-core/nonlinear-core/parallel-autodiff,
+no failures). Local70750486 still one ahead of pushedb7cd526e; no source pushes
+to cancel its CI, no merges.
+
+Removed the fixed reference directory from scratch audit-refined-gx.py. Requires
+--root, --stem, --binary, --binary-sha256, --input-sha256, --gkx-csv. Checks
+provided hashes using streaming file_digest, successful /usr/bin/time exit,
+the command named by that log, at least8 samples, and the requested horizon
+before reporting temporal comparisons. Completion is checked before opening
+NetCDF; the live run is not inspected concurrently. The selected paths/hashes
+are printed. Single-mode CSV comparison requires exactly one row and explicitly
+says resolution is verified separately from the manifest, not inferred from
+CSV names (the historical CSV lacks resolution columns).
+
+This validates selected current artifacts against recorded expected hashes;
+it is not cryptographic attestation that an arbitrary mutable binary produced
+an arbitrary old file. Our separate immutable scratch directories and launch
+hash records remain part of provenance. Finite-array checks still do not
+validate scalar geometry metadata or kernel physics.
+
+Verification:
+
+| Probe | Result |
+|---|---|
+| Explicit old normalized-power reference and correct hashes | 39466exit0; same temporal/growth results reproduced |
+| Corrected reference while PID1753613 is live | exit1, `reference has not exited successfully`, before NetCDF read |
+| Old binary with the corrected binary's expected hash | exit1, `reference binary hash mismatch` |
+| Explicit old-root same-state RHS probe | 53310exit0; previous full/truncated Rayleigh and field results reproduced |
+
+RHS probe audit-gx-final-state-rhs.py now requires --root/--stem, rejects an
+unfinished time log, and checks restart and big-field final timestamps exactly
+against the diagnostic timestamp. It remains the specific Nm96/Nl32/Nz96/ky.55
+probe, not a general-purpose solver. Run the full file/hash audit first.
+Old copies inside the prior scratch still have historical hard-coded paths;
+the UPDATED scripts are in new-root `/home/rjorge/gx-damping-coverage-20260905.8w5DhH`.
+
+After7690 finishes, use officevenv-python new-root/audit-refined-gx.py with
+--root new-root/r0_validation/refined --stem salpha_nl32_nm96_t300
+--binary new-root/gx
+--binary-sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+--input-sha256 fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df
+--gkx-csv /home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined/salpha_rate50_nl32_nm96_t300_dt_half.csv.
+That last path is the archived matched GKX CSV, not a selection of old GX data.
+Then run the new-root RHS script from campaign cwd with usual PYTHONPATH=src,
+GX_PARITY_REF_DIR=campaign/matched_refs,JAX_ENABLE_X64=true and an available GPU,
+passing the corrected --root/--stem. Do not run against unfinished outputs.
+
+| Local recent scratch artifact | SHA256 |
+|---|---|
+| audit-refined-gx.py | f183e3a6196a68fb758e3a8ab29752508bce5b45fafe8860dd5aa68201e9147e |
+| audit-gx-final-state-rhs.py | bea3efc8422fa2f83d4951eac5e31acd1283cee3fb64663fc7eefb9969d0c2c5 |
+| audit-old-reference-explicit.log | 81f948e94c135aa5773c7fc243257083737b6021f35586189b8d9daf54fc6ef4 |
+| audit-live-reference-rejected.log | 3d0e8c4c01051c15e078ab097e51678196125a11aba7cecc3f0933c6579be7e0 |
+| audit-wrong-binary-rejected.log | 22b06f948e06b36e76b88526b1ad887bd6ace2517a30d8e32f388f533568d0b2 |
+| audit-old-rhs-explicit.log | e093d5c61c21f29f8ddedf365d0eab9808ecd615a0e66ed49f70985b7ffc70d4 |
+
+No new repo source changes. Corrected GX7690 remains the only live research job;
+GPU0 free. Full R0–R9 goal remains active.
