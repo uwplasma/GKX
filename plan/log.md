@@ -8423,3 +8423,91 @@ Keep research-only scope, historical defect measurements labeled as historical,
 and audit interpolation/parameter derivatives after coefficient replacement.
 Check GX completion and current CI before starting more long jobs or pushing.
 Full goal active.
+
+## 2026-09-05 — Replace inaccurate coefficients; CPU/GPU and off-node checks
+
+Previous turn: progress (verified direct candidate generator). Revalidated
+cleanad47d3be and candidate checks before writing package data. New local
+commitb05b3949 replaces only the two NPZ/JSON pairs plus tests/docs/budget.
+Held one ahead of pushedad47d3be while CI33966229536 runs; last no failures.
+No merges, original checkout untouched. GX7690/PID1753613 verified RNl59m39s
+initially and1h07m32s during this turn; still live, no unfinished NetCDF read.
+
+Re-ran generator --check into package data for8 and18 moments, sessions28185/
+27944 both exit0. All four outputs are byte-identical to the audited final/
+candidates from the previous entry. Old arrays are recoverable at ad47d3be;
+do not conflate them with new measurements. Full-J0 polarization, moment/grid
+shapes, runtime formula and interpolation unchanged. Working precision15 and
+independent DK-reference precision60 are now correctly distinguished in provenance.
+
+Replaced test_finite_larmor_self_adjointness_breaks_at_first_order_in_b (a known
+legacy-defect regression) with both resolutions/all-node independent test-block
+and test-polarization quadrature, matrix symmetry, test NSD/field PSD/total NSD.
+This coefficient test does not claim an energy theorem for the coupled field
+map. Updated provenance expectations. Net Python test growth+1; source/tools
+unchanged. No new repo files. README and operator docs now label the old large
+errors and rank study as historical, retaining research-only scope.
+
+| Validation | Result |
+|---|---|
+| Full collision_physics.py, x64 | 90 pass,0 skip,17.082s;36255exit0 |
+| Operator kernels, `-k 'coulomb or collision'`, x64 | 33 pass,0 skip,19.567s;14511exit0 |
+| Both modules, expanded collision/oracle selection, f32-mode | 124 pass,0 skip,36.166s;27114exit0 |
+| Replay archived ad47d3be8/18 arrays against new coefficient gate | both rejected; negative-control scriptexit0 |
+| Strict Sphinx | final28810exit0 |
+| Ruff, diff-check, architecture | pass |
+
+Local artifacts are in `/tmp/gkx-collision-candidates-20260905.XqBQZb`;
+Python remains `/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`, PYTHONPATH=src.
+f32 selection was `collision or coulomb or finite_larmor or drift_kinetic or
+test_particle or field_particle_fourier`; NumPy oracle computations remain f64.
+replay-legacy-tables.py reads old binary blobs via git show ad47d3be, injects
+them only into the test loader and verifies both fail. It changes no repo files.
+
+**GPU control completed.** Fresh office scratch
+`/home/rjorge/gkx-collision-coefficients-20260905.yLNpmZ`, populated by
+`git archive b05b3949 pyproject.toml src tests tools | ssh office 'tar -x -C <root>'`.
+No existing campaign files overwritten. Preflight3195exit0 explicitly confirms
+JAX0.10.2 CudaDevice0/default_backend gpu, CUDA_VISIBLE_DEVICES=0. From that root:
+
+```
+CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src /usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python -m pytest tests/unit/operators/test_operator_kernels.py -q -k 'coulomb or collision' --junitxml=gpu-x64.xml >gpu-x64.log 2>gpu-x64-time.log
+```
+
+40475/PID1757924 terminalexit0,33 pass/0 skip in78.662s. Both remote NPZ hashes
+match the candidates exactly. Timing includes compilation and concurrent GX
+activity; not an isolated CPU/GPU performance comparison. GPU0 now free again.
+
+**Off-node physical derivative audit.** audit-interpolation.py31511exit0 and
+final74719exit0 use the actual runtime diagonal interpolator/JVP against
+quadrature at b=.00390625,.390625,7.0625 (midpoints in B² intervals0,5,12).
+Every JVP equals the declared analytic segment slope to1e-12. Independent
+central FD on physical quadrature uses h=min(1e-4,.05b), then h/2; maximum
+relative step-refinement difference3.94e-9. Quadratic test values match to
+2.42e-14 relative; test JVP differences from FD≤7.80e-12.
+
+Maximum sampled field/polarization value error1.87237%; maximum derivative
+error2.65782% (18-moment test-phi2 at b7.0625). At that high midpoint, field
+matrix derivative errors are2.18619%/1.74920% for8/18 moments. Thus accurate
+nodes do not prove accurate optimization derivatives between nodes. This is
+interpolation error, not a failure to differentiate the declared approximation;
+it is not a global bound and does not cover endpoints or arbitrary objectives.
+No tolerance was relaxed. Docs retain this explicit limit.
+
+| Artifact | SHA256 |
+|---|---|
+| promoted-physics-x64.xml | 89fad09c535747358fe96e71424688330aa77770973b056ed83c94233eeabfb8 |
+| promoted-operators-x64.xml | b700340f801c00f6545311d1d5fe9c100e0ba69185f48a539001e4a3a53d19ae |
+| promoted-f32mode.xml | ccdd09805fc0f662e889d51f18af098fc0db6c502cbf5b5646daca3416ccdb34 |
+| replay-legacy-tables.py | 263f1f1f9db9e4610bb51b0e1923455c2699c3f431e1a0dc50b8b00f351e224e |
+| replay-legacy-tables.log | f12f4e85880d1135395855ea89560ae92f2e59ba81b3ea5be3bba95c9f81db08 |
+| audit-interpolation.py (final slope assertion included) | 2706ff2e93b003b3717476f56153e293ab7ff9190b90ec3e89176cb9a1a62208 |
+| audit-interpolation-final.log | a1fe098fc9fd5c2eac9e7bc9cb389cdc8d3ce68d5da5e8d2c388cd1dfe0c5847 |
+| office-root/gpu-x64.xml | bbb24f6a6c4e1488371b981f3ca39e5abd50aba5e85e99dbe20da2d13f9272c9 |
+
+Next: after current CI finishes, push heldb05b3949; investigate failures if any.
+Measure grid refinement and off-midpoint/endpoint derivative holdouts, retaining
+convex matrix interpolation's dissipative signs and reporting memory/runtime
+cost before changing the grid. Separately continue finite-H/EM/multispecies and
+resolved transport validation. Only GX7690 is live; verify terminal success
+before using the explicit-path reference audits. Full goal remains active.

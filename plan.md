@@ -125,8 +125,9 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local/pushed **ad47d3be**
-(CI33964841954 at6d645f3f passed; new CI33966229536 pending), worktree
+`fix/r0-end-damping-rate`, local **b05b3949**, pushed **ad47d3be**
+(coefficient commit held for CI33966229536; last no failures;
+CI33964841954 at6d645f3f passed), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -455,11 +456,21 @@ Generator repairad47d3be is committed: direct equal-species diagonals, mandatory
 all-node quadrature refinement, full-J0 source, signed convention and honest
 float64 provenance. Final candidates are in
 `/tmp/gkx-collision-candidates-20260905.XqBQZb/final`; both pass independent
-DK and saved-file/all-node audits. Packaged data is NOT replaced yet.
-Next promote the two verified candidates in a separate coefficient commit;
-replace the legacy asymmetry-defect regression with physical symmetry/entropy
-and independent-coefficient gates, and update provenance expectations. Run the
-full collision suites and runtime interpolation/AD checks before pushing.
+DK and saved-file/all-node audits. **Local commitb05b3949 replaces packaged
+data**, exactly matching all four candidate files. Legacy arrays remain in
+ad47d3be history. New coefficient symmetry/entropy/reference gates reject both
+old archives. CPU:90 full physics and33 selected operator tests pass in x64;
+124 selected tests pass in f32 mode. GPU:33 selected operator tests pass at
+exact b05b3949 in isolated office root documented below. No runtime formulation
+or interpolation change; README/operator error tables now label legacy results.
+
+**Next:** refine the table-grid accuracy before optimization claims. Runtime
+JVPs equal declared segment slopes, but three sampled b-midpoints give up to
+1.87% value /2.66% physical-derivative error in field/polarization blocks;
+independent FD step refinement is below4e-9 relative. The quadratic test block
+is preserved to roundoff. Compare refined grids across every interval and
+off-midpoint holdouts; preserve entropy signs and measure table/runtime cost.
+The finite-source/H closure and predictive transport gates remain open.
 Record quadrature provenance (not fictional high-precision decimal digits),
 independently recheck all nodes, update coefficient regressions and audit the
 interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H
