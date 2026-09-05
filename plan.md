@@ -437,6 +437,11 @@ temporary bytes are not measured peak memory.
 
 First make provenance work for archive installs and separate warm traces from
 compilation. Do not call a cross-JAX-version CPU/GPU ratio a hardware-only speedup.
+Avoid duplicate validation trajectories: batch scans already retain phi/density
+histories but discard them after one fit. Add bounded multi-window fitting so
+full/half parity estimates can reuse one fixed-step trajectory. Preserve each
+window's sampling and mode extraction; verify against independent prefix runs
+before switching campaigns. A CPU prefix/cadence pilot passes exactly (log).
 
 Use a matched JAX/dependency environment when possible, with the existing dated
 profiles as a baseline, not a substitute for a full workload sweep. First profile

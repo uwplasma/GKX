@@ -6390,3 +6390,32 @@ reference settling must propagate into joint counts. Do not restart6455.
 Nl32 dt-half73383/PID1729118 RNl3m37s remains live onGPU1. Resume these two new
 current handles; both GPUs occupied so two-GPU AD remains pending. No source
 changes, snapshot overwrite or merge. Full scope active.
+
+## 2026-09-05 — Measured route to removing duplicate half-horizon solves
+
+Previous turn progressed with reference completion and matched kinetic launch.
+Re-read authoritative checkpoint/clean worktrees: plan4d81887b, codebb9dcbfc;
+both new GPU jobs verified live. No CI202 failures in query; not full completion.
+
+Performance source audit: orchestration_scan._run_batch_diagnostics retains
+phi/density histories, but run_runtime_scan_batch fits once and drops them.
+Parity tool then independently integrates T/2:1.5T total step work. A bounded
+multi-window fit can potentially reduce this toT without changing dynamics.
+API work must avoid exporting large state histories or monkeypatching internals.
+
+Executed CPU/x64/JAX0.11.1 pilot using actual imported s-alpha geometry, one
+selected ky, Nl4/Nm8, Gaussian l0m0 complex128 seed, runtime params/terms,
+integrate_linear_diagnostics RK4dt.001. Runs(steps,stride)=(100,5),(100,10),(50,5).
+For both phi and density,20sample full history finite; prefix versus separate
+50step run max error0, full[1::2] versus stride10 history max error0.
+Session75990 exit0. This is one fixed-step CPU case, not general CPU/GPU proof.
+
+Next implementation acceptance: shared trajectory with cadence divisible into
+both original cadences; slice history BEFORE window-specific project/auto mode
+selection, reproduce both fits versus independent runs, test odd horizons and
+nondividing requested strides, record whole-workflow timing and bounded memory.
+Step-count saving is potentially one third, not a measured wall-time speedup.
+Do not replace current running reporter mid-campaign. Added this scoped R3 task.
+
+Latest live handles: dt-control73383/PID1729118 RNl6m48s; kinetic40474/PID1729837
+RNl3m12s. Resume these, no restart. No source edits or merges; full scope active.
