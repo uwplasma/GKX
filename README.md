@@ -454,9 +454,10 @@ and holdout gates: [quasilinear](docs/quasilinear.rst).
 
 Collision evidence covers tested like-species drift-kinetic matrices and cached
 runtime algebra; finite-wavelength physical identities remain unverified.
-The shipped finite-wavelength test-particle blocks fail independent quadrature:
-errors at Bessel arguments 1/4 are 22.9%/84.1% (8 moments) and 13.0%/64.2%
-(18 moments). Do not use them for predictive transport until repaired and converged.
+The 8/18-moment finite-wavelength coefficients now pass independent quadrature
+and drift-kinetic checks, replacing tables with large finite-wavelength errors.
+They remain research-only: interpolation/derivative convergence, finite-basis
+field consistency and resolved transport benchmarks are still required.
 High-order GX comparisons are also provisional: the inspected reference's linked
 end-damping kernel omits indices above its 65,535 launch limit. An isolated
 coverage repair passes kernel tests; corrected reference solves are pending.

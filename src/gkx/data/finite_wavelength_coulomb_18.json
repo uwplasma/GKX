@@ -17,16 +17,44 @@
     4.0
   ],
   "claim_scope": "research_like_species_finite_larmor_coulomb",
+  "comparison_nodes": {
+    "field": [
+      64,
+      48,
+      48
+    ],
+    "test": [
+      96,
+      48
+    ]
+  },
+  "drift_kinetic_check_passed": true,
   "dtype": "float64",
   "equations": "3.47-3.50",
+  "generation_method": "like_species_dirichlet_fourier_quadrature",
   "kind": "gkx_finite_wavelength_coulomb_coefficients",
   "laguerre_convention": "gkx_signed_runtime",
   "mass_ratio": 1.0,
   "maximum_hermite_order": 5,
   "maximum_laguerre_order": 2,
   "moment_order": "hermite_major_index=p*(J+1)+j",
-  "precision_decimal_digits": 60,
-  "sha256": "19fc558f024f101d4043edc110ab9baf9c30540f2bcd6ef490326515c1e6b2ea",
+  "polarization_source": "full_J0_not_truncated_H",
+  "precision_decimal_digits": 15,
+  "quadrature_atol": 1e-12,
+  "quadrature_nodes": {
+    "field": [
+      96,
+      64,
+      64
+    ],
+    "test": [
+      192,
+      64
+    ]
+  },
+  "quadrature_rtol": 1e-10,
+  "reference_decimal_digits": 60,
+  "sha256": "fb282d85656a1186023b9500b1108c15f11386878f5241b01ed1a6428aa7f65b",
   "shapes": {
     "field_matrix": [
       14,

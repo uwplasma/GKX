@@ -503,31 +503,28 @@ def test_drift_kinetic_operators_are_self_adjoint(model: str) -> None:
     assert asymmetry < conservation_tolerance(), f"{model}: {asymmetry:.3e}"
 
 
-def test_finite_larmor_self_adjointness_breaks_at_first_order_in_b() -> None:
-    """Regress stored-table asymmetry scaling; not a self-adjointness proof.
-
-    A physical metric and the g/h/field mapping must be derived independently
-    before interpreting this measured defect as an admissible property.
-    """
-
-    _, metadata = _finite_wavelength_coulomb_bundle()
-    grid = np.asarray(metadata["bessel_argument_grid"], dtype=float)
-
-    zero = finite_wavelength_matrix(0)
-    assert (
-        np.abs(zero - zero.T).max() / np.abs(zero).max() < conservation_tolerance()
-    ), "the drift-kinetic limit must stay self-adjoint"
-
-    small = (grid > 0.0) & (grid <= 0.5)
-    asymmetry = np.array(
-        [
-            np.abs((matrix := finite_wavelength_matrix(index)) - matrix.T).max()
-            for index in np.flatnonzero(small)
-        ]
-    )
-    assert np.all(asymmetry > 0.0)
-    exponent = float(np.polyfit(np.log(grid[small]), np.log(asymmetry), 1)[0])
-    assert 1.8 <= exponent <= 2.3, f"asymmetry scales as B^{exponent:.3f}, not B^2"
+@pytest.mark.parametrize("moments,pmax,jmax", [(8, 3, 1), (18, 5, 2)])
+def test_finite_larmor_tables_match_dirichlet_form_and_entropy(moments, pmax, jmax):
+    """Coefficient gate, not an entropy proof for the coupled runtime field map."""
+    arrays, _ = _finite_wavelength_coulomb_bundle(moments)
+    signs = np.tile((-1.0) ** np.arange(jmax + 1), pmax + 1)
+    convention = signs[:, None] * signs
+    c0, d = like_species_test_particle_gram_matrices(pmax, jmax)
+    for index, b in enumerate(arrays["bessel_argument_grid"]):
+        test = arrays["test_matrix"][index] * convention
+        field = arrays["field_matrix"][index] * convention
+        np.testing.assert_allclose(test, c0 - b * b * d, rtol=1e-11, atol=1e-12)
+        for matrix in (test, field):
+            np.testing.assert_allclose(matrix, matrix.T, rtol=0, atol=1e-12)
+        assert np.linalg.eigvalsh(test)[-1] <= 1e-12
+        assert np.linalg.eigvalsh(field)[0] >= -1e-12
+        assert np.linalg.eigvalsh(test + field)[-1] <= 1e-12
+        np.testing.assert_allclose(
+            arrays["test_phi2"][index] * signs,
+            like_species_test_particle_polarization(pmax, jmax, float(b)),
+            rtol=1e-11,
+            atol=1e-12,
+        )
 
 
 def test_finite_larmor_coulomb_conserves_invariants_at_zero_wavelength() -> None:

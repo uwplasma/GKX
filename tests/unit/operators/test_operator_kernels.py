@@ -1327,8 +1327,8 @@ def test_collision_operator_from_config_selects_validates_and_stays_dissipative(
 
 
 def test_finite_wavelength_coulomb_tables_load_with_provenance() -> None:
-    # The shipped gyrokinetic Coulomb tables are checksummed multiprecision
-    # output; the loader must verify provenance and expose a usable grid.
+    # The shipped coefficients are refined float64 quadrature, independently
+    # checked against a multiprecision DK reference, not multiprecision output.
     from gkx.operators.linear.collision_tables import (
         _finite_wavelength_coulomb_bundle,
         finite_wavelength_coulomb_metadata,
@@ -1339,7 +1339,11 @@ def test_finite_wavelength_coulomb_tables_load_with_provenance() -> None:
     assert "2104.11480" in metadata["source"]
     assert metadata["equations"] == "3.47-3.50"
     assert metadata["mass_ratio"] == 1.0 and metadata["temperature_ratio"] == 1.0
-    assert int(metadata["precision_decimal_digits"]) >= 40
+    assert metadata["precision_decimal_digits"] == 15
+    assert metadata["reference_decimal_digits"] >= 40
+    assert metadata["drift_kinetic_check_passed"] is True
+    assert metadata["generation_method"] == "like_species_dirichlet_fourier_quadrature"
+    assert metadata["polarization_source"] == "full_J0_not_truncated_H"
 
     arrays, _ = _finite_wavelength_coulomb_bundle()
     grid = np.asarray(arrays["bessel_argument_grid"])

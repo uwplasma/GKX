@@ -305,8 +305,8 @@ an adjoint-pair projection preserves that property. Derive the metric and
 ``g``/``h``/field-response mapping of the stored matrix before accepting its
 observed asymmetry. A wrong assembly can also produce an order-:math:`b` defect.
 
-The solved potential alone cannot restore Euclidean symmetry of the shipped
-matrix. For one species, write the runtime action as
+The solved potential alone could not restore Euclidean symmetry of the legacy
+matrix (before the quadrature replacement). For one species, write the runtime action as
 :math:`C G+p\phi`, with :math:`\phi=r^T G`, and define
 :math:`P=I-pp^T/(p^Tp)`. Then
 
@@ -314,7 +314,7 @@ matrix. For one species, write the runtime action as
 
    P[(C+pr^T)-(C+pr^T)^T]P=P(C-C^T)P.
 
-At Bessel argument :math:`B=1`, the measured Frobenius norm on the right is
+At Bessel argument :math:`B=1`, the legacy measured Frobenius norm on the right was
 0.1543 (8 moments) and 0.4038 (18 moments), not roundoff. This rules out a
 scalar-potential correction as the sole explanation in the Euclidean metric;
 it does not establish the physical metric or identify the faulty coefficient.
@@ -351,9 +351,9 @@ Gauss--Laguerre quadrature in :math:`r^2` (48/96/192 nodes) and 32-point
 Gauss--Legendre quadrature in :math:`\xi` give stable eight-moment results.
 The :math:`B=0` test matrix matches the shipped matrix within
 :math:`6.1\times10^{-15}` relative Frobenius norm, without fitted normalization.
-At :math:`B=1,4`, the shipped test blocks differ by 22.9% and 84.1%.
+At :math:`B=1,4`, the legacy test blocks differed by 22.9% and 84.1%.
 The refined spherical13/radial12/Bessel24 generator agrees at :math:`B=1`
-within :math:`2.55\times10^{-9}`. This diagnoses a shipped-table limitation;
+within :math:`2.55\times10^{-9}`. This diagnosed a legacy table limitation;
 it does not validate the field-particle/polarization blocks or transport.
 In particular, symmetry restored by radial refinement is not sufficient.
 
@@ -362,10 +362,10 @@ The offline ``like_species_test_particle_gram_matrices`` reference in
 :math:`C_0,D` with :math:`C^T(B)=C_0-B^2D`. Weighted Gram products preserve
 the dissipative signs without numerical symmetrization. Quadrature ladders pass
 for 8, 18 and 32 moments; independent drift-kinetic coefficients are checked for
-8 and 18. The shipped 18-moment test block also fails the finite-wavelength
+8 and 18. The legacy 18-moment test block also failed the finite-wavelength
 comparison: 13.0% at :math:`B=1`, 64.2% at :math:`B=4`.
-This oracle is not wired into runtime table application; the field and
-polarization terms must be validated before replacing a complete operator.
+This offline oracle generates coefficients; runtime application still uses only
+the tables. The field and polarization references below complete the replacement.
 
 The same Dirichlet form gives an independent test-particle polarization check.
 From Frei2021 Eq45/47c, replace the source basis function by
@@ -382,7 +382,7 @@ term vanishes. Checks: 96/192 radial and 48/64 pitch nodes; the independently
 resolved source :math:`u=\sum_j e^{-B^2/4}(B^2/4)^j L_j/j!`; and
 :math:`p^T_{\phi2}/B^2\to C_0[:,1]/4-D[:,0]` as :math:`B\to0`.
 
-.. list-table:: Shipped test-polarization relative vector errors
+.. list-table:: Legacy test-polarization relative vector errors
    :header-rows: 1
 
    * - Moments
@@ -397,8 +397,8 @@ resolved source :math:`u=\sum_j e^{-B^2/4}(B^2/4)^j L_j/j!`; and
 
 The refined eight-moment spherical13/radial12/Bessel24 generator agrees at
 :math:`B=1` within :math:`1.51\times10^{-11}`. This is a separate coefficient
-defect from interpolation. No shipped coefficients are replaced by this oracle;
-the coupled collision/field map remains unvalidated.
+defect from interpolation. The independent test and field references now supply
+the replacement tables; the coupled collision/field map remains a separate gate.
 
 Independent field-particle quadrature
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -441,7 +441,7 @@ Frobenius error; the :math:`B=1` field-polarization vector agrees to
 of shipped tables, unlike-species collisions or the runtime field coupling.
 
 The independent references pass node refinement at all 14 shipped wavelengths
-for both moment counts. Relative errors in the shipped field blocks are:
+for both moment counts. Relative errors in the legacy field blocks were:
 
 .. list-table:: Field matrix / field-polarization vector errors
    :header-rows: 1
@@ -481,15 +481,16 @@ applies :math:`C_NG+p\phi`. At :math:`B=4`, the relative source difference
 is 51.7% / 41.8% for 8 / 18 moments, even with converged coefficients.
 These sampled maps remain dissipative in the candidate metric, but are not
 exactly self-adjoint in it. Resolve the finite-basis/field closure contract and
-its convergence before replacing coefficients. Do not discard polarization,
+its convergence before claiming predictive physics. The coefficient replacement
+preserves the existing full-source contract. Do not discard polarization,
 symmetrize the operator, or infer a general electromagnetic energy law from
 this restricted electrostatic calculation.
 
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
 
-Finite-Larmor tables ship at 8 and 18 Hermite-Laguerre moments, generated in
-60-digit arithmetic on a 14-point Bessel-argument grid
+Finite-Larmor tables ship at 8 and 18 Hermite-Laguerre moments, generated by
+independently checked float64 quadrature on a 14-point Bessel-argument grid
 :math:`B = k_\perp v_{\mathrm{th}}/\Omega \in [0, 4]` and stored as
 checksummed float64. Like-species Coulomb/Sugama paths interpolate in
 :math:`B^2=2b` directly, preserving quadratic limits without differentiating a
@@ -497,7 +498,20 @@ square root at zero. They use interior one-sided derivatives at table endpoints;
 values outside the interval remain clamped. The generic B-linear and full-pair
 interpolators are unchanged, so their off-node approximations differ.
 The table matching ``Nl*Nm`` is selected automatically. This interpolation repair
-does not correct the independently measured coefficient/truncation errors above.
+is separate from the coefficient repair: the historical errors above belong to
+the replaced tables. Both replacements pass all-node quadrature refinement,
+signed-convention, matrix symmetry/entropy and independent drift-kinetic checks.
+No finite-H closure, grid range or interpolation formula changes with the data.
+
+Off-node accuracy is a separate limit. At three interval midpoints in :math:`b`
+(0.00390625, 0.390625, 7.0625), the quadratic test block is reproduced to
+roundoff. Across the sampled 8/18-moment field/polarization blocks, maximum
+relative value and physical-derivative errors are 1.87% and 2.66%.
+The comparison uses runtime JVPs versus independently refined finite differences
+of the quadrature oracle (difference-of-differences below :math:`4\times10^{-9}`
+relative). This is table interpolation error, not a JAX differentiation defect
+or a full-grid error bound. Refine the table grid before making optimization
+gradient-accuracy claims; no tolerance has been relaxed to hide this discrepancy.
 
 Cost and the resolution ceiling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -528,9 +542,9 @@ bounds the reachable resolution. Extrapolating the per-point matrices to a
 ``(16, 8)`` and 275 GB at ``(32, 16)`` -- so the published convergence
 resolutions are not reachable in this form on a 16 GB card.
 
-A rank-:math:`R` separable factorization in the Bessel argument is the obvious
-candidate, and the tables do support it: the :math:`B` dependence is smooth, and
-:math:`R=10` reconstructs both shipped resolutions to about :math:`10^{-6}`.
+A rank-:math:`R` separable factorization in the Bessel argument is a candidate:
+in the legacy table study, :math:`R=10` reconstructed both resolutions to about
+:math:`10^{-6}`. Rebenchmark the corrected coefficients before selecting a rank.
 A direct micro-benchmark of the naive form was not an unambiguous win, however
 -- it traded roughly four times the arithmetic for the lower memory traffic, and
 the compiler already fuses part of the interpolation -- so this is recorded as a
@@ -553,8 +567,9 @@ the package before reviewing a replacement::
 ``--digits`` controls only the optional independent drift-kinetic check;
 coefficient generation is float64 quadrature with recorded node counts, not
 60-digit arithmetic. ``--workers`` is retained for command compatibility, but
-this streamed generator is serial. The currently packaged legacy coefficients
-have not yet been replaced by the independently checked candidates.
+this streamed generator is serial. The packaged replacements use the refined
+node counts recorded in their metadata, with an independent 60-digit DK check;
+that check precision is not the working precision of the quadrature.
 
 Claim boundary and extension plan
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

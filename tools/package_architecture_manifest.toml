@@ -947,7 +947,8 @@ recursive = true
 # +41: direct polarization/source-projection and quadratic-limit gates.
 # +86: independent field Fourier, polarization, entropy and node-refinement gates.
 # +82 net: candidate generator convention/provenance and pre-publication gates.
-baseline = 87263
+# +1 net: replace legacy defect regression with repaired coefficient physics gates.
+baseline = 87264
 target = 35000
 
 [[line_budget_policy.counts]]
