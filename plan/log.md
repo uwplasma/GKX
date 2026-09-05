@@ -9113,3 +9113,48 @@ free, state/field VJPs and production contracts. Consider fused coefficient
 application/storage only when it preserves accuracy and dissipation evidence.
 Research-grade accuracy remains primary; do not choose a faster inaccurate
 interpolant. Both GX runs still live; no merges; full goal active.
+
+### 2026-09-05: interleaved timing does not reproduce large gradient gain
+
+Previous turn progress: measured initial dynamic-state costs and regressions.
+Code local48b90099/pushedf4d5d1b5 unchanged. CI33969411628 now in_progress,
+not terminal. GX1767040/1767078 revalidated RNl at20:16/20:14; do not restart.
+
+scaled-cost-interleaved.py in candidate rootXqBQZb repeats the same18-moment
+4096-point dynamic-state/field/wavenumber microbenchmark with nine batches of
+eleven synchronized warm calls per executable. Shuffle order of the four
+primal/gradient baseline/candidate executables each batch. Report median of
+batch medians, retain every batch value. Same JAX0111 CPU/dtypes/HIGHEST dot,
+nodal equivalence check and source conventions. No timing result is a confidence
+interval; batches on one machine are not independent hardware replications.
+
+| Precision | Baseline primal ms | Cubic primal ms | Baseline b-gradient ms | Cubic b-gradient ms |
+|---|---|---|---|---|
+| f32 | 3.349 | 4.004 | 13.229 | 14.188 |
+| f64 | 6.934 | 5.663 | 20.581 | 20.997 |
+
+Gradient batch ranges: f32 baseline10.55–17.74ms/candidate12.38–20.92ms;
+f64 baseline17.27–25.47ms/candidate19.23–26.39ms. Earlier single-batch large
+f64 gradient improvement is NOT reproduced. Order/platform variability remains
+substantial; do not selectively quote favorable timing or infer a thermal cause
+without measurements. Accuracy improvement survives independently, but speed
+advantage and f32-gradient regression magnitude remain unestablished.
+
+Additional dynamic linearity/AD checks: JVP in simultaneous g/phi scaling
+equals the output; reverse derivatives of squared output norm with respect to
+separate real g/phi amplitude scales match analytic linear contractions.
+f32 pullbacks[7592610,74473.3516] versus analytic[7592616.5,74473.375];
+f64[7650688.18100286,75768.5223984031] versus
+[7650688.181002895,75768.5223984030], rtol/atol2e-5 checks pass.
+These cover two real directions, not all state/field complex VJP directions or
+self-consistent-field derivatives. Full arbitrary-direction tests remain needed.
+
+Run87149 terminalexit0. Reproduce PYTHONPATH=src:tools/artifacts local Python
+scaled-cost-interleaved.py from code worktree. Builder dependency retained.
+Script SHA2564cf17608ece99b5ccf1a3ae5d620082c78e7d811b1c1f4ade61bfb0d9c01bfa9;
+log69804d9fa17c491dcea26c921ed8dbfb0e69e5337b3ba88bec71a32f8438fd9d.
+
+Next: measure generated contraction/gather costs or a memory-fused candidate,
+GPU after controls finish, arbitrary-direction state/field AD, and narrow scalar
+density limit in f32. Avoid spending implementation complexity on noisy timing
+differences. Production promotion still requires all scientific gates. Goal active.

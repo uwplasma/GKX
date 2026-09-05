@@ -534,6 +534,9 @@ First dynamic-state CPU microbenchmark has mixed performance: at4096 points,
 f64 primal/gradient improve5.37→3.18ms and25.77→9.79ms, but f32 gradient worsens
 5.78→8.93ms. Coefficient storage grows80,752→569,512bytes in f64. No universal
 speedup or end-to-end claim; repeat with controlled timing and GPU before selection.
+Interleaved repeats do NOT reproduce the large gradient gain: medians at4096
+points are13.23→14.19ms (f32),20.58→21.00ms (f64), with broad batch variation.
+Treat performance as unresolved; the initial single-batch result is not a speed claim.
 Record quadrature provenance (not fictional high-precision decimal digits),
 independently recheck all nodes, update coefficient regressions and audit the
 interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H
