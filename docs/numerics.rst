@@ -167,6 +167,21 @@ For scan workloads, the default path is the custom fixed-step ``imex2``
 owner. This keeps stepping shape-stable and improves throughput for multi-ky
 scans.
 
+The current diagonal ``imex2`` update is **not uniformly second order**.
+For :math:`\dot u=(a-d)u`, where :math:`d\geq0` is the implicit diagonal
+damping and :math:`a` the remaining explicit coefficient, its amplification is
+
+.. math::
+
+   R(h)=\frac{1+h a\,(1+h a/2)/(1+h d/2)}{1+h d}.
+
+Pure damping (:math:`a=0`) gives backward Euler, :math:`R=(1+hd)^{-1}`,
+with first-order global error. An undamped oscillation (:math:`d=0,a=i\omega`)
+gives explicit midpoint, with :math:`|R|^2=1+(h\omega)^4/4>1`.
+Do not infer oscillatory stability from the method name. Refine the timestep
+at each velocity/spatial resolution and compare another integrator before
+promoting a scan; artificial damping can conceal amplification error.
+
 Nonlinear FFT bracket
 ---------------------
 
