@@ -7720,3 +7720,38 @@ jax.config.x64_enabled=False, ky/z float32 and one visible CUDA device. Main
 solver PID1748122 independently verified after launch; no duplicate process.
 Both GPUs now occupied. Inspect terminal handles/results before further runs.
 No code changes or merges this turn. Full R0–R9 goal remains active.
+
+## 2026-09-05 — Finer field angular rung and polarization assembly identity
+
+Previous turn: progress (independent energy-fit evidence and matched precision
+control). Live processes revalidated; no restarts. CI33961508920 now has only
+nonlinear-core pending, no failures. Localb7cd526e still held one ahead of2c440b0e.
+
+B4 fixedP3J1/R32/K48/digits50 spherical19 rung completed during the continuing
+12758 process: test-block Gram relative error .0002611458315650394; field norm
+2.697143456494279; asymmetry3.749160853593214e-15; field successive relative
+change6.004033774502048e-7;815.136456s. Spherical21 remains pending. Saved
+collision-b4-s19-r32-k48.npz SHA256
+7607cfa5e7e96480b4d52721ea2cdfc42d3660f11951111fd388f9de87ddefda.
+The test error remains much larger than the field's successive change; preserve
+separate block-specific accuracy claims and do not promote by symmetry alone.
+
+Started an additional B1 field-polarization assembly-identity control:
+**45346/PID62787**, local recent scratch/collision-field-source-ladder.py,
+SHA256e73cfd09e0b03c8f4c70bd977f0d5535a82fa883ac7b9d2c6e254a21357728e3.
+PYTHONPATH=src:tools/artifacts local-JAX0111-python, cwd code worktree; output
+collision-field-source-ladder.log. No existing source or results overwritten.
+FixedS13/R12/K24/digits40, source Hermite maximum3 and Laguerre maxima3/5/7,
+float64_final_contraction=True. Apply each generated test/field matrix to the
+known J0 Laguerre coefficients, then retain only P3J1 outputs and compare with
+the separately assembled vectors in collision-polarization-b1-s13-r12-k24.npz.
+Saves each projected pair as collision-b1-source-j{jmax}-s13-r12-k24.npz.
+This resolves source truncation independently of the retained output moments.
+Both assembly routes share speed coefficients: this is a structural identity
+check, not independent physical validation of the field-particle kernel. The
+test-particle vector already has a separate differential-form reference.
+
+Latest processes: field12758/PID58452 Rs15m05s; source45346/PID62787 Rs38s;
+officeNm16011457/PID1744614 RNl44m56s; officef32Nm9672033/PID1748122 RNl3m56s.
+Four live jobs; no new repo source edits, no merges. Continue these controls,
+collect and audit terminal results before choosing any subsequent scans.
