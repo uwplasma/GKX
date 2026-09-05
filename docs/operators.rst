@@ -267,8 +267,10 @@ the couplings between different Laguerre parities and leaves same-parity entries
 alone, which makes the comparison a check on the convention as well as on the
 values.
 
-The properties a linearized collision operator must satisfy are gated
-numerically in ``tests/validation/physics_gates/test_collision_physics.py``:
+The following scoped checks live in
+``tests/validation/physics_gates/test_collision_physics.py``. Conservation,
+entropy and symmetry results below concern the tested like-species
+**drift-kinetic** matrices, not all finite-wavelength/species combinations:
 
 .. list-table::
    :header-rows: 1
@@ -295,21 +297,264 @@ Hermite-major index :math:`p(J+1)+j` they are :math:`e_0` (density), :math:`e_2`
 (parallel momentum), and :math:`e_1 + e_4/\sqrt{2}` (energy), the last read off
 the exact null space rather than assumed.
 
-The finite-Larmor operator acts on *gyrocenter* moments, whose conservation and
-plain self-adjointness are modified by gyroaveraging, so the ordering is the
-test: both defects must vanish at :math:`b=0` and enter at first order in
-:math:`b = B^2/2`. A kernel assembled at the wrong order would show
-:math:`B^{1}` or :math:`B^{4}` instead.
+Finite-Larmor defect exponents are regression measurements, not proofs of
+conservation or self-adjointness. The gyroaverage and its adjoint must be
+treated consistently; see `Frei et al., sections 3.1–3.2
+<https://arxiv.org/html/2104.11480>`_. For a self-adjoint particle operator,
+an adjoint-pair projection preserves that property. Derive the metric and
+``g``/``h``/field-response mapping of the stored matrix before accepting its
+observed asymmetry. A wrong assembly can also produce an order-:math:`b` defect.
+
+The solved potential alone could not restore Euclidean symmetry of the legacy
+matrix (before the quadrature replacement). For one species, write the runtime action as
+:math:`C G+p\phi`, with :math:`\phi=r^T G`, and define
+:math:`P=I-pp^T/(p^Tp)`. Then
+
+.. math::
+
+   P[(C+pr^T)-(C+pr^T)^T]P=P(C-C^T)P.
+
+At Bessel argument :math:`B=1`, the legacy measured Frobenius norm on the right was
+0.1543 (8 moments) and 0.4038 (18 moments), not roundoff. This rules out a
+scalar-potential correction as the sole explanation in the Euclidean metric;
+it does not establish the physical metric or identify the faulty coefficient.
+The reproducible rank probe and hashes are in the
+`research logbook <https://github.com/uwplasma/GKX/pull/198>`_.
+
+An intermediate-basis ladder isolates a truncation contribution. At fixed
+8 output moments and :math:`B=1`, increasing the spherical radial cutoff from
+2 to 4 to 12 reduces :math:`\|C-C^T\|_F` from 0.1575 to
+0.000898 to :math:`2.02\times10^{-16}` (spherical cutoff 5).
+Nevertheless, spherical cutoffs :math:`5\to7\to9` at radial cutoff 12 change
+the matrix by 21.12% and 1.65% in relative Frobenius norm. Symmetry alone is
+therefore insufficient: converge radial, spherical, Bessel and output-moment
+truncations separately before regenerating or promoting these research tables.
+
+Independent test-particle quadrature
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For like species, the particle test operator's Dirichlet form and the Fourier
+gyrocentre pullback give, with normalized basis :math:`\psi_i(r,\xi)`,
+
+.. math::
+
+   C^T_{ij}(B)=-\left\langle
+   \nu_\parallel r^2\partial_r\psi_i\partial_r\psi_j
+   +\nu_D(1-\xi^2)\partial_\xi\psi_i\partial_\xi\psi_j
+   +\frac{B^2r^2}{2}[\nu_D(1+\xi^2)+\nu_\parallel(1-\xi^2)]\psi_i\psi_j
+   \right\rangle_M.
+
+Here :math:`r=v/v_T`, :math:`\xi=v_\parallel/v`, and the brackets use the
+normalized Maxwellian velocity measure. This independently derived expression
+uses the differential operator and pullback, not the spherical-moment generator.
+Gauss--Laguerre quadrature in :math:`r^2` (48/96/192 nodes) and 32-point
+Gauss--Legendre quadrature in :math:`\xi` give stable eight-moment results.
+The :math:`B=0` test matrix matches the shipped matrix within
+:math:`6.1\times10^{-15}` relative Frobenius norm, without fitted normalization.
+At :math:`B=1,4`, the legacy test blocks differed by 22.9% and 84.1%.
+The refined spherical13/radial12/Bessel24 generator agrees at :math:`B=1`
+within :math:`2.55\times10^{-9}`. This diagnosed a legacy table limitation;
+it does not validate the field-particle/polarization blocks or transport.
+In particular, symmetry restored by radial refinement is not sufficient.
+
+The offline ``like_species_test_particle_gram_matrices`` reference in
+``tools/artifacts/build_linear_validation_artifacts.py`` returns
+:math:`C_0,D` with :math:`C^T(B)=C_0-B^2D`. Weighted Gram products preserve
+the dissipative signs without numerical symmetrization. Quadrature ladders pass
+for 8, 18 and 32 moments; independent drift-kinetic coefficients are checked for
+8 and 18. The legacy 18-moment test block also failed the finite-wavelength
+comparison: 13.0% at :math:`B=1`, 64.2% at :math:`B=4`.
+This offline oracle generates coefficients; runtime application still uses only
+the tables. The field and polarization references below complete the replacement.
+
+The same Dirichlet form gives an independent test-particle polarization check.
+From Frei2021 Eq45/47c, replace the source basis function by
+
+.. math::
+
+   u=J_0(B r\sqrt{1-\xi^2}),\qquad
+   u_r=-B\sqrt{1-\xi^2}J_1,\qquad
+   u_\xi=\frac{Br\xi}{\sqrt{1-\xi^2}}J_1.
+
+``like_species_test_particle_polarization`` returns :math:`p^T_{\phi2}`
+with :math:`q\phi/T` factored out. The equal-species test :math:`\phi1`
+term vanishes. Checks: 96/192 radial and 48/64 pitch nodes; the independently
+resolved source :math:`u=\sum_j e^{-B^2/4}(B^2/4)^j L_j/j!`; and
+:math:`p^T_{\phi2}/B^2\to C_0[:,1]/4-D[:,0]` as :math:`B\to0`.
+
+.. list-table:: Legacy test-polarization relative vector errors
+   :header-rows: 1
+
+   * - Moments
+     - :math:`B=1`
+     - :math:`B=4`
+   * - 8
+     - 3.7403%
+     - 95.7948%
+   * - 18
+     - 0.1736%
+     - 86.4026%
+
+The refined eight-moment spherical13/radial12/Bessel24 generator agrees at
+:math:`B=1` within :math:`1.51\times10^{-11}`. This is a separate coefficient
+defect from interpolation. The independent test and field references now supply
+the replacement tables; the coupled collision/field map remains a separate gate.
+
+Independent field-particle quadrature
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For equal species, Fourier-transform the Landau kernel rather than truncating
+its spherical expansion. With :math:`F_M=\pi^{-3/2}e^{-v^2}` and convention
+:math:`\widehat f(q)=\int e^{-iq\cdot v}f(v)\,dv`,
+
+.. math::
+
+   U(v)=\nabla\nabla|v|,\qquad
+   \widehat U(q)=8\pi\frac{qq^T}{|q|^4},\qquad
+   C^F_{ij}=\frac1{\pi^2}\int_0^\infty dr\int d\Omega\,
+   (n\cdot\widehat a_i)^*(n\cdot\widehat a_j),
+
+where :math:`q=rn`, :math:`a_i=F_M\nabla(e^{-iBv_x}\psi_i)`.
+The Hermite--Laguerre Fourier transform is analytic:
+
+.. math::
+
+   k=q+B e_x,\qquad
+   P_{pj}(k)=\frac{(-ik_z)^p}{\sqrt{2^p p!}}
+   \frac{[(k_x^2+k_y^2)/4]^j}{j!},\qquad
+   \widehat a_{pj}=i(2\nabla_k P_{pj}-B e_x P_{pj})e^{-k^2/4}.
+
+For the polarization source, replace :math:`P` by
+:math:`e^{-B^2/4}I_0(Bk_\perp/2)` and differentiate analytically.
+``like_species_field_particle_fourier`` returns :math:`C^F,p^F_{\phi2}`;
+the equal-species :math:`\phi1` term vanishes. Its positive-weight Gram sum
+streams radial nodes, avoiding a full moment-by-three-dimensional-grid array.
+This is an independent derivation of the equal-species Landau form underlying
+Frei2021, not an implementation of the paper's spherical coefficient assembly.
+
+Checks use separate radial/pitch/azimuthal refinement, drift-kinetic analytic
+coefficients, total-matrix entropy and the three drift-kinetic null modes.
+The eight-moment :math:`B=4` field matrix agrees with the independently refined
+spherical21/radial32/Bessel48 result to :math:`6.5\times10^{-10}` relative
+Frobenius error; the :math:`B=1` field-polarization vector agrees to
+:math:`6.5\times10^{-14}`. These are offline coefficient checks, not validation
+of shipped tables, unlike-species collisions or the runtime field coupling.
+
+The independent references pass node refinement at all 14 shipped wavelengths
+for both moment counts. Relative errors in the legacy field blocks were:
+
+.. list-table:: Field matrix / field-polarization vector errors
+   :header-rows: 1
+
+   * - Moments
+     - :math:`B=1`
+     - :math:`B=4`
+   * - 8
+     - 8.571% / 2.910%
+     - 66.594% / 83.349%
+   * - 18
+     - 5.610% / 0.0794%
+     - 46.435% / 69.940%
+
+The :math:`B=4` analytic field-polarization source agrees with its separately
+resolved Laguerre expansion to :math:`2.7\times10^{-15}` at source order24.
+This checks source assembly using the same Fourier kernel; it is not a second
+independent kernel validation. The two equal-species :math:`\phi1` arrays are
+exactly zero throughout the shipped grid.
+
+Projection consistency remains a separate gate. For one unit species,
+nonzonal electrostatics and :math:`\tau_e=1`, the implemented field reduction
+gives, with retained gyroaverage column :math:`s`,
+
+.. math::
+
+   d=2-s^Ts,\quad \phi=s^TG/d,\quad H=MG,\quad M=I+ss^T/d.
+
+A collision operator projected on this finite :math:`H` basis is
+:math:`L_N=C_NM`, so :math:`ML_N=MC_NM` is symmetric negative-semidefinite.
+This uses the retained-:math:`H` truncation/free-energy structure in
+`Mandell et al. (2017), Section 4 <https://arxiv.org/html/1708.04029#S4>`_;
+their model collision operator is not itself a validation of full Coulomb terms.
+The independently resolved infinite :math:`J_0` source instead supplies
+:math:`p=P_NC J_0`, which need not equal :math:`C_Ns`; the present table route
+applies :math:`C_NG+p\phi`. At :math:`B=4`, the relative source difference
+is 51.7% / 41.8% for 8 / 18 moments, even with converged coefficients.
+These sampled maps remain dissipative in the candidate metric, but are not
+exactly self-adjoint in it. Resolve the finite-basis/field closure contract and
+its convergence before claiming predictive physics. The coefficient replacement
+preserves the existing full-source contract. Do not discard polarization,
+symmetrize the operator, or infer a general electromagnetic energy law from
+this restricted electrostatic calculation.
 
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
 
-Finite-Larmor tables ship at 8 and 18 Hermite-Laguerre moments, generated in
-60-digit arithmetic on a 14-point Bessel-argument grid
+Finite-Larmor tables ship at 8 and 18 Hermite-Laguerre moments, generated by
+independently checked float64 quadrature on a 14-point Bessel-argument grid
 :math:`B = k_\perp v_{\mathrm{th}}/\Omega \in [0, 4]` and stored as
-checksummed float64. The runtime interpolates at :math:`B=\sqrt{2b}` from the
-cached :math:`b`, so one table covers every perpendicular wavenumber, and it
-selects the table matching the run's ``Nl*Nm`` automatically.
+checksummed float64. Like-species Coulomb/Sugama paths interpolate in
+:math:`B^2=2b` directly, preserving quadratic limits without differentiating a
+square root at zero. They use interior one-sided derivatives at table endpoints;
+values outside the interval remain clamped. The generic B-linear and full-pair
+interpolators are unchanged, so their off-node approximations differ.
+The table matching ``Nl*Nm`` is selected automatically. This interpolation repair
+is separate from the coefficient repair: the historical errors above belong to
+the replaced tables. Both replacements pass all-node quadrature refinement,
+signed-convention, matrix symmetry/entropy and independent drift-kinetic checks.
+No finite-H closure, grid range or interpolation formula changes with the data.
+
+Off-node accuracy is a separate limit. At three interval midpoints in :math:`b`
+(0.00390625, 0.390625, 7.0625), the quadratic test block is reproduced to
+roundoff. Across the sampled 8/18-moment field/polarization blocks, maximum
+relative value and physical-derivative errors are 1.87% and 2.66%.
+The comparison uses runtime JVPs versus independently refined finite differences
+of the quadrature oracle (difference-of-differences below :math:`4\times10^{-9}`
+relative). This is table interpolation error, not a JAX differentiation defect
+or a full-grid error bound. Refine the table grid before making optimization
+gradient-accuracy claims; no tolerance has been relaxed to hide this discrepancy.
+
+A wider holdout study samples three fractions (0.2113, 0.5, 0.7887) in every
+interval plus both endpoints. Bisecting each interval in :math:`b=B^2/2`
+improves values faster than piecewise-constant derivatives:
+
+.. list-table:: Maximum sampled value / derivative relative errors
+   :header-rows: 1
+
+   * - Grid nodes
+     - 8 moments
+     - 18 moments
+   * - 14
+     - 2.87% / 71.86%
+     - 2.82% / 50.84%
+   * - 27
+     - 0.97% / 32.49%
+     - 0.95% / 23.93%
+   * - 53
+     - 0.287% / 15.67%
+     - 0.280% / 11.16%
+
+These are mathematical interpolation holdouts, not transport errors or uniform
+bounds. Independent physical finite-difference refinement changes the reference
+derivatives by less than :math:`10^{-8}` relative.
+
+Whole-block norms also hide cancellation-sensitive limits. Fourier integration
+over radial wavenumber gives the stable equal-species density Dirichlet entry
+
+.. math::
+
+   C_{00}(b)=2\sqrt{2/\pi}\,b\int_{-1}^{1}x^2
+   [e^{-b(1-x^2)}-1]\,dx
+   =-\frac{8}{15}\sqrt{2/\pi}\,b^2+O(b^3).
+
+Here :math:`x` is the Fourier-direction cosine along the perpendicular wavevector;
+the collision rate is unity and no solved-field contribution is included.
+Use ``expm1`` to evaluate this expression near zero. A 64/128-point Legendre
+check agrees to :math:`10^{-12}` relative without subtracting large test/field
+terms. Linear interpolation instead produces :math:`C_{00}=O(b)` in its first
+interval: at :math:`b=10^{-6}`, its value/derivative ratios to the analytic
+reference are about 7795/3898. This is a coefficient-level long-wavelength
+defect, not an observed transport instability. Any replacement must preserve
+the limiting powers and dissipative signs, not merely reduce a global norm.
 
 Cost and the resolution ceiling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -340,9 +585,9 @@ bounds the reachable resolution. Extrapolating the per-point matrices to a
 ``(16, 8)`` and 275 GB at ``(32, 16)`` -- so the published convergence
 resolutions are not reachable in this form on a 16 GB card.
 
-A rank-:math:`R` separable factorization in the Bessel argument is the obvious
-candidate, and the tables do support it: the :math:`B` dependence is smooth, and
-:math:`R=10` reconstructs both shipped resolutions to about :math:`10^{-6}`.
+A rank-:math:`R` separable factorization in the Bessel argument is a candidate:
+in the legacy table study, :math:`R=10` reconstructed both resolutions to about
+:math:`10^{-6}`. Rebenchmark the corrected coefficients before selecting a rank.
 A direct micro-benchmark of the naive form was not an unambiguous win, however
 -- it traded roughly four times the arithmetic for the lower memory traffic, and
 the compiler already fuses part of the interpolation -- so this is recorded as a
@@ -352,11 +597,22 @@ current cost so a structural regression is caught.
 
 Published convergence studies ask for considerably more than eight moments --
 (16,8) for linear Cyclone-base-case ITG and (32,16) for the converged case -- so
-resolution should be scanned rather than assumed. Generate further resolutions
-with::
+resolution should be scanned rather than assumed. The like-species generator
+now uses independent Dirichlet/Fourier quadrature, checks refinement at every
+wavelength, and preserves the full :math:`J_0` polarization source. It does not
+construct unreachable off-diagonal wavelength pairs. Generate candidates outside
+the package before reviewing a replacement::
 
     python tools/artifacts/build_finite_wavelength_coulomb_data.py \
-        --hermite 7 --laguerre 3 --digits 60 --workers 24 --check
+        --hermite 7 --laguerre 3 --digits 60 --check \
+        --output-dir /tmp/gkx-coulomb-candidate
+
+``--digits`` controls only the optional independent drift-kinetic check;
+coefficient generation is float64 quadrature with recorded node counts, not
+60-digit arithmetic. ``--workers`` is retained for command compatibility, but
+this streamed generator is serial. The packaged replacements use the refined
+node counts recorded in their metadata, with an independent 60-digit DK check;
+that check precision is not the working precision of the quadrature.
 
 Claim boundary and extension plan
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1150,8 +1406,32 @@ optional :math:`|k_z|`-scaled branch:
 .. math::
 
    \mathcal{R}_{hyper}^{|k_z|}
-   \propto
-   -w_{hyper}\,\nu_{k_z}\,|k_z|\,m^{p_m}\,G.
+   = -2.3\,w_{hyper}\,\nu_{k_z}\,\nu_m
+     \frac{p_m+1/2}{\sqrt{M}}
+     \mathcal{D}_{|k_z|}\!\left[
+       v_{th,s}|k_\parallel(z)|\,
+       \mathbf{1}_{m>2}\left(\frac{m}{M}\right)^{p_m}G
+     \right],\qquad M=\max(N_m-1,1).
+
+Here :math:`\nu_{k_z}` is ``hypercollisions_kz``, :math:`\nu_m` is
+``nu_hyper_m``, and :math:`\mathcal{D}_{|k_z|}` uses the configured parallel
+boundary operator. The coefficient is inside that operator; spatially varying
+geometry cannot generally be commuted through it. Runtime defaults use
+:math:`p_m=\min(20,\max(\lfloor N_m/2\rfloor,1))`.
+
+The prefactor 2.3 matches the inspected GX implementation (commit3865a537,
+``src/linear.cu``); the `GX paper, equation (4.28)
+<https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA>`_
+uses 2.5. Code parity and paper-model reproduction are distinct targets: record
+the chosen coefficient and test regularization sensitivity, rather than silently
+changing it between resolutions.
+
+Increasing :math:`N_m` therefore changes the truncation **and** artificial
+damping at retained moments, even with unchanged input coefficients. At fixed
+:math:`p_m,m`, its coefficient scales as :math:`M^{-p_m-1/2}`. A resolution
+study must converge the low moments/transport with this regularization, not
+equate finite temporal settling or cross-code agreement at one resolution with
+velocity-space convergence. Recheck timestep stability after refinement.
 
 Controls:
 
@@ -1186,21 +1466,107 @@ The field-line end damping is
 
 .. math::
 
-   \mathcal{R}_{end} = -w_{end}\,\frac{A_{end}}{\Delta t}\,d(z)\,H,
+   \mathcal{R}_{end} = -w_{end}\,\nu_{end}\,d(z)\,H,
 
-on linear integration routes supplying the instantaneous :math:`\Delta t`.
-For the isolated scalar equation with :math:`H=G`, an explicit RK step has
-amplification :math:`R(-w_{end}A_{end}d(z))`, where :math:`R` is its stability
-polynomial. Euler removes the fraction :math:`w_{end}A_{end}d(z)`;
-RK2 instead multiplies by :math:`1-a+a^2/2`, with
-:math:`a=w_{end}A_{end}d(z)`. Coupled fields and other terms further change
-the completed update. This is a per-step strength, not a universal removed fraction.
+where ``damp_ends_amp`` is :math:`\nu_{end}`, a fixed rate per normalized time
+on all solver routes. For the isolated scalar equation :math:`H=G`,
 
-RHS calls without a timestep, including the nonlinear RHS, instead use
-:math:`\mathcal{R}_{end}=-w_{end}A_{end}d(z)H`: amplitude is a rate on those
-routes. The mixed legacy contract is tracked in
-`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_. Do not interpret a
-legacy linear timestep scan as refinement of one fixed continuous operator.
+.. math::
+
+   G(T)=e^{-w_{end}\nu_{end}d(z)T}G(0),\qquad
+   \partial_{\nu_{end}}G(T)=-w_{end}d(z)T G(T).
+
+An explicit RK step multiplies by :math:`R(-\Delta t w_{end}\nu_{end}d(z))`.
+Refine the timestep with :math:`\nu_{end}` fixed; changing the rate during
+refinement changes the operator. Supplied-fields, nonlinear, eigenoperator,
+native, implicit and species-parallel routes share this contract.
+
+Migration from the mixed legacy model (`issue 194
+<https://github.com/uwplasma/GKX/issues/194>`_): preserve already-rate nonlinear
+and Krylov inputs. For native linear references use
+:math:`\nu_{end}=A_{legacy}/\Delta t_{reference}`, fixed thereafter. Adaptive
+legacy trajectories had a varying rate and cannot be preserved exactly by one
+constant. The parity harness pins exceptional reference rates explicitly;
+standalone fixtures retain their own reference rate. Full external reference
+regeneration remains required before this migration is release-ready.
+
+Imported GX linked-boundary inputs use a per-step strength. The trajectory and
+RHS comparison tools convert it using an explicit, positive GX input timestep,
+not the GKX refinement timestep. The GX input must explicitly set
+``[Time] fixed_dt = true``: ``dt`` alone is an adaptive-step ceiling in GX.
+Missing/adaptive reference timesteps are
+rejected when damping is active: one fixed rate cannot reproduce their changing
+operator. Periodic (including zero-shear-forced periodic) and disabled damping
+need no conversion. Sampled diagnostic spacing alone does not certify the
+internal damping rate.
+
+Fourier convention is also part of the comparison contract. For an even chain
+of :math:`N` samples separated by :math:`\Delta z`, GKX follows
+`FFT frequency ordering <https://numpy.org/doc/2.2/reference/routines.fft.html>`_:
+
+.. math::
+
+   k_{N/2}=-\frac{\pi}{\Delta z},\qquad
+   D_z e^{2\pi i m j/N}=\frac{2\pi i m}{N\Delta z}e^{2\pi i m j/N}.
+
+GX's inspected ``init_kzLinked`` instead assigns positive Nyquist frequency.
+Both signs have identical sampled values :math:`(-1)^j`, but opposite first
+derivatives. Neither sign ambiguity exists on odd-length chains; absolute-value
+multipliers are unchanged. Do not silently change the production convention to
+improve a cross-code comparison. Match conventions explicitly, test the highest
+modes, and measure spatial-resolution sensitivity.
+
+In the repaired :math:`N_z=96,N_l=32,N_m=96` reference at :math:`k_y\rho=.55`,
+99.999953% of the same-state RHS difference power lies in this single mode.
+A diagnostic-only sign match reduces the relative RHS difference from 32.018%
+to 0.02206% against an extrapolated one-step GX restart derivative. The latter
+is limited by float32 finite-difference cancellation, not an exact RHS oracle.
+This explains the large residual despite close growth rates; it does not prove
+spatial or velocity convergence. ``test_fft_highest_modes_and_ad_contract``
+checks analytic mode eigenvalues, JVPs and real-parameter pullbacks on odd/even
+periodic and reordered linked chains without changing the default.
+
+Reference launch coverage is a separate contract. In inspected GX3865a537,
+``GradParallelLinked`` caps the launch's third dimension at 65,535, with one
+thread per block in that dimension. ``dampEnds_linked`` lacks the grid-stride
+loop used by neighboring copy kernels, so only
+:math:`\min(65535,N_zN_lN_m)` local z/moment indices receive damping.
+The :math:`96\times32\times96` reference requires 294,912 indices; even
+:math:`96\times16\times48` exceeds the cap. Matching a nominal rate and passing
+temporal screens do not certify these reference operators.
+
+An isolated build adds the missing stride loop without changing GKX. Testing
+the actual compiled kernel on 6,144/73,728/294,912 indices gives zero failures
+after repair; the original kernel misses 1,966/54,958 nonzero updates in the two
+larger cases. A short corrected solve has finite outputs; matched long-reference
+validation remains pending. Preserve original binaries/results and label both
+this correction and the separate high-Hermite power-overflow correction.
+
+The temporal/AD gate ``test_coupled_linear_rate_gradient_converges_to_matrix_exponential``
+checks a coupled 64-state electrostatic operator against :math:`e^{TL}` and
+its Fréchet derivative (Al-Mohy and Higham, 2009). This validates timestep and
+reverse-mode derivative convergence for that discretization, not spatial or
+gyrokinetic model accuracy. Use reverse-mode ``jax.grad`` for this public
+linear-integration path: direct ``jax.jvp`` encounters its custom-VJP field
+solve and is not supported. Scalar-stage JVP checks do not establish otherwise.
+
+In newly generated parity reports, ``converged`` screens GKX only: finite growth and
+frequency estimates, each agreeing within 5% between full and half horizons
+(exactly equal zeros pass). This is a temporal settling screen, not resolution
+convergence. All modes remain in ``total_ky_count``; the finite relative-error
+count is reported separately. JSON retains both raw half-horizon estimates.
+Historical reports and already-running jobs may use the older growth-only gate.
+``reference_settled`` independently screens the GX diagnostic sample means over
+the middle quarter and last half of the trace, with the same 5% criterion.
+Short (<8 samples), invalid-time or nonuniformly sampled references report
+unknown (null), not success; sample means are not time-weighted estimates.
+Regular sampling may include one shortened terminal interval (GX's final write).
+``both_codes_settled`` requires both screens to pass. JSON and CSV retain the
+reference probe values; neither screen proves timestep or resolution convergence.
+Requested parity wavenumbers must match the reference (within four float32
+machine epsilons relatively); accepted decimal values use the exact reference
+coordinate. Missing, nonpositive, nonfinite or duplicate modes fail before
+integration. This is coordinate matching, not interpolation.
 
 Controls:
 
@@ -1209,7 +1575,6 @@ Controls:
 - ``RuntimeCollisionConfig.p_hyper_kperp``
 - ``RuntimeCollisionConfig.damp_ends_amp``
 - ``RuntimeCollisionConfig.damp_ends_widthfrac``
-- ``RuntimeCollisionConfig.damp_ends_scale_by_dt``
 
 Nonlinear :math:`E \\times B` And Flutter
 -----------------------------------------

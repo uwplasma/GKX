@@ -369,16 +369,17 @@ def test_runtime_end_damping_defaults_use_unscaled_reference_rate() -> None:
     assert float(params.damp_ends_widthfrac) == pytest.approx(0.125)
 
 
-def test_runtime_end_damping_can_explicitly_scale_by_dt() -> None:
-    base = _base_runtime_cfg()
-    cfg = replace(
-        base,
-        time=replace(base.time, dt=0.2),
-        collisions=RuntimeCollisionConfig(damp_ends_scale_by_dt=True),
-    )
-    params = build_runtime_linear_params(cfg, Nm=8)
-    assert float(params.damp_ends_amp) == pytest.approx(0.5)
-    assert float(params.damp_ends_widthfrac) == pytest.approx(0.125)
+@pytest.mark.parametrize("legacy", [True, False])
+def test_runtime_end_damping_rejects_removed_timestep_scaling(legacy) -> None:
+    from gkx.workflows.runtime.toml import _replace_runtime_section
+
+    with pytest.raises(ValueError, match="specify damp_ends_amp as a fixed rate"):
+        _replace_runtime_section(
+            _base_runtime_cfg(),
+            {"collisions": {"damp_ends_scale_by_dt": legacy}},
+            "collisions",
+            RuntimeCollisionConfig,
+        )
 
 
 def test_runtime_startup_model_and_geometry_branches(

@@ -3,7 +3,7 @@
 
 For every case in the manifest this driver
 
-1. reads the converged growth rate and frequency spectrum from the reference
+1. reads the growth rate and frequency spectrum from the reference
    code output, using the reference code's own late-window convention (mean of
    the second half of its diagnostic trace),
 2. runs the GKX linear scan over the same ``ky`` values with the same velocity
@@ -28,7 +28,7 @@ The reference outputs are not tracked in this repository. Point
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
@@ -50,7 +50,7 @@ DEFAULT_STEM = REPO_ROOT / "docs" / "_static" / "gkx_gx_linear_parity_matrix"
 
 @dataclass(frozen=True)
 class ReferenceSpectrum:
-    """Converged reference spectrum plus the trace metadata behind it."""
+    """Reference estimates and optional uniform-sampling temporal probe."""
 
     ky: np.ndarray
     gamma: np.ndarray
@@ -58,6 +58,8 @@ class ReferenceSpectrum:
     samples: int
     t_end: float
     nonfinite: int
+    gamma_half: np.ndarray | None = None
+    omega_half: np.ndarray | None = None
 
 
 def load_reference_spectrum(path: Path) -> ReferenceSpectrum:
@@ -75,6 +77,21 @@ def load_reference_spectrum(path: Path) -> ReferenceSpectrum:
     omega = np.mean(series[half:, :, 0, 0], axis=0)
     gamma = np.mean(series[half:, :, 0, 1], axis=0)
     positive = ky > 0.0
+    # Preserve the historical sample-mean estimator. Do not certify physical
+    # time windows from short, invalid or nonuniformly sampled traces. GX may
+    # write one final sample before the next regular diagnostic time.
+    gamma_half = omega_half = None
+    spacing = np.diff(t)
+    if (
+        len(t) >= 8
+        and np.all(np.isfinite(t))
+        and np.all(spacing > 0)
+        and np.allclose(spacing[:-1], spacing[0], rtol=1e-3, atol=0)
+        and spacing[-1] <= spacing[0] * 1.001
+    ):
+        middle = (t >= t[0] + 0.25 * (t[-1] - t[0])) & (t <= t[half])
+        omega_half, gamma_half = np.mean(series[middle, :, 0, :], axis=0).T
+        gamma_half, omega_half = gamma_half[positive], omega_half[positive]
     return ReferenceSpectrum(
         ky=ky[positive],
         gamma=gamma[positive],
@@ -82,6 +99,8 @@ def load_reference_spectrum(path: Path) -> ReferenceSpectrum:
         samples=int(len(t)),
         t_end=float(t[-1]),
         nonfinite=int(np.sum(~np.isfinite(series))),
+        gamma_half=gamma_half,
+        omega_half=omega_half,
     )
 
 
@@ -136,24 +155,73 @@ def _relative(value: float, reference: float) -> float:
     return float((value - reference) / abs(reference))
 
 
+def _settled(*pairs: tuple[float, float]) -> bool:
+    return all(
+        np.isfinite(full)
+        and np.isfinite(half)
+        and (full == half or abs(_relative(half, full)) <= 0.05)
+        for full, half in pairs
+    )
+
+
 def run_case(
     case: dict[str, Any], *, reference_dir: Path, order: int = 0
 ) -> dict[str, Any]:
     """Run one parity case and return its serializable record."""
 
     from gkx import load_runtime_from_toml, run_runtime_scan
+    from gkx.runtime import build_runtime_geometry
+    from gkx.geometry.core import apply_geometry_grid_defaults
+    from gkx.core_grid import build_spectral_grid
 
     reference_path = reference_dir / str(case["reference_output"])
     spectrum = load_reference_spectrum(reference_path)
 
-    requested = case.get("ky")
-    if requested:
-        ky_values = np.asarray([float(v) for v in requested], dtype=float)
-    else:
-        ky_values = spectrum.ky
+    reference_ky = np.asarray(spectrum.ky, dtype=float)
+    ky_values = np.asarray(case.get("ky", reference_ky), dtype=float)
+    for values in (reference_ky, ky_values):
+        if (
+            values.ndim != 1
+            or not values.size
+            or not np.all(np.isfinite(values) & (values > 0))
+            or len(np.unique(values)) != len(values)
+        ):
+            raise ValueError("parity ky must be nonempty, unique, finite and positive")
+    matches = np.argmin(abs(reference_ky[:, None] - ky_values), axis=0)
+    # Allow decimal rendering of a single-precision reference coordinate, not
+    # interpolation or an arbitrary nearest mode. Fail before expensive solves.
+    if not np.all(
+        np.isclose(
+            ky_values, reference_ky[matches], rtol=4 * np.finfo(np.float32).eps, atol=0
+        )
+    ):
+        raise ValueError("requested ky is absent from the reference spectrum")
+    if len(np.unique(matches)) != len(matches):
+        raise ValueError("requested ky values map to duplicate reference modes")
+    ky_values = reference_ky[matches]
 
     config_path = REPO_ROOT / str(case["config"])
     cfg, _ = load_runtime_from_toml(config_path)
+    # Fixed physical rate: the parity reference may use a different historical
+    # timestep than a standalone fixture. Never recompute this during refinement.
+    if "damp_ends_rate" in case:
+        cfg = replace(
+            cfg,
+            collisions=replace(
+                cfg.collisions, damp_ends_amp=float(case["damp_ends_rate"])
+            ),
+        )
+
+    # Resolve the same grid as the scan before spending time on integration.
+    grid = build_spectral_grid(
+        apply_geometry_grid_defaults(build_runtime_geometry(cfg), cfg.grid)
+    )
+    grid_ky = np.asarray(grid.ky)
+    selected_ky = grid_ky[np.argmin(abs(grid_ky[:, None] - ky_values), axis=0)]
+    if not np.all(
+        np.isclose(ky_values, selected_ky, rtol=4 * np.finfo(np.float32).eps, atol=0)
+    ):
+        raise ValueError("reference ky is absent from the effective GKX grid")
 
     steps = int(case["steps"])
     dt = float(case["dt"])
@@ -210,6 +278,16 @@ def run_case(
         omega = float(primary.omega[index])
         gamma_half = float(secondary.gamma[index])
         omega_half = float(secondary.omega[index])
+        ref_half = getattr(spectrum, "gamma_half", None)
+        gamma_ref_half = None if ref_half is None else float(ref_half[match])
+        ref_half = getattr(spectrum, "omega_half", None)
+        omega_ref_half = None if ref_half is None else float(ref_half[match])
+        reference_settled = (
+            None
+            if gamma_ref_half is None or omega_ref_half is None
+            else _settled((gamma_ref, gamma_ref_half), (omega_ref, omega_ref_half))
+        )
+        gkx_settled = _settled((gamma, gamma_half), (omega, omega_half))
         rows.append(
             {
                 "case": case["key"],
@@ -220,12 +298,16 @@ def run_case(
                 "gamma_relative_difference": _relative(gamma, gamma_ref),
                 "omega_reference": omega_ref,
                 "omega_gkx": omega,
+                "gamma_half_time": gamma_half,
+                "omega_half_time": omega_half,
                 "omega_relative_difference": _relative(omega, omega_ref),
                 "gamma_half_time_shift": _relative(gamma_half, gamma),
                 "omega_half_time_shift": _relative(omega_half, omega),
-                "converged": bool(
-                    np.isfinite(gamma) and abs(_relative(gamma_half, gamma)) <= 0.05
-                ),
+                "converged": gkx_settled,  # Historical field: GKX only.
+                "gamma_reference_half_time": gamma_ref_half,
+                "omega_reference_half_time": omega_ref_half,
+                "reference_settled": reference_settled,
+                "both_codes_settled": gkx_settled and reference_settled is True,
                 # True when the difference this row reports is inside the
                 # spread the reference itself shows between two legitimate
                 # builds of the same commit. Such a row is not evidence of
@@ -241,10 +323,16 @@ def run_case(
             }
         )
 
-    settled = [
-        r
+    settled = [r for r in rows if r["converged"]]
+    finite_errors = [
+        abs(r["gamma_relative_difference"])
+        for r in settled
+        if np.isfinite(r["gamma_relative_difference"])
+    ]
+    joint_errors = [
+        abs(r["gamma_relative_difference"])
         for r in rows
-        if r["converged"] and np.isfinite(r["gamma_relative_difference"])
+        if r["both_codes_settled"] and np.isfinite(r["gamma_relative_difference"])
     ]
     peak_index = int(np.argmax([r["gamma_reference"] for r in rows]))
     return {
@@ -259,10 +347,12 @@ def run_case(
         "electrons": case["electrons"],
         "field_model": case["field_model"],
         "geometry": case["geometry"],
+        "damp_ends_rate": float(cfg.collisions.damp_ends_amp),
         "resolution": {
             "Nl": int(case["Nl"]),
             "Nm": int(case["Nm"]),
-            "Nz": int(cfg.grid.Nz),
+            "Nz": int(grid.z.size),
+            "requested_Nz": int(cfg.grid.Nz),
             "Ny": int(cfg.grid.Ny),
             "dt": dt,
             "steps": steps,
@@ -286,11 +376,15 @@ def run_case(
         "build_reproducibility_floor": floor,
         "summary": {
             "settled_ky_count": len(settled),
+            "both_codes_settled_ky_count": sum(r["both_codes_settled"] for r in rows),
+            "finite_relative_error_ky_count": len(finite_errors),
+            "both_codes_finite_relative_error_ky_count": len(joint_errors),
             "total_ky_count": len(rows),
             "max_absolute_gamma_relative_difference_settled": (
-                max(abs(r["gamma_relative_difference"]) for r in settled)
-                if settled
-                else float("nan")
+                max(finite_errors) if finite_errors else float("nan")
+            ),
+            "max_absolute_gamma_relative_difference_both_codes_settled": (
+                max(joint_errors) if joint_errors else float("nan")
             ),
             "peak_ky": rows[peak_index]["ky"],
             "gamma_relative_difference_at_peak": rows[peak_index][
@@ -324,6 +418,10 @@ def write_csv(records: list[dict[str, Any]], path: Path) -> None:
         "omega_half_time_shift",
         "converged",
         "within_build_reproducibility_floor",
+        "gamma_reference_half_time",
+        "omega_reference_half_time",
+        "reference_settled",
+        "both_codes_settled",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -331,7 +429,7 @@ def write_csv(records: list[dict[str, Any]], path: Path) -> None:
         writer.writeheader()
         for record in records:
             for row in record["rows"]:
-                writer.writerow({key: row[key] for key in fields})
+                writer.writerow({key: row.get(key) for key in fields})
 
 
 def write_figure(records: list[dict[str, Any]], path: Path) -> None:
@@ -486,8 +584,9 @@ def main(argv: list[str] | None = None) -> None:
         summary = record["summary"]
         floor = record.get("build_reproducibility_floor")
         print(
-            f"{record['key']:34s} settled {summary['settled_ky_count']}/{summary['total_ky_count']} ky"
-            f"  max|d gamma|(settled)={summary['max_absolute_gamma_relative_difference_settled']:.4f}"
+            f"{record['key']:34s} GKX temporally settled {summary['settled_ky_count']}/{summary['total_ky_count']} ky"
+            f"  both codes {summary['both_codes_settled_ky_count']}/{summary['total_ky_count']}"
+            f"  max|d gamma|(both)={summary['max_absolute_gamma_relative_difference_both_codes_settled']:.4f}"
             f"  at peak ky={summary['peak_ky']:.3f}: "
             f"d gamma={summary['gamma_relative_difference_at_peak']:+.4f} "
             f"d omega={summary['omega_relative_difference_at_peak']:+.4f}"

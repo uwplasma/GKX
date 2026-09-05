@@ -868,15 +868,13 @@ def prepare_electrostatic_species_inputs(
     devices: Any | None = None,
     replicate_cache: bool = True,
 ) -> tuple[jnp.ndarray, LinearCache, LinearParams]:
-    """Place species-dependent inputs directly from host memory before JIT."""
+    """Place concrete inputs from host memory; preserve traced inputs for AD/JIT."""
 
     from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
     from gkx.operators.linear.params import _as_species_array
 
     arr = jnp.asarray(G)
-    if isinstance(arr, jax.core.Tracer):
-        raise ValueError("species inputs must be prepared outside jax.jit")
     if arr.ndim != 6:
         raise ValueError("species preparation requires a 6D multi-species state")
     ns = int(arr.shape[0])

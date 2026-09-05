@@ -325,6 +325,9 @@ def test_load_gx_input_contract_reads_fix_aspect_and_species_contract(
     assert contract.beta == 0.01
     assert contract.tau_e == 1.0
     assert contract.dt == 0.005
+    assert contract.fixed_dt is False
+    path.write_text(path.read_text().replace("[Time]", "[Time]\nfixed_dt = true"))
+    assert _load_gx_input_contract(path).fixed_dt is True
     assert contract.scheme == "rk3"
     assert contract.nwrite == 50
     assert contract.init_field == "density"
@@ -515,23 +518,33 @@ scale = 0.125
     assert contract.restart_scale == pytest.approx(0.125)
 
 
-def test_imported_linear_uses_raw_damp_ends_rate() -> None:
-    contract = _dummy_gx_contract(init_single=False)
-    dt = 0.2
-    params = imported_linear.build_linear_params(
-        contract.species,
-        tau_e=contract.tau_e,
-        kpar_scale=1.0,
-        beta=contract.beta,
+def test_imported_linear_converts_gx_strength_at_reference_dt() -> None:
+    contract = replace(_dummy_gx_contract(init_single=False), dt=0.2, boundary="linked")
+    assert imported_linear._gx_end_damping_rate(contract) == pytest.approx(0.5)
+    with pytest.raises(ValueError, match="Time.fixed_dt=true"):
+        imported_linear._gx_end_damping_rate(replace(contract, fixed_dt=False))
+
+
+@pytest.mark.parametrize("dt", [None, 0.0, -0.1, float("nan"), float("inf")])
+def test_imported_linear_refuses_undefined_reference_damping_rate(dt) -> None:
+    contract = replace(_dummy_gx_contract(init_single=False), dt=dt, boundary="linked")
+    with pytest.raises(ValueError, match="fixed positive GX input dt"):
+        imported_linear._gx_end_damping_rate(contract)
+    assert (
+        imported_linear._gx_end_damping_rate(replace(contract, damp_ends_amp=0.0))
+        == 0.0
     )
-    params = replace(
-        params,
-        D_hyper=float(contract.D_hyper),
-        damp_ends_amp=float(contract.damp_ends_amp),
-        damp_ends_widthfrac=float(contract.damp_ends_widthfrac),
+
+
+@pytest.mark.parametrize("boundary,zero_shat", [("periodic", False), ("linked", True)])
+def test_imported_periodic_reference_needs_no_damping_rate(boundary, zero_shat) -> None:
+    contract = replace(
+        _dummy_gx_contract(init_single=False),
+        dt=None,
+        boundary=boundary,
+        zero_shat=zero_shat,
     )
-    assert float(params.damp_ends_amp) == pytest.approx(0.1)
-    assert float(params.damp_ends_amp) != pytest.approx(0.1 / dt)
+    assert imported_linear._gx_end_damping_rate(contract) == 0.0
 
 
 def test_infer_gx_linear_dt_prefers_explicit_input_dt() -> None:
@@ -564,16 +577,14 @@ def test_gx_has_uniform_linear_dt_ignores_single_truncated_final_interval() -> N
     assert _gx_has_uniform_linear_dt(gx_time, contract) is True
 
 
-@pytest.mark.skipif(
-    not Path(".cache/gx_clean_main/linear/hsx/hsx_linear.in").exists(),
-    reason="Requires local cache file",
-)
-def test_build_imported_initial_condition_uses_runtime_multikx_startup() -> None:
-    class DummyGeom:
-        s_hat = 1.0
-
-    contract = _load_gx_input_contract(
-        Path(".cache/gx_clean_main/linear/hsx/hsx_linear.in")
+@pytest.mark.parametrize("init_single", [False, True])
+@pytest.mark.parametrize("gaussian_init", [False, True])
+def test_build_imported_initial_condition_uses_runtime_multikx_startup(
+    init_single, gaussian_init
+) -> None:
+    """Self-contained startup routing, not an HSX geometry or physics benchmark."""
+    contract = replace(
+        _dummy_gx_contract(init_single=init_single), gaussian_init=gaussian_init
     )
     grid_full = build_spectral_grid(
         GridConfig(
@@ -590,7 +601,7 @@ def test_build_imported_initial_condition_uses_runtime_multikx_startup() -> None
     )
     g0 = _build_imported_initial_condition(
         grid=grid_full,
-        geom=DummyGeom(),
+        geom=SimpleNamespace(s_hat=1.0),
         gx_contract=contract,
         species=contract.species,
         ky_index=1,
@@ -600,7 +611,8 @@ def test_build_imported_initial_condition_uses_runtime_multikx_startup() -> None
     )
     g0_np = np.asarray(g0)
     nonzero_kx = np.flatnonzero(np.any(np.abs(g0_np[0, 0, 0, 1]) > 0.0, axis=-1))
-    assert nonzero_kx.size > 1
+    assert np.all(np.isfinite(g0_np))
+    assert nonzero_kx.size == 1 if init_single else nonzero_kx.size > 1
 
 
 def test_match_local_kx_index_uses_kx_value_not_raw_index() -> None:
@@ -647,6 +659,7 @@ def test_resolve_imported_real_fft_ny_accepts_full_diag_state_ky_block() -> None
 
 def _dummy_gx_contract(*, init_single: bool) -> GXInputContract:
     return GXInputContract(
+        fixed_dt=True,
         Nx=8,
         Ny=8,
         nperiod=1,

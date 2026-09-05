@@ -1218,10 +1218,10 @@ def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_gri
     assert int(np.asarray(grid.ky_mode)[0]) > 0
 
 
-def test_linear_integrator_applies_linked_end_damping_per_step(
+def test_linear_integrator_applies_linked_end_damping_rate(
     only_term_config, only_terms, spectral_grid
 ):
-    """Legacy linear damping scales as 1/dt; its Euler increment is fixed."""
+    """The damping RHS is fixed; its Euler increment scales with dt."""
     grid_full = spectral_grid(
         Nx=1,
         Ny=16,
@@ -1252,10 +1252,9 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
     end_dt = np.asarray(contrib_dt["end_damping"])
     mask = np.abs(end_raw) > 1.0e-12
     assert np.any(mask)
-    assert np.allclose(end_dt[mask], end_raw[mask] / 0.2, rtol=1.0e-6, atol=1.0e-6)
+    assert np.allclose(end_dt[mask], end_raw[mask], rtol=1.0e-6, atol=1.0e-6)
 
-    # The completed step is what the decks are tuned against: the increment the
-    # integrator applies must not depend on the step size.
+    # Fixed-rate Euler increments are proportional to the integration timestep.
     terms = only_terms(end_damping=1.0)
     increments = []
     for dt in (0.1, 0.2):
@@ -1269,7 +1268,7 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
             method="euler",
             terms=terms,
         )
-        increments.append(np.asarray(integrated) - np.asarray(G))
+        increments.append((np.asarray(integrated) - np.asarray(G)) / dt)
     assert np.any(np.abs(increments[0][mask]) > 1.0e-12)
     assert np.allclose(increments[0], increments[1], rtol=1.0e-6, atol=1.0e-8)
 
@@ -1279,7 +1278,7 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
 )
 @pytest.mark.parametrize("dt", [0.002, 0.2])
 def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
-    """An isolated damped scalar follows R(-A), not an exact removed fraction."""
+    """An isolated damped scalar follows R(-nu*dt), including its rate tangent."""
     from math import factorial
 
     from gkx.solvers_time_explicit_steps import _linear_native_step
@@ -1290,7 +1289,7 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
 
         def step(amplitude):
             rate = _scalar_params(
-                LinearParams(damp_ends_amp=amplitude), jnp.float64, dt
+                LinearParams(damp_ends_amp=amplitude), jnp.float64
             ).damp_amp
             return _linear_native_step(
                 jnp.asarray(1.0),
@@ -1301,10 +1300,136 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
             )
 
         value, tangent = jax.jvp(step, (strength,), (jnp.ones_like(strength),))
-        expected = sum((-0.2) ** k / factorial(k) for k in range(order + 1))
-        derivative = -sum((-0.2) ** k / factorial(k) for k in range(order))
+        expected = sum((-0.2 * dt) ** k / factorial(k) for k in range(order + 1))
+        derivative = -dt * sum((-0.2 * dt) ** k / factorial(k) for k in range(order))
         assert float(value) == pytest.approx(expected, rel=0, abs=2e-15)
         assert float(tangent) == pytest.approx(derivative, rel=0, abs=2e-15)
+
+
+@pytest.mark.parametrize(
+    "method,order", [("euler", 1), ("rk2", 2), ("rk3", 3), ("rk4", 4)]
+)
+def test_end_damping_fixed_time_value_and_gradient_converge(method, order):
+    """Fixed-T scalar damping and dG/dnu converge to exp(-nu*T), -T*exp(-nu*T)."""
+    from gkx.solvers_time_explicit_steps import _linear_native_step
+    from gkx.terms.assembly import _scalar_params
+
+    with jax.enable_x64():
+        errors = []
+        for steps in (4, 8, 16):
+
+            def solve(nu):
+                rate = _scalar_params(
+                    LinearParams(damp_ends_amp=nu), jnp.float64
+                ).damp_amp
+                return jax.lax.fori_loop(
+                    0,
+                    steps,
+                    lambda _, value: _linear_native_step(
+                        value,
+                        jnp.asarray(0.0),
+                        jnp.asarray(1.0 / steps),
+                        method_key=method,
+                        rhs=lambda g: -rate * g,
+                    ),
+                    jnp.asarray(1.0),
+                )
+
+            result = jax.value_and_grad(solve)(jnp.asarray(0.7))
+            errors.append(
+                np.abs(np.asarray(result) - np.exp(-0.7) * np.array([1.0, -1.0]))
+            )
+        ratios = np.asarray(errors[:-1]) / np.asarray(errors[1:])
+        assert np.all(ratios > 2 ** (order - 0.3)), (method, errors)
+
+
+def test_coupled_linear_rate_gradient_converges_to_matrix_exponential():
+    """Temporal/AD gate using Al-Mohy & Higham (2009) exponential Frechet derivative."""
+    from scipy.linalg import expm, expm_frechet
+
+    with jax.enable_x64():
+        grid = select_ky_grid(
+            build_spectral_grid(
+                GridConfig(
+                    Nx=1,
+                    Ny=8,
+                    Nz=8,
+                    ntheta=8,
+                    nperiod=1,
+                    boundary="linked",
+                    y0=10.0,
+                    Ly=20 * np.pi,
+                )
+            ),
+            1,
+        )
+        geom = SAlphaGeometry.from_config(GeometryConfig(s_hat=0.8))
+        params = LinearParams(damp_ends_amp=0.7, nu=0.05)
+        cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
+        shape = (2, 4, 1, 1, 8)
+        terms = LinearTerms(apar=0.0, bpar=0.0)
+        rng = np.random.default_rng(32)
+        state = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+        _, phi = linear_rhs_cached(state, cache, params, terms=terms)
+        assert float(jnp.linalg.norm(phi)) > 1e-5
+
+        def matrix(rate):
+            p = replace(params, damp_ends_amp=rate)
+
+            def column(vector):
+                return linear_rhs_cached(
+                    vector.reshape(shape),
+                    cache,
+                    p,
+                    terms=terms,
+                    use_jit=False,
+                    use_custom_vjp=False,
+                )[0].ravel()
+
+            return np.asarray(
+                jax.vmap(column)(jnp.eye(state.size, dtype=state.dtype))
+            ).T
+
+        operator = matrix(0.7)
+        direction = matrix(1.7) - operator  # Exact: operator is affine in rate.
+        horizon = 0.2
+        reference = expm(horizon * operator) @ np.asarray(state).ravel()
+        tangent = (
+            expm_frechet(horizon * operator, horizon * direction, compute_expm=False)
+            @ np.asarray(state).ravel()
+        )
+        expected = np.real(np.vdot(np.asarray(state).ravel(), tangent))
+        assert abs(expected) > 0.1
+        errors = []
+        for steps in (8, 16, 32):
+
+            def solve(rate):
+                return integrate_linear(
+                    state,
+                    grid,
+                    geom,
+                    replace(params, damp_ends_amp=rate),
+                    dt=horizon / steps,
+                    steps=steps,
+                    method="rk4",
+                    cache=cache,
+                    terms=terms,
+                )[0].ravel()
+
+            value = solve(jnp.asarray(0.7))
+            gradient = jax.grad(
+                lambda rate: jnp.real(jnp.vdot(state.ravel(), solve(rate)))
+            )(jnp.asarray(0.7))
+            errors.append(
+                [
+                    np.linalg.norm(np.asarray(value) - reference)
+                    / np.linalg.norm(reference),
+                    abs(float(gradient) - expected) / abs(expected),
+                ]
+            )
+        errors = np.asarray(errors)
+        assert np.all(errors[:-1] / errors[1:] > 12.0), errors
+        assert np.all(errors[-1] < 1.5e-7), errors
 
 
 def test_streaming_zero_for_constant_z(cyclone_world, only_terms):
@@ -1834,6 +1959,35 @@ def test_implicit_standard_and_diagnostic_routes_match(cyclone_world, only_terms
     np.testing.assert_array_equal(np.asarray(diagnostic), np.asarray(standard))
     np.testing.assert_allclose(np.asarray(phi), np.asarray(fields))
     assert density.shape[0] == 2
+
+
+@pytest.mark.parametrize("method", ["rk4", "imex2"])
+@pytest.mark.parametrize("steps,stride", [(24, 3), (25, 5)])
+def test_diagnostic_prefix_and_cadence_preserve_trajectory(
+    cyclone_world, only_terms, method, steps, stride
+):
+    """One dense history must reproduce separate full/prefix diagnostic runs."""
+    _, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=8, Lx=6.0, Ly=6.0)
+    state = jnp.zeros((1, 2, 4, grid.ky.size, grid.kx.size, grid.z.size), complex)
+    state = state.at[0, 0, 0, -1, 0, :].set(1e-3 * jnp.cos(grid.z))
+    params = LinearParams(nu=0.1, damp_ends_amp=0.7)
+    common = dict(dt=0.001, method=method, terms=only_terms(streaming=1, end_damping=1))
+    dense = integrate_linear_diagnostics(
+        state, grid, geom, params, steps=steps, sample_stride=1, **common
+    )
+    tolerance = 1e-12 if _x64_enabled() else 5e-6
+    for horizon, cadence in ((steps, stride), (steps // 2, 2)):
+        separate = integrate_linear_diagnostics(
+            state, grid, geom, params, steps=horizon, sample_stride=cadence, **common
+        )
+        for observed, reference in zip(dense[1:3], separate[1:3]):
+            selected = np.asarray(observed)[cadence - 1 : horizon : cadence]
+            assert np.isfinite(selected).all() and np.linalg.norm(selected) > 0
+            np.testing.assert_allclose(selected, reference, rtol=tolerance, atol=1e-15)
+    with pytest.raises(ValueError, match="divisible"):
+        integrate_linear_diagnostics(
+            state, grid, geom, params, steps=25, sample_stride=2, **common
+        )
 
 
 def test_apply_hermite_v_simple():

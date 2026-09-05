@@ -376,7 +376,7 @@ def integrate_linear_explicit_diagnostics(
     show_progress: bool = False,
     linear_explicit_step_fn: Callable[..., tuple[jnp.ndarray, Any]] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, SimulationDiagnostics]:
-    """Explicit time integrator with growth-rate plus energy/flux diagnostics."""
+    """Growth/energy/flux diagnostics, with the final step clipped to ``t_max``."""
 
     console = _start_progress(show_progress)
     term_cfg = _linear_term_config(terms if terms is not None else LinearTerms())
@@ -403,7 +403,7 @@ def integrate_linear_explicit_diagnostics(
     next_progress_time = 0.0
     progress_interval = max(policy.t_max / 20.0, policy.dt_min)
     while t < policy.t_max - 1.0e-12:
-        dt_current = policy.step_dt()
+        dt_current = min(policy.step_dt(), policy.t_max - t)
         G, fields = stepper(G, cache, params, term_cfg, dt_current)
         step += 1
         t += dt_current

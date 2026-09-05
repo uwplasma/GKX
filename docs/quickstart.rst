@@ -19,6 +19,11 @@ or install the development checkout:
 Executable demo
 ---------------
 
+Bare ``gkx`` runs a short transient illustration (RK4, dt=0.02, t=15),
+not a converged growth-rate benchmark. Its fixed end-damping rate does not
+change when you refine dt. Extend the generated input's horizon and check
+stationarity and resolution before interpreting its fitted growth rate.
+
 .. code-block:: bash
 
    gkx

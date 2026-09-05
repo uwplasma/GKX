@@ -3972,6 +3972,205 @@ def test_parity_floors_are_declared_only_where_they_were_measured() -> None:
     )
 
 
+@pytest.mark.parametrize("dt", [0.0002, 0.0001])
+def test_parity_fixed_damping_override_survives_timestep_refinement(monkeypatch, dt):
+    import runpy
+    from types import SimpleNamespace
+    import gkx
+    import gkx.runtime
+    from gkx.geometry.analytic import SlabGeometry
+
+    monkeypatch.setattr(
+        gkx.runtime, "build_runtime_geometry", lambda cfg: SlabGeometry()
+    )
+
+    run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
+    case = next(c for c in _parity_cases() if c["key"] == "kbm_miller")
+    case = {**case, "dt": dt, "ky": [0.3]}
+    assert case["damp_ends_rate"] == 500.0
+    cfg, _ = gkx.load_runtime_from_toml(RUN_TO_REPO_ROOT / case["config"])
+    assert cfg.collisions.damp_ends_amp == 200.0
+    monkeypatch.setitem(
+        run_case.__globals__,
+        "load_reference_spectrum",
+        lambda _: SimpleNamespace(ky=[0.30000001192092896]),
+    )
+
+    class ReachedScan(Exception):
+        pass
+
+    def scan(resolved, ky_values, **kwargs):
+        assert ky_values.tolist() == [0.30000001192092896]
+        assert resolved.collisions.damp_ends_amp == 500.0
+        assert kwargs["dt"] == dt
+        raise ReachedScan
+
+    monkeypatch.setattr(gkx, "run_runtime_scan", scan)
+    with pytest.raises(ReachedScan):
+        run_case(case, reference_dir=RUN_TO_REPO_ROOT)
+
+
+@pytest.mark.parametrize(
+    "omega,half,settled",
+    [
+        (1.0, 1.03, True),
+        (1.0, 0.8, False),
+        (float("nan"), 1.0, False),
+        (1.0, float("inf"), False),
+        (0.0, 0.0, True),
+        (0.0, 0.01, False),
+    ],
+)
+@pytest.mark.parametrize("gamma_reference", [0.1, 0.0])
+@pytest.mark.parametrize("reference_half", [1.0, 0.8, float("nan"), None])
+def test_parity_convergence_requires_finite_stable_frequency(
+    monkeypatch, omega, half, settled, gamma_reference, reference_half
+):
+    import runpy
+    from types import SimpleNamespace
+    import numpy as np
+    import gkx
+    import gkx.runtime
+    from gkx.geometry.analytic import SlabGeometry
+    from gkx.geometry.flux_tube import sample_flux_tube_geometry
+
+    geometry = sample_flux_tube_geometry(
+        SlabGeometry(), np.linspace(-np.pi, np.pi, 12, endpoint=False)
+    )
+    monkeypatch.setattr(gkx.runtime, "build_runtime_geometry", lambda cfg: geometry)
+
+    run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
+    case = next(c for c in _parity_cases() if c["key"] == "kbm_miller")
+    reference = SimpleNamespace(
+        ky=np.array([0.3]),
+        gamma=np.array([gamma_reference]),
+        omega=np.array([1.0]),
+        samples=100,
+        t_end=20.0,
+        nonfinite=0,
+        gamma_half=np.array([gamma_reference]),
+        omega_half=None if reference_half is None else np.array([reference_half]),
+    )
+    monkeypatch.setitem(
+        run_case.__globals__, "load_reference_spectrum", lambda _: reference
+    )
+    responses = iter(
+        [
+            SimpleNamespace(gamma=[0.1], omega=[omega]),
+            SimpleNamespace(gamma=[0.1], omega=[half]),
+        ]
+    )
+    monkeypatch.setattr(gkx, "run_runtime_scan", lambda *a, **kw: next(responses))
+    result = run_case(case, reference_dir=RUN_TO_REPO_ROOT)
+    reference.ky = np.array([0.31])
+    with pytest.raises(ValueError, match="effective GKX grid"):
+        run_case(case, reference_dir=RUN_TO_REPO_ROOT)
+    assert result["resolution"]["Nz"] == 12
+    assert result["resolution"]["requested_Nz"] != 12
+    assert result["rows"][0]["converged"] is settled
+    reference_settled = None if reference_half is None else reference_half == 1.0
+    assert result["rows"][0]["reference_settled"] is reference_settled
+    assert result["summary"]["both_codes_settled_ky_count"] == int(
+        settled and reference_settled is True
+    )
+    assert result["rows"][0]["gamma_half_time"] == 0.1
+    assert result["summary"]["total_ky_count"] == 1
+    assert result["summary"]["settled_ky_count"] == int(settled)
+    assert result["summary"]["finite_relative_error_ky_count"] == int(
+        settled and gamma_reference != 0.0
+    )
+    joint_finite = settled and reference_settled is True and gamma_reference != 0.0
+    assert result["summary"]["both_codes_finite_relative_error_ky_count"] == int(
+        joint_finite
+    )
+    joint_error = result["summary"][
+        "max_absolute_gamma_relative_difference_both_codes_settled"
+    ]
+    if joint_finite:
+        assert joint_error == 0.0
+    else:
+        assert np.isnan(joint_error)
+
+
+@pytest.mark.parametrize(
+    "sampling", ["uniform", "truncated", "irregular", "reversed", "short"]
+)
+def test_parity_reference_probe_reads_real_trace(tmp_path, sampling):
+    import runpy
+    import numpy as np
+    from netCDF4 import Dataset
+
+    path = tmp_path / "reference.nc"
+    t = np.arange(9.0) if sampling != "short" else np.arange(4.0)
+    if sampling == "irregular":
+        t[3] += 0.25
+    if sampling == "truncated":
+        t[-1] -= 0.1  # GX terminal write before the next diagnostic stride.
+    if sampling == "reversed":
+        t = t[::-1]
+    with Dataset(path, "w") as root:
+        for name, size in (("t", len(t)), ("ky", 2), ("kx", 1), ("ri", 2)):
+            root.createDimension(name, size)
+        grid, diag = root.createGroup("Grids"), root.createGroup("Diagnostics")
+        grid.createVariable("time", "f8", ("t",))[:] = t
+        grid.createVariable("ky", "f8", ("ky",))[:] = [0, 0.3]
+        signal = np.ones((len(t), 2, 1, 2))
+        signal[:, 1, 0, 1] = np.arange(len(t))
+        diag.createVariable("omega_kxkyt", "f8", ("t", "ky", "kx", "ri"))[:] = signal
+    spectrum = runpy.run_path(str(_PARITY_BUILDER))["load_reference_spectrum"](path)
+    assert spectrum.ky.tolist() == [0.3]
+    assert spectrum.gamma.tolist() == [np.arange(len(t))[len(t) // 2 :].mean()]
+    if sampling in ("uniform", "truncated"):
+        assert spectrum.gamma_half.tolist() == [3.0]  # t=2,3,4
+        assert spectrum.omega_half.tolist() == [1.0]
+    else:
+        assert spectrum.gamma_half is spectrum.omega_half is None
+
+
+@pytest.mark.parametrize("key", ["cyclone_miller_kinetic_electrons", "kbm_miller"])
+def test_kinetic_parity_decks_preserve_electron_only_seed(key):
+    from gkx import load_runtime_from_toml
+
+    case = next(c for c in _parity_cases() if c["key"] == key)
+    cfg, _ = load_runtime_from_toml(RUN_TO_REPO_ROOT / case["config"])
+    assert cfg.init.init_electrons_only is True
+
+
+@pytest.mark.parametrize(
+    "ky",
+    [
+        [],
+        [0.4],
+        [0.0],
+        [-0.3],
+        [float("nan")],
+        [float("inf")],
+        [0.3, 0.3],
+        [0.3, 0.30000001],
+    ],
+)
+def test_parity_rejects_unmatched_coordinates_before_loading_config(monkeypatch, ky):
+    import runpy
+    from types import SimpleNamespace
+    import gkx
+
+    run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
+    monkeypatch.setitem(
+        run_case.__globals__,
+        "load_reference_spectrum",
+        lambda _: SimpleNamespace(ky=[0.3]),
+    )
+    monkeypatch.setattr(
+        gkx,
+        "load_runtime_from_toml",
+        lambda _: pytest.fail("coordinate validation must precede setup"),
+    )
+    with pytest.raises(ValueError, match="ky"):
+        run_case(
+            {"ky": ky, "reference_output": "unused"}, reference_dir=RUN_TO_REPO_ROOT
+        )
+
+
 def test_parity_builder_reads_the_declared_floor() -> None:
     """A manifest key nothing reads is documentation pretending to be a gate."""
 

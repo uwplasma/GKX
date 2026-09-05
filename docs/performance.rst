@@ -14,6 +14,27 @@ office-GPU timings are retained as rejected provenance because both A4000s were
 already at 100% utilization; they do not update the published speed claim. An
 uncontended rerun is required before replacing the historical GPU panel.
 
+Reading parity-run costs
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+``tools/comparison/build_gx_parity_matrix.py`` records distinct scopes:
+
+- ``gkx_scan_seconds``: primary full-horizon scan, including setup/compilation
+  encountered by that call; excludes the separate half-horizon check.
+- ``gkx_peak_host_rss_mb``: process-lifetime RSS high-water mark, sampled after
+  both scans; not an incremental per-case allocation.
+- ``gkx_peak_device_mb``: first visible device's ``peak_bytes_in_use`` counter,
+  if available; not all-device memory, reserved capacity or a reset per-case peak.
+
+Despite the historical ``mb`` names, these fields use MiB. Run one case per
+fresh process for attributable high-water marks; record whole-command wall time
+separately. Do not subtract cumulative peaks to estimate incremental memory.
+GPU process usage can include a reserved pool: `JAX preallocates GPU memory
+<https://docs.jax.dev/en/latest/gpu_memory_allocation.html>`_ by default. Record
+allocator settings and distinguish reserved memory, live arrays and temporaries.
+Do not compare a GX process-memory figure to a JAX allocator counter as a
+memory-efficiency ratio, or change allocator policy mid-campaign.
+
 GKX uses JAX to compile array kernels ahead of time, enabling
 vectorized, accelerator-ready performance while retaining automatic
 differentiation. The linear operator and time integrator are designed to be
@@ -727,6 +748,13 @@ helper:
      --Nm 8 \
      --repeats 3 \
      --summary-json docs/_static/full_linear_rhs_trace_summary.json
+
+Both full-RHS profilers accept ``--state-dtype complex64|complex128|native``.
+``native`` preserves the seed dtype; enabling JAX x64 alone does not promote
+that seed. Use ``JAX_ENABLE_X64=true`` with ``--state-dtype complex128`` for
+an explicit double-precision state. New summaries record ``state_dtype``,
+``rhs_dtype`` and ``jax_enable_x64``; compare those, geometry, state and grid
+before comparing timings. This option does not recalculate the seed in f64.
 
 The May 11, 2026 local CPU production-path artifacts record
 ``source="gkx.operators.linear.rhs.linear_rhs_cached"`` and

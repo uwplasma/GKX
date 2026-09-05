@@ -621,6 +621,12 @@ def _add_full_rhs_common_args(
     parser.add_argument("--Nm", type=int, default=8)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--state", choices=("initial", "z_wave"), default="initial")
+    parser.add_argument(
+        "--state-dtype",
+        choices=("native", "complex64", "complex128"),
+        default="native",
+        help="Input state dtype; complex128 requires JAX_ENABLE_X64=true.",
+    )
     parser.add_argument("--z-mode", type=int, default=1)
     parser.add_argument("--z-wave-amplitude", type=float, default=1.0e-3)
     if nonlinear:
@@ -639,6 +645,12 @@ def _add_full_rhs_common_args(
     parser.add_argument("--memory-profile", type=Path, default=None)
     parser.add_argument("--python-tracer-level", type=int, default=0)
     parser.add_argument("--host-tracer-level", type=int, default=0)
+
+
+def _profile_state(state: Any, dtype: str) -> Any:
+    if dtype == "complex128" and not jax.config.x64_enabled:
+        raise ValueError("complex128 profiling requires JAX_ENABLE_X64=true")
+    return jnp.asarray(state, dtype=None if dtype == "native" else dtype)
 
 
 def build_full_linear_rhs_parser() -> argparse.ArgumentParser:
@@ -791,7 +803,7 @@ def main_full_linear_rhs(argv: list[str] | None = None) -> int:
         nspecies=len(cfg.species),
     )
     cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
-    g0 = jnp.asarray(g0)
+    g0 = _profile_state(g0, args.state_dtype)
     if args.state == "z_wave":
         g0 = _inject_z_wave(
             g0,
@@ -866,6 +878,11 @@ def main_full_linear_rhs(argv: list[str] | None = None) -> int:
         force_electrostatic_fields=force_electrostatic_fields,
         source="gkx.operators.linear.rhs.linear_rhs_cached",
     )
+    summary.update(
+        state_dtype=str(g0.dtype),
+        rhs_dtype=str(rhs.dtype),
+        jax_enable_x64=bool(jax.config.x64_enabled),
+    )
     _write_summary_json(summary, args.summary_json)
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
@@ -902,7 +919,7 @@ def main_full_nonlinear_rhs(argv: list[str] | None = None) -> int:
         nspecies=len(cfg.species),
     )
     cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
-    g0 = jnp.asarray(g0)
+    g0 = _profile_state(g0, args.state_dtype)
     if args.state == "z_wave":
         g0 = _inject_z_wave(
             g0,
@@ -975,6 +992,11 @@ def main_full_nonlinear_rhs(argv: list[str] | None = None) -> int:
         hlo_out=args.hlo_out,
         electrostatic_specialized=_is_static_zero(term_cfg.apar)
         and _is_static_zero(term_cfg.bpar),
+    )
+    summary.update(
+        state_dtype=str(g0.dtype),
+        rhs_dtype=str(rhs.dtype),
+        jax_enable_x64=bool(jax.config.x64_enabled),
     )
     _write_summary_json(summary, args.summary_json)
     print(json.dumps(summary, indent=2, sort_keys=True))

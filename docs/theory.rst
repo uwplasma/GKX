@@ -34,23 +34,26 @@ For non-twisting flux tubes (NTFT), GKX employs an ``m0`` and
 Hermite-Laguerre velocity space
 -------------------------------
 
-The perturbed distribution is expanded in a Hermite (parallel velocity) and
-Laguerre (magnetic moment) basis. For a single species, the expansion is
+The Maxwellian-normalized perturbation is expanded in orthonormal Hermite
+(parallel velocity) and signed Laguerre (perpendicular energy) functions:
 
 .. math::
 
-   g(\mathbf{k}, \theta, v_\parallel, \mu) =
+   \frac{g}{F_M} =
    \sum_{\ell=0}^{N_\ell-1} \sum_{m=0}^{N_m-1}
    G_{\ell m}(\mathbf{k}, \theta)
-   L_\ell(b) H_m(v_\parallel),
+   \mathcal{L}_\ell(x)\mathcal{H}_m(v_\parallel),
 
-with the gyroaverage factor
+where :math:`x=\mu B/T` is a velocity coordinate and
+:math:`\mathcal{L}_\ell(x)=(-1)^\ell L_\ell(x)`. The projected gyroaverage is
 
 .. math::
 
-   J_\ell(b) = e^{-b/2} L_\ell(b),
+   J_\ell(b) = e^{-b/2}\frac{(-b/2)^\ell}{\ell!},
 
-where :math:`b = k_\perp^2 \rho^2`. This Laguerre-Hermite formulation is detailed
+where :math:`b = k_\perp^2 \rho^2` is a spatial-mode parameter, not the
+Laguerre velocity coordinate. This matches ``core_velocity.J_l_all`` and
+:doc:`linear_model`. The Laguerre-Hermite formulation is detailed
 by Mandell, Dorland & Landreman (2017). [MDL17]_
 
 Field solve and gyrokinetic variable

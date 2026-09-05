@@ -192,6 +192,16 @@ def test_cli_without_args_runs_default_demo(
     out = capsys.readouterr().out
     assert code == 0
     assert "No input specified" in out
+    assert "not a converged growth-rate benchmark" in out
+    import tomllib
+    from gkx.workflows.demo import DEFAULT_DEMO_SETTINGS, default_demo_toml_text
+
+    deck = tomllib.loads(default_demo_toml_text())
+    assert deck["collisions"]["damp_ends_amp"] == pytest.approx(0.1 / 0.03)
+    assert run_kwargs["dt"] == 0.02
+    assert run_kwargs["dt"] * run_kwargs["steps"] == 15.0
+    monkeypatch.setitem(DEFAULT_DEMO_SETTINGS, "dt", 0.01)
+    assert tomllib.loads(default_demo_toml_text())["collisions"] == deck["collisions"]
     assert run_kwargs["solver"] == "time"
     assert run_kwargs["sample_stride"] == 5
     assert run_kwargs["show_progress"] is True

@@ -1934,7 +1934,94 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         )
 
 
-def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
+@pytest.mark.parametrize("dt", [0.1, 0.2])
+def test_end_damping_rate_matches_nonlinear_eigen_implicit_and_species_routes(dt):
+    """A field-free m=3 mode sees the same -nu*d(z)*G on every route."""
+    from dataclasses import fields
+    from gkx.terms.config import TermConfig
+    from gkx.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_with_fields
+    from gkx.operators.linear.params import term_config_to_linear_terms
+    from gkx.solvers_linear_integrators import integrate_linear
+    from gkx.solvers_linear_implicit import _build_implicit_operator
+    from gkx.solvers_linear_krylov_algorithms import _apply_operator
+    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+
+    if len(jax.devices()) < 2:
+        pytest.skip("requires two logical CPUs or accelerators")
+    with jax.enable_x64():
+        state, cache, params, grid, geom = _small_kinetic_electron_problem(linked=True)
+        state = jnp.zeros(state.shape, dtype=jnp.complex128).at[:, 0, 3].set(1.0)
+        terms = TermConfig(
+            **{f.name: float(f.name == "end_damping") for f in fields(TermConfig)}
+        )
+        linear_terms = term_config_to_linear_terms(terms)
+        reference, solved = assemble_rhs_cached(state, cache, params, terms=terms)
+        assert float(jnp.linalg.norm(reference)) > 1e-5
+        implicit = _build_implicit_operator(
+            state, cache, params, dt, linear_terms, "identity"
+        )[5]
+        routes = [
+            assemble_rhs_cached(state, cache, params, terms=terms, dt=dt)[0],
+            assemble_rhs_cached_with_fields(state, cache, params, solved, terms=terms),
+            nonlinear_rhs_cached(state, cache, params, terms)[0],
+            _apply_operator(state, cache, params, terms),
+            (state - implicit(state.ravel()).reshape(state.shape)) / dt,
+        ]
+        for parallel in (
+            None,
+            SimpleNamespace(
+                strategy="velocity", backend="auto", axis="species", num_devices=2
+            ),
+        ):
+            result, _ = integrate_linear(
+                state,
+                grid,
+                geom,
+                params,
+                dt=dt,
+                steps=1,
+                method="euler",
+                cache=cache,
+                terms=linear_terms,
+                parallel=parallel,
+            )
+            routes.append((result - state) / dt)
+
+            def objective(rate):
+                final, _ = integrate_linear(
+                    state,
+                    grid,
+                    geom,
+                    replace(params, damp_ends_amp=rate),
+                    dt=dt,
+                    steps=3,
+                    method="euler",
+                    cache=cache,
+                    terms=linear_terms,
+                    parallel=parallel,
+                )
+                return jnp.real(jnp.sum(final))
+
+            # Active entries start at one: G3=(1+dt*R0)^3 and R0 is linear
+            # in the fixed damping rate. No finite-difference step to tune.
+            derivative = jax.grad(objective)(jnp.asarray(params.damp_ends_amp))
+            expected = jnp.real(
+                jnp.sum(
+                    3
+                    * dt
+                    * reference
+                    / params.damp_ends_amp
+                    * (1 + dt * reference) ** 2
+                )
+            )
+            assert float(jnp.abs(expected)) > 1e-5
+            np.testing.assert_allclose(derivative, expected, rtol=1e-9, atol=1e-12)
+        for result in routes:
+            np.testing.assert_allclose(result, reference, rtol=1e-9, atol=1e-12)
+
+
+@pytest.mark.parametrize("jit", [False, True])
+def test_species_pmap_electromagnetic_trajectory_matches_serial(jit) -> None:
     from gkx.solvers_linear_integrators import integrate_linear
     from gkx.operators.linear.params import linear_terms_to_term_config
     from gkx.terms.assembly import compute_fields_cached
@@ -1976,18 +2063,33 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
         ),
         **integration,
     )
-    np.testing.assert_allclose(
-        np.asarray(parallel_state),
-        np.asarray(serial_state),
-        rtol=8e-5,
-        atol=8e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(parallel_phi),
-        np.asarray(serial_phi),
-        rtol=8e-5,
-        atol=8e-6,
-    )
+    np.testing.assert_allclose(parallel_state, serial_state, rtol=8e-5, atol=8e-6)
+    np.testing.assert_allclose(parallel_phi, serial_phi, rtol=8e-5, atol=8e-6)
+
+    # Linear EM evolution is homogeneous in its initial state. This probes
+    # traced state inputs, which parameter-only gradient checks do not exercise.
+    derivatives = []
+    for parallel in (
+        None,
+        SimpleNamespace(
+            strategy="velocity", backend="auto", axis="species", num_devices=2
+        ),
+    ):
+
+        def objective(scale):
+            final, phi = integrate_linear(
+                scale * state, grid, geom, params, parallel=parallel, **integration
+            )
+            return jnp.real(jnp.vdot(final, final) + jnp.vdot(phi, phi))
+
+        differentiate = jax.value_and_grad(objective)
+        value, derivative = (jax.jit(differentiate) if jit else differentiate)(
+            jnp.asarray(1.0)
+        )
+        assert float(value) > 1e-5
+        np.testing.assert_allclose(derivative, 2 * value, rtol=8e-5, atol=1e-7)
+        derivatives.append(derivative)
+    np.testing.assert_allclose(*derivatives, rtol=8e-5, atol=1e-7)
 
 
 def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:

@@ -253,10 +253,13 @@ gives normalized overlap ``0.9999999994`` and relative ``L^2`` mismatch
 Reference-Code Linear Parity Matrix
 -----------------------------------
 
-The lanes above each close one physics family against its own reference. This
-section is the cross-cutting view: one instrument, one convention, several
-cases run as a single campaign, so the numbers are comparable with each other
-and not only with their own histories.
+.. warning::
+
+   The table below is a **historical campaign**, not validation of the repaired
+   fixed-rate operator. R0 found damping-convention and kinetic-initialization
+   mismatches; replacement runs are in progress. Its small errors do not prove
+   resolution convergence. Commands, hashes and negative results are retained
+   in the `active research logbook <https://github.com/uwplasma/GKX/pull/198>`_.
 
 The instrument is ``tools/comparison/build_gx_parity_matrix.py``, driven by
 ``tools/gx_parity_matrix_manifest.toml``. For each case it
@@ -287,7 +290,21 @@ the full-length integration is marked unsettled in
 ``docs/_static/gkx_gx_linear_parity_matrix.csv``, and the headline column below
 reports the largest difference over the settled wavenumbers only.
 
-.. list-table:: Linear parity against GX, matched resolution and geometry
+The current reporter requires finite, stable **growth and frequency** at full
+and half horizons. Exact equal finite zeros pass; otherwise the relative
+change must be at most 5%. GX temporal settling is screened separately where
+sampling permits it; unknown settling is not a pass. Historical ``converged``
+means GKX temporal settling only. New summaries distinguish jointly settled
+counts, finite relative-error coverage and joint error maxima.
+
+Temporal settling, resolution convergence, cross-code agreement and predictive
+validation are separate requirements. Refine timestep, Laguerre/Hermite orders,
+parallel sampling and domain length independently, controlling regularization
+and fitting windows. Imported geometry overrides deck ``Nz``: reports now
+retain ``requested_Nz`` alongside effective ``Nz``. Generate finer same-domain
+geometry and verify its coefficients before comparing spatial resolutions.
+
+.. list-table:: Historical linear parity against GX — pending R0 regeneration
    :header-rows: 1
    :widths: 20 12 10 14 14 14 16
 
@@ -344,30 +361,26 @@ reports the largest difference over the settled wavenumbers only.
 
 Two results in that table are worth stating in words.
 
-First, the integration length, not the model, sets the Cyclone difference.
+First, the historical Cyclone estimate was sensitive to integration length.
 Reproducing the tracked ``t=10`` Cyclone protocol at ``(N_l,N_m)=(16,48)``
 gives ``+2.24%`` in ``gamma`` and ``+5.41%`` in ``omega`` at the peak
 ``k_y rho_i = 0.3``. Integrating the same configuration for the ``t=150`` the
 GX deck itself runs moves that to ``+0.02%`` and ``+0.01%``, and the whole
 resolved band ``0.15 <= k_y rho_i <= 0.55`` falls inside ``0.21%`` in ``gamma``
-and ``0.07%`` in ``omega``. The older Cyclone mismatch figures are therefore a
-statement about a short fitting window, not about the operators.
+and ``0.07%`` in ``omega``. This alone does not exclude operator,
+initial-condition or spatial/velocity-resolution errors.
 
-Second, where both codes are converged and discretized identically, they agree
-to far better than any gate in this repository. At the W7-X peak
+Second, the historical table reported small differences at the W7-X peak
 ``k_y rho_i = 1.6`` the growth-rate difference is ``3.3e-5`` and the frequency
 difference is ``2.2e-6``; at the HSX peak ``k_y rho_i = 1.1`` both are below
-``5e-5``. This is the expected behaviour when the geometry, the velocity
-resolution and the parallel grid are shared: the two codes are converging on
-the same discrete eigenvalue, so what remains is time-integration and fitting
-error rather than a model difference.
+``5e-5``. Agreement at a shared finite resolution does not establish the
+continuum limit; these cases require fixed-rate reruns and refinement.
 
-The unsettled rows are all low-``k_y`` near-marginal modes, and they are
-reported rather than dropped. The one genuinely unresolved row is the
-kinetic-electron Cyclone case at ``k_y rho_i = 0.1``, where the fitted GKX
-frequency is over a hundred times the GX value: that is a different branch, the
-electrostatic shear-Alfven response that the GX deck's own comments warn about
-at small but finite ``beta``, and not a growth-rate error on the ITG branch.
+The historical kinetic-electron Cyclone row at ``k_y rho_i = 0.1`` reported a
+frequency over a hundred times the GX value. Mode identification remains open:
+first match damping, electron-only initialization and horizon, then compare
+eigenfunctions and branch continuity. A frequency mismatch alone is not a
+verified shear-Alfven identification.
 
 One case in that table has a coarser instrument than the others, and the table
 does not show it. Rebuilding GX at the same commit with ``-prec-sqrt=true``

@@ -39,10 +39,291 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "artifact
 from build_linear_validation_artifacts import (  # noqa: E402
     build_finite_wavelength_coulomb_pair_tables,
     coulomb_drift_kinetic_moment_matrices,
+    like_species_field_particle_fourier,
+    like_species_test_particle_gram_matrices,
+    like_species_test_particle_polarization,
 )
 
 
 MOMENT_COUNT = 8
+
+
+@pytest.mark.parametrize("pmax,jmax", [(3, 1), (5, 2), (7, 3)])
+@pytest.mark.parametrize("b", [0.0, 1.0, 4.0])
+def test_field_particle_fourier_quadrature_and_entropy(pmax, jmax, b):
+    matrix, polarization = like_species_field_particle_fourier(pmax, jmax, b)
+    refined, source = like_species_field_particle_fourier(
+        pmax, jmax, b, radial_nodes=96, pitch_nodes=64, azimuthal_nodes=64
+    )
+    np.testing.assert_allclose(matrix, refined, rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(polarization, source, rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(matrix, matrix.T, atol=1e-14)
+    assert np.linalg.eigvalsh(matrix)[0] >= -1e-12
+    c0, d = like_species_test_particle_gram_matrices(pmax, jmax)
+    total = c0 - b * b * d + matrix
+    assert np.linalg.eigvalsh(total)[-1] <= 1e-11
+    if b == 0:
+        np.testing.assert_array_equal(polarization, 0.0)
+        # Density, parallel momentum, and isotropic temperature are null modes.
+        invariants = np.zeros((pmax + 1, jmax + 1, 3))
+        invariants[0, 0, 0] = invariants[1, 0, 1] = 1
+        invariants[2, 0, 2], invariants[0, 1, 2] = 1 / np.sqrt(2), -1
+        np.testing.assert_allclose(total @ invariants.reshape(-1, 3), 0, atol=1e-11)
+        if pmax == 3:
+            exact = coulomb_drift_kinetic_moment_matrices(pmax, jmax, 1, 1, digits=40)[
+                1
+            ]
+            np.testing.assert_allclose(matrix, exact, rtol=1e-11, atol=1e-12)
+
+
+def test_field_particle_fourier_independent_spherical_coefficients():
+    # Independently generated Frei2021 coefficients: B1 S13/R12/K24, 40 digits;
+    # B4 S21/R32/K48, 50 digits. Cutoff ladders and hashes are in plan/log.md.
+    _, source = like_species_field_particle_fourier(3, 1, 1.0)
+    np.testing.assert_allclose(
+        source,
+        [
+            0.34973285725478276,
+            0.17457423371928057,
+            0,
+            0,
+            -0.16362603669655548,
+            -0.07807943187205812,
+            0,
+            0,
+        ],
+        rtol=1e-11,
+        atol=1e-13,
+    )
+    matrix, _ = like_species_field_particle_fourier(3, 1, 4.0)
+    np.testing.assert_allclose(
+        matrix[[0, 0, 2, 4, 7], [0, 1, 2, 4, 7]],
+        [
+            1.4878966067418307,
+            0.6844323956007714,
+            0.7588272803134128,
+            0.5755718820847758,
+            0.24224060802671601,
+        ],
+        rtol=1e-8,
+        atol=1e-10,
+    )
+
+
+@pytest.mark.parametrize("b", [-1.0, np.nan, np.inf])
+def test_field_particle_fourier_rejects_invalid_wavelength(b):
+    with pytest.raises(ValueError, match="bessel_argument"):
+        like_species_field_particle_fourier(3, 1, b)
+
+
+@pytest.mark.parametrize(
+    "p,j,nr,nxi,nphi",
+    [
+        (-1, 0, 8, 8, 8),
+        (0, -1, 8, 8, 8),
+        (0, 0, 0, 8, 8),
+        (0, 0, 8, 0, 8),
+        (0, 0, 8, 8, 0),
+    ],
+)
+def test_field_particle_fourier_rejects_invalid_orders(p, j, nr, nxi, nphi):
+    with pytest.raises(ValueError, match="orders"):
+        like_species_field_particle_fourier(
+            p, j, 1, radial_nodes=nr, pitch_nodes=nxi, azimuthal_nodes=nphi
+        )
+
+
+@pytest.mark.parametrize("pmax,jmax", [(3, 1), (5, 2), (7, 3)])
+def test_like_species_test_particle_dirichlet_quadrature(pmax, jmax):
+    c0, d = like_species_test_particle_gram_matrices(pmax, jmax)
+    refined = like_species_test_particle_gram_matrices(
+        pmax, jmax, radial_nodes=192, pitch_nodes=64
+    )
+    np.testing.assert_allclose((c0, d), refined, rtol=1e-11, atol=1e-12)
+    np.testing.assert_array_equal(c0[:, 0], 0.0)
+    assert np.linalg.eigvalsh(c0)[-1] <= 1e-12
+    assert np.linalg.eigvalsh(d)[0] > 0.0
+    if pmax < 7:
+        exact_dk = coulomb_drift_kinetic_moment_matrices(
+            pmax, jmax, 1.0, 1.0, digits=40
+        )[0]
+        np.testing.assert_allclose(c0, exact_dk, rtol=1e-11, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "p,j,nr,nxi", [(-1, 0, 48, 32), (0, -1, 48, 32), (0, 0, 0, 32), (0, 0, 48, 0)]
+)
+def test_test_particle_quadrature_rejects_invalid_orders(p, j, nr, nxi):
+    with pytest.raises(ValueError, match="orders"):
+        like_species_test_particle_gram_matrices(p, j, radial_nodes=nr, pitch_nodes=nxi)
+
+
+@pytest.mark.parametrize("pmax,jmax", [(3, 1), (5, 2)])
+@pytest.mark.parametrize("b", [0.0, 1.0, 4.0])
+def test_test_particle_polarization_quadrature_and_j0_source(pmax, jmax, b):
+    from scipy.special import gammaln
+
+    result = like_species_test_particle_polarization(pmax, jmax, b)
+    refined = like_species_test_particle_polarization(
+        pmax, jmax, b, radial_nodes=192, pitch_nodes=64
+    )
+    np.testing.assert_allclose(result, refined, rtol=1e-11, atol=1e-12)
+    np.testing.assert_allclose(result.reshape(pmax + 1, jmax + 1)[1::2], 0, atol=1e-14)
+    if b == 0:
+        np.testing.assert_array_equal(result, 0.0)
+        return
+    # J0(B sqrt(x)) = sum_j exp(-B²/4)(B²/4)^j/j! L_j(x).
+    # Resolve the source independently of the retained output moments.
+    c0, d = like_species_test_particle_gram_matrices(pmax, 24)
+    j = np.arange(25)
+    source = np.zeros((pmax + 1, 25))
+    source[0] = np.exp(-b * b / 4 + j * np.log(b * b / 4) - gammaln(j + 1))
+    projected = ((c0 - b * b * d) @ source.ravel()).reshape(pmax + 1, 25)
+    np.testing.assert_allclose(projected[:, : jmax + 1].ravel(), result, atol=1e-11)
+
+
+def test_test_particle_polarization_quadratic_limit():
+    c0, d = like_species_test_particle_gram_matrices(3, 1)
+    b = 1e-4
+    result = like_species_test_particle_polarization(3, 1, b)
+    # J0 = 1 - B²*x/4 + O(B⁴), x = L0-L1, C0[:,0] = 0.
+    np.testing.assert_allclose(
+        result / b**2, c0[:, 1] / 4 - d[:, 0], rtol=2e-8, atol=1e-10
+    )
+
+
+@pytest.mark.parametrize("b", [-1.0, np.nan, np.inf])
+def test_test_particle_polarization_rejects_invalid_wavelength(b):
+    with pytest.raises(ValueError, match="bessel_argument"):
+        like_species_test_particle_polarization(3, 1, b)
+
+
+@pytest.mark.parametrize("error", [0.0, 1e-9, 1e-5, np.nan, np.inf])
+@pytest.mark.parametrize("component", [0, 1])
+def test_collision_table_check_precedes_publication(
+    monkeypatch, tmp_path, error, component
+):
+    import build_finite_wavelength_coulomb_data as generator
+    import build_linear_validation_artifacts as reference
+
+    count = len(generator.BESSEL_ARGUMENTS)
+    blocks = [np.zeros((count, 8, 8)) for _ in range(2)]
+    blocks += [np.zeros((count, 8)) for _ in range(4)]
+    blocks[component][0, 0, 0] = error
+    monkeypatch.setattr(
+        generator,
+        "build_tables",
+        lambda *args: dict(zip(generator.BLOCK_NAMES, blocks)),
+    )
+    monkeypatch.setattr(
+        reference,
+        "coulomb_drift_kinetic_moment_matrices",
+        lambda *args, **kwargs: (np.zeros((8, 8)),) * 2,
+    )
+    monkeypatch.setattr(generator, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(generator, "REPO_ROOT", tmp_path)
+    paths = [tmp_path / f"{generator.STEM}.{suffix}" for suffix in ("npz", "json")]
+    for path in paths:
+        path.write_bytes(b"existing table")
+    assert generator.main(["--check"]) == (0 if error == 0 else 1)
+    for path in paths:
+        assert (path.read_bytes() == b"existing table") == (error != 0)
+
+
+@pytest.mark.parametrize("component", range(6))
+@pytest.mark.parametrize("error", [np.nan, np.inf])
+def test_collision_table_publication_rejects_nonfinite(
+    monkeypatch, tmp_path, component, error
+):
+    import build_finite_wavelength_coulomb_data as generator
+
+    blocks = {name: np.zeros(2) for name in generator.BLOCK_NAMES}
+    blocks[generator.BLOCK_NAMES[component]][-1] = error
+    monkeypatch.setattr(generator, "DATA_DIR", tmp_path)
+    paths = [tmp_path / f"{generator.STEM}.{suffix}" for suffix in ("npz", "json")]
+    for path in paths:
+        path.write_bytes(b"existing table")
+    with pytest.raises(ValueError, match="non-finite"):
+        generator.write_artifacts(blocks, digits=40)
+    assert all(path.read_bytes() == b"existing table" for path in paths)
+
+
+@pytest.mark.parametrize("component", [0, 1])
+@pytest.mark.parametrize("error", [1e-3, np.nan])
+def test_collision_quadrature_failure_precedes_publication(
+    monkeypatch, tmp_path, component, error
+):
+    import build_finite_wavelength_coulomb_data as generator
+    import build_linear_validation_artifacts as reference
+
+    original = reference.like_species_field_particle_fourier
+
+    def perturb(*args, **kwargs):
+        result = list(original(*args, **kwargs))
+        if kwargs["radial_nodes"] == 96 and args[2] == 1:
+            result[component].flat[0] += error
+        return tuple(result)
+
+    monkeypatch.setattr(reference, "like_species_field_particle_fourier", perturb)
+    monkeypatch.setattr(generator, "BESSEL_ARGUMENTS", (0.0, 1.0))
+    paths = [tmp_path / f"{generator.STEM}.{suffix}" for suffix in ("npz", "json")]
+    for path in paths:
+        path.write_bytes(b"existing table")
+    with pytest.raises(ValueError, match="quadrature"):
+        generator.main(["--output-dir", str(tmp_path)])
+    assert all(path.read_bytes() == b"existing table" for path in paths)
+
+
+def test_collision_diagonal_generator_signed_source_and_provenance(
+    monkeypatch, tmp_path
+):
+    import hashlib
+    import json
+    import build_finite_wavelength_coulomb_data as generator
+
+    monkeypatch.setattr(generator, "BESSEL_ARGUMENTS", (0.0, 1.0, 4.0))
+    blocks = generator.build_tables(40, 1)
+    signs = np.tile([1.0, -1.0], 4)
+    c0, d = like_species_test_particle_gram_matrices(3, 1)
+    for i, b in enumerate(generator.BESSEL_ARGUMENTS):
+        np.testing.assert_allclose(
+            blocks["test_matrix"][i],
+            (c0 - b * b * d) * signs[:, None] * signs,
+            rtol=1e-11,
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            blocks["test_phi2"][i],
+            like_species_test_particle_polarization(3, 1, b) * signs,
+            rtol=1e-11,
+            atol=1e-12,
+        )
+    np.testing.assert_allclose(
+        blocks["field_phi2"][1],
+        np.array(
+            [
+                0.34973285725478276,
+                0.17457423371928057,
+                0,
+                0,
+                -0.16362603669655548,
+                -0.07807943187205812,
+                0,
+                0,
+            ]
+        )
+        * signs,
+        atol=1e-12,
+    )
+    for name in ("test_phi1", "field_phi1"):
+        np.testing.assert_array_equal(blocks[name], 0)
+    data, provenance = generator.write_artifacts(blocks, 40, output_dir=tmp_path)
+    metadata = json.loads(provenance.read_text())
+    assert metadata["precision_decimal_digits"] == 15
+    assert metadata["reference_decimal_digits"] == 40
+    assert metadata["drift_kinetic_check_passed"] is False
+    assert metadata["polarization_source"] == "full_J0_not_truncated_H"
+    assert metadata["sha256"] == hashlib.sha256(data.read_bytes()).hexdigest()
 
 
 def conservation_tolerance() -> float:
@@ -222,33 +503,28 @@ def test_drift_kinetic_operators_are_self_adjoint(model: str) -> None:
     assert asymmetry < conservation_tolerance(), f"{model}: {asymmetry:.3e}"
 
 
-def test_finite_larmor_self_adjointness_breaks_at_first_order_in_b() -> None:
-    """Gyroaveraging breaks plain symmetry at first order in b, and no faster.
-
-    At finite perpendicular wavelength the operator is self-adjoint with
-    respect to a gyroaveraging-weighted inner product rather than the plain
-    one, so the stored matrix acquires an antisymmetric part. That part must
-    vanish at b = 0 and grow as B^2, matching the conservation defect.
-    """
-
-    _, metadata = _finite_wavelength_coulomb_bundle()
-    grid = np.asarray(metadata["bessel_argument_grid"], dtype=float)
-
-    zero = finite_wavelength_matrix(0)
-    assert (
-        np.abs(zero - zero.T).max() / np.abs(zero).max() < conservation_tolerance()
-    ), "the drift-kinetic limit must stay self-adjoint"
-
-    small = (grid > 0.0) & (grid <= 0.5)
-    asymmetry = np.array(
-        [
-            np.abs((matrix := finite_wavelength_matrix(index)) - matrix.T).max()
-            for index in np.flatnonzero(small)
-        ]
-    )
-    assert np.all(asymmetry > 0.0)
-    exponent = float(np.polyfit(np.log(grid[small]), np.log(asymmetry), 1)[0])
-    assert 1.8 <= exponent <= 2.3, f"asymmetry scales as B^{exponent:.3f}, not B^2"
+@pytest.mark.parametrize("moments,pmax,jmax", [(8, 3, 1), (18, 5, 2)])
+def test_finite_larmor_tables_match_dirichlet_form_and_entropy(moments, pmax, jmax):
+    """Coefficient gate, not an entropy proof for the coupled runtime field map."""
+    arrays, _ = _finite_wavelength_coulomb_bundle(moments)
+    signs = np.tile((-1.0) ** np.arange(jmax + 1), pmax + 1)
+    convention = signs[:, None] * signs
+    c0, d = like_species_test_particle_gram_matrices(pmax, jmax)
+    for index, b in enumerate(arrays["bessel_argument_grid"]):
+        test = arrays["test_matrix"][index] * convention
+        field = arrays["field_matrix"][index] * convention
+        np.testing.assert_allclose(test, c0 - b * b * d, rtol=1e-11, atol=1e-12)
+        for matrix in (test, field):
+            np.testing.assert_allclose(matrix, matrix.T, rtol=0, atol=1e-12)
+        assert np.linalg.eigvalsh(test)[-1] <= 1e-12
+        assert np.linalg.eigvalsh(field)[0] >= -1e-12
+        assert np.linalg.eigvalsh(test + field)[-1] <= 1e-12
+        np.testing.assert_allclose(
+            arrays["test_phi2"][index] * signs,
+            like_species_test_particle_polarization(pmax, jmax, float(b)),
+            rtol=1e-11,
+            atol=1e-12,
+        )
 
 
 def test_finite_larmor_coulomb_conserves_invariants_at_zero_wavelength() -> None:
@@ -267,9 +543,9 @@ def test_finite_larmor_coulomb_conserves_invariants_at_zero_wavelength() -> None
 def test_finite_larmor_conservation_defect_is_first_order_in_b() -> None:
     """The gyrocenter conservation defect must enter at first order in b = B^2/2.
 
-    This is the sharpest available check that the finite-Larmor kernels carry
-    the right order: a defect scaling as B^2 is linear in b, while a wrong
-    kernel assembly would show B^1 or B^4.
+    This regresses the stored tables, not finite-k conservation: a wrong
+    assembly can also have a B^2 defect. Physical moment functionals and
+    field-response terms require independent verification.
     """
 
     _, metadata = _finite_wavelength_coulomb_bundle()

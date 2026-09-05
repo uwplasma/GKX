@@ -167,6 +167,21 @@ For scan workloads, the default path is the custom fixed-step ``imex2``
 owner. This keeps stepping shape-stable and improves throughput for multi-ky
 scans.
 
+The current diagonal ``imex2`` update is **not uniformly second order**.
+For :math:`\dot u=(a-d)u`, where :math:`d\geq0` is the implicit diagonal
+damping and :math:`a` the remaining explicit coefficient, its amplification is
+
+.. math::
+
+   R(h)=\frac{1+h a\,(1+h a/2)/(1+h d/2)}{1+h d}.
+
+Pure damping (:math:`a=0`) gives backward Euler, :math:`R=(1+hd)^{-1}`,
+with first-order global error. An undamped oscillation (:math:`d=0,a=i\omega`)
+gives explicit midpoint, with :math:`|R|^2=1+(h\omega)^4/4>1`.
+Do not infer oscillatory stability from the method name. Refine the timestep
+at each velocity/spatial resolution and compare another integrator before
+promoting a scan; artificial damping can conceal amplification error.
+
 Nonlinear FFT bracket
 ---------------------
 
@@ -1554,10 +1569,9 @@ linked-boundary taper used in flux-tube calculations). The damping profile is
 controlled by:
 
 - ``damp_ends_widthfrac``: fraction of the domain used for the taper.
-- ``damp_ends_amp``: damping amplitude applied to :math:`H_{\ell m}`. Linear
-  callers supplying ``dt`` use a per-step strength; nonlinear/RHS callers
-  without ``dt`` use a rate. The exact scalar RK amplification and the pending
-  normalization migration are documented in :doc:`operators`.
+- ``damp_ends_amp``: fixed damping rate applied to :math:`H_{\ell m}`, per
+  normalized time. All routes use the same rate; timestep refinement holds it
+  fixed. Scalar RK amplification and legacy migration are in :doc:`operators`.
 
 The damping is only applied to nonzonal modes (:math:`k_y>0`) and can be
 disabled by setting ``damp_ends_amp = 0`` in ``LinearParams``.

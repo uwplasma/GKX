@@ -287,11 +287,7 @@ def build_runtime_linear_params(
         params,
         nu_hermite=float(cfg.collisions.nu_hermite),
         nu_laguerre=float(cfg.collisions.nu_laguerre),
-        damp_ends_amp=(
-            float(cfg.collisions.damp_ends_amp) / float(cfg.time.dt)
-            if cfg.collisions.damp_ends_scale_by_dt and float(cfg.time.dt) != 0.0
-            else float(cfg.collisions.damp_ends_amp)
-        ),
+        damp_ends_amp=float(cfg.collisions.damp_ends_amp),
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
     )
 

@@ -847,7 +847,8 @@ recursive = true
 # fraction rather than the rate its name and the docs suggest, so the comment is
 # the part that stops it happening again, and it points at #194 for the redesign
 # that would make the name true.
-baseline = 88968
+# +13 net: diagonal B² interpolation with finite one-sided endpoint derivatives.
+baseline = 88981
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -922,7 +923,32 @@ recursive = true
 # assertions 79064c4d rewrote: that the RHS end-damping term scales as 1/dt,
 # that a completed step's increment does not, and the two mocked signatures
 # that pin dt reaching the serial and sharded RHS at all.
-baseline = 86448
+# 86448 -> 86571: fixed-rate cross-route and value/gradient refinement gates,
+# plus removed-input rejection and parity override execution tests. No files added.
+# 86571 -> 86579: replace the self-constructed rate check by adapter tests.
+# 86579 -> 86668: coupled-field fixed-time/AD comparison with an independent
+# matrix exponential and Frechet derivative; no additional test files.
+# 86668 -> 86718: execute reporting gates with drifting/nonfinite frequencies
+# and zero reference growth rates; preserve total and error-coverage counts.
+# +43: exercise reference probes, terminal writes and joint reporting unknowns.
+# +10: preserve demo horizon and fixed damping while refining its timestep.
+# +9: pin the kinetic reference decks' species-selective initial condition.
+# +36: reject invalid/missing parity coordinates before setup; verify exact snapping.
+# +30: exact three-step rate derivative through serial/species-sharded integration.
+# +16: explicit profiler state precision and disabled-x64 rejection.
+# +11: distinguish jointly settled finite errors from absent/undefined coverage.
+# +10: imported sampling overrides requested Nz in parity provenance.
+# +29: full/prefix sampling equivalence with even/odd horizons and two integrators.
+# +9: refuse reference modes absent from the effective solver grid before scans.
+# +21 net: preserve existing collision artifacts when finite/NaN/Inf checks fail.
+# +18: reject nonfinite values in all six published coefficient blocks.
+# +26: independent test-particle Gram quadrature and order/entropy gates.
+# +42: like-species quadratic values/JVP/VJP at zero, interior and endpoints.
+# +41: direct polarization/source-projection and quadratic-limit gates.
+# +86: independent field Fourier, polarization, entropy and node-refinement gates.
+# +82 net: candidate generator convention/provenance and pre-publication gates.
+# +1 net: replace legacy defect regression with repaired coefficient physics gates.
+baseline = 87264
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -987,7 +1013,22 @@ recursive = true
 # made every regeneration of a tracked file a diff carrying whoever ran it. The
 # comment is longer than the deletion because the reason a provenance field is
 # absent has to live where someone would otherwise re-add it.
-baseline = 77823
+# 77823 -> 77833: explicit fixed-rate parity override and recorded resolved rate.
+# 77833 -> 77854: one GX per-step-to-rate adapter shared by trajectory/RHS tools.
+# 77854 -> 77859: require stable frequency as well as growth and retain raw
+# half-horizon values plus explicit finite-error coverage in parity reports.
+# +42: report reference-side temporal evidence without certifying sampled means.
+# +17: preflight and match reference coordinates before expensive parity solves.
+# +22: select input dtype and report actual input/output precision in RHS profiles.
+# +10: explicit joint temporal-screen error coverage and console headline.
+# +9: resolve actual spectral-grid Nz while retaining the requested value.
+# +6: move grid resolution to preflight and validate actual solver ky.
+# +1 net: reject nonfinite collision coefficients before publication.
+# +64: independent differential-form collision oracle, no runtime dependency.
+# +60 net: polarization oracle sharing the existing Dirichlet quadrature basis.
+# +84: streamed Fourier field/polarization reference; no runtime table change.
+# +44 net: direct like-species generation replaces discarded pair assembly.
+baseline = 78226
 target = 0
 
 [[line_budget_policy.counts]]

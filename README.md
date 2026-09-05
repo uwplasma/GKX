@@ -33,8 +33,8 @@ accelerator-enabled JAX wheel from the
 file, no data download. It takes about 20 s on a laptop CPU, prints the fitted
 `gamma` and `omega`, and writes
 `gkx_default_linear.{toml,summary.json,timeseries.csv,eigenfunction.csv,png}`.
-It is a smoke test, not a converged result, and emits CFL and under-resolution
-warnings to say so.
+It is a smoke test, not a converged result; fit and spectral-resolution warnings
+identify its limits. The default timestep passes the startup CFL check.
 
 Development checkout:
 
@@ -305,10 +305,11 @@ tuning but does not beat a well-tuned hypercollision. Tables and scans:
 ![Collision operator comparison](docs/_static/collision_operator_comparison.png)
 
 The models agree in the collisionless limit and separate as collisionality
-rises. Every shipped matrix is checked against the published closed forms:
+rises. The tested like-species drift-kinetic matrices match published closed forms:
 conservation and Onsager self-adjointness at 5.6e-17 and 8.3e-17 against a
 5e-12 gate, published Appendix-C coefficients at 1.1e-16, and an H-theorem
-maximum eigenvalue of 9.0e-18. Coulomb tables are generated for like-species
+maximum eigenvalue of 9.0e-18. Finite-wavelength defect-scaling tests do not yet
+prove the corresponding conservation and adjointness identities. Coulomb tables are generated for like-species
 collisions; a multispecies request is refused rather than silently
 extrapolated. Equations and convergence panels: [operators](docs/operators.rst),
 metrics in
@@ -451,8 +452,17 @@ gate, and the positive-growth mixing-length rule predicts zero for HSX and W7-X
 where the tracked nonlinear windows are finite. Derivations, calibration splits,
 and holdout gates: [quasilinear](docs/quasilinear.rst).
 
-Collision operators are validated for like-species collisions and run on the
-fixed-step cached integrator. W7-X zonal long-window recurrence/damping and
+Collision evidence covers tested like-species drift-kinetic matrices and cached
+runtime algebra; finite-wavelength physical identities remain unverified.
+The 8/18-moment finite-wavelength coefficients now pass independent quadrature
+and drift-kinetic checks, replacing tables with large finite-wavelength errors.
+They remain research-only: interpolation/derivative convergence, finite-basis
+field consistency and resolved transport benchmarks are still required.
+High-order GX comparisons are also provisional: the inspected reference's linked
+end-damping kernel omits indices above its 65,535 launch limit. An isolated
+coverage repair passes kernel tests; corrected reference solves are pending.
+See [operator/reference contracts](docs/operators.rst).
+W7-X zonal long-window recurrence/damping and
 W7-X TEM / kinetic-electron extensions are deferred. Production nonlinear
 domain decomposition and equilibrium ExB flow shear remain open.
 

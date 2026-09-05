@@ -22,19 +22,6 @@ from gkx.operators.linear.streaming import (
 )
 
 
-def test_grad_z_periodic_with_dz_and_kz_match() -> None:
-    n = 64
-    z = jnp.linspace(0.0, 2.0 * jnp.pi, n, endpoint=False)
-    f = jnp.sin(3.0 * z)
-    dz = z[1] - z[0]
-    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz)
-    df_dz = grad_z_periodic(f, dz=dz)
-    df_kz = grad_z_periodic(f, kz=kz)
-    expected = 3.0 * jnp.cos(3.0 * z)
-    assert jnp.allclose(df_dz, expected, atol=2.0e-2)
-    assert jnp.allclose(df_dz, df_kz, atol=1.0e-10)
-
-
 def test_fft_z_operators_preserve_complex64_with_float64_wavenumbers() -> None:
     """FFT multipliers must not promote complex64 states under x64/sharding."""
 
@@ -68,27 +55,38 @@ def test_grad_z_periodic_requires_dz_or_kz() -> None:
         grad_z_periodic(jnp.ones((8,)))
 
 
-def test_grad_z_linked_fft_valid_chain_matches_manual() -> None:
-    ny, nx, nz = 1, 2, 8
-    z = jnp.linspace(0.0, 2.0 * jnp.pi, nz, endpoint=False)
-    dz = z[1] - z[0]
-    f = jnp.zeros((ny, nx, nz), dtype=jnp.complex64)
-    f = f.at[0, 0, :].set(jnp.exp(1j * z))
-    f = f.at[0, 1, :].set(2.0 * jnp.exp(1j * 2.0 * z))
+@pytest.mark.parametrize("nlinks,nz", [(1, 7), (1, 8), (3, 3), (2, 4)])
+@pytest.mark.parametrize("linked", [False, True])
+def test_fft_highest_modes_and_ad_contract(nlinks, nz, linked) -> None:
+    """Analytic DFT eigenvalues and AD; even Nyquist uses -N/2, unlike GX."""
+    n = nlinks * nz
+    dz = 0.3
+    modes = (-(n // 2), (n - 1) // 2)
+    kz = 2 * jnp.pi * jnp.fft.fftfreq(n, d=dz)
+    order = jnp.arange(nlinks - 1, -1, -1)
 
-    idx_map = jnp.asarray([[0, 1]], dtype=jnp.int32)
-    kz_link = 2.0 * jnp.pi * jnp.fft.fftfreq(2 * nz, d=dz)
-    out = grad_z_linked_fft(
-        f,
-        dz=dz,
-        linked_indices=(idx_map,),
-        linked_kz=(kz_link,),
-    )
+    def derivative(value):
+        if linked:
+            return grad_z_linked_fft(
+                value, dz=dz, linked_indices=(order[None, :],), linked_kz=(kz,)
+            )
+        return grad_z_periodic(value, dz=dz)
 
-    chain = jnp.concatenate([f[0, 0, :], f[0, 1, :]])
-    dchain = grad_z_periodic(chain, dz=dz)
-    expected = jnp.stack([dchain[:nz], dchain[nz:]], axis=0)[None, ...]
-    assert jnp.allclose(out, expected, atol=1.0e-5)
+    for mode in modes:
+        wave = jnp.exp(2j * jnp.pi * mode * jnp.arange(n) / n)
+        if linked:
+            wave = wave.reshape(nlinks, nz)[order][None, ...]
+        expected = (2j * jnp.pi * mode / (n * dz)) * wave
+        actual, tangent = jax.jvp(jax.jit(derivative), (wave,), (wave,))
+        if not linked:
+            assert jnp.allclose(grad_z_periodic(wave, kz=kz), actual, atol=3e-5)
+        assert jnp.allclose(actual, expected, rtol=3e-5, atol=3e-5)
+        assert jnp.allclose(tangent, expected, rtol=3e-5, atol=3e-5)
+        # Real parameter pullback avoids ambiguous complex-gradient conventions.
+        gradient = jax.grad(
+            lambda amplitude: jnp.real(jnp.vdot(expected, derivative(amplitude * wave)))
+        )(1.0)
+        assert jnp.allclose(gradient, jnp.real(jnp.vdot(expected, expected)), rtol=3e-5)
 
 
 def test_grad_z_linked_fft_with_inverse_permutation_matches_scatter_path() -> None:

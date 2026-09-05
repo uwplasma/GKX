@@ -476,7 +476,10 @@ def _check_laguerre_transform_conditioning(
     identity_error = float(
         np.abs(to_grid @ to_spectral - np.eye(nl, dtype=float)).max()
     )
-    if identity_error > _LAGUERRE_ROUNDTRIP_TOLERANCE:
+    if (
+        not np.isfinite(identity_error)
+        or identity_error > _LAGUERRE_ROUNDTRIP_TOLERANCE
+    ):
         raise ValueError(
             f"Laguerre transform for nl={nl} is numerically unusable: the "
             f"round-trip identity error is {identity_error:.3e}, above the "
