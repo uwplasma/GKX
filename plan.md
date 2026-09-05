@@ -184,12 +184,15 @@ also fail the 5% growth screen at ky=.05 and .10: **only 9/11 modes pass
 temporal screens in both codes**. These screens use each code's estimator,
 not identical windows. Maximum GKX-settled relative errors: gamma1.904%, omega0.2591%; peak
 gamma error0.01449%. This is temporal parity evidence, not resolution convergence.
-All original rows and artifacts retained. Next GX Miller reference is live on
-GPU1, session **97329**, PID **1717513**, fixed dt=.002, tmax150, rate50.
+All original rows and artifacts retained. GX Miller reference completed exit0
+(session **97329**, old PID **1717513**), fixed dt=.002, tmax150, rate50.
 Input/output directory is the same `matched_refs/ITG_cyclone`; logs
 `miller-gx.stdout.log`, `miller-gx.time.log`. Geometry generation succeeded.
-After exit, validate its trace/provenance, prepare a separate matched Miller
-manifest and run GKX; do not call an in-flight reference complete.
+Its 751 samples reach t=150.000007 with no nonfinite diagnostics; 14/15 modes
+pass reference temporal screens (ky=.05 growth drifts21.4%). GKX Miller is now
+live on GPU1: **session31885/PID1719945**, current reporter, manifest
+`matched_miller_manifest.toml`, logs `gkx-miller.{stdout,stderr}.log`, stem
+`results/miller_rate50`. Do not restart terminal GX session97329.
 GKX fixed-rate timestep refinement completed exit0: session **57878**, old PID
 **1717879**, `salpha_dt_refinement.toml`, dt=.001, T=150, ky=.15/.30/.55,
 rate50 unchanged; logs `gkx-salpha-dt-half.{stdout,stderr}.log`, result stem
@@ -202,8 +205,7 @@ Hermite-only refinement is now live on GPU0, **session92932/PID1719126**,
 `salpha_hermite_refinement.toml`: Nm48→64, Nl16, dt=.002, T150, rate50,
 three exact stored baseline ky. Logs `gkx-salpha-nm64.{stdout,stderr}.log`;
 stem `results/salpha_rate50_nm64`. It uses the current0acbd221 reporter copy,
-not the old running tool. Miller manifest is prepared (not launched) as
-`matched_miller_manifest.toml`; verify GX completion before running it on GPU1.
+not the old running tool.
 The parity tool now reports reference-side temporal status separately (0acbd221,
 55 focused tests). Unsupported sampling is unknown; regular sampling may have
 one shortened terminal interval, as observed in GX. `converged` remains GKX-only
@@ -246,6 +248,10 @@ User checkout and other existing worktrees remain untouched.
 4. **Rebaseline:** run installed-wheel startup, relevant physics sentinels and
    external scans. Keep failed/unsettled modes in denominators. Refresh release
    evidence only from repaired results; a readiness percentage is not validation.
+   Wheel first-run at0acbd221 produced all five artifacts, but dt=.03 exceeds
+   its estimated CFL .02197 and its T15 fit is under-resolved. Repair the demo
+   without silently changing its fixed damping rate (currently .1/.03); distinguish
+   a quick transient illustration from a converged linear benchmark. See log.
 5. **Public truth:** remove the assertion that QA passed all transport gates.
 
 ### Existing entry points to reuse

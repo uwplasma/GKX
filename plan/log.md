@@ -5457,3 +5457,57 @@ this manifest with current reporter on freed GPU1. Do not treat an in-flight
 reference as finished. Keep both current live handles; no restart of terminal
 session57878. Remaining slow-mode, velocity/spatial refinement and full matrix
 are open. No source changes or public artifact promotion this turn; no merge.
+
+## 2026-09-05 — Miller reference complete; installed-wheel startup audit
+
+Previous turn progressed (dt results, full release tests, new Hermite job).
+This turn verified #200/#201 open at e36e5bd8/53d86f01, with no failed or pending
+checks. This does not certify #202 CI. Code worktree clean at0acbd221.
+
+**GX Miller session97329 completed exit0**, old PID1717513 terminal. Output
+`matched_refs/ITG_cyclone/itg_miller_adiabatic_electrons.out.nc` in owned office
+snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`, SHA256
+`da6b8cd7bf0cba3ac2da815f83dfacc98ce3fc4bc57d70304d4e1a167e29d61c`.
+751 samples, t_end150.0000071246177, 15 positive ky, zero nonfinite diagnostics.
+Independent audit_reference.py output `results/miller_reference_temporal.csv`,
+SHA256 `a8e933b85a3bc94eb9d7ab0887f71449b4f626702cfa67944dad48d21fc9cf5d`.
+14/15 pass both5% reference screens; ky=.05 growth shift -.21405718 fails.
+Largest growth at ky=.40000000596, gamma .1431124038, omega .3066916866.
+Do not claim this reference is fully settled or resolution converged.
+
+Launched **GKX Miller**, GPU1, session **31885**, Python **PID1719945**
+(time parent1719944), verified live/no stderr. Same owned snapshot and previous
+matched manifest/reporter hashes. Command uses GX_PARITY_REF_DIR=<snapshot>/matched_refs,
+CUDA_VISIBLE_DEVICES=1, JAX_ENABLE_X64=true, PYTHONPATH=src, MPLBACKEND=Agg:
+`/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python
+tools/comparison/build_gx_parity_matrix_current.py --manifest
+matched_miller_manifest.toml --cases cyclone_miller_itg --stem
+results/miller_rate50 > gkx-miller.stdout.log 2> gkx-miller.stderr.log`.
+Full 15-mode batch,75k/37.5k steps,IMEX2,rate50; reference RK4/f32 vs GKXf64.
+Hermite refinement session92932/PID1719126 still live at4m10s last check.
+
+Installed-wheel audit at0acbd221: scratch `/tmp/gkx-rate-wheel-20260905.aBK527`.
+Initial --no-build-isolation attempt failed because the existing Python3.12
+venv lacks setuptools; normal isolated `python -m pip wheel . --no-deps
+--wheel-dir <scratch>` succeeded. Wheel `gkx-2.0.0-py3-none-any.whl`, ~786KiB,
+SHA256 `4646d920f7d55523b51f858936a39a1cb3557b0d6581648eaad3984b043b46e2`.
+Installed with --no-deps --target <scratch>/installed using local jax0111 python.
+From empty <scratch>/first-run, PYTHONPATH=<scratch>/installed, asserted gkx.__file__
+points inside that install, then executed <scratch>/installed/bin/gkx with
+JAX_ENABLE_X64=true. **Exit0, all five documented artifacts nonempty**;
+log <scratch>/first-run.log. Session16126 terminal. Dependencies reused, so not
+a clean dependency-resolution test; source checkout not imported.
+
+Important first-run issue: emitted CFL warning dt=.03 >estimated.02197,
+nonstationary fit fallback, and only1.34 e-foldings (requires7). Reported
+gamma=.089982/omega=.289838 is a transient demo result, not validated growth.
+Source owner `src/gkx/workflows/demo.py`: default dt.03/steps500/T15;
+generated damping .1/settings[dt]. A dt repair must preserve the old resolved
+rate3.333333, not silently increase damping by changing the preset denominator.
+Next small fix: safe demo step, explicit fixed-rate preset, keep runtime modest,
+label transient status honestly; test actual generated input/first run. Do not
+suppress diagnostics or loosen CFL/fit thresholds. Wheel outputs preserved.
+
+Resume live **92932/PID1719126** (Nm64 GPU0) and **31885/PID1719945** (Miller
+GKX GPU1); GX97329 terminal, no restart. Record complete results before promotion,
+continue remaining matrix/refinements. No PR merged, no public artifact updated.
