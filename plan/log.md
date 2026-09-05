@@ -7108,3 +7108,50 @@ Sphinx build31253 exit0 (em-outer-jit-docs.log). Local head54a90f25 is two commi
 ahead of pushed9fc6e42d. Hold push until CI33958341219 completes: latest25pending,
 no failures. No PR merge. Latest long jobs: GX95001/PID1738946 RNl30m46s;
 GKX68484/PID1740480 RNl4m29s. All physics claims/remaining R0–R9 gates unchanged.
+
+## 2026-09-05 — Finite-k scalar-field correction cannot explain all asymmetry
+
+Previous turn added verified outer-JIT coverage. Revisited collision claims:
+README's blanket like-species validation assertion and both shipped finite-k
+table metadata labels still exceeded the bounded evidence in operators.rst.
+0afa8b64 narrows README and changes claim_scope to research_like_species_finite_larmor_coulomb
+in both metadata files and their generator. No NPZ coefficients, interpolation,
+runtime algebra or physics tolerance changed. Cached source plan.md on the code
+branch is historical; this plan branch remains authoritative.
+
+Rechecked primary Frei2021 source https://arxiv.org/html/2104.11480,
+sections3.1–3.2 (particle-coordinate conservation, test/field adjoint relations).
+The following is a mathematical inference and numerical diagnostic, not a
+claimed derivation of the physical metric. Equal-species runtime is C G+p phi;
+any linear solved scalar potential gives phi=r^T G. Set P=I−pp^T/(p^Tp).
+Then P[(C+p r^T)−(C+p r^T)^T]P=P(C−C^T)P for any r. Thus a nonzero projected
+residual rules out potential coupling alone as a repair of Euclidean symmetry.
+
+Read-only table probe, CPUx64, no interpolation (exact stored Bessel nodes):
+
+| Moments | B | norm(C−C.T) | norm(P(C−C.T)P) |
+|---|---:|---:|---:|
+| 8 | 0 | 1.779e-16 | 1.779e-16 |
+| 8 | .375 | .01332277 | .01331105 |
+| 8 | 1 | .15745363 | .15428744 |
+| 18 | 0 | 5.689e-16 | 5.689e-16 |
+| 18 | .375 | .05361009 | .05360875 |
+| 18 | 1 | .40612070 | .40379641 |
+
+For nearzero p at B0, used identity projector. This does not prove incorrect
+physics under an as-yet-undetermined metric, nor isolate a faulty coefficient.
+Next: derive g/h and entropy metric from normalized basis, independently audit
+gyroaverage/adjoint projection and coefficient assembly. Preserve asymmetry as
+negative evidence; do not patch by numerical symmetrization.
+
+Reproducer /tmp/gkx-coupled-rate-20260905.shBvlR/audit-collision-asymmetry-rank.py
+SHA256 97a1eabd592ea8896852a0612f9fc65df000f022b625ea2d7ccb1950767c4146;
+run JAX_ENABLE_X64=true PYTHONPATH=src local-JAX0111-python <script> from code
+worktree. Log SHA256 b236ea32bd65ddc013be29d10e0bfa17726ebe4c2579f126c6192be797ea7d13.
+Collision physics tests excluding overhead/cost:24passed0skipped9.824s,
+session62968exit0, collision-scope.xml SHA256
+0c07e570ec847edaef1ea9e5b2d542d9e5c5bae29764ea80272466f0fb17846f.
+Strict Sphinx2058exit0, ruff and diff checks pass. These regression passes do
+not close C2. Local0afa8b64 is3ahead of9fc6e42d, held forCI33958341219:
+latest17pending/no failures. GPUjobs verified: GX95001/PID1738946 RNl34m05s;
+GKX68484/PID1740480 RNl7m48s. No merges, no restarts; full roadmap active.

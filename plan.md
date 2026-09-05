@@ -125,8 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local head **54a90f25**, pushed **9fc6e42d**
-(two local commits held until current CI completes), worktree
+`fix/r0-end-damping-rate`, local head **0afa8b64**, pushed **9fc6e42d**
+(three local commits held until current CI completes), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -134,7 +134,7 @@ repairs CPU singleton-rank lowering without changing the GPU layout.
 PR200/201 last checks: no failures or pending checks. PR202's earlier formatting
 failure was fixed in02536eef; CI status is tied to the exact commit below.
 CI run33956493988 at b734e19d completed successfully; after that, pushed9fc6e42d.
-New run33958341219 has25 pending jobs and no failures in the latest query,
+New run33958341219 has17 pending jobs and no failures in the latest query,
 not yet certified. Frequent earlier pushes cancelled
 superseded runs before completion; avoid restarting CI for every microcommit.
 
@@ -319,6 +319,11 @@ identities directly for each supported model and species combination.
 The finite-k runtime includes four nonzero polarization vectors omitted by the
 matrix-only defect tests; audit the coupled distribution/field map, not just
 the sum of its test-particle and field-particle matrix blocks.
+The scalar-potential term alone cannot restore Euclidean symmetry: with
+`phi=r^T G` and `P=I−pp^T/(p^Tp)`, the projected antisymmetric part of
+`C+p r^T` is `P(C−C^T)P`, measured nonzero for both shipped tables. Derive the
+physical metric and audit coefficient/projection assembly; do not symmetrize
+tables or call a finite-k defect-scaling regression a validation proof.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
