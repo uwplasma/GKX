@@ -7557,3 +7557,114 @@ polarization, or full collision physics. Next: inspect terminal results/hashes
 without duplicates; compare Nm160 against matched Nm128; independently audit
 the patched GX output and dt before parity; finish coefficient/polarization
 convergence before replacing tables. Full R0–R9 roadmap remains active.
+
+## 2026-09-05 — Independent polarization oracle; completed patched-GX reference
+
+Previous goal turn: progress (pushed interpolation repair and revised checkpoint).
+Revalidated all three old jobs; no duplicate launches. Code now **b7cd526e**,
+one ahead of pushed2c440b0e, held while CI33961508920 completes (latest5pending,
+no failures). Added an offline test-particle polarization oracle, sharing the
+existing differential quadrature basis; no runtime/table modification. Source
+count88981 unchanged, tests87095 (+41), tools78098 (+60 net), no new repo files.
+
+Derivation source revisited: https://arxiv.org/html/2104.11480, Eq45/47c/77/89.
+Set the Dirichlet source to u=J0(B r sqrt(1−xi²)), with analytic derivatives
+u_r=−B sqrt(1−xi²)J1 and u_xi=B r xi J1/sqrt(1−xi²). This gives test-phi2
+with qphi/T factored out; equal-species test-phi1 is zero. This is independently
+derived from the differential form, not another spherical-coefficient contraction.
+
+Scratch `/tmp/gkx-coupled-rate-20260905.shBvlR`, local Python/JAX0.11.1 environment,
+PYTHONPATH=src:tools/artifacts, script collision-test-polarization.py. Session22738/
+PID57719 terminal exit0. Direct quadrature96/48→192/64 changes vectors by <=6.03e-14.
+
+| Moments | B1 shipped test-phi2 relative error | B4 error |
+|---:|---:|---:|
+| 8 | .037402892979085306 | .957948360893082 |
+| 18 | .0017358376451763447 | .8640258003712806 |
+
+Refined B1/P3J1/S13/R12/K24/digits40 generator agrees with direct quadrature
+to1.5078857862559835e-11 in54.8385s; both phi1 norms zero. B0 direct vector
+is exactly zero. The scratch's relative-error normalization at B0 is meaningless
+(division by float tiny); actual stored norms are only1.0655743879e-61 and
+3.4942288488e-60. Do not report its huge B0 ratios as a physical failure.
+
+Independent source ladder uses J0=sum_j exp(−B²/4)(B²/4)^j/j! L_j, contracts
+the Gram matrix, and projects onto fixed8 output moments. For B4 sourceJ4/8/
+12/16/24 relative errors are .0408927/.000169877/1.42939e-7/3.78451e-11/
+9.96057e-16; B1 J8 already9.15081e-14. This checks the direct source derivative
+and the need to resolve source independently of output moments. Shared-basis
+refactor check extracts only the committed2c440b0e Gram function with AST:
+8/18/32 old/new matrix pairs are bitwise equal, exit0.
+
+Committed tests cover quadrature refinement, odd-Hermite parity, source projection,
+B0, the analytic B² limit C0[:,1]/4−D[:,0], and invalid wavelengths. CPU selected
+physics suite (`-k 'not overhead and not cost'`) **61pass0skip** in both x64
+(11.111s,7440exit0) and f32 mode (11.894s,82335exit0). These new offline oracles
+are NumPy float64 in both modes, not a GPU/production-AD claim. Targeted17pass;
+Ruff/check/format/architecture/diff and strictSphinx64151 pass. No table promoted.
+
+SHA256 (same scratch):
+
+| Artifact | SHA256 |
+|---|---|
+| collision-test-polarization.py | 3eb068dbb46c908c1ab8b976c02ed37154c28ccc7ff118236004e4ec32243621 |
+| collision-test-polarization.log | 1d2c011e31c03e5160db31c0e59076084d499dbd02e796d04795edbd913cd1f8 |
+| collision-polarization-b1-s13-r12-k24.npz | 327d79ae1baf1713b08289fd5929eb67fabf71e0ad372009ac1cc35b52d48b8e |
+| collision-polarization-source-ladder.py | ba411d52f6e187edea73be03ee67ab11cb855f41d1827960effa42d39daad99d |
+| collision-polarization-source-ladder.log | f64f8e96872323198142b114f8ef9a077fa73d4aaf9176b8eec5daa39cf0ec95 |
+| collision-gram-refactor-check.py | 202a1cb10e2b0c465a088b1e3e897a98d2d0f949012625abef2792edad258831 |
+| collision-gram-refactor-check.log | 44365e041c9fae06e08db447f8e9a018688c070c8524f8ec55d51a73a890ab90 |
+| collision-polarization-final.xml | 1da968a20fbc7e6a7061e94e811555c8042c2dfa402fcf46f0cd21464fcb703d |
+| collision-polarization-f32.xml | cbcb54a91e5b0fc4939fe8808212139ce4414740730c2f09e530bfc2b111a697 |
+
+Field angular45671/PID50209 completed exit0. Final spherical17 test error
+.0018808579841654452, field norm2.6971432806633238, asymmetry3.730828446079427e-15,
+field successive change1.070927690290596e-5,658.9941s. Log SHA
+ac7f7d9a92dacf5948a8c6a7c6ec289028f645157c169f5e2cd9a8fea618cc8e.
+Saved collision-b4-s{13,15,17}-r32-k48.npz hashes respectively
+fb977323815b228f72108b1a43585347ceb7e759effa35e00bfc2c2cd9fe0fa2,
+27d31976bf204d17a0097972a54fc5e585cc283b5e1370da890e989817dacd2e,
+3c37039bfca3af6f2e7b9a3b8db2bedd9076663d3860cdc868634fbf77d002c2.
+Continued at spherical19/21, not repeating old rungs: **12758/PID58452**,
+collision-field-angular-fine.py SHA4f51d44d6ddc4551dac71f68e0654c360452a9efb2b98042d48a3582ba3edae0,
+same environment and cwd, stdout/stderr collision-field-angular-fine.log;
+saved17 field supplies the baseline. Verified Rs6m12s. Keep running.
+
+### Patched GX reference exit and audit
+
+GX95001/PID1738946 completed exit0 in1:44:10 (RSS1691008kB, concurrent hardware:
+not an isolated performance benchmark). Original GX remains untouched; this is
+the explicitly normalized-power scratch binary whose provenance is above.
+`audit-refined-gx.py` copied to the existing refined directory with the matched
+GKX dt-half CSV, then executed with office venv Python. Initial43874exit0;
+repeat36476exit0 saved log, copied locally. This repeat is a read-only audit,
+not a solver restart. All numeric arrays finite:264 out,42 big,2 restart.
+Grid ky12/kz96;1501 samples,150000 steps, float32 dt=.0020000000949949026,
+T300.0000142492354; stdout and interior NetCDF time-spacing audits pass.
+Final diagnostic interval is99 steps, accepted as a truncated regular interval.
+
+Ten of11 positiveky modes pass both5% temporal screens; lowestky growth shift
+−5.355% fails. Atky.550000011920929, late-half omega=.5051693808381631,
+gamma=.023903807575570125; reference half-window relative shifts−.00125904/
+−.00966998 respectively. Matched GKX Nl32Nm96 dt.001/T300 omega/gamma
+.5049331701718064/.02485209212445021 differ by−.0467587%/+3.9670858%.
+Using GX last30% instead gives omega=.5051046493576794,gamma=.023870534360607026,
+half shifts−.019584%/−.111038%, and GKX differences−.033949%/+4.112006%.
+Thus changing the diagnostic window does not remove the residual. These use
+GX sample means of instantaneous omega/gamma versus GKX fitted diagnostics;
+audit estimator, precision and operator differences before assigning a cause.
+Do not compare the running GKX Nm160 to this Nm96 reference as matched resolution.
+
+| Artifact | SHA256 |
+|---|---|
+| audit-refined-gx.py | 77ba6323af38349fbe824f34dda98c399f11a77b021a04672a0f22121cfe221e |
+| audit-refined-gx.log | 2c03fb2f6db742a2e681d6315d4a4f58f8baee2a285c8ac5714aed6f3c811c33 |
+| salpha_nl32_nm96_t300.out.nc | 1243aa98ff6632120b37a74767d646c8505d52cf364bc5b36d82746296f73be8 |
+| salpha_nl32_nm96_t300.big.nc | 2565c874de7fd3d5fd4c46a38be6f59afd40b9e8574a2efb93fed140c7ce8312 |
+| salpha_nl32_nm96_t300.restart.nc | ee08cd0eff13d85de259b6aac55cf7462bca7ed7206c351a480b8c01ca48df00 |
+
+Only live long jobs now GKX11457/PID1744614 (verified RNl32m50s, GPU0) and
+field12758/PID58452 (local CPU). GPU1 is free. No merges. Next: collectNm160,
+finish19/21 field ladder, independently validate field polarization, investigate
+the ~4% reference discrepancy, then regenerate coefficients only with established
+convergence and physical contracts. Full R0–R9 goal remains active.

@@ -125,8 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local/pushed head **2c440b0e**
-(two held commits pushed after CI33959939110 completed successfully), worktree
+`fix/r0-end-damping-rate`, local **b7cd526e**, pushed **2c440b0e**
+(one held commit while CI33961508920 completes), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -153,7 +153,7 @@ superseded runs before completion; avoid restarting CI for every microcommit.
 | s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
 | Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
 | High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; at T300 Nm96→128 changes gamma0.468%, omega0.192%, with temporal shifts0.168%/0.219% | Laguerre/parallel resolution and regularization sensitivity; two fine Hermite points alone do not establish convergence |
-| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713%; halving dt has negligible effect; Nz96→192 changes gamma+0.3467%, omega−0.0306% | Velocity convergence fails; patched-GX same-resolution reference running |
+| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713%; halving dt has negligible effect; Nz96→192 changes gamma+0.3467%, omega−0.0306%; patched-GX Nm96 reference completed, high-ky growth discrepancy ~4% | Velocity convergence and residual cross-code discrepancy remain open |
 | Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
 | RHS profiling | Explicit state precision and observed state/RHS dtypes; 36 profiler tests pass; CPU z-wave warm means17.8ms f32/41.8ms f64 | Artificial-state triage only; no end-to-end speedup, peak-memory or f32 scientific-accuracy claim |
 
@@ -168,8 +168,7 @@ convergence and experimental validation are distinct claims.
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
 | GKX s-alpha Nl32 Nm160 Nz96, RK4 dt=.001, T300, rate50 | 0 | **11457 / 1744614** | `salpha_nl32_nm160_t300.toml`, `gkx-salpha-nl32-nm160-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm160_t300` |
-| Patched GX s-alpha Nl32 Nm96 Nz96, RK4 dt=.002 fixed, T300, rate50 | 1 | **95001 / 1738946** | Different directory: `/home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined`, `salpha_nl32_nm96_t300.in`, `run.log`, `time.log` |
-| Collision B4 spherical13/15/17 control, radial32/Bessel48, fixed8 moments | Local CPU | **45671 / 50209** | `/tmp/gkx-coupled-rate-20260905.shBvlR/collision-field-angular.{py,log}`; saves each matrix NPZ |
+| Collision B4 spherical19/21 control, radial32/Bessel48, fixed8 moments | Local CPU | **12758 / 58452** | `/tmp/gkx-coupled-rate-20260905.shBvlR/collision-field-angular-fine.{py,log}`; continues from saved spherical17 field |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -179,24 +178,30 @@ uses a separate grid-verified reporter from1571a9e6; no running copy overwritten
 Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** inspect all three exits, hashes, finite histories and all rows.
+**Next actions:** inspect both live exits, hashes, finite histories and all rows.
 Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
 running as11457. Nm128 run68484 completed exit0 in43:47.41: atNl32,
 Nm96→128 changes gamma−8.141% and omega−0.274%, so velocity convergence fails.
 Compare the new run against Nm128 at matched dt.001/T300;
 the earlier Nm96→128 result at Nl16 cannot establish convergence at Nl32.
-GX95001 is now running with an isolated normalized-power repair, explicitly
+GX95001 completed exit0 in1:44:10 with an isolated normalized-power repair, explicitly
 labeled as a modified reference (original checkout/binary unchanged). The failed
 original high-order startup and repaired finite startup are retained; low-order
 potential traces agree within1.42e-7 relative L2. Do not launch a duplicate or use
 unmodified GX3865a537 at high Nm: its separate float32 powers overflow. Use a valid reference to compare
 the high-order GKX result at matched velocity resolution, not the old Nl16/Nm48
-reference. Preserve both references and record the actual resulting GX timestep.
+reference. Preserve both references. The completed audit verifies1501 samples,
+dt=.0020000000949949026 toT300.0000142492354, and finite264/42/2 numeric
+arrays in out/big/restart. Atky.550000011920929, late-half GX gamma=.023903807575570125,
+omega=.5051693808381631; half-window shifts−.967%/−.126% pass the temporal screen.
+Matched GKX Nm96 gamma is3.967% higher (4.112% against the reference's last30%);
+this residual is not erased by temporal settling. Audit estimator/precision/operator
+differences before claiming resolved parity. Lowestky still fails the5% growth screen.
 Prepared input now explicitly pins fixed_dt=true and Expert damping values;
 its current SHA256 is fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
 Spatial77271, dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
 The small derivative test completed beside the kinetic run with an8% memory pool;
-no performance claim. Patched GX95001 now occupies GPU1.
+no performance claim. Patched GX95001 is terminal; GPU1 is now free.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly
@@ -362,6 +367,13 @@ generic and unlike-species semantics remain unchanged. Still required: physical
 interpolation/AD convergence for field/polarization coefficients, and a validated
 runtime Gram polynomial for the test block. Neither this interpolation repair
 nor coefficient repair alone closes physical AD validation.
+New independent test-polarization quadrature (b7cd526e) agrees with the refined
+B1 spherical13/radial12/Bessel24 generator to1.51e-11, but the shipped B4
+test-phi2 errors are95.79%/86.40% for8/18 moments. Quadrature refinement and
+the independent J0 source-moment ladder pass; field polarization remains open.
+B4 angular13/15/17 control45671 completed exit0: at17 the field changes1.07e-5,
+while the test block still differs from its Gram oracle by.1881%. Continue the
+new19/21 control12758, not the completed13/15/17 process. No tables replaced.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
