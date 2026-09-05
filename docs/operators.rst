@@ -305,6 +305,22 @@ an adjoint-pair projection preserves that property. Derive the metric and
 ``g``/``h``/field-response mapping of the stored matrix before accepting its
 observed asymmetry. A wrong assembly can also produce an order-:math:`b` defect.
 
+The solved potential alone cannot restore Euclidean symmetry of the shipped
+matrix. For one species, write the runtime action as
+:math:`C G+p\phi`, with :math:`\phi=r^T G`, and define
+:math:`P=I-pp^T/(p^Tp)`. Then
+
+.. math::
+
+   P[(C+pr^T)-(C+pr^T)^T]P=P(C-C^T)P.
+
+At Bessel argument :math:`B=1`, the measured Frobenius norm on the right is
+0.1543 (8 moments) and 0.4038 (18 moments), not roundoff. This rules out a
+scalar-potential correction as the sole explanation in the Euclidean metric;
+it does not establish the physical metric or identify the faulty coefficient.
+The reproducible rank probe and hashes are in the
+`research logbook <https://github.com/uwplasma/GKX/pull/198>`_.
+
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
 

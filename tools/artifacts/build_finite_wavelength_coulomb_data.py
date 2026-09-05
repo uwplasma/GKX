@@ -130,7 +130,7 @@ def write_artifacts(
         "kind": "gkx_finite_wavelength_coulomb_coefficients",
         "source": "Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021), arXiv:2104.11480",
         "equations": "3.47-3.50",
-        "claim_scope": "validated_like_species_finite_larmor_coulomb",
+        "claim_scope": "research_like_species_finite_larmor_coulomb",
         "bessel_argument": "B = k_perp v_th / Omega; runtime interpolates at sqrt(2 b)",
         "bessel_argument_grid": list(BESSEL_ARGUMENTS),
         "maximum_hermite_order": hermite,

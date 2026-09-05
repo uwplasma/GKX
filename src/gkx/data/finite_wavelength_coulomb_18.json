@@ -16,7 +16,7 @@
     3.5,
     4.0
   ],
-  "claim_scope": "validated_like_species_finite_larmor_coulomb",
+  "claim_scope": "research_like_species_finite_larmor_coulomb",
   "dtype": "float64",
   "equations": "3.47-3.50",
   "kind": "gkx_finite_wavelength_coulomb_coefficients",
