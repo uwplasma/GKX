@@ -5351,3 +5351,51 @@ session97329/PID1717513; GKX refinement session57878/PID1717879. Record actual
 exit/artifacts before interpreting. Continue slow-mode extension, spatial and
 velocity refinement, broader matrix and reference-status repair. No merge,
 public artifact promotion, or validation-debt closure in this turn.
+
+## 2026-09-05 — reference temporal status wired into parity reports
+
+Previous turn progressed (independent reference audit, live timestep refinement,
+pushed checkpoint). Revalidated both jobs this turn: Miller PID1717513 at8m00s
+and GKX refinement PID1717879 at5m14s, both RNl, no stderr. Do not restart.
+
+Committed/pushed **0acbd221** to draft #202. No production solver changes.
+Reference loader no longer describes every loaded mean as converged. Retains
+the historical late-half diagnostic sample mean, with optional middle-quarter
+probe and raw reference growth/frequency values. Requires >=8 finite increasing
+timestamps with regular spacing (rtol1e-3), permitting one shortened terminal
+interval. Short, invalid or irregular sampling yields unknown reference status,
+not a passed screen; not a time-weighted estimator. Reference and GKX screens
+each require finite growth/frequency and <=5% relative shift (finite equal zeros
+pass). `converged` and old settled count stay explicitly GKX-only for artifact
+compatibility. New `reference_settled`, `both_codes_settled` and joint count expose
+the distinction; CSV appends fields and leaves old records' missing fields blank.
+
+**55 focused tests passed**, using real synthetic NetCDF reads for regular,
+shortened-final, irregular, reversed and short time grids, and actual run_case
+wiring with stable/drifting/nonfinite/unknown reference frequency crossed with
+the existing GKX frequency and zero-reference tests. Command:
+`PYTHONPATH=src JAX_ENABLE_X64=true
+/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python -m pytest -q
+tests/release/test_release_gates.py -k
+'parity_reference_probe or parity_convergence_requires or parity_fixed_damping'
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/reference-gates.xml`.
+XML SHA256 `461dd0688aea3a848d7106481ec00c157063b2f41679d90488c2f3499631bacb`.
+Ruff, whitespace, architecture gate and Sphinx HTML -W pass. Explicit budgets
+test+43/tool+42 lines; no new repository files. No full-CI assertion.
+
+Real-output check initially returned unknown because GX's final interval is
+.1980000094, versus regular .2000000095; this was not an adaptive run. Added
+explicit shortened-terminal handling/test instead of loosening interior-grid
+tolerance. Read-only loader copy `postprocess_parity.py` in the office snapshot
+now returns reference false for ky=.05/.10 and true for the other nine, matching
+the independent audit. This copy is only postprocessing; neither running solver
+nor its old3565 reporter was replaced. All original reference estimates retained.
+Runpy command calls load_reference_spectrum on the completed s-alpha NetCDF then
+_settled on each pair of full/half reference growth and frequency estimates.
+
+Resume unchanged live sessions: **97329/PID1717513** (Miller GX GPU1),
+**57878/PID1717879** (GKX dt=.001 GPU0). Their owned directory, commands, stems
+and hashes remain in preceding entries. Read exits and complete traces before
+interpreting; finish matched Miller comparison and timestep/spatial/velocity
+refinement. Slow-mode extension and broader R0 work remain open. Keep #202 draft
+and all PRs unmerged; no public evidence promoted.

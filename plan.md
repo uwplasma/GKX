@@ -151,7 +151,7 @@ Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
 **In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `c979989f`, based on #199 b5dca15a.
+`fix/r0-end-damping-rate`, head `0acbd221`, based on #199 b5dca15a.
 Source, route-aware deck migration, fixed-rate parity overrides, docs and
 cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
 and route checks pass. Full external reference regeneration, adaptive calibration,
@@ -195,8 +195,11 @@ GKX fixed-rate timestep refinement is also live: GPU0, session **57878**, PID
 rate50 unchanged; logs `gkx-salpha-dt-half.{stdout,stderr}.log`, result stem
 `results/salpha_rate50_dt_half`. Compare to the original rows, audit both
 temporal shifts, and distinguish timestep error from reference-window drift.
-The parity tool still lacks reference-side temporal status: repair this before
-public promotion; a reference mean is not automatically a converged spectrum.
+The parity tool now reports reference-side temporal status separately (0acbd221,
+55 focused tests). Unsupported sampling is unknown; regular sampling may have
+one shortened terminal interval, as observed in GX. `converged` remains GKX-only
+for compatibility; `both_codes_settled` requires both screens. Old running
+snapshot3565 lacks these fields; audit it independently before public promotion.
 Verify the current handle/process before resuming; never restart from a stale log.
 Existing `/home/rjorge/gx_refs_lin`
 contains five outputs, but its s-alpha run uses dt≈.00466 and KBM≈.00065, not
