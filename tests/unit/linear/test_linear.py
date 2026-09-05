@@ -1343,6 +1343,95 @@ def test_end_damping_fixed_time_value_and_gradient_converge(method, order):
         assert np.all(ratios > 2 ** (order - 0.3)), (method, errors)
 
 
+def test_coupled_linear_rate_gradient_converges_to_matrix_exponential():
+    """Temporal/AD gate using Al-Mohy & Higham (2009) exponential Frechet derivative."""
+    from scipy.linalg import expm, expm_frechet
+
+    with jax.enable_x64():
+        grid = select_ky_grid(
+            build_spectral_grid(
+                GridConfig(
+                    Nx=1,
+                    Ny=8,
+                    Nz=8,
+                    ntheta=8,
+                    nperiod=1,
+                    boundary="linked",
+                    y0=10.0,
+                    Ly=20 * np.pi,
+                )
+            ),
+            1,
+        )
+        geom = SAlphaGeometry.from_config(GeometryConfig(s_hat=0.8))
+        params = LinearParams(damp_ends_amp=0.7, nu=0.05)
+        cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
+        shape = (2, 4, 1, 1, 8)
+        terms = LinearTerms(apar=0.0, bpar=0.0)
+        rng = np.random.default_rng(32)
+        state = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+        _, phi = linear_rhs_cached(state, cache, params, terms=terms)
+        assert float(jnp.linalg.norm(phi)) > 1e-5
+
+        def matrix(rate):
+            p = replace(params, damp_ends_amp=rate)
+
+            def column(vector):
+                return linear_rhs_cached(
+                    vector.reshape(shape),
+                    cache,
+                    p,
+                    terms=terms,
+                    use_jit=False,
+                    use_custom_vjp=False,
+                )[0].ravel()
+
+            return np.asarray(
+                jax.vmap(column)(jnp.eye(state.size, dtype=state.dtype))
+            ).T
+
+        operator = matrix(0.7)
+        direction = matrix(1.7) - operator  # Exact: operator is affine in rate.
+        horizon = 0.2
+        reference = expm(horizon * operator) @ np.asarray(state).ravel()
+        tangent = (
+            expm_frechet(horizon * operator, horizon * direction, compute_expm=False)
+            @ np.asarray(state).ravel()
+        )
+        expected = np.real(np.vdot(np.asarray(state).ravel(), tangent))
+        assert abs(expected) > 0.1
+        errors = []
+        for steps in (8, 16, 32):
+
+            def solve(rate):
+                return integrate_linear(
+                    state,
+                    grid,
+                    geom,
+                    replace(params, damp_ends_amp=rate),
+                    dt=horizon / steps,
+                    steps=steps,
+                    method="rk4",
+                    cache=cache,
+                    terms=terms,
+                )[0].ravel()
+
+            value = solve(jnp.asarray(0.7))
+            gradient = jax.grad(
+                lambda rate: jnp.real(jnp.vdot(state.ravel(), solve(rate)))
+            )(jnp.asarray(0.7))
+            errors.append(
+                [
+                    np.linalg.norm(np.asarray(value) - reference)
+                    / np.linalg.norm(reference),
+                    abs(float(gradient) - expected) / abs(expected),
+                ]
+            )
+        errors = np.asarray(errors)
+        assert np.all(errors[:-1] / errors[1:] > 12.0), errors
+        assert np.all(errors[-1] < 1.5e-7), errors
+
+
 def test_streaming_zero_for_constant_z(cyclone_world, only_terms):
     """Streaming should vanish for z-constant fields."""
     cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)

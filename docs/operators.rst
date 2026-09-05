@@ -1218,6 +1218,14 @@ operator. Periodic (including zero-shear-forced periodic) and disabled damping
 need no conversion. Sampled diagnostic spacing alone does not certify the
 internal damping rate.
 
+The temporal/AD gate ``test_coupled_linear_rate_gradient_converges_to_matrix_exponential``
+checks a coupled 64-state electrostatic operator against :math:`e^{TL}` and
+its Fréchet derivative (Al-Mohy and Higham, 2009). This validates timestep and
+reverse-mode derivative convergence for that discretization, not spatial or
+gyrokinetic model accuracy. Use reverse-mode ``jax.grad`` for this public
+linear-integration path: direct ``jax.jvp`` encounters its custom-VJP field
+solve and is not supported. Scalar-stage JVP checks do not establish otherwise.
+
 Controls:
 
 - ``RuntimeTermsConfig.hyperdiffusion``
