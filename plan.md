@@ -119,14 +119,20 @@ acceptance criteria are frozen.
 
 ### R0: immediate small-PR queue
 
-Resume checkpoint (2026-09-04): plan approved. Worktree
+Resume checkpoint (2026-09-05): plan approved; first R0 slice is
+[PR #199](https://github.com/uwplasma/GKX/pull/199), **open**, stacked on #197.
+Worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`, branch
-`fix/r0-damping-path-consistency`, starts from PR #197 `9074dd87`. Independently
-audit the restoring patch, especially missing dt in field-supplied/sharded RHS
-and the distinction between RK stage strength and exact removed fraction.
-PR #196's open-ended backend skip is the next precision audit. No merge is
-authorized; update this checkpoint and append commands/results to `plan/log.md`
-before changing workstreams. User checkout and other existing worktrees remain untouched.
+`fix/r0-damping-path-consistency`, commit `b5dca15a`, base #197 `9074dd87`.
+CPU/GPU boundary sentinel passed; 8 analytic RK/JVP cases plus the existing
+Euler check passed; removing dt scaling fails the new test. Nonlinear RHS also
+omits dt, not just the four field-supplied call sites: #194 must reconcile these
+contracts without silently changing nonlinear results. No numerical change yet.
+**Next:** audit #196's open-ended backend skip with isolated f32 reproducers and
+supported-version probes; then finish route coverage and release rebaselining.
+No jobs remain running from this slice. No merge is authorized; update this
+checkpoint and append commands/results to `plan/log.md` before changing workstreams.
+User checkout and other existing worktrees remain untouched.
 
 1. **Damping:** review #197 against #192 independently. Compatibility restores
    the old per-step map; it is not #194's continuous-rate migration. Audit serial,

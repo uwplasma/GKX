@@ -4542,3 +4542,61 @@ physics-validation claim follows from this planning-only test.
 Next remains R0; R1 contracts now cover the full scientific destination. Full
 workload profiling, independent physics campaigns and predictive/optimization
 acceptance remain explicit open milestones. Keep PR #198 open; do not merge.
+
+## 2026-09-05 — R0 first execution slice: damping contract certification
+
+Approved plan; execution active. Code PR **#199** (`b5dca15a`) is stacked on
+**#197** (`9074dd87`), not main. Roadmap/log remain on PR #198. All three are
+open; no merge, reference regeneration or numerical implementation change.
+
+Resume locations:
+- `/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`, branch
+  `fix/r0-damping-path-consistency`; clean/pushed at b5dca15a.
+- `/Users/rogeriojorge/local/GKX-worktrees/research-plan-20260904`, branch
+  `plan/research-publication-20260904`; authoritative plan/log.
+- Office snapshot `/home/rjorge/gkx-r0-damping-20260904.S0ny7R`, created by
+  `git archive origin/fix/end-damping-per-step | ssh office 'tar -x -C ...'`;
+  exact source SHA 9074dd87. No background solver job remains from this slice.
+
+Independent findings:
+- Per-step strength is not an exact fraction removed by arbitrary RK: for an
+  isolated scalar damped mode, `G_next=R(-A*d(z))*G`. Added analytic polynomial
+  and JVP tests at dt=0.002/0.2 for Euler/RK2/RK3/RK4 (absolute 2e-15).
+- The main nonlinear RHS does not accept/pass dt either. The four missing
+  field-supplied call sites listed in #197/#194 are not the whole scope.
+  Documented the mixed legacy contract rather than changing nonlinear runs
+  under a compatibility patch. Coupled H/fields are not the scalar test model.
+- Corrected input/normalization/operators/numerics and repeated test prose.
+  Source Python -6 lines, test Python -1 line; no new file, assertion removal
+  or manifest relaxation. The sentinel's gamma is a compatibility reference,
+  not an independently derived physical benchmark value.
+
+Commands/results (run from the code worktree unless qualified):
+1. `PYTHONPATH=src JAX_ENABLE_X64=true python -m pytest -q
+   tests/validation/physics_gates/test_end_damping_physics.py`: **1 passed**;
+   local `/opt/local/bin/python`, JAX 0.9.2. 20,000 steps at dt=0.002.
+2. Same sentinel on office, `CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true
+   PYTHONPATH=src /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+   tests/validation/physics_gates/test_end_damping_physics.py
+   --junitxml=sentinel-gpu.xml`: **1 passed**, Python 3.11.15/JAX 0.10.2.
+   XML SHA256 `0239dfcdcd6d7bbeca04a61d112e2e1efc3c24b15d67d7a63261b116cf36f7af`.
+3. `PYTHONPATH=src python -m pytest -q tests/unit/linear/test_linear.py
+   -k 'end_damping_rk_stability or applies_linked_end_damping_per_step'
+   --junitxml=/tmp/gkx-r0-damping-focused-20260905.xml`: **9 passed**.
+4. In an isolated interpreter replace `_scalar_params(params,dtype,dt)` by
+   its original call with `dt=None`, then run `pytest -x -k
+   end_damping_rk_stability` on that test file: **expected failure**,
+   amplification 0.9996 vs 0.8. No source mutation persisted.
+   `/tmp/gkx-r0-damping-mutant-20260905.xml` SHA256
+   `16233a6b177fe881d49301d0a51144a91df8c5a7a025d1f4fd23dd5c0f128b32`.
+5. Ruff 0.13.1 check/format on edited Python, Sphinx `-q -b html -W
+   --keep-going docs /tmp/gkx-r0-damping-docs-20260905`, package architecture,
+   repository-size checks and `git diff --check`: **pass**. CI's newer Ruff
+   and full-suite status are not inferred from these focused checks.
+
+Next: inspect #196 on an isolated branch, reproduce the f32 backend issue in
+subprocesses, probe known-installed versions, bound skips to actual evidence
+and retain default-precision coverage. Then complete linear/nonlinear/eigen/
+implicit/sharded damping route coverage before #194 migration/rebaselining.
+Do not reinterpret the completed smoke/math/compatibility checks as full
+physics, all-PR independent validation or completed R0.
