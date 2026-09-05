@@ -125,7 +125,7 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, head **77d2d5ed**, worktree
+`fix/r0-end-damping-rate`, head **3d78fbf0**, worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -142,6 +142,7 @@ in02536eef; do not infer full-CI completion from local gates.
 | GX adapters | Active damping requires explicit reference dt; kinetic Miller electron-only seed corrected | Do not reuse old unmatched-rate/initial-condition results |
 | Parity coordinates | Missing/invalid/duplicate ky rejected before solves; accepted decimal values snapped to exact reference within float32 roundoff | Old running reporter lacks this preflight; current campaign manifests already use exact ky |
 | Tests/startup | CPU/GPU boundary and route probes; coupled reverse AD vs matrix exponential; 88 linear, 78 time-integrator, 188 release, 148 CLI tests passed in recorded runs | Fresh full CI; direct JVP through custom-VJP field solve remains unsupported |
+| Sharded rate AD | Exact three-step serial/species-pmap reverse derivatives pass at two dt values on two logical CPUs | Repeat on two GPUs when both are free; this field-free gate is not nonlinear transport AD |
 | Demo | dt=.02/750 steps, T15 and fixed rate preserved; wheel writes all artifacts, no CFL warning; short nonlinear wheel run also completes | Transient demo is not stationary physics validation; under-resolved-fit/cutoff warnings remain |
 | s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
 | Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |

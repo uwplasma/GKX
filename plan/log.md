@@ -5818,3 +5818,34 @@ reporter after the live jobs finish; preserve old reports and their provenance.
 Resume session6455/PID1722824 (GX kinetic GPU0) and session37619/PID1723912
 (Nm128T300 GPU1). Do not start kinetic GKX from an incomplete reference. No
 public benchmark promoted, full roadmap unchanged.
+
+## 2026-09-05 — serial/species-sharded rate derivative gate
+
+Previous turn progressed (coordinate validation/tests). Verified both live jobs,
+last check kinetic GX PID1722824 at12m21s and horizon GKX PID1723912 at5m12s,
+both RNl; no restart or terminal interpretation.
+
+Extended existing end-damping cross-route test, not a new file. For its field-free
+m3 state with active entries initially one, the exact Euler map is
+G3=(1+dt*R0)^3; derivative wrt fixed rate nu is
+3dt*(R0/nu)*(1+dt*R0)^2. Compared actual jax.grad through integrate_linear,
+serial and species-pmap, at dt=.1/.2 over3steps; require nonzero derivative
+and rtol1e-9/atol1e-12. No finite-difference tuning or tolerance weakening.
+**Two parametrized cases passed** on two logical CPU devices, JAX0.11.1f64.
+Command: XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu
+PYTHONPATH=src JAX_ENABLE_X64=true <local jax0111 python> -m pytest -q
+tests/unit/parallel/test_parallel_linear_velocity.py -k end_damping_rate_matches
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/damping-sharded-ad.xml.
+XML SHA256 `565df79bc0846b1d228f491c8ffbae31642b65bea2f461c12684052c2f4dfee9`.
+Local session21465 terminal. This checks discrete parameter differentiation in
+an analytic limit, not nonlinear transport, arbitrary coupled fields or JVP.
+
+**3d78fbf0** pushed to draft #202; test+30 lines explicitly budgeted, no source
+change. Full Ruff lint/format406files, architecture and whitespace pass. No
+full-CI claim. Repeat this new derivative gate on two GPUs after both current
+jobs finish; do not disturb active simulations to run it now. Previous GPU
+value-only route tests are not substituted for this new reverse-AD check.
+
+Resume unchanged session6455/PID1722824 and session37619/PID1723912. Inspect
+complete reference/horizon outputs before launching dependent comparisons.
+No PR merged, no public artifact promoted, full roadmap remains active.
