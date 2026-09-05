@@ -4774,3 +4774,118 @@ Then complete the damping route audit (nonlinear, four field-supplied routes,
 eigen/implicit/sharded paths) and reconcile #194's rate migration separately.
 R0 remains open; broader precision/sharded AD and physics validation are not
 replaced by this targeted backend repair. Keep all PRs unmerged.
+
+## 2026-09-05 — R0 damping route audit changes the migration
+
+Previous turn: progress (#201 repair and pushed log). Current source audited:
+#199 `b5dca15a`, clean worktree
+`/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`.
+No solver or deck edited in this slice. #194 is an **issue**, not a PR.
+Checked its full body against source and executable probes; its proposed blanket
+deck rescale would change nonlinear rates and must be corrected before coding.
+
+Let A=damp_ends_amp, d the cached boundary profile, and choose a pure Hermite
+m=3 state so field moments vanish (H=G). Use all species, all Fourier cells,
+linked grid8^3, Nl=2,Nm=6, two kinetic species from the existing
+`_small_kinetic_electron_problem(linked=True)` fixture. Every term except end
+damping is zero. Compare each effective RHS with `r=-A*d*G` on cells with
+nonzero r. This is an algebraic contract probe, not a gyrokinetic instability
+benchmark. Results agree on Mac JAX0.11.1/two logical CPUs and office
+JAX0.10.2/two RTX A4000 GPUs, f64:
+
+| Route | Effective RHS / r at dt=.1 | at dt=.2 | Meaning |
+|---|---:|---:|---|
+| `assemble_rhs_cached(...,dt=dt)` | 10 | 5 | legacy A/dt |
+| serial `integrate_linear`, one Euler step | 10 | 5 | legacy A/dt |
+| `_build_implicit_operator` matrix, `(G-MG)/dt` | 10 | 5 | legacy A/dt |
+| `nonlinear_rhs_cached` | 1 | 1 | rate A |
+| Krylov `_apply_operator` | 1 | 1 | rate A |
+| supplied-fields assembly, no dt | 1 | 1 | rate A |
+| species-pmap `integrate_linear`, one Euler step | 1 | 1 | rate A: serial mismatch |
+
+All ratios asserted to 1e-9. Largest observed rounding was ~9e-15.
+At fixed physical time T the serial Euler map is `(1-A*d)^(T/dt)`;
+the rate-map Euler route is `(1-dt*A*d)^(T/dt) -> exp(-A*d*T)`.
+Thus equal dt refinement does not compare a fixed operator across routes.
+The earlier per-step RK tests certify the first contract, not the target model.
+
+Source corrections to the previous four-call-site account:
+- There are **five** calls to `assemble_rhs_cached_with_fields` outside its
+  definition. `solvers_linear_integrators.py:526` is the additional species-pmap
+  call; it omits dt. The existing electromagnetic trajectory test explicitly
+  leaves end_damping=0, so it cannot detect this defect.
+- `solvers_linear_implicit.py:617,637` belong to
+  `_build_field_corrected_shifted_preconditioner`, not the time-step operator.
+  `_build_implicit_matvec` at line700 passes `state.dt_val` to linear RHS.
+  Inexact preconditioner structure must not be confused with the equation solved.
+- `parallel/integrators.py:577` is nonlinear shard-local assembly (rate), and
+  `solvers_linear_parallel_electrostatic.py:833` is the species-sharded RHS
+  (rate). The distinct species/Hermite linear implementation in
+  `solvers_linear_parallel_streaming.py:401` duplicates the optional A/dt rule.
+- Krylov `_apply_operator` calls `_assemble_rhs_cached_novjp` without dt.
+  `_advance_imex2` uses that fixed rate operator; the adaptive propagator calls
+  this eigenmode family. Its time-step arguments alone do not imply A/dt.
+- Runtime `startup.py:290` applies optional A/dt_input before RHS assembly.
+  Therefore the opt-in creates A/(dt_input*dt_step) on legacy linear paths,
+  but only A/dt_input on rate paths. Existing startup tests check only the
+  constructed parameter, not a completed step.
+
+Input inventory at this commit: **32 tracked TOML paths** explicitly set
+positive damping (not the old issue's 34); 31 distinct targets because packaged
+common_input is a symlink. All explicit A=.1, scale_by_dt=false. This is not a
+complete affected-input inventory: inherited defaults, generated demos, Python
+constructors and CLI/manifest overrides also matter. One explicitly damped
+linear deck is periodic: its cached damping profile vanishes, so A alone does
+not prove that a deck's observable changes. The initial periodic probe correctly
+failed its nonzero-profile assertion; switched to linked geometry, without
+weakening the assertion. The fixture emits a dtype scatter FutureWarning while
+creating its unused original state; the actual probe replaces it with f64.
+
+Migration decision (one coherent rate model, not another compatibility switch):
+1. Preserve the amplitude of already-rate nonlinear/eigen routes when defining
+   their new rate inputs. Native linear compatibility uses A/dt_reference.
+2. Remove timestep scaling in both assembly and the independent sharded kernel;
+   retire scale_by_dt with explicit input validation. Document rate units using
+   the code's normalized physical time. No runtime inference from chosen solver.
+3. Convert each active native-linear deck from its resolved reference timestep.
+   Preserve standalone parity fixture rates as well as harness rates: kinetic
+   electrons and KBM use .0005 in their deck but .0002 in the parity manifest,
+   requiring 200 and 500 respectively. The harness currently overrides dt but
+   has no rate override. Add an explicit fixed rate field there, never derive
+   it from the current refinement timestep.
+4. Add nonzero-damping cross-route operator and trajectory tests, fixed-T
+   refinement to exp(-nu*d*T), derivative refinement, and adaptive acceptance
+   checks before running the full external matrix and replacing any artifacts.
+5. Recheck defaults/decks that run in multiple modes; record which historical
+   operator is being preserved. Changed scientific results require revalidation,
+   not relabeling. Keep the minor-release migration PR unmerged until complete.
+
+Reproduce (no repository modifications): local scratch
+`/tmp/gkx-damping-route-20260905.Xk4sat` holds `probe.py`, `decks.py`, `mac.log`,
+`decks.csv`. Probe imports production owners above and the existing fixture via
+runpy, constructs a TermConfig with only end_damping=1, uses m=3 G=1 and
+`dt in (.1,.2)`, and asserts the table. Command from #199 worktree:
+`XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_ENABLE_X64=true
+PYTHONPATH=src /tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python
+/tmp/gkx-damping-route-20260905.Xk4sat/probe.py > .../mac.log`.
+`decks.py` parses `git ls-files '*.toml'` using tomllib, lists positive explicit
+collisions.damp_ends_amp and joins config paths to gx_parity_matrix_manifest dt.
+
+Office scratch `/home/rjorge/gkx-r0-damping-route-20260905.8mUFOv` is a fresh
+`git archive b5dca15a` plus `probe.py` (not the f32 repair snapshot).
+Run `CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true PYTHONPATH=src
+/home/rjorge/venvs/gkx-nl/bin/python probe.py > gpu.log`. Both commands exit0.
+
+| Evidence | SHA256 |
+|---|---|
+| probe.py | 62f4833fca550a6ba2891c0aba7592f47c148910d6fa6f9a28d6e71c7a637762 |
+| mac.log | fbbfcf1e2121074a00fe737855be7f60e188fb55efbb03bf23967488e22c2075 |
+| gpu.log | 7c3c269360424f071ed4132ba008c647913e62372ce102ae67726ce7e964b9aa |
+| decks.py | 3a760f0282da3377f73d73b5a02d04686dd835d4c74718f5caba51cbf639c526 |
+| decks.csv | 716a2e5aefd0747edd834b2325369acdcedfdfcd27491a4752e23d274d4c7254 |
+
+CI inspected: #199 nonlinear-core still running; #200 several pending tests;
+#201 dispatched and mostly queued. No observed failure, no full-CI claim.
+No local/SSH jobs active. Next: implement the above migration in a new worktree
+from #199, promote the nonzero-damping probe into concise regression tests,
+and validate same-rate parity before any expensive reference regeneration.

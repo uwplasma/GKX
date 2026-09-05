@@ -149,10 +149,15 @@ no material speedup claim. Removed the crash exemption. Linux 0.11.1
 passes the minimal rank-7 reproducer, not yet the application test.
 Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
-**Next:** review #199–#201 CI and finish damping route coverage. Broader f32,
+**Next:** implement the route-aware rate migration below on a new branch from
+#199; review #199–#201 CI. CPU/GPU damp-only probes now establish that serial
+linear/implicit use A/dt, but nonlinear/eigenoperator/species-pmap use A.
+Five field-supplied call sites exist, not four; two are preconditioner probes,
+not the implicit time-step operator. See the latest log for commands and hashes.
+Broader f32,
 sharded AD and production-horizon validation remain open.
 No local/SSH tests remain active. Check remote CI on #199–#201 before relying
-on full-suite status; both were still awaiting complete CI during this slice.
+on full-suite status; they were still awaiting complete CI during this slice.
 No merge is authorized; update this
 checkpoint and append commands/results to `plan/log.md` before changing workstreams.
 User checkout and other existing worktrees remain untouched.
@@ -161,6 +166,18 @@ User checkout and other existing worktrees remain untouched.
    the old per-step map; it is not #194's continuous-rate migration. Audit serial,
    adaptive, eigenoperator, implicit, Hermite-sharded and field-supplied RHS
    together. Freeze units in inputs/outputs; migrate affected decks explicitly.
+   **Migration correction (measured 2026-09-05):** issue #194 is not permission
+   to rescale every nonlinear deck by 1/dt. Their production RHS already uses a
+   rate. Preserve A for these decks; convert legacy native-linear inputs using
+   A/dt_reference, then require every solver to evaluate the same fixed operator.
+   The two parity fixtures with deck dt=.0005 but harness dt=.0002 need explicit
+   provenance-preserving rate overrides (200 standalone versus 500 in harness
+   for A=.1), not an undocumented global choice. Audit inherited defaults,
+   demo-generated decks and caller overrides as well as explicit TOML values.
+   Remove the scale-by-dt input with a clear migration error; it must not become
+   a silently ignored unknown key. Require nonzero-damping serial/species-pmap,
+   native/implicit/eigenoperator, fixed/adaptive and gradient agreement at fixed
+   physical time. Keep the old snapshot as compatibility evidence only.
 2. **Detection:** add an unstable f64 sentinel at the benchmark timestep, not
    only a tiny f32 finite-value check. Verify the damp-only stage map analytically.
    A true rate ν must converge to `exp(-νt)` at fixed physical time; this is not
