@@ -5966,3 +5966,32 @@ no failures, multiple pending; no full-CI claim. Resume both live handles,
 compare Nl24 result to completed Nl16/Nm96/T300, then parallel resolution and
 regularization controls. Two-GPU reverse-AD gate still waits for both GPUs.
 Nothing merged; full roadmap remains active.
+
+## 2026-09-05 — Joint temporal-screen parity headline
+
+Previous turn progressed by completing the matched-horizon Hermite comparison
+and launching the independent Laguerre control. Both current processes freshly
+verified live. Audited comparison reporting: per-row joint flags were present,
+but console "settled" and its error maximum still meant GKX-only. Fixed in
+**6eb0e4a5**, pushed to draft PR202. Preserve historical GKX-only JSON fields;
+add joint finite-relative-error count and joint maximum. Console explicitly
+labels GKX temporal count, both-code count and joint-filtered error maximum.
+Empty or undefined relative-error coverage returns NaN, not zero. These screens
+still do not establish resolution convergence or predictive validation.
+
+48 parameterized reporting tests pass, including unknown, drifting/nonfinite
+reference frequency, unsettled GKX and zero reference growth. Command:
+PYTHONPATH=src <local jax0111 python> -m pytest -q
+tests/release/test_release_gates.py -k parity_convergence
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/joint-parity-summary.xml.
+XML SHA256 `ef0d347e9689ede38d02def7a3fe46556d563d8fbbf882c6f39666153e5750a8`.
+Ruff lint/format406files, architecture and whitespace gates pass. Explicit
+budget +11 test/+10 tool lines; no added files or solver changes.
+Sessions87533(test),6765(check/commit/push) terminal exit0.
+
+Running office reporter remains0acbd221; do not overwrite during jobs or imply
+its existing JSON already has these new summary fields. GX kinetic
+session6455/PID1722824 verified RNl at29m05s; Laguerre-control
+session67452/PID1725909 RNl at2m23s. Resume those handles before restarting
+anything. Latest pre-push CI202 query: no failures, several pending/queued;
+new commit requires fresh CI. No merges, no public validation promotion.
