@@ -5511,3 +5511,53 @@ suppress diagnostics or loosen CFL/fit thresholds. Wheel outputs preserved.
 Resume live **92932/PID1719126** (Nm64 GPU0) and **31885/PID1719945** (Miller
 GKX GPU1); GX97329 terminal, no restart. Record complete results before promotion,
 continue remaining matrix/refinements. No PR merged, no public artifact updated.
+
+## 2026-09-05 — first-run repair and unresolved Hermite tail
+
+Previous turn progressed (Miller reference/comparison and wheel findings).
+**Nm64 session92932 completed exit0**, old PID1719126 terminal. CSV at owned
+office snapshot `results/salpha_rate50_nm64.csv`, SHA256
+`aaff5040d4ae52c1bb654c981dffad1cc41b7fdbdd30325187e443ce7917cba2`.
+All three modes pass both temporal screens, but at ky=.550000011920929 gamma
+changes from .034520991134793955 (Nm48) to .03731586113112525 (Nm64),
+**+8.09614644%**. Frequency becomes .4907877139176186; discrepancy from Nm48 GX
+is now10.1543% in growth. Temporal settling does not imply velocity convergence.
+Do not promote that high-ky result. Low/peak changes are smaller; keep all rows.
+
+Started Nm96 at the same high ky on GPU0: **session86304/PID1720507**
+(time parent1720506), same snapshot and0acbd221 reporter. Manifest
+`salpha_nm96.toml`, SHA256
+`c953c5ec1dea1a3595b5367cc25eff6c8c11815b9a7c2b5b79ce31b395c29699`.
+Only Nm changes64→96 and requested set narrows to exact high ky; Nl16,dt.002,
+rate50,T150 unchanged. Command/env follows preceding Nm64 run with --manifest
+salpha_nm96.toml --cases cyclone_salpha_itg_nm96 --stem results/salpha_rate50_nm96,
+logs gkx-salpha-nm96.stdout.log/gkx-salpha-nm96.stderr.log. Verified process live.
+Miller GKX session31885/PID1719945 also live at2m59s check. No restart of Nm64.
+
+**d4943414 pushed to draft #202:** no-argument demo uses dt=.02/750steps, retaining
+T15 and explicit damping rate .1/.03 instead of recalculating it from current dt.
+Intro and quickstart call it a transient illustration, not a converged benchmark.
+No CFL threshold or fit-warning suppression. Test exercises actual generated
+TOML, fixed rate under dt change, horizon and CLI forwarding.
+Full `tests/integration/runtime/test_cli.py`: **148passed**, local JAX0.11.1f64;
+XML `/tmp/gkx-rate-wheel-20260905.aBK527/cli.xml`, SHA256
+`78553879d08565a01dbca6faa2d1a576f5683c531bb99a175b6f2d03e3645c2a`.
+Ruff, architecture, whitespace and Sphinx HTML -W pass. Source+2/test+10 lines;
+test budget explicitly updated, no new repository files. No full-CI assertion.
+
+Rebuilt wheel with normal isolated pip wheel --no-deps, installed --no-deps
+--target `/tmp/gkx-rate-wheel-20260905.aBK527/repaired-installed`; same existing
+dependency environment, not fresh dependency resolution. Wheel under
+`repaired-wheel/gkx-2.0.0-py3-none-any.whl`, SHA256
+`3767d3ff1a6732e214851e4ab07ac10215ccd55ac8c57153fdde36603a51712b`.
+Ran its bin/gkx from empty repaired-wheel-run with PYTHONPATH pointing only at
+the repaired install and JAX_ENABLE_X64=true. **Exit0**, five promised artifacts
+nonempty, no CFL warning. Intro qualification and growth-under-resolved warning
+asserted present; actual log `repaired-wheel-run.log`. The source-tree trial
+also passed, but is not substituted for the wheel test. Transient fit warnings
+remain by design (T15 is not enough); no benchmark claim from its fitted value.
+All local test/build sessions terminal. Preserve scratch evidence.
+
+Resume **86304/PID1720507** Nm96 GPU0 and **31885/PID1719945** Miller GPU1.
+Check real exits/results before interpretation; continue Hermite/Laguerre/spatial
+and slow-mode convergence plus full external matrix. Do not merge any PR.

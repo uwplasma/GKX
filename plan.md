@@ -151,7 +151,7 @@ Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
 **In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `0acbd221`, based on #199 b5dca15a.
+`fix/r0-end-damping-rate`, head `d4943414`, based on #199 b5dca15a.
 Source, route-aware deck migration, fixed-rate parity overrides, docs and
 cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
 and route checks pass. Full external reference regeneration, adaptive calibration,
@@ -201,11 +201,14 @@ temporal shifts, and distinguish timestep error from reference-window drift.
 Maximum observed relative gamma change is 2.992e-5 (0.002992%); omega1.3003e-5.
 This pilot also changed ky by <=1.2e-8 through decimal rounding, so do not claim
 an exact fixed-coordinate convergence order. All three pass temporal screens.
-Hermite-only refinement is now live on GPU0, **session92932/PID1719126**,
+Hermite-only refinement completed exit0, **session92932/old PID1719126**,
 `salpha_hermite_refinement.toml`: Nm48→64, Nl16, dt=.002, T150, rate50,
 three exact stored baseline ky. Logs `gkx-salpha-nm64.{stdout,stderr}.log`;
 stem `results/salpha_rate50_nm64`. It uses the current0acbd221 reporter copy,
-not the old running tool.
+not the old running tool. At ky=.55, gamma changes **8.096%** from Nm48 to64:
+the high-ky mode is not Hermite-converged. Nm96 at that exact ky is now live on
+GPU0, **session86304/PID1720507**, `salpha_nm96.toml`, same dt/rate/T/Nl;
+stem `results/salpha_rate50_nm96`, logs `gkx-salpha-nm96.{stdout,stderr}.log`.
 The parity tool now reports reference-side temporal status separately (0acbd221,
 55 focused tests). Unsupported sampling is unknown; regular sampling may have
 one shortened terminal interval, as observed in GX. `converged` remains GKX-only
@@ -248,10 +251,10 @@ User checkout and other existing worktrees remain untouched.
 4. **Rebaseline:** run installed-wheel startup, relevant physics sentinels and
    external scans. Keep failed/unsettled modes in denominators. Refresh release
    evidence only from repaired results; a readiness percentage is not validation.
-   Wheel first-run at0acbd221 produced all five artifacts, but dt=.03 exceeds
-   its estimated CFL .02197 and its T15 fit is under-resolved. Repair the demo
-   without silently changing its fixed damping rate (currently .1/.03); distinguish
-   a quick transient illustration from a converged linear benchmark. See log.
+   Demo repaired atd4943414: dt=.02/750steps preserves T15 and fixed rate .1/.03.
+   Rebuilt wheel runs without CFL warning, keeps honest under-resolved-fit warnings
+   and labels the run a transient illustration. All five artifacts present,
+   148 CLI tests pass. This is startup evidence, not a converged physics benchmark.
 5. **Public truth:** remove the assertion that QA passed all transport gates.
 
 ### Existing entry points to reuse
