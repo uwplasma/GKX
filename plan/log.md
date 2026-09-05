@@ -5926,3 +5926,43 @@ running snapshot. Resume by checking these exact processes and exits; then
 compare matched-horizon Nm96/128 estimates and audit complete kinetic reference
 before launching the prepared matched kinetic solve. Two-GPU AD repeat remains
 pending until both GPUs free. Full R0–R9 scope remains active; nothing merged.
+
+## 2026-09-05 — Matched-horizon Hermite pair; Laguerre probe started
+
+Previous turn progressed: precision contract/tests/profile and logbook committed.
+Rechecked processes: Nm96T300 PID1724990 absent, then polled original session86753:
+**exit0**, remote time log also exit0. Do not restart it. CSV
+results/salpha_rate50_nm96_t300.csv SHA256
+`54f782be81203ba6961382340764e239f1f5a74db6cc743393f072ef88c40a05`.
+Gamma .03549582361114748, omega .4844506694454861; half-time shifts
+.0016798012164741796 and .0001612000687686131 respectively.
+At matched T300, Nm96→128 changes gamma **0.4677068%**, omega **0.1917518%**.
+Both temporal screens pass, but temporal shifts remain comparable to these
+small differences. Two fine Hermite points are not an asymptotic convergence
+proof; Nm-dependent hypercollision still changes the retained-m operator.
+CSV reference Nm48/T150 remains deliberately unmatched: its4.78%/5.27%
+growth differences must not be reported as matched-resolution code parity.
+
+Next independent velocity check launched on freed GPU1: **Nl16→24 only** from
+Nm96T300, keeping exact ky, geometry, rate, RK4,dt.002,T300 fixed. Manifest
+salpha_nl24_nm96_t300.toml SHA256
+`ed8ee22aa30d6043c7313f46eca2deac407c02d04e16bf39d8275cdee00879c4`.
+Local copy /tmp/gkx-coupled-rate-20260905.shBvlR/salpha_nl24_nm96_t300.toml;
+scp to owned campaign directory. Same reporter/environment as preceding run:
+--manifest salpha_nl24_nm96_t300.toml --cases cyclone_salpha_itg_nl24_nm96_t300
+--stem results/salpha_rate50_nl24_nm96_t300. Logs
+gkx-salpha-nl24-nm96-t300.stdout.log/stderr.log. **Session67452/PID1725909**
+(time1725908) verified RNl at12s. No production snapshot changed.
+
+Source check: cache_arrays.hypercollision_damping and
+dissipation._hypercollision_kz_source show active kz hypercollision depends on
+Hermite indices, not Nl. Fixture constant hypercollision weight and nu_hyper
+are zero. Thus this Nl check does not have the same explicit retained-index
+hypercollision rescaling as Nm refinement; field/velocity truncation still changes.
+
+GX kinetic session6455/PID1722824 remains verified RNl at26m54s. Prepared matched
+kinetic GKX run remains unlaunched. CI202 latest query has additional passes,
+no failures, multiple pending; no full-CI claim. Resume both live handles,
+compare Nl24 result to completed Nl16/Nm96/T300, then parallel resolution and
+regularization controls. Two-GPU reverse-AD gate still waits for both GPUs.
+Nothing merged; full roadmap remains active.
