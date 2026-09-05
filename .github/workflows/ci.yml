@@ -138,6 +138,15 @@ jobs:
         run: |
           pytest -q --collect-only --disable-warnings > /dev/null
 
+      - name: Default-f32 compressed nonlinear gradient (isolated backend failures)
+        env:
+          MPLBACKEND: Agg
+          JAX_ENABLE_X64: "false"
+          GKX_X64: "0"
+        run: |
+          pytest -q -rx tests/unit/nonlinear/test_nonlinear.py \
+            -k compressed_real_fft_heat_flux_window_gradient_matches_finite_difference
+
       - name: Portability gates
         env:
           MPLBACKEND: Agg

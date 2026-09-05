@@ -16,6 +16,20 @@ or install the development checkout:
    cd GKX
    pip install -e .
 
+Known precision limitation
+--------------------------
+
+JAX/jaxlib 0.10.2 on Linux x86-64 CPU can segfault during the compressed
+nonlinear float32 gradient calculation (`issue/PR 196
+<https://github.com/uwplasma/GKX/pull/196>`_). CI executes this path in an
+isolated process and reports an expected failure only for that observed stack
+and signal; other failures remain failures. This containment is not a solver fix.
+The same tests pass on macOS ARM64 with 0.10.2 and 0.11.1; that does not certify
+other workloads or establish where the Linux defect is fixed.
+Both checks also pass on the affected Linux stack with ``JAX_ENABLE_X64=true``
+set before Python starts. Float64 is a tested alternative for this path, with
+higher memory cost; it is not evidence of convergence for an arbitrary run.
+
 Executable demo
 ---------------
 
