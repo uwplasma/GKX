@@ -6723,3 +6723,40 @@ scoped venv PATH required by its geometry exporter, as earlier GX controls did.
 Latest live: kinetic40474/PID1729837 RNl43m51s; spatial77271/PID1733704 RNl9m52s.
 No restarts, test jobs, source-snapshot changes or merges. Continue these controls
 and matched GX refinement; full R0–R9 scope active.
+
+## 2026-09-05 — GX adaptive-default ambiguity closed in rate conversion
+
+Previous turn progressed with19 broader species tests and GX input preparation.
+Read office GX/src/parameters.cu: Time.fixed_dt defaults false, dt_max defaults
+dt; ts_rk4.cu sets dt=min(max(cfl_fac*cfl/wmax,dt_min),dt_max) unless fixed_dt.
+Thus positive input dt alone is not proof of a fixed A/dt end-damping rate.
+The old GKX helper's error/doc claimed adaptive rejection but only checked dt.
+**b6c375cf** adds parsed fixed_dt (defaultfalse) to GXInputContract and requires
+true when damping is active. Periodic/zero-shear-forced periodic/disabled cases
+still need no conversion. Existing adaptive-default inputs must be rerun with
+explicit fixed_dt for this adapter; do not just relabel historical trajectories.
+The independent parity reporter is a separate path, unchanged: campaign input
+ceilings and observed dt must still be audited, not inferred from this fix.
+
+Full tests/tools/comparison/test_reference_comparison_tools.py suite:
+**122pass,1skip,14.149s**, session30161exit0, local JAX0.11.1 PYTHONPATH=src.
+Skip test_build_imported_initial_condition_uses_runtime_multikx_startup requires
+an unavailable local cache file; no coverage claim for that path. Tests assert
+parser defaultfalse/explicittrue and active-rate refusal at false. XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/gx-fixed-dt-contract-final.xml SHA256
+`0f08e03887d9ec31bba292eae787a511747238f0f0fffd503b48088f539f8f78`.
+Ruff lint/format406files, warning-strict Sphinx, architecture and whitespace pass;
+explicit budgets+6tests/+8tools. Commit/push97735exit0; full CI pending.
+
+Prepared (not launched) salpha_nl32_nm96_t300.in now explicitly sets
+Time.fixed_dt=true and Expert.damp_ends_amp=.1/damp_ends_widthfrac=.125.
+Updated local/campaign copy SHA256
+`fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df`, superseding
+e0d83a0d in the prior entry. No old input/output overwritten; the prepared file
+had not run. This pins rate50 atdt.002 instead of trusting the adaptive ceiling.
+Older completed references retain their provenance and require actual timestep
+audit before stronger claims; current running GKX rates themselves remain fixed.
+
+Latest live: kinetic40474/PID1729837 RNl48m15s; spatial77271/PID1733704 RNl14m16s.
+No restarts or production-snapshot edits; no merges. Continue physical controls,
+matched GX refinement and full roadmap; this helper fix is not physics closure.

@@ -125,7 +125,7 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, head **19e066dd**, worktree
+`fix/r0-end-damping-rate`, head **b6c375cf**, worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -139,7 +139,7 @@ in02536eef; do not infer full-CI completion from local gates.
 | Item | Established | Still required |
 |---|---|---|
 | End damping | PR202 uses a fixed rate across audited routes; native-time decks migrated explicitly, existing nonlinear rates retained; old scale-by-dt input rejected | External matrix, adaptive calibration, broader precision/sharded AD validation |
-| GX adapters | Active damping requires explicit reference dt; kinetic Miller electron-only seed corrected | Do not reuse old unmatched-rate/initial-condition results |
+| GX adapters | Active damping requires positive reference dt and explicit Time.fixed_dt=true; kinetic Miller electron-only seed corrected | Recheck observed timestep in older adaptive-default references; input dt alone is only a ceiling |
 | Parity coordinates | Requested/reference ky and actual effective GKX grid matched before solves within float32 roundoff; missing/invalid/duplicate requests rejected | Old running reporter lacks preflight; current campaign coordinates already match its solver grids |
 | Tests/startup | CPU/GPU boundary and route probes; coupled reverse AD vs matrix exponential; 88 linear, 85 time-integrator, 198 release, 148 CLI tests passed in recorded runs; nonfinite Laguerre transform errors rejected, 50 core numerics tests pass; explicit linear facades clip the final step to t_max | Fresh full CI; direct JVP through custom-VJP field solve remains unsupported |
 | Sharded AD | Fixed-rate reverse derivatives pass on two CPUs/two GPUs; traced initial-state rejection repaired; short EM initial-state homogeneity derivative passes on both | Neither field-free damping nor short EM homogeneity validates nonlinear transport AD or general EM parameter derivatives |
@@ -177,6 +177,8 @@ An independent GX Nl32/Nm96/Nz96/T300/dt.002 input is prepared as
 `salpha_nl32_nm96_t300.in` in the campaign; it has not run. Use it to compare
 the high-order GKX result at matched velocity resolution, not the old Nl16/Nm48
 reference. Preserve both references and record the actual resulting GX timestep.
+Prepared input now explicitly pins fixed_dt=true and Expert damping values;
+its current SHA256 is fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
 Dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
 The small derivative test completed beside the kinetic run with an8% memory pool;
 no performance claim. Spatial refinement77271 now occupies GPU1.
