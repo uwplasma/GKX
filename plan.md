@@ -151,7 +151,7 @@ Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
 **In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `d4943414`, based on #199 b5dca15a.
+`fix/r0-end-damping-rate`, head `57485da2`, based on #199 b5dca15a.
 Source, route-aware deck migration, fixed-rate parity overrides, docs and
 cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
 and route checks pass. Full external reference regeneration, adaptive calibration,
@@ -206,9 +206,14 @@ Hermite-only refinement completed exit0, **session92932/old PID1719126**,
 three exact stored baseline ky. Logs `gkx-salpha-nm64.{stdout,stderr}.log`;
 stem `results/salpha_rate50_nm64`. It uses the current0acbd221 reporter copy,
 not the old running tool. At ky=.55, gamma changes **8.096%** from Nm48 to64:
-the high-ky mode is not Hermite-converged. Nm96 at that exact ky is now live on
-GPU0, **session86304/PID1720507**, `salpha_nm96.toml`, same dt/rate/T/Nl;
-stem `results/salpha_rate50_nm96`, logs `gkx-salpha-nm96.{stdout,stderr}.log`.
+the high-ky mode is not Hermite-converged. Nm96 at dt=.002 failed with a nonfinite
+field history (session86304/old PID1720507, exit1); preserve its logs, no result.
+Separate half-step trial is live on GPU0: **session42644/PID1721120**,
+`salpha_nm96_dt_half.toml`, dt=.001/150k steps, same rate/T/Nl/ky;
+stem `results/salpha_rate50_nm96_dt_half`, logs
+`gkx-salpha-nm96-dt-half.{stdout,stderr}.log`. Failure cause not yet established.
+57485da2 documents the GX-matched resolution dependence of hypercollisions;
+fixed input coefficients do not mean fixed damping at retained Hermite moments.
 The parity tool now reports reference-side temporal status separately (0acbd221,
 55 focused tests). Unsupported sampling is unknown; regular sampling may have
 one shortened terminal interval, as observed in GX. `converged` remains GKX-only

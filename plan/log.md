@@ -5561,3 +5561,44 @@ All local test/build sessions terminal. Preserve scratch evidence.
 Resume **86304/PID1720507** Nm96 GPU0 and **31885/PID1719945** Miller GPU1.
 Check real exits/results before interpretation; continue Hermite/Laguerre/spatial
 and slow-mode convergence plus full external matrix. Do not merge any PR.
+
+## 2026-09-05 — Nm96 failure retained; hypercollision scaling audited
+
+Previous turn progressed (demo repair, Nm64 evidence, higher-Nm run).
+Nm96 **session86304/PID1720507 terminal, exit1**, wall1:43.45. Reporter stopped
+at ensure_finite_linear_history with a nonfinite field history before any parity
+result. Full failure retained in snapshot gkx-salpha-nm96.stderr.log; do not
+replace it or report a successful refinement. Could be timestep stability; this
+is a hypothesis, not established causality. If needed control single-vs-batched
+ky too (Nm64 used three modes, Nm96 one), rather than assuming only Nm matters.
+
+Started separate **session42644/PID1721120** (parent1721119), GPU0, verified
+live/no stderr. Manifest salpha_nm96_dt_half.toml in owned office snapshot
+/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz, SHA256
+`7ff60a790094063d9ec0b9fcd2769170196f768b18bef7392251f7d60b95957b`.
+dt=.001/150000 steps, same Nm96,Nl16,rate50,T150,exact high ky. Command uses
+same previous env and current0acbd221 reporter with --manifest
+salpha_nm96_dt_half.toml --cases cyclone_salpha_itg_nm96_dt_half --stem
+results/salpha_rate50_nm96_dt_half; logs gkx-salpha-nm96-dt-half.stdout.log and
+gkx-salpha-nm96-dt-half.stderr.log. No restart of the failed job. Miller
+session31885/PID1719945 remains live at7m50s check.
+
+Read cache_arrays.py:_build_low_rank_moment_cache_arrays,
+dissipation.py:_hypercollision_kz_source/_apply_parallel_hypercollision, and
+startup.py:_default_hermite_hypercollision_exponent. Matched against office GX
+3865a537 src/linear.cu:226–232 and parameters.cu:185. With M=Nm-1, coefficient
+is 2.3 nu_m (p+.5)/sqrt(M) (m/M)^p vth|gradpar|, masked m>2, followed by the
+parallel absolute-derivative operator. Geometry multiplication stays inside
+that operator. Runtime default p=min(20,max(Nm//2,1)), hence p20 in48/64/96.
+At fixed retained m,p, artificial damping decreases as M^(-p-.5). Refinement
+changes regularization as well as truncation; it is not a fixed finite-moment
+damping operator, even though all input coefficients are unchanged.
+
+**57485da2** pushed to draft #202, documentation only: replaced proportional
+hypercollision expression with exact implemented normalization/operator order,
+default exponent and resolution interpretation. Sphinx HTML -W and whitespace
+checks pass. No solver changes, new tests, tolerance relaxation or new files.
+This source audit does not establish the Nm96 failure cause or close convergence.
+Resume both current live handles; record exits/evidence before promotion.
+Remaining matrix, Laguerre/spatial/temporal refinement and R0 work stay open.
+No PR merged, no public benchmark artifacts changed.
