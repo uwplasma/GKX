@@ -6255,3 +6255,36 @@ evidence; do not mistake a B² regression for that closure.
 Latest live processes: kinetic6455/PID1722824 RNl47m59s; Nl32
 26034/PID1727418 RNl9m32s. Resume these handles. No restart, snapshot overwrite
 or merge; full research/publication scope remains active.
+
+## 2026-09-05 — Finite-k runtime mapping includes polarization terms
+
+Previous turn progressed via literature-based correction of unsupported symmetry
+claims. Traced collision_tables.build_finite_wavelength_coulomb_operator into
+EqualSpeciesFiniteWavelengthCoulombOperator.apply and
+apply_finite_wavelength_coulomb_moment_operator in collisions.py. Runtime
+interpolates test/field matrices PLUS test_phi1,field_phi1,test_phi2,field_phi2,
+multiplies vectors by target/source charge-over-temperature and solved phi,
+then adds them to the distribution-dependent collision output. Thus the
+matrix-only finite_wavelength_matrix test helper omits a nonzero part of the
+full runtime map; the audit has NOT found missing polarization in production.
+
+Executed a local NumPy probe on the shipped8-moment table (CPU, PYTHONPATH=src,
+JAX_ENABLE_X64=true; no evolving solve). For C=test_matrix+field_matrix and
+p=sum of four phi vectors, Frobenius/Euclidean norms:
+
+| Bessel B | norm(C−C.T) | norm(p) | norm(C) |
+|---|---:|---:|---:|
+| 0 | 1.778572333e-16 | 6.687193181e-62 | 3.812753151 |
+| .375 | .01332277058 | .05049399151 | 3.782238074 |
+| 1 | .1574536315 | .3262640064 | 3.947760896 |
+
+This does not prove cancellation, dissipation or a metric identity. It makes
+the next C2 test explicit: derive the g/h plus field-response map, form its
+coupled linear action, compare independently generated physical functionals
+and adjoints, then vary tables/moment orders/interpolation. Do not remove
+polarization or symmetrize C merely to make the old defect test pass.
+
+Last authoritative check: kinetic6455/PID1722824 RNl49m38s; Nl32
+26034/PID1727418 RNl11m11s. Original26034 polled again: still running, no new
+output. Resume these handles; neither terminal. No production changes, restarts,
+snapshot modifications or merges. Full roadmap stays active.

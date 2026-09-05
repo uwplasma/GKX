@@ -291,6 +291,9 @@ Tabulated Coulomb support is not arbitrary-order or arbitrary-species validation
 Finite-wavelength defect-scaling tests alone do not prove a conservation law or
 weighted self-adjointness: derive the physical functionals/metric and test those
 identities directly for each supported model and species combination.
+The finite-k runtime includes four nonzero polarization vectors omitted by the
+matrix-only defect tests; audit the coupled distribution/field map, not just
+the sum of its test-particle and field-particle matrix blocks.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
