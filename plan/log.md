@@ -7274,3 +7274,33 @@ verified Rs4m38s; do not restart. GX95001/PID1738946 and GKX68484/PID1740480
 remain live. CI33958341219 now only nonlinear-core101285631242 in progress;
 parallel-autodiff101285631063 passed. Local65f92b06 is5ahead of9fc6e42d, held
 until CI completes. No merges. Full research/publication roadmap active.
+
+## 2026-09-05 — Whole-table finite guard; B4 radial24 result
+
+Previous turn fixed check-before-write ordering. This turn covers the remaining
+publication gap: zero-wavelength checks do not inspect all six blocks at other
+wavelengths. 3382c077 makes write_artifacts reject any nonfinite array value
+before opening either output, with or without --check. Two production lines;
+no coefficient/model/tolerance change. NaN and Inf in each of test/field and
+four polarization blocks reproduce12failures against the pre-fix writer.
+All12 new cases now raise before replacing sentinel files. Shapes in these
+synthetic fixtures exercise the finite guard only, not the physical schema.
+
+Final collision physics file excluding overhead/cost:44passed0skipped10.520s,
+96313exit0, local recent scratch/collision-finite-final.xml SHA256
+35377ef44369a58ec97af044ccd848a43cf41c5002b16127b22434b497ea07ad.
+Before12-failure JUnit collision-finite-before.xml SHA256
+8e026b86372ba7114b74ebca6a1b0fab4395ef64c8da2f3f8d2f6138962135aa.
+Ruff check/format, architecture and diff gates pass. No new files; test budget
+86986 (+18), tools77974 (+1net after previous move), targets unchanged.
+Finite-only and zero-wavelength checks still do not certify full-domain physics,
+truncation convergence, complete schemas or filesystem crash atomicity.
+
+B4 local58082/PID41100 remains live. Radial24 assembly finished in254.704s:
+normC21.05095167071282, asymmetry2.728216989e-12, relative16→24 change
+1.249587935e-6. Radial32 still running; do not label a partial log terminal.
+Fixed spherical13/Bessel48/outputP3J1/digits50; angular/Bessel/output convergence
+not established atB4. GPU95001/PID1738946 and68484/PID1740480 remain active.
+CI33958341219 only nonlinear-core101285631242 pending, no failures. Local
+3382c077 is6ahead of9fc6e42d; keep held until CI completes. No merges/restarts;
+full research/publication goal remains active.
