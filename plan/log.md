@@ -6873,3 +6873,48 @@ query. Hold the pending startup-test commit until that run finishes, then push
 and inspect its new CI. Latest physics process check: kinetic40474/PID1729837
 RNl58m27s, spatial77271/PID1733704 RNl24m28s. No restarts, GPU test jobs,
 snapshot edits or merges. Continue physical controls and full roadmap.
+
+## 2026-09-05 — High-Nm GX startup fails; reference hypercollision overflow found
+
+Previous turn progressed with broader f32 regression. Before the expensive
+prepared GX T300 run, copied its input to salpha_nl32_nm96_startup.in and changed
+only horizon toT1 (500steps) plus its comment. Explicit fixed_dt=true, dt.002,
+Nl32/Nm96/Nz96, all11 positive ky, rate50 remain. Input SHA256
+`810ec6e433b05f0e693f4b868b49afa8337cb7d067afa8c922b9ede48c9f51c1`.
+Ran beside GKX spatial control on GPU1 after checking3696MiB free; GX process
+1737950 used1360MiB. No timing/speedup claim from shared resources.
+
+Command in campaign: PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
+CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v /home/rjorge/GX/gx
+salpha_nl32_nm96_startup.in >gx-salpha-nl32-nm96-startup.stdout.log
+2>gx-salpha-nl32-nm96-startup.stderr.log. **60372 terminal exit0 but invalid**:
+first outputt=.002 finite, t=.202 onward Phi2/flux/frequencies NaN. NetCDF has
+six times [.002,.202,.402,.602,.802,1] to float32-dt precision and110nonfinite
+omega_kxkyt entries. Output salpha_nl32_nm96_startup.out.nc SHA256
+`8cd6f6c4df58738d8a994a191bca0441e8bafc689dfa6ad1308dcce9855a6d74`.
+Preserve input/output/logs; do not use as reference or launch fullT300 unchanged.
+
+Source audit identifies a definite overflow mechanism: GX3865a537
+src/linear.cu:229 forms nu=(p+.5)*2.3/[powf(M,p+.5)] times physical factors;
+src/device_funcs.cu:3378 then multiplies by powf(m,p), M=Nm−1,p=20.
+Float32 arithmetic at the largest moment (unit physical factors):
+
+| Nm | M^(p+.5) | M^p | Separate-power coefficient | Normalized coefficient |
+|---|---|---|---|---|
+| 64 | 7.699832e36 | 9.700877e35 | 5.9403415 | 5.9403415 |
+| 80 | Inf | 8.964825e37 | 0 | 5.3047895 |
+| 96 | Inf | Inf | NaN | 4.8374877 |
+
+The algebraically equivalent coefficient2.3*(p+.5)/sqrt(M)*(m/M)^p stays
+finite. GKX already uses this normalized form. This is not evidence that GX's
+entire failure is repaired: next use a scratch reference build with the equivalent
+arithmetic, rerun the bounded sentinel, and compare low-Nm outputs against the
+original binary before promoting high-Nm results. Preserve original GX source,
+its user-modified Makefile and binary; no GX edits were made this turn. Reducing
+p would change the model and is not a same-operator repair. Nm48 completed
+references are below this particular float32 overflow threshold.
+
+Latest active processes: kinetic40474/PID1729837 RNl1h02m59s; spatial77271/
+PID1733704 RNl29m00s. GX60372 terminal, do not restart. Code remains local9fc6e42d
+ahead1 of b734e19d; CI33956493988 still allowed to finish (last14success/23pending/
+1skip, no failures). No merge; full scope active.
