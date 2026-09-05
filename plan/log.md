@@ -7914,3 +7914,90 @@ short same-state and matched long-run controls. Audit other capped launch users.
 | audit-gx-final-state-rhs-coverage.log | 13c22e8e4b7f286cc05dde48771c5c75abc7ce52690190a494f20c44bbfaab69 |
 
 No live research processes now; both GPUs free. Full R0–R9 goal remains active.
+
+## 2026-09-05 — Actual GX kernel regression, isolated repair and corrected reference
+
+Previous turn: progress (same-state evidence and coverage defect identification).
+Verified old jobs absent/terminal and code worktree clean before acting. Created
+`/home/rjorge/gx-damping-coverage-20260905.8w5DhH` with mktemp and git clone
+--shared from the normalized-hyper scratch repo. HEAD3865a53778862e1686f414bf6f416339e24887c9;
+copied only its two modified source files and office Makefile. Neither original
+GX nor prior scratch binary/results changed (old normalized binary still SHA
+d30403b495e14900235bc0ee55de34b009920c3bf3eaa4bb75b58ae718bb55c9).
+
+Additional patch in dampEnds_linked: remove idzlm bound from the outer ky/mask
+condition, wrap the existing body with
+`for (; idzlm < nz*nMoms; idzlm += blockDim.z * gridDim.z)`.
+No mathematical/profile/Hamiltonian changes. Applied locally with apply_patch
+to a source copy, then transferred into the NEW scratch root. Existing normalized
+power correction retained; no GX commit/push or metadata repair performed.
+
+Actual-kernel harness gx-damping-coverage-test.cu links the production
+device_funcs.o, not a reimplemented CUDA kernel. Sets device constants, one
+radial mode/Ny4/Nz96/Nl32, complex G=(1,−.5), zero fields, kperp=0, one linked
+segment, width.125/rate50. Checks every output against the host analytic profile,
+including ky0 (undamped) and the dealiased ky2. Tests local Nm2/24/96 to cross
+the launch cap, with the actual capped block/grid layout. Tolerance2e-5;
+observed ordinary fast-math error4.529953e-6.
+
+| z/moment indices | Original wrong entries | Repaired wrong entries |
+|---:|---:|---:|
+| 6144 | 0 | 0 |
+| 73728 | 1966 | 0 |
+| 294912 | 54958 | 0 |
+
+Every original error in the large cases is an uncovered nonzero damping update,
+maximum error50. Original harness exited1 as expected; repaired exited0. This
+validates kernel coverage for these cases, not full solver or multispecies/EM
+physics. Original compile33901exit0; new full make build80927/PID1752428exit0;
+repaired harness34035exit0. No timing speedup claim.
+
+Harness compilation, cwd new scratch root:
+`/usr/bin/nvcc -ccbin /home/rjorge/local/install/gcc-10.4.0/bin/g++ -std=c++17
+-arch=sm_86 -rdc=true -use_fast_math -Iinclude
+-I/home/rjorge/local/install/libcutensor-1.7.0.1/include
+-I/home/rjorge/local/install/nccl-2.18.1/include gx-damping-coverage-test.cu
+OBJECT -o EXECUTABLE`. Original OBJECT=old-scratch/obj/device_funcs.o,
+EXECUTABLE=damping-coverage-original; repaired OBJECT=obj/device_funcs.o,
+EXECUTABLE=damping-coverage-repaired. Run with CUDA_VISIBLE_DEVICES=0.
+Full solver: `make -j2 GK_SYSTEM=office >build.log 2>&1`; same recorded
+CUDA11.5/gcc10.4/fast-math build settings. Harness build logs retained separately.
+
+| Artifact | SHA256 |
+|---|---|
+| new gx binary | 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536 |
+| new src/device_funcs.cu | a67e0062825274e5360ecbbc1b512792813965220003f3feb3edf9bf061c9ac3 |
+| new obj/device_funcs.o | 845acd00e196aa2b3abc30148e575b82ffe508c01c3124efb4b94b1fce3f8f11 |
+| src/linear.cu (inherited normalized powers) | 976ef802f6a9f5ca6a1eaf3ebd3082944e3fc5dac974c3f8bdc325146603f7c6 |
+| gx-damping-coverage-test.cu | 5e809a80d893bc0aeab3d040a48484273653512d742361aaa635ce5f4527e113 |
+| coverage-original.log | 4e842ef2e2fab3dfe884f6fac8f8d07000be91957daf5e36470cadcc7cce9fe4 |
+| coverage-repaired.log | d9eead955588318f3f7534c61b391729effb8d36285a7a1c92eb07b598477fa6 |
+
+Harness/source copies and logs also retained in local recent scratch. New
+reference smoke test50025 exit0: existing salpha_nl32_nm96_startup.in
+(T1/dt.002/fixed/Nl32/Nm96/Nz96) SHA
+810ec6e433b05f0e693f4b868b49afa8337cb7d067afa8c922b9ede48c9f51c1,
+copied to new-root/r0_validation/startup. PATH officevenv bin, GPU1, /usr/bin/time
+-v new-root/gx, run.log/time.log. Audit-gx-coverage-startup.py exits0:
+finite264 out/42 big/2 restart numeric arrays, time1.0000000474974513.
+This remains a finite-state smoke check, NOT validation of known corrupt scalar
+geometry metadata. File hashes: out009b0e4ce4dc82ff661d2562aa2d1ecd62dd3fec5efec0d4f0dc0409f2d476a8;
+big be30182e06e2351ba6adad9bdcfd736ad5f2bdc94aa5e1c6dd4a34d5f00af355;
+restart757b109d3f6bc116456f989cbcdf2417ba64955d9b9dad25c7730145ad953f5f.
+
+Corrected matched reference now **7690/PID1753613** (time1753612), verified
+RNl1m48s. Cwd new-root/r0_validation/refined, PATH officevenv bin,
+CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v new-root/gx salpha_nl32_nm96_t300.in
+>run.log 2>time.log. Identical input SHA
+fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df;
+Nl32/Nm96/Nz96,11 positiveky,dt.002 fixed/T300/rate50. Only reference kernel
+coverage changes from the prior normalized-power build. Retarget hard-coded
+old-root audit scripts before checking these NEW files; never overwrite old data.
+
+GKX doc commit70750486 adds concise README/operator warnings about provisional
+GX references and the verified kernel result. Strict Sphinx26053exit0/diff check
+pass; no source/test changes. Held one ahead of pushedb7cd526e while its
+CI33963277695 completes (latest9pending/no failures), avoiding cancellation.
+Only live research process is corrected GX7690, GPU1; GPU0 free. No merges.
+Full R0–R9 goal active; next full-state/dt/temporal audit and matched comparison
+must precede any corrected-reference validation claim.

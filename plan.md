@@ -125,8 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local/pushed **b7cd526e**
-(pushed after CI33961508920 at2c440b0e completed success), worktree
+`fix/r0-end-damping-rate`, local **70750486**, pushed **b7cd526e**
+(one documentation commit held while CI33963277695 completes), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -163,9 +163,13 @@ ky. Hypercollision coefficients depend on Nm: fixed input does not imply fixed
 damping at retained moments. Temporal settling, cross-code parity, resolution
 convergence and experimental validation are distinct claims.
 
-**Current live research jobs:** none. Nm16011457 and field12758 completed exit0;
-same-state RHS probes63632/68046/95262 also completed exit0. Do not restart old
-handles. New-head CI is not yet certified; both office GPUs are free.
+**Only live research job:** corrected GX Nm96/Nl32/Nz96 dt.002/T300 reference,
+GPU1, **7690/PID1753613** (time1753612), in
+`/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`.
+Input `salpha_nl32_nm96_t300.in`; logs `run.log`, `time.log`. Binary in the parent
+scratch root includes normalized hypercollision powers AND damping stride repair.
+Nm16011457, field12758, RHS probes63632/68046/95262, build80927 and startup50025
+are terminal exit0. Do not restart them. GPU0 is free; code CI not yet certified.
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -223,8 +227,14 @@ GX+.0238779. A30.4% full-state residual remains, so this is not a complete
 operator-equivalence proof. Existing high-order reference results are provisional;
 the normalized-hypercollision patch alone is insufficient. Even baseline
 Nz96/Nl16/Nm48 exceeds the cap (73728 indices). Audit every reference case;
-retain original outputs, add an isolated kernel-coverage regression/repair,
-then rerun matched controls without reproducing the defect in GKX.
+retain original outputs and do not reproduce the defect in GKX. An isolated
+actual-kernel regression now reproduces1966/54958 missed updates for73728/294912
+indices; the stride repair passes all cases, including the6144-index control.
+New build96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+passes the T1 finite-state smoke test. Corrected matched run7690 is live; its
+input SHA remainsfb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
+Existing audit scripts hard-code the OLD scratch root: explicitly retarget them
+before auditing new outputs, and keep old/new records separately labeled.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly
