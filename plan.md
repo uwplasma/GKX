@@ -354,11 +354,14 @@ Interpolation has a separate near-zero derivative defect: even exact samples
 of C(B)=−B², linearly interpolated in B then evaluated at sqrt(2b), give
 dC/db=−883.9 atb1e-8 and−Inf atzero instead of−2. The generic interpolator
 differentiates its declared approximation correctly, but that approximation
-does not preserve the like-species quadratic limit. Use the Gram polynomial
-for the test block; investigate B² coordinates and one-sided endpoint derivative
-contracts for diagonal field/polarization tables. Do not silently change generic
-or unlike-species interpolation semantics, or claim coefficient repair alone
-closes physical AD validation.
+does not preserve the like-species quadratic limit. Commit2c440b0e switches
+only like-species diagonal callers to B² coordinates, preserving the synthetic
+quadratic limit with interior one-sided endpoint derivatives and zero slopes
+outside the table. Twelve forward/reverse derivative cases pass on CPU/GPU;
+generic and unlike-species semantics remain unchanged. Still required: physical
+interpolation/AD convergence for field/polarization coefficients, and a validated
+runtime Gram polynomial for the test block. Neither this interpolation repair
+nor coefficient repair alone closes physical AD validation.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
