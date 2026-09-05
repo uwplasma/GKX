@@ -149,14 +149,23 @@ no material speedup claim. Removed the crash exemption. Linux 0.11.1
 passes the minimal rank-7 reproducer, not yet the application test.
 Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
-**Next:** implement the route-aware rate migration below on a new branch from
-#199; review #199–#201 CI. CPU/GPU damp-only probes now establish that serial
+**In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
+`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
+`fix/r0-end-damping-rate`, head `3e3e31d8`, based on #199 b5dca15a.
+Source, route-aware deck migration, fixed-rate parity overrides, docs and
+cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
+and route checks pass. Full external reference regeneration, adaptive calibration,
+broader caller/precision/AD validation and CI remain required before promotion.
+Public RHS dt
+keywords are temporarily retained for API compatibility but no longer scale
+damping. #199 reported all checks successful/skipped; review #200–#202 CI.
+The pre-migration CPU/GPU damp-only probes establish that serial
 linear/implicit use A/dt, but nonlinear/eigenoperator/species-pmap use A.
 Five field-supplied call sites exist, not four; two are preconditioner probes,
 not the implicit time-step operator. See the latest log for commands and hashes.
 Broader f32,
 sharded AD and production-horizon validation remain open.
-No local/SSH tests remain active. Check remote CI on #199–#201 before relying
+No local/SSH tests remain active. Check remote CI on #200–#202 before relying
 on full-suite status; they were still awaiting complete CI during this slice.
 No merge is authorized; update this
 checkpoint and append commands/results to `plan/log.md` before changing workstreams.

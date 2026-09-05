@@ -4889,3 +4889,102 @@ CI inspected: #199 nonlinear-core still running; #200 several pending tests;
 No local/SSH jobs active. Next: implement the above migration in a new worktree
 from #199, promote the nonzero-damping probe into concise regression tests,
 and validate same-rate parity before any expensive reference regeneration.
+
+## 2026-09-05 — R0 fixed-rate implementation, draft #202
+
+Previous turn was progress: independent CPU/GPU route evidence corrected the
+migration. Created a clean worktree from #199 b5dca15a:
+`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
+`fix/r0-end-damping-rate`. Commits `3f0a0e70` (migration) and `3e3e31d8`
+(explicit tool-line budget) pushed; **draft PR #202**, stacked on #199.
+No merge. Source net -15 lines; no new files. Draft is not release readiness.
+
+Implemented:
+- `_scalar_params` no longer accepts a timestep. Three assembly owners use
+  one fixed rate. Removed the separate A/dt logic in species/Hermite linear RHS.
+  Public optional RHS dt keywords remain accepted, now without damping scaling;
+  obsolete internal threading is a remaining cleanup, not a second model.
+- Removed RuntimeCollisionConfig.damp_ends_scale_by_dt and its startup scaling.
+  TOML explicitly rejects either former boolean with a fixed-rate migration
+  message. Programmatic use of the removed dataclass keyword raises TypeError.
+- Preserved nonlinear and **Krylov** deck rates. Inspecting [run]/[scan] exposed
+  why even 'all linear decks' was too broad: cyclone.toml, circular VMEC,
+  Miller QL and KBM defaults choose Krylov and already read rates.
+- Converted five native-time examples: Coulomb Cyclone 50, HSX/W7X VMEC20,
+  KAW10, imported W7X `0.1/0.005890226417991923` (~16.9773).
+  The latter two use adaptive explicit time: this selects a reference rate,
+  **not** an exactly preserved old trajectory; calibration remains mandatory.
+- Converted all six parity fixtures at their standalone reference dt:
+  s-alpha/Miller ITG50, kinetic-electron/KBM200, HSX/W7X20. Two manifest rows
+  now explicitly pin damp_ends_rate=500 for their dt=.0002 historical harness
+  runs. The builder applies this to cfg.collisions and reports the resolved
+  rate; halving the requested integration dt does not change it.
+- The generated time-solver demo writes its preset's reference rate once into
+  TOML. No nonlinear input changed, including packaged/default common_input.
+- Replaced mixed-contract docs with the fixed-rate operator, scalar exact
+  solution and derivative, RK refinement law and route-aware migration limits.
+  The documentation explicitly states full external regeneration is pending;
+  no published result or figure was relabeled as new evidence.
+
+Verification (local interpreter JAX0.11.1 from
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`, PYTHONPATH=src):
+1. `XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_ENABLE_X64=true
+   <python> -m pytest -q tests/unit/linear/test_linear.py
+   tests/unit/parallel/test_parallel_linear_velocity.py
+   tests/integration/runtime/test_runtime_runner.py -k end_damping
+   --junitxml=/tmp/gkx-damping-route-20260905.Xk4sat/rate-focused.xml`:
+   **21 passed**. Includes four RK schemes' stage values/tangents, fixed-T
+   value/gradient convergence through 4/8/16 steps, and seven damp-only route
+   comparisons at dt=.1/.2 with nonzero profile. A=rate held fixed.
+2. Office snapshot `/home/rjorge/gkx-r0-damping-route-20260905.8mUFOv` was
+   updated with `git diff --binary | ssh office 'cd <snapshot> && git apply'`
+   before docs and parity-wiring-test additions. Solver, route tests and
+   sentinel match 3f0a0e70; initial archive b5dca15a. With
+   `CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true PYTHONPATH=src
+   /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+   tests/unit/parallel/test_parallel_linear_velocity.py -k end_damping_rate`:
+   **2 passed**, JAX0.10.2 on two A4000s.
+3. CPU and GPU `tests/validation/physics_gates/test_end_damping_physics.py`:
+   **1 passed each**, 20,000 steps, dt=.002, fixed rate50. Compatibility gamma
+   and tolerances unchanged. This preserves the old .1/.002 operator at the
+   reference timestep; it is not a fresh external physics validation.
+4. `tests/release/test_release_gates.py -k parity_fixed_damping`: **2 passed**.
+   Executes run_case through its scan call with a sentinel scan substitute:
+   standalone rate200, resolved harness rate500 at both dt=.0002/.0001.
+   This checks override wiring, not simulated GK/GX agreement. First test run
+   caught an incorrect mock signature (missing ky argument); corrected and rerun.
+5. `tests/integration/runtime/test_runtime_config.py`: **56 passed, 1 skipped**.
+   The skip is not counted as covered functionality.
+6. Ruff0.16.4 check/format and Sphinx `-q -W -b html` pass. Architecture gate
+   initially required explicit test (+123) and tool (+10) line-budget accounts;
+   both recorded with reasons and gate rerun successfully. Repository-size and
+   whitespace checks pass. Full suite, mypy and release-artifact regeneration
+   are not claimed from these focused commands.
+
+All local reports under `/tmp/gkx-damping-route-20260905.Xk4sat`; remote reports
+under the office snapshot above. Hashes:
+
+| Report | SHA256 |
+|---|---|
+| rate-focused.xml | 20644f52f18aef61703c661e92dd4d7867a26397a875c7060af705e34e4c7d70 |
+| rate-cpu-sentinel.xml | 73ec01500055de3c6580176524be045aee5d401dd3990ae1a8a9e659dbda7e8b |
+| rate-gpu-routes.xml | c1f2e4995a4701098ba63737cdfb87c17f5e333039b3e5e445d9930643e5aea8 |
+| rate-gpu-sentinel.xml | da82d23dc268962628af428afb64d747fcd609b3e82ba533f6caa5d4d2fa0bb6 |
+| rate-parity-override.xml | f41e42f4c6e9c605f7e7a79484b28f07ffbb9997cc8920cec1838325a2a636ff |
+| rate-runtime-config.xml | b3fa428145ed392251f48f96bb7f64c4ff4c955e2f3de33808841cb23df3d59d |
+
+Next, keep #202 draft and unmerged:
+1. Inspect #200–#202 CI. #199 now reports no checks other than SUCCESS/SKIPPED;
+   #201 had no failures at the last query, but remaining jobs were not certified.
+2. Broaden caller/default audit, particularly auto solver selection, demos,
+   benchmark adapters, CLI overrides and test fixtures that inherited A=.1.
+   A fixed rate must not be recomputed from a refinement dt anywhere downstream.
+3. Audit native adaptive dt threading and run fixed-rate refinement against
+   independent eigenoperator/implicit answers with nontrivial field coupling;
+   test distributed gradients, not just primal pmap parity.
+4. Locate and verify current GX reference bundles; sync a fresh committed #202
+   office snapshot, run the complete six-case parity matrix with resolved-rate
+   provenance and unsettled/failed modes retained, plus relevant nonlinear
+   unchanged-rate checks. Only then regenerate downstream artifacts and assess
+   adaptive deck/reference changes. Do not weaken gates to hide changed physics.
+No local/SSH process remains active; both worktrees are clean after commits.
