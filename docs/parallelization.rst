@@ -125,6 +125,39 @@ does not imply runtime nonlinear domain decomposition: it only proves that the
 metadata split/reassemble contract is internally consistent and correctly
 scoped as non-production.
 
+Diagnostic gate: species-parallel rate derivatives
+--------------------------------------------------
+
+For a field-free moment with fixed end-damping rate, three Euler steps give
+
+.. math::
+
+   G_3=(1-\Delta t\,\nu d)^3G_0,\qquad
+   \partial_\nu G_3=-3\Delta t\,d(1-\Delta t\,\nu d)^2G_0.
+
+Serial and species-``pmap`` reverse derivatives pass this exact check at
+``dt=0.1,0.2`` on two logical CPUs and two RTX A4000 GPUs (float64,
+``rtol=1e-9, atol=1e-12``; September 2026). Run with two visible devices:
+
+.. code-block:: bash
+
+   JAX_ENABLE_X64=true PYTHONPATH=src python -m pytest -q \
+     tests/unit/parallel/test_parallel_linear_velocity.py \
+     -k end_damping_rate_matches_nonlinear_eigen_implicit_and_species_routes
+
+This gate also compares supplied-field, nonlinear-RHS, eigenoperator and implicit
+routes. It does **not** establish coupled electromagnetic or saturated-transport
+derivative accuracy, nor a parallel speedup. Device details and artifact hashes
+are in the `research logbook <https://github.com/uwplasma/GKX/pull/198>`_.
+
+The companion ``test_species_pmap_electromagnetic_trajectory_matches_serial``
+checks active :math:`A_\parallel,B_\parallel` and initial-state derivatives:
+for :math:`J=\|G_3\|^2+\|\phi\|^2`, linearity requires
+:math:`\partial_s J(sG_0)|_{s=1}=2J(G_0)`. This short three-step check passes
+on two CPUs and two GPUs; it is not electromagnetic model validation. Concrete
+inputs may be placed before differentiation; traced initial states and parameters
+are preserved without a host round trip.
+
 Diagnostic path: whole-state nonlinear sharding
 -----------------------------------------------
 

@@ -2075,6 +2075,28 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
         atol=8e-6,
     )
 
+    # Linear EM evolution is homogeneous in its initial state. This probes
+    # traced state inputs, which parameter-only gradient checks do not exercise.
+    derivatives = []
+    for parallel in (
+        None,
+        SimpleNamespace(
+            strategy="velocity", backend="auto", axis="species", num_devices=2
+        ),
+    ):
+
+        def objective(scale):
+            final, phi = integrate_linear(
+                scale * state, grid, geom, params, parallel=parallel, **integration
+            )
+            return jnp.real(jnp.vdot(final, final) + jnp.vdot(phi, phi))
+
+        value, derivative = jax.value_and_grad(objective)(jnp.asarray(1.0))
+        assert float(value) > 1e-5
+        np.testing.assert_allclose(derivative, 2 * value, rtol=8e-5, atol=1e-7)
+        derivatives.append(derivative)
+    np.testing.assert_allclose(*derivatives, rtol=8e-5, atol=1e-7)
+
 
 def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:
     from gkx.solvers_linear_integrators import integrate_linear
