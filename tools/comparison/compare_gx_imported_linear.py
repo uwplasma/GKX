@@ -178,6 +178,7 @@ class GXInputContract:
     damp_ends_widthfrac: float
     restart_with_perturb: bool
     restart_scale: float
+    fixed_dt: bool = False
 
 
 def _file_cache_token(path: Path | None) -> dict[str, str | int | None]:
@@ -398,6 +399,7 @@ def _load_gx_input_contract(path: Path) -> GXInputContract:
         tau_e=tau_e,
         beta=float(physics.get("beta", 0.0)),
         dt=None if "dt" not in time else float(time["dt"]),
+        fixed_dt=bool(time.get("fixed_dt", False)),
         scheme=str(time.get("scheme", "rk4")).strip().lower(),
         nwrite=max(1, int(diagnostics.get("nwrite", 1))),
         init_field=str(init.get("init_field", "density")).strip().lower(),
@@ -950,9 +952,15 @@ def _gx_end_damping_rate(contract: GXInputContract) -> float:
         or float(contract.damp_ends_widthfrac) == 0.0
     ):
         return 0.0
-    if contract.dt is None or not np.isfinite(contract.dt) or contract.dt <= 0.0:
+    if (
+        not contract.fixed_dt
+        or contract.dt is None
+        or not np.isfinite(contract.dt)
+        or contract.dt <= 0.0
+    ):
         raise ValueError(
-            "GX end damping is per step: a fixed positive GX input dt is required "
+            "GX end damping is per step: a fixed positive GX input dt and "
+            "Time.fixed_dt=true are required "
             "to define a comparable GKX rate; adaptive references need a separate "
             "fixed-rate validation run."
         )

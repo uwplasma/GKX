@@ -1233,7 +1233,9 @@ regeneration remains required before this migration is release-ready.
 
 Imported GX linked-boundary inputs use a per-step strength. The trajectory and
 RHS comparison tools convert it using an explicit, positive GX input timestep,
-not the GKX refinement timestep. Missing/adaptive reference timesteps are
+not the GKX refinement timestep. The GX input must explicitly set
+``[Time] fixed_dt = true``: ``dt`` alone is an adaptive-step ceiling in GX.
+Missing/adaptive reference timesteps are
 rejected when damping is active: one fixed rate cannot reproduce their changing
 operator. Periodic (including zero-shear-forced periodic) and disabled damping
 need no conversion. Sampled diagnostic spacing alone does not certify the

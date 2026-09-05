@@ -325,6 +325,9 @@ def test_load_gx_input_contract_reads_fix_aspect_and_species_contract(
     assert contract.beta == 0.01
     assert contract.tau_e == 1.0
     assert contract.dt == 0.005
+    assert contract.fixed_dt is False
+    path.write_text(path.read_text().replace("[Time]", "[Time]\nfixed_dt = true"))
+    assert _load_gx_input_contract(path).fixed_dt is True
     assert contract.scheme == "rk3"
     assert contract.nwrite == 50
     assert contract.init_field == "density"
@@ -518,6 +521,8 @@ scale = 0.125
 def test_imported_linear_converts_gx_strength_at_reference_dt() -> None:
     contract = replace(_dummy_gx_contract(init_single=False), dt=0.2, boundary="linked")
     assert imported_linear._gx_end_damping_rate(contract) == pytest.approx(0.5)
+    with pytest.raises(ValueError, match="Time.fixed_dt=true"):
+        imported_linear._gx_end_damping_rate(replace(contract, fixed_dt=False))
 
 
 @pytest.mark.parametrize("dt", [None, 0.0, -0.1, float("nan"), float("inf")])
@@ -655,6 +660,7 @@ def test_resolve_imported_real_fft_ny_accepts_full_diag_state_ky_block() -> None
 
 def _dummy_gx_contract(*, init_single: bool) -> GXInputContract:
     return GXInputContract(
+        fixed_dt=True,
         Nx=8,
         Ny=8,
         nperiod=1,

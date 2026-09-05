@@ -939,7 +939,7 @@ recursive = true
 # +10: imported sampling overrides requested Nz in parity provenance.
 # +29: full/prefix sampling equivalence with even/odd horizons and two integrators.
 # +9: refuse reference modes absent from the effective solver grid before scans.
-baseline = 86941
+baseline = 86947
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1014,7 +1014,7 @@ recursive = true
 # +10: explicit joint temporal-screen error coverage and console headline.
 # +9: resolve actual spectral-grid Nz while retaining the requested value.
 # +6: move grid resolution to preflight and validate actual solver ky.
-baseline = 77965
+baseline = 77973
 target = 0
 
 [[line_budget_policy.counts]]
