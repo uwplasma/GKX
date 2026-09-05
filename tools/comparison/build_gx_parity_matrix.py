@@ -174,11 +174,28 @@ def run_case(
     reference_path = reference_dir / str(case["reference_output"])
     spectrum = load_reference_spectrum(reference_path)
 
-    requested = case.get("ky")
-    if requested:
-        ky_values = np.asarray([float(v) for v in requested], dtype=float)
-    else:
-        ky_values = spectrum.ky
+    reference_ky = np.asarray(spectrum.ky, dtype=float)
+    ky_values = np.asarray(case.get("ky", reference_ky), dtype=float)
+    for values in (reference_ky, ky_values):
+        if (
+            values.ndim != 1
+            or not values.size
+            or not np.all(np.isfinite(values) & (values > 0))
+            or len(np.unique(values)) != len(values)
+        ):
+            raise ValueError("parity ky must be nonempty, unique, finite and positive")
+    matches = np.argmin(abs(reference_ky[:, None] - ky_values), axis=0)
+    # Allow decimal rendering of a single-precision reference coordinate, not
+    # interpolation or an arbitrary nearest mode. Fail before expensive solves.
+    if not np.all(
+        np.isclose(
+            ky_values, reference_ky[matches], rtol=4 * np.finfo(np.float32).eps, atol=0
+        )
+    ):
+        raise ValueError("requested ky is absent from the reference spectrum")
+    if len(np.unique(matches)) != len(matches):
+        raise ValueError("requested ky values map to duplicate reference modes")
+    ky_values = reference_ky[matches]
 
     config_path = REPO_ROOT / str(case["config"])
     cfg, _ = load_runtime_from_toml(config_path)

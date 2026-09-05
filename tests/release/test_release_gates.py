@@ -3980,20 +3980,21 @@ def test_parity_fixed_damping_override_survives_timestep_refinement(monkeypatch,
 
     run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
     case = next(c for c in _parity_cases() if c["key"] == "kbm_miller")
-    case = {**case, "dt": dt}
+    case = {**case, "dt": dt, "ky": [0.3]}
     assert case["damp_ends_rate"] == 500.0
     cfg, _ = gkx.load_runtime_from_toml(RUN_TO_REPO_ROOT / case["config"])
     assert cfg.collisions.damp_ends_amp == 200.0
     monkeypatch.setitem(
         run_case.__globals__,
         "load_reference_spectrum",
-        lambda _: SimpleNamespace(ky=[0.3]),
+        lambda _: SimpleNamespace(ky=[0.30000001192092896]),
     )
 
     class ReachedScan(Exception):
         pass
 
     def scan(resolved, ky_values, **kwargs):
+        assert ky_values.tolist() == [0.30000001192092896]
         assert resolved.collisions.damp_ends_amp == 500.0
         assert kwargs["dt"] == dt
         raise ReachedScan
@@ -4103,6 +4104,41 @@ def test_kinetic_parity_decks_preserve_electron_only_seed(key):
     case = next(c for c in _parity_cases() if c["key"] == key)
     cfg, _ = load_runtime_from_toml(RUN_TO_REPO_ROOT / case["config"])
     assert cfg.init.init_electrons_only is True
+
+
+@pytest.mark.parametrize(
+    "ky",
+    [
+        [],
+        [0.4],
+        [0.0],
+        [-0.3],
+        [float("nan")],
+        [float("inf")],
+        [0.3, 0.3],
+        [0.3, 0.30000001],
+    ],
+)
+def test_parity_rejects_unmatched_coordinates_before_loading_config(monkeypatch, ky):
+    import runpy
+    from types import SimpleNamespace
+    import gkx
+
+    run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
+    monkeypatch.setitem(
+        run_case.__globals__,
+        "load_reference_spectrum",
+        lambda _: SimpleNamespace(ky=[0.3]),
+    )
+    monkeypatch.setattr(
+        gkx,
+        "load_runtime_from_toml",
+        lambda _: pytest.fail("coordinate validation must precede setup"),
+    )
+    with pytest.raises(ValueError, match="ky"):
+        run_case(
+            {"ky": ky, "reference_output": "unused"}, reference_dir=RUN_TO_REPO_ROOT
+        )
 
 
 def test_parity_builder_reads_the_declared_floor() -> None:

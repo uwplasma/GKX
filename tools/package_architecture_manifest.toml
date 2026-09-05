@@ -932,7 +932,8 @@ recursive = true
 # +43: exercise reference probes, terminal writes and joint reporting unknowns.
 # +10: preserve demo horizon and fixed damping while refining its timestep.
 # +9: pin the kinetic reference decks' species-selective initial condition.
-baseline = 86780
+# +36: reject invalid/missing parity coordinates before setup; verify exact snapping.
+baseline = 86816
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1002,7 +1003,8 @@ recursive = true
 # 77854 -> 77859: require stable frequency as well as growth and retain raw
 # half-horizon values plus explicit finite-error coverage in parity reports.
 # +42: report reference-side temporal evidence without certifying sampled means.
-baseline = 77901
+# +17: preflight and match reference coordinates before expensive parity solves.
+baseline = 77918
 target = 0
 
 [[line_budget_policy.counts]]

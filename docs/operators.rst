@@ -1256,6 +1256,10 @@ unknown (null), not success; sample means are not time-weighted estimates.
 Regular sampling may include one shortened terminal interval (GX's final write).
 ``both_codes_settled`` requires both screens to pass. JSON and CSV retain the
 reference probe values; neither screen proves timestep or resolution convergence.
+Requested parity wavenumbers must match the reference (within four float32
+machine epsilons relatively); accepted decimal values use the exact reference
+coordinate. Missing, nonpositive, nonfinite or duplicate modes fail before
+integration. This is coordinate matching, not interpolation.
 
 Controls:
 
