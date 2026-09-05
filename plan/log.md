@@ -6760,3 +6760,46 @@ audit before stronger claims; current running GKX rates themselves remain fixed.
 Latest live: kinetic40474/PID1729837 RNl48m15s; spatial77271/PID1733704 RNl14m16s.
 No restarts or production-snapshot edits; no merges. Continue physical controls,
 matched GX refinement and full roadmap; this helper fix is not physics closure.
+
+## 2026-09-05 — Observed-timestep audit retains three completed GX references
+
+Previous turn progressed with strict fixed-dt import contract. Audited actual
+stdout step/time/dt rows and NetCDF Grids/time for all three completed references
+in <campaign>/matched_refs/ITG_cyclone. All inputs retain fixed_dt=false by
+default; do not relabel them. Every printed dt equals the declared ceiling, each
+interior diagnostic interval/nwrite equals the float32 ceiling exactly, and
+every printed time agrees with step_number*float32_dt within its5-decimal-place
+rounding error. This is stronger than assuming constant dt from input or one
+summary value. The linear GX frequency bound has fixed geometry/parameters;
+no nonlinear frequency contribution exists in these runs. No evidence of a
+changed timestep or varying nominal end-damping rate in these three references.
+
+| Reference | Printed samples / last step | Interior dt | Max printed-time residual | Final interval in steps |
+|---|---|---|---|---|
+| s-alpha adiabatic | 751 /75000 | .0020000000949949026 | 4.99683e-6 | 99 |
+| Miller adiabatic | 751 /75000 | .0020000000949949026 | 4.99683e-6 | 99 |
+| Miller kinetic | 2001 /200001 | .00019999999494757503 | 1.01049e-6 | 100 |
+
+The nominal dt values are.002/.0002; float32 parsing explains the difference.
+The first two final diagnostic writes are one step early relative to the regular
+cadence, not a changed integration dt. Retain these reference outputs and the
+earlier temporal-screen failures; this audit does not establish mode settling
+or velocity convergence. The new generic adapter remains conservative and
+requires explicit fixed_dt=true rather than silently assuming this audit applies
+to arbitrary inputs. Future prepared GX reference is already explicitfixed.
+
+Reproducer: /tmp/gkx-coupled-rate-20260905.shBvlR/audit-gx-reference-dt.py,
+also copied to campaign; run with office venv Python, no JAX/GPU required.
+Script SHA256 `f94cb4b4f24bb5743c0be5417b125ac02eebeb9b49ce7974a5809f48c0fe7aa5`;
+local output audit-gx-reference-dt.log SHA256
+`c5a7ea03b892eabd21e0d900bcc996d0b65452b448498206163d406d9ad58bbd`.
+Original stdout hashes in that output: s-alpha
+`d3700f57c5b23cb1b3ae60d648b9f7e003c3cd79afbc428941a7c49329d651b7`,
+Miller `b7738e048d955c485c5f64535f10233533e1dba0d30cf85b77517fcad3fac179`,
+kinetic `1eacccf9f9d9257fac34d910795001c8767655aa684af5ef2d455008ce38aa73`.
+Output NetCDF hashes retained in original completion entries. Both audit runs
+exit0; no reference mutation or new physics run.
+
+Latest live: kinetic40474/PID1729837 RNl50m48s; spatial77271/PID1733704 RNl16m49s.
+Code stays clean b6c375cf; CI9running/28queued/1skip at initial query, no full
+green claim. No restarts or merges; full roadmap active.
