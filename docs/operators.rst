@@ -367,6 +367,39 @@ comparison: 13.0% at :math:`B=1`, 64.2% at :math:`B=4`.
 This oracle is not wired into runtime table application; the field and
 polarization terms must be validated before replacing a complete operator.
 
+The same Dirichlet form gives an independent test-particle polarization check.
+From Frei2021 Eq45/47c, replace the source basis function by
+
+.. math::
+
+   u=J_0(B r\sqrt{1-\xi^2}),\qquad
+   u_r=-B\sqrt{1-\xi^2}J_1,\qquad
+   u_\xi=\frac{Br\xi}{\sqrt{1-\xi^2}}J_1.
+
+``like_species_test_particle_polarization`` returns :math:`p^T_{\phi2}`
+with :math:`q\phi/T` factored out. The equal-species test :math:`\phi1`
+term vanishes. Checks: 96/192 radial and 48/64 pitch nodes; the independently
+resolved source :math:`u=\sum_j e^{-B^2/4}(B^2/4)^j L_j/j!`; and
+:math:`p^T_{\phi2}/B^2\to C_0[:,1]/4-D[:,0]` as :math:`B\to0`.
+
+.. list-table:: Shipped test-polarization relative vector errors
+   :header-rows: 1
+
+   * - Moments
+     - :math:`B=1`
+     - :math:`B=4`
+   * - 8
+     - 3.7403%
+     - 95.7948%
+   * - 18
+     - 0.1736%
+     - 86.4026%
+
+The refined eight-moment spherical13/radial12/Bessel24 generator agrees at
+:math:`B=1` within :math:`1.51\times10^{-11}`. This is a separate coefficient
+defect from interpolation. No shipped coefficients are replaced by this oracle;
+field-particle polarization and the coupled collision/field map remain unvalidated.
+
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
 

@@ -40,6 +40,7 @@ from build_linear_validation_artifacts import (  # noqa: E402
     build_finite_wavelength_coulomb_pair_tables,
     coulomb_drift_kinetic_moment_matrices,
     like_species_test_particle_gram_matrices,
+    like_species_test_particle_polarization,
 )
 
 
@@ -69,6 +70,46 @@ def test_like_species_test_particle_dirichlet_quadrature(pmax, jmax):
 def test_test_particle_quadrature_rejects_invalid_orders(p, j, nr, nxi):
     with pytest.raises(ValueError, match="orders"):
         like_species_test_particle_gram_matrices(p, j, radial_nodes=nr, pitch_nodes=nxi)
+
+
+@pytest.mark.parametrize("pmax,jmax", [(3, 1), (5, 2)])
+@pytest.mark.parametrize("b", [0.0, 1.0, 4.0])
+def test_test_particle_polarization_quadrature_and_j0_source(pmax, jmax, b):
+    from scipy.special import gammaln
+
+    result = like_species_test_particle_polarization(pmax, jmax, b)
+    refined = like_species_test_particle_polarization(
+        pmax, jmax, b, radial_nodes=192, pitch_nodes=64
+    )
+    np.testing.assert_allclose(result, refined, rtol=1e-11, atol=1e-12)
+    np.testing.assert_allclose(result.reshape(pmax + 1, jmax + 1)[1::2], 0, atol=1e-14)
+    if b == 0:
+        np.testing.assert_array_equal(result, 0.0)
+        return
+    # J0(B sqrt(x)) = sum_j exp(-B²/4)(B²/4)^j/j! L_j(x).
+    # Resolve the source independently of the retained output moments.
+    c0, d = like_species_test_particle_gram_matrices(pmax, 24)
+    j = np.arange(25)
+    source = np.zeros((pmax + 1, 25))
+    source[0] = np.exp(-b * b / 4 + j * np.log(b * b / 4) - gammaln(j + 1))
+    projected = ((c0 - b * b * d) @ source.ravel()).reshape(pmax + 1, 25)
+    np.testing.assert_allclose(projected[:, : jmax + 1].ravel(), result, atol=1e-11)
+
+
+def test_test_particle_polarization_quadratic_limit():
+    c0, d = like_species_test_particle_gram_matrices(3, 1)
+    b = 1e-4
+    result = like_species_test_particle_polarization(3, 1, b)
+    # J0 = 1 - B²*x/4 + O(B⁴), x = L0-L1, C0[:,0] = 0.
+    np.testing.assert_allclose(
+        result / b**2, c0[:, 1] / 4 - d[:, 0], rtol=2e-8, atol=1e-10
+    )
+
+
+@pytest.mark.parametrize("b", [-1.0, np.nan, np.inf])
+def test_test_particle_polarization_rejects_invalid_wavelength(b):
+    with pytest.raises(ValueError, match="bessel_argument"):
+        like_species_test_particle_polarization(3, 1, b)
 
 
 @pytest.mark.parametrize("error", [0.0, 1e-5, np.nan, np.inf])

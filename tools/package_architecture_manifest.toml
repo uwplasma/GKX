@@ -944,7 +944,8 @@ recursive = true
 # +18: reject nonfinite values in all six published coefficient blocks.
 # +26: independent test-particle Gram quadrature and order/entropy gates.
 # +42: like-species quadratic values/JVP/VJP at zero, interior and endpoints.
-baseline = 87054
+# +41: direct polarization/source-projection and quadratic-limit gates.
+baseline = 87095
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1021,7 +1022,8 @@ recursive = true
 # +6: move grid resolution to preflight and validate actual solver ky.
 # +1 net: reject nonfinite collision coefficients before publication.
 # +64: independent differential-form collision oracle, no runtime dependency.
-baseline = 78038
+# +60 net: polarization oracle sharing the existing Dirichlet quadrature basis.
+baseline = 78098
 target = 0
 
 [[line_budget_policy.counts]]

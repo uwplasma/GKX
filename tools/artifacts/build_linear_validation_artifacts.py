@@ -1804,21 +1804,14 @@ def _precompute_coulomb_speed_coefficients(
     return tuple(functions)
 
 
-def like_species_test_particle_gram_matrices(
+def _like_species_test_particle_quadrature(
     maximum_hermite_order: int,
     maximum_laguerre_order: int,
     *,
     radial_nodes: int = 96,
     pitch_nodes: int = 48,
-) -> tuple[np.ndarray, np.ndarray]:
-    r"""Quadrature oracle for C_test(B)=C0-B²D, in paper moment convention.
-
-    Integrate the equal-species differential operator's Dirichlet form after
-    the Fourier pullback (Frei2021 Eq77/89). Positive quadrature weights give
-    negative-semidefinite C0 and positive-semidefinite D without symmetrizing.
-    Unit collision frequency; no field/polarization terms. Converge node counts
-    independently for each output basis before using this offline reference.
-    """
+):
+    """Basis derivatives and Maxwellian Dirichlet weights, in paper convention."""
     from scipy.special import (
         erf,
         eval_genlaguerre,
@@ -1852,20 +1845,87 @@ def like_species_test_particle_gram_matrices(
             radial.append(dh * xi * lag + h * dl * 2 * r * (1 - xi * xi))
             angular.append(dh * r * lag - h * dl * 2 * r * r * xi)
 
-    def gram(basis, weights):
-        weighted = (np.asarray(basis) * np.sqrt(weights)).reshape(len(values), -1)
-        return weighted @ weighted.T
-
-    c0 = -gram(radial, weight * nu_parallel * r * r) - gram(
-        angular, weight * nu_d * (1 - xi * xi)
-    )
-    d = gram(
-        values,
+    weights = (
+        weight * nu_parallel * r * r,
+        weight * nu_d * (1 - xi * xi),
         weight * r * r / 2 * (nu_d * (1 + xi * xi) + nu_parallel * (1 - xi * xi)),
     )
+    return np.asarray(values), np.asarray(radial), np.asarray(angular), weights, r, xi
+
+
+def like_species_test_particle_gram_matrices(
+    maximum_hermite_order: int,
+    maximum_laguerre_order: int,
+    *,
+    radial_nodes: int = 96,
+    pitch_nodes: int = 48,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Quadrature oracle for C_test(B)=C0-B²D, in paper moment convention.
+
+    Integrate the equal-species differential operator's Dirichlet form after
+    the Fourier pullback (Frei2021 Eq77/89). Positive quadrature weights give
+    negative-semidefinite C0 and positive-semidefinite D without symmetrizing.
+    Unit collision frequency; no field/polarization terms. Converge node counts
+    independently for each output basis before using this offline reference.
+    """
+    values, radial, angular, weights, _, _ = _like_species_test_particle_quadrature(
+        maximum_hermite_order,
+        maximum_laguerre_order,
+        radial_nodes=radial_nodes,
+        pitch_nodes=pitch_nodes,
+    )
+
+    def gram(basis, weight):
+        weighted = (basis * np.sqrt(weight)).reshape(len(values), -1)
+        return weighted @ weighted.T
+
+    c0 = -gram(radial, weights[0]) - gram(angular, weights[1])
+    d = gram(values, weights[2])
     if not (np.isfinite(c0).all() and np.isfinite(d).all()):
         raise ValueError("test-particle quadrature produced non-finite coefficients")
     return c0, d
+
+
+def like_species_test_particle_polarization(
+    maximum_hermite_order: int,
+    maximum_laguerre_order: int,
+    bessel_argument: float,
+    *,
+    radial_nodes: int = 96,
+    pitch_nodes: int = 48,
+) -> np.ndarray:
+    r"""Offline test-phi2 oracle: apply the Dirichlet form to J0(B v_perp/vT).
+
+    Frei2021 Eq45/47c supplies this source; the equal-species test-phi1 is zero.
+    Unit collision frequency, with q*phi/T factored out. No field-particle term.
+    Direct source derivatives avoid truncating its infinite Laguerre expansion.
+    """
+    from scipy.special import j0, j1
+
+    if not math.isfinite(bessel_argument) or bessel_argument < 0:
+        raise ValueError("bessel_argument must be finite and nonnegative")
+    values, radial, angular, weights, r, xi = _like_species_test_particle_quadrature(
+        maximum_hermite_order,
+        maximum_laguerre_order,
+        radial_nodes=radial_nodes,
+        pitch_nodes=pitch_nodes,
+    )
+    b = bessel_argument
+    perpendicular = np.sqrt(1 - xi * xi)
+    argument = b * r * perpendicular
+    source_r = -b * perpendicular * j1(argument)
+    source_xi = b * r * xi / perpendicular * j1(argument)
+    result = -np.sum(
+        radial * (weights[0] * source_r)
+        + angular * (weights[1] * source_xi)
+        + values * (b * b * weights[2] * j0(argument)),
+        axis=(1, 2),
+    )
+    if not np.isfinite(result).all():
+        raise ValueError(
+            "test-particle polarization quadrature produced non-finite values"
+        )
+    return result
 
 
 def coulomb_nonpolarized_moment_matrices(
