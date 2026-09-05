@@ -175,6 +175,9 @@ After GX kinetic completes, run prepared **matched_kinetic_manifest.toml**
 the old T20 harness. Validate its complete reference before reading it into GKX.
 Continue slow-mode/velocity/parallel-resolution and regularization checks, then
 remaining kinetic/EM/stellarator matrix and the numbered R0 queue below.
+For imported parity geometry, editing grid.Nz alone does **not** refine the
+solve: geometry-file sampling overrides it. Resolve/report the effective grid
+and generate a finer same-domain geometry before the spatial study (see log).
 GPU wall times from concurrent runs are not isolated performance benchmarks.
 Update this checkpoint and append evidence to the logbook before switching work.
 

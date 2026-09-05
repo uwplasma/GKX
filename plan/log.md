@@ -5995,3 +5995,36 @@ session6455/PID1722824 verified RNl at29m05s; Laguerre-control
 session67452/PID1725909 RNl at2m23s. Resume those handles before restarting
 anything. Latest pre-push CI202 query: no failures, several pending/queued;
 new commit requires fresh CI. No merges, no public validation promotion.
+
+## 2026-09-05 — Prevent a false parallel-resolution study
+
+Previous turn progressed: joint temporal summary contract implemented/tested.
+Both GPU processes verified RNl: kinetic1722824 at29m43s, Laguerre1725909 at3m01s.
+Reviewed spatial-refinement path before preparing its deck. Important contract:
+geometry/core.py apply_geometry_grid_defaults replaces Nz and z bounds from
+FluxTubeGeometryData, clearing ntheta/nperiod/zp. Runtime scan _batch_scan_setup
+applies this before constructing the actual spectral grid. The parity reporter
+currently records cfg.grid.Nz, not this effective value: latent provenance gap
+if requested and imported sampling disagree. Current campaign is96/96, so its
+existing resolution labels are unaffected.
+
+Executed a local CPU probe with completed matched s-alpha reference, same
+PYTHONPATH=src/local JAX0.11.1 environment, using load_runtime_from_toml,
+build_runtime_geometry, dataclasses.replace(grid,Nz=...), then
+apply_geometry_grid_defaults. Requested Nz96 **and192 both resolve to96**, with
+96 imported points and bounds[-9.42477798461914,9.42477798461914]. Thus merely
+changing the fixture's Nz would silently repeat the same spatial solve.
+
+Next spatial action: resolve/report effective grid in the comparison tool with
+a regression for mismatched requested/imported sizes; generate same-domain
+finer reference geometry before launching refinement. GX source deck inspected:
+ntheta32,nperiod2 =>96 total points. Increase ntheta to64 at fixed nperiod2 for
+192 points, preserving physical domain and end-damping rate50. Obtain geometry
+from an independently generated GX output (separate owned case), not arbitrary
+upsampling of the96-point geometry. Check actual coordinates/coefficients and
+timestep sensitivity before interpreting differences. Keep velocity and window
+settings fixed to a completed baseline. No new spatial solve launched yet.
+
+No edits to running snapshots or production code this turn. This is new verified
+evidence that changes the next experiment, not a completion claim. Resume live
+session6455/PID1722824 and session67452/PID1725909; no restarts or merges.
