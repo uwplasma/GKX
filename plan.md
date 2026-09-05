@@ -517,6 +517,13 @@ passes independent small-b checks for8/18 moments; see the logbook's scaled
 congruence checkpoint. This is not implemented or globally certified. Check all source-vector
 limits separately, smooth derivative accuracy, endpoints and CPU/GPU cost;
 do not repair one entry by hand at the expense of matrix entropy.
+Full-range follow-up favors scaled cubic over scaled linear: at53 nodes, sampled
+combined-matrix/source derivative errors are .01373%/.29030% (8 moments) and
+.01052%/.25718% (18). All cubic Bernstein control matrices satisfy the sufficient
+negative-semidefinite condition to roundoff (<6.9e-15), including14/27-node grids.
+This is an interval-wise matrix certificate to numerical tolerance, not a coupled
+field-energy proof. No production interpolation change; require signed-runtime
+JVP/VJP, endpoint/clipping contracts, f32 and cost gates before promotion.
 Record quadrature provenance (not fictional high-precision decimal digits),
 independently recheck all nodes, update coefficient regressions and audit the
 interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H

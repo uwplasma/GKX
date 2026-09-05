@@ -8929,3 +8929,78 @@ topology/frequency construction, not distributed runtime derivatives.
 Plan checkpoint corrected stale GPU-free wording. Next: terminal spatial
 artifact audits when ready, distributed derivative conventions, and the open
 collision/source gates. Goal active; both GPUs occupied by existing controls.
+
+### 2026-09-05: full-range scaled cubic study and Bernstein matrix check
+
+Previous turn progress: strengthened multi-link tests. Code still local48b90099,
+pushedf4d5d1b5; CI33969411628 last queued/incomplete. GPU resolution controls
+1767040/1767078 revalidated running at7:04/7:02; no restarts, no live NetCDF reads.
+This turn changes no runtime code or packaged coefficients.
+
+Scratch root `/tmp/gkx-collision-candidates-20260905.XqBQZb`.
+scaled-full-range.py uses independent quadrature C=Ctest+Cfield and full source
+p=ptest+pfield, rather than comparing separate blocks as the older grid study did.
+Do not compare the two studies' percentages as identical norms. Evaluate three
+off-grid fractions .2113248654/.5/.7886751346 per interval and upper endpoint b8.
+Reference derivative uses central h=min(1e-5,.05b), checked against h/2;
+maximum relative FD refinement1.54e-9. These are sampled error maxima, not
+continuous error bounds or transport errors. b0 behavior is separately covered
+by the earlier analytic-limit study.
+
+Compare raw linear, scaled linear, and scaled cubic (SciPy CubicSpline default
+not-a-knot) in b=B²/2, with derived A0/q0 and C=DAD, p=bDq. Grids14/27/53
+are repeated b-midpoint bisections of the packaged grid. Runs37120/97478/81426
+all terminalexit0. Invocation from code worktree, PYTHONPATH=src:tools/artifacts,
+local JAX0111 Python, scaled-full-range.py [0|1|2]; same-stem logs record results.
+Initial14-node log predates adding printed node count; mathematics unchanged.
+
+| Cubic nodes | 8 moments value matrix/source (%) | 8 derivative matrix/source (%) | 18 value matrix/source (%) | 18 derivative matrix/source (%) |
+|---|---|---|---|---|
+| 14 | .039786/1.54425 | 1.47302/43.3838 | .027598/.820933 | 1.15413/35.2823 |
+| 27 | .002041/.064638 | .139379/3.34707 | .001386/.036143 | .107668/2.86573 |
+| 53 | .000102/.002961 | .013730/.290301 | .000068/.001698 | .010521/.257176 |
+
+Worst cubic derivatives are at upper endpoint b8. Scaled linear is not a global
+improvement: at14 nodes its source derivative maxima125.99%/52.57%, versus
+raw98.44%/50.37%; at53 still27.92%/11.51%. This rejects promoting the small-b
+linear fix as the final derivative algorithm. Combined source derivatives can be
+small near turning points, so relative errors are not standalone physics tolerances.
+
+**Interval-wide sufficient entropy check.** For each cubic A on an interval
+of width h, with power coefficients a3,a2,a1,a0 in (b-b_left), Bernstein controls:
+
+```
+B0=a0
+B1=a0+h*a1/3
+B2=a0+2*h*a1/3+h²*a2/3
+B3=a0+h*a1+h²*a2+h³*a3
+A(t)=(1-t)³ B0+3t(1-t)² B1+3t²(1-t) B2+t³ B3, 0<=t<=1
+```
+
+Nonnegative weights sum to1: if all Bj are negative-semidefinite, A and DAD
+are too throughout the interval. scaled-bernstein.py tests all controls for all
+three grids and both bases. Maximum eigenvalues6.65e-15/6.84e-15 occur at the
+zero endpoint (quadrature roundoff). No projection/symmetrization applied.
+Symmetry asserted to1e-12; Bernstein reconstruction independently matches spline
+at0,.2113248654,.7886751346,1 to1e-12. Final verification99091 exit0; initial
+63593 also exit0. This is a numerical certificate of the sufficient condition
+for these coefficients, NOT automatic preservation by arbitrary cubic data,
+NOT a rigorous interval-arithmetic bound, and NOT coupled field-metric entropy.
+Future coefficient generation must check the controls instead of assuming it.
+
+| Artifact | SHA256 |
+|---|---|
+| scaled-full-range.py | fd87c71a83e0f1f6da982c3dd99ea460fe8cbc36853f5779c1783543c7b65c1c |
+| scaled-full-range.log | 0543d449810c4a218167a742f41fe1e1cee6c4fb6fed0e3e937b7936a72af0b5 |
+| scaled-full-range-27.log | e423c3ec2766293d86f665746c27a1e8672c252cceb1b93c68755ce2394b4fbf |
+| scaled-full-range-53.log | a8ff0f1d5a088a87cd706853094379747975a0d6789e8e3a36bd09ba0037e753 |
+| scaled-bernstein.py | 4c752f9c2e5b9fb8af1ce1b510df9a801499baed7dbd6562c0d35240bb43ea38 |
+| scaled-bernstein-verified.log | 5f26e9f542a00710c9a7b70af2109dc83c3d9b2af62e86792f09541814d7f742 |
+
+Next candidate: precomputed scaled cubic coefficients with a mandatory control
+matrix gate. Before runtime promotion: choose accuracy tolerance from intended
+use, refine as needed, signed-Laguerre source/basis contracts, small-b JVP/VJP,
+endpoint/out-of-grid behavior, f32 certificate tolerance and measured runtime/
+storage cost. Full-J0 versus retained-H field metric remains a separate gate.
+All local studies terminal; only two previously launched GX controls are live.
+No merge; full R0–R9 goal active.
