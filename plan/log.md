@@ -6693,3 +6693,33 @@ exit0. Full CI needs fresh result; no global green claim.
 Latest live checks: kinetic40474/PID1729837 RNl41m25s; spatial77271/PID1733704
 RNl7m26s. Both unchanged; no pending test process, no merge. Continue physics
 controls and the full R0–R9 roadmap, not just these AD microgates.
+
+## 2026-09-05 — Broader species regression and independent GX refinement input
+
+Previous turn progressed with traced-state repair. At clean19e066dd, local CPU
+JAX0.11.1, XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu
+JAX_ENABLE_X64=true PYTHONPATH=src, ran python -m pytest -q
+tests/unit/parallel/test_parallel_linear_velocity.py -k 'species and not mixed'
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/species-broad-f64.xml.
+**19pass,0skip,26.174s**, session31069terminal exit0; matching .log retained.
+XML SHA256 `d9600bd3bd69c28b405a4d3e409c4582ed06e8121078de3de2aa853016316f58`.
+This broadens the source-fix regression beyond the four targeted tests, not
+physics or performance validation. CI latest2success/14running/21queued/1skip;
+no full-CI result claimed. No source edits this turn.
+
+Prepared independent GX refinement **not yet run**:
+<campaign>/salpha_nl32_nm96_t300.in, local copy in same scratch. Based on the
+already inspected geometry-only input, restoring ntheta32/Nz96 and changing
+nhermite96,nlaguerre32,t_max300; dt.002/rate50 and remaining coefficients retained.
+Parsed Dimensions/Time verified; SHA256
+`e0d83a0db5e14db39240cdfa1aa0d15295d9bca7f7f7d701fb1100eb757fb6b5`.
+Keeps all11 positive ky modes (nky12), rather than changing box size to isolate
+one ky. This provides a future same-resolution cross-code comparison for the
+large Nl24→32 change. Verify actual GX dt/output coordinates, finite diagnostics,
+temporal settling and imported geometry after execution; do not overwrite the
+existing Nl16/Nm48/T150 reference. Run the existing GX3865a537 binary with the
+scoped venv PATH required by its geometry exporter, as earlier GX controls did.
+
+Latest live: kinetic40474/PID1729837 RNl43m51s; spatial77271/PID1733704 RNl9m52s.
+No restarts, test jobs, source-snapshot changes or merges. Continue these controls
+and matched GX refinement; full R0–R9 scope active.

@@ -173,6 +173,10 @@ Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
 **Next actions:** inspect both exits, hashes, finite histories and all rows.
+An independent GX Nl32/Nm96/Nz96/T300/dt.002 input is prepared as
+`salpha_nl32_nm96_t300.in` in the campaign; it has not run. Use it to compare
+the high-order GKX result at matched velocity resolution, not the old Nl16/Nm48
+reference. Preserve both references and record the actual resulting GX timestep.
 Dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
 The small derivative test completed beside the kinetic run with an8% memory pool;
 no performance claim. Spatial refinement77271 now occupies GPU1.
