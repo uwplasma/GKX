@@ -473,7 +473,10 @@ def test_integrate_linear_explicit_show_progress_and_max_mode(capsys) -> None:
 @pytest.mark.parametrize("fixed_dt", [True, False])
 @pytest.mark.parametrize("diagnostics", [True, False])
 @pytest.mark.parametrize("method", ["rk3", "rk4"])
-def test_linear_explicit_stops_at_requested_time(fixed_dt, diagnostics, method) -> None:
+@pytest.mark.parametrize("jit", [False, True])
+def test_linear_explicit_stops_at_requested_time(
+    fixed_dt, diagnostics, method, jit
+) -> None:
     """A nonintegral horizon requires a shortened final step in both facades."""
     g0, grid, geom, params, cache, *_ = _tiny_linear_case()
     cfg = eti.ExplicitTimeConfig(
@@ -491,7 +494,7 @@ def test_linear_explicit_stops_at_requested_time(fixed_dt, diagnostics, method) 
         if diagnostics
         else eti.integrate_linear_explicit
     )
-    result = solve(g0, grid, cache, params, geom, cfg, jit=False)
+    result = solve(g0, grid, cache, params, geom, cfg, jit=jit)
     np.testing.assert_allclose(result[0], [0.03, 0.06, 0.09, 0.1], atol=1e-12)
     assert np.all(np.isfinite(result[1]))
     if diagnostics:
