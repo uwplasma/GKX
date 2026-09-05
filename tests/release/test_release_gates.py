@@ -4024,6 +4024,14 @@ def test_parity_convergence_requires_finite_stable_frequency(
     from types import SimpleNamespace
     import numpy as np
     import gkx
+    import gkx.runtime
+    from gkx.geometry.analytic import SlabGeometry
+    from gkx.geometry.flux_tube import sample_flux_tube_geometry
+
+    geometry = sample_flux_tube_geometry(
+        SlabGeometry(), np.linspace(-np.pi, np.pi, 12, endpoint=False)
+    )
+    monkeypatch.setattr(gkx.runtime, "build_runtime_geometry", lambda cfg: geometry)
 
     run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
     case = next(c for c in _parity_cases() if c["key"] == "kbm_miller")
@@ -4048,6 +4056,8 @@ def test_parity_convergence_requires_finite_stable_frequency(
     )
     monkeypatch.setattr(gkx, "run_runtime_scan", lambda *a, **kw: next(responses))
     result = run_case(case, reference_dir=RUN_TO_REPO_ROOT)
+    assert result["resolution"]["Nz"] == 12
+    assert result["resolution"]["requested_Nz"] != 12
     assert result["rows"][0]["converged"] is settled
     reference_settled = None if reference_half is None else reference_half == 1.0
     assert result["rows"][0]["reference_settled"] is reference_settled

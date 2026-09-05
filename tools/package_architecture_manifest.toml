@@ -936,7 +936,8 @@ recursive = true
 # +30: exact three-step rate derivative through serial/species-sharded integration.
 # +16: explicit profiler state precision and disabled-x64 rejection.
 # +11: distinguish jointly settled finite errors from absent/undefined coverage.
-baseline = 86873
+# +10: imported sampling overrides requested Nz in parity provenance.
+baseline = 86883
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1009,7 +1010,8 @@ recursive = true
 # +17: preflight and match reference coordinates before expensive parity solves.
 # +22: select input dtype and report actual input/output precision in RHS profiles.
 # +10: explicit joint temporal-screen error coverage and console headline.
-baseline = 77950
+# +9: resolve actual spectral-grid Nz while retaining the requested value.
+baseline = 77959
 target = 0
 
 [[line_budget_policy.counts]]

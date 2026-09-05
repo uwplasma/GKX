@@ -170,6 +170,9 @@ def run_case(
     """Run one parity case and return its serializable record."""
 
     from gkx import load_runtime_from_toml, run_runtime_scan
+    from gkx.runtime import build_runtime_geometry
+    from gkx.geometry.core import apply_geometry_grid_defaults
+    from gkx.core_grid import build_spectral_grid
 
     reference_path = reference_dir / str(case["reference_output"])
     spectrum = load_reference_spectrum(reference_path)
@@ -321,6 +324,11 @@ def run_case(
         if r["both_codes_settled"] and np.isfinite(r["gamma_relative_difference"])
     ]
     peak_index = int(np.argmax([r["gamma_reference"] for r in rows]))
+    # Use the same geometry/grid resolution path as the scan, not deck Nz:
+    # imported sampling and analytic ntheta/nperiod can override that value.
+    grid = build_spectral_grid(
+        apply_geometry_grid_defaults(build_runtime_geometry(cfg), cfg.grid)
+    )
     return {
         "key": case["key"],
         "order": int(order),
@@ -337,7 +345,8 @@ def run_case(
         "resolution": {
             "Nl": int(case["Nl"]),
             "Nm": int(case["Nm"]),
-            "Nz": int(cfg.grid.Nz),
+            "Nz": int(grid.z.size),
+            "requested_Nz": int(cfg.grid.Nz),
             "Ny": int(cfg.grid.Ny),
             "dt": dt,
             "steps": steps,
