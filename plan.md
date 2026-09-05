@@ -189,10 +189,11 @@ All original rows and artifacts retained. GX Miller reference completed exit0
 Input/output directory is the same `matched_refs/ITG_cyclone`; logs
 `miller-gx.stdout.log`, `miller-gx.time.log`. Geometry generation succeeded.
 Its 751 samples reach t=150.000007 with no nonfinite diagnostics; 14/15 modes
-pass reference temporal screens (ky=.05 growth drifts21.4%). GKX Miller is now
-live on GPU1: **session31885/PID1719945**, current reporter, manifest
+pass reference temporal screens (ky=.05 growth drifts21.4%). GKX Miller completed
+exit0: **session31885/old PID1719945**, current reporter, manifest
 `matched_miller_manifest.toml`, logs `gkx-miller.{stdout,stderr}.log`, stem
-`results/miller_rate50`. Do not restart terminal GX session97329.
+`results/miller_rate50`. Both-code settling14/15; max settled gamma error0.85194%,
+peak error0.0006939%. Lowest ky remains unsettled. No resolution-convergence claim.
 GKX fixed-rate timestep refinement completed exit0: session **57878**, old PID
 **1717879**, `salpha_dt_refinement.toml`, dt=.001, T=150, ky=.15/.30/.55,
 rate50 unchanged; logs `gkx-salpha-dt-half.{stdout,stderr}.log`, result stem
@@ -213,9 +214,14 @@ Separate half-step trial completed exit0: **session42644/old PID1721120**,
 stem `results/salpha_rate50_nm96_dt_half`, logs
 `gkx-salpha-nm96-dt-half.{stdout,stderr}.log`. Gamma=.03555382534,
 omega=.48452886591, both temporal screens pass; resolution remains open.
-RK4 control at Nm96/dt=.002 is now live GPU0, **session95639/PID1722017**,
+RK4 control at Nm96/dt=.002 completed exit0, **session95639/old PID1722017**,
 `salpha_nm96_rk4.toml`, stem `results/salpha_rate50_nm96_rk4`, logs
-`gkx-salpha-nm96-rk4.{stdout,stderr}.log`. Failure cause not fully established.
+`gkx-salpha-nm96-rk4.{stdout,stderr}.log`. Gamma=.03555544954, omega=.48452876293;
+growth differs ~0.0046% from half-step imex2. Hermite convergence remains open.
+Live: **Nm128 RK4 GPU1 session17139/PID1723101**, manifest salpha_nm128_rk4.toml,
+same rate50,dt.002,T150,Nl16,exact high ky; stem results/salpha_rate50_nm128_rk4.
+**GX kinetic reference GPU0 session6455/PID1722824** uses prepared input, dt=.0002,
+rate500,T40; logs matched_refs/ITG_cyclone/kinetic-gx.{stdout,time}.log.
 57485da2 documents the GX-matched resolution dependence of hypercollisions;
 fixed input coefficients do not mean fixed damping at retained Hermite moments.
 7f3424fa documents native imex2's actual scalar amplification: first-order pure
@@ -236,7 +242,7 @@ Latest #202 repo-hygiene failure was the unformatted demo print; corrected in
 02536eef, full Ruff lint+format now pass locally (406 files); remote rerun pending.
 Kinetic Miller fixture's missing electron-only seed corrected in8ce22e33; KBM
 already matched. Prepared new GX kinetic input in matched_refs/ITG_cyclone with
-dt=.0002/rate500/T40, **not launched**. Start after a GPU frees, then match the
+dt=.0002/rate500/T40, **now launched**. After completion, match the
 GKX horizon to T40 instead of reusing the old T20 harness unchanged.
 No merge is authorized; update this
 checkpoint and append commands/results to `plan/log.md` before changing workstreams.

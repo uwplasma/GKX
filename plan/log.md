@@ -5688,3 +5688,55 @@ Resume **95639/PID1722017** (Nm96RK4 GPU0), **31885/PID1719945** (Miller GPU1).
 Inspect complete outputs, then start the prepared kinetic reference with scoped
 GPU selection. Record exit/hash/trace before comparison. CI still in progress;
 no merge, no benchmark artifact promoted. User checkout untouched.
+
+## 2026-09-05 — Miller and RK4 completed; next velocity and kinetic references
+
+Previous turn progressed (CI/seed corrections and prepared reference). Rechecked
+source/logbook and actual processes before acting. **RK4 session95639 exit0**:
+Nm96 dt.002 gamma=.03555544953882924, omega=.4845287629267157. Both screens pass;
+growth/frequency shifts -.02905971423/-.001208356047. Relative gamma difference
+from successful imex2 dt.001 ~4.568e-5 (0.0046%), much below Hermite shifts.
+This supports integrator/timestep sensitivity, not a proved stability boundary.
+CSV results/salpha_rate50_nm96_rk4.csv SHA256
+`ef0a0e4720ed83fdf252695ad213dab08cd3e529d8a0aaf126cf7dbe36d91784`.
+
+**Miller session31885 exit0**: 14/15 rows pass both temporal screens. ky=.05
+fails GKX frequency shift13.94% and reference growth screen. Maximum settled
+relative gamma error .008519381783, frequency .003756963687 (both ky=.10).
+At peak ky=.40000000596 gamma relative error6.9386744e-6. All rows retained;
+no velocity/spatial convergence assertion. CSV results/miller_rate50.csv SHA256
+`e3285306854e08e67752b51de38ffba0431b919498da3ab82a38172f4673dd21`.
+Old PIDs1722017/1719945 terminal; no restart.
+
+Started **GX kinetic reference GPU0 session6455/PID1722824** (time1722823),
+verified geometry generation and advancing diagnostic rows. From owned snapshot
+matched_refs/ITG_cyclone, CUDA_VISIBLE_DEVICES=0 and scoped
+PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH, /usr/bin/time -v /home/rjorge/GX/gx
+itg_miller_kinetic_electrons.in > kinetic-gx.stdout.log 2> kinetic-gx.time.log.
+Prepared input/hash unchanged (1fee7d65...), T40 dt.0002 rate500. Not complete.
+
+Started **Nm128 RK4 GPU1 session17139/PID1723101** (time1723100), verified live.
+Manifest salpha_nm128_rk4.toml SHA256
+`96a2cf8b96eee6c67e84a7523804c6f8b7b07103ff7b3e6b43a6d52c2de1daa5`.
+Only Nm96→128, otherwise exact high ky,Nl16,rate50,dt.002,T150 unchanged.
+Same current reporter/env as preceding RK4; --manifest salpha_nm128_rk4.toml
+--cases cyclone_salpha_itg_nm128_rk4 --stem results/salpha_rate50_nm128_rk4,
+logs gkx-salpha-nm128-rk4.stdout.log/stderr.log. Both jobs in owned snapshot
+/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz. No isolated timing claims.
+
+Targeted literature refresh (primary sources, accessed today):
+- [GX §7](https://arxiv.org/html/2209.06731v3#S7) explicitly couples moment
+  convergence with timing and decreasing stable timestep; includes kinetic
+  and adiabatic cases and moment spectra. Use the same evidence structure,
+  not its case-specific coarse-resolution thresholds as universal GKX defaults.
+- [Parker & Dellar](https://arxiv.org/abs/1407.1932) motivates recurrence/filter
+  checks; [Pezzi et al.](https://arxiv.org/abs/1601.05240) warns in its abstract
+  that artificial collisionality can alter kinetic dynamics while suppressing
+  recurrence. This is guidance for separate regularization sensitivity tests,
+  not a demonstrated diagnosis of our gyrokinetic case. Full Pezzi text not
+  studied this turn; public preprint available, no download request needed.
+
+Next: inspect current exits, continue velocity-tail and regularization sensitivity
+at a stable timestep, then Laguerre/spatial refinement and matched kinetic scan
+at T40 with corrected electron-only seed. Retain slow modes and failures. No
+source changes or public artifact promotions this turn; logbook remains authority.
