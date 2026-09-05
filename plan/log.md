@@ -7304,3 +7304,61 @@ not established atB4. GPU95001/PID1738946 and68484/PID1740480 remain active.
 CI33958341219 only nonlinear-core101285631242 pending, no failures. Local
 3382c077 is6ahead of9fc6e42d; keep held until CI completes. No merges/restarts;
 full research/publication goal remains active.
+
+## 2026-09-05 — Independent test-particle quadrature; B4 radial completion
+
+Previous turn was a verified wait. This turn produced independent physics
+evidence, not just another stored-table regression. Used Frei2021 primary HTML
+https://arxiv.org/html/2104.11480, Eq77 differential form with equal-species
+corrections vanishing, and Eq89 Fourier gyrocentre pullback. Integrate the
+test operator by parts in normalized Maxwellian measure. For orthonormal
+psi_i(r,xi), Ctest_ij is the negative weighted sum of radial derivative products,
+pitch derivative products and B²r²/2 [nuD(1+xi²)+nu_parallel(1−xi²)]psi_i psi_j.
+The gyrophase cross terms average to zero; no fitted scale or symmetrization.
+This gives the exact quadratic-B structure of the like-species test block,
+not of the Coulomb field block. The formula is now displayed in operators.rst.
+
+Independent Gauss-Laguerre in r² (alpha=.5,48/96/192 nodes) and32-point
+Gauss-Legendre in pitch; normalized Hermite p0–3/Laguerre j0–1. Converted stored
+runtime signs back to paper convention with D C D. Results stable across all
+three radial quadratures:
+
+| B | quadrature norm(test) | shipped norm(test) | relative Frobenius difference |
+|---:|---:|---:|---:|
+| 0 | 4.950681543335375 | 4.950681543335382 | <=6.031e-15 |
+| 1 | 5.970624500211333 | 5.229504287487146 | .2285675400 |
+| 4 | 23.47437603255837 | 4.833822011365678 | .8411588484 |
+
+Cross-check against independently refined generator (not shipped table):
+B1/P3J1/spherical13/radial12/Bessel24/digits40 test norm5.970624493121327,
+relative quadrature difference2.544286174e-9. Session67222exit0. This strongly
+implicates intermediate truncation, with the DK normalization independently
+recovered. Does not establish field/polarization correctness, all moments,
+temperature ratios, electromagnetic coupling or predictive transport.
+6ae7c30c explicitly warns about the shipped8-moment test-block failure in README;
+no coefficients/runtime behavior replaced.
+
+Local recent scratch reproducibility:
+- audit-collision-test-quadrature.py SHA256 b09c301238e0e83688f1999d91605a8cdbf74a9ac85ab5a013053428f0862033;
+  log f72eecb1c6dc61c4c357d24f2a14b3a7646a07ad2583014d79e4d1a24bfa2afd.
+- compare-collision-test-quadrature.py dcc1f071d86463b0c806b0ab32ad0aa8d67ced104fb1bf3ca0b3c8195dfafd3a;
+  log52d2b8cfdfac4749ed4ce9c4eca07428232ad8eb539a17fee04bae7dfbfa54c9.
+Run local-JAX0111-python from code worktree with PYTHONPATH=src:tools/artifacts.
+First script takes<1s; second regenerates the refined comparison. Preserve both.
+
+B4 radial58082/PID41100 terminalexit0: final radial32 normC21.050951670714824,
+asymmetry3.698059403e-15, radial24→32 relativechange2.254586919e-13,
+410.281s final assembly. Full log SHA256
+4171a0eb51bf8f8eea5f4cede7c1bcc2cad34c0561a8245f67dfd7b308f32b66.
+This remains fixed spherical13/Bessel48/P3J1; do not promote a full-domain table.
+Next leverage the independent quadratic-B test block for efficient generation,
+with larger-basis/quadrature/AD gates; separately converge field/polarization
+and angular/output truncation. No duplicate radial control required.
+
+CI33958341219 at9fc6e42d completed success before the batched push. The new doc
+section initially failed strict Sphinx for a short heading underline; detected
+locally, corrected ine9b7b67f, final strict build57683exit0. First two failed
+build logs retained (collision-quadrature-docs{,-fixed}.log), final pass log
+collision-quadrature-docs-final.log. Pushede9b7b67f; new CI is not yet certified.
+Only current live physics jobs: office95001/PID1738946 and68484/PID1740480.
+No PR merges; original checkout unchanged. Full research/publication goal active.

@@ -125,8 +125,7 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local head **3382c077**, pushed **9fc6e42d**
-(six local commits held until current CI completes), worktree
+`fix/r0-end-damping-rate`, local/pushed head **e9b7b67f**, worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -134,9 +133,9 @@ repairs CPU singleton-rank lowering without changing the GPU layout.
 PR200/201 last checks: no failures or pending checks. PR202's earlier formatting
 failure was fixed in02536eef; CI status is tied to the exact commit below.
 CI run33956493988 at b734e19d completed successfully; after that, pushed9fc6e42d.
-New run33958341219 has only nonlinear-core101285631242 pending;
-parallel-autodiff passed, with no failures in the latest query,
-not yet certified. Frequent earlier pushes cancelled
+Run33958341219 at9fc6e42d completed success; only then pushed the accumulated
+followups. The subsequent new documentation heading warning was fixed and the
+strict local build now passes; new HEAD CI is not yet certified. Frequent earlier pushes cancelled
 superseded runs before completion; avoid restarting CI for every microcommit.
 
 **Current contract and evidence.**
@@ -168,7 +167,6 @@ convergence and experimental validation are distinct claims.
 |---|---|---|---|
 | GKX s-alpha Nl32 Nm128 Nz96, RK4 dt=.001, T300, rate50 | 0 | **68484 / 1740480** | `salpha_nl32_nm128_t300.toml`, `gkx-salpha-nl32-nm128-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm128_t300` |
 | Patched GX s-alpha Nl32 Nm96 Nz96, RK4 dt=.002 fixed, T300, rate50 | 1 | **95001 / 1738946** | Different directory: `/home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined`, `salpha_nl32_nm96_t300.in`, `run.log`, `time.log` |
-| Collision B4 intermediate radial16/24/32 control, fixed8 output moments | Local CPU | **58082 / 41100** | `/tmp/gkx-coupled-rate-20260905.shBvlR/audit-collision-high-b.{py,log}` |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -332,8 +330,16 @@ intermediate radial/spherical/Bessel and output-moment ladders are required;
 the default intermediate degree inferred solely from output moments is not
 a convergence guarantee. Extend this ladder before regenerating shipped tables.
 At B1, spherical9→11→13 changes C by0.02521%/0.000132%; radial12→16 is
-roundoff and Bessel24→32 unchanged in float64. B4 endpoint control58082 is now
-running; neither B1 nor a single output size certifies the full table domain.
+roundoff and Bessel24→32 unchanged in float64. B4 endpoint58082 finished exit0:
+radial24→32 changes C by2.25e-13 at fixed spherical13/Bessel48. Both CPU collision
+controls58082/67222 are terminal; do not restart them.
+Independent like-species test-particle Dirichlet quadrature matches the shipped
+DK limit to6.1e-15 but finds22.9%/84.1% errors in the shipped8-moment test block
+atB1/B4. Refined spherical13/radial12/Bessel24 agrees atB1 to2.55e-9. This isolates
+shipped truncation debt and motivates an efficient C_test(B)=C_test(0)−B²D
+representation; independently validate D, normalization, AD and larger moment
+orders before runtime use. Field/polarization blocks still need their own
+convergence and physical checks. No shipped table regenerated.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
