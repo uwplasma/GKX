@@ -2020,7 +2020,8 @@ def test_end_damping_rate_matches_nonlinear_eigen_implicit_and_species_routes(dt
             np.testing.assert_allclose(result, reference, rtol=1e-9, atol=1e-12)
 
 
-def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
+@pytest.mark.parametrize("jit", [False, True])
+def test_species_pmap_electromagnetic_trajectory_matches_serial(jit) -> None:
     from gkx.solvers_linear_integrators import integrate_linear
     from gkx.operators.linear.params import linear_terms_to_term_config
     from gkx.terms.assembly import compute_fields_cached
@@ -2062,18 +2063,8 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
         ),
         **integration,
     )
-    np.testing.assert_allclose(
-        np.asarray(parallel_state),
-        np.asarray(serial_state),
-        rtol=8e-5,
-        atol=8e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(parallel_phi),
-        np.asarray(serial_phi),
-        rtol=8e-5,
-        atol=8e-6,
-    )
+    np.testing.assert_allclose(parallel_state, serial_state, rtol=8e-5, atol=8e-6)
+    np.testing.assert_allclose(parallel_phi, serial_phi, rtol=8e-5, atol=8e-6)
 
     # Linear EM evolution is homogeneous in its initial state. This probes
     # traced state inputs, which parameter-only gradient checks do not exercise.
@@ -2091,7 +2082,10 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
             )
             return jnp.real(jnp.vdot(final, final) + jnp.vdot(phi, phi))
 
-        value, derivative = jax.value_and_grad(objective)(jnp.asarray(1.0))
+        differentiate = jax.value_and_grad(objective)
+        value, derivative = (jax.jit(differentiate) if jit else differentiate)(
+            jnp.asarray(1.0)
+        )
         assert float(value) > 1e-5
         np.testing.assert_allclose(derivative, 2 * value, rtol=8e-5, atol=1e-7)
         derivatives.append(derivative)

@@ -154,7 +154,8 @@ The companion ``test_species_pmap_electromagnetic_trajectory_matches_serial``
 checks active :math:`A_\parallel,B_\parallel` and initial-state derivatives:
 for :math:`J=\|G_3\|^2+\|\phi\|^2`, linearity requires
 :math:`\partial_s J(sG_0)|_{s=1}=2J(G_0)`. This short three-step check passes
-on two CPUs and two GPUs; it is not electromagnetic model validation. Concrete
+on two CPUs and two GPUs, with and without an enclosing
+``jax.jit(jax.value_and_grad(...))``; it is not electromagnetic model validation. Concrete
 inputs may be placed before differentiation; traced initial states and parameters
 are preserved without a host round trip.
 
