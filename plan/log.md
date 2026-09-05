@@ -6288,3 +6288,35 @@ Last authoritative check: kinetic6455/PID1722824 RNl49m38s; Nl32
 26034/PID1727418 RNl11m11s. Original26034 polled again: still running, no new
 output. Resume these handles; neither terminal. No production changes, restarts,
 snapshot modifications or merges. Full roadmap stays active.
+
+## 2026-09-05 — Spatial-refinement timestep preflight
+
+Previous turn progressed: full finite-k collision mapping traced and measured.
+Both current jobs reverified live; no CI202 failures in the current query and
+clean code worktree, without claiming full CI completion. Nl32 original
+session26034 polled, still running.
+
+Executed independent host preflight on office CPU in owned campaign snapshot,
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=true PYTHONPATH=src and current matched reference
+environment. Loaded original s-alpha fixture, then substituted only the completed
+192-point geometry file. Used build_runtime_geometry, apply_geometry_grid_defaults,
+build_spectral_grid, select_ky_grid (nearest actual grid ky=.55),
+ensure_flux_tube_geometry_data and build_runtime_linear_params(Nm=96), followed by
+_linear_frequency_bound(Nl=32,Nm=96). No evolving solve or GPU allocation.
+
+| Actual Nz | radial frequency | binormal frequency | streaming frequency | RK4 estimated dt |
+|---|---:|---:|---:|---:|
+| 96 | 0 | 977.3476078702 | 80.6231441743 | .002398932102 |
+| 192 | 0 | 977.3476078702 | 161.2462883485 | .002229065173 |
+
+Runtime cfl=.9, RK4factor2.82. dt.002 lies below both estimates, permitting an
+initial fixed-dt spatial comparison without deliberately changing time and
+space together. This estimate is not a full coupled-operator stability proof
+and includes drive in its conservative binormal bound; follow with temporal
+control before a spatial-convergence claim. Actual grid ky is .55; the manifest
+reference coordinate is .550000011920929, same selection path as campaign.
+
+Next: inspect Nl32 exit/result before choosing Nl refinement versus first spatial
+run; validated192-point geometry is ready. Latest processes kinetic6455/PID1722824
+RNl51m53s and Nl32 26034/PID1727418 RNl13m26s. Keep both handles; do not restart
+due to buffered logs. No source edits or merges; full scope active.
