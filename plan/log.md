@@ -6604,3 +6604,44 @@ explicit-endpoint-jit-f32.xml SHA256
 `7477360d980320e51ae95fd751780ee62a8945ffcbb2d4dd6ee887cbf663b0d7`.
 Ruff lint/format406files, architecture and whitespace pass after formatting;
 92337commit/pushexit0. No GPU endpoint test claimed, no merges, full scope active.
+
+## 2026-09-05 — Two-GPU rate reverse derivatives pass; spatial control launched
+
+Previous turn progressed with timestep-control evidence and compiled endpoint
+tests. Rechecked GPU0:3784MiB free beside kinetic PID1729837; GPU1:15872MiB free.
+Rather than wait for both devices to empty, ran the small correctness test with
+XLA_PYTHON_CLIENT_MEM_FRACTION=.08 in a fresh git archive of1571a9e6 at
+/home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo. No changes to the kinetic snapshot.
+Observed test PID1732271 using1452MiB GPU0/162MiB GPU1 during setup; kinetic stayed
+live. This resource-sharing choice is not an isolated performance experiment.
+
+Command in that archive: CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true
+JAX_PLATFORMS=cuda XLA_PYTHON_CLIENT_MEM_FRACTION=.08 PYTHONPATH=src
+/home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+tests/unit/parallel/test_parallel_linear_velocity.py
+-k end_damping_rate_matches_nonlinear_eigen_implicit_and_species_routes
+--junitxml=two-gpu-rate-ad.xml >two-gpu-rate-ad.log 2>&1.
+**2pass,0skip,33.325s**, session31794 terminal exit0. JAX0.10.2, two RTX A4000s.
+XML SHA256 `a9773e5d1d18a3c93cb2a3f777f65de8588c8ce01ffc1d92128c1d44d6ce1039`,
+copied to /tmp/gkx-coupled-rate-20260905.shBvlR. Gate compares field-free m3
+fixed-rate RHS across supplied-fields/nonlinear/eigen/implicit/serial/species
+routes and three-step serial/species-pmap reverse derivatives against the exact
+Euler polynomial at dt=.1,.2, rtol1e-9/atol1e-12, explicitly nonzero gradients.
+Not nonlinear transport or general electromagnetic sharded AD validation.
+
+Started prepared spatial control **77271/PID1733704**, GPU1, in campaign
+/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz. Same source snapshot; copied latest
+reporter to separate tools/comparison/build_gx_parity_matrix_grid_verified.py
+SHA256 `ecd7d5fd174f18b75cf968ac4b80f6f5279665f404da7b22af98902ac03987ed`.
+Do not replace the running kinetic reporter. Command: GX_PARITY_REF_DIR=<campaign>/matched_refs
+CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
+/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python <new reporter>
+--manifest salpha_nl32_nm96_nz192_t300.toml
+--cases cyclone_salpha_itg_nl32_nm96_nz192_t300
+--stem results/salpha_rate50_nl32_nm96_nz192_t300
+>gkx-salpha-nl32-nm96-nz192-t300.stdout.log
+2>gkx-salpha-nl32-nm96-nz192-t300.stderr.log.
+Nl32/Nm96/Nz192/dt.002/T300/rate50; input hashes in preceding entry. Reporter now
+records actual192-point geometry and retains requested96-point deck metadata.
+Latest confirmed RNl10s, stderr empty. Kinetic40474/PID1729837 RNl34m09s. Only
+these two jobs live; no restarts of completed controls, no merges. Full scope active.

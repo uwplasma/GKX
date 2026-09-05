@@ -142,12 +142,12 @@ in02536eef; do not infer full-CI completion from local gates.
 | GX adapters | Active damping requires explicit reference dt; kinetic Miller electron-only seed corrected | Do not reuse old unmatched-rate/initial-condition results |
 | Parity coordinates | Requested/reference ky and actual effective GKX grid matched before solves within float32 roundoff; missing/invalid/duplicate requests rejected | Old running reporter lacks preflight; current campaign coordinates already match its solver grids |
 | Tests/startup | CPU/GPU boundary and route probes; coupled reverse AD vs matrix exponential; 88 linear, 85 time-integrator, 198 release, 148 CLI tests passed in recorded runs; nonfinite Laguerre transform errors rejected, 50 core numerics tests pass; explicit linear facades clip the final step to t_max | Fresh full CI; direct JVP through custom-VJP field solve remains unsupported |
-| Sharded rate AD | Exact three-step serial/species-pmap reverse derivatives pass at two dt values on two logical CPUs | Repeat on two GPUs when both are free; this field-free gate is not nonlinear transport AD |
+| Sharded rate AD | Exact three-step serial/species-pmap reverse derivatives pass at two dt values on two logical CPUs and two RTX A4000 GPUs | This field-free gate is not nonlinear transport AD; broader coupled/distributed validation remains |
 | Demo | dt=.02/750 steps, T15 and fixed rate preserved; wheel writes all artifacts, no CFL warning; short nonlinear wheel run also completes | Transient demo is not stationary physics validation; under-resolved-fit/cutoff warnings remain |
 | s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
 | Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
 | High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; at T300 Nm96→128 changes gamma0.468%, omega0.192%, with temporal shifts0.168%/0.219% | Laguerre/parallel resolution and regularization sensitivity; two fine Hermite points alone do not establish convergence |
-| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713% at Nm96/T300; Nl32 dt.002→.001 changes gamma only~4e-14 relative | Velocity convergence fails; parallel refinement input verified, not yet run |
+| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713% at Nm96/T300; Nl32 dt.002→.001 changes gamma only~4e-14 relative | Velocity convergence fails; parallel refinement Nz192 running |
 | Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
 | RHS profiling | Explicit state precision and observed state/RHS dtypes; 36 profiler tests pass; CPU z-wave warm means17.8ms f32/41.8ms f64 | Artificial-state triage only; no end-to-end speedup, peak-memory or f32 scientific-accuracy claim |
 
@@ -162,16 +162,20 @@ convergence and experimental validation are distinct claims.
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
 | GKX kinetic Miller matched reference, dt=.0002, T40, rate500 | 0 | **40474 / 1729837** | `matched_kinetic_manifest.toml`, `gkx-kinetic-rate500-matched-t40.{stdout,stderr}.log`, stem `results/kinetic_rate500_matched_t40` |
+| GKX s-alpha Nl32 Nm96 Nz192, RK4 dt=.002, T300, rate50 | 1 | **77271 / 1733704** | `salpha_nl32_nm96_nz192_t300.toml`, `gkx-salpha-nl32-nm96-nz192-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm96_nz192_t300` |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
-Production snapshot3565 remains solver-equivalent; current reporter copy is0acbd221,
-and kinetic fixture includes8ce22e33's seed correction. Existing reference bundle
+Production snapshot3565 remains solver-equivalent for these scans; kinetic reporter
+copy is0acbd221, and its fixture includes8ce22e33's seed correction. Spatial run
+uses a separate grid-verified reporter from1571a9e6; no running copy overwritten.
+Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** inspect kinetic exit, hashes, finite histories and all rows.
-Dt-half73383 is terminal exit0; do not restart. GPU1 is free; reserve the next
-both-free interval for the two-GPU rate-VJP test before the prepared Nz192 run.
+**Next actions:** inspect both exits, hashes, finite histories and all rows.
+Dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
+The small derivative test completed beside the kinetic run with an8% memory pool;
+no performance claim. Spatial refinement77271 now occupies GPU1.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run is active; do not reuse the old T20 harness or
@@ -182,7 +186,7 @@ For imported parity geometry, editing grid.Nz alone does **not** refine the
 solve: geometry-file sampling overrides it. PR202 now reports effective Nz and
 requested_Nz separately. Independently generated192-point GX geometry now passes
 finite/shared-point checks (see log); use it after isolating Laguerre refinement.
-The older running reporter has not been replaced.
+The older kinetic reporter has not been replaced.
 GPU wall times from concurrent runs are not isolated performance benchmarks.
 Update this checkpoint and append evidence to the logbook before switching work.
 
