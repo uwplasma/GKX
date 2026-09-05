@@ -6560,3 +6560,47 @@ PID1729837 RNl26m52s. Both live; do not restart or overwrite snapshots. Next:
 inspect terminal results when available, reserve both GPUs for pending rate-VJP
 test, then continue evidence-driven velocity/parallel-resolution controls. No
 merge; full roadmap remains active.
+
+## 2026-09-05 — Timestep control completes; prepared spatial refinement
+
+Previous turn progressed with endpoint repair. Dt-half **73383/PID1729118 is
+terminal exit0**, whole command32m55.72s. Nl32/Nm96/Nz96/T300/rate50/RK4,
+dt=.001 yields gamma=.02485209212445021, omega=.5049331701718064. Compared with
+dt=.002 gamma=.024852092124449224, omega=.5049331701718024, relative changes
+~4e-14/~8e-15. Thus this control does not support timestep error as the cause
+of the24.713% Nl24→32 growth-rate change. It does not establish convergence.
+Half-time shifts +.00574089543/−.000221581187 pass the temporal screen;
+reference and GKX both settled at this single ky, but their velocity resolutions
+differ, so −26.638% growth-rate disagreement is not a matched-resolution test.
+Reference has751samples/0nonfinite frequency entries. GKX estimates finite and
+solver completed; no additional raw-field-history audit claimed.
+
+Campaign results/salpha_rate50_nl32_nm96_t300_dt_half.csv SHA256
+`38be2673bf20089a0e4f59d03ddb9e4ff09493c9206a6ef9144724d796a40b53`;
+copied to /tmp/gkx-coupled-rate-20260905.shBvlR. JSON inspected: primary window
+[210,300], half[105,150]. Primary-only scan1313.9165s; concurrent GPU workloads
+and different measurement scopes preclude isolated performance claims.
+
+Prepared, copied to campaign, but **not launched**: salpha_nz192.toml differs
+from the current s-alpha fixture only in geometry_file, pointing to the existing
+salpha_ntheta64_geometry.out.nc. CPU preflight75046exit0 confirms requested_Nz96
+but effective_Nz192 and solver ky.55. Config SHA256
+`33c5f71aa8c6edd5b7f6e8535ce1fbec224f8091a30bc3409129ffc8faf9fbf0`;
+manifest salpha_nl32_nm96_nz192_t300.toml SHA256
+`8a1d36d477a644cf5193558a7346f6bb935ca0419bc6992ce5594b902e1a66bc`.
+Manifest keeps Nl32/Nm96/T300/dt.002/rate50, uses key
+cyclone_salpha_itg_nl32_nm96_nz192_t300. Reference spectrum remains original T150
+file, not the one-step geometry-generation output. Local copies in same scratch.
+Launch only after pending two-GPU rate-VJP check; kinetic40474/PID1729837 remains
+live RNl30m20s at last check. GPU1 now free; don't restart73383.
+
+Code **1571a9e6** adds compiled/uncompiled endpoint-test coverage. Local CPU
+JAX0.11.1, PYTHONPATH=src, pytest tests/unit/solvers/test_time_integrators.py
+-k stops_at_requested_time:16pass each with JAX_ENABLE_X64=true/false,
+33.872s/31.728s, sessions53170/3141exit0. XMLs in scratch:
+explicit-endpoint-jit-f64.xml SHA256
+`c5836c27cf689764ab5402a3cca599e6fa2b7054f202305bc77da0f22f49b057`;
+explicit-endpoint-jit-f32.xml SHA256
+`7477360d980320e51ae95fd751780ee62a8945ffcbb2d4dd6ee887cbf663b0d7`.
+Ruff lint/format406files, architecture and whitespace pass after formatting;
+92337commit/pushexit0. No GPU endpoint test claimed, no merges, full scope active.

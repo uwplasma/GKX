@@ -125,7 +125,7 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, head **f00abafd**, worktree
+`fix/r0-end-damping-rate`, head **1571a9e6**, worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -147,7 +147,7 @@ in02536eef; do not infer full-CI completion from local gates.
 | s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
 | Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
 | High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; at T300 Nm96→128 changes gamma0.468%, omega0.192%, with temporal shifts0.168%/0.219% | Laguerre/parallel resolution and regularization sensitivity; two fine Hermite points alone do not establish convergence |
-| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713% at Nm96/T300; Nl32 temporal shift+0.578% | Nl32 dt-half control running before further refinement; velocity convergence fails |
+| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713% at Nm96/T300; Nl32 dt.002→.001 changes gamma only~4e-14 relative | Velocity convergence fails; parallel refinement input verified, not yet run |
 | Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
 | RHS profiling | Explicit state precision and observed state/RHS dtypes; 36 profiler tests pass; CPU z-wave warm means17.8ms f32/41.8ms f64 | Artificial-state triage only; no end-to-end speedup, peak-memory or f32 scientific-accuracy claim |
 
@@ -162,7 +162,6 @@ convergence and experimental validation are distinct claims.
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
 | GKX kinetic Miller matched reference, dt=.0002, T40, rate500 | 0 | **40474 / 1729837** | `matched_kinetic_manifest.toml`, `gkx-kinetic-rate500-matched-t40.{stdout,stderr}.log`, stem `results/kinetic_rate500_matched_t40` |
-| GKX s-alpha Nl32 Nm96 RK4, dt=.001, T300, rate50, exact high ky | 1 | **73383 / 1729118** | `salpha_nl32_nm96_t300_dt_half.toml`, `gkx-salpha-nl32-nm96-t300-dt-half.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm96_t300_dt_half` |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -170,7 +169,9 @@ Production snapshot3565 remains solver-equivalent; current reporter copy is0acbd
 and kinetic fixture includes8ce22e33's seed correction. Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** inspect both exits, hashes, finite histories and all rows.
+**Next actions:** inspect kinetic exit, hashes, finite histories and all rows.
+Dt-half73383 is terminal exit0; do not restart. GPU1 is free; reserve the next
+both-free interval for the two-GPU rate-VJP test before the prepared Nz192 run.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run is active; do not reuse the old T20 harness or
