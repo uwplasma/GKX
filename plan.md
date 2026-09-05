@@ -169,7 +169,14 @@ Five field-supplied call sites exist, not four; two are preconditioner probes,
 not the implicit time-step operator. See the latest log for commands and hashes.
 Broader f32,
 sharded AD and production-horizon validation remain open.
-No local/SSH tests remain active. Check remote CI on #200–#202 before relying
+Active validation: fresh committed #202 snapshot at office
+`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz` (3565ecdc). A new GX s-alpha
+reference runs at explicit dt=.002, rate .1/.002=50, t=150 under
+`matched_refs/ITG_cyclone`, SSH execution handle 26100. Verify the handle/process
+before resuming; never restart from a stale log. Existing `/home/rjorge/gx_refs_lin`
+contains five outputs, but its s-alpha run uses dt≈.00466 and KBM≈.00065, not
+the manifest timesteps; HSX is missing. Do not call that a matched-rate matrix.
+Check remote CI on #200–#202 before relying
 on full-suite status; they were still awaiting complete CI during this slice.
 No merge is authorized; update this
 checkpoint and append commands/results to `plan/log.md` before changing workstreams.

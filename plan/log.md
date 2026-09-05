@@ -5036,3 +5036,54 @@ review CI; locate exact GX parity reference bundles and record their provenance;
 sync a fresh committed #202 office snapshot before complete external matrix and
 same-rate refinement. Do not reuse the older office patch snapshot as head.
 No local/SSH jobs active. #202 remains draft/unmerged; plan/log checkpoint pushed.
+
+## 2026-09-05 — matched-rate external campaign started
+
+Previous turn was progress (adapter conversion). Rechecked #202 clean at
+3565ecdc; CI jobs queued, no failure reported, no completion claim.
+Located `/home/rjorge/gx_refs_lin`: five of the six manifest outputs exist
+(three Cyclone, KBM, W7-X), plus unrelated KAW. HSX output not found within
+the inspected home depth6. Preserve this bundle; do not synthesize missing rows.
+
+Reference provenance exposed a scientific mismatch: the s-alpha stdout starts
+with dt=.004663, KBM with dt=.0006499; their input Time tables do not specify
+dt. The GKX manifest instead pins .002 and .0002. GX uses A/dt at the boundary,
+so matching A alone is not matching the damping operator. Reproducing the old
+matrix would be compatibility evidence, not same-rate validation. A sparse
+diagnostic cadence cannot establish that every internal adaptive timestep stayed
+fixed. These are Sep2 campaign-generated outputs, not immutable upstream blobs.
+
+Started a new **GX** s-alpha reference (not yet a result):
+- Fresh #202 snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`
+  from `git archive 3565ecdc`, no edits to tracked GKX source there.
+- Under `matched_refs/ITG_cyclone`, copied the existing s-alpha input and added
+  `[Time] dt=.002`; diagnostic nwrite100 (was1000), unchanged t_max150,
+  RK4, Nl16/Nm48, ntheta32/nperiod2, 12 ky modes, linked boundaries and A=.1.
+  GKX manifest rate50 now matches this reference's .1/.002. The new output is
+  a newly generated controlled comparison, not an upstream-shipped reference.
+- Input stored locally as
+  `/tmp/gkx-damping-route-20260905.Xk4sat/matched_salpha.in`, remote basename
+  `itg_salpha_adiabatic_electrons.in`; SHA256
+  `2aa2793daca6b19f03ccecd00f6ba97b570563b3147cac05feac9f80229a094a`.
+- Executable `/home/rjorge/GX/gx`, source reports3865a537, SHA256
+  `787eb0145937e653c08750fd7168029c20772ce3e6c2a2a3b58c70aab128dc9b`.
+  This pins the binary; it does not certify a fresh reproducible rebuild.
+- Run from that input directory:
+  `CUDA_VISIBLE_DEVICES=0 /usr/bin/time -v /home/rjorge/GX/gx
+  itg_salpha_adiabatic_electrons.in > gx.stdout.log 2> gx.time.log`.
+  SSH execution session **26100**, remote GX PID **1713851**, parent time PID
+  1713850. Process verified live and first log step confirms dt=.002.
+  Do not infer termination from an idle log or restart without checking PID/session.
+
+Prepared `matched_manifest.toml` in the new snapshot (local scratch copy also
+retained). It uses #202 rates/cases but changes s-alpha reference_provenance
+to explicitly identify this new fixed-dt run. No public matrix/artifact changed.
+Next once GX exits successfully: hash output, verify final physical time and
+finite spectra, then run from the fresh GKX snapshot with
+`GX_PARITY_REF_DIR=<snapshot>/matched_refs CUDA_VISIBLE_DEVICES=0
+JAX_ENABLE_X64=true PYTHONPATH=src /home/rjorge/venvs/gkx-nl/bin/python
+tools/comparison/build_gx_parity_matrix.py --manifest matched_manifest.toml
+--cases cyclone_salpha_itg --stem results/salpha_rate50`.
+This uses a full and half-horizon GKX solve, not a shortened smoke. Do not use
+the new manifest to claim other missing/unregenerated references are validated.
+Continue matched fixed-rate references and step-refinement before publication.
