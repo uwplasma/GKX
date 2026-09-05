@@ -14,6 +14,27 @@ office-GPU timings are retained as rejected provenance because both A4000s were
 already at 100% utilization; they do not update the published speed claim. An
 uncontended rerun is required before replacing the historical GPU panel.
 
+Reading parity-run costs
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+``tools/comparison/build_gx_parity_matrix.py`` records distinct scopes:
+
+- ``gkx_scan_seconds``: primary full-horizon scan, including setup/compilation
+  encountered by that call; excludes the separate half-horizon check.
+- ``gkx_peak_host_rss_mb``: process-lifetime RSS high-water mark, sampled after
+  both scans; not an incremental per-case allocation.
+- ``gkx_peak_device_mb``: first visible device's ``peak_bytes_in_use`` counter,
+  if available; not all-device memory, reserved capacity or a reset per-case peak.
+
+Despite the historical ``mb`` names, these fields use MiB. Run one case per
+fresh process for attributable high-water marks; record whole-command wall time
+separately. Do not subtract cumulative peaks to estimate incremental memory.
+GPU process usage can include a reserved pool: `JAX preallocates GPU memory
+<https://docs.jax.dev/en/latest/gpu_memory_allocation.html>`_ by default. Record
+allocator settings and distinguish reserved memory, live arrays and temporaries.
+Do not compare a GX process-memory figure to a JAX allocator counter as a
+memory-efficiency ratio, or change allocator policy mid-campaign.
+
 GKX uses JAX to compile array kernels ahead of time, enabling
 vectorized, accelerator-ready performance while retaining automatic
 differentiation. The linear operator and time integrator are designed to be
