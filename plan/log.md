@@ -6472,3 +6472,29 @@ CI202 early query1success,15running,21queued,1skipped: new commit checks remain
 in flight, not a global green claim. Latest process check during tests:
 dt-half73383/PID1729118 RNl13m53s; kinetic40474/PID1729837 RNl10m17s. Both
 remain current handles; no restarts, source edits or merges. Full scope active.
+
+## 2026-09-05 — Reference-to-solver ky preflight closes mislabeled-scan risk
+
+Previous turn progressed with40 current-head regression tests. Scan review found
+that requested/reference coordinate checks alone did not reject a mismatched
+GKX deck: runtime selects nearest grid mode, potentially labeling a different
+solver ky with the reference coordinate. **4b78404d** pushed to draft PR202 moves
+effective-grid resolution before integration and requires selected grid ky to
+agree within4float32eps,atol0. Existing arbitrary nearest-reference acceptance
+remains rejected. No solver equation, default scan behavior or running snapshot
+changed; current campaign grid coordinates agree within that tolerance.
+
+50 targeted tests pass: parity_convergence or parity_fixed_damping in
+tests/release/test_release_gates.py, local CPU/JAX0.11.1 PYTHONPATH=src. Tests
+change the mocked reference to.31 while effective deck grid has.3/.4 and require
+failure before a scan; existing exact/roundoff acceptance retained. Session74612
+exit0; XML /tmp/gkx-coupled-rate-20260905.shBvlR/effective-ky-preflight.xml SHA256
+`c6a54eba22ffb509bcbc463bf30f08756294ce923f7ad6a36e8ff8788066b7f1`.
+Ruff lint/format406files, architecture and whitespace pass;25628commit/pushexit0.
+Explicit budget+9tests/+6tools. Grid preflight now occurs outside the primary
+scan timer; use whole-command measurements for end-to-end comparisons. Multi-
+window reuse remains pending, not claimed implemented by this correctness fix.
+
+Latest live processes: dt-half73383/PID1729118 RNl18m32s; kinetic40474/PID1729837
+RNl14m56s. Resume those exact handles. Initial CI11success,10running,16queued,
+1skipped; fresh push needs its own checks. No restarts or merges; full scope active.
