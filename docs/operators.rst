@@ -357,6 +357,16 @@ within :math:`2.55\times10^{-9}`. This diagnoses a shipped-table limitation;
 it does not validate the field-particle/polarization blocks or transport.
 In particular, symmetry restored by radial refinement is not sufficient.
 
+The offline ``like_species_test_particle_gram_matrices`` reference in
+``tools/artifacts/build_linear_validation_artifacts.py`` returns
+:math:`C_0,D` with :math:`C^T(B)=C_0-B^2D`. Weighted Gram products preserve
+the dissipative signs without numerical symmetrization. Quadrature ladders pass
+for 8, 18 and 32 moments; independent drift-kinetic coefficients are checked for
+8 and 18. The shipped 18-moment test block also fails the finite-wavelength
+comparison: 13.0% at :math:`B=1`, 64.2% at :math:`B=4`.
+This oracle is not wired into runtime table application; the field and
+polarization terms must be validated before replacing a complete operator.
+
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
 

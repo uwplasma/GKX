@@ -39,10 +39,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "artifact
 from build_linear_validation_artifacts import (  # noqa: E402
     build_finite_wavelength_coulomb_pair_tables,
     coulomb_drift_kinetic_moment_matrices,
+    like_species_test_particle_gram_matrices,
 )
 
 
 MOMENT_COUNT = 8
+
+
+@pytest.mark.parametrize("pmax,jmax", [(3, 1), (5, 2), (7, 3)])
+def test_like_species_test_particle_dirichlet_quadrature(pmax, jmax):
+    c0, d = like_species_test_particle_gram_matrices(pmax, jmax)
+    refined = like_species_test_particle_gram_matrices(
+        pmax, jmax, radial_nodes=192, pitch_nodes=64
+    )
+    np.testing.assert_allclose((c0, d), refined, rtol=1e-11, atol=1e-12)
+    np.testing.assert_array_equal(c0[:, 0], 0.0)
+    assert np.linalg.eigvalsh(c0)[-1] <= 1e-12
+    assert np.linalg.eigvalsh(d)[0] > 0.0
+    if pmax < 7:
+        exact_dk = coulomb_drift_kinetic_moment_matrices(
+            pmax, jmax, 1.0, 1.0, digits=40
+        )[0]
+        np.testing.assert_allclose(c0, exact_dk, rtol=1e-11, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "p,j,nr,nxi", [(-1, 0, 48, 32), (0, -1, 48, 32), (0, 0, 0, 32), (0, 0, 48, 0)]
+)
+def test_test_particle_quadrature_rejects_invalid_orders(p, j, nr, nxi):
+    with pytest.raises(ValueError, match="orders"):
+        like_species_test_particle_gram_matrices(p, j, radial_nodes=nr, pitch_nodes=nxi)
 
 
 @pytest.mark.parametrize("error", [0.0, 1e-5, np.nan, np.inf])

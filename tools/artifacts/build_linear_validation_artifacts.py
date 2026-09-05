@@ -1804,6 +1804,70 @@ def _precompute_coulomb_speed_coefficients(
     return tuple(functions)
 
 
+def like_species_test_particle_gram_matrices(
+    maximum_hermite_order: int,
+    maximum_laguerre_order: int,
+    *,
+    radial_nodes: int = 96,
+    pitch_nodes: int = 48,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Quadrature oracle for C_test(B)=C0-B²D, in paper moment convention.
+
+    Integrate the equal-species differential operator's Dirichlet form after
+    the Fourier pullback (Frei2021 Eq77/89). Positive quadrature weights give
+    negative-semidefinite C0 and positive-semidefinite D without symmetrizing.
+    Unit collision frequency; no field/polarization terms. Converge node counts
+    independently for each output basis before using this offline reference.
+    """
+    from scipy.special import (
+        erf,
+        eval_genlaguerre,
+        eval_hermite,
+        eval_laguerre,
+        roots_genlaguerre,
+        roots_legendre,
+    )
+
+    if (
+        min(maximum_hermite_order, maximum_laguerre_order) < 0
+        or min(radial_nodes, pitch_nodes) < 1
+    ):
+        raise ValueError("moment orders must be nonnegative and node counts positive")
+    y, wy = roots_genlaguerre(radial_nodes, 0.5)
+    xi, wx = roots_legendre(pitch_nodes)
+    r, xi = np.sqrt(y)[:, None], xi[None, :]
+    z, x = r * xi, r**2 * (1 - xi**2)
+    chandrasekhar = (erf(r) - 2 * r * np.exp(-r * r) / np.sqrt(np.pi)) / (2 * r * r)
+    nu_d, nu_parallel = (erf(r) - chandrasekhar) / r**3, 2 * chandrasekhar / r**3
+    weight = wy[:, None] * wx[None, :] / np.sqrt(np.pi)
+    values, radial, angular = [], [], []
+    for p in range(maximum_hermite_order + 1):
+        scale = math.sqrt(2**p * math.factorial(p))
+        h = eval_hermite(p, z) / scale
+        dh = 2 * p * eval_hermite(p - 1, z) / scale if p else np.zeros_like(z)
+        for j in range(maximum_laguerre_order + 1):
+            lag = eval_laguerre(j, x)
+            dl = -eval_genlaguerre(j - 1, 1, x) if j else np.zeros_like(x)
+            values.append(h * lag)
+            radial.append(dh * xi * lag + h * dl * 2 * r * (1 - xi * xi))
+            angular.append(dh * r * lag - h * dl * 2 * r * r * xi)
+
+    def gram(basis, weights):
+        weighted = (np.asarray(basis) * np.sqrt(weights)).reshape(len(values), -1)
+        return weighted @ weighted.T
+
+    c0 = -gram(radial, weight * nu_parallel * r * r) - gram(
+        angular, weight * nu_d * (1 - xi * xi)
+    )
+    d = gram(
+        values,
+        weight * r * r / 2 * (nu_d * (1 + xi * xi) + nu_parallel * (1 - xi * xi)),
+    )
+    if not (np.isfinite(c0).all() and np.isfinite(d).all()):
+        raise ValueError("test-particle quadrature produced non-finite coefficients")
+    return c0, d
+
+
 def coulomb_nonpolarized_moment_matrices(
     maximum_hermite_order: int,
     maximum_laguerre_order: int,

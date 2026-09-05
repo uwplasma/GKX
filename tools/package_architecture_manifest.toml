@@ -941,7 +941,8 @@ recursive = true
 # +9: refuse reference modes absent from the effective solver grid before scans.
 # +21 net: preserve existing collision artifacts when finite/NaN/Inf checks fail.
 # +18: reject nonfinite values in all six published coefficient blocks.
-baseline = 86986
+# +26: independent test-particle Gram quadrature and order/entropy gates.
+baseline = 87012
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1017,7 +1018,8 @@ recursive = true
 # +9: resolve actual spectral-grid Nz while retaining the requested value.
 # +6: move grid resolution to preflight and validate actual solver ky.
 # +1 net: reject nonfinite collision coefficients before publication.
-baseline = 77974
+# +64: independent differential-form collision oracle, no runtime dependency.
+baseline = 78038
 target = 0
 
 [[line_budget_policy.counts]]
