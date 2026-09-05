@@ -125,7 +125,7 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, head **6eb0e4a5**, worktree
+`fix/r0-end-damping-rate`, head **a60de104**, worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -176,8 +176,9 @@ the old T20 harness. Validate its complete reference before reading it into GKX.
 Continue slow-mode/velocity/parallel-resolution and regularization checks, then
 remaining kinetic/EM/stellarator matrix and the numbered R0 queue below.
 For imported parity geometry, editing grid.Nz alone does **not** refine the
-solve: geometry-file sampling overrides it. Resolve/report the effective grid
-and generate a finer same-domain geometry before the spatial study (see log).
+solve: geometry-file sampling overrides it. PR202 now reports effective Nz and
+requested_Nz separately; generate a finer same-domain geometry before the spatial
+study (see log). The older running reporter has not been replaced.
 GPU wall times from concurrent runs are not isolated performance benchmarks.
 Update this checkpoint and append evidence to the logbook before switching work.
 

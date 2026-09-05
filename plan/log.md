@@ -6028,3 +6028,31 @@ settings fixed to a completed baseline. No new spatial solve launched yet.
 No edits to running snapshots or production code this turn. This is new verified
 evidence that changes the next experiment, not a completion claim. Resume live
 session6455/PID1722824 and session67452/PID1725909; no restarts or merges.
+
+## 2026-09-05 — Effective parallel-grid provenance implemented
+
+Previous turn produced verified evidence of the requested/imported Nz mismatch.
+Implemented **a60de104**, pushed to draft PR202: after scans, resolve geometry,
+apply_geometry_grid_defaults and build_spectral_grid using the runtime path.
+Report actual grid.z.size as resolution.Nz and retain deck value as requested_Nz.
+This additionally handles analytic ntheta/nperiod overrides. Metadata resolution
+is outside measured scan time; it reloads geometry, not an additional solve.
+Production evolution unchanged. Current campaign96/96 labels remain valid.
+
+Executed48 parameterized parity reporting tests with a real sampled12-point
+SlabGeometry injected at the runtime geometry-builder boundary, while the deck
+requests a different Nz. Real grid-default and spectral-grid builders execute;
+all cases report12 and preserve distinct requested_Nz. Existing temporal-summary
+assertions also pass. Test session41408 exit0, command PYTHONPATH=src
+<local jax0111 python> -m pytest -q tests/release/test_release_gates.py
+-k parity_convergence --junitxml=<scratch>/effective-grid-parity.xml,
+scratch=/tmp/gkx-coupled-rate-20260905.shBvlR. XML SHA256
+`ca2e5c8bee6d1f2c081ae0a3d8f1130a4fd03d828c1476c94b75b4107327f4b1`.
+Ruff lint/format406files, architecture and whitespace pass; checks/commit/push
+session59460 exit0. Explicit budget+10test/+9tool lines. No full-CI claim.
+
+Both office jobs reverified RNl: kinetic session6455/PID1722824 at32m57s;
+Laguerre session67452/PID1725909 at6m15s. Reporter in running snapshot remains
+0acbd221; do not overwrite it or attribute new metadata to its outputs. Continue
+these handles; finer same-domain GX geometry generation remains next spatial
+task after a GPU frees. Two-GPU AD gate still pending; nothing merged.
