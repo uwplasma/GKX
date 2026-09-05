@@ -288,6 +288,9 @@ variables. A distribution norm alone is not automatically the total invariant.
 | C4 | Jorge–Frei–Ricci nonlinear Coulomb | Bilinear moments with controlled truncation/cost; linearization recovers C1–C3; consistent evolving background/full-f contract, conservation and entropy |
 
 Tabulated Coulomb support is not arbitrary-order or arbitrary-species validation.
+Finite-wavelength defect-scaling tests alone do not prove a conservation law or
+weighted self-adjointness: derive the physical functionals/metric and test those
+identities directly for each supported model and species combination.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and

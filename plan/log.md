@@ -6191,3 +6191,35 @@ implementation change. Full phase/memory profiling remains R3 work.
 Latest authoritative process check: GX kinetic6455/PID1722824 RNl43m00s;
 Nl32 GPU126034/PID1727418 RNl4m33s (session26034, GPU1). Resume both; no restart.
 Initial CI202 failure query empty, not evidence all checks finished. Nothing merged.
+
+## 2026-09-05 — Fresh geometry, collision and Hermite physics gates
+
+Previous turn progressed by auditing/documenting timing and memory scopes.
+Revalidated clean code worktree20bb9600 and live GPU handles before testing.
+CPU/JAX0.11.1 with PYTHONPATH=src JAX_PLATFORMS=cpu JAX_ENABLE_X64=true:
+
+- tests/validation/physics_gates/test_geometry_physics_contracts.py: **5pass**,
+  session14458 exit0. XML /tmp/gkx-coupled-rate-20260905.shBvlR/geometry-physics-current.xml
+  SHA256 `bd34e42a3990549aaffa6263a3eee9ee916c68ff5f9abc68085e9a25427141d6`.
+  Scope: zero-shear radial dependence, field-strength variation, parallel
+  scaling and electromagnetic zonal-limit contracts; not imported stellarator
+  geometry convergence or all model combinations.
+- tests/validation/physics_gates/test_collision_physics.py plus
+  test_hermite_hierarchy_physics.py: **42pass,0skip,0fail**,79.742s; session70347
+  terminal exit0. XML collision-hierarchy-current.xml in same scratch SHA256
+  `32cd2f03c34842c568d850fdaaa4f7657ed3db9a202092d8a7fa682cd48bca0f`.
+  Commands use python -m pytest -q <files> --junitxml=<path>; stdout matching
+  .log files retained. Covers scoped drift-kinetic invariant/dissipation and
+  analytic-coefficient checks, finite-k limit/scaling, conductivity ratios,
+  closure/recurrence and bounded hierarchy examples, not all C0–C4 requirements.
+
+Test-source audit found finite-Larmor self-adjointness/conservation tests that
+fit plain-matrix defect scaling in B, rather than directly proving the claimed
+weighted identities. Kept existing regression tests unchanged; explicitly added
+to C2/C3 acceptance the need to derive and test physical functionals and metric.
+A passing defect exponent alone does not certify a valid finite-k collision
+operator. No arbitrary-species, nonlinear-Coulomb or predictive claims added.
+
+Latest live check: GX kinetic6455/PID1722824 RNl45m47s; Nl32
+session26034/PID1727418 RNl7m20s. Resume those exact handles. Initial CI failure
+query empty, not full-CI completion. No production edits, restarts or merges.
