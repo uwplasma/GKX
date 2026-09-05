@@ -125,9 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local **b05b3949**, pushed **ad47d3be**
-(coefficient commit held for CI33966229536; last no failures;
-CI33964841954 at6d645f3f passed), worktree
+`fix/r0-end-damping-rate`, local/pushed **17ff384a**
+(CI33966229536 atad47d3be passed; new CI33967886511 pending), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -471,6 +470,25 @@ independent FD step refinement is below4e-9 relative. The quadratic test block
 is preserved to roundoff. Compare refined grids across every interval and
 off-midpoint holdouts; preserve entropy signs and measure table/runtime cost.
 The finite-source/H closure and predictive transport gates remain open.
+The wider all-interval holdout study now supersedes that three-midpoint sample
+as an error estimate: 14/27/53-node maxima reach71.86%/32.49%/15.67% derivative
+error for8 moments and50.84%/23.93%/11.16% for18. All use three fractions per
+interval and both endpoints; FD reference refinement is below1e-8 relative.
+Simple grid refinement is not yet an adequate gradient-accuracy solution.
+
+**Structural zero-wavenumber requirement:** the unit-rate density Dirichlet
+entry has stable analytic representation
+`C00=2*sqrt(2/pi)*b*integral[-1,1] x²*expm1(-b*(1-x²)) dx`, hence
+`C00=-(8/15)*sqrt(2/pi)*b²+O(b³)`. Linear interpolation gives O(b) in its
+first interval; atb1e-6 its value/derivative ratios are7795/3898. This is a
+cancellation-sensitive coefficient defect, not an observed transport instability.
+Any finite linear grid retains the wrong power as b→0. Before adding more
+nodes, investigate a density-scaled congruence C=D A D, D=diag(b,1,...), with
+the b=0 limit of A derived and independently checked; positive-weight interpolation
+of a negative-semidefinite A would preserve dissipativity and density scaling.
+This is a proposal, not implemented or certified. Check all source-vector
+limits separately, smooth derivative accuracy, endpoints and CPU/GPU cost;
+do not repair one entry by hand at the expense of matrix entropy.
 Record quadrature provenance (not fictional high-precision decimal digits),
 independently recheck all nodes, update coefficient regressions and audit the
 interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H

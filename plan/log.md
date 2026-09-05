@@ -8511,3 +8511,98 @@ convex matrix interpolation's dissipative signs and reporting memory/runtime
 cost before changing the grid. Separately continue finite-H/EM/multispecies and
 resolved transport validation. Only GX7690 is live; verify terminal success
 before using the explicit-path reference audits. Full goal remains active.
+
+## 2026-09-05 — All-interval derivative holdouts and density quartic limit
+
+Previous turn: progress (coefficient replacement, CPU/GPU tests and initial
+off-node audit). Revalidated cleanb05b3949 ahead1 and live GX7690/PID1753613.
+CI33966229536 atad47d3be completed success during this turn; then pushed held
+b05b3949 and new docs17ff384a together. New CI33967886511 pending. No merges.
+GX last verified RNl1h27m57s; still the sole live research job. Its outputs are
+not yet audited. All new local studies below completed; do not restart them.
+
+grid-refinement-study.py30672exit0, local candidate root
+`/tmp/gkx-collision-candidates-20260905.XqBQZb`, uses direct physical quadrature
+and the mathematical B²-linear interpolation rule. Each original interval is
+split1/2/4 times, yielding14/27/53 nodes. Evaluate fractions .2113248654,.5,
+.7886751346 in EVERY interval plus b0/b8 endpoints, both8/18 moment bases.
+No runtime grid changes. Cache reference evaluations to avoid repeated work.
+CSV has2232 block/holdout rows (558 parameter/resolution cases, four blocks).
+
+Physical derivatives use centered h=min(1e-5,.05b), then h/2; b0 uses the
+second-order forward formula instead of invalid negative b. All maximum FD
+refinement differences are below9.86e-9 relative; test-block FD roundoff is
+~1.3e-10. Table test values remain exact to~1.6e-16 because C_test is affine
+in b. Endpoint derivatives compare the interior segment slope, not the clipped
+outside derivative. This is an interpolation study, not a transport error bound.
+
+| Nodes | 8 moments max value / derivative | 18 moments max value / derivative |
+|---|---|---|
+| 14 | 2.8666% / 71.8626% | 2.8223% / 50.8352% |
+| 27 | .9700% / 32.4886% | .9503% / 23.9298% |
+| 53 | .2868% / 15.6748% | .2804% / 11.1588% |
+
+Worst derivatives are field/test polarization at off-midpoint holdouts; field
+matrix errors also reach37.46%/33.15% at the B4 endpoint on14 nodes. The earlier
+2.66% estimate covered only three interval midpoints and was explicitly not a
+global bound. This experiment shows why midpoint-only derivative validation is
+insufficient. No coarse/refined grid is promoted as adequate. Generation/
+interpolation runtime cost has not been benchmarked here; source evaluation
+wall times are in the log and are not solver performance results.
+
+density-quartic-audit.py terminalexit0 derives an independent stable scalar
+reference from the Fourier Landau form. For the unit-rate C_test+C_field
+density-to-density coefficient (no solved-field term), radial Fourier integration
+gives, with x the cosine along the perpendicular Fourier direction,
+
+```
+C00(b) = 2*sqrt(2/pi)*b * integral[-1,1] x²*expm1(-b*(1-x²)) dx
+dC00/db = 2*sqrt(2/pi)*integral[-1,1] x²*[expm1(-b*a)-b*a*exp(-b*a)] dx
+a=1-x²
+C00/b² -> -8*sqrt(2/pi)/15 = -.4255384324281949
+```
+
+64/128 Legendre nodes agree at rtol1e-12, without cancellation between separate
+test and field terms. The prior direct 3-D quadrature sum matches but loses
+relative digits as its two O(b) terms cancel: error1.47e-6 atb1e-8,1.41e-8
+atb1e-6,~1.4e-10 atb1e-4. This is a reason to use the stable scalar reference
+for the limit rather than interpreting cancellation noise as physical damping.
+
+| b | C00 physical | Interpolated value / physical | JVP / physical derivative |
+|---|---|---|---|
+| 1e-8 | -4.25538e-17 | 779509 | 389755 |
+| 1e-6 | -4.25538e-13 | 7795.09 | 3897.55 |
+| 1e-4 | -4.25526e-9 | 77.9531 | 38.9771 |
+| .00390625 | -6.48596e-6 | 1.99777 | .999443 |
+
+Absolute values are small, and this is NOT a demonstrated full-RHS instability
+or a transport ratio. It diagnoses the wrong limiting power: any finite first
+linear interval gives O(b), versus physical O(b²). Note how its midpoint
+derivative happens to look good even while the value is wrong by nearly2x.
+
+Next direction to test, NOT yet implement: factor C=D A D with the density
+entry of D equal to b. Derive/verify the finite A(0) limit, matrix entropy,
+and source-vector limits. A convex interpolation of negative-semidefinite A
+could preserve density scaling and dissipation; smoother schemes still need
+off-midpoint/endpoint accuracy and cost checks. Do not replace a single C00
+entry in isolation, symmetrize by hand, or assume denser linear grids cure the
+b→0 order. Record this as a proposed mathematical route, not a validated method.
+
+Commands: from code worktree with localvenv-python and
+PYTHONPATH=src:tools/artifacts, run the two named full scratch scripts;
+density script additionally JAX_ENABLE_X64=true. stdout/stderr in same-stem logs.
+docs/operators.rst17ff384a contains the holdout table and stable density formula;
+strict Sphinx12491/final4272 and diff-check pass. No new runtime/Python repo code
+or packaged data this turn; only the already-verified coefficient commit was
+released to the review branch after the previous CI completed.
+
+| Scratch artifact | SHA256 |
+|---|---|
+| grid-refinement-study.py | 4c41cf61df19994f0fdd6bbcbbea072e6ac3b6b7bf278873f8a4a9235bd00957 |
+| grid-refinement-study.csv | 26d9c9042cf75720423ece2ece09b01946d15e040e98d9f1fc2fed761cd7310d |
+| grid-refinement-study.log | 7a49ea61a05731eba6ec29c8b045c460231d636cf8f7a99ca05455a8aa1d6c40 |
+| density-quartic-audit.py | 81bda9eae6fdc4b19af692c0bc5e64906b5c897d89ac79fbb4b33ab4bc2e6932 |
+| density-quartic-audit.log | 4b892409461ecb6c10561dc0238cee762bd1dbfe2e504d08043beaad6b3150fe |
+
+Only GX7690 remains live. Continue its explicit-path terminal audits after
+success; current observation is not terminal. Full R0–R9 goal active.
