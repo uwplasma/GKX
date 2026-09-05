@@ -5849,3 +5849,46 @@ value-only route tests are not substituted for this new reverse-AD check.
 Resume unchanged session6455/PID1722824 and session37619/PID1723912. Inspect
 complete reference/horizon outputs before launching dependent comparisons.
 No PR merged, no public artifact promoted, full roadmap remains active.
+
+## 2026-09-05 — T300 estimate settled further; first CPU RHS triage
+
+Previous turn progressed (sharded derivative gate). Reverified live processes
+before work. **Nm128T300 session37619 completed exit0**, PID1723912 terminal:
+gamma=.03566183997672651, omega=.4853796122998043. Half-horizon growth shift
+.002190092920, frequency -2.3448572e-5: temporal sensitivity is reduced, not
+zero. CSV results/salpha_rate50_nm128_t300.csv SHA256
+`e454fd1857e47791ca8a668b19fa87e1c93c348cd0f086da1d6f84f47056669a`.
+Reference still Nm48/T150; do not label its5.27% gamma difference matched-resolution
+parity. Need Nm96 at the same horizon to separate temporal and velocity effects.
+
+Started **Nm96T300 session86753/PID1724990** (time1724989), GPU1, verified live.
+Manifest salpha_nm96_t300.toml SHA256
+`f36a321ea8c83ddd6730722baadc4600ae8c2b7d2cab5439e2e5ab8ec2c1e435`.
+Only Nm128→96; RK4,dt.002,T300,Nl16,rate50,exact ky unchanged. Same owned
+snapshot/env/reporter; --manifest salpha_nm96_t300.toml --cases
+cyclone_salpha_itg_nm96_t300 --stem results/salpha_rate50_nm96_t300, logs
+gkx-salpha-nm96-t300.stdout.log/stderr.log. No restart of terminal37619.
+Kinetic GX session6455/PID1722824 remains live at17m38s last check.
+
+CPU profiling progress using existing tool, no source edits: first attempt
+failed before computation because GX_PARITY_REF_DIR was unset. Copied completed
+11MiB s-alpha reference to local scratch matched_refs/ITG_cyclone; verified
+SHA256633742b0... matches recorded office source. Then ran (local JAX0.11.1):
+GX_PARITY_REF_DIR=/tmp/gkx-coupled-rate-20260905.shBvlR/matched_refs
+PYTHONPATH=src JAX_ENABLE_X64=false JAX_PLATFORMS=cpu <python>
+tools/profiling/profile_runtime_kernels.py full-linear-rhs --config
+tools/comparison/fixtures/parity/cyclone_salpha_itg.toml --Nl16 --Nm48
+--state z_wave --repeats20 --summary-json <scratch>/cpu-f32-rhs-profile.json
+--memory-profile <scratch>/cpu-f32-rhs-memory.pprof (actual options spaced).
+Session71662 exit0. Summary hash
+`a75ce6f55d0d480bde4f01444cbd73ef4a4c2fe197fca1c7f6836c872f372a1c`.
+First-call compile+execute .2983165s, synchronized warm average .0178058604s,
+20calls; rhs norm .156490535. HLO1809lines/117361bytes; token counts are textual
+triage, not timed kernel counts. Memory pprof saved, not a peak-memory claim.
+No cold-cache or end-to-end speedup claim. Artificial z-wave state/f32 CPU only;
+not the f64 evolution used by parity. No overlap with local compute-heavy work.
+Profiler does not automatically promote its seed like the time integrator, so
+do not infer f64 state solely from an enabled-x64 flag in future profiles.
+
+Resume current kinetic GX and Nm96T300 handles. Two-GPU rate-AD test remains
+pending until both GPUs free. Continue full roadmap; no merge or public promotion.

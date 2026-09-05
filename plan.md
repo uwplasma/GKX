@@ -146,7 +146,7 @@ in02536eef; do not infer full-CI completion from local gates.
 | Demo | dt=.02/750 steps, T15 and fixed rate preserved; wheel writes all artifacts, no CFL warning; short nonlinear wheel run also completes | Transient demo is not stationary physics validation; under-resolved-fit/cutoff warnings remain |
 | s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
 | Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
-| High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; Nm96→128 changes ~0.52% but temporal drift4.6% remains | Extend horizon before claiming Hermite convergence; then Laguerre/parallel resolution and regularization sensitivity |
+| High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; Nm128 T300 reduces temporal shift to0.219% | Match Nm96 at T300 before Hermite claims; then Laguerre/parallel resolution and regularization sensitivity |
 | Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
 
 The Nm48 half-step pilot rounded ky by <=1.2e-8; it is sensitivity evidence,
@@ -160,7 +160,7 @@ convergence and experimental validation are distinct claims.
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
 | GX kinetic Miller reference, dt=.0002, T40, rate500 | 0 | **6455 / 1722824** | `matched_refs/ITG_cyclone/kinetic-gx.{stdout,time}.log` |
-| GKX s-alpha Nm128 RK4, dt=.002, T300, rate50, Nl16, exact high ky | 1 | **37619 / 1723912** | `salpha_nm128_t300.toml`, `gkx-salpha-nm128-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nm128_t300` |
+| GKX s-alpha Nm96 RK4, dt=.002, T300, rate50, Nl16, exact high ky | 1 | **86753 / 1724990** | `salpha_nm96_t300.toml`, `gkx-salpha-nm96-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nm96_t300` |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
