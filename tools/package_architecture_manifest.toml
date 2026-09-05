@@ -898,17 +898,11 @@ recursive = true
 # seeded mirror record and the generator-less performance file. All seven
 # reproduce today; the gate is so they keep doing so. Verified negatively:
 # editing KBM from 20.0% to 18.0% fails it.
-# 86219 -> 86254: the guard that keeps the jaxlib 0.10.2 XLA:CPU segfault from
-# killing a default-precision test session, in the existing
-# tests/unit/nonlinear/test_nonlinear.py. No new test FILE: the topology count
-# stays at 76. Nearly all of it is the docstring, and it is load-bearing: the
-# fault is a SIGSEGV on an Eigen worker thread, so it takes the interpreter
-# down instead of failing one test, and the Python traceback blames a
-# different innocent frame on each run. Written down there are the four-line
-# reproducer that says whether the guard can be deleted yet, the reason the
-# compressed bracket reaches it while the full-complex bracket next door does
-# not, and why CI never saw it.
-baseline = 86426
+# 86377 -> 86426: #196 added a backend-crash skip in the existing nonlinear tests.
+# 86426 -> 86434: replace its unbounded version skip with actual subprocess
+# execution, exact observed-failure classification and three negative guard
+# tests. No new files; unknown versions/errors now fail instead of disappearing.
+baseline = 86434
 target = 35000
 
 [[line_budget_policy.counts]]
