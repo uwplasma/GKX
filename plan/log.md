@@ -6918,3 +6918,58 @@ Latest active processes: kinetic40474/PID1729837 RNl1h02m59s; spatial77271/
 PID1733704 RNl29m00s. GX60372 terminal, do not restart. Code remains local9fc6e42d
 ahead1 of b734e19d; CI33956493988 still allowed to finish (last14success/23pending/
 1skip, no failures). No merge; full scope active.
+
+## 2026-09-05 — Spatial control completes; isolated GX repair passes startup
+
+Previous turn progressed with failed GX sentinel and overflow analysis. GKX
+spatial77271/PID1733704 **terminal exit0**: gamma=.024938243056538495,
+omega=.5047786677125604. Relative to Nz96 at identical Nl32/Nm96/T300/dt.002,
+gamma+0.346654646%, omega−0.030598596%. Half-horizon shifts+.006671912/−.000239857
+pass the temporal screen; this does not establish velocity convergence or rule
+out further spatial error. JSON confirms effectiveNz192/requestedNz96, windows
+[210,300]/[105,150]. CSV results/salpha_rate50_nl32_nm96_nz192_t300.csv SHA256
+`94592ebea869f2096cff94bbeec58426eb8a4b7ebdf4c989e0dab537e37f2bc1`, copied locally.
+
+Created isolated copy /home/rjorge/gx-normalized-hyper-20260905.JZDbbo from the
+431MiB GX tree (including build objects/config), never editing original GX.
+Original status before/after only untracked Makefiles/Makefile.office and its
+.nofastsqrt.bak. Scratch modifies src/linear.cu coefficient denominator from
+powf(M,p+.5) to sqrtf(max(M,1)), paired with device_funcs.cu kernel power
+powf(m/max(nm_glob−1,1),p). Same coefficient2.3, physical factors and model.
+Source hashes linear.cu `976ef802f6a9f5ca6a1eaf3ebd3082944e3fc5dac974c3f8bdc325146603f7c6`,
+device_funcs.cu `20c1f85e19cc7c066bcdd50680c44bdcd2692923af3662513195643ad84ef480`.
+Local copies in recent scratch named gx-linear.cu/gx-device_funcs.cu. Build:
+make -j2 GK_SYSTEM=office gx, same CUDA11.5/gcc10/fast-math settings,30675exit0;
+normalized-build.log retained. Scratch binary SHA256
+`d30403b495e14900235bc0ee55de34b009920c3bf3eaa4bb75b58ae718bb55c9`;
+original remains `787eb0145937e653c08750fd7168029c20772ce3e6c2a2a3b58c70aab128dc9b`.
+Treat scratch version as3865a537+explicit arithmetic patch, never pristine GX.
+
+Validation in scratch/r0_validation, separate directories and run.log files:
+original-low86905, normalized-low88116, normalized-high94250 all terminalexit0.
+Low pair Nl16/Nm48, high Nl32/Nm96, dt.002fixed/T1; original and normalized low
+use identical input; normalized high repeats the failed sentinel's input.
+All264numeric arrays in each out.nc and42 in each big.nc are finite. Low-order
+relative L2 differences: omega_kxkyt4.84762e-5, Phi1.41190e-7, max inspected big
+diagnostic Tpar4.49826e-7. Short-run rounding-level compatibility, not long-run
+benchmark certification. High repaired output finite where original had110
+nonfinite frequency entries. Output hashes:
+
+| Output | SHA256 |
+|---|---|
+| original-low out.nc | a707beffac5e831282800a7028f2b7d3db9deb99324beee2ff09f2189ccae9e9 |
+| normalized-low out.nc | f0bf9c4ba653ed847515e8cb411b13644b10e9caac781bdd722e0fef3f397adf |
+| normalized-high out.nc | a12a6f20bc1c9e0a4de538720d76ecadc1eb322cb4bd670d9ea66b8884051072 |
+| original-low big.nc | 31e3347ceedad7797a36acfe47d6c720cc136865c68877f0f04f1eda4b08a7e2 |
+| normalized-low big.nc | d2ab6e27b34a6e75e34ed69eb23158eb7a540e66eee559994051100faba8d910 |
+| normalized-high big.nc | fb898b3c7611fa35b41560a6a7d617c6faf7e0f4d9084b005fe04dd239fa037b |
+
+Started long patched-GX reference **95001/PID1738946** in
+<scratchGX>/r0_validation/refined. Command PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
+CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v <scratchGX>/gx salpha_nl32_nm96_t300.in
+>run.log 2>time.log. Input hash remainsfb3e49f6 (explicitfixed,rate50,Nl32/Nm96/Nz96,
+all11positiveky,T300). Confirmed RNl11s, stderr empty. Inspect completed finite
+histories, actualdt, geometry, all modes and temporal settling before using it.
+Kinetic40474/PID1729837 still RNl1h08m00s. Only these two jobs live; no restart
+of spatial77271. GKX local9fc6e42d remains ahead1; CI b734 last26success/11pending/
+1skip, no failures. No GX commits/pushes or PR merges; full roadmap active.

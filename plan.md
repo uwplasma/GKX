@@ -150,7 +150,7 @@ superseded runs before completion; avoid restarting CI for every microcommit.
 | s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
 | Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
 | High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; at T300 Nm96→128 changes gamma0.468%, omega0.192%, with temporal shifts0.168%/0.219% | Laguerre/parallel resolution and regularization sensitivity; two fine Hermite points alone do not establish convergence |
-| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713% at Nm96/T300; Nl32 dt.002→.001 changes gamma only~4e-14 relative | Velocity convergence fails; parallel refinement Nz192 running |
+| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713%; halving dt has negligible effect; Nz96→192 changes gamma+0.3467%, omega−0.0306% | Velocity convergence fails; patched-GX same-resolution reference running |
 | Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
 | RHS profiling | Explicit state precision and observed state/RHS dtypes; 36 profiler tests pass; CPU z-wave warm means17.8ms f32/41.8ms f64 | Artificial-state triage only; no end-to-end speedup, peak-memory or f32 scientific-accuracy claim |
 
@@ -165,7 +165,7 @@ convergence and experimental validation are distinct claims.
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
 | GKX kinetic Miller matched reference, dt=.0002, T40, rate500 | 0 | **40474 / 1729837** | `matched_kinetic_manifest.toml`, `gkx-kinetic-rate500-matched-t40.{stdout,stderr}.log`, stem `results/kinetic_rate500_matched_t40` |
-| GKX s-alpha Nl32 Nm96 Nz192, RK4 dt=.002, T300, rate50 | 1 | **77271 / 1733704** | `salpha_nl32_nm96_nz192_t300.toml`, `gkx-salpha-nl32-nm96-nz192-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm96_nz192_t300` |
+| Patched GX s-alpha Nl32 Nm96 Nz96, RK4 dt=.002 fixed, T300, rate50 | 1 | **95001 / 1738946** | Different directory: `/home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined`, `salpha_nl32_nm96_t300.in`, `run.log`, `time.log` |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -176,19 +176,18 @@ Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
 **Next actions:** inspect both exits, hashes, finite histories and all rows.
-An independent GX Nl32/Nm96/Nz96/T300/dt.002 input is prepared as
-`salpha_nl32_nm96_t300.in` in the campaign; **do not launch yet**. Its short
-startup control produces NaNs; GX3865a537's float32 hypercollision powers overflow
-at high Nm. Validate an algebraically equivalent normalized-power reference
-implementation in an isolated build before using higher-Nm GX results. Keep the
-original GX checkout/binary and failed outputs unchanged. Use a valid reference to compare
+GX95001 is now running with an isolated normalized-power repair, explicitly
+labeled as a modified reference (original checkout/binary unchanged). The failed
+original high-order startup and repaired finite startup are retained; low-order
+potential traces agree within1.42e-7 relative L2. Do not launch a duplicate or use
+unmodified GX3865a537 at high Nm: its separate float32 powers overflow. Use a valid reference to compare
 the high-order GKX result at matched velocity resolution, not the old Nl16/Nm48
 reference. Preserve both references and record the actual resulting GX timestep.
 Prepared input now explicitly pins fixed_dt=true and Expert damping values;
 its current SHA256 is fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
-Dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
+Spatial77271, dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
 The small derivative test completed beside the kinetic run with an8% memory pool;
-no performance claim. Spatial refinement77271 now occupies GPU1.
+no performance claim. Patched GX95001 now occupies GPU1.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run is active; do not reuse the old T20 harness or
