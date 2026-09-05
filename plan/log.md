@@ -6498,3 +6498,31 @@ window reuse remains pending, not claimed implemented by this correctness fix.
 Latest live processes: dt-half73383/PID1729118 RNl18m32s; kinetic40474/PID1729837
 RNl14m56s. Resume those exact handles. Initial CI11success,10running,16queued,
 1skipped; fresh push needs its own checks. No restarts or merges; full scope active.
+
+## 2026-09-05 — Nonfinite velocity-transform guard and full release verification
+
+Previous turn progressed with effective-ky preflight. At code4b78404d the full
+tests/release/test_release_gates.py suite passes198 tests,0skip,4.381s, session74651
+exit0. XML /tmp/gkx-coupled-rate-20260905.shBvlR/release-effective-ky-full.xml
+SHA256 `53c19a96aad396c72494cacbd0b3637525fa36857deb0c0f433091f8f02092e1`.
+CI query for that head had no failures but pending checks; no full-green claim.
+
+High-order basis review found a guard gap: NaN identity error did not satisfy
+`error > tolerance`, allowing an unusable transform through. **93062763** rejects
+nonfinite errors explicitly and parameterizes the existing degraded-pair test
+over1.01,NaN,Inf. No healthy transform or operator equation changed; this does
+not explain the observed Laguerre growth-rate shift. Full core numerics suite
+passes50 tests,0skip,3.612s with JAX_ENABLE_X64=true JAX_PLATFORMS=cpu PYTHONPATH=src,
+local JAX0.11.1. Session85933exit0; XML in same scratch named
+core-numerics-finite-guard.xml SHA256
+`437a096c451198f89cfba7a6aeda664100d2fde07bd7c5b84d43bb6984300557`.
+Coverage includes high-order transform round trips, conditioning, quadrature
+moments and convention checks; not eigenmode resolution convergence. Ruff lint,
+format406files, architecture and whitespace pass without budget increases.
+Commit/push69468exit0; draft PR202 remains open, no merge.
+
+Live processes reverified: dt-half73383/PID1729118 RNl25m46s, kinetic40474/
+PID1729837 RNl22m10s, both stderr files empty. Running snapshot unchanged; resume
+these exact handles. Two-GPU reverse-AD repeat remains pending until both free.
+Full roadmap remains active; next major evidence is the timestep control and
+matched kinetic comparison, then parallel/velocity resolution and R0 remainder.
