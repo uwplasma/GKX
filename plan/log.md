@@ -6320,3 +6320,34 @@ Next: inspect Nl32 exit/result before choosing Nl refinement versus first spatia
 run; validated192-point geometry is ready. Latest processes kinetic6455/PID1722824
 RNl51m53s and Nl32 26034/PID1727418 RNl13m26s. Keep both handles; do not restart
 due to buffered logs. No source edits or merges; full scope active.
+
+## 2026-09-05 — Nl32 rejects velocity convergence; temporal control launched
+
+Previous turn was a verified wait. Rechecked authoritative processes: Nl32
+PID1727418 absent, polled original session26034 and obtained **exit0**; time log
+also exit0. Results/salpha_rate50_nl32_nm96_t300.csv SHA256
+`90efe742d9f8f5ac948f3b9fbb9227402d5edfcbc260a8f5ee914e673ac66439`.
+Gamma=.024852092124449224, omega=.5049331701718024. Compared with Nl24 at
+the same Nm96/Nz96/T300/dt.002, gamma changes **−24.712753%**, omega+0.938981%.
+Half-time shifts+.005781475200 and−.000222202091 pass temporal screen, but
+the Laguerre sequence is not converging at the current resolutions. Do not
+promote the earlier matched Nl16 parity as predictive validation.
+
+Before increasing Nl again or changing Nz, launched **dt.002→.001 only** at
+Nl32/Nm96/Nz96/T300/rate50 with300000steps, RK4, exact same manifest ky.
+This controls temporal discretization rather than assuming a CFL estimate
+ensures accuracy. Spatial192-point geometry remains validated and ready but
+unused in this solve. No cause (truncation, branch selection, integration or
+other defect) is established solely by these growth-rate shifts.
+
+**Session73383/PID1729118** (time1729117), GPU1, RNl verified21s. Manifest
+salpha_nl32_nm96_t300_dt_half.toml SHA256
+`483dfe63c3ffa5ab080d7b6baccd249f678a965a090c86e069cd2e6a8ec767ad`.
+Local /tmp/gkx-coupled-rate-20260905.shBvlR copy, scp to owned office campaign.
+Same JAX0.10.2/x64/environment/reporter0acbd221; --cases
+cyclone_salpha_itg_nl32_nm96_t300_dt_half --stem
+results/salpha_rate50_nl32_nm96_t300_dt_half. Logs
+gkx-salpha-nl32-nm96-t300-dt-half.stdout.log/stderr.log. Do not restart terminal
+26034. Kinetic GX6455/PID1722824 remains RNl56m10s; complete reference required
+before prepared matched kinetic GKX launch. No code edits, snapshot overwrites
+or merges. Full roadmap remains active.
