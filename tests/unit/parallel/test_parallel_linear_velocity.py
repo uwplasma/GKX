@@ -1934,6 +1934,62 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         )
 
 
+@pytest.mark.parametrize("dt", [0.1, 0.2])
+def test_end_damping_rate_matches_nonlinear_eigen_implicit_and_species_routes(dt):
+    """A field-free m=3 mode sees the same -nu*d(z)*G on every route."""
+    from dataclasses import fields
+    from gkx.terms.config import TermConfig
+    from gkx.terms.assembly import assemble_rhs_cached, assemble_rhs_cached_with_fields
+    from gkx.operators.linear.params import term_config_to_linear_terms
+    from gkx.solvers_linear_integrators import integrate_linear
+    from gkx.solvers_linear_implicit import _build_implicit_operator
+    from gkx.solvers_linear_krylov_algorithms import _apply_operator
+    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+
+    if len(jax.devices()) < 2:
+        pytest.skip("requires two logical CPUs or accelerators")
+    with jax.enable_x64():
+        state, cache, params, grid, geom = _small_kinetic_electron_problem(linked=True)
+        state = jnp.zeros(state.shape, dtype=jnp.complex128).at[:, 0, 3].set(1.0)
+        terms = TermConfig(
+            **{f.name: float(f.name == "end_damping") for f in fields(TermConfig)}
+        )
+        linear_terms = term_config_to_linear_terms(terms)
+        reference, solved = assemble_rhs_cached(state, cache, params, terms=terms)
+        assert float(jnp.linalg.norm(reference)) > 1e-5
+        implicit = _build_implicit_operator(
+            state, cache, params, dt, linear_terms, "identity"
+        )[5]
+        routes = [
+            assemble_rhs_cached(state, cache, params, terms=terms, dt=dt)[0],
+            assemble_rhs_cached_with_fields(state, cache, params, solved, terms=terms),
+            nonlinear_rhs_cached(state, cache, params, terms)[0],
+            _apply_operator(state, cache, params, terms),
+            (state - implicit(state.ravel()).reshape(state.shape)) / dt,
+        ]
+        for parallel in (
+            None,
+            SimpleNamespace(
+                strategy="velocity", backend="auto", axis="species", num_devices=2
+            ),
+        ):
+            result, _ = integrate_linear(
+                state,
+                grid,
+                geom,
+                params,
+                dt=dt,
+                steps=1,
+                method="euler",
+                cache=cache,
+                terms=linear_terms,
+                parallel=parallel,
+            )
+            routes.append((result - state) / dt)
+        for result in routes:
+            np.testing.assert_allclose(result, reference, rtol=1e-9, atol=1e-12)
+
+
 def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
     from gkx.solvers_linear_integrators import integrate_linear
     from gkx.operators.linear.params import linear_terms_to_term_config

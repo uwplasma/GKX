@@ -922,7 +922,9 @@ recursive = true
 # assertions 79064c4d rewrote: that the RHS end-damping term scales as 1/dt,
 # that a completed step's increment does not, and the two mocked signatures
 # that pin dt reaching the serial and sharded RHS at all.
-baseline = 86448
+# 86448 -> 86571: fixed-rate cross-route and value/gradient refinement gates,
+# plus removed-input rejection and parity override execution tests. No files added.
+baseline = 86571
 target = 35000
 
 [[line_budget_policy.counts]]

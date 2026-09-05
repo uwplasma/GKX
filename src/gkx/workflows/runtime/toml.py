@@ -259,6 +259,11 @@ def _replace_runtime_section(
     raw = data.get(key)
     if not isinstance(raw, dict):
         return cfg
+    if key == "collisions" and "damp_ends_scale_by_dt" in raw:
+        raise ValueError(
+            "damp_ends_scale_by_dt was removed: specify damp_ends_amp as a fixed "
+            "rate per normalized time, independent of the integration timestep."
+        )
     return cast(RuntimeConfig, replace(cfg, **{key: constructor(**raw)}))
 
 

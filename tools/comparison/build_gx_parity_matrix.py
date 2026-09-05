@@ -28,7 +28,7 @@ The reference outputs are not tracked in this repository. Point
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
@@ -154,6 +154,15 @@ def run_case(
 
     config_path = REPO_ROOT / str(case["config"])
     cfg, _ = load_runtime_from_toml(config_path)
+    # Fixed physical rate: the parity reference may use a different historical
+    # timestep than a standalone fixture. Never recompute this during refinement.
+    if "damp_ends_rate" in case:
+        cfg = replace(
+            cfg,
+            collisions=replace(
+                cfg.collisions, damp_ends_amp=float(case["damp_ends_rate"])
+            ),
+        )
 
     steps = int(case["steps"])
     dt = float(case["dt"])
@@ -259,6 +268,7 @@ def run_case(
         "electrons": case["electrons"],
         "field_model": case["field_model"],
         "geometry": case["geometry"],
+        "damp_ends_rate": float(cfg.collisions.damp_ends_amp),
         "resolution": {
             "Nl": int(case["Nl"]),
             "Nm": int(case["Nm"]),

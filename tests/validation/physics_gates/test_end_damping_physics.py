@@ -1,7 +1,7 @@
 """Physics gate: parallel-domain end damping on a linked flux tube.
 
-Linear RHS assembly uses legacy strength ``damp_ends_amp / dt``. At the pinned
-``dt=0.002``, interpreting 0.1 as a rate instead weakens damping 500-fold and
+The fixed rate 50 preserves legacy strength .1 at the pinned ``dt=0.002``.
+Using 0.1 as a rate instead weakens damping 500-fold and
 allows an unphysical boundary mode to dominate (uwplasma/GKX#192).
 References below are measured compatibility regressions, not independent
 literature validation. Float64 is deliberate: this small float32 case did not
@@ -69,7 +69,7 @@ def test_end_damping_bounds_the_domain_end_mode_at_a_deck_step_size() -> None:
             geom,
             tprim=2.49,
             fprim=0.8,
-            damp_ends_amp=0.1,
+            damp_ends_amp=50.0,  # Legacy .1/.002; fixed rate during dt refinement.
             damp_ends_widthfrac=0.125,
             nu_hermite=1.0,
             nu_laguerre=2.0,

@@ -125,7 +125,7 @@ nu_hyper = 0.0
 p_hyper = 4.0
 hypercollisions_const = 0.0
 hypercollisions_kz = 1.0
-damp_ends_amp = 0.1
+damp_ends_amp = {0.1 / float(settings["dt"])} # Fixed rate at this preset's reference timestep.
 damp_ends_widthfrac = 0.125
 
 [normalization]

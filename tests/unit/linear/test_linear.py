@@ -1218,10 +1218,10 @@ def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_gri
     assert int(np.asarray(grid.ky_mode)[0]) > 0
 
 
-def test_linear_integrator_applies_linked_end_damping_per_step(
+def test_linear_integrator_applies_linked_end_damping_rate(
     only_term_config, only_terms, spectral_grid
 ):
-    """Legacy linear damping scales as 1/dt; its Euler increment is fixed."""
+    """The damping RHS is fixed; its Euler increment scales with dt."""
     grid_full = spectral_grid(
         Nx=1,
         Ny=16,
@@ -1252,10 +1252,9 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
     end_dt = np.asarray(contrib_dt["end_damping"])
     mask = np.abs(end_raw) > 1.0e-12
     assert np.any(mask)
-    assert np.allclose(end_dt[mask], end_raw[mask] / 0.2, rtol=1.0e-6, atol=1.0e-6)
+    assert np.allclose(end_dt[mask], end_raw[mask], rtol=1.0e-6, atol=1.0e-6)
 
-    # The completed step is what the decks are tuned against: the increment the
-    # integrator applies must not depend on the step size.
+    # Fixed-rate Euler increments are proportional to the integration timestep.
     terms = only_terms(end_damping=1.0)
     increments = []
     for dt in (0.1, 0.2):
@@ -1269,7 +1268,7 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
             method="euler",
             terms=terms,
         )
-        increments.append(np.asarray(integrated) - np.asarray(G))
+        increments.append((np.asarray(integrated) - np.asarray(G)) / dt)
     assert np.any(np.abs(increments[0][mask]) > 1.0e-12)
     assert np.allclose(increments[0], increments[1], rtol=1.0e-6, atol=1.0e-8)
 
@@ -1279,7 +1278,7 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
 )
 @pytest.mark.parametrize("dt", [0.002, 0.2])
 def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
-    """An isolated damped scalar follows R(-A), not an exact removed fraction."""
+    """An isolated damped scalar follows R(-nu*dt), including its rate tangent."""
     from math import factorial
 
     from gkx.solvers_time_explicit_steps import _linear_native_step
@@ -1290,7 +1289,7 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
 
         def step(amplitude):
             rate = _scalar_params(
-                LinearParams(damp_ends_amp=amplitude), jnp.float64, dt
+                LinearParams(damp_ends_amp=amplitude), jnp.float64
             ).damp_amp
             return _linear_native_step(
                 jnp.asarray(1.0),
@@ -1301,10 +1300,47 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
             )
 
         value, tangent = jax.jvp(step, (strength,), (jnp.ones_like(strength),))
-        expected = sum((-0.2) ** k / factorial(k) for k in range(order + 1))
-        derivative = -sum((-0.2) ** k / factorial(k) for k in range(order))
+        expected = sum((-0.2 * dt) ** k / factorial(k) for k in range(order + 1))
+        derivative = -dt * sum((-0.2 * dt) ** k / factorial(k) for k in range(order))
         assert float(value) == pytest.approx(expected, rel=0, abs=2e-15)
         assert float(tangent) == pytest.approx(derivative, rel=0, abs=2e-15)
+
+
+@pytest.mark.parametrize(
+    "method,order", [("euler", 1), ("rk2", 2), ("rk3", 3), ("rk4", 4)]
+)
+def test_end_damping_fixed_time_value_and_gradient_converge(method, order):
+    """Fixed-T scalar damping and dG/dnu converge to exp(-nu*T), -T*exp(-nu*T)."""
+    from gkx.solvers_time_explicit_steps import _linear_native_step
+    from gkx.terms.assembly import _scalar_params
+
+    with jax.enable_x64():
+        errors = []
+        for steps in (4, 8, 16):
+
+            def solve(nu):
+                rate = _scalar_params(
+                    LinearParams(damp_ends_amp=nu), jnp.float64
+                ).damp_amp
+                return jax.lax.fori_loop(
+                    0,
+                    steps,
+                    lambda _, value: _linear_native_step(
+                        value,
+                        jnp.asarray(0.0),
+                        jnp.asarray(1.0 / steps),
+                        method_key=method,
+                        rhs=lambda g: -rate * g,
+                    ),
+                    jnp.asarray(1.0),
+                )
+
+            result = jax.value_and_grad(solve)(jnp.asarray(0.7))
+            errors.append(
+                np.abs(np.asarray(result) - np.exp(-0.7) * np.array([1.0, -1.0]))
+            )
+        ratios = np.asarray(errors[:-1]) / np.asarray(errors[1:])
+        assert np.all(ratios > 2 ** (order - 0.3)), (method, errors)
 
 
 def test_streaming_zero_for_constant_z(cyclone_world, only_terms):

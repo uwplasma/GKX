@@ -415,26 +415,18 @@ are:
 
 Notable runtime-only keys:
 
-* ``[collisions] damp_ends_amp`` / ``damp_ends_widthfrac``: reference-compatible end
-  damping defaults are ``0.1`` and ``0.125``. Linear integration routes supplying
-  ``dt`` divide the amplitude by the instantaneous step size: it is a per-step
-  strength, not an exact fraction removed by every RK scheme. RHS calls without
-  ``dt``, including nonlinear integration, retain a rate interpretation.
-  The linear compatibility repair addresses
-  `issue 192 <https://github.com/uwplasma/GKX/issues/192>`_; reconciling routes
-  requires the deck/reference migration in issue 194. See :doc:`operators`
-  for the stage-map equations and limitations.
+* ``[collisions] damp_ends_amp`` / ``damp_ends_widthfrac``: fixed damping rate
+  per normalized time and taper width; defaults ``0.1`` and ``0.125``.
+  The rate is independent of timestep and solver. Converted native-linear
+  benchmark decks pin their historical rate explicitly; nonlinear and Krylov
+  decks retain their already-rate values. See :doc:`operators` for migration
+  and refinement equations. An optional RHS ``dt`` keyword no longer rescales it.
 * ``[physics] reduced_model``: physics-family selector for runtime inputs.
   The maintained runtime supports full gyrokinetics via ``"gyrokinetic"``
   and its full-GK aliases. Non-promoted reduced-model values fail closed with
   ``NotImplementedError`` instead of silently routing through the wrong equations.
-* ``[collisions] damp_ends_scale_by_dt``: legacy opt-in that divides
-  ``damp_ends_amp`` by ``[time] dt`` once more, *before* the solver's own
-  per-step division on linear routes (``1/(dt_input*dt_step)`` in the RHS).
-  Without a solver timestep it applies only the input-step division. The
-  reference-compatible default is ``false`` and no shipped deck sets it. It is
-  scheduled for removal with the end-damping redesign
-  (`uwplasma/GKX#194 <https://github.com/uwplasma/GKX/issues/194>`_).
+* ``[collisions] damp_ends_scale_by_dt``: removed; either boolean value raises
+  a migration error. Specify the intended fixed rate as ``damp_ends_amp``.
 * ``[collisions] hypercollisions_const`` / ``hypercollisions_kz``: defaults are
   the reference-compatible ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
   default, constant hypercollisions off).

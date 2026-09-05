@@ -1186,21 +1186,29 @@ The field-line end damping is
 
 .. math::
 
-   \mathcal{R}_{end} = -w_{end}\,\frac{A_{end}}{\Delta t}\,d(z)\,H,
+   \mathcal{R}_{end} = -w_{end}\,\nu_{end}\,d(z)\,H,
 
-on linear integration routes supplying the instantaneous :math:`\Delta t`.
-For the isolated scalar equation with :math:`H=G`, an explicit RK step has
-amplification :math:`R(-w_{end}A_{end}d(z))`, where :math:`R` is its stability
-polynomial. Euler removes the fraction :math:`w_{end}A_{end}d(z)`;
-RK2 instead multiplies by :math:`1-a+a^2/2`, with
-:math:`a=w_{end}A_{end}d(z)`. Coupled fields and other terms further change
-the completed update. This is a per-step strength, not a universal removed fraction.
+where ``damp_ends_amp`` is :math:`\nu_{end}`, a fixed rate per normalized time
+on all solver routes. For the isolated scalar equation :math:`H=G`,
 
-RHS calls without a timestep, including the nonlinear RHS, instead use
-:math:`\mathcal{R}_{end}=-w_{end}A_{end}d(z)H`: amplitude is a rate on those
-routes. The mixed legacy contract is tracked in
-`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_. Do not interpret a
-legacy linear timestep scan as refinement of one fixed continuous operator.
+.. math::
+
+   G(T)=e^{-w_{end}\nu_{end}d(z)T}G(0),\qquad
+   \partial_{\nu_{end}}G(T)=-w_{end}d(z)T G(T).
+
+An explicit RK step multiplies by :math:`R(-\Delta t w_{end}\nu_{end}d(z))`.
+Refine the timestep with :math:`\nu_{end}` fixed; changing the rate during
+refinement changes the operator. Supplied-fields, nonlinear, eigenoperator,
+native, implicit and species-parallel routes share this contract.
+
+Migration from the mixed legacy model (`issue 194
+<https://github.com/uwplasma/GKX/issues/194>`_): preserve already-rate nonlinear
+and Krylov inputs. For native linear references use
+:math:`\nu_{end}=A_{legacy}/\Delta t_{reference}`, fixed thereafter. Adaptive
+legacy trajectories had a varying rate and cannot be preserved exactly by one
+constant. The parity harness pins exceptional reference rates explicitly;
+standalone fixtures retain their own reference rate. Full external reference
+regeneration remains required before this migration is release-ready.
 
 Controls:
 
@@ -1209,7 +1217,6 @@ Controls:
 - ``RuntimeCollisionConfig.p_hyper_kperp``
 - ``RuntimeCollisionConfig.damp_ends_amp``
 - ``RuntimeCollisionConfig.damp_ends_widthfrac``
-- ``RuntimeCollisionConfig.damp_ends_scale_by_dt``
 
 Nonlinear :math:`E \\times B` And Flutter
 -----------------------------------------

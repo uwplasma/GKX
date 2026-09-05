@@ -234,13 +234,11 @@ runtime schema therefore exposes light-weight diagnostic scale factors:
 These are reporting-only knobs; they do not alter the RHS/operator. They are
 intended to document exact comparison settings used for benchmark plots.
 
-The reference end-damping defaults are ``damp_ends_amp = 0.1`` and
-``damp_ends_widthfrac = 0.125``. The damping kernel interprets
-``damp_ends_amp`` as a per-step strength when the linear caller supplies a
-timestep; otherwise it remains a rate, including on nonlinear routes.
-Only an isolated Euler damping update removes exactly that local fraction;
-other RK schemes apply their stability polynomial. See :doc:`operators` for
-the equations and the pending cross-route normalization migration.
+The end-damping defaults are ``damp_ends_amp = 0.1`` (rate per normalized time)
+and ``damp_ends_widthfrac = 0.125``. The rate does not depend on timestep or
+solver. Native-linear benchmark decks converted from legacy per-step strengths
+pin larger reference rates explicitly. See :doc:`operators` for the equations
+and migration; do not rescale already-rate nonlinear or Krylov inputs.
 
 Defaults (model parameters):
 

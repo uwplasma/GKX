@@ -3972,6 +3972,37 @@ def test_parity_floors_are_declared_only_where_they_were_measured() -> None:
     )
 
 
+@pytest.mark.parametrize("dt", [0.0002, 0.0001])
+def test_parity_fixed_damping_override_survives_timestep_refinement(monkeypatch, dt):
+    import runpy
+    from types import SimpleNamespace
+    import gkx
+
+    run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
+    case = next(c for c in _parity_cases() if c["key"] == "kbm_miller")
+    case = {**case, "dt": dt}
+    assert case["damp_ends_rate"] == 500.0
+    cfg, _ = gkx.load_runtime_from_toml(RUN_TO_REPO_ROOT / case["config"])
+    assert cfg.collisions.damp_ends_amp == 200.0
+    monkeypatch.setitem(
+        run_case.__globals__,
+        "load_reference_spectrum",
+        lambda _: SimpleNamespace(ky=[0.3]),
+    )
+
+    class ReachedScan(Exception):
+        pass
+
+    def scan(resolved, ky_values, **kwargs):
+        assert resolved.collisions.damp_ends_amp == 500.0
+        assert kwargs["dt"] == dt
+        raise ReachedScan
+
+    monkeypatch.setattr(gkx, "run_runtime_scan", scan)
+    with pytest.raises(ReachedScan):
+        run_case(case, reference_dir=RUN_TO_REPO_ROOT)
+
+
 def test_parity_builder_reads_the_declared_floor() -> None:
     """A manifest key nothing reads is documentation pretending to be a gate."""
 
