@@ -29,6 +29,22 @@ linear_trace = runtime_kernels
 nonlinear_trace = runtime_kernels
 
 
+def test_full_rhs_profile_state_dtype_is_explicit():
+    import jax
+    import pytest
+
+    state = np.array([1 + 2j], dtype=np.complex64)
+    with jax.enable_x64(False):
+        assert runtime_kernels._profile_state(state, "native").dtype == jnp.complex64
+        with pytest.raises(ValueError, match="JAX_ENABLE_X64"):
+            runtime_kernels._profile_state(state, "complex128")
+    with jax.enable_x64(True):
+        for dtype in ("complex64", "complex128"):
+            result = runtime_kernels._profile_state(state, dtype)
+            assert str(result.dtype) == dtype
+            np.testing.assert_array_equal(result, state)
+
+
 def test_cyclone_runtime_profiler_default_config_exists() -> None:
     args = runtime_kernels.build_cyclone_parser().parse_args([])
 

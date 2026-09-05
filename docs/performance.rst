@@ -728,6 +728,13 @@ helper:
      --repeats 3 \
      --summary-json docs/_static/full_linear_rhs_trace_summary.json
 
+Both full-RHS profilers accept ``--state-dtype complex64|complex128|native``.
+``native`` preserves the seed dtype; enabling JAX x64 alone does not promote
+that seed. Use ``JAX_ENABLE_X64=true`` with ``--state-dtype complex128`` for
+an explicit double-precision state. New summaries record ``state_dtype``,
+``rhs_dtype`` and ``jax_enable_x64``; compare those, geometry, state and grid
+before comparing timings. This option does not recalculate the seed in f64.
+
 The May 11, 2026 local CPU production-path artifacts record
 ``source="gkx.operators.linear.rhs.linear_rhs_cached"`` and
 ``force_electrostatic_fields=true``. The initial-state companion reports

@@ -934,7 +934,8 @@ recursive = true
 # +9: pin the kinetic reference decks' species-selective initial condition.
 # +36: reject invalid/missing parity coordinates before setup; verify exact snapping.
 # +30: exact three-step rate derivative through serial/species-sharded integration.
-baseline = 86846
+# +16: explicit profiler state precision and disabled-x64 rejection.
+baseline = 86862
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1005,7 +1006,8 @@ recursive = true
 # half-horizon values plus explicit finite-error coverage in parity reports.
 # +42: report reference-side temporal evidence without certifying sampled means.
 # +17: preflight and match reference coordinates before expensive parity solves.
-baseline = 77918
+# +22: select input dtype and report actual input/output precision in RHS profiles.
+baseline = 77940
 target = 0
 
 [[line_budget_policy.counts]]
