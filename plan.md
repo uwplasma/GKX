@@ -168,6 +168,7 @@ convergence and experimental validation are distinct claims.
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
 | GKX s-alpha Nl32 Nm160 Nz96, RK4 dt=.001, T300, rate50 | 0 | **11457 / 1744614** | `salpha_nl32_nm160_t300.toml`, `gkx-salpha-nl32-nm160-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm160_t300` |
+| GKX matched Nm96 float32 control, Nl32 Nz96 dt=.001 T300 rate50 | 1 | **72033 / 1748122** | `salpha_nl32_nm96_t300_f32.toml`, `gkx-salpha-nl32-nm96-t300-f32.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm96_t300_f32` |
 | Collision B4 spherical19/21 control, radial32/Bessel48, fixed8 moments | Local CPU | **12758 / 58452** | `/tmp/gkx-coupled-rate-20260905.shBvlR/collision-field-angular-fine.{py,log}`; continues from saved spherical17 field |
 
 Office campaign directory:
@@ -178,7 +179,7 @@ uses a separate grid-verified reporter from1571a9e6; no running copy overwritten
 Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** inspect both live exits, hashes, finite histories and all rows.
+**Next actions:** inspect all three live exits, hashes, finite histories and all rows.
 Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
 running as11457. Nm128 run68484 completed exit0 in43:47.41: atNl32,
 Nm96→128 changes gamma−8.141% and omega−0.274%, so velocity convergence fails.
@@ -201,7 +202,13 @@ Prepared input now explicitly pins fixed_dt=true and Expert damping values;
 its current SHA256 is fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
 Spatial77271, dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
 The small derivative test completed beside the kinetic run with an8% memory pool;
-no performance claim. Patched GX95001 is terminal; GPU1 is now free.
+no performance claim. Patched GX95001 is terminal; GPU1 now runs the matched
+GKX float32 precision control72033. Its imported grid is confirmed float32 with
+x64 disabled; compare to the saved Nm96 x64 result, not the running Nm160.
+Independent GX energy fits at last30% give gamma=.0238429354 fromPhi2 and
+.0238471208 fromWg, leaving4.233% GKX/Phi2 discrepancy. The instantaneous-growth
+estimator is therefore insufficient to explain the difference; precision and
+operator differences remain to be isolated.
 GX kinetic reference completed exit0 with finite inspected diagnostics and
 2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
 T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly

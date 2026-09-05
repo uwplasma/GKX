@@ -7668,3 +7668,55 @@ field12758/PID58452 (local CPU). GPU1 is free. No merges. Next: collectNm160,
 finish19/21 field ladder, independently validate field polarization, investigate
 the ~4% reference discrepancy, then regenerate coefficients only with established
 convergence and physical contracts. Full R0–R9 goal remains active.
+
+## 2026-09-05 — GX energy-growth estimator control and matched f32 launch
+
+Previous goal turn classified progress (new independent polarization oracle and
+completed GX-reference audit). Revalidated live Nm16011457/PID1744614 RNl38m39s
+and field12758/PID58452 Rs8m49s; neither restarted. CI33961508920 still running,
+no failed jobs, latest only parallel-autodiff and nonlinear-core pending.
+Localb7cd526e remains one held commit ahead of pushed2c440b0e.
+
+Read-only estimator audit of the completed patched GX output: fit
+gamma=0.5*slope(log E) by centered least squares for positive mode energies
+E=Phi2_kyt and Wg_kyst. Same output, unchanged hashes from the preceding entry;
+all11 positiveky modes evaluated at last50%,30%,15% of physical time.
+
+| Fit start / T | GX instantaneous gamma mean, ky=.55 | Phi2 fitted gamma | Wg fitted gamma |
+|---:|---:|---:|---:|
+| .5 | .023903807575570125 | .02384708860836354 | .023855835928109727 |
+| .7 | .023870534360607026 | .023842935400764494 | .02384712079354227 |
+| .85 | .023870550771862006 | .02384342848771987 | .02384490120555679 |
+
+Matched GKX gamma=.02485209212445021 is4.2325188% above the GX Phi2 last30%
+fit. The small difference between GX estimators cannot explain the observed
+GKX/GX discrepancy. GKX uses a selected-z complex-phi fit, whereas this GX
+energy fit integrates z; stationarity makes the comparison useful but does not
+prove identical finite-time estimators. No operator or precision cause assigned.
+Local scratch audit-gx-growth-estimators.py was copied into the existing office
+refined directory and run with office Python, exit0. Full11-mode log copied
+back. Script SHA256865dddd175e98d957835ec6dab01435c5691075c077069ac7ae5c27815824e7b;
+log f2958cc8af4ca72a90181bbe8ce5d1289813fb90e5a1d9cacc041393a8e998cc.
+
+Precision-only GKX control launched on freed GPU1, **72033/PID1748122**
+(time1748121). Same production snapshot/reporter/geometry and matched Nm96
+Nl32 Nz96 RK4dt.001/T300/rate50 as completed x64 dt-half run. Manifest
+salpha_nl32_nm96_t300_f32.toml SHA256
+550acf2ee0a40eae6e2173c0b22432adccb201d9345fa15c3827676af53ffb03.
+Only numerical precision intentionally changes; historical-reference columns
+still refer to Nm48 and MUST NOT be used for same-resolution parity. Compare
+raw GKX results against saved Nm96 x64 and separately audited patched GX Nm96.
+
+Command in `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`:
+GX_PARITY_REF_DIR=campaign/matched_refs CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=false
+PYTHONPATH=src MPLBACKEND=Agg /usr/bin/time -v officevenv-python
+tools/comparison/build_gx_parity_matrix_grid_verified.py
+--manifest salpha_nl32_nm96_t300_f32.toml
+--cases cyclone_salpha_itg_nl32_nm96_t300_f32
+--stem results/salpha_rate50_nl32_nm96_t300_f32.
+Logs gkx-salpha-nl32-nm96-t300-f32.{stdout,stderr}.log; stderr initially empty.
+Preflight21707exit0 imported GKX and built the actual geometry/grid, confirming
+jax.config.x64_enabled=False, ky/z float32 and one visible CUDA device. Main
+solver PID1748122 independently verified after launch; no duplicate process.
+Both GPUs now occupied. Inspect terminal handles/results before further runs.
+No code changes or merges this turn. Full R0–R9 goal remains active.
