@@ -440,6 +440,51 @@ Frobenius error; the :math:`B=1` field-polarization vector agrees to
 :math:`6.5\times10^{-14}`. These are offline coefficient checks, not validation
 of shipped tables, unlike-species collisions or the runtime field coupling.
 
+The independent references pass node refinement at all 14 shipped wavelengths
+for both moment counts. Relative errors in the shipped field blocks are:
+
+.. list-table:: Field matrix / field-polarization vector errors
+   :header-rows: 1
+
+   * - Moments
+     - :math:`B=1`
+     - :math:`B=4`
+   * - 8
+     - 8.571% / 2.910%
+     - 66.594% / 83.349%
+   * - 18
+     - 5.610% / 0.0794%
+     - 46.435% / 69.940%
+
+The :math:`B=4` analytic field-polarization source agrees with its separately
+resolved Laguerre expansion to :math:`2.7\times10^{-15}` at source order24.
+This checks source assembly using the same Fourier kernel; it is not a second
+independent kernel validation. The two equal-species :math:`\phi1` arrays are
+exactly zero throughout the shipped grid.
+
+Projection consistency remains a separate gate. For one unit species,
+nonzonal electrostatics and :math:`\tau_e=1`, the implemented field reduction
+gives, with retained gyroaverage column :math:`s`,
+
+.. math::
+
+   d=2-s^Ts,\quad \phi=s^TG/d,\quad H=MG,\quad M=I+ss^T/d.
+
+A collision operator projected on this finite :math:`H` basis is
+:math:`L_N=C_NM`, so :math:`ML_N=MC_NM` is symmetric negative-semidefinite.
+This uses the retained-:math:`H` truncation/free-energy structure in
+`Mandell et al. (2017), Section 4 <https://arxiv.org/html/1708.04029#S4>`_;
+their model collision operator is not itself a validation of full Coulomb terms.
+The independently resolved infinite :math:`J_0` source instead supplies
+:math:`p=P_NC J_0`, which need not equal :math:`C_Ns`; the present table route
+applies :math:`C_NG+p\phi`. At :math:`B=4`, the relative source difference
+is 51.7% / 41.8% for 8 / 18 moments, even with converged coefficients.
+These sampled maps remain dissipative in the candidate metric, but are not
+exactly self-adjoint in it. Resolve the finite-basis/field closure contract and
+its convergence before replacing coefficients. Do not discard polarization,
+symmetrize the operator, or infer a general electromagnetic energy law from
+this restricted electrostatic calculation.
+
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
 
