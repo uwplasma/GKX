@@ -6056,3 +6056,39 @@ Laguerre session67452/PID1725909 at6m15s. Reporter in running snapshot remains
 0acbd221; do not overwrite it or attribute new metadata to its outputs. Continue
 these handles; finer same-domain GX geometry generation remains next spatial
 task after a GPU frees. Two-GPU AD gate still pending; nothing merged.
+
+## 2026-09-05 — Full release regression and finer geometry input ready
+
+Previous turn progressed: effective-grid reporting fixed and tested. Revalidated
+clean code worktree at a60de104; PR202 is OPEN at that SHA. Initial checks query
+briefly returned no checks; a second authoritative PR query shows38 checks.
+Do not interpret that observation gap as a failed or absent workflow.
+
+Ran **all198 tests** in tests/release/test_release_gates.py, not just the48
+reporting parameterizations. Local JAX0.11.1, PYTHONPATH=src, session62749 exit0.
+XML /tmp/gkx-coupled-rate-20260905.shBvlR/release-current.xml SHA256
+`03a57a8f7ee6d219d7bacd0b0167ba23f6fa97617b6696c65b0a1d9c469d0142`;
+stdout release-current.log in same scratch. This does not replace full CI.
+
+Prepared **salpha_ntheta64_geometry.in** locally in that scratch and copied to
+office campaign root. SHA256
+`8a33469f5b30beb45392cd397416268435288642d282f04a40339b81fb504405`.
+Copied completed GX s-alpha input, changed ntheta32→64, retained nperiod2,
+dt.002/rate50 and all physics, shortened t_max150→.002 to export geometry only.
+No new solve launched: both GPUs occupied. Source GX src/run_gx.cu128–160
+confirms timestep loop and final diagnostics/finish; final exported geometry
+still must be inspected after actual completion. The short output must NOT
+replace the T150 growth reference or be treated as temporal validation.
+
+When GPU1 frees, run existing GX binary in campaign root with basename
+salpha_ntheta64_geometry, CUDA_VISIBLE_DEVICES=1 and scoped venv PATH as earlier.
+Use distinct stdout/time logs. Validate192 points, unchanged bounds/model,
+finite coefficients, shared-coordinate agreement with baseline and output hash
+before using a separate GKX fixture pointing to this geometry. Reference spectrum
+for mode coordinates remains the completed T150 file; report mismatched spatial
+resolution explicitly. Do not overwrite baseline geometry or reference files.
+
+Latest live processes: GX6455/PID1722824 RNl34m39s; Laguerre67452/PID1725909
+RNl7m57s. Polled original session67452 again: still running, no new output.
+No restart. Continue both current handles, then finer geometry generation;
+two-GPU AD pending. Full roadmap active; nothing merged.
