@@ -6223,3 +6223,35 @@ operator. No arbitrary-species, nonlinear-Coulomb or predictive claims added.
 Latest live check: GX kinetic6455/PID1722824 RNl45m47s; Nl32
 session26034/PID1727418 RNl7m20s. Resume those exact handles. Initial CI failure
 query empty, not full-CI completion. No production edits, restarts or merges.
+
+## 2026-09-05 — Literature audit removes unsupported collision interpretation
+
+Previous turn progressed with47 fresh scoped physics tests. Rechecked primary
+Frei et al. advanced linearized collision-operator paper, public full HTML:
+https://arxiv.org/html/2104.11480 (v2). Sections3.1–3.2 explicitly define the
+gyroaverage/adjoint pair (HTML Eq48) and transformed Sugama test operator
+(HTML Eq89); no access blocker. Mathematical inference: if C is self-adjoint
+in its physical space, U* C U remains self-adjoint on the projected space.
+Therefore gyroaveraging alone is not a justification for arbitrary observed
+matrix asymmetry. The stored table's state convention, metric, truncation and
+field response must be derived before assigning physical meaning to it.
+
+**bb9dcbfc** pushed to draft PR202: README/operators documentation scopes strong
+conservation/entropy/symmetry claims to the tested like-species drift-kinetic
+matrices. Finite-wavelength defect scaling is labeled regression evidence, not
+a proof. Test docstrings no longer claim a derived gyroaveraging-weighted metric
+that the test never constructs. Assertions and all production code unchanged;
+the prior42-test pass remains evidence for the same assertions, not a new proof.
+This flags a validation gap, not a confirmed erroneous finite-k operator or
+permission to symmetrize a matrix without the physical derivation.
+
+Ruff lint/format406files, strict Sphinx -W and whitespace pass. Build log
+/tmp/gkx-coupled-rate-20260905.shBvlR/docs-collision-scope.log. Session68171
+(checks/build/commit/push) exit0. Next C2 audit: derive the stored-matrix map,
+verify its adjoint identity with independent coefficients/quadrature, then
+conservation/entropy and truncation/interpolation ladders. Preserve negative
+evidence; do not mistake a B² regression for that closure.
+
+Latest live processes: kinetic6455/PID1722824 RNl47m59s; Nl32
+26034/PID1727418 RNl9m32s. Resume these handles. No restart, snapshot overwrite
+or merge; full research/publication scope remains active.
