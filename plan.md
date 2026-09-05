@@ -430,7 +430,7 @@ matrix/field-phi2 errors atB4 are66.59%/83.35% (8) and46.43%/69.94% (18).
 B4 field source J4→8→12→16→24 converges to the direct source to2.65e-15;
 this independently checks the source expansion, but shares the Fourier kernel.
 
-**Next blocking scientific gate: finite-basis/field consistency.** Runtime
+**Finite-basis/field validation gate, not a demonstrated instability.** Runtime
 electrostatic quasineutrality uses retained s=J_l and H=MG. For unit single
 species/nonzonal tau_e=1, d=2-s^Ts and M=I+ss^T/d. Retained-H Galerkin
 collisions give L=C_N M and M L=M C_N M symmetric negative-semidefinite.
@@ -442,6 +442,24 @@ metric. Use Mandell2017 Section4's retained-H closure/free-energy analysis
 to resolve the discrete contract; test larger Laguerre bases, zonal and
 multispecies cases, interpolation and AD before proposing a complete runtime
 replacement. Do not impose symmetry or drop polarization by hand.
+Actual runtime field/H/collision probes now confirm these relations for
+8/18 moments, nonzonal and genuinely nonzero-kx zonal modes with three z points
+and nonuniform Jacobian. State JVP/VJP comparisons pass. A rejected kx0-only
+probe did not exercise zonal correction and is retained in the logbook.
+At fixed Nm4/B4, Nl2→3→5→9→13→17→25 reduces the full/retained source gap
+from.5173 to2.75e-12; independent endpoint quadrature changes the matrix/source
+by1.25e-13/9.05e-14. This is source-truncation convergence, not a resolved
+collision spectrum, transport calculation or electromagnetic energy law.
+
+**Next implementation:** isolate coefficient repair from closure changes.
+Regenerate the two like-species tables with the independently checked Gram/
+Fourier references, retaining the present full-J0 source and signed convention.
+Record quadrature provenance (not fictional high-precision decimal digits),
+independently recheck all nodes, update coefficient regressions and audit the
+interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H
+closure in a separate review with resolution and field-metric evidence; do not
+change it silently while repairing coefficients. The now-measured source-tail
+convergence supports this staged correction rather than conflating two changes.
 Unequal species, temperature relaxation and runtime transport
 remain separate open gates. Equations and API are in docs/operators.rst;
 commands, failures and hashes are in the logbook.

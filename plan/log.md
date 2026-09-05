@@ -8244,3 +8244,93 @@ Next: resolve and test the retained-H versus full-source closure contract with
 actual runtime field maps and larger Laguerre bases, then interpolation/AD and
 complete coefficient replacement. Corrected GX reference still live; use the
 explicit-path terminal audits above after successful completion. Goal active.
+
+## 2026-09-05 — Runtime field contract and resolved source-tail convergence
+
+Previous turn: progress (full-grid errors, projection analysis, docs/log commits).
+Current code ac8d4ec7 is clean/one ahead of pushed6d645f3f. CI33964841954 still
+running, last only parallel-autodiff/nonlinear-core pending, no failures. Held
+documentation commit not pushed to cancel CI. GX7690/PID1753613 verified RNl
+39m01s initially,46m01s finally; time log not terminal. No other live research
+jobs and no restarted runs. No repo source changes or merges this turn.
+
+New scratch controls in `/tmp/gkx-coupled-rate-20260905.shBvlR`:
+
+- collision-runtime-field-contract.py uses actual J_l_all, canonical field
+  reduction/solve, build_H, and apply_finite_wavelength_coulomb_moment_operator.
+  Coefficients come from corrected independent reference arrays, NOT shipped
+  tables. Hermite-major/signed-Laguerre state has8/18 moments, three z points
+  with B=(1,2,4), Jacobian=(1,2,3), unit single species/tau_e=1. Activate kx
+  index1 in a two-slot array; index0 kept zero. Both positive-ky and ky0 tested.
+  Jacobians of actual linear state maps give M and L. Compare retained-H
+  application against C M, metric diag(J) M against its transpose/positive
+  eigenvalues, and current-route JVP/VJP against L and L^T actions (1e-12).
+- Initial34906exit0 is NOT zonal evidence: its sole kx0 slot is excluded by
+  _zonal_adiabatic_correction's `arange(nkx)>0` mask. Equal reported maps exposed
+  the missing coverage. Original log retained as
+  collision-runtime-field-contract-kx0-only.log. Corrected47825exit0 adds an
+  explicit ||M_zonal-M_nonzonal||>.1 assertion; it passes. Final matrix/metric
+  arrays collision-runtime-contract-{8,18}-zonal{0,1}.npz are corrected outputs.
+
+| Moments / mode | Full-source weighted asymmetry | Retained-H weighted asymmetry | Max energy eigenvalue full / retained |
+|---|---|---|---|
+| 8 / nonzonal | .00181021 | 1.13e-17 | -.159971 / -.159996 |
+| 8 / zonal | .00652631 | 4.81e-18 | -.181302 / -.181919 |
+| 18 / nonzonal | .00105283 | 1.26e-17 | -.159875 / -.159875 |
+| 18 / zonal | .00712315 | 2.80e-17 | -.180689 / -.181692 |
+
+These are restricted ES state-map tests, not geometry/B/collision-parameter
+derivatives, sharded nonlinear AD, an EM energy law, or default-table validation.
+
+collision-retained-source-convergence.py58061exit0: fixed P3/B4, increase all
+retained Laguerre input/output moments. Test quadrature192/96, Fourier96/96/96.
+
+| Nl | ||p-C s||/||p|| | Relative weighted asymmetry |
+|---|---|---|
+| 2 | .517259 | 2.72411e-4 |
+| 3 | .417471 | 9.19213e-4 |
+| 5 | .206577 | .00306297 |
+| 9 | .0163269 | 5.31939e-4 |
+| 13 | 2.84301e-4 | 7.62927e-6 |
+| 17 | 1.46597e-6 | 3.14852e-8 |
+| 25 | 2.75191e-12 | 4.12613e-14 |
+
+Source error decays; weighted asymmetry is NOT monotonic. All sampled symmetric
+energy parts remain negative. The least-damped energy eigenvalue changes from
+-5.70 to-1.03 over this ladder, so do not call the collision spectrum converged.
+Hermite order remains fixed. Endpoint86167exit0 independently refines test to
+256/128 and Fourier to128/128/128: source gap2.75183e-12; matrix/source changes
+1.24608e-13/9.05141e-14. Thus the observed source-tail endpoint is quadrature
+resolved, not a physical transport/velocity-convergence certification.
+
+Commands from code worktree with
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`:
+runtime script uses JAX_ENABLE_X64=true JAX_PLATFORMS=cpu PYTHONPATH=src;
+both source scripts use PYTHONPATH=src:tools/artifacts. Execute the named full
+scratch paths; their same-stem .log files hold stdout/stderr and are terminal.
+
+Plan decision: do not bundle a finite-H closure change with coefficient repair.
+The full-source route is a convergent source projection and has not exhibited
+positive energy production in these tests. Repair demonstrably wrong table
+coefficients first, preserve the existing full-J0 contract, signed convention,
+and research-only qualification. Use independent oracles for like-species
+generation with honest quadrature provenance and all-node rechecks; replace
+obsolete coefficient regressions with independent references, then test runtime
+interpolation/AD. Evaluate retained-H closure separately with proper physical
+resolution and multispecies/zonal/EM scope. No silent symmetrization or discarded
+polarization. This sequencing advances correctness without claiming the broader
+field-consistency gate is closed.
+
+| Scratch artifact | SHA256 |
+|---|---|
+| collision-runtime-field-contract.py | 5155ef8b84ff0fabe12999c49f146b32cb5712ba8dd4cd841d90c80e2c0c619f |
+| collision-runtime-field-contract.log | 98e65b63d3aed9a594e3eb0c7d5a217493dd36191d886cb05a2456f3b36ea96e |
+| collision-runtime-field-contract-kx0-only.log | f3086c363b3773b8e40709c64c9262553821120cc61d095aaf846d02695e4571 |
+| collision-retained-source-convergence.py | c463296cbe85ca3d8969a4b84a4cfda36e0120eafa20eb73fb66fc52b2ca59c7 |
+| collision-retained-source-convergence.log | a18bd752c1212d3a371b5644538fbb65c5a43e25fe56c66c19f08dfff11e8f70 |
+| collision-source-endpoint-refinement.py | a375ecde4363578fd21c8a287af399010b8e31b38811d986948e1e8bffe5a45a |
+| collision-source-endpoint-refinement.log | c0be8b22c14caf3ecdda53a2b90d976c1d7e7b5adcd3b5fcb3e9033ae847a247 |
+
+Only GX7690 remains live. Revalidate it, then run explicit-path completion/
+dt/temporal/state audits after success. Do not restart completed scratch probes.
+Full R0–R9 goal active; next code action is the scoped like-species generator repair.
