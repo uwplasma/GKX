@@ -6803,3 +6803,26 @@ exit0; no reference mutation or new physics run.
 Latest live: kinetic40474/PID1729837 RNl50m48s; spatial77271/PID1733704 RNl16m49s.
 Code stays clean b6c375cf; CI9running/28queued/1skip at initial query, no full
 green claim. No restarts or merges; full roadmap active.
+
+## 2026-09-05 — Release recheck and literature/implementation distinction
+
+Previous turn progressed with observed GX timestep audit. At b6c375cf full
+tests/release/test_release_gates.py passes198tests,0skip,2.801s, session11027exit0,
+local JAX0.11.1 PYTHONPATH=src. XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/release-fixed-gx-contract.xml SHA256
+`1bc6923523ec04210213079541eaa8a9ac0db581cb466b580b8d472ee40a7cc8`.
+No full-CI claim: initial latest query8success/13running/16queued/1skip.
+
+Re-read primary sources online:
+
+- [GX paper, §4.4 and Appendix B](https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA): Eq4.28 uses prefactor2.5. Office GX3865a537 src/linear.cu:229 instead uses2.3, as GKX does. b734e19d documents the distinction without changing either running model. Paper reproduction and code parity need separately named coefficients; sensitivity testing remains required.
+- [Frei et al., flux-tube moment model](https://doi.org/10.1017/S0022377823000715), §4 and Appendix A: mode-dependent velocity resolution and weak-gradient/trapped-particle structures motivate inspecting velocity-space distributions, not only growth-rate agreement. The local EM dispersion benchmark excludes trapped-particle effects; it must not certify TEM physics. Inference for our campaign: retain velocity/spatial/regularization controls even after temporal settling, then compare distribution spectra/eigenfunctions if discrepancies persist.
+
+Both primary sources accessible; no paper download needed. No universal low-Nl/Nm
+recommendation follows from their successful case-specific coarse resolutions.
+Docs warning-strict Sphinx and whitespace pass; commit/push57940exit0. This is
+model provenance clarification, not an operator or numerical-accuracy change.
+
+Latest live checks: kinetic40474/PID1729837 RNl53m01s, spatial77271/PID1733704
+RNl19m02s. Both unchanged, no restarts or merges. Prepared explicit-fixed GX
+Nl32/Nm96 reference remains unlaunched; continue full roadmap.
