@@ -125,7 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, head **b734e19d**, worktree
+`fix/r0-end-damping-rate`, local head **9fc6e42d** (one commit ahead of pushed
+**b734e19d**; hold push until current CI finishes), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -133,6 +134,8 @@ repairs CPU singleton-rank lowering without changing the GPU layout.
 PR200/201 last checks: no failures or pending checks. PR202: no failures in the
 latest query, several checks pending. Its earlier formatting failure was fixed
 in02536eef; do not infer full-CI completion from local gates.
+Current CI run33956493988 targets b734e19d. Frequent earlier pushes cancelled
+superseded runs before completion; avoid restarting CI for every microcommit.
 
 **Current contract and evidence.**
 

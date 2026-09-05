@@ -6826,3 +6826,30 @@ model provenance clarification, not an operator or numerical-accuracy change.
 Latest live checks: kinetic40474/PID1729837 RNl53m01s, spatial77271/PID1733704
 RNl19m02s. Both unchanged, no restarts or merges. Prepared explicit-fixed GX
 Nl32/Nm96 reference remains unlaunched; continue full roadmap.
+
+## 2026-09-05 — Eliminate machine-local startup-test skip; let CI finish
+
+Previous turn progressed with release recheck and coefficient provenance. The
+comparison suite's only skip depended on .cache/gx_clean_main/linear/hsx/hsx_linear.in,
+but the test uses DummyGeom and only checks multi-kx initialization routing.
+**9fc6e42d** replaces that machine-local contract with the existing explicit
+dummy contract, parameterizes Gaussian/non-Gaussian and single/multi-kx startup,
+and checks finite states and the expected kx support. Docstring explicitly says
+this is not HSX geometry/physics validation. No external benchmark replaced.
+One fewer test-file line; no new files or budget changes.
+
+Full tests/tools/comparison/test_reference_comparison_tools.py:
+**126pass,0skip,14.336s**, session3933exit0, local JAX0.11.1 PYTHONPATH=src.
+XML /tmp/gkx-coupled-rate-20260905.shBvlR/comparison-self-contained-final.xml
+SHA256 `06ba96f8d3ea627522f04b9060635068825e80facd89d39d084058876b67b415`.
+Ruff lint/format406files, architecture and whitespace pass.
+
+**Local commit only; NOT PUSHED YET.** Current remote b734e19d CI33956493988
+has6success/12running/19queued/1skip at latest check. gh run list confirms earlier
+PR202 runs were cancelled by successive pushes, not all-green. Preserve current
+run to completion before pushing accumulated nonurgent local commits. No manual
+cancellation required: superseded runs are already terminal cancelled. Branch
+clean, ahead1. Next agent must not assume PR202 contains9fc6e42d yet.
+
+Latest live GPU check: kinetic40474/PID1729837 RNl55m28s; spatial77271/PID1733704
+RNl21m29s, stderr empty. No restarts or snapshot changes, no merge. Full scope active.
