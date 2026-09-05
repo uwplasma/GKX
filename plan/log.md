@@ -6853,3 +6853,23 @@ clean, ahead1. Next agent must not assume PR202 contains9fc6e42d yet.
 
 Latest live GPU check: kinetic40474/PID1729837 RNl55m28s; spatial77271/PID1733704
 RNl21m29s, stderr empty. No restarts or snapshot changes, no merge. Full scope active.
+
+## 2026-09-05 — Broader default-float32 species regression
+
+Previous turn progressed with self-contained startup tests. Local clean9fc6e42d
+(still ahead1 of remote b734e19d), JAX0.11.1:
+XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu
+JAX_ENABLE_X64=false PYTHONPATH=src python -m pytest -q
+tests/unit/parallel/test_parallel_linear_velocity.py -k 'species and not mixed'
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/species-broad-f32.xml.
+**19pass,0skip,27.175s**, session13190terminal exit0. Matching .log retained;
+XML SHA256 `7fb2ad093cb7003a7722451d61ddba15aa8be063bf29096d7b62f77590d2fdc4`.
+This repeats the broader species selection under default precision; individual
+tests that explicitly enable x64 retain their own precision scope. No claim of
+universal f32 physics accuracy follows from this regression selection.
+
+CI33956493988 remains active,12success/25pending/1skip; no failed jobs in the
+query. Hold the pending startup-test commit until that run finishes, then push
+and inspect its new CI. Latest physics process check: kinetic40474/PID1729837
+RNl58m27s, spatial77271/PID1733704 RNl24m28s. No restarts, GPU test jobs,
+snapshot edits or merges. Continue physical controls and full roadmap.
