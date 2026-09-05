@@ -39,7 +39,6 @@ from gkx.terms.config import TermConfig
 from types import SimpleNamespace
 import jax
 import jax.numpy as jnp
-import jaxlib
 import numpy as np
 import pytest
 
@@ -1065,8 +1064,6 @@ def test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference
         return
 
     import os
-    import platform
-    import signal
     import subprocess
     import sys
 
@@ -1085,30 +1082,16 @@ def test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference
         text=True,
         timeout=180,
     )
-    if (
-        result.returncode == -signal.SIGSEGV
-        and jaxlib.__version__ == "0.10.2"
-        and platform.system() == "Linux"
-        and platform.machine() == "x86_64"
-    ):
-        pytest.xfail("#196: observed jaxlib 0.10.2 Linux x86_64 CPU f32 SIGSEGV")
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize(
-    "version,system,code",
-    [("0.11.1", "Linux", -11), ("0.10.2", "Darwin", -11), ("0.10.2", "Linux", 1)],
-)
+@pytest.mark.parametrize("code", [-11, -9, 1])
 def test_compressed_gradient_isolation_does_not_hide_unconfirmed_failures(
-    monkeypatch, version, system, code
+    monkeypatch, code
 ):
-    import platform
     import subprocess
 
     monkeypatch.setattr(jax, "default_backend", lambda: "cpu")
-    monkeypatch.setattr(jaxlib, "__version__", version)
-    monkeypatch.setattr(platform, "system", lambda: system)
-    monkeypatch.setattr(platform, "machine", lambda: "x86_64")
     monkeypatch.setattr(
         subprocess,
         "run",

@@ -825,7 +825,9 @@ recursive = true
 # combined_ky belongs in the scan-level set for a measured reason and not a
 # defensive one: it routes to the combined-ky solver only for axis="ky", so
 # axis="hermite" reaches the worker and failed there too.
-baseline = 88910
+# 88910 -> 88925: CPU-only singleton-axis lowering repairs the measured f32
+# bracket VJP crash while retaining the GPU layout and temporary-memory cost.
+baseline = 88925
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -902,7 +904,9 @@ recursive = true
 # 86426 -> 86434: replace its unbounded version skip with actual subprocess
 # execution, exact observed-failure classification and three negative guard
 # tests. No new files; unknown versions/errors now fail instead of disappearing.
-baseline = 86434
+# 86434 -> 86462: five broadcast-shape primal/both-operand VJP comparisons;
+# remove the crash exemption now that affected CPU application tests pass.
+baseline = 86462
 target = 35000
 
 [[line_budget_policy.counts]]

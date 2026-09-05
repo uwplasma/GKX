@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import jax.numpy as jnp
+from jax import lax
 
 from gkx.core_grid import real_fft_mesh
 
@@ -241,9 +242,23 @@ def _spectral_bracket_multi_real_fft(
     chi_hat_stack: jnp.ndarray,
     **kwargs,
 ) -> jnp.ndarray:
-    return _spectral_bracket_real_fft_core(
-        G_hat, chi_hat_stack, multiple_fields=True, **kwargs
+    # Shared singleton batch axes trigger XLA:CPU YNN's f32 VJP reduction fault.
+    # Keep the original GPU layout: squeezing increases its VJP temporary memory.
+    axes = tuple(
+        i
+        for i, n in enumerate(G_hat.shape[:-3])
+        if n == 1 and chi_hat_stack.shape[i + 1] == 1
     )
+    field_axes = tuple(i + 1 for i in axes)
+
+    def original(g, chi):
+        return _spectral_bracket_real_fft_core(g, chi, multiple_fields=True, **kwargs)
+
+    def reduced(g, chi):
+        result = original(jnp.squeeze(g, axis=axes), jnp.squeeze(chi, axis=field_axes))
+        return jnp.expand_dims(result, axis=field_axes)
+
+    return lax.platform_dependent(G_hat, chi_hat_stack, cpu=reduced, default=original)
 
 
 def _spectral_bracket_multi_full(
