@@ -58,7 +58,8 @@ def test_grad_z_periodic_sine():
     assert jnp.allclose(df, jnp.cos(z), atol=2.0e-2)
 
 
-def test_build_linked_fft_maps_keeps_real_fft_positive_ky_modes():
+@pytest.mark.parametrize("nz", [31, 32])
+def test_build_linked_fft_maps_keeps_real_fft_positive_ky_modes(nz):
     kx = np.array([0.0], dtype=float)
     ky = np.array([0.0, 0.01, 0.02], dtype=float)
     linked_indices, linked_kz = _build_linked_fft_maps(
@@ -67,7 +68,7 @@ def test_build_linked_fft_maps_keeps_real_fft_positive_ky_modes():
         y0=100.0,
         jtwist=2,
         dz=(2.0 * np.pi) / 32.0,
-        nz=32,
+        nz=nz,
         real_dtype=jnp.float32,
         ky_mode=np.array([0, 1, 2], dtype=int),
     )
@@ -76,7 +77,8 @@ def test_build_linked_fft_maps_keeps_real_fft_positive_ky_modes():
     assert np.array_equal(
         np.asarray(linked_indices[0]), np.array([[0], [1], [2]], dtype=np.int32)
     )
-    assert np.asarray(linked_kz[0]).shape == (32,)
+    modes = np.r_[np.arange((nz + 1) // 2), np.arange(-(nz // 2), 0)]
+    np.testing.assert_allclose(linked_kz[0], modes * 32 / nz, rtol=1e-6, atol=1e-6)
 
 
 def test_build_linear_cache_zero_shat_periodic_uses_periodic_fft_without_end_damping():

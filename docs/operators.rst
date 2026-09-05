@@ -1526,6 +1526,15 @@ spatial or velocity convergence. ``test_fft_highest_modes_and_ad_contract``
 checks analytic mode eigenvalues, JVPs and real-parameter pullbacks on odd/even
 periodic and reordered linked chains without changing the default.
 
+Small spectral power is not sufficient evidence that filtering is harmless.
+The reference Nyquist component contains only :math:`9.96\times10^{-5}` of
+the squared distribution norm. Removing it reduces the convention-dependent
+RHS difference to 0.0911%, but raises the matched-convention eigenmode residual
+from 0.000114 to 0.364. This is a projection of one state, not a recomputed
+eigenmode or a resolution study. Spatial convergence must be tested by solving
+again at finer resolution; do not interpret a filtered Rayleigh quotient as a
+converged growth rate.
+
 Reference launch coverage is a separate contract. In inspected GX3865a537,
 ``GradParallelLinked`` caps the launch's third dimension at 65,535, with one
 thread per block in that dimension. ``dampEnds_linked`` lacks the grid-stride
