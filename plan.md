@@ -119,134 +119,61 @@ acceptance criteria are frozen.
 
 ### R0: immediate small-PR queue
 
-Resume checkpoint (2026-09-05): plan approved; first R0 slice is
-[PR #199](https://github.com/uwplasma/GKX/pull/199), **open**, stacked on #197.
-Worktree
-`/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`, branch
-`fix/r0-damping-path-consistency`, commit `b5dca15a`, base #197 `9074dd87`.
-CPU/GPU boundary sentinel passed; 8 analytic RK/JVP cases plus the existing
-Euler check passed; removing dt scaling fails the new test. Nonlinear RHS also
-omits dt, not just the four field-supplied call sites: #194 must reconcile these
-contracts without silently changing nonlinear results. No numerical change yet.
-Second R0 slice: [PR #200](https://github.com/uwplasma/GKX/pull/200), **open**,
-stacked on #196, commit e36e5bd8. Branch `test/r0-f32-backend-probe` at
-`/Users/rogeriojorge/local/GKX-worktrees/r0-f32-backend-probe`, base #196 fdfb1a13.
-The real f32 AD test passes on Mac JAX 0.10.2/0.11.1 but SIGSEGVs on Linux
-x86-64/0.10.2 (f64 passes). Replaced the blanket future-version skip by isolated
-execution, an exact observed-failure bound, and default-f32 CI coverage. This is
-containment, not a solver repair. Probe environments
-and reports: `/tmp/gkx-f32-20260905.alM6Fy`; office
-`/home/rjorge/gkx-r0-f32-20260905.qIKcGz`. Third R0 slice:
-[PR #201](https://github.com/uwplasma/GKX/pull/201), **open**, repair in
-`/Users/rogeriojorge/local/GKX-worktrees/r0-f32-bracket-rank`, branch
-`fix/r0-f32-bracket-rank`, commit `53d86f01`, based on #200 e36e5bd8.
-Squeezing shared singleton batch axes cures both Linux 0.10.2 f32 AD crashes,
-but unconditional squeezing regresses GPU VJP time/temporary memory; reject that
-variant. CPU-only lowering passes actual Linux/Mac/GPU f32 gradient checks,
-51 bracket cases and two-device CPU/GPU RHS/trajectory parity. Short nonzero
-heat-flux window values/gradients match, with unchanged temporary memory;
-no material speedup claim. Removed the crash exemption. Linux 0.11.1
-passes the minimal rank-7 reproducer, not yet the application test.
-Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
-the rejected experiment; full commands/results are in the logbook.
-**In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
-`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `8ce22e33`, based on #199 b5dca15a.
-Source, route-aware deck migration, fixed-rate parity overrides, docs and
-cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
-and route checks pass. Full external reference regeneration, adaptive calibration,
-broader caller/precision/AD validation and CI remain required before promotion.
-Imported GX trajectory/RHS adapters now convert per-step inputs only from an
-explicit positive GX reference dt (periodic/disabled damping excepted); their
-suite passes 122 tests, one skip. Do not infer an active damping rate from sampled
-diagnostic spacing. Ky-diagnostics caller audit found no additional conversion
-needed; old time-output and implicit-conditioning performance claims need reruns.
-Public RHS dt
-keywords are temporarily retained for API compatibility but no longer scale
-damping. #199 reported all checks successful/skipped; review #200–#202 CI.
-The pre-migration CPU/GPU damp-only probes establish that serial
-linear/implicit use A/dt, but nonlinear/eigenoperator/species-pmap use A.
-Five field-supplied call sites exist, not four; two are preconditioner probes,
-not the implicit time-step operator. See the latest log for commands and hashes.
-Broader f32,
-sharded AD and production-horizon validation remain open.
-Active validation: fresh committed #202 snapshot at office
-`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz` (3565ecdc). A new GX s-alpha
-reference used explicit dt=.002, rate .1/.002=50, t=150 under
-`matched_refs/ITG_cyclone`: GX session26100 completed successfully at
-t=150.000007, 751 samples, no nonfinite diagnostics. GKX full/half-horizon
-comparison completed (session **32453**, exit0), logs `gkx-salpha.stdout.log` and
-`gkx-salpha.stderr.log`, output stem `results/salpha_rate50` in the snapshot.
-Its reporting code predates c979989f. Independent CSV audit requires finite
-growth/frequency and both half-horizon shifts <=5%: **10/11 pass**, ky=.05
-unsettled on GKX. Independent GX [T/4,T/2] versus [T/2,T] diagnostic means
-also fail the 5% growth screen at ky=.05 and .10: **only 9/11 modes pass
-temporal screens in both codes**. These screens use each code's estimator,
-not identical windows. Maximum GKX-settled relative errors: gamma1.904%, omega0.2591%; peak
-gamma error0.01449%. This is temporal parity evidence, not resolution convergence.
-All original rows and artifacts retained. GX Miller reference completed exit0
-(session **97329**, old PID **1717513**), fixed dt=.002, tmax150, rate50.
-Input/output directory is the same `matched_refs/ITG_cyclone`; logs
-`miller-gx.stdout.log`, `miller-gx.time.log`. Geometry generation succeeded.
-Its 751 samples reach t=150.000007 with no nonfinite diagnostics; 14/15 modes
-pass reference temporal screens (ky=.05 growth drifts21.4%). GKX Miller completed
-exit0: **session31885/old PID1719945**, current reporter, manifest
-`matched_miller_manifest.toml`, logs `gkx-miller.{stdout,stderr}.log`, stem
-`results/miller_rate50`. Both-code settling14/15; max settled gamma error0.85194%,
-peak error0.0006939%. Lowest ky remains unsettled. No resolution-convergence claim.
-GKX fixed-rate timestep refinement completed exit0: session **57878**, old PID
-**1717879**, `salpha_dt_refinement.toml`, dt=.001, T=150, ky=.15/.30/.55,
-rate50 unchanged; logs `gkx-salpha-dt-half.{stdout,stderr}.log`, result stem
-`results/salpha_rate50_dt_half`. Compare to the original rows, audit both
-temporal shifts, and distinguish timestep error from reference-window drift.
-Maximum observed relative gamma change is 2.992e-5 (0.002992%); omega1.3003e-5.
-This pilot also changed ky by <=1.2e-8 through decimal rounding, so do not claim
-an exact fixed-coordinate convergence order. All three pass temporal screens.
-Hermite-only refinement completed exit0, **session92932/old PID1719126**,
-`salpha_hermite_refinement.toml`: Nm48→64, Nl16, dt=.002, T150, rate50,
-three exact stored baseline ky. Logs `gkx-salpha-nm64.{stdout,stderr}.log`;
-stem `results/salpha_rate50_nm64`. It uses the current0acbd221 reporter copy,
-not the old running tool. At ky=.55, gamma changes **8.096%** from Nm48 to64:
-the high-ky mode is not Hermite-converged. Nm96 at dt=.002 failed with a nonfinite
-field history (session86304/old PID1720507, exit1); preserve its logs, no result.
-Separate half-step trial completed exit0: **session42644/old PID1721120**,
-`salpha_nm96_dt_half.toml`, dt=.001/150k steps, same rate/T/Nl/ky;
-stem `results/salpha_rate50_nm96_dt_half`, logs
-`gkx-salpha-nm96-dt-half.{stdout,stderr}.log`. Gamma=.03555382534,
-omega=.48452886591, both temporal screens pass; resolution remains open.
-RK4 control at Nm96/dt=.002 completed exit0, **session95639/old PID1722017**,
-`salpha_nm96_rk4.toml`, stem `results/salpha_rate50_nm96_rk4`, logs
-`gkx-salpha-nm96-rk4.{stdout,stderr}.log`. Gamma=.03555544954, omega=.48452876293;
-growth differs ~0.0046% from half-step imex2. Hermite convergence remains open.
-Live: **Nm128 RK4 GPU1 session17139/PID1723101**, manifest salpha_nm128_rk4.toml,
-same rate50,dt.002,T150,Nl16,exact high ky; stem results/salpha_rate50_nm128_rk4.
-**GX kinetic reference GPU0 session6455/PID1722824** uses prepared input, dt=.0002,
-rate500,T40; logs matched_refs/ITG_cyclone/kinetic-gx.{stdout,time}.log.
-57485da2 documents the GX-matched resolution dependence of hypercollisions;
-fixed input coefficients do not mean fixed damping at retained Hermite moments.
-7f3424fa documents native imex2's actual scalar amplification: first-order pure
-diagonal damping and explicit-midpoint undamped oscillations. Compare integrators
-and establish stability/order before selecting the production scan default.
-The parity tool now reports reference-side temporal status separately (0acbd221,
-55 focused tests). Unsupported sampling is unknown; regular sampling may have
-one shortened terminal interval, as observed in GX. `converged` remains GKX-only
-for compatibility; `both_codes_settled` requires both screens. Old running
-snapshot3565 lacks these fields; audit it independently before public promotion.
-Verify the current handle/process before resuming; never restart from a stale log.
-Existing `/home/rjorge/gx_refs_lin`
-contains five outputs, but its s-alpha run uses dt≈.00466 and KBM≈.00065, not
-the manifest timesteps; HSX is missing. Do not call that a matched-rate matrix.
-Check remote CI on #200–#202 before relying
-on full-suite status; they were still awaiting complete CI during this slice.
-Latest #202 repo-hygiene failure was the unformatted demo print; corrected in
-02536eef, full Ruff lint+format now pass locally (406 files); remote rerun pending.
-Kinetic Miller fixture's missing electron-only seed corrected in8ce22e33; KBM
-already matched. Prepared new GX kinetic input in matched_refs/ITG_cyclone with
-dt=.0002/rate500/T40, **now launched**. After completion, match the
-GKX horizon to T40 instead of reusing the old T20 harness unchanged.
-No merge is authorized; update this
-checkpoint and append commands/results to `plan/log.md` before changing workstreams.
-User checkout and other existing worktrees remain untouched.
+Resume checkpoint (2026-09-05): R0 remains open. Full commands, hashes,
+rejected trials and terminal handles are retained in [the logbook](plan/log.md).
+Do not merge PRs or modify the user's original checkout.
+
+**Review branches.** Plan PR198: `plan/research-publication-20260904`.
+Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
+`fix/r0-end-damping-rate`, head **8ce22e33**, worktree
+`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
+PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
+PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
+repairs CPU singleton-rank lowering without changing the GPU layout.
+PR200/201 last checks: no failures or pending checks. PR202: no failures in the
+latest query, several checks pending. Its earlier formatting failure was fixed
+in02536eef; do not infer full-CI completion from local gates.
+
+**Current contract and evidence.**
+
+| Item | Established | Still required |
+|---|---|---|
+| End damping | PR202 uses a fixed rate across audited routes; native-time decks migrated explicitly, existing nonlinear rates retained; old scale-by-dt input rejected | External matrix, adaptive calibration, broader precision/sharded AD validation |
+| GX adapters | Active damping requires explicit reference dt; kinetic Miller electron-only seed corrected | Do not reuse old unmatched-rate/initial-condition results |
+| Tests/startup | CPU/GPU boundary and route probes; coupled reverse AD vs matrix exponential; 88 linear, 78 time-integrator, 188 release, 148 CLI tests passed in recorded runs | Fresh full CI; direct JVP through custom-VJP field solve remains unsupported |
+| Demo | dt=.02/750 steps, T15 and fixed rate preserved; wheel writes all artifacts, no CFL warning; short nonlinear wheel run also completes | Transient demo is not stationary physics validation; under-resolved-fit/cutoff warnings remain |
+| s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
+| Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
+| High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; Nm96 RK4 dt.002 agrees with latter within ~0.0046% | No Hermite convergence claim; examine Nm128, Laguerre/parallel resolution and regularization sensitivity |
+| Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
+
+The Nm48 half-step pilot rounded ky by <=1.2e-8; it is sensitivity evidence,
+not an exact-coordinate Richardson pair. Subsequent refinement uses exact stored
+ky. Hypercollision coefficients depend on Nm: fixed input does not imply fixed
+damping at retained moments. Temporal settling, cross-code parity, resolution
+convergence and experimental validation are distinct claims.
+
+**Only current live jobs** (verify the handle/process before any restart):
+
+| Job | Office GPU | Session / PID | Files in campaign directory |
+|---|---|---|---|
+| GX kinetic Miller reference, dt=.0002, T40, rate500 | 0 | **6455 / 1722824** | `matched_refs/ITG_cyclone/kinetic-gx.{stdout,time}.log` |
+| GKX s-alpha Nm128 RK4, dt=.002, T150, rate50, Nl16, exact high ky | 1 | **17139 / 1723101** | `salpha_nm128_rk4.toml`, `gkx-salpha-nm128-rk4.{stdout,stderr}.log`, stem `results/salpha_rate50_nm128_rk4` |
+
+Office campaign directory:
+`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
+Production snapshot3565 remains solver-equivalent; current reporter copy is0acbd221,
+and kinetic fixture includes8ce22e33's seed correction. Existing reference bundle
+`/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
+
+**Next actions:** inspect both exits, hashes, finite histories and all rows.
+After GX kinetic completes, run prepared **matched_kinetic_manifest.toml**
+(RK4, rate500, dt=.0002, T40, electron-only seed; not yet launched), rather than
+the old T20 harness. Validate its complete reference before reading it into GKX.
+Continue slow-mode/velocity/parallel-resolution and regularization checks, then
+remaining kinetic/EM/stellarator matrix and the numbered R0 queue below.
+GPU wall times from concurrent runs are not isolated performance benchmarks.
+Update this checkpoint and append evidence to the logbook before switching work.
 
 1. **Damping:** review #197 against #192 independently. Compatibility restores
    the old per-step map; it is not #194's continuous-rate migration. Audit serial,

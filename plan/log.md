@@ -5740,3 +5740,32 @@ Next: inspect current exits, continue velocity-tail and regularization sensitivi
 at a stable timestep, then Laguerre/spatial refinement and matched kinetic scan
 at T40 with corrected electron-only seed. Retain slow modes and failures. No
 source changes or public artifact promotions this turn; logbook remains authority.
+
+## 2026-09-05 — kinetic preparation and concise resume checkpoint
+
+Previous turn progressed (completed Miller/RK4, two new jobs). This turn verified
+both current PIDs live; no restarts. #202 clean at8ce22e33; latest CI query has
+no failed checks, several pending. Do not call CI complete.
+
+Prepared matched_kinetic_manifest.toml in owned office snapshot, SHA256
+`876e06cd367b32f85d3be7f4f6f8a0d9c405f6f943730fa194289d1f4f8dfbd9`:
+RK4,dt.0002,200000 steps/T40,Nl16,Nm48,rate500,corrected kinetic fixture.
+Campaign-generated provenance explicit. **Not launched** until completed GX
+reference is audited; avoids old T20 horizon and imex2 order assumptions.
+Local copy /tmp/gkx-damping-route-20260905.Xk4sat/matched_kinetic_manifest.toml.
+
+Existing actual initializer test test_runtime_init_species_targets_all_vs_electrons_only
+passes on local JAX0.11.1f64. Source audit: combined batch uses this same builder;
+initial seed is allocated complex64, then linear diagnostics _initial_state
+promotes to complex128 when x64 is enabled. Recorded f64 evolution therefore
+does not imply f64 seed construction. No new test/code change needed here.
+
+Main plan resume checkpoint slimmed from130 to57 lines: review branches,
+established-vs-open evidence, only current live handles, next actions. Full
+historical hashes/commands, failed trials and terminal handles remain untouched
+in preceding log entries. No requirements or roadmap stages removed. This
+prevents stale completed process IDs from being mistaken for live work.
+
+Current jobs remain GX kinetic GPU0 session6455/PID1722824 and Nm128RK4 GPU1
+session17139/PID1723101. Verify current state before any restart. No source
+commit, benchmark promotion or merge this turn; proceed to their actual results.
