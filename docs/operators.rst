@@ -513,6 +513,49 @@ relative). This is table interpolation error, not a JAX differentiation defect
 or a full-grid error bound. Refine the table grid before making optimization
 gradient-accuracy claims; no tolerance has been relaxed to hide this discrepancy.
 
+A wider holdout study samples three fractions (0.2113, 0.5, 0.7887) in every
+interval plus both endpoints. Bisecting each interval in :math:`b=B^2/2`
+improves values faster than piecewise-constant derivatives:
+
+.. list-table:: Maximum sampled value / derivative relative errors
+   :header-rows: 1
+
+   * - Grid nodes
+     - 8 moments
+     - 18 moments
+   * - 14
+     - 2.87% / 71.86%
+     - 2.82% / 50.84%
+   * - 27
+     - 0.97% / 32.49%
+     - 0.95% / 23.93%
+   * - 53
+     - 0.287% / 15.67%
+     - 0.280% / 11.16%
+
+These are mathematical interpolation holdouts, not transport errors or uniform
+bounds. Independent physical finite-difference refinement changes the reference
+derivatives by less than :math:`10^{-8}` relative.
+
+Whole-block norms also hide cancellation-sensitive limits. Fourier integration
+over radial wavenumber gives the stable equal-species density Dirichlet entry
+
+.. math::
+
+   C_{00}(b)=2\sqrt{2/\pi}\,b\int_{-1}^{1}x^2
+   [e^{-b(1-x^2)}-1]\,dx
+   =-\frac{8}{15}\sqrt{2/\pi}\,b^2+O(b^3).
+
+Here :math:`x` is the Fourier-direction cosine along the perpendicular wavevector;
+the collision rate is unity and no solved-field contribution is included.
+Use ``expm1`` to evaluate this expression near zero. A 64/128-point Legendre
+check agrees to :math:`10^{-12}` relative without subtracting large test/field
+terms. Linear interpolation instead produces :math:`C_{00}=O(b)` in its first
+interval: at :math:`b=10^{-6}`, its value/derivative ratios to the analytic
+reference are about 7795/3898. This is a coefficient-level long-wavelength
+defect, not an observed transport instability. Any replacement must preserve
+the limiting powers and dissipative signs, not merely reduce a global norm.
+
 Cost and the resolution ceiling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
