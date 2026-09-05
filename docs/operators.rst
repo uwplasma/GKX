@@ -540,11 +540,21 @@ current cost so a structural regression is caught.
 
 Published convergence studies ask for considerably more than eight moments --
 (16,8) for linear Cyclone-base-case ITG and (32,16) for the converged case -- so
-resolution should be scanned rather than assumed. Generate further resolutions
-with::
+resolution should be scanned rather than assumed. The like-species generator
+now uses independent Dirichlet/Fourier quadrature, checks refinement at every
+wavelength, and preserves the full :math:`J_0` polarization source. It does not
+construct unreachable off-diagonal wavelength pairs. Generate candidates outside
+the package before reviewing a replacement::
 
     python tools/artifacts/build_finite_wavelength_coulomb_data.py \
-        --hermite 7 --laguerre 3 --digits 60 --workers 24 --check
+        --hermite 7 --laguerre 3 --digits 60 --check \
+        --output-dir /tmp/gkx-coulomb-candidate
+
+``--digits`` controls only the optional independent drift-kinetic check;
+coefficient generation is float64 quadrature with recorded node counts, not
+60-digit arithmetic. ``--workers`` is retained for command compatibility, but
+this streamed generator is serial. The currently packaged legacy coefficients
+have not yet been replaced by the independently checked candidates.
 
 Claim boundary and extension plan
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

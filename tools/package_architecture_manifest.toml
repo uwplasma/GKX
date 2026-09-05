@@ -946,7 +946,8 @@ recursive = true
 # +42: like-species quadratic values/JVP/VJP at zero, interior and endpoints.
 # +41: direct polarization/source-projection and quadratic-limit gates.
 # +86: independent field Fourier, polarization, entropy and node-refinement gates.
-baseline = 87181
+# +82 net: candidate generator convention/provenance and pre-publication gates.
+baseline = 87263
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1025,7 +1026,8 @@ recursive = true
 # +64: independent differential-form collision oracle, no runtime dependency.
 # +60 net: polarization oracle sharing the existing Dirichlet quadrature basis.
 # +84: streamed Fourier field/polarization reference; no runtime table change.
-baseline = 78182
+# +44 net: direct like-species generation replaces discarded pair assembly.
+baseline = 78226
 target = 0
 
 [[line_budget_policy.counts]]

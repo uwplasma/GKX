@@ -198,7 +198,7 @@ def test_test_particle_polarization_rejects_invalid_wavelength(b):
         like_species_test_particle_polarization(3, 1, b)
 
 
-@pytest.mark.parametrize("error", [0.0, 1e-5, np.nan, np.inf])
+@pytest.mark.parametrize("error", [0.0, 1e-9, 1e-5, np.nan, np.inf])
 @pytest.mark.parametrize("component", [0, 1])
 def test_collision_table_check_precedes_publication(
     monkeypatch, tmp_path, error, component
@@ -207,10 +207,14 @@ def test_collision_table_check_precedes_publication(
     import build_linear_validation_artifacts as reference
 
     count = len(generator.BESSEL_ARGUMENTS)
-    blocks = [np.zeros((count, count, 8, 8)) for _ in range(2)]
-    blocks += [np.zeros((count, count, 8)) for _ in range(4)]
-    blocks[component][0, 0, 0, 0] = error
-    monkeypatch.setattr(generator, "build_tables", lambda *args: tuple(blocks))
+    blocks = [np.zeros((count, 8, 8)) for _ in range(2)]
+    blocks += [np.zeros((count, 8)) for _ in range(4)]
+    blocks[component][0, 0, 0] = error
+    monkeypatch.setattr(
+        generator,
+        "build_tables",
+        lambda *args: dict(zip(generator.BLOCK_NAMES, blocks)),
+    )
     monkeypatch.setattr(
         reference,
         "coulomb_drift_kinetic_moment_matrices",
@@ -242,6 +246,84 @@ def test_collision_table_publication_rejects_nonfinite(
     with pytest.raises(ValueError, match="non-finite"):
         generator.write_artifacts(blocks, digits=40)
     assert all(path.read_bytes() == b"existing table" for path in paths)
+
+
+@pytest.mark.parametrize("component", [0, 1])
+@pytest.mark.parametrize("error", [1e-3, np.nan])
+def test_collision_quadrature_failure_precedes_publication(
+    monkeypatch, tmp_path, component, error
+):
+    import build_finite_wavelength_coulomb_data as generator
+    import build_linear_validation_artifacts as reference
+
+    original = reference.like_species_field_particle_fourier
+
+    def perturb(*args, **kwargs):
+        result = list(original(*args, **kwargs))
+        if kwargs["radial_nodes"] == 96 and args[2] == 1:
+            result[component].flat[0] += error
+        return tuple(result)
+
+    monkeypatch.setattr(reference, "like_species_field_particle_fourier", perturb)
+    monkeypatch.setattr(generator, "BESSEL_ARGUMENTS", (0.0, 1.0))
+    paths = [tmp_path / f"{generator.STEM}.{suffix}" for suffix in ("npz", "json")]
+    for path in paths:
+        path.write_bytes(b"existing table")
+    with pytest.raises(ValueError, match="quadrature"):
+        generator.main(["--output-dir", str(tmp_path)])
+    assert all(path.read_bytes() == b"existing table" for path in paths)
+
+
+def test_collision_diagonal_generator_signed_source_and_provenance(
+    monkeypatch, tmp_path
+):
+    import hashlib
+    import json
+    import build_finite_wavelength_coulomb_data as generator
+
+    monkeypatch.setattr(generator, "BESSEL_ARGUMENTS", (0.0, 1.0, 4.0))
+    blocks = generator.build_tables(40, 1)
+    signs = np.tile([1.0, -1.0], 4)
+    c0, d = like_species_test_particle_gram_matrices(3, 1)
+    for i, b in enumerate(generator.BESSEL_ARGUMENTS):
+        np.testing.assert_allclose(
+            blocks["test_matrix"][i],
+            (c0 - b * b * d) * signs[:, None] * signs,
+            rtol=1e-11,
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            blocks["test_phi2"][i],
+            like_species_test_particle_polarization(3, 1, b) * signs,
+            rtol=1e-11,
+            atol=1e-12,
+        )
+    np.testing.assert_allclose(
+        blocks["field_phi2"][1],
+        np.array(
+            [
+                0.34973285725478276,
+                0.17457423371928057,
+                0,
+                0,
+                -0.16362603669655548,
+                -0.07807943187205812,
+                0,
+                0,
+            ]
+        )
+        * signs,
+        atol=1e-12,
+    )
+    for name in ("test_phi1", "field_phi1"):
+        np.testing.assert_array_equal(blocks[name], 0)
+    data, provenance = generator.write_artifacts(blocks, 40, output_dir=tmp_path)
+    metadata = json.loads(provenance.read_text())
+    assert metadata["precision_decimal_digits"] == 15
+    assert metadata["reference_decimal_digits"] == 40
+    assert metadata["drift_kinetic_check_passed"] is False
+    assert metadata["polarization_source"] == "full_J0_not_truncated_H"
+    assert metadata["sha256"] == hashlib.sha256(data.read_bytes()).hexdigest()
 
 
 def conservation_tolerance() -> float:
