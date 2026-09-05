@@ -938,7 +938,8 @@ recursive = true
 # +11: distinguish jointly settled finite errors from absent/undefined coverage.
 # +10: imported sampling overrides requested Nz in parity provenance.
 # +29: full/prefix sampling equivalence with even/odd horizons and two integrators.
-baseline = 86912
+# +9: refuse reference modes absent from the effective solver grid before scans.
+baseline = 86921
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1012,7 +1013,8 @@ recursive = true
 # +22: select input dtype and report actual input/output precision in RHS profiles.
 # +10: explicit joint temporal-screen error coverage and console headline.
 # +9: resolve actual spectral-grid Nz while retaining the requested value.
-baseline = 77959
+# +6: move grid resolution to preflight and validate actual solver ky.
+baseline = 77965
 target = 0
 
 [[line_budget_policy.counts]]

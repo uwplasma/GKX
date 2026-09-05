@@ -3977,6 +3977,12 @@ def test_parity_fixed_damping_override_survives_timestep_refinement(monkeypatch,
     import runpy
     from types import SimpleNamespace
     import gkx
+    import gkx.runtime
+    from gkx.geometry.analytic import SlabGeometry
+
+    monkeypatch.setattr(
+        gkx.runtime, "build_runtime_geometry", lambda cfg: SlabGeometry()
+    )
 
     run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
     case = next(c for c in _parity_cases() if c["key"] == "kbm_miller")
@@ -4056,6 +4062,9 @@ def test_parity_convergence_requires_finite_stable_frequency(
     )
     monkeypatch.setattr(gkx, "run_runtime_scan", lambda *a, **kw: next(responses))
     result = run_case(case, reference_dir=RUN_TO_REPO_ROOT)
+    reference.ky = np.array([0.31])
+    with pytest.raises(ValueError, match="effective GKX grid"):
+        run_case(case, reference_dir=RUN_TO_REPO_ROOT)
     assert result["resolution"]["Nz"] == 12
     assert result["resolution"]["requested_Nz"] != 12
     assert result["rows"][0]["converged"] is settled

@@ -212,6 +212,17 @@ def run_case(
             ),
         )
 
+    # Resolve the same grid as the scan before spending time on integration.
+    grid = build_spectral_grid(
+        apply_geometry_grid_defaults(build_runtime_geometry(cfg), cfg.grid)
+    )
+    grid_ky = np.asarray(grid.ky)
+    selected_ky = grid_ky[np.argmin(abs(grid_ky[:, None] - ky_values), axis=0)]
+    if not np.all(
+        np.isclose(ky_values, selected_ky, rtol=4 * np.finfo(np.float32).eps, atol=0)
+    ):
+        raise ValueError("reference ky is absent from the effective GKX grid")
+
     steps = int(case["steps"])
     dt = float(case["dt"])
     t_end = steps * dt
@@ -324,11 +335,6 @@ def run_case(
         if r["both_codes_settled"] and np.isfinite(r["gamma_relative_difference"])
     ]
     peak_index = int(np.argmax([r["gamma_reference"] for r in rows]))
-    # Use the same geometry/grid resolution path as the scan, not deck Nz:
-    # imported sampling and analytic ntheta/nperiod can override that value.
-    grid = build_spectral_grid(
-        apply_geometry_grid_defaults(build_runtime_geometry(cfg), cfg.grid)
-    )
     return {
         "key": case["key"],
         "order": int(order),
