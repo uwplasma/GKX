@@ -151,11 +151,15 @@ Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
 **In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `3e3e31d8`, based on #199 b5dca15a.
+`fix/r0-end-damping-rate`, head `3565ecdc`, based on #199 b5dca15a.
 Source, route-aware deck migration, fixed-rate parity overrides, docs and
 cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
 and route checks pass. Full external reference regeneration, adaptive calibration,
 broader caller/precision/AD validation and CI remain required before promotion.
+Imported GX trajectory/RHS adapters now convert per-step inputs only from an
+explicit positive GX reference dt (periodic/disabled damping excepted); their
+suite passes 122 tests, one skip. Do not infer an active damping rate from sampled
+diagnostic spacing. Broader adapter audit, including ky diagnostics, remains open.
 Public RHS dt
 keywords are temporarily retained for API compatibility but no longer scale
 damping. #199 reported all checks successful/skipped; review #200–#202 CI.

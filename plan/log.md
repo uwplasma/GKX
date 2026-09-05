@@ -4988,3 +4988,51 @@ Next, keep #202 draft and unmerged:
    unchanged-rate checks. Only then regenerate downstream artifacts and assess
    adaptive deck/reference changes. Do not weaken gates to hide changed physics.
 No local/SSH process remains active; both worktrees are clean after commits.
+
+## 2026-09-05 — R0 GX adapter units, #202 follow-up
+
+Previous turn: progress (fixed-rate implementation). Read clean #202 head
+3e3e31d8 and queried CI: no failed checks reported, not a full-CI certification.
+Audited comparison callers before dispatching long runs. Confirmed reference
+implementation in office `/home/rjorge/GX`, commit
+`3865a53778862e1686f414bf6f416339e24887c9`: `src/grad_parallel_linked.cu:382`
+and `src/grad_parallel_NTFT.cu:308` pass `pars_->damp_ends_amp/dt` to end damping;
+`src/device_funcs.cu:2852` documents the same normalization. `rg` is unavailable
+on office, so used grep for these read-only source checks. GX was not modified.
+
+Found four adapter sites copying raw GX amplitude: three imported-linear
+trajectory variants and the RHS-term comparison constructor. With GKX now using
+a fixed rate, that silently compares different operators. The old test named
+`test_imported_linear_uses_raw_damp_ends_rate` simply built its own params and
+asserted what it had assigned; it never exercised the production conversion.
+
+Commit **3565ecdc**, pushed to draft #202:
+- One `_gx_end_damping_rate` helper converts GX A to A/dt_reference once.
+  It takes only GXInputContract, not a GKX timestep; refinement cannot change
+  the result through that interface. All four production sites call it.
+- Active nonperiodic damping requires explicit finite positive GX input dt.
+  Missing, zero, negative, NaN and infinite values fail with a diagnostic, not
+  an inferred rate from sparse diagnostic samples. Adaptive reference physics
+  is a varying-rate model; a fixed-rate comparison needs its own validation run.
+- Effective periodic boundary, including zero_shat-forced periodic, or zero
+  amplitude/width returns zero. An inactive operator needs no reference dt.
+- Replaced the self-constructed test with helper value/failure tests and
+  effective-periodic cases. Documentation states the conversion and limitation.
+  No new files; test budget +8, tool budget +21, explicit measured counts.
+
+Verification: `PYTHONPATH=src
+/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python -m pytest -q
+tests/tools/comparison/test_reference_comparison_tools.py
+--junitxml=/tmp/gkx-damping-route-20260905.Xk4sat/rate-imported-tools-final.xml`:
+**122 passed, 1 skipped**. This suite plus the direct helper tests is not a new
+external trajectory benchmark. XML SHA256
+`e821c1cc21ebf35f1c43788a9439f129ae9161b76677f4d7ca619397fce530d4`.
+Ruff0.16.4 check/format, architecture gate, whitespace and Sphinx HTML `-q -W`
+pass. Intermediate budget overages were inspected and set to actual measured
+86579 test / 77854 tool lines, not left as speculative allowances.
+
+Remaining: audit ky_diagnostics and other benchmark-default constructors;
+review CI; locate exact GX parity reference bundles and record their provenance;
+sync a fresh committed #202 office snapshot before complete external matrix and
+same-rate refinement. Do not reuse the older office patch snapshot as head.
+No local/SSH jobs active. #202 remains draft/unmerged; plan/log checkpoint pushed.
