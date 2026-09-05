@@ -321,6 +321,15 @@ it does not establish the physical metric or identify the faulty coefficient.
 The reproducible rank probe and hashes are in the
 `research logbook <https://github.com/uwplasma/GKX/pull/198>`_.
 
+An intermediate-basis ladder isolates a truncation contribution. At fixed
+8 output moments and :math:`B=1`, increasing the spherical radial cutoff from
+2 to 4 to 12 reduces :math:`\|C-C^T\|_F` from 0.1575 to
+0.000898 to :math:`2.02\times10^{-16}` (spherical cutoff 5).
+Nevertheless, spherical cutoffs :math:`5\to7\to9` at radial cutoff 12 change
+the matrix by 21.12% and 1.65% in relative Frobenius norm. Symmetry alone is
+therefore insufficient: converge radial, spherical, Bessel and output-moment
+truncations separately before regenerating or promoting these research tables.
+
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
 
