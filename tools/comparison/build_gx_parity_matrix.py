@@ -3,7 +3,7 @@
 
 For every case in the manifest this driver
 
-1. reads the converged growth rate and frequency spectrum from the reference
+1. reads the growth rate and frequency spectrum from the reference
    code output, using the reference code's own late-window convention (mean of
    the second half of its diagnostic trace),
 2. runs the GKX linear scan over the same ``ky`` values with the same velocity
@@ -50,7 +50,7 @@ DEFAULT_STEM = REPO_ROOT / "docs" / "_static" / "gkx_gx_linear_parity_matrix"
 
 @dataclass(frozen=True)
 class ReferenceSpectrum:
-    """Converged reference spectrum plus the trace metadata behind it."""
+    """Reference estimates and optional uniform-sampling temporal probe."""
 
     ky: np.ndarray
     gamma: np.ndarray
@@ -58,6 +58,8 @@ class ReferenceSpectrum:
     samples: int
     t_end: float
     nonfinite: int
+    gamma_half: np.ndarray | None = None
+    omega_half: np.ndarray | None = None
 
 
 def load_reference_spectrum(path: Path) -> ReferenceSpectrum:
@@ -75,6 +77,21 @@ def load_reference_spectrum(path: Path) -> ReferenceSpectrum:
     omega = np.mean(series[half:, :, 0, 0], axis=0)
     gamma = np.mean(series[half:, :, 0, 1], axis=0)
     positive = ky > 0.0
+    # Preserve the historical sample-mean estimator. Do not certify physical
+    # time windows from short, invalid or nonuniformly sampled traces. GX may
+    # write one final sample before the next regular diagnostic time.
+    gamma_half = omega_half = None
+    spacing = np.diff(t)
+    if (
+        len(t) >= 8
+        and np.all(np.isfinite(t))
+        and np.all(spacing > 0)
+        and np.allclose(spacing[:-1], spacing[0], rtol=1e-3, atol=0)
+        and spacing[-1] <= spacing[0] * 1.001
+    ):
+        middle = (t >= t[0] + 0.25 * (t[-1] - t[0])) & (t <= t[half])
+        omega_half, gamma_half = np.mean(series[middle, :, 0, :], axis=0).T
+        gamma_half, omega_half = gamma_half[positive], omega_half[positive]
     return ReferenceSpectrum(
         ky=ky[positive],
         gamma=gamma[positive],
@@ -82,6 +99,8 @@ def load_reference_spectrum(path: Path) -> ReferenceSpectrum:
         samples=int(len(t)),
         t_end=float(t[-1]),
         nonfinite=int(np.sum(~np.isfinite(series))),
+        gamma_half=gamma_half,
+        omega_half=omega_half,
     )
 
 
@@ -134,6 +153,15 @@ def _relative(value: float, reference: float) -> float:
     if not np.isfinite(value) or not np.isfinite(reference) or reference == 0.0:
         return float("nan")
     return float((value - reference) / abs(reference))
+
+
+def _settled(*pairs: tuple[float, float]) -> bool:
+    return all(
+        np.isfinite(full)
+        and np.isfinite(half)
+        and (full == half or abs(_relative(half, full)) <= 0.05)
+        for full, half in pairs
+    )
 
 
 def run_case(
@@ -219,6 +247,16 @@ def run_case(
         omega = float(primary.omega[index])
         gamma_half = float(secondary.gamma[index])
         omega_half = float(secondary.omega[index])
+        ref_half = getattr(spectrum, "gamma_half", None)
+        gamma_ref_half = None if ref_half is None else float(ref_half[match])
+        ref_half = getattr(spectrum, "omega_half", None)
+        omega_ref_half = None if ref_half is None else float(ref_half[match])
+        reference_settled = (
+            None
+            if gamma_ref_half is None or omega_ref_half is None
+            else _settled((gamma_ref, gamma_ref_half), (omega_ref, omega_ref_half))
+        )
+        gkx_settled = _settled((gamma, gamma_half), (omega, omega_half))
         rows.append(
             {
                 "case": case["key"],
@@ -234,12 +272,11 @@ def run_case(
                 "omega_relative_difference": _relative(omega, omega_ref),
                 "gamma_half_time_shift": _relative(gamma_half, gamma),
                 "omega_half_time_shift": _relative(omega_half, omega),
-                "converged": all(
-                    np.isfinite(full)
-                    and np.isfinite(half)
-                    and (full == half or abs(_relative(half, full)) <= 0.05)
-                    for full, half in ((gamma, gamma_half), (omega, omega_half))
-                ),
+                "converged": gkx_settled,  # Historical field: GKX only.
+                "gamma_reference_half_time": gamma_ref_half,
+                "omega_reference_half_time": omega_ref_half,
+                "reference_settled": reference_settled,
+                "both_codes_settled": gkx_settled and reference_settled is True,
                 # True when the difference this row reports is inside the
                 # spread the reference itself shows between two legitimate
                 # builds of the same commit. Such a row is not evidence of
@@ -302,6 +339,7 @@ def run_case(
         "build_reproducibility_floor": floor,
         "summary": {
             "settled_ky_count": len(settled),
+            "both_codes_settled_ky_count": sum(r["both_codes_settled"] for r in rows),
             "finite_relative_error_ky_count": len(finite_errors),
             "total_ky_count": len(rows),
             "max_absolute_gamma_relative_difference_settled": (
@@ -339,6 +377,10 @@ def write_csv(records: list[dict[str, Any]], path: Path) -> None:
         "omega_half_time_shift",
         "converged",
         "within_build_reproducibility_floor",
+        "gamma_reference_half_time",
+        "omega_reference_half_time",
+        "reference_settled",
+        "both_codes_settled",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -346,7 +388,7 @@ def write_csv(records: list[dict[str, Any]], path: Path) -> None:
         writer.writeheader()
         for record in records:
             for row in record["rows"]:
-                writer.writerow({key: row[key] for key in fields})
+                writer.writerow({key: row.get(key) for key in fields})
 
 
 def write_figure(records: list[dict[str, Any]], path: Path) -> None:

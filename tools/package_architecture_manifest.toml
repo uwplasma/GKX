@@ -929,7 +929,8 @@ recursive = true
 # matrix exponential and Frechet derivative; no additional test files.
 # 86668 -> 86718: execute reporting gates with drifting/nonfinite frequencies
 # and zero reference growth rates; preserve total and error-coverage counts.
-baseline = 86718
+# +43: exercise reference probes, terminal writes and joint reporting unknowns.
+baseline = 86761
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -998,7 +999,8 @@ recursive = true
 # 77833 -> 77854: one GX per-step-to-rate adapter shared by trajectory/RHS tools.
 # 77854 -> 77859: require stable frequency as well as growth and retain raw
 # half-horizon values plus explicit finite-error coverage in parity reports.
-baseline = 77859
+# +42: report reference-side temporal evidence without certifying sampled means.
+baseline = 77901
 target = 0
 
 [[line_budget_policy.counts]]

@@ -4015,8 +4015,9 @@ def test_parity_fixed_damping_override_survives_timestep_refinement(monkeypatch,
     ],
 )
 @pytest.mark.parametrize("gamma_reference", [0.1, 0.0])
+@pytest.mark.parametrize("reference_half", [1.0, 0.8, float("nan"), None])
 def test_parity_convergence_requires_finite_stable_frequency(
-    monkeypatch, omega, half, settled, gamma_reference
+    monkeypatch, omega, half, settled, gamma_reference, reference_half
 ):
     import runpy
     from types import SimpleNamespace
@@ -4032,6 +4033,8 @@ def test_parity_convergence_requires_finite_stable_frequency(
         samples=100,
         t_end=20.0,
         nonfinite=0,
+        gamma_half=np.array([gamma_reference]),
+        omega_half=None if reference_half is None else np.array([reference_half]),
     )
     monkeypatch.setitem(
         run_case.__globals__, "load_reference_spectrum", lambda _: reference
@@ -4045,12 +4048,52 @@ def test_parity_convergence_requires_finite_stable_frequency(
     monkeypatch.setattr(gkx, "run_runtime_scan", lambda *a, **kw: next(responses))
     result = run_case(case, reference_dir=RUN_TO_REPO_ROOT)
     assert result["rows"][0]["converged"] is settled
+    reference_settled = None if reference_half is None else reference_half == 1.0
+    assert result["rows"][0]["reference_settled"] is reference_settled
+    assert result["summary"]["both_codes_settled_ky_count"] == int(
+        settled and reference_settled is True
+    )
     assert result["rows"][0]["gamma_half_time"] == 0.1
     assert result["summary"]["total_ky_count"] == 1
     assert result["summary"]["settled_ky_count"] == int(settled)
     assert result["summary"]["finite_relative_error_ky_count"] == int(
         settled and gamma_reference != 0.0
     )
+
+
+@pytest.mark.parametrize(
+    "sampling", ["uniform", "truncated", "irregular", "reversed", "short"]
+)
+def test_parity_reference_probe_reads_real_trace(tmp_path, sampling):
+    import runpy
+    import numpy as np
+    from netCDF4 import Dataset
+
+    path = tmp_path / "reference.nc"
+    t = np.arange(9.0) if sampling != "short" else np.arange(4.0)
+    if sampling == "irregular":
+        t[3] += 0.25
+    if sampling == "truncated":
+        t[-1] -= 0.1  # GX terminal write before the next diagnostic stride.
+    if sampling == "reversed":
+        t = t[::-1]
+    with Dataset(path, "w") as root:
+        for name, size in (("t", len(t)), ("ky", 2), ("kx", 1), ("ri", 2)):
+            root.createDimension(name, size)
+        grid, diag = root.createGroup("Grids"), root.createGroup("Diagnostics")
+        grid.createVariable("time", "f8", ("t",))[:] = t
+        grid.createVariable("ky", "f8", ("ky",))[:] = [0, 0.3]
+        signal = np.ones((len(t), 2, 1, 2))
+        signal[:, 1, 0, 1] = np.arange(len(t))
+        diag.createVariable("omega_kxkyt", "f8", ("t", "ky", "kx", "ri"))[:] = signal
+    spectrum = runpy.run_path(str(_PARITY_BUILDER))["load_reference_spectrum"](path)
+    assert spectrum.ky.tolist() == [0.3]
+    assert spectrum.gamma.tolist() == [np.arange(len(t))[len(t) // 2 :].mean()]
+    if sampling in ("uniform", "truncated"):
+        assert spectrum.gamma_half.tolist() == [3.0]  # t=2,3,4
+        assert spectrum.omega_half.tolist() == [1.0]
+    else:
+        assert spectrum.gamma_half is spectrum.omega_half is None
 
 
 def test_parity_builder_reads_the_declared_floor() -> None:

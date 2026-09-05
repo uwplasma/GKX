@@ -1226,12 +1226,19 @@ gyrokinetic model accuracy. Use reverse-mode ``jax.grad`` for this public
 linear-integration path: direct ``jax.jvp`` encounters its custom-VJP field
 solve and is not supported. Scalar-stage JVP checks do not establish otherwise.
 
-In newly generated parity reports, ``converged`` requires finite growth and
+In newly generated parity reports, ``converged`` screens GKX only: finite growth and
 frequency estimates, each agreeing within 5% between full and half horizons
 (exactly equal zeros pass). This is a temporal settling screen, not resolution
 convergence. All modes remain in ``total_ky_count``; the finite relative-error
 count is reported separately. JSON retains both raw half-horizon estimates.
 Historical reports and already-running jobs may use the older growth-only gate.
+``reference_settled`` independently screens the GX diagnostic sample means over
+the middle quarter and last half of the trace, with the same 5% criterion.
+Short (<8 samples), invalid-time or nonuniformly sampled references report
+unknown (null), not success; sample means are not time-weighted estimates.
+Regular sampling may include one shortened terminal interval (GX's final write).
+``both_codes_settled`` requires both screens to pass. JSON and CSV retain the
+reference probe values; neither screen proves timestep or resolution convergence.
 
 Controls:
 
