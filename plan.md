@@ -530,6 +530,10 @@ tiny b, knots and endpoints. Outside-range derivatives are explicitly zero;
 endpoint derivatives are interior one-sided. These are prototype contracts, not
 yet the production API. Quantized f32 controls have positive eigenvalues~2.27e-8
 (~2e-9 relative matrix scale): numerical-tolerance dissipation only, not exact NSD.
+First dynamic-state CPU microbenchmark has mixed performance: at4096 points,
+f64 primal/gradient improve5.37→3.18ms and25.77→9.79ms, but f32 gradient worsens
+5.78→8.93ms. Coefficient storage grows80,752→569,512bytes in f64. No universal
+speedup or end-to-end claim; repeat with controlled timing and GPU before selection.
 Record quadrature provenance (not fictional high-precision decimal digits),
 independently recheck all nodes, update coefficient regressions and audit the
 interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H

@@ -9060,3 +9060,56 @@ current operator (avoid constant-state compiler folding), storage/generation
 cost, state/field VJPs, scalar density-limit errors in f32, GPU once free, and
 actual factory/basis/input contracts. Coupled-field entropy and unlike-species
 remain separate open gates. Both GPU controls still live; goal active.
+
+### 2026-09-05: dynamic-state CPU collision microbenchmark
+
+Previous turn progress: signed JAX/precision contracts. No runtime code changes;
+local48b90099/pushedf4d5d1b5, CI33969411628 last queued. Exact GX processes
+1767040/1767078 revalidated RNl at18:40/18:38; keep sessions85194/42690.
+
+scaled-cost.py in candidate scratch rootXqBQZb executes the signed-contract
+coefficient builder, then benchmarks18-moment actual
+EqualSpeciesFiniteWavelengthCoulombOperator.apply versus a vmap/Horner prototype.
+Input g,b,phi are dynamic compiled arguments, random seed17, spatial shapes
+(8,8,8)/(8,8,64), signed Hermite-major conversion explicit; frequency=1,tz=1.
+Candidate dot uses Precision.HIGHEST like baseline. Baseline is the actual
+14-node packaged six-table path; candidate is53-node combined scaled cubic.
+These methods have different off-node accuracy, not interchangeable gradients.
+Nodal primal checks agree9.3e-8 f32 /2.33e-14 f64, protecting ordering/source
+normalization. No solved-field or nonlinear trajectory in this benchmark.
+
+Warm executable timing: block_until_ready after warmup and every call,
+seven repetitions, median reported. b-gradient is gradient of squared output
+norm with respect to the spatial b array, with g/phi dynamic, NOT full-state VJP.
+Compilation timings in log are NOT cold compilation: nodal checks already
+compiled primal shapes, so cached compile calls cannot establish compile speed.
+Only one timing batch, not an independently replicated performance study.
+
+| Precision / points | Baseline primal ms | Cubic primal ms | Baseline b-gradient ms | Cubic b-gradient ms |
+|---|---|---|---|---|
+| f32 /512 | .323 | .371 | .791 | .856 |
+| f32 /4096 | 3.165 | 1.622 | 5.784 | 8.926 |
+| f64 /512 | 1.677 | 1.143 | 4.288 | 3.878 |
+| f64 /4096 | 5.369 | 3.184 | 25.774 | 9.791 |
+
+Correction to initial spoken estimate: f64/4096 baseline primal is5.369ms,
+not4.9ms. The full table explicitly retains regressions, especially f32 gradient.
+No overall speedup claim. XLA estimated temp bytes at4096: f32 primal
+21,856,320→11,550,752; gradient45,744,160→41,599,008. f64 primal
+43,696,192→23,085,088; gradient91,455,520→83,197,984. These compiler estimates
+are NOT measured process/device peak memory and exclude other solver storage.
+At512, gradient temporary memory slightly increases in both precisions.
+
+Raw coefficient storage f32 40,376→284,756bytes; f64 80,752→569,512bytes
+(~7.05x). Includes node vectors; excludes Python/container/package compression.
+No packaged artifact was enlarged. CPU benchmark20474 exited0 on local JAX0111.
+Reproduce PYTHONPATH=src:tools/artifacts localvenv Python scaled-cost.py from
+code worktree. Script uses absolute path to existing signed-contract builder.
+SHA256 script8ce9781b1f6b43dd38e5023cd0dc7c90bc633ce301f62f051199d551708ecbb0;
+logd7edeedd368c5576b2bd24fe559ba72dcbab8306cd84707a9f58c02b16c5f8f9.
+
+Next: profile the f32-gradient regression, repeat interleaved trials, GPU when
+free, state/field VJPs and production contracts. Consider fused coefficient
+application/storage only when it preserves accuracy and dissipation evidence.
+Research-grade accuracy remains primary; do not choose a faster inaccurate
+interpolant. Both GX runs still live; no merges; full goal active.
