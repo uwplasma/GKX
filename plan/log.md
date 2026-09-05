@@ -5194,3 +5194,50 @@ successful program exit alone does not establish predictive parity. Continue
 matched-rate refinement and the other cases; HSX reference remains missing.
 #202 remains draft, unmerged. No full-CI claim (latest query showed no failures
 but did not certify completion).
+
+## 2026-09-05 — parity settling gate repaired during live comparison
+
+Previous turn progressed: completed GX reference, 88 CPU linear tests and
+started GKX. Rechecked Python PID1716124/session32453 throughout this turn;
+still live at 6m40s, no stderr. No restart or modifications to the running
+snapshot. Local #202 worktree started clean at6bf824b5.
+
+Audited run_case reporting: its old `converged` flag required only finite gamma
+and <=5% half-horizon growth-rate shift. Frequency could drift or be nonfinite
+without invalidating the flag. This is not sufficient for a settled complex
+eigenmode. Also, `settled_ky_count` excluded rows with undefined relative growth
+error (e.g. zero reference gamma), conflating temporal settling with error
+availability, although total rows remained present.
+
+**c979989f** pushed to draft #202:
+- Both growth and frequency estimates must be finite at both horizons and
+  agree within the existing 5% relative criterion; exactly equal finite values
+  (including zero) pass. No tolerance loosening.
+- Preserve raw half-horizon gamma/omega in newly generated JSON. CSV columns
+  remain backward compatible, including their existing half-time shifts.
+- Count temporally settled rows separately from finite relative-error rows;
+  `finite_relative_error_ky_count` makes the latter coverage explicit. Zero
+  reference growth is not discarded from total or temporal-settling counts.
+- Documentation calls this a temporal screen, not resolution convergence.
+  Historical and in-flight reports retain the old flag and need explicit audit.
+
+Executed mocked scan results through **run_case itself**, not a copy of its
+logic: stable, drifting, NaN, infinite and zero frequencies, paired with nonzero
+and zero reference gamma. Plus the existing fixed-rate override tests:
+`PYTHONPATH=src <local jax0111 python> -m pytest -q
+tests/release/test_release_gates.py -k
+'parity_convergence_requires or parity_fixed_damping'
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/parity-gates-final.xml`:
+**14 passed**. This is report wiring coverage, not a simulated benchmark.
+XML SHA256 `079652c72da3201649fbd1165ffb334b6b1df6b5d2af3a5e52b77e7de8f53109`.
+Ruff0.16.4, Sphinx HTML -W, architecture and whitespace gates pass. Explicit
+budgets: test +50, tool +5 lines; no new files or solver changes.
+
+Only remote comparison session32453/PID1716124 remains active. Next: read its
+actual exit status/results, retain the original record, and independently
+reassess both gamma_half_time_shift and omega_half_time_shift before claiming
+settling. For old rows with undefined shifts, do not invent absent half-time
+values or certify convergence; mark uncertainty and rerun if necessary. An
+updated audit must identify its postprocessing version separately from the old
+snapshot that performed the solves. Keep #202 draft/unmerged and continue the
+external matrix/refinement, not just report-gate fixes.

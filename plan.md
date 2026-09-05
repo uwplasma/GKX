@@ -151,7 +151,7 @@ Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
 **In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `6bf824b5`, based on #199 b5dca15a.
+`fix/r0-end-damping-rate`, head `c979989f`, based on #199 b5dca15a.
 Source, route-aware deck migration, fixed-rate parity overrides, docs and
 cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
 and route checks pass. Full external reference regeneration, adaptive calibration,
@@ -176,6 +176,8 @@ reference used explicit dt=.002, rate .1/.002=50, t=150 under
 t=150.000007, 751 samples, no nonfinite diagnostics. GKX full/half-horizon
 comparison now runs in session **32453**, logs `gkx-salpha.stdout.log` and
 `gkx-salpha.stderr.log`, output stem `results/salpha_rate50` in the snapshot.
+Its reporting code predates c979989f: audit frequency settling as well as growth
+before using its convergence flags. All rows/relative shifts must be retained.
 Verify the current handle/process before resuming; never restart from a stale log.
 Existing `/home/rjorge/gx_refs_lin`
 contains five outputs, but its s-alpha run uses dt≈.00466 and KBM≈.00065, not
