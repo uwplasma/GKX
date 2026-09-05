@@ -7155,3 +7155,49 @@ Strict Sphinx2058exit0, ruff and diff checks pass. These regression passes do
 not close C2. Local0afa8b64 is3ahead of9fc6e42d, held forCI33958341219:
 latest17pending/no failures. GPUjobs verified: GX95001/PID1738946 RNl34m05s;
 GKX68484/PID1740480 RNl7m48s. No merges, no restarts; full roadmap active.
+
+## 2026-09-05 — Intermediate collision truncation isolated at fixed output moments
+
+Previous turn supplied rank diagnostic; this turn traced generator defaults and
+ran a controlled multiprecision ladder. Frei2021 HTML equations5–10 define the
+normalized Hermite/Laguerre basis; equation17 separates g and h. Generator
+build_finite_wavelength_coulomb_pair_tables converts paper/runtime conventions
+only by D C D with diagonal D=(-1)^j, an orthogonal sign change that cannot
+remove the Euclidean asymmetry. coulomb_nonpolarized_moment_matrices defaults
+spherical_limit=P+2J and radial_limit=(P+2J)//2. For the8-moment P3/J1 table
+these are5/2, irrespective of wavelength. Source/full-field mapping still needs
+independent physical verification, but a numerical cause is now isolated.
+
+Held outputP3/J1, B1, mass/temperature ratios1, Bessel-Laguerre24, digits40;
+varied intermediate cutoffs, not output resolution. No source or NPZ mutation.
+
+| Spherical | Radial | norm(C) | norm(C−C.T) | relative change from prior row |
+|---:|---:|---:|---:|---:|
+| 5 | 2 | 3.947760896 | .1574536315 | — |
+| 5 | 4 | 4.083120948 | .0008975154 | see raw log |
+| 5 | 6 | 4.084084849 | 1.124314e-6 | .0004099561 |
+| 5 | 8 | 4.084086241 | 6.007383e-10 | 5.795692e-7 |
+| 5 | 12 | 4.084086241 | 2.020636e-16 | 3.422569e-10 |
+| 7 | 12 | 4.646291730 | 1.736111e-16 | .2111773916 |
+| 9 | 12 | 4.690112340 | 1.501914e-16 | .01648290693 |
+
+Test and field blocks separately recover symmetry at radial12. Thus intermediate
+radial truncation explains the observed asymmetry in this controlled case, but
+symmetry alone accepts an angularly unconverged operator. Do not merely increase
+radial cutoff or symmetrize and label the table validated. Next extend spherical
+11/13 at radial12, recheck radial and Bessel orders, then other wavelengths up
+to storedB4 and output18 moments; explicitly record every intermediate cutoff
+and an accuracy gate before regenerating tables. Existing one-species diagonal
+writer can avoid unnecessary full-pair14×14 generation but also currently fixes
+intermediate spherical/radial defaults from output degree; audit that route.
+
+Scratch reproducer audit-collision-spherical-truncation.py in local recent scratch,
+SHA256 8e3b9bc5fe978a6fef247bcd9a255f4c3ba49caeb6ac9aeba14bb4bc0d8fc112.
+PYTHONPATH=src:tools/artifacts local-JAX0111-python <script> from code worktree.
+Extended log SHA256 b529d701627c8cd12de93f0c28d1502bb771c184b2ac3a70dec2e7ae2304b549.
+45705 terminalexit0; first shorter2/3/4 ladder64583 alsoexit0. Per assembly
+2.17–17.49s CPU, not a solver-performance benchmark. Source73ec5820 adds concise
+measured warning in operators.rst; strict Sphinx36429exit0 and diff check pass.
+Local73ec5820 is4ahead of9fc6e42d, held while CI33958341219 has5pending/no failures.
+Verified GPU95001/PID1738946 RNl38m47s and68484/PID1740480 RNl12m30s.
+No merges/restarts. Full research/publication roadmap remains active.

@@ -125,8 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local head **0afa8b64**, pushed **9fc6e42d**
-(three local commits held until current CI completes), worktree
+`fix/r0-end-damping-rate`, local head **73ec5820**, pushed **9fc6e42d**
+(four local commits held until current CI completes), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -134,7 +134,7 @@ repairs CPU singleton-rank lowering without changing the GPU layout.
 PR200/201 last checks: no failures or pending checks. PR202's earlier formatting
 failure was fixed in02536eef; CI status is tied to the exact commit below.
 CI run33956493988 at b734e19d completed successfully; after that, pushed9fc6e42d.
-New run33958341219 has17 pending jobs and no failures in the latest query,
+New run33958341219 has5 pending jobs and no failures in the latest query,
 not yet certified. Frequent earlier pushes cancelled
 superseded runs before completion; avoid restarting CI for every microcommit.
 
@@ -324,6 +324,11 @@ The scalar-potential term alone cannot restore Euclidean symmetry: with
 `C+p r^T` is `P(C−C^T)P`, measured nonzero for both shipped tables. Derive the
 physical metric and audit coefficient/projection assembly; do not symmetrize
 tables or call a finite-k defect-scaling regression a validation proof.
+At fixed8 output moments/B1, radial cutoff2→4→12 removes the asymmetry down
+to roundoff, but spherical5→7→9 still changes C by21.12%/1.65%. Independent
+intermediate radial/spherical/Bessel and output-moment ladders are required;
+the default intermediate degree inferred solely from output moments is not
+a convergence guarantee. Extend this ladder before regenerating shipped tables.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
