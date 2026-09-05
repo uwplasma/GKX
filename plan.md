@@ -128,9 +128,19 @@ CPU/GPU boundary sentinel passed; 8 analytic RK/JVP cases plus the existing
 Euler check passed; removing dt scaling fails the new test. Nonlinear RHS also
 omits dt, not just the four field-supplied call sites: #194 must reconcile these
 contracts without silently changing nonlinear results. No numerical change yet.
-**Next:** audit #196's open-ended backend skip with isolated f32 reproducers and
-supported-version probes; then finish route coverage and release rebaselining.
-No jobs remain running from this slice. No merge is authorized; update this
+Second R0 slice: [PR #200](https://github.com/uwplasma/GKX/pull/200), **open**,
+stacked on #196, commit e36e5bd8. Branch `test/r0-f32-backend-probe` at
+`/Users/rogeriojorge/local/GKX-worktrees/r0-f32-backend-probe`, base #196 fdfb1a13.
+The real f32 AD test passes on Mac JAX 0.10.2/0.11.1 but SIGSEGVs on Linux
+x86-64/0.10.2 (f64 passes). Replaced the blanket future-version skip by isolated
+execution, an exact observed-failure bound, and default-f32 CI coverage. This is
+containment, not a solver repair. Probe environments
+and reports: `/tmp/gkx-f32-20260905.alM6Fy`; office
+`/home/rjorge/gkx-r0-f32-20260905.qIKcGz`. **Next:** probe newer Linux backend and
+investigate a measured kernel/backend repair; then finish damping route coverage.
+No local/SSH tests remain active. Check remote CI on #199/#200 before relying
+on full-suite status; both were still awaiting complete CI during this slice.
+No merge is authorized; update this
 checkpoint and append commands/results to `plan/log.md` before changing workstreams.
 User checkout and other existing worktrees remain untouched.
 

@@ -4600,3 +4600,66 @@ and retain default-precision coverage. Then complete linear/nonlinear/eigen/
 implicit/sharded damping route coverage before #194 migration/rebaselining.
 Do not reinterpret the completed smoke/math/compatibility checks as full
 physics, all-PR independent validation or completed R0.
+
+## 2026-09-05 — R0 default-f32 application coverage
+
+PR **#200**, `test/r0-f32-backend-probe`, e36e5bd8, stacked on #196 fdfb1a13.
+Worktree `/Users/rogeriojorge/local/GKX-worktrees/r0-f32-backend-probe` is pushed;
+no numerical implementation changed. PRs #196–#200 remain unmerged.
+
+Evidence changed the action: #196 skipped all CPU versions >=0.10.2, but the
+actual compressed periodic/linked gradient tests pass on Mac ARM64 0.10.2 and
+0.11.1. Office Linux x86-64 0.10.2 actually SIGSEGVs on both. The tiny JAX-only
+rank-7 multiply/reduce reproducer crashes on office (-11), not on the Mac;
+using a passing proxy as proof of application safety would be insufficient.
+
+Implemented bounded subprocess execution for actual f32 CPU tests, disabling
+core dumps. Only actual SIGSEGV on exact Linux/x86-64/jaxlib 0.10.2 becomes
+xfail. Other errors/architectures/versions fail; successful runs pass. Added
+the default-f32 test command to Python-floor CI. Three unit tests ensure future
+version, Mac and ordinary Python failures are not hidden. Test lines +8, no new
+files; source unchanged. Quickstart states the observed defect, containment and
+tested f64 alternative without claiming global backend safety.
+
+Reproduction:
+- Local scratch `/tmp/gkx-f32-20260905.alM6Fy/jax0102/bin/python`: Python 3.11
+  venv with system site packages and isolated jax/jaxlib 0.10.2. Other shared
+  packages declare incompatible JAX bounds; those packages were not used and
+  were not modified. This is workload evidence, not a clean-install certification.
+- Local `/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`: clean Python 3.12
+  venv, jax/jaxlib 0.11.1, `pip install -e '.[dev]'` from the code worktree.
+- Office `/home/rjorge/gkx-r0-f32-20260905.qIKcGz`: archive fdfb1a13 plus the
+  edited test file copied from e36e5bd8. Interpreter
+  `/home/rjorge/venvs/gkx-nl/bin/python`, Python 3.11.15/JAX 0.10.2.
+- Run `PYTHONPATH=src JAX_ENABLE_X64=false <python> -m pytest -q -rx
+  tests/unit/nonlinear/test_nonlinear.py -k
+  'compressed_real_fft_heat_flux_window_gradient_matches_finite_difference or
+  isolation_does_not_hide' --junitxml=<report>`. Office also sets
+  `JAX_PLATFORMS=cpu`. Repeat with `JAX_ENABLE_X64=true` for f64.
+
+Results: Mac 0.10.2 f32 **2 passed**; Mac 0.11.1 f32 and f64 each **5 passed**
+(2 gradients + 3 classification checks); office 0.10.2 f32 **3 passed, 2 xfailed**
+(observed native crashes), f64 **2 passed**. The latter office test copy predated
+only classification/core-dump additions; physics checks are identical.
+
+XML provenance (local reports under the scratch root; remote under office root):
+| File | SHA256 |
+|---|---|
+| mac0102.xml | 21053dc63af6d453f07cf9df0169093a6d216dc242e870c2f685628ec0b5d2c4 |
+| mac0111-final.xml | 458256f53cde95e9d36d3a8bb2db432190bde7ce34d2a08d905d398b9badda6d |
+| mac0111-f64.xml | 590669de0321b16a2f245f46c595582788df2bf12f9f7bbbde11af676ba92622 |
+| linux0102-final.xml | 18fd45751e497e2d1432d333220b308f7ceb54badbcfdc6d9587c7d998a2c89a |
+| linux0102-f64.xml | c41b95d70cf0134bdf9b92086f0a5d4c43f081f24602f8d0fae5daced34d7060 |
+
+Checks: Ruff **0.16.4**, Sphinx HTML `-W`, architecture/size policies and
+whitespace passed. Also checked #199's edited Python formatting with 0.16.4;
+passes. #199 CI had successful hygiene/docs/mypy/floor and several test shards,
+but other shards remained running/queued: do not call full CI passed yet.
+No local/SSH process remains active; new GitHub CI needs status inspection.
+
+Next: probe newer Linux JAX in an isolated environment; investigate reducing
+problematic kernel rank/broadcasts or an upstream fix with full primal/VJP,
+physics identity and performance checks. Do not stop at xfail as the research
+solution. Finish damping route audit and rate/deck migration before rebaselining
+release physics. R0 stays in progress; no evidence here establishes all default
+precision workflows, a production nonlinear gradient horizon, or Linux 0.11.1 safety.
