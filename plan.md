@@ -166,8 +166,9 @@ convergence and experimental validation are distinct claims.
 
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
-| GKX s-alpha Nl32 Nm128 Nz96, RK4 dt=.001, T300, rate50 | 0 | **68484 / 1740480** | `salpha_nl32_nm128_t300.toml`, `gkx-salpha-nl32-nm128-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm128_t300` |
+| GKX s-alpha Nl32 Nm160 Nz96, RK4 dt=.001, T300, rate50 | 0 | **11457 / 1744614** | `salpha_nl32_nm160_t300.toml`, `gkx-salpha-nl32-nm160-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm160_t300` |
 | Patched GX s-alpha Nl32 Nm96 Nz96, RK4 dt=.002 fixed, T300, rate50 | 1 | **95001 / 1738946** | Different directory: `/home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined`, `salpha_nl32_nm96_t300.in`, `run.log`, `time.log` |
+| Collision B4 spherical13/15/17 control, radial32/Bessel48, fixed8 moments | Local CPU | **45671 / 50209** | `/tmp/gkx-coupled-rate-20260905.shBvlR/collision-field-angular.{py,log}`; saves each matrix NPZ |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -177,9 +178,11 @@ uses a separate grid-verified reporter from1571a9e6; no running copy overwritten
 Existing reference bundle
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
-**Next actions:** inspect both exits, hashes, finite histories and all rows.
-Current GKX velocity control: `salpha_nl32_nm128_t300.toml` in campaign,
-running as68484. Compare against the completed Nl32/Nm96 dt.001/T300 control;
+**Next actions:** inspect all three exits, hashes, finite histories and all rows.
+Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
+running as11457. Nm128 run68484 completed exit0 in43:47.41: atNl32,
+Nm96→128 changes gamma−8.141% and omega−0.274%, so velocity convergence fails.
+Compare the new run against Nm128 at matched dt.001/T300;
 the earlier Nm96→128 result at Nl16 cannot establish convergence at Nl32.
 GX95001 is now running with an isolated normalized-power repair, explicitly
 labeled as a modified reference (original checkout/binary unchanged). The failed

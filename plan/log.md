@@ -7411,3 +7411,48 @@ complete tables. Existing spherical generator remains available as an oracle.
 CI33959939110 targets pushede9b7b67f; last23pending/no failures. Hold this new
 commit until that CI completes. GPU95001/PID1738946 RNl1h09m17s and68484/
 PID1740480 RNl43m00s still active. No merges/restarts. Full roadmap active.
+
+## 2026-09-05 — Coupled Hermite refinement fails; Nm160 and field controls launched
+
+Previous turn added verified Gram oracle. Nm128 GKX68484/PID1740480 now terminal
+exit0, wholewall43:47.41. Result ky.550000011920929, Nl32/Nm128/Nz96,
+RK4dt.001/T300/rate50: gamma.02282883928152596, omega.5035508454745032.
+Against matched Nl32/Nm96 dt-half control, gamma−8.14117714%, omega−.27376389%.
+Full/half shifts+3.754626714% gamma/−.1840620154% omega pass the current5%
+temporal screen, but do not establish asymptotic settling at tighter accuracy.
+The sub-percent Nm96→128 change previously observed atNl16 is not transferable
+toNl32. Velocity convergence remains failed. CSV's32.61% growth difference from
+the old GX reference is NOT matched-resolution parity: that referenceNl16/Nm48
+differs. Wait for patchedGX same-resolution reference before using that comparison.
+
+CSV copied to local recent scratch, SHA256
+8178f187db7e963212cd805a1d85348ee30d94142ab633ed05037c73bae62e47.
+Prepared and launched Nm160 at sameNl32/Nz96/dt.001/T300/ky/rate50/p20.
+Nm-dependent regularization changes remain part of the refinement protocol;
+no fixed-operator claim. Localpreflight effectiveky.55/Nz96, frequencies
+[0,1514.94946517,104.08403157], RK4 heuristicbound.0015676019088626794.
+The first preflight print used nonexistent grid.Nz; fixed to grid.z.size and
+reran successfully. No production bug or timestep conclusion from that typo.
+Preflight script SHA2560b9528c4bc9ff0c3b848bdbd69693b35de891c5e1b141d4c22f3692e2b9bce42.
+Input salpha_nl32_nm160_t300.toml SHA256
+2c38a2f6337b1821fbe932a039bb3aa8eca85ab97acc5773f1ab017517ef2568.
+
+GPU0 launch11457/PID1744614 (time1744613), campaign cwd and unchanged
+grid-verified reporter, usual GX_PARITY_REF_DIR=campaign/matched_refs,
+CUDA_VISIBLE_DEVICES=0,JAX_ENABLE_X64=true,PYTHONPATH=src,MPLBACKEND=Agg;
+officevenv-python reporter --manifest salpha_nl32_nm160_t300.toml
+--cases cyclone_salpha_itg_nl32_nm160_t300 --stem results/salpha_rate50_nl32_nm160_t300.
+Logs gkx-salpha-nl32-nm160-t300.{stdout,stderr}.log; process verified, stderr empty.
+No duplicate/restart of terminal68484. PatchedGX95001/PID1738946 remains live.
+
+Local field-particle angular control launched45671/PID50209, fixedB4/P3J1,
+radial32/Bessel48/digits50, spherical13/15/17. Saves test/field arrays per rung
+as collision-b4-s{order}-r32-k48.npz for later comparisons; first baseline is
+recomputed because the older radial probe saved only scalar logs. Reports field
+successive differences, symmetry and independent test-block Gram error. No
+polarization or full-operator promotion. Script collision-field-angular.py SHA256
+7b4fe62bc46ffe65d2a74ef03eec49ed8b5d8f5692259128f4285b2f7dfe1243,
+in local recent scratch; PYTHONPATH=src:tools/artifacts local-JAX0111-python,
+output collision-field-angular.log. Process verified Rs1s; keep running.
+CI33959939110 last18pending/no failures. Local9e05ba52 remains1ahead of
+pushede9b7b67f, held for CI. No merges; full research/publication roadmap active.
