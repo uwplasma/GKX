@@ -305,10 +305,11 @@ tuning but does not beat a well-tuned hypercollision. Tables and scans:
 ![Collision operator comparison](docs/_static/collision_operator_comparison.png)
 
 The models agree in the collisionless limit and separate as collisionality
-rises. Every shipped matrix is checked against the published closed forms:
+rises. The tested like-species drift-kinetic matrices match published closed forms:
 conservation and Onsager self-adjointness at 5.6e-17 and 8.3e-17 against a
 5e-12 gate, published Appendix-C coefficients at 1.1e-16, and an H-theorem
-maximum eigenvalue of 9.0e-18. Coulomb tables are generated for like-species
+maximum eigenvalue of 9.0e-18. Finite-wavelength defect-scaling tests do not yet
+prove the corresponding conservation and adjointness identities. Coulomb tables are generated for like-species
 collisions; a multispecies request is refused rather than silently
 extrapolated. Equations and convergence panels: [operators](docs/operators.rst),
 metrics in

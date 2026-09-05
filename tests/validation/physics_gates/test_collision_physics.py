@@ -223,12 +223,10 @@ def test_drift_kinetic_operators_are_self_adjoint(model: str) -> None:
 
 
 def test_finite_larmor_self_adjointness_breaks_at_first_order_in_b() -> None:
-    """Gyroaveraging breaks plain symmetry at first order in b, and no faster.
+    """Regress stored-table asymmetry scaling; not a self-adjointness proof.
 
-    At finite perpendicular wavelength the operator is self-adjoint with
-    respect to a gyroaveraging-weighted inner product rather than the plain
-    one, so the stored matrix acquires an antisymmetric part. That part must
-    vanish at b = 0 and grow as B^2, matching the conservation defect.
+    A physical metric and the g/h/field mapping must be derived independently
+    before interpreting this measured defect as an admissible property.
     """
 
     _, metadata = _finite_wavelength_coulomb_bundle()
@@ -267,9 +265,9 @@ def test_finite_larmor_coulomb_conserves_invariants_at_zero_wavelength() -> None
 def test_finite_larmor_conservation_defect_is_first_order_in_b() -> None:
     """The gyrocenter conservation defect must enter at first order in b = B^2/2.
 
-    This is the sharpest available check that the finite-Larmor kernels carry
-    the right order: a defect scaling as B^2 is linear in b, while a wrong
-    kernel assembly would show B^1 or B^4.
+    This regresses the stored tables, not finite-k conservation: a wrong
+    assembly can also have a B^2 defect. Physical moment functionals and
+    field-response terms require independent verification.
     """
 
     _, metadata = _finite_wavelength_coulomb_bundle()

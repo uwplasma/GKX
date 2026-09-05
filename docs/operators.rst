@@ -267,8 +267,10 @@ the couplings between different Laguerre parities and leaves same-parity entries
 alone, which makes the comparison a check on the convention as well as on the
 values.
 
-The properties a linearized collision operator must satisfy are gated
-numerically in ``tests/validation/physics_gates/test_collision_physics.py``:
+The following scoped checks live in
+``tests/validation/physics_gates/test_collision_physics.py``. Conservation,
+entropy and symmetry results below concern the tested like-species
+**drift-kinetic** matrices, not all finite-wavelength/species combinations:
 
 .. list-table::
    :header-rows: 1
@@ -295,11 +297,13 @@ Hermite-major index :math:`p(J+1)+j` they are :math:`e_0` (density), :math:`e_2`
 (parallel momentum), and :math:`e_1 + e_4/\sqrt{2}` (energy), the last read off
 the exact null space rather than assumed.
 
-The finite-Larmor operator acts on *gyrocenter* moments, whose conservation and
-plain self-adjointness are modified by gyroaveraging, so the ordering is the
-test: both defects must vanish at :math:`b=0` and enter at first order in
-:math:`b = B^2/2`. A kernel assembled at the wrong order would show
-:math:`B^{1}` or :math:`B^{4}` instead.
+Finite-Larmor defect exponents are regression measurements, not proofs of
+conservation or self-adjointness. The gyroaverage and its adjoint must be
+treated consistently; see `Frei et al., sections 3.1–3.2
+<https://arxiv.org/html/2104.11480>`_. For a self-adjoint particle operator,
+an adjoint-pair projection preserves that property. Derive the metric and
+``g``/``h``/field-response mapping of the stored matrix before accepting its
+observed asymmetry. A wrong assembly can also produce an order-:math:`b` defect.
 
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
