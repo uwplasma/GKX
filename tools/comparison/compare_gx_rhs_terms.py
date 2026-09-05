@@ -67,6 +67,7 @@ from gkx.operators.linear.params import build_linear_params
 
 try:
     from tools.comparison.compare_gx_imported_linear import (
+        _gx_end_damping_rate,
         _load_gx_input_contract,
         _read_gx_output_bool,
         _resolve_imported_boundary,
@@ -75,6 +76,7 @@ try:
     )
 except ModuleNotFoundError:  # Direct execution adds this script directory.
     from compare_gx_imported_linear import (  # type: ignore[no-redef]
+        _gx_end_damping_rate,
         _load_gx_input_contract,
         _read_gx_output_bool,
         _resolve_imported_boundary,
@@ -535,7 +537,7 @@ def _build_imported_compare_context(
     params = replace(
         params,
         D_hyper=float(gx_contract.D_hyper),
-        damp_ends_amp=float(gx_contract.damp_ends_amp),
+        damp_ends_amp=_gx_end_damping_rate(gx_contract),
         damp_ends_widthfrac=float(gx_contract.damp_ends_widthfrac),
     )
     terms = LinearTerms(

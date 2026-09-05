@@ -924,7 +924,8 @@ recursive = true
 # that pin dt reaching the serial and sharded RHS at all.
 # 86448 -> 86571: fixed-rate cross-route and value/gradient refinement gates,
 # plus removed-input rejection and parity override execution tests. No files added.
-baseline = 86571
+# 86571 -> 86579: replace the self-constructed rate check by adapter tests.
+baseline = 86579
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -990,7 +991,8 @@ recursive = true
 # comment is longer than the deletion because the reason a provenance field is
 # absent has to live where someone would otherwise re-add it.
 # 77823 -> 77833: explicit fixed-rate parity override and recorded resolved rate.
-baseline = 77833
+# 77833 -> 77854: one GX per-step-to-rate adapter shared by trajectory/RHS tools.
+baseline = 77854
 target = 0
 
 [[line_budget_policy.counts]]

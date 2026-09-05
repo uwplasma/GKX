@@ -940,6 +940,25 @@ def _write_scan_rows(rows: list[dict[str, float]], out: Path | None) -> pd.DataF
     return df
 
 
+def _gx_end_damping_rate(contract: GXInputContract) -> float:
+    """Convert GX's per-step input once, never using a GKX refinement timestep."""
+    amplitude = float(contract.damp_ends_amp)
+    if (
+        _resolve_imported_boundary(contract.boundary, zero_shat=contract.zero_shat)
+        == "periodic"
+        or amplitude == 0.0
+        or float(contract.damp_ends_widthfrac) == 0.0
+    ):
+        return 0.0
+    if contract.dt is None or not np.isfinite(contract.dt) or contract.dt <= 0.0:
+        raise ValueError(
+            "GX end damping is per step: a fixed positive GX input dt is required "
+            "to define a comparable GKX rate; adaptive references need a separate "
+            "fixed-rate validation run."
+        )
+    return amplitude / float(contract.dt)
+
+
 def _infer_gx_linear_dt(
     gx_time: np.ndarray, gx_contract: GXInputContract | None
 ) -> float:
@@ -1342,7 +1361,7 @@ def run_fields(argv: list[str] | None = None) -> None:
         params = replace(
             params,
             D_hyper=float(gx_contract.D_hyper),
-            damp_ends_amp=float(gx_contract.damp_ends_amp),
+            damp_ends_amp=_gx_end_damping_rate(gx_contract),
             damp_ends_widthfrac=float(gx_contract.damp_ends_widthfrac),
         )
     else:
@@ -1851,7 +1870,7 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
     params = replace(
         params,
         D_hyper=float(gx_contract.D_hyper),
-        damp_ends_amp=float(gx_contract.damp_ends_amp),
+        damp_ends_amp=_gx_end_damping_rate(gx_contract),
         damp_ends_widthfrac=float(gx_contract.damp_ends_widthfrac),
     )
     cache = build_linear_cache(grid, geom, params, nl, nm)
@@ -2205,7 +2224,7 @@ def run_window(argv: list[str] | None = None) -> None:
     params = replace(
         params,
         D_hyper=float(gx_contract.D_hyper),
-        damp_ends_amp=float(gx_contract.damp_ends_amp),
+        damp_ends_amp=_gx_end_damping_rate(gx_contract),
         damp_ends_widthfrac=float(gx_contract.damp_ends_widthfrac),
     )
 

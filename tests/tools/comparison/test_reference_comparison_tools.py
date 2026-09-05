@@ -515,23 +515,31 @@ scale = 0.125
     assert contract.restart_scale == pytest.approx(0.125)
 
 
-def test_imported_linear_uses_raw_damp_ends_rate() -> None:
-    contract = _dummy_gx_contract(init_single=False)
-    dt = 0.2
-    params = imported_linear.build_linear_params(
-        contract.species,
-        tau_e=contract.tau_e,
-        kpar_scale=1.0,
-        beta=contract.beta,
+def test_imported_linear_converts_gx_strength_at_reference_dt() -> None:
+    contract = replace(_dummy_gx_contract(init_single=False), dt=0.2, boundary="linked")
+    assert imported_linear._gx_end_damping_rate(contract) == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("dt", [None, 0.0, -0.1, float("nan"), float("inf")])
+def test_imported_linear_refuses_undefined_reference_damping_rate(dt) -> None:
+    contract = replace(_dummy_gx_contract(init_single=False), dt=dt, boundary="linked")
+    with pytest.raises(ValueError, match="fixed positive GX input dt"):
+        imported_linear._gx_end_damping_rate(contract)
+    assert (
+        imported_linear._gx_end_damping_rate(replace(contract, damp_ends_amp=0.0))
+        == 0.0
     )
-    params = replace(
-        params,
-        D_hyper=float(contract.D_hyper),
-        damp_ends_amp=float(contract.damp_ends_amp),
-        damp_ends_widthfrac=float(contract.damp_ends_widthfrac),
+
+
+@pytest.mark.parametrize("boundary,zero_shat", [("periodic", False), ("linked", True)])
+def test_imported_periodic_reference_needs_no_damping_rate(boundary, zero_shat) -> None:
+    contract = replace(
+        _dummy_gx_contract(init_single=False),
+        dt=None,
+        boundary=boundary,
+        zero_shat=zero_shat,
     )
-    assert float(params.damp_ends_amp) == pytest.approx(0.1)
-    assert float(params.damp_ends_amp) != pytest.approx(0.1 / dt)
+    assert imported_linear._gx_end_damping_rate(contract) == 0.0
 
 
 def test_infer_gx_linear_dt_prefers_explicit_input_dt() -> None:
