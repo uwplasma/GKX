@@ -945,7 +945,8 @@ recursive = true
 # +26: independent test-particle Gram quadrature and order/entropy gates.
 # +42: like-species quadratic values/JVP/VJP at zero, interior and endpoints.
 # +41: direct polarization/source-projection and quadratic-limit gates.
-baseline = 87095
+# +86: independent field Fourier, polarization, entropy and node-refinement gates.
+baseline = 87181
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1023,7 +1024,8 @@ recursive = true
 # +1 net: reject nonfinite collision coefficients before publication.
 # +64: independent differential-form collision oracle, no runtime dependency.
 # +60 net: polarization oracle sharing the existing Dirichlet quadrature basis.
-baseline = 78098
+# +84: streamed Fourier field/polarization reference; no runtime table change.
+baseline = 78182
 target = 0
 
 [[line_budget_policy.counts]]

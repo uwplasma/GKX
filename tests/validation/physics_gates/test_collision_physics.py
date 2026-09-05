@@ -39,12 +39,98 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "artifact
 from build_linear_validation_artifacts import (  # noqa: E402
     build_finite_wavelength_coulomb_pair_tables,
     coulomb_drift_kinetic_moment_matrices,
+    like_species_field_particle_fourier,
     like_species_test_particle_gram_matrices,
     like_species_test_particle_polarization,
 )
 
 
 MOMENT_COUNT = 8
+
+
+@pytest.mark.parametrize("pmax,jmax", [(3, 1), (5, 2), (7, 3)])
+@pytest.mark.parametrize("b", [0.0, 1.0, 4.0])
+def test_field_particle_fourier_quadrature_and_entropy(pmax, jmax, b):
+    matrix, polarization = like_species_field_particle_fourier(pmax, jmax, b)
+    refined, source = like_species_field_particle_fourier(
+        pmax, jmax, b, radial_nodes=96, pitch_nodes=64, azimuthal_nodes=64
+    )
+    np.testing.assert_allclose(matrix, refined, rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(polarization, source, rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(matrix, matrix.T, atol=1e-14)
+    assert np.linalg.eigvalsh(matrix)[0] >= -1e-12
+    c0, d = like_species_test_particle_gram_matrices(pmax, jmax)
+    total = c0 - b * b * d + matrix
+    assert np.linalg.eigvalsh(total)[-1] <= 1e-11
+    if b == 0:
+        np.testing.assert_array_equal(polarization, 0.0)
+        # Density, parallel momentum, and isotropic temperature are null modes.
+        invariants = np.zeros((pmax + 1, jmax + 1, 3))
+        invariants[0, 0, 0] = invariants[1, 0, 1] = 1
+        invariants[2, 0, 2], invariants[0, 1, 2] = 1 / np.sqrt(2), -1
+        np.testing.assert_allclose(total @ invariants.reshape(-1, 3), 0, atol=1e-11)
+        if pmax == 3:
+            exact = coulomb_drift_kinetic_moment_matrices(pmax, jmax, 1, 1, digits=40)[
+                1
+            ]
+            np.testing.assert_allclose(matrix, exact, rtol=1e-11, atol=1e-12)
+
+
+def test_field_particle_fourier_independent_spherical_coefficients():
+    # Independently generated Frei2021 coefficients: B1 S13/R12/K24, 40 digits;
+    # B4 S21/R32/K48, 50 digits. Cutoff ladders and hashes are in plan/log.md.
+    _, source = like_species_field_particle_fourier(3, 1, 1.0)
+    np.testing.assert_allclose(
+        source,
+        [
+            0.34973285725478276,
+            0.17457423371928057,
+            0,
+            0,
+            -0.16362603669655548,
+            -0.07807943187205812,
+            0,
+            0,
+        ],
+        rtol=1e-11,
+        atol=1e-13,
+    )
+    matrix, _ = like_species_field_particle_fourier(3, 1, 4.0)
+    np.testing.assert_allclose(
+        matrix[[0, 0, 2, 4, 7], [0, 1, 2, 4, 7]],
+        [
+            1.4878966067418307,
+            0.6844323956007714,
+            0.7588272803134128,
+            0.5755718820847758,
+            0.24224060802671601,
+        ],
+        rtol=1e-8,
+        atol=1e-10,
+    )
+
+
+@pytest.mark.parametrize("b", [-1.0, np.nan, np.inf])
+def test_field_particle_fourier_rejects_invalid_wavelength(b):
+    with pytest.raises(ValueError, match="bessel_argument"):
+        like_species_field_particle_fourier(3, 1, b)
+
+
+@pytest.mark.parametrize(
+    "p,j,nr,nxi,nphi",
+    [
+        (-1, 0, 8, 8, 8),
+        (0, -1, 8, 8, 8),
+        (0, 0, 0, 8, 8),
+        (0, 0, 8, 0, 8),
+        (0, 0, 8, 8, 0),
+    ],
+)
+def test_field_particle_fourier_rejects_invalid_orders(p, j, nr, nxi, nphi):
+    with pytest.raises(ValueError, match="orders"):
+        like_species_field_particle_fourier(
+            p, j, 1, radial_nodes=nr, pitch_nodes=nxi, azimuthal_nodes=nphi
+        )
 
 
 @pytest.mark.parametrize("pmax,jmax", [(3, 1), (5, 2), (7, 3)])

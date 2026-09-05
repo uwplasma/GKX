@@ -1928,6 +1928,90 @@ def like_species_test_particle_polarization(
     return result
 
 
+def like_species_field_particle_fourier(
+    maximum_hermite_order: int,
+    maximum_laguerre_order: int,
+    bessel_argument: float,
+    *,
+    radial_nodes: int = 64,
+    pitch_nodes: int = 48,
+    azimuthal_nodes: int = 48,
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Independent equal-species field matrix and field-phi2 quadrature.
+
+    Fourier-transform the Landau kernel: Uhat(q)=8*pi*q*q.T/|q|**4.
+    Its positive-weight Gram form uses analytic Fourier-Hermite-Laguerre
+    polynomials, not spherical speed coefficients. Apply the same form to
+    F*J0 for polarization. Unit collision frequency, paper moment convention,
+    q*phi/T factored out; field-phi1 vanishes for equal species. Stream radial
+    nodes to bound memory. This offline oracle requires node convergence;
+    it neither changes runtime tables nor certifies unlike-species physics.
+    """
+    from scipy.special import i0e, i1e, roots_genlaguerre, roots_legendre
+
+    if (
+        min(maximum_hermite_order, maximum_laguerre_order) < 0
+        or min(radial_nodes, pitch_nodes, azimuthal_nodes) < 1
+    ):
+        raise ValueError("moment orders must be nonnegative and node counts positive")
+    if not math.isfinite(bessel_argument) or bessel_argument < 0:
+        raise ValueError("bessel_argument must be finite and nonnegative")
+    b = bessel_argument
+    y, wy = roots_genlaguerre(radial_nodes, -0.5)
+    xi, wx = roots_legendre(pitch_nodes)
+    phi = 2 * np.pi * np.arange(azimuthal_nodes) / azimuthal_nodes
+    perpendicular = np.sqrt(1 - xi[:, None] ** 2)
+    nx, ny = perpendicular * np.cos(phi), perpendicular * np.sin(phi)
+    nz = np.broadcast_to(xi[:, None], nx.shape)
+    size = (maximum_hermite_order + 1) * (maximum_laguerre_order + 1)
+    matrix = np.zeros((size, size), dtype=complex)
+    polarization = np.zeros(size, dtype=complex)
+    for radius, radial_weight in zip(np.sqrt(2 * y), wy, strict=True):
+        kx, ky, kz = radius * nx + b, radius * ny, radius * nz
+        t = (kx * kx + ky * ky) / 4
+        weight = np.sqrt(
+            radial_weight / np.sqrt(2) * wx[:, None] * 2 / (np.pi * azimuthal_nodes)
+        )
+        envelope = -b * b / 4 - radius * b * nx / 2
+        weighted, basis = weight * np.exp(envelope), []
+        for p in range(maximum_hermite_order + 1):
+            scale = math.sqrt(2**p * math.factorial(p))
+            h = (-1j * kz) ** p / scale
+            dh = (-1j) ** p * p * kz ** (p - 1) / scale if p else np.zeros_like(kz)
+            for j in range(maximum_laguerre_order + 1):
+                lag = t**j / math.factorial(j)
+                dl = t ** (j - 1) / math.factorial(j - 1) if j else np.zeros_like(t)
+                basis.append(
+                    weighted
+                    * (
+                        -b * nx * h * lag
+                        + h * dl * (nx * kx + ny * ky)
+                        + 2 * nz * dh * lag
+                    )
+                )
+        a = np.asarray(basis).reshape(size, -1)
+        matrix += a.conj() @ a.T
+        kp = np.hypot(kx, ky)
+        argument = b * kp / 2
+        derivative = np.divide(
+            b * i1e(argument), kp, out=np.zeros_like(kp), where=kp != 0
+        )
+        source = (
+            weight
+            * np.exp(envelope - b * b / 4 + abs(argument))
+            * (-b * nx * i0e(argument) + derivative * (nx * kx + ny * ky))
+        )
+        polarization += a.conj() @ source.ravel()
+    for result in (matrix, polarization):
+        if not np.isfinite(result).all():
+            raise ValueError(
+                "field-particle quadrature produced non-finite coefficients"
+            )
+        if np.max(abs(result.imag)) > 1e-11 * max(1.0, np.max(abs(result.real))):
+            raise ValueError("field-particle quadrature failed real parity")
+    return matrix.real, polarization.real
+
+
 def coulomb_nonpolarized_moment_matrices(
     maximum_hermite_order: int,
     maximum_laguerre_order: int,

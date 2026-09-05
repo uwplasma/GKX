@@ -398,7 +398,47 @@ resolved source :math:`u=\sum_j e^{-B^2/4}(B^2/4)^j L_j/j!`; and
 The refined eight-moment spherical13/radial12/Bessel24 generator agrees at
 :math:`B=1` within :math:`1.51\times10^{-11}`. This is a separate coefficient
 defect from interpolation. No shipped coefficients are replaced by this oracle;
-field-particle polarization and the coupled collision/field map remain unvalidated.
+the coupled collision/field map remains unvalidated.
+
+Independent field-particle quadrature
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For equal species, Fourier-transform the Landau kernel rather than truncating
+its spherical expansion. With :math:`F_M=\pi^{-3/2}e^{-v^2}` and convention
+:math:`\widehat f(q)=\int e^{-iq\cdot v}f(v)\,dv`,
+
+.. math::
+
+   U(v)=\nabla\nabla|v|,\qquad
+   \widehat U(q)=8\pi\frac{qq^T}{|q|^4},\qquad
+   C^F_{ij}=\frac1{\pi^2}\int_0^\infty dr\int d\Omega\,
+   (n\cdot\widehat a_i)^*(n\cdot\widehat a_j),
+
+where :math:`q=rn`, :math:`a_i=F_M\nabla(e^{-iBv_x}\psi_i)`.
+The Hermite--Laguerre Fourier transform is analytic:
+
+.. math::
+
+   k=q+B e_x,\qquad
+   P_{pj}(k)=\frac{(-ik_z)^p}{\sqrt{2^p p!}}
+   \frac{[(k_x^2+k_y^2)/4]^j}{j!},\qquad
+   \widehat a_{pj}=i(2\nabla_k P_{pj}-B e_x P_{pj})e^{-k^2/4}.
+
+For the polarization source, replace :math:`P` by
+:math:`e^{-B^2/4}I_0(Bk_\perp/2)` and differentiate analytically.
+``like_species_field_particle_fourier`` returns :math:`C^F,p^F_{\phi2}`;
+the equal-species :math:`\phi1` term vanishes. Its positive-weight Gram sum
+streams radial nodes, avoiding a full moment-by-three-dimensional-grid array.
+This is an independent derivation of the equal-species Landau form underlying
+Frei2021, not an implementation of the paper's spherical coefficient assembly.
+
+Checks use separate radial/pitch/azimuthal refinement, drift-kinetic analytic
+coefficients, total-matrix entropy and the three drift-kinetic null modes.
+The eight-moment :math:`B=4` field matrix agrees with the independently refined
+spherical21/radial32/Bessel48 result to :math:`6.5\times10^{-10}` relative
+Frobenius error; the :math:`B=1` field-polarization vector agrees to
+:math:`6.5\times10^{-14}`. These are offline coefficient checks, not validation
+of shipped tables, unlike-species collisions or the runtime field coupling.
 
 Tabulated resolutions
 ^^^^^^^^^^^^^^^^^^^^^
