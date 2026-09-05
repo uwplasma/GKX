@@ -7201,3 +7201,40 @@ measured warning in operators.rst; strict Sphinx36429exit0 and diff check pass.
 Local73ec5820 is4ahead of9fc6e42d, held while CI33958341219 has5pending/no failures.
 Verified GPU95001/PID1738946 RNl38m47s and68484/PID1740480 RNl12m30s.
 No merges/restarts. Full research/publication roadmap remains active.
+
+## 2026-09-05 — B1 collision cutoff controls completed; B4 endpoint running
+
+Previous turn isolated intermediate truncation. New independent controls fixed
+P3/J1/B1, equal mass/temperature, digits40. Session83584/PID39919 terminalexit0.
+
+| Spherical | Radial | Bessel-Laguerre | norm(C) | relative change from prior row |
+|---:|---:|---:|---:|---:|
+| 9 | 12 | 24 | 4.690112339503574 | — |
+| 11 | 12 | 24 | 4.690764426249639 | 2.520667358e-4 |
+| 13 | 12 | 24 | 4.690767791632572 | 1.319618127e-6 |
+| 13 | 16 | 24 | 4.690767791632572 | 9.468458819e-17 |
+| 13 | 16 | 32 | 4.690767791632572 | 0 in returned float64 |
+
+All finite; asymmetry Frobenius norms1.50–2.55e-16. This is a single-wavelength,
+fixed-output-size control, not a full coefficient or transport validation gate.
+No shipped NPZ regenerated. Reproducer local recent scratch/audit-collision-cutoffs.py
+SHA256 817205d4c9bb8683a37d96b5ff08c0da2151602657b60ffbf5c738fb4e09857f;
+log e061355e7bc666f5aba8311443ea47f390b1da1c04d7a63d6ad22016fdb5a4b6.
+Run PYTHONPATH=src:tools/artifacts local-JAX0111-python <script> in code worktree.
+Assembly times17.3–76.5s; no solver-performance claim. Existing artifact generator
+already has a four-output-moment B.8 spherical ladder, but that does not certify
+the shipped8/18 tables or their B4 endpoint.
+
+Launched separate B4 radial16/24/32 control at fixed spherical13, Bessel48,
+P3/J1, digits50. Local session58082/PID41100 verified Rs23s; stdout initially
+buffered per complete assembly, do not restart based on silence. Script
+/tmp/gkx-coupled-rate-20260905.shBvlR/audit-collision-high-b.py SHA256
+5a44ca4184b12bf6d7c7e0786910df06a1f100321559cd94f050fbc69bcd2737;
+same command prefix, output audit-collision-high-b.log. Next check finite
+matrices and cutoff changes; angular/output/Bessel/precision ladders still
+required afterward, not merely radial symmetry.
+
+GPUjobs unchanged:95001/PID1738946 RNl44m13s,68484/PID1740480 RNl17m56s.
+CI33958341219 has only parallel-autodiff101285631063 and nonlinear-core101285631242
+in progress, no failures. Local code73ec5820 remains4ahead of9fc6e42d; hold push
+until CI completes. No source changes or merges this turn. Full roadmap active.

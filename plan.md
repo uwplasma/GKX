@@ -134,7 +134,8 @@ repairs CPU singleton-rank lowering without changing the GPU layout.
 PR200/201 last checks: no failures or pending checks. PR202's earlier formatting
 failure was fixed in02536eef; CI status is tied to the exact commit below.
 CI run33956493988 at b734e19d completed successfully; after that, pushed9fc6e42d.
-New run33958341219 has5 pending jobs and no failures in the latest query,
+New run33958341219 has2 pending jobs (parallel-autodiff101285631063 and
+nonlinear-core101285631242) and no failures in the latest query,
 not yet certified. Frequent earlier pushes cancelled
 superseded runs before completion; avoid restarting CI for every microcommit.
 
@@ -167,6 +168,7 @@ convergence and experimental validation are distinct claims.
 |---|---|---|---|
 | GKX s-alpha Nl32 Nm128 Nz96, RK4 dt=.001, T300, rate50 | 0 | **68484 / 1740480** | `salpha_nl32_nm128_t300.toml`, `gkx-salpha-nl32-nm128-t300.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm128_t300` |
 | Patched GX s-alpha Nl32 Nm96 Nz96, RK4 dt=.002 fixed, T300, rate50 | 1 | **95001 / 1738946** | Different directory: `/home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined`, `salpha_nl32_nm96_t300.in`, `run.log`, `time.log` |
+| Collision B4 intermediate radial16/24/32 control, fixed8 output moments | Local CPU | **58082 / 41100** | `/tmp/gkx-coupled-rate-20260905.shBvlR/audit-collision-high-b.{py,log}` |
 
 Office campaign directory:
 `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
@@ -329,6 +331,9 @@ to roundoff, but spherical5→7→9 still changes C by21.12%/1.65%. Independent
 intermediate radial/spherical/Bessel and output-moment ladders are required;
 the default intermediate degree inferred solely from output moments is not
 a convergence guarantee. Extend this ladder before regenerating shipped tables.
+At B1, spherical9→11→13 changes C by0.02521%/0.000132%; radial12→16 is
+roundoff and Bessel24→32 unchanged in float64. B4 endpoint control58082 is now
+running; neither B1 nor a single output size certifies the full table domain.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
