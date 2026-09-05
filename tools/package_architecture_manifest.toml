@@ -935,7 +935,8 @@ recursive = true
 # +36: reject invalid/missing parity coordinates before setup; verify exact snapping.
 # +30: exact three-step rate derivative through serial/species-sharded integration.
 # +16: explicit profiler state precision and disabled-x64 rejection.
-baseline = 86862
+# +11: distinguish jointly settled finite errors from absent/undefined coverage.
+baseline = 86873
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1007,7 +1008,8 @@ recursive = true
 # +42: report reference-side temporal evidence without certifying sampled means.
 # +17: preflight and match reference coordinates before expensive parity solves.
 # +22: select input dtype and report actual input/output precision in RHS profiles.
-baseline = 77940
+# +10: explicit joint temporal-screen error coverage and console headline.
+baseline = 77950
 target = 0
 
 [[line_budget_policy.counts]]

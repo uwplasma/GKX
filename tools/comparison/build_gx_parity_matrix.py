@@ -315,6 +315,11 @@ def run_case(
         for r in settled
         if np.isfinite(r["gamma_relative_difference"])
     ]
+    joint_errors = [
+        abs(r["gamma_relative_difference"])
+        for r in rows
+        if r["both_codes_settled"] and np.isfinite(r["gamma_relative_difference"])
+    ]
     peak_index = int(np.argmax([r["gamma_reference"] for r in rows]))
     return {
         "key": case["key"],
@@ -358,9 +363,13 @@ def run_case(
             "settled_ky_count": len(settled),
             "both_codes_settled_ky_count": sum(r["both_codes_settled"] for r in rows),
             "finite_relative_error_ky_count": len(finite_errors),
+            "both_codes_finite_relative_error_ky_count": len(joint_errors),
             "total_ky_count": len(rows),
             "max_absolute_gamma_relative_difference_settled": (
                 max(finite_errors) if finite_errors else float("nan")
+            ),
+            "max_absolute_gamma_relative_difference_both_codes_settled": (
+                max(joint_errors) if joint_errors else float("nan")
             ),
             "peak_ky": rows[peak_index]["ky"],
             "gamma_relative_difference_at_peak": rows[peak_index][
@@ -560,8 +569,9 @@ def main(argv: list[str] | None = None) -> None:
         summary = record["summary"]
         floor = record.get("build_reproducibility_floor")
         print(
-            f"{record['key']:34s} settled {summary['settled_ky_count']}/{summary['total_ky_count']} ky"
-            f"  max|d gamma|(settled)={summary['max_absolute_gamma_relative_difference_settled']:.4f}"
+            f"{record['key']:34s} GKX temporally settled {summary['settled_ky_count']}/{summary['total_ky_count']} ky"
+            f"  both codes {summary['both_codes_settled_ky_count']}/{summary['total_ky_count']}"
+            f"  max|d gamma|(both)={summary['max_absolute_gamma_relative_difference_both_codes_settled']:.4f}"
             f"  at peak ky={summary['peak_ky']:.3f}: "
             f"d gamma={summary['gamma_relative_difference_at_peak']:+.4f} "
             f"d omega={summary['omega_relative_difference_at_peak']:+.4f}"

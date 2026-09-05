@@ -4060,6 +4060,17 @@ def test_parity_convergence_requires_finite_stable_frequency(
     assert result["summary"]["finite_relative_error_ky_count"] == int(
         settled and gamma_reference != 0.0
     )
+    joint_finite = settled and reference_settled is True and gamma_reference != 0.0
+    assert result["summary"]["both_codes_finite_relative_error_ky_count"] == int(
+        joint_finite
+    )
+    joint_error = result["summary"][
+        "max_absolute_gamma_relative_difference_both_codes_settled"
+    ]
+    if joint_finite:
+        assert joint_error == 0.0
+    else:
+        assert np.isnan(joint_error)
 
 
 @pytest.mark.parametrize(
