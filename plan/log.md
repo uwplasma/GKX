@@ -5087,3 +5087,65 @@ tools/comparison/build_gx_parity_matrix.py --manifest matched_manifest.toml
 This uses a full and half-horizon GKX solve, not a shortened smoke. Do not use
 the new manifest to claim other missing/unregenerated references are validated.
 Continue matched fixed-rate references and step-refinement before publication.
+
+## 2026-09-05 — coupled-field temporal/AD gate while GX runs
+
+Previous turn progressed by starting the matched reference. Revalidated session
+26100 and remote PID1713851: GX remains live, reaching t=78.202/150 at 7m27s.
+No restart. Continue polling that same handle/PID; the output is not final.
+
+Added **6bf824b5** to draft #202 (clean, pushed):
+`test_coupled_linear_rate_gradient_converges_to_matrix_exponential` in existing
+linear tests. A 64-state linked electrostatic problem has active field coupling,
+streaming/drifts and collisions, not merely isolated scalar damping. The
+discrete operator L is probed column-wise; its rate direction is exactly
+L(nu+1)-L(nu), since this parameter enters affinely. Independent SciPy expm
+and expm_frechet give `G(T)=exp(TL)G0` and its derivative. Scalar objective is
+`Re(G0^H G(T))`, T=.2, nu=.7. Reference scalar derivative -1.267821290586.
+This validates temporal integration and AD of the given spatial operator,
+**not** gyrokinetic model accuracy or spatial resolution convergence.
+
+| RK4 steps | relative state error | relative reverse-gradient error |
+|---|---:|---:|
+| 8 | 1.37272e-5 | 1.96065e-5 |
+| 16 | 8.57869e-7 | 1.50308e-6 |
+| 32 | 5.36034e-8 | 1.02201e-7 |
+
+The test checks nonzero field response and reference derivative, error reduction
+>12 per refinement for both quantities, and final errors <1.5e-7. Uses
+Al-Mohy & Higham (2009), *Computing the Frechet Derivative of the Matrix
+Exponential, with an application to Condition Number Estimation*, SIMAX30(4),
+1639–1657, as cited by installed scipy.linalg.expm_frechet documentation.
+The online SciPy page timed out; installed documentation supplied the citation.
+
+An initial direct jax.jvp of the public integrate_linear route **failed**:
+its custom-VJP field solve cannot be used by forward-mode AD. This is not a
+failure of reverse mode, and is now documented. Earlier scalar JVP tests bypass
+field solves and never established public-route forward-mode support. Preserve
+this distinction; do not silently claim all JAX transformations are supported.
+
+Verification:
+- Mac JAX0.11.1/SciPy1.18.1, f64, `PYTHONPATH=src <jax0111 python> -m pytest
+  -q tests/unit/linear/test_linear.py -k coupled_linear_rate_gradient
+  --junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/test.xml`: **1 passed**.
+- Office JAX0.10.2/SciPy1.17.1, same test copied into the 3565ecdc source
+  snapshot, `CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=true PYTHONPATH=src
+  /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q ...
+  --junitxml=coupled-rate-gpu.xml`: **1 passed**. Production source unchanged
+  from snapshot; test is the one in 6bf824b5. GPU0 still runs GX. Do not publish
+  the concurrent GX wall time as an isolated-machine performance benchmark.
+- Ruff0.16.4, Sphinx HTML -W, architecture policy and whitespace pass.
+  Test budget +89 lines explicitly accounted; no new repository files/source
+  changes. Standalone probe/results live under the local scratch above.
+
+| Evidence | SHA256 |
+|---|---|
+| test.xml (local) | 78500bac8da533a143ba88759c391eb30fac01de21fb319e49e433f635f18a6f |
+| results-refined.log (local) | 1c82cf3d8a60a0365f490a69921f14ca8bfb0ab2b78fa50c88ce7525fec53a6a |
+| coupled-rate-gpu.xml (office snapshot) | abfb40a625264b7235d709828435356b8c3e8279c046419ccda17db37ab59f6a |
+
+Only GX session26100/PID1713851 remains active. Next: finish/verify that reference,
+then run the full+half-horizon GKX comparison using the previous entry's command.
+The head change adds a test/doc only, so the snapshot's production source is
+still exact for that run. Keep #202 draft; external matrix and broad AD/physics
+validation remain incomplete. No merge.

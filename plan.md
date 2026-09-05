@@ -151,7 +151,7 @@ Scratch `rank_profile.py` and `rank-*-f32.csv` in the probe directories preserve
 the rejected experiment; full commands/results are in the logbook.
 **In progress:** [draft PR #202](https://github.com/uwplasma/GKX/pull/202), rate migration worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
-`fix/r0-end-damping-rate`, head `3565ecdc`, based on #199 b5dca15a.
+`fix/r0-end-damping-rate`, head `6bf824b5`, based on #199 b5dca15a.
 Source, route-aware deck migration, fixed-rate parity overrides, docs and
 cross-route/refinement tests are committed and pushed. CPU/GPU boundary sentinel
 and route checks pass. Full external reference regeneration, adaptive calibration,
