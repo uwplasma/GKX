@@ -161,7 +161,7 @@ convergence and experimental validation are distinct claims.
 
 | Job | Office GPU | Session / PID | Files in campaign directory |
 |---|---|---|---|
-| GX kinetic Miller reference, dt=.0002, T40, rate500 | 0 | **6455 / 1722824** | `matched_refs/ITG_cyclone/kinetic-gx.{stdout,time}.log` |
+| GKX kinetic Miller matched reference, dt=.0002, T40, rate500 | 0 | **40474 / 1729837** | `matched_kinetic_manifest.toml`, `gkx-kinetic-rate500-matched-t40.{stdout,stderr}.log`, stem `results/kinetic_rate500_matched_t40` |
 | GKX s-alpha Nl32 Nm96 RK4, dt=.001, T300, rate50, exact high ky | 1 | **73383 / 1729118** | `salpha_nl32_nm96_t300_dt_half.toml`, `gkx-salpha-nl32-nm96-t300-dt-half.{stdout,stderr}.log`, stem `results/salpha_rate50_nl32_nm96_t300_dt_half` |
 
 Office campaign directory:
@@ -171,9 +171,10 @@ and kinetic fixture includes8ce22e33's seed correction. Existing reference bundl
 `/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
 **Next actions:** inspect both exits, hashes, finite histories and all rows.
-After GX kinetic completes, run prepared **matched_kinetic_manifest.toml**
-(RK4, rate500, dt=.0002, T40, electron-only seed; not yet launched), rather than
-the old T20 harness. Validate its complete reference before reading it into GKX.
+GX kinetic reference completed exit0 with finite inspected diagnostics and
+2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
+T40/electron-only-seed run is active; do not reuse the old T20 harness or
+restart terminal GX6455. Extend unsettled reference modes before promotion.
 Continue slow-mode/velocity/parallel-resolution and regularization checks, then
 remaining kinetic/EM/stellarator matrix and the numbered R0 queue below.
 For imported parity geometry, editing grid.Nz alone does **not** refine the

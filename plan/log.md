@@ -6351,3 +6351,42 @@ gkx-salpha-nl32-nm96-t300-dt-half.stdout.log/stderr.log. Do not restart terminal
 26034. Kinetic GX6455/PID1722824 remains RNl56m10s; complete reference required
 before prepared matched kinetic GKX launch. No code edits, snapshot overwrites
 or merges. Full roadmap remains active.
+
+## 2026-09-05 — Nl coefficient controls; matched kinetic solve launched
+
+Previous turn progressed with Nl32 result and fixed-horizon dt control. Probed
+actual s-alpha cache on local CPU/JAX0.11.1 x64, exact runtime setup/select-ky
+path, Nm96,Nl16/24/32. Cached b range[.421200979915572,12.729942305739831].
+Compared sum_l J_l² to scipy.special.i0e(b): maximum relative tails
+3.657448916e-6,2.960688450e-14,3.358543856e-15 respectively (absolute
+4.131643535e-7,3.344546862e-15,3.885780586e-16). Direct polarization-sum
+truncation is tiny at Nl24; not a rigorous eigenvalue-sensitivity bound.
+
+Second full-RHS probe: complex128 state with G_l0m0=.001 sin(z),
+G_l1m2=.001 i cos(z), all other moments zero; full runtime terms, same grid,
+Nm96, compare retained first8 Laguerre/4Hermite RHS rows. Norm .156165915943;
+Nl16→24 relative difference1.011741633e-11, Nl24→32 difference6.368796233e-20.
+No obvious low-order rescaling for this probe, not a complete operator proof
+or diagnosis of the observed growth changes. Sessions22266 and45276 exit0.
+
+**GX kinetic session6455 completed exit0**, PID1722824 terminal and time log
+exit0. Output matched_refs/ITG_cyclone/itg_miller_kinetic_electrons.out.nc SHA256
+`f3f89a5c360d205b44caaffb2a3f33712edfef999478470fb07f874001047905`.
+Reporter reads2001samples,t_end40.000198989509954,0nonfinite frequency values.
+Audited all Phi2/Apar2/Wphi/Wapar arrays and time: finite. This is not a claim
+that raw complex-field histories were stored or audited. Positive ky7modes;
+reference full/half growth+frequency screen passes onlyky.4,.5 (2/7).
+Full gamma=[.031955565,.158830750,.230318412,.265107186,.254175820,
+.216957123,.138781044]; other modes need longer-reference settling before
+validation. One-step overshoot reflects GX time accumulation; not exact T40.
+
+After this completion/audit, launched prepared **matched_kinetic_manifest.toml**
+unchanged on GPU0: RK4dt.0002,200000steps,T40,rate500,Nl16Nm48, corrected
+electron-only seed. **Session40474/PID1729837** (time1729836), RNl verified1s.
+Same owned snapshot/reporter0acbd221/env; --cases cyclone_miller_kinetic_electrons
+--stem results/kinetic_rate500_matched_t40. Logs
+gkx-kinetic-rate500-matched-t40.stdout.log/stderr.log. All7ky retained; limited
+reference settling must propagate into joint counts. Do not restart6455.
+Nl32 dt-half73383/PID1729118 RNl3m37s remains live onGPU1. Resume these two new
+current handles; both GPUs occupied so two-GPU AD remains pending. No source
+changes, snapshot overwrite or merge. Full scope active.
