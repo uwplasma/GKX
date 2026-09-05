@@ -159,7 +159,8 @@ broader caller/precision/AD validation and CI remain required before promotion.
 Imported GX trajectory/RHS adapters now convert per-step inputs only from an
 explicit positive GX reference dt (periodic/disabled damping excepted); their
 suite passes 122 tests, one skip. Do not infer an active damping rate from sampled
-diagnostic spacing. Broader adapter audit, including ky diagnostics, remains open.
+diagnostic spacing. Ky-diagnostics caller audit found no additional conversion
+needed; old time-output and implicit-conditioning performance claims need reruns.
 Public RHS dt
 keywords are temporarily retained for API compatibility but no longer scale
 damping. #199 reported all checks successful/skipped; review #200–#202 CI.
@@ -174,10 +175,18 @@ Active validation: fresh committed #202 snapshot at office
 reference used explicit dt=.002, rate .1/.002=50, t=150 under
 `matched_refs/ITG_cyclone`: GX session26100 completed successfully at
 t=150.000007, 751 samples, no nonfinite diagnostics. GKX full/half-horizon
-comparison now runs in session **32453**, logs `gkx-salpha.stdout.log` and
+comparison completed (session **32453**, exit0), logs `gkx-salpha.stdout.log` and
 `gkx-salpha.stderr.log`, output stem `results/salpha_rate50` in the snapshot.
-Its reporting code predates c979989f: audit frequency settling as well as growth
-before using its convergence flags. All rows/relative shifts must be retained.
+Its reporting code predates c979989f. Independent CSV audit requires finite
+growth/frequency and both half-horizon shifts <=5%: **10/11 pass**, ky=.05
+unsettled. Maximum settled relative errors: gamma1.904%, omega0.2591%; peak
+gamma error0.01449%. This is temporal parity evidence, not resolution convergence.
+All original rows and artifacts retained. Next GX Miller reference is live on
+GPU1, session **97329**, PID **1717513**, fixed dt=.002, tmax150, rate50.
+Input/output directory is the same `matched_refs/ITG_cyclone`; logs
+`miller-gx.stdout.log`, `miller-gx.time.log`. Geometry generation succeeded.
+After exit, validate its trace/provenance, prepare a separate matched Miller
+manifest and run GKX; do not call an in-flight reference complete.
 Verify the current handle/process before resuming; never restart from a stale log.
 Existing `/home/rjorge/gx_refs_lin`
 contains five outputs, but its s-alpha run uses dt≈.00466 and KBM≈.00065, not

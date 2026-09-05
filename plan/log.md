@@ -5241,3 +5241,58 @@ values or certify convergence; mark uncertainty and rerun if necessary. An
 updated audit must identify its postprocessing version separately from the old
 snapshot that performed the solves. Keep #202 draft/unmerged and continue the
 external matrix/refinement, not just report-gate fixes.
+
+## 2026-09-05 — first matched-rate parity result; Miller reference started
+
+Progress, no blocker. #202 remains c979989f, draft/unmerged. User checkout
+untouched. All **78 time-integrator tests passed** on Mac JAX0.11.1 f64:
+`PYTHONPATH=src JAX_ENABLE_X64=true
+/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python -m pytest -q
+tests/unit/solvers/test_time_integrators.py
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/time-integrators-full.xml`.
+XML SHA256 `6fe305539126e04d0dac13a7a43785a36283c9f4c8766df29af467843f8272b5`.
+Session1163 terminal. No full-CI claim.
+
+Caller audit: ky_diagnostics Cyclone defaults periodic (damping inactive);
+KBM/ETG/TEM disable damping; kinetic uses the same fixed-rate params for time
+and Krylov. No additional automatic conversion warranted. Historical time
+references still require regeneration. benchmark_lineax_linear_solve uses
+linked A=.1: its pre-migration A/dt conditioning differs; reprofile before
+reusing performance claims.
+
+**GKX s-alpha session32453 completed exit0**, wall13:08.07 (not an isolated
+performance benchmark), host RSS1638948 KiB. Original snapshot3565 reporting
+retained under `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/results/`.
+CSV SHA256 `d957bba357ff01ece8f5eaf0bea2aabb5ff7fbcde77c08b693363c911b9208de`;
+local copy `/tmp/gkx-damping-route-20260905.Xk4sat/salpha_rate50.csv`.
+Independent Python csv/math audit (not rewriting solver output): require finite
+gamma/omega reference and GKX, finite both half-time shifts, and absolute shifts
+<=.05. **10/11 modes pass both screens**. Max settled relative error gamma
+.019040262519361965, omega .0025907639149554055. Peak ky=.3000000119 gamma
+relative error -.00014494507360926425. ky=.050000000745 remains unsettled:
+gamma shift .11005, omega shift .13837; retained, not omitted. These agree with
+the new joint screen, but no resolution convergence, matched precision, or
+predictive validation is claimed. Review reference temporal settling too;
+extend the slow mode and refine fixed-rate dt/resolution before promotion.
+
+Started the next **GX Miller adiabatic reference**, GPU1, session **97329**,
+PID **1717513** (time parent1717512), same owned snapshot directory
+`matched_refs/ITG_cyclone`. Copied original input from
+`/home/rjorge/gx_refs_lin/ITG_cyclone/itg_miller_adiabatic_electrons.in`, added
+only Time.dt=.002 via apply_patch; nwrite100, tmax150 unchanged. Input SHA256
+`317358524c40a91298841ba336332831c0375e8b9d75273d19976331ef342ce5`.
+Local input `/tmp/gkx-damping-route-20260905.Xk4sat/matched_miller.in`.
+Command from the owned reference directory:
+`CUDA_VISIBLE_DEVICES=1 PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
+/usr/bin/time -v /home/rjorge/GX/gx itg_miller_adiabatic_electrons.in
+> miller-gx.stdout.log 2> miller-gx.time.log`.
+Geometry generator succeeded and mode diagnostics are advancing; not complete.
+GX source/binary unchanged from preceding provenance record. PATH scoped to
+this command for generator dependencies. Existing reference bundle untouched.
+
+**Resume:** verify session97329/PID1717513 before any restart. After completion
+record exit, output hash, time coverage and finiteness; create a separately
+named matched Miller manifest (do not retroactively alter s-alpha provenance),
+then run GKX comparison. S-alpha session32453 is terminal, do not poll/restart.
+Continue external cases, independent temporal/resolution checks, #202 CI and
+remaining R0 validation. No benchmark/README artifact promoted, no merge.
