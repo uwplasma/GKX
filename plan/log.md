@@ -5786,3 +5786,35 @@ Same owned snapshot/env/current reporter; --manifest salpha_nm128_t300.toml
 logs gkx-salpha-nm128-t300.stdout.log/stderr.log. Verified PID live. GX reference
 remains Nm48/T150, deliberately not a matched-resolution/horizon claim. Assess
 GKX temporal sensitivity first. New checkpoint updated; old17139 must not restart.
+
+## 2026-09-05 — parity coordinate preflight prevents wrong-mode comparisons
+
+Previous turn progressed (Nm128 result/horizon extension, checkpoint cleanup).
+Both live jobs reverified: GX kinetic PID1722824 at9m51s, diagnostic t6.68020
+with dt.0002; GKX T300 PID1723912 at2m42s, no stderr. No restart. Kinetic
+reference is still far from T40, not an observation failure or blocker.
+
+Audited run_case: arbitrary requested ky was integrated and paired with the
+nearest reference mode without a distance check. This can report a physically
+different mode as parity, and decimal rounding had already perturbed our early
+timestep probe. **77d2d5ed** rejects empty/nonpositive/nonfinite/duplicate grids,
+missing reference coordinates and duplicate matches before runtime setup.
+Accept only relative differences <=4*float32 epsilon (no absolute tolerance),
+then run at the exact stored reference coordinate. This handles GX f32 decimal
+roundoff, not interpolation or a physics-agreement tolerance. Default complete
+reference grid remains unchanged. No running source/reporter replaced.
+
+Tests exercise actual run_case preflight (setup would fail the test if reached),
+plus exact snapping in existing damping-override scans. Full release-gate file:
+**198 passed**, local JAX0.11.1f64, XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/parity-coordinates.xml SHA256
+`26e2381b8dedc6465e2fae55d4ce8c55bba9dd44a1ca4e3c1b73ad098cea4614`.
+Ruff lint/format across406files, architecture, whitespace and Sphinx HTML -W
+pass. Explicit test+36/tool+17 lines; no new files or solver changes. Pushed
+draft #202, no full-CI claim and no merge.
+
+Current exact-coordinate campaigns are unaffected. Future runs should use this
+reporter after the live jobs finish; preserve old reports and their provenance.
+Resume session6455/PID1722824 (GX kinetic GPU0) and session37619/PID1723912
+(Nm128T300 GPU1). Do not start kinetic GKX from an incomplete reference. No
+public benchmark promoted, full roadmap unchanged.
