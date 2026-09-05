@@ -933,7 +933,8 @@ recursive = true
 # +10: preserve demo horizon and fixed damping while refining its timestep.
 # +9: pin the kinetic reference decks' species-selective initial condition.
 # +36: reject invalid/missing parity coordinates before setup; verify exact snapping.
-baseline = 86816
+# +30: exact three-step rate derivative through serial/species-sharded integration.
+baseline = 86846
 target = 35000
 
 [[line_budget_policy.counts]]

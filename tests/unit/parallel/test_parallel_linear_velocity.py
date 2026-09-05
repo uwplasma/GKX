@@ -1986,6 +1986,36 @@ def test_end_damping_rate_matches_nonlinear_eigen_implicit_and_species_routes(dt
                 parallel=parallel,
             )
             routes.append((result - state) / dt)
+
+            def objective(rate):
+                final, _ = integrate_linear(
+                    state,
+                    grid,
+                    geom,
+                    replace(params, damp_ends_amp=rate),
+                    dt=dt,
+                    steps=3,
+                    method="euler",
+                    cache=cache,
+                    terms=linear_terms,
+                    parallel=parallel,
+                )
+                return jnp.real(jnp.sum(final))
+
+            # Active entries start at one: G3=(1+dt*R0)^3 and R0 is linear
+            # in the fixed damping rate. No finite-difference step to tune.
+            derivative = jax.grad(objective)(jnp.asarray(params.damp_ends_amp))
+            expected = jnp.real(
+                jnp.sum(
+                    3
+                    * dt
+                    * reference
+                    / params.damp_ends_amp
+                    * (1 + dt * reference) ** 2
+                )
+            )
+            assert float(jnp.abs(expected)) > 1e-5
+            np.testing.assert_allclose(derivative, expected, rtol=1e-9, atol=1e-12)
         for result in routes:
             np.testing.assert_allclose(result, reference, rtol=1e-9, atol=1e-12)
 
