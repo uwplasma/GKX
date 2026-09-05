@@ -6092,3 +6092,44 @@ Latest live processes: GX6455/PID1722824 RNl34m39s; Laguerre67452/PID1725909
 RNl7m57s. Polled original session67452 again: still running, no new output.
 No restart. Continue both current handles, then finer geometry generation;
 two-GPU AD pending. Full roadmap active; nothing merged.
+
+## 2026-09-05 — Laguerre sensitivity is material; fine geometry validated
+
+Previous turn progressed with198 release tests and prepared geometry input.
+Verified both live jobs, waited on original67452, then obtained **exit0**:
+Nl24/Nm96/T300 gamma=.0330096971753523, omega=.5002360481323374.
+Compared with Nl16 same Nm/horizon, gamma changes **−7.003997%**, omega+3.258408%.
+Half-time shifts−.005504888381 and−.000255765171 pass the5% temporal screen.
+This material Laguerre dependence prevents velocity-convergence claims despite
+small fine-Hermite differences. CSV results/salpha_rate50_nl24_nm96_t300.csv
+SHA256 `a9c47a1ebe162da8af2bf217cd407b242faddf5422a26ec9b2eba47d74f81efb`.
+Session67452/PID1725909 terminal; do not restart.
+
+40 tests in tests/unit/geometry/test_geometry.py pass on local CPU/JAX0.11.1,
+PYTHONPATH=src JAX_ENABLE_X64=true. Session96941 exit0. XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/geometry-current.xml SHA256
+`0696141442d3ec429e4cb14ea6828032a107bc5b7891c31d4e665faa8a643f01`.
+CI202 query7success,11in-progress,19queued,1skipped; no full-CI claim.
+
+Ran prepared salpha_ntheta64_geometry.in on freed GPU1 using existing GX binary
+and scoped venv PATH in campaign root. **Session33533 exit0**, time log exit0.
+Logs salpha-ntheta64-geometry.stdout.log/time.log. Geometry-only output
+salpha_ntheta64_geometry.out.nc SHA256
+`b139b1fbb908eb95cf6f50ac32a7ec64de5b50ae75c9100b318fdd022324f23b`.
+Loaded both GX files with GKX load_imported_geometry_netcdf on office CPU:
+baseline96/fine192 points, effective Nz96/192, identical bounds
+[-9.42477798461914,9.42477798461914]. Fine profiles finite; exact shared-point
+agreement at fine[::2] for theta,bmag,bgrad,gds2,gds21,gds22,cv,gb,cv0,gb0,
+jacobian,grho. This is geometry validation only; one-step frequencies unusable
+as a physics reference. Do not replace completed T150 reference spectra.
+
+Started next **Nl32/Nm96/T300** on GPU1 at original96-point geometry to isolate
+Laguerre refinement, not mix spatial changes. **Session26034/PID1727418**
+(time1727417), RNl verified5s. Manifest salpha_nl32_nm96_t300.toml SHA256
+`690e922075c1025b185d02461a37d5d55c6c45ce6459157c077f3f6247b4a537`.
+Same environment/reporter0acbd221, RK4dt.002/rate50/exactky; --cases
+cyclone_salpha_itg_nl32_nm96_t300 --stem results/salpha_rate50_nl32_nm96_t300.
+Logs gkx-salpha-nl32-nm96-t300.stdout.log/stderr.log. Local manifest in previous
+scratch and remote campaign root. GX kinetic6455/PID1722824 RNl38m32s remains
+live. Resume these two only; finer geometry ready for subsequent spatial test.
+No production code change, snapshot overwrite, restart or merge; full scope active.
