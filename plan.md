@@ -125,7 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local/pushed head **e9b7b67f**, worktree
+`fix/r0-end-damping-rate`, local head **9e05ba52**, pushed **e9b7b67f**
+(one held commit while CI33959939110 runs), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -340,6 +341,11 @@ shipped truncation debt and motivates an efficient C_test(B)=C_test(0)−B²D
 representation; independently validate D, normalization, AD and larger moment
 orders before runtime use. Field/polarization blocks still need their own
 convergence and physical checks. No shipped table regenerated.
+The independent offline Gram oracle is now committed with8/18/32-moment
+quadrature/spectral gates and8/18 DK coefficient comparisons;51 selected
+collision tests pass in both JAX precision configurations. It remains NumPy
+float64 offline code, not a deployed runtime replacement. Shipped18-moment
+test-block errors are13.0%/64.2% atB1/B4 as well; both tables remain research-only.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and

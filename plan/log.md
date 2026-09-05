@@ -7362,3 +7362,52 @@ build logs retained (collision-quadrature-docs{,-fixed}.log), final pass log
 collision-quadrature-docs-final.log. Pushede9b7b67f; new CI is not yet certified.
 Only current live physics jobs: office95001/PID1738946 and68484/PID1740480.
 No PR merges; original checkout unchanged. Full research/publication goal active.
+
+## 2026-09-05 — Compact test-particle Gram oracle, larger bases and regressions
+
+Previous turn established the independent8-moment quadrature failure. Extended
+the same differential-form calculation to P5/J2 (18 moments) and P7/J3 (32),
+building C0 and D as weighted Gram products, Ctest(B)=C0−B²D. Positive weights
+give the dissipative matrix signs without post-hoc symmetrization. Quadrature
+48radial/32pitch→96/48→192/64: largest C0 change9.35e-15, D5.50e-14.
+C0 Maxwellian column vanishes, max eigenvalue−0; minimum D eigenvalues
+.2870806/.2121421/.1734222 for8/18/32. This is tested moderate-order
+quadrature, not a guarantee at arbitrary order, unequal species or full fields.
+
+Shipped18-moment DK test block matches to1.51e-14 relative, but B1/B4
+errors are .1298183805/.6417139356. README warning now covers both shipped
+resolutions. No NPZ or runtime collision action replaced.
+
+Added like_species_test_particle_gram_matrices to existing offline artifact
+module (no new file or installed runtime dependency). Default96/48nodes;
+nonnegative moment/positive node checks and finite output guard. Reuses Hermite
+evaluation across Laguerre orders. Unit-frequency, paper-convention C0/D;
+field/polarization explicitly excluded. New regressions compare96/48 vs192/64
+at8/18/32, independent DK moment coefficients at8/18, Maxwellian null column,
+spectral signs and invalid node/orders. They do not yet exercise arbitrary
+large moments, physical field-response coupling, or production AD.
+
+Full selected collision tests, excluding hardware timing gates:
+51passed0skipped for both JAX_ENABLE_X64=true (10.339s,23405exit0) and false
+(11.079s,96946exit0). The new NumPy oracle itself is float64 regardless of JAX
+mode; do not call these all-f32 numerical coefficients. JUnit hashes in local
+recent scratch: collision-gram-final.xml
+aea749a256a144f3034cf4df341450a075ab20ed3e3c243409024c44ab7e4ec3;
+collision-gram-f32.xml92605df25757ffbeb3f9147bc108e09f9074941c8a25ddd0859b032faea28c02.
+Ruff check/format, architecture/diff pass; strict Sphinx99047exit0.
+Tool budget+64 to78038 and tests+26 to87012, targets unchanged; this is an
+independent reference rather than a duplicate production collision path.
+
+Exploratory scratch collision-test-gram.py SHA256
+1e6dacea374cca3023241840a1611cd6dba4b0872ac1954c02a7bf0497f887d8;
+log abfed80db431cc18ea7a1c940e313c41f517265fd5e2f6049816bec4077d6053.
+Measured NumPy assembly .00068–.00978s for these small bases after imports;
+not an end-to-end or GPU performance benchmark. Two stored matrices instead
+of14 wavelength test matrices is a prospective memory benefit, not deployed.
+Next validate quadratic coefficient/projection and differentiate its eventual
+runtime application; independently converge field/polarization before replacing
+complete tables. Existing spherical generator remains available as an oracle.
+
+CI33959939110 targets pushede9b7b67f; last23pending/no failures. Hold this new
+commit until that CI completes. GPU95001/PID1738946 RNl1h09m17s and68484/
+PID1740480 RNl43m00s still active. No merges/restarts. Full roadmap active.
