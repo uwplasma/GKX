@@ -1500,6 +1500,32 @@ operator. Periodic (including zero-shear-forced periodic) and disabled damping
 need no conversion. Sampled diagnostic spacing alone does not certify the
 internal damping rate.
 
+Fourier convention is also part of the comparison contract. For an even chain
+of :math:`N` samples separated by :math:`\Delta z`, GKX follows
+`FFT frequency ordering <https://numpy.org/doc/2.2/reference/routines.fft.html>`_:
+
+.. math::
+
+   k_{N/2}=-\frac{\pi}{\Delta z},\qquad
+   D_z e^{2\pi i m j/N}=\frac{2\pi i m}{N\Delta z}e^{2\pi i m j/N}.
+
+GX's inspected ``init_kzLinked`` instead assigns positive Nyquist frequency.
+Both signs have identical sampled values :math:`(-1)^j`, but opposite first
+derivatives. Neither sign ambiguity exists on odd-length chains; absolute-value
+multipliers are unchanged. Do not silently change the production convention to
+improve a cross-code comparison. Match conventions explicitly, test the highest
+modes, and measure spatial-resolution sensitivity.
+
+In the repaired :math:`N_z=96,N_l=32,N_m=96` reference at :math:`k_y\rho=.55`,
+99.999953% of the same-state RHS difference power lies in this single mode.
+A diagnostic-only sign match reduces the relative RHS difference from 32.018%
+to 0.02206% against an extrapolated one-step GX restart derivative. The latter
+is limited by float32 finite-difference cancellation, not an exact RHS oracle.
+This explains the large residual despite close growth rates; it does not prove
+spatial or velocity convergence. ``test_fft_highest_modes_and_ad_contract``
+checks analytic mode eigenvalues, JVPs and real-parameter pullbacks on odd/even
+periodic and reordered linked chains without changing the default.
+
 Reference launch coverage is a separate contract. In inspected GX3865a537,
 ``GradParallelLinked`` caps the launch's third dimension at 65,535, with one
 thread per block in that dimension. ``dampEnds_linked`` lacks the grid-stride
