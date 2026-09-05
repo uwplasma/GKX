@@ -7456,3 +7456,42 @@ in local recent scratch; PYTHONPATH=src:tools/artifacts local-JAX0111-python,
 output collision-field-angular.log. Process verified Rs1s; keep running.
 CI33959939110 last18pending/no failures. Local9e05ba52 remains1ahead of
 pushede9b7b67f, held for CI. No merges; full research/publication roadmap active.
+
+## 2026-09-05 — Near-zero collision interpolation derivative counterexample
+
+Previous turn produced the failed coupled-Hermite result and new controls.
+All three processes revalidated. Inspected diagonal interpolation: generic
+interpolate_collision_diagonal_table is linear in B; both like-species Coulomb
+and Sugama callers obtain B=sqrt(2max(cache.b,0)). This introduces a derivative
+issue separate from inaccurate table generation. No interpolator changed here.
+
+Synthetic exact data C(B)=−B² at B=[0,.125], using the production interpolator
+inside jax.jit(jax.value_and_grad), CPUx64/JAX0.11.1:
+
+| b | interpolated C | dC/db | exact dC/db |
+|---:|---:|---:|---:|
+| 0 | 0 | −Inf | −2 |
+| 1e-12 | −1.767766953e-7 | −88388.34765 | −2 |
+| 1e-8 | −1.767766953e-5 | −883.8834765 | −2 |
+| 1e-4 | −.001767766953 | −8.838834765 | −2 |
+
+On the first interval, C_interp(b)=−B1 sqrt(2b), hence dC/db=−B1/sqrt(2b).
+This is correct AD of an inappropriate physical approximation, not a JAX
+derivative implementation error. Exact quadratic test-block Gram evaluation
+avoids it. For remaining diagonal field/polarization blocks, prove evenness
+and investigate interpolation in B²; explicitly choose endpoint derivatives
+because jnp.maximum/clip use tied-boundary conventions. Preserve generic and
+unlike-species interpolation contracts; full-pair/diagonal tests and physical
+coefficient/AD ladders must distinguish any deliberately changed approximation.
+
+Reproducer local recent scratch/collision-interpolation-ad.py, exit0 despite
+intentional negative/nonfinite derivative evidence (no pass claim). Numeric
+outputs saved in collision-interpolation-ad.log. These artifacts use exact
+synthetic values, not the shipped faulty table. Results make coefficient-only
+repair insufficient for claiming physical collision/geometry derivative accuracy.
+Script SHA2565e81bfa92fd16cc670b78cdf34db7e31e280aac41e53811ddd2595a337eef6e7;
+log b265a0721372622ad00eb11512fb00c9cfbc5ee19a810be2dc3d01f1bda7061f.
+Latest local field-control50209 verified Rs5m53s; initial assembly still active.
+CI33959939110 has one pending job and no failures in the latest query.
+No production changes, no restarts or merges. Local9e05ba52 remains held while
+CI33959939110 completes; the full research/publication goal is active.

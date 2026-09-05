@@ -349,6 +349,15 @@ quadrature/spectral gates and8/18 DK coefficient comparisons;51 selected
 collision tests pass in both JAX precision configurations. It remains NumPy
 float64 offline code, not a deployed runtime replacement. Shipped18-moment
 test-block errors are13.0%/64.2% atB1/B4 as well; both tables remain research-only.
+Interpolation has a separate near-zero derivative defect: even exact samples
+of C(B)=−B², linearly interpolated in B then evaluated at sqrt(2b), give
+dC/db=−883.9 atb1e-8 and−Inf atzero instead of−2. The generic interpolator
+differentiates its declared approximation correctly, but that approximation
+does not preserve the like-species quadratic limit. Use the Gram polynomial
+for the test block; investigate B² coordinates and one-sided endpoint derivative
+contracts for diagonal field/polarization tables. Do not silently change generic
+or unlike-species interpolation semantics, or claim coefficient repair alone
+closes physical AD validation.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
