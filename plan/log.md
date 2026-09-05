@@ -8064,3 +8064,98 @@ passing the corrected --root/--stem. Do not run against unfinished outputs.
 
 No new repo source changes. Corrected GX7690 remains the only live research job;
 GPU0 free. Full R0–R9 goal remains active.
+
+## 2026-09-05 — Independent Fourier Landau field reference
+
+Progress: derived, independently checked and committed offline field matrix and
+field-polarization quadrature in PR202 commit6d645f3f. No runtime table changes.
+CI33963277695 at b7cd526e completed success before pushing the held70750486 docs
+and this commit. New CI33964841954 at6d645f3f is queued/pending, not certified.
+Both code and plan remain review branches; no merges. Original checkout untouched.
+
+Derivation in docs/operators.rst: with a=F_M*grad(exp(-iBvx)*psi),
+U=Hessian|v| and Fourier convention integral exp(-iqv), Uhat=8*pi*qq^T/q^4.
+The field Dirichlet form is pi^-2 integral dr dOmega (n.ahat_i)* (n.ahat_j).
+Writing k=rn+Bex, Fpsi-hat=P(k)*exp(-k²/4) gives
+ahat=i*(2grad(P)-Bex*P)*exp(-k²/4). P is the analytic normalized Hermite/Laguerre
+Fourier polynomial. For J0 source, P_phi=exp(-B²/4)*I0(B*kperp/2), with analytic
+I1 derivative. No reuse of spherical speed coefficients or fitted normalization.
+Equal-species/unit collision frequency, paper convention, qphi/T factored out.
+The first polarization vectors vanish in this equal-species equilibrium case.
+This is our independent derivation of the Landau form underlying Frei2021,
+not a claim that its paper supplies this implementation.
+
+Local scratch `/tmp/gkx-coupled-rate-20260905.shBvlR`:
+collision-field-fourier.py first built a full-grid Gram at8 moments B0/1/4.
+Quadrature32/24/32→64/32/48→96/48/64 (radial/pitch/azimuthal):
+
+| Check | Relative error/difference |
+|---|---|
+| B0 matrix vs independent analytic DK | 2.1236624583e-13 |
+| B1 last matrix refinement | 7.5851398826e-14 |
+| B4 last matrix refinement | 6.2753904526e-14 |
+| B4 vs independently refined spherical21/R32/K48/digits50 matrix | 6.4794748594e-10 |
+| B1 polarization vs spherical13/R12/K24/digits40 vector | 6.4381895995e-14 |
+| B4 last polarization refinement | 1.3677835073e-14 |
+
+The B4 field norm is2.6971434631156224, min eigenvalue.029778087632710677.
+B0 analytic p1j0 field diagonal8/(3*sqrt(2*pi))=1.063846081070487 fixes
+normalization independently. Full field PSD and combined test+field NSD pass
+the sampled cases. This is coefficient/linearized matrix evidence, not the
+runtime distribution/field energy law or nonlinear transport validation.
+
+Repo helper `like_species_field_particle_fourier` streams one radial node at
+a time, bounding temporary basis memory by moments*pitch*azimuthal, rather than
+moments*radial*pitch*azimuthal. Returns matrix and field_phi2 together; scaled
+Bessel functions avoid the unnecessary unscaled I0/I1 factor. No new repo files.
+Recorded budget growth: tools+84/tests+86 lines; source unchanged and ultimate
+slimming targets unchanged. This addition replaces no legacy generator yet:
+unlike-species and independent cross-check responsibilities remain necessary.
+
+Rejected trial: initial default64/32/48 failed the 32-moment B4 test (6 entries,
+maximum absolute4.0623e-10), retained as field-fourier-pitch32-failed.xml,
+session53080exit1. Independent node audit against128/64/96:
+
+| Nodes r/pitch/phi | Matrix relative difference | Source relative difference |
+|---|---|---|
+| 64/32/48 | 1.06835e-10 | 3.52697e-12 |
+| 96/32/48 | 1.06835e-10 | 3.52635e-12 |
+| 64/48/48 | 8.91159e-14 | 5.12732e-14 |
+| 64/32/64 | 1.06832e-10 | 3.52697e-12 |
+| 96/48/64 | 3.56258e-14 | 3.70048e-14 |
+
+Thus refine pitch, not tolerance: final default64/48/48; tests refine96/64/64.
+35 selected new/existing oracle tests pass, no skips, x64 session6810 and
+f32-mode43137 exit0. These NumPy references stay float64 under either JAX flag.
+Checks cover8/18/32 moments B0/1/4, independent coefficient fixtures,
+matrix entropy, density/momentum/temperature DK null modes, polarization,
+and invalid arguments. Command from code worktree, with localvenv-python
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`:
+
+```
+JAX_ENABLE_X64=true PYTHONPATH=src <python> -m pytest tests/validation/physics_gates/test_collision_physics.py -q -k 'field_particle_fourier or test_particle' --junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/field-fourier-tests.xml
+```
+
+Repeat with JAX_ENABLE_X64=false and field-fourier-f32mode-tests.xml.
+Scratch node script: PYTHONPATH=src:tools/artifacts <python> scratch/collision-field-node-audit.py.
+Ruff and diff-check pass. Architecture initially correctly rejected growth;
+explicit +84/+86 baseline accounting now passes, targets not relaxed.
+Strict Sphinx first caught a short heading underline; fixed build68798exit0,
+field-fourier-docs-fixed.log. Failed build43902 retained field-fourier-docs.log.
+
+| Scratch artifact | SHA256 |
+|---|---|
+| collision-field-fourier.py | 5fd526774421a397acb79ce0ef25750856c6aab21c5f5b4471acc3313a9d74fe |
+| collision-field-fourier-polarization.py | 36c5db7aeae30a00642b4c8744f7342ceed8541ee21b14223c9886a857ac20d0 |
+| collision-field-node-audit.py | c227c761041ad67369a731f80e69eaa694c6ed22eecd58ad6aff530eedcfcd39 |
+| collision-field-node-audit.log | 23f8fec32e8a268f139abe2ae2b24a5e85ff86f37efbbf98691678ee0d9f4ec6 |
+| field-fourier-pitch32-failed.xml | ec84bc5aaf6e29e5d1167ddf42f6543f6ba40127c62cee069e22d8399d526df8 |
+| field-fourier-tests.xml | eec9e8986659a73d36c8599bd703bd7fa59e2092c91949e0873cdbb941d13a20 |
+| field-fourier-f32mode-tests.xml | 8748b93c0041b4f172f350b216e45ca6ffb0252d8df7a4e727c1715bc94f6199 |
+
+Next: independently check the B4 polarization source expansion/full table grid,
+audit every shipped coefficient block, derive and check the coupled field metric
+and interpolation/AD convergence before changing runtime coefficients. Keep
+unlike-species validation separate. Corrected GX7690/PID1753613 remains the
+ONLY live research job (last verified RNl25m02s); use the preceding explicit-path
+audits only after terminal success. Do not restart completed controls. Goal active.

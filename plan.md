@@ -125,8 +125,8 @@ Do not merge PRs or modify the user's original checkout.
 
 **Review branches.** Plan PR198: `plan/research-publication-20260904`.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
-`fix/r0-end-damping-rate`, local **70750486**, pushed **b7cd526e**
-(one documentation commit held while CI33963277695 completes), worktree
+`fix/r0-end-damping-rate`, local/pushed **6d645f3f**
+(CI33963277695 at b7cd526e passed; new CI33964841954 pending), worktree
 `/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
@@ -407,17 +407,29 @@ nor coefficient repair alone closes physical AD validation.
 New independent test-polarization quadrature (b7cd526e) agrees with the refined
 B1 spherical13/radial12/Bessel24 generator to1.51e-11, but the shipped B4
 test-phi2 errors are95.79%/86.40% for8/18 moments. Quadrature refinement and
-the independent J0 source-moment ladder pass; field polarization remains open.
-B4 angular13/15/17 control45671 completed exit0: at17 the field changes1.07e-5,
-while the test block still differs from its Gram oracle by.1881%. Continue the
-new19/21 control12758, not the completed13/15/17 process. No tables replaced.
-Its spherical19 rung is complete: field change6.004e-7 while independent test
-error remains2.61146e-4. Field source-ladder45346 completed exit0: matrix action
-on a source resolved toJ7 agrees with B1 polarization-vector assembly to8.71e-12
-(test6.60e-12). Shared speed coefficients mean agreement cannot independently
-validate the kernel. Spherical21 control12758 is now terminal exit0: field
-change2.3033e-8, test-block error2.7282e-5. Do not restart the field, source,
-Nm160 or f32 controls. Independent field-kernel validation remains open.
+the independent J0 source-moment ladder pass.
+B4 field angular13→15→17→19→21 controls45671/12758 are terminal exit0.
+Last field change2.3033e-8; test-block error2.7282e-5. Source-ladder45346 is
+also terminal: source J7 reproduces B1 vector assembly to8.71e-12 (test6.60e-12),
+an assembly identity using shared coefficients, not independent kernel proof.
+Do not restart these controls, Nm160 or f32.
+
+**Independent field reference now implemented offline (6d645f3f).** Fourier
+Landau kernel `Uhat=8*pi*q*q^T/|q|^4` gives a positive-weight field Gram matrix;
+analytic Fourier transforms supply both moment columns and the J0 polarization
+source. No spherical speed coefficients, fitted normalization or symmetrization.
+At8 moments: DK matrix error2.13e-13; B4 full-matrix difference from spherical21
+reference6.48e-10; B1 field-phi2 difference6.44e-14. The streamed helper passes
+8/18/32-moment B0/1/4 node, matrix-entropy and DK nullspace gates. A rejected
+32-pitch-node trial is retained; 48 pitch nodes remove its 1.07e-10 relative
+32-moment/B4 error. 35 selected tests pass under both JAX precision flags, but
+the oracle itself is NumPy float64. No runtime table or model has changed.
+Next: independently resolve field polarization at B4 and across the full table
+grid; compare all shipped blocks, establish the coupled field/free-energy
+metric and interpolation/AD accuracy, then propose a complete like-species
+replacement. Unequal species, temperature relaxation and runtime transport
+remain separate open gates. Equations and API are in docs/operators.rst;
+commands, failures and hashes are in the logbook.
 Unequal-temperature Maxwellians are not generally equilibria of full interspecies
 Landau collisions. State the differing exact/approximate adjointness conditions
 for [Sugama 2009](https://nifs-repository.repo.nii.ac.jp/record/388/files/5317%20PhysPlasmas_16_112503.pdf) and
