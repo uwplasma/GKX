@@ -6526,3 +6526,37 @@ PID1729837 RNl22m10s, both stderr files empty. Running snapshot unchanged; resum
 these exact handles. Two-GPU reverse-AD repeat remains pending until both free.
 Full roadmap remains active; next major evidence is the timestep control and
 matched kinetic comparison, then parallel/velocity resolution and R0 remainder.
+
+## 2026-09-05 — Explicit linear endpoint overshoot reproduced and repaired
+
+Previous turn progressed with the nonfinite transform guard. R0 fixed-time audit
+found both host explicit linear facades used a full final step even when it crossed
+t_max. Red test52541exit1 reproduced t=[.03,.06,.09,.12] for requested t_max=.1.
+**f00abafd** clips the actual step after CFL selection, in both growth-only and
+energy/flux diagnostic loops. Endpoint remainder takes precedence over dt_min;
+the regression deliberately uses dt_min=.02 and final remainder=.01. Healthy
+integral-step horizons retain their maps. This is not a change to the running
+campaign's native fixed-step scan or its snapshot.
+
+Replaced the weaker adaptive-completion test with eight endpoint cases:
+RK3/RK4 × fixed/CFL-controlled × both diagnostic facades. Checks actual reported
+sample times, finite phi and diagnostics dt_t, including the shortened last dt.
+No fixed-rate gradient convergence claim follows from this endpoint test.
+Net change29insertions/29deletions across three files; no budget increase.
+
+Local PYTHONPATH=src, JAX0.11.1, python -m pytest -q
+tests/unit/solvers/test_time_integrators.py --junitxml=<scratch>/explicit-endpoint-final.xml:
+JAX_ENABLE_X64=true **85pass,0skip,36.138s**, session62902exit0. SHA256
+`49bb25d10de6de36926579a1ca35e7a0b68ef8d9b4fd52c98986a74f98eeb879`.
+JAX_ENABLE_X64=false with -k stops_at_requested_time: **8pass,0skip,24.086s**,
+session34503exit0; explicit-endpoint-f32.xml SHA256
+`b3304793f2588c221866b5db395fd1b9a3e16962e148fc00fca578a43eed1434`.
+Scratch=/tmp/gkx-coupled-rate-20260905.shBvlR. Tests use jit=False; explicit compiled
+endpoint repetition remains untested. Ruff lint/format406files, architecture,
+whitespace pass. PR202 latest pre-push CI14running/23queued/1skip, not all-green.
+
+Latest exact process check: dt-half73383/PID1729118 RNl30m28s; kinetic40474/
+PID1729837 RNl26m52s. Both live; do not restart or overwrite snapshots. Next:
+inspect terminal results when available, reserve both GPUs for pending rate-VJP
+test, then continue evidence-driven velocity/parallel-resolution controls. No
+merge; full roadmap remains active.
