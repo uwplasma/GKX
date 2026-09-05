@@ -7075,3 +7075,36 @@ matched_refs CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEN
 unchanged from prior preflight. Compare Nl32/Nm96 dt-half result; do not useNl16
 Hermite refinement as a substitute. Only other live job: patchedGX95001/PID1738946
 on GPU1, verified RNl25m46s. Do not restart terminal kinetic40474.
+
+## 2026-09-05 — Outer-JIT EM regression on CPUs and GPUs
+
+Previous turn progressed with kinetic result and launched coupled refinement.
+Revalidated both long-running PIDs before changes. Local code0441e4d8
+parameterizes the existing EM trajectory/homogeneity gate over an enclosing
+jax.jit of value_and_grad; both serial and species-pmap must still satisfy
+dJ/ds=2J and agree. Retains non-jitted case, active Apar/Bpar and trajectory
+comparisons. Removed redundant np.asarray wrappers in these assertions;
+test file net−6lines, no new file or architecture-budget increase.
+
+Two logical CPU devices: 2passed/0skipped in each subprocess configuration,
+JAX_ENABLE_X64=true 7.136s (23746 exit0), false7.358s (29209 exit0).
+Two RTX A4000: 2passed/0skipped29.861s (31522 exit0), JAX0.10.2/x64-enabled,
+CUDA_VISIBLE_DEVICES=0,1, XLA_PYTHON_CLIENT_MEM_FRACTION=.08; ran beside physics
+jobs after checking free memory. This is correctness evidence, not performance.
+Same office scratch /home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo;
+only updated test file copied after confirming no active test there. Local
+artifacts /tmp/gkx-coupled-rate-20260905.shBvlR/em-outer-jit-{f64,f32,gpu}.xml:
+f64 SHA256 abe92be426ef18440b9fdc15492428072b17c9bfc1b8b00a5f6192d87f20d3ba;
+f32 198d395e5c9ba709177c59193c6f5d13cf5553b08c39f2fc4bf0ee9e61c0333f;
+gpu 1f4d99b101ae6f119a5db7dc03f065bc76a7d25dc14b49e4586331090ee53ab3.
+Fixture state precision remains unchanged; this does not establish general
+EM parameter, nonlinear transport, or all-dtype derivative accuracy.
+
+README still claimed the repaired no-argument demo emitted CFL warnings;
+54a90f25 corrects this to passing startup CFL, retaining explicit fit/spectral
+resolution limitations. Based on previously logged installed-wheel evidence,
+not a new run. Focused ruff check/format and architecture policy pass; strict
+Sphinx build31253 exit0 (em-outer-jit-docs.log). Local head54a90f25 is two commits
+ahead of pushed9fc6e42d. Hold push until CI33958341219 completes: latest25pending,
+no failures. No PR merge. Latest long jobs: GX95001/PID1738946 RNl30m46s;
+GKX68484/PID1740480 RNl4m29s. All physics claims/remaining R0–R9 gates unchanged.
