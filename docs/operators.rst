@@ -1226,6 +1226,13 @@ gyrokinetic model accuracy. Use reverse-mode ``jax.grad`` for this public
 linear-integration path: direct ``jax.jvp`` encounters its custom-VJP field
 solve and is not supported. Scalar-stage JVP checks do not establish otherwise.
 
+In newly generated parity reports, ``converged`` requires finite growth and
+frequency estimates, each agreeing within 5% between full and half horizons
+(exactly equal zeros pass). This is a temporal settling screen, not resolution
+convergence. All modes remain in ``total_ky_count``; the finite relative-error
+count is reported separately. JSON retains both raw half-horizon estimates.
+Historical reports and already-running jobs may use the older growth-only gate.
+
 Controls:
 
 - ``RuntimeTermsConfig.hyperdiffusion``

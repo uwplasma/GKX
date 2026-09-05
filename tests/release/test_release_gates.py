@@ -4003,6 +4003,56 @@ def test_parity_fixed_damping_override_survives_timestep_refinement(monkeypatch,
         run_case(case, reference_dir=RUN_TO_REPO_ROOT)
 
 
+@pytest.mark.parametrize(
+    "omega,half,settled",
+    [
+        (1.0, 1.03, True),
+        (1.0, 0.8, False),
+        (float("nan"), 1.0, False),
+        (1.0, float("inf"), False),
+        (0.0, 0.0, True),
+        (0.0, 0.01, False),
+    ],
+)
+@pytest.mark.parametrize("gamma_reference", [0.1, 0.0])
+def test_parity_convergence_requires_finite_stable_frequency(
+    monkeypatch, omega, half, settled, gamma_reference
+):
+    import runpy
+    from types import SimpleNamespace
+    import numpy as np
+    import gkx
+
+    run_case = runpy.run_path(str(_PARITY_BUILDER))["run_case"]
+    case = next(c for c in _parity_cases() if c["key"] == "kbm_miller")
+    reference = SimpleNamespace(
+        ky=np.array([0.3]),
+        gamma=np.array([gamma_reference]),
+        omega=np.array([1.0]),
+        samples=100,
+        t_end=20.0,
+        nonfinite=0,
+    )
+    monkeypatch.setitem(
+        run_case.__globals__, "load_reference_spectrum", lambda _: reference
+    )
+    responses = iter(
+        [
+            SimpleNamespace(gamma=[0.1], omega=[omega]),
+            SimpleNamespace(gamma=[0.1], omega=[half]),
+        ]
+    )
+    monkeypatch.setattr(gkx, "run_runtime_scan", lambda *a, **kw: next(responses))
+    result = run_case(case, reference_dir=RUN_TO_REPO_ROOT)
+    assert result["rows"][0]["converged"] is settled
+    assert result["rows"][0]["gamma_half_time"] == 0.1
+    assert result["summary"]["total_ky_count"] == 1
+    assert result["summary"]["settled_ky_count"] == int(settled)
+    assert result["summary"]["finite_relative_error_ky_count"] == int(
+        settled and gamma_reference != 0.0
+    )
+
+
 def test_parity_builder_reads_the_declared_floor() -> None:
     """A manifest key nothing reads is documentation pretending to be a gate."""
 

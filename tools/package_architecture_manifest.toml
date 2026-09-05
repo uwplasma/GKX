@@ -927,7 +927,9 @@ recursive = true
 # 86571 -> 86579: replace the self-constructed rate check by adapter tests.
 # 86579 -> 86668: coupled-field fixed-time/AD comparison with an independent
 # matrix exponential and Frechet derivative; no additional test files.
-baseline = 86668
+# 86668 -> 86718: execute reporting gates with drifting/nonfinite frequencies
+# and zero reference growth rates; preserve total and error-coverage counts.
+baseline = 86718
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -994,7 +996,9 @@ recursive = true
 # absent has to live where someone would otherwise re-add it.
 # 77823 -> 77833: explicit fixed-rate parity override and recorded resolved rate.
 # 77833 -> 77854: one GX per-step-to-rate adapter shared by trajectory/RHS tools.
-baseline = 77854
+# 77854 -> 77859: require stable frequency as well as growth and retain raw
+# half-horizon values plus explicit finite-error coverage in parity reports.
+baseline = 77859
 target = 0
 
 [[line_budget_policy.counts]]

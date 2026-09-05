@@ -229,11 +229,16 @@ def run_case(
                 "gamma_relative_difference": _relative(gamma, gamma_ref),
                 "omega_reference": omega_ref,
                 "omega_gkx": omega,
+                "gamma_half_time": gamma_half,
+                "omega_half_time": omega_half,
                 "omega_relative_difference": _relative(omega, omega_ref),
                 "gamma_half_time_shift": _relative(gamma_half, gamma),
                 "omega_half_time_shift": _relative(omega_half, omega),
-                "converged": bool(
-                    np.isfinite(gamma) and abs(_relative(gamma_half, gamma)) <= 0.05
+                "converged": all(
+                    np.isfinite(full)
+                    and np.isfinite(half)
+                    and (full == half or abs(_relative(half, full)) <= 0.05)
+                    for full, half in ((gamma, gamma_half), (omega, omega_half))
                 ),
                 # True when the difference this row reports is inside the
                 # spread the reference itself shows between two legitimate
@@ -250,10 +255,11 @@ def run_case(
             }
         )
 
-    settled = [
-        r
-        for r in rows
-        if r["converged"] and np.isfinite(r["gamma_relative_difference"])
+    settled = [r for r in rows if r["converged"]]
+    finite_errors = [
+        abs(r["gamma_relative_difference"])
+        for r in settled
+        if np.isfinite(r["gamma_relative_difference"])
     ]
     peak_index = int(np.argmax([r["gamma_reference"] for r in rows]))
     return {
@@ -296,11 +302,10 @@ def run_case(
         "build_reproducibility_floor": floor,
         "summary": {
             "settled_ky_count": len(settled),
+            "finite_relative_error_ky_count": len(finite_errors),
             "total_ky_count": len(rows),
             "max_absolute_gamma_relative_difference_settled": (
-                max(abs(r["gamma_relative_difference"]) for r in settled)
-                if settled
-                else float("nan")
+                max(finite_errors) if finite_errors else float("nan")
             ),
             "peak_ky": rows[peak_index]["ky"],
             "gamma_relative_difference_at_peak": rows[peak_index][
