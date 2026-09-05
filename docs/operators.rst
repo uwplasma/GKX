@@ -1347,6 +1347,22 @@ operator. Periodic (including zero-shear-forced periodic) and disabled damping
 need no conversion. Sampled diagnostic spacing alone does not certify the
 internal damping rate.
 
+Reference launch coverage is a separate contract. In inspected GX3865a537,
+``GradParallelLinked`` caps the launch's third dimension at 65,535, with one
+thread per block in that dimension. ``dampEnds_linked`` lacks the grid-stride
+loop used by neighboring copy kernels, so only
+:math:`\min(65535,N_zN_lN_m)` local z/moment indices receive damping.
+The :math:`96\times32\times96` reference requires 294,912 indices; even
+:math:`96\times16\times48` exceeds the cap. Matching a nominal rate and passing
+temporal screens do not certify these reference operators.
+
+An isolated build adds the missing stride loop without changing GKX. Testing
+the actual compiled kernel on 6,144/73,728/294,912 indices gives zero failures
+after repair; the original kernel misses 1,966/54,958 nonzero updates in the two
+larger cases. A short corrected solve has finite outputs; matched long-reference
+validation remains pending. Preserve original binaries/results and label both
+this correction and the separate high-Hermite power-overflow correction.
+
 The temporal/AD gate ``test_coupled_linear_rate_gradient_converges_to_matrix_exponential``
 checks a coupled 64-state electrostatic operator against :math:`e^{TL}` and
 its Fréchet derivative (Al-Mohy and Higham, 2009). This validates timestep and

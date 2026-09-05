@@ -457,6 +457,10 @@ runtime algebra; finite-wavelength physical identities remain unverified.
 The shipped finite-wavelength test-particle blocks fail independent quadrature:
 errors at Bessel arguments 1/4 are 22.9%/84.1% (8 moments) and 13.0%/64.2%
 (18 moments). Do not use them for predictive transport until repaired and converged.
+High-order GX comparisons are also provisional: the inspected reference's linked
+end-damping kernel omits indices above its 65,535 launch limit. An isolated
+coverage repair passes kernel tests; corrected reference solves are pending.
+See [operator/reference contracts](docs/operators.rst).
 W7-X zonal long-window recurrence/damping and
 W7-X TEM / kinetic-electron extensions are deferred. Production nonlinear
 domain decomposition and equilibrium ExB flow shear remain open.
