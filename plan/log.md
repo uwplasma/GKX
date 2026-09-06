@@ -4560,3 +4560,20 @@ Evidence:
 Resume: read the expanded plan, then P0 shared correctness plus EM0; use the
 existing field tests as starting points, not as independent physical proof.
 Retain the earlier remote-job unknown state and reference-provenance warnings.
+
+## 2026-09-06 — synthesis take on the three plans
+
+Branch `plan/synthesis-20260906`, stacked on #204; PR [#205](https://github.com/uwplasma/GKX/pull/205), draft.
+Inputs: #198, #203, #204, main a99dac89, five research reports in
+`plan/research/`, and the measurements in
+`plan/baseline/review_2026_09_06_synthesis.md`. Output: `plan.md` (513 lines)
+with ranked reference sources, an evidence ledger, CI tiers, a statistics
+protocol, phases 0–7 with steps and exits, a parked list with triggers, and a
+compute budget; README additions and `CITATION.cff`.
+
+Verified: 134 release gates, eleven checkers, strict Sphinx, ruff. No solver,
+test, data or release change; no GPU job; office unreachable.
+
+Next: an independent collaborator writes the authoritative plan from the four
+inputs; then Phase 0 (merge #197, #199, the f32 stack; split #202; API
+contracts; ledger scaffold; the convergence investigation).
