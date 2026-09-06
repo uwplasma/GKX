@@ -1,5 +1,11 @@
 # Work log
 
+Current proposed execution plan: [focused roadmap](../plan.md).
+Latest independent evidence: [2026-09-06 review](baseline/review_2026_09_06.md).
+Entries below are historical observations at their stated revisions, not
+automatically current validation claims. The September 4–5 continuation is
+preserved in [the pinned branch log](https://github.com/uwplasma/GKX/blob/71c5cc480411e3c568b38ce9010b4b9093fa2453/plan/log.md).
+
 ## 2026-08-21 — repository and runtime audit
 
 - Audited `main` at `5f3ab32e`, GitHub PR metadata, branch protection,
@@ -4461,3 +4467,53 @@ Three things worth keeping:
 
 Outcome:
 - accepted. The remaining compilations are exactly those two regions.
+
+## 2026-09-06 — focused planning review, not implementation
+
+Baseline: main `a99dac898334414d31733f6d286bd4c36983702e`.
+Branch: `plan/focused-research-20260906`; worktree:
+`/Users/rogeriojorge/local/GKX-worktrees/focused-plan-20260906`.
+Review PR: pending creation; record its link below before handoff.
+
+Decision:
+- Replace the active 2,881-line roadmap with five ordered outcomes: baseline
+  correctness, ES transport/gradient evidence, useful warm QA optimization,
+  bounded Coulomb qualification, and research packaging/publication.
+- Preserve broad physics ambitions with admission criteria; defer speculative
+  coordinates, shadowing, new closures and arbitrary-order Coulomb expansion.
+- Published GX uses per-step absorber scaling. Compare conventions before
+  adopting fixed-rate damping; split independent repairs from PR #202.
+- Existing warm reuse is host-backed and disabled in QA. Validate on-device
+  continuation and independent cold outcomes; do not promise statistical AD.
+- Correct public QA/Coulomb/parallel claims, shorten README while preserving
+  results/figures and basic/advanced use, and organize the documentation index.
+- No source/test/data changes, merge, release, remote job launch or rewrite.
+
+Fresh checks (commands, versions, paths and qualifications in the
+[audit](baseline/review_2026_09_06.md)):
+- GKX: 82 x64 operator/API/physics checks; 4 selected window checks;
+  13 warm-policy checks; 13 parameter/physics AD checks; 26 QL/statistics checks.
+  Final release and QA example contract suite: 145 passed in 2.87 s.
+- Default-precision analytic geometry test fails a 1e-9 tolerance by 5.96e-8.
+  x64 passes; six dtype future warnings remain. This is not a full suite run.
+- No-argument CLI and public Python solve complete with finite outputs.
+  The demo emits CFL/fit warnings; prepare reports Nl=4,Nm=8 despite the deck's
+  16/48 run settings. Record these P0 contracts instead of hiding them.
+- Strict Sphinx HTML, size/architecture checks and QL/readiness checkers pass.
+  All four regenerated CI release summaries match tracked bytes; no JSON edits.
+  Their pass does not establish current-head transport or gradient validation.
+- New stella checkout built. Original output-smoke deck exits zero with NaNs;
+  controlled electrostatic copy gives finite ten-step output, not saturation.
+- New gyaradax checkout: 24 passed, 89 skipped (including missing reference
+  data), one roundoff-threshold collision failure. Neither external check is a
+  matched GKX transport comparison.
+
+Resume safely:
+1. Read the new plan and audit, inspect actual PR/worktree state, then P0.
+2. Original checkout is untouched. Local `fix/r0-end-damping-rate` retains two
+   unpushed commits beyond #202; interrupted uncommitted basis guard is absent.
+3. Office SSH timed out. Prior GX job terminal state is unknown; check
+   `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L` and previously recorded
+   PIDs 1767040/1767078 before launching anything else.
+4. Freeze the smallest discriminating test and cost cap before long runs.
+   No fresh GPU, saturated parity or VMEX optimization result is claimed.
