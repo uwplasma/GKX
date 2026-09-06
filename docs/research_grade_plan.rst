@@ -32,10 +32,16 @@ Older checklists are historical, not additional active roadmaps.
        generally established.
    * - Electromagnetic and coil fields
      - Equations and selected tests/interfaces exist. Broad finite-beta
-       nonlinear transport and island-containing coil-field turbulence are open.
+       nonlinear transport is unqualified and its core qualification is
+       **required**, not deferred. Island-containing coil-field turbulence
+       requires a separate model/locality program.
 
-The first target is verified electrostatic ITG transport and useful QA design
-directions, followed by independently confirmed transport reduction.
+Required targets are verified ES **and three-field electromagnetic** local
+gyrokinetics, including kinetic-electron tokamak and finite-beta stellarator
+cases. ES QA optimization is an early application, not the full code milestone.
+The plan's EM0–EM5 sequence covers independent field residuals, wave/KBM checks,
+nonlinear channel-resolved transport, stellarator geometry, AD and execution.
+An ES-only result cannot close the research-grade release.
 See :doc:`stellarator_optimization` for the retained initial/final conditions,
 failed gates and reproduction commands.
 

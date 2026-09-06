@@ -6,6 +6,175 @@ Planning review, 2026-09-06. The repository's
 owns the execution queue. This page explains choices, not new validation
 results. Current claims are in :doc:`research_grade_plan`.
 
+Electromagnetics is a required model contract
+----------------------------------------------
+
+The final planning pass retains electrostatic **and** electromagnetic
+qualification as core outcomes. An ES optimization control is useful early
+evidence, not the complete research-grade target. The root plan's EM0–EM5
+sequence owns the executable steps and acceptance criteria.
+
+The three-field model must connect
+:math:`(G_s,\phi,A_\parallel,\delta B_\parallel)` consistently in the field
+solve, kinetic equation, nonlinear brackets, transport and derivatives.
+An illustrative dimensional Hamiltonian perturbation in SI units is
+
+.. math::
+
+   \delta H_s =
+       q_s J_0(a_s)\phi
+       -q_s v_\parallel J_0(a_s)A_\parallel
+       +\mu_s\frac{2J_1(a_s)}{a_s}\delta B_\parallel,\qquad
+   a_s=\frac{k_\perp v_\perp}{|\Omega_s|},\quad
+   \mu_s=\frac{m_s v_\perp^2}{2B_0}.
+
+This fixes the physical terms to trace; it is **not** a replacement for GKX's
+normalized stored-distribution equations. Derive the :math:`G_s\leftrightarrow
+h_s\leftrightarrow\delta f_s` transformation and its field dependence before
+changing an inductive term. Document the :math:`a_s\to0` limit of the Bessel
+weights, sign conventions, gyroaveraging at particle/gyrocenter position and
+the retained delta-f ordering.
+
+.. list-table:: Independent equation checks
+   :header-rows: 1
+   :widths: 25 40 35
+
+   * - Equation
+     - Required response
+     - Frequent false positive
+   * - Quasineutrality
+     - Density, polarization and species response with proper zonal average
+     - Wrapper agrees with the same incorrectly normalized implementation
+   * - Parallel Ampère
+     - Current, skin response and inductive coupling in the stored convention
+     - Small current is lost by cancellation or a silently disabled field
+   * - Perpendicular Ampère / pressure balance
+     - FLR perpendicular-pressure response and coupled potential
+     - Two-field KBM passes while compressional physics is absent
+   * - Kinetic/nonlinear RHS
+     - Every retained electromagnetic term and particle–field exchange
+     - Fields are nonzero in diagnostics but disconnected from evolution
+   * - Transport
+     - Species-resolved ES, flutter and compressional contributions
+     - Incorrect channels cancel in a plausible total
+
+For a small independently assembled field system :math:`M F=S(G)`, use a
+dimensionless backward residual, after fixing the gauge/nullspace:
+
+.. math::
+
+   \eta_F=\frac{\|MF-S\|}
+     {\|M\|\|F\|+\|S\|+\epsilon_{\rm scale}}.
+
+Declare the scale floor and compare with conditioning/precision. Also compare
+physical fields and independent moments: a small residual alone does not imply
+small forward error. Small :math:`k_\perp`, realistic electron mass and low
+beta are required stress tests, not reasons to silently clip a denominator.
+Inspect :mod:`gkx.terms.fields`, including the coupled potential/compression
+block, current response, zero modes and species reductions.
+
+The corresponding energy check is
+
+.. math::
+
+   \frac{dW_{\rm GK}}{dt}
+      =P_{\rm profiles}+P_{\rm imposed}
+       -D_{\rm collisions}-D_{\rm numerical}-\mathcal F_{\rm boundary}.
+
+Derive :math:`W_{\rm GK}` for the actual distribution and discrete weights.
+The diagnostic names ``Wphi`` and ``Wg`` do not establish that invariant.
+In the no-drive, no-dissipation, closed-boundary test the residual must converge
+with time/velocity/spatial resolution; driven tests must account for each term.
+General gyrokinetic ordering and energy context:
+`Abel et al. (2013) <https://arxiv.org/abs/1209.4782>`_.
+
+Reduced-field evidence versus full EM
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+`GX's published CBC beta scan <https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA>`_
+uses :math:`A_\parallel` but omits :math:`\delta B_\parallel`.
+Reproduce that comparison before extending it; do not silently change its
+physical model and then call a different curve a repaired benchmark.
+
+GKX's current ``runtime_kbm.toml`` likewise disables ``use_bpar``.
+The independent
+`stella EM test set <https://github.com/stellaGK/stella/tree/2b8e269f2addd0baa5991057eafa022135e04498/AUTOMATIC_TESTS/numerical_tests/test_7_electromagnetic>`_
+has term-isolation and three-field KBM inputs. Its ``EM_KBM.in`` differs from
+GKX's deck in geometry, gradients, beta and wavenumber.
+Translate one complete physical case, not just ``beta`` and the filename.
+Use `GS2 <https://gyrokinetics.gitlab.io/gs2/>`_'s independent velocity
+discretization for selected anchors; converge each representation separately.
+
+`Davies (2022) <https://etheses.whiterose.ac.uk/id/eprint/32068/>`_ describes
+linear electromagnetic stella/GS2 comparisons and also reports difficulties
+with a separate nonlinear semi-Lagrangian experiment. This motivates
+term-by-term and nonlinear checks, not adoption of that experimental scheme.
+Current stella source, a historical thesis implementation and a published
+reference curve are distinct reference revisions.
+
+For finite-beta nonlinear transport, use
+`Pueschel, Kammerer & Jenko (2008) <https://doi.org/10.1063/1.3005380>`_
+as a benchmark source, obtaining its precise setup before freezing targets.
+The newer `GENE compression implementation (2025)
+<https://doi.org/10.1016/j.cpc.2024.109410>`_ motivates an independent finite-FLR
+compression check, not copying a global discretization into GKX.
+
+Physics beta, geometry beta and statistical channels
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Distinguish the reference-species normalization from total physical beta:
+
+.. math::
+
+   \beta_{\rm ref}=\frac{2\mu_0 n_{\rm ref}T_{\rm ref}}{B_{\rm ref}^2},
+   \qquad
+   \beta_{\rm total}=\frac{2\mu_0\sum_s n_s T_s}{B_0^2}.
+
+Temperatures here are in energy units. Record each code's reference field and
+thermal-speed convention. A frozen-geometry fluctuation-beta scan and a
+self-consistent finite-pressure VMEX sequence answer different questions.
+Pressure-gradient geometry and :math:`\nabla B` versus curvature must remain
+consistent; no fitted scale factor substitutes for that check.
+
+Require a local full-EM stellarator comparison, not only tokamak waves/KBM.
+`Global stellarator EM results (2023)
+<https://doi.org/10.1017/S0022377823000363>`_ motivate checking locality and
+profile consistency. Global EUTERPE/GENE-3D transport is not an exact reference
+for a flux tube without establishing a corresponding local limit.
+
+GKX already exposes ES, ``Apar`` and ``Bpar`` flux channels. For each species,
+
+.. math::
+
+   Q_s=Q_{s,\phi}+Q_{s,A_\parallel}+Q_{s,B_\parallel},\qquad
+   {\rm Var}(\bar Q_s)=\sum_{c,c'}{\rm Cov}(\bar Q_{s,c},\bar Q_{s,c'}).
+
+Measure the total uncertainty from the total trace or include cross-channel
+covariance. Adding channel standard errors in quadrature assumes independence
+that need not hold. Use absolute precision for near-zero channels and resolve
+dominant magnetic channels individually; total agreement can mask cancellation.
+Verify particle flux, magnetic energy and current response as well as heat flux.
+
+Differentiate, restart and distribute the same EM equations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Verify each channel's derivative in a full kinetic-electron case, with
+  positive-beta parameter/geometry perturbations and a fixed seed/window.
+- The exact-zero-beta branch and positive-beta limit are separate tests;
+  finite-time stability and a differentiable parameter path must be specified.
+- Recompute all fields after restart. When coefficients/geometry change,
+  account for the field-dependent distribution convention before reusing ``G``.
+- Check current and magnetic-energy relaxation in warm states, not only ion flux.
+- Validate species-current/pressure reductions and their transposes under
+  sharding; an ES halo identity is not an EM field-communication proof.
+- Profile kinetic streaming/Alfvén stiffness and field solves. Compare existing
+  explicit/IMEX methods only at converged accuracy, including preconditioner
+  setup, field rebuilds and reverse-pass memory.
+
+Canonical full-EM fields, transport, stellarator cases and derivatives are
+required. Broad microtearing, TAE/energetic-particle and global-island campaigns
+remain later applications with additional ordering and model requirements.
+
 Optimization: different derivatives
 -----------------------------------
 

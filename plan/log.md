@@ -4521,3 +4521,42 @@ Resume safely:
    No fresh GPU, saturated parity or VMEX optimization result is claimed.
 5. Local final checks pass as recorded above; GitHub CI was only just triggered
    for the new PR at handoff. Inspect its actual result before implementation.
+
+## 2026-09-06 — final planning pass: restore context and require EM
+
+User direction: retain a complete executable plan, not just a short summary;
+electromagnetic research capability is essential. Continue draft
+[#204](https://github.com/uwplasma/GKX/pull/204), following `6d46f9bb`.
+
+Changes:
+- Expand the plan's context, preserved achievements, numerical ownership,
+  concrete steps, matching contracts, bounded execution schedule and checklist.
+- Make kinetic-electron, three-field EM a required P1 outcome: EM0 independent
+  algebra/RHS/energy; EM1 wave/limit tests; EM2 reduced/full-field KBM; EM3
+  nonlinear tokamak flux; EM4 finite-beta stellarator; EM5 AD/restart/execution.
+- Distinguish core EM from later MTM/TAE/energetic-particle/global applications.
+  An ES-only result cannot close the code's research-grade milestone.
+- Add physical/normalized field-contract equations, beta distinctions,
+  cross-channel covariance and references in the technical documentation.
+- Keep the README concise and unchanged; no solver/test/data/JSON changes.
+
+Evidence:
+- Read GKX field solves, EM flux channels, KBM deck and relevant tests; inspected
+  pinned stella full-EM inputs and primary GX/GS2/stella literature/sources.
+  GX's published KBM comparison and GKX's current deck both omit B_parallel;
+  the full-EM comparison is a separate required gate, not a relabeling.
+- 9 targeted field/beta-limit/KBM-routing/EM-activation tests passed (20.19 s);
+  1 runtime EM-channel test passed (4.78 s). Dtype warnings and the channel
+  test's over-CFL two-step setup remain explicitly recorded in the audit.
+- These checks do not qualify saturation, independent full-EM parity or GPU
+  execution. No long/remote campaign was launched in this planning turn.
+- Final release/example contract rerun: 145 passed in 2.73 s. Strict Sphinx
+  build passed at `/tmp/gkx-plan-em-docs-20260906`; all four regenerated CI
+  release summaries match tracked bytes. No JSON edits are needed.
+- Active plan: 696 lines, technical decisions: 490 lines, README: unchanged
+  at 239 lines. Completeness of the execution context, not a line-count cap,
+  controls future plan edits.
+
+Resume: read the expanded plan, then P0 shared correctness plus EM0; use the
+existing field tests as starting points, not as independent physical proof.
+Retain the earlier remote-job unknown state and reference-provenance warnings.
