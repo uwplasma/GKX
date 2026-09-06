@@ -4473,7 +4473,9 @@ Outcome:
 Baseline: main `a99dac898334414d31733f6d286bd4c36983702e`.
 Branch: `plan/focused-research-20260906`; worktree:
 `/Users/rogeriojorge/local/GKX-worktrees/focused-plan-20260906`.
-Review PR: pending creation; record its link below before handoff.
+Review PR: [#204](https://github.com/uwplasma/GKX/pull/204), draft, do not merge.
+Main review commit: `8be376d4`. README: 503 → 239 lines; active plan:
+2,881 → 294 lines. Eight documentation files changed; no added JSON.
 
 Decision:
 - Replace the active 2,881-line roadmap with five ordered outcomes: baseline
@@ -4517,3 +4519,5 @@ Resume safely:
    PIDs 1767040/1767078 before launching anything else.
 4. Freeze the smallest discriminating test and cost cap before long runs.
    No fresh GPU, saturated parity or VMEX optimization result is claimed.
+5. Local final checks pass as recorded above; GitHub CI was only just triggered
+   for the new PR at handoff. Inspect its actual result before implementation.
