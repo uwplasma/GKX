@@ -42,6 +42,20 @@ pip install -e .
 gkx examples/linear/axisymmetric/cyclone.toml
 ```
 
+The last command prints the converged eigenvalue from the certified Krylov
+path, `gamma ≈ 0.093` and `omega ≈ 0.282` at `ky = 0.3`; the tracked reference
+for the full scan is in the parity table below.
+
+| What you can do | One command |
+| --- | --- |
+| Linear growth rate and frequency | `gkx examples/linear/axisymmetric/cyclone.toml` |
+| `ky` scan in parallel | `gkx scan examples/linear/axisymmetric/cyclone.toml` |
+| Nonlinear turbulence with restart | `gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --out run.nc` |
+| Stellarator from a VMEC/VMEX `wout` | `gkx wout_w7x.nc --estimate` then `gkx wout_w7x.nc` |
+| Collision model comparison | `python examples/theory_and_demos/collision_operator_comparison.py` |
+| Eigenvalue and heat-flux gradients | `python examples/optimization/QA_optimization.py` |
+| Replot any saved run | `gkx plot run.nc` |
+
 ### Nonlinear turbulence
 
 ```bash
@@ -233,6 +247,22 @@ python -m sphinx -W -b html docs docs/_build/html
 
 Coverage is necessary, not physics validation. The [plan](plan.md) names the
 remaining evidence gates; no new release is scheduled yet.
+
+## Cite
+
+Cite the software by version until the methods paper is out; GitHub renders
+[CITATION.cff](CITATION.cff) as "Cite this repository". A Zenodo DOI is minted
+at the next release.
+
+```bibtex
+@software{gkx,
+  author  = {Jorge, Rogerio},
+  title   = {GKX: gyrokinetic turbulence and sensitivities in JAX},
+  version = {2.0.0},
+  year    = {2026},
+  url     = {https://github.com/uwplasma/GKX}
+}
+```
 
 ## License
 

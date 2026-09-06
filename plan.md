@@ -1,696 +1,513 @@
-# GKX: focused research plan
-
-Updated 2026-09-06, final planning pass. **No solver changes, merge, or release.**
-Baseline: main [a99dac89](https://github.com/uwplasma/GKX/commit/a99dac898334414d31733f6d286bd4c36983702e).
-This is the proposed execution authority once reviewed, not a claim that its gates pass.
-
-## 1. Outcome and scope
-
-Deliver a reproducible local gyrokinetic workflow that can distinguish a useful
-stellarator design change from numerical error and sampling noise, with
-trustworthy derivatives and measured CPU/GPU cost.
-
-**First optimization control:** electrostatic ion-temperature-gradient (ITG) transport
-in nested-surface equilibria, kinetic ions and adiabatic electrons, one validated
-collision/closure policy, and vacuum QA optimization with finite `a/L_T,a/L_n`.
-Validate a tokamak control and one stellarator before expanding geometry coverage.
-Vacuum describes the equilibrium, not zero turbulence drive.
-
-**Required research-grade scope:** electrostatic (ES) **and electromagnetic (EM)**
-local gyrokinetics, including kinetic electrons, `phi,A_parallel,delta B_parallel`,
-and qualified linear/nonlinear cases in tokamak and stellarator geometry.
-EM correctness is a core deliverable, not an optional extension after optimizing
-QA. An ES design result alone does not complete this program or justify the
-research-grade release.
-
-Keep the broader ambition: additional kinetic species, advanced collisions,
-equilibrium flow and ESSOS coil fields. Arbitrary combinations require separate
-admission tests. A verified code is not automatically an experimentally
-validated, predictive model.
-
-The plan must carry enough context, exact next actions and failed evidence for
-independent resumption. Its size is not an optimization target. Keep the README
-short; keep this execution plan complete, with equations in the technical page
-and chronological evidence in the log. The earlier 294-line revision compressed
-the context too aggressively and incorrectly deferred core EM qualification.
-
-| Priority | Outcome | Dependency |
-| --- | --- | --- |
-| P0 | One defensible baseline, resolved correctness regressions and claims | None |
-| P1 | Required ES **and full-EM** physics, transport and derivative qualification | Shared P0 contracts; staged ES and EM tests below |
-| P2 | Faster validated QA optimization, using warm states where beneficial | Relevant P1 subset; ES experiments may proceed while core EM is qualified |
-| P3 | Bounded Coulomb implementation with an honest shipping envelope | P0; does not block Dougherty-based P1/P2 |
-| P4 | Usable research package, evidence bundle, manuscript and release review | Required ES/EM P1 gates, P2 evidence, and explicit P3 scope decision |
-
-Work on **one correctness change and one bounded measurement at most**.
-No unlimited resolution or algorithm sweeps. After each decision experiment,
-record adopt / reject / unresolved and its next discriminating check.
-
-### 1.1 Context that must survive the refactor
-
-- GKX's differentiable Hermite–Laguerre formulation is a means to a research
-  workflow: equilibrium/geometry → linear or nonlinear dynamics → physical
-  observables → useful design directions → independent verification.
-- VMEX supplies vacuum/finite-pressure equilibria and geometry derivatives.
-  ESSOS supplies coil fields and their derivatives. A smooth Biot–Savart
-  derivative does not prove nested surfaces or a valid local GK equilibrium.
-- SOLVAX supplies reusable structured linear algebra. Preserve moment
-  recurrences and matrix-free execution; move a primitive upstream only after
-  demonstrating its need and its transpose contract in GKX.
-- Target both local CPUs and office GPUs, with explicit precision and memory
-  policies. Independent cases and distributed states are distinct forms of
-  parallelism and need separate timing/accuracy evidence.
-- Retain linear stability, quasilinear screening and nonlinear transport as
-  complementary applications. Their derivative contracts and validation
-  standards differ; none automatically certifies the others.
-- Preserve the work already done: implicit eigenmode sensitivities,
-  checkpointed windows, geometry bridges, restart/output contracts, comparisons,
-  performance measurements and initial/candidate QA visualizations.
-  Revalidate changed contracts; do not restart the entire project from scratch.
-- A finite-time AD identity, a CI success, a short finite trace and a visually
-  quiet `Wphi` window answer different questions. Record which question a test
-  actually answers.
-- The nominal QA reduction is useful evidence for designing the next test,
-  not a resolved claim. Missing source decks and unknown remote-job states are
-  explicit evidence gaps, not reasons to manufacture replacement references.
-- Changes stay small, concise and deliberate. No source/JSON deletion that
-  loses unique physics or provenance merely to reduce counts; no new release
-  before reviewed PR dispositions and essential goals are achieved.
-
-## 2. What changed in this plan
-
-- Replace the old architecture-first, version-number-driven program with
-  **observable correctness → useful gradient → total optimization cost**.
-- Keep one nonlinear derivative: checkpointed finite-window reverse AD.
-  Distinguish it from implicit eigenvalue/equilibrium differentiation and from
-  the unknown derivative of the invariant turbulent measure.
-- Validate the warm-start code already present; do not create another framework.
-- Restore the published GX absorber convention as a **comparison baseline**,
-  subject to matched tests. Fixed-rate damping is not a release prerequisite.
-- Retain field-aligned Hermite–Laguerre coordinates. Consider domain/parallel
-  coordinate changes only when a measured resolution bottleneck warrants them.
-- Stop expanding closure, absolute-quasilinear calibration, and arbitrary-order
-  Coulomb interpolation experiments until the relevant baseline fails a
-  discriminating test.
-- Preserve successful refactoring; do not impose another folder migration or
-  arbitrary LOC target before measuring duplicated numerical ownership.
-- Fix contradictory public status now; preserve failed results and historical
-  provenance, without treating old logs as the active queue.
-- Make the three-field EM contract a required P1 outcome, with independent
-  references, channel-resolved transport, finite-beta geometry and derivative
-  tests. ES optimization is an early application, not the scope ceiling.
-- Restore implementation order, numerical ownership, campaign budgets and
-  completion criteria. Do not replace a complete roadmap with an executive summary.
-
-Technical rationale, equations, comparative sources and decision experiments:
-[research program](docs/research_grade_program.rst).
-Fresh tests, code observations, PR ledger and reproduction:
-[September 6 audit](plan/baseline/review_2026_09_06.md).
-
-## 3. Baseline: what is and is not established
-
-| Area | Main evidence | Limit affecting the plan |
-| --- | --- | --- |
-| Linear solver | Dense and matrix-free routes; implicit eigenmode derivatives; tracked scans | Mode selection, timestep/boundary conventions and resolution matter; CBC and KBM discrepancies remain |
-| Nonlinear AD | Fixed-window RK objective; checkpoint/plain and finite-difference tests | Initial state is detached; no general long-time statistical derivative |
-| Warm restart | `SaturationWarmStart` and prepared initial-state execution exist | QA example disables warm reuse; policy stores NumPy arrays; no demonstrated saturated warm-optimization saving |
-| Transport statistics | IAT correction; heat-flux, field and distribution guards | Median-crossing window and repeated stopping remain heuristics; nonuniform-time and near-zero handling need qualification |
-| QA result | Initial/final shapes, flux traces, nominal 12.26% reduction | 4/48 nominal traces fail drift; not a resolved transport-reduction claim |
-| Coulomb | Drift-kinetic low-moment and finite-wavelength 8/18-moment tables | Finite-wavelength coefficient/derivative corrections are unmerged; not arbitrary-order or unlike-species |
-| Parallel | Independent scans/ensembles; explicit species–Hermite implementation | Full nonlinear/AD scaling is not generally qualified; split-Hermite conserving collisions are refused |
-| Geometry/EM | Analytic/Miller/VMEC paths, EM equations and small tests | Neither arbitrary island transport nor broad finite-beta nonlinear validation is established |
-| CI | Main CI run 33752936621 succeeded | Fresh CPU precision-specific test failure still exists; green CI is not a scientific certificate |
-
-Measured main: **184 Python source files, 88,910 physical source lines,
-562 tracked JSON files, 503 README lines**. Counts include blank/comment lines;
-they are baselines, not complexity or performance scores.
-
-### 3.1 Numerical ownership and concrete starting points
-
-| Contract | Existing starting point | What the next test must establish |
-| --- | --- | --- |
-| Resolved public input | `api/prepared.py`, runtime TOML/resolution helpers | CLI/Python agree on requested moments, fields, species and numerical policy |
-| Fields | `terms/fields.py` | Independent quasineutrality and both Ampère residuals, not wrapper self-agreement |
-| Linear map | `operators/linear/`, matrix-free solver modules | Same physical operator in initial-value, eigenmode and gradient paths |
-| Nonlinear map | `terms/nonlinear.py`, `solvers_nonlinear_state_integration.py` | Complete ES/EM stage coupling, projection and field refresh |
-| Physical transport | `operators/moments.py`, `operators/fluxes.py` | Species/channel normalization and independently reconstructed flux |
-| Stopping | `diagnostics/saturation.py`, runtime chunks | Qualified burn-in, irregular-time handling, effective sample size and false-stop rate |
-| Warm state | `workflows/runtime/warm_start.py`, QA example | Device residence, compatible physical state, no trial-history-dependent objective |
-| Parallel execution | `parallel/integrators.py` and nonlinear distribution helpers | Correct moments/halos, species reductions, field response and adjoint |
-| EM evidence | KAW/KBM decks, field tests and finite-beta geometry tests | Separate reduced two-field evidence from complete three-field qualification |
-
-Paths in this table are under `src/gkx/` unless identified as an example/test.
-These are ownership boundaries, not instructions to create new modules.
-
-The current KBM runtime deck uses kinetic ions/electrons with `use_apar=true`
-and `use_bpar=false`. Its contract test preserves a transitional operator; it
-does not test the omitted compressional field. Existing tests do exercise
-nonzero `apar/bpar`, custom field VJPs, the zonal beta limit and channel sums.
-They are valuable starting checks, not a saturated full-EM benchmark.
-
-## 4. P0 — settle the baseline before more expensive physics
-
-### P0.1 Adjudicate the open PRs
-
-| PR | Proposed disposition (review, not automatic merge) |
-| --- | --- |
-| [196](https://github.com/uwplasma/GKX/pull/196), [200](https://github.com/uwplasma/GKX/pull/200), [201](https://github.com/uwplasma/GKX/pull/201) | Treat as one CPU-f32 repair stack. Test actual bracket values/VJPs in isolated processes; prefer the repair over permanent broad skips; retain GPU layout checks. |
-| [197](https://github.com/uwplasma/GKX/pull/197), [199](https://github.com/uwplasma/GKX/pull/199) | Review legacy per-step absorber and route consistency together. Reproduce original regression, both step maps and observables; document which eigensolver can represent that policy. |
-| [202](https://github.com/uwplasma/GKX/pull/202) | Do not merge as a bundle. Separate independently justified streaming/coefficient repairs from fixed-rate damping and new table experiments; preserve evidence. |
-| [198](https://github.com/uwplasma/GKX/pull/198), [203](https://github.com/uwplasma/GKX/pull/203) | Preserve plans/logs as history. This review reconciles their competing recommendations; request explicit supersession, not deletion or automatic closure. |
-
-The published GX paper and old preprint differ on absorber amplitude.
-Run the small comparison specified in the research program; do not choose by
-PR chronology. Guard external reference kernel launch coverage and record local
-patches/binary hashes. A repaired external binary is a distinct reference.
-
-**Exit:** f32 crash probe, route-identity, original regression and boundary-policy
-checks pass on the selected CPU/GPU environments; every open PR has a reviewed
-disposition. No solver change in this planning PR.
-
-### P0.2 Evidence and API contracts
-
-- Recompute claims from their inputs. Mark unavailable reference decks
-  (especially HSX) and historical artifacts separately from fresh current-head runs.
-- Make precision explicit in physics tests; test f32/f64 in separate processes.
-  Do not weaken tolerances to hide a physics error.
-- Qualify the no-argument demo separately from a converged eigenmode: the fresh
-  run completes but emits CFL and under-resolved-growth warnings. Make the
-  teaching preset safe and its transient diagnostic labels unambiguous.
-- Check that prepare/load/solve preserve resolved `Nl,Nm`, species, geometry,
-  fields, collision model, accepted-time history and numerical policy.
-- Measure real compilation: `PreparedSimulation.warmup()` is currently a no-op,
-  so “prepared” alone must not certify that compilation has finished.
-- Keep diagnostics and optimized maps identical. A source branch or a passing
-  metadata test is not evidence that the full physics route is supported.
-
-### P0.3 Implementation order and evidence discipline
-
-1. Record current main, each candidate SHA and the exact worktree; reproduce
-   the smallest f32/compiler failure before testing a repair. Keep bad/good
-   subprocess outputs and a f64 control. Do not silently skip the failing shape.
-2. Compare legacy/per-step and fixed-rate damping at a selected affected mode,
-   holding everything else fixed. Resolve route identity before scanning beta.
-   Preserve the published two-field reference when testing a three-field extension.
-3. Write independent field residual checks before changing EM coefficients.
-   Distinguish an incorrect normalization, missing term and singular gauge mode.
-4. Fix load/prepare/solve and seed-state contracts in small, separately tested
-   PRs. Verify a real execution, not only the prepared summary dictionary.
-5. Freeze the accepted baseline and reference builds for P1. Rerun affected
-   controls after each numerical change; retain original failed traces.
-
-Each implementation PR must name the equation/contract changed, minimal
-reproducer, affected configurations, precision/backend tests and cost impact.
-Attach a passing operator test and a discriminating physics/numerics check;
-regression agreement with an old implementation is insufficient by itself.
-
-Start with local algebra/small grids. A comparison with missing geometry,
-nonfinite output or unidentified collision model fails the setup gate before
-any long integration. No simultaneous large scan of all open hypotheses.
-
-## 5. P1 — required ES and electromagnetic qualification
-
-P1 has two required outcomes sharing one solver, geometry, statistics and
-evidence system. Start EM field/linear qualification as soon as the relevant P0
-contracts pass; do not wait for a full QA optimization campaign.
-
-### P1.1 ES control and reusable benchmark protocol
-
-Use **CBC + one documented stellarator case**, then the initial/candidate QA pair.
-Use exact source decks, geometry hashes, normalizations and reference revisions.
-First choice: the existing W7-X ITG comparison, after checking its actual
-equilibrium provenance. Missing inputs block that claim, not the CBC controls.
-Do not substitute bundled QHS/QI examples for actual HSX/W7-X benchmarks.
-
-1. **Operator checks:** projected manufactured solution, Hermite/Laguerre
-   identities, streaming/mirror weighted adjointness, nonlinear bracket
-   free-energy balance, zonal field response and field-solve residual.
-   Manufacture forcing independently of the production RHS.
-   Spectral convergence is not a fixed finite-difference order.
-2. **Linear checks:** growth/frequency and eigenfunction, mode overlap/branch
-   separation, domain and moment convergence; directional AD versus finite
-   differences, including geometry and profile parameters.
-3. **Nonlinear checks:** stationary physical heat flux, zonal/nonzonal energy,
-   free-energy budget and resolved spectra. Establish matched comparison-code
-   transport intervals, not trajectory identity after chaos separates phases.
-4. **Refinements:** time sampling and `dt`, perpendicular box versus cutoff,
-   parallel domain versus `Nz`, `Nl/Nm` versus closure. One factor at a time,
-   followed by one joint refinement to detect compensation.
-5. **Gradient checks:** same detached state, numerical map and physical horizon
-   for AD/FD; perturbation ladder; checkpoint/plain agreement. Then test whether
-   directions improve an independent statistical objective.
-
-**Target acceptance (proposed, predeclare before running):** linear observables
-within 1% of a converged matched reference away from zero; transport discretization
-change below 5% and below the intended design effect; matched-code transport
-difference compatible with uncertainty and a declared 10% comparison envelope.
-Near zero use absolute tolerances. A failure changes the claim, not the threshold.
-Directional finite differences require a stable perturbation plateau, not one
-fortunate step size.
-
-First complete one clearly turbulent point. Add a small three-gradient bracket
-of the CBC nonlinear threshold as a falsifiable saturation/zonal test.
-A full Dimits-shift publication scan is subsequent work, not a reason to postpone
-all usable ES results.
-
-**Exit:** replayable benchmark bundle with pass/fail gates, uncertainty and cost;
-no nominal reduction promoted while drift, tails or refinement gates fail.
-
-### P1.2 Electromagnetic model contract — required
-
-The core model is local, low-frequency, delta-f GK with kinetic Maxwellian ions
-and electrons. Qualify finite mass ratio, charge/density balance and a named
-collision model. Additional species reuse the same field sums but need their
-own charge/current and collisional-exchange tests.
-
-Publish a configuration table with three distinct modes:
-
-| Mode | Evolved kinetic response / fields | Permitted claim |
-| --- | --- | --- |
-| ES | Kinetic ions, adiabatic or kinetic electrons; `phi` | ES validation only |
-| Reduced EM | Kinetic ions/electrons; `phi,A_parallel`, explicitly `delta B_parallel=0` | Named approximation and matched two-field reference |
-| Full EM | Kinetic ions/electrons; `phi,A_parallel,delta B_parallel` | Full local EM only after all required gates below |
-
-An adiabatic-electron magnetic-field calculation is not a substitute for a
-kinetic-electron EM benchmark. Unsupported flag/species/basis combinations
-must refuse or be explicitly labeled reduced models; flags must never silently
-discard requested fields. Retain intentional approximations as named modes.
-
-**Derive and freeze before optimization:**
-
-- The stored `G` distribution, its relation to `h` and `delta f`, and the
-  field-dependent transformation. Trace inductive response through that
-  transformation instead of adding a duplicate `partial_t A_parallel` term.
-- Quasineutrality, parallel Ampère and perpendicular pressure/Ampère balance,
-  including FLR weights, polarization, skin response, signs and beta factors.
-- The generalized gyroaveraged potential in streaming, drifts, drive,
-  collisions and nonlinear brackets. Toggling a field changes both field
-  solve and RHS consistently.
-- Parallel electric response, magnetic flutter, compressional magnetic
-  coupling, species-resolved particle/heat flux and particle–field energy
-  exchange. Declare the retained gyrokinetic ordering.
-- The zero-mode/gauge policy, small-`k_perp` and small-beta limits, linked
-  boundaries, Jacobian weights and conservation properties.
-- The source/operator combination for every admitted collision model,
-  including physical collisional dissipation and any numerical absorber.
-
-Separate **equilibrium beta** from **fluctuation beta**. A frozen-geometry beta
-scan reproduces a local benchmark, but is not a self-consistent VMEX
-finite-pressure equilibrium sequence. For the latter, track pressure-gradient
-geometry, curvature versus grad-B, species profiles and normalization together.
-
-### P1.3 EM execution ladder and decision gates
-
-All stages below are required for the claimed local ES/EM research-grade
-milestone. Small test cases precede expensive runs; passing an earlier stage
-does not close the later ones.
-
-**EM0 — field algebra and complete term routing**
-
-1. Assemble independent small field systems and their source moments. Check
-   each equation's residual, the coupled `phi/B_parallel` block and `A_parallel`.
-   Do not only compare a wrapper with the implementation it calls.
-2. Excite density, parallel-current and perpendicular-pressure responses
-   separately. Include zonal and nonzonal modes, two kinetic species, unequal
-   temperature, varying geometry and finite FLR.
-3. Toggle `A_parallel` and `B_parallel` independently; verify expected zero
-   channels and nonzero responses. Check retained first-order terms against
-   direct velocity quadrature on a small independent grid.
-4. Check the field VJP/JVP, full RHS linearization and an independent weighted
-   free-energy identity. The EM invariant includes particle and magnetic
-   contributions in the chosen distribution convention, not just `Wg+Wphi`.
-5. Test f32/f64 and a normalized residual over a parameter ladder. Measure
-   cancellation/conditioning in long-wavelength, light-electron limits.
-   Denominator clipping is not a substitute for a valid constrained solve.
-
-**Exit:** no missing field/RHS/diagnostic connection; residuals scale with
-conditioning and precision; invariants converge under refinement.
-
-**EM1 — analytic waves and limiting behavior**
-
-1. Use a homogeneous, periodic, no-drive slab to test shear-Alfvén frequency
-   in its MHD asymptotic range. Extend to a kinetic-Alfvén dispersion/damping
-   reference at resolved `k_perp rho` and mass ratio.
-2. Test finite-beta and low-beta limits, finite/increasing velocity resolution,
-   timestep convergence, relative field amplitudes/phases and parallel current.
-   State the applicability of the dispersion relation; do not use an MHD
-   approximation as an exact finite-FLR reference.
-3. Test compressional pressure response even where `B_parallel` is small.
-   The low-frequency GK model does not aim to recover the fast magnetosonic branch.
-4. Treat the `beta=0` switch and `beta→0+` limit separately. A nonuniform
-   Alfvén timestep restriction or a branch in the field solve must not be
-   mistaken for a failed physical ES limit or a smooth AD point.
-
-**Exit:** converged frequencies, damping and field ratios agree with their
-declared limits; no nonphysical unstable branch or hidden magnetic suppression.
-
-**EM2 — matched linear ITG–KBM and full-field comparison**
-
-1. Reproduce the published GX/GS2 CBC beta scan with `B_parallel=0` at
-   `ky rho_i=0.3`. First test low beta, the ITG–KBM transition neighborhood
-   and a clearly KBM-dominated point; refine around the transition only after
-   mode identification is reliable.
-2. Diagnose the current KBM discrepancy using eigenfunctions, residuals,
-   parity and growth/frequency, not fitted scale factors. Resolve thermal-speed,
-   beta, geometry, collision, boundary and timestep conventions first.
-3. Add a full-field comparison against stella and GS2 (GENE where available).
-   Use the same resolved physical deck; stella's current `EM_KBM.in` has
-   different geometry, gradients, beta and `ky` from GKX's deck. Its filename
-   is not a declaration of matched inputs.
-4. Perform paired `B_parallel` on/off checks at finite beta, followed by
-   velocity/domain/timestep and one combined refinement. Explain a small
-   compressional effect physically instead of accepting a disconnected field.
-5. Require a second independent discretization for selected anchor points;
-   GX alone is insufficient to rule out shared moment/convention errors.
-
-**Exit:** proposed 1% growth/frequency agreement away from marginality on
-matched converged modes; absolute tolerances near zero; transition brackets
-agree within resolved beta uncertainty. Field shapes and residuals must also pass.
-
-**EM3 — nonlinear tokamak transport and energy**
-
-1. Use a kinetic-electron low-beta CBC control, a finite-beta ITG point and
-   a KBM-side point that remains within local delta-f ordering.
-   A case that leaves that ordering is reported as model failure, not saturation.
-2. Benchmark total and per-species `Q_ES,Q_Apar,Q_Bpar` and particle flux.
-   Sum independently reconstructed channels; compare magnetic spectra and
-   field energy. Total flux agreement must not hide cancelling channel errors.
-3. Match field subset, geometry, physical collision model and numerical
-   dissipation across codes. If collision models differ, use a declared
-   collisionless limit or qualify the difference; do not call it exact parity.
-4. Verify short-time same-state RHS/flux comparisons, then statistically
-   compare stationary runs. Apply the P1.1 uncertainty and refinement protocol
-   to dominant individual channels as well as totals.
-5. Check drives, collisional loss, numerical damping and boundary terms in the
-   discrete energy budget. Resolve current/electron and magnetic tails even
-   when the ion heat-flux spectrum looks satisfactory.
-
-**Exit:** matched mean-flux uncertainty and discretization gates, resolved
-magnetic response and energy accounting; no claim based on a two-step sum test.
-
-**EM4 — finite-beta stellarator qualification**
-
-1. Freeze one actual nested-surface W7-X equilibrium/flux tube and profile set.
-   Check the geometry against an independent interface before running EM.
-2. Run a matched frozen-geometry beta scan with kinetic electrons and both
-   magnetic fields; then one physically consistent finite-pressure equilibrium
-   case. Record which beta and which geometry derivatives changed.
-3. Compare selected linear modes and a stationary nonlinear point with stella
-   or GENE using the same equilibrium. Use GX as an additional moment-method
-   control where its corresponding path is qualified.
-4. Repeat a neighboring field line and parallel-domain refinement; magnetic
-   shear, pressure-gradient drifts and boundary connection must be preserved.
-5. Do not use a global EUTERPE/GENE-3D result as direct local-code parity without
-   a matched local limit. Global results motivate scope checks, not arbitrary
-   adjustments to a local benchmark.
-
-**Exit:** one reproducible full-EM stellarator case with qualified geometry,
-linear response and stationary transport. A tokamak-only EM pass is insufficient.
-
-**EM5 — derivatives, restart and execution identity**
-
-1. Extend existing small finite-window tests to full kinetic-electron EM
-   parameter, geometry and collision derivatives. Check each flux channel's
-   derivative, not only a possibly compensating total.
-2. Compare JVP/VJP directional products, finite-difference ladders and
-   checkpoint/plain results. Branch selection, stopped initial states and
-   numerical topology remain fixed; test beta derivatives at positive beta.
-3. Verify an in-memory or NetCDF restart regenerates all fields and gives the
-   same short continuation. Warm shape changes re-equilibrate current and
-   magnetic energy as well as ion heat flux.
-4. Check CPU/GPU values and gradients, then species–Hermite moment reductions
-   and transpose communication. Unsupported collision/mesh combinations refuse.
-5. Profile kinetic-electron streaming, field response and communication before
-   selecting IMEX/preconditioning changes. Test the physical residual after
-   preconditioning, and include setup/rebuild and VJP memory in timing.
-
-**Exit:** a documented full-EM Python value/gradient/restart example and
-verified supported CPU/GPU execution. Distributed EM claims require their own
-identity, adjoint and scaling gate, not an ES timing extrapolation.
-
-### P1.4 References, matching contract and minimum evidence bundle
-
-| Reference | Use in this plan | Important qualification |
-| --- | --- | --- |
-| [GX, `6.1 and appendix G](https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA) | EM2 reduced-field beta scan and EM3 low-beta kinetic control | Published ITG–KBM scan explicitly omits `B_parallel` |
-| [stella EM tests, pinned source](https://github.com/stellaGK/stella/tree/2b8e269f2addd0baa5991057eafa022135e04498/AUTOMATIC_TESTS/numerical_tests/test_7_electromagnetic) | Term isolation, full-field KBM and restart methodology | Frozen outputs are regression evidence; translate and converge the actual input |
-| [GS2 documentation](https://gyrokinetics.gitlab.io/gs2/) | Independent energy/pitch discretization and EM field response | Pin revision, namelists, collision model and field switches |
-| [Pueschel, Kammerer & Jenko (2008)](https://doi.org/10.1063/1.3005380) | Finite-beta CBC transport/KBM benchmark design | Recover exact field and geometry assumptions before numerical targets |
-| [Davies thesis (2022)](https://etheses.whiterose.ac.uk/id/eprint/32068/) | EM stella/GS2 algorithm and benchmark context | Historical implementation; not a claim about today's solver or all regimes |
-| [GENE magnetic compression (2025)](https://doi.org/10.1016/j.cpc.2024.109410) | Why finite-FLR `B_parallel` deserves an independent test | Global implementation is not a drop-in local GKX discretization |
-| [Global stellarator EM (2023)](https://doi.org/10.1017/S0022377823000363) | Finite-beta stellarator physics and locality checks | Do not compare global/local fluxes as identical models |
-
-Every reference record contains: code SHA, patches/binary hash, machine/compiler,
-species `Z,m,n,T` and gradients, collision operator/frequency convention, all
-field flags, beta definition, geometry hash and pressure gradients, coordinate
-and boundary conventions, box/cutoffs, velocity truncation, timestep, closure
-and absorber, seed, diagnostic units and averaging rule.
-
-Use one compact evidence bundle per benchmark, shared by CI, docs and figures:
-resolved TOML/namelist inputs, small tabular observables, provenance, explicit
-pass/fail/unknown gates and reproduction command. Store large distributions and
-movies outside Git with content hashes. Do not introduce another JSON framework.
-
-### P1.5 Bounded execution schedule
-
-| Batch | Work | Start/stop rule |
-| --- | --- | --- |
-| A | P0 reproduction + EM0 field/RHS tests | Local small grids first; stop on missing terms/nonfinite fields |
-| B | ES CBC control + EM1 wave/limit checks | Freeze accepted normalization; no parameter sweep before convergence |
-| C | EM2 three-point beta comparison, then transition refinement | Exact decks and healthy reference builds required |
-| D | ES stellarator and EM3 nonlinear pilot | Use short pilots to set resolution/cost; pilots are not saturation evidence |
-| E | Fixed-budget replicated transport/refinement and EM4 stellarator | Launch only after pilot setup/tails pass; check remote job state first |
-| F | P2 warm QA plus EM5 differentiated/restart workloads | Use relevant qualified physics; keep independent validation seeds |
-
-Predeclare a wall-time/memory cap and physical accuracy goal for each batch.
-If a cap is reached, save state and report unresolved; do not shorten the
-averaging interval retrospectively to make a gate pass. Resolved deterministic
-field/linear checks need no ensemble; turbulent means do.
-
-## 6. P2 — useful derivatives and warm QA optimization
-
-### P2.1 Warm restart is a continuation policy, not a new adjoint
-
-Use the existing Python integrator with a device-resident turbulent distribution.
-Recompute fields with the new geometry/species; do not carry an old potential as
-an independent solution. Preserve physical amplitude.
-Freeze seeds/states throughout each local objective/line search and refresh only
-after acceptance. Record numerical topology and normalization in the state contract.
-
-Measure cold, warm, and warm-plus-re-equilibration from the same accepted design.
-Check at least small and larger geometry perturbations, three independent seeds,
-and two re-equilibration budgets; compare on **equal total wall-time budgets**.
-Do not infer convergence from the existing 5% geometry / quarter-spin-up heuristics.
-Initial implementation should keep host orchestration outside AD and the
-distribution on-device; differentiated windows stay pure JAX.
-An array in Python is not automatically a differentiable in-memory pipeline.
-
-**Adopt warm reuse only if** independent flux distributions agree within the
-predeclared bias budget, descent directions remain useful, and end-to-end time
-to the same uncertainty decreases. Otherwise retain cold restarts.
-
-Implementation sequence:
-
-1. Define a typed accepted-state record containing the device array, physical
-   time, geometry/species/normalization identity, field mode and resolution.
-   Extend the existing helper; do not create a competing cache abstraction.
-2. Separate accepted-state ownership from temporary line-search states.
-   Rejected proposals cannot change future objective values.
-3. Rebuild geometry/field coefficients for a new shape and solve all enabled
-   fields from the distribution. In EM, `A_parallel` participates in the
-   distribution convention: derive any necessary state transformation before
-   assuming the ES reuse map applies.
-4. Test equal-parameter restart identity first, then changed-shape response,
-   then bias/cost over independent seeds. Measure transfers and peak memory.
-5. Keep gradient-window length and statistical validation horizon separate.
-   Refresh the accepted ensemble only at documented acceptance points.
-6. Promote the simplest passing policy; save cold restart as the fallback.
-
-### P2.2 Three examples, one geometry/objective interface
-
-| Example | Objective | Required result |
-| --- | --- | --- |
-| Linear QA ITG | Smooth aggregate of unstable eigenvalues over selected `ky,s,alpha` | Feasible geometry and verified derivative/branch handling |
-| QA quasilinear screening | Declared spectral weights/saturation rule | Held-out ranking against nonlinear cases, including failures |
-| QA turbulent transport | Fixed-window physical heat flux plus VMEX constraint tuples | Cold held-out seeds, timestep/resolution/field-line checks show resolved reduction |
-
-Each example has a small smoke preset, a teaching case with interpretable plots,
-and a documented research preset. Add a full-EM evaluation/gradient recipe to
-the shared workflow after EM5; an expensive EM optimization campaign is not
-needed to prove basic three-field differentiation.
-
-The eventual finite-beta optimization objective must include the intended
-species and EM flux channels, with equilibrium constraints and profile choices
-explicit. An ES-optimized candidate is not automatically an EM improvement:
-perform a held-out EM evaluation before making that broader claim.
-
-Share setup and plotting through existing helpers; retain short readable scripts.
-Use VMEX's tuple convention. Fix physical `s` rather than an index that changes
-with equilibrium resolution; hold scale, profiles and constraints explicit.
-Reserve validation seeds and neighboring radii/field lines/gradients before
-optimization. Check closeness to low-order rational iota and domain sensitivity.
-QL or reduced resolution must not exclude a good design solely by an unvalidated proxy.
-
-Compare checkpointed AD against finite-difference directions and a bounded SPSA
-control; choose on verified improvement per wall time, not derivative exactness
-for a surrogate window. No shadowing or statistical-implicit-adjoint project now.
-
-### P2.3 Performance on the admitted physics
-
-- Profile cold compile, cached RHS, FFT/bracket, field solve, diagnostics,
-  transfers, spin-up, window value/VJP and validation separately.
-- Synchronize JAX timings, use repeated medians/spread, report peak resident and
-  temporary memory, compiler/device/thread settings and numerical identity.
-- Use independent cases first. Assess the existing species–Hermite route next,
-  with width-two halos and field reductions; do not revive whole-state FFT
-  sharding before a communication profile justifies it.
-- Precondition the already implemented stiff/shifted solves only when profiling
-  identifies them as limiting. Require unpreconditioned residuals and transpose
-  tests; count setup and memory. A better preconditioner cannot speed an explicit
-  ExB-limited step by itself.
-- Proposed adoption threshold: at least 20% total workload saving outside timing
-  noise, no failed physics/gradient gate, and no unreported memory regression.
-
-Required profile workloads: ES adiabatic-ion-scale control; kinetic-electron
-two-field control; full-EM finite-beta case; short/full checkpointed VJP; warm
-refresh and independent ensemble. Use one accepted numerical baseline per
-comparison. Report strong scaling separately from ensemble throughput.
-
-For a streaming/Alfvén-limited workload, compare the existing explicit and IMEX
-maps with verified order/stability and a field-aware preconditioner if needed.
-Do not replace the nonlinear derivative with a statistical implicit solve.
-Use equal-arclength or non-twisting coordinates only through the measured
-decision tests in the technical page; changing coordinates also changes
-quadrature, boundaries and geometry derivatives.
-
-## 7. P3 — ship Coulomb honestly
-
-Do not make full multispecies Landau a prerequisite for the first ES optimization.
-Do not describe the finite-wavelength tables on main as already validated.
-
-1. Reproduce unmerged coefficient repairs independently; declare moment
-   ordering/shape, frequency convention, FLR argument and supported range.
-2. Check particle-coordinate invariants, like-species entropy metric and `kperp=0`
-   limits; finite-k gyrocenter moments must retain classical diffusion.
-3. Test interpolated values and wavelength/parameter JVPs at zero, between nodes
-   and at range boundaries, against independent high-accuracy coefficients.
-   Reject unsupported bases/ranges, including equal-size but different `Nl,Nm`.
-4. Validate the coupled field/source/operator map in f32/f64, then collisional
-   relaxation, ITG and zonal-flow cases against a specifically named GENE or
-   stella collision model.
-5. Publish the narrow validated envelope or keep it experimental. Arbitrary
-   moment order, unlike species and new interpolation forms require a separately
-   justified extension, not an oversized correction PR.
-
-Details and GENE distinctions: [Coulomb contract](docs/research_grade_program.rst).
-
-EM adds a necessary current-response test: an operator that preserves the right
-density moments can still give incorrect parallel-current relaxation, magnetic
-flutter transport or field-source cancellation. Test the admitted model with
-both magnetic fields before advertising that model as EM-compatible.
-Until that passes, keep a specifically qualified collision model for core EM;
-do not silently substitute a different model or claim full multispecies Coulomb.
-
-## 8. What is deliberately deferred, and when to reconsider
-
-| Deferred work | Admission trigger |
-| --- | --- |
-| Universal long-time AD / shadowing | Warm short-window directions demonstrably fail the design task despite horizon/ensemble tests |
-| New closures / compressed Coulomb representations | A converged baseline identifies closure error or coefficient storage as the bottleneck |
-| General energy–pitch velocity coordinates | Trapped-particle convergence remains the dominant cost after moment/collision/domain controls |
-| Non-twisting flux tube | High shear / long domain forces excessive perpendicular resolution |
-| Full-flux-surface / FCI island physics | Locality or flux-surface assumptions fail the target application; needs a separately funded model/validation program |
-| Broad MTM/TAE/energetic-particle campaigns, TEM and Er optimization | Core EM0–EM5 is qualified; add the ordering/species/collision/shearing checks for the new regime |
-| Arbitrary unlike-species Coulomb | Pair coefficients and mass/temperature exchange tests exist; not supplied by more like-species table nodes |
-| Absolute QL model / transport-profile coupling | Held-out nonlinear calibration meets a predefined accuracy gate |
-| New release / performance publication claims | Open PR disposition and essential admitted physics, examples and reproducibility gates pass |
-
-Retain existing code and historical tests unless a deliberate, separately tested
-deletion is approved. Deferral is not an unsupported feature silently disappearing.
-**Not deferred:** kinetic-electron EM, both magnetic fields, canonical nonlinear
-EM transport, finite-beta stellarator qualification and full-EM derivatives.
-
-## 9. P4 — slimming, documentation, publication and release
-
-- Keep one active plan, one append-only log, and one evidence entry per decision.
-  Older plans remain accessible through pinned Git history; no mass JSON deletion
-  or force-history rewrite in this task.
-- Contract source by numerical ownership: remove duplicated stage/RHS/field
-  dispatch and wrappers only with call-graph, API and benchmark evidence.
-  Avoid merging unrelated tests into giant files merely to hit a file count.
-- Classify JSON as runtime interchange, reproducible evidence, redundant summary,
-  or bulky generated data. Deduplicate summaries; retain schema/provenance;
-  externalize large immutable outputs with hashes, small fixtures and replay tools.
-  Measure wheel, checkout and full clone separately.
-- Documentation: quickstart → scenario recipes → equations/contracts →
-  validation/results → developer reference. README shows a few results, runnable
-  entry points and clear scope; do not copy input reference tables or logbooks.
-- Examples: smoke, teaching and research presets, expected physics, cost/memory,
-  plot definitions and failure interpretation; explicit commands, no hidden
-  benchmark data downloads. Initial/final QA surface/Boozer/flux plots stay visible.
-- First code paper: verified ES and EM local GK, differentiated workloads and
-  cost-to-accuracy on CPU/GPU,
-  with warm/cold optimization only if independently validated.
-  A later physics/collision paper needs genuinely new results, not a new feature
-  count. Do not claim the first differentiable GK code: iGENE and gyaradax exist.
-- Release only after user review of open PR dispositions, current-head/wheel
-  tests, admitted benchmark gates, documented limitations and manuscript data.
-  No version bump, tag, release upload or automatic merge in this plan.
-
-### P4.1 Documentation and research deliverables
-
-Keep the scenario index aligned with the model contract:
-
-| Reader/task | Required example or page |
-| --- | --- |
-| First-time student | Safe linear run; growth/frequency/energy/flux glossary; expected transient versus eigenmode |
-| Turbulence user | ES and full-EM input recipes, species/field flags, saturation and resolution checks |
-| Physics researcher | Field/kinetic equations, ordering, normalization and collision/closure support matrix |
-| Optimization user | Linear/QL/nonlinear tuples, exact differentiated quantity, warm-state and held-out validation |
-| Performance user | CPU/GPU sizing, supported sharding, synchronized timings, memory and accuracy constraints |
-| Paper reviewer | Source-deck provenance, independent references, failed gates and replayable plots |
-
-Required EM figures, generated from accepted data rather than schematic claims:
-Alfvén dispersion/damping; ITG–KBM beta scan with field-mode labels; normalized
-three-field eigenfunctions; channel-resolved nonlinear flux with uncertainty;
-finite-beta stellarator geometry/flux; convergence and energy-budget residuals;
-full-EM value/VJP cost and qualified scaling. Retain QA boundary/Boozer/flux plots.
-The README selects high-impact accepted figures; the documentation carries
-the complete evidence and does not hide failures.
-
-### P4.2 Completion checklist
-
-- [ ] P0: reviewed PR dispositions and exact public input/state/field contracts.
-- [ ] P1 ES: converged CBC and provenance-checked stellarator controls.
-- [ ] EM0–EM2: independent field/limit/linear three-field qualification.
-- [ ] EM3–EM4: stationary nonlinear tokamak and finite-beta stellarator evidence.
-- [ ] EM5: full-EM derivatives, restarts and supported CPU/GPU identity.
-- [ ] P2: independently resolved QA design result; warm reuse only if qualified.
-- [ ] P3: publish the exact admitted collision envelope and remaining exclusions.
-- [ ] Performance: ES and EM time-to-accuracy/value/VJP measurements; no blanket
-      distributed speed claim from a single configuration.
-- [ ] Package/docs: working examples, wheel checks, source/data provenance,
-      uncertainty plots and a manageable, reproducible repository.
-- [ ] User review before any merge/release/publication submission.
-
-No checklist item is marked complete merely because this planning PR exists.
-An ES-only result may support an interim scoped report; it does not remove EM
-from the required code milestone without a new explicit user decision.
-
-## 10. Resume protocol and logbook
-
-1. Read this plan, [the audit](plan/baseline/review_2026_09_06.md), and the latest
-   [log entry](plan/log.md); then inspect actual branch/worktree/PR state.
-2. Pick the first unmet P0 item. State the falsifiable question, smallest test,
-   cost cap and stop condition **before** starting a long run.
-3. Log commit, environment, exact command, inputs/reference hashes, result,
-   failed/skipped checks, elapsed time, artifact location and next decision.
-4. For remote jobs also save host, directory, PID/job ID and last verified state.
-   Unknown is not finished; never duplicate an unverified running campaign.
-5. Commit small, deliberate changes as Rogerio Jorge; no AI coauthors.
-   Push for review, never merge without explicit approval.
-
-Historical authorities (superseded ordering, preserved evidence):
-[main plan at a99dac89](https://github.com/uwplasma/GKX/blob/a99dac898334414d31733f6d286bd4c36983702e/plan.md),
-[September 4–5 log at 71c5cc48](https://github.com/uwplasma/GKX/blob/71c5cc480411e3c568b38ce9010b4b9093fa2453/plan/log.md),
-[external review at 1643f0e7](https://github.com/uwplasma/GKX/blob/1643f0e72a6310068b3387cceb94e39922020597/plan/baseline/review_2026_09_05_external.md).
+# GKX research plan — synthesis take, 2026-09-06
+
+Baseline: main [a99dac89](https://github.com/uwplasma/GKX/commit/a99dac898334414d31733f6d286bd4c36983702e)
+(2.0.0 plus #193/#195). This document is one author's take, written after
+reading [#198](https://github.com/uwplasma/GKX/pull/198),
+[#203](https://github.com/uwplasma/GKX/pull/203) and
+[#204](https://github.com/uwplasma/GKX/pull/204) in full, the code they
+describe, and the five research reports in [plan/research](plan/research/).
+It is input to the authoritative plan an independent collaborator will write.
+The reasoning behind each departure from the three earlier plans is in
+[the synthesis review](plan/baseline/review_2026_09_06_synthesis.md).
+
+**No solver, test, data or release change is made by this document.**
+
+## 0. How this plan differs, in one page
+
+The three earlier plans agree on the diagnosis: the damping regression must be
+fixed, the QA reduction is unresolved, the finite-k Coulomb tables are
+research-only, the README must shrink, and finite-window AD is the one
+nonlinear derivative. They differ on scope gating (#204 requires full
+three-field EM before the research-grade milestone), on the damping fix (#198
+backed a fixed rate; #203 and #204 back GX's per-step contract), and on how to
+work. This plan keeps their agreements and changes four things.
+
+1. **Where references come from.** Stop running GX ourselves as the first
+   resort. Rank reference sources: analytic results, published numbers, the six
+   golden outputs GX ships in its own source tree, the open 100,705-tube GX
+   stellarator dataset on disk, and only then self-run GX with a labeled build
+   and a checked launch-dimension cap. This removes the office-GPU and
+   unknown-remote-job dependencies from every validation claim except the
+   expensive nonlinear stellarator points.
+2. **How claims are gated.** One evidence ledger, generalizing the README
+   parity gate #193 landed: every public number is a row with its artifact,
+   generator, reference, tolerance, tier and status, and CI recomputes it.
+   Regression is bitwise on stored outputs (stella, CGYRO practice); algorithm
+   changes are judged at physics tolerances (GX practice: γ 1e-3, ω 5e-3).
+3. **What "converged" and "saturated" mean.** One statistics module implements
+   a pre-registered protocol (MSER transient cut, integrated autocorrelation
+   time by two estimators, batch means with lag-1 correction, multivariate ESS,
+   relative half-width stop, persistence) and is the only source of error bars
+   for stopping, cross-code comparison and optimization acceptance.
+4. **What is new.** The differentiable-gyrokinetics field is now populated
+   (iGENE, gyaradax, GANDALF, JAX-in-Cell, a 2026 review that does not mention
+   GKX), and every differentiable GK code is tokamak-only. The contributions
+   nobody has made are named with their evidence bars and compute estimates,
+   and the first paper is built around two of them.
+
+On EM: this plan keeps #204's requirement that kinetic-electron three-field EM
+is core, and sequences it by what a reference exists for. EM algebra, waves,
+linear ITG–KBM and nonlinear kinetic-electron tokamak transport have published
+references and are required before release. Finite-β stellarator EM is
+required at the linear level and as one nonlinear point with declared
+uncertainty; no local code has published a matched nonlinear EM stellarator
+benchmark to compare against, so parity cannot be the gate there.
+
+## 1. Destination
+
+A verified, differentiable, local δf gyrokinetic code in the Hermite–Laguerre
+basis, electrostatic and electromagnetic, adiabatic or kinetic electrons, with
+analytic, Miller and VMEC/VMEX geometry, running on CPU and NVIDIA GPU, whose
+every public number is regenerated by CI from a declared reference, and whose
+derivatives are demonstrated useful on a stellarator design problem with
+held-out validation.
+
+Two papers follow from that:
+
+| Paper | Claim | Evidence phases |
+|---|---|---|
+| Methods and verification | JAX Hermite–Laguerre GK with published-reference verification, dataset-scale nonlinear validation, a pre-registered statistics protocol, and measured cost-to-accuracy on CPU/GPU | Phases 1–3, 5 |
+| Differentiable stellarator design | Adjoint linear/quasilinear optimization through VMEX in stellarator geometry, a physics-based differentiable proxy scored on the open dataset, and finite-window nonlinear gradients validated against SPSA | Phases 2, 4 |
+
+Neither claims "first differentiable gyrokinetic code" or "exact saturated
+transport gradients".
+
+## 2. Current truth (what is established, what is not)
+
+| Area | Established at a99dac89 | Not established |
+|---|---|---|
+| Linear ES | Krylov and dense eigenmodes; tracked parity scans (KAW 0.0004%, ETG 0.04%, W7-X 0.27%, Cyclone 5.5–6.8%, KBM 20%) recomputed by CI | Cyclone 5–7% and KBM 20% unexplained; HSX reference unreproducible; velocity convergence anomalous (Nl 24→32: −24.7%) |
+| Damping | #197 restores GX's per-step absorber and reproduces the recorded artifact bit-identically at all 11 ky | #197 unmerged (one manifest conflict); every 2.0.0 time-integrated result carries the regression |
+| Nonlinear ES | Runtime, restart, saturation stopping, tracked windows for Cyclone/Miller/KBM/W7-X/HSX | No statistical cross-code comparison; stopping rule uncalibrated; no Dimits bracket |
+| EM | Three-field solves exist; KAW golden; KBM two-field deck; channel-sum tests | No three-field linear reference; no nonlinear EM transport; no finite-β stellarator EM |
+| Derivatives | Implicit eigenpair sensitivities; checkpointed finite-window heat-flux VJP with AD/FD agreement to 1024 steps | No stellarator adjoint result; QA 12.26% unresolved (4/48 traces fail drift) |
+| Collisions | LB/Dougherty, Sugama, improved Sugama; drift-kinetic Coulomb low-moment | Finite-k Coulomb tables: 22.9–95.8% block errors; research-only |
+| Parallel | Independent scans/ensembles; species×Hermite implemented | Whole-state sharding 0.211× and fails identity; species×Hermite unqualified with conserving collisions |
+| API | load/prepare/solve/scan/plot; wheel first-run gate | `prepare` drops deck Nl/Nm (reports 4/8 for a 16/48 deck); `warmup` is a no-op; demo emits CFL warnings; f32 geometry test fails 1e-9 by 6e-8 |
+| Process | 134 release gates; strict docs; eleven checkers; parity gate | Seven open PRs, none merged since 2026-09-03; three competing plans; office box unreachable; two GX jobs of unknown state |
+
+Fresh measurements behind this plan (details in the synthesis review): GKX at
+the dataset resolution 64×64×96 (4,8) costs 1.14 s per step on an M3 Max CPU;
+the dataset's periodic flux-surface average is reproduced to 1e-6 from its
+geometry tensor; GX's launch clamp is confined to the linked kernel; GX's
+`calculate_bgrad` is a periodic spectral derivative like GKX's.
+
+## 3. The evidence system
+
+### 3.1 Reference sources, in order of preference
+
+| Rank | Source | Examples | Why this rank |
+|---|---|---|---|
+| 1 | Analytic | Landau roots; Rosenbluth–Hinton 1/(1+1.6q²/√ε) and the GS2 value 0.04659 at ε=0.02, q=1.3; KAW slab dispersion; Dimits offset-linear fit χᵢ ∝ 15.4[1−6.0L_T/R] | Independent of any code |
+| 2 | Published numbers | GX Tables 1–2 (Qᵢ by (Nl,Nm), ±σ); stella–GENE W7-X Qᵢ 2.26/2.47; Nevins ETG χₑ 3.0±0.13; GX ITG→KBM at β≈1.3%; Hoffmann Dimits κ_T≈4 | Citable, fixed |
+| 3 | GX shipped goldens | `benchmarks/linear/{ITG_cyclone×3, KAW, KBM, ITG_w7x}/*_correct.out.nc` with decks; gate at GX's own 1e-3/5e-3 | Reproducible by anyone with GX's repo; no run needed |
+| 4 | Open dataset | Landreman 2025: 100,705 tubes × 2 nonlinear GX runs, CC-BY, with a 100-tube resolution check (R²=0.993) | Statistical validation at scale with zero GX runs |
+| 5 | Self-run GX | Only for cases absent above (kinetic-electron W7-X, EM stellarator) | Requires a labeled build, `MAX_BLOCK_DIM_YZ` check for linked kernels, recorded hashes |
+
+Rule: a claim cites the highest-ranked source available. A self-run reference
+is labeled as such in the ledger and never called "published".
+
+### 3.2 The ledger
+
+`tools/evidence_ledger.toml`, one `[[row]]` per public number or claim:
+
+```toml
+[[row]]
+id = "L-lin-cyclone-salpha-gamma"
+claim = "README parity table, Cyclone ITG gamma"
+observable = "max|gamma_gkx - gamma_ref| / max|gamma_ref| over the ky scan"
+artifact = "docs/_static/cyclone_mismatch_table.csv"
+generator = "tools/comparison/build_gx_parity_matrix.py --case cyclone_salpha_itg"
+reference = "GX benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons_correct.out.nc"
+reference_rank = 3
+reference_sha256 = "..."
+tolerance = { gamma = 1.0e-3, omega = 5.0e-3 }   # GX's own check.py gate
+tier = 2
+status = "open"          # open | passing | failing | superseded
+last_regenerated = "2026-09-06"
+```
+
+- `tests/release/test_evidence_ledger.py` parses the ledger, checks that every
+  artifact exists, recomputes each README/docs number from its artifact (the
+  #193 mechanism, generalized), and fails on any `status = "passing"` row whose
+  recomputation is outside tolerance.
+- README and docs numbers are either generated from the ledger or gated by it.
+  No number is typed by hand.
+- Bitwise regression rows (tier 1) store a small NetCDF/CSV of the reference
+  output and compare at `atol ≤ 1e-12` after a fixed seed. Physics rows (tier 2)
+  compare at the declared tolerance. Statistical rows (tier 3) compare paired
+  means with confidence intervals from the statistics module.
+
+### 3.3 CI tiers
+
+| Tier | Runs | Budget | Content |
+|---|---|---|---|
+| 0 | every push | <60 s | algebra, contracts, tiny derivatives |
+| 1 | every push, sharded | <10 min per shard | bitwise regression on stored outputs; wheel first run; README/docs recomputation; f32 and f64 in separate processes |
+| 2 | nightly | <60 min | GX goldens at GX tolerance; analytic tier; short nonlinear CBC; convergence tables |
+| 3 | weekly or manual, office GPU | declared per campaign | dataset samples, Dimits bracket, EM nonlinear, optimization; raw data retained, digests checked in CI |
+
+CGYRO runs 21 regression cases on every push; stella runs eight groups. Tier 1
+stays inside that budget.
+
+### 3.4 Statistics module
+
+`src/gkx/diagnostics/statistics.py` (extending `saturation.py`, not replacing
+it) implements the protocol in
+[the statistics report](plan/research/2026-09-06_saturation_statistics.md):
+MSER-5 transient cut with the second-half rejection rule; τ_int by Sokal window
+(C=5) and by batch means, flagged if they differ by 2×; T_avg ≥ 50 τ_int;
+batches of max(⌊√n⌋, 5τ_int) samples with ≥20 batches and lag-1 correction;
+mean ± t·SE with ESS reported; split-half and trend stationarity; multivariate
+ESS on (Q_i, Q_e, Γ) with the Vats–Flegal–Jones bound; relative half-width
+≤ 5%; checks at 10% increments and not before n*; persistence over two
+checkpoints; ARMA forecast near marginality; JSON output, never a bare mean.
+
+Its three consumers: `run_to = "saturation"` stopping; `tools/comparison`
+paired comparisons (Δ with CI; converged means CI contains zero and half-width
+< ε·Q̄); optimization acceptance in the QA workflow. The rule is calibrated
+once on replayed archived traces and synthetic correlated traces for false-stop
+rate, and the calibration is a ledger row.
+
+## 4. Phase 0 — unblock and settle truth (weeks 1–2)
+
+### 4.1 PR dispositions
+
+| PR | Disposition | Steps |
+|---|---|---|
+| #197 | **Merge first.** The per-step contract is GX's (`damp_ends_amp/dt` in both linked and NTFT kernels; eq. 4.30; App. C converged in AΔt). Bit-identical reproduction of the recorded artifact is the acceptance evidence. | rebase onto main (one conflict in `tools/package_architecture_manifest.toml`); CI; merge |
+| #199 | Merge after #197 | analytic stage-map tests; docs |
+| #196 → #200 → #201 | Merge as one stack, in order | subprocess-isolated f32 checks; CPU-only lowering; GPU layout retained |
+| #202 | **Split.** Independently justified repairs (single-link and multi-link frequency fixes, streaming coefficients) become small PRs with their own tests; the fixed-rate absorber becomes an R1 research flag with rescaled decks and regenerated references, never a silent default. The two unpushed local commits (447d724f, 48b90099) are pushed to a branch so nothing is lost. | |
+| #198, #203, #204, this PR | Inputs to the authoritative plan; closed by supersession when it merges; their logs and audits stay in history and are linked from the plan | |
+
+Merge cadence rule from here on: a PR whose ledger rows pass merges within
+five working days or receives a written disposition in the log. Stacked drafts
+older than two weeks are split or closed.
+
+### 4.2 API and first-run contracts (from #204's audit; verified defects)
+
+1. `gkx.prepare(case)` must carry the deck's `[run] Nl, Nm`, species, fields,
+   collision model and numerical policy; add a test that prepares the shipped
+   Cyclone deck and asserts Nl=16, Nm=48 in the summary and in the executed
+   solve. Owner: `api/prepared.py`.
+2. `PreparedSimulation.warmup()` must trigger compilation and report it;
+   measure with a fresh-process timing test. Owner: `api/prepared.py`.
+3. The no-argument demo must not emit a CFL warning: choose dt from the
+   estimator's bound and label the output "transient illustration". Owner: CLI.
+4. Precision-specific tests run in separate processes; the s-α field-strength
+   test gets an explicit f32 tolerance or is marked x64-only; no physics
+   tolerance is loosened. Owner: `tests/validation/physics_gates`.
+5. Every claim in README/docs that depends on a time-integrated result at
+   2.0.0 is marked "pre-#197" in the ledger until regenerated.
+
+### 4.3 Public truth and citation
+
+1. README: adopt #204's 239-line structure; add the capability table with one
+   command per row, the expected eigenvalue line under the first example, and a
+   Cite section; keep the five pinned scope sentences verbatim (they are gated).
+2. Add `CITATION.cff`; mint a Zenodo DOI at the next release and add the badge.
+   Add `CONTRIBUTING.md` (JOSS checklist item).
+3. README collision row already corrected (#203); HSX row: delete or regenerate
+   with provenance by the end of Phase 1 (the #178 rule).
+
+### 4.4 Ledger scaffold and GX goldens
+
+1. Create `tools/evidence_ledger.toml` seeded with the seven parity rows, the
+   four Landau rows, the AD/FD figure, the runtime/memory figure and the QA
+   figures; port the #193 test into `test_evidence_ledger.py`.
+2. Import GX's six shipped linear decks verbatim into
+   `tools/comparison/fixtures/gx_goldens/` with a README naming the GX commit
+   (bc2fe552 locally; upstream 3865a537) and the `*_correct.out.nc` SHA-256s;
+   extract (ky, γ, ω) to tracked CSVs; add tier-2 rows at GX's tolerance.
+3. Record the GX reference-validity rule as a ledger field: linked-boundary
+   references list Nz·Nl·Nm·Nspecies and are invalid above 65,535 unless the
+   build is labeled repaired; periodic references are exempt.
+
+### 4.5 Velocity-convergence investigation (the anomaly is a defect until shown otherwise)
+
+Protocol from [the convergence report](plan/research/2026-09-06_hermite_laguerre_convergence.md),
+run on merged #197:
+
+1. Baseline = GX App. G.1 (Nl=16, Nm=48, ν_ii=1e-2 Dougherty, no
+   hypercollisions, 3×2π, Nz=24 per segment). Obtain γ from the late-window fit
+   and from the Krylov eigenvalue; require <1% agreement.
+2. Hold dt (verified by halving), Nz/nperiod, absorber at GX's contract, the
+   fit window, p_hyper=Nm/2 and f_hyp=1.
+3. Scan Nm ∈ {16,24,32,48,64,96} at Nl=16; Nl ∈ {4,6,8,12,16,24,32} at Nm=48;
+   the P≈2J diagonal.
+4. Decide with |Δγ| per doubling <2%, corner power ≤1e-5, monotone Hermite
+   decay, ν and f_hyp insensitivity <1–3%.
+5. If the −25% swing persists, the eight isolating tests in the report name
+   the cause: collisionless deck; `p_hyper_m = min(20, Nm/2)` cap; fit window;
+   fixed dt; Laguerre top-ℓ convention vs GX zero-padding; absorber strength;
+   the Nl-dependent default hypercollision channel (`l_norm`); top-moment pile-up.
+
+Exit: a convergence table as a ledger artifact, and either the anomaly gone or
+its cause fixed in a separate PR.
+
+Cost: CPU only; hours.
+
+## 5. Phase 1 — linear atlas and analytic tier (weeks 2–4)
+
+1. **GX goldens pass at GX tolerance** for the six cases (three Cyclone, KAW,
+   KBM two-field, W7-X). This either explains the 5–7% Cyclone and 20% KBM rows
+   or localizes the defect (fit window, normalization, dt, absorber). Owner:
+   `tools/comparison/build_gx_parity_matrix.py`.
+2. **Analytic tier as tier-2 rows:** Landau roots (already), Rosenbluth–Hinton
+   residual with the GS2 value, KAW slab dispersion, local-limit ITG vs the
+   Dong case. Owner: `tests/validation/physics_gates`.
+3. **Parallel-domain convergence** on W7-X: Nz, nperiod and field-line label α
+   scanned separately (Sánchez et al.: tube length is configuration dependent).
+4. **Normalization appendix**: the GKX equivalent of GX Appendix G with the
+   √2 v_ti and 2√2 Q_GB conversions against stella/GENE; a docs page generated
+   from the ledger.
+5. **pyrokinetics plugin**: `GKInputGKX`/`GKOutputReaderGKX`, plus VMEC support
+   in its `LocalGeometry` (absent for every code today). This gives input
+   conversion to GS2/stella/GENE/CGYRO and the shared golden-answer harness.
+   Owner: new `src/gkx/io/pyrokinetics.py`; upstream PR to pyrokinetics.
+
+Exit: ledger rows for every README parity number at rank ≤3; KBM two-field
+reproduced or its discrepancy diagnosed by eigenfunctions and residuals, not
+scale factors.
+
+Cost: CPU; the KBM and W7-X linear runs fit in tier 2.
+
+## 6. Phase 2 — nonlinear ES validation at scale (weeks 3–8, GPU)
+
+### 6.1 Statistics module and calibration
+
+Implement §3.4. Calibrate on the tracked Cyclone, KBM, W7-X and HSX windows
+replayed at chunk boundaries and on synthetic AR(1)/ARMA traces with known
+means: report false-stop rate and interval coverage. Ledger row
+`L-stat-calibration`.
+
+### 6.2 GX Table 1 reproduction
+
+Cyclone Miller, Boltzmann electrons, Nx=192, Ny=64, Nz=24, ν_ii=1e-2, D=0.05,
+n=4, hypercollisions f=1, p=Nm/2; (Nl,Nm) ∈ {(4,4),(4,6),(4,8),(8,16),(16,32)}
+expecting 5.9±0.7, 7.0±0.9, 7.2±0.8, 7.3±0.9, 7.8±0.8 in Q_GB. Paired CIs
+from §3.4; converged means the CI contains the GX value and the half-width is
+below 15% (GX's own criterion). Cost: five runs; at (4,8) roughly an hour on
+an A4000 by the measured step cost, the (16,32) run several hours.
+
+### 6.3 Dimits bracket
+
+Three gradients across the threshold (R/L_T ≈ 5, 6, 7 in Dimits units) with
+zonal-flow diagnostics; compare with the offset-linear fit and Hoffmann's κ_T≈4
+at (12,6). Not a full shift scan. Cost: three runs × two seeds.
+
+### 6.4 The open dataset as a nonlinear validation set
+
+1. **Adapter** `tools/comparison/landreman_dataset.py`: read tube i from the
+   HDF5 tensor; write a root-level eik NetCDF with theta = z (uniform, periodic,
+   last point excluded), bmag, gbdrift, cvdrift, gbdrift0 = ŝ·(gbdrift0/ŝ),
+   cvdrift0 = gbdrift0 (flagged approximation for the finite-pressure classes),
+   gds2, gds21 = ŝ·(gds21/ŝ), gds22 = ŝ²·(gds22/ŝ²), grho = |∇x|, gradpar = 1,
+   jacobian = 1/B, shat, q = 1/ι, aminor = 1. Self-checks that are ledger rows:
+   the stored ⟨|∇x|⟩ reproduced to 1e-6 (verified) and the deck's Q_GB
+   normalization reproduced from the GX convention (Q/⟨|∇ρ|⟩ factor).
+2. **Pilot** on five tubes spanning the Q range (median 8.3; range 1e-11 to
+   876) at the dataset resolution and GX-like dt; verify runtime, saturation
+   and the normalization; then fix the sample size from the pilot's CIs.
+3. **Sample** 100 tubes stratified over the five equilibrium classes and over
+   log Q; run the fixed-gradient case (a/L_T=3, a/L_n=0.9, ν=0.01,
+   hypercollisions, D=0.05, periodic, t=800) with the §3.4 protocol; report
+   ln Q_GKX vs ln Q_GX with R², paired CIs, and the stability classification
+   accuracy, beside the dataset's own resolution scatter (R²=0.993) as the
+   floor no comparison can beat.
+4. **Diagnose** outliers with the Q(z) profiles the dataset stores per tube.
+
+Cost: 5 pilot + 100 runs ≈ 40–120 A4000-hours (measured 1.14 s/step on CPU;
+GPU assumed 10–15×; pilot fixes the number). This is the largest single
+validation result in the plan and needs no GX run.
+
+### 6.5 W7-X bean and one QUASR configuration
+
+Reproduce the stella–GENE W7-X bean nonlinear point (Qᵢ 2.26 vs 2.47) at GX's
+(8,16) and (4,8); then one QUASR QA configuration from the dataset with a
+public equilibrium, at both periodic and twist-and-shift boundaries, as the
+bridge to Phase 4's optimization target.
+
+Exit for Phase 2: dataset comparison published as a ledger artifact and a docs
+page; Table 1 and the bracket as rows; HSX resolved.
+
+## 7. Phase 3 — electromagnetic core (weeks 6–14)
+
+Required, per the user's direction recorded in #204, sequenced by reference
+availability.
+
+| Stage | Content | Reference (rank) | Required for release? |
+|---|---|---|---|
+| EM0 | Independent three-field algebra: quasineutrality, parallel Ampère, perpendicular pressure balance; residual η_F with declared scale floor; field VJP/JVP; free-energy identity with particle and magnetic parts | analytic (1) | yes |
+| EM1 | Shear-Alfvén frequency in the MHD range; KAW dispersion and damping; β→0 vs β=0 branches | analytic (1); GX KAW golden (3) | yes |
+| EM2 | ITG→KBM β scan at k_yρ=0.3 with B∥=0 against GX/GS2 (transition ≈1.3%); then three-field KBM translated from stella's `EM_KBM.in` and run in GS2 | published (2); stella/GS2 (5, self-run) | yes |
+| EM3 | Nonlinear kinetic-electron Cyclone Miller: GX Table 2 at (4,16) Qᵢ=23.6±3.2, Qₑ=7.3±0.9 and (16,32) 27.8±4.0/8.4±1.2; finite-β point from Pueschel–Kammerer–Jenko 2008; channel-resolved Q_φ, Q_A∥, Q_B∥ with cross-channel covariance | published (2) | yes |
+| EM4 | Finite-β W7-X: linear kinetic-electron ITG/KBM branches at frozen geometry and one self-consistent finite-pressure VMEX equilibrium; one nonlinear point with declared uncertainty | self-run stella/GENE if available (5); otherwise labeled GKX-only | linear yes; nonlinear point reported, no parity claim |
+| EM5 | Linear and quasilinear EM derivatives through VMEX; finite-window EM smoke gradient; restart identity; CPU/GPU identity | AD/FD | yes (linear/QL); nonlinear EM AD at scale parked (iGENE needed 192 GPUs) |
+
+Steps, owners and exits are as written in #204 §5.2–5.3 and are not repeated;
+this plan adds the reference column, the cost line and the release rule.
+
+Cost: EM0–EM2 CPU and tier 2. EM3 at (4,16) with kinetic electrons: GX ran 600
+a/v_ti; expect several A4000-hours per run, two seeds, two β points. EM4
+nonlinear: one run, tens of hours.
+
+## 8. Phase 4 — derivatives and optimization (weeks 6–16, parallel with Phase 3 after Phase 2 pilots)
+
+The [landscape report](plan/research/2026-09-06_differentiable_landscape.md)
+found no nonlinear GK adjoint and no differentiable GK code in stellarator
+geometry. The work below is ordered by evidence bar per GPU-day.
+
+### 8.1 Contribution 1 — adjoint linear/quasilinear optimization through VMEX (under one GPU-day)
+
+1. Reproduce Jorge et al. 2024: precise QH nfp=4, s=0.25, α=0, ten k_y ∈
+   [0.3, 3], f_Q = Σ γ/⟨k⊥²⟩; their Levenberg–Marquardt with finite differences
+   reached f_Q 0.192→0.112.
+2. Replace finite differences by the implicit eigenpair derivative composed
+   with VMEX's equilibrium derivative; verify AD vs FD on every boundary mode
+   with a step ladder; report cost per gradient independent of N_p.
+3. Add α-averaging over two field lines (Kim's ~50% α variation) and the
+   held-out surfaces/k_y that Jorge did not use.
+4. Ledger rows: AD/FD agreement; reproduced f_Q trajectory; held-out ranking.
+
+### 8.2 Contribution 3 — physics-based differentiable proxy scored on the dataset (1–3 GPU-days)
+
+1. Compute GKX linear γ(k_y) and the quasilinear f_Q on a 10⁴ stratified
+   subsample of the dataset tubes at the dataset gradients.
+2. Report Spearman and R² against the nonlinear Q beside the paper's analytic
+   proxy (0.788 / 0.737) and CNN (0.989). The result is publishable whichever
+   way it falls; the differentiable proxy's value is extrapolation and
+   gradients, not regression accuracy.
+3. Hold out one equilibrium class entirely; report the out-of-class score.
+
+### 8.3 Contribution 2 — finite-window gradient law in stellarator geometry (3–6 GPU-days)
+
+1. Replicate Kim 2024's setup (A=8, nfp=4 QH, 64³, (4,8), ~3 min per
+   evaluation on their V100) with GKX at the dataset-verified resolution.
+2. Measure the useful window: AD vs FD at three window lengths against the Q
+   autocorrelation time; direction preservation; magnitude bias (iGENE saw
+   15–34% at 512 steps).
+3. Run the optimization with checkpointed finite-window AD and with an
+   equal-budget SPSA control; claim only what beats "2 evaluations per
+   iteration, ~20 h V100" to the same ~3× reduction, on held-out seeds and
+   the α=πι/4 line.
+4. The warm-start experiment from #204 §6.1 (cold vs warm, two relaxation
+   budgets, three seeds, equal wall-time) runs inside this campaign.
+
+### 8.4 Later
+
+Contribution 4 (gradient of the nonlinear threshold) and 5 (differentiable
+profile prediction) enter after 8.1–8.3 report. Shadowing and long-horizon
+adjoints stay parked.
+
+Exit for Phase 4: paper-2 figures as ledger artifacts; the QA 12.26% claim is
+replaced by whichever result survives held-out validation, or withdrawn.
+
+## 9. Phase 5 — performance on admitted workloads (weeks 10–16)
+
+1. Profile cold compile, cached RHS, FFT/bracket, field solve, diagnostics,
+   transfers, spin-up, window value and VJP separately on: ES adiabatic
+   control; kinetic-electron two-field control; full-EM finite-β case; the
+   dataset-resolution tube. Synchronized medians and spread; peak resident and
+   temporary memory.
+2. Species×Hermite is the only distributed route (GX's design; ≥75% efficiency
+   to four GPUs in their paper). Ladder: meshes (2,1), (1,2), (2,2); global
+   low-order moment reduction and its VJP so conserving collisions are not
+   refused; identity on short trajectories; statistical equivalence on long
+   ones; strong scaling S_p, E_p, memory, communication.
+3. Time-to-accuracy plots, not ms/step; adoption threshold 20% total workload
+   saving outside noise with no failed physics or gradient gate.
+4. Whole-state and domain decomposition stay parked until a communication
+   profile justifies them.
+
+## 10. Phase 6 — collisions, bounded (weeks 8–14, CPU)
+
+1. Declare the supported envelope: LB/Dougherty, Sugama, improved Sugama,
+   drift-kinetic Coulomb low-moment; finite-k tables research-only.
+2. C1: arbitrary-order drift-kinetic moments against an independent quadrature
+   reference; Spitzer–Härm conductivity ladder.
+3. C2: finite-k like-species with the scaled congruence C = DAD for the b→0
+   density entry; interpolation JVPs at nodes, between and at boundaries;
+   particle-coordinate conservation vs gyrocenter diffusion per Frei 2021.
+4. Dynamics against a named model: GENE exact Landau (Pan–Ernst–Crandall) or
+   stella Fokker–Planck, never "GENE" unqualified.
+5. EM current-response test before any operator is called EM-compatible.
+6. Unlike species and arbitrary order are parked.
+
+## 11. Phase 7 — package, docs, papers, release (weeks 14–20)
+
+1. Ledger green for every row cited in README, docs and the two papers.
+2. Docs by reader task (Diátaxis): learn, do research, understand, look up,
+   develop; the verification matrix and release scope generated from the ledger.
+3. Examples: smoke, teaching and research presets; 16 of 36 already run in CI;
+   the remaining ones need an untracked geometry or eight devices and are
+   marked as such.
+4. Paper 1 to JPP or CPC with a JOSS-style state-of-the-field section naming
+   GX, stella, GENE, iGENE, gyaradax; reproducible bundle with hashes on
+   Zenodo.
+5. Release 2.1.0 after ledger green, wheel first run, and the user's review of
+   PR dispositions. No release before Phase 3's required stages pass.
+
+## 12. Parked, with entry triggers
+
+| Item | Trigger to reopen |
+|---|---|
+| Fixed-rate absorber as default (#202) | A converged case where the per-step contract fails GX App. C's AΔt insensitivity |
+| Islands, ESSOS coil-field transport, FCI | Phases 2–4 complete and a funded model-validation program |
+| Equilibrium Er and E×B shear (E1–E2) | Stellarator validation set closed; a target case with measured Er |
+| Nonlinear EM AD at scale | EM5 linear/QL derivatives published; a 100-GPU allocation |
+| Shadowing, long-horizon adjoint | Finite-window directions fail the Kim replication despite window and ensemble tests |
+| Whole-state or domain sharding | Communication profile shows species×Hermite saturating below the target size |
+| Arbitrary-order unlike-species Coulomb | C1–C2 envelope published; pair-coefficient tests exist |
+| New closures | A converged baseline names closure error as the bottleneck |
+| Absolute quasilinear flux model | Dataset-scored proxy meets a predeclared accuracy gate |
+| MTM, TAE, energetic particles, TEM optimization | EM0–EM3 pass; ordering and species checks for the regime |
+
+## 13. Compute budget
+
+| Phase | Hardware | Estimate | Basis |
+|---|---|---|---|
+| 0–1 | laptop/CI CPU | hours | linear Krylov runs are seconds to minutes |
+| 2.2 Table 1 | 1 A4000 | ~10 h | (4,8) ≈ 1 h, (16,32) ≈ 6 h, measured step cost scaled by moments |
+| 2.3 bracket | 1 A4000 | ~6 h | 6 runs |
+| 2.4 dataset | 2 A4000 | 40–120 h | 105 runs; pilot fixes the number |
+| 2.5 W7-X, QUASR | 1 A4000 | ~10 h | four runs |
+| 3 EM3 | 1 A4000 | 20–40 h | kinetic electrons at (4,16), two β, two seeds |
+| 3 EM4 nonlinear | 1 A4000 | 20–40 h | one point |
+| 4.1 | CPU/GPU | <1 day | linear |
+| 4.2 | 1 A4000 | 1–3 days | 10⁴ linear/QL evaluations |
+| 4.3 | 2 A4000 | 3–6 days | ~100 evaluations × window VJP |
+| 5 | 2 A4000 | ~2 days | profiles and scaling |
+
+Total of order 20–30 A4000-days over 16–20 weeks, against a box that was
+unreachable on both review days. Phases 0–1 and 4.1 need none of it. Every
+tier-3 job records host, directory, PID, and last verified state before
+launch; the two GX jobs of unknown state under
+`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L` are checked first.
+
+## 14. Working rules
+
+1. One correctness change or one bounded measurement per PR; the PR names the
+   falsifiable question, the ledger rows it touches, the cost cap and the stop
+   condition before any long run.
+2. Every PR body: scope and non-goals → equation/API contract → tests and
+   expected failure → measured accuracy, runtime, memory and size delta →
+   ledger rows → adopt/reject/unresolved → next question.
+3. Commits as Rogerio Jorge; no AI co-author trailers; no force-push to
+   shared branches; no history rewrite in this program.
+4. Numbers live in the ledger; prose cites rows. A README or docs number
+   without a row is a defect.
+5. Remote jobs: unknown is not finished; check before launching; never
+   duplicate an unverified campaign.
+6. Resume: read this plan, the synthesis review, the latest log entry, then the
+   actual branch, worktree and PR state. Pick the first unmet item of the
+   lowest open phase.
+
+## 15. Superseded documents
+
+[#198's roadmap](https://github.com/uwplasma/GKX/blob/71c5cc480411e3c568b38ce9010b4b9093fa2453/plan.md),
+[#203's review](https://github.com/uwplasma/GKX/blob/1643f0e72a6310068b3387cceb94e39922020597/plan/baseline/review_2026_09_05_external.md)
+and [#204's plan and audit](https://github.com/uwplasma/GKX/blob/29e559e0/plan.md)
+remain in history as evidence. Their measurements are reused here; their
+queues are not.

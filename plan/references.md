@@ -299,3 +299,23 @@ default only if resolved linear and nonlinear IMEX cases win without changing
 the solution. PR #101 corrects the performance guide: the `diag` factor contains
 damping plus the curvature/grad-B diagonal, not the off-diagonal mirror
 stencil.
+
+## 2026-09-06 synthesis sources
+
+Added by the synthesis review. Each entry was fetched for
+[the research reports](research/); UNVERIFIED items are marked there.
+
+| Source | Use |
+|---|---|
+| [Landreman et al. 2025, JPP 91 E120](https://arxiv.org/abs/2502.11657); [data, Zenodo 14867777](https://zenodo.org/records/14867777) | 100,705-tube GX nonlinear dataset: nonlinear validation set, QL calibration, optimization targets; Appendix B resolution and convergence checks |
+| [Dimits et al. 2000](https://w3.pppl.gov/~hammett/ark/1999/cyclone-b26.pdf) | Cyclone offset-linear χᵢ fit, Dimits shift, Rosenbluth–Hinton scans |
+| [Nevins et al. 2007](https://www.osti.gov/servlets/purl/1564634) | ETG χₑ ≈ 3.0±0.13 benchmark point |
+| [GS2 zonal-flow residual test](https://gitlab.com/gyrokinetics/gs2/-/raw/master/tests/linear_tests/zonal_flow_residual/zonal_flow_residual.f90); [GS2 CBC golden](https://gitlab.com/gyrokinetics/gs2/-/raw/master/tests/linear_tests/cyclone_itg/cyclone_itg_low_res.f90) | Analytic-tier values and golden-number practice |
+| [CGYRO regression](https://raw.githubusercontent.com/gafusion/gacode/master/shared/bin/gacode_reg); [stella numerical tests](https://raw.githubusercontent.com/stellaGK/stella/master/AUTOMATIC_TESTS/numerical_tests/test_5_diagnostics/test_5a_diagnostics.py); [GX check.py](https://api.bitbucket.org/2.0/repositories/gyrokinetics/gx/src/3865a53778862e1686f414bf6f416339e24887c9/benchmarks/linear/ITG_cyclone/check.py) | Two-tier gating: bitwise regression and physics tolerances |
+| [pyrokinetics GX reader](https://raw.githubusercontent.com/pyro-kinetics/pyrokinetics/main/src/pyrokinetics/gk_code/gx.py); [imas-gk](https://gitlab.com/gkdb/imas-gk) | Interoperability plugin and IMAS export |
+| [Parker & Dellar 2015](https://arxiv.org/abs/1407.1932); [Kanekar et al. 2015](https://arxiv.org/abs/1403.6257); [Loureiro et al. 2016](https://arxiv.org/abs/1505.02649); [Adkins & Schekochihin 2018](https://arxiv.org/abs/1709.03203); [Issan et al. 2024](https://arxiv.org/abs/2412.07073) | Hermite recurrence, spectra, cutoffs and hypercollision robustness |
+| [Frei et al. 2023](https://arxiv.org/abs/2210.05799); [Hoffmann et al. 2023b](https://arxiv.org/abs/2208.01346); [Hoffmann & Ricci 2024](https://arxiv.org/abs/2407.12942) | Gyromoment convergence by mode and collisionality |
+| [Parker et al. 2018](https://arxiv.org/abs/1807.04779); [Flegal & Gong](https://arxiv.org/abs/1303.0238); [Vats, Flegal & Jones](https://arxiv.org/abs/1512.07713); [Hoad & Robinson 2011](https://www.informs-sim.org/wsc11papers/044.pdf); [Glynn & Whitt 1992](https://projecteuclid.org/euclid.aoap/1177005777); [Oliver et al. 2014](https://arxiv.org/abs/1311.0828); [Rezaeiravesh et al. 2023](https://arxiv.org/abs/2310.08676); [Papadopoulos et al.](https://arxiv.org/abs/2212.14219) | Statistics protocol defaults and pitfalls |
+| [iGENE](https://arxiv.org/abs/2605.03086); [gyaradax](https://arxiv.org/abs/2604.06085); [yancc](https://arxiv.org/abs/2607.20861); [Unalmis et al.](https://arxiv.org/abs/2412.01724); [Joglekar et al. review](https://arxiv.org/abs/2603.11231); [Metz et al. 2021](https://arxiv.org/abs/2111.05803) | Differentiable landscape and gradient limits |
+| [Kim et al. 2024](https://arxiv.org/abs/2310.18842); [Jorge et al. 2024](https://arxiv.org/abs/2301.09356); [Roberg-Clark et al.](https://arxiv.org/abs/2210.16030); [Goodman et al. 2024](https://arxiv.org/abs/2405.19860); [Mackenbach et al.](https://arxiv.org/abs/2109.01042); [Gerard et al. 2024](https://arxiv.org/abs/2404.07322) | Turbulence-aware stellarator optimization baselines and targets |
+| [JOSS checklist](https://joss.readthedocs.io/en/latest/review_checklist.html); [FAIR4RS](https://doi.org/10.15497/RDA00068); [CITATION.cff](https://citation-file-format.github.io/); [Lee 2018](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1006561) | Software and citation norms |
