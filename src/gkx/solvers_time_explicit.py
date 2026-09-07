@@ -515,7 +515,7 @@ def integrate_linear_explicit(
     t_max, dt, dt_min, dt_max, sample_stride, wmax = _linear_explicit_timing(
         time_cfg, grid, geom, params, G.shape
     )
-    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg)
+    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=dt)
     return _run_linear_explicit_loop(
         G=G,
         cache=cache,

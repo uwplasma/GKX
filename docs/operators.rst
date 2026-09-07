@@ -94,6 +94,25 @@ Controls:
 - ``RuntimeTermsConfig.streaming``
 - boundary/link metadata from the geometry/grid
 
+The parallel FFT uses the signed frequencies of
+`NumPy's DFT convention <https://numpy.org/doc/stable/reference/routines.fft.html>`_.
+For a chain of :math:`N` points separated by :math:`\Delta z`,
+
+.. math::
+
+   D_z e^{2\pi i m j/N}
+   = \frac{2\pi i m}{N\Delta z}e^{2\pi i m j/N},
+   \qquad k_{N/2}=-\frac{\pi}{\Delta z}\quad(N\text{ even}).
+
+Opposite Nyquist signs give the same sampled wave :math:`(-1)^j` but opposite
+first derivatives. Match this convention before comparing another code's RHS;
+filtering a mode is not a substitute for spatial convergence. Linked chains
+must use the total chain length and preserve their gather/scatter ordering.
+``test_fft_highest_modes_and_ad_contract`` checks analytic derivatives, JVPs
+and real-parameter pullbacks on odd/even periodic and reordered linked chains.
+The linked-map tests independently check signed frequencies and exact topology.
+These are discrete-operator contracts, not turbulent-transport benchmarks.
+
 Mirror
 ------
 
@@ -1186,7 +1205,21 @@ The field-line end damping is
 
 .. math::
 
-   \mathcal{R}_{end} = -w_{end}\,A_{end}\,d(z)\,H.
+   \mathcal{R}_{end} = -w_{end}\,\frac{A_{end}}{\Delta t}\,d(z)\,H,
+
+on linear integration routes supplying the instantaneous :math:`\Delta t`.
+For the isolated scalar equation with :math:`H=G`, an explicit RK step has
+amplification :math:`R(-w_{end}A_{end}d(z))`, where :math:`R` is its stability
+polynomial. Euler removes the fraction :math:`w_{end}A_{end}d(z)`;
+RK2 instead multiplies by :math:`1-a+a^2/2`, with
+:math:`a=w_{end}A_{end}d(z)`. Coupled fields and other terms further change
+the completed update. This is a per-step strength, not a universal removed fraction.
+
+RHS calls without a timestep, including the nonlinear RHS, instead use
+:math:`\mathcal{R}_{end}=-w_{end}A_{end}d(z)H`: amplitude is a rate on those
+routes. The mixed legacy contract is tracked in
+`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_. Do not interpret a
+legacy linear timestep scan as refinement of one fixed continuous operator.
 
 Controls:
 

@@ -1554,7 +1554,10 @@ linked-boundary taper used in flux-tube calculations). The damping profile is
 controlled by:
 
 - ``damp_ends_widthfrac``: fraction of the domain used for the taper.
-- ``damp_ends_amp``: damping amplitude applied to :math:`H_{\ell m}`.
+- ``damp_ends_amp``: damping amplitude applied to :math:`H_{\ell m}`. Linear
+  callers supplying ``dt`` use a per-step strength; nonlinear/RHS callers
+  without ``dt`` use a rate. The exact scalar RK amplification and the pending
+  normalization migration are documented in :doc:`operators`.
 
 The damping is only applied to nonzonal modes (:math:`k_y>0`) and can be
 disabled by setting ``damp_ends_amp = 0`` in ``LinearParams``.
