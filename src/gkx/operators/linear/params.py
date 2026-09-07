@@ -162,6 +162,17 @@ class LinearParams:
     apar_beta_scale: float = 0.5
     ampere_g0_scale: float = 0.5
     bpar_beta_scale: float = 0.5
+    damp_ends_rate: float | jnp.ndarray | None = None
+
+    def end_damping_strength(self, dt, dtype):
+        """Explicit rate overrides legacy A/dt (or A when dt is absent/zero)."""
+        if self.damp_ends_rate is not None:
+            return jnp.asarray(self.damp_ends_rate, dtype=dtype)
+        amplitude = jnp.asarray(self.damp_ends_amp, dtype=dtype)
+        if dt is None:
+            return amplitude
+        step = jnp.asarray(dt, dtype=dtype)
+        return amplitude / jnp.where(step != 0.0, step, 1.0)
 
     def tree_flatten(self):
         children = (
@@ -205,6 +216,7 @@ class LinearParams:
             self.apar_beta_scale,
             self.ampere_g0_scale,
             self.bpar_beta_scale,
+            self.damp_ends_rate,
         )
         return children, None
 

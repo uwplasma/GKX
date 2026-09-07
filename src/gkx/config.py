@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 
 from dataclasses import asdict, dataclass
 from typing import Any, Dict
@@ -112,6 +113,12 @@ class TimeConfig:
     run_to: str = "saturation"
     saturation_rel_sem: float = 0.05
     saturation_min_window: float | None = None
+    damp_ends_rate: float | None = None
+
+    def __post_init__(self) -> None:
+        rate = self.damp_ends_rate
+        if rate is not None and (not math.isfinite(rate) or rate < 0.0):
+            raise ValueError("time.damp_ends_rate must be finite and nonnegative")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

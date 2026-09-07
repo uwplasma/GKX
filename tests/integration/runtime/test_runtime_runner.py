@@ -369,6 +369,29 @@ def test_runtime_end_damping_defaults_use_unscaled_reference_rate() -> None:
     assert float(params.damp_ends_widthfrac) == pytest.approx(0.125)
 
 
+@pytest.mark.parametrize("dt", [0.002, 0.2])
+@pytest.mark.parametrize("rate", [0.0, 0.5])
+def test_runtime_explicit_end_damping_rate(dt, rate, tmp_path) -> None:
+    from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+    deck = tmp_path / "rate.toml"
+    deck.write_text(f"[time]\ndt = {dt}\ndamp_ends_rate = {rate}\n")
+    cfg, _ = load_runtime_from_toml(deck)
+    params = build_runtime_linear_params(cfg, Nm=8)
+    assert params.damp_ends_rate == rate
+    assert cfg.to_dict()["time"]["damp_ends_rate"] == rate
+    with pytest.raises(ValueError, match="cannot be combined"):
+        build_runtime_linear_params(
+            replace(cfg, collisions=RuntimeCollisionConfig(damp_ends_scale_by_dt=True))
+        )
+
+
+@pytest.mark.parametrize("rate", [-0.1, float("inf"), float("nan")])
+def test_runtime_end_damping_rejects_invalid_rate(rate) -> None:
+    with pytest.raises(ValueError, match="finite and nonnegative"):
+        replace(_base_runtime_cfg().time, damp_ends_rate=rate)
+
+
 def test_runtime_end_damping_can_explicitly_scale_by_dt() -> None:
     base = _base_runtime_cfg()
     cfg = replace(

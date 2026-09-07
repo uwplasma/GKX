@@ -847,7 +847,8 @@ recursive = true
 # fraction rather than the rate its name and the docs suggest, so the comment is
 # the part that stops it happening again, and it points at #194 for the redesign
 # that would make the name true.
-baseline = 88968
+# Explicit optional rate and one shared damping resolver; legacy defaults retained.
+baseline = 88978
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -932,7 +933,8 @@ recursive = true
 # 86377 -> 86568: retain both main's 120-line README parity gate (#193)
 # and #197's 191-line net increase over their shared 86257-line baseline.
 # Measured after the history-preserving main integration; no tests removed.
-baseline = 86568
+# +48: rate/legacy RK identities, pytree AD, runtime input and mixed-route checks.
+baseline = 86616
 target = 35000
 
 [[line_budget_policy.counts]]

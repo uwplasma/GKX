@@ -1416,9 +1416,8 @@ def test_species_sharded_phi_matches_production_quasineutrality() -> None:
     )
 
 
-def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route() -> (
-    None
-):
+@pytest.mark.parametrize("rate", [None, 0.4])
+def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route(rate):
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers_linear_integrators import integrate_linear
 
@@ -1535,6 +1534,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
         hypercollisions_kz=0.4,
         D_hyper=0.02,
         damp_ends_amp=0.1,
+        damp_ends_rate=rate,
         nu=jnp.asarray([0.1, 0.2]),
     )
     dissipative_cache = replace(

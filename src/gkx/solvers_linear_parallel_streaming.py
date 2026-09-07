@@ -398,10 +398,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             * cache.dealias_mask[None, None, None, :, :, None]
             * local_state
         )
-        damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
-        if dt is not None:
-            dt_value = jnp.asarray(dt, dtype=real_dtype)
-            damp_amp = jnp.where(dt_value != 0.0, damp_amp / dt_value, damp_amp)
+        damp_amp = params.end_damping_strength(dt, real_dtype)
         if cache.use_twist_shift and cache.linked_damp_profile.size != 0:
             damping_profile = cache.linked_damp_profile[None, None, None, ...]
         else:
