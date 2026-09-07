@@ -204,7 +204,18 @@ recursive = true
 # integration: at a deck-sized dt the parallel-boundary mode must stay bounded
 # and the fitted rate must be the physical one. Measured against pristine 2.0.0
 # it fails at the amplitude bound with peak |phi| = 1.125e+163.
-baseline = 77
+# 77 -> 78: tests/release/test_evidence_ledger.py. The target is 30, so a new
+# file needs a reason: this one owns the evidence ledger, which is a different
+# object from every existing release gate. The others assert that a specific
+# artifact or claim holds; this one asserts that the index of claims is
+# complete and self-consistent -- that no published number lacks a row, that no
+# row points at a deleted artifact or generator, that a reference whose
+# launch-clamp binds cannot be marked passing, and that a rank-3 golden pins its
+# hash. Those are properties of the ledger, not of any one case, so they cannot
+# live inside a per-case gate; and folding them into test_release_gates.py would
+# put the index and the things it indexes in the same file, which is exactly the
+# coupling the ledger exists to remove.
+baseline = 78
 target = 30
 
 [[topology_policy.counts]]
@@ -932,7 +943,16 @@ recursive = true
 # 86377 -> 86568: retain both main's 120-line README parity gate (#193)
 # and #197's 191-line net increase over their shared 86257-line baseline.
 # Measured after the history-preserving main integration; no tests removed.
-baseline = 86568
+# 86568 -> 86801: tests/release/test_evidence_ledger.py, 233 lines. The target
+# is 35000, so an increase needs a reason: this file replaces a hard-coded map
+# inside test_release_gates.py with a data-driven index, so adding a published
+# number no longer means editing test code. It carries four checks nothing else
+# owns -- ledger completeness against the README, artifact and generator
+# existence, the GX linked-boundary clamp rule, and rank-3 hash pinning -- each
+# verified negatively: breaking a README percentage, pointing a row at a missing
+# artifact, marking a clamp-bound row passing, and deleting a rank-3 hash each
+# fail exactly one test.
+baseline = 86801
 target = 35000
 
 [[line_budget_policy.counts]]
