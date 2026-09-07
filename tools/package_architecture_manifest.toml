@@ -849,8 +849,8 @@ recursive = true
 # fraction rather than the rate its name and the docs suggest, so the comment is
 # the part that stops it happening again, and it points at #194 for the redesign
 # that would make the name true.
-# Combined #197/#199/#201: measured 88977 after #199's six-line reduction.
-baseline = 88977
+# Combined #197/#199/#201: 88977 after #199's six-line reduction; #208 adds 4.
+baseline = 88981
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -941,8 +941,8 @@ recursive = true
 # 86377 -> 86568: retain both main's 120-line README parity gate (#193)
 # and #197's 191-line net increase over their shared 86257-line baseline.
 # Measured after the history-preserving main integration; no tests removed.
-# Combined #197/#199/#201: 86568 - 1 (#199) + 85 (f32 stack).
-baseline = 86652
+# Combined stack: 86568 - 1 (#199) + 85 (f32 stack) - 1 (#208); #207 is neutral.
+baseline = 86651
 target = 35000
 
 [[line_budget_policy.counts]]
