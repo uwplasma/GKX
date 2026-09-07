@@ -9598,3 +9598,152 @@ No reference spectrum or release artifact changed. PR #202 stays open until
 the remaining independent repairs and fixed-rate migration are dispositioned.
 Preparation of these bounded independent checks does not satisfy the Phase 0
 merge exit. Explicit merge approval requested; none received at this entry.
+
+### Completed eleven-mode replay and endpoint extraction
+
+#197 `73a8a8c4`: office replay session 77153 exited 0, 18:34.50 whole-command
+wall time, peak host RSS 1280184 KiB. Primary-scan timer 770.1413 s excludes
+the half-time scan; concurrent CPU/other-GPU checks mean this is not an
+isolated speed benchmark. All eleven ky, gamma, omega, reference values, both
+half-time shifts and convergence flags compare exactly to the tracked
+Cyclone record. Settled count remains 10/11. Only row-schema difference:
+`within_build_reproducibility_floor=null` is newly present; do not claim
+whole-file byte identity. The driver's 177.505 MiB JAX allocator peak is not
+total device memory: nvidia-smi observed about 15 GiB during execution.
+Keep those measurements separately scoped.
+
+SHA256 in `/home/rjorge/gkx-phase0-pr197-20260906.ME6JGZ`:
+
+| File | SHA256 |
+|---|---|
+| `replay/cyclone.csv` | `3072687d5ce0695dad48da5a701da988a384cdb0a3c58bd563938d3e9b16bb06` |
+| `replay/cyclone.json` | `e8fbecf844668d7a08d2178f43018dc3339a3195adb8af890dab9903280ee604` |
+| `docs/_static/gkx_gx_linear_parity_matrix.json` | `6bb9a4fd419ea1ac05338a5bf1e63116d8694b90857c4eb3d222fbc885bc308e` |
+| `tools/gx_parity_matrix_manifest.toml` | `3157a9b2fcb49cf510944c1822390f9f7d2dc317cb71a386c7e51106d83b8fc6` |
+| `tools/comparison/fixtures/parity/cyclone_salpha_itg.toml` | `e828bd40f56d63de4c89e8be2a4f11268357ac466034c96087ab1186f93042e6` |
+
+Evidence posted to #197, comment 5564439104. The original reference's known
+damping-coverage limitation remains: this replay restores compatibility, not
+independent predictive validation. The authoritative no-release policy also
+supersedes #197's old recommendation to issue 2.0.1.
+
+[PR #208](https://github.com/uwplasma/GKX/pull/208), `ce38e3ac`, branch
+`fix/phase0-linear-endpoint`, extracts `f00abafd`/`1571a9e6` from #202,
+stacked on #199. Both explicit linear facades now shorten the actual final
+step to t_max, even below dt_min; no damping-rate redesign. Three files,
+net +3 lines; no manifest increase. In worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-linear-endpoint`, local Python
+as above, `PYTHONPATH=$PWD/src JAX_ENABLE_X64=true`:
+
+- `-m pytest -o addopts='' -q tests/unit/solvers/test_time_integrators.py -k stops_at_requested_time`:
+  16 passed, 41.20 s, across fixed/adaptive, RK3/RK4, diagnostics/plain, JIT/eager.
+- Same absolute test path with `--noconftest`, cwd/PYTHONPATH of #199:
+  all 16 fail at t=.12 rather than .1, 42.28 s (dt=.03, dt_min=.02).
+- Full time-integrator file: 93 passed, 56.35 s. Existing scatter-dtype warnings
+  remain; no tolerance changes. Ruff 0.16.4 and architecture gates pass.
+
+### Recover terminal GX spatial controls; no new GX solve
+
+Both original jobs completed successfully on September 5. Source directory
+`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`, stems `full96`, `full192`.
+GNU time logs certify exit 0, 35:07.34 / 1:06:52 whole-command wall time
+(GX internal runtimes 35.082804 / 66.828008 min); use the retained `.time`
+files for exact external timing rather than the internal timer. No speed claim.
+Binary hash matches `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536`;
+both input hashes match the launch record above.
+
+Reused the unchanged `gx-damping-coverage-20260905.8w5DhH/audit-refined-gx.py`.
+Read-only symlink views at `/home/rjorge/gx-nyquist-audit-20260906.kMqkuF/{full96,full192}`
+map each stem's `.log/.time` to `run.log/time.log`, as that script requires.
+Run with `--root <view> --stem <stem> --binary <corrected-root>/gx
+--binary-sha256 <hash above> --input-sha256 <launch hash>
+--gkx-csv <campaign>/results/salpha_rate50_nl32_nm96[_nz192]_t300.csv`.
+Both audits exit 0. Inputs/binary unchanged; no live NetCDF read or restart.
+
+Verified actual Nz96/192, Nl32, Nm96, one species, ky=.550000011920929;
+1501 diagnostic samples and 16 field samples, both ending at
+T=300.0000142492354, matching restart time; dt=.0020000000949949026.
+Each output/field/restart file has 264/42/2 finite numeric arrays.
+**Metadata caveat remains:** `/Geometry/nperiod` is garbage (0 / -1582686208),
+although root nperiod=2 and actual theta lengths are correct. Finiteness is
+not metadata validation; do not use these geometry scalars for plotting.
+
+| Record | Output NetCDF SHA256 |
+|---|---|
+| prior 12-ky corrected GX | `d5d834349e2ac3b8c8c4aae3a0e0ad8e2b5a779bc9c32a6e64196437e468a4f9` |
+| reduced-mode Nz96 | `50f9912652f39a0648fb22f55ec57ba1a705caf105c0f4840114ceb683fe894e` |
+| reduced-mode Nz192 | `7f83248fcbac3ce21e641a88377221a2be277948c1c30bbb8e1896e056b94024` |
+
+All 1501 omega/gamma samples for the selected mode are bit-identical between
+the full and reduced-ky Nz96 runs: the proposed reduced-mode control is now
+verified for this case. Float64 accumulation of the last 30% gives:
+
+| Nz | GX gamma | GKX gamma | GX omega | GKX omega |
+|---|---|---|---|---|
+| 96 | .02487663027237762 | .024852092124449224 | .5049278882813295 | .5049331701718024 |
+| 192 | .024965570033620838 | .024938243056538495 | .5047703091955502 | .5047786677125604 |
+
+GKX CSV hashes: `90efe742d9f8f5ac948f3b9fbb9227402d5edfcbc260a8f5ee914e673ac66439`
+and `94592ebea869f2096cff94bbeec58426eb8a4b7ebdf4c989e0dab537e37f2bc1`.
+Gamma changes +.3575% in GX and +.3467% in GKX under this spatial refinement;
+matched last-window gamma differences are -.09864% / -.10946%.
+However GX half-window shifts are -.6050% / -.5124%, comparable to those
+changes. Do not promote a sub-percent convergence claim from these values.
+This is recovered fixed-rate research-branch evidence, not a rerun of current
+main, velocity convergence, a corrected full atlas, or nonlinear transport.
+
+### Combined-stack validation (local integration only)
+
+Worktree `/Users/rogeriojorge/local/GKX-worktrees/phase0-integration`, local
+branch `review/phase0-integration`, commit `1c7c7472`: combines #196/#200/#201,
+#197/#199, #207 and #208 without merging any PR or modifying main. The only
+integration conflict was the architecture manifest. Measured combined counts:
+88981 source lines, 86651 test lines; no dropped assertions. Remote immutable
+archive `/home/rjorge/gkx-phase0-integration-20260906.o4aD19`.
+
+- CPU f64: 397 passed in 215.24 s over the full linear, linear-helper,
+  streaming, time-integrator, end-damping-physics and release-gate files;
+  30 existing dtype/escape warnings.
+- CPU f32: physical compressed-flux gradients and isolation checks,
+  5 passed in 27.98 s.
+- GPU1 f64: damping, endpoint, highest-mode and linked-map selections across
+  linear/streaming/time-integrator/sentinel files: 39 passed in 182.22 s;
+  16 existing scatter warnings. Remote `gpu-contracts.xml`.
+- Two GPUs f64: nonlinear species/Hermite RHS and fused-trajectory identity,
+  2 passed in 17.34 s; remote `two-gpu.xml`.
+- XML SHA256 respectively:
+  `76bb54eb2ae9eff90a62c664d9f15fccf7ecbe78189277c5e723b6b15bc9721b`,
+  `b9fde32b9df277b51142e97ab05087e76f3dd46066406bab43bb34d2b1df4478`.
+- Architecture and scoped Ruff pass. No performance claim from concurrent
+  checks; no long-time AD or EM qualification inferred from these tests.
+
+Combined CPU invocation (same local interpreter and environment as above):
+
+```sh
+python -m pytest -o addopts='' -q tests/unit/linear/test_linear.py \
+tests/unit/linear/test_linear_helpers_extra.py \
+tests/unit/operators/test_linear_streaming.py \
+tests/unit/solvers/test_time_integrators.py \
+tests/validation/physics_gates/test_end_damping_physics.py \
+tests/release/test_release_gates.py
+```
+
+GPU contract invocation uses the same paths except linear-helper/release,
+`-k 'damping or stops_at_requested_time or fft_highest or linked_fft_maps'`,
+`--junitxml=gpu-contracts.xml`, CUDA_VISIBLE_DEVICES=1, JAX_PLATFORMS=cuda,
+JAX_ENABLE_X64=true, XLA_PYTHON_CLIENT_PREALLOCATE=false, PYTHONPATH=src,
+and `timeout 900` with the office interpreter. The two-GPU selection/command
+is the earlier two-logical-CPU selection with CUDA_VISIBLE_DEVICES=0,1,
+JAX_PLATFORMS=cuda, timeout 600 and `--junitxml=two-gpu.xml`.
+
+Resume at Phase 0.1: inspect latest CI on exact PR heads, obtain explicit
+maintainer merge approval, then merge in the declared order. #207/#208 are
+reviewable independent #202 extractions; do not close #202 wholesale. The
+fixed-rate opt-in, remaining research-branch dispositions, API/warmup contracts,
+evidence ledger and velocity anomaly remain open. No release or main merge.
+Latest checks: #197 has 32 success, 5 pending, 1 skipped; #199 has 8 success,
+29 pending, 1 skipped. Do not infer final CI success from the local tests.
+Final authoritative-document checks: 134 release gates pass (2.40 s), strict
+Sphinx passes (`/tmp/gkx-phase0-authority-docs`), whitespace clean. All runs
+launched in this execution are terminal; office now has other users' workloads,
+which were neither interrupted nor treated as ours. Recheck before using GPUs.

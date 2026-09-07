@@ -108,7 +108,7 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 | Collisions | LB/Dougherty, Sugama, improved Sugama, drift-kinetic Coulomb low-moment | Finite-k Coulomb 8/18 tables: 22.9–95.8% block errors; research-only |
 | Parallel | Independent scans and ensembles, serial-identity gated; species×Hermite implemented with width-two halos | Whole-state sharding 0.211× and fails identity; species×Hermite refuses conserving collisions when m is split; no measured VJP scaling |
 | API | load/prepare/solve/scan/plot; six CLI commands; wheel first-run gate | `prepare` reports Nl=4, Nm=8 for a 16/48 deck; `warmup()` is a no-op; the demo warns on CFL (dt .03 vs bound .022); an f32 geometry test fails 1e-9 by 6e-8 |
-| Process | 134 release gates; eleven checkers; strict docs; README parity gate (#193); examples in CI (#185) | Seven code PRs open, none merged since 2026-09-03; office box unreachable 2026-09-05/06; two GX jobs of unknown state |
+| Process | 134 release gates; eleven checkers; strict docs; README parity gate (#193); examples in CI (#185); office available and old GX spatial controls audited exit 0 | Phase 0 repairs still await required checks and maintainer merge approval; see the current PR ledger and execution log |
 
 ### 2.2 Fresh measurements (2026-09-05/06, details in the audits)
 
@@ -314,10 +314,14 @@ exactly, the finite-pressure classes only approximately.
    eleven-mode artifact replay. Keep those two evidence claims separate.
    **In progress:** `73a8a8c4` integrates main without solver changes; local
    physics, damping-unit, release and architecture gates pass. The negative
-   control on main fails as expected. Fresh full-artifact replay, CI and
-   explicit maintainer merge approval remain pending; see the execution log.
+   control on main fails as expected. Fresh office replay reproduces all eleven
+   gamma/omega values and both half-time shifts exactly (18m34s, exit 0).
+   CI and explicit maintainer merge approval remain separate gates; see the
+   execution log for hashes, schema caveat and reference-validity limits.
    Owner: maintainer.
-2. Merge #199.
+2. Merge #199 after approval. Prepared at `4e78e7bb`; 16 damping checks and
+   134 release tests independently pass. The legacy scalar contract is not a
+   fixed-rate physical-model certification.
 3. Merge #196, then #200, then #201, each after CI.
 4. Push the two unpushed local commits on `fix/r0-end-damping-rate` to
    `wip/r0-end-damping-rate-local` so nothing is lost; open one small PR per
@@ -326,6 +330,11 @@ exactly, the finite-pressure classes only approximately.
    fixed-rate absorber into `[time] damp_ends_rate` behind an explicit flag,
    with `A/dt_reference` conversion recorded in the resolved deck and a
    migration error for the old scale-by-dt key; close #202.
+   **Preservation done:** WIP branch pushed at `48b90099`. Extractions open:
+   #207 (analytic Fourier/link-map contracts, net zero test lines) and #208
+   (explicit linear endpoint clipping, independently failed on the parent).
+   These do not import #202's collision tables or select its rate redesign;
+   keep #202 open until the remainder is explicitly dispositioned.
 5. Close #198, #203, #204, #205 with a comment pointing here.
 
 Merge cadence from now on: a PR whose ledger rows pass merges within five
@@ -416,9 +425,17 @@ fixed. Cost: CPU, hours.
 
 ### 0.6 Remote state
 
-Before any GPU campaign: check the two GX jobs under
-`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L` (PIDs 1767040/1767078
-at last record), record their terminal state in the log, and free the disk.
+The two GX jobs under `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`
+are now audited **exit 0**, not running: actual Nz96/192, T300, fixed dt.002,
+finite outputs and matching input/binary hashes. All 1501 frequency/growth
+samples of the reduced-ky Nz96 control are bit-identical to the corresponding
+mode of the previous 12-ky run. The recovered spatial comparison is recorded
+in the execution log; it is fixed-rate research-branch evidence, not a main
+release benchmark or velocity-convergence certificate.
+
+Before each further campaign, check live GPU processes and disk space again.
+65 GB was free at this preflight; no deletion was needed. Preserve references
+and provenance rather than treating cleanup as an unconditional exit gate.
 The office environment notes are in [plan/notes](plan/notes/).
 
 ---

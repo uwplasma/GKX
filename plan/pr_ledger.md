@@ -2,14 +2,19 @@
 
 ## Execution inventory, 2026-09-06
 
-GitHub all-state inventory: 200 PRs, seven open: authoritative plan #206 and
-six code PRs (#196, #197, #199, #200, #201, #202). #198, #203, #204 and #205
+GitHub inventory after the first extractions: 202 PRs, nine open:
+authoritative plan #206 and eight code PRs (#196, #197, #199, #200, #201,
+#202, #207, #208). #198, #203, #204 and #205
 are closed, superseded by #206; their branches remain available.
 
 Phase 0.1 starts with #197. Commit `73a8a8c4` integrates main `a99dac89`
 without rewriting the published branch or changing its solver implementation.
-Local regression checks pass; full artifact replay, remote CI and maintainer
-merge approval are still gates. No PR was merged during this execution step.
+Local regression checks and the full eleven-mode Cyclone replay pass; remote
+CI and maintainer merge approval remain separate gates. #199 updated to
+`4e78e7bb`; #201 independently rechecked on Mac CPU, office CPU/GPU and logical
+CPU sharding. #207 extracts Fourier/link-map oracles; #208 extracts endpoint
+clipping from #202. WIP branch at `48b90099` preserves the two unpushed commits.
+No PR was merged during this execution step.
 See [log.md](log.md) for commands and negative-control evidence.
 
 ## Historical inventory, #1–#197
