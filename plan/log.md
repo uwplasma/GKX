@@ -9855,3 +9855,53 @@ At 14:31 UTC, #209 still has 37 queued jobs and one skipped nightly job, no
 assigned runners; GitHub's public status reports Actions operational. Queue
 cause is not established. #196/#200/#201/#208/#209/#210 remain unmerged;
 #206 and #202 remain open intentionally.
+
+## 2026-09-07 — resume: differentiable species-state placement
+
+Rechecked the authoritative plan and open PRs. #209 remains open at `23710471`;
+GitHub finally assigned one runner after the initial queue, but required CI
+has not passed. No merge, protection change or branch deletion this step.
+
+Next bounded #202 extraction is [#211](https://github.com/uwplasma/GKX/pull/211),
+`fix/phase0-species-state-ad` at `24eca522`, based on main `99963b45`. Worktree:
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-state-ad`. It independently
+extracts `19e066dd`/`0441e4d8`: remove the unconditional tracer rejection in
+`prepare_electrostatic_species_inputs`. Its existing `from_host` helper already
+preserves tracers. Concrete device placement, equations and kernels unchanged.
+Source shrinks by two lines. The existing EM trajectory test grows by 15
+physical lines (14 architecture-counted); no test file added.
+
+For fixed parameters, linear evolution implies
+`J(s) = ||G_T(s G0)||² + ||phi_T(s G0)||²`, `J'(1) = 2 J(1)`.
+The test activates Apar/Bpar and compares serial/species-pmap, eager/outer-JIT
+derivatives. Negative control before source fix: both eager and JIT cases fail
+with the expected traced-state ValueError (2 failed, 7.29 s).
+Fixed focused selection: 4 pass in each of separate precision processes,
+10.86 s x64-enabled and 11.13 s f32. The EM test promotes its initial state
+to complex128 for x64; derivative tolerances are 1e-10/1e-12 there and
+8e-5/1e-7 in f32. Other existing fixture tests retain complex64 states.
+Known fixture scatter-downcast warnings remain in x64; no warning suppression.
+
+```sh
+PYTHONPATH=$PWD/src JAX_ENABLE_X64=true \
+XLA_FLAGS=--xla_force_host_platform_device_count=2 \
+/tmp/gkx-plan-review-20260906/bin/python -m pytest -o addopts='' -q \
+tests/unit/parallel/test_parallel_linear_velocity.py -k species_pmap --tb=short
+# Repeat in a fresh process with JAX_ENABLE_X64=false.
+```
+
+Ruff check/format, architecture gate and strict Sphinx pass (one new heading
+underline warning corrected before final successful build at
+`/tmp/gkx-state-ad-docs`). Full four-logical-CPU module is running; its result
+must be recorded separately, not inferred from the focused selection.
+Office check: both RTX A4000s at 93% utilization, 12337/12415 MiB allocated.
+Did not launch GPU work or interrupt others. This is linear AD/routing
+evidence, not EM physics validation, turbulent restart sensitivity or speedup.
+
+Remaining #202 source review: the streaming-owner change removes A/dt scaling;
+it is part of the rejected unconditional rate migration, not an unported
+Fourier-frequency fix. Keep it coupled to the explicit fixed-rate opt-in design.
+Collision-table/generator/interpolation changes remain Phase 6 evidence work,
+not part of these small repairs. Next: finish #209 checks and ancestry-preserving
+merge; refresh #210/#211 on main with measured combined budgets and CI; continue
+the explicit absorber input/migration contract without changing legacy defaults.

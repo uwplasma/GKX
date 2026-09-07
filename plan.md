@@ -340,6 +340,10 @@ exactly, the finite-pressure classes only approximately.
    (explicit linear endpoint clipping, independently failed on the parent).
    These do not import #202's collision tables or select its rate redesign;
    keep #202 open until the remainder is explicitly dispositioned.
+   Further bounded extractions: #210 rejects nonfinite Laguerre transforms;
+   #211 preserves traced initial states through species-parallel placement,
+   with eager/outer-JIT electromagnetic derivative identities. Both await CI.
+   Neither certifies finite-wavelength Coulomb physics or turbulent gradients.
 5. Close #198, #203, #204, #205 with a comment pointing here.
 
 Merge cadence from now on: a PR whose ledger rows pass merges within five
