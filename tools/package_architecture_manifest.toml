@@ -932,7 +932,8 @@ recursive = true
 # 86377 -> 86568: retain both main's 120-line README parity gate (#193)
 # and #197's 191-line net increase over their shared 86257-line baseline.
 # Measured after the history-preserving main integration; no tests removed.
-baseline = 86568
+# +14: eager/outer-jitted EM initial-state derivative identity, serial and pmap.
+baseline = 86582
 target = 35000
 
 [[line_budget_policy.counts]]
