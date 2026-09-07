@@ -9826,3 +9826,32 @@ Resume at Phase 0.1: complete that integration, then disposition the remaining
 #202 repairs and explicit fixed-rate opt-in. Phase 0.2 API/warmup contracts,
 evidence ledger and velocity anomaly remain open. Branch cleanup does not
 resolve those scientific or interface gates.
+
+While integration CI waits, extracted one further Phase 0 numerical guard in
+[#210](https://github.com/uwplasma/GKX/pull/210), head `19515c2e`, branch
+`fix/phase0-laguerre-finite`, based on main `99963b45`. Worktree:
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-laguerre-guard`.
+Reimplements #202 commit `93062763` concisely: reject nonfinite Laguerre
+round-trip errors and make the error message accurate. Existing test is
+parameterized over 1.01, NaN and infinity; two files, net four lines, no new
+dependency or per-step computation. This is cache-construction validation,
+not a new collision model or velocity-convergence result.
+
+Negative control before source fix: NaN and infinity both fail because the
+old guard does not raise; finite degraded case passes (2 failed / 1 passed,
+1.49 s). Fixed source: all 50 core-numerics tests pass in 6.07 s:
+
+```sh
+PYTHONPATH=$PWD/src JAX_ENABLE_X64=true \
+  /tmp/gkx-plan-review-20260906/bin/python -m pytest -o addopts='' -q \
+  tests/unit/core/test_core_numerics.py
+```
+
+Ruff check/format and architecture gates pass; no budget adjustment on this
+base. After #209 merges, refresh #210 against main and remeasure the combined
+test-line budget (one test line added); do not drop a test to satisfy a cap.
+#210 is not included in #209's prior GPU evidence or approved repair batch.
+At 14:31 UTC, #209 still has 37 queued jobs and one skipped nightly job, no
+assigned runners; GitHub's public status reports Actions operational. Queue
+cause is not established. #196/#200/#201/#208/#209/#210 remain unmerged;
+#206 and #202 remain open intentionally.

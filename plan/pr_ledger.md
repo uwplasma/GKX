@@ -9,6 +9,9 @@ head `23710471`. Its complete tree is identical to independently tested
 `1c7c7472`, and it preserves all four approved heads for a merge-commit merge.
 Strict base checks apply even to administrators; auto-merge is disabled.
 #206 stays the authoritative open plan; #202 stays open for bounded splits.
+#210 (`19515c2e`) extracts the nonfinite Laguerre guard from #202: negative
+controls fail on main and all 50 core-numerics tests pass after the fix.
+It awaits CI separately; it is not part of #209's tested integration tree.
 
 Safely removed 18 remote and 85 unused local branches with exact-tip checks
 against merged PRs and a verified full-history bundle. No worktrees removed;

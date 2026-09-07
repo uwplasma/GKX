@@ -128,10 +128,11 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 
 | PR | Content | Disposition |
 |---|---|---|
-| #197 | per-step end damping restored | **merge first** after rebasing the one conflict in `tools/package_architecture_manifest.toml` |
-| #199 | analytic stage-map tests, route docs; stacked on #197 | merge after #197 |
-| #196 → #200 → #201 | f32 skip → subprocess isolation → CPU-only lowering fix | merge as one stack in order |
-| #202 | fixed-rate absorber plus streaming/coefficient repairs, +2199/−400 | **split**: repairs become small PRs with tests; the rate becomes an input flag behind rescaled decks; push the two unpushed local commits (447d724f, 48b90099) to a branch first |
+| #197 | per-step end damping restored | merged `ca4e5169`; recorded artifact reproduced, not newly physics-certified |
+| #199 | analytic stage-map tests, route docs | merged `0c016bd1` |
+| #196 → #200 → #201; #208 | f32 safety/lowering repairs; linear endpoint | integrate through #209 after fresh required CI, preserving merge ancestry |
+| #207; #210 | Fourier/link-map oracles; nonfinite Laguerre guard | #207 merged `99963b45`; #210 independently tested, awaiting CI |
+| #202 | fixed-rate absorber plus streaming/coefficient repairs, +2199/−400 | **split**, not wholesale merge: remaining repairs isolated; rate behind explicit input and rescaled decks; unpublished commits preserved at `wip/r0-end-damping-rate-local` |
 | #198, #203, #204, #205 | planning | superseded by this plan; closed with a pointer here; branches kept |
 
 ---
