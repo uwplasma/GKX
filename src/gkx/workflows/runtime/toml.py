@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import is_dataclass, replace
 from typing import Any, Callable, Sequence, cast
 import os
@@ -18,6 +19,7 @@ from gkx.config import (
     RuntimeParallelConfig,
     RuntimePhysicsConfig,
     RuntimeQuasilinearConfig,
+    RuntimeRunConfig,
     RuntimeSpeciesConfig,
     RuntimeTermsConfig,
 )
@@ -353,7 +355,26 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     species = _runtime_species_from_toml(data.get("species"))
     if species is not None:
         cfg = replace(cfg, species=species)
+    run = _runtime_run_from_toml(data.get("run"))
+    if run is not None:
+        cfg = replace(cfg, run=run)
     return _resolve_runtime_config_paths(cfg, base_dir=base_dir), data
+
+
+def _runtime_run_from_toml(section: Any) -> RuntimeRunConfig | None:
+    """Read the deck's ``[run]`` selections, or ``None`` when it has none.
+
+    Only the keys the runtime itself resolves are carried. Anything else in the
+    table belongs to a subcommand's own parser and is left where it is.
+    """
+
+    if not isinstance(section, dict):
+        return None
+    fields = {f.name for f in dataclasses.fields(RuntimeRunConfig)}
+    present = {key: section[key] for key in fields if section.get(key) is not None}
+    if not present:
+        return None
+    return RuntimeRunConfig(**present)
 
 
 def load(path: str | Path) -> Case:

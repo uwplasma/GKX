@@ -200,6 +200,34 @@ class PreparedSimulation:
             print(f"{key}: {value}", file=stream)
 
 
+# The runtime resolves [run] Nl/Nm per call, and its fallback differs by kind:
+# a linear call defaults to (24, 12), a nonlinear one to (4, 8). See
+# ``_CASE_LINEAR_SPECS`` and ``_CASE_NONLINEAR_SPECS`` in
+# ``gkx.workflows.runtime.commands``.
+_RUNTIME_RESOLUTION_DEFAULTS = {"linear": (24, 12), "nonlinear": (4, 8)}
+
+
+def _resolve_velocity_resolution(
+    case: Any, kind: str, options: dict[str, Any]
+) -> tuple[int, int]:
+    """Return the ``(Nl, Nm)`` a later ``solve`` will actually build.
+
+    Precedence is explicit argument, then the deck's ``[run]`` table, then the
+    runtime's own default for this kind of case. Reporting anything else makes
+    ``print_summary`` describe a calculation that will not be run: before the
+    ``[run]`` table was carried on the case, preparing the shipped Cyclone deck
+    reported ``4, 8`` for a deck that asks for ``16, 48``.
+    """
+
+    default_l, default_m = _RUNTIME_RESOLUTION_DEFAULTS.get(kind, (4, 8))
+    run = getattr(case, "run", None)
+    deck_l = getattr(run, "Nl", None)
+    deck_m = getattr(run, "Nm", None)
+    n_laguerre = options.get("Nl") or deck_l or default_l
+    n_hermite = options.get("Nm") or deck_m or default_m
+    return int(n_laguerre), int(n_hermite)
+
+
 def prepare_simulation(case: Any, **options: Any) -> PreparedSimulation:
     """Build a :class:`PreparedSimulation` for ``case``.
 
@@ -211,11 +239,7 @@ def prepare_simulation(case: Any, **options: Any) -> PreparedSimulation:
 
     case.validate()
     kind = _case_kind(case)
-    # Nl/Nm are run-time selections, not case fields: the deck carries them in
-    # its [run] table and the runtime resolves them per call. Mirror the
-    # runtime's own defaults so the reported topology matches what solve builds.
-    n_laguerre = int(options.get("Nl") or 4)
-    n_hermite = int(options.get("Nm") or 8)
+    n_laguerre, n_hermite = _resolve_velocity_resolution(case, kind, options)
     backend = None
     if kind == "nonlinear":
         from gkx import runtime as _runtime

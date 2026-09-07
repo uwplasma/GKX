@@ -847,7 +847,18 @@ recursive = true
 # fraction rather than the rate its name and the docs suggest, so the comment is
 # the part that stops it happening again, and it points at #194 for the redesign
 # that would make the name true.
-baseline = 88968
+# 88968 -> 89061: the [run] section, +93 lines across config.py,
+# workflows/runtime/toml.py and api/prepared.py. The loader read the deck's
+# [run] table and threw it away, so nothing downstream could see the velocity
+# resolution the deck asked for: preparing the shipped Cyclone deck, which
+# asks for Nl = 16 and Nm = 48, reported a hard-coded 4 and 8, and the
+# resolved deck a run wrote back omitted the table entirely. Carrying it costs
+# a small frozen section with a to_dict that stays empty for decks that never
+# had one, so those still round-trip byte-identically, plus one resolver in
+# prepare whose precedence is explicit argument, deck, then the runtime's own
+# kind-aware default. The alternative -- leaving prepare to guess -- makes
+# print_summary describe a calculation solve will not run.
+baseline = 89061
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -932,7 +943,23 @@ recursive = true
 # 86377 -> 86568: retain both main's 120-line README parity gate (#193)
 # and #197's 191-line net increase over their shared 86257-line baseline.
 # Measured after the history-preserving main integration; no tests removed.
-baseline = 86568
+# 86568 -> 86679: 72 lines of [run]-contract tests appended to the existing
+# tests/unit/api/test_prepared_simulation.py rather than a new file. Five
+# checks: the shipped Cyclone deck prepares at its own 16/48; an explicit
+# argument still wins; a deck with no [run] falls back to the runtime's
+# kind-aware default rather than a third invented pair; a deck with [run]
+# round-trips through TOML; a deck without one does not grow the section.
+# Verified negatively: restoring the hard-coded (4, 8) fails the first and
+# third and nothing else.
+# The remaining 39 are the jax-floor guard in tests/unit/api/test_public_types.py.
+# pyproject requires jax>=0.10.1 because gkx.objectives.core opts into
+# eig(..., enable_eigvec_derivs=True), but nothing checked it at test time, so an
+# older jax produced eight unrelated-looking physics failures -- a TypeError deep
+# in the objective vector plus four Hermite gates -- instead of one sentence. A
+# measurement recorded in the plan on 2026-09-07 had to be withdrawn for exactly
+# that reason. The guard reads the floor from pyproject rather than duplicating
+# it, so the two cannot drift apart.
+baseline = 86679
 target = 35000
 
 [[line_budget_policy.counts]]
