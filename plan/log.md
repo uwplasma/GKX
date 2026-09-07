@@ -10209,3 +10209,43 @@ Environment note for whoever resumes: office
 (`plasmaworkstation.physics.wisc.edu:3281`) has now been unreachable on
 2026-09-05, 06 and 07. Local load hit 117 on 14 cores after the reboot; check
 `uptime` before starting a sweep.
+
+## 2026-09-07 — Phase 0.2: the deck's [run] table, and a dependency-floor guard
+
+Branch `phase0/api-contracts` at `ce360d0d`, based on main `99963b45`;
+[#214](https://github.com/uwplasma/GKX/pull/214). Worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase02-api`.
+
+Closes plan.md 0.2.1 and part of 0.2.4.
+
+The loader read `[run]` and discarded it; `RuntimeConfig` had no field for it.
+So `gkx.prepare(gkx.load("examples/linear/axisymmetric/cyclone.toml"))` reported
+`n_laguerre 4, n_hermite 8` for a deck that asks for 16 and 48, and a resolved
+deck written back by a run omitted the table entirely. Three defaults were in
+play at once: prepare's (4, 8), the linear runtime's (24, 12), the nonlinear
+runtime's (4, 8), and the deck's (16, 48).
+
+`RuntimeConfig` gains a frozen `run` section (ky, Nl, Nm, solver, method, dt,
+steps). `None` distinguishes "the deck did not say" from a chosen value, and
+`to_dict` emits `[run]` only when the deck carried one, so decks without it
+still write byte-identical resolved decks. `prepare_simulation` resolves
+explicit argument, then deck, then the runtime's kind-aware default.
+
+Also adds the jax floor guard in `tests/unit/api/test_public_types.py`, reading
+the requirement from `pyproject.toml` so the two cannot drift. This is the check
+whose absence cost the withdrawn measurement recorded earlier today.
+
+Verified on jax 0.10.2, `JAX_ENABLE_X64=true GKX_X64=1`: `tests/unit/api`,
+`tests/unit/core`, `tests/release`, `tests/integration/runtime` pass, exit 0.
+Negative controls: restoring the hard-coded (4, 8) fails the shipped-deck and
+runtime-default tests and nothing else; the guard fails on jax 0.9.2, passes on
+0.10.2. Eleven checkers pass, ruff clean, manifest budgets moved with reasons.
+
+Status of my open PRs at this point: **#213 (evidence ledger) is CLEAN with 41
+successful checks and one skipped, ready for maintainer merge.** #206 (the plan)
+re-queued CI after the corrections above. #214 just opened.
+
+Still open in Phase 0.2: `warmup()` remains a no-op for the linear path (0.2.2),
+the no-argument demo still warns over CFL (0.2.3), and the f32 geometry
+tolerance (rest of 0.2.4) is untouched. 0.3 still needs CONTRIBUTING.md and the
+HSX decision.
