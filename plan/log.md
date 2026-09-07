@@ -9905,3 +9905,19 @@ Collision-table/generator/interpolation changes remain Phase 6 evidence work,
 not part of these small repairs. Next: finish #209 checks and ancestry-preserving
 merge; refresh #210/#211 on main with measured combined budgets and CI; continue
 the explicit absorber input/migration contract without changing legacy defaults.
+
+**Broader validation completed:** 70/70 tests in
+`tests/unit/parallel/test_parallel_linear_velocity.py` pass in 307.10 s with
+`JAX_ENABLE_X64=true`, `XLA_FLAGS=--xla_force_host_platform_device_count=4`,
+`PYTHONPATH=$PWD/src`, the same interpreter and `pytest -o addopts='' -q --tb=short`.
+There are 27 existing fixture scatter-downcast warnings, not suppressed.
+No local test process remains running from this step.
+
+Requested cancellation of redundant CI runs `34131850773` (#196 at `77d7370d`)
+and `34132278037` (#200 at `b2bd0d43`): both exact heads are ancestors of #209,
+whose fresh complete-tree CI is the merge gate. GitHub accepted both requests;
+their cancellation conclusion was not yet populated at the final check.
+Main CI and all integration checks retained. #209 currently has 2 successful
+checks, 35 unfinished, one skipped nightly; no merge attempted on partial CI.
+The four original repair PRs still require the ancestry/state verification
+described above after #209 merges. #210/#211 are not merged or GPU-certified.
