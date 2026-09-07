@@ -10431,3 +10431,46 @@ it stands. Concretely, in order:
 
 The row stays `provisional` in the ledger either way; what changes is whether it
 becomes `passing` or disappears.
+
+## 2026-09-07 — Phase 0.3.3: CONTRIBUTING.md
+
+Branch `phase0/contributing` at `f15fe869`, based on main `99963b45`;
+[#215](https://github.com/uwplasma/GKX/pull/215). Worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase03-contrib`.
+
+A JOSS review-checklist item the repository did not satisfy: community
+guidelines for contributing, reporting issues and seeking support.
+
+Written around the failure modes this project has actually hit, so it is worth
+reading rather than boilerplate: the jax >= 0.10.1 floor and why an older jax
+looks like broken physics; the nightly invocation
+(`MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1`); that `pytest.ini` holds
+`--maxfail=1 -m "not slow"`, so a one-failure report has not measured the rest
+and `slow` tests never run anywhere; one change per PR with tests stated
+alongside the failure they were verified against; the ledger rule that
+publishing a number is a data change and a self-run reference is rank 5 and
+never called published; manifest budgets moving with a written reason; pinned
+claim wording that must not be paraphrased; worktrees for anything measured.
+
+README gains a Contributing section. 134 release gates, all checkers, ruff
+clean.
+
+Phase 0 status after this step:
+
+| Item | State |
+|---|---|
+| 0.1 PR dispositions | other session, #208-#212 open |
+| 0.2.1 prepare carries the deck resolution | done, #214 |
+| 0.2.2 warmup is a no-op | **open** |
+| 0.2.3 demo reports its own eigenvalue | done, #214 |
+| 0.2.4 precision-specific tests / jax floor | floor guard done in #214; f32 geometry tolerance **open** |
+| 0.2.5 shipped decks load through the public API | done, #214 |
+| 0.3.1 README | done on the plan branch |
+| 0.3.2 CITATION.cff | done on the plan branch; Zenodo DOI at release |
+| 0.3.3 CONTRIBUTING.md | done, #215 |
+| 0.3.4 HSX decision | investigated; needs a GPU or the row goes |
+| 0.4 ledger and GX goldens | done, #213 |
+| 0.5 velocity convergence | opened; two hypotheses refuted, blast radius unmeasured |
+| 0.6 remote state | office unreachable three days running |
+
+Open PRs in this lane: #213, #214, #215, and #206 for the plan itself.
