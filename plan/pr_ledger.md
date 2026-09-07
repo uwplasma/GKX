@@ -15,6 +15,9 @@ It awaits CI separately; it is not part of #209's tested integration tree.
 #211 (`24eca522`) extracts traced species-state placement from #202: eager and
 outer-JIT homogeneity identities pass in separate f32/f64 processes. GPU rerun
 is deferred while office GPUs are occupied; no EM-physics promotion implied.
+#212 (`37a9c0be`) adds the explicit differentiable rate opt-in, preserves legacy
+defaults and unifies the two damping resolvers. Focused tests and strict docs
+pass; broader validation is recorded in the log. Reference migration remains open.
 
 Safely removed 18 remote and 85 unused local branches with exact-tip checks
 against merged PRs and a verified full-history bundle. No worktrees removed;

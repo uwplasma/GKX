@@ -9921,3 +9921,75 @@ Main CI and all integration checks retained. #209 currently has 2 successful
 checks, 35 unfinished, one skipped nightly; no merge attempted on partial CI.
 The four original repair PRs still require the ancestry/state verification
 described above after #209 merges. #210/#211 are not merged or GPU-certified.
+
+## 2026-09-07 — additive fixed-rate absorber contract
+
+Opened [#212](https://github.com/uwplasma/GKX/pull/212), branch
+`fix/phase0-fixed-rate-optin`, head `37a9c0be`, based on main `99963b45`.
+Worktree: `/Users/rogeriojorge/local/GKX-worktrees/phase0-rate-optin`.
+
+Contract: optional `[time] damp_ends_rate = nu` becomes a differentiable
+`LinearParams.damp_ends_rate` pytree leaf. Explicit `nu >= 0`, including zero,
+overrides legacy amplitude on timestep-aware and timestep-free routes. When
+absent, legacy A/dt (or A without a timestep) remains. Runtime validation
+rejects negative/nonfinite values and combination with scale-by-dt=true.
+One `LinearParams.end_damping_strength` resolver replaces both ordinary assembly
+and mixed species/Hermite implementations. No new file or dependency.
+
+Mathematical gate: for isolated `dG/dt = -nu G`, explicit Euler/RK2/RK3/RK4
+produce `R(-dt nu)`, with derivative `-dt R'(-dt nu)`; the legacy case remains
+`R(-A)`, derivative `-R'(-A)`. The existing RK tests cover both, at dt=.002/.2.
+Linked-domain Euler increments test actual assembly/integration: proportional
+to dt for a rate, invariant for legacy amplitude. JIT/pytree reverse checks
+cover dt=None/0/.002/.2, including zero derivative with respect to overridden A.
+Runtime tests load TOML, check serialized config values and invalid inputs.
+
+Focused command, x64-enabled Mac CPU, 34 pass in 9.22 s:
+
+```sh
+PYTHONPATH=$PWD/src JAX_ENABLE_X64=true \
+/tmp/gkx-plan-review-20260906/bin/python -m pytest -o addopts='' -q \
+tests/unit/linear/test_linear.py tests/integration/runtime/test_runtime_runner.py \
+-k end_damping --tb=short
+```
+
+Negative-control subprocess replaced the resolver with a wrapper that sets
+`damp_ends_rate=None` before calling the original. All four
+`fixed_end_damping_rate_pytree` cases fail (0.34 s). Repository files were not
+mutated by this control. Ruff, architecture gate and strict Sphinx pass;
+docs at `/tmp/gkx-rate-optin-docs`, log `/tmp/gkx-rate-optin-docs.log`.
+Measured source/test architecture counts: 88978 / 86616; reconcile these
+against combined main after #209 rather than overwriting other repairs' counts.
+
+Broader linear/runtime/config/end-damping tests and the mixed species/Hermite
+four-logical-CPU selection are running; final results follow below. No new
+GPU result or coupled-EM physical validation claimed. Both office GPUs retain
+~12 GiB allocated to other workloads, which were left untouched.
+
+This is an additive stage, not completion of Phase 0.1: no reference deck was
+converted, no historical result recertified, no old scale-by-dt key removed.
+Next migration must record A/dt_reference provenance, reject ambiguous adaptive
+reference conversions, and replace the deprecated key with a useful migration
+error. Do not silently reinterpret old decks. #209 currently has eight successful
+checks and 29 unfinished plus one skipped nightly; it is not merge-ready.
+
+Broader rate-opt-in CPU validation completed: **298 passed, 1 skipped**,
+227.45 s, 53 unsuppressed warnings, with the same interpreter, PYTHONPATH,
+`JAX_ENABLE_X64=true`, `pytest -o addopts='' -q --tb=short`, paths:
+`tests/unit/linear/test_linear.py`,
+`tests/integration/runtime/test_runtime_runner.py`,
+`tests/integration/runtime/test_runtime_config.py`,
+`tests/validation/physics_gates/test_end_damping_physics.py`.
+Warnings include existing dtype-downcast and under-resolved short-run fits;
+passing smoke tests do not certify converged growth/transport values. Separate
+release-gate run on the same code head: 134 passed in 3.15 s.
+
+Mixed species/Hermite comparison completed: **2 passed**, 414.88 s, two existing
+downcast warnings. Command uses `JAX_ENABLE_X64=true`,
+`XLA_FLAGS=--xla_force_host_platform_device_count=4`, the same interpreter and
+`pytest -o addopts='' -q tests/unit/parallel/test_parallel_linear_velocity.py
+-k mixed_species_hermite_electrostatic_rhs_matches_serial_production_route --tb=short`.
+Both legacy (None) and explicit rate (.4) compare all active dissipation routes
+against serial. No speedup claim from these compilation-heavy CPU tests.
+All local jobs launched for this step are terminal. Resume at the outstanding
+merge gate, then complete the reference-conversion/migration stage above.

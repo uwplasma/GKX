@@ -344,6 +344,10 @@ exactly, the finite-pressure classes only approximately.
    #211 preserves traced initial states through species-parallel placement,
    with eager/outer-JIT electromagnetic derivative identities. Both await CI.
    Neither certifies finite-wavelength Coulomb physics or turbulent gradients.
+   #212 adds the explicit `[time] damp_ends_rate`/Python rate opt-in and a shared
+   resolver while retaining legacy defaults. Reference conversion/provenance,
+   old scale-by-dt migration errors and the remaining #202 dispositions are
+   **not complete**; do not mark Phase 0.1 closed when this additive patch merges.
 5. Close #198, #203, #204, #205 with a comment pointing here.
 
 Merge cadence from now on: a PR whose ledger rows pass merges within five
