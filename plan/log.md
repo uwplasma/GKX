@@ -9444,3 +9444,55 @@ test, data or release change; no Phase 0 work started; no GPU job launched.
 
 Next: maintainer review of #206; then Phase 0 step 0.1 (rebase and merge
 #197).
+
+## 2026-09-06 — execution starts: Phase 0.1, #197 integration
+
+Authority: #206 at `c893b93a`; checked all 200 PRs via
+`gh pr list --repo uwplasma/GKX --state all --limit 1000`. Seven open,
+including this plan; superseded planning PRs are closed. No new roadmap.
+
+Implementation worktree: `/Users/rogeriojorge/local/GKX-worktrees/phase0-pr197`,
+local branch `review/phase0-pr197`, based on published #197 `9074dd87`.
+Merged main `a99dac89` with `git merge --no-commit --no-ff origin/main`.
+Only conflict: `tools/package_architecture_manifest.toml`. Retained both
+test additions: 86257 shared baseline +191 (#197) +120 (#193) =86568 lines.
+Architecture checker confirms this count. Solver diff against #197 is empty.
+Commit `73a8a8c41a37b5d68bb0e49e28dd25a47a5bc311` pushed fast-forward with
+`git push origin HEAD:fix/end-damping-per-step`. No main merge or force push.
+
+Environment: macOS arm64, M3 Max CPU; Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6. Interpreter `/tmp/gkx-plan-review-20260906/bin/python`.
+Commands below run in the implementation worktree with `PYTHONPATH=$PWD/src`
+and `JAX_ENABLE_X64=true` (pytest invoked with `-o addopts='' -q`):
+
+| Command suffix | Result | Wall time |
+|---|---|---|
+| `-m pytest tests/validation/physics_gates/test_end_damping_physics.py` | 1 passed | 16.23 s |
+| `-m pytest tests/unit/linear/test_linear.py tests/unit/linear/test_linear_helpers_extra.py -k damping` | 7 passed, 128 deselected; one pre-existing escape-sequence warning | 12.32 s |
+| `-m pytest tests/release/test_release_gates.py` | 134 passed | 4.44 s |
+| `tools/release/check_package_architecture_manifest.py` | passed; long-term slimming targets still unmet | not recorded |
+
+Negative control: from `/Users/rogeriojorge/local/GKX-worktrees/planreview`,
+set `PYTHONPATH=$PWD/src JAX_ENABLE_X64=true` and run the same interpreter with
+`-m pytest --noconftest -o addopts='' -q
+/Users/rogeriojorge/local/GKX-worktrees/phase0-pr197/tests/validation/physics_gates/test_end_damping_physics.py`.
+This uses unchanged main solver source (authority branch has documentation
+changes only); `--noconftest` prevents the test worktree overriding imports.
+Expected failure in 16.10 s: peak |phi| =1.1249725794901433e163, above 1e-4.
+Inputs are embedded in the versioned test; no external reference file or
+generated scientific artifact is involved. This detects the original defect,
+not merely a test that passes on both implementations.
+
+Correction to step 0.1.1: its single-mode test does not reproduce the complete
+eleven-mode Cyclone artifact. Historical GPU bit-identity is not fresh replay
+evidence. Also replaced the published-branch rebase instruction with a
+history-preserving merge, consistent with §0.5.
+
+At verification, GitHub reports #197 MERGEABLE; CI run
+[34075132805](https://github.com/uwplasma/GKX/actions/runs/34075132805) queued,
+nightly-full skipped. No GPU job launched; no release or benchmark claim.
+Resume at 0.1.1: inspect this CI run, reproduce the full Cyclone artifact using
+the pinned deck/reference and explicit compute cap, then obtain maintainer
+merge approval. Do not mark 0.1 complete, merge #199 first, or advance an
+expensive later-phase campaign. The original checkout and unrelated worktrees
+remain untouched.

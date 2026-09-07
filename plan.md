@@ -307,9 +307,16 @@ exactly, the finite-pressure classes only approximately.
 
 ### 0.1 PR dispositions
 
-1. Rebase #197 onto main; resolve `tools/package_architecture_manifest.toml`;
-   confirm the cyclone_salpha_itg artifact is still reproduced bit-identically
-   (its test is in the PR); merge. Owner: maintainer.
+1. Update #197 against main with a history-preserving merge, not a force-push
+   rebase (§0.5); resolve `tools/package_architecture_manifest.toml`.
+   Reproduce the cyclone_salpha_itg artifact before maintainer-approved merge.
+   The PR's single-mode end-damping physics test is a regression gate, not an
+   eleven-mode artifact replay. Keep those two evidence claims separate.
+   **In progress:** `73a8a8c4` integrates main without solver changes; local
+   physics, damping-unit, release and architecture gates pass. The negative
+   control on main fails as expected. Fresh full-artifact replay, CI and
+   explicit maintainer merge approval remain pending; see the execution log.
+   Owner: maintainer.
 2. Merge #199.
 3. Merge #196, then #200, then #201, each after CI.
 4. Push the two unpushed local commits on `fix/r0-end-damping-rate` to

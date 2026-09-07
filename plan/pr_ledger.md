@@ -1,4 +1,18 @@
-# Pull-request ledger, #1–#197
+# Pull-request ledger
+
+## Execution inventory, 2026-09-06
+
+GitHub all-state inventory: 200 PRs, seven open: authoritative plan #206 and
+six code PRs (#196, #197, #199, #200, #201, #202). #198, #203, #204 and #205
+are closed, superseded by #206; their branches remain available.
+
+Phase 0.1 starts with #197. Commit `73a8a8c4` integrates main `a99dac89`
+without rewriting the published branch or changing its solver implementation.
+Local regression checks pass; full artifact replay, remote CI and maintainer
+merge approval are still gates. No PR was merged during this execution step.
+See [log.md](log.md) for commands and negative-control evidence.
+
+## Historical inventory, #1–#197
 
 Reconciled with GitHub on 2026-09-04 at `a99dac89`: 191 pull requests,
 180 merged, 9 closed unmerged, 2 open. Issue-only or absent numbers in this
