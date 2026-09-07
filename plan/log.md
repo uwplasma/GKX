@@ -10118,3 +10118,41 @@ top-moment pile-up in W(l), W(m). Those need runs on merged #197.
 
 Files: plan.md 0.5.1/0.5.2/0.5.6 corrected;
 plan/research/2026-09-06_hermite_laguerre_convergence.md marked at both errors.
+
+## 2026-09-07 — Phase 0.5.6 tested and revised: do not flip the hypercollision defaults
+
+Followed plan.md 0.5.6 as written, measured it, and it was wrong. Recording the
+contradiction and correcting the plan, per plan.md 0.6.
+
+Experiment: on a throwaway worktree off main `99963b45`, flipped
+`LinearParams.hypercollisions_const` 1.0 -> 0.0 and `hypercollisions_kz`
+0.0 -> 1.0 to match GX's defaults, changing nothing else, and ran
+`tests/unit/linear tests/unit/operators tests/validation/physics_gates`.
+
+Result: **321 passed, 9 failed, 6 skipped** (223 s). Failures:
+
+- `test_hermite_hierarchy_physics.py::test_zero_drive_is_damped_at_every_hermite_truncation[8|16|32]`
+- `test_hermite_hierarchy_physics.py::test_the_unstable_branch_converges_in_hermite`
+- `test_geometry_physics_contracts.py::test_s_alpha_retains_field_strength_variation`
+- `test_geometry_physics_contracts.py::test_geometry_params_helper_carries_the_parallel_scale`
+- `test_geometry_physics_contracts.py::test_electromagnetic_zonal_solve_is_continuous_in_beta`
+- `test_linear.py::test_shift_invert_nearest_pair_passes_physical_outer_residual`
+- `test_linear.py::test_linked_boundary_growth_gradient_matches_finite_difference`
+
+The zero-drive failures identify the mechanism, and it is physical rather than a
+stale expectation. The constant branch damps every mode with `m>2` or `ell>1`
+irrespective of `k_parallel`; the kz branch damps proportionally to `|k_z|`. At
+`k_z -> 0` the kz branch leaves the truncation's top-moment numerical mode
+undamped, so a zero-drive case reports growth >= 0 and the gate fires exactly as
+it is designed to. GKX's constant default is load-bearing.
+
+Revised disposition, now in plan.md 0.5.6: keep GKX's default, document that GX
+defaults to the kz branch so a Python caller comparing against GX selects it
+explicitly, and gate that the GX-comparison decks keep `hypercollisions_kz` with
+`hypercollisions_const = 0` (they already do). `p_hyper_m` is left as a separate
+decision to settle by measurement on the Nm ∈ {16,24,32} rungs and the W7-X
+deck, since it does not touch the Nm=48 parity deck.
+
+The experiment worktree and branch were deleted; nothing was committed to
+`src/`. No claim here about the Nl 24->32 swing, which remains open and needs
+runs.

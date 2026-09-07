@@ -492,12 +492,32 @@ run on merged #197:
    | `p_hyper_m` default | `min(20, Nm/2)` (`parameters.cu:185`) | fixed `20.0` (`params.py:150`) | agree only for Nm ≥ 40. At Nm=16 the top-moment damping is 12.17 versus GX's 5.05, a factor 2.4 |
    | default branch | `hypercollisions_const=false`, `hypercollisions_kz=true` (`parameters.cu:190-192`) | `hypercollisions_const=1.0`, `hypercollisions_kz=0.0` (`params.py:152-153`) | **opposite**. The shipped decks override correctly, so file-driven runs are unaffected; any Python run on default `LinearParams` selects the other model |
 
-   Fix both in one small PR: make `p_hyper_m` default to `min(20, Nm/2)` and
-   swap the branch defaults to GX's, with a test that pins each against the GX
-   expression. Regenerate no reference: the shipped Cyclone deck sets Nm=48 and
-   selects the kz branch explicitly, so its numbers do not move. The W7-X deck
-   (Nm=16) and the Nm ∈ {16,24,32} rungs of step 3 **do** move; re-extract those
-   rows and mark them in the ledger.
+   **Measured disposition (2026-09-07), after testing the flip.** Swapping the
+   branch defaults to GX's fails nine existing gates in
+   `tests/unit/linear`, `tests/unit/operators` and
+   `tests/validation/physics_gates` (321 pass, 9 fail, 6 skip), among them
+   `test_zero_drive_is_damped_at_every_hermite_truncation` at Nm = 8, 16 and 32.
+   The mechanism is real, not a stale expectation: the constant branch damps
+   every `m>2` or `ell>1` mode regardless of `k_parallel`, while the kz branch
+   damps proportionally to `|k_z|`, so at `k_z -> 0` the truncation's top-moment
+   numerical mode is left undamped and the branch selector returns it. GKX's
+   default is therefore load-bearing and is **not** changed to match GX.
+
+   What to do instead:
+
+   - Keep `hypercollisions_const` as GKX's default; document beside it that GX
+     defaults to the kz branch, so a Python caller comparing against GX must
+     select it explicitly.
+   - Add a gate that every deck used for GX comparison selects the kz branch
+     with `hypercollisions_const = 0`. The shipped parity decks already do;
+     the gate stops that drifting silently.
+   - `p_hyper_m` is a separate decision with no such counter-argument. It
+     affects only Nm < 40, so it changes the Nm rungs {16, 24, 32} and the
+     W7-X deck (Nm=16), not the Cyclone parity deck (Nm=48). Resolve it by
+     measurement: run those rungs both ways and report which reproduces GX,
+     rather than assuming GX's choice is the right one for GKX.
+
+   Neither item explains the Nl swing, so neither blocks step 5.
 7. Fix the remaining cause in its own PR with a tier-2 row.
 
 Exit: a convergence table as a ledger artifact, the anomaly gone or its cause
