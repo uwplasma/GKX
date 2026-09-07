@@ -236,9 +236,11 @@ intended to document exact comparison settings used for benchmark plots.
 
 The reference end-damping defaults are ``damp_ends_amp = 0.1`` and
 ``damp_ends_widthfrac = 0.125``. The damping kernel interprets
-``damp_ends_amp`` as a per-**step** fraction: RHS assembly divides it by the
-instantaneous step size, so a completed step removes ``damp_ends_amp`` of the
-end-cap amplitude at any ``dt``, fixed or adaptive.
+``damp_ends_amp`` as a per-step strength when the linear caller supplies a
+timestep; otherwise it remains a rate, including on nonlinear routes.
+Only an isolated Euler damping update removes exactly that local fraction;
+other RK schemes apply their stability polynomial. See :doc:`operators` for
+the equations and the pending cross-route normalization migration.
 
 Defaults (model parameters):
 

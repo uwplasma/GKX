@@ -1221,15 +1221,7 @@ def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_gri
 def test_linear_integrator_applies_linked_end_damping_per_step(
     only_term_config, only_terms, spectral_grid
 ):
-    """End damping removes a fixed fraction of the amplitude on every step.
-
-    ``damp_ends_amp`` is divided by the step size during RHS assembly, so the
-    ``G += dt * RHS`` update removes ``damp_ends_amp`` of the damped amplitude
-    per step independently of ``dt``. Every shipped deck is tuned against that
-    per-step meaning; reading ``damp_ends_amp`` as a per-unit-time rate instead
-    weakens end damping by a factor ``dt`` and lets the domain-end modes run
-    away (uwplasma/GKX#192).
-    """
+    """Legacy linear damping scales as 1/dt; its Euler increment is fixed."""
     grid_full = spectral_grid(
         Nx=1,
         Ny=16,
@@ -1280,6 +1272,39 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
         increments.append(np.asarray(integrated) - np.asarray(G))
     assert np.any(np.abs(increments[0][mask]) > 1.0e-12)
     assert np.allclose(increments[0], increments[1], rtol=1.0e-6, atol=1.0e-8)
+
+
+@pytest.mark.parametrize(
+    "method,order", [("euler", 1), ("rk2", 2), ("rk3", 3), ("rk4", 4)]
+)
+@pytest.mark.parametrize("dt", [0.002, 0.2])
+def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
+    """An isolated damped scalar follows R(-A), not an exact removed fraction."""
+    from math import factorial
+
+    from gkx.solvers_time_explicit_steps import _linear_native_step
+    from gkx.terms.assembly import _scalar_params
+
+    with jax.enable_x64():
+        strength = jnp.asarray(0.2, dtype=jnp.float64)
+
+        def step(amplitude):
+            rate = _scalar_params(
+                LinearParams(damp_ends_amp=amplitude), jnp.float64, dt
+            ).damp_amp
+            return _linear_native_step(
+                jnp.asarray(1.0),
+                jnp.asarray(0.0),
+                jnp.asarray(dt),
+                method_key=method,
+                rhs=lambda value: -rate * value,
+            )
+
+        value, tangent = jax.jvp(step, (strength,), (jnp.ones_like(strength),))
+        expected = sum((-0.2) ** k / factorial(k) for k in range(order + 1))
+        derivative = -sum((-0.2) ** k / factorial(k) for k in range(order))
+        assert float(value) == pytest.approx(expected, rel=0, abs=2e-15)
+        assert float(tangent) == pytest.approx(derivative, rel=0, abs=2e-15)
 
 
 def test_streaming_zero_for_constant_z(cyclone_world, only_terms):

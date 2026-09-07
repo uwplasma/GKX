@@ -1,30 +1,12 @@
 """Physics gate: parallel-domain end damping on a linked flux tube.
 
-``damp_ends_amp`` is a per-**step** fraction. RHS assembly divides it by the
-instantaneous step size so that the ``G += dt * RHS`` update removes that
-fraction of the amplitude in the end-cap region on every step, at any ``dt``.
-Reading it as a per-unit-time rate instead -- which ``79064c4d`` did, and which
-shipped in 2.0.0 -- leaves the damping weaker by a factor ``dt``: at the tokamak
-parity decks' ``dt = 0.002`` the end caps are damped at rate ``0.1`` rather than
-``50``, which is the same order as the physical growth rate, so the numerical
-mode that lives at the two ends of the parallel domain is no longer suppressed.
-
-That mode is not marginal when it survives. On the configuration below it grows
-at about ``+11`` against a physical rate of ``-0.04``, carrying the field from
-the ``1e-06`` seed to ``1.1e+163`` over ``t = 40``. In the shipped parity matrix
-the same
-mechanism produced ``|field| = 5.75e+75`` on ``cyclone_salpha_itg``, a
-non-finite history on ``cyclone_miller_itg``, ``6.56e+90`` on
-``cyclone_miller_kinetic_electrons``, and a ``kbm_miller`` growth rate off by
--65% -- severity ordering exactly as ``1/dt`` across the five cases. See
-uwplasma/GKX#192; uwplasma/GKX#194 tracks turning the amplitude into a genuine
-rate, which cannot be done without rescaling every deck.
-
-The reference values here were measured on this repository at the commit that
-restored the per-step contract. They are float64 numbers: the shipped decks are
-run under ``JAX_ENABLE_X64=1`` (``tools/benchmark_refresh_manifest.toml``), and
-in float32 the spurious end mode stays below the physical one on a case this
-small, so a float32 run would not see the defect at all.
+Linear RHS assembly uses legacy strength ``damp_ends_amp / dt``. At the pinned
+``dt=0.002``, interpreting 0.1 as a rate instead weakens damping 500-fold and
+allows an unphysical boundary mode to dominate (uwplasma/GKX#192).
+References below are measured compatibility regressions, not independent
+literature validation. Float64 is deliberate: this small float32 case did not
+expose the unstable boundary mode. Issue #194 owns the cross-route rate migration;
+the analytic scalar RK stage-map and tangent tests live in test_linear.py.
 """
 
 from __future__ import annotations
@@ -79,15 +61,7 @@ def _linked_salpha_flux_tube():
 
 
 def test_end_damping_bounds_the_domain_end_mode_at_a_deck_step_size() -> None:
-    """A deck-sized ``dt`` must not weaken end damping (uwplasma/GKX#192).
-
-    Integrates a mid-domain seed on a linked tube with end damping live and
-    asserts the three things the shipped decks depend on: the field history
-    stays finite, the amplitude stays near the seed rather than running away,
-    and the fitted growth rate is the physical one rather than the end mode's.
-    Measured against pristine 2.0.0 (``46b178e1``) this fails at the amplitude
-    bound with ``peak |phi| = 1.125e+163``.
-    """
+    """Bound the field/end caps and recover the pinned late-time decay rate."""
 
     with jax.enable_x64():
         grid, geom = _linked_salpha_flux_tube()
