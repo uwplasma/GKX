@@ -10249,3 +10249,58 @@ Still open in Phase 0.2: `warmup()` remains a no-op for the linear path (0.2.2),
 the no-argument demo still warns over CFL (0.2.3), and the f32 geometry
 tolerance (rest of 0.2.4) is untouched. 0.3 still needs CONTRIBUTING.md and the
 HSX decision.
+
+## 2026-09-07 — Phase 0.2.3: the demo printed a growth rate 12.9 percent wrong
+
+Added to [#214](https://github.com/uwplasma/GKX/pull/214) at `0fc52224`,
+retitled "Phase 0.2: report only what was actually computed" since all three of
+its changes are the same contract.
+
+The no-argument demo at `dt = 0.03`, 500 steps printed `gamma = 0.089982`. The
+certified Krylov eigenvalue of the demo's own resolved deck is
+`eig = 0.103263 - 0.285915j`, residual `2.28e-06`, converged. That is **12.9
+percent low**, and the run emitted four warnings saying so: `dt` exceeded the
+estimated CFL-stable `0.02197`, and `t_max = 15` gave the fitter 1.34
+e-foldings against the `gamma*t_max >= 7` it wants.
+
+Coarseness was not the fault. `Nl = 7, Nm = 14` is deliberate, and a coarse
+operator still has a definite eigenvalue. Nothing tested the printed number:
+`test_cli_without_args_runs_default_demo` monkeypatches `run_runtime_linear`,
+so it checks plumbing.
+
+Measured through the CLI on jax 0.10.2:
+
+| dt | steps | t_max | wall | gamma | vs 0.103263 | warnings |
+|---|---:|---:|---:|---|---:|---:|
+| 0.03 | 500 | 15 | 3.1 s | 0.089982 | −12.9% | 4 |
+| 0.03 | 2600 | 78 | 4.5 s | 0.103295 | +0.03% | 1 (CFL) |
+| 0.02 | 2000 | 40 | 4.1 s | 0.097011 | −6.1% | 3 |
+| 0.02 | 4000 | 80 | 7.0 s | 0.103283 | +0.02% | 0 |
+
+Adopted `dt = 0.02`, `steps = 4000`. New gate
+`test_the_demo_reports_the_eigenvalue_of_the_case_it_builds` runs the demo's
+settings through time integration and the Krylov solver and requires agreement
+within 1 percent; 36 s in float64 against a 45-minute shard budget.
+
+Two things learned about this repo's test configuration, worth recording:
+
+- `pytest.ini` (not `pyproject.toml`) carries
+  `addopts = -q --maxfail=1 --disable-warnings -m "not slow"`. The `--maxfail=1`
+  is why the earlier hypercollision flip run stopped at its first failure and
+  its blast radius is still unmeasured.
+- **No CI job runs `slow` tests.** `ci.yml:488` clears addopts and re-adds
+  `-m "not slow"`, and the nightly full suite inherits the same filter from
+  `pytest.ini`. Three tests currently carry the marker and therefore never run
+  in CI. Marking a new gate `slow` makes it dead; the demo gate is unmarked
+  deliberately. Whether those three should run is an open question for Phase 3.
+
+README corrected: it claimed the demo "emits CFL and under-resolution warnings
+to say so", which is no longer true, and claimed 20 s.
+
+Verified: 689 passed, 1 skipped, 0 failed across `tests/validation/physics_gates`,
+`tests/unit/api`, `tests/release`, `tests/integration/runtime` on jax 0.10.2
+with `JAX_ENABLE_X64=true GKX_X64=1`. Eleven checkers, ruff clean.
+
+Remaining in 0.2: `warmup()` is still a no-op on the linear path (0.2.2), and
+the f32 geometry tolerance (rest of 0.2.4). 0.3 still needs CONTRIBUTING.md and
+the HSX decision.
