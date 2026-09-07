@@ -9496,3 +9496,105 @@ the pinned deck/reference and explicit compute cap, then obtain maintainer
 merge approval. Do not mark 0.1 complete, merge #199 first, or advance an
 expensive later-phase campaign. The original checkout and unrelated worktrees
 remain untouched.
+
+## 2026-09-06 — Phase 0.1 replay preflight
+
+Question: does #197 at `73a8a8c4` reproduce all eleven Cyclone s-alpha
+gamma/omega rows in the tracked artifact on office GPU, including the
+half-time settling diagnostic? This is compatibility evidence, not new
+resolution-converged physics validation. Ledger target: Cyclone pre-197
+replay provenance; do not relabel other cases.
+
+Office is reachable; both RTX A4000s idle at preflight. Old GX Nyquist job
+PIDs 1767040/1767078 are absent; their files remain, completion not inferred.
+65 GB disk free; no cleanup performed. Fresh immutable git-archive snapshot:
+`/home/rjorge/gkx-phase0-pr197-20260906.ME6JGZ`.
+Python `/home/rjorge/venvs/dkx-gpu/bin/python`, 3.11.15, JAX 0.10.2.
+Reference `/home/rjorge/gx_refs_lin/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc`,
+SHA256 `5134216ca3cc475357e1c2acf25533061411da264950f026fc38028647ce9e27`.
+Use the tracked manifest/deck unchanged, float64, GPU 0, 75000 +37500 steps.
+Hard cap: 3600 s wall time, one GPU; stop on timeout, error or nonfinite
+history. No automatic parameter tuning. Outputs under `replay/cyclone` in
+the snapshot; do not overwrite the tracked artifact. Inspect differences
+before deciding whether an exact-reproduction gate is met.
+
+### Replay launch and independent Phase 0 repair checks
+
+First launch failed before integration (2.17 s): `--reference-dir` did not
+expand the deck's `$GX_PARITY_REF_DIR` geometry path. Restarted with that
+environment variable set; no input changes. Exact remote command, cwd above:
+
+```sh
+CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_PREALLOCATE=false \
+GX_PARITY_REF_DIR=/home/rjorge/gx_refs_lin PYTHONPATH=src timeout 3600 \
+/usr/bin/time -v /home/rjorge/venvs/dkx-gpu/bin/python -u \
+tools/comparison/build_gx_parity_matrix.py --cases cyclone_salpha_itg \
+--reference-dir /home/rjorge/gx_refs_lin --stem replay/cyclone
+```
+
+PID 2965025 (timeout parent 2965023), terminal session 77153. Live at 6m29s,
+GPU0 busy; not completed at that check. Driver CLI/environment consistency
+is a follow-up usability issue; setting the environment is the current workaround.
+
+#199 updated by a history-preserving merge of #197, commit `4e78e7bb`, pushed
+to `fix/r0-damping-path-consistency`. No solver algebra change. In
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-pr199`, interpreter as above,
+`PYTHONPATH=$PWD/src JAX_ENABLE_X64=true`, pytest `-o addopts='' -q`:
+
+- `tests/unit/linear/test_linear.py tests/unit/linear/test_linear_helpers_extra.py tests/validation/physics_gates/test_end_damping_physics.py -k damping`:
+  16 passed, 128 deselected, 20.66 s; one existing escape warning.
+- `tests/release/test_release_gates.py`: 134 passed, 2.23 s.
+- Architecture checker passes; no budget increases. #199 remains open.
+
+#201 independently rechecked at `53d86f01`, local worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-pr201`; immutable office
+archive `/home/rjorge/gkx-phase0-pr201-20260906.9RIQDR`:
+
+| Backend | Selection | Result |
+|---|---|---|
+| Mac CPU, f32 | physical compressed heat-flux gradients | 2 passed, 22.49 s |
+| Mac CPU, f32 default | complete `test_nonlinear_exb.py` | 51 passed, 41.14 s; 16 dtype/CFL/fit warnings; some tests explicitly enable x64 |
+| Office CPU, f32 | physical gradients + failure-isolation checks | 5 passed, 44.06 s |
+| Office GPU1, f32 | same selection | 5 passed, 51.88 s |
+| Mac, two logical CPUs, f64 | nonlinear RHS + fused trajectory sharding identity | 2 passed, 6.66 s |
+
+Office command prefix: `PYTHONPATH=src JAX_ENABLE_X64=false`, either
+`JAX_PLATFORMS=cpu` or `CUDA_VISIBLE_DEVICES=1 JAX_PLATFORMS=cuda
+XLA_PYTHON_CLIENT_PREALLOCATE=false`; `timeout 600` and the office interpreter,
+`-m pytest -o addopts= -q tests/unit/nonlinear/test_nonlinear.py -k
+'compressed_real_fft_heat_flux_window_gradient or compressed_gradient_isolation'`
+with `--junitxml=cpu-f32.xml` or `gpu-f32.xml`. Hashes respectively:
+`3ae025b19ad5da3ab4df0effa5f43f4c2a43af7e2505c518893e40cf03102c47`,
+`09882d3f8f7d27a4d71f9e05f20003feb2559bfbc1d4f6051363271a06cfa759`.
+Local sharding command uses `XLA_FLAGS=--xla_force_host_platform_device_count=2`
+and `tests/unit/parallel/test_parallel_linear_velocity.py -k
+'species_hermite_rhs_reproduces_the_serial_nonlinear_rhs or species_hermite_trajectory_and_fused_traces_match_serial'`.
+These are correctness smoke checks, not fresh speed or saturation evidence.
+
+### Phase 0.1.4: preserve and extract, without merging the research branch
+
+Pushed `wip/r0-end-damping-rate-local` at `48b90099`, preserving both local
+commits `447d724f` and `48b90099`; original branch untouched. First coherent
+extraction: [#207](https://github.com/uwplasma/GKX/pull/207),
+`test/phase0-fourier-contract` at `3b60d61e`, stacked on #199. Extracts the
+three frequency/map/DFT tests from `f4d5d1b5`, `447d724f`, `48b90099`;
+documents the NumPy DFT contract without republishing historical GX residuals.
+No new files, no source changes, net zero test lines, no manifest increases.
+
+In `/Users/rogeriojorge/local/GKX-worktrees/phase0-fourier-contract`, same
+local interpreter, `PYTHONPATH=$PWD/src`, separate `JAX_ENABLE_X64=false/true`:
+`-m pytest -o addopts='' -q tests/unit/operators/test_linear_streaming.py
+tests/unit/linear/test_linear.py tests/unit/linear/test_linear_helpers_extra.py
+-k 'fft_highest or linked_fft_maps or grad_z_periodic'`: 14 passed in each
+process, 4.87/4.31 s. In-memory mutation of `jnp.fft.fftfreq` reversing only
+the even-grid Nyquist sign: exactly four even-grid cases fail, four odd-grid
+cases pass (3.28 s); no production-file mutation. This independently checks
+the oracle's ability to detect the convention defect.
+
+Ruff 0.16.4 lint/format, strict Sphinx HTML and architecture pass. The isolated
+venv lacks ruff; used `/Users/rogeriojorge/Library/Python/3.11/bin/ruff` after
+checking its version. Docs output `/tmp/gkx-phase0-fourier-docs`.
+No reference spectrum or release artifact changed. PR #202 stays open until
+the remaining independent repairs and fixed-rate migration are dispositioned.
+Preparation of these bounded independent checks does not satisfy the Phase 0
+merge exit. Explicit merge approval requested; none received at this entry.
