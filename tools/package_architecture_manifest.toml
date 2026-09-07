@@ -863,7 +863,16 @@ recursive = true
 # low -- with four warnings, and why dt now sits under the CFL bound and the
 # horizon reaches gamma*t_max >= 7. Without it the next person tuning the demo
 # for speed reintroduces the bias.
-baseline = 89071
+# 89071 -> 89098: an honest warmup. Preparing a nonlinear case builds its scan
+# closure but does not compile it -- XLA compiles when the scan first executes.
+# warmup() documented itself as forcing that compile and returned self without
+# doing anything, and summary() reported compiled_at_prepare as kind ==
+# 'nonlinear', claiming a compile that had not happened. Fresh-process timing on
+# the shipped five-step KBM deck: prepare 4.3 s, warmup 0.000 s, first solve
+# 19.2 s; with the fix, warmup 18.9 s and solve 0.000 s. The added lines are the
+# one-shot guard, the warmed flag in the summary, and the docstrings that record
+# why forcing the compile means executing the closure once.
+baseline = 89098
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -978,7 +987,14 @@ recursive = true
 # examples/ and benchmarks/ and requires each to load as a case or to carry a
 # written exemption, and a second test keeps those exemptions from outliving
 # their files or shrinking to something unauditable.
-baseline = 86813
+# 86813 -> 86899: four warmup-contract tests in tests/unit/api. They pin that
+# preparing does not claim a compile it has not done, that warmup moves the
+# compile out of the first solve, that a second warmup does not re-run the case,
+# and that a linear case reports it was not warmed. They use a 4x4x8, (2,4) case
+# so the whole group costs about 5 s while still exercising a real compile
+# (warmup 1.2 s against a 0.000 s solve). Verified negatively: restoring the
+# no-op warmup fails three of the four and nothing else.
+baseline = 86899
 target = 35000
 
 [[line_budget_policy.counts]]

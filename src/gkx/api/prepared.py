@@ -60,6 +60,7 @@ class PreparedSimulation:
     n_hermite: int
     options: dict[str, Any] = field(default_factory=dict)
     _backend: Any = None
+    _warmed: list[bool] = field(default_factory=lambda: [False])
 
     # -- execution -------------------------------------------------------
 
@@ -116,13 +117,31 @@ class PreparedSimulation:
     # -- introspection ---------------------------------------------------
 
     def warmup(self) -> "PreparedSimulation":
-        """Force compilation now so a later timed call measures execution.
+        """Force compilation now, so a later timed call measures execution.
 
-        Returns ``self`` so a caller can chain. Preparing already builds the
-        compiled callables for the nonlinear path, so this is a no-op there;
-        it exists so timing code does not have to know which path it holds.
+        Preparing a nonlinear case builds its scan closure but does not compile
+        it: XLA compiles when the scan first executes. Measured on the shipped
+        five-step KBM deck, ``prepare`` took 4.3 s, the first ``solve`` 19.6 s
+        and the second 0.000 s. This method used to return ``self`` without
+        doing anything, so code that called it and then timed ``solve`` was
+        timing the compile.
+
+        Forcing compilation means executing the prepared closure once, because
+        the scan exposes no separately lowerable handle. That costs one run --
+        cheap next to the compile it triggers, but not free, so it happens only
+        when asked for. A second call is a no-op.
+
+        A linear case has nothing to compile ahead of time: the linear runtime
+        chooses its solver per call, so warming one would compile a solver the
+        next call may not use. ``summary()["warmed"]`` reports which happened.
+
+        Returns ``self`` so a caller can chain.
         """
 
+        if self.kind == "nonlinear" and self._backend is not None:
+            if not self._warmed[0]:
+                self._backend.run()
+                self._warmed[0] = True
         return self
 
     def estimate_memory(self) -> dict[str, Any]:
@@ -172,7 +191,13 @@ class PreparedSimulation:
         enabled = compilation_cache.compilation_cache_enabled()
         return {
             "persistent_cache_enabled": enabled,
-            "compiled_at_prepare": self.kind == "nonlinear",
+            # Preparation builds the nonlinear scan closure; XLA compiles it
+            # when that scan first executes, not here. Measured on the shipped
+            # five-step KBM deck: prepare 4.3 s, first solve 19.6 s, second
+            # 0.000 s. This key reported ``kind == "nonlinear"`` and so claimed
+            # a compile that had not happened.
+            "compiled_at_prepare": False,
+            "warmed": bool(self._warmed[0]),
             "devices": self.devices,
             "precision": self.precision,
         }
@@ -231,10 +256,12 @@ def _resolve_velocity_resolution(
 def prepare_simulation(case: Any, **options: Any) -> PreparedSimulation:
     """Build a :class:`PreparedSimulation` for ``case``.
 
-    A nonlinear case compiles its scan closure here, which is what makes a
-    later ``solve`` cheap. A linear case is validated and described but not
-    compiled, because the linear runtime chooses its solver per call; the
-    difference is reported by ``compiled_at_prepare`` rather than hidden.
+    A nonlinear case builds its scan closure here, which is what makes a later
+    ``solve`` cheap once that closure has been compiled -- XLA does that when
+    the scan first executes, so call ``warmup()`` if a later ``solve`` is being
+    timed. A linear case is validated and described but not built, because the
+    linear runtime chooses its solver per call. ``summary()`` reports both
+    facts rather than hiding them.
     """
 
     case.validate()
