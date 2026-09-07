@@ -101,7 +101,7 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 | Area | Established | Not established |
 |---|---|---|
 | Linear ES | Krylov and dense eigenmodes; implicit eigenpair derivatives; parity scans recomputed by CI (KAW 0.0004%, ETG 0.04%, W7-X 0.27%, HSX 0.58%, Cyclone Miller 5.5%, Cyclone 6.8%, KBM 20%) | Cyclone 5–7% and KBM 20% unexplained; HSX reference has no deck, wout or generator; velocity convergence anomalous (Nl 24→32: −24.7%) |
-| End damping | #197 restores GX's per-step contract (A/Δt) and reproduces the recorded artifact bit-identically at all 11 ky | #197 unmerged (one manifest conflict); every 2.0.0 time-integrated number carries the regression |
+| End damping | #197 restores GX's per-step contract (A/Δt) and reproduces the recorded artifact bit-identically at all 11 ky | Merged `ca4e5169`; historical 2.0.0 time-integrated numbers still require repaired-build evidence |
 | Nonlinear ES | Runtime, restart, chunked saturation stopping; tracked windows for Cyclone, Miller, KBM, W7-X, HSX | No statistical cross-code comparison; stopping rule uncalibrated; no Dimits bracket; no dataset comparison |
 | EM | Three-field solves with custom VJP; KAW golden; KBM two-field deck (`use_bpar=false`); per-species ES/A∥/B∥ flux channels; channel-sum test | No three-field linear reference; no nonlinear EM transport; no finite-β stellarator EM; energy identity not derived for the stored convention |
 | Derivatives | Implicit eigenpair sensitivities; checkpointed finite-window heat-flux VJP; AD/FD to 1e-11 at 512 steps, 2.7e-9 at 1024, diverging by 2048 | No stellarator adjoint result; QA 12.26% has 4/48 traces failing drift; warm start wired but off (`max_reuse=0`) and host-backed |
@@ -312,17 +312,21 @@ exactly, the finite-pressure classes only approximately.
    Reproduce the cyclone_salpha_itg artifact before maintainer-approved merge.
    The PR's single-mode end-damping physics test is a regression gate, not an
    eleven-mode artifact replay. Keep those two evidence claims separate.
-   **In progress:** `73a8a8c4` integrates main without solver changes; local
+   **Merged:** `73a8a8c4` integrates main without solver changes; local
    physics, damping-unit, release and architecture gates pass. The negative
    control on main fails as expected. Fresh office replay reproduces all eleven
    gamma/omega values and both half-time shifts exactly (18m34s, exit 0).
-   CI and explicit maintainer merge approval remain separate gates; see the
+   Maintainer approved; 41 checks passed before merge `ca4e5169`. See the
    execution log for hashes, schema caveat and reference-validity limits.
    Owner: maintainer.
-2. Merge #199 after approval. Prepared at `4e78e7bb`; 16 damping checks and
+2. **Merged #199** as `0c016bd1` from `4e78e7bb`; 16 damping checks and
    134 release tests independently pass. The legacy scalar contract is not a
    fixed-rate physical-model certification.
-3. Merge #196, then #200, then #201, each after CI.
+3. Merge #196 → #200 → #201 and #208 through integration **#209**, with a
+   merge commit preserving their heads. Its complete tree equals tested
+   `1c7c7472`; fresh CI on the current main is required even for administrators.
+   No protection changes, synthetic statuses or main force-push. Verify each
+   original PR's merged state after integration; do not merely close it.
 4. Push the two unpushed local commits on `fix/r0-end-damping-rate` to
    `wip/r0-end-damping-rate-local` so nothing is lost; open one small PR per
    independently justified repair in #202 (single-link frequencies,
@@ -330,8 +334,8 @@ exactly, the finite-pressure classes only approximately.
    fixed-rate absorber into `[time] damp_ends_rate` behind an explicit flag,
    with `A/dt_reference` conversion recorded in the resolved deck and a
    migration error for the old scale-by-dt key; close #202.
-   **Preservation done:** WIP branch pushed at `48b90099`. Extractions open:
-   #207 (analytic Fourier/link-map contracts, net zero test lines) and #208
+   **Preservation done:** WIP branch pushed at `48b90099`. #207 merged as
+   `99963b45` (analytic Fourier/link-map contracts, net zero test lines); #208
    (explicit linear endpoint clipping, independently failed on the parent).
    These do not import #202's collision tables or select its rate redesign;
    keep #202 open until the remainder is explicitly dispositioned.

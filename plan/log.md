@@ -9747,3 +9747,82 @@ Final authoritative-document checks: 134 release gates pass (2.40 s), strict
 Sphinx passes (`/tmp/gkx-phase0-authority-docs`), whitespace clean. All runs
 launched in this execution are terminal; office now has other users' workloads,
 which were neither interrupted nor treated as ours. Recheck before using GPUs.
+
+## 2026-09-07 — approved merges and recoverable branch cleanup
+
+Maintainer explicitly approved the repair merges and safe branch deletion,
+including admin override where necessary. #197 merged as `ca4e5169`; #199
+retargeted to main and merged as `0c016bd1`. Both reviewed heads had 41 green
+checks and one skipped nightly check. #199 required admin override for stale
+base status. No force-push to main or protection-setting change.
+
+Branch-deletion preflight: verified self-contained bundle of all 209 refs at
+`/Users/rogeriojorge/local/GKX-branch-backup-20260907.p7LZPA/all-refs.bundle`.
+Each candidate below exactly matches the head SHA of a merged PR and is
+neither the head nor base of an open PR. Squash-merged heads need this PR-tip
+check: ancestry alone would retain them. Unmerged/divergent work, authoritative
+and superseded plan branches, WIP backups and checked-out local branches are
+not deletion candidates. The bundle preserves original commits, not just the
+squashed main content. Delete remote refs only with exact-SHA leases.
+
+| Remote branch candidate | Merged PR | Saved head |
+|---|---|---|
+| `api/a1-2-public-types` | #165 | `8a3d67003a5ce2f88d5f6600d9a27238e849a969` |
+| `api/a1-3-prepared-simulation` | #166 | `d9cd2045ea51175b5f65bb3b03f53bcbb230f2b6` |
+| `ci/release-first-run-gate` | #188 | `32b3a5d5c568d4cdae42e59a03252fcda574091b` |
+| `cli/a2-1-consolidation` | #167 | `2b5c0d2ac48eea956bc36f507f4d90f97ef3e23e` |
+| `core/a1-1-import-graph` | #164 | `823c7f372fc03b6d6bff95c6b0985955b1c50f46` |
+| `docs/d-first-run-and-linkcheck` | #186 | `f3ed745c2d5ceabd51417dc036fc1c3eff722018` |
+| `fix/end-damping-per-step` | #197 | `73a8a8c41a37b5d68bb0e49e28dd25a47a5bc311` |
+| `fix/linear-rhs-demo-seed` | #190 | `2c7b1ef64a6013d625f2453a9fad8015a3fb01fc` |
+| `fix/reproducible-release-artifacts` | #195 | `c895a2dd4fe4591a5fe604749cae2f66297d7ed3` |
+| `fix/scan-level-strategy-whitelist` | #189 | `ef9a96a89cbae275145a214ed5160b618b466a46` |
+| `fix/vmex-mirror-solved-artifacts` | #191 | `7aa99d925847c0f0e4a4ed5d030166caab677352` |
+| `geometry/b1-1-report-eviction` | #168 | `a8f661277857634bc47881fc2d34f9d62024c279` |
+| `perf/cold-start-eager-compiles` | #187 | `7ffc0ea89fb70f5e83a190b07b85055c13b000f6` |
+| `plan/h0-rebaseline` | #163 | `a8e1950e5e7e8ded318eeef6cf28af603d79f317` |
+| `refactor/r4-flatten-and-fuse` | #185 | `2d665f5fd5ab0630de8df160feaddb617e212c64` |
+| `solvers/b2-1-remove-diffrax` | #169 | `d266d7421b03ed22b1f78903d4c8af2e55f45cf9` |
+| `test/readme-parity-claims-gated` | #193 | `8b03dc244cedfb1f9cc2ed3668e7e5d5fface9fd` |
+| `tests/c1-1-nonlinear-consolidation` | #170 | `5ca781bfdb7f0a38a954d3ee19001cbc750bd44e` |
+
+Restore any deleted remote branch locally with
+`git fetch <bundle> refs/remotes/origin/<name>:refs/heads/<name>`, then
+`git push origin refs/heads/<name>:refs/heads/<name>` if it should be public.
+Deletion results follow below; this inventory is the preflight, not a claim
+that every ref was already removed.
+
+**Completed:** all 18 remote refs above deleted atomically with exact-SHA
+leases; 85 unused local refs deleted with `git update-ref -d <ref> <old-sha>`.
+Every tip matched a merged PR. Excluded open PR heads/bases, checked-out
+branches, detached worktree HEADs and divergent/unpublished work. No worktree,
+source file or history object was deleted; no garbage collection performed.
+Full 103-ref recovery inventory (names, original SHAs, merged PRs):
+`/Users/rogeriojorge/local/GKX-branch-backup-20260907.p7LZPA/branch-deletions.md`.
+Restore a local ref with `git fetch <bundle> refs/heads/<name>:refs/heads/<name>`.
+
+#207 merged as `99963b45` from `3b60d61e` after 41 successful checks. #196 and
+#208 admin merge attempts were rejected: required `ci-required` is expected
+on the current base. Protection is strict and enforced for administrators;
+auto-merge is disabled. Neither protection settings nor statuses were altered.
+Updated #196 to `77d7370d` and #200 to `b2bd0d43` with history-preserving merges;
+only shared architecture-manifest conflicts required resolution. #196's local
+compressed-gradient x64 selection passes (2 tests, 26.08 s).
+
+Opened integration [#209](https://github.com/uwplasma/GKX/pull/209), branch
+`merge/phase0-approved-repairs`, head `237104718309d32fcf8e21b03a4aca0d7d5c4e0c`,
+from `/Users/rogeriojorge/local/GKX-worktrees/phase0-approved`. It preserves
+#196/#200/#201/#208 heads and current main. Its **entire tree**, not merely
+source/tests, equals tested integration `1c7c7472`:
+`7b551fd765410b7154f0128ce771c000259607d3`. Existing evidence therefore applies:
+397 CPU f64 tests, 5 f32 checks, 39 GPU checks and 2 dual-GPU checks (above).
+Fresh architecture gate passes: 88981 source / 86651 test lines.
+Fresh required CI run `34132704484` is queued; do not infer remote CI success
+from the local/GPU evidence. Merge #209 with **merge**, never squash, after CI;
+verify main ancestry and all four original PR states before recording completion.
+No new physics claims, release, plan merge or wholesale #202 merge authorized.
+
+Resume at Phase 0.1: complete that integration, then disposition the remaining
+#202 repairs and explicit fixed-rate opt-in. Phase 0.2 API/warmup contracts,
+evidence ledger and velocity anomaly remain open. Branch cleanup does not
+resolve those scientific or interface gates.

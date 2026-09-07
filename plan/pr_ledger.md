@@ -1,5 +1,20 @@
 # Pull-request ledger
 
+## Current disposition, 2026-09-07
+
+Maintainer approved repair merges. #197 (`ca4e5169`), #199 (`0c016bd1`)
+and #207 (`99963b45`) are merged. #196/#200/#201/#208 remain open pending
+fresh CI on integration [#209](https://github.com/uwplasma/GKX/pull/209),
+head `23710471`. Its complete tree is identical to independently tested
+`1c7c7472`, and it preserves all four approved heads for a merge-commit merge.
+Strict base checks apply even to administrators; auto-merge is disabled.
+#206 stays the authoritative open plan; #202 stays open for bounded splits.
+
+Safely removed 18 remote and 85 unused local branches with exact-tip checks
+against merged PRs and a verified full-history bundle. No worktrees removed;
+unmerged/divergent work and open-PR/worktree branches retained. Recovery paths,
+commands, full inventories and remaining gates are in [log.md](log.md).
+
 ## Execution inventory, 2026-09-06
 
 GitHub inventory after the first extractions: 202 PRs, nine open:
