@@ -10060,3 +10060,61 @@ analytic rows are unaffected.
 
 Next: Phase 0.5 on merged #197, and plan.md 1.1 gains an explicit
 regenerate-the-reference step before the Cyclone and KBM rows can close.
+
+## 2026-09-07 — Phase 0.5 opening diagnostics: two hypotheses refuted, two divergences found
+
+No runs yet. Source-level comparison of GKX against pristine GX at `bc2fe552`
+(not the locally instrumented tree), plus one numeric check. Nothing changed in
+`src/`; this entry records what the ladder must be run against and corrects two
+errors in the plan and its research report.
+
+**Refuted: the collisionless-deck hypothesis.** The research report and
+plan.md 0.5.1 both specified the baseline as "GX App. G.1: ν_ii=1e-2 Dougherty,
+no hypercollisions". GX's own shipped deck
+`benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in` — the deck
+that produced `itg_salpha_adiabatic_electrons_correct.out.nc` — sets
+`vnewk = 0.0`, `hypercollisions = true`, `closure_model = "none"`,
+`ntheta=32, nperiod=2, nlaguerre=16, nhermite=48, y0=20, boundary="linked",
+t_max=150, scheme="rk4"`. It is collisionless with hypercollisions on, matching
+GKX's shipped deck. The plan's baseline is corrected to the deck; the appendix
+text is not what the reference encodes.
+
+**Refuted: the "2.3 vs 2.5" prefactor.** `src/linear.cu:232` reads
+`nu_hyp_m = nu_hyper_m*(p + 0.5)/powf(M, p + 0.5)*2.3*vt*abs(gradpar)` with
+`M = Nm_glob - 1`, and `hypercollisions_kz` applies `-nu*powf(m,p)*g` for `m>2`.
+GKX's `_hypercollision_kz_source` uses the same 2.3, and `cache_arrays.py:66`
+sets `m_norm_kz = max(Nm - 1, 1)` with `m_norm_kz_factor = (p+0.5)/sqrt(m_norm_kz)`
+and `m_pow = (m/m_norm_kz)**p_hyper_m`, mask `m > 2`. Algebraically identical.
+The 2.5 in the research report came from the paper text, not the code.
+
+**Confirmed divergence 1: `p_hyper_m`.** GX `parameters.cu:185` defaults it to
+`fmin(20, nm_in/2)`; GKX `params.py:150` fixes it at 20.0. Equal for Nm >= 40.
+Below that they differ, and the top-moment damping coefficient `nu*M^p` differs
+with them:
+
+| Nm | GX p | GKX p | GX nu*M^p | GKX nu*M^p |
+|---:|---:|---:|---:|---:|
+| 16 | 8 | 20 | 5.048 | 12.174 |
+| 24 | 12 | 20 | | |
+| 32 | 16 | 20 | | |
+| 48 | 20 | 20 | 6.878 | 6.878 |
+
+**Confirmed divergence 2: default branch.** GX `parameters.cu:190-192` defaults
+`hypercollisions_const=false` and `hypercollisions_kz=true` (the `hypercollisions`
+key is an alias for the kz branch). GKX `params.py:152-153` defaults
+`hypercollisions_const=1.0`, `hypercollisions_kz=0.0` — the opposite model.
+Shipped decks set both explicitly and are unaffected; a Python caller on default
+`LinearParams` is not.
+
+Neither divergence is Nl-dependent at fixed Nm=48, so **neither explains the
+Nl 24->32 swing**. Both must be fixed before the Nm rungs {16,24,32} or the
+W7-X deck (Nm=16) mean anything, which is why plan.md 0.5.6 now fixes them
+first, in one small PR, with the Cyclone deck's numbers unaffected (Nm=48,
+explicit branch) and the W7-X and low-Nm rows re-extracted.
+
+Still open for the Nl swing: fit window versus Krylov eigenvalue, fixed dt,
+Laguerre top-l convention against GX's zero-padding, absorber strength, and
+top-moment pile-up in W(l), W(m). Those need runs on merged #197.
+
+Files: plan.md 0.5.1/0.5.2/0.5.6 corrected;
+plan/research/2026-09-06_hermite_laguerre_convergence.md marked at both errors.

@@ -456,11 +456,20 @@ with GX at every (P,J)). It is a defect until shown otherwise. Protocol from
 the [convergence report](plan/research/2026-09-06_hermite_laguerre_convergence.md),
 run on merged #197:
 
-1. Baseline = GX App. G.1: Nl=16, Nm=48, ν_ii=1e-2 Dougherty, no
-   hypercollisions, 3×2π, Nz=24 per segment. Obtain γ from the late-window fit
-   and from the Krylov eigenvalue; require <1% agreement.
+1. Baseline = **the GX deck that produced the reference**, not the paper's
+   appendix text. `benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in`
+   is `ntheta=32, nperiod=2` (so Nz=96), `nlaguerre=16, nhermite=48`, `y0=20`,
+   `boundary="linked"`, `t_max=150`, `scheme="rk4"`, **`vnewk = 0.0`
+   (collisionless) with `hypercollisions = true`** and `closure_model="none"`.
+   The shipped GKX deck already matches this. An earlier draft of this step
+   specified "ν_ii=1e-2, no hypercollisions" from a reading of the paper's
+   appendix; the deck contradicts it, and the deck is what the reference
+   encodes. Obtain γ from the late-window fit and from the Krylov eigenvalue;
+   require <1% agreement.
 2. Hold fixed: dt (verified by halving), Nz and nperiod, the absorber at GX's
-   contract, the fit window, p_hyper=Nm/2, f_hyp=1.
+   contract, the fit window, and the hypercollision settings **matched to GX's
+   own defaults** — `hypercollisions_kz` on, `hypercollisions_const` off,
+   `nu_hyper_m=1`, `p_hyper_m = min(20, Nm/2)` (see 0.5.6).
 3. Scan Nm ∈ {16,24,32,48,64,96} at Nl=16; Nl ∈ {4,6,8,12,16,24,32} at Nm=48;
    the P≈2J diagonal.
 4. Decide with |Δγ| per doubling <2%; corner power P(ℓ,m)/P(0,0) ≤ 1e-5;
@@ -472,7 +481,24 @@ run on merged #197:
    Laguerre top-ℓ convention versus GX zero-padding; absorber strength; the
    Nl-dependent default hypercollision channel (`l_norm = G.shape[1]`);
    top-moment pile-up in W(ℓ), W(m).
-6. Fix the cause in its own PR with a tier-2 row.
+6. **Two hypercollision divergences are already established** (2026-09-07,
+   from pristine GX source at `bc2fe552` plus a numeric check); both are real
+   and neither explains the Nl swing on its own, so they are fixed first to
+   clear the field:
+
+   | Item | GX | GKX | Effect |
+   |---|---|---|---|
+   | kz-branch form | `−ν m^p g`, `ν = ν_m (p+½)/M^(p+½)·2.3·v_t·|∇∥|`, `M = Nm−1`, mask `m>2` (`linear.cu:232`, `device_funcs.cu`) | identical: prefactor 2.3, `m_norm_kz = max(Nm−1,1)`, same mask (`cache_arrays.py:66,94-96`) | **agree exactly**; the "2.3 vs 2.5" suspicion is refuted, GX's code uses 2.3 |
+   | `p_hyper_m` default | `min(20, Nm/2)` (`parameters.cu:185`) | fixed `20.0` (`params.py:150`) | agree only for Nm ≥ 40. At Nm=16 the top-moment damping is 12.17 versus GX's 5.05, a factor 2.4 |
+   | default branch | `hypercollisions_const=false`, `hypercollisions_kz=true` (`parameters.cu:190-192`) | `hypercollisions_const=1.0`, `hypercollisions_kz=0.0` (`params.py:152-153`) | **opposite**. The shipped decks override correctly, so file-driven runs are unaffected; any Python run on default `LinearParams` selects the other model |
+
+   Fix both in one small PR: make `p_hyper_m` default to `min(20, Nm/2)` and
+   swap the branch defaults to GX's, with a test that pins each against the GX
+   expression. Regenerate no reference: the shipped Cyclone deck sets Nm=48 and
+   selects the kz branch explicitly, so its numbers do not move. The W7-X deck
+   (Nm=16) and the Nm ∈ {16,24,32} rungs of step 3 **do** move; re-extract those
+   rows and mark them in the ledger.
+7. Fix the remaining cause in its own PR with a tier-2 row.
 
 Exit: a convergence table as a ledger artifact, the anomaly gone or its cause
 fixed. Cost: CPU, hours.

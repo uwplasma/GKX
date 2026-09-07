@@ -41,6 +41,14 @@ in the sweep (UNVERIFIED that none exists).
 - GX hypercollisions: ∂G/∂t = −ν_hyp m^p G for m>2, ν_hyp = 2.5 f_hyp
   (p+½)/m_max^{p+½} |k∥|v_t, p=Nm/2; none in Laguerre because "phase mixing in
   v∥ dominates" (GX eqs. 4.27–4.28, App. B).
+
+  > **Correction, 2026-09-07, from pristine GX source at `bc2fe552`.** The
+  > shipped code uses **2.3**, not 2.5 (`src/linear.cu:232`), normalizes by
+  > `M = Nm_glob − 1`, and defaults `p_hyper_m = min(20, Nm/2)`
+  > (`src/parameters.cu:185`), not `Nm/2`. GKX matches the first two exactly
+  > (`cache_arrays.py:66,94-96`) and differs on the third (fixed 20.0). GX's
+  > default branch is `hypercollisions_kz`, GKX's library default is
+  > `hypercollisions_const`. See plan.md 0.5.6.
 - Recurrence: truncation is a reflecting wall; damping must be smooth in m, e.g.
   −ν(m/Nm)^α ([Parker & Dellar 2015 §3.2.4](https://arxiv.org/pdf/1407.1932));
   T_R ≃ 2√(2P) qR₀/v_T (Frei 2023 eq. 3.3); hypercollisions are the most robust
@@ -60,12 +68,20 @@ At Cyclone b ≲ 10, the Laguerre weights (b/2)^ℓ e^{−b/2}/ℓ! are negligib
 ℓ≈15; GX is accurate at Nl=4 nonlinearly and Frei coincides with GX at every
 (P,J). Candidate causes, each with a test that isolates it:
 
-1. **Collisionless deck.** `examples/linear/axisymmetric/cyclone.toml` has
-   `nu = 0.0`; GX App. G.1 uses ν=1e-2 without hypercollisions. Test: replicate
-   G.1 exactly, then scan Nl.
-2. **Hypercollision exponent cap.** Runtime default `p_hyper_m = min(20, Nm/2)`
-   and prefactor 2.3 vs GX's p=Nm/2, 2.5. Test: set p=Nm/2; vary f_hyp ×0.5 and
-   ×2; γ must move <1%.
+1. ~~**Collisionless deck.**~~ **Refuted, 2026-09-07.** GX's own shipped deck
+   `benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in` sets
+   `vnewk = 0.0` with `hypercollisions = true` and `closure_model = "none"` —
+   collisionless, exactly like GKX's deck. The claim that App. G.1 uses ν=1e-2
+   without hypercollisions does not describe the deck that produced the
+   reference output, so it cannot be the discrepancy.
+2. **Hypercollision defaults.** *Partly refuted, partly confirmed,
+   2026-09-07.* The prefactor matches (both 2.3) and so does the normalization
+   (`Nm−1`). Two real divergences remain: GKX's `p_hyper_m` is a fixed 20.0
+   where GX uses `min(20, Nm/2)` — equal only for Nm ≥ 40, a factor 2.4 in
+   top-moment damping at Nm=16 — and GKX's library defaults select the
+   constant-coefficient branch where GX selects the kz branch. Neither is
+   Nl-dependent at fixed Nm=48, so neither explains the Nl swing; both must be
+   fixed before the Nm ladder means anything.
 3. **Growth-rate extraction.** The driver notes γ "still 24% high at t=30";
    docs cite a t=7–10 window. Test: running γ(t) per Nl against the Krylov
    eigenvalue; require <1% agreement.
