@@ -10474,3 +10474,57 @@ Phase 0 status after this step:
 | 0.6 remote state | office unreachable three days running |
 
 Open PRs in this lane: #213, #214, #215, and #206 for the plan itself.
+
+## 2026-09-07 — Phase 0.2.2: warmup was a no-op, and the summary agreed with it
+
+Added to [#214](https://github.com/uwplasma/GKX/pull/214) at `3ed459a0`.
+
+`PreparedSimulation.warmup` said "Force compilation now so a later timed call
+measures execution" and its body was `return self`. The docstring justified that
+by claiming preparation already compiles the nonlinear path. Measured, in a
+fresh process, on `runtime_kbm_nonlinear_short.toml` with `steps=5`:
+
+| step | before | after |
+|---|---:|---:|
+| prepare | 4.317 s | 4.3 s |
+| warmup | 0.000 s | 18.893 s |
+| first solve | 19.604 s | 0.000 s |
+| second solve | 0.000 s | — |
+
+Preparation builds the scan closure; XLA compiles when the scan first executes.
+So anyone calling warmup and then timing solve was timing the compiler — the one
+thing the method exists to prevent. `summary()` sided with the docstring rather
+than the machine: `compiled_at_prepare` was `kind == "nonlinear"`, asserting a
+compile that had not happened.
+
+warmup now runs the prepared closure once, which is the only way to force the
+compile (the scan exposes no separately lowerable handle), guarded so a second
+call is a no-op. `compiled_at_prepare` reports False, true of both kinds, and
+`warmed` is added so the distinction the old key pretended to draw exists.
+Linear stays unwarmed deliberately: its runtime picks a solver per call, so
+warming would compile one the next call may not use.
+
+Four tests on a 4x4x8 (2,4) case, ~5 s for the group, still a real compile
+(warmup 1.2 s against a 0.000 s solve). Negative control: restoring the no-op
+fails three of four and nothing else.
+
+**Found on the way, not yet fixed.** `gkx.prepare` cannot prepare **any**
+shipped nonlinear example. Scanning all decks through `gkx.prepare(gkx.load(f))`:
+
+| Failure | Count |
+|---|---:|
+| `prepared execution cannot stop early at saturation` | 11 |
+| missing untracked geometry (`FileNotFoundError`) | 4 |
+| the `common_input.toml` template | 1 |
+| the GX input file | 1 |
+
+`run_to = "saturation"` is the documented default for diagnosed nonlinear runs,
+and a prepared scan has a fixed compiled length, so the limitation is real, not
+a bug. But the escape is undiscoverable: `gkx.prepare(case, steps=5)` works and
+nothing says so. The README advertises preparing a nonlinear case for reuse
+while no shipped nonlinear deck can be prepared as written. Next action: make
+the error name the escape (`steps=` or `run_to = "t_max"`), and extend the
+shipped-deck gate from `load+validate` to `prepare` with a recorded inventory
+of which decks can be prepared and why the rest cannot.
+
+Phase 0.2 is now closed except the f32 geometry tolerance in 0.2.4.
