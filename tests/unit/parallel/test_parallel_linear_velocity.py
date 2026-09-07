@@ -477,7 +477,7 @@ def test_linear_rhs_parallel_cached_serial_dispatch(monkeypatch) -> None:
         calls.append("serial")
         assert kwargs["use_jit"] is False
         assert kwargs["use_custom_vjp"] is False
-        assert "dt" not in kwargs
+        assert kwargs["dt"] == 0.125
         return _sentinel("serial")
 
     monkeypatch.setattr(linear_rhs_owner, "linear_rhs_cached", fake_serial)
@@ -489,6 +489,7 @@ def test_linear_rhs_parallel_cached_serial_dispatch(monkeypatch) -> None:
         parallel=None,
         use_jit=False,
         use_custom_vjp=False,
+        dt=0.125,
     )
 
     assert calls == ["serial"]
@@ -1214,6 +1215,7 @@ def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> No
         cache,
         params,
         terms=terms,
+        dt=0.01,
         use_jit=False,
         use_custom_vjp=False,
         force_electrostatic_fields=True,
@@ -1224,6 +1226,7 @@ def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> No
             cache,
             params,
             terms=terms,
+            dt=0.01,
             devices=devices[:4],
         )
     )
@@ -1557,6 +1560,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
             dissipative_cache,
             dissipative_params,
             terms=active_terms,
+            dt=0.01,
             use_jit=False,
             use_custom_vjp=False,
             force_electrostatic_fields=True,
@@ -1567,6 +1571,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
                 dissipative_cache,
                 dissipative_params,
                 terms=active_terms,
+                dt=0.01,
                 devices=devices[:4],
             )
         )

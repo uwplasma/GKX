@@ -416,14 +416,23 @@ are:
 Notable runtime-only keys:
 
 * ``[collisions] damp_ends_amp`` / ``damp_ends_widthfrac``: reference-compatible end
-  damping defaults are ``0.1`` and ``0.125``.
+  damping defaults are ``0.1`` and ``0.125``. ``damp_ends_amp`` is a per-**step**
+  fraction, not a per-unit-time rate: the solver divides it by the step size
+  during RHS assembly so that the ``G += dt * RHS`` update removes that fraction
+  of the amplitude at the parallel-domain ends on every step, whatever ``dt``
+  is. Every shipped deck is tuned against that meaning. Reading it as a rate
+  leaves end damping weaker by a factor ``dt`` and lets the domain-end modes run
+  away (`uwplasma/GKX#192 <https://github.com/uwplasma/GKX/issues/192>`_).
 * ``[physics] reduced_model``: physics-family selector for runtime inputs.
   The maintained runtime supports full gyrokinetics via ``"gyrokinetic"``
   and its full-GK aliases. Non-promoted reduced-model values fail closed with
   ``NotImplementedError`` instead of silently routing through the wrong equations.
-* ``[collisions] damp_ends_scale_by_dt``: opt-in per-step damping-rate scaling
-  for controlled reproduction studies. The reference-compatible default is ``false`` because
-  ``damp_ends_amp`` is already a per-unit-time damping rate.
+* ``[collisions] damp_ends_scale_by_dt``: legacy opt-in that divides
+  ``damp_ends_amp`` by ``[time] dt`` once more, *before* the solver's own
+  per-step division, so enabling it scales the amplitude by ``1/dt**2``. The
+  reference-compatible default is ``false`` and no shipped deck sets it. It is
+  scheduled for removal with the end-damping redesign
+  (`uwplasma/GKX#194 <https://github.com/uwplasma/GKX/issues/194>`_).
 * ``[collisions] hypercollisions_const`` / ``hypercollisions_kz``: defaults are
   the reference-compatible ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
   default, constant hypercollisions off).

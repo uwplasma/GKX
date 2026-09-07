@@ -1218,9 +1218,18 @@ def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_gri
     assert int(np.asarray(grid.ky_mode)[0]) > 0
 
 
-def test_linear_integrator_uses_linked_end_damping_as_a_rate(
+def test_linear_integrator_applies_linked_end_damping_per_step(
     only_term_config, only_terms, spectral_grid
 ):
+    """End damping removes a fixed fraction of the amplitude on every step.
+
+    ``damp_ends_amp`` is divided by the step size during RHS assembly, so the
+    ``G += dt * RHS`` update removes ``damp_ends_amp`` of the damped amplitude
+    per step independently of ``dt``. Every shipped deck is tuned against that
+    per-step meaning; reading ``damp_ends_amp`` as a per-unit-time rate instead
+    weakens end damping by a factor ``dt`` and lets the domain-end modes run
+    away (uwplasma/GKX#192).
+    """
     grid_full = spectral_grid(
         Nx=1,
         Ny=16,
@@ -1240,14 +1249,23 @@ def test_linear_integrator_uses_linked_end_damping_as_a_rate(
     G = jnp.ones((2, 4, 1, 1, 96), dtype=jnp.complex64)
     term_cfg = only_term_config(end_damping=1.0)
 
-    rhs_raw, _fields_raw, contrib_raw = assemble_rhs_terms_cached(
+    _rhs_raw, _fields_raw, contrib_raw = assemble_rhs_terms_cached(
         G, cache, params, terms=term_cfg
     )
+    _rhs_dt, _fields_dt, contrib_dt = assemble_rhs_terms_cached(
+        G, cache, params, terms=term_cfg, dt=0.2
+    )
+
     end_raw = np.asarray(contrib_raw["end_damping"])
+    end_dt = np.asarray(contrib_dt["end_damping"])
     mask = np.abs(end_raw) > 1.0e-12
     assert np.any(mask)
+    assert np.allclose(end_dt[mask], end_raw[mask] / 0.2, rtol=1.0e-6, atol=1.0e-6)
 
+    # The completed step is what the decks are tuned against: the increment the
+    # integrator applies must not depend on the step size.
     terms = only_terms(end_damping=1.0)
+    increments = []
     for dt in (0.1, 0.2):
         integrated, _phi = integrate_linear(
             G,
@@ -1259,13 +1277,9 @@ def test_linear_integrator_uses_linked_end_damping_as_a_rate(
             method="euler",
             terms=terms,
         )
-        measured_rate = (np.asarray(integrated) - np.asarray(G)) / dt
-        assert np.allclose(
-            measured_rate[mask],
-            np.asarray(rhs_raw)[mask],
-            rtol=1.0e-6,
-            atol=1.0e-6,
-        )
+        increments.append(np.asarray(integrated) - np.asarray(G))
+    assert np.any(np.abs(increments[0][mask]) > 1.0e-12)
+    assert np.allclose(increments[0], increments[1], rtol=1.0e-6, atol=1.0e-8)
 
 
 def test_streaming_zero_for_constant_z(cyclone_world, only_terms):

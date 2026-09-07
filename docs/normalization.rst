@@ -236,8 +236,9 @@ intended to document exact comparison settings used for benchmark plots.
 
 The reference end-damping defaults are ``damp_ends_amp = 0.1`` and
 ``damp_ends_widthfrac = 0.125``. The damping kernel interprets
-``damp_ends_amp`` directly as a rate; the runtime no longer rescales it by the
-timestep.
+``damp_ends_amp`` as a per-**step** fraction: RHS assembly divides it by the
+instantaneous step size, so a completed step removes ``damp_ends_amp`` of the
+end-cap amplitude at any ``dt``, fixed or adaptive.
 
 Defaults (model parameters):
 
