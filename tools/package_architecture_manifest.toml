@@ -922,7 +922,17 @@ recursive = true
 # assertions 79064c4d rewrote: that the RHS end-damping term scales as 1/dt,
 # that a completed step's increment does not, and the two mocked signatures
 # that pin dt reaching the serial and sharded RHS at all.
-baseline = 86448
+# 86257 -> 86377: recompute the README's published linear parity table from
+# the scans the benchmark atlas points at. The seven percentages were
+# transcribed by hand and nothing checked them, so a refreshed scan could
+# leave the published figure behind -- the failure mode that produced the
+# seeded mirror record and the generator-less performance file. All seven
+# reproduce today; the gate is so they keep doing so. Verified negatively:
+# editing KBM from 20.0% to 18.0% fails it.
+# 86377 -> 86568: retain both main's 120-line README parity gate (#193)
+# and #197's 191-line net increase over their shared 86257-line baseline.
+# Measured after the history-preserving main integration; no tests removed.
+baseline = 86568
 target = 35000
 
 [[line_budget_policy.counts]]
