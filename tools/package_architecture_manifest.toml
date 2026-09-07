@@ -858,7 +858,12 @@ recursive = true
 # prepare whose precedence is explicit argument, deck, then the runtime's own
 # kind-aware default. The alternative -- leaving prepare to guess -- makes
 # print_summary describe a calculation solve will not run.
-baseline = 89061
+# 89061 -> 89071: the demo's rationale comment. It records that dt = 0.03 over
+# 500 steps printed gamma = 0.089982 against a certified 0.103263 -- 12.9 percent
+# low -- with four warnings, and why dt now sits under the CFL bound and the
+# horizon reaches gamma*t_max >= 7. Without it the next person tuning the demo
+# for speed reintroduces the bias.
+baseline = 89071
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -959,7 +964,13 @@ recursive = true
 # measurement recorded in the plan on 2026-09-07 had to be withdrawn for exactly
 # that reason. The guard reads the floor from pyproject rather than duplicating
 # it, so the two cannot drift apart.
-baseline = 86679
+# 86679 -> 86742: the demo eigenvalue gate in test_validation_gates.py. It runs
+# the demo's own settings through both time integration and the certified Krylov
+# solver and requires agreement within 1 percent. Nothing else covered the number
+# the demo prints: the existing CLI demo test mocks the solver away, so it checks
+# plumbing only. Deliberately not marked slow -- no CI job runs slow tests, so
+# that marker would make the gate dead.
+baseline = 86742
 target = 35000
 
 [[line_budget_policy.counts]]

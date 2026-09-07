@@ -30,11 +30,15 @@ accelerator-enabled JAX wheel from the
 [JAX installation guide](https://docs.jax.dev/en/latest/installation.html).
 
 `gkx` with no arguments runs a self-contained linear Cyclone demo — no input
-file, no data download. It takes about 20 s on a laptop CPU, prints the fitted
-`gamma` and `omega`, and writes
+file, no data download. It takes well under a minute on a laptop CPU, prints
+the fitted `gamma` and `omega`, and writes
 `gkx_default_linear.{toml,summary.json,timeseries.csv,eigenfunction.csv,png}`.
-It is a smoke test, not a converged result, and emits CFL and under-resolution
-warnings to say so.
+
+The demo runs a deliberately coarse velocity grid (`Nl = 7`, `Nm = 14`), so it
+is not a converged physics result. It is resolved *for the case it builds*: its
+step stays under the estimated CFL bound and its horizon is long enough to fit,
+so the growth rate it prints agrees with that case's certified eigenvalue to
+better than 1%, and it runs without warnings. A gate holds it there.
 
 Development checkout:
 

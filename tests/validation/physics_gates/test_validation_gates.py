@@ -895,3 +895,66 @@ def test_period_rms_damping_ignores_a_slowly_drifting_offset() -> None:
 
     shift = abs(drifting.gam_damping_rate - flat.gam_damping_rate) * MERLO_R0
     assert shift < 0.1 * GAMMA_GATE_ATOL_R0_OVER_VI
+
+
+# ---- the no-argument demo reports its own eigenvalue ----------------------
+#
+# The demo is the first thing most people run, so the number it prints is the
+# first evidence anyone has about whether this code works. It is a coarse
+# configuration on purpose (Nl = 7, Nm = 14), which is fine: coarse has a right
+# answer too, and that answer is the eigenvalue of the operator the demo builds.
+# What is not fine is printing a growth rate that disagrees with it. At the
+# original dt = 0.03 over 500 steps the demo printed 0.089982 against a
+# certified 0.103263, 12.9 percent low, and said so in four warnings that a
+# newcomer has no way to weigh.
+#
+# This gate runs the demo's own settings twice -- time integration, as the demo
+# does, and the certified Krylov eigensolver -- and requires them to agree. It
+# is the check that would have caught the drift, and it fails if anyone shortens
+# the horizon or raises the step back over the CFL bound.
+
+
+def _demo_case(tmp_path):
+    """Write and load the demo's deck exactly as the demo itself does."""
+
+    from gkx.workflows.demo import default_demo_toml_text
+
+    deck = tmp_path / "demo.toml"
+    deck.write_text(default_demo_toml_text(), encoding="utf-8")
+    return deck
+
+
+def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None:
+    from gkx.workflows.demo import DEFAULT_DEMO_SETTINGS
+    from gkx.runtime import run_runtime_linear
+    from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+    settings = DEFAULT_DEMO_SETTINGS
+    cfg, _data = load_runtime_from_toml(_demo_case(tmp_path))
+
+    shared = dict(
+        ky_target=float(settings["ky"]),
+        Nl=int(settings["Nl"]),
+        Nm=int(settings["Nm"]),
+    )
+    integrated = run_runtime_linear(
+        cfg,
+        solver="time",
+        method=str(settings["method"]),
+        dt=float(settings["dt"]),
+        steps=int(settings["steps"]),
+        sample_stride=int(settings["sample_stride"]),
+        **shared,
+    )
+    certified = run_runtime_linear(cfg, solver="krylov", **shared)
+
+    assert certified.gamma > 0.0, "the demo case should be unstable"
+    relative = abs(integrated.gamma - certified.gamma) / abs(certified.gamma)
+    assert relative < 0.01, (
+        f"the demo's time-integrated gamma {integrated.gamma:.6f} disagrees with "
+        f"the certified eigenvalue {certified.gamma:.6f} of the same case by "
+        f"{100 * relative:.1f}%. The demo is the first number anyone sees from "
+        "this code; if its horizon is too short or its step is over the CFL "
+        "bound, it prints a biased growth rate. Restore dt and steps rather "
+        "than widening this tolerance."
+    )
