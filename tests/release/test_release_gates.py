@@ -4282,3 +4282,74 @@ def test_tracked_release_readiness_matches_the_current_project_version() -> None
     assert payload["project"]["version"] == project_version
     assert payload["version"]["project_version"] == project_version
     assert payload["version"]["source_version"] == project_version
+
+
+# ---- every shipped deck loads through the public API ----------------------
+#
+# The CLI never calls ``RuntimeConfig.validate``; the Python facade does. So a
+# deck could run fine under ``gkx run-runtime-nonlinear`` and raise under
+# ``gkx.load``, and five shipped decks did -- including
+# ``runtime_cyclone_nonlinear.toml``, which the README advertises as the
+# nonlinear example. They set ``nonlinear = true`` and left ``linear`` at its
+# default of true, which validate rejects as a contradiction. Adding
+# ``linear = false`` changed no output: the nonlinear runtime never read the
+# flag, and the diagnostics of a five-step run are bit-identical across the
+# change. The bug was that the two entry points disagreed about what a valid
+# case is, and nothing checked the one the README sends people to.
+
+# A deck may be exempt only with a reason, and the reason is checked below.
+_DECKS_NOT_LOADABLE_AS_CASES: dict[str, str] = {
+    "examples/common_input.toml": (
+        "key-by-key reference template, not a runnable case: its geometry.model "
+        "is 'vmec' and the file's own comment says vmec_file is injected by the "
+        "CLI from the wout positional, so it cannot validate standalone"
+    ),
+    "examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml": (
+        "a GX input file, not a GKX deck: it carries GX's [Dimensions], "
+        "[Domain] and nonlinear_mode keys and GX's array-style [species] "
+        "table. It is kept for provenance of the HSX comparison and is not "
+        "loadable by gkx.load; see plan.md 0.3.4 on the HSX row"
+    ),
+}
+
+
+def _shipped_decks() -> list[str]:
+    root = RUN_TO_REPO_ROOT
+    found: list[str] = []
+    for base in ("examples", "benchmarks"):
+        for path in sorted((root / base).rglob("*.toml")):
+            found.append(str(path.relative_to(root)))
+    return found
+
+
+def test_every_shipped_deck_loads_and_validates_through_the_public_api() -> None:
+    import gkx
+
+    failures: list[str] = []
+    for relative in _shipped_decks():
+        if relative in _DECKS_NOT_LOADABLE_AS_CASES:
+            continue
+        try:
+            gkx.load(RUN_TO_REPO_ROOT / relative).validate()
+        except Exception as error:  # noqa: BLE001 - the message is the evidence
+            failures.append(f"{relative}: {type(error).__name__}: {error}")
+
+    assert not failures, (
+        "shipped decks that the CLI accepts but the public API rejects:\n"
+        + "\n".join(failures)
+        + "\n\nA deck under examples/ or benchmarks/ is something a reader is "
+        "invited to run. If it cannot be loaded as a case, either fix it or add "
+        "it to _DECKS_NOT_LOADABLE_AS_CASES with the reason."
+    )
+
+
+def test_deck_exemptions_are_real_and_explained() -> None:
+    """An exemption may not outlive the file, and may not be silent."""
+
+    problems: list[str] = []
+    for relative, reason in _DECKS_NOT_LOADABLE_AS_CASES.items():
+        if not (RUN_TO_REPO_ROOT / relative).is_file():
+            problems.append(f"{relative}: exempted but no longer exists")
+        if len(reason.split()) < 8:
+            problems.append(f"{relative}: exemption reason is too thin to audit")
+    assert not problems, "\n".join(problems)

@@ -61,6 +61,7 @@ electrostatic = true
 electromagnetic = false
 adiabatic_electrons = true
 tau_e = 1.0
+linear = false
 nonlinear = true
 beta = 0.0
 

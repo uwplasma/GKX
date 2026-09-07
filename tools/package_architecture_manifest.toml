@@ -970,7 +970,15 @@ recursive = true
 # the demo prints: the existing CLI demo test mocks the solver away, so it checks
 # plumbing only. Deliberately not marked slow -- no CI job runs slow tests, so
 # that marker would make the gate dead.
-baseline = 86742
+# 86742 -> 86813: the shipped-deck gate in tests/release/test_release_gates.py.
+# The CLI never calls RuntimeConfig.validate and the Python facade does, so a
+# deck could run under gkx run-runtime-nonlinear and raise under gkx.load. Five
+# shipped decks did, including the one the README advertises. Nothing checked
+# the entry point the README sends people to. The gate walks every deck under
+# examples/ and benchmarks/ and requires each to load as a case or to carry a
+# written exemption, and a second test keeps those exemptions from outliving
+# their files or shrinking to something unauditable.
+baseline = 86813
 target = 35000
 
 [[line_budget_policy.counts]]

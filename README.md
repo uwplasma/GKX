@@ -127,9 +127,11 @@ an `[output] path` and without `--out` writes no files. Examples live under
 
 ## Configure a run
 
-One TOML file. Every key has a default, so a working input is short. The shipped
-default deck is [`examples/common_input.toml`](examples/common_input.toml); the
-key-by-key reference is [inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
+One TOML file. Every key has a default, so a working input is short.
+[`examples/common_input.toml`](examples/common_input.toml) shows every section
+with its defaults; it is a template rather than a runnable case, because its
+`vmec_file` is supplied by the CLI from the `wout` you pass. The key-by-key
+reference is [inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
 
 | Section | Controls | Common keys |
 | --- | --- | --- |
