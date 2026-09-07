@@ -1,6 +1,16 @@
 Release Scope and Claim Boundaries
 ==================================
 
+.. warning::
+
+   Review snapshot: GKX 2.0.0, ``a99dac89``, 2026-09-04. End-damping
+   compatibility is unresolved (`issue 192 <https://github.com/uwplasma/GKX/issues/192>`_;
+   proposed `PR 197 <https://github.com/uwplasma/GKX/pull/197>`_).
+   The artifact-backed rows below describe their recorded experiments, not a
+   fresh verification of the affected 2.0.0 operator. Re-run affected cases
+   after the repair before promoting current-release parity. See
+   :doc:`research_grade_plan` and the :download:`roadmap <../plan.md>`.
+
 This page is the canonical claim-scope checklist for the current development
 state. It keeps README, documentation, release notes, and manuscript drafts
 aligned with the tracked artifacts in ``docs/_static``. If a claim is not

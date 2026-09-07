@@ -3,7 +3,7 @@ Research status
 
 Reviewed against main a99dac89 on 2026-09-06.
 The active execution queue is
-`plan.md <https://github.com/uwplasma/GKX/blob/plan/focused-research-20260906/plan.md>`_;
+`plan.md <https://github.com/uwplasma/GKX/blob/main/plan.md>`_;
 :doc:`research_grade_program` records the technical decisions and sources.
 Older checklists are historical, not additional active roadmaps.
 

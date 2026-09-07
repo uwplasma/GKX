@@ -2,7 +2,7 @@ Research decisions and their evidence
 =====================================
 
 Planning review, 2026-09-06. The repository's
-`plan.md <https://github.com/uwplasma/GKX/blob/plan/focused-research-20260906/plan.md>`_
+`plan.md <https://github.com/uwplasma/GKX/blob/main/plan.md>`_
 owns the execution queue. This page explains choices, not new validation
 results. Current claims are in :doc:`research_grade_plan`.
 
@@ -486,5 +486,5 @@ context; discrete tests must use GKX's weights and boundary fluxes.
   alone does not establish a differentiable backend.
 
 Fresh checks and limitations:
-`review evidence <https://github.com/uwplasma/GKX/blob/plan/focused-research-20260906/plan/baseline/review_2026_09_06.md>`_.
+`review evidence <https://github.com/uwplasma/GKX/blob/main/plan/baseline/review_2026_09_06.md>`_.
 No fresh GPU parity or saturated cross-code speed result is claimed here.

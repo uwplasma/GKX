@@ -1,5 +1,9 @@
 # Synthesis review of the three GKX plans, 2026-09-06
 
+> Superseded the same day by the consolidated [plan.md](../../plan.md), which
+> folds this take together with #198, #203 and #204. Kept as the record of the
+> reasoning and measurements behind that consolidation.
+
 Inputs: [#198](https://github.com/uwplasma/GKX/pull/198) at 71c5cc48,
 [#203](https://github.com/uwplasma/GKX/pull/203) at 1643f0e7,
 [#204](https://github.com/uwplasma/GKX/pull/204) at 29e559e0, main a99dac89,
@@ -31,7 +35,7 @@ so that the disagreements can be adjudicated on evidence.
 | Velocity-convergence anomaly | a finding | a defect hypothesis caused by damping | "damping does not prove every failure" | a defect until shown otherwise, with eight isolating tests | Hoffmann (16,8), GX (4,6)/(16,48); no published HL study shows −25% at Nl 24→32; the deck is collisionless and the hypercollision exponent is capped at 20 |
 | Scope gate | ten lanes, all open | three tiers | full three-field kinetic-electron EM (EM0–EM5) required before release | EM required; EM0–EM3 must pass with published references; EM4 linear required, nonlinear reported without parity; EM5 linear/QL required, nonlinear AD parked | no published local nonlinear EM stellarator benchmark to match; iGENE needed 192 GPUs for kinetic-electron EM AD |
 | Reference source | self-run GX first | GX with cap gate | matched external codes, self-built stella/GS2 | ranked sources; self-run GX last | GX ships six goldens; the open dataset gives 100,705 nonlinear references; the cap is confined to the linked kernel |
-| Plan form | 1001 lines, logbook | 784 lines | 696 lines plus 490-line technical page | 513 lines with phases, steps, costs, and a ledger | user's request for context and steps; #204's structure retained where it is good |
+| Plan form | 1001 lines, logbook | 784 lines | 696 lines plus 490-line technical page | 513 lines (#205); consolidated into the 983-line authoritative plan | user's request for context and steps; #204's structure retained where it is good |
 | Process change | none | none | "one correctness change and one measurement per PR" | ledger, tiers, statistics module, ranked references, merge cadence | CGYRO/stella/GX practice; #193 already does this for one table |
 | Novelty | adjoint nonlinear stellarator optimization as hypothesis | same, named | "do not claim first differentiable GK" | five unclaimed contributions with evidence bars and GPU-days; two chosen for paper 1 | landscape report |
 
