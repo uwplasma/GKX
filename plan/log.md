@@ -10304,3 +10304,57 @@ with `JAX_ENABLE_X64=true GKX_X64=1`. Eleven checkers, ruff clean.
 Remaining in 0.2: `warmup()` is still a no-op on the linear path (0.2.2), and
 the f32 geometry tolerance (rest of 0.2.4). 0.3 still needs CONTRIBUTING.md and
 the HSX decision.
+
+## 2026-09-07 — Phase 0.2.5: five shipped decks the README advertises did not load
+
+Added to [#214](https://github.com/uwplasma/GKX/pull/214) at `78494e46`.
+
+The CLI never calls `RuntimeConfig.validate`; the Python facade does. So the two
+entry points disagreed about what a valid case is, and nothing checked the one
+the README points at. Scanning all 38 shipped `.toml` under `examples/` and
+`benchmarks/` through `gkx.load(...).validate()` found **7 failures in 3
+classes**:
+
+| Class | Count | Cause |
+|---|---:|---|
+| `physics.linear and physics.nonlinear cannot both be true` | 5 | deck sets `nonlinear = true`, leaves `linear` at its default `true` |
+| `geometry.model = 'vmec' requires geometry.vmec_file` | 1 | `examples/common_input.toml`, a template the CLI completes |
+| `[[species]] entries must be provided as an array of tables` | 1 | a GX input file shelved among GKX decks |
+
+The five include `runtime_cyclone_nonlinear.toml`, which the README advertises
+as *the* nonlinear example. `gkx.load` on it raised ValueError.
+
+Adding `linear = false` to the five is behaviour-neutral, verified rather than
+assumed: a five-step run of the Cyclone deck writes bit-identical `Diagnostics`
+before and after, because the nonlinear runtime never read the flag.
+
+`examples/common_input.toml` is genuinely a template: `geometry.model = "vmec"`
+and its own comment says the CLI injects `vmec_file` from the wout positional.
+The README called it "the shipped default deck", which reads as runnable; it now
+says template and says why.
+
+`examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml`
+is **a GX input file, not a GKX deck** — GX's `[Dimensions]`, `[Domain]`,
+`nonlinear_mode` and array-style `[species]`, while declaring
+`schema_version = 1` so it reads as a GKX deck sitting among GKX decks. It is
+referenced by `tests/release/test_release_gates.py:3600`, so it was left in
+place and exempted rather than moved. **This is a thread for 0.3.4:** the README
+publishes an HSX parity row (0.577%/0.273%) whose reference has no regenerating
+deck, and the one file named "reference_hsx_nonlinear..." turns out to be a GX
+input. Whoever takes 0.3.4 should start here.
+
+New gate in `tests/release/test_release_gates.py`: every shipped deck loads and
+validates, or carries a written exemption; a second test stops an exemption
+outliving its file or shrinking to something unauditable. Verified negatively —
+reverting the five decks fails the gate and names them.
+
+617 passed, 1 skipped across `tests/release`, `tests/unit/api`,
+`tests/integration/runtime` on jax 0.10.2. Eleven checkers, ruff clean.
+
+Status: **#213, #214 and #206 are all CLEAN with 41 successful checks**, awaiting
+maintainer merge. Remaining in 0.2: `warmup()` is still a no-op on the linear
+path (0.2.2) — note that `prepare` genuinely does not compile a linear case,
+because the linear runtime picks its solver per call, so the honest fix is
+probably to correct the docstring and report the state rather than force a
+compile for a solver that may not be used. 0.3 needs CONTRIBUTING.md and the
+HSX decision.
