@@ -9993,3 +9993,70 @@ Both legacy (None) and explicit rate (.4) compare all active dissipation routes
 against serial. No speedup claim from these compilation-heavy CPU tests.
 All local jobs launched for this step are terminal. Resume at the outstanding
 merge gate, then complete the reference-conversion/migration stage above.
+
+## 2026-09-07 — Phase 0.4: the evidence ledger, and what it found in the GX references
+
+Branch `phase0/evidence-ledger` at `b7fab7ed`, based on main `99963b45`;
+[#213](https://github.com/uwplasma/GKX/pull/213). Worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase04-ledger`. Planning-independent:
+no solver or scientific change, no published number moved.
+
+Delivered plan.md 0.4.1, 0.4.2 and 0.4.3, and drafted 0.4.4:
+
+- `tools/evidence_ledger.toml`, 14 rows: the seven README parity percentages,
+  Landau, collision verification, nonlinear AD/FD, runtime/memory, the
+  saturation-policy figure, and the two QA figures. Each row carries artifact,
+  generator, reference, reference rank, tier and status. 8 passing,
+  6 provisional.
+- `tests/release/test_evidence_ledger.py`, 14 tests. Generalises #193: the
+  case-to-column map moved out of test code into the ledger, so publishing a
+  number is a data change. Negative controls, each failing exactly one test:
+  KAW 0.0004% -> 0.9004%; KBM row pointed at a missing CSV; clamp-bound KBM row
+  marked passing; a rank-3 hash deleted.
+- `tools/comparison/fixtures/gx_goldens/README.md` and `upstream_report.md`:
+  GX commit `bc2fe552` (upstream HEAD `3865a537`), GX's own gate (gamma 1e-3,
+  omega 5e-3), SHA-256 of all five shipped `*_correct.out.nc`, and the clamp
+  derivation. Reference outputs stay untracked.
+
+**Reference-validity finding, verified from pristine GX source, not the local
+instrumented tree.** `grad_parallel_linked.cu:169-173` builds one launch grid
+`dG_all.z = min(65535, Nz*Nl*Nm)` and its comment claims the kernels carry a
+grid-stride loop in z. `linkedCopyBackAll` and `linkedAccumulateBackAll` do:
+both open with
+`for (int idzlm = __umul24(blockIdx.z,blockDim.z)+threadIdx.z; idzlm < nz*nMoms; idzlm += __umul24(blockDim.z,gridDim.z))`.
+`dampEnds_linked` (`device_funcs.cu:3149`) does not: `idzlm = get_id3()`, no
+loop, no `gridDim.z`. With `blockDim.z = 1` it covers `idzlm < 65535` only.
+
+`Nz` is the extended grid: `parameters.cu:755-757` sets
+`ntgrid = ntheta/2 + (nperiod-1)*ntheta`, `Nz = 2*ntgrid`. An earlier note in
+this log used `Nz = 96` without recording that rescale; the rescale is real, so
+the number stands, but the derivation is now written down.
+
+| GX golden | ntheta | nperiod | Nz | Nl | Nm | Nz*Nl*Nm | undamped | share | moments |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Cyclone s-alpha adiabatic | 32 | 2 | 96 | 16 | 48 | 73,728 | 8,193 | 11.11% | m 43-47, part of 42 |
+| Cyclone Miller adiabatic | 32 | 2 | 96 | 16 | 48 | 73,728 | 8,193 | 11.11% | same |
+| Cyclone Miller kinetic | 32 | 2 | 96 | 16 | 48 | 73,728 | 8,193 | 11.11% | same |
+| KBM Miller | 32 | 2 | 96 | 16 | 48 | 73,728 | 8,193 | 11.11% | same |
+| W7-X ITG | 256 | 1 | 256 | 8 | 16 | 32,768 | 0 | 0% | none |
+
+Consequence for the plan. The four affected goldens are the references behind
+the README's Cyclone 5.51%/6.83% and KBM 20.0% gamma rows, which Phase 1.1.1
+and 1.1.4 were to close. Those rows are now `provisional`: the reference omits
+end damping on its top Hermite moments, so the disagreement is not attributable
+to GKX either way. This is not evidence that GKX is correct. Phase 1.1 must
+regenerate them from a repaired, labelled GX build before the rows can move.
+
+It also bears on Phase 0.5. The absorber is missing exactly where Hermite
+recurrence is strongest, so any GX-referenced velocity ladder run above the
+clamp compares against a reference whose high-m content is unabsorbed; at
+Nz=96, Nl=32, Nm=96 the covered fraction is 65,535/294,912 = 22%. GKX's own
+Nl 24->32 swing is a GKX measurement and is not explained by this, but a
+GX-referenced ladder at those resolutions is uninformative until repaired.
+
+Not done: no GX rebuild, no rerun of any reference, no upstream ticket filed
+(the report text is in the fixtures directory, ready to send). W7-X and the
+analytic rows are unaffected.
+
+Next: Phase 0.5 on merged #197, and plan.md 1.1 gains an explicit
+regenerate-the-reference step before the Cyclone and KBM rows can close.

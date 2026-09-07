@@ -106,7 +106,7 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 
 | Area | Established | Not established |
 |---|---|---|
-| Linear ES | Krylov and dense eigenmodes; implicit eigenpair derivatives; parity scans recomputed by CI (KAW 0.0004%, ETG 0.04%, W7-X 0.27%, HSX 0.58%, Cyclone Miller 5.5%, Cyclone 6.8%, KBM 20%) | Cyclone 5–7% and KBM 20% unexplained; HSX reference has no deck, wout or generator; velocity convergence anomalous (Nl 24→32: −24.7%) |
+| Linear ES | Krylov and dense eigenmodes; implicit eigenpair derivatives; parity scans recomputed by CI (KAW 0.0004%, ETG 0.04%, W7-X 0.27%, HSX 0.58%, Cyclone Miller 5.5%, Cyclone 6.8%, KBM 20%); every published number now carries an evidence-ledger row (#213) | Cyclone 5–7% and KBM 20% **not attributable**: their GX references omit end damping on Hermite m ≥ 42 of 48 (§3.7), so the reference must be regenerated before the rows can move; HSX reference has no deck, wout or generator; velocity convergence anomalous (Nl 24→32: −24.7%) |
 | End damping | #197 restores GX's per-step contract (A/Δt) and reproduces the recorded artifact bit-identically at all 11 ky | Merged `ca4e5169`; historical 2.0.0 time-integrated numbers still require repaired-build evidence |
 | Nonlinear ES | Runtime, restart, chunked saturation stopping; tracked windows for Cyclone, Miller, KBM, W7-X, HSX | No statistical cross-code comparison; stopping rule uncalibrated; no Dimits bracket; no dataset comparison |
 | EM | Three-field solves with custom VJP; KAW golden; KBM two-field deck (`use_bpar=false`); per-species ES/A∥/B∥ flux channels; channel-sum test | No three-field linear reference; no nonlinear EM transport; no finite-β stellarator EM; energy identity not derived for the stored convention |
@@ -309,6 +309,40 @@ exactly, the finite-pressure classes only approximately.
 | Feature analysis | the paper's own finding (flux compression in bad curvature, geodesic curvature) as a check on GKX's geometry diagnostics | 4.2 |
 | Teaching example | one tube, one command, a known answer | 7 |
 
+### 3.7 Reference validity: the GX linked-boundary end-damping clamp
+
+Verified from pristine GX source at `bc2fe552`; reproduction in
+`tools/comparison/fixtures/gx_goldens/README.md`.
+
+GX launches three kernels on one grid, `dG_all.z = min(65535, Nz*Nl*Nm)`
+(`grad_parallel_linked.cu:169-173`), whose comment states the kernels carry a
+grid-stride loop in z. `linkedCopyBackAll` and `linkedAccumulateBackAll` do.
+`dampEnds_linked` (`device_funcs.cu:3149`) does not: it takes a single index
+from `get_id3()` and never reads `gridDim.z`. Above the clamp the parallel
+absorbing layer is not applied, and since `idm = (idzlm/Nz)/Nl` the omission
+lands on the highest Hermite moments. `Nz` is the extended grid:
+`parameters.cu:755-757` sets `ntgrid = ntheta/2 + (nperiod-1)*ntheta`,
+`Nz = 2*ntgrid`.
+
+| GX golden | Nz | Nl | Nm | Nz·Nl·Nm | undamped | moments |
+|---|---:|---:|---:|---:|---:|---|
+| Cyclone s-α adiabatic | 96 | 16 | 48 | 73,728 | 11.11% | m 43–47, part of 42 |
+| Cyclone Miller adiabatic | 96 | 16 | 48 | 73,728 | 11.11% | same |
+| Cyclone Miller kinetic | 96 | 16 | 48 | 73,728 | 11.11% | same |
+| KBM Miller | 96 | 16 | 48 | 73,728 | 11.11% | same |
+| W7-X ITG | 256 | 8 | 16 | 32,768 | 0% | none |
+
+**The rule.** Every linked-boundary GX reference records `Nz*Nl*Nm` and whether
+the clamp binds. A reference above the clamp is `provisional`: it is legitimate
+GX output, but not of the requested model, so a disagreement against it is
+uninformative in both directions. It may become `passing` only when regenerated
+from a labelled repaired build, with the original retained. A reference-code
+defect is never evidence that GKX is correct.
+
+This also bounds Phase 0.5: a GX-referenced velocity ladder run above the clamp
+compares against unabsorbed high-`m` content. At `Nz=96, Nl=32, Nm=96` the
+covered fraction is 65,535/294,912 = 22%.
+
 ---
 
 ## 4. Phase 0 — unblock and settle truth (weeks 1–2, CPU only)
@@ -464,29 +498,36 @@ The office environment notes are in [plan/notes](plan/notes/).
 
 ### 1.1 Linear atlas against ranked references
 
-1. **GX goldens at GX tolerance** for the six cases. Either the Cyclone 5–7%
+1. **Regenerate the four clamped GX references first** (§3.7): rebuild GX with
+   the grid-stride loop restored in `dampEnds_linked`, label the build, retain
+   the original output, and re-extract the Cyclone s-α, Cyclone Miller
+   adiabatic, Cyclone Miller kinetic and KBM Miller scans. Until this is done
+   the Cyclone and KBM parity rows cannot close in either direction, because
+   the reference does not encode the physics its deck requests. W7-X is below
+   the clamp and needs no rebuild.
+2. **GX goldens at GX tolerance** for the six cases. Either the Cyclone 5–7%
    and KBM 20% rows close or the defect is localized (fit window,
    normalization, dt, absorber, boundary chain). Owner:
    `tools/comparison/build_gx_parity_matrix.py`. Rows: `L-lin-*`.
-2. **Analytic tier as tier-2 rows**: Landau roots (present); Rosenbluth–Hinton
+3. **Analytic tier as tier-2 rows**: Landau roots (present); Rosenbluth–Hinton
    with the GS2 value; the 1/(1+1.6q²/√ε) q- and ε-scans; KAW slab
    dispersion; the local-limit ITG (Dong) case. Owner:
    `tests/validation/physics_gates`.
-3. **Parallel-domain convergence on W7-X**: Nz, nperiod and the field-line
+4. **Parallel-domain convergence on W7-X**: Nz, nperiod and the field-line
    label α scanned separately (flux-tube length is configuration dependent);
    record retained dealiased modes.
-4. **KBM two-field reproduction** of GX Fig. 3 (B∥=0, k_yρ=0.3, β scan through
+5. **KBM two-field reproduction** of GX Fig. 3 (B∥=0, k_yρ=0.3, β scan through
    the ITG→KBM transition near β_ref≈1.3%) with eigenfunctions, parity and
    residuals, not scale factors. This is EM2's first half and closes or
    explains the 20% row.
-5. **Normalization appendix**: the GKX equivalent of GX App. G with the
+6. **Normalization appendix**: the GKX equivalent of GX App. G with the
    √2 v_ti and 2√2 Q_GB conversions against stella/GENE; a docs page
    generated from the ledger.
-6. **pyrokinetics plugin**: `GKInputGKX`/`GKOutputReaderGKX` plus VMEC
+7. **pyrokinetics plugin**: `GKInputGKX`/`GKOutputReaderGKX` plus VMEC
    support in pyrokinetics' `LocalGeometry` (absent for every code today);
    round-trip the six GX decks and one W7-X deck; upstream PR. Owner: new
    `src/gkx/io/pyrokinetics.py`.
-7. **HSX decision** per 0.3.4.
+8. **HSX decision** per 0.3.4.
 
 ### 1.2 Model contracts and falsification tests
 
@@ -989,7 +1030,7 @@ needs an alternative allocation before its pilot.
 - [ ] 0.1 PR dispositions executed; planning PRs closed.
 - [ ] 0.2 five API/first-run contracts pass.
 - [ ] 0.3 CITATION.cff, CONTRIBUTING.md; HSX decision made.
-- [ ] 0.4 ledger scaffold and GX goldens imported; upstream clamp report filed.
+- [x] 0.4 ledger scaffold and GX goldens imported (#213); upstream clamp report drafted at `tools/comparison/fixtures/gx_goldens/upstream_report.md`, not yet filed.
 - [ ] 0.5 velocity-convergence table passing; anomaly resolved.
 - [ ] 1 linear atlas at rank ≤3; KBM two-field closed or diagnosed; pyrokinetics round-trip.
 - [ ] 2 statistics calibrated; Table 1; Dimits bracket; dataset-100; W7-X bean.
