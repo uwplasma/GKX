@@ -11,6 +11,12 @@ and reasoning are kept in [plan/baseline](plan/baseline/),
 [plan/research](plan/research/) and [plan/log.md](plan/log.md). No other
 roadmap is active. This plan changes no solver, test, data or release.
 
+**Status 2026-09-07:** this document is on branch `plan/authoritative-20260906`
+([#206](https://github.com/uwplasma/GKX/pull/206)) and is **not yet on `main`**,
+which still carries the superseded 2,881-line roadmap. Landing #206 is Phase 0's
+first act: until it lands, `main`'s `plan.md` contradicts this file. Phase 0.1 is
+under way (#197, #199, #207 merged; #209–#212 open).
+
 An independent agent should be able to resume from this file alone: every
 phase has numbered steps with an owner, an entry point, an exit condition, the
 ledger rows it produces and its cost. Read §0 first, then the lowest open
@@ -133,6 +139,7 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 | #196 → #200 → #201; #208 | f32 safety/lowering repairs; linear endpoint | integrate through #209 after fresh required CI, preserving merge ancestry |
 | #207; #210 | Fourier/link-map oracles; nonfinite Laguerre guard | #207 merged `99963b45`; #210 independently tested, awaiting CI |
 | #202 | fixed-rate absorber plus streaming/coefficient repairs, +2199/−400 | **split**, not wholesale merge: remaining repairs isolated; rate behind explicit input and rescaled decks; unpublished commits preserved at `wip/r0-end-damping-rate-local` |
+| #211; #212 | species-parallel traced-state repair; opt-in differentiable `damp_ends_rate` | further bounded #202 extractions, based on main `99963b45`; awaiting required CI and maintainer approval |
 | #198, #203, #204, #205 | planning | superseded by this plan; closed with a pointer here; branches kept |
 
 ---
