@@ -31,18 +31,28 @@ phase.
 2. Take the lowest phase with an unmet exit. Within a phase, take the lowest
    unmet numbered step. Do not start a later phase's expensive campaign while a
    cheaper earlier gate is open, except where a step is marked *parallel*.
-3. Before any run longer than an hour, write down the falsifiable question,
+3. **Check the environment before believing a failure.** The package requires
+   `jax>=0.10.1`; `gkx.objectives.core` opts into
+   `eig(..., enable_eigvec_derivs=True)`, which older jax rejects with a
+   `TypeError` that surfaces as several unrelated-looking physics failures. Run
+   in a fresh venv (`python -m venv env && env/bin/pip install -e '.[dev]'`) and
+   set `JAX_ENABLE_X64=true GKX_X64=1`, as the nightly job does. A measurement
+   taken below the floor is not evidence: one was recorded in this plan on
+   2026-09-07 and had to be withdrawn. `tests/unit/api/test_public_types.py`
+   now fails with that instruction rather than leaving it to be rediscovered.
+   Watch machine load before starting a sweep; the suites are CPU-hungry.
+4. Before any run longer than an hour, write down the falsifiable question,
    the ledger rows it will produce, the cost cap and the stop condition; then
    run.
-4. After each step, append one entry to [plan/log.md](plan/log.md): commit,
+5. After each step, append one entry to [plan/log.md](plan/log.md): commit,
    environment, exact command, inputs and reference hashes, result, failed or
    skipped checks, elapsed time, artifact location, next decision. For remote
    jobs also host, directory, PID and last verified state. Unknown is not
    finished.
-5. Commit small changes as Rogerio Jorge, no AI co-author trailers. Open a
+6. Commit small changes as Rogerio Jorge, no AI co-author trailers. Open a
    PR per step with the template in §14. Never merge without the maintainer's
    approval; never force-push a shared branch.
-6. If a step's evidence contradicts this plan, record the contradiction in the
+7. If a step's evidence contradicts this plan, record the contradiction in the
    log and change the plan in the same PR. The plan is edited, not argued
    around.
 
@@ -492,32 +502,44 @@ run on merged #197:
    | `p_hyper_m` default | `min(20, Nm/2)` (`parameters.cu:185`) | fixed `20.0` (`params.py:150`) | agree only for Nm ≥ 40. At Nm=16 the top-moment damping is 12.17 versus GX's 5.05, a factor 2.4 |
    | default branch | `hypercollisions_const=false`, `hypercollisions_kz=true` (`parameters.cu:190-192`) | `hypercollisions_const=1.0`, `hypercollisions_kz=0.0` (`params.py:152-153`) | **opposite**. The shipped decks override correctly, so file-driven runs are unaffected; any Python run on default `LinearParams` selects the other model |
 
-   **Measured disposition (2026-09-07), after testing the flip.** Swapping the
-   branch defaults to GX's fails nine existing gates in
-   `tests/unit/linear`, `tests/unit/operators` and
-   `tests/validation/physics_gates` (321 pass, 9 fail, 6 skip), among them
-   `test_zero_drive_is_damped_at_every_hermite_truncation` at Nm = 8, 16 and 32.
-   The mechanism is real, not a stale expectation: the constant branch damps
-   every `m>2` or `ell>1` mode regardless of `k_parallel`, while the kz branch
-   damps proportionally to `|k_z|`, so at `k_z -> 0` the truncation's top-moment
-   numerical mode is left undamped and the branch selector returns it. GKX's
-   default is therefore load-bearing and is **not** changed to match GX.
+   **Measured disposition, corrected 2026-09-07.** A first attempt to measure
+   this ran against **jax 0.9.2**, below the `jax>=0.10.1` floor `pyproject.toml`
+   declares, and reported nine failures. Eight of those were the stale
+   environment, not the flip: on unmodified `main` the same interpreter fails
+   `tests/unit/objectives/test_autodiff_solver_objectives.py` with
+   `TypeError: eig() got an unexpected keyword argument 'enable_eigvec_derivs'`
+   — the opt-in `gkx.objectives.core` needs and older jax rejects — and four
+   Hermite-hierarchy gates fail downstream of it. The earlier claim in this plan
+   that the constant branch is load-bearing *because zero-drive damping fails
+   without it* is **withdrawn**: those gates pass with the flip once the
+   environment conforms.
 
-   What to do instead:
+   Re-measured in a clean venv on jax 0.10.2, with
+   `JAX_ENABLE_X64=true GKX_X64=1` as the nightly job sets:
 
-   - Keep `hypercollisions_const` as GKX's default; document beside it that GX
-     defaults to the kz branch, so a Python caller comparing against GX must
-     select it explicitly.
-   - Add a gate that every deck used for GX comparison selects the kz branch
-     with `hypercollisions_const = 0`. The shipped parity decks already do;
-     the gate stops that drifting silently.
-   - `p_hyper_m` is a separate decision with no such counter-argument. It
-     affects only Nm < 40, so it changes the Nm rungs {16, 24, 32} and the
-     W7-X deck (Nm=16), not the Cyclone parity deck (Nm=48). Resolve it by
-     measurement: run those rungs both ways and report which reproduces GX,
-     rather than assuming GX's choice is the right one for GKX.
+   | Tree | `tests/unit/{objectives,linear,operators}` + `tests/validation/physics_gates` |
+   |---|---|
+   | `main` unmodified | **all pass**, exit 0 |
+   | defaults flipped to GX's | fails `test_linear.py::test_shift_invert_nearest_pair_passes_physical_outer_residual` — `RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.98747, tolerance=0.06` |
+
+   The flip run stopped at that first failure (`--maxfail=1`), so the **full
+   blast radius is still unmeasured**. What is established: the flip is not
+   free, and it degrades a Krylov eigenpair's outer residual by more than an
+   order of magnitude past its gate, which is a solver-conditioning consequence
+   rather than the physical argument previously given here.
+
+   Next action for this item, in order:
+
+   1. Re-run the flip without `--maxfail` to get the true failure set.
+   2. Decide from that, not from the count: if the only casualty is
+      shift-invert conditioning, the flip may still be right with a
+      preconditioner or tolerance change; if physics gates fall, it is not.
+   3. `p_hyper_m` remains a separate decision (GX `min(20, Nm/2)` versus GKX's
+      fixed 20.0, differing only for Nm < 40). It does not touch the Nm=48
+      parity deck, so settle it on the Nm ∈ {16,24,32} rungs and the W7-X deck.
 
    Neither item explains the Nl swing, so neither blocks step 5.
+
 7. Fix the remaining cause in its own PR with a tier-2 row.
 
 Exit: a convergence table as a ledger artifact, the anomaly gone or its cause

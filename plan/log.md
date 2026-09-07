@@ -10156,3 +10156,56 @@ deck, since it does not touch the Nm=48 parity deck.
 The experiment worktree and branch were deleted; nothing was committed to
 `src/`. No claim here about the Nl 24->32 swing, which remains open and needs
 runs.
+
+## 2026-09-07 — correction: the hypercollision measurement was taken below the jax floor
+
+Withdrawing the disposition recorded earlier today in "Phase 0.5.6 tested and
+revised". That entry reported nine gate failures from flipping
+`hypercollisions_const`/`hypercollisions_kz` to GX's defaults, and concluded
+from `test_zero_drive_is_damped_at_every_hermite_truncation` that GKX's constant
+branch is load-bearing. **Eight of those nine failures were the environment.**
+
+The interpreter used was **jax 0.9.2**, below the `jax>=0.10.1` floor
+`pyproject.toml` declares. On *unmodified* `main` that interpreter fails:
+
+- `tests/unit/objectives/test_autodiff_solver_objectives.py`, four tests, with
+  `TypeError: eig() got an unexpected keyword argument 'enable_eigvec_derivs'`
+  at `src/gkx/objectives/core.py:348`. That opt-in first shipped in jax 0.10.1
+  and the source comment says so.
+- `tests/validation/physics_gates/test_hermite_hierarchy_physics.py`, four
+  tests, downstream of the same missing capability.
+
+Confirmed the same 8 failures with `JAX_ENABLE_X64=true` and with
+`JAX_ENABLE_X64=true GKX_X64=1` (the nightly job's environment), so it was not a
+precision flag. `pyproject.toml` has no `addopts`, so this is what a plain
+`pytest` does.
+
+Re-measured in a fresh venv on **jax 0.10.2**, `JAX_ENABLE_X64=true GKX_X64=1`,
+over `tests/unit/objectives`, `tests/validation/physics_gates`,
+`tests/unit/linear`, `tests/unit/operators`:
+
+| Tree | Result |
+|---|---|
+| `main` unmodified | all pass, exit 0 |
+| defaults flipped to GX's | first failure `test_linear.py::test_shift_invert_nearest_pair_passes_physical_outer_residual`, `RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.98747, tolerance=0.06` |
+
+The flip run stopped there under `--maxfail=1`, so the true failure set is still
+unmeasured. The zero-drive Hermite gates **pass** with the flip on a conforming
+jax, so the mechanism argument previously given is retracted. What stands: the
+flip is not free, and it pushes a Krylov outer residual an order of magnitude
+past its gate — a conditioning consequence, not the physical one claimed.
+
+Actions taken: plan.md 0.5.6 rewritten with the retraction, the corrected table
+and a three-step next action; plan.md 0.1 gains an environment rule, since a
+measurement below the floor is not evidence.
+
+Housekeeping: the experiment had left
+`src/gkx/operators/linear/params.py` modified in the `phase04-ledger` worktree
+(the machine rebooted mid-run, before the revert). Reverted; that worktree backs
+#213 and its tree is again source-clean. `/tmp` was cleared by the reboot, so
+the venv was rebuilt.
+
+Environment note for whoever resumes: office
+(`plasmaworkstation.physics.wisc.edu:3281`) has now been unreachable on
+2026-09-05, 06 and 07. Local load hit 117 on 14 cores after the reboot; check
+`uptime` before starting a sweep.
