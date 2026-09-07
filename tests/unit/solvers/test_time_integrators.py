@@ -470,36 +470,35 @@ def test_integrate_linear_explicit_show_progress_and_max_mode(capsys) -> None:
     assert np.asarray(t).shape[0] >= 2
 
 
-def test_integrate_linear_explicit_adaptive_dt_completes() -> None:
-    # fixed_dt=False with a physical frequency bound exercises the adaptive CFL
-    # dt selection inside the stepping loop.
-    g0, grid, geom, params, cache, _n_l, _n_m = _tiny_linear_case()
-    time_cfg = eti.ExplicitTimeConfig(
+@pytest.mark.parametrize("fixed_dt", [True, False])
+@pytest.mark.parametrize("diagnostics", [True, False])
+@pytest.mark.parametrize("method", ["rk3", "rk4"])
+@pytest.mark.parametrize("jit", [False, True])
+def test_linear_explicit_stops_at_requested_time(
+    fixed_dt, diagnostics, method, jit
+) -> None:
+    """A nonintegral horizon requires a shortened final step in both facades."""
+    g0, grid, geom, params, cache, *_ = _tiny_linear_case()
+    cfg = eti.ExplicitTimeConfig(
         t_max=0.1,
-        dt=0.05,
-        method="rk3",
+        dt=0.03,
+        dt_max=0.03,
+        dt_min=0.02,
+        fixed_dt=fixed_dt,
+        cfl=1e3,
+        method=method,
         sample_stride=1,
-        fixed_dt=False,
-        dt_min=1.0e-4,
-        dt_max=0.05,
-        cfl=0.8,
     )
-    t, phi, gamma, omega = eti.integrate_linear_explicit(
-        g0,
-        grid,
-        cache,
-        params,
-        geom,
-        time_cfg,
-        mode_method="z_index",
-        jit=False,
-        show_progress=False,
+    solve = (
+        eti.integrate_linear_explicit_diagnostics
+        if diagnostics
+        else eti.integrate_linear_explicit
     )
-    t = np.asarray(t)
-    assert t.shape[0] >= 1
-    assert np.all(np.isfinite(t))
-    assert np.all(np.isfinite(np.asarray(phi)))
-    assert float(t[-1]) <= 0.1 + 1.0e-9
+    result = solve(g0, grid, cache, params, geom, cfg, jit=jit)
+    np.testing.assert_allclose(result[0], [0.03, 0.06, 0.09, 0.1], atol=1e-12)
+    assert np.all(np.isfinite(result[1]))
+    if diagnostics:
+        np.testing.assert_allclose(result[-1].dt_t, [0.03, 0.03, 0.03, 0.01])
 
 
 def test_cfl_host_scales_read_inside_a_trace_that_touched_nothing_physical() -> None:
