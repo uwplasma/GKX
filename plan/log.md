@@ -9427,3 +9427,20 @@ test, data or release change; no GPU job; office unreachable.
 Next: an independent collaborator writes the authoritative plan from the four
 inputs; then Phase 0 (merge #197, #199, the f32 stack; split #202; API
 contracts; ledger scaffold; the convergence investigation).
+
+## 2026-09-06 — one authoritative plan
+
+Independent-reviewer consolidation. Branch `plan/authoritative-20260906`,
+PR [#206](https://github.com/uwplasma/GKX/pull/206) against main a99dac89. Folds #198, #203, #204 and #205
+into a single 983-line `plan.md` (phases 0–7, evidence ledger, ranked
+references, statistics protocol, EM ladder, compute budget, checklist); brings
+the 2026-09-04 audit, the 2026-09-05 external review, the full logbook, the PR
+ledger and the release-scope warning onto this branch; removes the archived
+pre-2026-08-30 plan and the history-rewrite plan; points the docs at main.
+#198, #203, #204 and #205 closed with a pointer here; branches kept.
+
+Verified: 134 release gates, eleven checkers, strict Sphinx, ruff. No solver,
+test, data or release change; no Phase 0 work started; no GPU job launched.
+
+Next: maintainer review of #206; then Phase 0 step 0.1 (rebase and merge
+#197).
