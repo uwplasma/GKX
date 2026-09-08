@@ -10528,3 +10528,48 @@ shipped-deck gate from `load+validate` to `prepare` with a recorded inventory
 of which decks can be prepared and why the rest cannot.
 
 Phase 0.2 is now closed except the f32 geometry tolerance in 0.2.4.
+
+## 2026-09-07 — Phase 0.2 closed: prepare usability, and the suite's precision floor
+
+Two more PRs, stacked so they land in order behind #214.
+
+**[#216](https://github.com/uwplasma/GKX/pull/216) — the prepare refusal now has a
+way out.** `gkx.prepare` compiles one scan of a fixed length and refuses a deck
+whose `run_to` is `"saturation"`. Refusing is right: dropping the stop condition
+silently would return a simulation that integrates past where the deck asked it
+to stop. But the refusal was a dead end, and every shipped nonlinear deck sets
+saturation stopping, so `gkx.prepare` had **no working nonlinear example in the
+tree** while the README advertised preparing a case for reuse. The message now
+names both escapes (`steps=N`, or `run_to = "t_max"`) and what each costs. Two
+gates: one pins that the named escape actually prepares the deck, one records
+that no shipped deck fails `prepare` for a reason outside the two understood
+kinds. Negative control: the bare one-line message fails the escape gate only.
+
+**[#217](https://github.com/uwplasma/GKX/pull/217) — the s-alpha gate was testing
+the number format.** It asserted `abs(bmag.min() - 1/(1+eps)) < 1e-9` and failed
+at default precision by `5.9604645e-08`, which is `2**-24`, one float32 epsilon.
+The tolerance now scales with the dtype: `max(1e-9, 8*finfo(dtype).eps)`. In
+float64 that is still exactly 1e-9, so **no physics gate is loosened**. It keeps
+its teeth — a factor 1.0001 perturbation of the field-strength model fails at
+both precisions; 1.000002 fails only under float64, because the induced 1.65e-7
+shift is genuinely below float32 resolution.
+
+**The wider finding: this suite is x64-only in practice and nothing said so.**
+At default precision on jax 0.10.2, 17 tests fail — nonlinear window AD/FD,
+Krylov preconditioner and long-horizon propagator, the EM zonal solve, two
+geometry contracts. Their tolerances are float64-scale by nature; chasing each
+would weaken gates that work. `tests/conftest.py` now writes the precision in
+force to stderr when a switch is missing, and stays silent otherwise. It has to
+be stderr: `pytest.ini` passes `-q --disable-warnings`, so a plain `pytest`
+suppresses both a report header and a warning. Nothing is skipped, no tolerance
+relaxed.
+
+Phase 0.2 is now complete. Standing chain, each green before the next was cut:
+#214 -> #216 -> #217.
+
+Open in this lane: #206 (plan), #213 (ledger), #214, #215 (CONTRIBUTING), #216,
+#217. All were CLEAN with 41 checks when last polled.
+
+Still open overall: 0.3.4 HSX (needs a GPU or the row goes), 0.5 velocity
+convergence (blast radius unmeasured, `--maxfail=1` truncated the run), 0.6
+office unreachable four days.
