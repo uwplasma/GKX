@@ -16,6 +16,18 @@ or install the development checkout:
    cd GKX
    pip install -e .
 
+Precision and nonlinear gradients
+---------------------------------
+
+The compressed nonlinear bracket removes shared singleton batch axes during
+CPU compilation to avoid a JAX/jaxlib 0.10.2 Linux float32 reduction crash
+(`PR 196 <https://github.com/uwplasma/GKX/pull/196>`_). Output shapes and the
+discrete bracket are unchanged; GPU compilation retains its original layout.
+The periodic/linked heat-flux gradient tests must pass, including in float32;
+CPU isolation makes any renewed crash a test failure, not an exemption.
+Use ``JAX_ENABLE_X64=true`` before Python starts when float64 is needed, and
+check precision and resolution convergence for your observable.
+
 Executable demo
 ---------------
 

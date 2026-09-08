@@ -856,6 +856,8 @@ recursive = true
 # combined_ky belongs in the scan-level set for a measured reason and not a
 # defensive one: it routes to the combined-ky solver only for axis="ky", so
 # axis="hermite" reaches the worker and failed there too.
+# 88910 -> 88925: CPU-only singleton-axis lowering repairs the measured f32
+# bracket VJP crash while retaining the GPU layout and temporary-memory cost.
 # 88910 -> 88968: restoring the per-step end-damping contract 79064c4d deleted
 # (#192, shipped in 2.0.0). 44 lines are the `dt` argument threaded back from
 # each integrator to RHS scalar assembly -- there is no cheaper place to put it,
@@ -895,7 +897,11 @@ recursive = true
 # 89098 -> 89114: the same prepare-refusal message, counted package-wide.
 # +3 from merging main (the Laguerre finite guard and CONTRIBUTING.md)
 # into the consolidated branch; measured, not assumed.
-baseline = 89117
+# Combined #197/#199/#201: 88977 after #199's six-line reduction; #208 adds 4.
+# Consolidated: #209's approved repair stack plus #211's species-state AD fix,
+# landed together because both move this counter. Measured union, not either
+# branch's figure.
+baseline = 89136
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -977,6 +983,12 @@ recursive = true
 # seeded mirror record and the generator-less performance file. All seven
 # reproduce today; the gate is so they keep doing so. Verified negatively:
 # editing KBM from 20.0% to 18.0% fails it.
+# 86377 -> 86426: #196 added a backend-crash skip in the existing nonlinear tests.
+# 86426 -> 86434: replace its unbounded version skip with actual subprocess
+# execution, exact observed-failure classification and three negative guard
+# tests. No new files; unknown versions/errors now fail instead of disappearing.
+# 86434 -> 86462: five broadcast-shape primal/both-operand VJP comparisons;
+# remove the crash exemption now that affected CPU application tests pass.
 # 86377 -> 86568: retain both main's 120-line README parity gate (#193)
 # and #197's 191-line net increase over their shared 86257-line baseline.
 # Measured after the history-preserving main integration; no tests removed.
@@ -1048,7 +1060,13 @@ recursive = true
 # baseline is the measured union, not either branch's figure.
 # +1 from merging main (the Laguerre finite guard and CONTRIBUTING.md)
 # into the consolidated branch; measured, not assumed.
-baseline = 87277
+# Combined stack: 86568 - 1 (#199) + 85 (f32 stack) - 1 (#208); #207 is neutral.
+# Consolidated: #209's approved repair stack plus #211's species-state AD fix,
+# landed together because both move this counter. Measured union, not either
+# branch's figure.
+# +14: eager/outer-jitted EM initial-state derivative identity, serial and pmap.
+# Consolidated #209 + #211; measured union after both merges.
+baseline = 87376
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -926,6 +926,51 @@ def test_bpar_contributes_to_chi():
     assert np.max(np.abs(np.asarray(dG - bracket_expected))) < 1.0e-5
 
 
+@pytest.mark.parametrize(
+    "batch", [(1, 2, 3), (2, 1, 3), (2, 2, 1), (2, 2, 3), (1, 1, 1)]
+)
+def test_real_fft_singleton_batch_axes_preserve_bracket_and_vjp(batch):
+    """Reshape optimization preserves broadcast outputs and both operand adjoints."""
+    from gkx.operators.nonlinear.brackets import (
+        _spectral_bracket_real_fft_core,
+        _spectral_bracket_multi_real_fft,
+    )
+
+    with jax.enable_x64():
+        grid = build_spectral_grid(GridConfig(Nx=8, Ny=8, Nz=4))
+        shape = (grid.ky.size, grid.kx.size, grid.z.size)
+        rng = np.random.default_rng(31)
+        state = jnp.asarray(rng.normal(size=batch + shape), dtype=jnp.complex128)
+        fields = jnp.asarray(
+            rng.normal(size=(3, batch[0], batch[1], 1) + shape), dtype=jnp.complex128
+        )
+        kwargs = dict(
+            kx_grid=grid.kx_grid,
+            ky_grid=grid.ky_grid,
+            dealias_mask=grid.dealias_mask,
+            kxfac=1.0,
+        )
+
+        def original(g, c):
+            return _spectral_bracket_real_fft_core(g, c, multiple_fields=True, **kwargs)
+
+        def reduced(g, c):
+            return _spectral_bracket_multi_real_fft(g, c, **kwargs)
+
+        reference, pullback = jax.vjp(original, state, fields)
+        actual, reduced_pullback = jax.vjp(reduced, state, fields)
+        assert actual.shape == (3,) + state.shape
+        np.testing.assert_allclose(actual, reference, rtol=2e-13, atol=2e-13)
+        cotangent = jnp.asarray(
+            rng.normal(size=actual.shape) + 1j * rng.normal(size=actual.shape),
+            dtype=actual.dtype,
+        )
+        for got, expected in zip(
+            reduced_pullback(cotangent), pullback(cotangent), strict=True
+        ):
+            np.testing.assert_allclose(got, expected, rtol=2e-13, atol=2e-13)
+
+
 def test_bracket_multi_matches_separate():
     grid = build_spectral_grid(
         GridConfig(Nx=4, Ny=4, Nz=1, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
