@@ -508,6 +508,13 @@ The package-wide CI coverage gate is at least 95%. Physics, convergence,
 comparison, differentiability, and performance gates are required in addition to
 line coverage.
 
+## Contributing
+
+Bug reports, decks that misbehave and physics questions are all welcome. Start
+with [CONTRIBUTING.md](CONTRIBUTING.md): it covers the environment this code
+needs (jax >= 0.10.1, and the two precision variables the nightly job sets),
+what a change is expected to carry, and how published numbers are gated.
+
 ## License
 
 GKX is distributed under the [MIT License](LICENSE).
