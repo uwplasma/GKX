@@ -1,10 +1,63 @@
-# Pull-request ledger, #1-#162
+# Pull-request ledger
 
-Generated from the GitHub pull-request list at the audited revision `e19336dc`.
-160 pull requests exist in the range #1-#162: 152 merged, 8 closed unmerged. Numbers absent from GitHub: #2, #9.
+## Current disposition, 2026-09-07
 
-The detailed per-pull-request audit lives in `plan/pr_audit.md`; this file is the
-compact index the handoff plan requires and does not duplicate it.
+Maintainer approved repair merges. #197 (`ca4e5169`), #199 (`0c016bd1`)
+and #207 (`99963b45`) are merged. #196/#200/#201/#208 remain open pending
+fresh CI on integration [#209](https://github.com/uwplasma/GKX/pull/209),
+head `23710471`. Its complete tree is identical to independently tested
+`1c7c7472`, and it preserves all four approved heads for a merge-commit merge.
+Strict base checks apply even to administrators; auto-merge is disabled.
+#206 stays the authoritative open plan; #202 stays open for bounded splits.
+#210 (`19515c2e`) extracts the nonfinite Laguerre guard from #202: negative
+controls fail on main and all 50 core-numerics tests pass after the fix.
+It awaits CI separately; it is not part of #209's tested integration tree.
+#211 (`24eca522`) extracts traced species-state placement from #202: eager and
+outer-JIT homogeneity identities pass in separate f32/f64 processes. GPU rerun
+is deferred while office GPUs are occupied; no EM-physics promotion implied.
+#212 (`37a9c0be`) adds the explicit differentiable rate opt-in, preserves legacy
+defaults and unifies the two damping resolvers. Focused tests and strict docs
+pass; broader validation is recorded in the log. Reference migration remains open.
+
+Safely removed 18 remote and 85 unused local branches with exact-tip checks
+against merged PRs and a verified full-history bundle. No worktrees removed;
+unmerged/divergent work and open-PR/worktree branches retained. Recovery paths,
+commands, full inventories and remaining gates are in [log.md](log.md).
+
+## Execution inventory, 2026-09-06
+
+GitHub inventory after the first extractions: 202 PRs, nine open:
+authoritative plan #206 and eight code PRs (#196, #197, #199, #200, #201,
+#202, #207, #208). #198, #203, #204 and #205
+are closed, superseded by #206; their branches remain available.
+
+Phase 0.1 starts with #197. Commit `73a8a8c4` integrates main `a99dac89`
+without rewriting the published branch or changing its solver implementation.
+Local regression checks and the full eleven-mode Cyclone replay pass; remote
+CI and maintainer merge approval remain separate gates. #199 updated to
+`4e78e7bb`; #201 independently rechecked on Mac CPU, office CPU/GPU and logical
+CPU sharding. #207 extracts Fourier/link-map oracles; #208 extracts endpoint
+clipping from #202. WIP branch at `48b90099` preserves the two unpushed commits.
+No PR was merged during this execution step.
+See [log.md](log.md) for commands and negative-control evidence.
+
+## Historical inventory, #1–#197
+
+Reconciled with GitHub on 2026-09-04 at `a99dac89`: 191 pull requests,
+180 merged, 9 closed unmerged, 2 open. Issue-only or absent numbers in this
+range: #2, #9, #173, #178, #192, #194. The original #1–#162 inventory was
+recorded at `e19336dc`; its entries remain below.
+
+Historical detailed reviews live in `plan/pr_audit.md`; the September review is
+`plan/baseline/review_2026_09_04.md`. Listing a merge is not an independent
+scientific certification of its changes.
+
+## Open at this audit
+
+| PR | Head | Title |
+|---:|---|---|
+| [#196](https://github.com/uwplasma/GKX/pull/196) | `fdfb1a13` | Skip the compressed nonlinear gradient test where jaxlib 0.10.2 segfaults |
+| [#197](https://github.com/uwplasma/GKX/pull/197) | `9074dd87` | fix: restore the per-step end-damping contract that 2.0.0 removed (#192) |
 
 ## Closed without merge
 
@@ -18,6 +71,7 @@ compact index the handoff plan requires and does not duplicate it.
 | #106 | Deduplicate the VMEC geometry facade |
 | #133 | Fix runtime startup profiler handoff |
 | #159 | geometry: add the canonical VMEX WOUT adapter |
+| #182 | refactor: rejoin four modules that were split rather than encapsulated |
 
 ## Merged
 
@@ -175,3 +229,31 @@ compact index the handoff plan requires and does not duplicate it.
 | #160 | geometry: add the canonical VMEX WOUT adapter |
 | #161 | docs: review open-ended mirror model admission |
 | #162 | geometry: remove synthetic Boozer closure |
+| #163 | plan: replace the root plan and rebaseline current main |
+| #164 | core: inventory the import graph and delete the toml shim |
+| #165 | api: give Case and the result types their contracted behaviour |
+| #166 | api: make PreparedSimulation a real public object |
+| #167 | cli: complete the six product commands |
+| #168 | geometry: evict the parity and sensitivity report builders |
+| #169 | solvers: remove Diffrax from the base product |
+| #170 | tests: consolidate the nonlinear unit domain from nine files to three |
+| #171 | docs: restructure the README around install and usage, and cut AI prose patterns |
+| #172 | tests: consolidate the solvers unit domain from nine files to three |
+| #174 | tests: add a shared fixture layer for the linear domain, and measure its reach |
+| #175 | tests: consolidate the runtime integration domain from eleven files to four |
+| #176 | tests: consolidate the physics-gate domain from ten files to four |
+| #177 | Say what the closed VMEX mirror ratio actually measures |
+| #179 | Make the tree ruff-format clean, and gate it in CI |
+| #180 | examples: repair the differentiable-geometry bridge and stop gating on deleted capability |
+| #181 | plan: measure what src/gkx lines actually do, and plan simplification from it |
+| #183 | plan: measure the directory structure and plan a flat source layout |
+| #184 | Measure import laziness in a fresh interpreter, not in a polluted one |
+| #185 | refactor: flatten containers, fuse split modules, and lift the case type |
+| #186 | docs: gate the documented first run and the reference links |
+| #187 | perf: compile the seed nonlinear diagnostic once instead of per primitive |
+| #188 | release prep: first-run gate on the release wheel, and bump to 2.0.0 |
+| #189 | Keep every scan-level parallel strategy out of the per-ky solve |
+| #190 | fix: seed linear_rhs_demo on a mode the grid actually has |
+| #191 | Build the closed VMEX mirror case on a solved equilibrium, and delete the record with no generator |
+| #193 | test: recompute the README's parity table from the scans it cites |
+| #195 | Make the regenerated release artifacts reproducible and fail CI on staleness |

@@ -1,4 +1,8 @@
-# Work log
+# GKX logbook
+
+Append-only record. The active plan is [plan.md](../plan.md); dated audits are in
+[baseline/](baseline/) and research reports in [research/](research/). Entries are
+observations at their stated revisions, not current validation claims.
 
 ## 2026-08-21 — repository and runtime audit
 
@@ -4461,3 +4465,6379 @@ Three things worth keeping:
 
 Outcome:
 - accepted. The remaining compilations are exactly those two regions.
+
+## 2026-09-04 — Current-state review and publication roadmap
+
+Baseline: `a99dac898334414d31733f6d286bd4c36983702e` (2.0.0).
+Branch: `plan/research-publication-20260904`. No solver changes or merges.
+
+Scope: reconcile code/PRs/plans and scientific claims; run bounded CPU/GPU
+diagnostics; replace the accumulated queue with an actionable research plan.
+Full long-run validation and implementation of the new milestones are not
+claimed complete by this review.
+
+Changes:
+- root plan reduced from 2,881 lines; R0–R9 dependencies, numerical/physics benchmark
+  matrix, CPU/GPU sharded primal/VJP gates, statistical stopping, source/data
+  slimming, student/research examples, VMEX/ESSOS and publication acceptance;
+- old public program reduced to a roadmap link; false QA “passes all gates”
+  statement removed; README/public scope flags the current damping regression;
+- grouped documentation navigation; ledger through #197 and primary literature
+  update including iGENE/gyaradax, JAX sharding/AD and companion interfaces;
+- compact dated audit with commands, numbers, scope and raw-probe hashes;
+  no new tracked JSON, generated media, solver or test implementation.
+
+Evidence:
+- 191 PRs: 180 merged, 9 closed, 2 open (#196/#197). Main CI green despite the
+  reported end-damping/default-f32 issues; their repairs remain review work.
+- 2,738 tests collected; 12 selected analytic collision tests passed.
+- all 346 lazy root API names resolve in a fresh interpreter.
+- species/Hermite bounded trajectory and traced-projector tests: 2 passed on
+  local logical CPUs, 2 passed on office GPUs; no distributed gradient claim.
+- whole-state large probe: one GPU 0.495 s; two GPUs auto 2.538 s / kx 1.799 s;
+  identity passes, no speedup. Four-logical-CPU whole-state route safely skips.
+- tiny f64 finite-window compiler-memory check: block/plain value/gradient
+  parity on CPU/GPU; temporary memory 3.25×/6.17× smaller, runtime 1.78×/1.67×
+  higher. Tiny unsaturated seed and one timing sample; not physics validation.
+- normal full clone 14.53 MiB pack; mirror 276.66 MiB. Both differ from tracked
+  tree size; the <10 MiB ordinary-clone goal remains open.
+- Sphinx HTML `-W --keep-going`, `git diff --check`, package architecture and
+  repository-size checks pass. These checks do not close the physics gaps.
+
+Outcome: revised plan ready for maintainer review. Next: **R0**, independently
+review damping compatibility/rate migration and default-precision coverage,
+then rebaseline affected physics. Preserve the negative sharding/optimization
+evidence. Do not restart the already-landed public API or Diffrax removal work.
+
+## 2026-09-04 — broad-physics destination and execution gates
+
+Follow-up to the same-day review on `plan/research-publication-20260904`, PR #198.
+The maintainer clarified the destination: research-grade ES/EM multispecies GK,
+advanced collisions/closures/Er and direct ESSOS fields with islands, not a
+deliberately small local solver. No solver or numerical reference changed.
+
+Changes and evidence:
+- Revised the destination and combination-level capability ledger; added C4
+  nonlinear Jorge Coulomb, E0–E2 shear/Er/ambipolarity, coupled finite-beta EM
+  gates and R8a–e nested realization/non-flux geometry/background/island AD.
+- Kept efficient local GK and made island-model development independent of
+  completing R7 optimization. Added conservative field/spatial operators,
+  equilibrium residual, finite-beta plasma-current and topology-event contracts.
+- Added collision/Er/island student/research presets, concrete EM benchmark
+  sources, experimental-validation criteria and publication-scope boundaries.
+- Confirmed office GX equals upstream HEAD `3865a537`; preserved its local
+  Makefiles. Found the explicit m-split conserving-collision rejection and
+  recorded historical species-route speedup separately from whole-state timings.
+- Broadened primary-source references. Direct GENE-X publisher access blocked;
+  indexed excerpts/preprint abstract suffice for this architectural plan, not
+  for the future detailed derivation audit.
+- Corrected README's blanket collision-validation statement to the artifact's
+  actual offline eight-moment algebra scope and shipped like-species table limits.
+- Kept the <10 MB clone goal, explicitly 10,000,000 bytes, distinct from tree size.
+
+Checks: Sphinx HTML with `-W --keep-going` passed after correcting a heading
+underline; package architecture and repository-size policy checks passed;
+`test_species_hermite_plan_factors_species_first_with_exact_hermite_division`
+passed (`-k species_hermite_plan`); `git diff --check` passed. The local amendment
+checks used `/opt/local/bin/python` (JAX 0.9.2, Sphinx 9.0.4), not the different
+environment of the earlier timing probes. No new trajectory, GPU scaling or
+physics-validation claim follows from this planning-only test.
+
+Next remains R0; R1 contracts now cover the full scientific destination. Full
+workload profiling, independent physics campaigns and predictive/optimization
+acceptance remain explicit open milestones. Keep PR #198 open; do not merge.
+
+## 2026-09-05 — R0 first execution slice: damping contract certification
+
+Approved plan; execution active. Code PR **#199** (`b5dca15a`) is stacked on
+**#197** (`9074dd87`), not main. Roadmap/log remain on PR #198. All three are
+open; no merge, reference regeneration or numerical implementation change.
+
+Resume locations:
+- `/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`, branch
+  `fix/r0-damping-path-consistency`; clean/pushed at b5dca15a.
+- `/Users/rogeriojorge/local/GKX-worktrees/research-plan-20260904`, branch
+  `plan/research-publication-20260904`; authoritative plan/log.
+- Office snapshot `/home/rjorge/gkx-r0-damping-20260904.S0ny7R`, created by
+  `git archive origin/fix/end-damping-per-step | ssh office 'tar -x -C ...'`;
+  exact source SHA 9074dd87. No background solver job remains from this slice.
+
+Independent findings:
+- Per-step strength is not an exact fraction removed by arbitrary RK: for an
+  isolated scalar damped mode, `G_next=R(-A*d(z))*G`. Added analytic polynomial
+  and JVP tests at dt=0.002/0.2 for Euler/RK2/RK3/RK4 (absolute 2e-15).
+- The main nonlinear RHS does not accept/pass dt either. The four missing
+  field-supplied call sites listed in #197/#194 are not the whole scope.
+  Documented the mixed legacy contract rather than changing nonlinear runs
+  under a compatibility patch. Coupled H/fields are not the scalar test model.
+- Corrected input/normalization/operators/numerics and repeated test prose.
+  Source Python -6 lines, test Python -1 line; no new file, assertion removal
+  or manifest relaxation. The sentinel's gamma is a compatibility reference,
+  not an independently derived physical benchmark value.
+
+Commands/results (run from the code worktree unless qualified):
+1. `PYTHONPATH=src JAX_ENABLE_X64=true python -m pytest -q
+   tests/validation/physics_gates/test_end_damping_physics.py`: **1 passed**;
+   local `/opt/local/bin/python`, JAX 0.9.2. 20,000 steps at dt=0.002.
+2. Same sentinel on office, `CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true
+   PYTHONPATH=src /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+   tests/validation/physics_gates/test_end_damping_physics.py
+   --junitxml=sentinel-gpu.xml`: **1 passed**, Python 3.11.15/JAX 0.10.2.
+   XML SHA256 `0239dfcdcd6d7bbeca04a61d112e2e1efc3c24b15d67d7a63261b116cf36f7af`.
+3. `PYTHONPATH=src python -m pytest -q tests/unit/linear/test_linear.py
+   -k 'end_damping_rk_stability or applies_linked_end_damping_per_step'
+   --junitxml=/tmp/gkx-r0-damping-focused-20260905.xml`: **9 passed**.
+4. In an isolated interpreter replace `_scalar_params(params,dtype,dt)` by
+   its original call with `dt=None`, then run `pytest -x -k
+   end_damping_rk_stability` on that test file: **expected failure**,
+   amplification 0.9996 vs 0.8. No source mutation persisted.
+   `/tmp/gkx-r0-damping-mutant-20260905.xml` SHA256
+   `16233a6b177fe881d49301d0a51144a91df8c5a7a025d1f4fd23dd5c0f128b32`.
+5. Ruff 0.13.1 check/format on edited Python, Sphinx `-q -b html -W
+   --keep-going docs /tmp/gkx-r0-damping-docs-20260905`, package architecture,
+   repository-size checks and `git diff --check`: **pass**. CI's newer Ruff
+   and full-suite status are not inferred from these focused checks.
+
+Next: inspect #196 on an isolated branch, reproduce the f32 backend issue in
+subprocesses, probe known-installed versions, bound skips to actual evidence
+and retain default-precision coverage. Then complete linear/nonlinear/eigen/
+implicit/sharded damping route coverage before #194 migration/rebaselining.
+Do not reinterpret the completed smoke/math/compatibility checks as full
+physics, all-PR independent validation or completed R0.
+
+## 2026-09-05 — R0 default-f32 application coverage
+
+PR **#200**, `test/r0-f32-backend-probe`, e36e5bd8, stacked on #196 fdfb1a13.
+Worktree `/Users/rogeriojorge/local/GKX-worktrees/r0-f32-backend-probe` is pushed;
+no numerical implementation changed. PRs #196–#200 remain unmerged.
+
+Evidence changed the action: #196 skipped all CPU versions >=0.10.2, but the
+actual compressed periodic/linked gradient tests pass on Mac ARM64 0.10.2 and
+0.11.1. Office Linux x86-64 0.10.2 actually SIGSEGVs on both. The tiny JAX-only
+rank-7 multiply/reduce reproducer crashes on office (-11), not on the Mac;
+using a passing proxy as proof of application safety would be insufficient.
+
+Implemented bounded subprocess execution for actual f32 CPU tests, disabling
+core dumps. Only actual SIGSEGV on exact Linux/x86-64/jaxlib 0.10.2 becomes
+xfail. Other errors/architectures/versions fail; successful runs pass. Added
+the default-f32 test command to Python-floor CI. Three unit tests ensure future
+version, Mac and ordinary Python failures are not hidden. Test lines +8, no new
+files; source unchanged. Quickstart states the observed defect, containment and
+tested f64 alternative without claiming global backend safety.
+
+Reproduction:
+- Local scratch `/tmp/gkx-f32-20260905.alM6Fy/jax0102/bin/python`: Python 3.11
+  venv with system site packages and isolated jax/jaxlib 0.10.2. Other shared
+  packages declare incompatible JAX bounds; those packages were not used and
+  were not modified. This is workload evidence, not a clean-install certification.
+- Local `/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`: clean Python 3.12
+  venv, jax/jaxlib 0.11.1, `pip install -e '.[dev]'` from the code worktree.
+- Office `/home/rjorge/gkx-r0-f32-20260905.qIKcGz`: archive fdfb1a13 plus the
+  edited test file copied from e36e5bd8. Interpreter
+  `/home/rjorge/venvs/gkx-nl/bin/python`, Python 3.11.15/JAX 0.10.2.
+- Run `PYTHONPATH=src JAX_ENABLE_X64=false <python> -m pytest -q -rx
+  tests/unit/nonlinear/test_nonlinear.py -k
+  'compressed_real_fft_heat_flux_window_gradient_matches_finite_difference or
+  isolation_does_not_hide' --junitxml=<report>`. Office also sets
+  `JAX_PLATFORMS=cpu`. Repeat with `JAX_ENABLE_X64=true` for f64.
+
+Results: Mac 0.10.2 f32 **2 passed**; Mac 0.11.1 f32 and f64 each **5 passed**
+(2 gradients + 3 classification checks); office 0.10.2 f32 **3 passed, 2 xfailed**
+(observed native crashes), f64 **2 passed**. The latter office test copy predated
+only classification/core-dump additions; physics checks are identical.
+
+XML provenance (local reports under the scratch root; remote under office root):
+| File | SHA256 |
+|---|---|
+| mac0102.xml | 21053dc63af6d453f07cf9df0169093a6d216dc242e870c2f685628ec0b5d2c4 |
+| mac0111-final.xml | 458256f53cde95e9d36d3a8bb2db432190bde7ce34d2a08d905d398b9badda6d |
+| mac0111-f64.xml | 590669de0321b16a2f245f46c595582788df2bf12f9f7bbbde11af676ba92622 |
+| linux0102-final.xml | 18fd45751e497e2d1432d333220b308f7ceb54badbcfdc6d9587c7d998a2c89a |
+| linux0102-f64.xml | c41b95d70cf0134bdf9b92086f0a5d4c43f081f24602f8d0fae5daced34d7060 |
+
+Checks: Ruff **0.16.4**, Sphinx HTML `-W`, architecture/size policies and
+whitespace passed. Also checked #199's edited Python formatting with 0.16.4;
+passes. #199 CI had successful hygiene/docs/mypy/floor and several test shards,
+but other shards remained running/queued: do not call full CI passed yet.
+No local/SSH process remains active; new GitHub CI needs status inspection.
+
+Next: probe newer Linux JAX in an isolated environment; investigate reducing
+problematic kernel rank/broadcasts or an upstream fix with full primal/VJP,
+physics identity and performance checks. Do not stop at xfail as the research
+solution. Finish damping route audit and rate/deck migration before rebaselining
+release physics. R0 stays in progress; no evidence here establishes all default
+precision workflows, a production nonlinear gradient horizon, or Linux 0.11.1 safety.
+
+## 2026-09-05 — R0 CPU bracket VJP repair, GPU regression rejected
+
+PR **#201**, `fix/r0-f32-bracket-rank`, commit
+`53d86f01e40fb5acb81eff9b1fd3af7205eeec06`, stacked on #200 e36e5bd8.
+Worktree `/Users/rogeriojorge/local/GKX-worktrees/r0-f32-bracket-rank`.
+Author/committer Rogerio Jorge; no merge. Five edited files, no new files;
+source +15 and test net +28 lines, explicit budget updates.
+
+Repair: squeeze only shared singleton batch axes of the multi-field compressed
+real-FFT bracket, then restore them. For squeeze maps Sg, Sc, So and original
+bracket B, the CPU expression is `So^-1 B(Sg g, Sc chi)`. Singleton reshapes
+are bijective and do not alter the spatial FFT axes, bracket arithmetic or
+broadcasted Hermite extent. Both operand VJPs are tested, including complex
+cotangents and five species/Laguerre/Hermite shapes. GPU uses original B.
+Selection uses [JAX platform_dependent](https://docs.jax.dev/en/latest/_autosummary/jax.lax.platform_dependent.html),
+resolved at lowering (not a Python default-backend check); official API docs
+were checked against the installed JAX implementation. Removed all SIGSEGV
+exemptions from the isolated actual f32 test. Quickstart explains the repair
+without claiming universal backend safety.
+
+**Rejected experiment:** unconditional squeeze cured the Linux 0.10.2 CPU
+application crash but worsened GPU VJP time and compiler temporary memory.
+Bracket benchmark: grid32^3, Ns=1,Nl=4,Nm=8, three fields, complex64, seed4,
+one warmup then seven synchronized samples. Office RTX A4000/JAX0.10.2:
+
+| Variant | Primal median (ms) | Value/VJP median (ms) | VJP temporary bytes |
+|---|---:|---:|---:|
+| Original, first experiment | 0.9203 | 3.0444 | 44,433,408 |
+| Unconditional squeeze (rejected) | 0.9949 | 3.4661 | 62,914,576 |
+| Original, CPU-only comparison | 0.9675 | 3.0594 | 44,433,408 |
+| Accepted CPU-only lowering | 0.9204 | 3.1302 | 44,433,408 |
+
+Do not claim a GPU speedup from this noisy microbenchmark. CPU Mac JAX0.11.1
+unconditional squeeze measured 20.06→17.98 ms/VJP at the same 125,829,120
+temporary bytes; that microkernel gain did not become a whole-window gain.
+
+Application profile reuses `build_window_case` and `make_window` from
+`tools/campaigns/nonlinear_gradient_window.py` with the shipped Cyclone t400
+deck overridden to 16^3, checkpoint=True, 32 steps, dt=.001, seed7 and complex64
+Gaussian amplitude .1. Compare original core (temporary alias replacement in
+`gkx.terms.nonlinear`) against repaired wrapper; clear JAX caches per variant,
+compile separately, one warmup, seven synchronized evaluations. This is a
+short, unsaturated nonzero-transport check, **not** a predictive transport or
+gradient-horizon benchmark. Compiler temporary bytes are not peak device RSS.
+
+| Backend | Old/new median (s) | Old/new temp bytes | Q / dQ per drive multiplier (both variants) |
+|---|---|---|---|
+| Mac CPU, JAX0.11.1 | 1.14516 / 1.16525 | 63,270,184 / same | -0.001556194853 / 0.001344901277 |
+| A4000, JAX0.10.2 | .090094 / .090297 | 27,522,176 / same | -0.001556183561 / 0.001344907796 |
+
+Reproduction/provenance:
+- Local scratch remains `/tmp/gkx-f32-20260905.alM6Fy`; interpreters
+  `jax0102/bin/python` and `jax0111/bin/python` as previous entry. Always use
+  `PYTHONPATH=src` from this worktree: the editable 0.11.1 install still points
+  at parent #200, so omitting it tests the wrong source.
+- Office snapshot `/home/rjorge/gkx-r0-f32-20260905.qIKcGz` now has #201
+  `brackets.py` and `test_nonlinear.py` copied over the earlier snapshot.
+  Bracket SHA256 `0ea48ced187f40b7867aa6138bd6a08561fdf8a2ba258420f64a689a98aae0c9`.
+  All reported office application tests use `/home/rjorge/venvs/gkx-nl/bin/python`.
+- `JAX_ENABLE_X64=false PYTHONPATH=src <python> -m pytest -q
+  tests/unit/nonlinear/test_nonlinear.py -k
+  'compressed_real_fft_heat_flux_window_gradient or isolation_does_not_hide'`:
+  **5 passed each** on Mac0.10.2, office CPU0.10.2 (`JAX_PLATFORMS=cpu`),
+  office GPU0.10.2 (`CUDA_VISIBLE_DEVICES=0`). No xfails.
+  An earlier selector matched only the three guards; that run is not used as
+  gradient evidence. `cpu-lowering-f32-actual.xml` is the corrected five-test run.
+- Mac0.11.1 `JAX_ENABLE_X64=true ... pytest -q
+  tests/unit/nonlinear/test_nonlinear_exb.py`: **51 passed**.
+- `JAX_ENABLE_X64=false ... pytest -q
+  tests/unit/parallel/test_parallel_linear_velocity.py -k
+  'species_hermite_rhs_reproduces or species_hermite_trajectory_and_fused'`:
+  **2 passed each**, Mac0.11.1 with
+  `XLA_FLAGS=--xla_force_host_platform_device_count=2`, office0.10.2 with
+  `CUDA_VISIBLE_DEVICES=0,1`. These establish primal sharded parity, not
+  arbitrary distributed VJP validity or scaling speedup.
+- Profilers in both scratch roots: `rank_profile.py 32 1 4 8` and
+  `window_rank_profile.py`, invoked with the same PYTHONPATH/precision/device
+  selection as above. CSVs retain compile time, all timing extrema and memory.
+- Separate clean office `jax0111/bin/python` (Python3.12/JAX0.11.1) passes the
+  tiny rank7 multiply/reduce proxy; application deps not installed there.
+  Do not infer application safety or change supported versions from this proxy.
+
+Selected raw evidence SHA256 (local L / office O scratch roots above):
+
+| File | SHA256 |
+|---|---|
+| L cpu-lowering-exb.xml | 479b687fa4b62a21b9038dc3f2e8fe732e9186999965afe849b680a9b9c06d93 |
+| L cpu-lowering-sharded-f32.xml | 6fe7494c05fac8e703e81100b9a1fd39c54003edc2c0cecd9cf549d32ab5b273 |
+| L mac0102-cpu-lowering-f32.xml | 028f50e7f24c589de88214411cde269eae5ad43b8b78b9e646d4ffeb9e79cca7 |
+| O cpu-lowering-f32-actual.xml | 83f1730d875483714829a5204104a2da485962dab5d5e42ff1ccb5929a82f614 |
+| O gpu-cpu-lowering-f32.xml | 9b350f5538c1448c0490d0f352c2d8b3061c21d38441350d2d7e03ccc3c50233 |
+| O gpu-cpu-lowering-sharded-f32.xml | 0a48c46e2121fa55d9a598e372cbfc20ea38f9be928991c079b71e572d6ff217 |
+| L rank_profile.py | ff3b1ac2e11c884e87407ba4953a4bcb9a1a46504475fa1bea98ac9aa1fd17c0 |
+| L window_rank_profile.py | 22f68f17c850c1025801a0870d96f26b924e6bd86077048fd8e9eef74d969865 |
+| O rank-gpu-f32.csv (rejected) | 56b0c81b6194e9d82b2857371de428b7828f940f5042fdbeace64de338b2007c |
+| O rank-gpu-cpu-lowering-f32.csv | d18cc1132ebf498cdfa929f527d60ce72c9276f96d7edc512ccf7ac76b0a5cac |
+| L window-mac-cpu-lowering-f32.csv | 5d6143f712e36014d3875cafa7fe4367ef4a41c9af830028fcee15ef4e4c342d |
+| O window-gpu-cpu-lowering-f32.csv | 8eb9252555e326fee9e86eada5554eb15ef48c2ef5c7b68b3b21bfeb0a6468cf |
+
+Ruff0.16.4 check/format, whitespace, architecture and repository-size gates,
+Sphinx HTML `-q -W` pass. First Sphinx run caught a short heading underline;
+fixed and rerun successfully. #199 still had two running test jobs and #200
+several queued/running at inspection; no observed failed checks, **not** a
+full-CI pass. #201 newly dispatched. No local/SSH jobs remain active.
+
+Next: inspect #199–#201 CI and their stack bases before any further work.
+Then complete the damping route audit (nonlinear, four field-supplied routes,
+eigen/implicit/sharded paths) and reconcile #194's rate migration separately.
+R0 remains open; broader precision/sharded AD and physics validation are not
+replaced by this targeted backend repair. Keep all PRs unmerged.
+
+## 2026-09-05 — R0 damping route audit changes the migration
+
+Previous turn: progress (#201 repair and pushed log). Current source audited:
+#199 `b5dca15a`, clean worktree
+`/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`.
+No solver or deck edited in this slice. #194 is an **issue**, not a PR.
+Checked its full body against source and executable probes; its proposed blanket
+deck rescale would change nonlinear rates and must be corrected before coding.
+
+Let A=damp_ends_amp, d the cached boundary profile, and choose a pure Hermite
+m=3 state so field moments vanish (H=G). Use all species, all Fourier cells,
+linked grid8^3, Nl=2,Nm=6, two kinetic species from the existing
+`_small_kinetic_electron_problem(linked=True)` fixture. Every term except end
+damping is zero. Compare each effective RHS with `r=-A*d*G` on cells with
+nonzero r. This is an algebraic contract probe, not a gyrokinetic instability
+benchmark. Results agree on Mac JAX0.11.1/two logical CPUs and office
+JAX0.10.2/two RTX A4000 GPUs, f64:
+
+| Route | Effective RHS / r at dt=.1 | at dt=.2 | Meaning |
+|---|---:|---:|---|
+| `assemble_rhs_cached(...,dt=dt)` | 10 | 5 | legacy A/dt |
+| serial `integrate_linear`, one Euler step | 10 | 5 | legacy A/dt |
+| `_build_implicit_operator` matrix, `(G-MG)/dt` | 10 | 5 | legacy A/dt |
+| `nonlinear_rhs_cached` | 1 | 1 | rate A |
+| Krylov `_apply_operator` | 1 | 1 | rate A |
+| supplied-fields assembly, no dt | 1 | 1 | rate A |
+| species-pmap `integrate_linear`, one Euler step | 1 | 1 | rate A: serial mismatch |
+
+All ratios asserted to 1e-9. Largest observed rounding was ~9e-15.
+At fixed physical time T the serial Euler map is `(1-A*d)^(T/dt)`;
+the rate-map Euler route is `(1-dt*A*d)^(T/dt) -> exp(-A*d*T)`.
+Thus equal dt refinement does not compare a fixed operator across routes.
+The earlier per-step RK tests certify the first contract, not the target model.
+
+Source corrections to the previous four-call-site account:
+- There are **five** calls to `assemble_rhs_cached_with_fields` outside its
+  definition. `solvers_linear_integrators.py:526` is the additional species-pmap
+  call; it omits dt. The existing electromagnetic trajectory test explicitly
+  leaves end_damping=0, so it cannot detect this defect.
+- `solvers_linear_implicit.py:617,637` belong to
+  `_build_field_corrected_shifted_preconditioner`, not the time-step operator.
+  `_build_implicit_matvec` at line700 passes `state.dt_val` to linear RHS.
+  Inexact preconditioner structure must not be confused with the equation solved.
+- `parallel/integrators.py:577` is nonlinear shard-local assembly (rate), and
+  `solvers_linear_parallel_electrostatic.py:833` is the species-sharded RHS
+  (rate). The distinct species/Hermite linear implementation in
+  `solvers_linear_parallel_streaming.py:401` duplicates the optional A/dt rule.
+- Krylov `_apply_operator` calls `_assemble_rhs_cached_novjp` without dt.
+  `_advance_imex2` uses that fixed rate operator; the adaptive propagator calls
+  this eigenmode family. Its time-step arguments alone do not imply A/dt.
+- Runtime `startup.py:290` applies optional A/dt_input before RHS assembly.
+  Therefore the opt-in creates A/(dt_input*dt_step) on legacy linear paths,
+  but only A/dt_input on rate paths. Existing startup tests check only the
+  constructed parameter, not a completed step.
+
+Input inventory at this commit: **32 tracked TOML paths** explicitly set
+positive damping (not the old issue's 34); 31 distinct targets because packaged
+common_input is a symlink. All explicit A=.1, scale_by_dt=false. This is not a
+complete affected-input inventory: inherited defaults, generated demos, Python
+constructors and CLI/manifest overrides also matter. One explicitly damped
+linear deck is periodic: its cached damping profile vanishes, so A alone does
+not prove that a deck's observable changes. The initial periodic probe correctly
+failed its nonzero-profile assertion; switched to linked geometry, without
+weakening the assertion. The fixture emits a dtype scatter FutureWarning while
+creating its unused original state; the actual probe replaces it with f64.
+
+Migration decision (one coherent rate model, not another compatibility switch):
+1. Preserve the amplitude of already-rate nonlinear/eigen routes when defining
+   their new rate inputs. Native linear compatibility uses A/dt_reference.
+2. Remove timestep scaling in both assembly and the independent sharded kernel;
+   retire scale_by_dt with explicit input validation. Document rate units using
+   the code's normalized physical time. No runtime inference from chosen solver.
+3. Convert each active native-linear deck from its resolved reference timestep.
+   Preserve standalone parity fixture rates as well as harness rates: kinetic
+   electrons and KBM use .0005 in their deck but .0002 in the parity manifest,
+   requiring 200 and 500 respectively. The harness currently overrides dt but
+   has no rate override. Add an explicit fixed rate field there, never derive
+   it from the current refinement timestep.
+4. Add nonzero-damping cross-route operator and trajectory tests, fixed-T
+   refinement to exp(-nu*d*T), derivative refinement, and adaptive acceptance
+   checks before running the full external matrix and replacing any artifacts.
+5. Recheck defaults/decks that run in multiple modes; record which historical
+   operator is being preserved. Changed scientific results require revalidation,
+   not relabeling. Keep the minor-release migration PR unmerged until complete.
+
+Reproduce (no repository modifications): local scratch
+`/tmp/gkx-damping-route-20260905.Xk4sat` holds `probe.py`, `decks.py`, `mac.log`,
+`decks.csv`. Probe imports production owners above and the existing fixture via
+runpy, constructs a TermConfig with only end_damping=1, uses m=3 G=1 and
+`dt in (.1,.2)`, and asserts the table. Command from #199 worktree:
+`XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_ENABLE_X64=true
+PYTHONPATH=src /tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python
+/tmp/gkx-damping-route-20260905.Xk4sat/probe.py > .../mac.log`.
+`decks.py` parses `git ls-files '*.toml'` using tomllib, lists positive explicit
+collisions.damp_ends_amp and joins config paths to gx_parity_matrix_manifest dt.
+
+Office scratch `/home/rjorge/gkx-r0-damping-route-20260905.8mUFOv` is a fresh
+`git archive b5dca15a` plus `probe.py` (not the f32 repair snapshot).
+Run `CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true PYTHONPATH=src
+/home/rjorge/venvs/gkx-nl/bin/python probe.py > gpu.log`. Both commands exit0.
+
+| Evidence | SHA256 |
+|---|---|
+| probe.py | 62f4833fca550a6ba2891c0aba7592f47c148910d6fa6f9a28d6e71c7a637762 |
+| mac.log | fbbfcf1e2121074a00fe737855be7f60e188fb55efbb03bf23967488e22c2075 |
+| gpu.log | 7c3c269360424f071ed4132ba008c647913e62372ce102ae67726ce7e964b9aa |
+| decks.py | 3a760f0282da3377f73d73b5a02d04686dd835d4c74718f5caba51cbf639c526 |
+| decks.csv | 716a2e5aefd0747edd834b2325369acdcedfdfcd27491a4752e23d274d4c7254 |
+
+CI inspected: #199 nonlinear-core still running; #200 several pending tests;
+#201 dispatched and mostly queued. No observed failure, no full-CI claim.
+No local/SSH jobs active. Next: implement the above migration in a new worktree
+from #199, promote the nonzero-damping probe into concise regression tests,
+and validate same-rate parity before any expensive reference regeneration.
+
+## 2026-09-05 — R0 fixed-rate implementation, draft #202
+
+Previous turn was progress: independent CPU/GPU route evidence corrected the
+migration. Created a clean worktree from #199 b5dca15a:
+`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
+`fix/r0-end-damping-rate`. Commits `3f0a0e70` (migration) and `3e3e31d8`
+(explicit tool-line budget) pushed; **draft PR #202**, stacked on #199.
+No merge. Source net -15 lines; no new files. Draft is not release readiness.
+
+Implemented:
+- `_scalar_params` no longer accepts a timestep. Three assembly owners use
+  one fixed rate. Removed the separate A/dt logic in species/Hermite linear RHS.
+  Public optional RHS dt keywords remain accepted, now without damping scaling;
+  obsolete internal threading is a remaining cleanup, not a second model.
+- Removed RuntimeCollisionConfig.damp_ends_scale_by_dt and its startup scaling.
+  TOML explicitly rejects either former boolean with a fixed-rate migration
+  message. Programmatic use of the removed dataclass keyword raises TypeError.
+- Preserved nonlinear and **Krylov** deck rates. Inspecting [run]/[scan] exposed
+  why even 'all linear decks' was too broad: cyclone.toml, circular VMEC,
+  Miller QL and KBM defaults choose Krylov and already read rates.
+- Converted five native-time examples: Coulomb Cyclone 50, HSX/W7X VMEC20,
+  KAW10, imported W7X `0.1/0.005890226417991923` (~16.9773).
+  The latter two use adaptive explicit time: this selects a reference rate,
+  **not** an exactly preserved old trajectory; calibration remains mandatory.
+- Converted all six parity fixtures at their standalone reference dt:
+  s-alpha/Miller ITG50, kinetic-electron/KBM200, HSX/W7X20. Two manifest rows
+  now explicitly pin damp_ends_rate=500 for their dt=.0002 historical harness
+  runs. The builder applies this to cfg.collisions and reports the resolved
+  rate; halving the requested integration dt does not change it.
+- The generated time-solver demo writes its preset's reference rate once into
+  TOML. No nonlinear input changed, including packaged/default common_input.
+- Replaced mixed-contract docs with the fixed-rate operator, scalar exact
+  solution and derivative, RK refinement law and route-aware migration limits.
+  The documentation explicitly states full external regeneration is pending;
+  no published result or figure was relabeled as new evidence.
+
+Verification (local interpreter JAX0.11.1 from
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`, PYTHONPATH=src):
+1. `XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_ENABLE_X64=true
+   <python> -m pytest -q tests/unit/linear/test_linear.py
+   tests/unit/parallel/test_parallel_linear_velocity.py
+   tests/integration/runtime/test_runtime_runner.py -k end_damping
+   --junitxml=/tmp/gkx-damping-route-20260905.Xk4sat/rate-focused.xml`:
+   **21 passed**. Includes four RK schemes' stage values/tangents, fixed-T
+   value/gradient convergence through 4/8/16 steps, and seven damp-only route
+   comparisons at dt=.1/.2 with nonzero profile. A=rate held fixed.
+2. Office snapshot `/home/rjorge/gkx-r0-damping-route-20260905.8mUFOv` was
+   updated with `git diff --binary | ssh office 'cd <snapshot> && git apply'`
+   before docs and parity-wiring-test additions. Solver, route tests and
+   sentinel match 3f0a0e70; initial archive b5dca15a. With
+   `CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true PYTHONPATH=src
+   /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+   tests/unit/parallel/test_parallel_linear_velocity.py -k end_damping_rate`:
+   **2 passed**, JAX0.10.2 on two A4000s.
+3. CPU and GPU `tests/validation/physics_gates/test_end_damping_physics.py`:
+   **1 passed each**, 20,000 steps, dt=.002, fixed rate50. Compatibility gamma
+   and tolerances unchanged. This preserves the old .1/.002 operator at the
+   reference timestep; it is not a fresh external physics validation.
+4. `tests/release/test_release_gates.py -k parity_fixed_damping`: **2 passed**.
+   Executes run_case through its scan call with a sentinel scan substitute:
+   standalone rate200, resolved harness rate500 at both dt=.0002/.0001.
+   This checks override wiring, not simulated GK/GX agreement. First test run
+   caught an incorrect mock signature (missing ky argument); corrected and rerun.
+5. `tests/integration/runtime/test_runtime_config.py`: **56 passed, 1 skipped**.
+   The skip is not counted as covered functionality.
+6. Ruff0.16.4 check/format and Sphinx `-q -W -b html` pass. Architecture gate
+   initially required explicit test (+123) and tool (+10) line-budget accounts;
+   both recorded with reasons and gate rerun successfully. Repository-size and
+   whitespace checks pass. Full suite, mypy and release-artifact regeneration
+   are not claimed from these focused commands.
+
+All local reports under `/tmp/gkx-damping-route-20260905.Xk4sat`; remote reports
+under the office snapshot above. Hashes:
+
+| Report | SHA256 |
+|---|---|
+| rate-focused.xml | 20644f52f18aef61703c661e92dd4d7867a26397a875c7060af705e34e4c7d70 |
+| rate-cpu-sentinel.xml | 73ec01500055de3c6580176524be045aee5d401dd3990ae1a8a9e659dbda7e8b |
+| rate-gpu-routes.xml | c1f2e4995a4701098ba63737cdfb87c17f5e333039b3e5e445d9930643e5aea8 |
+| rate-gpu-sentinel.xml | da82d23dc268962628af428afb64d747fcd609b3e82ba533f6caa5d4d2fa0bb6 |
+| rate-parity-override.xml | f41e42f4c6e9c605f7e7a79484b28f07ffbb9997cc8920cec1838325a2a636ff |
+| rate-runtime-config.xml | b3fa428145ed392251f48f96bb7f64c4ff4c955e2f3de33808841cb23df3d59d |
+
+Next, keep #202 draft and unmerged:
+1. Inspect #200–#202 CI. #199 now reports no checks other than SUCCESS/SKIPPED;
+   #201 had no failures at the last query, but remaining jobs were not certified.
+2. Broaden caller/default audit, particularly auto solver selection, demos,
+   benchmark adapters, CLI overrides and test fixtures that inherited A=.1.
+   A fixed rate must not be recomputed from a refinement dt anywhere downstream.
+3. Audit native adaptive dt threading and run fixed-rate refinement against
+   independent eigenoperator/implicit answers with nontrivial field coupling;
+   test distributed gradients, not just primal pmap parity.
+4. Locate and verify current GX reference bundles; sync a fresh committed #202
+   office snapshot, run the complete six-case parity matrix with resolved-rate
+   provenance and unsettled/failed modes retained, plus relevant nonlinear
+   unchanged-rate checks. Only then regenerate downstream artifacts and assess
+   adaptive deck/reference changes. Do not weaken gates to hide changed physics.
+No local/SSH process remains active; both worktrees are clean after commits.
+
+## 2026-09-05 — R0 GX adapter units, #202 follow-up
+
+Previous turn: progress (fixed-rate implementation). Read clean #202 head
+3e3e31d8 and queried CI: no failed checks reported, not a full-CI certification.
+Audited comparison callers before dispatching long runs. Confirmed reference
+implementation in office `/home/rjorge/GX`, commit
+`3865a53778862e1686f414bf6f416339e24887c9`: `src/grad_parallel_linked.cu:382`
+and `src/grad_parallel_NTFT.cu:308` pass `pars_->damp_ends_amp/dt` to end damping;
+`src/device_funcs.cu:2852` documents the same normalization. `rg` is unavailable
+on office, so used grep for these read-only source checks. GX was not modified.
+
+Found four adapter sites copying raw GX amplitude: three imported-linear
+trajectory variants and the RHS-term comparison constructor. With GKX now using
+a fixed rate, that silently compares different operators. The old test named
+`test_imported_linear_uses_raw_damp_ends_rate` simply built its own params and
+asserted what it had assigned; it never exercised the production conversion.
+
+Commit **3565ecdc**, pushed to draft #202:
+- One `_gx_end_damping_rate` helper converts GX A to A/dt_reference once.
+  It takes only GXInputContract, not a GKX timestep; refinement cannot change
+  the result through that interface. All four production sites call it.
+- Active nonperiodic damping requires explicit finite positive GX input dt.
+  Missing, zero, negative, NaN and infinite values fail with a diagnostic, not
+  an inferred rate from sparse diagnostic samples. Adaptive reference physics
+  is a varying-rate model; a fixed-rate comparison needs its own validation run.
+- Effective periodic boundary, including zero_shat-forced periodic, or zero
+  amplitude/width returns zero. An inactive operator needs no reference dt.
+- Replaced the self-constructed test with helper value/failure tests and
+  effective-periodic cases. Documentation states the conversion and limitation.
+  No new files; test budget +8, tool budget +21, explicit measured counts.
+
+Verification: `PYTHONPATH=src
+/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python -m pytest -q
+tests/tools/comparison/test_reference_comparison_tools.py
+--junitxml=/tmp/gkx-damping-route-20260905.Xk4sat/rate-imported-tools-final.xml`:
+**122 passed, 1 skipped**. This suite plus the direct helper tests is not a new
+external trajectory benchmark. XML SHA256
+`e821c1cc21ebf35f1c43788a9439f129ae9161b76677f4d7ca619397fce530d4`.
+Ruff0.16.4 check/format, architecture gate, whitespace and Sphinx HTML `-q -W`
+pass. Intermediate budget overages were inspected and set to actual measured
+86579 test / 77854 tool lines, not left as speculative allowances.
+
+Remaining: audit ky_diagnostics and other benchmark-default constructors;
+review CI; locate exact GX parity reference bundles and record their provenance;
+sync a fresh committed #202 office snapshot before complete external matrix and
+same-rate refinement. Do not reuse the older office patch snapshot as head.
+No local/SSH jobs active. #202 remains draft/unmerged; plan/log checkpoint pushed.
+
+## 2026-09-05 — matched-rate external campaign started
+
+Previous turn was progress (adapter conversion). Rechecked #202 clean at
+3565ecdc; CI jobs queued, no failure reported, no completion claim.
+Located `/home/rjorge/gx_refs_lin`: five of the six manifest outputs exist
+(three Cyclone, KBM, W7-X), plus unrelated KAW. HSX output not found within
+the inspected home depth6. Preserve this bundle; do not synthesize missing rows.
+
+Reference provenance exposed a scientific mismatch: the s-alpha stdout starts
+with dt=.004663, KBM with dt=.0006499; their input Time tables do not specify
+dt. The GKX manifest instead pins .002 and .0002. GX uses A/dt at the boundary,
+so matching A alone is not matching the damping operator. Reproducing the old
+matrix would be compatibility evidence, not same-rate validation. A sparse
+diagnostic cadence cannot establish that every internal adaptive timestep stayed
+fixed. These are Sep2 campaign-generated outputs, not immutable upstream blobs.
+
+Started a new **GX** s-alpha reference (not yet a result):
+- Fresh #202 snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`
+  from `git archive 3565ecdc`, no edits to tracked GKX source there.
+- Under `matched_refs/ITG_cyclone`, copied the existing s-alpha input and added
+  `[Time] dt=.002`; diagnostic nwrite100 (was1000), unchanged t_max150,
+  RK4, Nl16/Nm48, ntheta32/nperiod2, 12 ky modes, linked boundaries and A=.1.
+  GKX manifest rate50 now matches this reference's .1/.002. The new output is
+  a newly generated controlled comparison, not an upstream-shipped reference.
+- Input stored locally as
+  `/tmp/gkx-damping-route-20260905.Xk4sat/matched_salpha.in`, remote basename
+  `itg_salpha_adiabatic_electrons.in`; SHA256
+  `2aa2793daca6b19f03ccecd00f6ba97b570563b3147cac05feac9f80229a094a`.
+- Executable `/home/rjorge/GX/gx`, source reports3865a537, SHA256
+  `787eb0145937e653c08750fd7168029c20772ce3e6c2a2a3b58c70aab128dc9b`.
+  This pins the binary; it does not certify a fresh reproducible rebuild.
+- Run from that input directory:
+  `CUDA_VISIBLE_DEVICES=0 /usr/bin/time -v /home/rjorge/GX/gx
+  itg_salpha_adiabatic_electrons.in > gx.stdout.log 2> gx.time.log`.
+  SSH execution session **26100**, remote GX PID **1713851**, parent time PID
+  1713850. Process verified live and first log step confirms dt=.002.
+  Do not infer termination from an idle log or restart without checking PID/session.
+
+Prepared `matched_manifest.toml` in the new snapshot (local scratch copy also
+retained). It uses #202 rates/cases but changes s-alpha reference_provenance
+to explicitly identify this new fixed-dt run. No public matrix/artifact changed.
+Next once GX exits successfully: hash output, verify final physical time and
+finite spectra, then run from the fresh GKX snapshot with
+`GX_PARITY_REF_DIR=<snapshot>/matched_refs CUDA_VISIBLE_DEVICES=0
+JAX_ENABLE_X64=true PYTHONPATH=src /home/rjorge/venvs/gkx-nl/bin/python
+tools/comparison/build_gx_parity_matrix.py --manifest matched_manifest.toml
+--cases cyclone_salpha_itg --stem results/salpha_rate50`.
+This uses a full and half-horizon GKX solve, not a shortened smoke. Do not use
+the new manifest to claim other missing/unregenerated references are validated.
+Continue matched fixed-rate references and step-refinement before publication.
+
+## 2026-09-05 — coupled-field temporal/AD gate while GX runs
+
+Previous turn progressed by starting the matched reference. Revalidated session
+26100 and remote PID1713851: GX remains live, reaching t=78.202/150 at 7m27s.
+No restart. Continue polling that same handle/PID; the output is not final.
+
+Added **6bf824b5** to draft #202 (clean, pushed):
+`test_coupled_linear_rate_gradient_converges_to_matrix_exponential` in existing
+linear tests. A 64-state linked electrostatic problem has active field coupling,
+streaming/drifts and collisions, not merely isolated scalar damping. The
+discrete operator L is probed column-wise; its rate direction is exactly
+L(nu+1)-L(nu), since this parameter enters affinely. Independent SciPy expm
+and expm_frechet give `G(T)=exp(TL)G0` and its derivative. Scalar objective is
+`Re(G0^H G(T))`, T=.2, nu=.7. Reference scalar derivative -1.267821290586.
+This validates temporal integration and AD of the given spatial operator,
+**not** gyrokinetic model accuracy or spatial resolution convergence.
+
+| RK4 steps | relative state error | relative reverse-gradient error |
+|---|---:|---:|
+| 8 | 1.37272e-5 | 1.96065e-5 |
+| 16 | 8.57869e-7 | 1.50308e-6 |
+| 32 | 5.36034e-8 | 1.02201e-7 |
+
+The test checks nonzero field response and reference derivative, error reduction
+>12 per refinement for both quantities, and final errors <1.5e-7. Uses
+Al-Mohy & Higham (2009), *Computing the Frechet Derivative of the Matrix
+Exponential, with an application to Condition Number Estimation*, SIMAX30(4),
+1639–1657, as cited by installed scipy.linalg.expm_frechet documentation.
+The online SciPy page timed out; installed documentation supplied the citation.
+
+An initial direct jax.jvp of the public integrate_linear route **failed**:
+its custom-VJP field solve cannot be used by forward-mode AD. This is not a
+failure of reverse mode, and is now documented. Earlier scalar JVP tests bypass
+field solves and never established public-route forward-mode support. Preserve
+this distinction; do not silently claim all JAX transformations are supported.
+
+Verification:
+- Mac JAX0.11.1/SciPy1.18.1, f64, `PYTHONPATH=src <jax0111 python> -m pytest
+  -q tests/unit/linear/test_linear.py -k coupled_linear_rate_gradient
+  --junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/test.xml`: **1 passed**.
+- Office JAX0.10.2/SciPy1.17.1, same test copied into the 3565ecdc source
+  snapshot, `CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=true PYTHONPATH=src
+  /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q ...
+  --junitxml=coupled-rate-gpu.xml`: **1 passed**. Production source unchanged
+  from snapshot; test is the one in 6bf824b5. GPU0 still runs GX. Do not publish
+  the concurrent GX wall time as an isolated-machine performance benchmark.
+- Ruff0.16.4, Sphinx HTML -W, architecture policy and whitespace pass.
+  Test budget +89 lines explicitly accounted; no new repository files/source
+  changes. Standalone probe/results live under the local scratch above.
+
+| Evidence | SHA256 |
+|---|---|
+| test.xml (local) | 78500bac8da533a143ba88759c391eb30fac01de21fb319e49e433f635f18a6f |
+| results-refined.log (local) | 1c82cf3d8a60a0365f490a69921f14ca8bfb0ab2b78fa50c88ce7525fec53a6a |
+| coupled-rate-gpu.xml (office snapshot) | abfb40a625264b7235d709828435356b8c3e8279c046419ccda17db37ab59f6a |
+
+Only GX session26100/PID1713851 remains active. Next: finish/verify that reference,
+then run the full+half-horizon GKX comparison using the previous entry's command.
+The head change adds a test/doc only, so the snapshot's production source is
+still exact for that run. Keep #202 draft; external matrix and broad AD/physics
+validation remain incomplete. No merge.
+
+## 2026-09-05 — GX reference finished; GKX comparison live
+
+Previous turn progressed with the coupled-field gate. This turn verified the
+same GX PID/session repeatedly while it finished (no restart), and ran the
+**complete** `tests/unit/linear/test_linear.py` locally at head6bf824b5,
+JAX0.11.1, JAX_ENABLE_X64=true, PYTHONPATH=src: **88 passed**.
+Local session44302 exited0. Report
+`/tmp/gkx-coupled-rate-20260905.shBvlR/linear-full.xml`, SHA256
+`0b5b0c724e95b64cec487989fa425f149f8816c2244702d9f46bddd0ef6d4b5d`.
+This is CPU linear-file coverage, not the whole repository or all precisions.
+
+GX session26100 exited0, `/usr/bin/time` also reports exit0. The completed
+NetCDF was read only after termination using load_reference_spectrum from the
+committed GKX snapshot. Assertions: final time in [149.8,150.01], nonfinite
+diagnostic count zero, all positive-ky gamma/omega finite. Results:
+- t_end=150.0000071246177, 751 samples, 11 positive ky values .05 through .55.
+- Late-half mean peak gamma=.09305833 at ky≈.3, omega=.28203376 there.
+- These are reference measurements, not yet a GKX agreement claim; low-ky
+  settling and temporal/spatial refinement still need assessment.
+- Output `<snapshot>/matched_refs/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc`
+  SHA256 `633742b0da84e3e8cf1d0a7638fccd7b52fa90ce71ac166021f3bdcb657cf24a`.
+  Input/binary hashes and concurrent-hardware caveat are in previous entries.
+
+Launched the full+half-horizon GKX s-alpha matrix command from the prior entry,
+with CUDA_VISIBLE_DEVICES=0, JAX_ENABLE_X64=true, PYTHONPATH=src, MPLBACKEND=Agg,
+GX_PARITY_REF_DIR pointing to matched_refs. Verified the snapshot fixture rate
+is50 and its `terms/assembly.py` hash equals committed3565ecdc:
+`e8eeeda61da6763b07dcb55c0cc178353c49df762bfabf507eeaf5dffb88ffb5`.
+Production source remains equivalent at head6bf824b5 (test/doc additions only).
+
+**Live resume handle:** SSH session **32453**, Python PID **1716124**, time
+parent1716123. Snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`;
+logs `gkx-salpha.stdout.log`, `gkx-salpha.stderr.log`; stem
+`results/salpha_rate50`. Command uses `--manifest matched_manifest.toml --cases
+cyclone_salpha_itg`, no --merge and no public artifact overwrite. Verify process
+or same handle before deciding whether it is terminal. Empty/buffered logs do
+not justify a restart. No local test jobs remain active.
+
+Next: inspect exit status and every comparison row, including unsettled or
+failed modes, half-horizon drift, normalization and reference provenance. A
+successful program exit alone does not establish predictive parity. Continue
+matched-rate refinement and the other cases; HSX reference remains missing.
+#202 remains draft, unmerged. No full-CI claim (latest query showed no failures
+but did not certify completion).
+
+## 2026-09-05 — parity settling gate repaired during live comparison
+
+Previous turn progressed: completed GX reference, 88 CPU linear tests and
+started GKX. Rechecked Python PID1716124/session32453 throughout this turn;
+still live at 6m40s, no stderr. No restart or modifications to the running
+snapshot. Local #202 worktree started clean at6bf824b5.
+
+Audited run_case reporting: its old `converged` flag required only finite gamma
+and <=5% half-horizon growth-rate shift. Frequency could drift or be nonfinite
+without invalidating the flag. This is not sufficient for a settled complex
+eigenmode. Also, `settled_ky_count` excluded rows with undefined relative growth
+error (e.g. zero reference gamma), conflating temporal settling with error
+availability, although total rows remained present.
+
+**c979989f** pushed to draft #202:
+- Both growth and frequency estimates must be finite at both horizons and
+  agree within the existing 5% relative criterion; exactly equal finite values
+  (including zero) pass. No tolerance loosening.
+- Preserve raw half-horizon gamma/omega in newly generated JSON. CSV columns
+  remain backward compatible, including their existing half-time shifts.
+- Count temporally settled rows separately from finite relative-error rows;
+  `finite_relative_error_ky_count` makes the latter coverage explicit. Zero
+  reference growth is not discarded from total or temporal-settling counts.
+- Documentation calls this a temporal screen, not resolution convergence.
+  Historical and in-flight reports retain the old flag and need explicit audit.
+
+Executed mocked scan results through **run_case itself**, not a copy of its
+logic: stable, drifting, NaN, infinite and zero frequencies, paired with nonzero
+and zero reference gamma. Plus the existing fixed-rate override tests:
+`PYTHONPATH=src <local jax0111 python> -m pytest -q
+tests/release/test_release_gates.py -k
+'parity_convergence_requires or parity_fixed_damping'
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/parity-gates-final.xml`:
+**14 passed**. This is report wiring coverage, not a simulated benchmark.
+XML SHA256 `079652c72da3201649fbd1165ffb334b6b1df6b5d2af3a5e52b77e7de8f53109`.
+Ruff0.16.4, Sphinx HTML -W, architecture and whitespace gates pass. Explicit
+budgets: test +50, tool +5 lines; no new files or solver changes.
+
+Only remote comparison session32453/PID1716124 remains active. Next: read its
+actual exit status/results, retain the original record, and independently
+reassess both gamma_half_time_shift and omega_half_time_shift before claiming
+settling. For old rows with undefined shifts, do not invent absent half-time
+values or certify convergence; mark uncertainty and rerun if necessary. An
+updated audit must identify its postprocessing version separately from the old
+snapshot that performed the solves. Keep #202 draft/unmerged and continue the
+external matrix/refinement, not just report-gate fixes.
+
+## 2026-09-05 — first matched-rate parity result; Miller reference started
+
+Progress, no blocker. #202 remains c979989f, draft/unmerged. User checkout
+untouched. All **78 time-integrator tests passed** on Mac JAX0.11.1 f64:
+`PYTHONPATH=src JAX_ENABLE_X64=true
+/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python -m pytest -q
+tests/unit/solvers/test_time_integrators.py
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/time-integrators-full.xml`.
+XML SHA256 `6fe305539126e04d0dac13a7a43785a36283c9f4c8766df29af467843f8272b5`.
+Session1163 terminal. No full-CI claim.
+
+Caller audit: ky_diagnostics Cyclone defaults periodic (damping inactive);
+KBM/ETG/TEM disable damping; kinetic uses the same fixed-rate params for time
+and Krylov. No additional automatic conversion warranted. Historical time
+references still require regeneration. benchmark_lineax_linear_solve uses
+linked A=.1: its pre-migration A/dt conditioning differs; reprofile before
+reusing performance claims.
+
+**GKX s-alpha session32453 completed exit0**, wall13:08.07 (not an isolated
+performance benchmark), host RSS1638948 KiB. Original snapshot3565 reporting
+retained under `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/results/`.
+CSV SHA256 `d957bba357ff01ece8f5eaf0bea2aabb5ff7fbcde77c08b693363c911b9208de`;
+local copy `/tmp/gkx-damping-route-20260905.Xk4sat/salpha_rate50.csv`.
+Independent Python csv/math audit (not rewriting solver output): require finite
+gamma/omega reference and GKX, finite both half-time shifts, and absolute shifts
+<=.05. **10/11 modes pass both screens**. Max settled relative error gamma
+.019040262519361965, omega .0025907639149554055. Peak ky=.3000000119 gamma
+relative error -.00014494507360926425. ky=.050000000745 remains unsettled:
+gamma shift .11005, omega shift .13837; retained, not omitted. These agree with
+the new joint screen, but no resolution convergence, matched precision, or
+predictive validation is claimed. Review reference temporal settling too;
+extend the slow mode and refine fixed-rate dt/resolution before promotion.
+
+Started the next **GX Miller adiabatic reference**, GPU1, session **97329**,
+PID **1717513** (time parent1717512), same owned snapshot directory
+`matched_refs/ITG_cyclone`. Copied original input from
+`/home/rjorge/gx_refs_lin/ITG_cyclone/itg_miller_adiabatic_electrons.in`, added
+only Time.dt=.002 via apply_patch; nwrite100, tmax150 unchanged. Input SHA256
+`317358524c40a91298841ba336332831c0375e8b9d75273d19976331ef342ce5`.
+Local input `/tmp/gkx-damping-route-20260905.Xk4sat/matched_miller.in`.
+Command from the owned reference directory:
+`CUDA_VISIBLE_DEVICES=1 PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
+/usr/bin/time -v /home/rjorge/GX/gx itg_miller_adiabatic_electrons.in
+> miller-gx.stdout.log 2> miller-gx.time.log`.
+Geometry generator succeeded and mode diagnostics are advancing; not complete.
+GX source/binary unchanged from preceding provenance record. PATH scoped to
+this command for generator dependencies. Existing reference bundle untouched.
+
+**Resume:** verify session97329/PID1717513 before any restart. After completion
+record exit, output hash, time coverage and finiteness; create a separately
+named matched Miller manifest (do not retroactively alter s-alpha provenance),
+then run GKX comparison. S-alpha session32453 is terminal, do not poll/restart.
+Continue external cases, independent temporal/resolution checks, #202 CI and
+remaining R0 validation. No benchmark/README artifact promoted, no merge.
+
+## 2026-09-05 — reference settling qualification and fixed-rate dt refinement
+
+Previous turn was progress (completed comparison, committed checkpoint, new GX
+reference). This turn verified Miller PID1717513 live/advancing, 3m03s at last
+check. #202 at c979989f clean; CI query shows no failed checks, several pending,
+so still no full-CI assertion. Plan started clean at768dcada.
+
+Inspected reference loader: it averages the last half of the GX diagnostic
+trace but calls the result "converged" without testing reference settling.
+Read-only independent audit script in owned office snapshot
+`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/audit_reference.py` (local
+copy `/tmp/gkx-damping-route-20260905.Xk4sat/audit_reference.py`) compares GX
+mean instantaneous complex frequency over [T/4,T/2] and [T/2,T], float64
+accumulation, preserving all positive ky. This probes the existing estimator;
+it is not a new GX run or a statistical confidence interval. Existing output
+has uniform fixed-dt diagnostic sampling; do not generalize sample means to
+arbitrarily sampled adaptive traces. Command:
+`/home/rjorge/venvs/gkx-nl/bin/python audit_reference.py
+matched_refs/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc
+> results/salpha_reference_temporal.csv` (metadata line precedes CSV header).
+Script SHA256 `e5840d49d118959a8fa06ab1881f000aa2f00c1ecfce7d38c8ed8eb86fe56a4e`;
+result SHA256 `d7fd35cc808767fd9ccf7f70e24ce37647ab895d0a5028188123fb0259ce32c7`.
+
+GX growth relative shifts at ky=.05/.10 are -.2040967934/-.0595856369;
+all remaining modes pass both 5% growth and frequency screens. Thus **9/11
+pass both codes' temporal screens**, not 10/11 reference-certified modes.
+Prior 10/11 was correctly GKX-only; do not use it as a joint validation count.
+GKX fits [0.7T,T] at T and T/2, while GX here averages its own diagnostics:
+different estimators/windows are explicit. Resolution convergence remains open.
+Next reporting repair should expose reference temporal diagnostics/status;
+do not label any loaded spectrum converged merely because its values are finite.
+
+Launched fixed-operator timestep refinement on GPU0, **session57878**, Python
+**PID1717879** (time parent1717878), verified live with no stderr. Same source
+snapshot3565, no changes to running code. Manifest `salpha_dt_refinement.toml`
+selects ky=.15/.30/.55, dt=.001, 150000 steps (T150), Nl16/Nm48, explicit
+rate50, IMEX2, original matched GX reference. Original baseline retained.
+Manifest SHA256 `aee947066f77edb46688e0f3d5935c0a79281dd0d392d46cc7dd5ba27e2e7b3a`.
+Command from snapshot:
+`GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs
+CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
+/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python
+tools/comparison/build_gx_parity_matrix.py --manifest salpha_dt_refinement.toml
+--cases cyclone_salpha_itg_dt_half --stem results/salpha_rate50_dt_half
+> gkx-salpha-dt-half.stdout.log 2> gkx-salpha-dt-half.stderr.log`.
+Reporter is old3565: audit both temporal shifts manually, not just its flag.
+Concurrent GPU1 GX means no isolated performance claim. Chosen three modes
+sample low/peak/high growth-spectrum regions, not a full-spectrum refinement.
+
+Resume both live handles, never restart solely for empty buffered logs. Miller
+session97329/PID1717513; GKX refinement session57878/PID1717879. Record actual
+exit/artifacts before interpreting. Continue slow-mode extension, spatial and
+velocity refinement, broader matrix and reference-status repair. No merge,
+public artifact promotion, or validation-debt closure in this turn.
+
+## 2026-09-05 — reference temporal status wired into parity reports
+
+Previous turn progressed (independent reference audit, live timestep refinement,
+pushed checkpoint). Revalidated both jobs this turn: Miller PID1717513 at8m00s
+and GKX refinement PID1717879 at5m14s, both RNl, no stderr. Do not restart.
+
+Committed/pushed **0acbd221** to draft #202. No production solver changes.
+Reference loader no longer describes every loaded mean as converged. Retains
+the historical late-half diagnostic sample mean, with optional middle-quarter
+probe and raw reference growth/frequency values. Requires >=8 finite increasing
+timestamps with regular spacing (rtol1e-3), permitting one shortened terminal
+interval. Short, invalid or irregular sampling yields unknown reference status,
+not a passed screen; not a time-weighted estimator. Reference and GKX screens
+each require finite growth/frequency and <=5% relative shift (finite equal zeros
+pass). `converged` and old settled count stay explicitly GKX-only for artifact
+compatibility. New `reference_settled`, `both_codes_settled` and joint count expose
+the distinction; CSV appends fields and leaves old records' missing fields blank.
+
+**55 focused tests passed**, using real synthetic NetCDF reads for regular,
+shortened-final, irregular, reversed and short time grids, and actual run_case
+wiring with stable/drifting/nonfinite/unknown reference frequency crossed with
+the existing GKX frequency and zero-reference tests. Command:
+`PYTHONPATH=src JAX_ENABLE_X64=true
+/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python -m pytest -q
+tests/release/test_release_gates.py -k
+'parity_reference_probe or parity_convergence_requires or parity_fixed_damping'
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/reference-gates.xml`.
+XML SHA256 `461dd0688aea3a848d7106481ec00c157063b2f41679d90488c2f3499631bacb`.
+Ruff, whitespace, architecture gate and Sphinx HTML -W pass. Explicit budgets
+test+43/tool+42 lines; no new repository files. No full-CI assertion.
+
+Real-output check initially returned unknown because GX's final interval is
+.1980000094, versus regular .2000000095; this was not an adaptive run. Added
+explicit shortened-terminal handling/test instead of loosening interior-grid
+tolerance. Read-only loader copy `postprocess_parity.py` in the office snapshot
+now returns reference false for ky=.05/.10 and true for the other nine, matching
+the independent audit. This copy is only postprocessing; neither running solver
+nor its old3565 reporter was replaced. All original reference estimates retained.
+Runpy command calls load_reference_spectrum on the completed s-alpha NetCDF then
+_settled on each pair of full/half reference growth and frequency estimates.
+
+Resume unchanged live sessions: **97329/PID1717513** (Miller GX GPU1),
+**57878/PID1717879** (GKX dt=.001 GPU0). Their owned directory, commands, stems
+and hashes remain in preceding entries. Read exits and complete traces before
+interpreting; finish matched Miller comparison and timestep/spatial/velocity
+refinement. Slow-mode extension and broader R0 work remain open. Keep #202 draft
+and all PRs unmerged; no public evidence promoted.
+
+## 2026-09-05 — timestep sensitivity measured; Hermite refinement running
+
+Previous turn progressed (reporting repair/tests/pushed checkpoints). This turn
+completed the **full release-gate file: 188 passed, no skips/failures** on local
+JAX0.11.1 f64, at source0acbd221. Command uses the same local python/PYTHONPATH
+as above, `-m pytest -q tests/release/test_release_gates.py
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/release-full-reference-gates.xml`.
+XML SHA256 `6cc43368598a39d5ae3ff2e2cad56a281323d25f5eb133553a7f752945ae4fd5`.
+Session4340 terminal. Read README QA section: it already explicitly says the
+12.26% conditional reduction is not statistically resolved (4/48 drift failures).
+No need to repeat that earlier correction. PR202 confirmed open/draft at0acbd221,
+no failed CI checks at query, many pending. No full-CI claim.
+
+**GKX dt refinement session57878 completed exit0**, PID1717879 terminal.
+Original result retained at office snapshot `results/salpha_rate50_dt_half.csv`,
+SHA256 `03744b68b05e42c937fde865760ee59b65781cabe511340f07a7730be7dffb2f`;
+local copy in `/tmp/gkx-damping-route-20260905.Xk4sat/`. Against dt=.002 rows,
+relative gamma changes at ky=.15/.30/.55 are
+`5.5874703e-7, -8.3410629e-7, -2.9919959e-5`; omega changes
+`-1.0257238e-7, 1.4879404e-7, 1.3003040e-5`. All three growth/frequency
+half-horizon shifts pass5%; ky=.55 growth shift remains -4.5605%, and relative
+GX gamma discrepancy remains1.90098%. Timestep sensitivity is much smaller,
+but this is not resolution convergence or a proof of asymptotic order.
+**Qualification:** manifest's decimal ky differ from stored f32 reference/baseline
+coordinates by -5.96e-9/-1.192e-8/-1.192e-8. Do not present this as a perfectly
+fixed-coordinate Richardson pair; use exact baseline coordinates henceforth.
+Comparison computed from preserved CSV rows using nearest ky, relative change
+(fine-base)/abs(base); no solver output rewritten.
+
+Started **Hermite-only refinement**, GPU0, session **92932**, Python
+**PID1719126** (time parent1719125), verified live/no stderr. Owned snapshot
+`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`; manifest
+`salpha_hermite_refinement.toml`, SHA256
+`dc3101e90553ebf101a55794ed7606e1b5745312ee1955bbf69cb3839630f14c`.
+Nm64 vs baseline48; Nl16, dt=.002, T150, rate50 unchanged. Exact ky
+`.15000000596046448, .30000001192092896, .550000011920929`.
+GX reference intentionally remains Nm48; this is a GKX resolution probe,
+not a newly matched velocity-resolution parity claim. Hypercollision model is
+unchanged but truncation effects remain part of the resolution question.
+Command uses previous env, GPU0, current reporter copy
+`tools/comparison/build_gx_parity_matrix_current.py --manifest
+salpha_hermite_refinement.toml --cases cyclone_salpha_itg_nm64 --stem
+results/salpha_rate50_nm64 > gkx-salpha-nm64.stdout.log
+2> gkx-salpha-nm64.stderr.log`, under /usr/bin/time -v.
+Reporter SHA256 `2464af5789be4a11d730e44b2b0fa9599b5895c1f9f31b8a7389c70203af8d5e`
+matches0acbd221; source still3565 production-equivalent. No running tool overwritten.
+
+Miller GX session97329/PID1717513 remains live (11m42s, RNl last check).
+Prepared separate `matched_miller_manifest.toml` in snapshot, hash
+`7bacfe949049cba8d6d80ff609a15980ce7d39d7ca053139de905109e0103e4b`;
+explicit fixed rate50/dt.002/T150/Nl16/Nm48 and campaign provenance. Verified
+Miller fixture imports geometry from this reference NetCDF, matching coefficients.
+**Not launched yet:** after GX exits0, check full trace/finiteness/hash, then run
+this manifest with current reporter on freed GPU1. Do not treat an in-flight
+reference as finished. Keep both current live handles; no restart of terminal
+session57878. Remaining slow-mode, velocity/spatial refinement and full matrix
+are open. No source changes or public artifact promotion this turn; no merge.
+
+## 2026-09-05 — Miller reference complete; installed-wheel startup audit
+
+Previous turn progressed (dt results, full release tests, new Hermite job).
+This turn verified #200/#201 open at e36e5bd8/53d86f01, with no failed or pending
+checks. This does not certify #202 CI. Code worktree clean at0acbd221.
+
+**GX Miller session97329 completed exit0**, old PID1717513 terminal. Output
+`matched_refs/ITG_cyclone/itg_miller_adiabatic_electrons.out.nc` in owned office
+snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`, SHA256
+`da6b8cd7bf0cba3ac2da815f83dfacc98ce3fc4bc57d70304d4e1a167e29d61c`.
+751 samples, t_end150.0000071246177, 15 positive ky, zero nonfinite diagnostics.
+Independent audit_reference.py output `results/miller_reference_temporal.csv`,
+SHA256 `a8e933b85a3bc94eb9d7ab0887f71449b4f626702cfa67944dad48d21fc9cf5d`.
+14/15 pass both5% reference screens; ky=.05 growth shift -.21405718 fails.
+Largest growth at ky=.40000000596, gamma .1431124038, omega .3066916866.
+Do not claim this reference is fully settled or resolution converged.
+
+Launched **GKX Miller**, GPU1, session **31885**, Python **PID1719945**
+(time parent1719944), verified live/no stderr. Same owned snapshot and previous
+matched manifest/reporter hashes. Command uses GX_PARITY_REF_DIR=<snapshot>/matched_refs,
+CUDA_VISIBLE_DEVICES=1, JAX_ENABLE_X64=true, PYTHONPATH=src, MPLBACKEND=Agg:
+`/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python
+tools/comparison/build_gx_parity_matrix_current.py --manifest
+matched_miller_manifest.toml --cases cyclone_miller_itg --stem
+results/miller_rate50 > gkx-miller.stdout.log 2> gkx-miller.stderr.log`.
+Full 15-mode batch,75k/37.5k steps,IMEX2,rate50; reference RK4/f32 vs GKXf64.
+Hermite refinement session92932/PID1719126 still live at4m10s last check.
+
+Installed-wheel audit at0acbd221: scratch `/tmp/gkx-rate-wheel-20260905.aBK527`.
+Initial --no-build-isolation attempt failed because the existing Python3.12
+venv lacks setuptools; normal isolated `python -m pip wheel . --no-deps
+--wheel-dir <scratch>` succeeded. Wheel `gkx-2.0.0-py3-none-any.whl`, ~786KiB,
+SHA256 `4646d920f7d55523b51f858936a39a1cb3557b0d6581648eaad3984b043b46e2`.
+Installed with --no-deps --target <scratch>/installed using local jax0111 python.
+From empty <scratch>/first-run, PYTHONPATH=<scratch>/installed, asserted gkx.__file__
+points inside that install, then executed <scratch>/installed/bin/gkx with
+JAX_ENABLE_X64=true. **Exit0, all five documented artifacts nonempty**;
+log <scratch>/first-run.log. Session16126 terminal. Dependencies reused, so not
+a clean dependency-resolution test; source checkout not imported.
+
+Important first-run issue: emitted CFL warning dt=.03 >estimated.02197,
+nonstationary fit fallback, and only1.34 e-foldings (requires7). Reported
+gamma=.089982/omega=.289838 is a transient demo result, not validated growth.
+Source owner `src/gkx/workflows/demo.py`: default dt.03/steps500/T15;
+generated damping .1/settings[dt]. A dt repair must preserve the old resolved
+rate3.333333, not silently increase damping by changing the preset denominator.
+Next small fix: safe demo step, explicit fixed-rate preset, keep runtime modest,
+label transient status honestly; test actual generated input/first run. Do not
+suppress diagnostics or loosen CFL/fit thresholds. Wheel outputs preserved.
+
+Resume live **92932/PID1719126** (Nm64 GPU0) and **31885/PID1719945** (Miller
+GKX GPU1); GX97329 terminal, no restart. Record complete results before promotion,
+continue remaining matrix/refinements. No PR merged, no public artifact updated.
+
+## 2026-09-05 — first-run repair and unresolved Hermite tail
+
+Previous turn progressed (Miller reference/comparison and wheel findings).
+**Nm64 session92932 completed exit0**, old PID1719126 terminal. CSV at owned
+office snapshot `results/salpha_rate50_nm64.csv`, SHA256
+`aaff5040d4ae52c1bb654c981dffad1cc41b7fdbdd30325187e443ce7917cba2`.
+All three modes pass both temporal screens, but at ky=.550000011920929 gamma
+changes from .034520991134793955 (Nm48) to .03731586113112525 (Nm64),
+**+8.09614644%**. Frequency becomes .4907877139176186; discrepancy from Nm48 GX
+is now10.1543% in growth. Temporal settling does not imply velocity convergence.
+Do not promote that high-ky result. Low/peak changes are smaller; keep all rows.
+
+Started Nm96 at the same high ky on GPU0: **session86304/PID1720507**
+(time parent1720506), same snapshot and0acbd221 reporter. Manifest
+`salpha_nm96.toml`, SHA256
+`c953c5ec1dea1a3595b5367cc25eff6c8c11815b9a7c2b5b79ce31b395c29699`.
+Only Nm changes64→96 and requested set narrows to exact high ky; Nl16,dt.002,
+rate50,T150 unchanged. Command/env follows preceding Nm64 run with --manifest
+salpha_nm96.toml --cases cyclone_salpha_itg_nm96 --stem results/salpha_rate50_nm96,
+logs gkx-salpha-nm96.stdout.log/gkx-salpha-nm96.stderr.log. Verified process live.
+Miller GKX session31885/PID1719945 also live at2m59s check. No restart of Nm64.
+
+**d4943414 pushed to draft #202:** no-argument demo uses dt=.02/750steps, retaining
+T15 and explicit damping rate .1/.03 instead of recalculating it from current dt.
+Intro and quickstart call it a transient illustration, not a converged benchmark.
+No CFL threshold or fit-warning suppression. Test exercises actual generated
+TOML, fixed rate under dt change, horizon and CLI forwarding.
+Full `tests/integration/runtime/test_cli.py`: **148passed**, local JAX0.11.1f64;
+XML `/tmp/gkx-rate-wheel-20260905.aBK527/cli.xml`, SHA256
+`78553879d08565a01dbca6faa2d1a576f5683c531bb99a175b6f2d03e3645c2a`.
+Ruff, architecture, whitespace and Sphinx HTML -W pass. Source+2/test+10 lines;
+test budget explicitly updated, no new repository files. No full-CI assertion.
+
+Rebuilt wheel with normal isolated pip wheel --no-deps, installed --no-deps
+--target `/tmp/gkx-rate-wheel-20260905.aBK527/repaired-installed`; same existing
+dependency environment, not fresh dependency resolution. Wheel under
+`repaired-wheel/gkx-2.0.0-py3-none-any.whl`, SHA256
+`3767d3ff1a6732e214851e4ab07ac10215ccd55ac8c57153fdde36603a51712b`.
+Ran its bin/gkx from empty repaired-wheel-run with PYTHONPATH pointing only at
+the repaired install and JAX_ENABLE_X64=true. **Exit0**, five promised artifacts
+nonempty, no CFL warning. Intro qualification and growth-under-resolved warning
+asserted present; actual log `repaired-wheel-run.log`. The source-tree trial
+also passed, but is not substituted for the wheel test. Transient fit warnings
+remain by design (T15 is not enough); no benchmark claim from its fitted value.
+All local test/build sessions terminal. Preserve scratch evidence.
+
+Resume **86304/PID1720507** Nm96 GPU0 and **31885/PID1719945** Miller GPU1.
+Check real exits/results before interpretation; continue Hermite/Laguerre/spatial
+and slow-mode convergence plus full external matrix. Do not merge any PR.
+
+## 2026-09-05 — Nm96 failure retained; hypercollision scaling audited
+
+Previous turn progressed (demo repair, Nm64 evidence, higher-Nm run).
+Nm96 **session86304/PID1720507 terminal, exit1**, wall1:43.45. Reporter stopped
+at ensure_finite_linear_history with a nonfinite field history before any parity
+result. Full failure retained in snapshot gkx-salpha-nm96.stderr.log; do not
+replace it or report a successful refinement. Could be timestep stability; this
+is a hypothesis, not established causality. If needed control single-vs-batched
+ky too (Nm64 used three modes, Nm96 one), rather than assuming only Nm matters.
+
+Started separate **session42644/PID1721120** (parent1721119), GPU0, verified
+live/no stderr. Manifest salpha_nm96_dt_half.toml in owned office snapshot
+/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz, SHA256
+`7ff60a790094063d9ec0b9fcd2769170196f768b18bef7392251f7d60b95957b`.
+dt=.001/150000 steps, same Nm96,Nl16,rate50,T150,exact high ky. Command uses
+same previous env and current0acbd221 reporter with --manifest
+salpha_nm96_dt_half.toml --cases cyclone_salpha_itg_nm96_dt_half --stem
+results/salpha_rate50_nm96_dt_half; logs gkx-salpha-nm96-dt-half.stdout.log and
+gkx-salpha-nm96-dt-half.stderr.log. No restart of the failed job. Miller
+session31885/PID1719945 remains live at7m50s check.
+
+Read cache_arrays.py:_build_low_rank_moment_cache_arrays,
+dissipation.py:_hypercollision_kz_source/_apply_parallel_hypercollision, and
+startup.py:_default_hermite_hypercollision_exponent. Matched against office GX
+3865a537 src/linear.cu:226–232 and parameters.cu:185. With M=Nm-1, coefficient
+is 2.3 nu_m (p+.5)/sqrt(M) (m/M)^p vth|gradpar|, masked m>2, followed by the
+parallel absolute-derivative operator. Geometry multiplication stays inside
+that operator. Runtime default p=min(20,max(Nm//2,1)), hence p20 in48/64/96.
+At fixed retained m,p, artificial damping decreases as M^(-p-.5). Refinement
+changes regularization as well as truncation; it is not a fixed finite-moment
+damping operator, even though all input coefficients are unchanged.
+
+**57485da2** pushed to draft #202, documentation only: replaced proportional
+hypercollision expression with exact implemented normalization/operator order,
+default exponent and resolution interpretation. Sphinx HTML -W and whitespace
+checks pass. No solver changes, new tests, tolerance relaxation or new files.
+This source audit does not establish the Nm96 failure cause or close convergence.
+Resume both current live handles; record exits/evidence before promotion.
+Remaining matrix, Laguerre/spatial/temporal refinement and R0 work stay open.
+No PR merged, no public benchmark artifacts changed.
+
+## 2026-09-05 — finite Nm96 half-step result; RK4 control and IMEX audit
+
+Previous turn progressed (failure provenance, stability trial, operator docs).
+**Session42644/PID1721120 completed exit0.** Nm96/dt.001 gives
+gamma=.03555382534327573, omega=.4845288659123776 at exact ky=.550000011920929.
+Growth/frequency half shifts -.02904581221/-.001207343917; both reference and
+GKX temporal screens pass. CSV results/salpha_rate50_nm96_dt_half.csv SHA256
+`98d17f6820241f3e3f385470b5e0b6ba698e46b73eaef3b01b03b66723cd91d4`.
+Still ~4.95% gamma disagreement with Nm48 GX and a material shift from Nm64
+GKX; neither cross-code nor Hermite convergence established. The smaller step
+removes observed nonfiniteness, but do not infer an exact stability boundary.
+
+Started **RK4 control**, same Nm96,Nl16,ky,rate50,T150, dt=.002/75k steps:
+GPU0, **session95639/PID1722017** (time parent1722016), verified live.
+Manifest salpha_nm96_rk4.toml SHA256
+`d4e9b06c622de191ac7d7740775852b08147af27d23961a9a69247cd9176757f`.
+Same owned snapshot/env/current reporter as prior runs; --manifest
+salpha_nm96_rk4.toml --cases cyclone_salpha_itg_nm96_rk4 --stem
+results/salpha_rate50_nm96_rk4; logs gkx-salpha-nm96-rk4.stdout.log/stderr.log.
+Miller session31885/PID1719945 still live at12m00s. Old42644 terminal, no restart.
+
+Audited solvers_time_explicit_steps.py:_linear_native_step, not method naming.
+For u'=(a-d)u, implemented imex2 has R=[1+ha(1+ha/2)/(1+hd/2)]/(1+hd).
+Pure diagonal damping is backward Euler; d0/a=i omega is explicit midpoint,
+|R|^2=1+(h omega)^4/4. **7f3424fa** documents these qualifications in numerics;
+Sphinx HTML -W and diff checks pass, documentation-only, no method replacement.
+Executed actual step function locally JAX0.11.1f64 at d=.7,T1,N8/16/32/64:
+absolute errors against exp(-.7): .01458530514,.00744446130,.00376160512,
+.001890832668 (first-order trend). Single oscillator step h=.1 gives
+|u|²=1.0000250000000002, analytic1.000025. Existing scalar amplification unit
+test covers the formula, but is not a proof of uniform second order. These
+limiting cases do not by themselves diagnose the full high-Nm operator.
+
+Installed-wheel nonlinear startup also completed exit0, **session30211 terminal**.
+Used repaired wheel target and existing JAX0.11.1f64 dependency environment,
+from empty-wheel-run directory: bin/gkx run-runtime-nonlinear --config
+<worktree>/examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml
+--steps50 --out /tmp/gkx-rate-wheel-20260905.aBK527/cyclone_nonlinear.out.nc.
+Log nonlinear-wheel.log beside output. Reached t=.5,4samples; NetCDF time and
+HeatFlux_st finite. Unresolved cutoff warnings retained (heat32%, potential21%
+of spectral peak). This proves short installed execution, not saturated or
+resolution-converged transport. No clean dependency-install claim.
+
+Resume current RK4 and Miller handles; compare integrator/temporal sensitivities,
+then continue Hermite/Laguerre/spatial and other parity cases. Keep raw failures,
+do not merge or promote public benchmarks. Source worktree unchanged apart from
+the committed numerical-method qualification.
+
+## 2026-09-05 — CI formatting repaired; kinetic initial-condition mismatch fixed
+
+Previous turn progressed (finite Nm96 trial, numerical audit, RK4 control).
+Both jobs verified live this turn; final check Miller PID1719945 at15m30s,
+RK4 PID1722017 at3m36s. No restart, no terminal result yet.
+
+Current #202 CI exposed repo-hygiene failure on7f3424fa. Read authoritative job
+101266023078 logs via gh api (run33951126955 still active, gh run --log-failed
+unavailable): ruff format rejected demo.py's long print. Earlier local ruff
+check was lint only. **02536eef** formats it; full `ruff check .` and
+`ruff format --check .` pass (406 files), architecture and whitespace gates pass.
+Fix pushed; do not claim the remote rerun is complete.
+
+Prepared next reference from /home/rjorge/gx_refs_lin/ITG_cyclone/
+itg_miller_kinetic_electrons.in. Added only Time.dt=.0002, preserving T40,
+nwrite100,Nl16,Nm48,7positiveky,two species,beta1e-5. Default A.1 implies rate500.
+Input copied to owned snapshot matched_refs/ITG_cyclone with original basename;
+SHA256 `1fee7d656a4353ccda20934b9c1ddeb2820b9eaf1732ac707e48e070555fc2da`.
+Local /tmp/gkx-damping-route-20260905.Xk4sat/matched_kinetic.in. **Not launched**:
+both GPUs occupied. After a GPU frees, run GX using prior scoped PATH and log
+kinetic-gx.stdout.log/kinetic-gx.time.log. Match future GKX T40, not old T20.
+
+Input audit found GX kinetic Miller sets init_electrons_only=true, while GKX
+parity fixture omitted it (defaultfalse). KBM already sets true on both sides.
+**8ce22e33** corrects kinetic Miller fixture and adds two loaded-config tests
+pinning this contract. Full Ruff lint/format, two focused tests and architecture
+gate pass; explicit test-line allowance+9, no new files. Existing species-target
+execution tests remain in tests/integration/runtime/test_runtime_runner.py;
+this new gate checks the actual parity decks. No running adiabatic job affected.
+Copied only corrected kinetic fixture into owned snapshot for future comparison;
+source production remains3565-equivalent, reporter0acbd221. Do not claim old
+kinetic transient comparisons were identically initialized or relabel old output.
+
+Resume **95639/PID1722017** (Nm96RK4 GPU0), **31885/PID1719945** (Miller GPU1).
+Inspect complete outputs, then start the prepared kinetic reference with scoped
+GPU selection. Record exit/hash/trace before comparison. CI still in progress;
+no merge, no benchmark artifact promoted. User checkout untouched.
+
+## 2026-09-05 — Miller and RK4 completed; next velocity and kinetic references
+
+Previous turn progressed (CI/seed corrections and prepared reference). Rechecked
+source/logbook and actual processes before acting. **RK4 session95639 exit0**:
+Nm96 dt.002 gamma=.03555544953882924, omega=.4845287629267157. Both screens pass;
+growth/frequency shifts -.02905971423/-.001208356047. Relative gamma difference
+from successful imex2 dt.001 ~4.568e-5 (0.0046%), much below Hermite shifts.
+This supports integrator/timestep sensitivity, not a proved stability boundary.
+CSV results/salpha_rate50_nm96_rk4.csv SHA256
+`ef0a0e4720ed83fdf252695ad213dab08cd3e529d8a0aaf126cf7dbe36d91784`.
+
+**Miller session31885 exit0**: 14/15 rows pass both temporal screens. ky=.05
+fails GKX frequency shift13.94% and reference growth screen. Maximum settled
+relative gamma error .008519381783, frequency .003756963687 (both ky=.10).
+At peak ky=.40000000596 gamma relative error6.9386744e-6. All rows retained;
+no velocity/spatial convergence assertion. CSV results/miller_rate50.csv SHA256
+`e3285306854e08e67752b51de38ffba0431b919498da3ab82a38172f4673dd21`.
+Old PIDs1722017/1719945 terminal; no restart.
+
+Started **GX kinetic reference GPU0 session6455/PID1722824** (time1722823),
+verified geometry generation and advancing diagnostic rows. From owned snapshot
+matched_refs/ITG_cyclone, CUDA_VISIBLE_DEVICES=0 and scoped
+PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH, /usr/bin/time -v /home/rjorge/GX/gx
+itg_miller_kinetic_electrons.in > kinetic-gx.stdout.log 2> kinetic-gx.time.log.
+Prepared input/hash unchanged (1fee7d65...), T40 dt.0002 rate500. Not complete.
+
+Started **Nm128 RK4 GPU1 session17139/PID1723101** (time1723100), verified live.
+Manifest salpha_nm128_rk4.toml SHA256
+`96a2cf8b96eee6c67e84a7523804c6f8b7b07103ff7b3e6b43a6d52c2de1daa5`.
+Only Nm96→128, otherwise exact high ky,Nl16,rate50,dt.002,T150 unchanged.
+Same current reporter/env as preceding RK4; --manifest salpha_nm128_rk4.toml
+--cases cyclone_salpha_itg_nm128_rk4 --stem results/salpha_rate50_nm128_rk4,
+logs gkx-salpha-nm128-rk4.stdout.log/stderr.log. Both jobs in owned snapshot
+/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz. No isolated timing claims.
+
+Targeted literature refresh (primary sources, accessed today):
+- [GX §7](https://arxiv.org/html/2209.06731v3#S7) explicitly couples moment
+  convergence with timing and decreasing stable timestep; includes kinetic
+  and adiabatic cases and moment spectra. Use the same evidence structure,
+  not its case-specific coarse-resolution thresholds as universal GKX defaults.
+- [Parker & Dellar](https://arxiv.org/abs/1407.1932) motivates recurrence/filter
+  checks; [Pezzi et al.](https://arxiv.org/abs/1601.05240) warns in its abstract
+  that artificial collisionality can alter kinetic dynamics while suppressing
+  recurrence. This is guidance for separate regularization sensitivity tests,
+  not a demonstrated diagnosis of our gyrokinetic case. Full Pezzi text not
+  studied this turn; public preprint available, no download request needed.
+
+Next: inspect current exits, continue velocity-tail and regularization sensitivity
+at a stable timestep, then Laguerre/spatial refinement and matched kinetic scan
+at T40 with corrected electron-only seed. Retain slow modes and failures. No
+source changes or public artifact promotions this turn; logbook remains authority.
+
+## 2026-09-05 — kinetic preparation and concise resume checkpoint
+
+Previous turn progressed (completed Miller/RK4, two new jobs). This turn verified
+both current PIDs live; no restarts. #202 clean at8ce22e33; latest CI query has
+no failed checks, several pending. Do not call CI complete.
+
+Prepared matched_kinetic_manifest.toml in owned office snapshot, SHA256
+`876e06cd367b32f85d3be7f4f6f8a0d9c405f6f943730fa194289d1f4f8dfbd9`:
+RK4,dt.0002,200000 steps/T40,Nl16,Nm48,rate500,corrected kinetic fixture.
+Campaign-generated provenance explicit. **Not launched** until completed GX
+reference is audited; avoids old T20 horizon and imex2 order assumptions.
+Local copy /tmp/gkx-damping-route-20260905.Xk4sat/matched_kinetic_manifest.toml.
+
+Existing actual initializer test test_runtime_init_species_targets_all_vs_electrons_only
+passes on local JAX0.11.1f64. Source audit: combined batch uses this same builder;
+initial seed is allocated complex64, then linear diagnostics _initial_state
+promotes to complex128 when x64 is enabled. Recorded f64 evolution therefore
+does not imply f64 seed construction. No new test/code change needed here.
+
+Main plan resume checkpoint slimmed from130 to57 lines: review branches,
+established-vs-open evidence, only current live handles, next actions. Full
+historical hashes/commands, failed trials and terminal handles remain untouched
+in preceding log entries. No requirements or roadmap stages removed. This
+prevents stale completed process IDs from being mistaken for live work.
+
+Current jobs remain GX kinetic GPU0 session6455/PID1722824 and Nm128RK4 GPU1
+session17139/PID1723101. Verify current state before any restart. No source
+commit, benchmark promotion or merge this turn; proceed to their actual results.
+
+**Late-turn result supersedes the just-written live status above:** session17139
+completed exit0; PID1723101 terminal. Nm128 RK4 T150 gamma=.03573994271997718,
+omega=.4853682308408486. Growth half-horizon shift -.04612233489; both temporal
+screens pass5%, but this is too large to interpret the ~0.52% Nm96→128 change
+as resolved velocity convergence. CSV results/salpha_rate50_nm128_rk4.csv hash
+`6d63defff6caf3f66da5c8df602dea966c4309cb5c35fb6650818f7af288ee07`.
+
+Started horizon extension only, **session37619/PID1723912** (time1723911),
+GPU1, Nm128/RK4/dt.002/Nl16/rate50/exact ky unchanged, T300/150000 steps.
+Manifest salpha_nm128_t300.toml hash
+`4c6c9d259a245501db92ff98063c02217965b5a249ddf36997126c2f41e44d62`.
+Same owned snapshot/env/current reporter; --manifest salpha_nm128_t300.toml
+--cases cyclone_salpha_itg_nm128_t300 --stem results/salpha_rate50_nm128_t300,
+logs gkx-salpha-nm128-t300.stdout.log/stderr.log. Verified PID live. GX reference
+remains Nm48/T150, deliberately not a matched-resolution/horizon claim. Assess
+GKX temporal sensitivity first. New checkpoint updated; old17139 must not restart.
+
+## 2026-09-05 — parity coordinate preflight prevents wrong-mode comparisons
+
+Previous turn progressed (Nm128 result/horizon extension, checkpoint cleanup).
+Both live jobs reverified: GX kinetic PID1722824 at9m51s, diagnostic t6.68020
+with dt.0002; GKX T300 PID1723912 at2m42s, no stderr. No restart. Kinetic
+reference is still far from T40, not an observation failure or blocker.
+
+Audited run_case: arbitrary requested ky was integrated and paired with the
+nearest reference mode without a distance check. This can report a physically
+different mode as parity, and decimal rounding had already perturbed our early
+timestep probe. **77d2d5ed** rejects empty/nonpositive/nonfinite/duplicate grids,
+missing reference coordinates and duplicate matches before runtime setup.
+Accept only relative differences <=4*float32 epsilon (no absolute tolerance),
+then run at the exact stored reference coordinate. This handles GX f32 decimal
+roundoff, not interpolation or a physics-agreement tolerance. Default complete
+reference grid remains unchanged. No running source/reporter replaced.
+
+Tests exercise actual run_case preflight (setup would fail the test if reached),
+plus exact snapping in existing damping-override scans. Full release-gate file:
+**198 passed**, local JAX0.11.1f64, XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/parity-coordinates.xml SHA256
+`26e2381b8dedc6465e2fae55d4ce8c55bba9dd44a1ca4e3c1b73ad098cea4614`.
+Ruff lint/format across406files, architecture, whitespace and Sphinx HTML -W
+pass. Explicit test+36/tool+17 lines; no new files or solver changes. Pushed
+draft #202, no full-CI claim and no merge.
+
+Current exact-coordinate campaigns are unaffected. Future runs should use this
+reporter after the live jobs finish; preserve old reports and their provenance.
+Resume session6455/PID1722824 (GX kinetic GPU0) and session37619/PID1723912
+(Nm128T300 GPU1). Do not start kinetic GKX from an incomplete reference. No
+public benchmark promoted, full roadmap unchanged.
+
+## 2026-09-05 — serial/species-sharded rate derivative gate
+
+Previous turn progressed (coordinate validation/tests). Verified both live jobs,
+last check kinetic GX PID1722824 at12m21s and horizon GKX PID1723912 at5m12s,
+both RNl; no restart or terminal interpretation.
+
+Extended existing end-damping cross-route test, not a new file. For its field-free
+m3 state with active entries initially one, the exact Euler map is
+G3=(1+dt*R0)^3; derivative wrt fixed rate nu is
+3dt*(R0/nu)*(1+dt*R0)^2. Compared actual jax.grad through integrate_linear,
+serial and species-pmap, at dt=.1/.2 over3steps; require nonzero derivative
+and rtol1e-9/atol1e-12. No finite-difference tuning or tolerance weakening.
+**Two parametrized cases passed** on two logical CPU devices, JAX0.11.1f64.
+Command: XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu
+PYTHONPATH=src JAX_ENABLE_X64=true <local jax0111 python> -m pytest -q
+tests/unit/parallel/test_parallel_linear_velocity.py -k end_damping_rate_matches
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/damping-sharded-ad.xml.
+XML SHA256 `565df79bc0846b1d228f491c8ffbae31642b65bea2f461c12684052c2f4dfee9`.
+Local session21465 terminal. This checks discrete parameter differentiation in
+an analytic limit, not nonlinear transport, arbitrary coupled fields or JVP.
+
+**3d78fbf0** pushed to draft #202; test+30 lines explicitly budgeted, no source
+change. Full Ruff lint/format406files, architecture and whitespace pass. No
+full-CI claim. Repeat this new derivative gate on two GPUs after both current
+jobs finish; do not disturb active simulations to run it now. Previous GPU
+value-only route tests are not substituted for this new reverse-AD check.
+
+Resume unchanged session6455/PID1722824 and session37619/PID1723912. Inspect
+complete reference/horizon outputs before launching dependent comparisons.
+No PR merged, no public artifact promoted, full roadmap remains active.
+
+## 2026-09-05 — T300 estimate settled further; first CPU RHS triage
+
+Previous turn progressed (sharded derivative gate). Reverified live processes
+before work. **Nm128T300 session37619 completed exit0**, PID1723912 terminal:
+gamma=.03566183997672651, omega=.4853796122998043. Half-horizon growth shift
+.002190092920, frequency -2.3448572e-5: temporal sensitivity is reduced, not
+zero. CSV results/salpha_rate50_nm128_t300.csv SHA256
+`e454fd1857e47791ca8a668b19fa87e1c93c348cd0f086da1d6f84f47056669a`.
+Reference still Nm48/T150; do not label its5.27% gamma difference matched-resolution
+parity. Need Nm96 at the same horizon to separate temporal and velocity effects.
+
+Started **Nm96T300 session86753/PID1724990** (time1724989), GPU1, verified live.
+Manifest salpha_nm96_t300.toml SHA256
+`f36a321ea8c83ddd6730722baadc4600ae8c2b7d2cab5439e2e5ab8ec2c1e435`.
+Only Nm128→96; RK4,dt.002,T300,Nl16,rate50,exact ky unchanged. Same owned
+snapshot/env/reporter; --manifest salpha_nm96_t300.toml --cases
+cyclone_salpha_itg_nm96_t300 --stem results/salpha_rate50_nm96_t300, logs
+gkx-salpha-nm96-t300.stdout.log/stderr.log. No restart of terminal37619.
+Kinetic GX session6455/PID1722824 remains live at17m38s last check.
+
+CPU profiling progress using existing tool, no source edits: first attempt
+failed before computation because GX_PARITY_REF_DIR was unset. Copied completed
+11MiB s-alpha reference to local scratch matched_refs/ITG_cyclone; verified
+SHA256633742b0... matches recorded office source. Then ran (local JAX0.11.1):
+GX_PARITY_REF_DIR=/tmp/gkx-coupled-rate-20260905.shBvlR/matched_refs
+PYTHONPATH=src JAX_ENABLE_X64=false JAX_PLATFORMS=cpu <python>
+tools/profiling/profile_runtime_kernels.py full-linear-rhs --config
+tools/comparison/fixtures/parity/cyclone_salpha_itg.toml --Nl16 --Nm48
+--state z_wave --repeats20 --summary-json <scratch>/cpu-f32-rhs-profile.json
+--memory-profile <scratch>/cpu-f32-rhs-memory.pprof (actual options spaced).
+Session71662 exit0. Summary hash
+`a75ce6f55d0d480bde4f01444cbd73ef4a4c2fe197fca1c7f6836c872f372a1c`.
+First-call compile+execute .2983165s, synchronized warm average .0178058604s,
+20calls; rhs norm .156490535. HLO1809lines/117361bytes; token counts are textual
+triage, not timed kernel counts. Memory pprof saved, not a peak-memory claim.
+No cold-cache or end-to-end speedup claim. Artificial z-wave state/f32 CPU only;
+not the f64 evolution used by parity. No overlap with local compute-heavy work.
+Profiler does not automatically promote its seed like the time integrator, so
+do not infer f64 state solely from an enabled-x64 flag in future profiles.
+
+Resume current kinetic GX and Nm96T300 handles. Two-GPU rate-AD test remains
+pending until both GPUs free. Continue full roadmap; no merge or public promotion.
+
+## 2026-09-05 — Explicit precision for full-RHS profiling
+
+Committed and pushed **8d41d7d5** to draft PR202. Full linear/nonlinear RHS
+profilers now accept --state-dtype native/complex64/complex128, preserve native
+by default, and reject explicit complex128 if JAX x64 is disabled. Summaries
+record actual state_dtype, rhs_dtype and jax_enable_x64. Seed construction is
+not recomputed in higher precision; no claim that every coefficient shares the
+state dtype. Documented this contract in docs/performance.rst. No solver change.
+
+All36 tests in tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
+passed with local JAX0.11.1, PYTHONPATH=src. XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/profile-precision-tests.xml SHA256
+`140c59d75c3e421dfd50df5154db824a99c773c4cf01e66f1906bcd2dd2da7fb`.
+Full Ruff lint/format406files, architecture manifest, Sphinx -W and whitespace
+checks pass. Explicit budgets increased16 test/22 tool lines. Commit/push
+session24373 exited0. PR202 latest checks: no failures, multiple pending;
+not a full-CI completion claim.
+
+Repeated preceding CPU full-linear-rhs command with JAX_ENABLE_X64=true and
+--state-dtype complex128, same z_wave/Nl16/Nm48/20 repeats and local reference.
+Session41472 exited0. Both state and RHS complex128. First-call compile+execute
+.329830833s; synchronized warm mean **.041784449999s**, RHS norm
+.15649053450845635. Summary cpu-f64-rhs-profile.json in the same scratch:
+SHA256 `4383c2bac5ee9074e9c6d62bc691a3c734422f4e642300c0b8e4ea23ca6543c2`.
+This and f32's17.8ms are single artificial-state kernel profiles, not isolated
+repeat distributions, end-to-end timings or an accuracy-based precision choice.
+
+Both office jobs reverified live: GX session6455/PID1722824 at25m01s; GKX
+Nm96T300 session86753/PID1724990 at7m32s. No restart or modification of either
+running snapshot. Resume by checking these exact processes and exits; then
+compare matched-horizon Nm96/128 estimates and audit complete kinetic reference
+before launching the prepared matched kinetic solve. Two-GPU AD repeat remains
+pending until both GPUs free. Full R0–R9 scope remains active; nothing merged.
+
+## 2026-09-05 — Matched-horizon Hermite pair; Laguerre probe started
+
+Previous turn progressed: precision contract/tests/profile and logbook committed.
+Rechecked processes: Nm96T300 PID1724990 absent, then polled original session86753:
+**exit0**, remote time log also exit0. Do not restart it. CSV
+results/salpha_rate50_nm96_t300.csv SHA256
+`54f782be81203ba6961382340764e239f1f5a74db6cc743393f072ef88c40a05`.
+Gamma .03549582361114748, omega .4844506694454861; half-time shifts
+.0016798012164741796 and .0001612000687686131 respectively.
+At matched T300, Nm96→128 changes gamma **0.4677068%**, omega **0.1917518%**.
+Both temporal screens pass, but temporal shifts remain comparable to these
+small differences. Two fine Hermite points are not an asymptotic convergence
+proof; Nm-dependent hypercollision still changes the retained-m operator.
+CSV reference Nm48/T150 remains deliberately unmatched: its4.78%/5.27%
+growth differences must not be reported as matched-resolution code parity.
+
+Next independent velocity check launched on freed GPU1: **Nl16→24 only** from
+Nm96T300, keeping exact ky, geometry, rate, RK4,dt.002,T300 fixed. Manifest
+salpha_nl24_nm96_t300.toml SHA256
+`ed8ee22aa30d6043c7313f46eca2deac407c02d04e16bf39d8275cdee00879c4`.
+Local copy /tmp/gkx-coupled-rate-20260905.shBvlR/salpha_nl24_nm96_t300.toml;
+scp to owned campaign directory. Same reporter/environment as preceding run:
+--manifest salpha_nl24_nm96_t300.toml --cases cyclone_salpha_itg_nl24_nm96_t300
+--stem results/salpha_rate50_nl24_nm96_t300. Logs
+gkx-salpha-nl24-nm96-t300.stdout.log/stderr.log. **Session67452/PID1725909**
+(time1725908) verified RNl at12s. No production snapshot changed.
+
+Source check: cache_arrays.hypercollision_damping and
+dissipation._hypercollision_kz_source show active kz hypercollision depends on
+Hermite indices, not Nl. Fixture constant hypercollision weight and nu_hyper
+are zero. Thus this Nl check does not have the same explicit retained-index
+hypercollision rescaling as Nm refinement; field/velocity truncation still changes.
+
+GX kinetic session6455/PID1722824 remains verified RNl at26m54s. Prepared matched
+kinetic GKX run remains unlaunched. CI202 latest query has additional passes,
+no failures, multiple pending; no full-CI claim. Resume both live handles,
+compare Nl24 result to completed Nl16/Nm96/T300, then parallel resolution and
+regularization controls. Two-GPU reverse-AD gate still waits for both GPUs.
+Nothing merged; full roadmap remains active.
+
+## 2026-09-05 — Joint temporal-screen parity headline
+
+Previous turn progressed by completing the matched-horizon Hermite comparison
+and launching the independent Laguerre control. Both current processes freshly
+verified live. Audited comparison reporting: per-row joint flags were present,
+but console "settled" and its error maximum still meant GKX-only. Fixed in
+**6eb0e4a5**, pushed to draft PR202. Preserve historical GKX-only JSON fields;
+add joint finite-relative-error count and joint maximum. Console explicitly
+labels GKX temporal count, both-code count and joint-filtered error maximum.
+Empty or undefined relative-error coverage returns NaN, not zero. These screens
+still do not establish resolution convergence or predictive validation.
+
+48 parameterized reporting tests pass, including unknown, drifting/nonfinite
+reference frequency, unsettled GKX and zero reference growth. Command:
+PYTHONPATH=src <local jax0111 python> -m pytest -q
+tests/release/test_release_gates.py -k parity_convergence
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/joint-parity-summary.xml.
+XML SHA256 `ef0d347e9689ede38d02def7a3fe46556d563d8fbbf882c6f39666153e5750a8`.
+Ruff lint/format406files, architecture and whitespace gates pass. Explicit
+budget +11 test/+10 tool lines; no added files or solver changes.
+Sessions87533(test),6765(check/commit/push) terminal exit0.
+
+Running office reporter remains0acbd221; do not overwrite during jobs or imply
+its existing JSON already has these new summary fields. GX kinetic
+session6455/PID1722824 verified RNl at29m05s; Laguerre-control
+session67452/PID1725909 RNl at2m23s. Resume those handles before restarting
+anything. Latest pre-push CI202 query: no failures, several pending/queued;
+new commit requires fresh CI. No merges, no public validation promotion.
+
+## 2026-09-05 — Prevent a false parallel-resolution study
+
+Previous turn progressed: joint temporal summary contract implemented/tested.
+Both GPU processes verified RNl: kinetic1722824 at29m43s, Laguerre1725909 at3m01s.
+Reviewed spatial-refinement path before preparing its deck. Important contract:
+geometry/core.py apply_geometry_grid_defaults replaces Nz and z bounds from
+FluxTubeGeometryData, clearing ntheta/nperiod/zp. Runtime scan _batch_scan_setup
+applies this before constructing the actual spectral grid. The parity reporter
+currently records cfg.grid.Nz, not this effective value: latent provenance gap
+if requested and imported sampling disagree. Current campaign is96/96, so its
+existing resolution labels are unaffected.
+
+Executed a local CPU probe with completed matched s-alpha reference, same
+PYTHONPATH=src/local JAX0.11.1 environment, using load_runtime_from_toml,
+build_runtime_geometry, dataclasses.replace(grid,Nz=...), then
+apply_geometry_grid_defaults. Requested Nz96 **and192 both resolve to96**, with
+96 imported points and bounds[-9.42477798461914,9.42477798461914]. Thus merely
+changing the fixture's Nz would silently repeat the same spatial solve.
+
+Next spatial action: resolve/report effective grid in the comparison tool with
+a regression for mismatched requested/imported sizes; generate same-domain
+finer reference geometry before launching refinement. GX source deck inspected:
+ntheta32,nperiod2 =>96 total points. Increase ntheta to64 at fixed nperiod2 for
+192 points, preserving physical domain and end-damping rate50. Obtain geometry
+from an independently generated GX output (separate owned case), not arbitrary
+upsampling of the96-point geometry. Check actual coordinates/coefficients and
+timestep sensitivity before interpreting differences. Keep velocity and window
+settings fixed to a completed baseline. No new spatial solve launched yet.
+
+No edits to running snapshots or production code this turn. This is new verified
+evidence that changes the next experiment, not a completion claim. Resume live
+session6455/PID1722824 and session67452/PID1725909; no restarts or merges.
+
+## 2026-09-05 — Effective parallel-grid provenance implemented
+
+Previous turn produced verified evidence of the requested/imported Nz mismatch.
+Implemented **a60de104**, pushed to draft PR202: after scans, resolve geometry,
+apply_geometry_grid_defaults and build_spectral_grid using the runtime path.
+Report actual grid.z.size as resolution.Nz and retain deck value as requested_Nz.
+This additionally handles analytic ntheta/nperiod overrides. Metadata resolution
+is outside measured scan time; it reloads geometry, not an additional solve.
+Production evolution unchanged. Current campaign96/96 labels remain valid.
+
+Executed48 parameterized parity reporting tests with a real sampled12-point
+SlabGeometry injected at the runtime geometry-builder boundary, while the deck
+requests a different Nz. Real grid-default and spectral-grid builders execute;
+all cases report12 and preserve distinct requested_Nz. Existing temporal-summary
+assertions also pass. Test session41408 exit0, command PYTHONPATH=src
+<local jax0111 python> -m pytest -q tests/release/test_release_gates.py
+-k parity_convergence --junitxml=<scratch>/effective-grid-parity.xml,
+scratch=/tmp/gkx-coupled-rate-20260905.shBvlR. XML SHA256
+`ca2e5c8bee6d1f2c081ae0a3d8f1130a4fd03d828c1476c94b75b4107327f4b1`.
+Ruff lint/format406files, architecture and whitespace pass; checks/commit/push
+session59460 exit0. Explicit budget+10test/+9tool lines. No full-CI claim.
+
+Both office jobs reverified RNl: kinetic session6455/PID1722824 at32m57s;
+Laguerre session67452/PID1725909 at6m15s. Reporter in running snapshot remains
+0acbd221; do not overwrite it or attribute new metadata to its outputs. Continue
+these handles; finer same-domain GX geometry generation remains next spatial
+task after a GPU frees. Two-GPU AD gate still pending; nothing merged.
+
+## 2026-09-05 — Full release regression and finer geometry input ready
+
+Previous turn progressed: effective-grid reporting fixed and tested. Revalidated
+clean code worktree at a60de104; PR202 is OPEN at that SHA. Initial checks query
+briefly returned no checks; a second authoritative PR query shows38 checks.
+Do not interpret that observation gap as a failed or absent workflow.
+
+Ran **all198 tests** in tests/release/test_release_gates.py, not just the48
+reporting parameterizations. Local JAX0.11.1, PYTHONPATH=src, session62749 exit0.
+XML /tmp/gkx-coupled-rate-20260905.shBvlR/release-current.xml SHA256
+`03a57a8f7ee6d219d7bacd0b0167ba23f6fa97617b6696c65b0a1d9c469d0142`;
+stdout release-current.log in same scratch. This does not replace full CI.
+
+Prepared **salpha_ntheta64_geometry.in** locally in that scratch and copied to
+office campaign root. SHA256
+`8a33469f5b30beb45392cd397416268435288642d282f04a40339b81fb504405`.
+Copied completed GX s-alpha input, changed ntheta32→64, retained nperiod2,
+dt.002/rate50 and all physics, shortened t_max150→.002 to export geometry only.
+No new solve launched: both GPUs occupied. Source GX src/run_gx.cu128–160
+confirms timestep loop and final diagnostics/finish; final exported geometry
+still must be inspected after actual completion. The short output must NOT
+replace the T150 growth reference or be treated as temporal validation.
+
+When GPU1 frees, run existing GX binary in campaign root with basename
+salpha_ntheta64_geometry, CUDA_VISIBLE_DEVICES=1 and scoped venv PATH as earlier.
+Use distinct stdout/time logs. Validate192 points, unchanged bounds/model,
+finite coefficients, shared-coordinate agreement with baseline and output hash
+before using a separate GKX fixture pointing to this geometry. Reference spectrum
+for mode coordinates remains the completed T150 file; report mismatched spatial
+resolution explicitly. Do not overwrite baseline geometry or reference files.
+
+Latest live processes: GX6455/PID1722824 RNl34m39s; Laguerre67452/PID1725909
+RNl7m57s. Polled original session67452 again: still running, no new output.
+No restart. Continue both current handles, then finer geometry generation;
+two-GPU AD pending. Full roadmap active; nothing merged.
+
+## 2026-09-05 — Laguerre sensitivity is material; fine geometry validated
+
+Previous turn progressed with198 release tests and prepared geometry input.
+Verified both live jobs, waited on original67452, then obtained **exit0**:
+Nl24/Nm96/T300 gamma=.0330096971753523, omega=.5002360481323374.
+Compared with Nl16 same Nm/horizon, gamma changes **−7.003997%**, omega+3.258408%.
+Half-time shifts−.005504888381 and−.000255765171 pass the5% temporal screen.
+This material Laguerre dependence prevents velocity-convergence claims despite
+small fine-Hermite differences. CSV results/salpha_rate50_nl24_nm96_t300.csv
+SHA256 `a9c47a1ebe162da8af2bf217cd407b242faddf5422a26ec9b2eba47d74f81efb`.
+Session67452/PID1725909 terminal; do not restart.
+
+40 tests in tests/unit/geometry/test_geometry.py pass on local CPU/JAX0.11.1,
+PYTHONPATH=src JAX_ENABLE_X64=true. Session96941 exit0. XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/geometry-current.xml SHA256
+`0696141442d3ec429e4cb14ea6828032a107bc5b7891c31d4e665faa8a643f01`.
+CI202 query7success,11in-progress,19queued,1skipped; no full-CI claim.
+
+Ran prepared salpha_ntheta64_geometry.in on freed GPU1 using existing GX binary
+and scoped venv PATH in campaign root. **Session33533 exit0**, time log exit0.
+Logs salpha-ntheta64-geometry.stdout.log/time.log. Geometry-only output
+salpha_ntheta64_geometry.out.nc SHA256
+`b139b1fbb908eb95cf6f50ac32a7ec64de5b50ae75c9100b318fdd022324f23b`.
+Loaded both GX files with GKX load_imported_geometry_netcdf on office CPU:
+baseline96/fine192 points, effective Nz96/192, identical bounds
+[-9.42477798461914,9.42477798461914]. Fine profiles finite; exact shared-point
+agreement at fine[::2] for theta,bmag,bgrad,gds2,gds21,gds22,cv,gb,cv0,gb0,
+jacobian,grho. This is geometry validation only; one-step frequencies unusable
+as a physics reference. Do not replace completed T150 reference spectra.
+
+Started next **Nl32/Nm96/T300** on GPU1 at original96-point geometry to isolate
+Laguerre refinement, not mix spatial changes. **Session26034/PID1727418**
+(time1727417), RNl verified5s. Manifest salpha_nl32_nm96_t300.toml SHA256
+`690e922075c1025b185d02461a37d5d55c6c45ce6459157c077f3f6247b4a537`.
+Same environment/reporter0acbd221, RK4dt.002/rate50/exactky; --cases
+cyclone_salpha_itg_nl32_nm96_t300 --stem results/salpha_rate50_nl32_nm96_t300.
+Logs gkx-salpha-nl32-nm96-t300.stdout.log/stderr.log. Local manifest in previous
+scratch and remote campaign root. GX kinetic6455/PID1722824 RNl38m32s remains
+live. Resume these two only; finer geometry ready for subsequent spatial test.
+No production code change, snapshot overwrite, restart or merge; full scope active.
+
+## 2026-09-05 — Public parity claims now distinguish historical evidence
+
+Previous turn progressed with completed Laguerre experiment, independently
+generated/checked fine geometry and next Nl32 launch. Reviewed the public
+verification_matrix.rst against these findings. Its older parity narrative
+still attributed Cyclone errors solely to integration length, treated shared
+finite-resolution agreement as convergence, and identified a kinetic branch
+from a frequency mismatch despite the subsequently found initialization gap.
+
+**57cf786b** pushed to draft PR202: mark table historical/pending fixed-rate
+regeneration; preserve old numerical records, remove those exclusive causal
+claims, and leave kinetic branch identification open until matched inputs,
+eigenfunctions and branch continuity support it. Explain current full/half
+growth-and-frequency screens, unknown reference status and joint finite-error
+coverage. Separate temporal, spatial/velocity, cross-code and predictive
+requirements; explain requested versus imported effective Nz. No replacement
+matrix or broader physics validation claimed. Active plan/logbook linked.
+
+Strict Sphinx -W build and git diff --check pass. Command PYTHONPATH=src
+<local jax0111 python> -m sphinx -b html -W docs
+/tmp/gkx-rate-wheel-20260905.aBK527/docs; log
+/tmp/gkx-coupled-rate-20260905.shBvlR/docs-parity-scope.log. Session74242
+(build/commit/push) terminal exit0. Documentation-only commit, no solver changes.
+
+Reverified both office jobs RNl: kinetic session6455/PID1722824 at41m12s;
+Nl32 session26034/PID1727418 at2m45s. Running reporter remains0acbd221.
+Resume these handles; no restart or snapshot changes. No merge; full scope active.
+
+## 2026-09-05 — Memory/timing scope audit for publication evidence
+
+Previous turn progressed with corrected historical public parity claims.
+Read completed JSON cost records in office campaign results: Nm96T300 primary
+scan306.378781s, RSS1496.933594MiB, allocator peak68.673828MiB; Nm128T300
+392.785458s/1490.796875MiB/70.188477MiB; Nl24Nm96T300
+422.990467s/1498.718750MiB/71.000977MiB. These are triage records, not isolated
+equal-accuracy performance claims (the cases differ in resolution and accuracy).
+
+Source audit: elapsed wraps primary scan only; half-horizon check is outside.
+RSS uses RUSAGE_SELF lifetime maximum; device counter is first visible device
+peak_bytes_in_use, neither reset per case nor all-device reserved memory.
+Both denominators are1024² despite historical mb field names. Previous
+nvidia-smi12168MiB usage cannot be compared directly to these allocator peaks.
+Checked primary JAX documentation https://docs.jax.dev/en/latest/gpu_memory_allocation.html:
+default75% GPU preallocation, alternative allocator/fragmentation/runtime tradeoffs.
+This supports distinguishing reservation from storage, not a measured decomposition
+of the observed12168MiB or a reason to alter active-run allocator settings.
+
+Committed/pushed **20bb9600** to draft PR202: concise performance documentation
+of timing scope, lifetime/first-device counters, MiB, fresh-process attribution,
+and prohibition on comparing mismatched GX/JAX memory metrics. Strict Sphinx -W
+and whitespace pass, session14949 exit0. Build log
+/tmp/gkx-coupled-rate-20260905.shBvlR/docs-memory-scope.log. No solver or measurement
+implementation change. Full phase/memory profiling remains R3 work.
+
+Latest authoritative process check: GX kinetic6455/PID1722824 RNl43m00s;
+Nl32 GPU126034/PID1727418 RNl4m33s (session26034, GPU1). Resume both; no restart.
+Initial CI202 failure query empty, not evidence all checks finished. Nothing merged.
+
+## 2026-09-05 — Fresh geometry, collision and Hermite physics gates
+
+Previous turn progressed by auditing/documenting timing and memory scopes.
+Revalidated clean code worktree20bb9600 and live GPU handles before testing.
+CPU/JAX0.11.1 with PYTHONPATH=src JAX_PLATFORMS=cpu JAX_ENABLE_X64=true:
+
+- tests/validation/physics_gates/test_geometry_physics_contracts.py: **5pass**,
+  session14458 exit0. XML /tmp/gkx-coupled-rate-20260905.shBvlR/geometry-physics-current.xml
+  SHA256 `bd34e42a3990549aaffa6263a3eee9ee916c68ff5f9abc68085e9a25427141d6`.
+  Scope: zero-shear radial dependence, field-strength variation, parallel
+  scaling and electromagnetic zonal-limit contracts; not imported stellarator
+  geometry convergence or all model combinations.
+- tests/validation/physics_gates/test_collision_physics.py plus
+  test_hermite_hierarchy_physics.py: **42pass,0skip,0fail**,79.742s; session70347
+  terminal exit0. XML collision-hierarchy-current.xml in same scratch SHA256
+  `32cd2f03c34842c568d850fdaaa4f7657ed3db9a202092d8a7fa682cd48bca0f`.
+  Commands use python -m pytest -q <files> --junitxml=<path>; stdout matching
+  .log files retained. Covers scoped drift-kinetic invariant/dissipation and
+  analytic-coefficient checks, finite-k limit/scaling, conductivity ratios,
+  closure/recurrence and bounded hierarchy examples, not all C0–C4 requirements.
+
+Test-source audit found finite-Larmor self-adjointness/conservation tests that
+fit plain-matrix defect scaling in B, rather than directly proving the claimed
+weighted identities. Kept existing regression tests unchanged; explicitly added
+to C2/C3 acceptance the need to derive and test physical functionals and metric.
+A passing defect exponent alone does not certify a valid finite-k collision
+operator. No arbitrary-species, nonlinear-Coulomb or predictive claims added.
+
+Latest live check: GX kinetic6455/PID1722824 RNl45m47s; Nl32
+session26034/PID1727418 RNl7m20s. Resume those exact handles. Initial CI failure
+query empty, not full-CI completion. No production edits, restarts or merges.
+
+## 2026-09-05 — Literature audit removes unsupported collision interpretation
+
+Previous turn progressed with47 fresh scoped physics tests. Rechecked primary
+Frei et al. advanced linearized collision-operator paper, public full HTML:
+https://arxiv.org/html/2104.11480 (v2). Sections3.1–3.2 explicitly define the
+gyroaverage/adjoint pair (HTML Eq48) and transformed Sugama test operator
+(HTML Eq89); no access blocker. Mathematical inference: if C is self-adjoint
+in its physical space, U* C U remains self-adjoint on the projected space.
+Therefore gyroaveraging alone is not a justification for arbitrary observed
+matrix asymmetry. The stored table's state convention, metric, truncation and
+field response must be derived before assigning physical meaning to it.
+
+**bb9dcbfc** pushed to draft PR202: README/operators documentation scopes strong
+conservation/entropy/symmetry claims to the tested like-species drift-kinetic
+matrices. Finite-wavelength defect scaling is labeled regression evidence, not
+a proof. Test docstrings no longer claim a derived gyroaveraging-weighted metric
+that the test never constructs. Assertions and all production code unchanged;
+the prior42-test pass remains evidence for the same assertions, not a new proof.
+This flags a validation gap, not a confirmed erroneous finite-k operator or
+permission to symmetrize a matrix without the physical derivation.
+
+Ruff lint/format406files, strict Sphinx -W and whitespace pass. Build log
+/tmp/gkx-coupled-rate-20260905.shBvlR/docs-collision-scope.log. Session68171
+(checks/build/commit/push) exit0. Next C2 audit: derive the stored-matrix map,
+verify its adjoint identity with independent coefficients/quadrature, then
+conservation/entropy and truncation/interpolation ladders. Preserve negative
+evidence; do not mistake a B² regression for that closure.
+
+Latest live processes: kinetic6455/PID1722824 RNl47m59s; Nl32
+26034/PID1727418 RNl9m32s. Resume these handles. No restart, snapshot overwrite
+or merge; full research/publication scope remains active.
+
+## 2026-09-05 — Finite-k runtime mapping includes polarization terms
+
+Previous turn progressed via literature-based correction of unsupported symmetry
+claims. Traced collision_tables.build_finite_wavelength_coulomb_operator into
+EqualSpeciesFiniteWavelengthCoulombOperator.apply and
+apply_finite_wavelength_coulomb_moment_operator in collisions.py. Runtime
+interpolates test/field matrices PLUS test_phi1,field_phi1,test_phi2,field_phi2,
+multiplies vectors by target/source charge-over-temperature and solved phi,
+then adds them to the distribution-dependent collision output. Thus the
+matrix-only finite_wavelength_matrix test helper omits a nonzero part of the
+full runtime map; the audit has NOT found missing polarization in production.
+
+Executed a local NumPy probe on the shipped8-moment table (CPU, PYTHONPATH=src,
+JAX_ENABLE_X64=true; no evolving solve). For C=test_matrix+field_matrix and
+p=sum of four phi vectors, Frobenius/Euclidean norms:
+
+| Bessel B | norm(C−C.T) | norm(p) | norm(C) |
+|---|---:|---:|---:|
+| 0 | 1.778572333e-16 | 6.687193181e-62 | 3.812753151 |
+| .375 | .01332277058 | .05049399151 | 3.782238074 |
+| 1 | .1574536315 | .3262640064 | 3.947760896 |
+
+This does not prove cancellation, dissipation or a metric identity. It makes
+the next C2 test explicit: derive the g/h plus field-response map, form its
+coupled linear action, compare independently generated physical functionals
+and adjoints, then vary tables/moment orders/interpolation. Do not remove
+polarization or symmetrize C merely to make the old defect test pass.
+
+Last authoritative check: kinetic6455/PID1722824 RNl49m38s; Nl32
+26034/PID1727418 RNl11m11s. Original26034 polled again: still running, no new
+output. Resume these handles; neither terminal. No production changes, restarts,
+snapshot modifications or merges. Full roadmap stays active.
+
+## 2026-09-05 — Spatial-refinement timestep preflight
+
+Previous turn progressed: full finite-k collision mapping traced and measured.
+Both current jobs reverified live; no CI202 failures in the current query and
+clean code worktree, without claiming full CI completion. Nl32 original
+session26034 polled, still running.
+
+Executed independent host preflight on office CPU in owned campaign snapshot,
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=true PYTHONPATH=src and current matched reference
+environment. Loaded original s-alpha fixture, then substituted only the completed
+192-point geometry file. Used build_runtime_geometry, apply_geometry_grid_defaults,
+build_spectral_grid, select_ky_grid (nearest actual grid ky=.55),
+ensure_flux_tube_geometry_data and build_runtime_linear_params(Nm=96), followed by
+_linear_frequency_bound(Nl=32,Nm=96). No evolving solve or GPU allocation.
+
+| Actual Nz | radial frequency | binormal frequency | streaming frequency | RK4 estimated dt |
+|---|---:|---:|---:|---:|
+| 96 | 0 | 977.3476078702 | 80.6231441743 | .002398932102 |
+| 192 | 0 | 977.3476078702 | 161.2462883485 | .002229065173 |
+
+Runtime cfl=.9, RK4factor2.82. dt.002 lies below both estimates, permitting an
+initial fixed-dt spatial comparison without deliberately changing time and
+space together. This estimate is not a full coupled-operator stability proof
+and includes drive in its conservative binormal bound; follow with temporal
+control before a spatial-convergence claim. Actual grid ky is .55; the manifest
+reference coordinate is .550000011920929, same selection path as campaign.
+
+Next: inspect Nl32 exit/result before choosing Nl refinement versus first spatial
+run; validated192-point geometry is ready. Latest processes kinetic6455/PID1722824
+RNl51m53s and Nl32 26034/PID1727418 RNl13m26s. Keep both handles; do not restart
+due to buffered logs. No source edits or merges; full scope active.
+
+## 2026-09-05 — Nl32 rejects velocity convergence; temporal control launched
+
+Previous turn was a verified wait. Rechecked authoritative processes: Nl32
+PID1727418 absent, polled original session26034 and obtained **exit0**; time log
+also exit0. Results/salpha_rate50_nl32_nm96_t300.csv SHA256
+`90efe742d9f8f5ac948f3b9fbb9227402d5edfcbc260a8f5ee914e673ac66439`.
+Gamma=.024852092124449224, omega=.5049331701718024. Compared with Nl24 at
+the same Nm96/Nz96/T300/dt.002, gamma changes **−24.712753%**, omega+0.938981%.
+Half-time shifts+.005781475200 and−.000222202091 pass temporal screen, but
+the Laguerre sequence is not converging at the current resolutions. Do not
+promote the earlier matched Nl16 parity as predictive validation.
+
+Before increasing Nl again or changing Nz, launched **dt.002→.001 only** at
+Nl32/Nm96/Nz96/T300/rate50 with300000steps, RK4, exact same manifest ky.
+This controls temporal discretization rather than assuming a CFL estimate
+ensures accuracy. Spatial192-point geometry remains validated and ready but
+unused in this solve. No cause (truncation, branch selection, integration or
+other defect) is established solely by these growth-rate shifts.
+
+**Session73383/PID1729118** (time1729117), GPU1, RNl verified21s. Manifest
+salpha_nl32_nm96_t300_dt_half.toml SHA256
+`483dfe63c3ffa5ab080d7b6baccd249f678a965a090c86e069cd2e6a8ec767ad`.
+Local /tmp/gkx-coupled-rate-20260905.shBvlR copy, scp to owned office campaign.
+Same JAX0.10.2/x64/environment/reporter0acbd221; --cases
+cyclone_salpha_itg_nl32_nm96_t300_dt_half --stem
+results/salpha_rate50_nl32_nm96_t300_dt_half. Logs
+gkx-salpha-nl32-nm96-t300-dt-half.stdout.log/stderr.log. Do not restart terminal
+26034. Kinetic GX6455/PID1722824 remains RNl56m10s; complete reference required
+before prepared matched kinetic GKX launch. No code edits, snapshot overwrites
+or merges. Full roadmap remains active.
+
+## 2026-09-05 — Nl coefficient controls; matched kinetic solve launched
+
+Previous turn progressed with Nl32 result and fixed-horizon dt control. Probed
+actual s-alpha cache on local CPU/JAX0.11.1 x64, exact runtime setup/select-ky
+path, Nm96,Nl16/24/32. Cached b range[.421200979915572,12.729942305739831].
+Compared sum_l J_l² to scipy.special.i0e(b): maximum relative tails
+3.657448916e-6,2.960688450e-14,3.358543856e-15 respectively (absolute
+4.131643535e-7,3.344546862e-15,3.885780586e-16). Direct polarization-sum
+truncation is tiny at Nl24; not a rigorous eigenvalue-sensitivity bound.
+
+Second full-RHS probe: complex128 state with G_l0m0=.001 sin(z),
+G_l1m2=.001 i cos(z), all other moments zero; full runtime terms, same grid,
+Nm96, compare retained first8 Laguerre/4Hermite RHS rows. Norm .156165915943;
+Nl16→24 relative difference1.011741633e-11, Nl24→32 difference6.368796233e-20.
+No obvious low-order rescaling for this probe, not a complete operator proof
+or diagnosis of the observed growth changes. Sessions22266 and45276 exit0.
+
+**GX kinetic session6455 completed exit0**, PID1722824 terminal and time log
+exit0. Output matched_refs/ITG_cyclone/itg_miller_kinetic_electrons.out.nc SHA256
+`f3f89a5c360d205b44caaffb2a3f33712edfef999478470fb07f874001047905`.
+Reporter reads2001samples,t_end40.000198989509954,0nonfinite frequency values.
+Audited all Phi2/Apar2/Wphi/Wapar arrays and time: finite. This is not a claim
+that raw complex-field histories were stored or audited. Positive ky7modes;
+reference full/half growth+frequency screen passes onlyky.4,.5 (2/7).
+Full gamma=[.031955565,.158830750,.230318412,.265107186,.254175820,
+.216957123,.138781044]; other modes need longer-reference settling before
+validation. One-step overshoot reflects GX time accumulation; not exact T40.
+
+After this completion/audit, launched prepared **matched_kinetic_manifest.toml**
+unchanged on GPU0: RK4dt.0002,200000steps,T40,rate500,Nl16Nm48, corrected
+electron-only seed. **Session40474/PID1729837** (time1729836), RNl verified1s.
+Same owned snapshot/reporter0acbd221/env; --cases cyclone_miller_kinetic_electrons
+--stem results/kinetic_rate500_matched_t40. Logs
+gkx-kinetic-rate500-matched-t40.stdout.log/stderr.log. All7ky retained; limited
+reference settling must propagate into joint counts. Do not restart6455.
+Nl32 dt-half73383/PID1729118 RNl3m37s remains live onGPU1. Resume these two new
+current handles; both GPUs occupied so two-GPU AD remains pending. No source
+changes, snapshot overwrite or merge. Full scope active.
+
+## 2026-09-05 — Measured route to removing duplicate half-horizon solves
+
+Previous turn progressed with reference completion and matched kinetic launch.
+Re-read authoritative checkpoint/clean worktrees: plan4d81887b, codebb9dcbfc;
+both new GPU jobs verified live. No CI202 failures in query; not full completion.
+
+Performance source audit: orchestration_scan._run_batch_diagnostics retains
+phi/density histories, but run_runtime_scan_batch fits once and drops them.
+Parity tool then independently integrates T/2:1.5T total step work. A bounded
+multi-window fit can potentially reduce this toT without changing dynamics.
+API work must avoid exporting large state histories or monkeypatching internals.
+
+Executed CPU/x64/JAX0.11.1 pilot using actual imported s-alpha geometry, one
+selected ky, Nl4/Nm8, Gaussian l0m0 complex128 seed, runtime params/terms,
+integrate_linear_diagnostics RK4dt.001. Runs(steps,stride)=(100,5),(100,10),(50,5).
+For both phi and density,20sample full history finite; prefix versus separate
+50step run max error0, full[1::2] versus stride10 history max error0.
+Session75990 exit0. This is one fixed-step CPU case, not general CPU/GPU proof.
+
+Next implementation acceptance: shared trajectory with cadence divisible into
+both original cadences; slice history BEFORE window-specific project/auto mode
+selection, reproduce both fits versus independent runs, test odd horizons and
+nondividing requested strides, record whole-workflow timing and bounded memory.
+Step-count saving is potentially one third, not a measured wall-time speedup.
+Do not replace current running reporter mid-campaign. Added this scoped R3 task.
+
+Latest live handles: dt-control73383/PID1729118 RNl6m48s; kinetic40474/PID1729837
+RNl3m12s. Resume these, no restart. No source edits or merges; full scope active.
+
+## 2026-09-05 — Reusable-prefix regression contract committed
+
+Previous turn progressed with actual trajectory-reuse pilot. Inspected public
+scan facade/options/batch dependency path: histories exist only inside batch
+orchestration and current return type contains fitted spectra. Multi-window
+support still needs deliberate API work; no monkeypatch capture or second solver
+implementation added. Committed **8bae97a2** to draft PR202:29-line regression in
+existing tests/unit/linear/test_linear.py, explicitly budgeted, no new files.
+
+test_diagnostic_prefix_and_cadence_preserve_trajectory executes real streaming
+and fixed-rate end damping on nonzero fields/density, RK4 and IMEX2, horizons24
+and25, full diagnostic strides3/5 and half-horizon stride2. Compares sampled
+dense histories to separately integrated trajectories; nondividing stride is
+explicitly rejected. Does not yet test window-specific project/auto mode fits,
+GPU equivalence, multi-window API or actual time savings.
+
+Local CPU/JAX0.11.1 PYTHONPATH=src, separate JAX_ENABLE_X64=true/false commands:
+python -m pytest -q tests/unit/linear/test_linear.py -k diagnostic_prefix_and_cadence
+--junitxml=<scratch>/prefix-cadence-f64.xml (or f32). **4pass each precision**;
+sessions24974/66279 terminal exit0. Scratch=/tmp/gkx-coupled-rate-20260905.shBvlR.
+Hashes f64 `89e79117073e9de7d9dbaf9275188d1f98c4f7952ed60d08a31f2c45130d5c76`,
+f32 `ab1334b1929712462fb6bcb3e8e8df1f53741b18244a5e9d0c17e92653e580ee`.
+Ruff lint/format406files, architecture and whitespace pass; commit/push17967exit0.
+Production source and active campaign unchanged; optimization remains pending.
+
+Latest verified live: dt-half73383/PID1729118 RNl10m42s; matched kinetic
+40474/PID1729837 RNl7m06s. Resume these; two-GPU derivative test still pending
+until both free. No restart, snapshot overwrite or merge; full scope active.
+
+## 2026-09-05 — Current-head end damping and core nonlinear regressions
+
+Previous turn progressed with cross-precision diagnostic-prefix regression.
+At clean code8bae97a2, ran local CPU/JAX0.11.1, PYTHONPATH=src,
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=true:
+
+| Test file | Result | XML SHA256 |
+|---|---|---|
+| tests/validation/physics_gates/test_end_damping_physics.py | 1pass,14.183s | `2282192f543560f99078ae9fe31a5e80490466575e0e3cf1e8e082fe89273bd1` |
+| tests/unit/nonlinear/test_nonlinear.py | 39pass,0skip,122.618s | `55ffd1c25925d172222411701f60e115186da659518aafe074f38f718ae69585` |
+
+Commands python -m pytest -q <file> --junitxml=<scratch>/<name>.xml; scratch
+/tmp/gkx-coupled-rate-20260905.shBvlR, names end-damping-physics-current and
+nonlinear-core-current. Nonlinear stdout saved in matching .log. Sessions5238
+and77010 terminal exit0. The first is a measured linked-end compatibility gate,
+not literature validation. Nonlinear coverage includes checkpoint/IMEX routes,
+adaptive eager/compiled equivalence and short linked/compressed-FFT physical
+heat-flux gradient checks, not saturated transport or distributed GPU validation.
+
+CI202 early query1success,15running,21queued,1skipped: new commit checks remain
+in flight, not a global green claim. Latest process check during tests:
+dt-half73383/PID1729118 RNl13m53s; kinetic40474/PID1729837 RNl10m17s. Both
+remain current handles; no restarts, source edits or merges. Full scope active.
+
+## 2026-09-05 — Reference-to-solver ky preflight closes mislabeled-scan risk
+
+Previous turn progressed with40 current-head regression tests. Scan review found
+that requested/reference coordinate checks alone did not reject a mismatched
+GKX deck: runtime selects nearest grid mode, potentially labeling a different
+solver ky with the reference coordinate. **4b78404d** pushed to draft PR202 moves
+effective-grid resolution before integration and requires selected grid ky to
+agree within4float32eps,atol0. Existing arbitrary nearest-reference acceptance
+remains rejected. No solver equation, default scan behavior or running snapshot
+changed; current campaign grid coordinates agree within that tolerance.
+
+50 targeted tests pass: parity_convergence or parity_fixed_damping in
+tests/release/test_release_gates.py, local CPU/JAX0.11.1 PYTHONPATH=src. Tests
+change the mocked reference to.31 while effective deck grid has.3/.4 and require
+failure before a scan; existing exact/roundoff acceptance retained. Session74612
+exit0; XML /tmp/gkx-coupled-rate-20260905.shBvlR/effective-ky-preflight.xml SHA256
+`c6a54eba22ffb509bcbc463bf30f08756294ce923f7ad6a36e8ff8788066b7f1`.
+Ruff lint/format406files, architecture and whitespace pass;25628commit/pushexit0.
+Explicit budget+9tests/+6tools. Grid preflight now occurs outside the primary
+scan timer; use whole-command measurements for end-to-end comparisons. Multi-
+window reuse remains pending, not claimed implemented by this correctness fix.
+
+Latest live processes: dt-half73383/PID1729118 RNl18m32s; kinetic40474/PID1729837
+RNl14m56s. Resume those exact handles. Initial CI11success,10running,16queued,
+1skipped; fresh push needs its own checks. No restarts or merges; full scope active.
+
+## 2026-09-05 — Nonfinite velocity-transform guard and full release verification
+
+Previous turn progressed with effective-ky preflight. At code4b78404d the full
+tests/release/test_release_gates.py suite passes198 tests,0skip,4.381s, session74651
+exit0. XML /tmp/gkx-coupled-rate-20260905.shBvlR/release-effective-ky-full.xml
+SHA256 `53c19a96aad396c72494cacbd0b3637525fa36857deb0c0f433091f8f02092e1`.
+CI query for that head had no failures but pending checks; no full-green claim.
+
+High-order basis review found a guard gap: NaN identity error did not satisfy
+`error > tolerance`, allowing an unusable transform through. **93062763** rejects
+nonfinite errors explicitly and parameterizes the existing degraded-pair test
+over1.01,NaN,Inf. No healthy transform or operator equation changed; this does
+not explain the observed Laguerre growth-rate shift. Full core numerics suite
+passes50 tests,0skip,3.612s with JAX_ENABLE_X64=true JAX_PLATFORMS=cpu PYTHONPATH=src,
+local JAX0.11.1. Session85933exit0; XML in same scratch named
+core-numerics-finite-guard.xml SHA256
+`437a096c451198f89cfba7a6aeda664100d2fde07bd7c5b84d43bb6984300557`.
+Coverage includes high-order transform round trips, conditioning, quadrature
+moments and convention checks; not eigenmode resolution convergence. Ruff lint,
+format406files, architecture and whitespace pass without budget increases.
+Commit/push69468exit0; draft PR202 remains open, no merge.
+
+Live processes reverified: dt-half73383/PID1729118 RNl25m46s, kinetic40474/
+PID1729837 RNl22m10s, both stderr files empty. Running snapshot unchanged; resume
+these exact handles. Two-GPU reverse-AD repeat remains pending until both free.
+Full roadmap remains active; next major evidence is the timestep control and
+matched kinetic comparison, then parallel/velocity resolution and R0 remainder.
+
+## 2026-09-05 — Explicit linear endpoint overshoot reproduced and repaired
+
+Previous turn progressed with the nonfinite transform guard. R0 fixed-time audit
+found both host explicit linear facades used a full final step even when it crossed
+t_max. Red test52541exit1 reproduced t=[.03,.06,.09,.12] for requested t_max=.1.
+**f00abafd** clips the actual step after CFL selection, in both growth-only and
+energy/flux diagnostic loops. Endpoint remainder takes precedence over dt_min;
+the regression deliberately uses dt_min=.02 and final remainder=.01. Healthy
+integral-step horizons retain their maps. This is not a change to the running
+campaign's native fixed-step scan or its snapshot.
+
+Replaced the weaker adaptive-completion test with eight endpoint cases:
+RK3/RK4 × fixed/CFL-controlled × both diagnostic facades. Checks actual reported
+sample times, finite phi and diagnostics dt_t, including the shortened last dt.
+No fixed-rate gradient convergence claim follows from this endpoint test.
+Net change29insertions/29deletions across three files; no budget increase.
+
+Local PYTHONPATH=src, JAX0.11.1, python -m pytest -q
+tests/unit/solvers/test_time_integrators.py --junitxml=<scratch>/explicit-endpoint-final.xml:
+JAX_ENABLE_X64=true **85pass,0skip,36.138s**, session62902exit0. SHA256
+`49bb25d10de6de36926579a1ca35e7a0b68ef8d9b4fd52c98986a74f98eeb879`.
+JAX_ENABLE_X64=false with -k stops_at_requested_time: **8pass,0skip,24.086s**,
+session34503exit0; explicit-endpoint-f32.xml SHA256
+`b3304793f2588c221866b5db395fd1b9a3e16962e148fc00fca578a43eed1434`.
+Scratch=/tmp/gkx-coupled-rate-20260905.shBvlR. Tests use jit=False; explicit compiled
+endpoint repetition remains untested. Ruff lint/format406files, architecture,
+whitespace pass. PR202 latest pre-push CI14running/23queued/1skip, not all-green.
+
+Latest exact process check: dt-half73383/PID1729118 RNl30m28s; kinetic40474/
+PID1729837 RNl26m52s. Both live; do not restart or overwrite snapshots. Next:
+inspect terminal results when available, reserve both GPUs for pending rate-VJP
+test, then continue evidence-driven velocity/parallel-resolution controls. No
+merge; full roadmap remains active.
+
+## 2026-09-05 — Timestep control completes; prepared spatial refinement
+
+Previous turn progressed with endpoint repair. Dt-half **73383/PID1729118 is
+terminal exit0**, whole command32m55.72s. Nl32/Nm96/Nz96/T300/rate50/RK4,
+dt=.001 yields gamma=.02485209212445021, omega=.5049331701718064. Compared with
+dt=.002 gamma=.024852092124449224, omega=.5049331701718024, relative changes
+~4e-14/~8e-15. Thus this control does not support timestep error as the cause
+of the24.713% Nl24→32 growth-rate change. It does not establish convergence.
+Half-time shifts +.00574089543/−.000221581187 pass the temporal screen;
+reference and GKX both settled at this single ky, but their velocity resolutions
+differ, so −26.638% growth-rate disagreement is not a matched-resolution test.
+Reference has751samples/0nonfinite frequency entries. GKX estimates finite and
+solver completed; no additional raw-field-history audit claimed.
+
+Campaign results/salpha_rate50_nl32_nm96_t300_dt_half.csv SHA256
+`38be2673bf20089a0e4f59d03ddb9e4ff09493c9206a6ef9144724d796a40b53`;
+copied to /tmp/gkx-coupled-rate-20260905.shBvlR. JSON inspected: primary window
+[210,300], half[105,150]. Primary-only scan1313.9165s; concurrent GPU workloads
+and different measurement scopes preclude isolated performance claims.
+
+Prepared, copied to campaign, but **not launched**: salpha_nz192.toml differs
+from the current s-alpha fixture only in geometry_file, pointing to the existing
+salpha_ntheta64_geometry.out.nc. CPU preflight75046exit0 confirms requested_Nz96
+but effective_Nz192 and solver ky.55. Config SHA256
+`33c5f71aa8c6edd5b7f6e8535ce1fbec224f8091a30bc3409129ffc8faf9fbf0`;
+manifest salpha_nl32_nm96_nz192_t300.toml SHA256
+`8a1d36d477a644cf5193558a7346f6bb935ca0419bc6992ce5594b902e1a66bc`.
+Manifest keeps Nl32/Nm96/T300/dt.002/rate50, uses key
+cyclone_salpha_itg_nl32_nm96_nz192_t300. Reference spectrum remains original T150
+file, not the one-step geometry-generation output. Local copies in same scratch.
+Launch only after pending two-GPU rate-VJP check; kinetic40474/PID1729837 remains
+live RNl30m20s at last check. GPU1 now free; don't restart73383.
+
+Code **1571a9e6** adds compiled/uncompiled endpoint-test coverage. Local CPU
+JAX0.11.1, PYTHONPATH=src, pytest tests/unit/solvers/test_time_integrators.py
+-k stops_at_requested_time:16pass each with JAX_ENABLE_X64=true/false,
+33.872s/31.728s, sessions53170/3141exit0. XMLs in scratch:
+explicit-endpoint-jit-f64.xml SHA256
+`c5836c27cf689764ab5402a3cca599e6fa2b7054f202305bc77da0f22f49b057`;
+explicit-endpoint-jit-f32.xml SHA256
+`7477360d980320e51ae95fd751780ee62a8945ffcbb2d4dd6ee887cbf663b0d7`.
+Ruff lint/format406files, architecture and whitespace pass after formatting;
+92337commit/pushexit0. No GPU endpoint test claimed, no merges, full scope active.
+
+## 2026-09-05 — Two-GPU rate reverse derivatives pass; spatial control launched
+
+Previous turn progressed with timestep-control evidence and compiled endpoint
+tests. Rechecked GPU0:3784MiB free beside kinetic PID1729837; GPU1:15872MiB free.
+Rather than wait for both devices to empty, ran the small correctness test with
+XLA_PYTHON_CLIENT_MEM_FRACTION=.08 in a fresh git archive of1571a9e6 at
+/home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo. No changes to the kinetic snapshot.
+Observed test PID1732271 using1452MiB GPU0/162MiB GPU1 during setup; kinetic stayed
+live. This resource-sharing choice is not an isolated performance experiment.
+
+Command in that archive: CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true
+JAX_PLATFORMS=cuda XLA_PYTHON_CLIENT_MEM_FRACTION=.08 PYTHONPATH=src
+/home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+tests/unit/parallel/test_parallel_linear_velocity.py
+-k end_damping_rate_matches_nonlinear_eigen_implicit_and_species_routes
+--junitxml=two-gpu-rate-ad.xml >two-gpu-rate-ad.log 2>&1.
+**2pass,0skip,33.325s**, session31794 terminal exit0. JAX0.10.2, two RTX A4000s.
+XML SHA256 `a9773e5d1d18a3c93cb2a3f777f65de8588c8ce01ffc1d92128c1d44d6ce1039`,
+copied to /tmp/gkx-coupled-rate-20260905.shBvlR. Gate compares field-free m3
+fixed-rate RHS across supplied-fields/nonlinear/eigen/implicit/serial/species
+routes and three-step serial/species-pmap reverse derivatives against the exact
+Euler polynomial at dt=.1,.2, rtol1e-9/atol1e-12, explicitly nonzero gradients.
+Not nonlinear transport or general electromagnetic sharded AD validation.
+
+Started prepared spatial control **77271/PID1733704**, GPU1, in campaign
+/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz. Same source snapshot; copied latest
+reporter to separate tools/comparison/build_gx_parity_matrix_grid_verified.py
+SHA256 `ecd7d5fd174f18b75cf968ac4b80f6f5279665f404da7b22af98902ac03987ed`.
+Do not replace the running kinetic reporter. Command: GX_PARITY_REF_DIR=<campaign>/matched_refs
+CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
+/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python <new reporter>
+--manifest salpha_nl32_nm96_nz192_t300.toml
+--cases cyclone_salpha_itg_nl32_nm96_nz192_t300
+--stem results/salpha_rate50_nl32_nm96_nz192_t300
+>gkx-salpha-nl32-nm96-nz192-t300.stdout.log
+2>gkx-salpha-nl32-nm96-nz192-t300.stderr.log.
+Nl32/Nm96/Nz192/dt.002/T300/rate50; input hashes in preceding entry. Reporter now
+records actual192-point geometry and retains requested96-point deck metadata.
+Latest confirmed RNl10s, stderr empty. Kinetic40474/PID1729837 RNl34m09s. Only
+these two jobs live; no restarts of completed controls, no merges. Full scope active.
+
+## 2026-09-05 — Species-parallel traced initial-state AD failure repaired
+
+Previous turn progressed with two-GPU rate AD and spatial-control launch. A
+new coupled electromagnetic probe differentiated initial-state amplitude, rather
+than a parameter with fixed state. Serial passes the exact homogeneity identity;
+species parallel failed before integration with `species inputs must be prepared
+outside jax.jit` (session71403exit1). Preparation rejected the state tracer even
+though its own from_host helper already preserves traced parameter arrays.
+**19e066dd** removes that inconsistent state rejection, retaining dimensionality
+and device-count checks and all concrete host-placement behavior. Traced inputs
+stay in JAX without a device-to-host conversion. Running campaigns unchanged.
+
+Extended existing test_species_pmap_electromagnetic_trajectory_matches_serial:
+active Apar/Bpar, Euler3steps dt1e-6, J=||G3||²+||phi_history||² requires
+dJ(sG0)/ds at1 =2J(G0). Both serial/species routes must satisfy the identity,
+have nonzero J, and agree; rtol8e-5/atol1e-7 covers the fixture's complex64 state.
+This is a short coupled AD regression, not a physical EM benchmark. Independent
+complex128 scratch probe gives relative identity defects3.10e-16 serial and
+1.55e-16 species; value.7157894655052524/.7157894655052525,
+derivative1.4315789310105052, Apar norm.00174925, Bpar norm.00220207.
+Probe at /tmp/gkx-coupled-rate-20260905.shBvlR/em-state-ad.py; original/fixed
+logs em-state-ad.log/em-state-ad-fixed.log. Fixed probe72435exit0.
+
+Targeted test command: pytest -q tests/unit/parallel/test_parallel_linear_velocity.py
+-k 'electromagnetic_trajectory_matches_serial or species_pmap_parameter_gradient or end_damping_rate_matches'.
+CPU XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu,
+JAX_ENABLE_X64=true PYTHONPATH=src; JAX0.11.1. GPU CUDA_VISIBLE_DEVICES=0,1
+JAX_PLATFORMS=cuda JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_MEM_FRACTION=.08,
+JAX0.10.2 in /home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo (1571 archive plus
+the two changed source/test files, copied only after earlier test had exited).
+
+| Gate | Result / terminal session | XML SHA256 |
+|---|---|---|
+| CPU x64 targeted | 4pass,0skip,13.876s /11827 | `7967d80540f374bd7a7d413467d40beca44bd71cc77dea7fc86f8f11a03fa074` |
+| CPU f32 EM only | 1pass,0skip,5.483s /97698 | `9ef36474f1912e04af68129ba3a83d3b93391695280b7ace61ad31f193c37851` |
+| Two RTX A4000 targeted | 4pass,0skip,55.362s /54331 | `7650bf66ef24de7d0115786ebab1f5e018cfdef11ee446f5e4142ce7e958d1cd` |
+
+XMLs in local scratch: em-traced-state-f64.xml, em-traced-state-f32.xml,
+em-traced-state-gpu.xml; GPU original/log in test archive. All sessions exit0.
+Docs parallelization now state the formulas, commands, device evidence and
+claim limits. Warning-strict Sphinx, Ruff lint/format406files, architecture and
+whitespace pass; explicit test-budget+20 lines, source−2 lines. Commit/push8742
+exit0. Full CI needs fresh result; no global green claim.
+
+Latest live checks: kinetic40474/PID1729837 RNl41m25s; spatial77271/PID1733704
+RNl7m26s. Both unchanged; no pending test process, no merge. Continue physics
+controls and the full R0–R9 roadmap, not just these AD microgates.
+
+## 2026-09-05 — Broader species regression and independent GX refinement input
+
+Previous turn progressed with traced-state repair. At clean19e066dd, local CPU
+JAX0.11.1, XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu
+JAX_ENABLE_X64=true PYTHONPATH=src, ran python -m pytest -q
+tests/unit/parallel/test_parallel_linear_velocity.py -k 'species and not mixed'
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/species-broad-f64.xml.
+**19pass,0skip,26.174s**, session31069terminal exit0; matching .log retained.
+XML SHA256 `d9600bd3bd69c28b405a4d3e409c4582ed06e8121078de3de2aa853016316f58`.
+This broadens the source-fix regression beyond the four targeted tests, not
+physics or performance validation. CI latest2success/14running/21queued/1skip;
+no full-CI result claimed. No source edits this turn.
+
+Prepared independent GX refinement **not yet run**:
+<campaign>/salpha_nl32_nm96_t300.in, local copy in same scratch. Based on the
+already inspected geometry-only input, restoring ntheta32/Nz96 and changing
+nhermite96,nlaguerre32,t_max300; dt.002/rate50 and remaining coefficients retained.
+Parsed Dimensions/Time verified; SHA256
+`e0d83a0db5e14db39240cdfa1aa0d15295d9bca7f7f7d701fb1100eb757fb6b5`.
+Keeps all11 positive ky modes (nky12), rather than changing box size to isolate
+one ky. This provides a future same-resolution cross-code comparison for the
+large Nl24→32 change. Verify actual GX dt/output coordinates, finite diagnostics,
+temporal settling and imported geometry after execution; do not overwrite the
+existing Nl16/Nm48/T150 reference. Run the existing GX3865a537 binary with the
+scoped venv PATH required by its geometry exporter, as earlier GX controls did.
+
+Latest live: kinetic40474/PID1729837 RNl43m51s; spatial77271/PID1733704 RNl9m52s.
+No restarts, test jobs, source-snapshot changes or merges. Continue these controls
+and matched GX refinement; full R0–R9 scope active.
+
+## 2026-09-05 — GX adaptive-default ambiguity closed in rate conversion
+
+Previous turn progressed with19 broader species tests and GX input preparation.
+Read office GX/src/parameters.cu: Time.fixed_dt defaults false, dt_max defaults
+dt; ts_rk4.cu sets dt=min(max(cfl_fac*cfl/wmax,dt_min),dt_max) unless fixed_dt.
+Thus positive input dt alone is not proof of a fixed A/dt end-damping rate.
+The old GKX helper's error/doc claimed adaptive rejection but only checked dt.
+**b6c375cf** adds parsed fixed_dt (defaultfalse) to GXInputContract and requires
+true when damping is active. Periodic/zero-shear-forced periodic/disabled cases
+still need no conversion. Existing adaptive-default inputs must be rerun with
+explicit fixed_dt for this adapter; do not just relabel historical trajectories.
+The independent parity reporter is a separate path, unchanged: campaign input
+ceilings and observed dt must still be audited, not inferred from this fix.
+
+Full tests/tools/comparison/test_reference_comparison_tools.py suite:
+**122pass,1skip,14.149s**, session30161exit0, local JAX0.11.1 PYTHONPATH=src.
+Skip test_build_imported_initial_condition_uses_runtime_multikx_startup requires
+an unavailable local cache file; no coverage claim for that path. Tests assert
+parser defaultfalse/explicittrue and active-rate refusal at false. XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/gx-fixed-dt-contract-final.xml SHA256
+`0f08e03887d9ec31bba292eae787a511747238f0f0fffd503b48088f539f8f78`.
+Ruff lint/format406files, warning-strict Sphinx, architecture and whitespace pass;
+explicit budgets+6tests/+8tools. Commit/push97735exit0; full CI pending.
+
+Prepared (not launched) salpha_nl32_nm96_t300.in now explicitly sets
+Time.fixed_dt=true and Expert.damp_ends_amp=.1/damp_ends_widthfrac=.125.
+Updated local/campaign copy SHA256
+`fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df`, superseding
+e0d83a0d in the prior entry. No old input/output overwritten; the prepared file
+had not run. This pins rate50 atdt.002 instead of trusting the adaptive ceiling.
+Older completed references retain their provenance and require actual timestep
+audit before stronger claims; current running GKX rates themselves remain fixed.
+
+Latest live: kinetic40474/PID1729837 RNl48m15s; spatial77271/PID1733704 RNl14m16s.
+No restarts or production-snapshot edits; no merges. Continue physical controls,
+matched GX refinement and full roadmap; this helper fix is not physics closure.
+
+## 2026-09-05 — Observed-timestep audit retains three completed GX references
+
+Previous turn progressed with strict fixed-dt import contract. Audited actual
+stdout step/time/dt rows and NetCDF Grids/time for all three completed references
+in <campaign>/matched_refs/ITG_cyclone. All inputs retain fixed_dt=false by
+default; do not relabel them. Every printed dt equals the declared ceiling, each
+interior diagnostic interval/nwrite equals the float32 ceiling exactly, and
+every printed time agrees with step_number*float32_dt within its5-decimal-place
+rounding error. This is stronger than assuming constant dt from input or one
+summary value. The linear GX frequency bound has fixed geometry/parameters;
+no nonlinear frequency contribution exists in these runs. No evidence of a
+changed timestep or varying nominal end-damping rate in these three references.
+
+| Reference | Printed samples / last step | Interior dt | Max printed-time residual | Final interval in steps |
+|---|---|---|---|---|
+| s-alpha adiabatic | 751 /75000 | .0020000000949949026 | 4.99683e-6 | 99 |
+| Miller adiabatic | 751 /75000 | .0020000000949949026 | 4.99683e-6 | 99 |
+| Miller kinetic | 2001 /200001 | .00019999999494757503 | 1.01049e-6 | 100 |
+
+The nominal dt values are.002/.0002; float32 parsing explains the difference.
+The first two final diagnostic writes are one step early relative to the regular
+cadence, not a changed integration dt. Retain these reference outputs and the
+earlier temporal-screen failures; this audit does not establish mode settling
+or velocity convergence. The new generic adapter remains conservative and
+requires explicit fixed_dt=true rather than silently assuming this audit applies
+to arbitrary inputs. Future prepared GX reference is already explicitfixed.
+
+Reproducer: /tmp/gkx-coupled-rate-20260905.shBvlR/audit-gx-reference-dt.py,
+also copied to campaign; run with office venv Python, no JAX/GPU required.
+Script SHA256 `f94cb4b4f24bb5743c0be5417b125ac02eebeb9b49ce7974a5809f48c0fe7aa5`;
+local output audit-gx-reference-dt.log SHA256
+`c5a7ea03b892eabd21e0d900bcc996d0b65452b448498206163d406d9ad58bbd`.
+Original stdout hashes in that output: s-alpha
+`d3700f57c5b23cb1b3ae60d648b9f7e003c3cd79afbc428941a7c49329d651b7`,
+Miller `b7738e048d955c485c5f64535f10233533e1dba0d30cf85b77517fcad3fac179`,
+kinetic `1eacccf9f9d9257fac34d910795001c8767655aa684af5ef2d455008ce38aa73`.
+Output NetCDF hashes retained in original completion entries. Both audit runs
+exit0; no reference mutation or new physics run.
+
+Latest live: kinetic40474/PID1729837 RNl50m48s; spatial77271/PID1733704 RNl16m49s.
+Code stays clean b6c375cf; CI9running/28queued/1skip at initial query, no full
+green claim. No restarts or merges; full roadmap active.
+
+## 2026-09-05 — Release recheck and literature/implementation distinction
+
+Previous turn progressed with observed GX timestep audit. At b6c375cf full
+tests/release/test_release_gates.py passes198tests,0skip,2.801s, session11027exit0,
+local JAX0.11.1 PYTHONPATH=src. XML
+/tmp/gkx-coupled-rate-20260905.shBvlR/release-fixed-gx-contract.xml SHA256
+`1bc6923523ec04210213079541eaa8a9ac0db581cb466b580b8d472ee40a7cc8`.
+No full-CI claim: initial latest query8success/13running/16queued/1skip.
+
+Re-read primary sources online:
+
+- [GX paper, §4.4 and Appendix B](https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA): Eq4.28 uses prefactor2.5. Office GX3865a537 src/linear.cu:229 instead uses2.3, as GKX does. b734e19d documents the distinction without changing either running model. Paper reproduction and code parity need separately named coefficients; sensitivity testing remains required.
+- [Frei et al., flux-tube moment model](https://doi.org/10.1017/S0022377823000715), §4 and Appendix A: mode-dependent velocity resolution and weak-gradient/trapped-particle structures motivate inspecting velocity-space distributions, not only growth-rate agreement. The local EM dispersion benchmark excludes trapped-particle effects; it must not certify TEM physics. Inference for our campaign: retain velocity/spatial/regularization controls even after temporal settling, then compare distribution spectra/eigenfunctions if discrepancies persist.
+
+Both primary sources accessible; no paper download needed. No universal low-Nl/Nm
+recommendation follows from their successful case-specific coarse resolutions.
+Docs warning-strict Sphinx and whitespace pass; commit/push57940exit0. This is
+model provenance clarification, not an operator or numerical-accuracy change.
+
+Latest live checks: kinetic40474/PID1729837 RNl53m01s, spatial77271/PID1733704
+RNl19m02s. Both unchanged, no restarts or merges. Prepared explicit-fixed GX
+Nl32/Nm96 reference remains unlaunched; continue full roadmap.
+
+## 2026-09-05 — Eliminate machine-local startup-test skip; let CI finish
+
+Previous turn progressed with release recheck and coefficient provenance. The
+comparison suite's only skip depended on .cache/gx_clean_main/linear/hsx/hsx_linear.in,
+but the test uses DummyGeom and only checks multi-kx initialization routing.
+**9fc6e42d** replaces that machine-local contract with the existing explicit
+dummy contract, parameterizes Gaussian/non-Gaussian and single/multi-kx startup,
+and checks finite states and the expected kx support. Docstring explicitly says
+this is not HSX geometry/physics validation. No external benchmark replaced.
+One fewer test-file line; no new files or budget changes.
+
+Full tests/tools/comparison/test_reference_comparison_tools.py:
+**126pass,0skip,14.336s**, session3933exit0, local JAX0.11.1 PYTHONPATH=src.
+XML /tmp/gkx-coupled-rate-20260905.shBvlR/comparison-self-contained-final.xml
+SHA256 `06ba96f8d3ea627522f04b9060635068825e80facd89d39d084058876b67b415`.
+Ruff lint/format406files, architecture and whitespace pass.
+
+**Local commit only; NOT PUSHED YET.** Current remote b734e19d CI33956493988
+has6success/12running/19queued/1skip at latest check. gh run list confirms earlier
+PR202 runs were cancelled by successive pushes, not all-green. Preserve current
+run to completion before pushing accumulated nonurgent local commits. No manual
+cancellation required: superseded runs are already terminal cancelled. Branch
+clean, ahead1. Next agent must not assume PR202 contains9fc6e42d yet.
+
+Latest live GPU check: kinetic40474/PID1729837 RNl55m28s; spatial77271/PID1733704
+RNl21m29s, stderr empty. No restarts or snapshot changes, no merge. Full scope active.
+
+## 2026-09-05 — Broader default-float32 species regression
+
+Previous turn progressed with self-contained startup tests. Local clean9fc6e42d
+(still ahead1 of remote b734e19d), JAX0.11.1:
+XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu
+JAX_ENABLE_X64=false PYTHONPATH=src python -m pytest -q
+tests/unit/parallel/test_parallel_linear_velocity.py -k 'species and not mixed'
+--junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/species-broad-f32.xml.
+**19pass,0skip,27.175s**, session13190terminal exit0. Matching .log retained;
+XML SHA256 `7fb2ad093cb7003a7722451d61ddba15aa8be063bf29096d7b62f77590d2fdc4`.
+This repeats the broader species selection under default precision; individual
+tests that explicitly enable x64 retain their own precision scope. No claim of
+universal f32 physics accuracy follows from this regression selection.
+
+CI33956493988 remains active,12success/25pending/1skip; no failed jobs in the
+query. Hold the pending startup-test commit until that run finishes, then push
+and inspect its new CI. Latest physics process check: kinetic40474/PID1729837
+RNl58m27s, spatial77271/PID1733704 RNl24m28s. No restarts, GPU test jobs,
+snapshot edits or merges. Continue physical controls and full roadmap.
+
+## 2026-09-05 — High-Nm GX startup fails; reference hypercollision overflow found
+
+Previous turn progressed with broader f32 regression. Before the expensive
+prepared GX T300 run, copied its input to salpha_nl32_nm96_startup.in and changed
+only horizon toT1 (500steps) plus its comment. Explicit fixed_dt=true, dt.002,
+Nl32/Nm96/Nz96, all11 positive ky, rate50 remain. Input SHA256
+`810ec6e433b05f0e693f4b868b49afa8337cb7d067afa8c922b9ede48c9f51c1`.
+Ran beside GKX spatial control on GPU1 after checking3696MiB free; GX process
+1737950 used1360MiB. No timing/speedup claim from shared resources.
+
+Command in campaign: PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
+CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v /home/rjorge/GX/gx
+salpha_nl32_nm96_startup.in >gx-salpha-nl32-nm96-startup.stdout.log
+2>gx-salpha-nl32-nm96-startup.stderr.log. **60372 terminal exit0 but invalid**:
+first outputt=.002 finite, t=.202 onward Phi2/flux/frequencies NaN. NetCDF has
+six times [.002,.202,.402,.602,.802,1] to float32-dt precision and110nonfinite
+omega_kxkyt entries. Output salpha_nl32_nm96_startup.out.nc SHA256
+`8cd6f6c4df58738d8a994a191bca0441e8bafc689dfa6ad1308dcce9855a6d74`.
+Preserve input/output/logs; do not use as reference or launch fullT300 unchanged.
+
+Source audit identifies a definite overflow mechanism: GX3865a537
+src/linear.cu:229 forms nu=(p+.5)*2.3/[powf(M,p+.5)] times physical factors;
+src/device_funcs.cu:3378 then multiplies by powf(m,p), M=Nm−1,p=20.
+Float32 arithmetic at the largest moment (unit physical factors):
+
+| Nm | M^(p+.5) | M^p | Separate-power coefficient | Normalized coefficient |
+|---|---|---|---|---|
+| 64 | 7.699832e36 | 9.700877e35 | 5.9403415 | 5.9403415 |
+| 80 | Inf | 8.964825e37 | 0 | 5.3047895 |
+| 96 | Inf | Inf | NaN | 4.8374877 |
+
+The algebraically equivalent coefficient2.3*(p+.5)/sqrt(M)*(m/M)^p stays
+finite. GKX already uses this normalized form. This is not evidence that GX's
+entire failure is repaired: next use a scratch reference build with the equivalent
+arithmetic, rerun the bounded sentinel, and compare low-Nm outputs against the
+original binary before promoting high-Nm results. Preserve original GX source,
+its user-modified Makefile and binary; no GX edits were made this turn. Reducing
+p would change the model and is not a same-operator repair. Nm48 completed
+references are below this particular float32 overflow threshold.
+
+Latest active processes: kinetic40474/PID1729837 RNl1h02m59s; spatial77271/
+PID1733704 RNl29m00s. GX60372 terminal, do not restart. Code remains local9fc6e42d
+ahead1 of b734e19d; CI33956493988 still allowed to finish (last14success/23pending/
+1skip, no failures). No merge; full scope active.
+
+## 2026-09-05 — Spatial control completes; isolated GX repair passes startup
+
+Previous turn progressed with failed GX sentinel and overflow analysis. GKX
+spatial77271/PID1733704 **terminal exit0**: gamma=.024938243056538495,
+omega=.5047786677125604. Relative to Nz96 at identical Nl32/Nm96/T300/dt.002,
+gamma+0.346654646%, omega−0.030598596%. Half-horizon shifts+.006671912/−.000239857
+pass the temporal screen; this does not establish velocity convergence or rule
+out further spatial error. JSON confirms effectiveNz192/requestedNz96, windows
+[210,300]/[105,150]. CSV results/salpha_rate50_nl32_nm96_nz192_t300.csv SHA256
+`94592ebea869f2096cff94bbeec58426eb8a4b7ebdf4c989e0dab537e37f2bc1`, copied locally.
+
+Created isolated copy /home/rjorge/gx-normalized-hyper-20260905.JZDbbo from the
+431MiB GX tree (including build objects/config), never editing original GX.
+Original status before/after only untracked Makefiles/Makefile.office and its
+.nofastsqrt.bak. Scratch modifies src/linear.cu coefficient denominator from
+powf(M,p+.5) to sqrtf(max(M,1)), paired with device_funcs.cu kernel power
+powf(m/max(nm_glob−1,1),p). Same coefficient2.3, physical factors and model.
+Source hashes linear.cu `976ef802f6a9f5ca6a1eaf3ebd3082944e3fc5dac974c3f8bdc325146603f7c6`,
+device_funcs.cu `20c1f85e19cc7c066bcdd50680c44bdcd2692923af3662513195643ad84ef480`.
+Local copies in recent scratch named gx-linear.cu/gx-device_funcs.cu. Build:
+make -j2 GK_SYSTEM=office gx, same CUDA11.5/gcc10/fast-math settings,30675exit0;
+normalized-build.log retained. Scratch binary SHA256
+`d30403b495e14900235bc0ee55de34b009920c3bf3eaa4bb75b58ae718bb55c9`;
+original remains `787eb0145937e653c08750fd7168029c20772ce3e6c2a2a3b58c70aab128dc9b`.
+Treat scratch version as3865a537+explicit arithmetic patch, never pristine GX.
+
+Validation in scratch/r0_validation, separate directories and run.log files:
+original-low86905, normalized-low88116, normalized-high94250 all terminalexit0.
+Low pair Nl16/Nm48, high Nl32/Nm96, dt.002fixed/T1; original and normalized low
+use identical input; normalized high repeats the failed sentinel's input.
+All264numeric arrays in each out.nc and42 in each big.nc are finite. Low-order
+relative L2 differences: omega_kxkyt4.84762e-5, Phi1.41190e-7, max inspected big
+diagnostic Tpar4.49826e-7. Short-run rounding-level compatibility, not long-run
+benchmark certification. High repaired output finite where original had110
+nonfinite frequency entries. Output hashes:
+
+| Output | SHA256 |
+|---|---|
+| original-low out.nc | a707beffac5e831282800a7028f2b7d3db9deb99324beee2ff09f2189ccae9e9 |
+| normalized-low out.nc | f0bf9c4ba653ed847515e8cb411b13644b10e9caac781bdd722e0fef3f397adf |
+| normalized-high out.nc | a12a6f20bc1c9e0a4de538720d76ecadc1eb322cb4bd670d9ea66b8884051072 |
+| original-low big.nc | 31e3347ceedad7797a36acfe47d6c720cc136865c68877f0f04f1eda4b08a7e2 |
+| normalized-low big.nc | d2ab6e27b34a6e75e34ed69eb23158eb7a540e66eee559994051100faba8d910 |
+| normalized-high big.nc | fb898b3c7611fa35b41560a6a7d617c6faf7e0f4d9084b005fe04dd239fa037b |
+
+Started long patched-GX reference **95001/PID1738946** in
+<scratchGX>/r0_validation/refined. Command PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
+CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v <scratchGX>/gx salpha_nl32_nm96_t300.in
+>run.log 2>time.log. Input hash remainsfb3e49f6 (explicitfixed,rate50,Nl32/Nm96/Nz96,
+all11positiveky,T300). Confirmed RNl11s, stderr empty. Inspect completed finite
+histories, actualdt, geometry, all modes and temporal settling before using it.
+Kinetic40474/PID1729837 still RNl1h08m00s. Only these two jobs live; no restart
+of spatial77271. GKX local9fc6e42d remains ahead1; CI b734 last26success/11pending/
+1skip, no failures. No GX commits/pushes or PR merges; full roadmap active.
+
+## 2026-09-05 — Reproducible patched-GX evidence bundle
+
+Previous turn progressed with spatial result and scratch GX repair/controls.
+Saved exact git diff of the two GX source files as gx-normalized-hyper.patch
+in both /tmp/gkx-coupled-rate-20260905.shBvlR and the isolated GX root
+/home/rjorge/gx-normalized-hyper-20260905.JZDbbo. `git apply --reverse --check`
+passes against the built scratch source, without applying anything. Patch SHA256
+`02f39ab57967b68c5e490d2f51a00a8db103a624923f9d3c2c56a3b4454585a0`.
+Build provenance: CUDA11.5.119, g++10.4.0, Makefiles/Makefile.office SHA256
+`adce5f6b950b447d16392b5713cddbd7aed1f4fd6a9e322e7855bea934597d54`,
+normalized-build.log SHA256
+`d7835ea8ef6ddb67c08a2ffa42161c0b388bd55525277675144af229b59f6b44`.
+The rebuilt executable reports3865a537-dirty, compiled2026-09-05, rather than
+masquerading as the original binary. Binary/source/output hashes in prior entry.
+
+Added a read-only rerunnable audit in both scratch roots: audit-normalized-gx.py
+SHA256 `1adfb7d48208036eba96354afa0279ac05f6f38503aacc21633dedcfc630c34d`.
+Run office venv Python <script> <isolatedGX>/r0_validation. It asserts all numeric
+arrays finite and matching original/normalized low-order schemas/shapes, hashes
+outputs, and reports the largest physical diagnostic/grid relativeL2 differences.
+It deliberately does not convert the observed difference into a post-hoc
+long-run parity threshold. Execution exit0; local audit-normalized-gx.log SHA256
+`337f1eaafff4ef105ccd872a775e20f805e2abb1c50848124a50ec08cd0a0f10`.
+No scratch source/binary or running input changed this turn.
+
+Latest live: kinetic40474/PID1729837 RNl1h11m32s; GX95001/PID1738946 RNl3m43s,
+printed step5201/t10.402/dt.002 with finite Phi2 and flux outputs. This is progress
+logging, not a completed finite-history audit. CI33956493988 has36successful jobs,
+1skip and only nonlinear-core101280712503/parallel-autodiff101280712595 still
+running, no failures. Keep local9fc6e42d unpushed until this finishes; original
+GKX checkout untouched, no merges. Full R0–R9 roadmap remains active.
+
+## 2026-09-05 — Coupled velocity-refinement preflight; CI allowed to finish
+
+Previous turn progressed with reproducible GX patch/audit bundle. Prepared next
+GKX control at Nl32/Nm128/Nz96/T300/dt.001/rate50, not launched. The earlier
+Nm96→128 result usedNl16; it cannot certify Hermite convergence after increasing
+Nl to32. New salpha_nl32_nm128_t300.toml is in campaign and local recent scratch,
+SHA256 `09dab70e0a8cee45f434294acb2b8183b9d9442cc5b9bc2d8c3b8722a8357d0f`.
+Key cyclone_salpha_itg_nl32_nm128_t300, exactreferenceky.550000011920929,
+RK4/300000steps/latefraction.7. Compare against completed Nl32/Nm96 dt-half
+control, not against Nl16 or a changed horizon. The p20 regularization prescription
+is retained but its coefficient depends on Nm; no fixed-operator claim.
+
+Local CPU x64 preflight with GX_PARITY_REF_DIR=<scratch>/matched_refs,
+PYTHONPATH=src: load parity s-alpha config, import geometry, apply grid defaults,
+select nearest stored highky, build_runtime_linear_params(Nm=128), evaluate
+_linear_frequency_bound(grid,geom,params,32,128). Actualky.55, Nz96;
+frequencies[0,1246.14853652,93.09558798], .9*2.82/sum=.0018950988498382464.
+Chosen dt.001 is below the heuristic bound; this is not an executed stability
+or convergence test. No production/source changes and no new long job this turn.
+
+CI33956493988 progressed to only nonlinear-core101280712503 in progress;
+parallel-autodiff completed without failure. One bounded30s wait and requery
+confirmed that exact CI job remains live; no cancellation or held-commit push.
+Local9fc6e42d still ahead1 of pushedb734e19d. Latest process checks: kinetic
+40474/PID1729837 RNl1h16m14s; patchedGX95001/PID1738946 RNl8m25s. Resume these;
+do not infer stalled/terminal state from buffered GKX output. No PR merge;
+full research/publication roadmap active.
+
+## 2026-09-05 — Kinetic T40 result; completed CI; coupled refinement launched
+
+CI33956493988 at b734e19d completed success, no failed/pending jobs. Only then
+pushed the held cache-independent startup-test commit9fc6e42d to PR202.
+New run33958341219 queued; do not infer its success from the preceding run.
+No merges, original checkout unchanged.
+
+Kinetic matched GKX40474/PID1729837 is terminal: time log exit0, wall1:21:52.
+All seven CSV rows inspected. Joint temporal screen passes only ky.40000000596:
+gammaGKX=.2640189338083527 vs GX=.26510718634554914 (−.4104953%);
+omegaGKX=.35246389712429327 vs GX=.35200954266599604 (+.1290745%).
+GKX full/half gamma shift there is−4.942%, close to the5% screen boundary.
+At ky.5, reference settles but GKX growth shifts8.205%; remaining modes also fail
+at least one screen. Do not promote the seven-mode comparison as validated.
+Extend unsettled modes with matched seeds/rates/timesteps before parity claims.
+Reporter primary scan3263.274s excludes the half-horizon probe; concurrent GPU
+work means neither this nor total wall time is an isolated performance result.
+CSV SHA256 aacc31a25b7343b62a89c5a36e52290f0c6a58de486b83326cbe44be8490417f;
+JSON a591f600af3e2d3a13a3c06ee8b93eddf692d0702419644dcf7fddfc4c72efa2.
+Both copied from campaign/results to /tmp/gkx-coupled-rate-20260905.shBvlR.
+
+Outer-JIT scratch EM homogeneity probe completed: jax.jit(jax.value_and_grad)
+gives serial/species values .7157894655052524/.7157894655052525 and derivative
+1.4315789310105052 on both two-logical-CPU routes, relative residual<=3.11e-16.
+Same command/environment as em-state-ad.py, replacing its derivative wrapper.
+Script em-state-ad-jit.py SHA256
+25cde2518f542f85ab2684683581cd3ecba73a6250049b8d7c24640af09e8ed6;
+log d9830fd7167047d60db216d39cecab6c90cca33b6b34da4139c044b3a2e498c4.
+Fixture emits complex128→complex64 scatter FutureWarning before promotion;
+this scratch result is not a broad precision or nonlinear transport AD claim.
+
+After kinetic exit, launched the prepared Nl32/Nm128 control on GPU0:
+session68484/PID1740480 (time1740479), campaign cwd; GX_PARITY_REF_DIR=campaign/
+matched_refs CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
+/usr/bin/time -v office-venv-python tools/comparison/build_gx_parity_matrix_grid_verified.py
+--manifest salpha_nl32_nm128_t300.toml --cases cyclone_salpha_itg_nl32_nm128_t300
+--stem results/salpha_rate50_nl32_nm128_t300. Output gkx-salpha-nl32-nm128-t300.
+{stdout,stderr}.log; process verified, initial stderr empty. Input/reporter hashes
+unchanged from prior preflight. Compare Nl32/Nm96 dt-half result; do not useNl16
+Hermite refinement as a substitute. Only other live job: patchedGX95001/PID1738946
+on GPU1, verified RNl25m46s. Do not restart terminal kinetic40474.
+
+## 2026-09-05 — Outer-JIT EM regression on CPUs and GPUs
+
+Previous turn progressed with kinetic result and launched coupled refinement.
+Revalidated both long-running PIDs before changes. Local code0441e4d8
+parameterizes the existing EM trajectory/homogeneity gate over an enclosing
+jax.jit of value_and_grad; both serial and species-pmap must still satisfy
+dJ/ds=2J and agree. Retains non-jitted case, active Apar/Bpar and trajectory
+comparisons. Removed redundant np.asarray wrappers in these assertions;
+test file net−6lines, no new file or architecture-budget increase.
+
+Two logical CPU devices: 2passed/0skipped in each subprocess configuration,
+JAX_ENABLE_X64=true 7.136s (23746 exit0), false7.358s (29209 exit0).
+Two RTX A4000: 2passed/0skipped29.861s (31522 exit0), JAX0.10.2/x64-enabled,
+CUDA_VISIBLE_DEVICES=0,1, XLA_PYTHON_CLIENT_MEM_FRACTION=.08; ran beside physics
+jobs after checking free memory. This is correctness evidence, not performance.
+Same office scratch /home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo;
+only updated test file copied after confirming no active test there. Local
+artifacts /tmp/gkx-coupled-rate-20260905.shBvlR/em-outer-jit-{f64,f32,gpu}.xml:
+f64 SHA256 abe92be426ef18440b9fdc15492428072b17c9bfc1b8b00a5f6192d87f20d3ba;
+f32 198d395e5c9ba709177c59193c6f5d13cf5553b08c39f2fc4bf0ee9e61c0333f;
+gpu 1f4d99b101ae6f119a5db7dc03f065bc76a7d25dc14b49e4586331090ee53ab3.
+Fixture state precision remains unchanged; this does not establish general
+EM parameter, nonlinear transport, or all-dtype derivative accuracy.
+
+README still claimed the repaired no-argument demo emitted CFL warnings;
+54a90f25 corrects this to passing startup CFL, retaining explicit fit/spectral
+resolution limitations. Based on previously logged installed-wheel evidence,
+not a new run. Focused ruff check/format and architecture policy pass; strict
+Sphinx build31253 exit0 (em-outer-jit-docs.log). Local head54a90f25 is two commits
+ahead of pushed9fc6e42d. Hold push until CI33958341219 completes: latest25pending,
+no failures. No PR merge. Latest long jobs: GX95001/PID1738946 RNl30m46s;
+GKX68484/PID1740480 RNl4m29s. All physics claims/remaining R0–R9 gates unchanged.
+
+## 2026-09-05 — Finite-k scalar-field correction cannot explain all asymmetry
+
+Previous turn added verified outer-JIT coverage. Revisited collision claims:
+README's blanket like-species validation assertion and both shipped finite-k
+table metadata labels still exceeded the bounded evidence in operators.rst.
+0afa8b64 narrows README and changes claim_scope to research_like_species_finite_larmor_coulomb
+in both metadata files and their generator. No NPZ coefficients, interpolation,
+runtime algebra or physics tolerance changed. Cached source plan.md on the code
+branch is historical; this plan branch remains authoritative.
+
+Rechecked primary Frei2021 source https://arxiv.org/html/2104.11480,
+sections3.1–3.2 (particle-coordinate conservation, test/field adjoint relations).
+The following is a mathematical inference and numerical diagnostic, not a
+claimed derivation of the physical metric. Equal-species runtime is C G+p phi;
+any linear solved scalar potential gives phi=r^T G. Set P=I−pp^T/(p^Tp).
+Then P[(C+p r^T)−(C+p r^T)^T]P=P(C−C^T)P for any r. Thus a nonzero projected
+residual rules out potential coupling alone as a repair of Euclidean symmetry.
+
+Read-only table probe, CPUx64, no interpolation (exact stored Bessel nodes):
+
+| Moments | B | norm(C−C.T) | norm(P(C−C.T)P) |
+|---|---:|---:|---:|
+| 8 | 0 | 1.779e-16 | 1.779e-16 |
+| 8 | .375 | .01332277 | .01331105 |
+| 8 | 1 | .15745363 | .15428744 |
+| 18 | 0 | 5.689e-16 | 5.689e-16 |
+| 18 | .375 | .05361009 | .05360875 |
+| 18 | 1 | .40612070 | .40379641 |
+
+For nearzero p at B0, used identity projector. This does not prove incorrect
+physics under an as-yet-undetermined metric, nor isolate a faulty coefficient.
+Next: derive g/h and entropy metric from normalized basis, independently audit
+gyroaverage/adjoint projection and coefficient assembly. Preserve asymmetry as
+negative evidence; do not patch by numerical symmetrization.
+
+Reproducer /tmp/gkx-coupled-rate-20260905.shBvlR/audit-collision-asymmetry-rank.py
+SHA256 97a1eabd592ea8896852a0612f9fc65df000f022b625ea2d7ccb1950767c4146;
+run JAX_ENABLE_X64=true PYTHONPATH=src local-JAX0111-python <script> from code
+worktree. Log SHA256 b236ea32bd65ddc013be29d10e0bfa17726ebe4c2579f126c6192be797ea7d13.
+Collision physics tests excluding overhead/cost:24passed0skipped9.824s,
+session62968exit0, collision-scope.xml SHA256
+0c07e570ec847edaef1ea9e5b2d542d9e5c5bae29764ea80272466f0fb17846f.
+Strict Sphinx2058exit0, ruff and diff checks pass. These regression passes do
+not close C2. Local0afa8b64 is3ahead of9fc6e42d, held forCI33958341219:
+latest17pending/no failures. GPUjobs verified: GX95001/PID1738946 RNl34m05s;
+GKX68484/PID1740480 RNl7m48s. No merges, no restarts; full roadmap active.
+
+## 2026-09-05 — Intermediate collision truncation isolated at fixed output moments
+
+Previous turn supplied rank diagnostic; this turn traced generator defaults and
+ran a controlled multiprecision ladder. Frei2021 HTML equations5–10 define the
+normalized Hermite/Laguerre basis; equation17 separates g and h. Generator
+build_finite_wavelength_coulomb_pair_tables converts paper/runtime conventions
+only by D C D with diagonal D=(-1)^j, an orthogonal sign change that cannot
+remove the Euclidean asymmetry. coulomb_nonpolarized_moment_matrices defaults
+spherical_limit=P+2J and radial_limit=(P+2J)//2. For the8-moment P3/J1 table
+these are5/2, irrespective of wavelength. Source/full-field mapping still needs
+independent physical verification, but a numerical cause is now isolated.
+
+Held outputP3/J1, B1, mass/temperature ratios1, Bessel-Laguerre24, digits40;
+varied intermediate cutoffs, not output resolution. No source or NPZ mutation.
+
+| Spherical | Radial | norm(C) | norm(C−C.T) | relative change from prior row |
+|---:|---:|---:|---:|---:|
+| 5 | 2 | 3.947760896 | .1574536315 | — |
+| 5 | 4 | 4.083120948 | .0008975154 | see raw log |
+| 5 | 6 | 4.084084849 | 1.124314e-6 | .0004099561 |
+| 5 | 8 | 4.084086241 | 6.007383e-10 | 5.795692e-7 |
+| 5 | 12 | 4.084086241 | 2.020636e-16 | 3.422569e-10 |
+| 7 | 12 | 4.646291730 | 1.736111e-16 | .2111773916 |
+| 9 | 12 | 4.690112340 | 1.501914e-16 | .01648290693 |
+
+Test and field blocks separately recover symmetry at radial12. Thus intermediate
+radial truncation explains the observed asymmetry in this controlled case, but
+symmetry alone accepts an angularly unconverged operator. Do not merely increase
+radial cutoff or symmetrize and label the table validated. Next extend spherical
+11/13 at radial12, recheck radial and Bessel orders, then other wavelengths up
+to storedB4 and output18 moments; explicitly record every intermediate cutoff
+and an accuracy gate before regenerating tables. Existing one-species diagonal
+writer can avoid unnecessary full-pair14×14 generation but also currently fixes
+intermediate spherical/radial defaults from output degree; audit that route.
+
+Scratch reproducer audit-collision-spherical-truncation.py in local recent scratch,
+SHA256 8e3b9bc5fe978a6fef247bcd9a255f4c3ba49caeb6ac9aeba14bb4bc0d8fc112.
+PYTHONPATH=src:tools/artifacts local-JAX0111-python <script> from code worktree.
+Extended log SHA256 b529d701627c8cd12de93f0c28d1502bb771c184b2ac3a70dec2e7ae2304b549.
+45705 terminalexit0; first shorter2/3/4 ladder64583 alsoexit0. Per assembly
+2.17–17.49s CPU, not a solver-performance benchmark. Source73ec5820 adds concise
+measured warning in operators.rst; strict Sphinx36429exit0 and diff check pass.
+Local73ec5820 is4ahead of9fc6e42d, held while CI33958341219 has5pending/no failures.
+Verified GPU95001/PID1738946 RNl38m47s and68484/PID1740480 RNl12m30s.
+No merges/restarts. Full research/publication roadmap remains active.
+
+## 2026-09-05 — B1 collision cutoff controls completed; B4 endpoint running
+
+Previous turn isolated intermediate truncation. New independent controls fixed
+P3/J1/B1, equal mass/temperature, digits40. Session83584/PID39919 terminalexit0.
+
+| Spherical | Radial | Bessel-Laguerre | norm(C) | relative change from prior row |
+|---:|---:|---:|---:|---:|
+| 9 | 12 | 24 | 4.690112339503574 | — |
+| 11 | 12 | 24 | 4.690764426249639 | 2.520667358e-4 |
+| 13 | 12 | 24 | 4.690767791632572 | 1.319618127e-6 |
+| 13 | 16 | 24 | 4.690767791632572 | 9.468458819e-17 |
+| 13 | 16 | 32 | 4.690767791632572 | 0 in returned float64 |
+
+All finite; asymmetry Frobenius norms1.50–2.55e-16. This is a single-wavelength,
+fixed-output-size control, not a full coefficient or transport validation gate.
+No shipped NPZ regenerated. Reproducer local recent scratch/audit-collision-cutoffs.py
+SHA256 817205d4c9bb8683a37d96b5ff08c0da2151602657b60ffbf5c738fb4e09857f;
+log e061355e7bc666f5aba8311443ea47f390b1da1c04d7a63d6ad22016fdb5a4b6.
+Run PYTHONPATH=src:tools/artifacts local-JAX0111-python <script> in code worktree.
+Assembly times17.3–76.5s; no solver-performance claim. Existing artifact generator
+already has a four-output-moment B.8 spherical ladder, but that does not certify
+the shipped8/18 tables or their B4 endpoint.
+
+Launched separate B4 radial16/24/32 control at fixed spherical13, Bessel48,
+P3/J1, digits50. Local session58082/PID41100 verified Rs23s; stdout initially
+buffered per complete assembly, do not restart based on silence. Script
+/tmp/gkx-coupled-rate-20260905.shBvlR/audit-collision-high-b.py SHA256
+5a44ca4184b12bf6d7c7e0786910df06a1f100321559cd94f050fbc69bcd2737;
+same command prefix, output audit-collision-high-b.log. Next check finite
+matrices and cutoff changes; angular/output/Bessel/precision ladders still
+required afterward, not merely radial symmetry.
+
+GPUjobs unchanged:95001/PID1738946 RNl44m13s,68484/PID1740480 RNl17m56s.
+CI33958341219 has only parallel-autodiff101285631063 and nonlinear-core101285631242
+in progress, no failures. Local code73ec5820 remains4ahead of9fc6e42d; hold push
+until CI completes. No source changes or merges this turn. Full roadmap active.
+
+## 2026-09-05 — Validate collision candidate before writing artifacts
+
+Previous turn completed B1 controls and launched B4. Revalidated all live jobs.
+Audited the production artifact CLI while numerical jobs run: --check wrote
+NPZ/metadata before computing the drift-kinetic reduction. Furthermore,
+max(error_test,error_field)>tol allowed NaNs to bypass failure. This could
+replace existing files with a rejected candidate.
+
+65f92b06 moves publication after the check and requires both errors<=1e-6,
+which rejects NaN/Inf without changing the numerical tolerance. Runtime
+coefficients are untouched. Eight parameterized regressions inject zero,
+finite mismatch, NaN and Inf in either test/field block; sentinel files in
+pytest temporary directories must survive rejection, while accepted candidates
+replace them. Against pre-fix73ec5820, six invalid cases fail this regression;
+the two valid cases pass. All eight pass after the fix. These tests are about
+check-before-write behavior, not finite-k physics or crash-atomic publication.
+
+Before reproducer local recent scratch/check-old-collision-publication.py pins
+73ec5820 via git show and executes its CLI in memory, with mocked coefficients
+and temporary output paths; no old source installed in the worktree. SHA256
+665b7e9a5d084d5a13371a3e682f77555d350217decb3e197fba44dba2fe37e4;
+before log bae0fda855be16fdbf5e5f70ca33b31c2d6c2850f5b03d7fbf60904f9508ef8b.
+Final collision tests excluding overhead/cost:32passed0skipped10.471s,
+91958exit0, collision-publication-final.xml SHA256
+78dcdf1499c664b54f4bd2be3519d9a7741b4ab0690e1c6e8ca771c5a857382d.
+Ruff check/format, diff and architecture policy pass. No new files; production
+generator−1line, tests+28lines. Adjusted documented test budget+21net after prior
+slimming (86968), with target35000 unchanged. No scientific gate relaxed.
+
+B4 first radial16 assembly completed finite in163.609s: normC21.0509399211,
+asymmetry1.478004548e-5. Radial24/32 controls still running, local58082/PID41100
+verified Rs4m38s; do not restart. GX95001/PID1738946 and GKX68484/PID1740480
+remain live. CI33958341219 now only nonlinear-core101285631242 in progress;
+parallel-autodiff101285631063 passed. Local65f92b06 is5ahead of9fc6e42d, held
+until CI completes. No merges. Full research/publication roadmap active.
+
+## 2026-09-05 — Whole-table finite guard; B4 radial24 result
+
+Previous turn fixed check-before-write ordering. This turn covers the remaining
+publication gap: zero-wavelength checks do not inspect all six blocks at other
+wavelengths. 3382c077 makes write_artifacts reject any nonfinite array value
+before opening either output, with or without --check. Two production lines;
+no coefficient/model/tolerance change. NaN and Inf in each of test/field and
+four polarization blocks reproduce12failures against the pre-fix writer.
+All12 new cases now raise before replacing sentinel files. Shapes in these
+synthetic fixtures exercise the finite guard only, not the physical schema.
+
+Final collision physics file excluding overhead/cost:44passed0skipped10.520s,
+96313exit0, local recent scratch/collision-finite-final.xml SHA256
+35377ef44369a58ec97af044ccd848a43cf41c5002b16127b22434b497ea07ad.
+Before12-failure JUnit collision-finite-before.xml SHA256
+8e026b86372ba7114b74ebca6a1b0fab4395ef64c8da2f3f8d2f6138962135aa.
+Ruff check/format, architecture and diff gates pass. No new files; test budget
+86986 (+18), tools77974 (+1net after previous move), targets unchanged.
+Finite-only and zero-wavelength checks still do not certify full-domain physics,
+truncation convergence, complete schemas or filesystem crash atomicity.
+
+B4 local58082/PID41100 remains live. Radial24 assembly finished in254.704s:
+normC21.05095167071282, asymmetry2.728216989e-12, relative16→24 change
+1.249587935e-6. Radial32 still running; do not label a partial log terminal.
+Fixed spherical13/Bessel48/outputP3J1/digits50; angular/Bessel/output convergence
+not established atB4. GPU95001/PID1738946 and68484/PID1740480 remain active.
+CI33958341219 only nonlinear-core101285631242 pending, no failures. Local
+3382c077 is6ahead of9fc6e42d; keep held until CI completes. No merges/restarts;
+full research/publication goal remains active.
+
+## 2026-09-05 — Independent test-particle quadrature; B4 radial completion
+
+Previous turn was a verified wait. This turn produced independent physics
+evidence, not just another stored-table regression. Used Frei2021 primary HTML
+https://arxiv.org/html/2104.11480, Eq77 differential form with equal-species
+corrections vanishing, and Eq89 Fourier gyrocentre pullback. Integrate the
+test operator by parts in normalized Maxwellian measure. For orthonormal
+psi_i(r,xi), Ctest_ij is the negative weighted sum of radial derivative products,
+pitch derivative products and B²r²/2 [nuD(1+xi²)+nu_parallel(1−xi²)]psi_i psi_j.
+The gyrophase cross terms average to zero; no fitted scale or symmetrization.
+This gives the exact quadratic-B structure of the like-species test block,
+not of the Coulomb field block. The formula is now displayed in operators.rst.
+
+Independent Gauss-Laguerre in r² (alpha=.5,48/96/192 nodes) and32-point
+Gauss-Legendre in pitch; normalized Hermite p0–3/Laguerre j0–1. Converted stored
+runtime signs back to paper convention with D C D. Results stable across all
+three radial quadratures:
+
+| B | quadrature norm(test) | shipped norm(test) | relative Frobenius difference |
+|---:|---:|---:|---:|
+| 0 | 4.950681543335375 | 4.950681543335382 | <=6.031e-15 |
+| 1 | 5.970624500211333 | 5.229504287487146 | .2285675400 |
+| 4 | 23.47437603255837 | 4.833822011365678 | .8411588484 |
+
+Cross-check against independently refined generator (not shipped table):
+B1/P3J1/spherical13/radial12/Bessel24/digits40 test norm5.970624493121327,
+relative quadrature difference2.544286174e-9. Session67222exit0. This strongly
+implicates intermediate truncation, with the DK normalization independently
+recovered. Does not establish field/polarization correctness, all moments,
+temperature ratios, electromagnetic coupling or predictive transport.
+6ae7c30c explicitly warns about the shipped8-moment test-block failure in README;
+no coefficients/runtime behavior replaced.
+
+Local recent scratch reproducibility:
+- audit-collision-test-quadrature.py SHA256 b09c301238e0e83688f1999d91605a8cdbf74a9ac85ab5a013053428f0862033;
+  log f72eecb1c6dc61c4c357d24f2a14b3a7646a07ad2583014d79e4d1a24bfa2afd.
+- compare-collision-test-quadrature.py dcc1f071d86463b0c806b0ab32ad0aa8d67ced104fb1bf3ca0b3c8195dfafd3a;
+  log52d2b8cfdfac4749ed4ce9c4eca07428232ad8eb539a17fee04bae7dfbfa54c9.
+Run local-JAX0111-python from code worktree with PYTHONPATH=src:tools/artifacts.
+First script takes<1s; second regenerates the refined comparison. Preserve both.
+
+B4 radial58082/PID41100 terminalexit0: final radial32 normC21.050951670714824,
+asymmetry3.698059403e-15, radial24→32 relativechange2.254586919e-13,
+410.281s final assembly. Full log SHA256
+4171a0eb51bf8f8eea5f4cede7c1bcc2cad34c0561a8245f67dfd7b308f32b66.
+This remains fixed spherical13/Bessel48/P3J1; do not promote a full-domain table.
+Next leverage the independent quadratic-B test block for efficient generation,
+with larger-basis/quadrature/AD gates; separately converge field/polarization
+and angular/output truncation. No duplicate radial control required.
+
+CI33958341219 at9fc6e42d completed success before the batched push. The new doc
+section initially failed strict Sphinx for a short heading underline; detected
+locally, corrected ine9b7b67f, final strict build57683exit0. First two failed
+build logs retained (collision-quadrature-docs{,-fixed}.log), final pass log
+collision-quadrature-docs-final.log. Pushede9b7b67f; new CI is not yet certified.
+Only current live physics jobs: office95001/PID1738946 and68484/PID1740480.
+No PR merges; original checkout unchanged. Full research/publication goal active.
+
+## 2026-09-05 — Compact test-particle Gram oracle, larger bases and regressions
+
+Previous turn established the independent8-moment quadrature failure. Extended
+the same differential-form calculation to P5/J2 (18 moments) and P7/J3 (32),
+building C0 and D as weighted Gram products, Ctest(B)=C0−B²D. Positive weights
+give the dissipative matrix signs without post-hoc symmetrization. Quadrature
+48radial/32pitch→96/48→192/64: largest C0 change9.35e-15, D5.50e-14.
+C0 Maxwellian column vanishes, max eigenvalue−0; minimum D eigenvalues
+.2870806/.2121421/.1734222 for8/18/32. This is tested moderate-order
+quadrature, not a guarantee at arbitrary order, unequal species or full fields.
+
+Shipped18-moment DK test block matches to1.51e-14 relative, but B1/B4
+errors are .1298183805/.6417139356. README warning now covers both shipped
+resolutions. No NPZ or runtime collision action replaced.
+
+Added like_species_test_particle_gram_matrices to existing offline artifact
+module (no new file or installed runtime dependency). Default96/48nodes;
+nonnegative moment/positive node checks and finite output guard. Reuses Hermite
+evaluation across Laguerre orders. Unit-frequency, paper-convention C0/D;
+field/polarization explicitly excluded. New regressions compare96/48 vs192/64
+at8/18/32, independent DK moment coefficients at8/18, Maxwellian null column,
+spectral signs and invalid node/orders. They do not yet exercise arbitrary
+large moments, physical field-response coupling, or production AD.
+
+Full selected collision tests, excluding hardware timing gates:
+51passed0skipped for both JAX_ENABLE_X64=true (10.339s,23405exit0) and false
+(11.079s,96946exit0). The new NumPy oracle itself is float64 regardless of JAX
+mode; do not call these all-f32 numerical coefficients. JUnit hashes in local
+recent scratch: collision-gram-final.xml
+aea749a256a144f3034cf4df341450a075ab20ed3e3c243409024c44ab7e4ec3;
+collision-gram-f32.xml92605df25757ffbeb3f9147bc108e09f9074941c8a25ddd0859b032faea28c02.
+Ruff check/format, architecture/diff pass; strict Sphinx99047exit0.
+Tool budget+64 to78038 and tests+26 to87012, targets unchanged; this is an
+independent reference rather than a duplicate production collision path.
+
+Exploratory scratch collision-test-gram.py SHA256
+1e6dacea374cca3023241840a1611cd6dba4b0872ac1954c02a7bf0497f887d8;
+log abfed80db431cc18ea7a1c940e313c41f517265fd5e2f6049816bec4077d6053.
+Measured NumPy assembly .00068–.00978s for these small bases after imports;
+not an end-to-end or GPU performance benchmark. Two stored matrices instead
+of14 wavelength test matrices is a prospective memory benefit, not deployed.
+Next validate quadratic coefficient/projection and differentiate its eventual
+runtime application; independently converge field/polarization before replacing
+complete tables. Existing spherical generator remains available as an oracle.
+
+CI33959939110 targets pushede9b7b67f; last23pending/no failures. Hold this new
+commit until that CI completes. GPU95001/PID1738946 RNl1h09m17s and68484/
+PID1740480 RNl43m00s still active. No merges/restarts. Full roadmap active.
+
+## 2026-09-05 — Coupled Hermite refinement fails; Nm160 and field controls launched
+
+Previous turn added verified Gram oracle. Nm128 GKX68484/PID1740480 now terminal
+exit0, wholewall43:47.41. Result ky.550000011920929, Nl32/Nm128/Nz96,
+RK4dt.001/T300/rate50: gamma.02282883928152596, omega.5035508454745032.
+Against matched Nl32/Nm96 dt-half control, gamma−8.14117714%, omega−.27376389%.
+Full/half shifts+3.754626714% gamma/−.1840620154% omega pass the current5%
+temporal screen, but do not establish asymptotic settling at tighter accuracy.
+The sub-percent Nm96→128 change previously observed atNl16 is not transferable
+toNl32. Velocity convergence remains failed. CSV's32.61% growth difference from
+the old GX reference is NOT matched-resolution parity: that referenceNl16/Nm48
+differs. Wait for patchedGX same-resolution reference before using that comparison.
+
+CSV copied to local recent scratch, SHA256
+8178f187db7e963212cd805a1d85348ee30d94142ab633ed05037c73bae62e47.
+Prepared and launched Nm160 at sameNl32/Nz96/dt.001/T300/ky/rate50/p20.
+Nm-dependent regularization changes remain part of the refinement protocol;
+no fixed-operator claim. Localpreflight effectiveky.55/Nz96, frequencies
+[0,1514.94946517,104.08403157], RK4 heuristicbound.0015676019088626794.
+The first preflight print used nonexistent grid.Nz; fixed to grid.z.size and
+reran successfully. No production bug or timestep conclusion from that typo.
+Preflight script SHA2560b9528c4bc9ff0c3b848bdbd69693b35de891c5e1b141d4c22f3692e2b9bce42.
+Input salpha_nl32_nm160_t300.toml SHA256
+2c38a2f6337b1821fbe932a039bb3aa8eca85ab97acc5773f1ab017517ef2568.
+
+GPU0 launch11457/PID1744614 (time1744613), campaign cwd and unchanged
+grid-verified reporter, usual GX_PARITY_REF_DIR=campaign/matched_refs,
+CUDA_VISIBLE_DEVICES=0,JAX_ENABLE_X64=true,PYTHONPATH=src,MPLBACKEND=Agg;
+officevenv-python reporter --manifest salpha_nl32_nm160_t300.toml
+--cases cyclone_salpha_itg_nl32_nm160_t300 --stem results/salpha_rate50_nl32_nm160_t300.
+Logs gkx-salpha-nl32-nm160-t300.{stdout,stderr}.log; process verified, stderr empty.
+No duplicate/restart of terminal68484. PatchedGX95001/PID1738946 remains live.
+
+Local field-particle angular control launched45671/PID50209, fixedB4/P3J1,
+radial32/Bessel48/digits50, spherical13/15/17. Saves test/field arrays per rung
+as collision-b4-s{order}-r32-k48.npz for later comparisons; first baseline is
+recomputed because the older radial probe saved only scalar logs. Reports field
+successive differences, symmetry and independent test-block Gram error. No
+polarization or full-operator promotion. Script collision-field-angular.py SHA256
+7b4fe62bc46ffe65d2a74ef03eec49ed8b5d8f5692259128f4285b2f7dfe1243,
+in local recent scratch; PYTHONPATH=src:tools/artifacts local-JAX0111-python,
+output collision-field-angular.log. Process verified Rs1s; keep running.
+CI33959939110 last18pending/no failures. Local9e05ba52 remains1ahead of
+pushede9b7b67f, held for CI. No merges; full research/publication roadmap active.
+
+## 2026-09-05 — Near-zero collision interpolation derivative counterexample
+
+Previous turn produced the failed coupled-Hermite result and new controls.
+All three processes revalidated. Inspected diagonal interpolation: generic
+interpolate_collision_diagonal_table is linear in B; both like-species Coulomb
+and Sugama callers obtain B=sqrt(2max(cache.b,0)). This introduces a derivative
+issue separate from inaccurate table generation. No interpolator changed here.
+
+Synthetic exact data C(B)=−B² at B=[0,.125], using the production interpolator
+inside jax.jit(jax.value_and_grad), CPUx64/JAX0.11.1:
+
+| b | interpolated C | dC/db | exact dC/db |
+|---:|---:|---:|---:|
+| 0 | 0 | −Inf | −2 |
+| 1e-12 | −1.767766953e-7 | −88388.34765 | −2 |
+| 1e-8 | −1.767766953e-5 | −883.8834765 | −2 |
+| 1e-4 | −.001767766953 | −8.838834765 | −2 |
+
+On the first interval, C_interp(b)=−B1 sqrt(2b), hence dC/db=−B1/sqrt(2b).
+This is correct AD of an inappropriate physical approximation, not a JAX
+derivative implementation error. Exact quadratic test-block Gram evaluation
+avoids it. For remaining diagonal field/polarization blocks, prove evenness
+and investigate interpolation in B²; explicitly choose endpoint derivatives
+because jnp.maximum/clip use tied-boundary conventions. Preserve generic and
+unlike-species interpolation contracts; full-pair/diagonal tests and physical
+coefficient/AD ladders must distinguish any deliberately changed approximation.
+
+Reproducer local recent scratch/collision-interpolation-ad.py, exit0 despite
+intentional negative/nonfinite derivative evidence (no pass claim). Numeric
+outputs saved in collision-interpolation-ad.log. These artifacts use exact
+synthetic values, not the shipped faulty table. Results make coefficient-only
+repair insufficient for claiming physical collision/geometry derivative accuracy.
+Script SHA2565e81bfa92fd16cc670b78cdf34db7e31e280aac41e53811ddd2595a337eef6e7;
+log b265a0721372622ad00eb11512fb00c9cfbc5ee19a810be2dc3d01f1bda7061f.
+Latest local field-control50209 verified Rs5m53s; initial assembly still active.
+CI33959939110 has one pending job and no failures in the latest query.
+No production changes, no restarts or merges. Local9e05ba52 remains held while
+CI33959939110 completes; the full research/publication goal is active.
+
+## 2026-09-05 — Quadratic collision interpolation repair and resumed checkpoint
+
+Code commit **2c440b0e** repairs the preceding counterexample. The generic
+diagonal interpolation helper retains B-linear behavior by default. Its new
+`squared=True` contract accepts B² directly and squares the stored B grid;
+like-species Coulomb and Sugama callers pass `2*cache.b`, avoiding sqrt at zero.
+Strict outside-boundary comparisons retain the interior one-sided derivative
+at either endpoint, with zero derivative outside the table. Generic and unlike
+full-pair interpolation are unchanged. Off-node like-species approximations
+deliberately change; shared table-node values do not. This repairs the synthetic
+quadratic limit, not inaccurate physical coefficients or full-operator AD.
+
+Twelve regressions cover both models and b=[−.1,0,1e-8,.003,.25,.5], using
+exact C(B)=−B² on B=[0,.125,1]. Outer-jit reverse AD and forward JVP check
+the expected −2 slope in range and finite clipped behavior below range.
+An explicit old-formula wrapper replay fails all12 cases; it is not an old
+checkout run. Existing compact/full comparisons now use shared nodes, while
+the generic finite-difference test retains its original interior coordinates.
+The Sugama synthetic expectation was updated to the new quadratic contract,
+not relaxed by widening tolerances. No solver rates or NPZ coefficients changed.
+
+Verification (local recent scratch `/tmp/gkx-coupled-rate-20260905.shBvlR`):
+
+| Check | Result | JUnit SHA256 |
+|---|---|---|
+| CPU x64 collision/operator selection | 42 passed, 0 skipped, 22.317s, session88282 exit0 | a5bf9276eb133ee11aa5746f8d69c6aeefae1152199c834d4aca8af9d302b406 |
+| CPU f32 selection | 42 passed, 0 skipped, 21.384s, session83856 exit0 | ef3f8aa103d4e8b592b9108aea871c31eea3feeb066a09ac24316a8f08d6c100 |
+| Office GPU x64 quadratic-limit cases | 12 passed, 0 skipped, 8.545s, session47850 exit0 | f2aa5b4235f0499e202321abb451dfb5226ada1fee00fdb1931efeeb80f04a67 |
+| Old-formula replay | 12 failed as expected | 0c093b6800555fdb5ad7e969ee9bba5d5bc658ddb91a6e4969ff6645276ac6e2 |
+
+Files: collision-squared-{final,f32,gpu,legacy}.xml; replay script
+collision-squared-legacy-probe.py. CPU selection is tests/unit/operators/
+test_operator_kernels.py plus test_linear_collisions_coverage.py with
+`-k 'collision or finite_wavelength or interpolate'`. GPU uses the first file
+with `-k quadratic_limit`, CUDA_VISIBLE_DEVICES=1, memory fraction .08 in
+the dedicated `/home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo` archive.
+CPU f32 preceded restoration of the generic test's interior coordinates;
+final CPU x64 retains that coverage. Production code was identical.
+Ruff, format, architecture, diff checks passed; strict Sphinx session86153
+exit0 (collision-squared-docs.log). Budgets now source88981/tests87054/
+tools78038; no new files. Documentation states endpoint and coefficient limits.
+
+CI33959939110 at e9b7b67f completed **success**, no pending or failed jobs.
+Only after its completion pushed held9e05ba52 and2c440b0e together to PR202;
+new-head CI remains uncertified. No merges.
+
+Live processes revalidated, not restarted: GKX11457/PID1744614 RNl23m12s;
+patchedGX95001/PID1738946 RNl1h37m07s; local45671/PID50209 Rs22m10s.
+Local field angular partial results, fixed B4/P3J1/R32/K48/digits50:
+
+| Spherical cutoff | Test-block Gram relative error | Field norm | Field asymmetry | Assembly seconds |
+|---:|---:|---:|---:|---:|
+| 13 | .03908658928861847 | 2.6970971396621914 | 3.744020366828693e-15 | 409.171155 |
+| 15 | .010017207538561418 | 2.6971399301154007 | 3.72834976452174e-15 | 527.006639 |
+
+Field successive relative change .00012418653363288436; spherical17 pending.
+Small field change and symmetry do not certify the still1%-wrong test block,
+polarization, or full collision physics. Next: inspect terminal results/hashes
+without duplicates; compare Nm160 against matched Nm128; independently audit
+the patched GX output and dt before parity; finish coefficient/polarization
+convergence before replacing tables. Full R0–R9 roadmap remains active.
+
+## 2026-09-05 — Independent polarization oracle; completed patched-GX reference
+
+Previous goal turn: progress (pushed interpolation repair and revised checkpoint).
+Revalidated all three old jobs; no duplicate launches. Code now **b7cd526e**,
+one ahead of pushed2c440b0e, held while CI33961508920 completes (latest5pending,
+no failures). Added an offline test-particle polarization oracle, sharing the
+existing differential quadrature basis; no runtime/table modification. Source
+count88981 unchanged, tests87095 (+41), tools78098 (+60 net), no new repo files.
+
+Derivation source revisited: https://arxiv.org/html/2104.11480, Eq45/47c/77/89.
+Set the Dirichlet source to u=J0(B r sqrt(1−xi²)), with analytic derivatives
+u_r=−B sqrt(1−xi²)J1 and u_xi=B r xi J1/sqrt(1−xi²). This gives test-phi2
+with qphi/T factored out; equal-species test-phi1 is zero. This is independently
+derived from the differential form, not another spherical-coefficient contraction.
+
+Scratch `/tmp/gkx-coupled-rate-20260905.shBvlR`, local Python/JAX0.11.1 environment,
+PYTHONPATH=src:tools/artifacts, script collision-test-polarization.py. Session22738/
+PID57719 terminal exit0. Direct quadrature96/48→192/64 changes vectors by <=6.03e-14.
+
+| Moments | B1 shipped test-phi2 relative error | B4 error |
+|---:|---:|---:|
+| 8 | .037402892979085306 | .957948360893082 |
+| 18 | .0017358376451763447 | .8640258003712806 |
+
+Refined B1/P3J1/S13/R12/K24/digits40 generator agrees with direct quadrature
+to1.5078857862559835e-11 in54.8385s; both phi1 norms zero. B0 direct vector
+is exactly zero. The scratch's relative-error normalization at B0 is meaningless
+(division by float tiny); actual stored norms are only1.0655743879e-61 and
+3.4942288488e-60. Do not report its huge B0 ratios as a physical failure.
+
+Independent source ladder uses J0=sum_j exp(−B²/4)(B²/4)^j/j! L_j, contracts
+the Gram matrix, and projects onto fixed8 output moments. For B4 sourceJ4/8/
+12/16/24 relative errors are .0408927/.000169877/1.42939e-7/3.78451e-11/
+9.96057e-16; B1 J8 already9.15081e-14. This checks the direct source derivative
+and the need to resolve source independently of output moments. Shared-basis
+refactor check extracts only the committed2c440b0e Gram function with AST:
+8/18/32 old/new matrix pairs are bitwise equal, exit0.
+
+Committed tests cover quadrature refinement, odd-Hermite parity, source projection,
+B0, the analytic B² limit C0[:,1]/4−D[:,0], and invalid wavelengths. CPU selected
+physics suite (`-k 'not overhead and not cost'`) **61pass0skip** in both x64
+(11.111s,7440exit0) and f32 mode (11.894s,82335exit0). These new offline oracles
+are NumPy float64 in both modes, not a GPU/production-AD claim. Targeted17pass;
+Ruff/check/format/architecture/diff and strictSphinx64151 pass. No table promoted.
+
+SHA256 (same scratch):
+
+| Artifact | SHA256 |
+|---|---|
+| collision-test-polarization.py | 3eb068dbb46c908c1ab8b976c02ed37154c28ccc7ff118236004e4ec32243621 |
+| collision-test-polarization.log | 1d2c011e31c03e5160db31c0e59076084d499dbd02e796d04795edbd913cd1f8 |
+| collision-polarization-b1-s13-r12-k24.npz | 327d79ae1baf1713b08289fd5929eb67fabf71e0ad372009ac1cc35b52d48b8e |
+| collision-polarization-source-ladder.py | ba411d52f6e187edea73be03ee67ab11cb855f41d1827960effa42d39daad99d |
+| collision-polarization-source-ladder.log | f64f8e96872323198142b114f8ef9a077fa73d4aaf9176b8eec5daa39cf0ec95 |
+| collision-gram-refactor-check.py | 202a1cb10e2b0c465a088b1e3e897a98d2d0f949012625abef2792edad258831 |
+| collision-gram-refactor-check.log | 44365e041c9fae06e08db447f8e9a018688c070c8524f8ec55d51a73a890ab90 |
+| collision-polarization-final.xml | 1da968a20fbc7e6a7061e94e811555c8042c2dfa402fcf46f0cd21464fcb703d |
+| collision-polarization-f32.xml | cbcb54a91e5b0fc4939fe8808212139ce4414740730c2f09e530bfc2b111a697 |
+
+Field angular45671/PID50209 completed exit0. Final spherical17 test error
+.0018808579841654452, field norm2.6971432806633238, asymmetry3.730828446079427e-15,
+field successive change1.070927690290596e-5,658.9941s. Log SHA
+ac7f7d9a92dacf5948a8c6a7c6ec289028f645157c169f5e2cd9a8fea618cc8e.
+Saved collision-b4-s{13,15,17}-r32-k48.npz hashes respectively
+fb977323815b228f72108b1a43585347ceb7e759effa35e00bfc2c2cd9fe0fa2,
+27d31976bf204d17a0097972a54fc5e585cc283b5e1370da890e989817dacd2e,
+3c37039bfca3af6f2e7b9a3b8db2bedd9076663d3860cdc868634fbf77d002c2.
+Continued at spherical19/21, not repeating old rungs: **12758/PID58452**,
+collision-field-angular-fine.py SHA4f51d44d6ddc4551dac71f68e0654c360452a9efb2b98042d48a3582ba3edae0,
+same environment and cwd, stdout/stderr collision-field-angular-fine.log;
+saved17 field supplies the baseline. Verified Rs6m12s. Keep running.
+
+### Patched GX reference exit and audit
+
+GX95001/PID1738946 completed exit0 in1:44:10 (RSS1691008kB, concurrent hardware:
+not an isolated performance benchmark). Original GX remains untouched; this is
+the explicitly normalized-power scratch binary whose provenance is above.
+`audit-refined-gx.py` copied to the existing refined directory with the matched
+GKX dt-half CSV, then executed with office venv Python. Initial43874exit0;
+repeat36476exit0 saved log, copied locally. This repeat is a read-only audit,
+not a solver restart. All numeric arrays finite:264 out,42 big,2 restart.
+Grid ky12/kz96;1501 samples,150000 steps, float32 dt=.0020000000949949026,
+T300.0000142492354; stdout and interior NetCDF time-spacing audits pass.
+Final diagnostic interval is99 steps, accepted as a truncated regular interval.
+
+Ten of11 positiveky modes pass both5% temporal screens; lowestky growth shift
+−5.355% fails. Atky.550000011920929, late-half omega=.5051693808381631,
+gamma=.023903807575570125; reference half-window relative shifts−.00125904/
+−.00966998 respectively. Matched GKX Nl32Nm96 dt.001/T300 omega/gamma
+.5049331701718064/.02485209212445021 differ by−.0467587%/+3.9670858%.
+Using GX last30% instead gives omega=.5051046493576794,gamma=.023870534360607026,
+half shifts−.019584%/−.111038%, and GKX differences−.033949%/+4.112006%.
+Thus changing the diagnostic window does not remove the residual. These use
+GX sample means of instantaneous omega/gamma versus GKX fitted diagnostics;
+audit estimator, precision and operator differences before assigning a cause.
+Do not compare the running GKX Nm160 to this Nm96 reference as matched resolution.
+
+| Artifact | SHA256 |
+|---|---|
+| audit-refined-gx.py | 77ba6323af38349fbe824f34dda98c399f11a77b021a04672a0f22121cfe221e |
+| audit-refined-gx.log | 2c03fb2f6db742a2e681d6315d4a4f58f8baee2a285c8ac5714aed6f3c811c33 |
+| salpha_nl32_nm96_t300.out.nc | 1243aa98ff6632120b37a74767d646c8505d52cf364bc5b36d82746296f73be8 |
+| salpha_nl32_nm96_t300.big.nc | 2565c874de7fd3d5fd4c46a38be6f59afd40b9e8574a2efb93fed140c7ce8312 |
+| salpha_nl32_nm96_t300.restart.nc | ee08cd0eff13d85de259b6aac55cf7462bca7ed7206c351a480b8c01ca48df00 |
+
+Only live long jobs now GKX11457/PID1744614 (verified RNl32m50s, GPU0) and
+field12758/PID58452 (local CPU). GPU1 is free. No merges. Next: collectNm160,
+finish19/21 field ladder, independently validate field polarization, investigate
+the ~4% reference discrepancy, then regenerate coefficients only with established
+convergence and physical contracts. Full R0–R9 goal remains active.
+
+## 2026-09-05 — GX energy-growth estimator control and matched f32 launch
+
+Previous goal turn classified progress (new independent polarization oracle and
+completed GX-reference audit). Revalidated live Nm16011457/PID1744614 RNl38m39s
+and field12758/PID58452 Rs8m49s; neither restarted. CI33961508920 still running,
+no failed jobs, latest only parallel-autodiff and nonlinear-core pending.
+Localb7cd526e remains one held commit ahead of pushed2c440b0e.
+
+Read-only estimator audit of the completed patched GX output: fit
+gamma=0.5*slope(log E) by centered least squares for positive mode energies
+E=Phi2_kyt and Wg_kyst. Same output, unchanged hashes from the preceding entry;
+all11 positiveky modes evaluated at last50%,30%,15% of physical time.
+
+| Fit start / T | GX instantaneous gamma mean, ky=.55 | Phi2 fitted gamma | Wg fitted gamma |
+|---:|---:|---:|---:|
+| .5 | .023903807575570125 | .02384708860836354 | .023855835928109727 |
+| .7 | .023870534360607026 | .023842935400764494 | .02384712079354227 |
+| .85 | .023870550771862006 | .02384342848771987 | .02384490120555679 |
+
+Matched GKX gamma=.02485209212445021 is4.2325188% above the GX Phi2 last30%
+fit. The small difference between GX estimators cannot explain the observed
+GKX/GX discrepancy. GKX uses a selected-z complex-phi fit, whereas this GX
+energy fit integrates z; stationarity makes the comparison useful but does not
+prove identical finite-time estimators. No operator or precision cause assigned.
+Local scratch audit-gx-growth-estimators.py was copied into the existing office
+refined directory and run with office Python, exit0. Full11-mode log copied
+back. Script SHA256865dddd175e98d957835ec6dab01435c5691075c077069ac7ae5c27815824e7b;
+log f2958cc8af4ca72a90181bbe8ce5d1289813fb90e5a1d9cacc041393a8e998cc.
+
+Precision-only GKX control launched on freed GPU1, **72033/PID1748122**
+(time1748121). Same production snapshot/reporter/geometry and matched Nm96
+Nl32 Nz96 RK4dt.001/T300/rate50 as completed x64 dt-half run. Manifest
+salpha_nl32_nm96_t300_f32.toml SHA256
+550acf2ee0a40eae6e2173c0b22432adccb201d9345fa15c3827676af53ffb03.
+Only numerical precision intentionally changes; historical-reference columns
+still refer to Nm48 and MUST NOT be used for same-resolution parity. Compare
+raw GKX results against saved Nm96 x64 and separately audited patched GX Nm96.
+
+Command in `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`:
+GX_PARITY_REF_DIR=campaign/matched_refs CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=false
+PYTHONPATH=src MPLBACKEND=Agg /usr/bin/time -v officevenv-python
+tools/comparison/build_gx_parity_matrix_grid_verified.py
+--manifest salpha_nl32_nm96_t300_f32.toml
+--cases cyclone_salpha_itg_nl32_nm96_t300_f32
+--stem results/salpha_rate50_nl32_nm96_t300_f32.
+Logs gkx-salpha-nl32-nm96-t300-f32.{stdout,stderr}.log; stderr initially empty.
+Preflight21707exit0 imported GKX and built the actual geometry/grid, confirming
+jax.config.x64_enabled=False, ky/z float32 and one visible CUDA device. Main
+solver PID1748122 independently verified after launch; no duplicate process.
+Both GPUs now occupied. Inspect terminal handles/results before further runs.
+No code changes or merges this turn. Full R0–R9 goal remains active.
+
+## 2026-09-05 — Finer field angular rung and polarization assembly identity
+
+Previous turn: progress (independent energy-fit evidence and matched precision
+control). Live processes revalidated; no restarts. CI33961508920 now has only
+nonlinear-core pending, no failures. Localb7cd526e still held one ahead of2c440b0e.
+
+B4 fixedP3J1/R32/K48/digits50 spherical19 rung completed during the continuing
+12758 process: test-block Gram relative error .0002611458315650394; field norm
+2.697143456494279; asymmetry3.749160853593214e-15; field successive relative
+change6.004033774502048e-7;815.136456s. Spherical21 remains pending. Saved
+collision-b4-s19-r32-k48.npz SHA256
+7607cfa5e7e96480b4d52721ea2cdfc42d3660f11951111fd388f9de87ddefda.
+The test error remains much larger than the field's successive change; preserve
+separate block-specific accuracy claims and do not promote by symmetry alone.
+
+Started an additional B1 field-polarization assembly-identity control:
+**45346/PID62787**, local recent scratch/collision-field-source-ladder.py,
+SHA256e73cfd09e0b03c8f4c70bd977f0d5535a82fa883ac7b9d2c6e254a21357728e3.
+PYTHONPATH=src:tools/artifacts local-JAX0111-python, cwd code worktree; output
+collision-field-source-ladder.log. No existing source or results overwritten.
+FixedS13/R12/K24/digits40, source Hermite maximum3 and Laguerre maxima3/5/7,
+float64_final_contraction=True. Apply each generated test/field matrix to the
+known J0 Laguerre coefficients, then retain only P3J1 outputs and compare with
+the separately assembled vectors in collision-polarization-b1-s13-r12-k24.npz.
+Saves each projected pair as collision-b1-source-j{jmax}-s13-r12-k24.npz.
+This resolves source truncation independently of the retained output moments.
+Both assembly routes share speed coefficients: this is a structural identity
+check, not independent physical validation of the field-particle kernel. The
+test-particle vector already has a separate differential-form reference.
+
+Latest processes: field12758/PID58452 Rs15m05s; source45346/PID62787 Rs38s;
+officeNm16011457/PID1744614 RNl44m56s; officef32Nm9672033/PID1748122 RNl3m56s.
+Four live jobs; no new repo source edits, no merges. Continue these controls,
+collect and audit terminal results before choosing any subsequent scans.
+
+## 2026-09-05 — Completed f32 and field-source controls; metadata audit finding
+
+Previous turn: progress (new angular rung and source-control launch). Revalidated
+all four processes; source45346/PID62787 and f3272033/PID1748122 then completed
+exit0. Do not restart them. CI33961508920 still only nonlinear-core pending,
+no failures; b7cd526e remains held one ahead of pushed2c440b0e. No merges.
+
+Field-source ladder terminal results, fixed B1/P3J1 outputs/S13/R12/K24/digits40:
+
+| Source maximum J | Test-phi2 relative error | Field-phi2 relative error | Seconds |
+|---:|---:|---:|---:|
+| 3 | 4.684542479110145e-5 | 5.34367599931973e-5 | 41.048166 |
+| 5 | 2.395644987561406e-8 | 3.00193629325671e-8 | 50.213049 |
+| 7 | 6.604769038061571e-12 | 8.705161174013638e-12 | 60.496323 |
+
+The resolved-source matrix action agrees with separate polarization assembly.
+This checks assembly/source truncation only: speed coefficients are shared,
+so the field-particle kernel still lacks independent physical validation.
+collision-field-source-ladder.log SHA256
+5ceabc8132b2125962c10c7849141a3038abe313d28db8f60a792c972d39a990.
+
+Matched f32 Nm96/Nl32/Nz96 RK4dt.001/T300/rate50 run72033 exited0 in7:02.13,
+RSS1586424kB. gamma=.024852321437161786,omega=.5049332865274092; half-time
+relative shifts .0057399234933239495/−.00022147858927143319, both pass.
+Compared with saved matched x64 gamma/omega, relative differences
+9.227098886732676e-6 / 2.304376296446975e-7. This small precision effect cannot
+explain the4% GX discrepancy in this case. No general f32 scientific-accuracy,
+AD or isolated speedup claim. The x64 control's recorded32:55.72 and this7:02.13
+ran under different concurrent load; use them only to motivate controlled R3
+profiling. CSV copied locally, SHA256
+adadc451a26ae460540a98b1a11c96a8d266c92f0ef981de5b89a9c39849641c.
+Its historical Nm48-reference differences remain inapplicable to matched parity.
+
+### Resolved coefficients versus exported geometry metadata
+
+New read-only audit-refined-gx-parameters.py compares the actual baseline geometry
+file consumed by GKX with completed patched-GX Nm96 output, then builds GKX
+parameters/small moment cache on CPU. First transfer used a gkx/gx directory
+typo and failed; corrected it, no reference files altered. Initial audit asserted
+all exported Geometry variables identical and FAILED: coefficient arrays match,
+but scalar metadata nperiod/aminor/alpha/zeta_center differ. Preserve the failed
+log, do not describe all geometry fields as matched. Initial CUDA-hidden CPU
+fallback warning was avoided on the rerun with explicit JAX_PLATFORMS=cpu.
+
+The refined audit separates consumed linear coefficients from metadata: theta,
+bmag,bgrad,gbdrift{,0},cvdrift{,0},gds2/gds21/gds22,grho,jacobian,gradpar,q,
+shat,rmaj,kxfac,drhodpsi,theta_scale are exactly equal. Resolved GX Numerical_Diss
+has nu_hyper_m=1,p_hyper_m=20,kz=true,const=false; GKX matches these and vth=1,
+kpar_scale=.25714266300201416. Both use (m/95)^20 with m>2 and prefactor
+2.3*(20+.5)/sqrt(95)*abs(gradpar). All96 pre-|kz| coefficients match exactly;
+the m95 coefficient is1.2439245285812583. This checks factors, not the full
+linked |kz| action or every RHS term. Physical end-profile action remains a
+separate gate; no claim from absent exported Expert damping variables.
+
+Absolute metadata differences: nperiod2067095552,aminor4.417032889398256e-41,
+alpha2.3825493031289572e33,zeta_center4.417032889398256e-41. Inspected scratch
+GX geometry.cu base constructor and complete S_alpha_geo constructor305–435:
+these scalar members are not initialized there, unlike the actual coefficient
+profiles. This explains why finite but nonsensical metadata can pass a generic
+finite-array audit. GKX flux_tube.py reads aminor into epsilon and alpha into
+metadata; its coefficient profiles are imported directly. Do not infer physical
+3-D geometry from these scalars without verified paired inputs/source metadata.
+No sanitization, invented defaults or GX modifications made. Add a validated
+source-specific metadata contract before reusing such files for visualization.
+
+Audit runs92130/65088 shell sessions ended0 because their final scp succeeded;
+the INITIAL Python audit failed AssertionError, explicitly visible in preserved
+audit-refined-gx-parameters.log. The final log shows successful coefficient
+assertions; both initial failure and narrowed justified scope are retained.
+
+| Local scratch artifact | SHA256 |
+|---|---|
+| audit-refined-gx-parameters.py (final) | fca43e2c4810f746f24ad2c915b6280281b149cc327179ac4b28875a7cc9b331 |
+| audit-refined-gx-parameters.log (initial failure) | 9605af06cd3553101cba0f53f1cd3853edf7bb9ce7ea37918ff174794c4ee595 |
+| audit-refined-gx-parameters-final.log | 0b3c6fae108f7d5a1b876d76e4df822fcf16923b6ff14ba4d15f68c8f84205ca |
+
+Only Nm16011457/PID1744614 and field19/21 control12758/PID58452 remain live;
+last verified RNl48m42s and Rs18m51s. GPU1 is free. Full R0–R9 goal active.
+
+## 2026-09-05 — Reference damping launch-coverage defect and terminal controls
+
+Previous turn: progress (completed precision/source checks and metadata audit).
+All remaining research jobs are now terminal: Nm16011457/PID1744614 exit0;
+field12758/PID58452 exit0. No restart. CI33961508920 at2c440b0e completed success;
+only then pushed heldb7cd526e to PR202. New-head CI remains uncertified. No merges.
+
+Nm160 Nl32/Nz96 RK4dt.001/T300/rate50:54:11.43 wall,RSS1556488kB,
+gamma=.02410635371563277,omega=.5058500630938944. Temporal half shifts
+−.01609524215956025/−.001790586088472738 pass5%, but Nm128→160 changes
+gamma+.05596055140397027,omega+.004566008855023451. Velocity convergence fails.
+Do not use the reporter's historicalNm48-reference columns as matched parity.
+CSV SHA256c9ceadd362a64a7c30f0d13010526fe5fec465d25300853ed5f13b42d990843a.
+
+Field spherical21 B4/P3J1/R32/K48/digits50: test-block Gram relative error
+2.7281845706059743e-5; field norm2.6971434629402586; asymmetry3.710952637038971e-15;
+field successive change2.3033336693731286e-8;996.260836s. Log
+collision-field-angular-fine.log SHA4a3fcbbc09e7d471548032dc3ce0468fb52c8d118d11708241d45c7138238c66;
+collision-b4-s21-r32-k48.npz SHA95f3d118538443ff80c8a6e2002b695f825b46ea67be222b8eb78f18b62afacf.
+Separate field/test accuracy statements remain essential; no coefficient replacement.
+
+### Same-state operator probe
+
+Loaded the completed GX Nm96 restart (time300.0000142492354), selected exact
+ky=.550000011920929, and transposed documented GX (s,m,l,z,kx,ky,ri) to GKX
+(s,l,m,ky,kx,z). No Laguerre sign conversion: both runtime conventions agree,
+also checked by the resulting field. Normalize G by its Euclidean norm
+4.2528513894334103e-7, build actual imported geometry and matched runtime
+params/term config, and JIT assemble all GKX RHS terms on GPU1. No integration.
+Script audit-gx-final-state-rhs.py in local recent scratch and office refined
+directory; campaign cwd, usual GX_PARITY_REF_DIR/PYTHONPATH=src,
+CUDA_VISIBLE_DEVICES=1,JAX_ENABLE_X64=true, officevenv Python.
+Initial63632, field-extension68046 and coverage-extension95262 all exit0.
+
+GX final diagnostic lambda=.023877935484051704−.5050777792930603i. Applying
+GKX to this state gives Rayleigh lambda=−.37011547913743326−.5052176344515562i,
+relative residual ||AG−lambda_GX G||/||AG||=.9918722810421208. End-damping
+alone has norm3.7920701874316105 and real Rayleigh contribution−.3963824372281995.
+This prompted inspecting damping action, rather than assuming the same nominal
+rate means equal operators. GKX field Phi matches GX final big.nc Phi at the
+same timestamp to7.76793443426897e-8 relative norm; complex scale ratio
+.9999999728960297+1.073359059468334e-8i. Both state/Phi peaks are atz index48.
+Thus simple layout/field normalization failure is not supported by this probe.
+
+### Concrete launch-coverage finding
+
+Scratch GX source grad_parallel_linked.cu149–170 uses nt3=1 and
+dG_all.z=min(65535,Nz*Nm*Nl). Its comment explicitly says the neighboring
+linkedCopyBackAll/linkedAccumulateBackAll kernels use a z grid-stride loop.
+However device_funcs.cu dampEnds_linked around2825–2880 only handles
+idzlm=get_id3() once. GradParallelLinked::applyBCs382 launches that kernel with
+the same capped dG_all. Thus at Nz96/Nl32/Nm96, damping covers only65535 of
+294912 z/moment indices. This is independent of the previously repaired
+hypercollision power overflow. Original GX and scratch source were not changed.
+
+Emulate only this coverage defect in the diagnostic result, keeping GKX's full
+physical implementation unchanged: replace end contribution by itself times
+`z+Nz*(l+Nl*m)<65535`. Rayleigh lambda then becomes
+.023863177234092165−.5052176344515562i, close in growth to the GX diagnostic.
+Relative full-state residual remains .3039369619880524 (best-scalar .3039368465541684).
+This strongly implicates missing damping coverage but does NOT prove it explains
+every discrepancy or establish that the saved finite-time state is a pure mode.
+Both full-state residual and corrected-reference evolution still need validation.
+
+Even Nz96/Nl16/Nm48=73728 exceeds the cap. All affected existing parity results
+must remain conditional on the actual reference operator; the earlier normalized
+hypercollision patch is insufficient to certify high-order GX. Do not "fix"
+GKX to omit damping. Next: isolated actual-kernel coverage regression, grid-stride
+repair in a new scratch reference build preserving existing binary/outputs, then
+short same-state and matched long-run controls. Audit other capped launch users.
+
+| Local scratch artifact | SHA256 |
+|---|---|
+| audit-gx-final-state-rhs.py (final coverage extension) | 1f075af8901f713dcab0d78e197eddf11b9b2678c7c6cc18b4d528a7cafa3ae0 |
+| audit-gx-final-state-rhs.log (initial) | 234f5dc2e031ff8c8b90ed01dbd60902af19ce37d0fade71e5567d7030208507 |
+| audit-gx-final-state-rhs-fields.log | a36eb65837790a215ab8ecf6f684e078e0a5790748d3338baf1311d437616d34 |
+| audit-gx-final-state-rhs-coverage.log | 13c22e8e4b7f286cc05dde48771c5c75abc7ce52690190a494f20c44bbfaab69 |
+
+No live research processes now; both GPUs free. Full R0–R9 goal remains active.
+
+## 2026-09-05 — Actual GX kernel regression, isolated repair and corrected reference
+
+Previous turn: progress (same-state evidence and coverage defect identification).
+Verified old jobs absent/terminal and code worktree clean before acting. Created
+`/home/rjorge/gx-damping-coverage-20260905.8w5DhH` with mktemp and git clone
+--shared from the normalized-hyper scratch repo. HEAD3865a53778862e1686f414bf6f416339e24887c9;
+copied only its two modified source files and office Makefile. Neither original
+GX nor prior scratch binary/results changed (old normalized binary still SHA
+d30403b495e14900235bc0ee55de34b009920c3bf3eaa4bb75b58ae718bb55c9).
+
+Additional patch in dampEnds_linked: remove idzlm bound from the outer ky/mask
+condition, wrap the existing body with
+`for (; idzlm < nz*nMoms; idzlm += blockDim.z * gridDim.z)`.
+No mathematical/profile/Hamiltonian changes. Applied locally with apply_patch
+to a source copy, then transferred into the NEW scratch root. Existing normalized
+power correction retained; no GX commit/push or metadata repair performed.
+
+Actual-kernel harness gx-damping-coverage-test.cu links the production
+device_funcs.o, not a reimplemented CUDA kernel. Sets device constants, one
+radial mode/Ny4/Nz96/Nl32, complex G=(1,−.5), zero fields, kperp=0, one linked
+segment, width.125/rate50. Checks every output against the host analytic profile,
+including ky0 (undamped) and the dealiased ky2. Tests local Nm2/24/96 to cross
+the launch cap, with the actual capped block/grid layout. Tolerance2e-5;
+observed ordinary fast-math error4.529953e-6.
+
+| z/moment indices | Original wrong entries | Repaired wrong entries |
+|---:|---:|---:|
+| 6144 | 0 | 0 |
+| 73728 | 1966 | 0 |
+| 294912 | 54958 | 0 |
+
+Every original error in the large cases is an uncovered nonzero damping update,
+maximum error50. Original harness exited1 as expected; repaired exited0. This
+validates kernel coverage for these cases, not full solver or multispecies/EM
+physics. Original compile33901exit0; new full make build80927/PID1752428exit0;
+repaired harness34035exit0. No timing speedup claim.
+
+Harness compilation, cwd new scratch root:
+`/usr/bin/nvcc -ccbin /home/rjorge/local/install/gcc-10.4.0/bin/g++ -std=c++17
+-arch=sm_86 -rdc=true -use_fast_math -Iinclude
+-I/home/rjorge/local/install/libcutensor-1.7.0.1/include
+-I/home/rjorge/local/install/nccl-2.18.1/include gx-damping-coverage-test.cu
+OBJECT -o EXECUTABLE`. Original OBJECT=old-scratch/obj/device_funcs.o,
+EXECUTABLE=damping-coverage-original; repaired OBJECT=obj/device_funcs.o,
+EXECUTABLE=damping-coverage-repaired. Run with CUDA_VISIBLE_DEVICES=0.
+Full solver: `make -j2 GK_SYSTEM=office >build.log 2>&1`; same recorded
+CUDA11.5/gcc10.4/fast-math build settings. Harness build logs retained separately.
+
+| Artifact | SHA256 |
+|---|---|
+| new gx binary | 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536 |
+| new src/device_funcs.cu | a67e0062825274e5360ecbbc1b512792813965220003f3feb3edf9bf061c9ac3 |
+| new obj/device_funcs.o | 845acd00e196aa2b3abc30148e575b82ffe508c01c3124efb4b94b1fce3f8f11 |
+| src/linear.cu (inherited normalized powers) | 976ef802f6a9f5ca6a1eaf3ebd3082944e3fc5dac974c3f8bdc325146603f7c6 |
+| gx-damping-coverage-test.cu | 5e809a80d893bc0aeab3d040a48484273653512d742361aaa635ce5f4527e113 |
+| coverage-original.log | 4e842ef2e2fab3dfe884f6fac8f8d07000be91957daf5e36470cadcc7cce9fe4 |
+| coverage-repaired.log | d9eead955588318f3f7534c61b391729effb8d36285a7a1c92eb07b598477fa6 |
+
+Harness/source copies and logs also retained in local recent scratch. New
+reference smoke test50025 exit0: existing salpha_nl32_nm96_startup.in
+(T1/dt.002/fixed/Nl32/Nm96/Nz96) SHA
+810ec6e433b05f0e693f4b868b49afa8337cb7d067afa8c922b9ede48c9f51c1,
+copied to new-root/r0_validation/startup. PATH officevenv bin, GPU1, /usr/bin/time
+-v new-root/gx, run.log/time.log. Audit-gx-coverage-startup.py exits0:
+finite264 out/42 big/2 restart numeric arrays, time1.0000000474974513.
+This remains a finite-state smoke check, NOT validation of known corrupt scalar
+geometry metadata. File hashes: out009b0e4ce4dc82ff661d2562aa2d1ecd62dd3fec5efec0d4f0dc0409f2d476a8;
+big be30182e06e2351ba6adad9bdcfd736ad5f2bdc94aa5e1c6dd4a34d5f00af355;
+restart757b109d3f6bc116456f989cbcdf2417ba64955d9b9dad25c7730145ad953f5f.
+
+Corrected matched reference now **7690/PID1753613** (time1753612), verified
+RNl1m48s. Cwd new-root/r0_validation/refined, PATH officevenv bin,
+CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v new-root/gx salpha_nl32_nm96_t300.in
+>run.log 2>time.log. Identical input SHA
+fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df;
+Nl32/Nm96/Nz96,11 positiveky,dt.002 fixed/T300/rate50. Only reference kernel
+coverage changes from the prior normalized-power build. Retarget hard-coded
+old-root audit scripts before checking these NEW files; never overwrite old data.
+
+GKX doc commit70750486 adds concise README/operator warnings about provisional
+GX references and the verified kernel result. Strict Sphinx26053exit0/diff check
+pass; no source/test changes. Held one ahead of pushedb7cd526e while its
+CI33963277695 completes (latest9pending/no failures), avoiding cancellation.
+Only live research process is corrected GX7690, GPU1; GPU0 free. No merges.
+Full R0–R9 goal active; next full-state/dt/temporal audit and matched comparison
+must precede any corrected-reference validation claim.
+
+## 2026-09-05 — Explicit reference-audit selection and negative controls
+
+Previous turn: progress (actual-kernel repair, finite smoke test and corrected
+reference launch). Corrected GX7690/PID1753613 revalidated RNl6m48s; still live.
+CI33963277695 remains pending (last runtime-core/nonlinear-core/parallel-autodiff,
+no failures). Local70750486 still one ahead of pushedb7cd526e; no source pushes
+to cancel its CI, no merges.
+
+Removed the fixed reference directory from scratch audit-refined-gx.py. Requires
+--root, --stem, --binary, --binary-sha256, --input-sha256, --gkx-csv. Checks
+provided hashes using streaming file_digest, successful /usr/bin/time exit,
+the command named by that log, at least8 samples, and the requested horizon
+before reporting temporal comparisons. Completion is checked before opening
+NetCDF; the live run is not inspected concurrently. The selected paths/hashes
+are printed. Single-mode CSV comparison requires exactly one row and explicitly
+says resolution is verified separately from the manifest, not inferred from
+CSV names (the historical CSV lacks resolution columns).
+
+This validates selected current artifacts against recorded expected hashes;
+it is not cryptographic attestation that an arbitrary mutable binary produced
+an arbitrary old file. Our separate immutable scratch directories and launch
+hash records remain part of provenance. Finite-array checks still do not
+validate scalar geometry metadata or kernel physics.
+
+Verification:
+
+| Probe | Result |
+|---|---|
+| Explicit old normalized-power reference and correct hashes | 39466exit0; same temporal/growth results reproduced |
+| Corrected reference while PID1753613 is live | exit1, `reference has not exited successfully`, before NetCDF read |
+| Old binary with the corrected binary's expected hash | exit1, `reference binary hash mismatch` |
+| Explicit old-root same-state RHS probe | 53310exit0; previous full/truncated Rayleigh and field results reproduced |
+
+RHS probe audit-gx-final-state-rhs.py now requires --root/--stem, rejects an
+unfinished time log, and checks restart and big-field final timestamps exactly
+against the diagnostic timestamp. It remains the specific Nm96/Nl32/Nz96/ky.55
+probe, not a general-purpose solver. Run the full file/hash audit first.
+Old copies inside the prior scratch still have historical hard-coded paths;
+the UPDATED scripts are in new-root `/home/rjorge/gx-damping-coverage-20260905.8w5DhH`.
+
+After7690 finishes, use officevenv-python new-root/audit-refined-gx.py with
+--root new-root/r0_validation/refined --stem salpha_nl32_nm96_t300
+--binary new-root/gx
+--binary-sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+--input-sha256 fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df
+--gkx-csv /home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined/salpha_rate50_nl32_nm96_t300_dt_half.csv.
+That last path is the archived matched GKX CSV, not a selection of old GX data.
+Then run the new-root RHS script from campaign cwd with usual PYTHONPATH=src,
+GX_PARITY_REF_DIR=campaign/matched_refs,JAX_ENABLE_X64=true and an available GPU,
+passing the corrected --root/--stem. Do not run against unfinished outputs.
+
+| Local recent scratch artifact | SHA256 |
+|---|---|
+| audit-refined-gx.py | f183e3a6196a68fb758e3a8ab29752508bce5b45fafe8860dd5aa68201e9147e |
+| audit-gx-final-state-rhs.py | bea3efc8422fa2f83d4951eac5e31acd1283cee3fb64663fc7eefb9969d0c2c5 |
+| audit-old-reference-explicit.log | 81f948e94c135aa5773c7fc243257083737b6021f35586189b8d9daf54fc6ef4 |
+| audit-live-reference-rejected.log | 3d0e8c4c01051c15e078ab097e51678196125a11aba7cecc3f0933c6579be7e0 |
+| audit-wrong-binary-rejected.log | 22b06f948e06b36e76b88526b1ad887bd6ace2517a30d8e32f388f533568d0b2 |
+| audit-old-rhs-explicit.log | e093d5c61c21f29f8ddedf365d0eab9808ecd615a0e66ed49f70985b7ffc70d4 |
+
+No new repo source changes. Corrected GX7690 remains the only live research job;
+GPU0 free. Full R0–R9 goal remains active.
+
+## 2026-09-05 — Independent Fourier Landau field reference
+
+Progress: derived, independently checked and committed offline field matrix and
+field-polarization quadrature in PR202 commit6d645f3f. No runtime table changes.
+CI33963277695 at b7cd526e completed success before pushing the held70750486 docs
+and this commit. New CI33964841954 at6d645f3f is queued/pending, not certified.
+Both code and plan remain review branches; no merges. Original checkout untouched.
+
+Derivation in docs/operators.rst: with a=F_M*grad(exp(-iBvx)*psi),
+U=Hessian|v| and Fourier convention integral exp(-iqv), Uhat=8*pi*qq^T/q^4.
+The field Dirichlet form is pi^-2 integral dr dOmega (n.ahat_i)* (n.ahat_j).
+Writing k=rn+Bex, Fpsi-hat=P(k)*exp(-k²/4) gives
+ahat=i*(2grad(P)-Bex*P)*exp(-k²/4). P is the analytic normalized Hermite/Laguerre
+Fourier polynomial. For J0 source, P_phi=exp(-B²/4)*I0(B*kperp/2), with analytic
+I1 derivative. No reuse of spherical speed coefficients or fitted normalization.
+Equal-species/unit collision frequency, paper convention, qphi/T factored out.
+The first polarization vectors vanish in this equal-species equilibrium case.
+This is our independent derivation of the Landau form underlying Frei2021,
+not a claim that its paper supplies this implementation.
+
+Local scratch `/tmp/gkx-coupled-rate-20260905.shBvlR`:
+collision-field-fourier.py first built a full-grid Gram at8 moments B0/1/4.
+Quadrature32/24/32→64/32/48→96/48/64 (radial/pitch/azimuthal):
+
+| Check | Relative error/difference |
+|---|---|
+| B0 matrix vs independent analytic DK | 2.1236624583e-13 |
+| B1 last matrix refinement | 7.5851398826e-14 |
+| B4 last matrix refinement | 6.2753904526e-14 |
+| B4 vs independently refined spherical21/R32/K48/digits50 matrix | 6.4794748594e-10 |
+| B1 polarization vs spherical13/R12/K24/digits40 vector | 6.4381895995e-14 |
+| B4 last polarization refinement | 1.3677835073e-14 |
+
+The B4 field norm is2.6971434631156224, min eigenvalue.029778087632710677.
+B0 analytic p1j0 field diagonal8/(3*sqrt(2*pi))=1.063846081070487 fixes
+normalization independently. Full field PSD and combined test+field NSD pass
+the sampled cases. This is coefficient/linearized matrix evidence, not the
+runtime distribution/field energy law or nonlinear transport validation.
+
+Repo helper `like_species_field_particle_fourier` streams one radial node at
+a time, bounding temporary basis memory by moments*pitch*azimuthal, rather than
+moments*radial*pitch*azimuthal. Returns matrix and field_phi2 together; scaled
+Bessel functions avoid the unnecessary unscaled I0/I1 factor. No new repo files.
+Recorded budget growth: tools+84/tests+86 lines; source unchanged and ultimate
+slimming targets unchanged. This addition replaces no legacy generator yet:
+unlike-species and independent cross-check responsibilities remain necessary.
+
+Rejected trial: initial default64/32/48 failed the 32-moment B4 test (6 entries,
+maximum absolute4.0623e-10), retained as field-fourier-pitch32-failed.xml,
+session53080exit1. Independent node audit against128/64/96:
+
+| Nodes r/pitch/phi | Matrix relative difference | Source relative difference |
+|---|---|---|
+| 64/32/48 | 1.06835e-10 | 3.52697e-12 |
+| 96/32/48 | 1.06835e-10 | 3.52635e-12 |
+| 64/48/48 | 8.91159e-14 | 5.12732e-14 |
+| 64/32/64 | 1.06832e-10 | 3.52697e-12 |
+| 96/48/64 | 3.56258e-14 | 3.70048e-14 |
+
+Thus refine pitch, not tolerance: final default64/48/48; tests refine96/64/64.
+35 selected new/existing oracle tests pass, no skips, x64 session6810 and
+f32-mode43137 exit0. These NumPy references stay float64 under either JAX flag.
+Checks cover8/18/32 moments B0/1/4, independent coefficient fixtures,
+matrix entropy, density/momentum/temperature DK null modes, polarization,
+and invalid arguments. Command from code worktree, with localvenv-python
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`:
+
+```
+JAX_ENABLE_X64=true PYTHONPATH=src <python> -m pytest tests/validation/physics_gates/test_collision_physics.py -q -k 'field_particle_fourier or test_particle' --junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/field-fourier-tests.xml
+```
+
+Repeat with JAX_ENABLE_X64=false and field-fourier-f32mode-tests.xml.
+Scratch node script: PYTHONPATH=src:tools/artifacts <python> scratch/collision-field-node-audit.py.
+Ruff and diff-check pass. Architecture initially correctly rejected growth;
+explicit +84/+86 baseline accounting now passes, targets not relaxed.
+Strict Sphinx first caught a short heading underline; fixed build68798exit0,
+field-fourier-docs-fixed.log. Failed build43902 retained field-fourier-docs.log.
+
+| Scratch artifact | SHA256 |
+|---|---|
+| collision-field-fourier.py | 5fd526774421a397acb79ce0ef25750856c6aab21c5f5b4471acc3313a9d74fe |
+| collision-field-fourier-polarization.py | 36c5db7aeae30a00642b4c8744f7342ceed8541ee21b14223c9886a857ac20d0 |
+| collision-field-node-audit.py | c227c761041ad67369a731f80e69eaa694c6ed22eecd58ad6aff530eedcfcd39 |
+| collision-field-node-audit.log | 23f8fec32e8a268f139abe2ae2b24a5e85ff86f37efbbf98691678ee0d9f4ec6 |
+| field-fourier-pitch32-failed.xml | ec84bc5aaf6e29e5d1167ddf42f6543f6ba40127c62cee069e22d8399d526df8 |
+| field-fourier-tests.xml | eec9e8986659a73d36c8599bd703bd7fa59e2092c91949e0873cdbb941d13a20 |
+| field-fourier-f32mode-tests.xml | 8748b93c0041b4f172f350b216e45ca6ffb0252d8df7a4e727c1715bc94f6199 |
+
+Next: independently check the B4 polarization source expansion/full table grid,
+audit every shipped coefficient block, derive and check the coupled field metric
+and interpolation/AD convergence before changing runtime coefficients. Keep
+unlike-species validation separate. Corrected GX7690/PID1753613 remains the
+ONLY live research job (last verified RNl25m02s); use the preceding explicit-path
+audits only after terminal success. Do not restart completed controls. Goal active.
+
+## 2026-09-05 — Full coefficient-grid audit and finite-H projection gate
+
+Previous turn classified progress (committed independent Fourier oracle and
+resumable evidence). Revalidated code at6d645f3f, clean; GX7690/PID1753613 RNl
+29m44s initially and36m40s at last check. Only live research job; no restart.
+CI33964841954 still pending (last10 jobs, no failures). New docs-only local
+commitac8d4ec7 is held for that CI; pushed source remains6d645f3f. No merges.
+
+Completed three scratch controls under
+`/tmp/gkx-coupled-rate-20260905.shBvlR`, using localvenv-python
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python` from the code worktree with
+PYTHONPATH=src:tools/artifacts. Commands are <python> followed by each full
+scratch script path; stdout/stderr retained in its same-stem .log.
+
+1. collision-field-source-fourier-ladder.py,15722exit0. B4/P3 outputJ1,
+   sourceJ4/8/12/16/24, Fourier nodes96/64/96. Direct I0/I1 source versus matrix
+   applied to exp(-4)*4^j/j! Laguerre coefficients. Errors6.3179e-2,
+   2.4889e-4,2.4143e-7,6.1204e-11,2.6520e-15. Last rung2.39s, no runtime-speed
+   claim. Individual projected/reference arrays retained in
+   collision-field-source-fourier-j{4,8,12,16,24}.npz. This is an independent
+   source representation with the same kernel, not a second field-kernel proof.
+2. collision-full-table-audit.py,30863exit0. All14 shipped wavelengths and both
+   8/18 bases. Load via checksum-validating bundle; assert signed convention,
+   undo row/column (-1)^j signs explicitly. Compare four nonzero blocks with
+   independent test/field oracles; separately measure both zero phi1 arrays.
+   Refine field64/48/48→96/64/64 and test96/48→192/64. All28 cases pass
+   coefficient refinement at rtol1e-10/atol1e-12; max absolute quadrature
+   difference8.7171e-13. Both phi1 arrays exactly zero at every node.
+   CSV collision-full-table-audit.csv and reference arrays
+   collision-independent-reference-{8,18}.npz retained outside repository.
+3. collision-field-metric-audit.py,exit0. Restricted single-unit-species,
+   nonzonal electrostatic tau_e=1; use corrected independent coefficients.
+   G-field contract from terms/fields.py:_reduce_electrostatic_moments and
+   operators/linear/moments.py:build_H; table application from collisions.py
+   apply_finite_wavelength_coulomb_moment_operator. In paper convention,
+   s is the retained J0 coefficient column, d=2-s^T s, phi=s^T G/d,
+   M=I+ss^T/d, H=MG. Table-like L=C+ps^T/d versus retained-H projection C M.
+
+| Moments/B | Test matrix error | Field matrix error | Test-phi2 error | Field-phi2 error |
+|---|---|---|---|---|
+| 8/1 | .228568 | .0857124 | .0374029 | .0291005 |
+| 8/4 | .841159 | .665944 | .957948 | .833485 |
+| 18/1 | .129818 | .0560996 | .00173584 | .000793777 |
+| 18/4 | .641714 | .464349 | .864026 | .699396 |
+
+All errors above are relative Euclidean/Frobenius norms, NOT percentage units.
+For corrected C and p, ||p-Cs||/||p|| = .0460617/.517259 (8 moments B1/B4)
+and .0058508/.417911 (18). The symmetric part of M L remains negative in these
+samples, but relative antisymmetry is .00264526/.000272411 (8) and
+.000174171/.000765069 (18). M C M is symmetric to≤1.76e-15. Thus coefficient
+correction does not alone establish a consistent finite-H field/entropy map.
+This does not prove an instability, a general EM law, or that projecting away
+the source tail is always the right closure; choose and validate the discrete
+contract explicitly. Do not fix it by manual operator symmetrization.
+
+Primary literature re-read online:
+[Mandell2017](https://arxiv.org/html/1708.04029), Section4/Eq48–49 discusses
+retained-H free energy and closure by truncation; its model collision operator
+is not full-Coulomb validation. [Frei2021](https://arxiv.org/html/2104.11480),
+Section5 discusses separately the collisional polarization contribution and
+resolved gyro-moment/GENE comparisons. Our finite matrix/metric algebra above
+is an inference from the implemented field contract, not an attribution of
+our numerical findings to those papers.
+
+Documentationac8d4ec7 adds the measured field errors and discrete projection
+gate. Also repaired theory.rst: erroneous J_l=exp(-b/2)*L_l(b) replaced by the
+actual signed-Poisson exp(-b/2)*(-b/2)^l/l! from core_velocity.J_l_all and
+linear_model.rst; velocity x=mu*B/T distinguished from spatial b=kperp²rho².
+Strict Sphinx29449 and final93270 both exit0; diff-check passes. No runtime,
+table, test, file-count or Python-line growth this turn.
+
+| Scratch artifact | SHA256 |
+|---|---|
+| collision-full-table-audit.py | 382742be2634e72a8477b23efebc96d1ca55c97da2d0d69c5ef9b25a5ebf05e0 |
+| collision-full-table-audit.csv | 58fdcff33375c823ac0cef6b84573fa4f74bab9fdc84c16db3139a59c587f801 |
+| collision-field-source-fourier-ladder.py | 4ea2e7b8fdd6111518a9864a7eda330251dfaf1a1bffd373a1ae94901a8f584e |
+| collision-field-source-fourier-ladder.log | 7725450911f08fc49a2cf03f28646542f44ea4f1ae40a1617d556a1ec0eedd86 |
+| collision-field-metric-audit.py | b2be0b6a9d15a626b0a1edb1ec372cf6016dec07581038978f6c89950b164efd |
+| collision-field-metric-audit.log | 5e47b7195cbce8847223d66384b48ccc212598470b3ce88caff897c5b5473104 |
+
+Next: resolve and test the retained-H versus full-source closure contract with
+actual runtime field maps and larger Laguerre bases, then interpolation/AD and
+complete coefficient replacement. Corrected GX reference still live; use the
+explicit-path terminal audits above after successful completion. Goal active.
+
+## 2026-09-05 — Runtime field contract and resolved source-tail convergence
+
+Previous turn: progress (full-grid errors, projection analysis, docs/log commits).
+Current code ac8d4ec7 is clean/one ahead of pushed6d645f3f. CI33964841954 still
+running, last only parallel-autodiff/nonlinear-core pending, no failures. Held
+documentation commit not pushed to cancel CI. GX7690/PID1753613 verified RNl
+39m01s initially,46m01s finally; time log not terminal. No other live research
+jobs and no restarted runs. No repo source changes or merges this turn.
+
+New scratch controls in `/tmp/gkx-coupled-rate-20260905.shBvlR`:
+
+- collision-runtime-field-contract.py uses actual J_l_all, canonical field
+  reduction/solve, build_H, and apply_finite_wavelength_coulomb_moment_operator.
+  Coefficients come from corrected independent reference arrays, NOT shipped
+  tables. Hermite-major/signed-Laguerre state has8/18 moments, three z points
+  with B=(1,2,4), Jacobian=(1,2,3), unit single species/tau_e=1. Activate kx
+  index1 in a two-slot array; index0 kept zero. Both positive-ky and ky0 tested.
+  Jacobians of actual linear state maps give M and L. Compare retained-H
+  application against C M, metric diag(J) M against its transpose/positive
+  eigenvalues, and current-route JVP/VJP against L and L^T actions (1e-12).
+- Initial34906exit0 is NOT zonal evidence: its sole kx0 slot is excluded by
+  _zonal_adiabatic_correction's `arange(nkx)>0` mask. Equal reported maps exposed
+  the missing coverage. Original log retained as
+  collision-runtime-field-contract-kx0-only.log. Corrected47825exit0 adds an
+  explicit ||M_zonal-M_nonzonal||>.1 assertion; it passes. Final matrix/metric
+  arrays collision-runtime-contract-{8,18}-zonal{0,1}.npz are corrected outputs.
+
+| Moments / mode | Full-source weighted asymmetry | Retained-H weighted asymmetry | Max energy eigenvalue full / retained |
+|---|---|---|---|
+| 8 / nonzonal | .00181021 | 1.13e-17 | -.159971 / -.159996 |
+| 8 / zonal | .00652631 | 4.81e-18 | -.181302 / -.181919 |
+| 18 / nonzonal | .00105283 | 1.26e-17 | -.159875 / -.159875 |
+| 18 / zonal | .00712315 | 2.80e-17 | -.180689 / -.181692 |
+
+These are restricted ES state-map tests, not geometry/B/collision-parameter
+derivatives, sharded nonlinear AD, an EM energy law, or default-table validation.
+
+collision-retained-source-convergence.py58061exit0: fixed P3/B4, increase all
+retained Laguerre input/output moments. Test quadrature192/96, Fourier96/96/96.
+
+| Nl | ||p-C s||/||p|| | Relative weighted asymmetry |
+|---|---|---|
+| 2 | .517259 | 2.72411e-4 |
+| 3 | .417471 | 9.19213e-4 |
+| 5 | .206577 | .00306297 |
+| 9 | .0163269 | 5.31939e-4 |
+| 13 | 2.84301e-4 | 7.62927e-6 |
+| 17 | 1.46597e-6 | 3.14852e-8 |
+| 25 | 2.75191e-12 | 4.12613e-14 |
+
+Source error decays; weighted asymmetry is NOT monotonic. All sampled symmetric
+energy parts remain negative. The least-damped energy eigenvalue changes from
+-5.70 to-1.03 over this ladder, so do not call the collision spectrum converged.
+Hermite order remains fixed. Endpoint86167exit0 independently refines test to
+256/128 and Fourier to128/128/128: source gap2.75183e-12; matrix/source changes
+1.24608e-13/9.05141e-14. Thus the observed source-tail endpoint is quadrature
+resolved, not a physical transport/velocity-convergence certification.
+
+Commands from code worktree with
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`:
+runtime script uses JAX_ENABLE_X64=true JAX_PLATFORMS=cpu PYTHONPATH=src;
+both source scripts use PYTHONPATH=src:tools/artifacts. Execute the named full
+scratch paths; their same-stem .log files hold stdout/stderr and are terminal.
+
+Plan decision: do not bundle a finite-H closure change with coefficient repair.
+The full-source route is a convergent source projection and has not exhibited
+positive energy production in these tests. Repair demonstrably wrong table
+coefficients first, preserve the existing full-J0 contract, signed convention,
+and research-only qualification. Use independent oracles for like-species
+generation with honest quadrature provenance and all-node rechecks; replace
+obsolete coefficient regressions with independent references, then test runtime
+interpolation/AD. Evaluate retained-H closure separately with proper physical
+resolution and multispecies/zonal/EM scope. No silent symmetrization or discarded
+polarization. This sequencing advances correctness without claiming the broader
+field-consistency gate is closed.
+
+| Scratch artifact | SHA256 |
+|---|---|
+| collision-runtime-field-contract.py | 5155ef8b84ff0fabe12999c49f146b32cb5712ba8dd4cd841d90c80e2c0c619f |
+| collision-runtime-field-contract.log | 98e65b63d3aed9a594e3eb0c7d5a217493dd36191d886cb05a2456f3b36ea96e |
+| collision-runtime-field-contract-kx0-only.log | f3086c363b3773b8e40709c64c9262553821120cc61d095aaf846d02695e4571 |
+| collision-retained-source-convergence.py | c463296cbe85ca3d8969a4b84a4cfda36e0120eafa20eb73fb66fc52b2ca59c7 |
+| collision-retained-source-convergence.log | a18bd752c1212d3a371b5644538fbb65c5a43e25fe56c66c19f08dfff11e8f70 |
+| collision-source-endpoint-refinement.py | a375ecde4363578fd21c8a287af399010b8e31b38811d986948e1e8bffe5a45a |
+| collision-source-endpoint-refinement.log | c0be8b22c14caf3ecdda53a2b90d976c1d7e7b5adcd3b5fcb3e9033ae847a247 |
+
+Only GX7690 remains live. Revalidate it, then run explicit-path completion/
+dt/temporal/state audits after success. Do not restart completed scratch probes.
+Full R0–R9 goal active; next code action is the scoped like-species generator repair.
+
+## 2026-09-05 — Direct verified like-species candidate generator
+
+Previous turn: progress (actual runtime maps and resolved source-tail ladder).
+Code committed/pushedad47d3be, including prior heldac8d4ec7 docs, only after
+CI33964841954 at6d645f3f completed success. New CI33966229536 pending. No merges;
+original checkout untouched. GX7690/PID1753613 RNl48m05s initially and56m53s
+at last check. Still only live research job; do not read unfinished NetCDF.
+
+Replaced the equal-species generator's full two-wavelength pair assembly plus
+diagonal extraction with direct diagonal Gram/Fourier quadrature. No unreachable
+off-diagonal storage or wasted pair evaluations. Other/unlike-species generators
+are unchanged. The current full-J0 polarization source and signed Hermite-major
+convention are preserved; no finite-H closure or runtime table change this turn.
+
+Every node/block must be finite and pass coarse/refined comparison:
+test96/48→192/64 and field64/48/48→96/64/64, rtol1e-10/atol1e-12. Publish the
+refined result. --check performs an independent multiprecision DK comparison,
+now bounded by1e-10 maximum coefficient error instead of1e-6. --digits controls
+that reference only. --workers remains accepted/positive for command compatibility,
+with help explicitly stating serial streamed quadrature. New --output-dir permits
+candidate generation without touching package data. Publication remains after
+all selected checks; a failed refinement never writes files.
+
+Metadata: working decimal precision15 (NumPy float64), separate requested DK
+reference digits, explicit drift_kinetic_check_passed boolean, method, both node
+sets, tolerances and full_J0_not_truncated_H source contract. No false 60-digit
+quadrature claim. Writers default the optional DK-check status to false.
+No new repo files. Budget accounting tools+44/test+82 lines, source unchanged;
+final slimming targets unchanged. Doc command now generates outside the package.
+
+Candidate root `/tmp/gkx-collision-candidates-20260905.XqBQZb`:
+initial86831/75598 terminal exit0; final8910/42933 terminal exit0 after adding
+explicit DK-check provenance and tightening the DK gate. Use **final/** files,
+not the initial root files, for promotion. Initial/final logs retained separately.
+
+From code worktree, localvenv-python
+`/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`, commands:
+
+```
+PYTHONPATH=src <python> tools/artifacts/build_finite_wavelength_coulomb_data.py --check --output-dir /tmp/gkx-collision-candidates-20260905.XqBQZb/final
+PYTHONPATH=src <python> tools/artifacts/build_finite_wavelength_coulomb_data.py --hermite 5 --laguerre 2 --check --output-dir /tmp/gkx-collision-candidates-20260905.XqBQZb/final
+```
+
+| Candidate | Generation wall | DK test/field max errors | NPZ bytes |
+|---|---|---|---|
+| 8 moments | 2.0s | 2.531e-14 / 1.976e-14 | 19840 |
+| 18 moments | 4.5s | 4.051e-14 / 2.220e-14 | 82560 |
+
+These are build-time controls, not runtime CPU/GPU speedups. Both have14 nodes,
+two (14,N,N) matrices and four (14,N) vectors; phi1 arrays exactly zero.
+audit-candidates.py terminalexit0 independently reloads final NPZ/JSON, checks
+hashes/schema/convention/precision/check status, and compares every stored node
+against prior full-grid reference arrays in the other scratch root. Max absolute
+differences by test matrix/field matrix/test phi2/field phi2:
+8:1.288e-13/2.398e-14/6.108e-14/7.216e-15;
+18:1.654e-13/3.308e-14/6.108e-14/7.327e-15. This verifies saved assembly as well
+as in-memory coefficients; the underlying independent derivations/cutoff checks
+remain documented in preceding entries, not inferred from matching checksums.
+
+Tests: 27 generator/publication tests pass in x64 session56042, no skips.
+62 generator+oracle tests pass under JAX_ENABLE_X64=false session20290, no skips
+(all quadrature remains NumPy float64). Injected finite error1e-3 and NaN into
+refined field matrix/source at B1 fail mandatory refinement, even without
+--check, and preserve existing output bytes. DK errors1e-9 are now rejected.
+Signed source fixtures, zero vectors, honest provenance and file SHA tested.
+Strict Sphinx19627exit0; Ruff/diff-check and architecture pass.
+
+| Artifact relative to candidate root | SHA256 |
+|---|---|
+| final/finite_wavelength_coulomb.npz | 38726a95514ae9e8fe5db345752606cc5c430bf0088f4f4c61a4fdb3c519cf1d |
+| final/finite_wavelength_coulomb_18.npz | fb282d85656a1186023b9500b1108c15f11386878f5241b01ed1a6428aa7f65b |
+| final/finite_wavelength_coulomb.json | c7c4067777a10ef25cac547d9bb8af9dd0ecb5f0dadb2796bca37c2d6ffb0cd0 |
+| final/finite_wavelength_coulomb_18.json | bee0717db1a17a74638d63ebdc65e0daa16ee91191852e57740eddc2e0c35b23 |
+| audit-candidates.py | ec3f71b6420541c8bebb5a05d71eb77db61440812a174eabd37294d1fd0d92ab |
+| audit-candidates.log | 7cd3df288e7eb55713ca43df0c30a816fc8214485e7557a9eaf2e7b0944b33ad |
+| generator-final-tests.xml | 878286603c036482a75fdbf6fcf9fb9b2d624f534bdda39cbb57840829b4ccdc |
+| generator-oracles-f32mode-tests.xml | 18e3c632ed4ab6b14cc5d87fbeda09a619784868aab367036729f3f66e0b3633 |
+
+Next code action: promote final candidates in a separate coefficient commit.
+Update test_finite_larmor_self_adjointness_breaks_at_first_order_in_b, which
+deliberately regresses a known legacy defect, to a real independent symmetry/
+entropy gate. Update test_finite_wavelength_coulomb_tables_load_with_provenance
+(currently demands multiprecision>=40). Re-run full collision tests; investigate
+every changed physical/numerical result rather than adjusting tolerances to fit.
+Keep research-only scope, historical defect measurements labeled as historical,
+and audit interpolation/parameter derivatives after coefficient replacement.
+Check GX completion and current CI before starting more long jobs or pushing.
+Full goal active.
+
+## 2026-09-05 — Replace inaccurate coefficients; CPU/GPU and off-node checks
+
+Previous turn: progress (verified direct candidate generator). Revalidated
+cleanad47d3be and candidate checks before writing package data. New local
+commitb05b3949 replaces only the two NPZ/JSON pairs plus tests/docs/budget.
+Held one ahead of pushedad47d3be while CI33966229536 runs; last no failures.
+No merges, original checkout untouched. GX7690/PID1753613 verified RNl59m39s
+initially and1h07m32s during this turn; still live, no unfinished NetCDF read.
+
+Re-ran generator --check into package data for8 and18 moments, sessions28185/
+27944 both exit0. All four outputs are byte-identical to the audited final/
+candidates from the previous entry. Old arrays are recoverable at ad47d3be;
+do not conflate them with new measurements. Full-J0 polarization, moment/grid
+shapes, runtime formula and interpolation unchanged. Working precision15 and
+independent DK-reference precision60 are now correctly distinguished in provenance.
+
+Replaced test_finite_larmor_self_adjointness_breaks_at_first_order_in_b (a known
+legacy-defect regression) with both resolutions/all-node independent test-block
+and test-polarization quadrature, matrix symmetry, test NSD/field PSD/total NSD.
+This coefficient test does not claim an energy theorem for the coupled field
+map. Updated provenance expectations. Net Python test growth+1; source/tools
+unchanged. No new repo files. README and operator docs now label the old large
+errors and rank study as historical, retaining research-only scope.
+
+| Validation | Result |
+|---|---|
+| Full collision_physics.py, x64 | 90 pass,0 skip,17.082s;36255exit0 |
+| Operator kernels, `-k 'coulomb or collision'`, x64 | 33 pass,0 skip,19.567s;14511exit0 |
+| Both modules, expanded collision/oracle selection, f32-mode | 124 pass,0 skip,36.166s;27114exit0 |
+| Replay archived ad47d3be8/18 arrays against new coefficient gate | both rejected; negative-control scriptexit0 |
+| Strict Sphinx | final28810exit0 |
+| Ruff, diff-check, architecture | pass |
+
+Local artifacts are in `/tmp/gkx-collision-candidates-20260905.XqBQZb`;
+Python remains `/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`, PYTHONPATH=src.
+f32 selection was `collision or coulomb or finite_larmor or drift_kinetic or
+test_particle or field_particle_fourier`; NumPy oracle computations remain f64.
+replay-legacy-tables.py reads old binary blobs via git show ad47d3be, injects
+them only into the test loader and verifies both fail. It changes no repo files.
+
+**GPU control completed.** Fresh office scratch
+`/home/rjorge/gkx-collision-coefficients-20260905.yLNpmZ`, populated by
+`git archive b05b3949 pyproject.toml src tests tools | ssh office 'tar -x -C <root>'`.
+No existing campaign files overwritten. Preflight3195exit0 explicitly confirms
+JAX0.10.2 CudaDevice0/default_backend gpu, CUDA_VISIBLE_DEVICES=0. From that root:
+
+```
+CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src /usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python -m pytest tests/unit/operators/test_operator_kernels.py -q -k 'coulomb or collision' --junitxml=gpu-x64.xml >gpu-x64.log 2>gpu-x64-time.log
+```
+
+40475/PID1757924 terminalexit0,33 pass/0 skip in78.662s. Both remote NPZ hashes
+match the candidates exactly. Timing includes compilation and concurrent GX
+activity; not an isolated CPU/GPU performance comparison. GPU0 now free again.
+
+**Off-node physical derivative audit.** audit-interpolation.py31511exit0 and
+final74719exit0 use the actual runtime diagonal interpolator/JVP against
+quadrature at b=.00390625,.390625,7.0625 (midpoints in B² intervals0,5,12).
+Every JVP equals the declared analytic segment slope to1e-12. Independent
+central FD on physical quadrature uses h=min(1e-4,.05b), then h/2; maximum
+relative step-refinement difference3.94e-9. Quadratic test values match to
+2.42e-14 relative; test JVP differences from FD≤7.80e-12.
+
+Maximum sampled field/polarization value error1.87237%; maximum derivative
+error2.65782% (18-moment test-phi2 at b7.0625). At that high midpoint, field
+matrix derivative errors are2.18619%/1.74920% for8/18 moments. Thus accurate
+nodes do not prove accurate optimization derivatives between nodes. This is
+interpolation error, not a failure to differentiate the declared approximation;
+it is not a global bound and does not cover endpoints or arbitrary objectives.
+No tolerance was relaxed. Docs retain this explicit limit.
+
+| Artifact | SHA256 |
+|---|---|
+| promoted-physics-x64.xml | 89fad09c535747358fe96e71424688330aa77770973b056ed83c94233eeabfb8 |
+| promoted-operators-x64.xml | b700340f801c00f6545311d1d5fe9c100e0ba69185f48a539001e4a3a53d19ae |
+| promoted-f32mode.xml | ccdd09805fc0f662e889d51f18af098fc0db6c502cbf5b5646daca3416ccdb34 |
+| replay-legacy-tables.py | 263f1f1f9db9e4610bb51b0e1923455c2699c3f431e1a0dc50b8b00f351e224e |
+| replay-legacy-tables.log | f12f4e85880d1135395855ea89560ae92f2e59ba81b3ea5be3bba95c9f81db08 |
+| audit-interpolation.py (final slope assertion included) | 2706ff2e93b003b3717476f56153e293ab7ff9190b90ec3e89176cb9a1a62208 |
+| audit-interpolation-final.log | a1fe098fc9fd5c2eac9e7bc9cb389cdc8d3ce68d5da5e8d2c388cd1dfe0c5847 |
+| office-root/gpu-x64.xml | bbb24f6a6c4e1488371b981f3ca39e5abd50aba5e85e99dbe20da2d13f9272c9 |
+
+Next: after current CI finishes, push heldb05b3949; investigate failures if any.
+Measure grid refinement and off-midpoint/endpoint derivative holdouts, retaining
+convex matrix interpolation's dissipative signs and reporting memory/runtime
+cost before changing the grid. Separately continue finite-H/EM/multispecies and
+resolved transport validation. Only GX7690 is live; verify terminal success
+before using the explicit-path reference audits. Full goal remains active.
+
+## 2026-09-05 — All-interval derivative holdouts and density quartic limit
+
+Previous turn: progress (coefficient replacement, CPU/GPU tests and initial
+off-node audit). Revalidated cleanb05b3949 ahead1 and live GX7690/PID1753613.
+CI33966229536 atad47d3be completed success during this turn; then pushed held
+b05b3949 and new docs17ff384a together. New CI33967886511 pending. No merges.
+GX last verified RNl1h27m57s; still the sole live research job. Its outputs are
+not yet audited. All new local studies below completed; do not restart them.
+
+grid-refinement-study.py30672exit0, local candidate root
+`/tmp/gkx-collision-candidates-20260905.XqBQZb`, uses direct physical quadrature
+and the mathematical B²-linear interpolation rule. Each original interval is
+split1/2/4 times, yielding14/27/53 nodes. Evaluate fractions .2113248654,.5,
+.7886751346 in EVERY interval plus b0/b8 endpoints, both8/18 moment bases.
+No runtime grid changes. Cache reference evaluations to avoid repeated work.
+CSV has2232 block/holdout rows (558 parameter/resolution cases, four blocks).
+
+Physical derivatives use centered h=min(1e-5,.05b), then h/2; b0 uses the
+second-order forward formula instead of invalid negative b. All maximum FD
+refinement differences are below9.86e-9 relative; test-block FD roundoff is
+~1.3e-10. Table test values remain exact to~1.6e-16 because C_test is affine
+in b. Endpoint derivatives compare the interior segment slope, not the clipped
+outside derivative. This is an interpolation study, not a transport error bound.
+
+| Nodes | 8 moments max value / derivative | 18 moments max value / derivative |
+|---|---|---|
+| 14 | 2.8666% / 71.8626% | 2.8223% / 50.8352% |
+| 27 | .9700% / 32.4886% | .9503% / 23.9298% |
+| 53 | .2868% / 15.6748% | .2804% / 11.1588% |
+
+Worst derivatives are field/test polarization at off-midpoint holdouts; field
+matrix errors also reach37.46%/33.15% at the B4 endpoint on14 nodes. The earlier
+2.66% estimate covered only three interval midpoints and was explicitly not a
+global bound. This experiment shows why midpoint-only derivative validation is
+insufficient. No coarse/refined grid is promoted as adequate. Generation/
+interpolation runtime cost has not been benchmarked here; source evaluation
+wall times are in the log and are not solver performance results.
+
+density-quartic-audit.py terminalexit0 derives an independent stable scalar
+reference from the Fourier Landau form. For the unit-rate C_test+C_field
+density-to-density coefficient (no solved-field term), radial Fourier integration
+gives, with x the cosine along the perpendicular Fourier direction,
+
+```
+C00(b) = 2*sqrt(2/pi)*b * integral[-1,1] x²*expm1(-b*(1-x²)) dx
+dC00/db = 2*sqrt(2/pi)*integral[-1,1] x²*[expm1(-b*a)-b*a*exp(-b*a)] dx
+a=1-x²
+C00/b² -> -8*sqrt(2/pi)/15 = -.4255384324281949
+```
+
+64/128 Legendre nodes agree at rtol1e-12, without cancellation between separate
+test and field terms. The prior direct 3-D quadrature sum matches but loses
+relative digits as its two O(b) terms cancel: error1.47e-6 atb1e-8,1.41e-8
+atb1e-6,~1.4e-10 atb1e-4. This is a reason to use the stable scalar reference
+for the limit rather than interpreting cancellation noise as physical damping.
+
+| b | C00 physical | Interpolated value / physical | JVP / physical derivative |
+|---|---|---|---|
+| 1e-8 | -4.25538e-17 | 779509 | 389755 |
+| 1e-6 | -4.25538e-13 | 7795.09 | 3897.55 |
+| 1e-4 | -4.25526e-9 | 77.9531 | 38.9771 |
+| .00390625 | -6.48596e-6 | 1.99777 | .999443 |
+
+Absolute values are small, and this is NOT a demonstrated full-RHS instability
+or a transport ratio. It diagnoses the wrong limiting power: any finite first
+linear interval gives O(b), versus physical O(b²). Note how its midpoint
+derivative happens to look good even while the value is wrong by nearly2x.
+
+Next direction to test, NOT yet implement: factor C=D A D with the density
+entry of D equal to b. Derive/verify the finite A(0) limit, matrix entropy,
+and source-vector limits. A convex interpolation of negative-semidefinite A
+could preserve density scaling and dissipation; smoother schemes still need
+off-midpoint/endpoint accuracy and cost checks. Do not replace a single C00
+entry in isolation, symmetrize by hand, or assume denser linear grids cure the
+b→0 order. Record this as a proposed mathematical route, not a validated method.
+
+Commands: from code worktree with localvenv-python and
+PYTHONPATH=src:tools/artifacts, run the two named full scratch scripts;
+density script additionally JAX_ENABLE_X64=true. stdout/stderr in same-stem logs.
+docs/operators.rst17ff384a contains the holdout table and stable density formula;
+strict Sphinx12491/final4272 and diff-check pass. No new runtime/Python repo code
+or packaged data this turn; only the already-verified coefficient commit was
+released to the review branch after the previous CI completed.
+
+| Scratch artifact | SHA256 |
+|---|---|
+| grid-refinement-study.py | 4c41cf61df19994f0fdd6bbcbbea072e6ac3b6b7bf278873f8a4a9235bd00957 |
+| grid-refinement-study.csv | 26d9c9042cf75720423ece2ece09b01946d15e040e98d9f1fc2fed761cd7310d |
+| grid-refinement-study.log | 7a49ea61a05731eba6ec29c8b045c460231d636cf8f7a99ca05455a8aa1d6c40 |
+| density-quartic-audit.py | 81bda9eae6fdc4b19af692c0bc5e64906b5c897d89ac79fbb4b33ab4bc2e6932 |
+| density-quartic-audit.log | 4b892409461ecb6c10561dc0238cee762bd1dbfe2e504d08043beaad6b3150fe |
+
+Only GX7690 remains live at this checkpoint. Continue its explicit-path terminal
+audits after success; this observation is not terminal. Full R0–R9 goal active.
+
+### 2026-09-05: analytic scaled-congruence limits; repaired GX reference terminal
+
+Code remains17ff384a, no production interpolation change. CI33967886511 is
+in_progress with two pending jobs (parallel-autodiff and nonlinear-core), no
+failures at this checkpoint. No merges. All research processes below are terminal;
+both office GPUs are free. Do not restart the completed reference.
+
+**Collision prototype.** Local scratch root
+`/tmp/gkx-collision-candidates-20260905.XqBQZb`;
+`scaled-congruence-study.py` SHA256
+`98c3d9bc866e8c76b7f0ff7a7012d13931b3510f9ffe8f6a22363b744043a02f`,
+analytic log SHA256
+`6e5d20bb000317ddf0aefe50dc7863cfa503917a0c3b0ce54def618df42081c1`.
+Run from code worktree with PYTHONPATH=src:tools/artifacts and local JAX0111
+venv Python. Session44844 completed; log contains both8/18-moment results.
+Earlier extrapolated-endpoint output remains in scaled-congruence-study.log;
+the script now uses exact analytic endpoints, not a fitted small-b value.
+
+For unsigned paper Laguerre convention, K=C(0), density index0 and first
+Laguerre index1, define b=B²/2, D=diag(b,1,...), C=D A D. Derived limits:
+
+```
+A(0)[i,j] = K[i,j]                 (i,j>0)
+A(0)[0,j] = K[1,j]/2               (j>0; symmetric column)
+A(0)[0,0] = K[1,1] = -8*sqrt(2/pi)/15
+T = identity with column0 replaced by e1/2
+A(0) = T.T K T + (3/4)*K[1,1]*e0 e0.T
+p = b D q                         (full-J0 collision source)
+q(0) = A(0)*(e0+e1/2)
+q(0)[0] = (5/4)*K[1,1]; q(0)[i] = K[i,1] (i>0)
+```
+
+Derivation uses the particle Landau Dirichlet form, rotational invariance,
+its density/momentum/energy null modes, and expansion of exp(-i B vx).
+For an axisymmetric target, vx² averages to (1-L1)/2; rotational invariance
+gives Q(vx²,vx²)=Q(vz²,vz²)=K[p2,p2]/2=K[1,1].
+The displayed decomposition proves A(0) negative-semidefinite whenever K is;
+convex interpolation and congruence then preserve matrix dissipation.
+This does NOT prove dissipation in the coupled solved-field metric.
+
+Important implementation contract: runtime signed Laguerre reverses the
+off-diagonal density limits: A0[0,j]=-K_runtime[1,j]/2 and q0[i]=-K_runtime[i,1]
+for i,j>0; A00/q00 unchanged. The prototype uses unsigned paper convention.
+Index1 is Laguerre only when Nl>=2; do not silently impose this on generic
+one-Laguerre/one-moment constructors. Such basis/API cases need explicit tests.
+
+Analytic versus extrapolated A0 discrepancy falls from~9.5e-8 at h1e-3 to
+~9.6e-12 at h1e-5. Source discrepancy reaches~2.4e-9 at h1e-4 and then stalls
+near1.8e-9 from cancellation. Analytic q00=-.531923040535... avoids this fit.
+Maximum eigenvalue over controls and1001 sampled b values is<7.6e-15.
+At b1e-8, density value/derivative ratios to the stable independent integral
+are1+4.95e-12 /1+7.43e-12; at first-interval midpoint .00390625,
+both differ by~9.68e-7 relative. This fixes the limiting power in a prototype,
+NOT the whole-grid derivative defect. Next: signed-runtime JVP/VJP, source
+limits and basis contracts, off-midpoint/endpoint errors, then cost comparison.
+Do not promote linear interpolation as globally accurate or repair C00 alone.
+
+**GX completion.** GX7690/PID1753613 exited0 in1:44:56, maxRSS1692920KiB.
+Root `/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`,
+stem salpha_nl32_nm96_t300. Binary96a53403... and inputfb3e49f... match the
+full expected hashes in the preceding checkpoint. Explicit artifact audit72318
+exited0: 264/42/2 numeric arrays finite in out/big/restart;1501 diagnostic
+samples,150000 steps, dt=.002000000095, terminal t=300.0000142492354.
+Finite arrays do not certify GX's known uninitialized scalar geometry metadata.
+
+| Artifact | SHA256 |
+|---|---|
+| out.nc | d5d834349e2ac3b8c8c4aae3a0e0ad8e2b5a779bc9c32a6e64196437e468a4f9 |
+| big.nc | 6cf195f08eefc5a8da029535c4b97071b30dfc78007228d0c4b74360c7b7a189 |
+| restart.nc | 2647207698043658107ba548197ab96c3de87bc5341f8eceb11fa340da874aac |
+
+10/11 positive modes pass the audit's temporal screen; ky=.05 fails
+(gamma half-shift−8.461%, omega−1.209%). At ky=.55, GX window mean
+gamma=.024908309636238253, omega=.5049831325141155; GKX dt-half control
+gamma=.02485209212445021, omega=.5049331701718064. Relative differences
+−.2256978% and−.00989386%, substantially smaller than the invalid old~4% gap.
+Using the audit's70%-start window instead gives gamma=.02487663027237762,
+omega=.5049278882813295 and differences−.0986394%,+.00104607%.
+Window dependence is not a statistical confidence interval or convergence proof.
+
+Same-state GPU0 x64 audit92620 exited0, diagnostic/restart/field timestamps
+match. Run updated audit-gx-final-state-rhs.py with explicit --root/--stem,
+cwd `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`, PYTHONPATH=src,
+GX_PARITY_REF_DIR=<cwd>/matched_refs, JAX_ENABLE_X64=true, CUDA_VISIBLE_DEVICES=0.
+GX last eigenvalue=.024950768798589706−.5049121379852295i;
+GKX Rayleigh=.024866607716735115−.5048557653340449i.
+Field relative difference8.20556e-8, but residual at GX=.30497635 and minimum
+scalar residual=.30497629. Old launch-coverage emulation worsens residual
+to.31552105 and Rayleigh to.02691289824−.50485576533i.
+This confirms the repaired coverage matters but DOES NOT establish full-state
+operator equivalence. Next compute GX's own RHS residual on this distribution,
+then compare termwise and temporal shape settling; do not infer another bug
+from a large eigenmode residual without that control. Nm convergence still fails.
+
+Resume: review terminal CI; implement no collision change before the signed/
+source/basis/whole-grid gates above; isolate remaining same-state GX residual.
+Plan remains the authoritative logbook. R0–R9 goal active.
+
+### 2026-09-05: same-state residual localized to Nyquist convention
+
+Previous turn classified progress: completed repaired GX reference and committed
+analytic collision limits. This turn leaves code17ff384a unchanged and all probes
+terminal. CI33967886511 last observed two pending/no failed jobs. No merges.
+
+Remote scratch `/home/rjorge/gx-own-rhs-20260905.0Qzs0L`, local mirror
+`/tmp/gkx-gx-own-rhs-20260905.wbfjWQ`. The unchanged repaired binary96a53403...
+restarts the completed T300 distribution for exactly one RK4 step in separate
+output stems probe/probe-half. nstep=1, t_max=301, restart_with_perturb=false,
+append_on_restart=false, nwrite=1. dt=.002/.001 paired with end amplitudes
+.1/.05 to keep rate50. Original reference files are read-only inputs, not replaced.
+Both probes93195 exit0, wall2.51/2.39s; observed time increments match their
+float32 dt exactly. No long integration, new build, or production mutation.
+
+For the normalized original state g and one-step map F_h,
+`r_h=(F_h(g)-g)/h`; `r*=2*r_(h/2)-r_h` cancels the leading secant bias.
+This is a finite-difference estimate, not an exact GX RHS; float32 cancellation
+limits accuracy as h decreases. Norms use the same full moment distribution,
+ky=.550000011920929, one kx, Nz96/Nl32/Nm96, and normalization as earlier.
+
+| Probe | Rayleigh real / imaginary | Minimum eigenmode residual | Relative difference to GKX RHS |
+|---|---|---|---|
+| h=.002 | .0246116890 / −.504972528 | .0001277905 | .320166725 |
+| h=.001 | .0247385578 / −.504959849 | .0001632117 | .320171405 |
+| extrapolated | .0248654266 / −.504947171 | .0002478193 | .320176297 |
+
+Secant refinement norm difference=.0002753863. Thus the~32% discrepancy is
+not explained by the distribution still evolving away from an eigenmode or by
+the finite-difference step. Localization:99.9999529400% of squared RHS difference
+is Fourier index48 (Nyquist) on Nz96; real-space difference power is nearly
+uniform. This is much more discriminating than projecting onto term norms.
+
+Source evidence: repaired GX src/device_funcs.cu:2475 init_kzLinked sets
+`k[i]=i/(zp*nLinks)` through i=N/2, positive Nyquist. GKX uses fftfreq's
+negative Nyquist in core_grid/cache and streaming maps. The ambiguity follows
+`exp(+i*pi*j)=exp(-i*pi*j)` at sample points, while their derivatives have
+opposite signs. See the primary [NumPy FFT documentation](https://numpy.org/doc/2.2/reference/routines.fft.html).
+This convention mismatch is not by itself proof that either sign is a physics bug.
+
+Diagnostic-only dataclass replacement flips the Nyquist sign in cache.kz and
+each even-length cache.linked_kz, without changing any other term/state/field:
+Rayleigh=.02486704448349−.504947708857859i,
+minimum eigenmode residual=.00011427234,
+relative difference to extrapolated GX RHS=.00022059425 (0.02206%).
+The remaining discrepancy is comparable to the secant refinement/cancellation
+scale; an exact instrumented GX RHS is required for a stronger bound. No
+whole-operator equivalence or resolution-convergence claim is made.
+
+Reproduction: use audit-own-rhs.py --root with the completed repaired reference
+directory and --stem salpha_nl32_nm96_t300. Same office venv/cwd/PYTHONPATH/
+GX_PARITY_REF_DIR/JAX_ENABLE_X64/CUDA_VISIBLE_DEVICES=0 as previous checkpoint.
+Audit74588, localization7219 and final sign-control69657 all exit0; final output
+audit-nyquist.log retained separately from earlier diagnostic logs.
+
+| Remote artifact | SHA256 |
+|---|---|
+| probe.in | d71a189e80746c8ce51e04e0f535cf5e1ef46807c8fd47a0db696cd5744fb950 |
+| probe-half.in | ba1cd568305e9a7fc7886a18d7da5816b4e497bb1db9b71aa20f1b1bd4f4a45d |
+| audit-own-rhs.py | 3c8b086bd53532397aa705d8fd43f1140a76385c9f3c7ac0443a2b28d51c2a8d |
+| audit-nyquist.log | 2b1570ae13d04422670baebf91b9d4062aeb21b8f3c2c379616bed9e36b7df25 |
+
+Next: manufacture even/odd-grid mode tests (including linked chains and AD),
+document parity conventions, and evaluate Nyquist truncation/spatial-resolution
+sensitivity before any production-policy choice. Do not silently make GKX match
+GX by flipping its default. Collision scaling/source gates remain unchanged.
+All research probes terminal; both GPUs free. Full R0–R9 goal remains active.
+
+### 2026-09-05: manufactured Nyquist/AD contract committed
+
+Previous turn progress: localized same-state residual by two restart steps and
+diagnostic cache sign control. This turn code commit f4d5d1b5 pushed to draft
+PR202; no runtime/source changes, no merges. CI33967886511 at17ff384a completed
+success before pushing; new HEAD CI not yet certified.
+
+tests/unit/operators/test_linear_streaming.py now parameterizes analytic
+highest positive/negative DFT eigenmodes over chain lengths7,8,9,8, both
+periodic and linked. Linked tests reverse segment order to exercise mapping.
+Even Nyquist is explicitly negative, odd chains have distinct signed endpoints.
+JIT primal, state JVP and real-amplitude reverse pullback compare with the
+analytic integer-mode eigenvalue, not a second FFT implementation. Explicit-kz
+and dz-built periodic paths are also compared. Replaces two older tests,
+including a linked-vs-periodic implementation comparison; no budget increase.
+
+Validation: full streaming CPU x64 module24 passed (4297); selected CPU
+f32-mode8 passed (59994). Final GPU x64 selected8 passed/16 deselected in15.82s
+(1111), backend independently confirmed CudaDevice0. GPU snapshot source
+b05b3949 in `/home/rjorge/gkx-collision-coefficients-20260905.yLNpmZ` has unchanged
+streaming code; final test copied to
+`/home/rjorge/gx-own-rhs-20260905.0Qzs0L/test_nyquist_contract.py`.
+Initial pre-consolidation checks also passed but are superseded by these results.
+Strict Sphinx91772 exit0, Ruff check/format pass, diff-check pass.
+
+Architecture first rejected+38 counted test lines, then+2 after consolidation;
+final test line count87262 <= unchanged87264 budget passes. No new files or
+runtime branches. Documentation records the mathematical sign ambiguity,
+observed32.018%→.02206% diagnostic improvement and its finite-difference limits.
+No production sign change or whole-operator convergence claim.
+
+Resume: review new CI, extend comparison metadata/cache-map/distributed contracts,
+then Nyquist-policy spatial sensitivity; collision scaled-congruence/source gates
+remain open. No live research processes. Full roadmap remains active.
+
+### 2026-09-05: Nyquist state-projection sensitivity; cache-frequency contract
+
+Previous turn progress: committed manufactured mode/AD tests. Current code local
+447d724f, pushed f4d5d1b5. CI33969411628 atf4d5d1b5 last observed queued;
+hold this small follow-up push until terminal CI to avoid cancellation. Source
+operator unchanged. No merges, no live research process.
+
+GPU0 x64 sensitivity audit41724 completed exit0, using unchanged previous
+restart controls and snapshot. Script/local mirror:
+`/tmp/gkx-gx-own-rhs-20260905.wbfjWQ/audit-nyquist-sensitivity.py`;
+remote root `/home/rjorge/gx-own-rhs-20260905.0Qzs0L` contains script and
+audit-sensitivity.log. Invocation/environment/reference paths identical to the
+previous own-RHS audit. Additional diagnostics Fourier-project the original
+distribution before recomputing the full GKX RHS and its sign-matched variant.
+No projected state was time evolved or called a converged solution.
+
+| Retained absolute mode cutoff | Removed squared state norm fraction | Convention RHS difference | Matched minimum eigenmode residual |
+|---|---|---|---|
+| 48 (all) | 0 | .320174 | .000114272 |
+| 47 | .0000995778 | .000910559 | .363629 |
+| 40 | .00198539 | .0000369461 | .621521 |
+| 32 | .00908851 | .00000355422 | .757874 |
+| 24 | .0297500 | .00000402380 | .857444 |
+
+Nyquist power alone is9.957778911381208e-5 of the state norm squared. Removing
+it nearly removes sign sensitivity but disrupts the eigenmode balance: matched
+Rayleigh real changes .02486704448→.02427675971, while residual grows to.364.
+These Rayleigh values are NOT new growth rates. Position-dependent coefficients
+and field coupling can regenerate cutoff content; the remaining convention
+difference need not vanish merely because the input Nyquist coefficient is zero.
+Conclusion: reject filtering as an evidence-backed production repair; obtain
+new solutions at finer resolution/policy controls instead. This projection study
+does not replace a spatial-convergence ladder.
+
+SHA256 script6ec521b6e466c00490849d9994f284dd1a688ad1f4fb182cd50578e719576e7b;
+log1916e8b671d30064ce353b24234d28a39eb3bb7431c80a7dd939abfc5a3b0743.
+
+447d724f strengthens the existing test_build_linked_fft_maps_keeps_real_fft_positive_ky_modes:
+Nz31/32 parameterization checks the whole signed frequency vector against integer
+mode labels, replacing shape-only validation. Both cases passed CPU73353;
+Ruff check/format, unchanged architecture budget87264, diff-check and strict
+Sphinx26399 passed. docs/operators.rst records projection caveats. This is a
+host cache-map test, not a new distributed/GPU validation claim.
+
+Resume: inspect CI33969411628; push447d724f only after the older run is terminal.
+Continue multi-link/distributed convention contracts and actual resolution/policy
+solves, plus the outstanding collision interpolation/source gates. Goal active.
+
+### 2026-09-05: launch actual single-mode GX spatial controls
+
+Previous turn progress: rejected simple filtering as a justified repair and
+committed cache-frequency checks. Current local447d724f/pushedf4d5d1b5 unchanged.
+CI33969411628 still queued/incomplete with no failed jobs; do not supersede it.
+Prioritized actual spatial controls over further test-only work this turn.
+
+New office root `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`;
+local decks `/tmp/gkx-gx-own-rhs-20260905.wbfjWQ/{single96,full96,full192}.in`.
+Same corrected GX binary96a53403... in gx-damping-coverage-20260905.8w5DhH.
+Compared with the full reference: nky12→2, y0=1.8181817787737895 so sole positive
+ky is EXACTLY .550000011920929; linear mode means modes should decouple, but
+this is an assumption to validate against the full reference, not a certified
+shortcut. No changed gradients/species/collisions/end rate or timestep.
+The full192 deck changes ntheta32→64 with nperiod2, hence total Nz192.
+Nl32/Nm96/RK4/dt.002/end amplitude.1/rate50/T300 unchanged.
+
+Preflight single96.in T1 completed51039 exit0 before full launches; terminal
+NetCDF read confirms ky[0,.550000011920929], theta length96 and times
+[.002,.20200001,.40200002,.60200003,.80200004,1.00000005].
+Fresh initialization, restart=false, append_on_restart=false, separate stems;
+original completed reference not overwritten. Full192 startup is running, but
+its effective-grid/time/finite-array audit must wait for terminal output.
+
+| Live control | GPU | Session / PID | Input SHA256 |
+|---|---|---|---|
+| full96 | 0 | 85194 /1767040 (time1767039) | a2653c8d619ae67e49b7b4ac92a437bb2eadcf0dfa6f1b8b29280f0110f5de05 |
+| full192 | 1 | 42690 /1767078 (time1767077) | ca003b7f1a78c70d390aa2213c5347a7da7ddae6922b6081c9e5ccdf3bf673dc |
+
+Both RNl at16/14 seconds on last process check; stdout contains live diagnostic
+rows. Command for each, cwd newroot:
+`CUDA_VISIBLE_DEVICES=<gpu> /usr/bin/time -v <corrected-root>/gx <stem>.in
+> <stem>.log 2> <stem>.time`. Do not restart on an observation timeout or read
+live NetCDF. Both GPUs now occupied. No performance claim from reduced layout.
+
+Terminal gates: Exit0, exact binary/input hashes, actual ky/Nz/Nl/Nm/dt/T,
+finite diagnostics and restart/field timestamps; temporal window stability.
+First require full96 agreement with completed12-ky GX reference (same windows,
+initialization normalization differences audited). Then compare Nz96→192,
+and full192 with existing GKX Nz192 control gamma=.024938243056538495,
+omega=.5047786677125604 at dt.002 (do not compare unmatched dt by accident).
+That GKX CSV hash94592ebea869f2096cff94bbeec58426eb8a4b7ebdf4c989e0dab537e37f2bc1
+is in campaign results/salpha_rate50_nl32_nm96_nz192_t300.csv.
+Apply same-state Nyquist residual checks at192 only after completed-artifact
+audit, generalizing hard-coded96 dimensions explicitly. Velocity convergence
+and collision interpolation remain open; these controls cannot certify them.
+
+Resume: monitor these exact handles and CI; continue multi-link/distributed
+contract checks or collision analysis while they run. Goal remains active.
+
+### 2026-09-05: multi-link host cache contract verified
+
+Previous turn progress: preflighted and launched actual spatial controls.
+This turn both exact PIDs1767040/1767078 revalidated RNl at3:16/3:14; no
+restarts or live NetCDF reads. Sessions85194/42690 remain their launch handles.
+CI33969411628 still queued/incomplete; pushed code remainsf4d5d1b5.
+Local48b90099 adds a second held commit after447d724f; preserve both and push
+after prior CI is terminal. No merges, no runtime-policy change.
+
+Strengthened existing test_linked_fft_maps_validate_ky_mode_and_empty_maps in
+tests/unit/linear/test_linear_helpers_extra.py: parameterize Nz3/4, assert exact
+one/two/three-link topology [[0],[3],[9],[2]], [[5,11]], [[4,1,10]], then check
+every signed frequency against integer Fourier labels scaled by full chain
+length. Includes odd chains3/9 and even chains4/6/8/12. Empty-map and invalid
+damping-profile checks retained. Common kwargs replace repeated setup; diff
+15 insertions/15 deletions, no new file or raised budget.
+
+Full helper module61 tests passed65274; count independently collected.
+Ruff format/check, architecture and diff-check passed. This validates host
+topology/frequency construction, not distributed runtime derivatives.
+Plan checkpoint corrected stale GPU-free wording. Next: terminal spatial
+artifact audits when ready, distributed derivative conventions, and the open
+collision/source gates. Goal active; both GPUs occupied by existing controls.
+
+### 2026-09-05: full-range scaled cubic study and Bernstein matrix check
+
+Previous turn progress: strengthened multi-link tests. Code still local48b90099,
+pushedf4d5d1b5; CI33969411628 last queued/incomplete. GPU resolution controls
+1767040/1767078 revalidated running at7:04/7:02; no restarts, no live NetCDF reads.
+This turn changes no runtime code or packaged coefficients.
+
+Scratch root `/tmp/gkx-collision-candidates-20260905.XqBQZb`.
+scaled-full-range.py uses independent quadrature C=Ctest+Cfield and full source
+p=ptest+pfield, rather than comparing separate blocks as the older grid study did.
+Do not compare the two studies' percentages as identical norms. Evaluate three
+off-grid fractions .2113248654/.5/.7886751346 per interval and upper endpoint b8.
+Reference derivative uses central h=min(1e-5,.05b), checked against h/2;
+maximum relative FD refinement1.54e-9. These are sampled error maxima, not
+continuous error bounds or transport errors. b0 behavior is separately covered
+by the earlier analytic-limit study.
+
+Compare raw linear, scaled linear, and scaled cubic (SciPy CubicSpline default
+not-a-knot) in b=B²/2, with derived A0/q0 and C=DAD, p=bDq. Grids14/27/53
+are repeated b-midpoint bisections of the packaged grid. Runs37120/97478/81426
+all terminalexit0. Invocation from code worktree, PYTHONPATH=src:tools/artifacts,
+local JAX0111 Python, scaled-full-range.py [0|1|2]; same-stem logs record results.
+Initial14-node log predates adding printed node count; mathematics unchanged.
+
+| Cubic nodes | 8 moments value matrix/source (%) | 8 derivative matrix/source (%) | 18 value matrix/source (%) | 18 derivative matrix/source (%) |
+|---|---|---|---|---|
+| 14 | .039786/1.54425 | 1.47302/43.3838 | .027598/.820933 | 1.15413/35.2823 |
+| 27 | .002041/.064638 | .139379/3.34707 | .001386/.036143 | .107668/2.86573 |
+| 53 | .000102/.002961 | .013730/.290301 | .000068/.001698 | .010521/.257176 |
+
+Worst cubic derivatives are at upper endpoint b8. Scaled linear is not a global
+improvement: at14 nodes its source derivative maxima125.99%/52.57%, versus
+raw98.44%/50.37%; at53 still27.92%/11.51%. This rejects promoting the small-b
+linear fix as the final derivative algorithm. Combined source derivatives can be
+small near turning points, so relative errors are not standalone physics tolerances.
+
+**Interval-wide sufficient entropy check.** For each cubic A on an interval
+of width h, with power coefficients a3,a2,a1,a0 in (b-b_left), Bernstein controls:
+
+```
+B0=a0
+B1=a0+h*a1/3
+B2=a0+2*h*a1/3+h²*a2/3
+B3=a0+h*a1+h²*a2+h³*a3
+A(t)=(1-t)³ B0+3t(1-t)² B1+3t²(1-t) B2+t³ B3, 0<=t<=1
+```
+
+Nonnegative weights sum to1: if all Bj are negative-semidefinite, A and DAD
+are too throughout the interval. scaled-bernstein.py tests all controls for all
+three grids and both bases. Maximum eigenvalues6.65e-15/6.84e-15 occur at the
+zero endpoint (quadrature roundoff). No projection/symmetrization applied.
+Symmetry asserted to1e-12; Bernstein reconstruction independently matches spline
+at0,.2113248654,.7886751346,1 to1e-12. Final verification99091 exit0; initial
+63593 also exit0. This is a numerical certificate of the sufficient condition
+for these coefficients, NOT automatic preservation by arbitrary cubic data,
+NOT a rigorous interval-arithmetic bound, and NOT coupled field-metric entropy.
+Future coefficient generation must check the controls instead of assuming it.
+
+| Artifact | SHA256 |
+|---|---|
+| scaled-full-range.py | fd87c71a83e0f1f6da982c3dd99ea460fe8cbc36853f5779c1783543c7b65c1c |
+| scaled-full-range.log | 0543d449810c4a218167a742f41fe1e1cee6c4fb6fed0e3e937b7936a72af0b5 |
+| scaled-full-range-27.log | e423c3ec2766293d86f665746c27a1e8672c252cceb1b93c68755ce2394b4fbf |
+| scaled-full-range-53.log | a8ff0f1d5a088a87cd706853094379747975a0d6789e8e3a36bd09ba0037e753 |
+| scaled-bernstein.py | 4c752f9c2e5b9fb8af1ce1b510df9a801499baed7dbd6562c0d35240bb43ea38 |
+| scaled-bernstein-verified.log | 5f26e9f542a00710c9a7b70af2109dc83c3d9b2af62e86792f09541814d7f742 |
+
+Next candidate: precomputed scaled cubic coefficients with a mandatory control
+matrix gate. Before runtime promotion: choose accuracy tolerance from intended
+use, refine as needed, signed-Laguerre source/basis contracts, small-b JVP/VJP,
+endpoint/out-of-grid behavior, f32 certificate tolerance and measured runtime/
+storage cost. Full-J0 versus retained-H field metric remains a separate gate.
+All local studies terminal; only two previously launched GX controls are live.
+No merge; full R0–R9 goal active.
+
+## Moved from plan.md by the 2026-09-05 external review
+
+These blocks were evidence, not plan; they are preserved verbatim.
+
+### R0 resume checkpoint and evidence table (moved 2026-09-05 external review)
+
+Resume checkpoint (2026-09-05): R0 remains open. Full commands, hashes,
+rejected trials and terminal handles are retained in [the logbook](plan/log.md).
+Do not merge PRs or modify the user's original checkout.
+
+**Review branches.** Plan PR198: `plan/research-publication-20260904`.
+Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
+`fix/r0-end-damping-rate`, pushed **f4d5d1b5**, local **48b90099**
+(CI33967886511 at17ff384a completed success; new HEAD CI not certified), worktree
+`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
+PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
+PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
+repairs CPU singleton-rank lowering without changing the GPU layout.
+PR200/201 last checks: no failures or pending checks. PR202's earlier formatting
+failure was fixed in02536eef; CI status is tied to the exact commit below.
+CI run33956493988 at b734e19d completed successfully; after that, pushed9fc6e42d.
+Run33958341219 at9fc6e42d completed success; only then pushed the accumulated
+followups. The subsequent new documentation heading warning was fixed and the
+strict local build passes; CI33959939110 at e9b7b67f completed success.
+New HEAD CI is not yet certified. Frequent earlier pushes cancelled
+superseded runs before completion; avoid restarting CI for every microcommit.
+
+**Current contract and evidence.**
+
+| Item | Established | Still required |
+|---|---|---|
+| End damping | PR202 uses a fixed rate across audited routes; native-time decks migrated explicitly, existing nonlinear rates retained; old scale-by-dt input rejected | External matrix, adaptive calibration, broader precision/sharded AD validation |
+| GX adapters | Active damping requires positive reference dt and explicit Time.fixed_dt=true; three completed campaign references independently pass observed-dt audit at their ceilings; kinetic seed corrected | Input dt alone remains insufficient for arbitrary references; retain historical inputs and audit provenance |
+| Parity coordinates | Requested/reference ky and actual effective GKX grid matched before solves within float32 roundoff; missing/invalid/duplicate requests rejected | Old running reporter lacks preflight; current campaign coordinates already match its solver grids |
+| Tests/startup | CPU/GPU boundary and route probes; coupled reverse AD vs matrix exponential; 88 linear, 85 time-integrator, 198 release, 148 CLI tests passed in recorded runs; nonfinite Laguerre transform errors rejected, 50 core numerics tests pass; explicit linear facades clip the final step to t_max | Fresh full CI; direct JVP through custom-VJP field solve remains unsupported |
+| Sharded AD | Fixed-rate reverse derivatives pass on two CPUs/two GPUs; traced initial-state rejection repaired; short EM initial-state homogeneity derivative passes on both | Neither field-free damping nor short EM homogeneity validates nonlinear transport AD or general EM parameter derivatives |
+| Demo | dt=.02/750 steps, T15 and fixed rate preserved; wheel writes all artifacts, no CFL warning; short nonlinear wheel run also completes | Transient demo is not stationary physics validation; under-resolved-fit/cutoff warnings remain |
+| s-alpha parity | 9/11 modes pass both temporal screens; baseline max GKX-settled gamma error1.904% | Low-ky extension and velocity/spatial convergence |
+| Miller parity | 14/15 modes pass both screens; max settled gamma error0.85194%, peak0.0006939% | Lowest-ky extension and resolution convergence |
+| High-ky Hermite study | Nm48→64 gamma changes8.096%; Nm96 imex2 dt.002 fails, dt.001 succeeds; RK4 agrees within ~0.0046%; at T300 Nm96→128 changes gamma0.468%, omega0.192%, with temporal shifts0.168%/0.219% | Laguerre/parallel resolution and regularization sensitivity; two fine Hermite points alone do not establish convergence |
+| Laguerre study | Nl16→24 changes gamma−7.004%; Nl24→32 changes−24.713%; halving dt has negligible effect; Nz96→192 changes gamma+0.3467%, omega−0.0306%; patched-GX Nm96 reference completed, high-ky growth discrepancy ~4% | Velocity convergence and residual cross-code discrepancy remain open |
+| Native imex2 | Scalar amplification documented: backward Euler for pure diagonal damping, explicit midpoint for undamped oscillations | Stable, accuracy-tested production method selection; no uniform second-order claim |
+| RHS profiling | Explicit state precision and observed state/RHS dtypes; 36 profiler tests pass; CPU z-wave warm means17.8ms f32/41.8ms f64 | Artificial-state triage only; no end-to-end speedup, peak-memory or f32 scientific-accuracy claim |
+
+The Nm48 half-step pilot rounded ky by <=1.2e-8; it is sensitivity evidence,
+not an exact-coordinate Richardson pair. Subsequent refinement uses exact stored
+ky. Hypercollision coefficients depend on Nm: fixed input does not imply fixed
+damping at retained moments. Temporal settling, cross-code parity, resolution
+convergence and experimental validation are distinct claims.
+
+**Live resolution controls:** GX single-mode ky=.550000011920929,
+Nl32/Nm96/dt.002/rate50/T300 at Nz96 and192 in
+`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`.
+GPU0 full96: session85194/PID1767040; GPU1 full192:42690/PID1767078.
+Both verified running; do not restart. Logs `<stem>.log`, `<stem>.time`.
+Accept reduced-mode layout only after full96 reproduces the earlier multi-mode
+reference; then compare full192 to the existing GKX spatial control. No results yet.
+
+**Completed reference:** corrected GX Nm96/Nl32/Nz96 dt.002/T300 reference,
+GPU1, **7690/PID1753613** (time1753612), in
+`/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`.
+Input `salpha_nl32_nm96_t300.in`; logs `run.log`, `time.log`. Binary in the parent
+scratch root includes normalized hypercollision powers AND damping stride repair.
+Nm16011457, field12758, RHS probes63632/68046/95262, build80927 and startup50025
+are terminal exit0. Do not restart them. GX7690 also exited0 in1:44:56;
+artifact/time/finite-array audits pass. Both GPUs now run the spatial controls above;
+new code CI is not yet certified.
+At ky=.55, corrected GX gamma=.0249083096362 versus GKX=.0248520921245
+(−.2257%); omega differs−.009894%. The same-state Rayleigh discrepancy is
+small, but the normalized full-state residual remains .30498. Do not equate
+frequency agreement with operator equivalence or velocity convergence.
+Follow-up one-step GX controls identify the dominant residual as an even-grid
+Nyquist-sign convention mismatch:99.999953% of difference power lies at kz index48.
+GX uses positive Nyquist; GKX uses negative FFT frequency. Diagnostic-only sign
+matching reduces RHS disagreement from32.018% to.02206%, and the minimum
+eigenmode residual to.0001143. Neither production solver was changed.
+
+Office campaign directory:
+`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
+Production snapshot3565 remains solver-equivalent for these scans; kinetic reporter
+copy is0acbd221, and its fixture includes8ce22e33's seed correction. Spatial run
+uses a separate grid-verified reporter from1571a9e6; no running copy overwritten.
+Existing reference bundle
+`/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
+
+Manufactured even/odd periodic and reordered-linked mode/JVP/pullback tests
+now pass CPU x64/f32 and GPU x64 in f4d5d1b5; runtime convention unchanged.
+Cache-built single-link signed frequencies now pass odd/even checks in447d724f.
+Filtering only the Nyquist mode removes9.96e-5 of state power but raises the
+matched eigenmode residual to.364; filtering is not a validated repair.
+**Next actions:** make external parity comparisons convention-aware, including
+distributed routes. Host one/two/three-link topology and signed-frequency tests
+pass in48b90099. Evaluate truncation/resolution
+sensitivity before choosing a production policy; do not silently flip GKX's default.
+Current GKX velocity control: `salpha_nl32_nm160_t300.toml` in campaign,
+completed11457 exit0 in54:11.43: gamma=.02410635371563277,omega=.5058500630938944.
+Nm128→160 changes gamma+5.596% and omega+.4566%; velocity convergence still fails.
+Nm128 run68484 completed exit0 in43:47.41: atNl32,
+Nm96→128 changes gamma−8.141% and omega−0.274%, so velocity convergence fails.
+Compare the new run against Nm128 at matched dt.001/T300;
+the earlier Nm96→128 result at Nl16 cannot establish convergence at Nl32.
+GX95001 completed exit0 in1:44:10 with an isolated normalized-power repair, explicitly
+labeled as a modified reference (original checkout/binary unchanged). The failed
+original high-order startup and repaired finite startup are retained; low-order
+potential traces agree within1.42e-7 relative L2. Do not launch a duplicate or use
+unmodified GX3865a537 at high Nm: its separate float32 powers overflow. Use a valid reference to compare
+the high-order GKX result at matched velocity resolution, not the old Nl16/Nm48
+reference. Preserve both references. The completed audit verifies1501 samples,
+dt=.0020000000949949026 toT300.0000142492354, and finite264/42/2 numeric
+arrays in out/big/restart. Atky.550000011920929, late-half GX gamma=.023903807575570125,
+omega=.5051693808381631; half-window shifts−.967%/−.126% pass the temporal screen.
+Matched GKX Nm96 gamma is3.967% higher (4.112% against the reference's last30%);
+this residual is not erased by temporal settling. Audit estimator/precision/operator
+differences before claiming resolved parity. Lowestky still fails the5% growth screen.
+Prepared input now explicitly pins fixed_dt=true and Expert damping values;
+its current SHA256 is fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
+Spatial77271, dt-half73383 and two-GPU derivative31794 are terminal exit0; do not restart.
+The small derivative test completed beside the kinetic run with an8% memory pool;
+no performance claim. Patched GX95001 and GKX float32 control72033 are terminal
+exit0; GPU1 is free. Matched Nm96 f32 gamma=.024852321437161786 differs from
+x64 by9.2271e-6 relative, omega by2.3044e-7: precision does not explain this
+case's cross-code discrepancy. The7:02.13 wall time is concurrent, not an isolated
+speedup benchmark or general permission to demote scientific runs to float32.
+Independent GX energy fits at last30% give gamma=.0238429354 fromPhi2 and
+.0238471208 fromWg, leaving4.233% GKX/Phi2 discrepancy. The instantaneous-growth
+estimator is therefore insufficient to explain the difference; operator/action
+differences remain to be isolated. Resolved kz-hypercollision coefficients match
+exactly for all96 moments, and imported coefficient profiles/theta are identical.
+Other GX scalar metadata are not reliable: the audited S_alpha constructor does
+not initialize exported nperiod/aminor/alpha/zeta_center. Retain this provenance
+debt; finite-value audits alone cannot certify geometry metadata or 3-D plots.
+**Reference coverage defect:** GX GradParallelLinked caps dG_all.z at65535;
+dampEnds_linked lacks the grid-stride loop used by neighboring copy kernels.
+At Nz96/Nl32/Nm96 it covers65535 of294912 z/moment indices. On the saved GX
+state, GKX's field solve matches Phi to7.77e-8, but full-damping Rayleigh growth
+is−.370115. Emulating precisely the missing-coverage mask yields+.0238632 versus
+GX+.0238779. A30.4% full-state residual remains, so this is not a complete
+operator-equivalence proof. Existing high-order reference results are provisional;
+the normalized-hypercollision patch alone is insufficient. Even baseline
+Nz96/Nl16/Nm48 exceeds the cap (73728 indices). Audit every reference case;
+retain original outputs and do not reproduce the defect in GKX. An isolated
+actual-kernel regression now reproduces1966/54958 missed updates for73728/294912
+indices; the stride repair passes all cases, including the6144-index control.
+New build96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+passes the T1 finite-state smoke test. Corrected matched run7690 completed exit0; its
+input SHA remainsfb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df.
+The updated audit-refined-gx.py in the new scratch root now requires explicit
+--root/--stem/--binary/--binary-sha256/--input-sha256/--gkx-csv and rejects a
+nonterminal run before reading NetCDF. It reproduces old results and rejects
+the live corrected run and a wrong binary hash. The RHS probe now requires
+--root/--stem and checks diagnostic/restart/field timestamps. Use these updated
+copies, not old hard-coded ones; keep old/new records separately labeled.
+GX kinetic reference completed exit0 with finite inspected diagnostics and
+2001 samples to T40; only2/7 modes pass both temporal screens. Matched GKX
+T40/electron-only-seed run40474 completed exit0 in1:21:52: only1/7 modes jointly
+settled (ky.4: gamma−0.4105%, omega+0.1291%). Other modes require longer horizons;
+neither temporal agreement nor this single mode establishes resolution convergence.
+Do not reuse the old T20 harness or
+restart terminal GX6455. Extend unsettled reference modes before promotion.
+Continue slow-mode/velocity/parallel-resolution and regularization checks, then
+remaining kinetic/EM/stellarator matrix and the numbered R0 queue below.
+For imported parity geometry, editing grid.Nz alone does **not** refine the
+solve: geometry-file sampling overrides it. PR202 now reports effective Nz and
+requested_Nz separately. Independently generated192-point GX geometry now passes
+finite/shared-point checks (see log); use it after isolating Laguerre refinement.
+The older kinetic reporter has not been replaced.
+GPU wall times from concurrent runs are not isolated performance benchmarks.
+Update this checkpoint and append evidence to the logbook before switching work.
+
+### R1 collision-table evidence (moved 2026-09-05 external review)
+
+At fixed8 output moments/B1, radial cutoff2→4→12 removes the asymmetry down
+to roundoff, but spherical5→7→9 still changes C by21.12%/1.65%. Independent
+intermediate radial/spherical/Bessel and output-moment ladders are required;
+the default intermediate degree inferred solely from output moments is not
+a convergence guarantee. Extend this ladder before regenerating shipped tables.
+At B1, spherical9→11→13 changes C by0.02521%/0.000132%; radial12→16 is
+roundoff and Bessel24→32 unchanged in float64. B4 endpoint58082 finished exit0:
+radial24→32 changes C by2.25e-13 at fixed spherical13/Bessel48. Both CPU collision
+controls58082/67222 are terminal; do not restart them.
+Independent like-species test-particle Dirichlet quadrature matches the shipped
+DK limit to6.1e-15 but finds22.9%/84.1% errors in the shipped8-moment test block
+atB1/B4. Refined spherical13/radial12/Bessel24 agrees atB1 to2.55e-9. This isolates
+shipped truncation debt and motivates an efficient C_test(B)=C_test(0)−B²D
+representation; independently validate D, normalization, AD and larger moment
+orders before runtime use. Field/polarization blocks still need their own
+convergence and physical checks. No shipped table regenerated.
+The independent offline Gram oracle is now committed with8/18/32-moment
+quadrature/spectral gates and8/18 DK coefficient comparisons;51 selected
+collision tests pass in both JAX precision configurations. It remains NumPy
+float64 offline code, not a deployed runtime replacement. Shipped18-moment
+test-block errors are13.0%/64.2% atB1/B4 as well; both tables remain research-only.
+Interpolation has a separate near-zero derivative defect: even exact samples
+of C(B)=−B², linearly interpolated in B then evaluated at sqrt(2b), give
+dC/db=−883.9 atb1e-8 and−Inf atzero instead of−2. The generic interpolator
+differentiates its declared approximation correctly, but that approximation
+does not preserve the like-species quadratic limit. Commit2c440b0e switches
+only like-species diagonal callers to B² coordinates, preserving the synthetic
+quadratic limit with interior one-sided endpoint derivatives and zero slopes
+outside the table. Twelve forward/reverse derivative cases pass on CPU/GPU;
+generic and unlike-species semantics remain unchanged. Still required: physical
+interpolation/AD convergence for field/polarization coefficients, and a validated
+runtime Gram polynomial for the test block. Neither this interpolation repair
+nor coefficient repair alone closes physical AD validation.
+New independent test-polarization quadrature (b7cd526e) agrees with the refined
+B1 spherical13/radial12/Bessel24 generator to1.51e-11, but the shipped B4
+test-phi2 errors are95.79%/86.40% for8/18 moments. Quadrature refinement and
+the independent J0 source-moment ladder pass.
+B4 field angular13→15→17→19→21 controls45671/12758 are terminal exit0.
+Last field change2.3033e-8; test-block error2.7282e-5. Source-ladder45346 is
+also terminal: source J7 reproduces B1 vector assembly to8.71e-12 (test6.60e-12),
+an assembly identity using shared coefficients, not independent kernel proof.
+Do not restart these controls, Nm160 or f32.
+
+**Independent field reference now implemented offline (6d645f3f).** Fourier
+Landau kernel `Uhat=8*pi*q*q^T/|q|^4` gives a positive-weight field Gram matrix;
+analytic Fourier transforms supply both moment columns and the J0 polarization
+source. No spherical speed coefficients, fitted normalization or symmetrization.
+At8 moments: DK matrix error2.13e-13; B4 full-matrix difference from spherical21
+reference6.48e-10; B1 field-phi2 difference6.44e-14. The streamed helper passes
+8/18/32-moment B0/1/4 node, matrix-entropy and DK nullspace gates. A rejected
+32-pitch-node trial is retained; 48 pitch nodes remove its 1.07e-10 relative
+32-moment/B4 error. 35 selected tests pass under both JAX precision flags, but
+the oracle itself is NumPy float64. No runtime table or model has changed.
+The full14-node audit for both shipped tables is now complete; refined field
+matrix/field-phi2 errors atB4 are66.59%/83.35% (8) and46.43%/69.94% (18).
+B4 field source J4→8→12→16→24 converges to the direct source to2.65e-15;
+this independently checks the source expansion, but shares the Fourier kernel.
+
+**Finite-basis/field validation gate, not a demonstrated instability.** Runtime
+electrostatic quasineutrality uses retained s=J_l and H=MG. For unit single
+species/nonzonal tau_e=1, d=2-s^Ts and M=I+ss^T/d. Retained-H Galerkin
+collisions give L=C_N M and M L=M C_N M symmetric negative-semidefinite.
+The full J0 source p=P_N C J0 used by the table route differs from C_N s:
+atB4 the discrepancy is51.73%/41.79% for8/18 moments, even with converged
+coefficients. This mixes a full source with a truncated field closure. Sampled
+maps remain dissipative, but lose exact self-adjointness in this candidate
+metric. Use Mandell2017 Section4's retained-H closure/free-energy analysis
+to resolve the discrete contract; test larger Laguerre bases, zonal and
+multispecies cases, interpolation and AD before proposing a complete runtime
+replacement. Do not impose symmetry or drop polarization by hand.
+Actual runtime field/H/collision probes now confirm these relations for
+8/18 moments, nonzonal and genuinely nonzero-kx zonal modes with three z points
+and nonuniform Jacobian. State JVP/VJP comparisons pass. A rejected kx0-only
+probe did not exercise zonal correction and is retained in the logbook.
+At fixed Nm4/B4, Nl2→3→5→9→13→17→25 reduces the full/retained source gap
+from.5173 to2.75e-12; independent endpoint quadrature changes the matrix/source
+by1.25e-13/9.05e-14. This is source-truncation convergence, not a resolved
+collision spectrum, transport calculation or electromagnetic energy law.
+
+**Next implementation:** isolate coefficient repair from closure changes.
+Generator repairad47d3be is committed: direct equal-species diagonals, mandatory
+all-node quadrature refinement, full-J0 source, signed convention and honest
+float64 provenance. Final candidates are in
+`/tmp/gkx-collision-candidates-20260905.XqBQZb/final`; both pass independent
+DK and saved-file/all-node audits. **Local commitb05b3949 replaces packaged
+data**, exactly matching all four candidate files. Legacy arrays remain in
+ad47d3be history. New coefficient symmetry/entropy/reference gates reject both
+old archives. CPU:90 full physics and33 selected operator tests pass in x64;
+124 selected tests pass in f32 mode. GPU:33 selected operator tests pass at
+exact b05b3949 in isolated office root documented below. No runtime formulation
+or interpolation change; README/operator error tables now label legacy results.
+
+**Next:** refine the table-grid accuracy before optimization claims. Runtime
+JVPs equal declared segment slopes, but three sampled b-midpoints give up to
+1.87% value /2.66% physical-derivative error in field/polarization blocks;
+independent FD step refinement is below4e-9 relative. The quadratic test block
+is preserved to roundoff. Compare refined grids across every interval and
+off-midpoint holdouts; preserve entropy signs and measure table/runtime cost.
+The finite-source/H closure and predictive transport gates remain open.
+The wider all-interval holdout study now supersedes that three-midpoint sample
+as an error estimate: 14/27/53-node maxima reach71.86%/32.49%/15.67% derivative
+error for8 moments and50.84%/23.93%/11.16% for18. All use three fractions per
+interval and both endpoints; FD reference refinement is below1e-8 relative.
+Simple grid refinement is not yet an adequate gradient-accuracy solution.
+
+**Structural zero-wavenumber requirement:** the unit-rate density Dirichlet
+entry has stable analytic representation
+`C00=2*sqrt(2/pi)*b*integral[-1,1] x²*expm1(-b*(1-x²)) dx`, hence
+`C00=-(8/15)*sqrt(2/pi)*b²+O(b³)`. Linear interpolation gives O(b) in its
+first interval; atb1e-6 its value/derivative ratios are7795/3898. This is a
+cancellation-sensitive coefficient defect, not an observed transport instability.
+Any finite linear grid retains the wrong power as b→0. Before adding more
+nodes, investigate a density-scaled congruence C=D A D, D=diag(b,1,...), with
+the b=0 limit of A derived and independently checked; positive-weight interpolation
+of a negative-semidefinite A would preserve dissipativity and density scaling.
+The bounded prototype now derives A(0) and the source limit analytically and
+passes independent small-b checks for8/18 moments; see the logbook's scaled
+congruence checkpoint. This is not implemented or globally certified. Check all source-vector
+limits separately, smooth derivative accuracy, endpoints and CPU/GPU cost;
+do not repair one entry by hand at the expense of matrix entropy.
+Full-range follow-up favors scaled cubic over scaled linear: at53 nodes, sampled
+combined-matrix/source derivative errors are .01373%/.29030% (8 moments) and
+.01052%/.25718% (18). All cubic Bernstein control matrices satisfy the sufficient
+negative-semidefinite condition to roundoff (<6.9e-15), including14/27-node grids.
+This is an interval-wise matrix certificate to numerical tolerance, not a coupled
+field-energy proof. No production interpolation change; require signed-runtime
+JVP/VJP, endpoint/clipping contracts, f32 and cost gates before promotion.
+Record quadrature provenance (not fictional high-precision decimal digits),
+independently recheck all nodes, update coefficient regressions and audit the
+interpolated runtime/JVP/VJP. Keep research-only scope. Evaluate a retained-H
+closure in a separate review with resolution and field-metric evidence; do not
+change it silently while repairing coefficients. The now-measured source-tail
+convergence supports this staged correction rather than conflating two changes.
+Unequal species, temperature relaxation and runtime transport
+remain separate open gates. Equations and API are in docs/operators.rst;
+commands, failures and hashes are in the logbook.
+
+
+## 2026-09-06 — focused planning review, not implementation
+
+Baseline: main `a99dac898334414d31733f6d286bd4c36983702e`.
+Branch: `plan/focused-research-20260906`; worktree:
+`/Users/rogeriojorge/local/GKX-worktrees/focused-plan-20260906`.
+Review PR: [#204](https://github.com/uwplasma/GKX/pull/204), draft, do not merge.
+Main review commit: `8be376d4`. README: 503 → 239 lines; active plan:
+2,881 → 294 lines. Eight documentation files changed; no added JSON.
+
+Decision:
+- Replace the active 2,881-line roadmap with five ordered outcomes: baseline
+  correctness, ES transport/gradient evidence, useful warm QA optimization,
+  bounded Coulomb qualification, and research packaging/publication.
+- Preserve broad physics ambitions with admission criteria; defer speculative
+  coordinates, shadowing, new closures and arbitrary-order Coulomb expansion.
+- Published GX uses per-step absorber scaling. Compare conventions before
+  adopting fixed-rate damping; split independent repairs from PR #202.
+- Existing warm reuse is host-backed and disabled in QA. Validate on-device
+  continuation and independent cold outcomes; do not promise statistical AD.
+- Correct public QA/Coulomb/parallel claims, shorten README while preserving
+  results/figures and basic/advanced use, and organize the documentation index.
+- No source/test/data changes, merge, release, remote job launch or rewrite.
+
+Fresh checks (commands, versions, paths and qualifications in the
+[audit](baseline/review_2026_09_06.md)):
+- GKX: 82 x64 operator/API/physics checks; 4 selected window checks;
+  13 warm-policy checks; 13 parameter/physics AD checks; 26 QL/statistics checks.
+  Final release and QA example contract suite: 145 passed in 2.87 s.
+- Default-precision analytic geometry test fails a 1e-9 tolerance by 5.96e-8.
+  x64 passes; six dtype future warnings remain. This is not a full suite run.
+- No-argument CLI and public Python solve complete with finite outputs.
+  The demo emits CFL/fit warnings; prepare reports Nl=4,Nm=8 despite the deck's
+  16/48 run settings. Record these P0 contracts instead of hiding them.
+- Strict Sphinx HTML, size/architecture checks and QL/readiness checkers pass.
+  All four regenerated CI release summaries match tracked bytes; no JSON edits.
+  Their pass does not establish current-head transport or gradient validation.
+- New stella checkout built. Original output-smoke deck exits zero with NaNs;
+  controlled electrostatic copy gives finite ten-step output, not saturation.
+- New gyaradax checkout: 24 passed, 89 skipped (including missing reference
+  data), one roundoff-threshold collision failure. Neither external check is a
+  matched GKX transport comparison.
+
+Resume safely:
+1. Read the new plan and audit, inspect actual PR/worktree state, then P0.
+2. Original checkout is untouched. Local `fix/r0-end-damping-rate` retains two
+   unpushed commits beyond #202; interrupted uncommitted basis guard is absent.
+3. Office SSH timed out. Prior GX job terminal state is unknown; check
+   `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L` and previously recorded
+   PIDs 1767040/1767078 before launching anything else.
+4. Freeze the smallest discriminating test and cost cap before long runs.
+   No fresh GPU, saturated parity or VMEX optimization result is claimed.
+5. Local final checks pass as recorded above; GitHub CI was only just triggered
+   for the new PR at handoff. Inspect its actual result before implementation.
+
+## 2026-09-06 — final planning pass: restore context and require EM
+
+User direction: retain a complete executable plan, not just a short summary;
+electromagnetic research capability is essential. Continue draft
+[#204](https://github.com/uwplasma/GKX/pull/204), following `6d46f9bb`.
+
+Changes:
+- Expand the plan's context, preserved achievements, numerical ownership,
+  concrete steps, matching contracts, bounded execution schedule and checklist.
+- Make kinetic-electron, three-field EM a required P1 outcome: EM0 independent
+  algebra/RHS/energy; EM1 wave/limit tests; EM2 reduced/full-field KBM; EM3
+  nonlinear tokamak flux; EM4 finite-beta stellarator; EM5 AD/restart/execution.
+- Distinguish core EM from later MTM/TAE/energetic-particle/global applications.
+  An ES-only result cannot close the code's research-grade milestone.
+- Add physical/normalized field-contract equations, beta distinctions,
+  cross-channel covariance and references in the technical documentation.
+- Keep the README concise and unchanged; no solver/test/data/JSON changes.
+
+Evidence:
+- Read GKX field solves, EM flux channels, KBM deck and relevant tests; inspected
+  pinned stella full-EM inputs and primary GX/GS2/stella literature/sources.
+  GX's published KBM comparison and GKX's current deck both omit B_parallel;
+  the full-EM comparison is a separate required gate, not a relabeling.
+- 9 targeted field/beta-limit/KBM-routing/EM-activation tests passed (20.19 s);
+  1 runtime EM-channel test passed (4.78 s). Dtype warnings and the channel
+  test's over-CFL two-step setup remain explicitly recorded in the audit.
+- These checks do not qualify saturation, independent full-EM parity or GPU
+  execution. No long/remote campaign was launched in this planning turn.
+- Final release/example contract rerun: 145 passed in 2.73 s. Strict Sphinx
+  build passed at `/tmp/gkx-plan-em-docs-20260906`; all four regenerated CI
+  release summaries match tracked bytes. No JSON edits are needed.
+- Active plan: 696 lines, technical decisions: 490 lines, README: unchanged
+  at 239 lines. Completeness of the execution context, not a line-count cap,
+  controls future plan edits.
+
+Resume: read the expanded plan, then P0 shared correctness plus EM0; use the
+existing field tests as starting points, not as independent physical proof.
+Retain the earlier remote-job unknown state and reference-provenance warnings.
+
+## 2026-09-06 — synthesis take on the three plans
+
+Branch `plan/synthesis-20260906`, stacked on #204; PR [#205](https://github.com/uwplasma/GKX/pull/205), draft.
+Inputs: #198, #203, #204, main a99dac89, five research reports in
+`plan/research/`, and the measurements in
+`plan/baseline/review_2026_09_06_synthesis.md`. Output: `plan.md` (513 lines)
+with ranked reference sources, an evidence ledger, CI tiers, a statistics
+protocol, phases 0–7 with steps and exits, a parked list with triggers, and a
+compute budget; README additions and `CITATION.cff`.
+
+Verified: 134 release gates, eleven checkers, strict Sphinx, ruff. No solver,
+test, data or release change; no GPU job; office unreachable.
+
+Next: an independent collaborator writes the authoritative plan from the four
+inputs; then Phase 0 (merge #197, #199, the f32 stack; split #202; API
+contracts; ledger scaffold; the convergence investigation).
+
+## 2026-09-06 — one authoritative plan
+
+Independent-reviewer consolidation. Branch `plan/authoritative-20260906`,
+PR [#206](https://github.com/uwplasma/GKX/pull/206) against main a99dac89. Folds #198, #203, #204 and #205
+into a single 983-line `plan.md` (phases 0–7, evidence ledger, ranked
+references, statistics protocol, EM ladder, compute budget, checklist); brings
+the 2026-09-04 audit, the 2026-09-05 external review, the full logbook, the PR
+ledger and the release-scope warning onto this branch; removes the archived
+pre-2026-08-30 plan and the history-rewrite plan; points the docs at main.
+#198, #203, #204 and #205 closed with a pointer here; branches kept.
+
+Verified: 134 release gates, eleven checkers, strict Sphinx, ruff. No solver,
+test, data or release change; no Phase 0 work started; no GPU job launched.
+
+Next: maintainer review of #206; then Phase 0 step 0.1 (rebase and merge
+#197).
+
+## 2026-09-06 — execution starts: Phase 0.1, #197 integration
+
+Authority: #206 at `c893b93a`; checked all 200 PRs via
+`gh pr list --repo uwplasma/GKX --state all --limit 1000`. Seven open,
+including this plan; superseded planning PRs are closed. No new roadmap.
+
+Implementation worktree: `/Users/rogeriojorge/local/GKX-worktrees/phase0-pr197`,
+local branch `review/phase0-pr197`, based on published #197 `9074dd87`.
+Merged main `a99dac89` with `git merge --no-commit --no-ff origin/main`.
+Only conflict: `tools/package_architecture_manifest.toml`. Retained both
+test additions: 86257 shared baseline +191 (#197) +120 (#193) =86568 lines.
+Architecture checker confirms this count. Solver diff against #197 is empty.
+Commit `73a8a8c41a37b5d68bb0e49e28dd25a47a5bc311` pushed fast-forward with
+`git push origin HEAD:fix/end-damping-per-step`. No main merge or force push.
+
+Environment: macOS arm64, M3 Max CPU; Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6. Interpreter `/tmp/gkx-plan-review-20260906/bin/python`.
+Commands below run in the implementation worktree with `PYTHONPATH=$PWD/src`
+and `JAX_ENABLE_X64=true` (pytest invoked with `-o addopts='' -q`):
+
+| Command suffix | Result | Wall time |
+|---|---|---|
+| `-m pytest tests/validation/physics_gates/test_end_damping_physics.py` | 1 passed | 16.23 s |
+| `-m pytest tests/unit/linear/test_linear.py tests/unit/linear/test_linear_helpers_extra.py -k damping` | 7 passed, 128 deselected; one pre-existing escape-sequence warning | 12.32 s |
+| `-m pytest tests/release/test_release_gates.py` | 134 passed | 4.44 s |
+| `tools/release/check_package_architecture_manifest.py` | passed; long-term slimming targets still unmet | not recorded |
+
+Negative control: from `/Users/rogeriojorge/local/GKX-worktrees/planreview`,
+set `PYTHONPATH=$PWD/src JAX_ENABLE_X64=true` and run the same interpreter with
+`-m pytest --noconftest -o addopts='' -q
+/Users/rogeriojorge/local/GKX-worktrees/phase0-pr197/tests/validation/physics_gates/test_end_damping_physics.py`.
+This uses unchanged main solver source (authority branch has documentation
+changes only); `--noconftest` prevents the test worktree overriding imports.
+Expected failure in 16.10 s: peak |phi| =1.1249725794901433e163, above 1e-4.
+Inputs are embedded in the versioned test; no external reference file or
+generated scientific artifact is involved. This detects the original defect,
+not merely a test that passes on both implementations.
+
+Correction to step 0.1.1: its single-mode test does not reproduce the complete
+eleven-mode Cyclone artifact. Historical GPU bit-identity is not fresh replay
+evidence. Also replaced the published-branch rebase instruction with a
+history-preserving merge, consistent with §0.5.
+
+At verification, GitHub reports #197 MERGEABLE; CI run
+[34075132805](https://github.com/uwplasma/GKX/actions/runs/34075132805) queued,
+nightly-full skipped. No GPU job launched; no release or benchmark claim.
+Resume at 0.1.1: inspect this CI run, reproduce the full Cyclone artifact using
+the pinned deck/reference and explicit compute cap, then obtain maintainer
+merge approval. Do not mark 0.1 complete, merge #199 first, or advance an
+expensive later-phase campaign. The original checkout and unrelated worktrees
+remain untouched.
+
+## 2026-09-06 — Phase 0.1 replay preflight
+
+Question: does #197 at `73a8a8c4` reproduce all eleven Cyclone s-alpha
+gamma/omega rows in the tracked artifact on office GPU, including the
+half-time settling diagnostic? This is compatibility evidence, not new
+resolution-converged physics validation. Ledger target: Cyclone pre-197
+replay provenance; do not relabel other cases.
+
+Office is reachable; both RTX A4000s idle at preflight. Old GX Nyquist job
+PIDs 1767040/1767078 are absent; their files remain, completion not inferred.
+65 GB disk free; no cleanup performed. Fresh immutable git-archive snapshot:
+`/home/rjorge/gkx-phase0-pr197-20260906.ME6JGZ`.
+Python `/home/rjorge/venvs/dkx-gpu/bin/python`, 3.11.15, JAX 0.10.2.
+Reference `/home/rjorge/gx_refs_lin/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc`,
+SHA256 `5134216ca3cc475357e1c2acf25533061411da264950f026fc38028647ce9e27`.
+Use the tracked manifest/deck unchanged, float64, GPU 0, 75000 +37500 steps.
+Hard cap: 3600 s wall time, one GPU; stop on timeout, error or nonfinite
+history. No automatic parameter tuning. Outputs under `replay/cyclone` in
+the snapshot; do not overwrite the tracked artifact. Inspect differences
+before deciding whether an exact-reproduction gate is met.
+
+### Replay launch and independent Phase 0 repair checks
+
+First launch failed before integration (2.17 s): `--reference-dir` did not
+expand the deck's `$GX_PARITY_REF_DIR` geometry path. Restarted with that
+environment variable set; no input changes. Exact remote command, cwd above:
+
+```sh
+CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_PREALLOCATE=false \
+GX_PARITY_REF_DIR=/home/rjorge/gx_refs_lin PYTHONPATH=src timeout 3600 \
+/usr/bin/time -v /home/rjorge/venvs/dkx-gpu/bin/python -u \
+tools/comparison/build_gx_parity_matrix.py --cases cyclone_salpha_itg \
+--reference-dir /home/rjorge/gx_refs_lin --stem replay/cyclone
+```
+
+PID 2965025 (timeout parent 2965023), terminal session 77153. Live at 6m29s,
+GPU0 busy; not completed at that check. Driver CLI/environment consistency
+is a follow-up usability issue; setting the environment is the current workaround.
+
+#199 updated by a history-preserving merge of #197, commit `4e78e7bb`, pushed
+to `fix/r0-damping-path-consistency`. No solver algebra change. In
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-pr199`, interpreter as above,
+`PYTHONPATH=$PWD/src JAX_ENABLE_X64=true`, pytest `-o addopts='' -q`:
+
+- `tests/unit/linear/test_linear.py tests/unit/linear/test_linear_helpers_extra.py tests/validation/physics_gates/test_end_damping_physics.py -k damping`:
+  16 passed, 128 deselected, 20.66 s; one existing escape warning.
+- `tests/release/test_release_gates.py`: 134 passed, 2.23 s.
+- Architecture checker passes; no budget increases. #199 remains open.
+
+#201 independently rechecked at `53d86f01`, local worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-pr201`; immutable office
+archive `/home/rjorge/gkx-phase0-pr201-20260906.9RIQDR`:
+
+| Backend | Selection | Result |
+|---|---|---|
+| Mac CPU, f32 | physical compressed heat-flux gradients | 2 passed, 22.49 s |
+| Mac CPU, f32 default | complete `test_nonlinear_exb.py` | 51 passed, 41.14 s; 16 dtype/CFL/fit warnings; some tests explicitly enable x64 |
+| Office CPU, f32 | physical gradients + failure-isolation checks | 5 passed, 44.06 s |
+| Office GPU1, f32 | same selection | 5 passed, 51.88 s |
+| Mac, two logical CPUs, f64 | nonlinear RHS + fused trajectory sharding identity | 2 passed, 6.66 s |
+
+Office command prefix: `PYTHONPATH=src JAX_ENABLE_X64=false`, either
+`JAX_PLATFORMS=cpu` or `CUDA_VISIBLE_DEVICES=1 JAX_PLATFORMS=cuda
+XLA_PYTHON_CLIENT_PREALLOCATE=false`; `timeout 600` and the office interpreter,
+`-m pytest -o addopts= -q tests/unit/nonlinear/test_nonlinear.py -k
+'compressed_real_fft_heat_flux_window_gradient or compressed_gradient_isolation'`
+with `--junitxml=cpu-f32.xml` or `gpu-f32.xml`. Hashes respectively:
+`3ae025b19ad5da3ab4df0effa5f43f4c2a43af7e2505c518893e40cf03102c47`,
+`09882d3f8f7d27a4d71f9e05f20003feb2559bfbc1d4f6051363271a06cfa759`.
+Local sharding command uses `XLA_FLAGS=--xla_force_host_platform_device_count=2`
+and `tests/unit/parallel/test_parallel_linear_velocity.py -k
+'species_hermite_rhs_reproduces_the_serial_nonlinear_rhs or species_hermite_trajectory_and_fused_traces_match_serial'`.
+These are correctness smoke checks, not fresh speed or saturation evidence.
+
+### Phase 0.1.4: preserve and extract, without merging the research branch
+
+Pushed `wip/r0-end-damping-rate-local` at `48b90099`, preserving both local
+commits `447d724f` and `48b90099`; original branch untouched. First coherent
+extraction: [#207](https://github.com/uwplasma/GKX/pull/207),
+`test/phase0-fourier-contract` at `3b60d61e`, stacked on #199. Extracts the
+three frequency/map/DFT tests from `f4d5d1b5`, `447d724f`, `48b90099`;
+documents the NumPy DFT contract without republishing historical GX residuals.
+No new files, no source changes, net zero test lines, no manifest increases.
+
+In `/Users/rogeriojorge/local/GKX-worktrees/phase0-fourier-contract`, same
+local interpreter, `PYTHONPATH=$PWD/src`, separate `JAX_ENABLE_X64=false/true`:
+`-m pytest -o addopts='' -q tests/unit/operators/test_linear_streaming.py
+tests/unit/linear/test_linear.py tests/unit/linear/test_linear_helpers_extra.py
+-k 'fft_highest or linked_fft_maps or grad_z_periodic'`: 14 passed in each
+process, 4.87/4.31 s. In-memory mutation of `jnp.fft.fftfreq` reversing only
+the even-grid Nyquist sign: exactly four even-grid cases fail, four odd-grid
+cases pass (3.28 s); no production-file mutation. This independently checks
+the oracle's ability to detect the convention defect.
+
+Ruff 0.16.4 lint/format, strict Sphinx HTML and architecture pass. The isolated
+venv lacks ruff; used `/Users/rogeriojorge/Library/Python/3.11/bin/ruff` after
+checking its version. Docs output `/tmp/gkx-phase0-fourier-docs`.
+No reference spectrum or release artifact changed. PR #202 stays open until
+the remaining independent repairs and fixed-rate migration are dispositioned.
+Preparation of these bounded independent checks does not satisfy the Phase 0
+merge exit. Explicit merge approval requested; none received at this entry.
+
+### Completed eleven-mode replay and endpoint extraction
+
+#197 `73a8a8c4`: office replay session 77153 exited 0, 18:34.50 whole-command
+wall time, peak host RSS 1280184 KiB. Primary-scan timer 770.1413 s excludes
+the half-time scan; concurrent CPU/other-GPU checks mean this is not an
+isolated speed benchmark. All eleven ky, gamma, omega, reference values, both
+half-time shifts and convergence flags compare exactly to the tracked
+Cyclone record. Settled count remains 10/11. Only row-schema difference:
+`within_build_reproducibility_floor=null` is newly present; do not claim
+whole-file byte identity. The driver's 177.505 MiB JAX allocator peak is not
+total device memory: nvidia-smi observed about 15 GiB during execution.
+Keep those measurements separately scoped.
+
+SHA256 in `/home/rjorge/gkx-phase0-pr197-20260906.ME6JGZ`:
+
+| File | SHA256 |
+|---|---|
+| `replay/cyclone.csv` | `3072687d5ce0695dad48da5a701da988a384cdb0a3c58bd563938d3e9b16bb06` |
+| `replay/cyclone.json` | `e8fbecf844668d7a08d2178f43018dc3339a3195adb8af890dab9903280ee604` |
+| `docs/_static/gkx_gx_linear_parity_matrix.json` | `6bb9a4fd419ea1ac05338a5bf1e63116d8694b90857c4eb3d222fbc885bc308e` |
+| `tools/gx_parity_matrix_manifest.toml` | `3157a9b2fcb49cf510944c1822390f9f7d2dc317cb71a386c7e51106d83b8fc6` |
+| `tools/comparison/fixtures/parity/cyclone_salpha_itg.toml` | `e828bd40f56d63de4c89e8be2a4f11268357ac466034c96087ab1186f93042e6` |
+
+Evidence posted to #197, comment 5564439104. The original reference's known
+damping-coverage limitation remains: this replay restores compatibility, not
+independent predictive validation. The authoritative no-release policy also
+supersedes #197's old recommendation to issue 2.0.1.
+
+[PR #208](https://github.com/uwplasma/GKX/pull/208), `ce38e3ac`, branch
+`fix/phase0-linear-endpoint`, extracts `f00abafd`/`1571a9e6` from #202,
+stacked on #199. Both explicit linear facades now shorten the actual final
+step to t_max, even below dt_min; no damping-rate redesign. Three files,
+net +3 lines; no manifest increase. In worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-linear-endpoint`, local Python
+as above, `PYTHONPATH=$PWD/src JAX_ENABLE_X64=true`:
+
+- `-m pytest -o addopts='' -q tests/unit/solvers/test_time_integrators.py -k stops_at_requested_time`:
+  16 passed, 41.20 s, across fixed/adaptive, RK3/RK4, diagnostics/plain, JIT/eager.
+- Same absolute test path with `--noconftest`, cwd/PYTHONPATH of #199:
+  all 16 fail at t=.12 rather than .1, 42.28 s (dt=.03, dt_min=.02).
+- Full time-integrator file: 93 passed, 56.35 s. Existing scatter-dtype warnings
+  remain; no tolerance changes. Ruff 0.16.4 and architecture gates pass.
+
+### Recover terminal GX spatial controls; no new GX solve
+
+Both original jobs completed successfully on September 5. Source directory
+`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`, stems `full96`, `full192`.
+GNU time logs certify exit 0, 35:07.34 / 1:06:52 whole-command wall time
+(GX internal runtimes 35.082804 / 66.828008 min); use the retained `.time`
+files for exact external timing rather than the internal timer. No speed claim.
+Binary hash matches `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536`;
+both input hashes match the launch record above.
+
+Reused the unchanged `gx-damping-coverage-20260905.8w5DhH/audit-refined-gx.py`.
+Read-only symlink views at `/home/rjorge/gx-nyquist-audit-20260906.kMqkuF/{full96,full192}`
+map each stem's `.log/.time` to `run.log/time.log`, as that script requires.
+Run with `--root <view> --stem <stem> --binary <corrected-root>/gx
+--binary-sha256 <hash above> --input-sha256 <launch hash>
+--gkx-csv <campaign>/results/salpha_rate50_nl32_nm96[_nz192]_t300.csv`.
+Both audits exit 0. Inputs/binary unchanged; no live NetCDF read or restart.
+
+Verified actual Nz96/192, Nl32, Nm96, one species, ky=.550000011920929;
+1501 diagnostic samples and 16 field samples, both ending at
+T=300.0000142492354, matching restart time; dt=.0020000000949949026.
+Each output/field/restart file has 264/42/2 finite numeric arrays.
+**Metadata caveat remains:** `/Geometry/nperiod` is garbage (0 / -1582686208),
+although root nperiod=2 and actual theta lengths are correct. Finiteness is
+not metadata validation; do not use these geometry scalars for plotting.
+
+| Record | Output NetCDF SHA256 |
+|---|---|
+| prior 12-ky corrected GX | `d5d834349e2ac3b8c8c4aae3a0e0ad8e2b5a779bc9c32a6e64196437e468a4f9` |
+| reduced-mode Nz96 | `50f9912652f39a0648fb22f55ec57ba1a705caf105c0f4840114ceb683fe894e` |
+| reduced-mode Nz192 | `7f83248fcbac3ce21e641a88377221a2be277948c1c30bbb8e1896e056b94024` |
+
+All 1501 omega/gamma samples for the selected mode are bit-identical between
+the full and reduced-ky Nz96 runs: the proposed reduced-mode control is now
+verified for this case. Float64 accumulation of the last 30% gives:
+
+| Nz | GX gamma | GKX gamma | GX omega | GKX omega |
+|---|---|---|---|---|
+| 96 | .02487663027237762 | .024852092124449224 | .5049278882813295 | .5049331701718024 |
+| 192 | .024965570033620838 | .024938243056538495 | .5047703091955502 | .5047786677125604 |
+
+GKX CSV hashes: `90efe742d9f8f5ac948f3b9fbb9227402d5edfcbc260a8f5ee914e673ac66439`
+and `94592ebea869f2096cff94bbeec58426eb8a4b7ebdf4c989e0dab537e37f2bc1`.
+Gamma changes +.3575% in GX and +.3467% in GKX under this spatial refinement;
+matched last-window gamma differences are -.09864% / -.10946%.
+However GX half-window shifts are -.6050% / -.5124%, comparable to those
+changes. Do not promote a sub-percent convergence claim from these values.
+This is recovered fixed-rate research-branch evidence, not a rerun of current
+main, velocity convergence, a corrected full atlas, or nonlinear transport.
+
+### Combined-stack validation (local integration only)
+
+Worktree `/Users/rogeriojorge/local/GKX-worktrees/phase0-integration`, local
+branch `review/phase0-integration`, commit `1c7c7472`: combines #196/#200/#201,
+#197/#199, #207 and #208 without merging any PR or modifying main. The only
+integration conflict was the architecture manifest. Measured combined counts:
+88981 source lines, 86651 test lines; no dropped assertions. Remote immutable
+archive `/home/rjorge/gkx-phase0-integration-20260906.o4aD19`.
+
+- CPU f64: 397 passed in 215.24 s over the full linear, linear-helper,
+  streaming, time-integrator, end-damping-physics and release-gate files;
+  30 existing dtype/escape warnings.
+- CPU f32: physical compressed-flux gradients and isolation checks,
+  5 passed in 27.98 s.
+- GPU1 f64: damping, endpoint, highest-mode and linked-map selections across
+  linear/streaming/time-integrator/sentinel files: 39 passed in 182.22 s;
+  16 existing scatter warnings. Remote `gpu-contracts.xml`.
+- Two GPUs f64: nonlinear species/Hermite RHS and fused-trajectory identity,
+  2 passed in 17.34 s; remote `two-gpu.xml`.
+- XML SHA256 respectively:
+  `76bb54eb2ae9eff90a62c664d9f15fccf7ecbe78189277c5e723b6b15bc9721b`,
+  `b9fde32b9df277b51142e97ab05087e76f3dd46066406bab43bb34d2b1df4478`.
+- Architecture and scoped Ruff pass. No performance claim from concurrent
+  checks; no long-time AD or EM qualification inferred from these tests.
+
+Combined CPU invocation (same local interpreter and environment as above):
+
+```sh
+python -m pytest -o addopts='' -q tests/unit/linear/test_linear.py \
+tests/unit/linear/test_linear_helpers_extra.py \
+tests/unit/operators/test_linear_streaming.py \
+tests/unit/solvers/test_time_integrators.py \
+tests/validation/physics_gates/test_end_damping_physics.py \
+tests/release/test_release_gates.py
+```
+
+GPU contract invocation uses the same paths except linear-helper/release,
+`-k 'damping or stops_at_requested_time or fft_highest or linked_fft_maps'`,
+`--junitxml=gpu-contracts.xml`, CUDA_VISIBLE_DEVICES=1, JAX_PLATFORMS=cuda,
+JAX_ENABLE_X64=true, XLA_PYTHON_CLIENT_PREALLOCATE=false, PYTHONPATH=src,
+and `timeout 900` with the office interpreter. The two-GPU selection/command
+is the earlier two-logical-CPU selection with CUDA_VISIBLE_DEVICES=0,1,
+JAX_PLATFORMS=cuda, timeout 600 and `--junitxml=two-gpu.xml`.
+
+Resume at Phase 0.1: inspect latest CI on exact PR heads, obtain explicit
+maintainer merge approval, then merge in the declared order. #207/#208 are
+reviewable independent #202 extractions; do not close #202 wholesale. The
+fixed-rate opt-in, remaining research-branch dispositions, API/warmup contracts,
+evidence ledger and velocity anomaly remain open. No release or main merge.
+Latest checks: #197 has 32 success, 5 pending, 1 skipped; #199 has 8 success,
+29 pending, 1 skipped. Do not infer final CI success from the local tests.
+Final authoritative-document checks: 134 release gates pass (2.40 s), strict
+Sphinx passes (`/tmp/gkx-phase0-authority-docs`), whitespace clean. All runs
+launched in this execution are terminal; office now has other users' workloads,
+which were neither interrupted nor treated as ours. Recheck before using GPUs.
+
+## 2026-09-07 — approved merges and recoverable branch cleanup
+
+Maintainer explicitly approved the repair merges and safe branch deletion,
+including admin override where necessary. #197 merged as `ca4e5169`; #199
+retargeted to main and merged as `0c016bd1`. Both reviewed heads had 41 green
+checks and one skipped nightly check. #199 required admin override for stale
+base status. No force-push to main or protection-setting change.
+
+Branch-deletion preflight: verified self-contained bundle of all 209 refs at
+`/Users/rogeriojorge/local/GKX-branch-backup-20260907.p7LZPA/all-refs.bundle`.
+Each candidate below exactly matches the head SHA of a merged PR and is
+neither the head nor base of an open PR. Squash-merged heads need this PR-tip
+check: ancestry alone would retain them. Unmerged/divergent work, authoritative
+and superseded plan branches, WIP backups and checked-out local branches are
+not deletion candidates. The bundle preserves original commits, not just the
+squashed main content. Delete remote refs only with exact-SHA leases.
+
+| Remote branch candidate | Merged PR | Saved head |
+|---|---|---|
+| `api/a1-2-public-types` | #165 | `8a3d67003a5ce2f88d5f6600d9a27238e849a969` |
+| `api/a1-3-prepared-simulation` | #166 | `d9cd2045ea51175b5f65bb3b03f53bcbb230f2b6` |
+| `ci/release-first-run-gate` | #188 | `32b3a5d5c568d4cdae42e59a03252fcda574091b` |
+| `cli/a2-1-consolidation` | #167 | `2b5c0d2ac48eea956bc36f507f4d90f97ef3e23e` |
+| `core/a1-1-import-graph` | #164 | `823c7f372fc03b6d6bff95c6b0985955b1c50f46` |
+| `docs/d-first-run-and-linkcheck` | #186 | `f3ed745c2d5ceabd51417dc036fc1c3eff722018` |
+| `fix/end-damping-per-step` | #197 | `73a8a8c41a37b5d68bb0e49e28dd25a47a5bc311` |
+| `fix/linear-rhs-demo-seed` | #190 | `2c7b1ef64a6013d625f2453a9fad8015a3fb01fc` |
+| `fix/reproducible-release-artifacts` | #195 | `c895a2dd4fe4591a5fe604749cae2f66297d7ed3` |
+| `fix/scan-level-strategy-whitelist` | #189 | `ef9a96a89cbae275145a214ed5160b618b466a46` |
+| `fix/vmex-mirror-solved-artifacts` | #191 | `7aa99d925847c0f0e4a4ed5d030166caab677352` |
+| `geometry/b1-1-report-eviction` | #168 | `a8f661277857634bc47881fc2d34f9d62024c279` |
+| `perf/cold-start-eager-compiles` | #187 | `7ffc0ea89fb70f5e83a190b07b85055c13b000f6` |
+| `plan/h0-rebaseline` | #163 | `a8e1950e5e7e8ded318eeef6cf28af603d79f317` |
+| `refactor/r4-flatten-and-fuse` | #185 | `2d665f5fd5ab0630de8df160feaddb617e212c64` |
+| `solvers/b2-1-remove-diffrax` | #169 | `d266d7421b03ed22b1f78903d4c8af2e55f45cf9` |
+| `test/readme-parity-claims-gated` | #193 | `8b03dc244cedfb1f9cc2ed3668e7e5d5fface9fd` |
+| `tests/c1-1-nonlinear-consolidation` | #170 | `5ca781bfdb7f0a38a954d3ee19001cbc750bd44e` |
+
+Restore any deleted remote branch locally with
+`git fetch <bundle> refs/remotes/origin/<name>:refs/heads/<name>`, then
+`git push origin refs/heads/<name>:refs/heads/<name>` if it should be public.
+Deletion results follow below; this inventory is the preflight, not a claim
+that every ref was already removed.
+
+**Completed:** all 18 remote refs above deleted atomically with exact-SHA
+leases; 85 unused local refs deleted with `git update-ref -d <ref> <old-sha>`.
+Every tip matched a merged PR. Excluded open PR heads/bases, checked-out
+branches, detached worktree HEADs and divergent/unpublished work. No worktree,
+source file or history object was deleted; no garbage collection performed.
+Full 103-ref recovery inventory (names, original SHAs, merged PRs):
+`/Users/rogeriojorge/local/GKX-branch-backup-20260907.p7LZPA/branch-deletions.md`.
+Restore a local ref with `git fetch <bundle> refs/heads/<name>:refs/heads/<name>`.
+
+#207 merged as `99963b45` from `3b60d61e` after 41 successful checks. #196 and
+#208 admin merge attempts were rejected: required `ci-required` is expected
+on the current base. Protection is strict and enforced for administrators;
+auto-merge is disabled. Neither protection settings nor statuses were altered.
+Updated #196 to `77d7370d` and #200 to `b2bd0d43` with history-preserving merges;
+only shared architecture-manifest conflicts required resolution. #196's local
+compressed-gradient x64 selection passes (2 tests, 26.08 s).
+
+Opened integration [#209](https://github.com/uwplasma/GKX/pull/209), branch
+`merge/phase0-approved-repairs`, head `237104718309d32fcf8e21b03a4aca0d7d5c4e0c`,
+from `/Users/rogeriojorge/local/GKX-worktrees/phase0-approved`. It preserves
+#196/#200/#201/#208 heads and current main. Its **entire tree**, not merely
+source/tests, equals tested integration `1c7c7472`:
+`7b551fd765410b7154f0128ce771c000259607d3`. Existing evidence therefore applies:
+397 CPU f64 tests, 5 f32 checks, 39 GPU checks and 2 dual-GPU checks (above).
+Fresh architecture gate passes: 88981 source / 86651 test lines.
+Fresh required CI run `34132704484` is queued; do not infer remote CI success
+from the local/GPU evidence. Merge #209 with **merge**, never squash, after CI;
+verify main ancestry and all four original PR states before recording completion.
+No new physics claims, release, plan merge or wholesale #202 merge authorized.
+
+Resume at Phase 0.1: complete that integration, then disposition the remaining
+#202 repairs and explicit fixed-rate opt-in. Phase 0.2 API/warmup contracts,
+evidence ledger and velocity anomaly remain open. Branch cleanup does not
+resolve those scientific or interface gates.
+
+While integration CI waits, extracted one further Phase 0 numerical guard in
+[#210](https://github.com/uwplasma/GKX/pull/210), head `19515c2e`, branch
+`fix/phase0-laguerre-finite`, based on main `99963b45`. Worktree:
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-laguerre-guard`.
+Reimplements #202 commit `93062763` concisely: reject nonfinite Laguerre
+round-trip errors and make the error message accurate. Existing test is
+parameterized over 1.01, NaN and infinity; two files, net four lines, no new
+dependency or per-step computation. This is cache-construction validation,
+not a new collision model or velocity-convergence result.
+
+Negative control before source fix: NaN and infinity both fail because the
+old guard does not raise; finite degraded case passes (2 failed / 1 passed,
+1.49 s). Fixed source: all 50 core-numerics tests pass in 6.07 s:
+
+```sh
+PYTHONPATH=$PWD/src JAX_ENABLE_X64=true \
+  /tmp/gkx-plan-review-20260906/bin/python -m pytest -o addopts='' -q \
+  tests/unit/core/test_core_numerics.py
+```
+
+Ruff check/format and architecture gates pass; no budget adjustment on this
+base. After #209 merges, refresh #210 against main and remeasure the combined
+test-line budget (one test line added); do not drop a test to satisfy a cap.
+#210 is not included in #209's prior GPU evidence or approved repair batch.
+At 14:31 UTC, #209 still has 37 queued jobs and one skipped nightly job, no
+assigned runners; GitHub's public status reports Actions operational. Queue
+cause is not established. #196/#200/#201/#208/#209/#210 remain unmerged;
+#206 and #202 remain open intentionally.
+
+## 2026-09-07 — resume: differentiable species-state placement
+
+Rechecked the authoritative plan and open PRs. #209 remains open at `23710471`;
+GitHub finally assigned one runner after the initial queue, but required CI
+has not passed. No merge, protection change or branch deletion this step.
+
+Next bounded #202 extraction is [#211](https://github.com/uwplasma/GKX/pull/211),
+`fix/phase0-species-state-ad` at `24eca522`, based on main `99963b45`. Worktree:
+`/Users/rogeriojorge/local/GKX-worktrees/phase0-state-ad`. It independently
+extracts `19e066dd`/`0441e4d8`: remove the unconditional tracer rejection in
+`prepare_electrostatic_species_inputs`. Its existing `from_host` helper already
+preserves tracers. Concrete device placement, equations and kernels unchanged.
+Source shrinks by two lines. The existing EM trajectory test grows by 15
+physical lines (14 architecture-counted); no test file added.
+
+For fixed parameters, linear evolution implies
+`J(s) = ||G_T(s G0)||² + ||phi_T(s G0)||²`, `J'(1) = 2 J(1)`.
+The test activates Apar/Bpar and compares serial/species-pmap, eager/outer-JIT
+derivatives. Negative control before source fix: both eager and JIT cases fail
+with the expected traced-state ValueError (2 failed, 7.29 s).
+Fixed focused selection: 4 pass in each of separate precision processes,
+10.86 s x64-enabled and 11.13 s f32. The EM test promotes its initial state
+to complex128 for x64; derivative tolerances are 1e-10/1e-12 there and
+8e-5/1e-7 in f32. Other existing fixture tests retain complex64 states.
+Known fixture scatter-downcast warnings remain in x64; no warning suppression.
+
+```sh
+PYTHONPATH=$PWD/src JAX_ENABLE_X64=true \
+XLA_FLAGS=--xla_force_host_platform_device_count=2 \
+/tmp/gkx-plan-review-20260906/bin/python -m pytest -o addopts='' -q \
+tests/unit/parallel/test_parallel_linear_velocity.py -k species_pmap --tb=short
+# Repeat in a fresh process with JAX_ENABLE_X64=false.
+```
+
+Ruff check/format, architecture gate and strict Sphinx pass (one new heading
+underline warning corrected before final successful build at
+`/tmp/gkx-state-ad-docs`). Full four-logical-CPU module is running; its result
+must be recorded separately, not inferred from the focused selection.
+Office check: both RTX A4000s at 93% utilization, 12337/12415 MiB allocated.
+Did not launch GPU work or interrupt others. This is linear AD/routing
+evidence, not EM physics validation, turbulent restart sensitivity or speedup.
+
+Remaining #202 source review: the streaming-owner change removes A/dt scaling;
+it is part of the rejected unconditional rate migration, not an unported
+Fourier-frequency fix. Keep it coupled to the explicit fixed-rate opt-in design.
+Collision-table/generator/interpolation changes remain Phase 6 evidence work,
+not part of these small repairs. Next: finish #209 checks and ancestry-preserving
+merge; refresh #210/#211 on main with measured combined budgets and CI; continue
+the explicit absorber input/migration contract without changing legacy defaults.
+
+**Broader validation completed:** 70/70 tests in
+`tests/unit/parallel/test_parallel_linear_velocity.py` pass in 307.10 s with
+`JAX_ENABLE_X64=true`, `XLA_FLAGS=--xla_force_host_platform_device_count=4`,
+`PYTHONPATH=$PWD/src`, the same interpreter and `pytest -o addopts='' -q --tb=short`.
+There are 27 existing fixture scatter-downcast warnings, not suppressed.
+No local test process remains running from this step.
+
+Requested cancellation of redundant CI runs `34131850773` (#196 at `77d7370d`)
+and `34132278037` (#200 at `b2bd0d43`): both exact heads are ancestors of #209,
+whose fresh complete-tree CI is the merge gate. GitHub accepted both requests;
+their cancellation conclusion was not yet populated at the final check.
+Main CI and all integration checks retained. #209 currently has 2 successful
+checks, 35 unfinished, one skipped nightly; no merge attempted on partial CI.
+The four original repair PRs still require the ancestry/state verification
+described above after #209 merges. #210/#211 are not merged or GPU-certified.
+
+## 2026-09-07 — additive fixed-rate absorber contract
+
+Opened [#212](https://github.com/uwplasma/GKX/pull/212), branch
+`fix/phase0-fixed-rate-optin`, head `37a9c0be`, based on main `99963b45`.
+Worktree: `/Users/rogeriojorge/local/GKX-worktrees/phase0-rate-optin`.
+
+Contract: optional `[time] damp_ends_rate = nu` becomes a differentiable
+`LinearParams.damp_ends_rate` pytree leaf. Explicit `nu >= 0`, including zero,
+overrides legacy amplitude on timestep-aware and timestep-free routes. When
+absent, legacy A/dt (or A without a timestep) remains. Runtime validation
+rejects negative/nonfinite values and combination with scale-by-dt=true.
+One `LinearParams.end_damping_strength` resolver replaces both ordinary assembly
+and mixed species/Hermite implementations. No new file or dependency.
+
+Mathematical gate: for isolated `dG/dt = -nu G`, explicit Euler/RK2/RK3/RK4
+produce `R(-dt nu)`, with derivative `-dt R'(-dt nu)`; the legacy case remains
+`R(-A)`, derivative `-R'(-A)`. The existing RK tests cover both, at dt=.002/.2.
+Linked-domain Euler increments test actual assembly/integration: proportional
+to dt for a rate, invariant for legacy amplitude. JIT/pytree reverse checks
+cover dt=None/0/.002/.2, including zero derivative with respect to overridden A.
+Runtime tests load TOML, check serialized config values and invalid inputs.
+
+Focused command, x64-enabled Mac CPU, 34 pass in 9.22 s:
+
+```sh
+PYTHONPATH=$PWD/src JAX_ENABLE_X64=true \
+/tmp/gkx-plan-review-20260906/bin/python -m pytest -o addopts='' -q \
+tests/unit/linear/test_linear.py tests/integration/runtime/test_runtime_runner.py \
+-k end_damping --tb=short
+```
+
+Negative-control subprocess replaced the resolver with a wrapper that sets
+`damp_ends_rate=None` before calling the original. All four
+`fixed_end_damping_rate_pytree` cases fail (0.34 s). Repository files were not
+mutated by this control. Ruff, architecture gate and strict Sphinx pass;
+docs at `/tmp/gkx-rate-optin-docs`, log `/tmp/gkx-rate-optin-docs.log`.
+Measured source/test architecture counts: 88978 / 86616; reconcile these
+against combined main after #209 rather than overwriting other repairs' counts.
+
+Broader linear/runtime/config/end-damping tests and the mixed species/Hermite
+four-logical-CPU selection are running; final results follow below. No new
+GPU result or coupled-EM physical validation claimed. Both office GPUs retain
+~12 GiB allocated to other workloads, which were left untouched.
+
+This is an additive stage, not completion of Phase 0.1: no reference deck was
+converted, no historical result recertified, no old scale-by-dt key removed.
+Next migration must record A/dt_reference provenance, reject ambiguous adaptive
+reference conversions, and replace the deprecated key with a useful migration
+error. Do not silently reinterpret old decks. #209 currently has eight successful
+checks and 29 unfinished plus one skipped nightly; it is not merge-ready.
+
+Broader rate-opt-in CPU validation completed: **298 passed, 1 skipped**,
+227.45 s, 53 unsuppressed warnings, with the same interpreter, PYTHONPATH,
+`JAX_ENABLE_X64=true`, `pytest -o addopts='' -q --tb=short`, paths:
+`tests/unit/linear/test_linear.py`,
+`tests/integration/runtime/test_runtime_runner.py`,
+`tests/integration/runtime/test_runtime_config.py`,
+`tests/validation/physics_gates/test_end_damping_physics.py`.
+Warnings include existing dtype-downcast and under-resolved short-run fits;
+passing smoke tests do not certify converged growth/transport values. Separate
+release-gate run on the same code head: 134 passed in 3.15 s.
+
+Mixed species/Hermite comparison completed: **2 passed**, 414.88 s, two existing
+downcast warnings. Command uses `JAX_ENABLE_X64=true`,
+`XLA_FLAGS=--xla_force_host_platform_device_count=4`, the same interpreter and
+`pytest -o addopts='' -q tests/unit/parallel/test_parallel_linear_velocity.py
+-k mixed_species_hermite_electrostatic_rhs_matches_serial_production_route --tb=short`.
+Both legacy (None) and explicit rate (.4) compare all active dissipation routes
+against serial. No speedup claim from these compilation-heavy CPU tests.
+All local jobs launched for this step are terminal. Resume at the outstanding
+merge gate, then complete the reference-conversion/migration stage above.
+
+## 2026-09-07 — Phase 0.4: the evidence ledger, and what it found in the GX references
+
+Branch `phase0/evidence-ledger` at `b7fab7ed`, based on main `99963b45`;
+[#213](https://github.com/uwplasma/GKX/pull/213). Worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase04-ledger`. Planning-independent:
+no solver or scientific change, no published number moved.
+
+Delivered plan.md 0.4.1, 0.4.2 and 0.4.3, and drafted 0.4.4:
+
+- `tools/evidence_ledger.toml`, 14 rows: the seven README parity percentages,
+  Landau, collision verification, nonlinear AD/FD, runtime/memory, the
+  saturation-policy figure, and the two QA figures. Each row carries artifact,
+  generator, reference, reference rank, tier and status. 8 passing,
+  6 provisional.
+- `tests/release/test_evidence_ledger.py`, 14 tests. Generalises #193: the
+  case-to-column map moved out of test code into the ledger, so publishing a
+  number is a data change. Negative controls, each failing exactly one test:
+  KAW 0.0004% -> 0.9004%; KBM row pointed at a missing CSV; clamp-bound KBM row
+  marked passing; a rank-3 hash deleted.
+- `tools/comparison/fixtures/gx_goldens/README.md` and `upstream_report.md`:
+  GX commit `bc2fe552` (upstream HEAD `3865a537`), GX's own gate (gamma 1e-3,
+  omega 5e-3), SHA-256 of all five shipped `*_correct.out.nc`, and the clamp
+  derivation. Reference outputs stay untracked.
+
+**Reference-validity finding, verified from pristine GX source, not the local
+instrumented tree.** `grad_parallel_linked.cu:169-173` builds one launch grid
+`dG_all.z = min(65535, Nz*Nl*Nm)` and its comment claims the kernels carry a
+grid-stride loop in z. `linkedCopyBackAll` and `linkedAccumulateBackAll` do:
+both open with
+`for (int idzlm = __umul24(blockIdx.z,blockDim.z)+threadIdx.z; idzlm < nz*nMoms; idzlm += __umul24(blockDim.z,gridDim.z))`.
+`dampEnds_linked` (`device_funcs.cu:3149`) does not: `idzlm = get_id3()`, no
+loop, no `gridDim.z`. With `blockDim.z = 1` it covers `idzlm < 65535` only.
+
+`Nz` is the extended grid: `parameters.cu:755-757` sets
+`ntgrid = ntheta/2 + (nperiod-1)*ntheta`, `Nz = 2*ntgrid`. An earlier note in
+this log used `Nz = 96` without recording that rescale; the rescale is real, so
+the number stands, but the derivation is now written down.
+
+| GX golden | ntheta | nperiod | Nz | Nl | Nm | Nz*Nl*Nm | undamped | share | moments |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Cyclone s-alpha adiabatic | 32 | 2 | 96 | 16 | 48 | 73,728 | 8,193 | 11.11% | m 43-47, part of 42 |
+| Cyclone Miller adiabatic | 32 | 2 | 96 | 16 | 48 | 73,728 | 8,193 | 11.11% | same |
+| Cyclone Miller kinetic | 32 | 2 | 96 | 16 | 48 | 73,728 | 8,193 | 11.11% | same |
+| KBM Miller | 32 | 2 | 96 | 16 | 48 | 73,728 | 8,193 | 11.11% | same |
+| W7-X ITG | 256 | 1 | 256 | 8 | 16 | 32,768 | 0 | 0% | none |
+
+Consequence for the plan. The four affected goldens are the references behind
+the README's Cyclone 5.51%/6.83% and KBM 20.0% gamma rows, which Phase 1.1.1
+and 1.1.4 were to close. Those rows are now `provisional`: the reference omits
+end damping on its top Hermite moments, so the disagreement is not attributable
+to GKX either way. This is not evidence that GKX is correct. Phase 1.1 must
+regenerate them from a repaired, labelled GX build before the rows can move.
+
+It also bears on Phase 0.5. The absorber is missing exactly where Hermite
+recurrence is strongest, so any GX-referenced velocity ladder run above the
+clamp compares against a reference whose high-m content is unabsorbed; at
+Nz=96, Nl=32, Nm=96 the covered fraction is 65,535/294,912 = 22%. GKX's own
+Nl 24->32 swing is a GKX measurement and is not explained by this, but a
+GX-referenced ladder at those resolutions is uninformative until repaired.
+
+Not done: no GX rebuild, no rerun of any reference, no upstream ticket filed
+(the report text is in the fixtures directory, ready to send). W7-X and the
+analytic rows are unaffected.
+
+Next: Phase 0.5 on merged #197, and plan.md 1.1 gains an explicit
+regenerate-the-reference step before the Cyclone and KBM rows can close.
+
+## 2026-09-07 — Phase 0.5 opening diagnostics: two hypotheses refuted, two divergences found
+
+No runs yet. Source-level comparison of GKX against pristine GX at `bc2fe552`
+(not the locally instrumented tree), plus one numeric check. Nothing changed in
+`src/`; this entry records what the ladder must be run against and corrects two
+errors in the plan and its research report.
+
+**Refuted: the collisionless-deck hypothesis.** The research report and
+plan.md 0.5.1 both specified the baseline as "GX App. G.1: ν_ii=1e-2 Dougherty,
+no hypercollisions". GX's own shipped deck
+`benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in` — the deck
+that produced `itg_salpha_adiabatic_electrons_correct.out.nc` — sets
+`vnewk = 0.0`, `hypercollisions = true`, `closure_model = "none"`,
+`ntheta=32, nperiod=2, nlaguerre=16, nhermite=48, y0=20, boundary="linked",
+t_max=150, scheme="rk4"`. It is collisionless with hypercollisions on, matching
+GKX's shipped deck. The plan's baseline is corrected to the deck; the appendix
+text is not what the reference encodes.
+
+**Refuted: the "2.3 vs 2.5" prefactor.** `src/linear.cu:232` reads
+`nu_hyp_m = nu_hyper_m*(p + 0.5)/powf(M, p + 0.5)*2.3*vt*abs(gradpar)` with
+`M = Nm_glob - 1`, and `hypercollisions_kz` applies `-nu*powf(m,p)*g` for `m>2`.
+GKX's `_hypercollision_kz_source` uses the same 2.3, and `cache_arrays.py:66`
+sets `m_norm_kz = max(Nm - 1, 1)` with `m_norm_kz_factor = (p+0.5)/sqrt(m_norm_kz)`
+and `m_pow = (m/m_norm_kz)**p_hyper_m`, mask `m > 2`. Algebraically identical.
+The 2.5 in the research report came from the paper text, not the code.
+
+**Confirmed divergence 1: `p_hyper_m`.** GX `parameters.cu:185` defaults it to
+`fmin(20, nm_in/2)`; GKX `params.py:150` fixes it at 20.0. Equal for Nm >= 40.
+Below that they differ, and the top-moment damping coefficient `nu*M^p` differs
+with them:
+
+| Nm | GX p | GKX p | GX nu*M^p | GKX nu*M^p |
+|---:|---:|---:|---:|---:|
+| 16 | 8 | 20 | 5.048 | 12.174 |
+| 24 | 12 | 20 | | |
+| 32 | 16 | 20 | | |
+| 48 | 20 | 20 | 6.878 | 6.878 |
+
+**Confirmed divergence 2: default branch.** GX `parameters.cu:190-192` defaults
+`hypercollisions_const=false` and `hypercollisions_kz=true` (the `hypercollisions`
+key is an alias for the kz branch). GKX `params.py:152-153` defaults
+`hypercollisions_const=1.0`, `hypercollisions_kz=0.0` — the opposite model.
+Shipped decks set both explicitly and are unaffected; a Python caller on default
+`LinearParams` is not.
+
+Neither divergence is Nl-dependent at fixed Nm=48, so **neither explains the
+Nl 24->32 swing**. Both must be fixed before the Nm rungs {16,24,32} or the
+W7-X deck (Nm=16) mean anything, which is why plan.md 0.5.6 now fixes them
+first, in one small PR, with the Cyclone deck's numbers unaffected (Nm=48,
+explicit branch) and the W7-X and low-Nm rows re-extracted.
+
+Still open for the Nl swing: fit window versus Krylov eigenvalue, fixed dt,
+Laguerre top-l convention against GX's zero-padding, absorber strength, and
+top-moment pile-up in W(l), W(m). Those need runs on merged #197.
+
+Files: plan.md 0.5.1/0.5.2/0.5.6 corrected;
+plan/research/2026-09-06_hermite_laguerre_convergence.md marked at both errors.
+
+## 2026-09-07 — Phase 0.5.6 tested and revised: do not flip the hypercollision defaults
+
+Followed plan.md 0.5.6 as written, measured it, and it was wrong. Recording the
+contradiction and correcting the plan, per plan.md 0.6.
+
+Experiment: on a throwaway worktree off main `99963b45`, flipped
+`LinearParams.hypercollisions_const` 1.0 -> 0.0 and `hypercollisions_kz`
+0.0 -> 1.0 to match GX's defaults, changing nothing else, and ran
+`tests/unit/linear tests/unit/operators tests/validation/physics_gates`.
+
+Result: **321 passed, 9 failed, 6 skipped** (223 s). Failures:
+
+- `test_hermite_hierarchy_physics.py::test_zero_drive_is_damped_at_every_hermite_truncation[8|16|32]`
+- `test_hermite_hierarchy_physics.py::test_the_unstable_branch_converges_in_hermite`
+- `test_geometry_physics_contracts.py::test_s_alpha_retains_field_strength_variation`
+- `test_geometry_physics_contracts.py::test_geometry_params_helper_carries_the_parallel_scale`
+- `test_geometry_physics_contracts.py::test_electromagnetic_zonal_solve_is_continuous_in_beta`
+- `test_linear.py::test_shift_invert_nearest_pair_passes_physical_outer_residual`
+- `test_linear.py::test_linked_boundary_growth_gradient_matches_finite_difference`
+
+The zero-drive failures identify the mechanism, and it is physical rather than a
+stale expectation. The constant branch damps every mode with `m>2` or `ell>1`
+irrespective of `k_parallel`; the kz branch damps proportionally to `|k_z|`. At
+`k_z -> 0` the kz branch leaves the truncation's top-moment numerical mode
+undamped, so a zero-drive case reports growth >= 0 and the gate fires exactly as
+it is designed to. GKX's constant default is load-bearing.
+
+Revised disposition, now in plan.md 0.5.6: keep GKX's default, document that GX
+defaults to the kz branch so a Python caller comparing against GX selects it
+explicitly, and gate that the GX-comparison decks keep `hypercollisions_kz` with
+`hypercollisions_const = 0` (they already do). `p_hyper_m` is left as a separate
+decision to settle by measurement on the Nm ∈ {16,24,32} rungs and the W7-X
+deck, since it does not touch the Nm=48 parity deck.
+
+The experiment worktree and branch were deleted; nothing was committed to
+`src/`. No claim here about the Nl 24->32 swing, which remains open and needs
+runs.
+
+## 2026-09-07 — correction: the hypercollision measurement was taken below the jax floor
+
+Withdrawing the disposition recorded earlier today in "Phase 0.5.6 tested and
+revised". That entry reported nine gate failures from flipping
+`hypercollisions_const`/`hypercollisions_kz` to GX's defaults, and concluded
+from `test_zero_drive_is_damped_at_every_hermite_truncation` that GKX's constant
+branch is load-bearing. **Eight of those nine failures were the environment.**
+
+The interpreter used was **jax 0.9.2**, below the `jax>=0.10.1` floor
+`pyproject.toml` declares. On *unmodified* `main` that interpreter fails:
+
+- `tests/unit/objectives/test_autodiff_solver_objectives.py`, four tests, with
+  `TypeError: eig() got an unexpected keyword argument 'enable_eigvec_derivs'`
+  at `src/gkx/objectives/core.py:348`. That opt-in first shipped in jax 0.10.1
+  and the source comment says so.
+- `tests/validation/physics_gates/test_hermite_hierarchy_physics.py`, four
+  tests, downstream of the same missing capability.
+
+Confirmed the same 8 failures with `JAX_ENABLE_X64=true` and with
+`JAX_ENABLE_X64=true GKX_X64=1` (the nightly job's environment), so it was not a
+precision flag. `pyproject.toml` has no `addopts`, so this is what a plain
+`pytest` does.
+
+Re-measured in a fresh venv on **jax 0.10.2**, `JAX_ENABLE_X64=true GKX_X64=1`,
+over `tests/unit/objectives`, `tests/validation/physics_gates`,
+`tests/unit/linear`, `tests/unit/operators`:
+
+| Tree | Result |
+|---|---|
+| `main` unmodified | all pass, exit 0 |
+| defaults flipped to GX's | first failure `test_linear.py::test_shift_invert_nearest_pair_passes_physical_outer_residual`, `RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.98747, tolerance=0.06` |
+
+The flip run stopped there under `--maxfail=1`, so the true failure set is still
+unmeasured. The zero-drive Hermite gates **pass** with the flip on a conforming
+jax, so the mechanism argument previously given is retracted. What stands: the
+flip is not free, and it pushes a Krylov outer residual an order of magnitude
+past its gate — a conditioning consequence, not the physical one claimed.
+
+Actions taken: plan.md 0.5.6 rewritten with the retraction, the corrected table
+and a three-step next action; plan.md 0.1 gains an environment rule, since a
+measurement below the floor is not evidence.
+
+Housekeeping: the experiment had left
+`src/gkx/operators/linear/params.py` modified in the `phase04-ledger` worktree
+(the machine rebooted mid-run, before the revert). Reverted; that worktree backs
+#213 and its tree is again source-clean. `/tmp` was cleared by the reboot, so
+the venv was rebuilt.
+
+Environment note for whoever resumes: office
+(`plasmaworkstation.physics.wisc.edu:3281`) has now been unreachable on
+2026-09-05, 06 and 07. Local load hit 117 on 14 cores after the reboot; check
+`uptime` before starting a sweep.
+
+## 2026-09-07 — Phase 0.2: the deck's [run] table, and a dependency-floor guard
+
+Branch `phase0/api-contracts` at `ce360d0d`, based on main `99963b45`;
+[#214](https://github.com/uwplasma/GKX/pull/214). Worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase02-api`.
+
+Closes plan.md 0.2.1 and part of 0.2.4.
+
+The loader read `[run]` and discarded it; `RuntimeConfig` had no field for it.
+So `gkx.prepare(gkx.load("examples/linear/axisymmetric/cyclone.toml"))` reported
+`n_laguerre 4, n_hermite 8` for a deck that asks for 16 and 48, and a resolved
+deck written back by a run omitted the table entirely. Three defaults were in
+play at once: prepare's (4, 8), the linear runtime's (24, 12), the nonlinear
+runtime's (4, 8), and the deck's (16, 48).
+
+`RuntimeConfig` gains a frozen `run` section (ky, Nl, Nm, solver, method, dt,
+steps). `None` distinguishes "the deck did not say" from a chosen value, and
+`to_dict` emits `[run]` only when the deck carried one, so decks without it
+still write byte-identical resolved decks. `prepare_simulation` resolves
+explicit argument, then deck, then the runtime's kind-aware default.
+
+Also adds the jax floor guard in `tests/unit/api/test_public_types.py`, reading
+the requirement from `pyproject.toml` so the two cannot drift. This is the check
+whose absence cost the withdrawn measurement recorded earlier today.
+
+Verified on jax 0.10.2, `JAX_ENABLE_X64=true GKX_X64=1`: `tests/unit/api`,
+`tests/unit/core`, `tests/release`, `tests/integration/runtime` pass, exit 0.
+Negative controls: restoring the hard-coded (4, 8) fails the shipped-deck and
+runtime-default tests and nothing else; the guard fails on jax 0.9.2, passes on
+0.10.2. Eleven checkers pass, ruff clean, manifest budgets moved with reasons.
+
+Status of my open PRs at this point: **#213 (evidence ledger) is CLEAN with 41
+successful checks and one skipped, ready for maintainer merge.** #206 (the plan)
+re-queued CI after the corrections above. #214 just opened.
+
+Still open in Phase 0.2: `warmup()` remains a no-op for the linear path (0.2.2),
+the no-argument demo still warns over CFL (0.2.3), and the f32 geometry
+tolerance (rest of 0.2.4) is untouched. 0.3 still needs CONTRIBUTING.md and the
+HSX decision.
+
+## 2026-09-07 — Phase 0.2.3: the demo printed a growth rate 12.9 percent wrong
+
+Added to [#214](https://github.com/uwplasma/GKX/pull/214) at `0fc52224`,
+retitled "Phase 0.2: report only what was actually computed" since all three of
+its changes are the same contract.
+
+The no-argument demo at `dt = 0.03`, 500 steps printed `gamma = 0.089982`. The
+certified Krylov eigenvalue of the demo's own resolved deck is
+`eig = 0.103263 - 0.285915j`, residual `2.28e-06`, converged. That is **12.9
+percent low**, and the run emitted four warnings saying so: `dt` exceeded the
+estimated CFL-stable `0.02197`, and `t_max = 15` gave the fitter 1.34
+e-foldings against the `gamma*t_max >= 7` it wants.
+
+Coarseness was not the fault. `Nl = 7, Nm = 14` is deliberate, and a coarse
+operator still has a definite eigenvalue. Nothing tested the printed number:
+`test_cli_without_args_runs_default_demo` monkeypatches `run_runtime_linear`,
+so it checks plumbing.
+
+Measured through the CLI on jax 0.10.2:
+
+| dt | steps | t_max | wall | gamma | vs 0.103263 | warnings |
+|---|---:|---:|---:|---|---:|---:|
+| 0.03 | 500 | 15 | 3.1 s | 0.089982 | −12.9% | 4 |
+| 0.03 | 2600 | 78 | 4.5 s | 0.103295 | +0.03% | 1 (CFL) |
+| 0.02 | 2000 | 40 | 4.1 s | 0.097011 | −6.1% | 3 |
+| 0.02 | 4000 | 80 | 7.0 s | 0.103283 | +0.02% | 0 |
+
+Adopted `dt = 0.02`, `steps = 4000`. New gate
+`test_the_demo_reports_the_eigenvalue_of_the_case_it_builds` runs the demo's
+settings through time integration and the Krylov solver and requires agreement
+within 1 percent; 36 s in float64 against a 45-minute shard budget.
+
+Two things learned about this repo's test configuration, worth recording:
+
+- `pytest.ini` (not `pyproject.toml`) carries
+  `addopts = -q --maxfail=1 --disable-warnings -m "not slow"`. The `--maxfail=1`
+  is why the earlier hypercollision flip run stopped at its first failure and
+  its blast radius is still unmeasured.
+- **No CI job runs `slow` tests.** `ci.yml:488` clears addopts and re-adds
+  `-m "not slow"`, and the nightly full suite inherits the same filter from
+  `pytest.ini`. Three tests currently carry the marker and therefore never run
+  in CI. Marking a new gate `slow` makes it dead; the demo gate is unmarked
+  deliberately. Whether those three should run is an open question for Phase 3.
+
+README corrected: it claimed the demo "emits CFL and under-resolution warnings
+to say so", which is no longer true, and claimed 20 s.
+
+Verified: 689 passed, 1 skipped, 0 failed across `tests/validation/physics_gates`,
+`tests/unit/api`, `tests/release`, `tests/integration/runtime` on jax 0.10.2
+with `JAX_ENABLE_X64=true GKX_X64=1`. Eleven checkers, ruff clean.
+
+Remaining in 0.2: `warmup()` is still a no-op on the linear path (0.2.2), and
+the f32 geometry tolerance (rest of 0.2.4). 0.3 still needs CONTRIBUTING.md and
+the HSX decision.
+
+## 2026-09-07 — Phase 0.2.5: five shipped decks the README advertises did not load
+
+Added to [#214](https://github.com/uwplasma/GKX/pull/214) at `78494e46`.
+
+The CLI never calls `RuntimeConfig.validate`; the Python facade does. So the two
+entry points disagreed about what a valid case is, and nothing checked the one
+the README points at. Scanning all 38 shipped `.toml` under `examples/` and
+`benchmarks/` through `gkx.load(...).validate()` found **7 failures in 3
+classes**:
+
+| Class | Count | Cause |
+|---|---:|---|
+| `physics.linear and physics.nonlinear cannot both be true` | 5 | deck sets `nonlinear = true`, leaves `linear` at its default `true` |
+| `geometry.model = 'vmec' requires geometry.vmec_file` | 1 | `examples/common_input.toml`, a template the CLI completes |
+| `[[species]] entries must be provided as an array of tables` | 1 | a GX input file shelved among GKX decks |
+
+The five include `runtime_cyclone_nonlinear.toml`, which the README advertises
+as *the* nonlinear example. `gkx.load` on it raised ValueError.
+
+Adding `linear = false` to the five is behaviour-neutral, verified rather than
+assumed: a five-step run of the Cyclone deck writes bit-identical `Diagnostics`
+before and after, because the nonlinear runtime never read the flag.
+
+`examples/common_input.toml` is genuinely a template: `geometry.model = "vmec"`
+and its own comment says the CLI injects `vmec_file` from the wout positional.
+The README called it "the shipped default deck", which reads as runnable; it now
+says template and says why.
+
+`examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml`
+is **a GX input file, not a GKX deck** — GX's `[Dimensions]`, `[Domain]`,
+`nonlinear_mode` and array-style `[species]`, while declaring
+`schema_version = 1` so it reads as a GKX deck sitting among GKX decks. It is
+referenced by `tests/release/test_release_gates.py:3600`, so it was left in
+place and exempted rather than moved. **This is a thread for 0.3.4:** the README
+publishes an HSX parity row (0.577%/0.273%) whose reference has no regenerating
+deck, and the one file named "reference_hsx_nonlinear..." turns out to be a GX
+input. Whoever takes 0.3.4 should start here.
+
+New gate in `tests/release/test_release_gates.py`: every shipped deck loads and
+validates, or carries a written exemption; a second test stops an exemption
+outliving its file or shrinking to something unauditable. Verified negatively —
+reverting the five decks fails the gate and names them.
+
+617 passed, 1 skipped across `tests/release`, `tests/unit/api`,
+`tests/integration/runtime` on jax 0.10.2. Eleven checkers, ruff clean.
+
+Status: **#213, #214 and #206 are all CLEAN with 41 successful checks**, awaiting
+maintainer merge. Remaining in 0.2: `warmup()` is still a no-op on the linear
+path (0.2.2) — note that `prepare` genuinely does not compile a linear case,
+because the linear runtime picks its solver per call, so the honest fix is
+probably to correct the docstring and report the state rather than force a
+compile for a solver that may not be used. 0.3 needs CONTRIBUTING.md and the
+HSX decision.
+
+## 2026-09-07 — Phase 0.3.4 investigation: what the HSX parity row actually rests on
+
+No code change. Establishing whether the README's HSX row can be regenerated,
+so 0.3.4 can be decided rather than deferred again.
+
+**What the row is.** README publishes HSX at `gamma 0.577%`, `omega 0.273%`.
+Recomputed from `docs/_static/hsx_linear_t2_scan.csv`: 0.577% and 0.273%,
+over **4 ky rows** (0.0476 to 0.190). So the published number is faithful to its
+artifact, and the ledger gate covers that. The question is only whether the
+artifact can be rebuilt.
+
+**What it compares against.** `tools/gx_parity_matrix_manifest.toml` records
+`hsx_itg` as "generated by this campaign; no upstream case",
+`reference_output = HSX/itg_hsx_adiabatic_electrons.out.nc`, Nl=8, Nm=16. That
+is **reference rank 5** on plan.md 3.1: self-run, never published.
+
+**Whether it can be regenerated.** Three checks:
+
+1. `tools/comparison/fixtures/parity/hsx_itg.toml` **exists** (Nx=1, Ny=34,
+   Nz=256, ntheta=256, nperiod=1, y0=10, tprim=3, fprim=1, imex2, dt=0.005,
+   t_max=200).
+2. Its geometry is `model = "eik"` with
+   `geometry_file = "$GX_PARITY_REF_DIR/HSX/itg_hsx_adiabatic_electrons.out.nc"`
+   — GKX reads the flux-tube geometry **out of GX's own output file**. Worth
+   stating plainly: this row compares the two solvers on one geometry, it does
+   not test GKX's geometry chain.
+3. That output file is **not on this machine**, and GX upstream does not ship
+   an HSX benchmark at all — `benchmarks/linear/` in the checkout at `bc2fe552`
+   holds only `ITG_cyclone`, `ITG_w7x`, `KAW`, `KBM`.
+
+So the row cannot be regenerated from anything in either repository. It needs a
+fresh GX run, which needs a GPU, and the office box has now been unreachable on
+2026-09-05, 06 and 07.
+
+**What is recoverable.** HSX equilibria are on this machine, so the chain is not
+lost, only the GX half:
+
+- `/Users/rogeriojorge/local/vmec_equilibria/HSX/QHS_vac_ns201_fixed/wout_HSX_QHS_vacuum_ns201.nc`
+- `/Users/rogeriojorge/local/GX_stellarator_zenodo/data_generation_and_analysis/20240415-01-database_of_configurations/wout_HSX_QHS_vacuum_ns201_aScaling.nc`
+- `/Users/rogeriojorge/local/GSS2024_PPPL_Simons_SummerSchool_GK/equilibria/wout_HSX.nc`
+- plus copies under `senac/`, `STELLOPT*/`, `ESSOS_main/`, `spectrax_gk_test/`
+
+Which of these the original run used is **not recorded anywhere**, which is the
+provenance gap itself.
+
+Also relevant, found while gating the shipped decks:
+`examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml`
+is a **GX input file** carrying `[Dimensions]`, `[Domain]`, `nonlinear_mode` and
+GX's array-style `[species]`, while declaring `schema_version = 1`. It is a
+nonlinear HSX case, not the linear one behind the parity row, but it is the only
+HSX GX input in the tree and belongs in this decision.
+
+**Clamp status:** Nz·Nl·Nm = 256·8·16 = 32,768, below the 65,535 launch clamp,
+so the GX end-damping defect does **not** affect this reference. HSX is
+provisional for provenance alone.
+
+**Recommendation for 0.3.4.** Do not delete the row yet, and do not leave it as
+it stands. Concretely, in order:
+
+1. Add `reference_index_count = 32768`, `reference_clamp_binds = false` and the
+   full provenance gap to the HSX ledger row, so the artifact carries its own
+   caveat. This is the next PR after #213 merges; #213 is green and should not
+   be reopened for it.
+2. When a GPU is reachable, rebuild GX for HSX from a **named** wout out of the
+   list above, record the SHA-256 of wout and output, and regenerate the scan.
+3. If no GPU becomes available before Phase 1 closes, delete the README row
+   and the atlas entry under the #178 rule rather than shipping a number whose
+   reference nobody can rebuild. Four ky points against an unrecorded
+   equilibrium is not a parity claim.
+
+The row stays `provisional` in the ledger either way; what changes is whether it
+becomes `passing` or disappears.
+
+## 2026-09-07 — Phase 0.3.3: CONTRIBUTING.md
+
+Branch `phase0/contributing` at `f15fe869`, based on main `99963b45`;
+[#215](https://github.com/uwplasma/GKX/pull/215). Worktree
+`/Users/rogeriojorge/local/GKX-worktrees/phase03-contrib`.
+
+A JOSS review-checklist item the repository did not satisfy: community
+guidelines for contributing, reporting issues and seeking support.
+
+Written around the failure modes this project has actually hit, so it is worth
+reading rather than boilerplate: the jax >= 0.10.1 floor and why an older jax
+looks like broken physics; the nightly invocation
+(`MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1`); that `pytest.ini` holds
+`--maxfail=1 -m "not slow"`, so a one-failure report has not measured the rest
+and `slow` tests never run anywhere; one change per PR with tests stated
+alongside the failure they were verified against; the ledger rule that
+publishing a number is a data change and a self-run reference is rank 5 and
+never called published; manifest budgets moving with a written reason; pinned
+claim wording that must not be paraphrased; worktrees for anything measured.
+
+README gains a Contributing section. 134 release gates, all checkers, ruff
+clean.
+
+Phase 0 status after this step:
+
+| Item | State |
+|---|---|
+| 0.1 PR dispositions | other session, #208-#212 open |
+| 0.2.1 prepare carries the deck resolution | done, #214 |
+| 0.2.2 warmup is a no-op | **open** |
+| 0.2.3 demo reports its own eigenvalue | done, #214 |
+| 0.2.4 precision-specific tests / jax floor | floor guard done in #214; f32 geometry tolerance **open** |
+| 0.2.5 shipped decks load through the public API | done, #214 |
+| 0.3.1 README | done on the plan branch |
+| 0.3.2 CITATION.cff | done on the plan branch; Zenodo DOI at release |
+| 0.3.3 CONTRIBUTING.md | done, #215 |
+| 0.3.4 HSX decision | investigated; needs a GPU or the row goes |
+| 0.4 ledger and GX goldens | done, #213 |
+| 0.5 velocity convergence | opened; two hypotheses refuted, blast radius unmeasured |
+| 0.6 remote state | office unreachable three days running |
+
+Open PRs in this lane: #213, #214, #215, and #206 for the plan itself.
+
+## 2026-09-07 — Phase 0.2.2: warmup was a no-op, and the summary agreed with it
+
+Added to [#214](https://github.com/uwplasma/GKX/pull/214) at `3ed459a0`.
+
+`PreparedSimulation.warmup` said "Force compilation now so a later timed call
+measures execution" and its body was `return self`. The docstring justified that
+by claiming preparation already compiles the nonlinear path. Measured, in a
+fresh process, on `runtime_kbm_nonlinear_short.toml` with `steps=5`:
+
+| step | before | after |
+|---|---:|---:|
+| prepare | 4.317 s | 4.3 s |
+| warmup | 0.000 s | 18.893 s |
+| first solve | 19.604 s | 0.000 s |
+| second solve | 0.000 s | — |
+
+Preparation builds the scan closure; XLA compiles when the scan first executes.
+So anyone calling warmup and then timing solve was timing the compiler — the one
+thing the method exists to prevent. `summary()` sided with the docstring rather
+than the machine: `compiled_at_prepare` was `kind == "nonlinear"`, asserting a
+compile that had not happened.
+
+warmup now runs the prepared closure once, which is the only way to force the
+compile (the scan exposes no separately lowerable handle), guarded so a second
+call is a no-op. `compiled_at_prepare` reports False, true of both kinds, and
+`warmed` is added so the distinction the old key pretended to draw exists.
+Linear stays unwarmed deliberately: its runtime picks a solver per call, so
+warming would compile one the next call may not use.
+
+Four tests on a 4x4x8 (2,4) case, ~5 s for the group, still a real compile
+(warmup 1.2 s against a 0.000 s solve). Negative control: restoring the no-op
+fails three of four and nothing else.
+
+**Found on the way, not yet fixed.** `gkx.prepare` cannot prepare **any**
+shipped nonlinear example. Scanning all decks through `gkx.prepare(gkx.load(f))`:
+
+| Failure | Count |
+|---|---:|
+| `prepared execution cannot stop early at saturation` | 11 |
+| missing untracked geometry (`FileNotFoundError`) | 4 |
+| the `common_input.toml` template | 1 |
+| the GX input file | 1 |
+
+`run_to = "saturation"` is the documented default for diagnosed nonlinear runs,
+and a prepared scan has a fixed compiled length, so the limitation is real, not
+a bug. But the escape is undiscoverable: `gkx.prepare(case, steps=5)` works and
+nothing says so. The README advertises preparing a nonlinear case for reuse
+while no shipped nonlinear deck can be prepared as written. Next action: make
+the error name the escape (`steps=` or `run_to = "t_max"`), and extend the
+shipped-deck gate from `load+validate` to `prepare` with a recorded inventory
+of which decks can be prepared and why the rest cannot.
+
+Phase 0.2 is now closed except the f32 geometry tolerance in 0.2.4.
+
+## 2026-09-07 — Phase 0.2 closed: prepare usability, and the suite's precision floor
+
+Two more PRs, stacked so they land in order behind #214.
+
+**[#216](https://github.com/uwplasma/GKX/pull/216) — the prepare refusal now has a
+way out.** `gkx.prepare` compiles one scan of a fixed length and refuses a deck
+whose `run_to` is `"saturation"`. Refusing is right: dropping the stop condition
+silently would return a simulation that integrates past where the deck asked it
+to stop. But the refusal was a dead end, and every shipped nonlinear deck sets
+saturation stopping, so `gkx.prepare` had **no working nonlinear example in the
+tree** while the README advertised preparing a case for reuse. The message now
+names both escapes (`steps=N`, or `run_to = "t_max"`) and what each costs. Two
+gates: one pins that the named escape actually prepares the deck, one records
+that no shipped deck fails `prepare` for a reason outside the two understood
+kinds. Negative control: the bare one-line message fails the escape gate only.
+
+**[#217](https://github.com/uwplasma/GKX/pull/217) — the s-alpha gate was testing
+the number format.** It asserted `abs(bmag.min() - 1/(1+eps)) < 1e-9` and failed
+at default precision by `5.9604645e-08`, which is `2**-24`, one float32 epsilon.
+The tolerance now scales with the dtype: `max(1e-9, 8*finfo(dtype).eps)`. In
+float64 that is still exactly 1e-9, so **no physics gate is loosened**. It keeps
+its teeth — a factor 1.0001 perturbation of the field-strength model fails at
+both precisions; 1.000002 fails only under float64, because the induced 1.65e-7
+shift is genuinely below float32 resolution.
+
+**The wider finding: this suite is x64-only in practice and nothing said so.**
+At default precision on jax 0.10.2, 17 tests fail — nonlinear window AD/FD,
+Krylov preconditioner and long-horizon propagator, the EM zonal solve, two
+geometry contracts. Their tolerances are float64-scale by nature; chasing each
+would weaken gates that work. `tests/conftest.py` now writes the precision in
+force to stderr when a switch is missing, and stays silent otherwise. It has to
+be stderr: `pytest.ini` passes `-q --disable-warnings`, so a plain `pytest`
+suppresses both a report header and a warning. Nothing is skipped, no tolerance
+relaxed.
+
+Phase 0.2 is now complete. Standing chain, each green before the next was cut:
+#214 -> #216 -> #217.
+
+Open in this lane: #206 (plan), #213 (ledger), #214, #215 (CONTRIBUTING), #216,
+#217. All were CLEAN with 41 checks when last polled.
+
+Still open overall: 0.3.4 HSX (needs a GPU or the row goes), 0.5 velocity
+convergence (blast radius unmeasured, `--maxfail=1` truncated the run), 0.6
+office unreachable four days.
+
+## 2026-09-07 — Phase 0.5.6 closed: the hypercollision blast radius is two tests
+
+The earlier measurement was truncated by `pytest.ini`'s `--maxfail=1`, so the
+plan carried an unmeasured blast radius. Redone with `--maxfail=0` on a scratch
+worktree off main `99963b45`, jax 0.10.2, `JAX_ENABLE_X64=true GKX_X64=1`,
+across `tests/unit/{linear,operators,solvers,objectives}` and
+`tests/validation/physics_gates`.
+
+Flipping `hypercollisions_const` 1.0 -> 0.0 and `hypercollisions_kz` 0.0 -> 1.0
+to match GX gives **exactly two failures**, both Krylov conditioning:
+
+- `unit/linear/test_linear.py::test_shift_invert_nearest_pair_passes_physical_outer_residual`
+  — `RuntimeError: shift-invert eigenpair failed the outer residual gate:
+  residual=0.98747, tolerance=0.06`
+- `unit/solvers/test_linear_krylov_core.py::test_field_corrected_shifted_preconditioner_removes_low_moment_coupling`
+  — the field-corrected residual stops beating 0.1x the hermite-line residual
+
+**No physics gate fails.** The zero-drive Hermite gates, which the withdrawn
+entry cited as proof that the constant branch is load-bearing, pass with the
+flip. That argument is dead; this is the replacement.
+
+Mechanism, from source rather than inference:
+`operators/linear/cache_arrays.py::hypercollision_damping` builds the diagonal
+the shifted preconditioner uses (`solvers_linear_krylov_algorithms.py:56`
+consumes it). It models the kz branch as `nu_hyp_m * m_pow * |kz|` using the
+**local** `cache.kz` array. The RHS applies the same branch through
+`_apply_parallel_hypercollision`, which for a linked domain routes through
+`abs_z_linked_fft` — nonlocal across chains. With the constant branch active the
+preconditioner's diagonal matches the operator; with the kz branch it does not.
+That is the leading explanation for a residual going 0.06 -> 0.987 and should be
+confirmed before either default moves.
+
+Disposition, now in plan.md 0.5.6: keep GKX's default, document that GX defaults
+to the kz branch so a caller comparing against GX selects it explicitly, and gate
+that the parity decks keep `hypercollisions_kz` with `hypercollisions_const = 0`
+(they already do). Matching GX is available once the preconditioner handles the
+kz form — bounded work with a named cause, not an open question.
+
+The scratch worktree was deleted; nothing was committed to `src/`.
+
+## 2026-09-07 — Phase 0.6 resolved, and 0.3.4 decided: the HSX row cannot stand
+
+**0.6, office is reachable again.** `plasmaworkstation` answers after three days
+down. Two idle RTX A4000s, load 1.00, 62 G free on `/home` (94% used). The two
+GX jobs from 2026-09-05 whose state was unknown both **completed cleanly**:
+neither PID 1767040 nor 1767078 is alive, and
+`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L` holds `full96` (35.1 min)
+and `full192` (66.8 min), each `Exit status: 0`. Nothing is at risk of being
+duplicated; the directory is 92 M and can stay. GX is built there at
+`3865a537`, upstream HEAD.
+
+**0.3.4, the HSX parity row.** The plan allowed regenerate-with-provenance or
+delete. It has to be delete, and not as a judgement call — the artifact
+contradicts its own declared generator.
+
+`docs/_static/hsx_linear_t2_scan.csv` has four ky rows spaced by
+`0.047619047619 = 1/21` exactly, so `dky = 1/y0` (`workflows/runtime/resolution.py:276`)
+puts the box at `y0 = 21`. Its declared generator,
+`tools/comparison/fixtures/parity/hsx_itg.toml`, sets `y0 = 10.0`, which would
+give `dky = 0.1`. **The tracked config cannot produce the tracked artifact.**
+
+W7-X is the control, and it passes: `w7x_linear_t2_scan.csv` has eight rows at
+`dky = 0.100000001` against its config's `y0 = 10.0`. So the check is sound and
+the failure is specific to HSX.
+
+`y0 = 21.0` is also exactly what
+`examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml`
+declares — the GX-format nonlinear file mis-shelved among GKX decks. That is
+suggestive of where the numbers came from, not proof.
+
+Everything else was already against the row:
+
+- GX ships **no HSX benchmark**. `benchmarks/linear/` at `bc2fe552` locally and
+  `3865a537` on office both hold only `ITG_cyclone`, `ITG_w7x`, `KAW`, `KBM`.
+- The reference output the manifest names,
+  `HSX/itg_hsx_adiabatic_electrons.out.nc`, is **not on this machine and not on
+  office**. `/home/rjorge/gx_refs_lin` has no HSX subdirectory, and
+  `gx_lin_refs_setup.sh` copies only those same four cases.
+- The wout was never recorded. Eight HSX equilibria exist locally; which one was
+  used is unknown.
+
+So even a successful GX run from the tracked config would compare **different
+modes** than the published row, on an equilibrium nobody can name. The number
+0.577%/0.273% is faithful to its CSV — the ledger gate confirms that — and the
+CSV is attributable to nothing.
+
+Regeneration remains possible and worth doing later as a **new**, declared case:
+office has the GPUs and GX, the W7-X deck is an exact template (its physics
+already matches the HSX parity config: `ntheta=256, nperiod=1, nhermite=16,
+nlaguerre=8, y0=10, t_max=200, tprim=3, fprim=1`), and a canonical equilibrium is
+at `vmec_equilibria/HSX/QHS_vac_ns201_fixed/wout_HSX_QHS_vacuum_ns201.nc`
+(nfp=4, ns=201, aspect 9.969, R=1.2114 m, a=0.12151 m, beta=0, iota 1.048-1.098,
+sha256 `a666187e934128dad37683cb7d19551622a58a638fdbd71c4da7943473be0671`). What
+it cannot do is defend the current number, because `torflux`, `alpha` and `npol`
+were never recorded and any choice makes a different case.
+
+**The coordinated edit, once #213 and the #214 chain land.** It spans both, so
+it is not safe to do piecemeal — removing the README row while #213's ledger
+still carries an HSX entry would fail `test_ledger_covers_every_published_parity_row`:
+
+1. `README.md` — drop the HSX row from the parity table.
+2. `tests/release/test_release_gates.py` — drop `"HSX"` from `_README_PARITY_SOURCES`.
+3. `tools/evidence_ledger.toml` (#213) — remove `L-lin-hsx`.
+4. `tools/benchmark_atlas_manifest.toml` — drop the `hsx` entries.
+5. `tools/gx_parity_matrix_manifest.toml` — remove the `hsx_itg` case, or keep it
+   marked unreproducible with this finding beside it.
+6. Keep `docs/_static/hsx_linear_t2_scan.csv` and the config in the tree as
+   evidence of what was published, with a note. Deleting the evidence of a
+   withdrawn claim is worse than keeping it.
+
+This is the #178 rule applied to the case it was written for.
+
+## 2026-09-07 — merge campaign: what the branch protection forces
+
+Started clearing the backlog. Fourteen PRs were open, which is the real problem:
+`main`'s protection is `strict = true` (branches must be up to date) with one
+required context, `ci-required`, and `enforce_admins = true`. So **every merge
+invalidates every other open PR** — each one goes BEHIND and has to be updated
+and re-run before it can land. There is no auto-merge on this repository
+(`enablePullRequestAutoMerge` is refused), so the queue is strictly serial at
+roughly one PR per CI cycle.
+
+That is worth stating in the plan as a throughput constraint, not just an
+annoyance: with a full run around 40 minutes, a 14-PR backlog is about a working
+day of wall-clock even when every PR is green. The remedy is fewer, larger,
+coherent PRs and prompt merging, not more parallel branches.
+
+A second constraint found the same way: **five open PRs each edit the same
+manifest line.** `tools/package_architecture_manifest.toml`'s
+`test_python_lines` baseline of 86568 is changed by #209 (to 86651), #211
+(86582), #213 (86801) and #214 (86899), and `installable_source_python_lines`
+at 88968 by #209 and #214. Whichever lands first leaves the rest stale, so each
+subsequent PR needs its baseline recomputed against the new `main` rather than
+merely re-run. Line-count baselines are a shared mutable counter, and that makes
+them a serialization point for anything that adds a file or a test.
+
+Merged so far: **#215** (CONTRIBUTING.md) as `4340d341`.
+
+Closed without merging: **#202**, the R0 fixed-rate draft. It is CONFLICTING
+against main and its independently justified repairs were already extracted as
+#210, #211 and #212, which is the disposition plan.md 0.1 specifies. Branch kept.
+
+Verified before touching them: **#209's file set is exactly the union of #196,
+#200, #201 and #208** — `.github/workflows/ci.yml`, `docs/quickstart.rst`,
+`operators/nonlinear/brackets.py`, `solvers_time_explicit*.py`, three test files
+and the manifest. So merging #209 retires four PRs, and those four are closed
+after it lands rather than before, so nothing is dropped if it fails.
+
+Planned order, each needing its own CI cycle: #210, then #209 (then close
+#196/#200/#201/#208), #211, #213, #214, #216, #217, #206. #212 has three failing
+checks and stays with its author.
+
+## 2026-09-07/08 — merge campaign, second pass: consolidation over serialization
+
+Merged: **#215** (CONTRIBUTING.md) `4340d341`, **#210** (nonfinite Laguerre
+guard) `cd449952`.
+
+Closed without merging: **#202**, superseded by the #210/#211/#212 split that
+plan.md 0.1 specifies.
+
+**Consolidated #213, #214, #216 and #217 into [#218](https://github.com/uwplasma/GKX/pull/218).**
+Not a stylistic choice — forced by two measured constraints:
+
+- `main` is `strict = true` with one required context (`ci-required`) and
+  `enforce_admins = true`, and `enablePullRequestAutoMerge` is refused. Every
+  merge pushes every other open PR out of date.
+- Those four PRs each edit the **same** `test_python_lines` baseline, and two
+  also edit `installable_source_python_lines`. Merging them one at a time leaves
+  each successor **numerically stale**, not merely behind: the baseline has to be
+  recomputed, not just re-run.
+
+A full CI cycle here is 40 minutes to 2.5 hours (#210's previous run: 14:29 to
+16:59). Four serial cycles with a baseline edit between each is most of a day;
+one consolidated cycle is one. The commits are preserved unchanged, both
+manifest comment histories are kept, and the baselines are the **measured**
+union rather than either branch's figure — 87277 test lines, 89117 source lines
+after merging main back in.
+
+Verified on the consolidated tree: 711 passed, 1 skipped across
+`tests/release`, `tests/unit/api`, `tests/validation/physics_gates`,
+`tests/integration/runtime`; 261 passed after the main merge; eleven checkers,
+ruff clean.
+
+Open PRs went 15 -> 9.
+
+Remaining queue, each needing its own cycle: #218 (in CI), then #209 — whose
+file set is exactly the union of #196, #200, #201 and #208, so those four close
+once it lands — then #211, then #206. #212 has three failing checks and stays
+with its author.
+
+**Process note worth acting on later.** Line-count baselines in
+`tools/package_architecture_manifest.toml` are a shared mutable counter, so any
+two PRs that add a file or a test collide there by construction. That makes them
+a serialization point independent of content. Either the check should compare
+against a computed value rather than a checked-in number, or the budget should
+live per-directory so unrelated work does not contend for one line.
+
+## 2026-09-08 — merge campaign, third pass
+
+Merged: **#218** (`2187135f`), the consolidated Phase 0 infrastructure — the
+evidence ledger, the `[run]`-table and `warmup` contracts, the prepare-refusal
+escape, and the dtype-scaled precision gate. That closed #213, #214, #216, #217.
+
+Opened **[#219](https://github.com/uwplasma/GKX/pull/219)**, consolidating #209
+and #211 the same way and for the same reason: their content does not overlap at
+all — the only shared file is `tools/package_architecture_manifest.toml` — but
+both move its line-count baselines, so a serial merge would leave the second
+numerically stale rather than merely behind.
+
+One thing to note for anyone repeating this. The first attempt produced a branch
+carrying only #209: the second `git merge` had refused because the first merge's
+conflict was still unresolved, and the later `git commit --no-edit` recorded only
+that first merge. It looked finished. The check that caught it was asking the
+branch directly whether #211's files were present
+(`git diff --stat origin/main..HEAD -- <its files>`), which returned nothing.
+Worth doing after any conflicted multi-merge: a clean `git log` is not evidence
+that every intended branch is in.
+
+#219 now carries both, verified by file set — `docs/parallelization.rst` and
+`solvers_linear_parallel_electrostatic.py` from #211 alongside #209's workflow,
+quickstart, brackets, both explicit-time facades and three test files — and it
+preserves every constituent head in its ancestry.
+
+Verified: 712 passed / 41 skipped, then 537 passed / 42 skipped after adding
+#211, on jax 0.10.2 with `JAX_ENABLE_X64=true GKX_X64=1`. Eleven checkers, ruff
+clean. Baselines are the measured union at each step: 89136 source lines, 87376
+test lines.
+
+When #219 lands it retires six PRs — itself, #209, #211, and the #196/#200/#201/#208
+whose file sets #209 covers exactly. That would leave **#206** (this plan) and
+**#212** (three failing checks, its author's) as the only open PRs, down from
+fifteen.
+
+## 2026-09-08 — merge campaign complete: fifteen open PRs down to two
+
+**#219 merged** (`7eb7627a`), retiring six: itself, #209 and #211 directly, and
+#196, #200, #208 which GitHub closed from its body.
+
+**#201 closed by hand after verifying it had actually landed.** It was the one
+that did not auto-close, and it read CONFLICTING, which looks like unmerged work.
+It is not: its head `53d86f01` is an ancestor of `main`, and
+`src/gkx/operators/nonlinear/brackets.py` on main is byte-identical to that
+branch. It stayed open only because its own base, `test/r0-f32-backend-probe`,
+had itself been merged, leaving the PR pointing at a base that no longer exists.
+Checked before closing rather than assumed — a DIRTY status is not evidence
+either way.
+
+Final tally: **#215, #210, #218, #219** merged; **#202, #213, #214, #216, #217,
+#201** closed as superseded or consolidated; **#196, #200, #208, #209, #211**
+retired by the consolidations. Two remain: **#206** (this plan) and **#212**
+(three failing checks, its author's).
+
+**#206 updated against the new main.** One conflict, in `README.md`: this branch
+still carried the 269-line rewrite inherited from #204, while `main`'s README had
+meanwhile grown to 520 lines with the corrections that actually mattered — the
+capability table, the Cite section, the demo's corrected resolution, the prepare
+paragraph, the CONTRIBUTING link. Resolved in `main`'s favour: #206 should be the
+plan, not a README rewrite. Shortening the README stays open as 0.3.1, separate
+work with its own evidence.
+
+Verified after the merge: 152 release-gate tests pass, all checkers pass, strict
+Sphinx builds, every relative link in plan.md resolves.
+
+Next, now that #218 put the ledger and the release gates on main, the queued
+**HSX deletion** from 0.3.4 is finally executable as a single coherent PR —
+README row, `_README_PARITY_SOURCES`, `L-lin-hsx`, the atlas entries, and the
+`hsx_itg` manifest case, keeping the CSV and config as evidence.
