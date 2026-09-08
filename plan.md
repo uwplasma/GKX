@@ -127,7 +127,7 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 
 | Area | Established | Not established |
 |---|---|---|
-| Linear ES | Krylov and dense eigenmodes; implicit eigenpair derivatives; parity scans recomputed by CI (KAW 0.0004%, ETG 0.04%, W7-X 0.27%, HSX 0.58%, Cyclone Miller 5.5%, Cyclone 6.8%, KBM 20%); every published number now carries an evidence-ledger row (#213) | Cyclone 5–7% and KBM 20% **not attributable**: their GX references omit end damping on Hermite m ≥ 42 of 48 (§3.7), so the reference must be regenerated before the rows can move; HSX reference has no deck, wout or generator; velocity convergence anomalous (Nl 24→32: −24.7%) |
+| Linear ES | Krylov and dense eigenmodes; implicit eigenpair derivatives; parity scans recomputed by CI (KAW 0.0004%, ETG 0.04%, W7-X 0.27%, HSX 0.58%, Cyclone Miller 5.5%, Cyclone 6.8%, KBM 20%); every published number now carries an evidence-ledger row (#213) | Cyclone 5–7% and KBM 20% **not attributable**: their GX references omit end damping on Hermite m ≥ 42 of 48 (§3.7), so the reference must be regenerated before the rows can move; HSX and W7-X scans depend on unrecorded `*_IMPORTED_ARGS` carrying their GX reference, and the GX parity manifest names a config that did not produce the HSX row (§0.3.4); velocity convergence anomalous (Nl 24→32: −24.7%) |
 | End damping | #197 restores GX's per-step contract (A/Δt) and reproduces the recorded artifact bit-identically at all 11 ky | Merged `ca4e5169`; historical 2.0.0 time-integrated numbers still require repaired-build evidence |
 | Nonlinear ES | Runtime, restart, chunked saturation stopping; tracked windows for Cyclone, Miller, KBM, W7-X, HSX | No statistical cross-code comparison; stopping rule uncalibrated; no Dimits bracket; no dataset comparison |
 | EM | Three-field solves with custom VJP; KAW golden; KBM two-field deck (`use_bpar=false`); per-species ES/A∥/B∥ flux channels; channel-sum test | No three-field linear reference; no nonlinear EM transport; no finite-β stellarator EM; energy identity not derived for the stored convention |
@@ -449,37 +449,48 @@ reachable.
 2. `CITATION.cff` (added). Mint a Zenodo DOI at 2.1.0 and add the badge.
 3. Add `CONTRIBUTING.md`: how to run tiers 0–2, the PR template (§14), the
    ledger rule.
-4. **HSX: delete the row.** Decided 2026-09-07 on evidence, not preference.
-   `docs/_static/hsx_linear_t2_scan.csv` is spaced by `dky = 1/21`, so its box is
-   `y0 = 21` (`dky = 1/y0`, `workflows/runtime/resolution.py:276`). Its declared
-   generator `tools/comparison/fixtures/parity/hsx_itg.toml` sets `y0 = 10`.
-   **The tracked config cannot produce the tracked artifact.** W7-X is the
-   control and is consistent (`dky = 0.1` against `y0 = 10`). On top of that: GX
-   ships no HSX benchmark at `bc2fe552` or `3865a537`, the named reference output
-   is absent locally and on office (`/home/rjorge/gx_refs_lin` has no HSX
-   subdirectory), and the wout was never recorded. The published 0.577%/0.273%
-   is faithful to its CSV and the CSV is attributable to nothing.
+4. **HSX: fix the provenance, do not delete the row.** *Corrected 2026-09-08;
+   the earlier entry here said delete, and it was wrong.*
 
-   The edit spans #213 and the #214 chain, so it lands only once both are in --
-   removing the README row while the ledger still carries `L-lin-hsx` fails
-   `test_ledger_covers_every_published_parity_row`:
+   The contradiction is real: `docs/_static/hsx_linear_t2_scan.csv` is spaced by
+   `dky = 1/21`, so `y0 = 21`, while
+   `tools/comparison/fixtures/parity/hsx_itg.toml` — the config the GX parity
+   manifest names — declares `y0 = 10`, `Nl = 8`, `Nm = 16`. What the earlier
+   entry got wrong was the cause. **That config is simply not the generator.**
 
-   - `README.md`: drop the HSX parity row.
-   - `tests/release/test_release_gates.py`: drop `"HSX"` from `_README_PARITY_SOURCES`.
-   - `tools/evidence_ledger.toml`: remove `L-lin-hsx`.
-   - `tools/benchmark_atlas_manifest.toml`: drop the `hsx` entries.
-   - `tools/gx_parity_matrix_manifest.toml`: remove or annotate `hsx_itg`.
-   - **Keep** the CSV and config in the tree as evidence of what was published.
-     Deleting the record of a withdrawn claim is worse than keeping it.
+   The artifact's real generator is documented, in a different file: the
+   `imported-linear-hsx` job in `tools/benchmark_refresh_manifest.toml` runs
+   `tools/comparison/compare_gx_imported_linear.py` against
+   `examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml`,
+   which has `y0 = 21`, `Ny = 96`, `Nz = 48`, `Nl = 4`, `Nm = 8`,
+   `torflux = 0.64`, `alpha = 0`, `npol = 1` — matching the CSV exactly. Its
+   equilibrium is **Nührenberg–Zille 1988 QHS**, regenerable from the tracked
+   `examples/vmec/input.NuhrenbergZille_1988_QHS` via `examples/vmec/generate_wouts.sh`.
+   So the scan is rebuildable, and the row stands.
 
-   Regenerating HSX as a **new**, declared case stays worthwhile and is now
-   feasible: office is back with two idle A4000s and GX at `3865a537`, the W7-X
-   deck is an exact template (`ntheta=256, nperiod=1, nhermite=16, nlaguerre=8,
-   y0=10, t_max=200, tprim=3, fprim=1` already match the HSX parity config), and
-   `vmec_equilibria/HSX/QHS_vac_ns201_fixed/wout_HSX_QHS_vacuum_ns201.nc`
-   (nfp=4, ns=201, aspect 9.969, iota 1.048-1.098, sha256 `a666187e...`) is a
-   canonical QHS vacuum equilibrium. That is Phase 1 work with declared
-   `torflux`, `alpha` and `npol` -- not a defence of the old number.
+   Two real defects remain, and **both apply to W7-X as well**, which is why
+   this is a provenance fix rather than a withdrawal:
+
+   - The decisive parameters live in unrecorded environment variables,
+     `HSX_IMPORTED_ARGS` and `W7X_IMPORTED_ARGS`, which carry the GX reference
+     (`--gx`, `--gx-input`, `--geometry-file`). Nothing records their values.
+   - The two manifests name different configs, and the two CSVs follow
+     different ones: W7-X's matches its **parity** config (`dky = 0.1`), HSX's
+     matches its **runtime** config (`dky = 1/21`). One of those pipelines is
+     mis-described in either case.
+   - The case is labelled HSX but its equilibrium is Nührenberg–Zille 1988 QHS.
+     That is a naming defect in a published table.
+
+   Actions: annotate `hsx_itg` in the GX parity manifest as not being the
+   published row's generator (done); point the ledger row at the real generator
+   and record the environment-variable gap for both stellarator rows (done);
+   record the `*_IMPORTED_ARGS` values the next time either scan is refreshed,
+   which is what moves these rows from `provisional` to `passing`; and decide
+   whether the published label should read Nührenberg–Zille QHS.
+
+   The lesson for the ledger: a `generator` field pointing at a config is not
+   provenance if a second manifest names a different one. The row must name the
+   **job** that produced the artifact, not a plausible config.
 
 ### 0.4 Ledger scaffold and GX goldens
 
@@ -1142,7 +1153,7 @@ needs an alternative allocation before its pilot.
 
 - [ ] 0.1 PR dispositions executed; planning PRs closed.
 - [ ] 0.2 five API/first-run contracts pass.
-- [x] 0.3 CITATION.cff and CONTRIBUTING.md (#215); HSX decision made — delete, on the config/artifact contradiction; the edit is queued behind #213 and the #214 chain.
+- [x] 0.3 CITATION.cff and CONTRIBUTING.md (#215); HSX decision made and then **corrected** — the row stands, its provenance was mis-recorded, and the unrecorded `*_IMPORTED_ARGS` gap it exposed applies to W7-X too.
 - [x] 0.4 ledger scaffold and GX goldens imported (#213); upstream clamp report drafted at `tools/comparison/fixtures/gx_goldens/upstream_report.md`, not yet filed.
 - [ ] 0.5 velocity-convergence table passing; anomaly resolved.
 - [ ] 1 linear atlas at rank ≤3; KBM two-field closed or diagnosed; pyrokinetics round-trip.
