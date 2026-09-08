@@ -1085,6 +1085,37 @@ gated scope sentences.
 
 ---
 
+### 11.1 Compute the size budgets instead of storing them
+
+**Accepted 2026-09-08.** `tools/package_architecture_manifest.toml` stores
+line-count and file-count baselines as literal numbers. Any two pull requests
+that add a file or a test edit the same line, so they collide regardless of
+content. That is a serialization point independent of what the work does, and it
+cost real time: it forced the two consolidations that cleared the September
+backlog, and it hid a genuine defect in #212 behind a merge conflict.
+
+The fix is to make the check derive its own comparison rather than diff against
+a checked-in figure.
+
+Sketch, to be designed properly when the work starts:
+
+- Keep the *targets* (`target`, `target_lines`) — they express intent and rarely
+  move. Drop the `baseline` literals.
+- Compare instead against the value computed on the merge base, so the question
+  becomes "did this change increase the count, and is the increase justified?"
+  rather than "does this number match a figure someone typed?".
+- Keep the written-justification requirement, which is the part that works:
+  today's comments beside each bump are genuinely useful history. Attach them to
+  the change rather than to the number.
+- Where a hard ceiling is wanted, express it as the target, not as a
+  ratchet that every unrelated PR has to renegotiate.
+
+Acceptance: two PRs that each add a test file can be prepared, run and merged in
+either order without touching the same line, and the checker still refuses an
+unjustified increase. Verify by constructing exactly that pair.
+
+---
+
 ## 12. Parked, with entry triggers
 
 | Item | Trigger to reopen |
