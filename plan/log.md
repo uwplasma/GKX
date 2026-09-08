@@ -10613,3 +10613,75 @@ that the parity decks keep `hypercollisions_kz` with `hypercollisions_const = 0`
 kz form — bounded work with a named cause, not an open question.
 
 The scratch worktree was deleted; nothing was committed to `src/`.
+
+## 2026-09-07 — Phase 0.6 resolved, and 0.3.4 decided: the HSX row cannot stand
+
+**0.6, office is reachable again.** `plasmaworkstation` answers after three days
+down. Two idle RTX A4000s, load 1.00, 62 G free on `/home` (94% used). The two
+GX jobs from 2026-09-05 whose state was unknown both **completed cleanly**:
+neither PID 1767040 nor 1767078 is alive, and
+`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L` holds `full96` (35.1 min)
+and `full192` (66.8 min), each `Exit status: 0`. Nothing is at risk of being
+duplicated; the directory is 92 M and can stay. GX is built there at
+`3865a537`, upstream HEAD.
+
+**0.3.4, the HSX parity row.** The plan allowed regenerate-with-provenance or
+delete. It has to be delete, and not as a judgement call — the artifact
+contradicts its own declared generator.
+
+`docs/_static/hsx_linear_t2_scan.csv` has four ky rows spaced by
+`0.047619047619 = 1/21` exactly, so `dky = 1/y0` (`workflows/runtime/resolution.py:276`)
+puts the box at `y0 = 21`. Its declared generator,
+`tools/comparison/fixtures/parity/hsx_itg.toml`, sets `y0 = 10.0`, which would
+give `dky = 0.1`. **The tracked config cannot produce the tracked artifact.**
+
+W7-X is the control, and it passes: `w7x_linear_t2_scan.csv` has eight rows at
+`dky = 0.100000001` against its config's `y0 = 10.0`. So the check is sound and
+the failure is specific to HSX.
+
+`y0 = 21.0` is also exactly what
+`examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml`
+declares — the GX-format nonlinear file mis-shelved among GKX decks. That is
+suggestive of where the numbers came from, not proof.
+
+Everything else was already against the row:
+
+- GX ships **no HSX benchmark**. `benchmarks/linear/` at `bc2fe552` locally and
+  `3865a537` on office both hold only `ITG_cyclone`, `ITG_w7x`, `KAW`, `KBM`.
+- The reference output the manifest names,
+  `HSX/itg_hsx_adiabatic_electrons.out.nc`, is **not on this machine and not on
+  office**. `/home/rjorge/gx_refs_lin` has no HSX subdirectory, and
+  `gx_lin_refs_setup.sh` copies only those same four cases.
+- The wout was never recorded. Eight HSX equilibria exist locally; which one was
+  used is unknown.
+
+So even a successful GX run from the tracked config would compare **different
+modes** than the published row, on an equilibrium nobody can name. The number
+0.577%/0.273% is faithful to its CSV — the ledger gate confirms that — and the
+CSV is attributable to nothing.
+
+Regeneration remains possible and worth doing later as a **new**, declared case:
+office has the GPUs and GX, the W7-X deck is an exact template (its physics
+already matches the HSX parity config: `ntheta=256, nperiod=1, nhermite=16,
+nlaguerre=8, y0=10, t_max=200, tprim=3, fprim=1`), and a canonical equilibrium is
+at `vmec_equilibria/HSX/QHS_vac_ns201_fixed/wout_HSX_QHS_vacuum_ns201.nc`
+(nfp=4, ns=201, aspect 9.969, R=1.2114 m, a=0.12151 m, beta=0, iota 1.048-1.098,
+sha256 `a666187e934128dad37683cb7d19551622a58a638fdbd71c4da7943473be0671`). What
+it cannot do is defend the current number, because `torflux`, `alpha` and `npol`
+were never recorded and any choice makes a different case.
+
+**The coordinated edit, once #213 and the #214 chain land.** It spans both, so
+it is not safe to do piecemeal — removing the README row while #213's ledger
+still carries an HSX entry would fail `test_ledger_covers_every_published_parity_row`:
+
+1. `README.md` — drop the HSX row from the parity table.
+2. `tests/release/test_release_gates.py` — drop `"HSX"` from `_README_PARITY_SOURCES`.
+3. `tools/evidence_ledger.toml` (#213) — remove `L-lin-hsx`.
+4. `tools/benchmark_atlas_manifest.toml` — drop the `hsx` entries.
+5. `tools/gx_parity_matrix_manifest.toml` — remove the `hsx_itg` case, or keep it
+   marked unreproducible with this finding beside it.
+6. Keep `docs/_static/hsx_linear_t2_scan.csv` and the config in the tree as
+   evidence of what was published, with a note. Deleting the evidence of a
+   withdrawn claim is worse than keeping it.
+
+This is the #178 rule applied to the case it was written for.
