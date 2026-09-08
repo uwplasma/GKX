@@ -406,7 +406,16 @@ path = "workflows/nonlinear.py"
 # 999 -> 1007: whitespace only, from the same sweep. Three reflowed call sites,
 # identical AST. The module was already one line under the default budget, so
 # the sweep is what crossed it, not new behaviour.
-baseline_lines = 1007
+# 1007 -> 1023: the prepare-refusal message. gkx.prepare compiles one scan of a
+# fixed length, so it refuses a deck whose run_to is "saturation", and every
+# shipped nonlinear deck sets exactly that -- so the refusal was a dead end with
+# no working nonlinear example of gkx.prepare anywhere in the tree, while the
+# README advertised preparing a case for reuse. The added lines are the two
+# escapes the message now names (steps=N, or run_to = "t_max") and the comment
+# recording why refusing is still correct: quietly dropping the stop condition
+# would hand back a simulation that integrates past where the deck asked it to
+# stop. No branch was added; the dispatcher's shape is unchanged.
+baseline_lines = 1023
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -872,7 +881,8 @@ recursive = true
 # 19.2 s; with the fix, warmup 18.9 s and solve 0.000 s. The added lines are the
 # one-shot guard, the warmed flag in the summary, and the docstrings that record
 # why forcing the compile means executing the closure once.
-baseline = 89098
+# 89098 -> 89114: the same prepare-refusal message, counted package-wide.
+baseline = 89114
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -994,7 +1004,12 @@ recursive = true
 # so the whole group costs about 5 s while still exercising a real compile
 # (warmup 1.2 s against a 0.000 s solve). Verified negatively: restoring the
 # no-op warmup fails three of the four and nothing else.
-baseline = 86899
+# 86899 -> 86979: the prepare inventory gate in tests/release/test_release_gates.py.
+# It pins that the saturation refusal names both escapes and that the escape it
+# names actually prepares, and it records that no shipped deck fails prepare for
+# a reason outside the two understood kinds. Loading a deck and being able to
+# prepare one are different questions, and only the first was gated.
+baseline = 86979
 target = 35000
 
 [[line_budget_policy.counts]]

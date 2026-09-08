@@ -4343,6 +4343,86 @@ def test_every_shipped_deck_loads_and_validates_through_the_public_api() -> None
     )
 
 
+# Loading a deck is not the same as being able to prepare one. ``gkx.prepare``
+# compiles a scan of a fixed length, so it refuses a deck whose ``[time] run_to``
+# is ``"saturation"`` -- the length is decided while that run is going. That
+# refusal is correct, but every shipped nonlinear deck sets saturation stopping,
+# so on main ``gkx.prepare`` had no working example anywhere in the tree while
+# the README advertised preparing a nonlinear case for reuse. The escape,
+# ``gkx.prepare(case, steps=N)``, works and nothing said so.
+#
+# This records which decks prepare as written and why the rest do not, so the
+# answer is a checked fact rather than something rediscovered by accident.
+
+_DECKS_NOT_PREPARABLE: dict[str, str] = {}
+
+
+def _prepare_failure(relative: str) -> str | None:
+    """Return a short reason ``gkx.prepare`` refuses this deck, or None."""
+
+    import gkx
+
+    try:
+        case = gkx.load(RUN_TO_REPO_ROOT / relative)
+    except Exception as error:  # noqa: BLE001
+        return f"load: {type(error).__name__}"
+    try:
+        gkx.prepare(case)
+    except Exception as error:  # noqa: BLE001
+        text = str(error)
+        if "cannot stop early at saturation" in text:
+            return "saturation"
+        if isinstance(error, FileNotFoundError):
+            return "missing geometry file"
+        return f"{type(error).__name__}"
+    return None
+
+
+def test_a_saturation_deck_can_still_be_prepared_with_an_explicit_length() -> None:
+    """The refusal must name a way out, and that way out must work."""
+
+    import gkx
+
+    relative = "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml"
+    case = gkx.load(RUN_TO_REPO_ROOT / relative)
+    assert str(case.time.run_to).strip().lower() == "saturation", (
+        "this fixture is chosen because it stops at saturation"
+    )
+
+    with pytest.raises(ValueError) as raised:
+        gkx.prepare(case)
+
+    message = str(raised.value)
+    assert "steps=" in message, (
+        "the refusal must name the explicit-length escape; without it "
+        "gkx.prepare has no working nonlinear example in the tree"
+    )
+    assert 'run_to = "t_max"' in message, "the refusal must name the deck-side escape"
+
+    # And the escape it names actually works.
+    assert gkx.prepare(case, steps=2) is not None
+
+
+def test_prepare_refusals_are_only_the_known_kinds() -> None:
+    """No shipped deck may fail ``prepare`` for a reason nobody has looked at."""
+
+    known = {"saturation", "missing geometry file"}
+    surprises: list[str] = []
+    for relative in _shipped_decks():
+        if relative in _DECKS_NOT_LOADABLE_AS_CASES:
+            continue
+        reason = _prepare_failure(relative)
+        if reason is not None and reason not in known:
+            surprises.append(f"{relative}: {reason}")
+
+    assert not surprises, (
+        "shipped decks fail gkx.prepare for reasons outside the two understood "
+        "kinds -- a deck that stops at saturation, which prepare refuses by "
+        "design and now explains, and a deck whose geometry file is not "
+        "tracked:\n" + "\n".join(surprises)
+    )
+
+
 def test_deck_exemptions_are_real_and_explained() -> None:
     """An exemption may not outlive the file, and may not be silent."""
 

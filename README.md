@@ -242,7 +242,11 @@ trajectory, potential = integrate_linear_from_config(
 ```
 
 For repeated nonlinear calls with fixed geometry and numerical policy, prepare
-the compiled simulation once and reuse it:
+the compiled simulation once and reuse it. A prepared object compiles one scan
+of a fixed length, so give it an explicit `steps`; the shipped decks stop at
+saturation instead, which decides the length mid-run and cannot be compiled
+ahead of time. Through the case API that is `gkx.prepare(case, steps=N)`, and
+`warmup()` moves the compile out of the first timed `solve`.
 
 ```python
 from gkx.solvers_nonlinear_diagnostic_integration import prepare_nonlinear_explicit_diagnostics
