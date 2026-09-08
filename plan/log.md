@@ -10685,3 +10685,43 @@ still carries an HSX entry would fail `test_ledger_covers_every_published_parity
    withdrawn claim is worse than keeping it.
 
 This is the #178 rule applied to the case it was written for.
+
+## 2026-09-07 — merge campaign: what the branch protection forces
+
+Started clearing the backlog. Fourteen PRs were open, which is the real problem:
+`main`'s protection is `strict = true` (branches must be up to date) with one
+required context, `ci-required`, and `enforce_admins = true`. So **every merge
+invalidates every other open PR** — each one goes BEHIND and has to be updated
+and re-run before it can land. There is no auto-merge on this repository
+(`enablePullRequestAutoMerge` is refused), so the queue is strictly serial at
+roughly one PR per CI cycle.
+
+That is worth stating in the plan as a throughput constraint, not just an
+annoyance: with a full run around 40 minutes, a 14-PR backlog is about a working
+day of wall-clock even when every PR is green. The remedy is fewer, larger,
+coherent PRs and prompt merging, not more parallel branches.
+
+A second constraint found the same way: **five open PRs each edit the same
+manifest line.** `tools/package_architecture_manifest.toml`'s
+`test_python_lines` baseline of 86568 is changed by #209 (to 86651), #211
+(86582), #213 (86801) and #214 (86899), and `installable_source_python_lines`
+at 88968 by #209 and #214. Whichever lands first leaves the rest stale, so each
+subsequent PR needs its baseline recomputed against the new `main` rather than
+merely re-run. Line-count baselines are a shared mutable counter, and that makes
+them a serialization point for anything that adds a file or a test.
+
+Merged so far: **#215** (CONTRIBUTING.md) as `4340d341`.
+
+Closed without merging: **#202**, the R0 fixed-rate draft. It is CONFLICTING
+against main and its independently justified repairs were already extracted as
+#210, #211 and #212, which is the disposition plan.md 0.1 specifies. Branch kept.
+
+Verified before touching them: **#209's file set is exactly the union of #196,
+#200, #201 and #208** — `.github/workflows/ci.yml`, `docs/quickstart.rst`,
+`operators/nonlinear/brackets.py`, `solvers_time_explicit*.py`, three test files
+and the manifest. So merging #209 retires four PRs, and those four are closed
+after it lands rather than before, so nothing is dropped if it fails.
+
+Planned order, each needing its own CI cycle: #210, then #209 (then close
+#196/#200/#201/#208), #211, #213, #214, #216, #217, #206. #212 has three failing
+checks and stays with its author.
