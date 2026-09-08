@@ -60,6 +60,7 @@ class PreparedSimulation:
     n_hermite: int
     options: dict[str, Any] = field(default_factory=dict)
     _backend: Any = None
+    _warmed: list[bool] = field(default_factory=lambda: [False])
 
     # -- execution -------------------------------------------------------
 
@@ -116,13 +117,31 @@ class PreparedSimulation:
     # -- introspection ---------------------------------------------------
 
     def warmup(self) -> "PreparedSimulation":
-        """Force compilation now so a later timed call measures execution.
+        """Force compilation now, so a later timed call measures execution.
 
-        Returns ``self`` so a caller can chain. Preparing already builds the
-        compiled callables for the nonlinear path, so this is a no-op there;
-        it exists so timing code does not have to know which path it holds.
+        Preparing a nonlinear case builds its scan closure but does not compile
+        it: XLA compiles when the scan first executes. Measured on the shipped
+        five-step KBM deck, ``prepare`` took 4.3 s, the first ``solve`` 19.6 s
+        and the second 0.000 s. This method used to return ``self`` without
+        doing anything, so code that called it and then timed ``solve`` was
+        timing the compile.
+
+        Forcing compilation means executing the prepared closure once, because
+        the scan exposes no separately lowerable handle. That costs one run --
+        cheap next to the compile it triggers, but not free, so it happens only
+        when asked for. A second call is a no-op.
+
+        A linear case has nothing to compile ahead of time: the linear runtime
+        chooses its solver per call, so warming one would compile a solver the
+        next call may not use. ``summary()["warmed"]`` reports which happened.
+
+        Returns ``self`` so a caller can chain.
         """
 
+        if self.kind == "nonlinear" and self._backend is not None:
+            if not self._warmed[0]:
+                self._backend.run()
+                self._warmed[0] = True
         return self
 
     def estimate_memory(self) -> dict[str, Any]:
@@ -172,7 +191,13 @@ class PreparedSimulation:
         enabled = compilation_cache.compilation_cache_enabled()
         return {
             "persistent_cache_enabled": enabled,
-            "compiled_at_prepare": self.kind == "nonlinear",
+            # Preparation builds the nonlinear scan closure; XLA compiles it
+            # when that scan first executes, not here. Measured on the shipped
+            # five-step KBM deck: prepare 4.3 s, first solve 19.6 s, second
+            # 0.000 s. This key reported ``kind == "nonlinear"`` and so claimed
+            # a compile that had not happened.
+            "compiled_at_prepare": False,
+            "warmed": bool(self._warmed[0]),
             "devices": self.devices,
             "precision": self.precision,
         }
@@ -200,22 +225,48 @@ class PreparedSimulation:
             print(f"{key}: {value}", file=stream)
 
 
+# The runtime resolves [run] Nl/Nm per call, and its fallback differs by kind:
+# a linear call defaults to (24, 12), a nonlinear one to (4, 8). See
+# ``_CASE_LINEAR_SPECS`` and ``_CASE_NONLINEAR_SPECS`` in
+# ``gkx.workflows.runtime.commands``.
+_RUNTIME_RESOLUTION_DEFAULTS = {"linear": (24, 12), "nonlinear": (4, 8)}
+
+
+def _resolve_velocity_resolution(
+    case: Any, kind: str, options: dict[str, Any]
+) -> tuple[int, int]:
+    """Return the ``(Nl, Nm)`` a later ``solve`` will actually build.
+
+    Precedence is explicit argument, then the deck's ``[run]`` table, then the
+    runtime's own default for this kind of case. Reporting anything else makes
+    ``print_summary`` describe a calculation that will not be run: before the
+    ``[run]`` table was carried on the case, preparing the shipped Cyclone deck
+    reported ``4, 8`` for a deck that asks for ``16, 48``.
+    """
+
+    default_l, default_m = _RUNTIME_RESOLUTION_DEFAULTS.get(kind, (4, 8))
+    run = getattr(case, "run", None)
+    deck_l = getattr(run, "Nl", None)
+    deck_m = getattr(run, "Nm", None)
+    n_laguerre = options.get("Nl") or deck_l or default_l
+    n_hermite = options.get("Nm") or deck_m or default_m
+    return int(n_laguerre), int(n_hermite)
+
+
 def prepare_simulation(case: Any, **options: Any) -> PreparedSimulation:
     """Build a :class:`PreparedSimulation` for ``case``.
 
-    A nonlinear case compiles its scan closure here, which is what makes a
-    later ``solve`` cheap. A linear case is validated and described but not
-    compiled, because the linear runtime chooses its solver per call; the
-    difference is reported by ``compiled_at_prepare`` rather than hidden.
+    A nonlinear case builds its scan closure here, which is what makes a later
+    ``solve`` cheap once that closure has been compiled -- XLA does that when
+    the scan first executes, so call ``warmup()`` if a later ``solve`` is being
+    timed. A linear case is validated and described but not built, because the
+    linear runtime chooses its solver per call. ``summary()`` reports both
+    facts rather than hiding them.
     """
 
     case.validate()
     kind = _case_kind(case)
-    # Nl/Nm are run-time selections, not case fields: the deck carries them in
-    # its [run] table and the runtime resolves them per call. Mirror the
-    # runtime's own defaults so the reported topology matches what solve builds.
-    n_laguerre = int(options.get("Nl") or 4)
-    n_hermite = int(options.get("Nm") or 8)
+    n_laguerre, n_hermite = _resolve_velocity_resolution(case, kind, options)
     backend = None
     if kind == "nonlinear":
         from gkx import runtime as _runtime

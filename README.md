@@ -30,11 +30,15 @@ accelerator-enabled JAX wheel from the
 [JAX installation guide](https://docs.jax.dev/en/latest/installation.html).
 
 `gkx` with no arguments runs a self-contained linear Cyclone demo — no input
-file, no data download. It takes about 20 s on a laptop CPU, prints the fitted
-`gamma` and `omega`, and writes
+file, no data download. It takes well under a minute on a laptop CPU, prints
+the fitted `gamma` and `omega`, and writes
 `gkx_default_linear.{toml,summary.json,timeseries.csv,eigenfunction.csv,png}`.
-It is a smoke test, not a converged result, and emits CFL and under-resolution
-warnings to say so.
+
+The demo runs a deliberately coarse velocity grid (`Nl = 7`, `Nm = 14`), so it
+is not a converged physics result. It is resolved *for the case it builds*: its
+step stays under the estimated CFL bound and its horizon is long enough to fit,
+so the growth rate it prints agrees with that case's certified eigenvalue to
+better than 1%, and it runs without warnings. A gate holds it there.
 
 Development checkout:
 
@@ -123,9 +127,11 @@ an `[output] path` and without `--out` writes no files. Examples live under
 
 ## Configure a run
 
-One TOML file. Every key has a default, so a working input is short. The shipped
-default deck is [`examples/common_input.toml`](examples/common_input.toml); the
-key-by-key reference is [inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
+One TOML file. Every key has a default, so a working input is short.
+[`examples/common_input.toml`](examples/common_input.toml) shows every section
+with its defaults; it is a template rather than a runnable case, because its
+`vmec_file` is supplied by the CLI from the `wout` you pass. The key-by-key
+reference is [inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
 
 | Section | Controls | Common keys |
 | --- | --- | --- |
@@ -236,7 +242,11 @@ trajectory, potential = integrate_linear_from_config(
 ```
 
 For repeated nonlinear calls with fixed geometry and numerical policy, prepare
-the compiled simulation once and reuse it:
+the compiled simulation once and reuse it. A prepared object compiles one scan
+of a fixed length, so give it an explicit `steps`; the shipped decks stop at
+saturation instead, which decides the length mid-run and cannot be compiled
+ahead of time. Through the case API that is `gkx.prepare(case, steps=N)`, and
+`warmup()` moves the compile out of the first timed `solve`.
 
 ```python
 from gkx.solvers_nonlinear_diagnostic_integration import prepare_nonlinear_explicit_diagnostics

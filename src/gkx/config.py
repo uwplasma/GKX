@@ -644,6 +644,56 @@ class RuntimeParallelConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeRunConfig:
+    """The deck's ``[run]`` selections: which mode, at which velocity resolution.
+
+    These are per-call selections rather than physical model parameters, which
+    is why they sit apart from the physics sections. They are still part of the
+    case: a deck that asks for ``Nl = 16, Nm = 48`` and a prepared simulation
+    that quietly builds ``4, 8`` are not the same calculation, and before this
+    section existed the loader dropped the table on the floor, so nothing
+    downstream could tell the difference.
+
+    ``None`` means the deck did not say, and the caller or the runtime default
+    decides. It is distinct from a value the deck chose.
+    """
+
+    ky: float | None = None
+    Nl: int | None = None
+    Nm: int | None = None
+    solver: str | None = None
+    method: str | None = None
+    dt: float | None = None
+    steps: int | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("Nl", "Nm", "steps"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            coerced = int(value)
+            if coerced <= 0:
+                raise ValueError(f"[run] {name} must be a positive integer")
+            object.__setattr__(self, name, coerced)
+        for name in ("ky", "dt"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, float(value))
+
+    def is_empty(self) -> bool:
+        """True when the deck carried no ``[run]`` table worth preserving."""
+
+        return all(getattr(self, f.name) is None for f in dataclasses.fields(self))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            f.name: getattr(self, f.name)
+            for f in dataclasses.fields(self)
+            if getattr(self, f.name) is not None
+        }
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     """Unified simulation config for runtime-driven GK runs."""
 
@@ -660,6 +710,7 @@ class RuntimeConfig:
     output: RuntimeOutputConfig = RuntimeOutputConfig()
     quasilinear: RuntimeQuasilinearConfig = RuntimeQuasilinearConfig()
     parallel: RuntimeParallelConfig = RuntimeParallelConfig()
+    run: RuntimeRunConfig = RuntimeRunConfig()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -676,6 +727,9 @@ class RuntimeConfig:
             "output": self.output.to_dict(),
             "quasilinear": self.quasilinear.to_dict(),
             "parallel": self.parallel.to_dict(),
+            # Emitted only when the deck carried a [run] table. A deck without
+            # one round-trips byte-identically; a deck with one stops losing it.
+            **({} if self.run.is_empty() else {"run": self.run.to_dict()}),
         }
 
     def replace(self, **changes: Any) -> "RuntimeConfig":
