@@ -72,10 +72,16 @@ def test_s_alpha_retains_field_strength_variation() -> None:
             GeometryConfig(q=1.4, s_hat=0.8, epsilon=epsilon, R0=2.78)
         )
         bmag = np.asarray(geometry.bmag(theta))
-        # B = B0 / (1 + eps cos theta)
-        assert bmag.min() == np.float64(bmag.min())
-        assert abs(bmag.min() - 1.0 / (1.0 + epsilon)) < 1.0e-9
-        assert abs(bmag.max() - 1.0 / (1.0 - epsilon)) < 1.0e-9
+        # The claim is physical -- B = B0 / (1 + eps cos theta) keeps its
+        # variation -- so the tolerance has to be the arithmetic's, not a
+        # constant. A flat 1e-9 is below float32 resolution: this ran green
+        # under x64 and failed by 5.96e-8 at default precision, which is 2**-24,
+        # exactly one float32 epsilon. That is the format, not the geometry, and
+        # loosening the gate for everyone to accommodate it would hide a real
+        # float64 regression. Scale with the dtype actually in use instead.
+        tolerance = max(1.0e-9, 8.0 * float(np.finfo(bmag.dtype).eps))
+        assert abs(bmag.min() - 1.0 / (1.0 + epsilon)) < tolerance
+        assert abs(bmag.max() - 1.0 / (1.0 - epsilon)) < tolerance
         assert np.abs(np.asarray(geometry.bgrad(theta))).max() > 0.0
 
 

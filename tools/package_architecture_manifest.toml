@@ -1009,7 +1009,15 @@ recursive = true
 # names actually prepares, and it records that no shipped deck fails prepare for
 # a reason outside the two understood kinds. Loading a deck and being able to
 # prepare one are different questions, and only the first was gated.
-baseline = 86979
+# 86979 -> 87042: the precision banner in tests/conftest.py and the dtype-scaled
+# tolerance in the s-alpha field-strength gate. 17 tests assert float64-scale
+# tolerances and fail on the format at default precision, reading as broken
+# solvers; pytest.ini's -q --disable-warnings suppresses both a report header and
+# a warning, so the notice is written to stderr and only when a switch is missing.
+# The s-alpha gate kept a flat 1e-9 that is below float32 resolution -- it failed
+# by 5.96e-8, one float32 epsilon -- and now scales with the dtype in use, leaving
+# the float64 tolerance at exactly 1e-9 so no physics gate is loosened.
+baseline = 87042
 target = 35000
 
 [[line_budget_policy.counts]]
