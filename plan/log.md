@@ -10841,3 +10841,45 @@ Next, now that #218 put the ledger and the release gates on main, the queued
 **HSX deletion** from 0.3.4 is finally executable as a single coherent PR —
 README row, `_README_PARITY_SOURCES`, `L-lin-hsx`, the atlas entries, and the
 `hsx_itg` manifest case, keeping the CSV and config as evidence.
+
+## 2026-09-08 — backlog cleared, and the HSX correction landed
+
+**The authoritative plan is on `main`.** #206 merged as `e6fb735e`; `main`'s
+`plan.md` is this document and the superseded 2,881-line roadmap is gone. That
+was the prerequisite everything else was queued behind.
+
+**#220 merged** (`1ce32683`): the HSX provenance correction, which retracts the
+"delete the row" conclusion this log recorded on 2026-09-07 and replaces it with
+what the tracing actually shows. Nothing was deleted; no published number moved.
+
+Final campaign tally, from fifteen open PRs:
+
+| Outcome | PRs |
+|---|---|
+| Merged | #215, #210, #218, #219, #206, #220 |
+| Retired by consolidation | #213, #214, #216, #217 (into #218); #209, #211 (into #219) |
+| Retired through #219's contents | #196, #200, #201, #208 |
+| Closed as superseded | #202 |
+| Still open | #212 |
+
+**#212 was not broken, it was stale.** Its three failing checks came from the
+manifest serialization point, not its content: the only conflict against `main`
+was `tools/package_architecture_manifest.toml`, whose baselines four other PRs
+had moved past it while it waited. Updated, resolved keeping both comment
+histories, baselines re-measured on the merged tree (89150 source, 87425 test
+lines), and re-validated locally — 945 passed / 44 skipped across release,
+linear, parallel and runtime, plus 175 passed in `tests/unit/nonlinear`, the
+shard that had been red. Eleven checkers, ruff clean. Its proposed contract is
+untouched; only the merge and the baselines changed. CI is re-running.
+
+Housekeeping: seven fully merged worktrees removed
+(`phase04-ledger`, `phase02-api`, `phase02-prep`, `phase02-f32`,
+`consolidated`, `repairs`, `hsx`); `planreview` kept for plan edits.
+
+**The standing recommendation from all of this**, unchanged and now with six
+merges of evidence behind it: the line-count baselines in
+`tools/package_architecture_manifest.toml` are a shared mutable counter, so any
+two PRs that add a file or a test collide there regardless of content. That cost
+this backlog several CI cycles and made one healthy PR look broken for a day.
+Either compute the value instead of storing it, or split the budget per
+directory so unrelated work stops contending for one line.
