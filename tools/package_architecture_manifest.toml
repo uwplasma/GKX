@@ -1065,7 +1065,8 @@ recursive = true
 # landed together because both move this counter. Measured union, not either
 # branch's figure.
 # +14: eager/outer-jitted EM initial-state derivative identity, serial and pmap.
-baseline = 87361
+# Consolidated #209 + #211; measured union after both merges.
+baseline = 87376
 target = 35000
 
 [[line_budget_policy.counts]]
