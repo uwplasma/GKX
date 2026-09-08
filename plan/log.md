@@ -10862,15 +10862,34 @@ Final campaign tally, from fifteen open PRs:
 | Closed as superseded | #202 |
 | Still open | #212 |
 
-**#212 was not broken, it was stale.** Its three failing checks came from the
-manifest serialization point, not its content: the only conflict against `main`
-was `tools/package_architecture_manifest.toml`, whose baselines four other PRs
-had moved past it while it waited. Updated, resolved keeping both comment
-histories, baselines re-measured on the merged tree (89150 source, 87425 test
-lines), and re-validated locally — 945 passed / 44 skipped across release,
-linear, parallel and runtime, plus 175 passed in `tests/unit/nonlinear`, the
-shard that had been red. Eleven checkers, ruff clean. Its proposed contract is
-untouched; only the merge and the baselines changed. CI is re-running.
+**#212 is stale *and* broken — my first reading was wrong.** It was certainly
+stale: the only merge conflict was
+`tools/package_architecture_manifest.toml`, whose baselines four other PRs had
+moved past it while it waited. I updated it, resolved keeping both comment
+histories, re-measured the baselines on the merged tree (89150 source, 87425
+test lines), and re-validated locally: 945 passed / 44 skipped across release,
+linear, parallel and runtime, plus 175 in `tests/unit/nonlinear`. On that basis
+I recorded here, and told the maintainer, that its failures were staleness only.
+
+That was wrong, and the error was in my test selection rather than in the
+runs. CI on the updated head `2e42b75c` still fails
+`tests/validation/benchmarks/test_benchmark_contracts.py::test_runtime_tem_case_matches_transitional_operator_contract`
+with `TypeError: unsupported operand type(s) for -: 'NoneType' and 'NoneType'`
+inside `numpy.testing.assert_allclose` — a directory I had not run. Reproduced
+locally in 1.6 s, and controlled: the same test **passes on `main`'s content**
+and **fails on #212's**, so it is that PR's change, not the merge.
+
+The likely mechanism, to be confirmed by whoever picks it up: #212 makes
+`damp_ends_rate` optional with `None` meaning "unset", and the TEM transitional
+contract compares a value that is now `None` on one side. The fix probably
+belongs in the contract's comparison or in the resolver's default, not in the
+test's tolerance.
+
+Lesson, and it is the same one this log keeps recording: a green local run
+proves only what it selected. I ran five directories and generalised to the
+suite. The cheap guard is to run the shard CI actually names — here
+`wide-coverage-shards` and the `quick-tests` file list — rather than a
+plausible subset.
 
 Housekeeping: seven fully merged worktrees removed
 (`phase04-ledger`, `phase02-api`, `phase02-prep`, `phase02-f32`,
