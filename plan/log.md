@@ -10725,3 +10725,48 @@ after it lands rather than before, so nothing is dropped if it fails.
 Planned order, each needing its own CI cycle: #210, then #209 (then close
 #196/#200/#201/#208), #211, #213, #214, #216, #217, #206. #212 has three failing
 checks and stays with its author.
+
+## 2026-09-07/08 — merge campaign, second pass: consolidation over serialization
+
+Merged: **#215** (CONTRIBUTING.md) `4340d341`, **#210** (nonfinite Laguerre
+guard) `cd449952`.
+
+Closed without merging: **#202**, superseded by the #210/#211/#212 split that
+plan.md 0.1 specifies.
+
+**Consolidated #213, #214, #216 and #217 into [#218](https://github.com/uwplasma/GKX/pull/218).**
+Not a stylistic choice — forced by two measured constraints:
+
+- `main` is `strict = true` with one required context (`ci-required`) and
+  `enforce_admins = true`, and `enablePullRequestAutoMerge` is refused. Every
+  merge pushes every other open PR out of date.
+- Those four PRs each edit the **same** `test_python_lines` baseline, and two
+  also edit `installable_source_python_lines`. Merging them one at a time leaves
+  each successor **numerically stale**, not merely behind: the baseline has to be
+  recomputed, not just re-run.
+
+A full CI cycle here is 40 minutes to 2.5 hours (#210's previous run: 14:29 to
+16:59). Four serial cycles with a baseline edit between each is most of a day;
+one consolidated cycle is one. The commits are preserved unchanged, both
+manifest comment histories are kept, and the baselines are the **measured**
+union rather than either branch's figure — 87277 test lines, 89117 source lines
+after merging main back in.
+
+Verified on the consolidated tree: 711 passed, 1 skipped across
+`tests/release`, `tests/unit/api`, `tests/validation/physics_gates`,
+`tests/integration/runtime`; 261 passed after the main merge; eleven checkers,
+ruff clean.
+
+Open PRs went 15 -> 9.
+
+Remaining queue, each needing its own cycle: #218 (in CI), then #209 — whose
+file set is exactly the union of #196, #200, #201 and #208, so those four close
+once it lands — then #211, then #206. #212 has three failing checks and stays
+with its author.
+
+**Process note worth acting on later.** Line-count baselines in
+`tools/package_architecture_manifest.toml` are a shared mutable counter, so any
+two PRs that add a file or a test collide there by construction. That makes them
+a serialization point independent of content. Either the check should compare
+against a computed value rather than a checked-in number, or the budget should
+live per-directory so unrelated work does not contend for one line.
