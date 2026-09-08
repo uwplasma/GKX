@@ -1058,15 +1058,55 @@ def test_linked_boundary_heat_flux_window_gradient_matches_finite_difference() -
 def test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference(
     boundary: str,
 ) -> None:
-    """The default production nonlinear path differentiates, not only the full one.
+    """Execute f32 CPU AD in isolation; never skip an untested future backend."""
+    if bool(jax.config.read("jax_enable_x64")) or jax.default_backend() != "cpu":
+        _compressed_real_fft_gradient_check(boundary)
+        return
 
-    ``compressed_real_fft=True`` is what the example TOMLs run, and it used to
-    refuse ``jit`` outright: the Hermitian projector read the sign pattern off
-    ``cache.ky``, which is a traced array whenever the cache is built inside
-    the trace. Every gradient test therefore ran the full-complex bracket
-    instead. The layout the projector actually needs is grid topology, so both
-    boundaries now differentiate on the compressed path as well.
-    """
+    import os
+    import subprocess
+    import sys
+
+    # Rank-7 f32 multiply/reduce can SIGSEGV in XLA:CPU YNN (#196).
+    # Run the actual application check, not a smaller proxy for its fusions.
+    code = (
+        "import runpy,sys\n"
+        "if sys.platform != 'win32':\n"
+        " import resource; resource.setrlimit(resource.RLIMIT_CORE,(0,0))\n"
+        "runpy.run_path(sys.argv[1])['_compressed_real_fft_gradient_check'](sys.argv[2])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code, __file__, boundary],
+        env=dict(os.environ, JAX_ENABLE_X64="false", GKX_X64="0"),
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("code", [-11, -9, 1])
+def test_compressed_gradient_isolation_does_not_hide_unconfirmed_failures(
+    monkeypatch, code
+):
+    import subprocess
+
+    monkeypatch.setattr(jax, "default_backend", lambda: "cpu")
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **kw: SimpleNamespace(
+            returncode=code, stdout="", stderr="sentinel failure"
+        ),
+    )
+    with jax.enable_x64(False), pytest.raises(AssertionError, match="sentinel failure"):
+        test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference(
+            "periodic"
+        )
+
+
+def _compressed_real_fft_gradient_check(boundary: str) -> None:
+    """Check real-FFT projector tracing and nonlinear AD against physical-flux FD."""
 
     grid_cfg = GridConfig(Nx=8, Ny=8, Nz=8, Lx=6.0, Ly=6.0, boundary=boundary)
     cfg = CycloneBaseCase(grid=grid_cfg)
