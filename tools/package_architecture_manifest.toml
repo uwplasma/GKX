@@ -1064,6 +1064,7 @@ recursive = true
 # Consolidated: #209's approved repair stack plus #211's species-state AD fix,
 # landed together because both move this counter. Measured union, not either
 # branch's figure.
+# +14: eager/outer-jitted EM initial-state derivative identity, serial and pmap.
 baseline = 87361
 target = 35000
 

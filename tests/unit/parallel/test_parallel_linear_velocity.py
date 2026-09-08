@@ -1934,7 +1934,8 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         )
 
 
-def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
+@pytest.mark.parametrize("jit", [False, True])
+def test_species_pmap_electromagnetic_trajectory_matches_serial(jit: bool) -> None:
     from gkx.solvers_linear_integrators import integrate_linear
     from gkx.operators.linear.params import linear_terms_to_term_config
     from gkx.terms.assembly import compute_fields_cached
@@ -1942,6 +1943,8 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
     if len(jax.devices()) < 2:
         pytest.skip("requires two logical CPU devices or two accelerators")
     state, cache, params, grid, geom = _small_kinetic_electron_problem()
+    state = state.astype(jnp.complex128 if jax.config.x64_enabled else jnp.complex64)
+    rtol, atol = (1e-10, 1e-12) if jax.config.x64_enabled else (8e-5, 1e-7)
     ky = min(1, grid.ky.size - 1)
     state = state.at[:, 0, 1, ky, 0, :].set(0.03 + 0.02j)
     params = replace(params, beta=0.01, fapar=1.0)
@@ -1976,18 +1979,30 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial() -> None:
         ),
         **integration,
     )
-    np.testing.assert_allclose(
-        np.asarray(parallel_state),
-        np.asarray(serial_state),
-        rtol=8e-5,
-        atol=8e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(parallel_phi),
-        np.asarray(serial_phi),
-        rtol=8e-5,
-        atol=8e-6,
-    )
+    np.testing.assert_allclose(parallel_state, serial_state, rtol=8e-5, atol=8e-6)
+    np.testing.assert_allclose(parallel_phi, serial_phi, rtol=8e-5, atol=8e-6)
+
+    # Linear EM evolution implies d/ds J(s G0)|s=1 = 2 J(G0).
+    derivatives = []
+    for parallel in (
+        None,
+        SimpleNamespace(
+            strategy="velocity", backend="auto", axis="species", num_devices=2
+        ),
+    ):
+
+        def objective(scale):
+            final, phi = integrate_linear(
+                scale * state, grid, geom, params, parallel=parallel, **integration
+            )
+            return jnp.real(jnp.vdot(final, final) + jnp.vdot(phi, phi))
+
+        differentiate = jax.value_and_grad(objective)
+        value, derivative = (jax.jit(differentiate) if jit else differentiate)(1.0)
+        assert float(value) > 1e-5
+        np.testing.assert_allclose(derivative, 2 * value, rtol=rtol, atol=atol)
+        derivatives.append(derivative)
+    np.testing.assert_allclose(*derivatives, rtol=rtol, atol=atol)
 
 
 def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:
