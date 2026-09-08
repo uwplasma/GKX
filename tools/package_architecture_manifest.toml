@@ -893,7 +893,9 @@ recursive = true
 # one-shot guard, the warmed flag in the summary, and the docstrings that record
 # why forcing the compile means executing the closure once.
 # 89098 -> 89114: the same prepare-refusal message, counted package-wide.
-baseline = 89114
+# +3 from merging main (the Laguerre finite guard and CONTRIBUTING.md)
+# into the consolidated branch; measured, not assumed.
+baseline = 89117
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1044,7 +1046,9 @@ recursive = true
 # this same counter. Merging them one at a time would have made every other
 # one numerically stale in turn. Both comment histories are kept above; the
 # baseline is the measured union, not either branch's figure.
-baseline = 87276
+# +1 from merging main (the Laguerre finite guard and CONTRIBUTING.md)
+# into the consolidated branch; measured, not assumed.
+baseline = 87277
 target = 35000
 
 [[line_budget_policy.counts]]
