@@ -132,6 +132,19 @@ method = "imex2"
 fit_start_fraction = 0.7
 
 [[case]]
+# PROVENANCE WARNING (2026-09-08). This case is NOT the generator of
+# docs/_static/hsx_linear_t2_scan.csv, which is what the README publishes.
+# That CSV is spaced by dky = 1/21, so its box is y0 = 21; this config declares
+# y0 = 10, with Nl = 8, Nm = 16 against the CSV pipeline's Nl = 4, Nm = 8. The
+# artifact's actual generator is the "imported-linear-hsx" job in
+# tools/benchmark_refresh_manifest.toml, which runs
+# tools/comparison/compare_gx_imported_linear.py against
+# examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml
+# (y0 = 21, Ny = 96, Nz = 48, Nl = 4, Nm = 8, torflux = 0.64, alpha = 0,
+# npol = 1) whose equilibrium is Nuhrenberg-Zille 1988 QHS -- regenerable from
+# the tracked examples/vmec/input.NuhrenbergZille_1988_QHS, and not literally
+# HSX despite the label. Do not treat this entry as describing the published
+# row until the two are reconciled; see plan.md 0.3.4.
 key = "hsx_itg"
 label = "HSX QHS ITG, VMEC"
 device = "stellarator"

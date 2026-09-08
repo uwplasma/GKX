@@ -7,14 +7,24 @@ from pathlib import Path
 from typing import Any, Callable
 
 
+# The demo is the first thing most people run, so it reports a number that can
+# be checked rather than a fast one that cannot. At dt = 0.03 over 500 steps it
+# printed gamma = 0.089982 against a certified Krylov eigenvalue of 0.103263 at
+# these same settings -- 12.9 percent low -- and emitted four warnings saying so:
+# the step exceeded the estimated CFL bound of 0.02197, and 15 time units gave
+# only 1.34 e-foldings to fit. Both are fixed by construction here. dt sits
+# under the CFL bound, and 4000 steps reach t = 80, which is past the
+# gamma * t_max >= 7 the fitter asks for. The run costs about 7 s instead of
+# 3 s and lands within 0.02 percent of the eigenvalue with no warnings.
+# tests/validation/physics_gates/test_validation_gates.py pins that agreement.
 DEFAULT_DEMO_SETTINGS: dict[str, float | int | str] = {
     "ky": 0.3,
     "Nl": 7,
     "Nm": 14,
     "solver": "time",
     "method": "rk4",
-    "dt": 0.03,
-    "steps": 500,
+    "dt": 0.02,
+    "steps": 4000,
     "sample_stride": 5,
     "fit_signal": "phi",
 }

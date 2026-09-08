@@ -1,70 +1,61 @@
-Research-grade checklist
-========================
+Research status
+===============
 
-GKX separates algorithm verification from physics claims. A feature is ready
-only when its numerical result, physical observable, and performance envelope
-are all tested.
+Reviewed against main a99dac89 on 2026-09-06.
+The active execution queue is
+`plan.md <https://github.com/uwplasma/GKX/blob/main/plan.md>`_;
+:doc:`research_grade_program` records the technical decisions and sources.
+Older checklists are historical, not additional active roadmaps.
 
-Nonlinear derivatives
----------------------
+.. list-table:: Claim boundaries
+   :header-rows: 1
+   :widths: 30 70
 
-Status: **implemented**. :func:`gkx.nonlinear_heat_flux_window` differentiates
-the physical post-saturation heat flux through the exact projected Runge--Kutta
-map. Block checkpointing retains :math:`O(\sqrt N)` states.
+   * - Feature
+     - Current scope
+   * - Nonlinear derivatives
+     - Implemented for a detached-state finite RK window with checkpointing.
+       This does not establish the derivative of long-time mean transport.
+   * - QA transport reduction
+     - **Not statistically resolved.** The nominal campaign has 4/48 traces
+       failing final drift; the previous claim that all gates passed was wrong.
+   * - Linear and quasilinear
+     - Eigenmode sensitivities and ranking tools exist. Residual/mode-selection
+       checks and reference provenance are required; QL is not an absolute-flux model.
+   * - Coulomb collisions
+     - Drift-kinetic low-moment and finite-wavelength tables have different
+       validation status. Finite-wavelength repairs remain under review; no
+       general unlike-species/arbitrary-moment claim.
+   * - CPU/GPU parallelism
+     - Independent scans/ensembles are the qualified path. Species–Hermite
+       execution exists with restrictions; full nonlinear scaling/AD is not
+       generally established.
+   * - Electromagnetic and coil fields
+     - Equations and selected tests/interfaces exist. Broad finite-beta
+       nonlinear transport is unqualified and its core qualification is
+       **required**, not deferred. Island-containing coil-field turbulence
+       requires a separate model/locality program.
 
-Required gates:
+Required targets are verified ES **and three-field electromagnetic** local
+gyrokinetics, including kinetic-electron tokamak and finite-beta stellarator
+cases. ES QA optimization is an early application, not the full code milestone.
+The plan's EM0–EM5 sequence covers independent field residuals, wave/KBM checks,
+nonlinear channel-resolved transport, stellarator geometry, AD and execution.
+An ES-only result cannot close the research-grade release.
+See :doc:`stellarator_optimization` for the retained initial/final conditions,
+failed gates and reproduction commands.
 
-* blocked and plain values and derivatives agree;
-* automatic differentiation agrees with centered finite differences below the
-  measured trajectory-divergence knee;
-* CPU and GPU results agree within the selected precision;
-* the optimizer uses the physical heat flux, not a state norm or linear
-  saturation rule.
+Required evidence
+-----------------
 
-See :doc:`nonlinear_autodiff` for equations, measurements, and usage.
+- Mathematics: independently constructed identities, invariants and derivatives.
+- Numerics: time, domain, spectral/velocity and closure convergence.
+- Physics: literature-anchored cases and matched independent-code observables.
+- Statistics: stationary individual traces, correlation-corrected uncertainty
+  and genuinely independent validation seeds.
+- Performance: compilation, spin-up, value/VJP, memory and uncertainty at matched
+  accuracy on the actual CPU/GPU workload.
+- Usability: working examples and explicit supported/unsupported contracts.
 
-Transport claims
-----------------
-
-An optimizer window gives a local design direction. A reported transport
-reduction additionally requires:
-
-* stationary post-transient running means;
-* correlation-corrected uncertainty using an effective sample count;
-* independent seeds and timestep repeats;
-* perpendicular, parallel, Laguerre, and Hermite convergence;
-* matched baseline and candidate equilibria that satisfy aspect, iota, and
-  quasisymmetry constraints.
-
-The selected vacuum QA direction passes these gates. Its scope, including the
-rejected short-horizon control, is in :doc:`stellarator_optimization`.
-
-Open numerical work
--------------------
-
-Electromagnetic parity
-   Close the KBM benchmark discrepancy against an independent code.
-
-Velocity-space recurrence
-   Report :math:`t_{rec}` beside each nonlinear averaging interval and verify
-   closure convergence.
-
-Precision
-   Keep single precision as the fast default; test ensemble observables in
-   double precision where cancellation or long integrations demand it.
-
-Performance
-   Measure Hermite--Laguerre block preconditioners, mixed-precision iterative
-   refinement, and distributed windows on production CPU and GPU cases. Adopt
-   a method only when wall time and peak memory improve without changing the
-   validated observable.
-
-Testing rule
-------------
-
-Each test must name a result that could falsify the implementation:
-
-* mathematics: identities, manufactured maps, and derivative comparisons;
-* numerics: order, convergence, conditioning, and conservation;
-* physics: literature benchmarks and independent-code parity;
-* regression: stable public outputs and performance budgets.
+No new release is scheduled. Review open PR dispositions and the essential
+admitted goals before tagging or publishing.

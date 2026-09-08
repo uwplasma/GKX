@@ -204,7 +204,18 @@ recursive = true
 # integration: at a deck-sized dt the parallel-boundary mode must stay bounded
 # and the fitted rate must be the physical one. Measured against pristine 2.0.0
 # it fails at the amplitude bound with peak |phi| = 1.125e+163.
-baseline = 77
+# 77 -> 78: tests/release/test_evidence_ledger.py. The target is 30, so a new
+# file needs a reason: this one owns the evidence ledger, which is a different
+# object from every existing release gate. The others assert that a specific
+# artifact or claim holds; this one asserts that the index of claims is
+# complete and self-consistent -- that no published number lacks a row, that no
+# row points at a deleted artifact or generator, that a reference whose
+# launch-clamp binds cannot be marked passing, and that a rank-3 golden pins its
+# hash. Those are properties of the ledger, not of any one case, so they cannot
+# live inside a per-case gate; and folding them into test_release_gates.py would
+# put the index and the things it indexes in the same file, which is exactly the
+# coupling the ledger exists to remove.
+baseline = 78
 target = 30
 
 [[topology_policy.counts]]
@@ -406,7 +417,16 @@ path = "workflows/nonlinear.py"
 # 999 -> 1007: whitespace only, from the same sweep. Three reflowed call sites,
 # identical AST. The module was already one line under the default budget, so
 # the sweep is what crossed it, not new behaviour.
-baseline_lines = 1007
+# 1007 -> 1023: the prepare-refusal message. gkx.prepare compiles one scan of a
+# fixed length, so it refuses a deck whose run_to is "saturation", and every
+# shipped nonlinear deck sets exactly that -- so the refusal was a dead end with
+# no working nonlinear example of gkx.prepare anywhere in the tree, while the
+# README advertised preparing a case for reuse. The added lines are the two
+# escapes the message now names (steps=N, or run_to = "t_max") and the comment
+# recording why refusing is still correct: quietly dropping the stop condition
+# would hand back a simulation that integrates past where the deck asked it to
+# stop. No branch was added; the dispatcher's shape is unchanged.
+baseline_lines = 1023
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -836,6 +856,8 @@ recursive = true
 # combined_ky belongs in the scan-level set for a measured reason and not a
 # defensive one: it routes to the combined-ky solver only for axis="ky", so
 # axis="hermite" reaches the worker and failed there too.
+# 88910 -> 88925: CPU-only singleton-axis lowering repairs the measured f32
+# bracket VJP crash while retaining the GPU layout and temporary-memory cost.
 # 88910 -> 88968: restoring the per-step end-damping contract 79064c4d deleted
 # (#192, shipped in 2.0.0). 44 lines are the `dt` argument threaded back from
 # each integrator to RHS scalar assembly -- there is no cheaper place to put it,
@@ -847,8 +869,41 @@ recursive = true
 # fraction rather than the rate its name and the docs suggest, so the comment is
 # the part that stops it happening again, and it points at #194 for the redesign
 # that would make the name true.
+# 88968 -> 89061: the [run] section, +93 lines across config.py,
+# workflows/runtime/toml.py and api/prepared.py. The loader read the deck's
+# [run] table and threw it away, so nothing downstream could see the velocity
+# resolution the deck asked for: preparing the shipped Cyclone deck, which
+# asks for Nl = 16 and Nm = 48, reported a hard-coded 4 and 8, and the
+# resolved deck a run wrote back omitted the table entirely. Carrying it costs
+# a small frozen section with a to_dict that stays empty for decks that never
+# had one, so those still round-trip byte-identically, plus one resolver in
+# prepare whose precedence is explicit argument, deck, then the runtime's own
+# kind-aware default. The alternative -- leaving prepare to guess -- makes
+# print_summary describe a calculation solve will not run.
+# 89061 -> 89071: the demo's rationale comment. It records that dt = 0.03 over
+# 500 steps printed gamma = 0.089982 against a certified 0.103263 -- 12.9 percent
+# low -- with four warnings, and why dt now sits under the CFL bound and the
+# horizon reaches gamma*t_max >= 7. Without it the next person tuning the demo
+# for speed reintroduces the bias.
+# 89071 -> 89098: an honest warmup. Preparing a nonlinear case builds its scan
+# closure but does not compile it -- XLA compiles when the scan first executes.
+# warmup() documented itself as forcing that compile and returned self without
+# doing anything, and summary() reported compiled_at_prepare as kind ==
+# 'nonlinear', claiming a compile that had not happened. Fresh-process timing on
+# the shipped five-step KBM deck: prepare 4.3 s, warmup 0.000 s, first solve
+# 19.2 s; with the fix, warmup 18.9 s and solve 0.000 s. The added lines are the
+# one-shot guard, the warmed flag in the summary, and the docstrings that record
+# why forcing the compile means executing the closure once.
+# 89098 -> 89114: the same prepare-refusal message, counted package-wide.
+# +3 from merging main (the Laguerre finite guard and CONTRIBUTING.md)
+# into the consolidated branch; measured, not assumed.
+# Combined #197/#199/#201: 88977 after #199's six-line reduction; #208 adds 4.
+# Consolidated: #209's approved repair stack plus #211's species-state AD fix,
+# landed together because both move this counter. Measured union, not either
+# branch's figure.
 # Explicit optional rate and one shared damping resolver; legacy defaults retained.
-baseline = 88978
+# +14 from the opt-in damp_ends_rate contract, measured after merging main.
+baseline = 89150
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -930,11 +985,92 @@ recursive = true
 # seeded mirror record and the generator-less performance file. All seven
 # reproduce today; the gate is so they keep doing so. Verified negatively:
 # editing KBM from 20.0% to 18.0% fails it.
+# 86377 -> 86426: #196 added a backend-crash skip in the existing nonlinear tests.
+# 86426 -> 86434: replace its unbounded version skip with actual subprocess
+# execution, exact observed-failure classification and three negative guard
+# tests. No new files; unknown versions/errors now fail instead of disappearing.
+# 86434 -> 86462: five broadcast-shape primal/both-operand VJP comparisons;
+# remove the crash exemption now that affected CPU application tests pass.
 # 86377 -> 86568: retain both main's 120-line README parity gate (#193)
 # and #197's 191-line net increase over their shared 86257-line baseline.
 # Measured after the history-preserving main integration; no tests removed.
+# 86568 -> 86801: tests/release/test_evidence_ledger.py, 233 lines. The target
+# is 35000, so an increase needs a reason: this file replaces a hard-coded map
+# inside test_release_gates.py with a data-driven index, so adding a published
+# number no longer means editing test code. It carries four checks nothing else
+# owns -- ledger completeness against the README, artifact and generator
+# existence, the GX linked-boundary clamp rule, and rank-3 hash pinning -- each
+# verified negatively: breaking a README percentage, pointing a row at a missing
+# artifact, marking a clamp-bound row passing, and deleting a rank-3 hash each
+# fail exactly one test.
+# 86568 -> 86679: 72 lines of [run]-contract tests appended to the existing
+# tests/unit/api/test_prepared_simulation.py rather than a new file. Five
+# checks: the shipped Cyclone deck prepares at its own 16/48; an explicit
+# argument still wins; a deck with no [run] falls back to the runtime's
+# kind-aware default rather than a third invented pair; a deck with [run]
+# round-trips through TOML; a deck without one does not grow the section.
+# Verified negatively: restoring the hard-coded (4, 8) fails the first and
+# third and nothing else.
+# The remaining 39 are the jax-floor guard in tests/unit/api/test_public_types.py.
+# pyproject requires jax>=0.10.1 because gkx.objectives.core opts into
+# eig(..., enable_eigvec_derivs=True), but nothing checked it at test time, so an
+# older jax produced eight unrelated-looking physics failures -- a TypeError deep
+# in the objective vector plus four Hermite gates -- instead of one sentence. A
+# measurement recorded in the plan on 2026-09-07 had to be withdrawn for exactly
+# that reason. The guard reads the floor from pyproject rather than duplicating
+# it, so the two cannot drift apart.
+# 86679 -> 86742: the demo eigenvalue gate in test_validation_gates.py. It runs
+# the demo's own settings through both time integration and the certified Krylov
+# solver and requires agreement within 1 percent. Nothing else covered the number
+# the demo prints: the existing CLI demo test mocks the solver away, so it checks
+# plumbing only. Deliberately not marked slow -- no CI job runs slow tests, so
+# that marker would make the gate dead.
+# 86742 -> 86813: the shipped-deck gate in tests/release/test_release_gates.py.
+# The CLI never calls RuntimeConfig.validate and the Python facade does, so a
+# deck could run under gkx run-runtime-nonlinear and raise under gkx.load. Five
+# shipped decks did, including the one the README advertises. Nothing checked
+# the entry point the README sends people to. The gate walks every deck under
+# examples/ and benchmarks/ and requires each to load as a case or to carry a
+# written exemption, and a second test keeps those exemptions from outliving
+# their files or shrinking to something unauditable.
+# 86813 -> 86899: four warmup-contract tests in tests/unit/api. They pin that
+# preparing does not claim a compile it has not done, that warmup moves the
+# compile out of the first solve, that a second warmup does not re-run the case,
+# and that a linear case reports it was not warmed. They use a 4x4x8, (2,4) case
+# so the whole group costs about 5 s while still exercising a real compile
+# (warmup 1.2 s against a 0.000 s solve). Verified negatively: restoring the
+# no-op warmup fails three of the four and nothing else.
+# 86899 -> 86979: the prepare inventory gate in tests/release/test_release_gates.py.
+# It pins that the saturation refusal names both escapes and that the escape it
+# names actually prepares, and it records that no shipped deck fails prepare for
+# a reason outside the two understood kinds. Loading a deck and being able to
+# prepare one are different questions, and only the first was gated.
+# 86979 -> 87042: the precision banner in tests/conftest.py and the dtype-scaled
+# tolerance in the s-alpha field-strength gate. 17 tests assert float64-scale
+# tolerances and fail on the format at default precision, reading as broken
+# solvers; pytest.ini's -q --disable-warnings suppresses both a report header and
+# a warning, so the notice is written to stderr and only when a switch is missing.
+# The s-alpha gate kept a flat 1e-9 that is below float32 resolution -- it failed
+# by 5.96e-8, one float32 epsilon -- and now scales with the dtype in use, leaving
+# the float64 tolerance at exactly 1e-9 so no physics gate is loosened.
+# 87042 and 86801 -> 87276: this branch consolidates four
+# separately reviewed PRs -- the evidence ledger, the [run]-table and warmup
+# contracts, the prepare-refusal escape, and the dtype-scaled precision gate --
+# because main requires branches to be up to date and each of those PRs moved
+# this same counter. Merging them one at a time would have made every other
+# one numerically stale in turn. Both comment histories are kept above; the
+# baseline is the measured union, not either branch's figure.
+# +1 from merging main (the Laguerre finite guard and CONTRIBUTING.md)
+# into the consolidated branch; measured, not assumed.
+# Combined stack: 86568 - 1 (#199) + 85 (f32 stack) - 1 (#208); #207 is neutral.
+# Consolidated: #209's approved repair stack plus #211's species-state AD fix,
+# landed together because both move this counter. Measured union, not either
+# branch's figure.
+# +14: eager/outer-jitted EM initial-state derivative identity, serial and pmap.
+# Consolidated #209 + #211; measured union after both merges.
 # +48: rate/legacy RK identities, pytree AD, runtime input and mixed-route checks.
-baseline = 86616
+# +49 from the opt-in damp_ends_rate contract, measured after merging main.
+baseline = 87425
 target = 35000
 
 [[line_budget_policy.counts]]

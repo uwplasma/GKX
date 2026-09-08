@@ -4282,3 +4282,154 @@ def test_tracked_release_readiness_matches_the_current_project_version() -> None
     assert payload["project"]["version"] == project_version
     assert payload["version"]["project_version"] == project_version
     assert payload["version"]["source_version"] == project_version
+
+
+# ---- every shipped deck loads through the public API ----------------------
+#
+# The CLI never calls ``RuntimeConfig.validate``; the Python facade does. So a
+# deck could run fine under ``gkx run-runtime-nonlinear`` and raise under
+# ``gkx.load``, and five shipped decks did -- including
+# ``runtime_cyclone_nonlinear.toml``, which the README advertises as the
+# nonlinear example. They set ``nonlinear = true`` and left ``linear`` at its
+# default of true, which validate rejects as a contradiction. Adding
+# ``linear = false`` changed no output: the nonlinear runtime never read the
+# flag, and the diagnostics of a five-step run are bit-identical across the
+# change. The bug was that the two entry points disagreed about what a valid
+# case is, and nothing checked the one the README sends people to.
+
+# A deck may be exempt only with a reason, and the reason is checked below.
+_DECKS_NOT_LOADABLE_AS_CASES: dict[str, str] = {
+    "examples/common_input.toml": (
+        "key-by-key reference template, not a runnable case: its geometry.model "
+        "is 'vmec' and the file's own comment says vmec_file is injected by the "
+        "CLI from the wout positional, so it cannot validate standalone"
+    ),
+    "examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml": (
+        "a GX input file, not a GKX deck: it carries GX's [Dimensions], "
+        "[Domain] and nonlinear_mode keys and GX's array-style [species] "
+        "table. It is kept for provenance of the HSX comparison and is not "
+        "loadable by gkx.load; see plan.md 0.3.4 on the HSX row"
+    ),
+}
+
+
+def _shipped_decks() -> list[str]:
+    root = RUN_TO_REPO_ROOT
+    found: list[str] = []
+    for base in ("examples", "benchmarks"):
+        for path in sorted((root / base).rglob("*.toml")):
+            found.append(str(path.relative_to(root)))
+    return found
+
+
+def test_every_shipped_deck_loads_and_validates_through_the_public_api() -> None:
+    import gkx
+
+    failures: list[str] = []
+    for relative in _shipped_decks():
+        if relative in _DECKS_NOT_LOADABLE_AS_CASES:
+            continue
+        try:
+            gkx.load(RUN_TO_REPO_ROOT / relative).validate()
+        except Exception as error:  # noqa: BLE001 - the message is the evidence
+            failures.append(f"{relative}: {type(error).__name__}: {error}")
+
+    assert not failures, (
+        "shipped decks that the CLI accepts but the public API rejects:\n"
+        + "\n".join(failures)
+        + "\n\nA deck under examples/ or benchmarks/ is something a reader is "
+        "invited to run. If it cannot be loaded as a case, either fix it or add "
+        "it to _DECKS_NOT_LOADABLE_AS_CASES with the reason."
+    )
+
+
+# Loading a deck is not the same as being able to prepare one. ``gkx.prepare``
+# compiles a scan of a fixed length, so it refuses a deck whose ``[time] run_to``
+# is ``"saturation"`` -- the length is decided while that run is going. That
+# refusal is correct, but every shipped nonlinear deck sets saturation stopping,
+# so on main ``gkx.prepare`` had no working example anywhere in the tree while
+# the README advertised preparing a nonlinear case for reuse. The escape,
+# ``gkx.prepare(case, steps=N)``, works and nothing said so.
+#
+# This records which decks prepare as written and why the rest do not, so the
+# answer is a checked fact rather than something rediscovered by accident.
+
+_DECKS_NOT_PREPARABLE: dict[str, str] = {}
+
+
+def _prepare_failure(relative: str) -> str | None:
+    """Return a short reason ``gkx.prepare`` refuses this deck, or None."""
+
+    import gkx
+
+    try:
+        case = gkx.load(RUN_TO_REPO_ROOT / relative)
+    except Exception as error:  # noqa: BLE001
+        return f"load: {type(error).__name__}"
+    try:
+        gkx.prepare(case)
+    except Exception as error:  # noqa: BLE001
+        text = str(error)
+        if "cannot stop early at saturation" in text:
+            return "saturation"
+        if isinstance(error, FileNotFoundError):
+            return "missing geometry file"
+        return f"{type(error).__name__}"
+    return None
+
+
+def test_a_saturation_deck_can_still_be_prepared_with_an_explicit_length() -> None:
+    """The refusal must name a way out, and that way out must work."""
+
+    import gkx
+
+    relative = "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml"
+    case = gkx.load(RUN_TO_REPO_ROOT / relative)
+    assert str(case.time.run_to).strip().lower() == "saturation", (
+        "this fixture is chosen because it stops at saturation"
+    )
+
+    with pytest.raises(ValueError) as raised:
+        gkx.prepare(case)
+
+    message = str(raised.value)
+    assert "steps=" in message, (
+        "the refusal must name the explicit-length escape; without it "
+        "gkx.prepare has no working nonlinear example in the tree"
+    )
+    assert 'run_to = "t_max"' in message, "the refusal must name the deck-side escape"
+
+    # And the escape it names actually works.
+    assert gkx.prepare(case, steps=2) is not None
+
+
+def test_prepare_refusals_are_only_the_known_kinds() -> None:
+    """No shipped deck may fail ``prepare`` for a reason nobody has looked at."""
+
+    known = {"saturation", "missing geometry file"}
+    surprises: list[str] = []
+    for relative in _shipped_decks():
+        if relative in _DECKS_NOT_LOADABLE_AS_CASES:
+            continue
+        reason = _prepare_failure(relative)
+        if reason is not None and reason not in known:
+            surprises.append(f"{relative}: {reason}")
+
+    assert not surprises, (
+        "shipped decks fail gkx.prepare for reasons outside the two understood "
+        "kinds -- a deck that stops at saturation, which prepare refuses by "
+        "design and now explains, and a deck whose geometry file is not "
+        "tracked:\n" + "\n".join(surprises)
+    )
+
+
+def test_deck_exemptions_are_real_and_explained() -> None:
+    """An exemption may not outlive the file, and may not be silent."""
+
+    problems: list[str] = []
+    for relative, reason in _DECKS_NOT_LOADABLE_AS_CASES.items():
+        if not (RUN_TO_REPO_ROOT / relative).is_file():
+            problems.append(f"{relative}: exempted but no longer exists")
+        if len(reason.split()) < 8:
+            problems.append(f"{relative}: exemption reason is too thin to audit")
+    assert not problems, "\n".join(problems)

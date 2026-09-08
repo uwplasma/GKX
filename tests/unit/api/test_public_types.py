@@ -161,3 +161,42 @@ def test_print_summary_writes_every_summary_field(capsys) -> None:
     _linear().print_summary()
     printed = capsys.readouterr().out
     assert "gamma" in printed and "fit_settled" in printed
+
+
+# ---- the installed environment meets the floor the package declares -------
+#
+# ``gkx.objectives.core`` opts into ``lax_linalg.eig(..., enable_eigvec_derivs=
+# True)``, which first shipped in jax 0.10.1, and ``pyproject.toml`` requires
+# it. Nothing enforced that at test time, so running the suite against an older
+# jax produced eight unrelated-looking physics failures -- a TypeError deep in
+# the objective vector, plus four Hermite-hierarchy gates -- rather than one
+# sentence naming the cause. A reviewer who hits that reads it as "the physics
+# is broken" instead of "the environment is stale".
+
+
+def test_installed_jax_meets_the_floor_the_package_declares() -> None:
+    import re
+    import tomllib
+    from pathlib import Path
+
+    import jax
+
+    root = Path(__file__).resolve().parents[3]
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    requirements = pyproject["project"]["dependencies"]
+    declared = next(r for r in requirements if r.replace(" ", "").startswith("jax>="))
+    floor = re.search(r">=\s*([0-9.]+)", declared).group(1)
+
+    def as_tuple(text: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in text.split(".") if part.isdigit())
+
+    installed = jax.__version__
+
+    assert as_tuple(installed) >= as_tuple(floor), (
+        f"installed jax {installed} is below the {floor} this package requires. "
+        "gkx.objectives.core needs eig(..., enable_eigvec_derivs=True), which "
+        "older jax rejects with a TypeError, and several physics gates fail as "
+        "a downstream consequence. Reinstall into a fresh environment "
+        f"(python -m venv env && env/bin/pip install -e '.[dev]') rather than "
+        "reading those failures as physics."
+    )

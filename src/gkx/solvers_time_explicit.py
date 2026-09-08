@@ -376,6 +376,7 @@ def _take_linear_explicit_step(
     dt_min: float,
     dt_max: float,
     wmax: float,
+    remaining_time: float,
 ) -> tuple[jnp.ndarray, Any, float]:
     dt = _adaptive_linear_dt(
         time_cfg,
@@ -384,6 +385,8 @@ def _take_linear_explicit_step(
         dt_max=dt_max,
         wmax=wmax,
     )
+    # The endpoint takes precedence over the controller's minimum timestep.
+    dt = min(dt, remaining_time)
     G, fields = stepper(G, cache, params, term_cfg, dt)
     return G, fields, dt
 
@@ -456,6 +459,7 @@ def _run_linear_explicit_loop(
             dt_min=dt_min,
             dt_max=dt_max,
             wmax=wmax,
+            remaining_time=t_max - t,
         )
         phi = fields.phi
         step += 1
@@ -504,7 +508,7 @@ def integrate_linear_explicit(
     jit: bool = True,
     show_progress: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Explicit time integrator with growth-rate diagnostics."""
+    """Explicit time integrator; shorten the final step to end at ``t_max``."""
 
     _validate_mode_method(mode_method)
     method = _resolve_explicit_method(time_cfg.method)
