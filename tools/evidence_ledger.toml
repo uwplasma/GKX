@@ -55,6 +55,13 @@ reference_rank = 5
 tier = 2
 status = "passing"
 
+# Both stellarator scans share a provenance gap found on 2026-09-08: the
+# decisive parameters live in unrecorded environment variables
+# (W7X_IMPORTED_ARGS, HSX_IMPORTED_ARGS) that carry the GX reference, and the
+# two manifests name different configs. The W7-X CSV matches the parity config
+# (dky = 0.1, y0 = 10); the HSX CSV matches the runtime config (dky = 1/21,
+# y0 = 21). Recording those variable values is what closes both rows.
+
 [[row]]
 id = "L-lin-w7x"
 claim = "README linear parity table, W7-X"
@@ -77,12 +84,12 @@ readme_label = "HSX"
 observable = "100*max|gkx-ref|/max|ref| over the tracked scan, gamma and omega"
 artifact = "docs/_static/hsx_linear_t2_scan.csv"
 columns = { gamma_ref = "gamma_ref_last", gamma_gkx = "gamma_last", omega_ref = "omega_ref_last", omega_gkx = "omega_last" }
-generator = "tools/comparison/build_gx_parity_matrix.py"
-reference = "no upstream case, deck or wout exists; the tracked CSV has no regenerating input"
+generator = "tools/benchmark_refresh_manifest.toml job 'imported-linear-hsx' -> tools/comparison/compare_gx_imported_linear.py"
+reference = "GX output supplied through the unrecorded HSX_IMPORTED_ARGS environment variable"
 reference_rank = 5
 tier = 2
 status = "provisional"
-notes = "plan.md 0.3.4: regenerate with provenance or delete the row and the claim by the end of Phase 1"
+notes = "provenance corrected 2026-09-08. The generator is NOT tools/comparison/fixtures/parity/hsx_itg.toml, which the GX parity manifest names: that config declares y0=10, Nl=8, Nm=16 while the CSV is spaced dky=1/21 (y0=21) and the real pipeline uses runtime_hsx_nonlinear_vmec_geometry.toml at y0=21, Nl=4, Nm=8. The equilibrium is Nuhrenberg-Zille 1988 QHS, regenerable from the tracked examples/vmec/input.NuhrenbergZille_1988_QHS, and is not literally HSX despite the label. What is still unrecorded is the value of HSX_IMPORTED_ARGS, which carries the GX reference; the same gap applies to the W7-X row. Row stays provisional until that is recorded, not because the scan cannot be rebuilt."
 
 [[row]]
 id = "L-lin-cyclone-miller"
