@@ -438,9 +438,37 @@ reachable.
 2. `CITATION.cff` (added). Mint a Zenodo DOI at 2.1.0 and add the badge.
 3. Add `CONTRIBUTING.md`: how to run tiers 0–2, the PR template (§14), the
    ledger rule.
-4. HSX: no reference, deck or wout exists anywhere. By the end of Phase 1,
-   regenerate with provenance or delete the README row and the atlas entry
-   (the #178 rule).
+4. **HSX: delete the row.** Decided 2026-09-07 on evidence, not preference.
+   `docs/_static/hsx_linear_t2_scan.csv` is spaced by `dky = 1/21`, so its box is
+   `y0 = 21` (`dky = 1/y0`, `workflows/runtime/resolution.py:276`). Its declared
+   generator `tools/comparison/fixtures/parity/hsx_itg.toml` sets `y0 = 10`.
+   **The tracked config cannot produce the tracked artifact.** W7-X is the
+   control and is consistent (`dky = 0.1` against `y0 = 10`). On top of that: GX
+   ships no HSX benchmark at `bc2fe552` or `3865a537`, the named reference output
+   is absent locally and on office (`/home/rjorge/gx_refs_lin` has no HSX
+   subdirectory), and the wout was never recorded. The published 0.577%/0.273%
+   is faithful to its CSV and the CSV is attributable to nothing.
+
+   The edit spans #213 and the #214 chain, so it lands only once both are in --
+   removing the README row while the ledger still carries `L-lin-hsx` fails
+   `test_ledger_covers_every_published_parity_row`:
+
+   - `README.md`: drop the HSX parity row.
+   - `tests/release/test_release_gates.py`: drop `"HSX"` from `_README_PARITY_SOURCES`.
+   - `tools/evidence_ledger.toml`: remove `L-lin-hsx`.
+   - `tools/benchmark_atlas_manifest.toml`: drop the `hsx` entries.
+   - `tools/gx_parity_matrix_manifest.toml`: remove or annotate `hsx_itg`.
+   - **Keep** the CSV and config in the tree as evidence of what was published.
+     Deleting the record of a withdrawn claim is worse than keeping it.
+
+   Regenerating HSX as a **new**, declared case stays worthwhile and is now
+   feasible: office is back with two idle A4000s and GX at `3865a537`, the W7-X
+   deck is an exact template (`ntheta=256, nperiod=1, nhermite=16, nlaguerre=8,
+   y0=10, t_max=200, tprim=3, fprim=1` already match the HSX parity config), and
+   `vmec_equilibria/HSX/QHS_vac_ns201_fixed/wout_HSX_QHS_vacuum_ns201.nc`
+   (nfp=4, ns=201, aspect 9.969, iota 1.048-1.098, sha256 `a666187e...`) is a
+   canonical QHS vacuum equilibrium. That is Phase 1 work with declared
+   `torflux`, `alpha` and `npol` -- not a defence of the old number.
 
 ### 0.4 Ledger scaffold and GX goldens
 
@@ -1103,7 +1131,7 @@ needs an alternative allocation before its pilot.
 
 - [ ] 0.1 PR dispositions executed; planning PRs closed.
 - [ ] 0.2 five API/first-run contracts pass.
-- [ ] 0.3 CITATION.cff, CONTRIBUTING.md; HSX decision made.
+- [x] 0.3 CITATION.cff and CONTRIBUTING.md (#215); HSX decision made — delete, on the config/artifact contradiction; the edit is queued behind #213 and the #214 chain.
 - [x] 0.4 ledger scaffold and GX goldens imported (#213); upstream clamp report drafted at `tools/comparison/fixtures/gx_goldens/upstream_report.md`, not yet filed.
 - [ ] 0.5 velocity-convergence table passing; anomaly resolved.
 - [ ] 1 linear atlas at rank ≤3; KBM two-field closed or diagnosed; pyrokinetics round-trip.
