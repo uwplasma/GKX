@@ -753,7 +753,23 @@ def run_full_nonlinear_runtime(
     )
     if prepare_only:
         if _saturation_stop_condition(cfg, ctx, policy) is not None:
-            raise ValueError("prepared execution cannot stop early at saturation")
+            # A prepared object compiles one scan of a fixed length, and
+            # saturation stopping decides the length while the run is going, so
+            # the two cannot both hold. Refusing is right -- quietly dropping
+            # the stop condition would hand back a simulation that integrates
+            # past where the deck asked it to stop. But the refusal used to end
+            # here, and every shipped nonlinear deck sets run_to = "saturation",
+            # so gkx.prepare had no working example in the tree. Name the two
+            # ways out.
+            raise ValueError(
+                "prepared execution cannot stop early at saturation: this deck "
+                f"sets [time] run_to = {str(cfg.time.run_to).strip().lower()!r}, "
+                "and a prepared simulation compiles one scan of a fixed length. "
+                "Either pass an explicit length, gkx.prepare(case, steps=N), or "
+                'set [time] run_to = "t_max" so the deck itself fixes it. '
+                "Both give up saturation stopping for this object; run the case "
+                "through gkx.solve or the CLI to keep it."
+            )
         kwargs = _diagnostic_kwargs(
             cfg,
             ctx,

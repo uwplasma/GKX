@@ -249,14 +249,15 @@ def test_laguerre_transform_sign_convention_is_unchanged() -> None:
     assert np.allclose(to_spectral.T, to_grid * weights[None, :], rtol=1.0e-12)
 
 
-def test_laguerre_transform_rejects_a_degraded_pair() -> None:
+@pytest.mark.parametrize("scale", [1.01, np.nan, np.inf])
+def test_laguerre_transform_rejects_a_degraded_pair(scale: float) -> None:
     """The round-trip guard must fire rather than return an unusable transform."""
     import gkx.core_velocity as velocity
 
     to_grid, to_spectral, _ = velocity.laguerre_transform(8)
     with pytest.raises(ValueError, match="round-trip identity error"):
         velocity._check_laguerre_transform_conditioning(
-            to_grid, to_spectral * 1.01, to_grid.shape[0]
+            to_grid, to_spectral * scale, to_grid.shape[0]
         )
 
 

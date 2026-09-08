@@ -125,6 +125,32 @@ does not imply runtime nonlinear domain decomposition: it only proves that the
 metadata split/reassemble contract is internally consistent and correctly
 scoped as non-production.
 
+Diagnostic gate: differentiable species initial states
+-------------------------------------------------------
+
+Species-parallel linear solves preserve traced initial states through input
+placement. Concrete inputs retain explicit placement; traced inputs never
+round-trip through host NumPy. For fixed parameters and linear evolution,
+
+.. math::
+
+   J(s)=\|G_T(sG_0)\|^2+\|\phi_T(sG_0)\|^2,
+   \qquad J'(1)=2J(1).
+
+The existing electromagnetic trajectory test checks this identity with active
+:math:`A_\parallel,B_\parallel`, serial versus species ``pmap``, and eager versus
+outer-jitted reverse differentiation. Run in separate precision processes:
+
+.. code-block:: bash
+
+   JAX_ENABLE_X64=true XLA_FLAGS=--xla_force_host_platform_device_count=2 \
+     python -m pytest tests/unit/parallel/test_parallel_linear_velocity.py \
+     -k species_pmap_electromagnetic_trajectory_matches_serial
+
+Repeat with ``JAX_ENABLE_X64=false`` for float32. This three-step identity is
+an AD/routing contract, not electromagnetic model validation, long-time
+turbulent sensitivity accuracy or a parallel speedup measurement.
+
 Diagnostic path: whole-state nonlinear sharding
 -----------------------------------------------
 
