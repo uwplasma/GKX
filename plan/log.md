@@ -10770,3 +10770,39 @@ two PRs that add a file or a test collide there by construction. That makes them
 a serialization point independent of content. Either the check should compare
 against a computed value rather than a checked-in number, or the budget should
 live per-directory so unrelated work does not contend for one line.
+
+## 2026-09-08 — merge campaign, third pass
+
+Merged: **#218** (`2187135f`), the consolidated Phase 0 infrastructure — the
+evidence ledger, the `[run]`-table and `warmup` contracts, the prepare-refusal
+escape, and the dtype-scaled precision gate. That closed #213, #214, #216, #217.
+
+Opened **[#219](https://github.com/uwplasma/GKX/pull/219)**, consolidating #209
+and #211 the same way and for the same reason: their content does not overlap at
+all — the only shared file is `tools/package_architecture_manifest.toml` — but
+both move its line-count baselines, so a serial merge would leave the second
+numerically stale rather than merely behind.
+
+One thing to note for anyone repeating this. The first attempt produced a branch
+carrying only #209: the second `git merge` had refused because the first merge's
+conflict was still unresolved, and the later `git commit --no-edit` recorded only
+that first merge. It looked finished. The check that caught it was asking the
+branch directly whether #211's files were present
+(`git diff --stat origin/main..HEAD -- <its files>`), which returned nothing.
+Worth doing after any conflicted multi-merge: a clean `git log` is not evidence
+that every intended branch is in.
+
+#219 now carries both, verified by file set — `docs/parallelization.rst` and
+`solvers_linear_parallel_electrostatic.py` from #211 alongside #209's workflow,
+quickstart, brackets, both explicit-time facades and three test files — and it
+preserves every constituent head in its ancestry.
+
+Verified: 712 passed / 41 skipped, then 537 passed / 42 skipped after adding
+#211, on jax 0.10.2 with `JAX_ENABLE_X64=true GKX_X64=1`. Eleven checkers, ruff
+clean. Baselines are the measured union at each step: 89136 source lines, 87376
+test lines.
+
+When #219 lands it retires six PRs — itself, #209, #211, and the #196/#200/#201/#208
+whose file sets #209 covers exactly. That would leave **#206** (this plan) and
+**#212** (three failing checks, its author's) as the only open PRs, down from
+fifteen.
