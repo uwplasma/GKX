@@ -11,11 +11,22 @@ and reasoning are kept in [plan/baseline](plan/baseline/),
 [plan/research](plan/research/) and [plan/log.md](plan/log.md). No other
 roadmap is active. This plan changes no solver, test, data or release.
 
-**Status 2026-09-07:** this document is on branch `plan/authoritative-20260906`
+**Status 2026-09-08:** this document is on branch `plan/authoritative-20260906`
 ([#206](https://github.com/uwplasma/GKX/pull/206)) and is **not yet on `main`**,
 which still carries the superseded 2,881-line roadmap. Landing #206 is Phase 0's
-first act: until it lands, `main`'s `plan.md` contradicts this file. Phase 0.1 is
-under way (#197, #199, #207 merged; #209–#212 open).
+first act: until it lands, `main`'s `plan.md` contradicts this file.
+
+Phase 0.1 is complete. Merged: #197, #199, #207, #215, #210, then #218
+(consolidating #213/#214/#216/#217) and #219 (consolidating #209/#211, and
+carrying #196/#200/#201/#208). Closed as superseded: #202, and the six retired by
+those consolidations. The backlog went from fifteen open PRs to two — this one
+and #212, which has failing checks and stays with its author.
+
+This branch no longer carries a README rewrite. `main`'s README has since taken
+the corrections that mattered (the capability table, the Cite section, the demo's
+resolution, the prepare paragraph, the CONTRIBUTING link), so the conflict was
+resolved in `main`'s favour. Shortening the README remains open as 0.3.1 and is
+separate work.
 
 An independent agent should be able to resume from this file alone: every
 phase has numbered steps with an owner, an entry point, an exit condition, the

@@ -10806,3 +10806,38 @@ When #219 lands it retires six PRs — itself, #209, #211, and the #196/#200/#20
 whose file sets #209 covers exactly. That would leave **#206** (this plan) and
 **#212** (three failing checks, its author's) as the only open PRs, down from
 fifteen.
+
+## 2026-09-08 — merge campaign complete: fifteen open PRs down to two
+
+**#219 merged** (`7eb7627a`), retiring six: itself, #209 and #211 directly, and
+#196, #200, #208 which GitHub closed from its body.
+
+**#201 closed by hand after verifying it had actually landed.** It was the one
+that did not auto-close, and it read CONFLICTING, which looks like unmerged work.
+It is not: its head `53d86f01` is an ancestor of `main`, and
+`src/gkx/operators/nonlinear/brackets.py` on main is byte-identical to that
+branch. It stayed open only because its own base, `test/r0-f32-backend-probe`,
+had itself been merged, leaving the PR pointing at a base that no longer exists.
+Checked before closing rather than assumed — a DIRTY status is not evidence
+either way.
+
+Final tally: **#215, #210, #218, #219** merged; **#202, #213, #214, #216, #217,
+#201** closed as superseded or consolidated; **#196, #200, #208, #209, #211**
+retired by the consolidations. Two remain: **#206** (this plan) and **#212**
+(three failing checks, its author's).
+
+**#206 updated against the new main.** One conflict, in `README.md`: this branch
+still carried the 269-line rewrite inherited from #204, while `main`'s README had
+meanwhile grown to 520 lines with the corrections that actually mattered — the
+capability table, the Cite section, the demo's corrected resolution, the prepare
+paragraph, the CONTRIBUTING link. Resolved in `main`'s favour: #206 should be the
+plan, not a README rewrite. Shortening the README stays open as 0.3.1, separate
+work with its own evidence.
+
+Verified after the merge: 152 release-gate tests pass, all checkers pass, strict
+Sphinx builds, every relative link in plan.md resolves.
+
+Next, now that #218 put the ledger and the release gates on main, the queued
+**HSX deletion** from 0.3.4 is finally executable as a single coherent PR —
+README row, `_README_PARITY_SOURCES`, `L-lin-hsx`, the atlas entries, and the
+`hsx_itg` manifest case, keeping the CSV and config as evidence.
