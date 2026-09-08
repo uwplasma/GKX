@@ -10573,3 +10573,43 @@ Open in this lane: #206 (plan), #213 (ledger), #214, #215 (CONTRIBUTING), #216,
 Still open overall: 0.3.4 HSX (needs a GPU or the row goes), 0.5 velocity
 convergence (blast radius unmeasured, `--maxfail=1` truncated the run), 0.6
 office unreachable four days.
+
+## 2026-09-07 — Phase 0.5.6 closed: the hypercollision blast radius is two tests
+
+The earlier measurement was truncated by `pytest.ini`'s `--maxfail=1`, so the
+plan carried an unmeasured blast radius. Redone with `--maxfail=0` on a scratch
+worktree off main `99963b45`, jax 0.10.2, `JAX_ENABLE_X64=true GKX_X64=1`,
+across `tests/unit/{linear,operators,solvers,objectives}` and
+`tests/validation/physics_gates`.
+
+Flipping `hypercollisions_const` 1.0 -> 0.0 and `hypercollisions_kz` 0.0 -> 1.0
+to match GX gives **exactly two failures**, both Krylov conditioning:
+
+- `unit/linear/test_linear.py::test_shift_invert_nearest_pair_passes_physical_outer_residual`
+  — `RuntimeError: shift-invert eigenpair failed the outer residual gate:
+  residual=0.98747, tolerance=0.06`
+- `unit/solvers/test_linear_krylov_core.py::test_field_corrected_shifted_preconditioner_removes_low_moment_coupling`
+  — the field-corrected residual stops beating 0.1x the hermite-line residual
+
+**No physics gate fails.** The zero-drive Hermite gates, which the withdrawn
+entry cited as proof that the constant branch is load-bearing, pass with the
+flip. That argument is dead; this is the replacement.
+
+Mechanism, from source rather than inference:
+`operators/linear/cache_arrays.py::hypercollision_damping` builds the diagonal
+the shifted preconditioner uses (`solvers_linear_krylov_algorithms.py:56`
+consumes it). It models the kz branch as `nu_hyp_m * m_pow * |kz|` using the
+**local** `cache.kz` array. The RHS applies the same branch through
+`_apply_parallel_hypercollision`, which for a linked domain routes through
+`abs_z_linked_fft` — nonlocal across chains. With the constant branch active the
+preconditioner's diagonal matches the operator; with the kz branch it does not.
+That is the leading explanation for a residual going 0.06 -> 0.987 and should be
+confirmed before either default moves.
+
+Disposition, now in plan.md 0.5.6: keep GKX's default, document that GX defaults
+to the kz branch so a caller comparing against GX selects it explicitly, and gate
+that the parity decks keep `hypercollisions_kz` with `hypercollisions_const = 0`
+(they already do). Matching GX is available once the preconditioner handles the
+kz form — bounded work with a named cause, not an open question.
+
+The scratch worktree was deleted; nothing was committed to `src/`.

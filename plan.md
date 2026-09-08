@@ -502,41 +502,47 @@ run on merged #197:
    | `p_hyper_m` default | `min(20, Nm/2)` (`parameters.cu:185`) | fixed `20.0` (`params.py:150`) | agree only for Nm ≥ 40. At Nm=16 the top-moment damping is 12.17 versus GX's 5.05, a factor 2.4 |
    | default branch | `hypercollisions_const=false`, `hypercollisions_kz=true` (`parameters.cu:190-192`) | `hypercollisions_const=1.0`, `hypercollisions_kz=0.0` (`params.py:152-153`) | **opposite**. The shipped decks override correctly, so file-driven runs are unaffected; any Python run on default `LinearParams` selects the other model |
 
-   **Measured disposition, corrected 2026-09-07.** A first attempt to measure
-   this ran against **jax 0.9.2**, below the `jax>=0.10.1` floor `pyproject.toml`
-   declares, and reported nine failures. Eight of those were the stale
-   environment, not the flip: on unmodified `main` the same interpreter fails
-   `tests/unit/objectives/test_autodiff_solver_objectives.py` with
-   `TypeError: eig() got an unexpected keyword argument 'enable_eigvec_derivs'`
-   — the opt-in `gkx.objectives.core` needs and older jax rejects — and four
-   Hermite-hierarchy gates fail downstream of it. The earlier claim in this plan
-   that the constant branch is load-bearing *because zero-drive damping fails
-   without it* is **withdrawn**: those gates pass with the flip once the
-   environment conforms.
+   **Measured, completed 2026-09-07.** A first attempt ran against **jax 0.9.2**,
+   below the `jax>=0.10.1` floor `pyproject.toml` declares, and reported nine
+   failures; eight were the stale environment, not the flip. The claim once made
+   here that the constant branch is load-bearing *because zero-drive damping
+   fails without it* is **withdrawn** — those gates pass with the flip once the
+   environment conforms. `tests/unit/api/test_public_types.py` now guards the
+   floor so this cannot recur.
 
-   Re-measured in a clean venv on jax 0.10.2, with
-   `JAX_ENABLE_X64=true GKX_X64=1` as the nightly job sets:
+   Re-measured in a clean venv on jax 0.10.2 with `JAX_ENABLE_X64=true
+   GKX_X64=1`, across `tests/unit/{linear,operators,solvers,objectives}` and
+   `tests/validation/physics_gates`, with `--maxfail=0` so the run was not
+   truncated:
 
-   | Tree | `tests/unit/{objectives,linear,operators}` + `tests/validation/physics_gates` |
+   | Tree | Result |
    |---|---|
-   | `main` unmodified | **all pass**, exit 0 |
-   | defaults flipped to GX's | fails `test_linear.py::test_shift_invert_nearest_pair_passes_physical_outer_residual` — `RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.98747, tolerance=0.06` |
+   | `main` unmodified | all pass |
+   | defaults flipped to GX's | **exactly 2 failures**, both Krylov conditioning |
 
-   The flip run stopped at that first failure (`--maxfail=1`), so the **full
-   blast radius is still unmeasured**. What is established: the flip is not
-   free, and it degrades a Krylov eigenpair's outer residual by more than an
-   order of magnitude past its gate, which is a solver-conditioning consequence
-   rather than the physical argument previously given here.
+   The two are `test_shift_invert_nearest_pair_passes_physical_outer_residual`
+   (outer residual 0.98747 against a 0.06 gate) and
+   `test_field_corrected_shifted_preconditioner_removes_low_moment_coupling`.
+   **No physics gate fails.**
 
-   Next action for this item, in order:
+   So the objection to matching GX is not physical, it is that GKX's shifted
+   preconditioner is built for the damping the constant branch produces.
+   `hypercollision_damping` in `operators/linear/cache_arrays.py` supplies the
+   preconditioner's diagonal and models the kz branch with the *local* `|kz|`
+   array, while the RHS applies it through `abs_z_linked_fft` — nonlocal across
+   linked chains. That mismatch is the leading explanation for the residual
+   blow-up and is worth confirming before either default is changed.
 
-   1. Re-run the flip without `--maxfail` to get the true failure set.
-   2. Decide from that, not from the count: if the only casualty is
-      shift-invert conditioning, the flip may still be right with a
-      preconditioner or tolerance change; if physics gates fall, it is not.
-   3. `p_hyper_m` remains a separate decision (GX `min(20, Nm/2)` versus GKX's
-      fixed 20.0, differing only for Nm < 40). It does not touch the Nm=48
-      parity deck, so settle it on the Nm ∈ {16,24,32} rungs and the W7-X deck.
+   Disposition: **keep GKX's default for now**, and document beside it that GX
+   defaults to the kz branch so a caller comparing against GX selects it
+   explicitly. Gate that the GX-comparison decks keep `hypercollisions_kz` with
+   `hypercollisions_const = 0`; the shipped parity decks already do. Matching GX
+   becomes available once the preconditioner handles the kz form, which is a
+   bounded piece of work with a named cause rather than an open question.
+
+   `p_hyper_m` remains separate: GX uses `min(20, Nm/2)`, GKX a fixed 20.0, equal
+   only for Nm >= 40. It does not touch the Nm=48 parity deck, so settle it by
+   measurement on the Nm in {16, 24, 32} rungs and the W7-X deck.
 
    Neither item explains the Nl swing, so neither blocks step 5.
 
