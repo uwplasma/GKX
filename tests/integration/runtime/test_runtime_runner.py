@@ -380,10 +380,6 @@ def test_runtime_explicit_end_damping_rate(dt, rate, tmp_path) -> None:
     params = build_runtime_linear_params(cfg, Nm=8)
     assert params.damp_ends_rate == rate
     assert cfg.to_dict()["time"]["damp_ends_rate"] == rate
-    with pytest.raises(ValueError, match="cannot be combined"):
-        build_runtime_linear_params(
-            replace(cfg, collisions=RuntimeCollisionConfig(damp_ends_scale_by_dt=True))
-        )
 
 
 @pytest.mark.parametrize("rate", [-0.1, float("inf"), float("nan")])
@@ -392,16 +388,20 @@ def test_runtime_end_damping_rejects_invalid_rate(rate) -> None:
         replace(_base_runtime_cfg().time, damp_ends_rate=rate)
 
 
-def test_runtime_end_damping_can_explicitly_scale_by_dt() -> None:
+@pytest.mark.parametrize("dt", [0.0, 0.2])
+@pytest.mark.parametrize("rate", [None, 0.0, 0.5])
+def test_runtime_end_damping_rejects_legacy_scaling(dt, rate, monkeypatch) -> None:
     base = _base_runtime_cfg()
     cfg = replace(
         base,
-        time=replace(base.time, dt=0.2),
+        time=replace(base.time, dt=dt, damp_ends_rate=rate),
         collisions=RuntimeCollisionConfig(damp_ends_scale_by_dt=True),
     )
-    params = build_runtime_linear_params(cfg, Nm=8)
-    assert float(params.damp_ends_amp) == pytest.approx(0.5)
-    assert float(params.damp_ends_widthfrac) == pytest.approx(0.125)
+    monkeypatch.setattr(
+        startup, "build_runtime_geometry", lambda _: pytest.fail("unexpected geometry")
+    )
+    with pytest.raises(ValueError, match="removed.*damp_ends_rate"):
+        startup.build_runtime_linear_params(cfg, Nm=8)
 
 
 def test_runtime_startup_model_and_geometry_branches(

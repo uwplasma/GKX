@@ -439,13 +439,15 @@ Notable runtime-only keys:
   The maintained runtime supports full gyrokinetics via ``"gyrokinetic"``
   and its full-GK aliases. Non-promoted reduced-model values fail closed with
   ``NotImplementedError`` instead of silently routing through the wrong equations.
-* ``[collisions] damp_ends_scale_by_dt``: legacy opt-in that divides
-  ``damp_ends_amp`` by ``[time] dt`` once more, *before* the solver's own
-  per-step division on linear routes (``1/(dt_input*dt_step)`` in the RHS).
-  Without a solver timestep it applies only the input-step division. The
-  reference-compatible default is ``false`` and no shipped deck sets it. It is
-  scheduled for removal with the end-damping redesign
-  (`uwplasma/GKX#194 <https://github.com/uwplasma/GKX/issues/194>`_).
+* ``[collisions] damp_ends_scale_by_dt``: ``true`` now raises a migration error
+  before geometry construction; omitted/``false`` retains legacy defaults.
+  Remove the true flag and choose ``[time] damp_ends_rate`` explicitly.
+  For an old true-flag deck, the linear rate was
+  :math:`A/(\Delta t_{input}\Delta t_{step})`; a timestep-free RHS used
+  :math:`A/\Delta t_{input}`. Record the route, source deck/hash, amplitude and
+  both timesteps before converting. Adaptive linear steps do not define one
+  equivalent constant rate. No automatic conversion or reference promotion
+  occurs (`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_).
 * ``[collisions] hypercollisions_const`` / ``hypercollisions_kz``: defaults are
   the reference-compatible ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
   default, constant hypercollisions off).

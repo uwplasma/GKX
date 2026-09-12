@@ -1228,7 +1228,8 @@ Controls:
 - ``RuntimeCollisionConfig.p_hyper_kperp``
 - ``RuntimeCollisionConfig.damp_ends_amp``
 - ``RuntimeCollisionConfig.damp_ends_widthfrac``
-- ``RuntimeCollisionConfig.damp_ends_scale_by_dt``
+- ``RuntimeCollisionConfig.damp_ends_scale_by_dt`` (deprecated true value rejected;
+  use the explicit rate described in :doc:`inputs`)
 
 Nonlinear :math:`E \\times B` And Flutter
 -----------------------------------------
