@@ -81,6 +81,23 @@ MAX_TRACKED_RESULT_BYTES = 1_000_000
 MAX_ROOT_BENCHMARK_PAYLOAD_BYTES = 200_000
 
 
+def _assert_same_parameters(actual, expected):
+    for field in fields(actual):
+        left, right = getattr(actual, field.name), getattr(expected, field.name)
+        if left is None or right is None:
+            assert left is right, field.name
+        else:
+            np.testing.assert_allclose(
+                left, right, rtol=1.0e-7, atol=1.0e-9, err_msg=field.name
+            )
+
+
+@pytest.mark.parametrize("rates", [(None, 0.0), (0.0, None), (0.1, 0.2)])
+def test_parameter_contract_rejects_optional_and_numeric_mismatches(rates):
+    with pytest.raises(AssertionError, match="damp_ends_rate"):
+        _assert_same_parameters(*(LinearParams(damp_ends_rate=r) for r in rates))
+
+
 def test_integrator_benchmark_uses_canonical_linear_owners() -> None:
     assert benchmark_integrators.LinearParams is LinearParams
     assert benchmark_integrators.build_linear_cache is build_linear_cache
@@ -167,19 +184,7 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
         damp_ends_widthfrac=0.0,
         nhermite=n_hermite,
     )
-    for field in fields(runtime_params):
-        actual = getattr(runtime_params, field.name)
-        expected = getattr(legacy_params, field.name)
-        if actual is None or expected is None:
-            assert actual is expected, field.name
-            continue
-        np.testing.assert_allclose(
-            actual,
-            expected,
-            rtol=1.0e-7,
-            atol=1.0e-9,
-            err_msg=field.name,
-        )
+    _assert_same_parameters(runtime_params, legacy_params)
 
     runtime_state = build_runtime_initial_condition(
         grid,
@@ -276,14 +281,7 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
         damp_ends_widthfrac=0.125,
         nhermite=n_hermite,
     )
-    for field in fields(runtime_params):
-        np.testing.assert_allclose(
-            np.asarray(getattr(runtime_params, field.name)),
-            np.asarray(getattr(legacy_params, field.name)),
-            rtol=1.0e-7,
-            atol=1.0e-9,
-            err_msg=field.name,
-        )
+    _assert_same_parameters(runtime_params, legacy_params)
 
     runtime_state = build_runtime_initial_condition(
         grid,
@@ -370,14 +368,7 @@ def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
         damp_ends_widthfrac=0.125,
         nhermite=n_hermite,
     )
-    for field in fields(runtime_params):
-        np.testing.assert_allclose(
-            np.asarray(getattr(runtime_params, field.name)),
-            np.asarray(getattr(legacy_params, field.name)),
-            rtol=1.0e-7,
-            atol=1.0e-9,
-            err_msg=field.name,
-        )
+    _assert_same_parameters(runtime_params, legacy_params)
     assert build_runtime_linear_terms(runtime_cfg).hypercollisions == 1.0
 
     runtime_state = build_runtime_initial_condition(
