@@ -13,6 +13,20 @@ runtime schema (``RuntimeConfig``) with explicit species and physics toggles.
 This allows Cyclone/ETG/KBM to run through the same solver path without
 changing solver internals.
 
+Runtime precision
+^^^^^^^^^^^^^^^^^
+
+``JAX_ENABLE_X64=true GKX_X64=1`` permits double precision; it does not
+promote explicitly typed arrays. The default runtime initializer (including
+file restart) constructs ``complex64`` states. For a precision-qualified linear
+Python solve, enable x64 before importing JAX and pass
+``run_runtime_linear(cfg, initial_state=G128, ...)`` with a ``complex128`` array.
+This API preserves its dtype and requires shape
+``(kinetic_species, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)`` on the
+selected-ky runtime grid. Record the seed dtype and hash; casting a rounded f32
+seed does not recover lost input precision. This is not a TOML dtype option;
+prepared linear ``solve(initial_state=...)`` is not supported yet.
+
 Minimal runtime TOML example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
