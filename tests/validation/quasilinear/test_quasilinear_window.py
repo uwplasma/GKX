@@ -13,6 +13,7 @@ import pytest
 
 from gkx.diagnostics.saturation import (
     SaturationStopConfig,
+    _sokal_window_mean_sem,
     saturation_stop_decision,
     sokal_autocorrelation_time,
 )
@@ -775,6 +776,66 @@ def test_saturation_stop_decision_still_stops_a_run_that_started_saturated() -> 
     # Not all 40: the half-window stationarity test rejects a minority of
     # realizations on its own, which is its job and predates this gate.
     assert stopped >= 30, stopped
+
+
+def _stationary_ar1(rho: float, *, seed: int, draws: int = 256) -> np.ndarray:
+    """Stationary unit-variance Gaussian draws; no fitted burn-in or scaling."""
+    noise = np.random.default_rng(seed).standard_normal((draws, 4096))
+    for i in range(1, noise.shape[1]):
+        noise[:, i] = rho * noise[:, i - 1] + np.sqrt(1 - rho**2) * noise[:, i]
+    return noise
+
+
+@pytest.mark.parametrize("rho", [0.0, 0.75, 0.95])
+def test_correlated_sem_has_fixed_horizon_ar1_coverage(
+    rho: float, record_property
+) -> None:
+    """Parker et al. (2018), arXiv:1807.04779, Eqs. 9–12: covariance sum.
+
+    Predeclared 256 draws, n=4096, seeds 20260912 + 100*rho; 95% interval
+    coverage 90–99%, RMS SEM/exact SEM 0.8–1.2. These broad Monte Carlo
+    regression gates are not a sequential-stop or turbulent-flux certificate.
+    """
+    series = _stationary_ar1(rho, seed=20260912 + int(100 * rho))
+    n = series.shape[1]
+    lags = np.arange(1, n)
+    # Exact finite-n variance from Cov(X_i, X_j) = rho**abs(i-j), not
+    # the production IAT estimator or its asymptotic effective sample count.
+    exact_variance = (n + 2 * np.sum((n - lags) * rho**lags)) / n**2
+    stats = np.array([_sokal_window_mean_sem(row, 1.0)[:2] for row in series])
+    coverage = np.mean(np.abs(stats[:, 0]) <= 1.96 * stats[:, 1])
+    variance_ratio = np.mean(stats[:, 1] ** 2) / exact_variance
+    record_property("coverage_95", float(coverage))
+    record_property("rms_sem_over_exact", float(np.sqrt(variance_ratio)))
+    assert 0.90 <= coverage <= 0.99, (rho, coverage)
+    assert 0.8**2 <= variance_ratio <= 1.2**2, (rho, variance_ratio)
+    # Mutation control: treating correlated outputs as independent must fail.
+    if rho > 0:
+        naive = series.std(axis=1, ddof=1) / np.sqrt(n)
+        naive_coverage = np.mean(np.abs(stats[:, 0]) <= 1.96 * naive)
+        record_property("naive_coverage_95", float(naive_coverage))
+        assert naive_coverage < 0.75
+
+
+def test_saturation_causal_prefixes_reject_strong_ar1_drift(record_property) -> None:
+    """Bounded negative control, not a proof of sequential interval coverage.
+
+    Flegal–Gong (2015), arXiv:1303.0238, motivates testing the stopping rule,
+    not just fixed-window SEM. Predeclared rho=.75, seed=20260913, 128 draws,
+    checkpoints 512/1024/2048/4096, and <=5% ever-stopped rate. The mean rises
+    eight noise standard deviations per 512 samples; every prefix is drifting.
+    """
+    time = np.arange(4096, dtype=float)
+    series = 10.0 + time / 64.0 + _stationary_ar1(0.75, seed=20260913, draws=128)
+    stopped = sum(
+        any(
+            saturation_stop_decision(time[:n], row[:n])["saturated"]
+            for n in (512, 1024, 2048, 4096)
+        )
+        for row in series
+    )
+    record_property("false_stops", stopped)
+    assert stopped / len(series) <= 0.05, stopped
 
 
 def test_sokal_reports_a_constant_trace_as_unresolved() -> None:
