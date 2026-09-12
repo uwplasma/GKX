@@ -13,6 +13,20 @@ runtime schema (``RuntimeConfig``) with explicit species and physics toggles.
 This allows Cyclone/ETG/KBM to run through the same solver path without
 changing solver internals.
 
+Runtime precision
+^^^^^^^^^^^^^^^^^
+
+``JAX_ENABLE_X64=true GKX_X64=1`` permits double precision; it does not
+promote explicitly typed arrays. The default runtime initializer (including
+file restart) constructs ``complex64`` states. For a precision-qualified linear
+Python solve, enable x64 before importing JAX and pass
+``run_runtime_linear(cfg, initial_state=G128, ...)`` with a ``complex128`` array.
+This API preserves its dtype and requires shape
+``(kinetic_species, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)`` on the
+selected-ky runtime grid. Record the seed dtype and hash; casting a rounded f32
+seed does not recover lost input precision. This is not a TOML dtype option;
+prepared linear ``solve(initial_state=...)`` is not supported yet.
+
 Minimal runtime TOML example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -449,8 +463,16 @@ Notable runtime-only keys:
   equivalent constant rate. No automatic conversion or reference promotion
   occurs (`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_).
 * ``[collisions] hypercollisions_const`` / ``hypercollisions_kz``: defaults are
-  the reference-compatible ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
+  ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
   default, constant hypercollisions off).
+  The parallel multiplier is spectral:
+  :math:`|\partial_z|G=\mathcal{F}^{-1}(|k_z|\mathcal{F}G)`,
+  on each periodic line or linked chain. It is not pointwise multiplication
+  of physical-z samples by the wavenumber array. The periodic implementation
+  was corrected in September 2026: rerun affected periodic transport results
+  with nonzero kz damping and Hermite orders above two, including the QA
+  optimization/validation examples. Linked parity runs are unaffected by this
+  particular RHS repair. See the spectral-contract entry in ``plan/log.md``.
 
 * ``[collisions] p_hyper_m``: when omitted, the runtime path uses the
   resolution-aware default ``min(20, Nm/2)`` instead of a fixed exponent across

@@ -14,6 +14,7 @@ from solvax import gmres, tridiagonal_solve
 from gkx.operators.linear.cache_arrays import (
     collision_damping,
     hypercollision_damping,
+    hypercollision_kz_coefficient,
 )
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
@@ -27,6 +28,7 @@ from gkx.operators.linear.params import (
     term_config_to_linear_terms,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.operators.linear.streaming import _scatter_unique_linked_modes
 from gkx.terms.assembly import assemble_rhs_cached_with_fields, compute_fields_cached
 from gkx.terms.config import FieldState, TermConfig
 
@@ -60,6 +62,7 @@ class _ImplicitPreconditionerData:
     sqrt_m_line: jnp.ndarray
     sqrt_p_line: jnp.ndarray
     imag: jnp.ndarray
+    hyper_kz: jnp.ndarray
 
 
 @dataclass(frozen=True)
@@ -135,9 +138,16 @@ def _build_implicit_preconditioner_data(
     state: _ImplicitState,
 ) -> _ImplicitPreconditionerData:
     real_dtype = state.real_dtype
-    hyper_damp = hypercollision_damping(cache, params, real_dtype)
+    hyper_damp = state.terms.hypercollisions * hypercollision_damping(
+        cache, params, real_dtype
+    )
+    hyper_kz = state.terms.hypercollisions * hypercollision_kz_coefficient(
+        cache, params, real_dtype
+    )
     damping = (
-        collision_damping(cache, params, real_dtype, squeeze_species=False) + hyper_damp
+        state.terms.collisions
+        * collision_damping(cache, params, real_dtype, squeeze_species=False)
+        + hyper_damp
     ).astype(real_dtype)
 
     ell = cache.l.astype(real_dtype)
@@ -179,31 +189,8 @@ def _build_implicit_preconditioner_data(
         sqrt_m_line=cache.sqrt_m_ladder.reshape(-1).astype(real_dtype),
         sqrt_p_line=cache.sqrt_p.reshape(-1).astype(real_dtype),
         imag=imag,
+        hyper_kz=jnp.broadcast_to(hyper_kz, (ns, 1, state.shape[2], 1, 1, 1)),
     )
-
-
-def _scatter_unique_spectral_modes(
-    target: jnp.ndarray,
-    idx_flat: jnp.ndarray,
-    updates: jnp.ndarray,
-) -> jnp.ndarray:
-    idx = jnp.asarray(idx_flat, dtype=jnp.int32)
-    target_t = jnp.moveaxis(target, -2, 0)
-    updates_t = jnp.moveaxis(updates, -2, 0)
-    idx = idx[:, None]
-    dnums = jax.lax.ScatterDimensionNumbers(
-        update_window_dims=tuple(range(1, updates_t.ndim)),
-        inserted_window_dims=(0,),
-        scatter_dims_to_operand_dims=(0,),
-    )
-    out_t = jax.lax.scatter(
-        target_t,
-        idx,
-        updates_t,
-        dnums,
-        unique_indices=True,
-    )
-    return jnp.moveaxis(out_t, 0, -2)
 
 
 def _solve_tridiagonal_last_axis(
@@ -261,11 +248,9 @@ def _solve_hermite_lines_fft(
     du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
     # Drifts vary along z and therefore couple Fourier modes.  Their mean
     # keeps the separable principal symbol D(l,m,kx,ky) + S(kz,m).
-    d = jnp.moveaxis(
-        jnp.mean(jnp.reciprocal(data.precond_full), axis=-1, keepdims=True),
-        2,
-        -1,
-    )
+    hyper_symbol = state.dt_val * data.hyper_kz * jnp.abs(kz)
+    diagonal = jnp.reciprocal(data.precond_full) - hyper_symbol
+    d = jnp.moveaxis(jnp.mean(diagonal, axis=-1, keepdims=True) + hyper_symbol, 2, -1)
     batch_shape = x_hat_mlast.shape
     dl = jnp.broadcast_to(dl, batch_shape)
     d = jnp.broadcast_to(d, batch_shape)
@@ -299,9 +284,13 @@ def _solve_hermite_lines_linked(
     Nx = x.shape[-2]
     Nz = x.shape[-1]
     lead_shape = x.shape[:-3]
-    x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
+    x_flat = jnp.swapaxes(x, -3, -2).reshape(*lead_shape, Nx * Ny, Nz)
     y_flat = jnp.zeros_like(x_flat)
-    diagonal_flat = jnp.reciprocal(data.precond_full).reshape(*lead_shape, Ny * Nx, Nz)
+    # Average only real-space coefficients; |kz| belongs to each linked FFT.
+    diagonal = jnp.reciprocal(
+        data.precond_full
+    ) - state.dt_val * data.hyper_kz * jnp.abs(cache.kz)
+    diagonal_flat = jnp.swapaxes(diagonal, -3, -2).reshape(*lead_shape, Nx * Ny, Nz)
 
     for idx_map, kz_link in zip(cache.linked_indices, cache.linked_kz):
         nChains, nLinks = idx_map.shape
@@ -330,6 +319,12 @@ def _solve_hermite_lines_linked(
             nLinks * Nz,
         )
         d = jnp.moveaxis(jnp.mean(diagonal_link, axis=-1), 2, -1)[..., None, :]
+        d = (
+            d
+            + state.dt_val
+            * data.hyper_kz.reshape(state.shape[0], 1, 1, 1, state.shape[2])
+            * jnp.abs(kz_link)[:, None]
+        )
         batch_shape = x_hat_mlast.shape
         dl = jnp.broadcast_to(dl, batch_shape)
         d = jnp.broadcast_to(d, batch_shape)
@@ -338,9 +333,9 @@ def _solve_hermite_lines_linked(
         y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
         y_link = jnp.fft.ifft(y_hat, axis=-1).astype(x.dtype)
         y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
-        y_flat = _scatter_unique_spectral_modes(y_flat, idx_flat, y_link)
+        y_flat = _scatter_unique_linked_modes(y_flat, idx_flat, y_link)
 
-    return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
+    return jnp.swapaxes(y_flat.reshape(*lead_shape, Nx, Ny, Nz), -3, -2)
 
 
 def _project_kx_coarse(x: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
@@ -354,7 +349,7 @@ def _project_kx_coarse(x: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
     Nx = x.shape[-2]
     Nz = x.shape[-1]
     lead_shape = x.shape[:-3]
-    x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
+    x_flat = jnp.swapaxes(x, -3, -2).reshape(*lead_shape, Nx * Ny, Nz)
     y_flat = jnp.zeros_like(x_flat)
 
     for idx_map in cache.linked_indices:
@@ -365,9 +360,9 @@ def _project_kx_coarse(x: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
         x_mean = jnp.mean(x_link, axis=-2, keepdims=True)
         x_mean = jnp.broadcast_to(x_mean, x_link.shape)
         x_updates = x_mean.reshape(*lead_shape, nChains * nLinks, Nz)
-        y_flat = _scatter_unique_spectral_modes(y_flat, idx_flat, x_updates)
+        y_flat = _scatter_unique_linked_modes(y_flat, idx_flat, x_updates)
 
-    return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
+    return jnp.swapaxes(y_flat.reshape(*lead_shape, Nx, Ny, Nz), -3, -2)
 
 
 def _canonical_implicit_preconditioner(

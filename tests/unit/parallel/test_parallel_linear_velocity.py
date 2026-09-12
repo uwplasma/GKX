@@ -1565,16 +1565,23 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
             use_custom_vjp=False,
             force_electrostatic_fields=True,
         )
-        observed_term_rhs, observed_term_phi = (
-            linear_parallel_streaming.linear_rhs_electrostatic_species_hermite_sharded(
-                state,
+
+        def sharded_term(value):
+            return linear_parallel_streaming.linear_rhs_electrostatic_species_hermite_sharded(
+                value,
                 dissipative_cache,
                 dissipative_params,
                 terms=active_terms,
                 dt=0.01,
                 devices=devices[:4],
             )
-        )
+
+        observed_term_rhs, observed_term_phi = sharded_term(state)
+        if name == "hypercollisions":
+            tangent = jax.jvp(lambda value: sharded_term(value)[0], (state,), (state,))[
+                1
+            ]
+            np.testing.assert_allclose(tangent, expected_term_rhs, rtol=7e-5, atol=7e-6)
         assert float(jnp.linalg.norm(expected_term_rhs)) > 0.0
         np.testing.assert_allclose(
             np.asarray(observed_term_phi),

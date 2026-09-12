@@ -8,6 +8,7 @@ import subprocess
 import tomllib
 from types import SimpleNamespace
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -1155,7 +1156,8 @@ def test_hypercollisions_static_zero_operator_skips_linked_abs_kz(monkeypatch):
     assert jnp.allclose(out, jnp.zeros_like(G))
 
 
-def test_linked_kz_hypercollisions_activate_for_z_varying_state():
+@pytest.mark.parametrize("linked", [False, True])
+def test_kz_hypercollisions_preserve_periodic_fourier_modes(linked):
     Nl, Nm, Nz = 2, 4, 4
     zeros_lm = jnp.zeros((Nl, Nm, 1, 1, 1), dtype=jnp.float32)
     mask_const = jnp.zeros((1, Nl, Nm, 1, 1, 1), dtype=bool)
@@ -1184,6 +1186,8 @@ def test_linked_kz_hypercollisions_activate_for_z_varying_state():
         linked_inverse_permutation=jnp.asarray([0], dtype=jnp.int32),
         linked_full_cover=True,
     )
+    if not linked:
+        kwargs.update(linked_indices=(), linked_kz=())
 
     constant = jnp.ones((1, Nl, Nm, 1, 1, Nz), dtype=jnp.complex64)
     z_varying = constant * jnp.asarray([0.0, 1.0, 0.0, -1.0], dtype=jnp.complex64)
@@ -1192,7 +1196,20 @@ def test_linked_kz_hypercollisions_activate_for_z_varying_state():
     varying_out = hypercollisions_contribution(z_varying, **kwargs)
 
     assert jnp.linalg.norm(constant_out) < 1.0e-6
-    assert jnp.linalg.norm(varying_out) > 1.0e-3
+    # |d/dz| exp(i*k*z) = |k| exp(i*k*z), independent of the origin.
+    np.testing.assert_allclose(varying_out, -2.3 * z_varying, atol=1e-6)
+    shifted_out = hypercollisions_contribution(jnp.roll(z_varying, 1, -1), **kwargs)
+    np.testing.assert_allclose(shifted_out, jnp.roll(varying_out, 1, -1), atol=1e-6)
+    # Real quadratic loss: JAX's complex cotangent is the conjugate of 2 L G
+    # for this self-adjoint Fourier multiplier (constant coefficients here).
+    state = z_varying * (1.0 + 0.3j)
+
+    def loss(value):
+        return jnp.real(jnp.vdot(value, hypercollisions_contribution(value, **kwargs)))
+
+    np.testing.assert_allclose(
+        jax.grad(loss)(state), 2 * jnp.conj(-2.3 * state), rtol=2e-6, atol=1e-6
+    )
 
 
 def test_static_zero_linear_term_guards_skip_expensive_operators(monkeypatch):
