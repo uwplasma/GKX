@@ -10841,3 +10841,64 @@ Next, now that #218 put the ledger and the release gates on main, the queued
 **HSX deletion** from 0.3.4 is finally executable as a single coherent PR —
 README row, `_README_PARITY_SOURCES`, `L-lin-hsx`, the atlas entries, and the
 `hsx_itg` manifest case, keeping the CSV and config as evidence.
+
+## 2026-09-08 — backlog cleared, and the HSX correction landed
+
+**The authoritative plan is on `main`.** #206 merged as `e6fb735e`; `main`'s
+`plan.md` is this document and the superseded 2,881-line roadmap is gone. That
+was the prerequisite everything else was queued behind.
+
+**#220 merged** (`1ce32683`): the HSX provenance correction, which retracts the
+"delete the row" conclusion this log recorded on 2026-09-07 and replaces it with
+what the tracing actually shows. Nothing was deleted; no published number moved.
+
+Final campaign tally, from fifteen open PRs:
+
+| Outcome | PRs |
+|---|---|
+| Merged | #215, #210, #218, #219, #206, #220 |
+| Retired by consolidation | #213, #214, #216, #217 (into #218); #209, #211 (into #219) |
+| Retired through #219's contents | #196, #200, #201, #208 |
+| Closed as superseded | #202 |
+| Still open | #212 |
+
+**#212 is stale *and* broken — my first reading was wrong.** It was certainly
+stale: the only merge conflict was
+`tools/package_architecture_manifest.toml`, whose baselines four other PRs had
+moved past it while it waited. I updated it, resolved keeping both comment
+histories, re-measured the baselines on the merged tree (89150 source, 87425
+test lines), and re-validated locally: 945 passed / 44 skipped across release,
+linear, parallel and runtime, plus 175 in `tests/unit/nonlinear`. On that basis
+I recorded here, and told the maintainer, that its failures were staleness only.
+
+That was wrong, and the error was in my test selection rather than in the
+runs. CI on the updated head `2e42b75c` still fails
+`tests/validation/benchmarks/test_benchmark_contracts.py::test_runtime_tem_case_matches_transitional_operator_contract`
+with `TypeError: unsupported operand type(s) for -: 'NoneType' and 'NoneType'`
+inside `numpy.testing.assert_allclose` — a directory I had not run. Reproduced
+locally in 1.6 s, and controlled: the same test **passes on `main`'s content**
+and **fails on #212's**, so it is that PR's change, not the merge.
+
+The likely mechanism, to be confirmed by whoever picks it up: #212 makes
+`damp_ends_rate` optional with `None` meaning "unset", and the TEM transitional
+contract compares a value that is now `None` on one side. The fix probably
+belongs in the contract's comparison or in the resolver's default, not in the
+test's tolerance.
+
+Lesson, and it is the same one this log keeps recording: a green local run
+proves only what it selected. I ran five directories and generalised to the
+suite. The cheap guard is to run the shard CI actually names — here
+`wide-coverage-shards` and the `quick-tests` file list — rather than a
+plausible subset.
+
+Housekeeping: seven fully merged worktrees removed
+(`phase04-ledger`, `phase02-api`, `phase02-prep`, `phase02-f32`,
+`consolidated`, `repairs`, `hsx`); `planreview` kept for plan edits.
+
+**The standing recommendation from all of this**, unchanged and now with six
+merges of evidence behind it: the line-count baselines in
+`tools/package_architecture_manifest.toml` are a shared mutable counter, so any
+two PRs that add a file or a test collide there regardless of content. That cost
+this backlog several CI cycles and made one healthy PR look broken for a day.
+Either compute the value instead of storing it, or split the budget per
+directory so unrelated work stops contending for one line.
