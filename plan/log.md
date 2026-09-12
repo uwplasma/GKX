@@ -10981,3 +10981,31 @@ and the benchmark-contract owner, with `-q --maxfail=1 --disable-warnings
 -o addopts=''`. Last observed at ~3 minutes, progressing; stop at 30 minutes
 if it exceeds the CI budget. Fresh GitHub CI is also unfinished. Do not merge
 #212 based only on the completed subsets; final disposition follows below.
+
+**Full nonlinear-core rerun completed:** 225 passed, 18 warnings, 485.04 s,
+exit 0, using the exact four-file quick-test selection above at `ce5ffe657`.
+XML SHA-256 `2c5db486b526ff8dcdb263869daee0b79ddb5fad1f380fc6901eec96aac492d7`.
+The separate 50-test benchmark-owner XML SHA-256 is
+`af4a679f154fcc120e919e14f0353de4c9b7cec2d20c8cbd362a769269e9bcb3`.
+Thus both failing CI owners have passed locally; this does not assert that
+every other CI job passed. At this checkpoint GitHub reports 16 successful,
+21 unfinished and one skipped check. No merge of #212 or #222 yet.
+
+Clean-install follow-up completed in `/tmp/gkx-clean-resume-20260912` (no
+system-site packages). Installed `.[dev]`, pinned JAX/jaxlib 0.10.2 and
+Matplotlib 3.10.8 for this validation environment only; repository requirements
+unchanged. The first download of Matplotlib 3.11.2 stalled and was interrupted;
+the retry completed, and `pip check` reports no broken requirements. NumPy
+2.4.6, SciPy 1.17.1, SOLVAX 0.20.0, booz_xform_jax 0.2.0, pytest 9.1.1.
+All **50 benchmark-contract tests pass** in this clean environment, 94.34 s,
+using the same x64/PYTHONPATH settings and `-o addopts='' -q --tb=short`;
+XML `/tmp/gkx-clean-resume-benchmarks.xml`. This is a supported clean-install
+check of that owner, not a claim that the complete suite ran in the clean venv.
+
+Plan branch release/evidence checks: **152 passed**, 9.82 s, three existing
+CFL-warning cases (not suppressed), selecting `tests/release/test_release_gates.py`
+and `tests/release/test_evidence_ledger.py`. All local and office jobs launched
+by this execution have completed or been explicitly interrupted as recorded.
+At the last check #212 CI has 29 successful, eight unfinished and one skipped
+check. Required CI remains the merge condition; the approved size-budget
+redesign (§11.1) and rate-reference migration remain queued, not implemented here.
