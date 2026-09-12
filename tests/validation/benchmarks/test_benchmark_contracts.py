@@ -8,6 +8,7 @@ import subprocess
 import tomllib
 from types import SimpleNamespace
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -1199,6 +1200,16 @@ def test_kz_hypercollisions_preserve_periodic_fourier_modes(linked):
     np.testing.assert_allclose(varying_out, -2.3 * z_varying, atol=1e-6)
     shifted_out = hypercollisions_contribution(jnp.roll(z_varying, 1, -1), **kwargs)
     np.testing.assert_allclose(shifted_out, jnp.roll(varying_out, 1, -1), atol=1e-6)
+    # Real quadratic loss: JAX's complex cotangent is the conjugate of 2 L G
+    # for this self-adjoint Fourier multiplier (constant coefficients here).
+    state = z_varying * (1.0 + 0.3j)
+
+    def loss(value):
+        return jnp.real(jnp.vdot(value, hypercollisions_contribution(value, **kwargs)))
+
+    np.testing.assert_allclose(
+        jax.grad(loss)(state), 2 * jnp.conj(-2.3 * state), rtol=2e-6, atol=1e-6
+    )
 
 
 def test_static_zero_linear_term_guards_skip_expensive_operators(monkeypatch):
