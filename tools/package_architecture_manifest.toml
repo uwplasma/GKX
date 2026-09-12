@@ -1070,7 +1070,8 @@ recursive = true
 # Consolidated #209 + #211; measured union after both merges.
 # +48: rate/legacy RK identities, pytree AD, runtime input and mixed-route checks.
 # +49 from the opt-in damp_ends_rate contract, measured after merging main.
-baseline = 87425
+# +5: compare optional TEM parameters exactly before numeric array comparisons.
+baseline = 87430
 target = 35000
 
 [[line_budget_policy.counts]]

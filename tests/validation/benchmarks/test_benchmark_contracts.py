@@ -168,9 +168,14 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
         nhermite=n_hermite,
     )
     for field in fields(runtime_params):
+        actual = getattr(runtime_params, field.name)
+        expected = getattr(legacy_params, field.name)
+        if actual is None or expected is None:
+            assert actual is expected, field.name
+            continue
         np.testing.assert_allclose(
-            np.asarray(getattr(runtime_params, field.name)),
-            np.asarray(getattr(legacy_params, field.name)),
+            actual,
+            expected,
             rtol=1.0e-7,
             atol=1.0e-9,
             err_msg=field.name,
