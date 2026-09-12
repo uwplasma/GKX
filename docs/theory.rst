@@ -83,13 +83,16 @@ with :math:`J_{\ell}^{B} = J_{\ell} + J_{\ell-1}`. These relations match the
 Laguerre-Hermite pseudo-spectral form used in the gyrokinetic literature.
 
 The nonzonal field-system test in ``tests/unit/operators/test_terms_fields.py``
-assembles a separate dense :math:`3\times3` system from the moment equations
-`GX (arXiv v3), (32)--(34) <https://arxiv.org/html/2209.06731v3>`_. It uses
-two kinetic species with unequal temperatures/masses, finite FLR, variable
-:math:`B`, and separate density/current/perpendicular-moment excitations;
-float32/64 values and normalized residuals must agree. This is an algebra
-gate, not the still-required independent free-energy identity or EM transport
-benchmark. Zonal/gauge and AD tests remain separate.
+assembles a separate dense :math:`3\times3` system from
+`GX (arXiv v3), (32)--(34) <https://arxiv.org/html/2209.06731v3>`_ at :math:`B=1`.
+It uses two kinetic species with unequal temperatures/masses, finite FLR, and
+separate density/current/perpendicular-moment excitations; float32/64 values
+and normalized residuals must agree. Variable-:math:`B` cases test GKX's
+additional :math:`B^{-2}` perpendicular-Ampere convention only: its physical
+normalization remains unqualified by those paper equations. Prescribed FLR
+and spatial coefficients do not certify geometry normalization. These are
+algebra gates, not the still-required independent free-energy identity or EM
+transport benchmark. Zonal/gauge and AD tests remain separate.
 
 Linear gyrokinetic operator
 ---------------------------

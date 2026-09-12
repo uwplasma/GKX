@@ -22,8 +22,11 @@ from gkx.terms.fields import _solve_fields_impl, solve_fields
 @pytest.mark.parametrize("dtype,tol", [(jnp.float32, 3e-6), (jnp.float64, 3e-13)])
 @pytest.mark.parametrize("beta", [1e-6, 0.02, 0.2])
 @pytest.mark.parametrize("ell,m", [(0, 0), (0, 1), (1, 0)])
-def test_three_field_dense_system_independent_moments(dtype, tol, beta, ell, m):
-    """GX (2022 v3), Eqs. 32--34: independent nonzonal finite-FLR field system."""
+@pytest.mark.parametrize("variable_b", [False, True])
+def test_three_field_dense_system_independent_moments(
+    dtype, tol, beta, ell, m, variable_b
+):
+    """GX Eqs. 32--34 at B=1; variable B tests GKX's implementation convention."""
     from gkx.core_velocity import J_l_all
 
     cache, params, *_ = _build_case(beta=beta, fapar=1.0)
@@ -36,7 +39,7 @@ def test_three_field_dense_system_independent_moments(dtype, tol, beta, ell, m):
         np.moveaxis(J_l_all(jnp.asarray(b, dtype), 2), 0, 1), jl, rtol=tol
     )
     jb = jl + np.concatenate([np.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
-    B = np.array([0.8, 1.0, 1.3])
+    B = np.array([0.8, 1.0, 1.3]) if variable_b else np.ones(3)
     k2 = np.array([0.3, 0.4, 0.7])
     cache = replace(
         cache,
@@ -81,6 +84,8 @@ def test_three_field_dense_system_independent_moments(dtype, tol, beta, ell, m):
             ).items()
         },
     )
+    # The paper's Eq. 34 has no B^-2. At variable B this independently
+    # assembles GKX's current convention, whose physical normalization is open.
     for iz in range(3):
         M, rhs = np.diag([0.0, k2[iz], 1.0]), np.zeros(3, dtype=complex)
         for s in range(2):
