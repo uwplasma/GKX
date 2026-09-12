@@ -487,9 +487,10 @@ def test_hermite_line_inverts_additive_diagonal_and_streaming_symbol() -> None:
 
 
 @pytest.mark.parametrize("weight", [0.0, 0.4, 1.0])
-def test_hermite_line_inverts_kz_hypercollisions(weight) -> None:
+@pytest.mark.parametrize("linked", [False, True])
+def test_hermite_line_inverts_kz_hypercollisions(weight, linked) -> None:
     """The |kz| multiplier lives on each FFT chain, including its zero mode."""
-    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=True)
+    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=linked)
     params = replace(
         params,
         hypercollisions_const=0.0,
@@ -509,6 +510,8 @@ def test_hermite_line_inverts_kz_hypercollisions(weight) -> None:
     active = jnp.zeros(v0.shape[-3] * v0.shape[-2], dtype=bool)
     for indices in cache.linked_indices:
         active = active.at[indices.ravel()].set(True)
+    if not linked:
+        active = jnp.ones_like(active)
     active = active.reshape(v0.shape[-2], v0.shape[-3]).T[..., None]
     # The RHS also reconstructs conjugate ky rows. Certify the independent
     # chain-covered subspace, not an inverse on every redundant spectral row.
@@ -520,6 +523,10 @@ def test_hermite_line_inverts_kz_hypercollisions(weight) -> None:
             expected_coarse[..., ky, kx, :] = np.mean(
                 np.asarray(rhs)[..., ky, kx, :], axis=-2, keepdims=True
             )
+    if not linked:
+        expected_coarse = np.broadcast_to(
+            np.mean(rhs, axis=-2, keepdims=True), rhs.shape
+        )
     np.testing.assert_allclose(
         implicit._project_kx_coarse(rhs[None], cache)[0],
         expected_coarse,

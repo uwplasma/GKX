@@ -271,11 +271,9 @@ def _solve_hermite_lines_fft(
     du = du.at[..., -1].set(jnp.asarray(0.0, dtype=du.dtype))
     # Drifts vary along z and therefore couple Fourier modes.  Their mean
     # keeps the separable principal symbol D(l,m,kx,ky) + S(kz,m).
-    d = jnp.moveaxis(
-        jnp.mean(jnp.reciprocal(data.precond_full), axis=-1, keepdims=True),
-        2,
-        -1,
-    )
+    hyper_symbol = state.dt_val * data.hyper_kz * jnp.abs(kz)
+    diagonal = jnp.reciprocal(data.precond_full) - hyper_symbol
+    d = jnp.moveaxis(jnp.mean(diagonal, axis=-1, keepdims=True) + hyper_symbol, 2, -1)
     batch_shape = x_hat_mlast.shape
     dl = jnp.broadcast_to(dl, batch_shape)
     d = jnp.broadcast_to(d, batch_shape)
