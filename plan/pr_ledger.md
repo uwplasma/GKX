@@ -1,6 +1,17 @@
 # Pull-request ledger
 
-## Current disposition, 2026-09-07
+## Current disposition, 2026-09-12
+
+Main now contains #206 and #221's status log. The September merge campaign
+landed #215/#210/#218/#219/#220; #209/#211 were retired into #219, carrying
+#196/#200/#201/#208. #202 is closed as superseded, not wholly physics-certified.
+After #221, #212's optional-parameter test fix at `ce5ffe657` passed 41 CI
+checks (one skipped) and merged as `c0c818361` on September 12, 15:01 UTC.
+CPU/GPU results are tracked in [log.md](log.md). #222 carries this updated
+handoff; reference conversion and deprecated-key migration remain open work.
+The following September 7 inventory is historical, not the current merge queue.
+
+## Historical disposition, 2026-09-07
 
 Maintainer approved repair merges. #197 (`ca4e5169`), #199 (`0c016bd1`)
 and #207 (`99963b45`) are merged. #196/#200/#201/#208 remain open pending
