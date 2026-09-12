@@ -437,6 +437,13 @@ covered fraction is 65,535/294,912 = 22%.
    Focused contracts pass on CPU and office GPU (39 each). This closes only
    the rejection implementation, not reference conversion/provenance, resolved
    reload or regeneration. See the September 12 migration entry in the log.
+   **Provenance extraction implemented (`c170d0f92`, pending PR CI):** typed
+   `[damping_reference]`, explicit host-side conversion of fixed-linear or
+   timestep-free source decks, SHA-256 and resolved reload; reject ambiguous
+   timesteps and stale rate metadata. CPU/GPU focused checks pass (56 each),
+   and the shipped Cyclone deck round-trips without changing the shipped file.
+   Do not call that a regenerated physics reference: the numerical comparison
+   and provisional ledger dispositions remain the next evidence gate.
 5. Close #198, #203, #204, #205 with a comment pointing here.
 
 Merge cadence from now on: a PR whose ledger rows pass merges within five

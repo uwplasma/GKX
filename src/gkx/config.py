@@ -701,6 +701,49 @@ class RuntimeRunConfig:
 
 
 @dataclass(frozen=True)
+class EndDampingReference:
+    """Provenance for an explicit conversion, not a physics certification."""
+
+    source: str
+    sha256: str
+    route: str
+    amplitude: float
+    dt_input: float
+    dt_step: float
+    scale_by_dt: bool
+
+    def __post_init__(self) -> None:
+        if (
+            not self.source
+            or len(self.sha256) != 64
+            or any(c not in "0123456789abcdef" for c in self.sha256)
+        ):
+            raise ValueError("damping_reference requires source and lowercase SHA-256")
+        if self.route not in ("fixed_linear", "timestep_free"):
+            raise ValueError(
+                "damping_reference route must be fixed_linear or timestep_free"
+            )
+        if not isinstance(self.scale_by_dt, bool) or any(
+            not math.isfinite(v) or v < 0
+            for v in (self.amplitude, self.dt_input, self.dt_step)
+        ):
+            raise ValueError("invalid damping_reference values")
+        if (self.scale_by_dt and self.dt_input == 0) or (
+            self.route == "fixed_linear" and self.dt_step == 0
+        ):
+            raise ValueError("damping_reference requires positive divisor timesteps")
+        if self.route == "timestep_free" and self.dt_step != 0:
+            raise ValueError("timestep_free reference must have dt_step=0")
+        if not math.isfinite(self.rate):
+            raise ValueError("damping_reference rate overflow")
+
+    @property
+    def rate(self) -> float:
+        rate = self.amplitude / self.dt_input if self.scale_by_dt else self.amplitude
+        return rate / self.dt_step if self.route == "fixed_linear" else rate
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     """Unified simulation config for runtime-driven GK runs."""
 
@@ -718,6 +761,7 @@ class RuntimeConfig:
     quasilinear: RuntimeQuasilinearConfig = RuntimeQuasilinearConfig()
     parallel: RuntimeParallelConfig = RuntimeParallelConfig()
     run: RuntimeRunConfig = RuntimeRunConfig()
+    damping_reference: EndDampingReference | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -737,6 +781,11 @@ class RuntimeConfig:
             # Emitted only when the deck carried a [run] table. A deck without
             # one round-trips byte-identically; a deck with one stops losing it.
             **({} if self.run.is_empty() else {"run": self.run.to_dict()}),
+            **(
+                {"damping_reference": asdict(self.damping_reference)}
+                if self.damping_reference
+                else {}
+            ),
         }
 
     def replace(self, **changes: Any) -> "RuntimeConfig":

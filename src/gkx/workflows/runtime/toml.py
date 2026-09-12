@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 from dataclasses import is_dataclass, replace
 from typing import Any, Callable, Sequence, cast
 import os
@@ -11,6 +12,7 @@ from pathlib import Path
 import tomllib
 from gkx.config import (
     Case,
+    EndDampingReference,
     RuntimeCollisionConfig,
     RuntimeConfig,
     RuntimeExpertConfig,
@@ -279,6 +281,7 @@ def _apply_runtime_section_overrides(
         ("output", RuntimeOutputConfig),
         ("quasilinear", RuntimeQuasilinearConfig),
         ("parallel", RuntimeParallelConfig),
+        ("damping_reference", EndDampingReference),
     )
     for key, constructor in section_constructors:
         cfg = _replace_runtime_section(cfg, data, key, constructor)
@@ -380,3 +383,41 @@ def _runtime_run_from_toml(section: Any) -> RuntimeRunConfig | None:
 def load(path: str | Path) -> Case:
     """Load a resolved immutable GKX case from TOML."""
     return load_runtime_from_toml(path)[0]
+
+
+def migrate_end_damping_reference(
+    path: str | Path, *, route: str, dt_step: float = 0.0
+) -> RuntimeConfig:
+    """Explicitly convert a legacy deck; write the returned case with to_toml().
+
+    dt_step is the actual fixed linear reference step, not an inferred input
+    default. timestep_free identifies RHS calls without a solver timestep.
+    """
+    path = Path(path).resolve()
+    source = path.read_bytes()
+    cfg, _ = load_runtime_from_toml(path)
+    if source != path.read_bytes():
+        raise ValueError("source deck changed during migration")
+    if cfg.time.damp_ends_rate is not None or cfg.damping_reference is not None:
+        raise ValueError("source already has an explicit damping rate or reference")
+    if cfg.run.dt is not None and cfg.run.dt != cfg.time.dt:
+        raise ValueError("resolve conflicting run.dt and time.dt before migration")
+    if route == "fixed_linear" and not cfg.time.fixed_dt:
+        raise ValueError("adaptive linear damping has no equivalent constant rate")
+    if route == "timestep_free" and dt_step != 0.0:
+        raise ValueError("timestep_free conversion must not specify dt_step")
+    reference = EndDampingReference(
+        str(path),
+        hashlib.sha256(source).hexdigest(),
+        route,
+        cfg.collisions.damp_ends_amp,
+        cfg.time.dt,
+        dt_step,
+        cfg.collisions.damp_ends_scale_by_dt,
+    )
+    return replace(
+        cfg,
+        damping_reference=reference,
+        time=replace(cfg.time, damp_ends_rate=reference.rate),
+        collisions=replace(cfg.collisions, damp_ends_scale_by_dt=False),
+    )
