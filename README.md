@@ -425,7 +425,8 @@ mean iota by -0.044%, while the QA residual goes from 5.88e-4 to 1.54e-3.
 
 ![Matched QA heat-flux traces and convergence](docs/_static/qa_transport_reduction.svg)
 
-The startup spike is excluded and the shaded window is measured. The preliminary
+These historical traces predate the periodic hypercollision correction and must
+be regenerated; they are not evidence for the current operator. The preliminary
 12.26% reduction across 24 nominal pairs has a conditional 95% CI of
 10.64-13.88%, and is **not statistically resolved**: 4 of 48 nominal traces fail
 the published per-trace final-drift test. Promotion requires stationary
