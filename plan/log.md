@@ -11480,3 +11480,9 @@ diagnostic is specified in §5.1; no SOLVAX change is justified before profiling
 At this checkpoint #224 still has two running required jobs and 38 successful
 checks; #225/#226 have their own queued/running CI. Merge in dependency order
 only when green, refresh heads after parent merges, and do not release.
+
+Final whole-tree lint/format: the shared venv exposes Ruff 0.13.1, not the
+project pin 0.16.4; its exploratory format check flagged an untouched objective
+test. No unrelated formatting was applied. Installed the pinned wheel only in
+`/tmp/gkx-pinned-lint.Vqrt9t` (shared venv unchanged), then ran its
+`bin/ruff check .` and `bin/ruff format --check .`: **pass, 407 files formatted**.
