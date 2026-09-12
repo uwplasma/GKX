@@ -39,16 +39,18 @@ Laguerre (magnetic moment) basis. For a single species, the expansion is
 
 .. math::
 
-   g(\mathbf{k}, \theta, v_\parallel, \mu) =
+   \frac{g(\mathbf{k}, \theta, v_\parallel, \mu)}{F_M} =
    \sum_{\ell=0}^{N_\ell-1} \sum_{m=0}^{N_m-1}
    G_{\ell m}(\mathbf{k}, \theta)
-   L_\ell(b) H_m(v_\parallel),
+   \mathcal{L}_\ell(\mu B/T)\mathcal{H}_m(v_\parallel/v_{th}),
 
-with the gyroaverage factor
+where the normalized velocity basis includes the chosen Laguerre sign and
+Hermite normalization. Its **projected gyroaverage coefficient**, not the
+Laguerre polynomial evaluated at the wavenumber, is
 
 .. math::
 
-   J_\ell(b) = e^{-b/2} L_\ell(b),
+   J_\ell(b) = e^{-b/2}\frac{(-b/2)^\ell}{\ell!},
 
 where :math:`b = k_\perp^2 \rho^2`. This Laguerre-Hermite formulation is detailed
 by Mandell, Dorland & Landreman (2017). [MDL17]_
@@ -79,6 +81,15 @@ parallel Ampere’s law. The gyrokinetic variable is
 
 with :math:`J_{\ell}^{B} = J_{\ell} + J_{\ell-1}`. These relations match the
 Laguerre-Hermite pseudo-spectral form used in the gyrokinetic literature.
+
+The nonzonal field-system test in ``tests/unit/operators/test_terms_fields.py``
+assembles a separate dense :math:`3\times3` system from the moment equations
+`GX (arXiv v3), (32)--(34) <https://arxiv.org/html/2209.06731v3>`_. It uses
+two kinetic species with unequal temperatures/masses, finite FLR, variable
+:math:`B`, and separate density/current/perpendicular-moment excitations;
+float32/64 values and normalized residuals must agree. This is an algebra
+gate, not the still-required independent free-energy identity or EM transport
+benchmark. Zonal/gauge and AD tests remain separate.
 
 Linear gyrokinetic operator
 ---------------------------
