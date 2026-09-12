@@ -6,6 +6,8 @@ from dataclasses import replace
 
 import jax
 import jax.numpy as jnp
+import numpy as np
+import pytest
 
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
@@ -15,6 +17,97 @@ from gkx.operators.linear.moments import quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
 from gkx.parallel.velocity_drive import electrostatic_phi_reference
 from gkx.terms.fields import _solve_fields_impl, solve_fields
+
+
+@pytest.mark.parametrize("dtype,tol", [(jnp.float32, 3e-6), (jnp.float64, 3e-13)])
+@pytest.mark.parametrize("beta", [1e-6, 0.02, 0.2])
+@pytest.mark.parametrize("ell,m", [(0, 0), (0, 1), (1, 0)])
+@pytest.mark.parametrize("variable_b", [False, True])
+def test_three_field_dense_system_independent_moments(
+    dtype, tol, beta, ell, m, variable_b
+):
+    """GX Eqs. 32--34 at B=1; variable B tests GKX's implementation convention."""
+    from gkx.core_velocity import J_l_all
+
+    cache, params, *_ = _build_case(beta=beta, fapar=1.0)
+    b = np.array([[0.2, 0.5, 0.8], [0.04, 0.1, 0.16]])
+    # Analytic Laguerre coefficients, not a field/cache helper's reduction.
+    jl = np.stack(
+        [np.exp(-b / 2), -b / 2 * np.exp(-b / 2), b * b / 8 * np.exp(-b / 2)], axis=1
+    )
+    np.testing.assert_allclose(
+        np.moveaxis(J_l_all(jnp.asarray(b, dtype), 2), 0, 1), jl, rtol=tol
+    )
+    jb = jl + np.concatenate([np.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+    B = np.array([0.8, 1.0, 1.3]) if variable_b else np.ones(3)
+    k2 = np.array([0.3, 0.4, 0.7])
+    cache = replace(
+        cache,
+        Jl=jnp.asarray(jl[:, :, None, None, :], dtype),
+        JlB=jnp.asarray(jb[:, :, None, None, :], dtype),
+        bmag=jnp.asarray(B, dtype),
+        kperp2=jnp.asarray(k2[None, None, :], dtype),
+        jacobian=jnp.ones(3, dtype),
+        ky=jnp.array([0.2], dtype),
+        mask0=jnp.zeros((1, 1, 3), dtype=bool),
+        kperp2_bmag=False,
+    )
+    params = replace(
+        params, tau_e=0.0, apar_beta_scale=0.5, ampere_g0_scale=0.5, bpar_beta_scale=0.5
+    )
+    z, n, T, mass = (
+        np.array([1.0, -1.0]),
+        np.ones(2),
+        np.array([1.0, 1.7]),
+        np.array([1.0, 0.01]),
+    )
+    vth = np.sqrt(T / mass)
+    G = np.zeros((2, 3, 2, 1, 1, 3), dtype=np.complex128)
+    G[:, ell, m, 0, 0, :] = np.array([1 + 0.3j, -0.4 + 0.8j])[:, None] * np.array(
+        [1.0, 0.7, 1.2]
+    )
+    out = solve_fields(
+        jnp.asarray(G, jnp.complex64 if dtype == jnp.float32 else jnp.complex128),
+        cache,
+        params,
+        **{
+            key: jnp.asarray(value, dtype)
+            for key, value in dict(
+                charge=z,
+                density=n,
+                temp=T,
+                mass=mass,
+                tz=T / z,
+                vth=vth,
+                fapar=1.0,
+                w_bpar=1.0,
+            ).items()
+        },
+    )
+    # The paper's Eq. 34 has no B^-2. At variable B this independently
+    # assembles GKX's current convention, whose physical normalization is open.
+    for iz in range(3):
+        M, rhs = np.diag([0.0, k2[iz], 1.0]), np.zeros(3, dtype=complex)
+        for s in range(2):
+            j, p = jl[s, :, iz], jb[s, :, iz]
+            g0, g1 = G[s, :, 0, 0, 0, iz], G[s, :, 1, 0, 0, iz]
+            M[0, 0] += n[s] * z[s] ** 2 / T[s] * (1 - j @ j)
+            M[0, 2] -= n[s] * z[s] * (j @ p)
+            M[2, 0] += beta / 2 / B[iz] ** 2 * n[s] * z[s] * (j @ p)
+            M[2, 2] += beta / 2 / B[iz] ** 2 * n[s] * T[s] * (p @ p)
+            M[1, 1] += beta / 2 * n[s] * z[s] ** 2 / mass[s] * (j @ j)
+            rhs += [
+                n[s] * z[s] * (j @ g0),
+                beta / 2 * n[s] * z[s] * vth[s] * (j @ g1),
+                -beta / 2 / B[iz] ** 2 * n[s] * T[s] * (p @ g0),
+            ]
+        actual = np.array([out.phi[0, 0, iz], out.apar[0, 0, iz], out.bpar[0, 0, iz]])
+        expected = np.linalg.solve(M, rhs)
+        np.testing.assert_allclose(actual, expected, rtol=tol, atol=tol * 1e-3)
+        scale = np.linalg.norm(M) * np.linalg.norm(actual) + np.linalg.norm(rhs)
+        assert np.linalg.norm(M @ actual - rhs) / scale < tol
+        # A sign mutation must not satisfy this independently assembled system.
+        assert np.linalg.norm(M @ (-actual) - rhs) / scale > 100 * tol
 
 
 def _build_case(
@@ -47,7 +140,7 @@ def _build_case(
     cache = build_linear_cache(grid, geom, params, Nl=3, Nm=4)
     ny, nx, nz = grid.ky.size, grid.kx.size, grid.z.size
     G = jnp.zeros((1, 3, 4, ny, nx, nz), dtype=jnp.complex64)
-    z = jnp.asarray(grid.z)
+    z = jnp.asarray(grid.z, dtype=jnp.float32)
     phase = jnp.exp(1j * z)
     G = G.at[0, 0, 0, 1, 1, :].set(0.2 * phase)
     G = G.at[0, 1, 0, 1, 1, :].set(0.1 * phase)

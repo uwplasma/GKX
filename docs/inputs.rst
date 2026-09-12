@@ -530,8 +530,13 @@ Notable runtime-only keys:
   ``run_to`` audit in ``tests/release/test_release_gates.py``.
 * ``[time] saturation_rel_sem``: target relative standard error of the mean on
   the windowed heat flux (default ``0.05``, i.e. 5%). The SEM is corrected for
-  autocorrelation via the Sokal integrated autocorrelation time, so it is the
-  error of the physical time average rather than of independent samples.
+  autocorrelation using the current first-negative-lag truncation estimate
+  (the historical function name is ``sokal_autocorrelation_time``). This is
+  not yet the plan's self-consistent Sokal window or a calibrated sequential
+  confidence guarantee. Independent fixed-horizon AR(1) coverage and a strong
+  drifting-prefix rejection control live in
+  ``tests/validation/quasilinear/test_quasilinear_window.py``; mild drift,
+  burn-in, repeated-look coverage and real turbulent traces remain open gates.
 * ``[time] saturation_min_window``: minimum averaging-window span in time
   units before a run may stop. When omitted, the requirement is derived from
   the trace itself as ten integrated autocorrelation times.
