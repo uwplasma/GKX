@@ -28,6 +28,7 @@ from gkx.operators.linear.params import (
     term_config_to_linear_terms,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.operators.linear.streaming import _scatter_unique_linked_modes
 from gkx.terms.assembly import assemble_rhs_cached_with_fields, compute_fields_cached
 from gkx.terms.config import FieldState, TermConfig
 
@@ -192,30 +193,6 @@ def _build_implicit_preconditioner_data(
     )
 
 
-def _scatter_unique_spectral_modes(
-    target: jnp.ndarray,
-    idx_flat: jnp.ndarray,
-    updates: jnp.ndarray,
-) -> jnp.ndarray:
-    idx = jnp.asarray(idx_flat, dtype=jnp.int32)
-    target_t = jnp.moveaxis(target, -2, 0)
-    updates_t = jnp.moveaxis(updates, -2, 0)
-    idx = idx[:, None]
-    dnums = jax.lax.ScatterDimensionNumbers(
-        update_window_dims=tuple(range(1, updates_t.ndim)),
-        inserted_window_dims=(0,),
-        scatter_dims_to_operand_dims=(0,),
-    )
-    out_t = jax.lax.scatter(
-        target_t,
-        idx,
-        updates_t,
-        dnums,
-        unique_indices=True,
-    )
-    return jnp.moveaxis(out_t, 0, -2)
-
-
 def _solve_tridiagonal_last_axis(
     lower: jnp.ndarray,
     diagonal: jnp.ndarray,
@@ -356,7 +333,7 @@ def _solve_hermite_lines_linked(
         y_hat = jnp.moveaxis(y_hat_mlast, -1, 2)
         y_link = jnp.fft.ifft(y_hat, axis=-1).astype(x.dtype)
         y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
-        y_flat = _scatter_unique_spectral_modes(y_flat, idx_flat, y_link)
+        y_flat = _scatter_unique_linked_modes(y_flat, idx_flat, y_link)
 
     return jnp.swapaxes(y_flat.reshape(*lead_shape, Nx, Ny, Nz), -3, -2)
 
@@ -383,7 +360,7 @@ def _project_kx_coarse(x: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
         x_mean = jnp.mean(x_link, axis=-2, keepdims=True)
         x_mean = jnp.broadcast_to(x_mean, x_link.shape)
         x_updates = x_mean.reshape(*lead_shape, nChains * nLinks, Nz)
-        y_flat = _scatter_unique_spectral_modes(y_flat, idx_flat, x_updates)
+        y_flat = _scatter_unique_linked_modes(y_flat, idx_flat, x_updates)
 
     return jnp.swapaxes(y_flat.reshape(*lead_shape, Nx, Ny, Nz), -3, -2)
 
