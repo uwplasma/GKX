@@ -10902,3 +10902,82 @@ two PRs that add a file or a test collide there regardless of content. That cost
 this backlog several CI cycles and made one healthy PR look broken for a day.
 Either compute the value instead of storing it, or split the budget per
 directory so unrelated work stops contending for one line.
+
+## 2026-09-12 — reconvene, repair optional benchmark contracts
+
+Reconciled GitHub and main before resuming. #221 had 41 successful checks and
+one skipped nightly; merged without override as `2333d6a4f`. Main contains the
+authoritative #206 plan and the repair consolidations. Corrected the plan's
+stale "not yet on main" header and its premature Phase 0.1 completion claim:
+reference-rate provenance and old-key migration are still required by item 4.
+No release, history rewrite, branch deletion or protection change this step.
+
+#212 at `2e42b75c6` fails because three benchmark contracts compare every
+LinearParams field numerically, including new optional `damp_ends_rate=None`.
+The first TEM-only fix (`9c29dd83c`, after merging main) exposed the same
+kinetic-electron failure when running the complete CI shard. Inspection found
+the duplicated KBM comparison too. Final fix `ce5ffe657` shares one comparison
+across all three: optional values must be identical; numeric values keep their
+original rtol=1e-7/atol=1e-9. New mismatch cases reject None/zero in both
+directions and unequal explicit rates. No solver or tolerance change. The
+shared helper reduces duplication and restores the previous size cap, rather
+than increasing it. Published updates stay in #212, not a competing repair PR.
+
+Environment: the old `/tmp/gkx-plan-review-20260906` interpreter no longer
+exists. Available `/tmp/gkx-x64-env` has JAX 0.9.2, below GKX's floor: its
+reproduction of the original None/None TypeError and initial TEM pass are
+diagnostic only, not supported-version validation. Subsequent tests use
+`/tmp/gkx-resume-20260912/bin/python`, Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6, with explicit PYTHONPATH, JAX_ENABLE_X64=true, GKX_X64=1,
+MPLBACKEND=Agg. This venv inherits system packages; unrelated installed packages
+declare older JAX constraints, so this is not a clean-install certification.
+Global packages were not changed. Remote validation independently uses
+`/home/rjorge/venvs/dkx-gpu/bin/python`, JAX 0.10.2 on RTX A4000s.
+
+CPU results at final helper revision:
+
+- All 50 benchmark-contract tests pass (15.62 s), including mismatch controls.
+- Exact wide-coverage shard 13: **173 passed / 1 skipped**, 34.24 s, three
+  warnings. Before completing all three comparisons: 125 passed / 1 skipped,
+  then the kinetic comparison failed. No skipped-failure workaround.
+- Ruff check/format and architecture gate pass; whitespace clean.
+
+Shard invocation (same checked-in runner and membership as CI; preserve existing
+coverage files in this shared worktree):
+
+```sh
+PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 \
+/tmp/gkx-resume-20260912/bin/python tools/release/run_test_gates.py wide-coverage \
+  --shards 24 --timeout 1800 --only-shard 13 --skip-combine \
+  --keep-existing-coverage --pytest-arg=-o --pytest-arg=addopts= \
+  --pytest-arg=-m --pytest-arg='not slow'
+```
+
+GPU snapshot `/home/rjorge/gkx-rate-resume-20260912.JdX89a` is a git archive of
+`9c29dd83c`. Its source and the GPU-selected tests are unchanged at `ce5ffe657`
+(verified empty diff). Both foreground SSH commands finished with exit 0:
+
+- CUDA_VISIBLE_DEVICES=0, `test_linear.py test_runtime_runner.py -k end_damping`:
+  **34 passed**, 19.65 s; `rate-gpu.xml` SHA-256
+  `2aa046a64ee8132096c0531d27dea20924da61a2c35f5c357cdefecf0216e79b`.
+- CUDA_VISIBLE_DEVICES=0,1, `test_parallel_linear_velocity.py
+  -k species_pmap_electromagnetic_trajectory_matches_serial`: **2 passed**,
+  26.82 s, two existing downcast warnings; `state-ad-two-gpu.xml` SHA-256
+  `ffc006c35ed6c69ad41ba13a252b28d971b04ce572e1ab214022f294639d2101`.
+
+Both use PYTHONPATH=$PWD/src, JAX_ENABLE_X64=true, GKX_X64=1,
+JAX_PLATFORMS=cuda, XLA_PYTHON_CLIENT_PREALLOCATE=false, the office interpreter,
+`pytest -o addopts= -q --tb=short --junitxml=<file>`. Remote PIDs were not
+captured; completion is verified by SSH exit status and XML artifacts. Existing
+GPU allocations were not interrupted. These are algebra/AD/routing checks,
+not EM physics certification or transport/convergence/speedup measurements.
+
+The first full nonlinear-core run was interrupted by us after 15 passing tests
+once the second comparison bug was found; it is not a passing shard. The
+restarted exact nonlinear-core file selection is running on final head:
+local PID 18760, logs `/tmp/gkx-resume-nonlinear-core.log` and planned XML
+`/tmp/gkx-resume-nonlinear-core.xml`. It includes all three nonlinear owners
+and the benchmark-contract owner, with `-q --maxfail=1 --disable-warnings
+-o addopts=''`. Last observed at ~3 minutes, progressing; stop at 30 minutes
+if it exceeds the CI budget. Fresh GitHub CI is also unfinished. Do not merge
+#212 based only on the completed subsets; final disposition follows below.

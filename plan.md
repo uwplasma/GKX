@@ -11,16 +11,18 @@ and reasoning are kept in [plan/baseline](plan/baseline/),
 [plan/research](plan/research/) and [plan/log.md](plan/log.md). No other
 roadmap is active. This plan changes no solver, test, data or release.
 
-**Status 2026-09-08:** this document is on branch `plan/authoritative-20260906`
-([#206](https://github.com/uwplasma/GKX/pull/206)) and is **not yet on `main`**,
-which still carries the superseded 2,881-line roadmap. Landing #206 is Phase 0's
-first act: until it lands, `main`'s `plan.md` contradicts this file.
+**Status 2026-09-12:** main carries this authoritative plan: #206 merged as
+`e6fb735e9`, followed by status correction #221 (`2333d6a4f`). This file is the
+execution authority, not an open proposal waiting for #206 to land.
 
-Phase 0.1 is complete. Merged: #197, #199, #207, #215, #210, then #218
+The repair backlog largely landed, but **Phase 0.1's rate migration is not
+complete** (§4.0.1 item 4). Merged: #197, #199, #207, #215, #210, then #218
 (consolidating #213/#214/#216/#217) and #219 (consolidating #209/#211, and
 carrying #196/#200/#201/#208). Closed as superseded: #202, and the six retired by
-those consolidations. The backlog went from fifteen open PRs to two — this one
-and #212, which has failing checks and stays with its author.
+those consolidations. #212 remains open: three benchmark parameter comparisons
+treated optional values as numbers. They now share an exact-optional/numeric
+comparison at `ce5ffe657`, with fresh validation in progress. Reference-rate
+conversion/provenance and deprecated-key migration remain separate open gates.
 
 This branch no longer carries a README rewrite. `main`'s README has since taken
 the corrections that mattered (the capability table, the Cite section, the demo's
@@ -157,10 +159,10 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 |---|---|---|
 | #197 | per-step end damping restored | merged `ca4e5169`; recorded artifact reproduced, not newly physics-certified |
 | #199 | analytic stage-map tests, route docs | merged `0c016bd1` |
-| #196 → #200 → #201; #208 | f32 safety/lowering repairs; linear endpoint | integrate through #209 after fresh required CI, preserving merge ancestry |
-| #207; #210 | Fourier/link-map oracles; nonfinite Laguerre guard | #207 merged `99963b45`; #210 independently tested, awaiting CI |
-| #202 | fixed-rate absorber plus streaming/coefficient repairs, +2199/−400 | **split**, not wholesale merge: remaining repairs isolated; rate behind explicit input and rescaled decks; unpublished commits preserved at `wip/r0-end-damping-rate-local` |
-| #211; #212 | species-parallel traced-state repair; opt-in differentiable `damp_ends_rate` | further bounded #202 extractions, based on main `99963b45`; awaiting required CI and maintainer approval |
+| #196 → #200 → #201; #208 | f32 safety/lowering repairs; linear endpoint | carried by merged consolidation #219; #209 retired |
+| #207; #210 | Fourier/link-map oracles; nonfinite Laguerre guard | both merged |
+| #202 | fixed-rate absorber plus streaming/coefficient repairs | closed as superseded; closure does not certify its collision tables or complete reference migration |
+| #211; #212 | species-parallel traced-state repair; opt-in differentiable `damp_ends_rate` | #211 carried by #219; #212 remains under CI validation |
 | #198, #203, #204, #205 | planning | superseded by this plan; closed with a pointer here; branches kept |
 
 ---
@@ -385,11 +387,10 @@ covered fraction is 65,535/294,912 = 22%.
 2. **Merged #199** as `0c016bd1` from `4e78e7bb`; 16 damping checks and
    134 release tests independently pass. The legacy scalar contract is not a
    fixed-rate physical-model certification.
-3. Merge #196 → #200 → #201 and #208 through integration **#209**, with a
-   merge commit preserving their heads. Its complete tree equals tested
-   `1c7c7472`; fresh CI on the current main is required even for administrators.
-   No protection changes, synthetic statuses or main force-push. Verify each
-   original PR's merged state after integration; do not merely close it.
+3. **Landed through #219** (`7eb7627a0`): #196/#200/#201/#208 and #211;
+   #209 was retired by consolidation. See the log for the actual dispositions,
+   rather than treating closed original PRs as individually merged. Required
+   checks still apply; no protection changes or synthetic statuses.
 4. Push the two unpushed local commits on `fix/r0-end-damping-rate` to
    `wip/r0-end-damping-rate-local` so nothing is lost; open one small PR per
    independently justified repair in #202 (single-link frequencies,
@@ -401,10 +402,10 @@ covered fraction is 65,535/294,912 = 22%.
    `99963b45` (analytic Fourier/link-map contracts, net zero test lines); #208
    (explicit linear endpoint clipping, independently failed on the parent).
    These do not import #202's collision tables or select its rate redesign;
-   keep #202 open until the remainder is explicitly dispositioned.
+   #202 was closed as superseded; its unshipped research remains unvalidated.
    Further bounded extractions: #210 rejects nonfinite Laguerre transforms;
    #211 preserves traced initial states through species-parallel placement,
-   with eager/outer-JIT electromagnetic derivative identities. Both await CI.
+   with eager/outer-JIT electromagnetic derivative identities. Both landed.
    Neither certifies finite-wavelength Coulomb physics or turbulent gradients.
    #212 adds the explicit `[time] damp_ends_rate`/Python rate opt-in and a shared
    resolver while retaining legacy defaults. Reference conversion/provenance,
@@ -417,8 +418,9 @@ working days or receives a written disposition in the log. Stacked drafts
 older than two weeks are split or closed.
 
 Exit: main contains #197, #199, #196, #200, #201; #202 split; planning PRs
-closed. Ledger rows: none yet; every time-integrated row is marked `pre-197`
-until regenerated.
+closed; explicit-rate reference conversion and deprecated-key migration done.
+The evidence ledger landed in #218; individual rows retain their recorded
+validation status until regenerated, not a blanket passing status after merging.
 
 ### 0.2 API and first-run contracts
 
