@@ -415,6 +415,17 @@ are:
 
 Notable runtime-only keys:
 
+* ``[time] damp_ends_rate``: optional finite, nonnegative end-absorber rate in
+  inverse simulation-time units. When set (including zero), overrides
+  ``damp_ends_amp`` consistently for timestep-aware and timestep-free RHS calls.
+  For the isolated absorber, :math:`\dot G=-\nu d(z)G`; a step multiplies by
+  :math:`R(-\Delta t\nu d(z))`, not :math:`R(-A d(z))`. In Python use
+  ``LinearParams(damp_ends_rate=nu)``; ``nu`` remains a differentiable leaf.
+  Omission preserves the legacy behavior below. Combining this option with
+  ``damp_ends_scale_by_dt=true`` is an error. For a fixed-step legacy reference,
+  matching requires :math:`\nu=A/\Delta t_{ref}`; record both reference values
+  with the comparison. No automatic conversion or benchmark recertification
+  occurs, and adaptive legacy steps do not define one equivalent constant rate.
 * ``[collisions] damp_ends_amp`` / ``damp_ends_widthfrac``: reference-compatible end
   damping defaults are ``0.1`` and ``0.125``. Linear integration routes supplying
   ``dt`` divide the amplitude by the instantaneous step size: it is a per-step

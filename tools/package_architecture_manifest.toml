@@ -901,7 +901,9 @@ recursive = true
 # Consolidated: #209's approved repair stack plus #211's species-state AD fix,
 # landed together because both move this counter. Measured union, not either
 # branch's figure.
-baseline = 89136
+# Explicit optional rate and one shared damping resolver; legacy defaults retained.
+# +14 from the opt-in damp_ends_rate contract, measured after merging main.
+baseline = 89150
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1066,7 +1068,9 @@ recursive = true
 # branch's figure.
 # +14: eager/outer-jitted EM initial-state derivative identity, serial and pmap.
 # Consolidated #209 + #211; measured union after both merges.
-baseline = 87376
+# +48: rate/legacy RK identities, pytree AD, runtime input and mixed-route checks.
+# +49 from the opt-in damp_ends_rate contract, measured after merging main.
+baseline = 87425
 target = 35000
 
 [[line_budget_policy.counts]]

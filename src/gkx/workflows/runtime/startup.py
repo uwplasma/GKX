@@ -211,6 +211,8 @@ def build_runtime_linear_params(
 ) -> LinearParams:
     """Build `LinearParams` from a unified runtime config."""
 
+    if cfg.time.damp_ends_rate is not None and cfg.collisions.damp_ends_scale_by_dt:
+        raise ValueError("damp_ends_rate cannot be combined with damp_ends_scale_by_dt")
     _require_full_gk_runtime_model(cfg)
     if geom is None:
         geom = build_runtime_geometry(cfg)
@@ -293,6 +295,7 @@ def build_runtime_linear_params(
             else float(cfg.collisions.damp_ends_amp)
         ),
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
+        damp_ends_rate=cfg.time.damp_ends_rate,
     )
 
 

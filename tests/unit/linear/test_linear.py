@@ -1220,8 +1220,9 @@ def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_gri
     assert int(np.asarray(grid.ky_mode)[0]) > 0
 
 
+@pytest.mark.parametrize("rate", [None, 0.5])
 def test_linear_integrator_applies_linked_end_damping_per_step(
-    only_term_config, only_terms, spectral_grid
+    only_term_config, only_terms, spectral_grid, rate
 ):
     """Legacy linear damping scales as 1/dt; its Euler increment is fixed."""
     grid_full = spectral_grid(
@@ -1238,7 +1239,9 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
     ky_idx = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     grid = select_ky_grid(grid_full, ky_idx)
     geom = SAlphaGeometry.from_config(GeometryConfig(s_hat=0.8))
-    params = LinearParams(damp_ends_amp=0.1, damp_ends_widthfrac=0.125)
+    params = LinearParams(
+        damp_ends_amp=0.1, damp_ends_widthfrac=0.125, damp_ends_rate=rate
+    )
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
     G = jnp.ones((2, 4, 1, 1, 96), dtype=jnp.complex64)
     term_cfg = only_term_config(end_damping=1.0)
@@ -1254,10 +1257,10 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
     end_dt = np.asarray(contrib_dt["end_damping"])
     mask = np.abs(end_raw) > 1.0e-12
     assert np.any(mask)
-    assert np.allclose(end_dt[mask], end_raw[mask] / 0.2, rtol=1.0e-6, atol=1.0e-6)
+    scale = 1.0 if rate is not None else 1 / 0.2
+    assert np.allclose(end_dt[mask], end_raw[mask] * scale, rtol=1.0e-6, atol=1.0e-6)
 
-    # The completed step is what the decks are tuned against: the increment the
-    # integrator applies must not depend on the step size.
+    # Legacy increments are fixed; explicit-rate Euler increments scale with dt.
     terms = only_terms(end_damping=1.0)
     increments = []
     for dt in (0.1, 0.2):
@@ -1271,7 +1274,8 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
             method="euler",
             terms=terms,
         )
-        increments.append(np.asarray(integrated) - np.asarray(G))
+        increment = np.asarray(integrated) - np.asarray(G)
+        increments.append(increment / dt if rate is not None else increment)
     assert np.any(np.abs(increments[0][mask]) > 1.0e-12)
     assert np.allclose(increments[0], increments[1], rtol=1.0e-6, atol=1.0e-8)
 
@@ -1280,7 +1284,8 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
     "method,order", [("euler", 1), ("rk2", 2), ("rk3", 3), ("rk4", 4)]
 )
 @pytest.mark.parametrize("dt", [0.002, 0.2])
-def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
+@pytest.mark.parametrize("fixed_rate", [False, True])
+def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt, fixed_rate):
     """An isolated damped scalar follows R(-A), not an exact removed fraction."""
     from math import factorial
 
@@ -1292,7 +1297,11 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
 
         def step(amplitude):
             rate = _scalar_params(
-                LinearParams(damp_ends_amp=amplitude), jnp.float64, dt
+                LinearParams(damp_ends_rate=amplitude)
+                if fixed_rate
+                else LinearParams(damp_ends_amp=amplitude),
+                jnp.float64,
+                dt,
             ).damp_amp
             return _linear_native_step(
                 jnp.asarray(1.0),
@@ -1303,10 +1312,27 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
             )
 
         value, tangent = jax.jvp(step, (strength,), (jnp.ones_like(strength),))
-        expected = sum((-0.2) ** k / factorial(k) for k in range(order + 1))
-        derivative = -sum((-0.2) ** k / factorial(k) for k in range(order))
+        factor = dt if fixed_rate else 1.0
+        expected = sum((-0.2 * factor) ** k / factorial(k) for k in range(order + 1))
+        derivative = -factor * sum(
+            (-0.2 * factor) ** k / factorial(k) for k in range(order)
+        )
         assert float(value) == pytest.approx(expected, rel=0, abs=2e-15)
         assert float(tangent) == pytest.approx(derivative, rel=0, abs=2e-15)
+
+
+@pytest.mark.parametrize("dt", [None, 0.0, 0.002, 0.2])
+def test_fixed_end_damping_rate_pytree_and_reverse_derivative(dt):
+    """Rate survives pytree/JIT and never depends on the caller's timestep."""
+
+    def objective(params):
+        return params.end_damping_strength(dt, jnp.float32) ** 2
+
+    params = LinearParams(damp_ends_amp=99.0, damp_ends_rate=0.3)
+    value, derivative = jax.jit(jax.value_and_grad(objective))(params)
+    assert float(value) == pytest.approx(0.09)
+    assert float(derivative.damp_ends_rate) == pytest.approx(0.6)
+    assert float(derivative.damp_ends_amp) == 0.0
 
 
 def test_streaming_zero_for_constant_z(cyclone_world, only_terms):

@@ -248,7 +248,7 @@ def _scalar_params(
     real_dtype: Any,
     dt: jnp.ndarray | float | None,
 ) -> _ScalarParams:
-    """Resolve end damping for the caller's legacy timestep contract.
+    """Resolve explicit-rate damping, falling back to the legacy contract.
 
     With nonzero ``dt``, amplitude A gives RHS strength A/dt. For the isolated
     scalar damping equation an explicit RK step multiplies by R(-A*d(z)),
@@ -258,10 +258,7 @@ def _scalar_params(
     and migrate decks/references before claiming a single dt-convergent model.
     """
 
-    damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
-    if dt is not None:
-        dt_arr = jnp.asarray(dt, dtype=real_dtype)
-        damp_amp = jnp.where(dt_arr != 0.0, damp_amp / dt_arr, damp_amp)
+    damp_amp = params.end_damping_strength(dt, real_dtype)
     return _ScalarParams(
         omega_d_scale=jnp.asarray(params.omega_d_scale, dtype=real_dtype),
         omega_star_scale=jnp.asarray(params.omega_star_scale, dtype=real_dtype),
