@@ -11093,3 +11093,60 @@ only for the filesystem/TOML/CSV evidence-ledger checks:
 -q -o addopts='' tests/release/test_evidence_ledger.py`: **14 passed, 0.02 s**.
 This metadata-only check is not supported-JAX solver validation. Final
 `git diff --check` passes; fresh #222 CI must validate the updated merged base.
+
+## 2026-09-12 — reject deprecated scaling before expensive work
+
+#222 completed with 41 SUCCESS / 1 SKIPPED and merged normally with the
+maintainer's standing approval at 17:24:26 UTC, `1c7d21e5d`. New branch
+`fix/reject-legacy-damping-scale` starts there in the existing planreview
+worktree. Source commit `1a0889925` implements the first bounded part of
+§0.1 item 4: reject `damp_ends_scale_by_dt=true` before geometry construction;
+remove the unreachable double-scaling branch. Omitted/false remains unchanged.
+The error and input documentation distinguish old linear
+`A/(dt_input*dt_step)` from timestep-free `A/dt_input`; no silent conversion.
+Source and test line counts are unchanged; architecture budgets were not raised.
+
+Negative control before source editing: both new dt=0 and dt=0.2 rejection
+tests fail on the parent (DID NOT RAISE), 9.15 s. Final controls additionally
+cover rate None/0/0.5 and fail if geometry is built before rejection.
+
+CPU environment: persistent
+`/Users/rogeriojorge/local/venvs/gkx-rate-migration`, Python 3.11, JAX/jaxlib
+0.10.2 installed in a system-site-packages venv; global packages unchanged.
+Inherited DESC/interpax/quadax and other unrelated packages declare incompatible
+JAX ceilings: this is supported-JAX focused validation, not clean-install proof.
+
+```sh
+cd /Users/rogeriojorge/local/GKX-worktrees/planreview
+PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 \
+/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m pytest \
+  -q -o addopts='' tests/integration/runtime/test_runtime_runner.py \
+  tests/unit/linear/test_linear.py -k end_damping --tb=short
+```
+
+Final source: **39 passed / 207 deselected, 6.86 s**, exit 0. Ruff check/format,
+`git diff --check` and `python3 tools/release/check_package_architecture_manifest.py`
+pass. An initial longer error message exceeded the source cap; shortened the
+message while preserving full guidance in docs, not the budget. No solver
+physics, integrator or tolerance changed.
+
+Office snapshot is `git archive 1a0889925` at
+`/home/rjorge/gkx-scale-migration.0xvBXZ`. Same pytest selection using
+`/home/rjorge/venvs/dkx-gpu/bin/python`, PYTHONPATH=$PWD/src,
+JAX_ENABLE_X64=true GKX_X64=1 JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=0
+XLA_PYTHON_CLIENT_PREALLOCATE=false and `--junitxml=checks.xml`:
+**39 passed / 207 deselected, 14.59 s**, SSH exit 0. Local SSH PID 46566;
+Office JAX version rechecked: 0.10.2. XML SHA-256:
+`6e245271da4d1955eb023fdca3d3768ab045612361e4596aea3fb167f60d34db`.
+remote PID not captured. No job from this step remains running. The preflight
+showed 0% utilization; unrelated GPU work subsequently appeared and was not
+interrupted. These elapsed times are test timings, not a CPU/GPU speed comparison.
+
+Next: required PR CI before merge; then implement explicit source-deck/hash,
+route and fixed-reference timestep provenance with resolved-input reload tests.
+Do not equate this rejection patch with completion of Phase 0.1. Reference
+regeneration, adaptive-rate ambiguity, EM physics gates and release remain open.
+Scientific/source context: authoritative plan §0.1/§3.7, issue #194 and
+docs/inputs.rst. This host-side migration guard needs no new scientific model
+or literature claim. Preserve the previous CPU/GPU scientific evidence as
+historical; this entry records the fresh focused rerun.
