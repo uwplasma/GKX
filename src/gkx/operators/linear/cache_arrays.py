@@ -155,7 +155,6 @@ def hypercollision_damping(
     nu_hyper_m = jnp.asarray(params.nu_hyper_m, dtype=real_dtype)
     nu_hyper_lm = jnp.asarray(params.nu_hyper_lm, dtype=real_dtype)
     w_const = jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
-    w_kz = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
 
     vth = jnp.asarray(params.vth, dtype=real_dtype)
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
@@ -174,16 +173,25 @@ def hypercollision_damping(
     hyper = hyper + w_const * jnp.where(mask_const, const_coeff, 0.0)
 
     abs_kz = jnp.abs(cache.kz).astype(real_dtype)[None, None, None, None, None, :]
+    return hyper + hypercollision_kz_coefficient(cache, params, real_dtype) * abs_kz
+
+
+def hypercollision_kz_coefficient(
+    cache: "LinearCache", params: "LinearParams", real_dtype: jnp.dtype
+) -> jnp.ndarray:
+    """Coefficient of the Fourier multiplier |kz|, not a real-space diagonal."""
+    vth = jnp.asarray(params.vth, dtype=real_dtype)
+    vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
     nu_hyp_m = (
-        nu_hyper_m
+        jnp.asarray(params.nu_hyper_m, dtype=real_dtype)
         * cache.m_norm_kz_factor.astype(real_dtype)
         * 2.3
         * vth_s
         * jnp.abs(jnp.asarray(params.kpar_scale, dtype=real_dtype))
     )
-    kz_term = nu_hyp_m * cache.m_pow.astype(real_dtype) * abs_kz
-    hyper = hyper + w_kz * jnp.where(cache.mask_kz, kz_term, 0.0)
-    return hyper
+    return jnp.asarray(params.hypercollisions_kz, dtype=real_dtype) * jnp.where(
+        cache.mask_kz, nu_hyp_m * cache.m_pow.astype(real_dtype), 0.0
+    )
 
 
 def collision_damping(

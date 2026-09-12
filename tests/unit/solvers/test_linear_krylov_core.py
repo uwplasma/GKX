@@ -486,6 +486,75 @@ def test_hermite_line_inverts_additive_diagonal_and_streaming_symbol() -> None:
     assert jnp.allclose(observed, expected, rtol=2.0e-5, atol=2.0e-5)
 
 
+@pytest.mark.parametrize("weight", [0.0, 0.4, 1.0])
+def test_hermite_line_inverts_kz_hypercollisions(weight) -> None:
+    """The |kz| multiplier lives on each FFT chain, including its zero mode."""
+    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=True)
+    params = replace(
+        params,
+        hypercollisions_const=0.0,
+        hypercollisions_kz=1.0,
+        kpar_scale=-0.7,
+        nu_hyper_m=0.8,
+    )
+    term_cfg = replace(term_cfg, streaming=0.0, collisions=0.0, hypercollisions=weight)
+    sigma = jnp.asarray(0.3 - 0.7j, dtype=v0.dtype)
+    apply = implicit._build_shifted_hermite_preconditioner(
+        v0, cache, params, term_cfg, sigma
+    )
+    rng = np.random.default_rng(19)
+    rhs = jnp.asarray(
+        rng.normal(size=v0.shape) + 1j * rng.normal(size=v0.shape), dtype=v0.dtype
+    )
+    active = jnp.zeros(v0.shape[-3] * v0.shape[-2], dtype=bool)
+    for indices in cache.linked_indices:
+        active = active.at[indices.ravel()].set(True)
+    active = active.reshape(v0.shape[-2], v0.shape[-3]).T[..., None]
+    # The RHS also reconstructs conjugate ky rows. Certify the independent
+    # chain-covered subspace, not an inverse on every redundant spectral row.
+    rhs = rhs * active
+    expected_coarse = np.zeros(v0.shape, dtype=np.asarray(rhs).dtype)
+    for indices in cache.linked_indices:
+        for chain in np.asarray(indices):
+            kx, ky = chain // v0.shape[-3], chain % v0.shape[-3]
+            expected_coarse[..., ky, kx, :] = np.mean(
+                np.asarray(rhs)[..., ky, kx, :], axis=-2, keepdims=True
+            )
+    np.testing.assert_allclose(
+        implicit._project_kx_coarse(rhs[None], cache)[0],
+        expected_coarse,
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    candidate = apply(rhs.ravel()).reshape(v0.shape)
+    residual = (
+        ka._apply_operator(candidate, cache, params, term_cfg) - sigma * candidate - rhs
+    )
+    relative = float(jnp.linalg.norm(residual * active) / jnp.linalg.norm(rhs))
+    assert relative < 3e-6, relative
+    # JAX's complex transpose is bilinear (not the Hermitian adjoint).
+    dual = jnp.asarray(
+        rng.normal(size=rhs.size) + 1j * rng.normal(size=rhs.size), dtype=v0.dtype
+    )
+    transpose = jax.linear_transpose(apply, rhs.ravel())(dual)[0]
+    np.testing.assert_allclose(
+        jnp.sum(dual * candidate.ravel()),
+        jnp.sum(transpose * rhs.ravel()),
+        rtol=3e-6,
+        atol=3e-5,
+    )
+
+    def solve_rate(rate):
+        return implicit._build_shifted_hermite_preconditioner(
+            v0, cache, replace(params, nu_hyper_m=rate), term_cfg, sigma
+        )(rhs.ravel())
+
+    rate = jnp.asarray(params.nu_hyper_m)
+    tangent = jax.jvp(solve_rate, (rate,), (jnp.ones_like(rate),))[1]
+    finite_difference = (solve_rate(rate + 1e-3) - solve_rate(rate - 1e-3)) / 2e-3
+    np.testing.assert_allclose(tangent, finite_difference, rtol=5e-3, atol=2e-4)
+
+
 def test_shifted_hermite_preconditioner_handles_a_zero_shift() -> None:
     """A marginal target must use the finite damping fallback."""
 
@@ -505,7 +574,10 @@ def test_shifted_hermite_preconditioner_handles_a_zero_shift() -> None:
     assert jnp.allclose(result, expected)
 
 
-def test_field_corrected_shifted_preconditioner_removes_low_moment_coupling() -> None:
+@pytest.mark.parametrize("kz_damping", [False, True])
+def test_field_corrected_shifted_preconditioner_removes_low_moment_coupling(
+    kz_damping,
+) -> None:
     """Woodbury field correction must fix the Hermite line inverse's main defect."""
 
     _grid, cache, params, v0, _term_cfg, _terms = _tiny_krylov_setup(linked=False)
@@ -515,6 +587,8 @@ def test_field_corrected_shifted_preconditioner_removes_low_moment_coupling() ->
         omega_d_scale=1.0,
         tprim=6.9,
         fprim=2.2,
+        hypercollisions_const=float(not kz_damping),
+        hypercollisions_kz=float(kz_damping),
     )
     term_cfg = linear_terms_to_term_config(
         LinearTerms(

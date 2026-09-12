@@ -51,15 +51,15 @@ def _compute_damping(
     v: jnp.ndarray,
     cache: LinearCache,
     params: LinearParams,
+    term_cfg: TermConfig | None = None,
 ) -> jnp.ndarray:
     real_dtype = jnp.real(v).dtype
     hyper_damp = hypercollision_damping(cache, params, real_dtype)
     if v.ndim == 5 and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
-    damping = (
-        collision_damping(cache, params, real_dtype, squeeze_species=(v.ndim == 5))
-        + hyper_damp
-    )
+    damping = (1.0 if term_cfg is None else term_cfg.collisions) * collision_damping(
+        cache, params, real_dtype, squeeze_species=(v.ndim == 5)
+    ) + (1.0 if term_cfg is None else term_cfg.hypercollisions) * hyper_damp
     return damping.astype(real_dtype)
 
 
@@ -214,7 +214,7 @@ def build_shift_invert_preconditioner(
             "_automatic_shift_preconditioner; reaching here means it was bypassed."
         )
     if mode_key == "damping":
-        damping = _compute_damping(v, cache, params)
+        damping = _compute_damping(v, cache, params, term_cfg)
         diag = -damping.astype(v.dtype) - sigma
         safe = jnp.where(jnp.abs(diag) > 0.0, diag, 1.0 + 0.0j)
         precond = 1.0 / safe
@@ -253,7 +253,7 @@ def build_shift_invert_preconditioner(
             sigma,
             coarse=coarse,
         )
-    damping = _compute_damping(v, cache, params)
+    damping = _compute_damping(v, cache, params, term_cfg)
     diagonal = -damping.astype(v.dtype) - sigma
     safe_diagonal = jnp.where(jnp.abs(diagonal) > 0.0, diagonal, 1.0 + 0.0j)
     damping_inverse = 1.0 / safe_diagonal

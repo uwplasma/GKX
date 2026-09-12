@@ -808,6 +808,9 @@ def test_linear_rhs_accepts_multispecies_state() -> None:
 
 
 def test_build_implicit_operator_handles_species_squeeze(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "gkx.solvers_linear_implicit.hypercollision_kz_coefficient", lambda *args: 0.0
+    )
     G0 = jnp.zeros((2, 2, 1, 1, 2), dtype=jnp.complex64)
     cache = SimpleNamespace(
         lb_lam=jnp.ones((1, 2, 2, 1, 1, 2), dtype=jnp.float32),
@@ -857,6 +860,9 @@ def test_build_implicit_operator_handles_species_squeeze(monkeypatch) -> None:
 
 
 def test_build_implicit_operator_preconditioner_aliases_and_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "gkx.solvers_linear_implicit.hypercollision_kz_coefficient", lambda *args: 0.0
+    )
     G0 = jnp.zeros((1, 2, 2, 1, 1, 2), dtype=jnp.complex64)
     cache = SimpleNamespace(
         lb_lam=jnp.ones((1, 2, 2, 1, 1, 2), dtype=jnp.float32),
@@ -931,6 +937,9 @@ def test_build_implicit_operator_preconditioner_aliases_and_errors(monkeypatch) 
 def test_build_implicit_operator_linked_hermite_line_preconditioner(
     monkeypatch,
 ) -> None:
+    monkeypatch.setattr(
+        "gkx.solvers_linear_implicit.hypercollision_kz_coefficient", lambda *args: 0.0
+    )
     G0 = jnp.zeros((1, 1, 2, 1, 1, 2), dtype=jnp.complex64)
     kz_link = 2.0 * jnp.pi * jnp.fft.fftfreq(2, d=1.0)
     cache = SimpleNamespace(

@@ -14,6 +14,7 @@ from solvax import gmres, tridiagonal_solve
 from gkx.operators.linear.cache_arrays import (
     collision_damping,
     hypercollision_damping,
+    hypercollision_kz_coefficient,
 )
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
@@ -60,6 +61,7 @@ class _ImplicitPreconditionerData:
     sqrt_m_line: jnp.ndarray
     sqrt_p_line: jnp.ndarray
     imag: jnp.ndarray
+    hyper_kz: jnp.ndarray
 
 
 @dataclass(frozen=True)
@@ -135,9 +137,16 @@ def _build_implicit_preconditioner_data(
     state: _ImplicitState,
 ) -> _ImplicitPreconditionerData:
     real_dtype = state.real_dtype
-    hyper_damp = hypercollision_damping(cache, params, real_dtype)
+    hyper_damp = state.terms.hypercollisions * hypercollision_damping(
+        cache, params, real_dtype
+    )
+    hyper_kz = state.terms.hypercollisions * hypercollision_kz_coefficient(
+        cache, params, real_dtype
+    )
     damping = (
-        collision_damping(cache, params, real_dtype, squeeze_species=False) + hyper_damp
+        state.terms.collisions
+        * collision_damping(cache, params, real_dtype, squeeze_species=False)
+        + hyper_damp
     ).astype(real_dtype)
 
     ell = cache.l.astype(real_dtype)
@@ -179,6 +188,7 @@ def _build_implicit_preconditioner_data(
         sqrt_m_line=cache.sqrt_m_ladder.reshape(-1).astype(real_dtype),
         sqrt_p_line=cache.sqrt_p.reshape(-1).astype(real_dtype),
         imag=imag,
+        hyper_kz=jnp.broadcast_to(hyper_kz, (ns, 1, state.shape[2], 1, 1, 1)),
     )
 
 
@@ -299,9 +309,13 @@ def _solve_hermite_lines_linked(
     Nx = x.shape[-2]
     Nz = x.shape[-1]
     lead_shape = x.shape[:-3]
-    x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
+    x_flat = jnp.swapaxes(x, -3, -2).reshape(*lead_shape, Nx * Ny, Nz)
     y_flat = jnp.zeros_like(x_flat)
-    diagonal_flat = jnp.reciprocal(data.precond_full).reshape(*lead_shape, Ny * Nx, Nz)
+    # Average only real-space coefficients; |kz| belongs to each linked FFT.
+    diagonal = jnp.reciprocal(
+        data.precond_full
+    ) - state.dt_val * data.hyper_kz * jnp.abs(cache.kz)
+    diagonal_flat = jnp.swapaxes(diagonal, -3, -2).reshape(*lead_shape, Nx * Ny, Nz)
 
     for idx_map, kz_link in zip(cache.linked_indices, cache.linked_kz):
         nChains, nLinks = idx_map.shape
@@ -330,6 +344,12 @@ def _solve_hermite_lines_linked(
             nLinks * Nz,
         )
         d = jnp.moveaxis(jnp.mean(diagonal_link, axis=-1), 2, -1)[..., None, :]
+        d = (
+            d
+            + state.dt_val
+            * data.hyper_kz.reshape(state.shape[0], 1, 1, 1, state.shape[2])
+            * jnp.abs(kz_link)[:, None]
+        )
         batch_shape = x_hat_mlast.shape
         dl = jnp.broadcast_to(dl, batch_shape)
         d = jnp.broadcast_to(d, batch_shape)
@@ -340,7 +360,7 @@ def _solve_hermite_lines_linked(
         y_link = y_link.reshape(*lead_shape, nChains * nLinks, Nz)
         y_flat = _scatter_unique_spectral_modes(y_flat, idx_flat, y_link)
 
-    return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
+    return jnp.swapaxes(y_flat.reshape(*lead_shape, Nx, Ny, Nz), -3, -2)
 
 
 def _project_kx_coarse(x: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
@@ -354,7 +374,7 @@ def _project_kx_coarse(x: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
     Nx = x.shape[-2]
     Nz = x.shape[-1]
     lead_shape = x.shape[:-3]
-    x_flat = x.reshape(*lead_shape, Ny * Nx, Nz)
+    x_flat = jnp.swapaxes(x, -3, -2).reshape(*lead_shape, Nx * Ny, Nz)
     y_flat = jnp.zeros_like(x_flat)
 
     for idx_map in cache.linked_indices:
@@ -367,7 +387,7 @@ def _project_kx_coarse(x: jnp.ndarray, cache: LinearCache) -> jnp.ndarray:
         x_updates = x_mean.reshape(*lead_shape, nChains * nLinks, Nz)
         y_flat = _scatter_unique_spectral_modes(y_flat, idx_flat, x_updates)
 
-    return y_flat.reshape(*lead_shape, Ny, Nx, Nz)
+    return jnp.swapaxes(y_flat.reshape(*lead_shape, Nx, Ny, Nz), -3, -2)
 
 
 def _canonical_implicit_preconditioner(
