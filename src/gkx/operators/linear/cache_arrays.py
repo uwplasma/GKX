@@ -179,7 +179,7 @@ def hypercollision_damping(
 def hypercollision_kz_coefficient(
     cache: "LinearCache", params: "LinearParams", real_dtype: jnp.dtype
 ) -> jnp.ndarray:
-    """Coefficient of the Fourier multiplier |kz|, not a real-space diagonal."""
+    """Coefficient of the Fourier multiplier ``abs(kz)``, not a spatial diagonal."""
     vth = jnp.asarray(params.vth, dtype=real_dtype)
     vth_s = vth if vth.ndim == 0 else vth[:, None, None, None, None, None]
     nu_hyp_m = (

@@ -11230,3 +11230,106 @@ Log `/tmp/gkx-provenance-release.log`. Final CPU focused XML SHA-256:
 At this checkpoint #223 has 32 successful, five unfinished and one skipped
 check; no failure and no merge yet. #224 has its own fresh CI. Neither the
 parent nor the child may be merged on the basis of these local subsets alone.
+
+## 2026-09-12 — periodic RHS and spectral preconditioner contracts
+
+Independent lanes and cross-review on branch
+`fix/spectral-hypercollision-contracts`, worktree
+`/Users/rogeriojorge/local/GKX-worktrees/spectral-contracts`. Base is #224
+`c0004e9f3`; require fresh CI before merge. This is a correctness change, not
+a performance claim or a completed physics benchmark.
+
+**RHS defect and impact.** `6d0023b25` replaces pointwise physical-z multiplication
+by `abs(kz)` with the existing FFT `abs_z_periodic` helper. A constant along-z
+state previously received `[0,-2.3,-4.6,-2.3]` instead of zero. Independent
+constant-null, Fourier-eigenvalue and translation-equivariance tests exercise
+periodic and one-link routes. `4a4adef60` checks the complex gradient of the
+self-adjoint multiplier as well. An initial integrated run had 49 passes and
+two failures due to a missing `jax` test import; fixed and rerun, not hidden.
+
+The active periodic kz channel changes physics. Regenerate outputs from
+`examples/optimization/QA_optimization.py` and
+`tools/campaigns/qa_transport_validation.py` before using their transport values.
+Pure geometry/Boozer panels are not invalidated. The shipped periodic cyclone
+quasilinear deck sets kz damping to zero; the batch-ky example has Nm=3 and no
+active m>2 channel. Inspected linked parity decks are unaffected by this
+periodic RHS repair. Do not blanket-invalidate unrelated references.
+
+**Preconditioner.** `b8f47098b` honors collision/hypercollision term weights,
+corrects linked flattening to kx-major order, and puts the kz symbol on each
+FFT chain rather than in a real-space averaged diagonal. Store only an O(ns Nm)
+coefficient, reuse existing SOLVAX tridiagonal machinery. Independent review
+caught the analogous periodic line-inverse omission: `51fb0964a` fixes it.
+Before that last repair, periodic inverse residuals were .295315862/.300024360
+for weights .4/1 against a 3e-6 gate; zero-weight and linked controls passed.
+After repair, nine focused inverse/field-correction controls pass (23.05 s),
+including transpose and rate-JVP/finite-difference checks. The inverse claim is
+only for the tested constant-coefficient principal part / independent linked
+subspace, not varying-drift operators or redundant conjugate rows.
+
+SOLVAX 0.20.0 uses portable Thomas for complex tridiagonal inputs, including GPU;
+no fused-complex solver, sharding improvement or speedup is claimed here.
+This PR does not modify SOLVAX. Required next performance evidence is outer
+residual plus matched wall time/memory on a representative difficult mode,
+not an isolated preconditioner microbenchmark.
+
+**Independent source check.** Pristine GX
+`bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`, `linear.cu:27–41,228–235`,
+`parameters.cu:1585`, `grad_parallel_linked.cu:469–486`: periodic construction
+selects linked chains with nLinks=1 and FFT|k|IFFT. A preliminary observation
+that an unused periodic moments overload was empty was withdrawn; it is not
+evidence of a GX no-op. Source hashes: linear.cu
+`63f8436863067984113e25341e56e1a6500cfc91cec2406006f0d97d6f422b57`,
+grad_parallel_linked.cu
+`5da9f89e7764b56850b9aedcf6f50c01c8b2919a26209aab12c3bd2ba0132a1f`.
+Context: [GX](https://arxiv.org/html/2209.06731v3),
+[JAX complex linear transpose](https://docs.jax.dev/en/latest/_autosummary/jax.linear_transpose.html),
+[SOLVAX](https://github.com/uwplasma/SOLVAX).
+
+**Reproduce.** CPU environment is the persistent Python3.11.14/JAX0.10.2/
+SOLVAX0.20.0 venv documented above, not clean-install proof. Prefix
+`PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1`, then
+`/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m pytest -q
+-o addopts='' -o junit_family=legacy tests/validation/benchmarks/test_benchmark_contracts.py
+tests/unit/solvers/test_linear_krylov_core.py tests/unit/linear/test_linear_helpers_extra.py
+tests/unit/linear/test_linear.py -k 'preconditioner or inverts_additive or
+inverts_kz_hypercollisions or hypercollision or shift_invert_nearest_pair'
+--tb=short --junitxml=/tmp/gkx-spectral-contracts-final-cpu.xml`:
+**54 passed / 236 deselected**, 65.43 s. Earlier owners: 51 benchmark contracts,
+four physics sentinels, 40 linked/preconditioner tests and two outer-residual
+cases passed; these overlap, not distinct totals. Final source adds 25 source
+and 110 test lines in existing modules, no new file; measured architecture
+budgets updated, targets unchanged.
+
+Negative/final periodic-inverse XML hashes:
+`ed05a48c1fd71c6b45392ee835df7c6dc4484edffe7de83b892d80797e7fde41` /
+`00ebb703d4fa5941ab5d8e7cb29e7b816a19baf69df04f1d29a92c7cb0b76e1e`.
+Office GPU0 final-source check is separately recorded below. GPU1 is reserved
+for the bounded Nl24 GX discriminator, not this PR's tests. No other simulation
+was interrupted. Rollback requires reverting the numerical PR and labeling
+results by operator revision; do not silently combine old/new QA outputs.
+
+Final CPU XML SHA-256:
+`d911f93d4e95d48592403181508ac6638fe7603ac263349a25f082c6fcbd3794`.
+Office archive `4a4adef60`, `/home/rjorge/gkx-spectral-contracts.KZ4pqN`,
+same selection on GPU0 with `/home/rjorge/venvs/dkx-gpu/bin/python`,
+JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=0 XLA_PYTHON_CLIENT_PREALLOCATE=false:
+**54 passed / 236 deselected**, 150.19 s, exit0; one existing invalid-escape
+docstring warning. `checks.xml` SHA-256
+`ac7fddd1ea059d3f72fa4b81284aa4cb5a8245f1b0366ead0fe4ec5d79f5d71e`.
+This is CPU/GPU correctness coverage, not a throughput comparison. The only
+subsequent source edit quotes a docstring multiplier for Sphinx. Strict docs
+initially caught the unquoted `|kz|` substitution; corrected, final CI-mode
+docs/Ruff/whitespace/architecture checks pass. Mypy: 184 source files pass.
+No numerical-test job in this entry remains running.
+
+Cross-review qualification `ae9abe7e8` labels historical QA transport in README,
+optimization/examples/AD documentation and the provisional ledger note as
+pre-correction output. Equilibrium evidence/statuses are unchanged. Reruns must
+use a fresh source-SHA-specific directory: the campaign currently skips existing
+filenames without checking operator provenance. Release/evidence owners:
+**152 passed**, 10.24 s, three existing CFL warnings; command
+`python -m pytest -q -o addopts='' tests/release/test_release_gates.py
+tests/release/test_evidence_ledger.py --junitxml=/tmp/gkx-qa-qualification-release.xml`,
+same CPU environment. XML SHA-256
+`701b4bdbe07e9a46b4c2312d1fcbeecf440cb487def2df1329ed069614b6fb46`.

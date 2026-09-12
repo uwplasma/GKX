@@ -905,7 +905,9 @@ recursive = true
 # +14 from the opt-in damp_ends_rate contract, measured after merging main.
 # +97: typed fixed-reference provenance, explicit conversion and stale-rate guard.
 # Host-only metadata; no new module or per-step work. Phase 0.1 migration gate.
-baseline = 89247
+# +25: shared kz coefficient, weighted spectral line inverse and linked layout
+# repair; periodic RHS reuses the existing FFT helper. No new module.
+baseline = 89272
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1073,7 +1075,8 @@ recursive = true
 # +48: rate/legacy RK identities, pytree AD, runtime input and mixed-route checks.
 # +49 from the opt-in damp_ends_rate contract, measured after merging main.
 # +88: both route/scaling round trips, rate equivalence and invalid-source controls.
-baseline = 87513
+# +110: independent periodic/linked Fourier, inverse, transpose and JVP controls.
+baseline = 87623
 target = 35000
 
 [[line_budget_policy.counts]]

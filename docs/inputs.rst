@@ -449,8 +449,16 @@ Notable runtime-only keys:
   equivalent constant rate. No automatic conversion or reference promotion
   occurs (`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_).
 * ``[collisions] hypercollisions_const`` / ``hypercollisions_kz``: defaults are
-  the reference-compatible ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
+  ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
   default, constant hypercollisions off).
+  The parallel multiplier is spectral:
+  :math:`|\partial_z|G=\mathcal{F}^{-1}(|k_z|\mathcal{F}G)`,
+  on each periodic line or linked chain. It is not pointwise multiplication
+  of physical-z samples by the wavenumber array. The periodic implementation
+  was corrected in September 2026: rerun affected periodic transport results
+  with nonzero kz damping and Hermite orders above two, including the QA
+  optimization/validation examples. Linked parity runs are unaffected by this
+  particular RHS repair. See the spectral-contract entry in ``plan/log.md``.
 
 * ``[collisions] p_hyper_m``: when omitted, the runtime path uses the
   resolution-aware default ``min(20, Nm/2)`` instead of a fixed exponent across
