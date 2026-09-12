@@ -16,12 +16,13 @@ roadmap is active. This plan changes no solver, test, data or release.
 execution authority, not an open proposal waiting for #206 to land.
 
 The repair backlog largely landed, but **Phase 0.1's rate migration is not
-complete** (§4.0.1 item 4). Merged: #197, #199, #207, #215, #210, then #218
+complete** (§0.1 item 4). Merged: #197, #199, #207, #215, #210, then #218
 (consolidating #213/#214/#216/#217) and #219 (consolidating #209/#211, and
 carrying #196/#200/#201/#208). Closed as superseded: #202, and the six retired by
-those consolidations. #212 remains open: three benchmark parameter comparisons
-treated optional values as numbers. They now share an exact-optional/numeric
-comparison at `ce5ffe657`, with fresh validation in progress. Reference-rate
+those consolidations. #212 merged as `c0c818361` after 41 successful checks and
+one skipped check. Three benchmark parameter comparisons treated optional
+values as numbers; the exact-optional/numeric repair at `ce5ffe657` passed the
+actual failing CI selections and CPU/GPU checks recorded in the log. Reference-rate
 conversion/provenance and deprecated-key migration remain separate open gates.
 
 This branch no longer carries a README rewrite. `main`'s README has since taken
@@ -162,7 +163,7 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 | #196 → #200 → #201; #208 | f32 safety/lowering repairs; linear endpoint | carried by merged consolidation #219; #209 retired |
 | #207; #210 | Fourier/link-map oracles; nonfinite Laguerre guard | both merged |
 | #202 | fixed-rate absorber plus streaming/coefficient repairs | closed as superseded; closure does not certify its collision tables or complete reference migration |
-| #211; #212 | species-parallel traced-state repair; opt-in differentiable `damp_ends_rate` | #211 carried by #219; #212 remains under CI validation |
+| #211; #212 | species-parallel traced-state repair; opt-in differentiable `damp_ends_rate` | #211 carried by #219; #212 merged `c0c818361`; reference migration still open |
 | #198, #203, #204, #205 | planning | superseded by this plan; closed with a pointer here; branches kept |
 
 ---
@@ -407,10 +408,29 @@ covered fraction is 65,535/294,912 = 22%.
    #211 preserves traced initial states through species-parallel placement,
    with eager/outer-JIT electromagnetic derivative identities. Both landed.
    Neither certifies finite-wavelength Coulomb physics or turbulent gradients.
-   #212 adds the explicit `[time] damp_ends_rate`/Python rate opt-in and a shared
+   #212 merged as `c0c818361`, adding the explicit `[time] damp_ends_rate`/Python rate opt-in and a shared
    resolver while retaining legacy defaults. Reference conversion/provenance,
    old scale-by-dt migration errors and the remaining #202 dispositions are
    **not complete**; do not mark Phase 0.1 closed when this additive patch merges.
+   **Next bounded PR — migration, not reference promotion:** inspect
+   `src/gkx/workflows/runtime/startup.py` (parameter construction),
+   `src/gkx/config.py`, `docs/inputs.rst`, and
+   `tests/integration/runtime/test_runtime_runner.py`. Preserve omitted/false
+   legacy defaults; reject the deprecated true opt-in with an actionable
+   migration message, rather than silently changing its model. For a legacy
+   fixed-step linear deck with the default scaling, record
+   `nu=A/dt_reference`; with the old true key its current linear strength is
+   `A/(dt_input*dt_step)`, whereas a timestep-free RHS sees `A/dt_input`.
+   Thus do not infer a universal conversion from the input dt alone. Adaptive
+   per-step damping has no single equivalent constant rate. Record source
+   deck/hash, route, amplitude, reference timestep and explicit rate in resolved
+   provenance; refuse ambiguous conversion. Gate fixed-step RHS/stage-map
+   equivalence, dt-refinement at fixed nu, zero-rate override, legacy omission,
+   deprecated-key rejection, and resolved-input reload. Use a tiny CPU case
+   first, then the same case on one free office GPU; reserve reference
+   regeneration for a separately costed comparison with geometry and build
+   hashes. Owner: implementing agent; exit: migration contracts pass without
+   promoting any provisional physics-ledger row.
 5. Close #198, #203, #204, #205 with a comment pointing here.
 
 Merge cadence from now on: a PR whose ledger rows pass merges within five
