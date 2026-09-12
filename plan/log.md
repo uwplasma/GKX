@@ -11412,3 +11412,71 @@ two cast warnings; `/tmp/gkx-em0-qualified-field-system.xml`, SHA-256
 All new tests remain in existing owners: net +177 test lines, +2 tool lines,
 zero installable source lines or modules. Budgets record the measured additions;
 slimming targets are unchanged. This is explicit validation cost, not slimming.
+
+## 2026-09-12 — terminal GX control changes the next decision
+
+The registered Nl24 run above completed **exit0**, GNU wall 30:09.92
+(1809.92 s), supervisor 1812.512 s. Different clock scopes, no speedup claim.
+1501 samples reach T=300.000014249, actual dt=.002000000095,
+(Nz,Nl,Nm,ns)=(96,24,96,1), nonzero ky=.5500000119. Terminal audit passes:
+264/42/2 finite numeric arrays in out/big/restart. This does not certify the
+known questionable finite GX geometry metadata. All owned PIDs are terminal;
+GPU1 returned idle; no follow-on solve.
+
+| Last30% observable | Nl24 repaired GX | Nl32 prior repaired GX | Nl24 historical GKX |
+| --- | ---: | ---: | ---: |
+| Mean instantaneous gamma | .03303322632138322 | .02487663027237762 | .0330096971753523 |
+| Mean omega | .5002386017543513 | .5049278882813295 | .5002360481323374 |
+| Phi² log-fit gamma | .0330093616746595 | .02485421507487127 | — |
+| Wg log-fit gamma | .033009538175237135 | .024855368462992754 | — |
+
+Repaired GX shares the Nl24→32 decrease: **24.6921%** from instantaneous
+means, 24.7056% from independent phi² fits. GKX/Nl24 GX instantaneous gamma
+differs −.07123%; comparison with the independent energy fit differs +.001016%.
+This rejects a GKX-only explanation of this historical pair, not a shared
+closure/truncation defect or finite-time bias. Nl24 half-window gamma drift is
+−.56029%, so subpercent agreement is not asymptotic time convergence.
+
+Final Wg_lmst corner/00 ratios are 3.1512e-7 / 2.9608e-7 (Nl24 /32), below
+the old 1e-5 screen, **but upper-quarter Laguerre fractions are 7.9595% /
+8.1705%**, with a hump before the cutoff. Last/first Laguerre powers are
+.006199/.004347. Upper-quarter Hermite fractions are 2.2155%/2.1689%.
+These terminal spectra are supporting diagnostics, not convergence certificates.
+The authoritative §0.5 now withdraws the unsupported universal-literature/GKX
+defect framing, requires full moment-tail evidence, and prioritizes common
+closure/truncation and residual-qualified mode identity before another rung.
+No atlas or QA transport row is promoted.
+
+All artifacts below are in
+`/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD`:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| nl24.out.nc | 94a7063d7cbdfaaa437738b5e2db86b230f37fd888898f308f6c76fb8254e556 |
+| nl24.big.nc | b31387e13a884fd07f2ea814148588d98284599274db3cbec6bd77a1e3d32f33 |
+| nl24.restart.nc | d2c9f5b757ee9d7b62a271a5dd86819e8a4f5c1506eac9a9eb3c6ffe5b30f99c |
+| audit.log | bc0ad5760570e6f8f70fdfbc8acf34791c062fb7967f602b98515804eb7e532c |
+| terminal.txt | dabc48b78197a2191f16396ffe1340bd0555491327ae93f2283a9de80c8a556e |
+| spectral-audit-v2.py | bc9666ac0728b7e457157adb2883c2a0b2a73efe7d27b43b99f3e3694a06e470 |
+| spectral-audit-v2.log | 5981c894ffb344bb02d7530b813bbd2ce55c080d0d01294afa4b1f5423941ebd |
+| completion.md | faddbaeae73ec795757d9777dc102366da4c009fee48a0a76b1e2d662e866b02 |
+
+Repeat the read-only audit in that directory with
+`/home/rjorge/venvs/dkx-gpu/bin/python audit.py --root . --stem nl24 --binary ./gx
+--binary-sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+--input-sha256 2dd1c42bf275f3784bc84f269c7763377d72e6055d4b07ee14b8025ae82e2146
+--gkx-csv /home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/results/salpha_rate50_nl24_nm96_t300.csv`,
+then `python spectral-audit-v2.py` in the same environment. Initial supplemental
+audit failed because the old-GX path was mistyped; the failed script/log are
+preserved. Only that path was corrected, not simulation inputs/outputs.
+
+Integration: #225 contains the independent tests; #226 contains the numerical
+repair, qualifications and this terminal handoff. #226 now stacks on #225 by
+history-preserving merge `ed56221b9`; both log entries retained, measured union
+test budget 87800. The parent had four lines of headroom: actual additions are
+177 validation-test lines and 114 numerical-test lines, not budget deltas.
+Strict integrated docs/architecture pass. A bounded, not-yet-run solver-cost
+diagnostic is specified in §5.1; no SOLVAX change is justified before profiling.
+At this checkpoint #224 still has two running required jobs and 38 successful
+checks; #225/#226 have their own queued/running CI. Merge in dependency order
+only when green, refresh heads after parent merges, and do not release.

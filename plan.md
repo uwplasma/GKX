@@ -35,9 +35,9 @@ validation. See the reproducible [handoff](plan/log.md#2026-09-12--parallel-inde
 The next order is:
 
 1. Merge maintenance/validation changes only after their own required checks.
-2. Finish the single matched GX Nl=24 discriminator against the existing Nl=32
-   control; inspect terminal output before fitting. Shared sensitivity would
-   motivate a third rung, not certify either rung as converged.
+2. The matched GX Nl=24 discriminator finished: GX shares the ~24.7% growth
+   change to Nl=32 (§0.5). Inspect common truncation/closure and mode identity,
+   then register a residual-qualified next rung; neither rung is converged.
 3. Repair periodic kz hypercollisions and the corresponding spectral
    preconditioner in a separate numerical PR. Regenerate affected periodic QA
    transport results before promoting them; linked parity is not invalidated
@@ -569,11 +569,15 @@ reachable.
 
 ### 0.5 Velocity-convergence investigation
 
-The −24.7% swing at Nl 24→32 contradicts every published Hermite–Laguerre
-study (Hoffmann (16,8); GX (16,48) linear, (4,6) nonlinear; Frei coincides
-with GX at every (P,J)). It is a defect until shown otherwise. Protocol from
-the [convergence report](plan/research/2026-09-06_hermite_laguerre_convergence.md),
-run on merged #197:
+**Updated by the completed 2026-09-12 matched control:** repaired GX also has
+a −24.6921% growth change at Nl24→32 (−24.7056% from independent phi² fits).
+At Nl24, GKX and GX instantaneous growth differ by −0.07123%. The earlier
+claim that this contradicts every published study and must be a GKX defect
+is withdrawn: published resolutions are not convergence guarantees for this
+case. Shared closure/truncation, domain and finite-time/mode-selection effects
+remain unresolved. The terminal audit and spectra are in [the log](plan/log.md).
+Use the [convergence report](plan/research/2026-09-06_hermite_laguerre_convergence.md)
+as the investigation protocol, with matched contracts below:
 
 1. Baseline = **the GX deck that produced the reference**, not the paper's
    appendix text. `benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in`
@@ -591,9 +595,13 @@ run on merged #197:
    `nu_hyper_m=1`, `p_hyper_m = min(20, Nm/2)` (see 0.5.6).
 3. Scan Nm ∈ {16,24,32,48,64,96} at Nl=16; Nl ∈ {4,6,8,12,16,24,32} at Nm=48;
    the P≈2J diagonal.
-4. Decide with |Δγ| per doubling <2%; corner power P(ℓ,m)/P(0,0) ≤ 1e-5;
-   monotone Hermite decay with no tail upturn; ν and f_hyp insensitivity <1–3%;
-   recurrence time beyond the fit window if collisionless.
+4. Decide with |Δγ| per doubling <2% over a consistent three-rung suffix;
+   corner power P(ℓ,m)/P(0,0) ≤ 1e-5 is necessary, not sufficient. Record full
+   W(ℓ), W(m), tail fractions and cutoff humps: the new GX pair has corner
+   ratios ≈3e-7 but ≈8% of power in the upper Laguerre quarter. Require tail
+   control, ν and f_hyp insensitivity <1–3%, and recurrence time beyond the fit
+   window if collisionless. No universal tail-fraction tolerance is invented
+   from this single pair.
 5. If the swing persists, run the eight isolating tests in the report:
    collisionless deck (`nu = 0.0` in the shipped deck); the
    `p_hyper_m = min(20, Nm/2)` cap versus GX's Nm/2; fit window; fixed dt;
@@ -639,8 +647,10 @@ run on merged #197:
    `hypercollision_damping` in `operators/linear/cache_arrays.py` supplies the
    preconditioner's diagonal and models the kz branch with the *local* `|kz|`
    array, while the RHS applies it through `abs_z_linked_fft` — nonlocal across
-   linked chains. That mismatch is the leading explanation for the residual
-   blow-up and is worth confirming before either default is changed.
+   linked chains. September 12 independent inverse tests confirm the symbol
+   mismatch and a linked flatten-order error. #226 repairs both, term weights
+   and the periodic counterpart, with CPU/GPU residual and AD checks. This
+   does not yet certify end-to-end timing or a default change.
 
    Disposition: **keep GKX's default for now**, and document beside it that GX
    defaults to the kz branch so a caller comparing against GX selects it
@@ -655,7 +665,9 @@ run on merged #197:
 
    Neither item explains the Nl swing, so neither blocks step 5.
 
-7. Fix the remaining cause in its own PR with a tier-2 row.
+7. Resolve common closure/truncation and mode identity before attributing the
+   remaining swing to an implementation. Repair any demonstrated defect in its
+   own PR; produce the qualified convergence table, including unresolved cases.
 
 Exit: a convergence table as a ledger artifact, the anomaly gone or its cause
 fixed. Cost: CPU, hours.
@@ -1014,6 +1026,20 @@ transfers, compile, warm primal, warm value+gradient, diagnostics and total
 time-to-accepted-result. Synchronize; fresh-process cold runs; ≥5 warm
 repetitions; medians and spread; peak resident and device memory; compiler
 temporaries are not peak memory. Time-to-accuracy plots, not ms/step.
+
+**Next solver diagnostic after the spectral-contract repair (not yet run):**
+reuse `run_runtime_linear(..., krylov_cfg=KrylovConfig(...))` and the existing
+`tools.profiling.profile_runtime_kernels._runtime_memory_summary`; the profiler
+CLIs do not currently compare interior-mode preconditioners. One fresh process
+per `damping`/`hermite-line`/`field-corrected`, 120-s cap each, no fallback or
+automatic budget increase. Use the linked Cyclone deck at ky=.3, Nx8/Ny12/Nz16,
+Nl4/Nm8, ntheta16/nperiod1/jtwist1, explicit rate .1 (isolated-RHS interpretation,
+not a certified reference conversion). Seed shift .09302951-.28199404j;
+outer space12/restarts2, inner tol1e-5/maxiter60/restart20, physical outer
+residual≤1e-6. Record cold/warm calls, residual/eigenbranch, RSS/device peak and
+timeouts. This underresolved conditioning pilot cannot establish physics or
+speedup; only successful matched-branch results justify repeated measurements
+under the protocol above. Do not alter SOLVAX before locating the dominant cost.
 
 | Workload | Sweep |
 |---|---|
