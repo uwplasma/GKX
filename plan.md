@@ -24,6 +24,30 @@ one skipped check. Three benchmark parameter comparisons treated optional
 values as numbers; the exact-optional/numeric repair at `ce5ffe657` passed the
 actual failing CI selections and CPU/GPU checks recorded in the log. Reference-rate
 conversion/provenance and deprecated-key migration remain separate open gates.
+#223 subsequently merged as `5f4cea140` with 41 successful / one skipped check;
+#224 is refreshed by a history-preserving merge of main (`c0004e9f3`) and awaits
+its fresh required CI. No release is authorized by these maintenance merges.
+
+**Parallel checkpoint, 2026-09-12:** independent nonzonal three-field algebra,
+fixed-window AR(1) uncertainty, and conservative refinement-admission tests are
+implemented; these are partial gates, not completed EM0, statistics or velocity
+validation. See the reproducible [handoff](plan/log.md#2026-09-12--parallel-independent-validation-gates).
+The next order is:
+
+1. Merge maintenance/validation changes only after their own required checks.
+2. Finish the single matched GX Nl=24 discriminator against the existing Nl=32
+   control; inspect terminal output before fitting. Shared sensitivity would
+   motivate a third rung, not certify either rung as converged.
+3. Repair periodic kz hypercollisions and the corresponding spectral
+   preconditioner in a separate numerical PR. Regenerate affected periodic QA
+   transport results before promoting them; linked parity is not invalidated
+   by this periodic-only RHS defect.
+4. Close EM0's geometry/FLR normalization and weighted free-energy identities,
+   then EM1 waves. The new B=1 algebra oracle alone is not EM validation.
+5. Calibrate causal stopping on correlated/drifting traces before tuning shorter
+   production windows. Fixed-window coverage does not certify repeated stopping.
+
+No new experimental lane or broad nonlinear campaign is introduced here.
 
 This branch no longer carries a README rewrite. `main`'s README has since taken
 the corrections that mattered (the capability table, the Cite section, the demo's
