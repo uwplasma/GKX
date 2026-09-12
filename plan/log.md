@@ -11298,7 +11298,7 @@ inverts_kz_hypercollisions or hypercollision or shift_invert_nearest_pair'
 **54 passed / 236 deselected**, 65.43 s. Earlier owners: 51 benchmark contracts,
 four physics sentinels, 40 linked/preconditioner tests and two outer-residual
 cases passed; these overlap, not distinct totals. Final source adds 25 source
-and 110 test lines in existing modules, no new file; measured architecture
+and 114 test lines in existing modules, no new file; measured architecture
 budgets updated, targets unchanged.
 
 Negative/final periodic-inverse XML hashes:
@@ -11333,3 +11333,82 @@ filenames without checking operator provenance. Release/evidence owners:
 tests/release/test_evidence_ledger.py --junitxml=/tmp/gkx-qa-qualification-release.xml`,
 same CPU environment. XML SHA-256
 `701b4bdbe07e9a46b4c2312d1fcbeecf440cb487def2df1329ed069614b6fb46`.
+## 2026-09-12 — parallel independent validation gates
+
+Maintainer authorized merges and independent parallel work. #223 merged through
+normal GitHub merge at exact head `3bab8cc06`, 41 successful / one skipped check,
+as `5f4cea1404fcc4742c047b0d02bfb7de9306e4d4`. #224 now targets main with
+history-preserving refresh `c0004e9f3`; its new CI must pass before merging.
+No protection bypass, forced shared-history update or release.
+
+Branch `validation/independent-gates-20260912`, worktree
+`/Users/rogeriojorge/local/GKX-worktrees/em0-field-system`, carries three small
+independent gates, not three completed physics lanes:
+
+| Gate / commits | Evidence | Explicit remaining limit |
+| --- | --- | --- |
+| EM0, `83ace27bc` plus review qualification | Independently assembled NumPy 3-field systems; density/current/perpendicular-pressure sources, unequal species, f32/f64, beta 1e-6/0.02/0.2; corrected projected J_l formula | B=1 matches GX equations 17, 32–34. Variable-B B^-2 is GKX implementation consistency only. Geometry-to-FLR normalization, zonal/gauge, direct quadrature, energy identity and EM waves remain open. |
+| Statistics, `4c4f2b059`, `ba03e6286` | 256 stationary AR(1) traces per rho=0/.75/.95, n=4096; exact finite-n variance. Coverage .972656/.953125/.933594, RMS estimated/exact SEM 1.00914/1.00516/1.02343. Naive-independent coverage falls to .566406/.230469 for correlated cases. | Current IAT truncates at first negative lag; it is not the planned C=5 self-consistent estimator. Fixed-window coverage and 0/128 stops on strong drift do not certify repeated-look coverage, mild drift, bursts, ARMA or real turbulence. L-stat-calibration stays open. |
+| Refinement admission, `0f6ddb6c7`, `3e0cd82f4` | Eight positive/negative controls: require two finer rungs, every later adjacent pair and accumulated candidate-to-finer agreement; reject nonfinite values | A resolved numerical plateau is not independently validated physics. Existing two-rung observations cannot be promoted. |
+
+Sources: [GX v3](https://arxiv.org/html/2209.06731v3),
+[Parker et al., turbulence uncertainty](https://arxiv.org/html/1807.04779v1),
+[Flegal–Gong, sequential stopping](https://arxiv.org/abs/1303.0238).
+The EM review explicitly caught the variable-B normalization overclaim; the
+test/documentation now distinguish the paper-normalized and implementation
+contracts. No gyrokinetic production operator or default is changed here.
+
+Reproduction environment: existing
+`/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python`, Python 3.11.14,
+JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0. This venv uses
+system site packages: passing subsets are not a clean-install claim. Prefix
+commands with `PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1`.
+
+- `python -m pytest -q -o addopts='' tests/tools/comparison/test_reference_comparison_tools.py tests/validation/quasilinear/test_quasilinear_window.py --tb=short --junitxml=/tmp/gkx-independent-gates-cpu.xml`:
+  **153 passed / 1 skipped**, 22.78 s. Seven warnings include four JUnit
+  record_property/xunit2 warnings; use `-o junit_family=legacy` when rerunning.
+- Initial EM source: same pytest flags on
+  `tests/unit/operators/test_terms_fields.py`: **24 passed**, CPU 14.65 s,
+  office GPU0 26.62 s. Two existing complex-cast warnings. Office archive
+  `ba03e6286`, `/home/rjorge/gkx-em0-oracle.65HUTi`, completed shell 4054142,
+  `/home/rjorge/venvs/dkx-gpu/bin/python`, CUDA_VISIBLE_DEVICES=0,
+  JAX_PLATFORMS=cuda, XLA_PYTHON_CLIENT_PREALLOCATE=false. XML SHA-256
+  `3d6fb2c0aa0f8c16b4cf1cb052d546cbab0106ecd349542fb2570aa3b65a4b06`.
+  This precedes the B=1/variable-B test split; timings are not scaling evidence.
+- Architecture check and CI-mode `python -m sphinx -W -b html docs
+  /tmp/gkx-independent-docs` passed before that split. Final reruns follow below.
+
+### Registered single GX velocity discriminator (not a converged reference)
+
+Question: does repaired GX share GKX's large Nl=24 versus32 sensitivity? Exactly
+one run changes only Nl32→24, retaining Nm96/Nz96, ky≈.55, dt=.002, T=300,
+absorber rate50. GPU1, 3600-s wall cap; stop on errors/nonfinite results, no
+automatic follow-on. Office directory
+`/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD`, supervisor 4053460,
+process group 4053462, GX 4053463. Monitor `terminal.txt`, `run.log`, `run.time`
+and terminal NetCDF, not only finite progress prints. Last pre-PR checkpoint:
+10m38s wall, t=97.602/300, finite printed diagnostics; **still running**.
+
+- New input SHA-256: `2dd1c42bf275f3784bc84f269c7763377d72e6055d4b07ee14b8025ae82e2146`.
+- Source deck: `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L/full96.in`,
+  SHA `a2653c8d619ae67e49b7b4ac92a437bb2eadcf0dfa6f1b8b29280f0110f5de05`.
+- Repaired GX binary SHA: `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536`;
+  base source `3865a53778862e1686f414bf6f416339e24887c9`, saved source diff
+  SHA `9a2ed15a3958f8841b2f0fdd433aca7d40f48fe4a449b31778d0dab6feb4266e`.
+- Existing Nl32 GX: gamma=.02487663027237762, omega=.5049278882813295
+  (last30% fit). GKX historical Nl24/.32 gamma=.0330096971753523/
+  .024852092124449224. Do not reuse those CSV reference columns: they point to
+  a different Nl16/Nm48 case. Full registration is saved in the run directory;
+  local working handoff `/tmp/gkx-velocity-reference-20260912.md`.
+
+Next: wait terminal exit0, inspect time extent/finite arrays, fit matched windows
+and compare half-window sensitivity. Shared resolution dependence does not
+certify convergence; a later third rung requires its own decision/cost cap.
+No nonlinear optimization result or evidence-ledger row is promoted here.
+
+Final EM qualification `df9565e78`: **42 CPU tests passed**, 14.98 s, same
+two cast warnings; `/tmp/gkx-em0-qualified-field-system.xml`, SHA-256
+`279b535efc724af2cfedea6b280792ba2861ffcd0feb7958a2510f597ba51d5a`.
+All new tests remain in existing owners: net +177 test lines, +2 tool lines,
+zero installable source lines or modules. Budgets record the measured additions;
+slimming targets are unchanged. This is explicit validation cost, not slimming.

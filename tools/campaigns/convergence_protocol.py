@@ -3,8 +3,8 @@
 Every scan point must be converged in each parameter that can change the
 answer, and the evidence must be recorded rather than asserted. This module
 runs a refinement ladder in one parameter at a time, holding the rest at their
-current best, and reports the smallest value whose observable agrees with the
-next-finer one to within tolerance.
+current best, and reports the smallest value whose observable agrees with all
+tested finer values to within tolerance, with at least two refinements.
 
 The parameters, and why each is here:
 
@@ -41,9 +41,9 @@ The parameters, and why each is here:
     transient and be long enough that the running mean has stopped drifting.
 
 Nothing here decides that a run is converged on the basis of a single
-comparison: a ladder value is accepted only if it agrees with the next finer
-value AND that finer value agrees with the one beyond it, so a coincidental
-crossing does not pass.
+comparison: both adjacent changes and the accepted value's differences from
+every finer value must pass. Later divergence vetoes an early plateau; small
+adjacent changes alone do not rule out accumulated drift.
 """
 
 from __future__ import annotations
@@ -99,10 +99,9 @@ def refine(
 ) -> LadderResult:
     """Evaluate a refinement ladder and pick the first converged rung.
 
-    A rung ``i`` is accepted when ``|o[i] - o[i+1]| / |o[i+1]| < tolerance`` and
-    the same holds for ``i+1`` against ``i+2``. Requiring two consecutive
-    agreements is what stops a curve that happens to cross the tolerance band on
-    its way somewhere else from being mistaken for a plateau.
+    Require at least two finer rungs, all remaining adjacent changes below
+    tolerance, and agreement of the candidate with every finer observable.
+    This is a finite-ladder screen, not proof of asymptotic convergence.
     """
 
     observables: list[float] = []
@@ -125,7 +124,10 @@ def refine(
 
     converged = None
     for index in range(len(changes) - 1):
-        if changes[index] < tolerance and changes[index + 1] < tolerance:
+        if all(change < tolerance for change in changes[index:]) and all(
+            abs(observables[index] - value) / max(abs(value), 1e-30) < tolerance
+            for value in observables[index + 1 :]
+        ):
             converged = ladder[index]
             break
 

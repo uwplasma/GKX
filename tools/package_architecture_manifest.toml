@@ -1075,8 +1075,11 @@ recursive = true
 # +48: rate/legacy RK identities, pytree AD, runtime input and mixed-route checks.
 # +49 from the opt-in damp_ends_rate contract, measured after merging main.
 # +88: both route/scaling round trips, rate equivalence and invalid-source controls.
-# +110: independent periodic/linked Fourier, inverse, transpose and JVP controls.
-baseline = 87623
+# +114: independent periodic/linked Fourier, inverse, transpose and JVP controls.
+# Independent EM field-system and AR(1) coverage oracles plus stricter refinement
+# admission, consolidated into existing owners; measured count, no new test file.
+# Measured union of the two independent validation/numerical branches.
+baseline = 87800
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1141,7 +1144,8 @@ recursive = true
 # made every regeneration of a tracked file a diff carrying whoever ran it. The
 # comment is longer than the deletion because the reason a provenance field is
 # absent has to live where someone would otherwise re-add it.
-baseline = 77823
+# +2: later-rung and cumulative-drift veto in the existing refinement driver.
+baseline = 77825
 target = 0
 
 [[line_budget_policy.counts]]
