@@ -11150,3 +11150,73 @@ Scientific/source context: authoritative plan §0.1/§3.7, issue #194 and
 docs/inputs.rst. This host-side migration guard needs no new scientific model
 or literature claim. Preserve the previous CPU/GPU scientific evidence as
 historical; this entry records the fresh focused rerun.
+
+## 2026-09-12 — explicit reference provenance and reload
+
+Following §0.1 item 4, branch `feat/damping-reference-provenance` is stacked on
+#223 (`3bab8cc06`) in planreview; parent CI is still running, not bypassed.
+Source `c170d0f92` adds the typed optional `[damping_reference]` table and
+`migrate_end_damping_reference(path, route=..., dt_step=...)` in runtime/toml.py.
+Default decks emit no new table. The helper hashes the source, preserves resolved
+paths, refuses source mutation during reading, conflicting run.dt/time.dt,
+already-explicit rates, adaptive linear conversion and invalid divisors. Both
+routes and both historical scaling flags have round-trip/rate-equivalence tests.
+Runtime refuses rate/provenance disagreement before geometry work. It never
+silently converts a running model or claims equivalence after dt changes in
+the legacy per-step formulation. No JIT/kernel, AD primitive, collision solver,
+SOLVAX setting, shipped deck or public physics result changed.
+
+This necessary metadata/validation feature adds 97 source and 88 test lines,
+no new module. Architecture baselines were updated with this explicit rationale;
+targets remain unchanged. It adds host setup work only, not per-step allocations
+or arithmetic. No performance improvement is claimed. SOLVAX changes remain
+evidence-driven work in the later solver/performance gates, not speculative
+changes bundled with provenance.
+
+Validation on the persistent JAX 0.10.2 CPU environment from the preceding entry:
+
+- Runtime runner/config owners: **216 passed / 1 skipped**, 139.35 s, 50
+  diagnostic warnings. Collected before six additional invalid-metadata cases
+  were added; not claimed as a final full-owner rerun.
+- Final source focused selection: **56 passed / 207 deselected**, 9.18 s,
+  exit 0; same command as the preceding entry with both test owners and
+  `-k end_damping --junitxml=/tmp/gkx-provenance-cpu.xml`.
+- Ruff check/format, whitespace and architecture checks pass.
+- CI-equivalent docs command `PYTHONPATH=$PWD/src MPLBACKEND=Agg
+  /Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m sphinx -E -W
+  -b html docs /tmp/gkx-provenance-docs` exits 0; log
+  `/tmp/gkx-provenance-docs.log`. An exploratory stricter `-n` build failed with
+  2685 warnings, including a newly introduced short heading underline (fixed).
+  The remaining nitpicky warnings were not audited; the passing assertion is
+  the actual CI mode, not warning-free nitpicky coverage.
+
+Office archive `c170d0f92` at
+`/home/rjorge/gkx-reference-provenance.ambg4j`, shell PID 3868895. GPU0 was busy;
+used GPU1 after observing 0% utilization / 1168 MiB allocation, retaining others'
+allocations. Same two-owner `-k end_damping` selection with
+`/home/rjorge/venvs/dkx-gpu/bin/python`, PYTHONPATH=$PWD/src,
+JAX_ENABLE_X64=true GKX_X64=1 JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=1
+XLA_PYTHON_CLIENT_PREALLOCATE=false, `-q -o addopts= --tb=short
+--junitxml=checks.xml`: **56 passed / 207 deselected**, 15.33 s, SSH exit 0.
+XML SHA-256 `46b733159192b23b9d0565a035704875bebbf48eab01a8355adb4bbd7db5c589`.
+All jobs in this entry completed; none remains running. Timings are not scaling
+evidence. CPU/GPU selections overlap, not 112 distinct mathematical contracts.
+
+Real-deck bookkeeping smoke (no simulation):
+`examples/linear/axisymmetric/cyclone.toml`, SHA-256
+`f2db5b3dce3e480ebd30c80d9a2849c9c10ace0bd3bcbb64e3a844bca40be405`,
+converted with route=fixed_linear and actual reference dt_step=0.004663,
+matching its input dt; amplitude 0.1, old scaling false gives nu=21.445421402530563.
+Wrote `/tmp/gkx-cyclone-fixed-reference.toml` and asserted `load(path)==case`.
+Resolved SHA-256 `a99d77fa0fcc3ba960647b3096cce78639e2f52e50c11a2d7f46c82fbcbf2772`.
+No shipped reference was replaced, and these hashes are not physics validation.
+
+Next handoff: wait for #223 required checks; merge only green, then reconcile
+this stacked PR with main and its own CI. Complete the reference gate using
+one pinned eligible reference, with identical route/step and an independently
+recorded build/geometry hash; do not start an unbudgeted nonlinear campaign.
+Then follow the lowest unmet plan exit toward ES and core three-field EM
+verification, statistical validation, performance profiling, and validated
+linear/quasilinear/nonlinear optimization. No release or claim promotion here.
+Sources remain the source-anchored §3.7 absorber audit and existing verification
+reports; this conversion implements their algebra, not a new physical model.

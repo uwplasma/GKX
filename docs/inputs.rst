@@ -741,6 +741,8 @@ amplitude, input timestep, actual reference step and old scaling flag. The
 record survives ``gkx.load`` / ``case.to_toml``; no source file is needed to
 reload it. A changed rate with stale provenance is rejected at runtime: clear
 ``damping_reference`` when intentionally defining a new model.
+Migration is host-side bookkeeping; differentiate the resulting
+``LinearParams.damp_ends_rate``, not the file-reading helper.
 
 Let :math:`s=1` for the old true scaling flag and :math:`s=0` otherwise:
 
