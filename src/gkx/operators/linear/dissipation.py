@@ -18,7 +18,7 @@ from gkx.operators.linear.cache_model import (
     hermite_index_of,
     hermite_total_of,
 )
-from gkx.operators.linear.streaming import abs_z_linked_fft, shift_axis
+from gkx.operators.linear.streaming import abs_z_linked_fft, abs_z_periodic, shift_axis
 
 
 @dataclass(frozen=True)
@@ -680,8 +680,7 @@ def _apply_parallel_hypercollision(
             linked_gather_mask=linked_gather_mask,
             linked_use_gather=linked_use_gather,
         )
-    abs_kz = jnp.abs(kz)[None, None, None, None, None, :]
-    return abs_kz * kz_source
+    return abs_z_periodic(kz_source, kz=kz)
 
 
 def _inactive_hypercollision_result(
