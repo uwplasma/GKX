@@ -11220,3 +11220,13 @@ verification, statistical validation, performance profiling, and validated
 linear/quasilinear/nonlinear optimization. No release or claim promotion here.
 Sources remain the source-anchored §3.7 absorber audit and existing verification
 reports; this conversion implements their algebra, not a new physical model.
+
+Published as #224, stacked on #223. Final release/evidence owners:
+**152 passed**, 8.74 s, three CFL-warning controls, selecting
+`tests/release/test_release_gates.py tests/release/test_evidence_ledger.py`
+with the same CPU x64 environment and `-q -o addopts='' --tb=short`.
+Log `/tmp/gkx-provenance-release.log`. Final CPU focused XML SHA-256:
+`57ba1f7ebbec251d8128b58b5d2e424d91852739bff297e38d683799d3e14cfa`.
+At this checkpoint #223 has 32 successful, five unfinished and one skipped
+check; no failure and no merge yet. #224 has its own fresh CI. Neither the
+parent nor the child may be merged on the basis of these local subsets alone.
