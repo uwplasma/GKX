@@ -211,8 +211,12 @@ def build_runtime_linear_params(
 ) -> LinearParams:
     """Build `LinearParams` from a unified runtime config."""
 
-    if cfg.time.damp_ends_rate is not None and cfg.collisions.damp_ends_scale_by_dt:
-        raise ValueError("damp_ends_rate cannot be combined with damp_ends_scale_by_dt")
+    if cfg.collisions.damp_ends_scale_by_dt:
+        raise ValueError(
+            "damp_ends_scale_by_dt=true removed; use [time] damp_ends_rate. "
+            "Remove flag. Old rates: linear A/(dt_input*dt_step), timestep-free "
+            "A/dt_input. Adaptive steps: no constant equivalent. See docs/inputs.rst."
+        )
     _require_full_gk_runtime_model(cfg)
     if geom is None:
         geom = build_runtime_geometry(cfg)
@@ -289,11 +293,7 @@ def build_runtime_linear_params(
         params,
         nu_hermite=float(cfg.collisions.nu_hermite),
         nu_laguerre=float(cfg.collisions.nu_laguerre),
-        damp_ends_amp=(
-            float(cfg.collisions.damp_ends_amp) / float(cfg.time.dt)
-            if cfg.collisions.damp_ends_scale_by_dt and float(cfg.time.dt) != 0.0
-            else float(cfg.collisions.damp_ends_amp)
-        ),
+        damp_ends_amp=float(cfg.collisions.damp_ends_amp),
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
         damp_ends_rate=cfg.time.damp_ends_rate,
     )

@@ -431,6 +431,12 @@ covered fraction is 65,535/294,912 = 22%.
    regeneration for a separately costed comparison with geometry and build
    hashes. Owner: implementing agent; exit: migration contracts pass without
    promoting any provisional physics-ledger row.
+   **First bounded extraction implemented (`1a0889925`, pending PR CI):** the
+   deprecated true flag now fails before geometry construction, including with
+   an explicit rate or zero input dt; omitted/false defaults are unchanged.
+   Focused contracts pass on CPU and office GPU (39 each). This closes only
+   the rejection implementation, not reference conversion/provenance, resolved
+   reload or regeneration. See the September 12 migration entry in the log.
 5. Close #198, #203, #204, #205 with a comment pointing here.
 
 Merge cadence from now on: a PR whose ledger rows pass merges within five
