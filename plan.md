@@ -25,8 +25,10 @@ values as numbers; the exact-optional/numeric repair at `ce5ffe657` passed the
 actual failing CI selections and CPU/GPU checks recorded in the log. Reference-rate
 conversion/provenance and deprecated-key migration remain separate open gates.
 #223 subsequently merged as `5f4cea140` with 41 successful / one skipped check;
-#224 is refreshed by a history-preserving merge of main (`c0004e9f3`) and awaits
-its fresh required CI. No release is authorized by these maintenance merges.
+#224 merged as `d8c0139e8`; #225 merged as `52b8dd693`, both with green checks.
+#226 targets main and includes the remaining spectral/sharding repair and compact
+scatter consolidation. Its failing sharded-RHS check must pass before merge.
+No release is authorized by these maintenance merges.
 
 **Parallel checkpoint, 2026-09-12:** independent nonzonal three-field algebra,
 fixed-window AR(1) uncertainty, and conservative refinement-admission tests are
@@ -1027,7 +1029,12 @@ time-to-accepted-result. Synchronize; fresh-process cold runs; ≥5 warm
 repetitions; medians and spread; peak resident and device memory; compiler
 temporaries are not peak memory. Time-to-accuracy plots, not ms/step.
 
-**Next solver diagnostic after the spectral-contract repair (not yet run):**
+**Solver diagnostic: first pilot completed, none accepted (§log, September 13).**
+The three GPU0 cold runs failed the original-operator residual gate; no warm
+timings or speedup result. Generated runtime seeds stayed complex64 despite x64
+flags. Next use the existing explicit `initial_state` API with a verified,
+identical complex128 seed, recording its hash and any earlier rounding; do not
+change defaults or enlarge budgets to obtain a passing timing. Protocol:
 reuse `run_runtime_linear(..., krylov_cfg=KrylovConfig(...))` and the existing
 `tools.profiling.profile_runtime_kernels._runtime_memory_summary`; the profiler
 CLIs do not currently compare interior-mode preconditioners. One fresh process

@@ -905,9 +905,9 @@ recursive = true
 # +14 from the opt-in damp_ends_rate contract, measured after merging main.
 # +97: typed fixed-reference provenance, explicit conversion and stale-rate guard.
 # Host-only metadata; no new module or per-step work. Phase 0.1 migration gate.
-# +25: shared kz coefficient, weighted spectral line inverse and linked layout
-# repair; periodic RHS reuses the existing FFT helper. No new module.
-baseline = 89272
+# +1: spectral/weighted line inverse and periodic RHS repairs, offset by sharing
+# the identical linked scatter kernel (-23) and shortening the sharded RHS (-1).
+baseline = 89248
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1079,7 +1079,8 @@ recursive = true
 # Independent EM field-system and AR(1) coverage oracles plus stricter refinement
 # admission, consolidated into existing owners; measured count, no new test file.
 # Measured union of the two independent validation/numerical branches.
-baseline = 87800
+# +26: sharded hypercollision JVP and explicit-runtime-state precision controls.
+baseline = 87826
 target = 35000
 
 [[line_budget_policy.counts]]
