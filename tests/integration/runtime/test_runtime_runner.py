@@ -404,6 +404,94 @@ def test_runtime_end_damping_rejects_legacy_scaling(dt, rate, monkeypatch) -> No
         startup.build_runtime_linear_params(cfg, Nm=8)
 
 
+@pytest.mark.parametrize("scaled", [False, True])
+@pytest.mark.parametrize("route,step", [("fixed_linear", 0.05), ("timestep_free", 0.0)])
+def test_end_damping_reference_roundtrip(tmp_path, scaled, route, step):
+    import hashlib
+    from gkx.workflows.runtime.toml import load, migrate_end_damping_reference
+
+    source = tmp_path / "legacy.toml"
+    source.write_text(
+        f"[time]\ndt=0.2\n[collisions]\ndamp_ends_amp=0.1\n"
+        f"damp_ends_scale_by_dt={str(scaled).lower()}\n"
+    )
+    case = migrate_end_damping_reference(source, route=route, dt_step=step)
+    rate = (0.5 if scaled else 0.1) / (step if step else 1)
+    assert case.time.damp_ends_rate == pytest.approx(rate)
+    assert (
+        case.damping_reference.sha256 == hashlib.sha256(source.read_bytes()).hexdigest()
+    )
+    destination = tmp_path / "resolved.toml"
+    case.to_toml(destination)
+    reloaded = load(destination)
+    assert reloaded == case
+    assert not reloaded.collisions.damp_ends_scale_by_dt
+    params = build_runtime_linear_params(reloaded, Nm=8)
+    from gkx.operators.linear.params import LinearParams
+
+    legacy = LinearParams(damp_ends_amp=0.5 if scaled else 0.1)
+    assert float(
+        legacy.end_damping_strength(step or None, jnp.float64)
+    ) == pytest.approx(rate)
+    assert float(params.end_damping_strength(0.01, jnp.float64)) == pytest.approx(rate)
+    with pytest.raises(ValueError, match="already has"):
+        migrate_end_damping_reference(destination, route=route, dt_step=step)
+    with pytest.raises(ValueError, match="stale provenance"):
+        build_runtime_linear_params(
+            replace(case, time=replace(case.time, damp_ends_rate=rate + 1))
+        )
+
+
+@pytest.mark.parametrize(
+    "deck,route,step",
+    [
+        ("[time]\nfixed_dt=false", "fixed_linear", 0.1),
+        ("", "fixed_linear", 0.0),
+        ("", "fixed_linear", float("nan")),
+        ("", "adaptive_linear", 0.1),
+        ("", "timestep_free", 0.1),
+        ("[time]\ndt=0\n[collisions]\ndamp_ends_scale_by_dt=true", "timestep_free", 0),
+        ("[run]\ndt=0.2", "fixed_linear", 0.1),
+    ],
+)
+def test_end_damping_reference_rejects_ambiguous_conversion(
+    tmp_path, deck, route, step
+):
+    from gkx.workflows.runtime.toml import migrate_end_damping_reference
+
+    source = tmp_path / "legacy.toml"
+    source.write_text(deck)
+    with pytest.raises(ValueError):
+        migrate_end_damping_reference(source, route=route, dt_step=step)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"sha256": "bad"},
+        {"amplitude": -1.0},
+        {"amplitude": float("inf")},
+        {"scale_by_dt": "false"},
+        {"dt_input": -0.1},
+        {"route": "timestep_free"},
+    ],
+)
+def test_end_damping_reference_rejects_invalid_metadata(changes):
+    from gkx.config import EndDampingReference
+
+    fields = dict(
+        source="source.toml",
+        sha256="0" * 64,
+        route="fixed_linear",
+        amplitude=0.1,
+        dt_input=0.2,
+        dt_step=0.1,
+        scale_by_dt=False,
+    )
+    with pytest.raises(ValueError):
+        EndDampingReference(**(fields | changes))
+
+
 def test_runtime_startup_model_and_geometry_branches(
     monkeypatch, tmp_path: Path
 ) -> None:

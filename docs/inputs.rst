@@ -451,6 +451,7 @@ Notable runtime-only keys:
 * ``[collisions] hypercollisions_const`` / ``hypercollisions_kz``: defaults are
   the reference-compatible ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
   default, constant hypercollisions off).
+
 * ``[collisions] p_hyper_m``: when omitted, the runtime path uses the
   resolution-aware default ``min(20, Nm/2)`` instead of a fixed exponent across
   Hermite resolutions.
@@ -718,3 +719,42 @@ parameter moves by no more than ``warm_start_max_step`` (relative, default
 which follows one branch and requires every point to return a state.
 
 For the explicit equations attached to these controls, see :doc:`operators`.
+
+Explicit reference migration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a **resolved legacy deck** with a known execution route:
+
+.. code-block:: python
+
+   from gkx.workflows.runtime.toml import migrate_end_damping_reference
+
+   case = migrate_end_damping_reference(
+       "legacy.toml", route="fixed_linear", dt_step=0.02,
+   )  # actual reference step, not an assumed input default
+   case.to_toml("fixed_rate.toml")
+
+Use ``route="timestep_free"`` without ``dt_step`` for a reference RHS that
+received no solver timestep. The helper does not run a simulation or overwrite
+the source. It records ``[damping_reference]``: source path/SHA-256, route,
+amplitude, input timestep, actual reference step and old scaling flag. The
+record survives ``gkx.load`` / ``case.to_toml``; no source file is needed to
+reload it. A changed rate with stale provenance is rejected at runtime: clear
+``damping_reference`` when intentionally defining a new model.
+
+Let :math:`s=1` for the old true scaling flag and :math:`s=0` otherwise:
+
+.. math::
+
+   \nu_{ref} = \frac{A}{\Delta t_{input}^{s}}
+   \begin{cases}
+     1/\Delta t_{step}, & \text{fixed linear route},\\
+     1, & \text{timestep-free RHS}.
+   \end{cases}
+
+This preserves the isolated RHS and RK stage map **at the reference step**.
+Subsequent timestep refinement holds :math:`\nu_{ref}` fixed; it does not
+preserve the legacy per-step model at every timestep. Adaptive linear sources,
+conflicting ``run.dt`` overrides and already-converted decks are rejected.
+Resolve any command-line timestep override into the source deck first.
+This is provenance and algebraic equivalence, **not benchmark recertification**.

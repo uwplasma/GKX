@@ -211,6 +211,13 @@ def build_runtime_linear_params(
 ) -> LinearParams:
     """Build `LinearParams` from a unified runtime config."""
 
+    if (
+        cfg.damping_reference is not None
+        and cfg.time.damp_ends_rate != cfg.damping_reference.rate
+    ):
+        raise ValueError(
+            "damp_ends_rate disagrees with damping_reference; clear stale provenance"
+        )
     if cfg.collisions.damp_ends_scale_by_dt:
         raise ValueError(
             "damp_ends_scale_by_dt=true removed; use [time] damp_ends_rate. "
