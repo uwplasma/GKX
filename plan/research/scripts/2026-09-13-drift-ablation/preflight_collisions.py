@@ -5,7 +5,8 @@ For the collisionless fixture and the [[species]] nu = 1e-3 / 1e-2 copies this
 resolves the runtime config as the parity runner does and asserts: the
 collision term weight (0 when every nu is 0, 1 otherwise), params.nu, the
 absorber strength 50, and that [time] collision_operator resolves to the
-built-in diagonal Lenard-Bernstein path (no dense moment operator). It then
+built-in Lenard-Bernstein path: damping nu*(m + 2*l + b) plus the moment
+correction _collision_moment_correction (no dense moment operator). It then
 evaluates the cached linear RHS on one fixed random state at ky=.55, Nl24,
 Nm96 and reports the RHS change against the collisionless fixture; the change
 must be nonzero and scale linearly with nu (ratio ~10). Measurement only; run

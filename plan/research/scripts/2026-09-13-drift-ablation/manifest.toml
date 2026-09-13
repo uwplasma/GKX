@@ -135,8 +135,9 @@ fit_start_fraction = 0.7
 # mode. The two registered curvature=0 cases were SKIPPED (never started).
 # Replacement, mode-preserving discriminators at the same T=150 settings:
 # physical collisions via [[species]] nu in {1e-3, 1e-2} x Nl {24, 32}, with the
-# fixture's built-in operator ([time] collision_operator unset = "none", the
-# diagonal Lenard-Bernstein term with [collisions] nu_hermite=1, nu_laguerre=2),
+# fixture's built-in operator ([time] collision_operator unset = "none": the
+# Lenard-Bernstein damping nu*(m + 2*l + b) from [collisions] nu_hermite=1,
+# nu_laguerre=2, plus the moment correction _collision_moment_correction),
 # then one collisionless full-terms Nl48 run. Registered prediction under a
 # truncation-reflection mechanism: the Nl24->32 gamma gap shrinks strongly with
 # nu, and gamma(nu) extrapolates smoothly toward the collisionless value.
