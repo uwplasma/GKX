@@ -11681,3 +11681,53 @@ inner conditioning with explicit diagnostics, not another scalar eigenvalue,
 alias-string switch, precision-only repeat or unconstrained grid sweep.
 All owned jobs finished. No production code, source-line budget or file-count
 increase is justified by these rejected candidates.
+
+### September 13 — signed-mode / fixed-budget restart discriminator
+
+Source `1e11faf7a1257608cd5b502ca80ad38bee37e048`, same CPU environment,
+complex128 initialization and shift as above. Change only Ny12→16 to select
+**ky=+.3**, full index6/16, not Nyquist. This changes the operator/sign, not
+the retained state shape `(1,4,8,1,8,16)` or original/widened/normalized seed
+hashes. Do not compare against the preceding -.3 run as a restart-only change.
+Actual linked layout `[(5,1)]` comprises five single-link chains, not an
+extended multi-link benchmark.
+
+Three fresh CPU processes, Hermite-line, rtol1e-5, fixed60 iterations maximum,
+120-s process caps. All consumed60, converged=False; independently recomputed
+true residuals agree with SOLVAX to roundoff.
+
+| Restart × cycles | True relative residual | Compile + solve (s) | Process (s) | Peak RSS (bytes) |
+| --- | ---: | ---: | ---: | ---: |
+| 20 × 3 | .2673133777267872 | .795 | 5.50 | 685375488 |
+| 30 × 2 | .09006584000462337 | .797 | 4.37 | 680591360 |
+| 60 × 1 | .007999488306488984 | .824 | 4.27 | 693141504 |
+
+Full retention improves residual33× at fixed iterations but still misses the
+tolerance800×. These single cold timings do not establish performance or
+memory scaling; there is no accepted result and no justified default change.
+Shifted-operator-on-normalized-seed SHA (identical across the three controls):
+`d6075c86cc18817facc42adc9e25e52c07725f421f262165fe2f1a9b026f2649`.
+Artifacts `/tmp/gkx-gmres-restart-control.beZ0sR`:
+
+| File | SHA-256 |
+| --- | --- |
+| run.py | e09350dabf167ec4df82f03077bbec96d621728b480ec6091b622ab49e9a7db1 |
+| restart-20.log | 4a109f5fca0b67b4864e9a82373969020257825c6ddeb62f75ae13d93a09d90a |
+| restart-30.log | c4560b34bf6f85c9d6b2f601ced42e5ae21437f096f3fa4c67e0fdf554e1c47d |
+| restart-60.log | 151d81b9c691291c9935c3675144ac303b68f3c86a74c3585174dcca348d3cef |
+
+Root independently ran one cold outer control with Ny16, all other Krylov
+settings unchanged (restart20, maxiter60, space12/restarts2). Explicit signed
+ky assertion passes; the physical residual .0415641 fails1e-6, exit1.
+Preparation .477s, API3.425s, process4.92s, peakRSS682393600bytes. No warm call,
+fallback or retry. Script `/tmp/gkx-signed-outer-control.py` reads the preceding
+f64 pilot, changes Ny and limits execution to cold, verifies the source SHA.
+Wrapper SHA `046a478c4b676d29db820113d48409bca9bd463cffd8bd697671fd9794932a80`;
+log `/tmp/gkx-signed-outer-control.log` SHA
+`cfde63218bb480c0360408166d9d3a7acc5f152b291d321be31c86d37afedd04`.
+Run from the pinned spectral-contracts worktree with the CPU venv, the same
+PYTHONPATH/x64/CPU environment above, `/usr/bin/time -l`, argument
+`hermite-line`. All four jobs are terminal; no GPU job was needed to reject
+these CPU candidates. Next: fixed-budget streaming-only/full-operator
+preconditioner-defect controls before a production solver change. Keep the
+source PR #226 frozen for CI; this evidence updates the existing docs PR #227.

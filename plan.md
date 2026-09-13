@@ -1033,8 +1033,15 @@ temporaries are not peak memory. Time-to-accuracy plots, not ms/step.
 All three modes still fail in complex128 on CPU and GPU, with matching seed
 hashes and essentially unchanged residuals. One direct Hermite-line inner solve
 already misses its 1e-5 tolerance: true residual1.02915e-4 at60/60 iterations.
-Next distinguish inner conditioning from later Arnoldi/mode-selection effects;
-do not increase budgets or change SOLVAX without a measured comparison. Record
+The signed-mode control (Ny16, +.3, non-Nyquist) also rejects the outer pair
+(residual .0415641). At fixed60 inner iterations, restart20/30/60 gives true
+residual .2673/.09007/.007999: restart loss matters, but none meets1e-5.
+Do not promote a longer restart or change SOLVAX on these rejected results.
+Next measure the preconditioned operator defect on streaming-only and full-RHS
+controls, with the same signed mode/seed and fixed budget; this separates an
+implementation mismatch from omitted physics before adding a preconditioner.
+Then inspect later Arnoldi RHSs and mode selection only after the first shifted
+solve is admitted. Record
 the resolved signed ky: this small grid selects **-.3**, its negative Nyquist,
 for `ky_target=.3`. Keep it as a conditioning stress case, not a published +.3
 physics reference. Pin a non-Nyquist signed mode before an admitted benchmark.
