@@ -11594,3 +11594,140 @@ against merged #225: +1 production source line, +140 test lines, no new files;
 source reduction relative to the previous #226 is 24 lines. Source/test budgets
 are measured at 89248/87826; targets unchanged. All owned CPU/GPU test/pilot jobs
 have finished. Push #226 for fresh CI; do not merge based on its old failed head.
+
+## 2026-09-13 — precision ruled out as sole cause; first inner solve unresolved
+
+Source fixed at `1e11faf7a1257608cd5b502ca80ad38bee37e048`; #226's head was
+left unchanged so its CI can finish. This evidence-only follow-up modifies no
+production source, tests, solver default, tolerance or iteration budget.
+
+**Registered matched precision control:** same §5.1 case and three modes,
+one fresh process per mode per host, 120-s cap plus10-s owned-process cleanup,
+no fallback/retry. CPU and office GPU0 construct the same original complex64
+seed, then widen it without changing its values. Shape(1,4,8,1,8,16), final
+dtype complex128; old/new byte hashes respectively
+`22f9570989dad9b6df827674c005270ace7f100dc3a4e2e9a2cd63ac9c17eb72` /
+`d851962ad739bb0fb29b7b37eaf6618bbebb72d49230c11ecc4ad6a94c71325c`.
+All six runs agree on these hashes. Earlier initialization rounding is retained
+intentionally; this tests arithmetic precision alone, not a new perturbation.
+The helper `_prepare_linear_runtime_context` supplies the resolved selected-ky
+shape; the solve uses public `run_runtime_linear(initial_state=seed)`.
+
+| Mode | Outer residual, CPU and GPU to reported digits | CPU cold API / process s | GPU cold API / process s | CPU peak RSS bytes | GPU peak RSS KiB / JAX device bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| damping | .658715 | 2.95756 / 4.81 | 6.90345 / 10.17 | 651952128 | 1299216 / 33697792 |
+| hermite-line | .000357697 | 3.30329 / 4.61 | 8.63156 / 11.72 | 678887424 | 1308152 / 33697792 |
+| field-corrected | .000504621 | 6.08765 / 7.40 | 10.54906 / 14.98 | 766279680 | 1368008 / 67861760 |
+
+All exit1, rejected at the requested1e-6 outer gate. Float32 values from the
+preceding pilot were .658716/.000357705/.000504636: precision alone is not the
+cause. No accepted eigenpair, warm timing or speedup. Seed preparation is now
+separate (CPU .506/.409/.407s; GPU1.000/1.080/2.212s), so API times are not
+directly comparable to the implicit-initialization pilot. Process times include
+preparation; one unaccepted case and one sample cannot establish scaling.
+The previous float32 threshold .000119209 is the configured1000*epsilon floor,
+not a measured hardware precision limit.
+
+Reproduction script `/tmp/gkx-conditioning-f64-pilot.py`, identical remote
+`/home/rjorge/gkx-conditioning-f64-20260913.GA7A8d/pilot.py`, SHA
+`e2b7983f5e8633b4c691b6c67dc45ac5774ce5930e457835ad5411c377b85cd4`.
+It prints exact configuration, dtype, hashes, timings and allocator statistics.
+CPU wrapper `/tmp/gkx-conditioning-f64-cpu.BYgQiE/run.py` SHA
+`62f148d3bee9362d4a1d71d27d434fb37d32765245850c43ddafbfe10faa6452`;
+launch from the pinned worktree with the existing CPU venv. Wrapper sets
+PYTHONPATH=$PWD/src:$PWD, JAX_PLATFORMS=cpu, JAX_ENABLE_X64=true, GKX_X64=1,
+uses `/usr/bin/time -l`, and enforces each process-group cap.
+CPU Python3.11.14/JAX0.10.2/NumPy2.4.6/SOLVAX0.20.0; no environment mutation.
+GPU environment and command are those of the previous pilot, using the new
+script and verified-idle GPU0 only; GPU1 untouched. Staging verified before run.
+
+| Log | CPU SHA-256 (`/tmp/gkx-conditioning-f64-cpu.BYgQiE`) | GPU SHA-256 (remote directory above) |
+| --- | --- | --- |
+| damping.log | a205c6a78cf2fa3494954eba51a08ec1c24415f636eba21ec2d23acc1bf0281c | bd30a42b51ee9e616604167c7f0a50be52cbc3ca9a29cb8754f94ea1472ed207 |
+| hermite-line.log | 922607cca93c21164076376630f4ed064e342b87f3989ce7cbc6c9d0087bb8f8 | e16098c0e606723a89f03c25e36ef2c5b649ef80fb0b7c93de5a4a6fcb6e35be |
+| field-corrected.log | c025af93a21d7e0398a42345367b3f21594b9c62a6883e4bd7f574f18227ce86 | 87e73c5ba85d3c733e73ae3791eb4922bdb5cf5691943ab3db633fd74c70cbdf |
+
+CPU group leaders27696/27711/27736 terminal. GPU supervisor4154214,
+timeout4154215/4154732/4155283, Python4154217/4154734/4155285 all terminal;
+GPU0 returned idle. No timeout or warm/follow-on eigensolve.
+
+**One additional, separately bounded discriminant:** direct shifted GMRES on
+CPU, Hermite-line only, same context/shift, normalized original seed, complex128,
+rtol1e-5/restart20/max_restarts3 (60 iterations), one call, 120-s cap. Seed hash
+after normalization `b3d0aa240eae80e7333952530d9790fff3d8159ce2bd1d4d3603dab619eb07f8`.
+Independent `norm(b-(A-sigma I)x)/norm(b)` =1.0291520586296631e-4;
+SOLVAX reports1.0291520586295848e-4, iterations60, converged=False.
+Setup2.074s, solve+compile.777s, process4.06s, peakRSS682885120bytes, exit0.
+This establishes an inner limitation on the first RHS, not behavior of every
+later Arnoldi vector, and does not exclude outer-subspace limitations.
+
+Script `/tmp/gkx-first-shifted-gmres.CxgjNE/run.py` SHA
+`51ad52138052676eac144d41125e4fa1c0bf053f527bdad8a6ea1bba9443bcc9`;
+`result.log` SHA `a564c0effbe1fea7cd8a975b11c70874ec03f79a52c7fb7d5c8c612e6d5e3652`.
+PID28442 completed; no retry or repository edit. Review of actual selection
+found **ky=-.3**, the Ny12 grid's negative Nyquist, for requested target+.3.
+All controls preserved it; the historical shift was only a seed, never a
+qualified reference for this underresolved case. §5.1 now requires the resolved
+signed mode and a non-Nyquist reference before a physics/time-to-accuracy claim.
+This is the documented magnitude-first selection contract in
+`diagnostics/modes.py::select_ky_index`, not evidence of a selection-code defect.
+
+Read-only solver review: `_shift_invert_apply_factory` discards SOLVAX's true
+residual/iterations/converged and returns only x; current outer logs cannot
+diagnose every inner failure. The `batched`, `incremental`, `flexible` strings
+all reach that same SOLVAX call. The physical Rayleigh quotient already minimizes
+residual over scalar eigenvalues for the selected vector. Next investigate
+inner conditioning with explicit diagnostics, not another scalar eigenvalue,
+alias-string switch, precision-only repeat or unconstrained grid sweep.
+All owned jobs finished. No production code, source-line budget or file-count
+increase is justified by these rejected candidates.
+
+### September 13 — signed-mode / fixed-budget restart discriminator
+
+Source `1e11faf7a1257608cd5b502ca80ad38bee37e048`, same CPU environment,
+complex128 initialization and shift as above. Change only Ny12→16 to select
+**ky=+.3**, full index6/16, not Nyquist. This changes the operator/sign, not
+the retained state shape `(1,4,8,1,8,16)` or original/widened/normalized seed
+hashes. Do not compare against the preceding -.3 run as a restart-only change.
+Actual linked layout `[(5,1)]` comprises five single-link chains, not an
+extended multi-link benchmark.
+
+Three fresh CPU processes, Hermite-line, rtol1e-5, fixed60 iterations maximum,
+120-s process caps. All consumed60, converged=False; independently recomputed
+true residuals agree with SOLVAX to roundoff.
+
+| Restart × cycles | True relative residual | Compile + solve (s) | Process (s) | Peak RSS (bytes) |
+| --- | ---: | ---: | ---: | ---: |
+| 20 × 3 | .2673133777267872 | .795 | 5.50 | 685375488 |
+| 30 × 2 | .09006584000462337 | .797 | 4.37 | 680591360 |
+| 60 × 1 | .007999488306488984 | .824 | 4.27 | 693141504 |
+
+Full retention improves residual33× at fixed iterations but still misses the
+tolerance800×. These single cold timings do not establish performance or
+memory scaling; there is no accepted result and no justified default change.
+Shifted-operator-on-normalized-seed SHA (identical across the three controls):
+`d6075c86cc18817facc42adc9e25e52c07725f421f262165fe2f1a9b026f2649`.
+Artifacts `/tmp/gkx-gmres-restart-control.beZ0sR`:
+
+| File | SHA-256 |
+| --- | --- |
+| run.py | e09350dabf167ec4df82f03077bbec96d621728b480ec6091b622ab49e9a7db1 |
+| restart-20.log | 4a109f5fca0b67b4864e9a82373969020257825c6ddeb62f75ae13d93a09d90a |
+| restart-30.log | c4560b34bf6f85c9d6b2f601ced42e5ae21437f096f3fa4c67e0fdf554e1c47d |
+| restart-60.log | 151d81b9c691291c9935c3675144ac303b68f3c86a74c3585174dcca348d3cef |
+
+Root independently ran one cold outer control with Ny16, all other Krylov
+settings unchanged (restart20, maxiter60, space12/restarts2). Explicit signed
+ky assertion passes; the physical residual .0415641 fails1e-6, exit1.
+Preparation .477s, API3.425s, process4.92s, peakRSS682393600bytes. No warm call,
+fallback or retry. Script `/tmp/gkx-signed-outer-control.py` reads the preceding
+f64 pilot, changes Ny and limits execution to cold, verifies the source SHA.
+Wrapper SHA `046a478c4b676d29db820113d48409bca9bd463cffd8bd697671fd9794932a80`;
+log `/tmp/gkx-signed-outer-control.log` SHA
+`cfde63218bb480c0360408166d9d3a7acc5f152b291d321be31c86d37afedd04`.
+Run from the pinned spectral-contracts worktree with the CPU venv, the same
+PYTHONPATH/x64/CPU environment above, `/usr/bin/time -l`, argument
+`hermite-line`. All four jobs are terminal; no GPU job was needed to reject
+these CPU candidates. Next: fixed-budget streaming-only/full-operator
+preconditioner-defect controls before a production solver change. Keep the
+source PR #226 frozen for CI; this evidence updates the existing docs PR #227.
