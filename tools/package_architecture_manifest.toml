@@ -1091,10 +1091,11 @@ recursive = true
 # +192: forced non-converging and converged inner solves, rejection text, one
 # compile across shift_solve_method labels, implicit iteration-budget semantics,
 # and the contraction allowlist re-keyed to the moved line (675 -> 749).
+# +15: the optimized-HLO op-ledger parser contract, in the existing profiling owner.
 # +112: raw routes fail closed with residual and tolerance or are flagged under
 # certify=False, a real converged propagator pair certifies, a zero eigenvector
 # never certifies, adaptive defaults, and the opt-out leaves shift-invert gated.
-baseline = 88130
+baseline = 88145
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1160,10 +1161,13 @@ recursive = true
 # comment is longer than the deletion because the reason a provenance field is
 # absent has to live where someone would otherwise re-add it.
 # +2: later-rung and cumulative-drift veto in the existing refinement driver.
+# +276: nonlinear-step-hlo, the optimized-HLO op ledger per RHS and RK step for
+# the argument-passing scan and the runtime diagnostics scan (plan 5.3 N0), in
+# the existing runtime-kernel profiler.
 # +14: ky_diagnostics compares raw eigen routes against time integration, so
 # under Q12's fail-closed gate it opts out explicitly (certify=False) and writes
 # each pair's residual and certified flag instead of an unlabelled growth rate.
-baseline = 77839
+baseline = 78115
 target = 0
 
 [[line_budget_policy.counts]]

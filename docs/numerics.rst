@@ -91,12 +91,16 @@ These links are clickable in the HTML docs via the ``viewcode`` extension.
 Structured solver dependency contract
 -------------------------------------
 
-GKX requires ``solvax>=0.7.3,<0.8``. Version 0.7.3 is the current
-admitted release because its complex Krylov and structured-solve interfaces
-pass the downstream linear, IMEX, geometry-gradient, and implicit-objective
-suite on the current JAX stack. The release also retains current-JAX
-linear-transpose compatibility, complex CPU/GPU tridiagonal identity gates,
-and strict type information. Generic numerical
+GKX requires ``solvax>=0.12.0``; ``pyproject.toml`` is the only place that
+floor is declared. Version 0.12.0 is the first release that exports every
+SOLVAX name GKX imports: the eigenpair, propagator, and sparse-operator
+interfaces (``adaptive_eigenpair``, ``eigenpair_reverse``,
+``estimate_rk4_timestep``, ``exponential_eigenpairs``,
+``propagator_eigenpairs``, ``sparse_eigenpairs``, ``sparse_operator_matrix``)
+first ship there, while the Krylov and structured-solve interfaces (``gmres``,
+``linear_solve``, ``tridiagonal_solve``, ``chunked_jacfwd``,
+``SpluFactorization``) are older. CI installs the newest released SOLVAX, so
+it tests the latest release rather than the floor. Generic numerical
 algebra lives in SOLVAX; gyrokinetic state layout, linked-boundary assembly,
 preconditioner coefficients, eigenbranch tracking, transport windows, and
 physics gates remain in GKX.
