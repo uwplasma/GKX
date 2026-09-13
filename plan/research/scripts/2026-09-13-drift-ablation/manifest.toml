@@ -101,45 +101,9 @@ steps = 75000
 method = "rk4"
 fit_start_fraction = 0.7
 
-[[case]]
-key = "curvature0_nl24"  # gitleaks:allow (case name, not a secret)
-label = "Cyclone ITG s-alpha, curvature=0, Nl24"
-device = "tokamak"
-drive = "ITG"
-electrons = "adiabatic"
-field_model = "electrostatic"
-geometry = "s-alpha analytic"
-config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_curvature0.toml"
-reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
-reference_provenance = "GX Nl16 Nm48 shipped-deck reference (all terms); comparison column meaningless for this ablation"
-Nl = 24
-Nm = 96
-ky = [0.550000011920929]
-damp_ends_rate = 50.0
-dt = 0.002
-steps = 75000
-method = "rk4"
-fit_start_fraction = 0.7
-
-[[case]]
-key = "curvature0_nl32"  # gitleaks:allow (case name, not a secret)
-label = "Cyclone ITG s-alpha, curvature=0, Nl32"
-device = "tokamak"
-drive = "ITG"
-electrons = "adiabatic"
-field_model = "electrostatic"
-geometry = "s-alpha analytic"
-config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_curvature0.toml"
-reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
-reference_provenance = "GX Nl16 Nm48 shipped-deck reference (all terms); comparison column meaningless for this ablation"
-Nl = 32
-Nm = 96
-ky = [0.550000011920929]
-damp_ends_rate = 50.0
-dt = 0.002
-steps = 75000
-method = "rk4"
-fit_start_fraction = 0.7
+# The two registered curvature=0 cases (Nl24, Nl32; fixture
+# cyclone_salpha_itg_curvature0.toml) were never started and are not listed here;
+# see the lead change below.
 
 # Preflight: the runner path at steps=500 (T=1) on the GPU, to verify the CUDA
 # route, config loading and output writing before the long runs. Not evidence.
@@ -168,7 +132,7 @@ fit_start_fraction = 0.7
 # Lead change, 2026-09-13 ~15:58 (documented deviation). gradb0_nl24 showed that
 # removing the grad-B drift removes the toroidal ITG itself (omega .50 -> .03,
 # unsettled), so drift ablations cannot discriminate truncation effects on this
-# mode. curvature0_nl24 and curvature0_nl32 above were SKIPPED (never started).
+# mode. The two registered curvature=0 cases were SKIPPED (never started).
 # Replacement, mode-preserving discriminators at the same T=150 settings:
 # physical collisions via [[species]] nu in {1e-3, 1e-2} x Nl {24, 32}, with the
 # fixture's built-in operator ([time] collision_operator unset = "none", the

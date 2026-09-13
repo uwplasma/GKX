@@ -11885,7 +11885,7 @@ the other GPU busy; not benchmark-grade.
 **Artifacts** (`plan/research/scripts/2026-09-13-drift-ablation/`, 49 text
 files, 82 KB before `SHA256SUMS.txt`): `SHA256SUMS.txt` lists SHA-256 for every
 other file; its own SHA-256 is `74e7f834dd6ca2260161c6a42f22a2b9718207966280f0ec75d96178c9432ba0`. Key hashes: `manifest.toml`
-`77481411c46a804db22b4fda1622064db5ba87d4fbfb989bc71464566f1924c5` (as executed on office: `00e8d3ab18c2523ae5aefd55623e5377ee6f31d168285414ad8aa9e2736fb94d`),
+`47f6ee669863f7f22abc243f1b131bfe72a3f5a56173bd56b8c35563c444e717` (as executed on office: `00e8d3ab18c2523ae5aefd55623e5377ee6f31d168285414ad8aa9e2736fb94d`),
 `summary.csv` `d2a9b50546a56b6df5ef8be20bae0a835bb6105a95571d349d0c103c4d9899d2`,
 `logs/supervisor.txt` `921e9b4f0b0dbb7ce0794456bb3855320ea4afb4ee8605ad50a864f79dd1ad3f`,
 `run_ablation.sh` `f6b0f219bc7ee40ed3ce5da077d01ce04c3b6ccae9137d3caba2397ad1e2a4b1`,
@@ -11893,12 +11893,12 @@ other file; its own SHA-256 is `74e7f834dd6ca2260161c6a42f22a2b9718207966280f0ec
 `preflight_collisions.py` `0e81db4369dbcde656872f04497bf21b8d3dd8323cc80d2691a46ebd602e8339`,
 `summarize.py` `bd658b45795b46adb80abf58a6d99062083833cbfa3fcbbda66f15992c185100`.
 PNGs written by the runner stay on office only.
-**Flag for the maintainer:** gitleaks 8.30.1 reported two `generic-api-key`
-false positives on the manifest `key` fields of the two skipped curvature cases
-(case names curvature0_nl24 and curvature0_nl32, entropy 3.64). The committed
-manifest adds an inline `# gitleaks:allow` comment to those two lines only; the
-parsed TOML is identical to the executed copy (asserted), and `.gitleaksignore`
-is unchanged.
+**Secret-scan note:** gitleaks 8.30.1 reported two `generic-api-key` false
+positives on the manifest `key` fields of the two never-started curvature=0
+cases. Rather than suppress the scanner, those two case blocks were removed
+from the committed manifest (a comment records that they were registered and
+skipped); the executed cases are unchanged, no `gitleaks:allow` comment or
+`.gitleaksignore` entry is used, and gitleaks is clean on the directory.
 
 **Terminal job state.** Batch 1: supervisor 224119 (launched 15:35:07 via
 wrapper 224117) ran `full_nl24` (timeout 224124, python 224127), `full_nl32`
