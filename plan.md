@@ -1056,6 +1056,15 @@ under the protocol above. Do not alter SOLVAX before locating the dominant cost.
 | Independent work | 1/2/4/8 CPU workers, 1/2 GPUs; k_y, surfaces, seeds, QL |
 | One distributed trajectory | species×Hermite; 1/2/4 logical CPUs for correctness; 1/2 GPUs on the real topology |
 
+**Exact sparse shift-invert ladder (L2, 2026-09-13; [log](plan/log.md)).** On the linked
+Cyclone deck at ky=+.3, `method="sparse_shift_invert"` is the fastest route to an
+original-operator-certified pair up to n=6144 ((Nz,Nl,Nm)=(48,8,16): 13.6 s against
+27.8 s for the runtime-default adaptive route) but not at n=18432 ((96,8,24): 155 s,
+SuperLU fill 12.4, against 82 s), and at the production chain n=73728 ((96,16,48)) its
+factor was unfinished after 30 min (assembly 293 s, 7.1 GiB when stopped) while the adaptive route
+certified λ=.0930912−.282033j in 761 s at 1.3 GiB. Crossover n≈1e4: exact LU is a
+small-rung reference and preconditioner harness for L4, not a production eigensolver.
+
 ### 5.2 Sharding acceptance ladder (species×Hermite only)
 
 1. Share RK, projector, field, damping and collision semantics; exercise

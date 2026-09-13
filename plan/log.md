@@ -11594,3 +11594,145 @@ against merged #225: +1 production source line, +140 test lines, no new files;
 source reduction relative to the previous #226 is 24 lines. Source/test budgets
 are measured at 89248/87826; targets unchanged. All owned CPU/GPU test/pilot jobs
 have finished. Push #226 for fresh CI; do not merge based on its old failed head.
+
+## 2026-09-13 — exact sparse shift-invert size ladder (Q2, plan §5.1 L2)
+
+**Question.** Up to what single-ky linked-Cyclone size is the existing exact route
+`KrylovConfig(method="sparse_shift_invert")` (SOLVAX `sparse_operator_matrix` column
+probing in 64-column batches, SciPy SuperLU of A−σI, `sparse_eigenpairs`,
+original-operator residual gate) the fastest route to a certified eigenpair on CPU, and
+what does it cost in time and memory against the runtime-default Krylov route on the
+same rungs? Measurement only; no source, test, default or reference change.
+
+**Source and setup.** `origin/main` `06606e404771b4c5217f07c284a9003e12d9c982`, staged
+by `git archive` (tarball SHA
+`a7fe0365d2d2ccc5e553704bda94971f33982e4c07c98c187b57c10e141bfea0`, removed after the
+run) to office `pop-os:/home/rjorge/gkx-q2-exact-ladder-20260913.zXGFAw`. Xeon W-2295,
+18 cores / 36 threads, 62 GB (≈43 GB available), shared with a DKX `cpu_lu.py`
+benchmark pinned to CPUs 24–28,30–32, an LMX `gpu_bench` run, a VMEX
+`validate_refinement.py` run and another user's GPU0 job; GPUs untouched. Python
+3.11.15, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0
+(`/home/rjorge/venvs/gkx-nl/bin/python`; SOLVAX resolves through that venv's
+`zz_dkx_gpu.pth`); `gkx.__file__` verified inside the staging `src`. Env
+`JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES= JAX_ENABLE_X64=true GKX_X64=1
+PYTHONPATH=$PWD/src:$PWD OMP_NUM_THREADS=12 OPENBLAS_NUM_THREADS=12
+XLA_FLAGS=--xla_cpu_multi_thread_eigen=true`. Each cell is one fresh process, run
+serially by `run_ladder.sh`:
+`nohup nice -n 10 systemd-run --user --scope -p MemoryMax=20G taskset -c 0-11 timeout
+--signal=TERM --kill-after=10s 7200s /usr/bin/time -v python exact_ladder.py --repo
+$DIR --rung R --arm A --shift σ`, with a 30-min wall guard per cell and a 2-h total
+cap. The 20 G scope cap and CPU/thread limits are the coordinator's resource correction
+of the original 50 GB guard; no cell reached the memory cap.
+
+Deck `examples/linear/axisymmetric/cyclone.toml` (SHA `f2db5b3d…be405`) with only
+(Nz, ntheta, nperiod) overridden and (Nl, Nm) passed to `run_runtime_linear(solver=
+"krylov", return_state=True, initial_state=seed)`. On the Ny=24 grid ky index 6 is
+**+0.3**, sign-matched and non-Nyquist (max |ky| 0.6, the −0.3 partner present) on
+every rung. The runtime generates the seed as complex64; it is cast to complex128 before
+the call (hash per rung in the RESULT lines). σ for rung 1 is the reference
+.09302951−.28199404j; each later rung uses the previous rung's certified sparse
+eigenvalue. Arms: `sparse` = `KrylovConfig(method="sparse_shift_invert", shift=σ)`;
+`default` = `krylov_cfg=None`, which for the cyclone contract resolves to
+`KrylovConfig(method="adaptive")` (certified adaptive propagator, 1e-9 base gate);
+`propagator` = the bare dataclass default `KrylovConfig()` (no certification gate; the
+residual is measured). Every returned pair is re-checked with
+`_eigenpair_relative_residual` against the matrix-free operator. SOLVAX helpers are
+wrapped at module-attribute level for timing and nnz only.
+
+**Per-rung results.** "route s" is the `run_runtime_linear` call (geometry, cache, JIT,
+solve and the branch's own residual gate); "wall" is the fresh process under
+`/usr/bin/time`. Where both certify, the arms agree on the eigenvalue to the printed
+digits.
+
+| rung (Nz,ntheta,nperiod,Nl,Nm) | n | arm | probe batches | nnz (per row) | L+U nnz (fill) | assembly / factor / eigs s (LU solves) | route s | wall s | peak RSS GiB | residual | γ | ω |
+|---|---:|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|
+| 1 (32,32,1,4,8) | 1024 | sparse | 16 | 85,714 (83.7) | 503,860 (5.9) | 0.63 / 0.12 / 0.13 (65) | **3.03** | 5.1 | 0.91 | 1.5e-14 | .1157314 | .2416600 |
+| 1 | 1024 | default (adaptive) | — | — | — | — | 8.41 | 10.8 | 1.15 | 4.0e-15 | .1157314 | .2416600 |
+| 1 | 1024 | propagator | — | — | — | — | 2.75 | 5.9 | 0.91 | .983 (rejected) | .0255 | .2108 |
+| 2 (48,16,2,8,16) | 6144 | sparse | 96 | 831,831 (135.4) | 8,507,897 (10.2) | 2.48 / 5.99 / 2.98 (156) | **13.57** | 15.8 | 1.05 | 5.2e-14 | .0982475 | .2770518 |
+| 2 | 6144 | default (adaptive) | — | — | — | — | 27.79 | 30.2 | 1.17 | 3.2e-15 | .0982475 | .2770518 |
+| 2 | 6144 | propagator | — | — | — | — | 2.79 | 5.9 | 0.92 | .989 (rejected) | .0453 | .3405 |
+| 3 (96,32,2,8,24) | 18432 | sparse | 288 | 4,760,571 (258.3) | 58,803,460 (12.4) | 17.2 / 115.1 / 20.7 (161) | 155.27 | 157.8 | 2.36 | 3.1e-13 | .0987757 | .2769046 |
+| 3 | 18432 | default (adaptive) | — | — | — | — | **82.03** | 84.6 | 1.22 | 6.5e-15 | .0987757 | .2769046 |
+| 3 | 18432 | propagator | — | — | — | — | 2.96 | 6.1 | 0.93 | .999 (rejected) | .0749 | .1662 |
+| 4 (96,32,2,16,48) production | 73728 | sparse | 1152 | 18,226,036 (247.2) | not reached | 292.9 / **>1509, unfinished** / — | **stopped at 1805 s by the 30-min wall guard** | — (rc 143) | cgroup 7.10 when stopped (RSS 5.65 at 1192 s) | — | — | — |
+| 4 | 73728 | default (adaptive) | — | — | — | — | **760.88** | 763.4 | 1.27 (process 1.33) | 1.1e-14 | .0930912 | .2820327 |
+| 4 | 73728 | propagator | — | — | — | — | 3.30 | 6.4 | 0.93 | .996 (rejected) | .0431 | .3922 |
+
+**Crossover.** The exact route is the fastest certified route at n=1024 (3.0 s against
+8.4 s) and n=6144 (13.6 s against 27.8 s). At n=18432 the adaptive route is 1.9× faster
+(82 s against 155 s; the SuperLU factor alone is 115 s, 74 % of the sparse route). At
+the production chain n=73728 the exact route produced no pair within 30 min, while the
+adaptive route certified λ=.0930912−.282033j (γ +0.07 %, ω +0.01 % from the plan's
+reference) in 761 s at 1.3 GiB. **Crossover between n=6144 and n=18432 (n≈1e4 on this
+host).** Scaling across rungs: nnz/row 84→135→258→247 (saturates once Nz=96), LU fill
+5.9→10.2→12.4, factor time 0.12→6.0→115 s (local exponents n^2.2 and n^2.7, steeper
+than the n^1.7 of the fixed-Nz ladder in review §3.5 because Nz also grows); at
+n^2.7 the rung-4 factor alone extrapolates to ≈80 min. Assembly by probing grows as n²
+(0.6→2.5→17→293 s). Sparse peak memory 0.9→1.1→2.4→≥7.1 GiB when stopped; the
+adaptive route stays at 1.15–1.33 GiB and grows as ≈n^1.6 in time between rungs 3
+and 4. The dataclass-default `propagator` returns an uncertified wrong branch (relative
+residual ≈1) on every rung in ≈3 s and is not a competitor for a certified pair.
+Reading: exact LU is the reference and preconditioner harness for small rungs (§5.1 L4
+bake-off), not a production eigensolver; plan §5.1 now says so.
+
+**Limitations.** One cold process per cell and no repetitions, so times include runtime
+import, geometry, cache build and JIT (the adaptive arm is JIT-heavy, the sparse arm
+host-heavy). The host was shared (load 5–24 on 36 threads from other jobs), so ratios
+within ≈1.5× are not resolved. SciPy SuperLU used its default COLAMD ordering with one
+factor per σ; nested dissection, ILU and multithreaded supernodal solvers were not
+tried, so this bounds the existing route, not exact LU in general. The rung-4 factor
+time is a lower bound; its memory is the maximum of the scope's `memory.current` over
+5-s polls (page cache included), and its `/usr/bin/time` file is empty because the wall
+guard terminated the whole process group. The supervisor's process-group RSS poll read
+0 throughout (procps `ps -g` selects sessions or groups by name, not process groups);
+the scope enforced the 20 G cap, and peaks come from `/usr/bin/time`, `ru_maxrss` and
+cgroup memory. The routes certify at different gates (sparse 1e-6, adaptive 1e-9 base),
+but every certified residual is ≤3.1e-13 against the same matrix-free operator. The
+plan §5.1 protocol's ≥5 warm repetitions were not run.
+
+**Superseded first launch (recorded, not used).** A first supervisor (14:35–14:40 CDT;
+unpinned, then CPUs 0–23 via `taskset`; 50 GB guard; no thread caps) ran rungs 1–2
+under load 16–41, with its OpenBLAS threads spinning during SuperLU on cores shared with
+the DKX benchmark. It was stopped for the coordinator's resource correction during rung
+3's factor (n=18432, nnz 4,760,571, assembly 21.5 s). Its eigenvalues equal the final
+run's; its rung-2 sparse time (87 s against 18 s process elapsed) was contention. Its
+outputs stay on office in `out_v1_superseded/`; its supervisor log is committed as
+`v1_superseded_supervisor.txt`.
+
+**plan.md.** The crossover is two sentences at the end of §5.1. Main does not yet carry
+#228's "Resolved 2026-09-13" paragraph, so they are placed before §5.2, outside the
+#227/#228 hunks; move them into that paragraph when #228 lands.
+
+**Artifacts** (`plan/research/scripts/2026-09-13-exact-ladder/`, SHA-256):
+
+```
+181b380fe7c483c7a8f819975849df7165322a957a46cbafd4ae0f3c51f0f160  exact_ladder.py
+50f7cc9b4ddc10d8e1ae7fc05964a606bffcfa7f845c2f0e7243d2baeeb3b018  run_ladder.sh
+aa02b34ce4bdf9ab275b1b0f26536a3b0329647cb8f42994510b82dbfc580b5d  supervisor.txt
+92c1efdaed01d6fbf95d640133d861c0b39db81cd007ae331d03bcd8b3ae5940  summary.txt
+fd2970827c3dfbba9ee8f8dc648b5e1647dffe8be777b3d574b0d038a04e82fb  v1_superseded_supervisor.txt
+149075d9f6e40481540d21a7d4b03d27c71336b181889cb73d65aa83a565124d  r1_sparse.txt
+419a128f97860bf4b425320a055b1b15a9124758258c48cfad7cd9c2d2e6a0ef  r1_default.txt
+0a9b0da11472be1a188b3aa824dbc7b6fb124a94e9f22eefc27059ef2afa5b7d  r1_propagator.txt
+53838cb75ec5781a87b887fc26853820e6104728d517bd6bb6e0f0882599a457  r2_sparse.txt
+63e0d74ab59d4d7d533a8e029254b1153533d883ac494b5d77735e47bd2e0956  r2_default.txt
+35a521198b9ce57dfcbdb6966c03c52c59cbe8e400d7896cc6d4cd84bec1d90e  r2_propagator.txt
+52a2e05fc08f47e9e65353eac65f6a511124ec43a448810e0e2aa158e349a527  r3_sparse.txt
+06cb32dca2727e799d9e07e9fa480d5ffd97dd51d6de4d3a1a4a78e8894575fe  r3_default.txt
+9f1cd76cbbdc0c628f826b1c05b2bd9de4b0f63144944e3069e290b260944fac  r3_propagator.txt
+30d3c07dd4046dd974b0735d767d73e4b3fd5d950a27bdb30a95204c73c28b42  r4_sparse.txt
+ac360dc147e7f6e61e543f34d9a556a52ed6c616f63f8a7b989d2aac02298ff8  r4_default.txt
+56b9c79efb44f12c4107fce28c8c8a09adc54ce990142fb661c63f60d058c1c2  r4_propagator.txt
+```
+
+The `r*_*.time.txt` files are the `/usr/bin/time -v` reports (none for `r4_sparse`).
+
+**Terminal state.** Supervisor PID 165423 ended 15:30:02 CDT (2935 s, `breach=1` =
+the rung-4 sparse wall guard). Launcher/Python PIDs 165434/165437, 165587/165590,
+165733/165736, 165980/165983, 166405/166410, 168469/168472, 169798/169801,
+208756/208759, 220834/220837, 220967/220970, 221103/221106, 221240/221243, plus the
+first launch's 160692, 160703/160706, 161207/161210, 161623/161626, 162566/162569,
+163424/163427 and pin watcher 163032, were all verified absent at 15:31; no `gkx-q2-*`
+systemd units remain. Staging tarballs were removed on office and locally. The 27 MB
+staging directory stays for provenance; office disk had 66 GB free.

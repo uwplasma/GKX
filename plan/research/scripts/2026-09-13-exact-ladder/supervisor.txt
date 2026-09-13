@@ -1,0 +1,44 @@
+supervisor pid=165423 start=2026-09-13T14:41:07-05:00 shift0=0.09302951-0.28199404j cpus=0-11 MemoryMax=20G OMP/OPENBLAS=12 XLA_FLAGS=--xla_cpu_multi_thread_eigen=true
+launch rung=1 arm=sparse shift=0.09302951-0.28199404j cap=1800s unit=gkx-q2-r1-sparse-165423 2026-09-13T14:41:07-05:00 load=5.41 14.06 9.09 memavail_kb=45497940
+  pids launcher=165434 python=165437 pgid=165434 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r1-sparse-165423.scope memory.max=21474836480
+  done rung=1 arm=sparse rc=0 elapsed=8s maxrss_kb=950932 peak_group_rss_kb=0 peak_cgroup_bytes=428027904 oom_kill=0 2026-09-13T14:41:15-05:00
+  shift for rung 2 = 0.1157314425-0.2416600155j (rung 1 certified sparse eigenvalue)
+launch rung=1 arm=default shift=0.1157314425-0.2416600155j cap=1800s unit=gkx-q2-r1-default-165423 2026-09-13T14:41:15-05:00 load=6.10 14.05 9.12 memavail_kb=45563348
+  pids launcher=165587 python=165590 pgid=165587 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r1-default-165423.scope memory.max=21474836480
+  done rung=1 arm=default rc=0 elapsed=13s maxrss_kb=1207412 peak_group_rss_kb=0 peak_cgroup_bytes=765280256 oom_kill=0 2026-09-13T14:41:28-05:00
+launch rung=2 arm=sparse shift=0.1157314425-0.2416600155j cap=1800s unit=gkx-q2-r2-sparse-165423 2026-09-13T14:41:28-05:00 load=5.48 13.53 9.03 memavail_kb=45457944
+  pids launcher=165733 python=165736 pgid=165733 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r2-sparse-165423.scope memory.max=21474836480
+  done rung=2 arm=sparse rc=0 elapsed=18s maxrss_kb=1096088 peak_group_rss_kb=0 peak_cgroup_bytes=751112192 oom_kill=0 2026-09-13T14:41:46-05:00
+  shift for rung 3 = 0.09824745845-0.2770517769j (rung 2 certified sparse eigenvalue)
+launch rung=2 arm=default shift=0.09824745845-0.2770517769j cap=1800s unit=gkx-q2-r2-default-165423 2026-09-13T14:41:46-05:00 load=6.25 13.19 9.01 memavail_kb=45456648
+  pids launcher=165980 python=165983 pgid=165980 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r2-default-165423.scope memory.max=21474836480
+  done rung=2 arm=default rc=0 elapsed=33s maxrss_kb=1231908 peak_group_rss_kb=0 peak_cgroup_bytes=793079808 oom_kill=0 2026-09-13T14:42:19-05:00
+launch rung=3 arm=sparse shift=0.09824745845-0.2770517769j cap=1800s unit=gkx-q2-r3-sparse-165423 2026-09-13T14:42:19-05:00 load=5.37 12.31 8.85 memavail_kb=45404400
+  pids launcher=166405 python=166410 pgid=166405 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r3-sparse-165423.scope memory.max=21474836480
+  done rung=3 arm=sparse rc=0 elapsed=159s maxrss_kb=2473116 peak_group_rss_kb=0 peak_cgroup_bytes=2164469760 oom_kill=0 2026-09-13T14:44:58-05:00
+  shift for rung 4 = 0.09877574613-0.2769045684j (rung 3 certified sparse eigenvalue)
+launch rung=3 arm=default shift=0.09877574613-0.2769045684j cap=1800s unit=gkx-q2-r3-default-165423 2026-09-13T14:44:58-05:00 load=11.68 11.69 9.12 memavail_kb=44251516
+  pids launcher=168469 python=168472 pgid=168469 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r3-default-165423.scope memory.max=21474836480
+  done rung=3 arm=default rc=0 elapsed=88s maxrss_kb=1279376 peak_group_rss_kb=0 peak_cgroup_bytes=852598784 oom_kill=0 2026-09-13T14:46:26-05:00
+launch rung=4 arm=sparse shift=0.09877574613-0.2769045684j cap=1800s unit=gkx-q2-r4-sparse-165423 2026-09-13T14:46:26-05:00 load=6.94 10.01 8.75 memavail_kb=45052608
+  pids launcher=169798 python=169801 pgid=169798 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r4-sparse-165423.scope memory.max=21474836480
+  GUARD rung=4 arm=sparse wall>1800s elapsed=1805s peak_group_rss_kb=0 peak_cgroup_bytes=7621668864 last=[   296.31s] SuperLU factor start
+  done rung=4 arm=sparse rc=143 elapsed=1817s maxrss_kb= peak_group_rss_kb=0 peak_cgroup_bytes=7621668864 oom_kill=0 2026-09-13T15:16:43-05:00
+  rung 4 sparse not certified; next shift unchanged 0.09877574613-0.2769045684j
+launch rung=4 arm=default shift=0.09877574613-0.2769045684j cap=1800s unit=gkx-q2-r4-default-165423 2026-09-13T15:16:43-05:00 load=9.26 15.90 15.44 memavail_kb=52829632
+  pids launcher=208756 python=208759 pgid=208756 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r4-default-165423.scope memory.max=21474836480
+  done rung=4 arm=default rc=0 elapsed=767s maxrss_kb=1328096 peak_group_rss_kb=0 peak_cgroup_bytes=970264576 oom_kill=0 2026-09-13T15:29:30-05:00
+ladder stopped after rung 4 (breach)
+launch rung=1 arm=propagator shift=0.09302951-0.28199404j cap=1800s unit=gkx-q2-r1-propagator-165423 2026-09-13T15:29:30-05:00 load=18.58 17.90 15.97 memavail_kb=49478936
+  pids launcher=220834 python=220837 pgid=220834 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r1-propagator-165423.scope memory.max=21474836480
+  done rung=1 arm=propagator rc=0 elapsed=8s maxrss_kb=954388 peak_group_rss_kb=0 peak_cgroup_bytes=385466368 oom_kill=0 2026-09-13T15:29:38-05:00
+launch rung=2 arm=propagator shift=0.09302951-0.28199404j cap=1800s unit=gkx-q2-r2-propagator-165423 2026-09-13T15:29:38-05:00 load=18.18 17.83 15.97 memavail_kb=49392000
+  pids launcher=220967 python=220970 pgid=220967 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r2-propagator-165423.scope memory.max=21474836480
+  done rung=2 arm=propagator rc=0 elapsed=8s maxrss_kb=965876 peak_group_rss_kb=0 peak_cgroup_bytes=388653056 oom_kill=0 2026-09-13T15:29:46-05:00
+launch rung=3 arm=propagator shift=0.09302951-0.28199404j cap=1800s unit=gkx-q2-r3-propagator-165423 2026-09-13T15:29:46-05:00 load=18.17 17.84 15.98 memavail_kb=49804320
+  pids launcher=221103 python=221106 pgid=221103 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r3-propagator-165423.scope memory.max=21474836480
+  done rung=3 arm=propagator rc=0 elapsed=8s maxrss_kb=971820 peak_group_rss_kb=0 peak_cgroup_bytes=390144000 oom_kill=0 2026-09-13T15:29:54-05:00
+launch rung=4 arm=propagator shift=0.09302951-0.28199404j cap=1800s unit=gkx-q2-r4-propagator-165423 2026-09-13T15:29:54-05:00 load=17.55 17.71 15.96 memavail_kb=49684128
+  pids launcher=221240 python=221243 pgid=221240 affinity=0-11 cgroup=/sys/fs/cgroup/user.slice/user-1006.slice/user@1006.service/app.slice/gkx-q2-r4-propagator-165423.scope memory.max=21474836480
+  done rung=4 arm=propagator rc=0 elapsed=8s maxrss_kb=979688 peak_group_rss_kb=0 peak_cgroup_bytes=396001280 oom_kill=0 2026-09-13T15:30:02-05:00
+supervisor end=2026-09-13T15:30:02-05:00 total=2935s breach=1
