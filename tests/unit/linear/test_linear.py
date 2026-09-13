@@ -1726,12 +1726,19 @@ def streaming_shift_invert_setup(cyclone_world, only_terms):
     return v0, cache, params, terms
 
 
+@pytest.mark.parametrize("kz_damping", [False, True])
 def test_shift_invert_nearest_pair_passes_physical_outer_residual(
     streaming_shift_invert_setup,
+    kz_damping,
 ):
     """Nearest-shift selection should admit a converged streaming Ritz pair."""
 
     v0, cache, params, terms = streaming_shift_invert_setup
+    params = replace(
+        params,
+        hypercollisions_const=float(not kz_damping),
+        hypercollisions_kz=float(kz_damping),
+    )
     eigenvalue, eigenvector = dominant_eigenpair(
         v0,
         cache,

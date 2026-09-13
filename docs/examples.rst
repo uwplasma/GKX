@@ -520,10 +520,12 @@ heat-flux derivative. The equilibrium is vacuum; finite ``a/L_T`` and ``a/L_n``
 drive GKX. Edit the top-level constants to set resolution and run length.
 
 The optimizer window starts from a detached saturated state and supplies a
-local design derivative. Independent matched runs give a preliminary 12.26%
+local design derivative. Historical matched runs give a preliminary 12.26%
 nominal reduction (conditional 95% CI 10.64--13.88%). This is not statistically
 resolved: individual drift failures and missing resolved spectra block
-promotion. See :doc:`stellarator_optimization` for the audit, resolution
+promotion. These traces predate the periodic hypercollision correction and must
+be regenerated before evaluating current-operator transport.
+See :doc:`stellarator_optimization` for the audit, resolution
 ladder, and CSV data.
 
 Reduced synthetic scripts are kept outside ``examples/optimization`` as

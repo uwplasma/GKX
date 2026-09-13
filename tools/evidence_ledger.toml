@@ -214,7 +214,7 @@ reference = "matched paired GKX runs; no external reference"
 reference_rank = 5
 tier = 3
 status = "provisional"
-notes = "nominal 12.26% reduction is NOT statistically resolved: 4 of 48 nominal traces fail the published final-drift test. Promotion requires plan.md 4.7"
+notes = "Historical traces predate the periodic hypercollision correction and require regeneration; they are not evidence for the current operator. Nominal 12.26% reduction is NOT statistically resolved: 4 of 48 nominal traces fail the published final-drift test. Promotion requires plan.md 4.7"
 
 [[row]]
 id = "F-qa-equilibria"

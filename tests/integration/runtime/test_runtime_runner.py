@@ -4220,7 +4220,14 @@ def test_runtime_parameter_scan_rejects_invalid_contracts(
         )
 
 
-def test_runtime_linear_rejects_incompatible_initial_state_shape() -> None:
+@pytest.mark.parametrize("dtype", [np.complex64, np.complex128])
+def test_runtime_linear_validates_initial_state_shape_and_preserves_dtype(
+    monkeypatch, dtype
+) -> None:
+    from jax import enable_x64
+
+    import gkx.runtime as runtime
+
     cfg = replace(
         _base_runtime_cfg(),
         species=(RuntimeSpeciesConfig(name="ion"),),
@@ -4235,6 +4242,18 @@ def test_runtime_linear_rejects_incompatible_initial_state_shape() -> None:
             solver="time",
             steps=1,
             initial_state=np.zeros((1, 2, 2, 1, 1, 1)),
+        )
+    state = np.full((1, 2, 2, 1, 1, 16), 1.0 + 0.25j, dtype=dtype)
+
+    def check_state(actual, *_args, **_kwargs):
+        assert actual.dtype == state.dtype
+        np.testing.assert_array_equal(actual, state)
+        raise RuntimeError("precision checked before eigensolve")
+
+    monkeypatch.setattr(runtime, "dominant_eigenpair", check_state)
+    with enable_x64(), pytest.raises(RuntimeError, match="precision checked"):
+        run_runtime_linear(
+            cfg, ky_target=0.3, Nl=2, Nm=2, solver="krylov", initial_state=state
         )
 
 

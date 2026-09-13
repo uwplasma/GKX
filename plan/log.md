@@ -11231,6 +11231,108 @@ At this checkpoint #223 has 32 successful, five unfinished and one skipped
 check; no failure and no merge yet. #224 has its own fresh CI. Neither the
 parent nor the child may be merged on the basis of these local subsets alone.
 
+## 2026-09-12 — periodic RHS and spectral preconditioner contracts
+
+Independent lanes and cross-review on branch
+`fix/spectral-hypercollision-contracts`, worktree
+`/Users/rogeriojorge/local/GKX-worktrees/spectral-contracts`. Base is #224
+`c0004e9f3`; require fresh CI before merge. This is a correctness change, not
+a performance claim or a completed physics benchmark.
+
+**RHS defect and impact.** `6d0023b25` replaces pointwise physical-z multiplication
+by `abs(kz)` with the existing FFT `abs_z_periodic` helper. A constant along-z
+state previously received `[0,-2.3,-4.6,-2.3]` instead of zero. Independent
+constant-null, Fourier-eigenvalue and translation-equivariance tests exercise
+periodic and one-link routes. `4a4adef60` checks the complex gradient of the
+self-adjoint multiplier as well. An initial integrated run had 49 passes and
+two failures due to a missing `jax` test import; fixed and rerun, not hidden.
+
+The active periodic kz channel changes physics. Regenerate outputs from
+`examples/optimization/QA_optimization.py` and
+`tools/campaigns/qa_transport_validation.py` before using their transport values.
+Pure geometry/Boozer panels are not invalidated. The shipped periodic cyclone
+quasilinear deck sets kz damping to zero; the batch-ky example has Nm=3 and no
+active m>2 channel. Inspected linked parity decks are unaffected by this
+periodic RHS repair. Do not blanket-invalidate unrelated references.
+
+**Preconditioner.** `b8f47098b` honors collision/hypercollision term weights,
+corrects linked flattening to kx-major order, and puts the kz symbol on each
+FFT chain rather than in a real-space averaged diagonal. Store only an O(ns Nm)
+coefficient, reuse existing SOLVAX tridiagonal machinery. Independent review
+caught the analogous periodic line-inverse omission: `51fb0964a` fixes it.
+Before that last repair, periodic inverse residuals were .295315862/.300024360
+for weights .4/1 against a 3e-6 gate; zero-weight and linked controls passed.
+After repair, nine focused inverse/field-correction controls pass (23.05 s),
+including transpose and rate-JVP/finite-difference checks. The inverse claim is
+only for the tested constant-coefficient principal part / independent linked
+subspace, not varying-drift operators or redundant conjugate rows.
+
+SOLVAX 0.20.0 uses portable Thomas for complex tridiagonal inputs, including GPU;
+no fused-complex solver, sharding improvement or speedup is claimed here.
+This PR does not modify SOLVAX. Required next performance evidence is outer
+residual plus matched wall time/memory on a representative difficult mode,
+not an isolated preconditioner microbenchmark.
+
+**Independent source check.** Pristine GX
+`bc2fe5523c23e3d0198181a3e3b7c8a482e25ba5`, `linear.cu:27–41,228–235`,
+`parameters.cu:1585`, `grad_parallel_linked.cu:469–486`: periodic construction
+selects linked chains with nLinks=1 and FFT|k|IFFT. A preliminary observation
+that an unused periodic moments overload was empty was withdrawn; it is not
+evidence of a GX no-op. Source hashes: linear.cu
+`63f8436863067984113e25341e56e1a6500cfc91cec2406006f0d97d6f422b57`,
+grad_parallel_linked.cu
+`5da9f89e7764b56850b9aedcf6f50c01c8b2919a26209aab12c3bd2ba0132a1f`.
+Context: [GX](https://arxiv.org/html/2209.06731v3),
+[JAX complex linear transpose](https://docs.jax.dev/en/latest/_autosummary/jax.linear_transpose.html),
+[SOLVAX](https://github.com/uwplasma/SOLVAX).
+
+**Reproduce.** CPU environment is the persistent Python3.11.14/JAX0.10.2/
+SOLVAX0.20.0 venv documented above, not clean-install proof. Prefix
+`PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1`, then
+`/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m pytest -q
+-o addopts='' -o junit_family=legacy tests/validation/benchmarks/test_benchmark_contracts.py
+tests/unit/solvers/test_linear_krylov_core.py tests/unit/linear/test_linear_helpers_extra.py
+tests/unit/linear/test_linear.py -k 'preconditioner or inverts_additive or
+inverts_kz_hypercollisions or hypercollision or shift_invert_nearest_pair'
+--tb=short --junitxml=/tmp/gkx-spectral-contracts-final-cpu.xml`:
+**54 passed / 236 deselected**, 65.43 s. Earlier owners: 51 benchmark contracts,
+four physics sentinels, 40 linked/preconditioner tests and two outer-residual
+cases passed; these overlap, not distinct totals. Final source adds 25 source
+and 114 test lines in existing modules, no new file; measured architecture
+budgets updated, targets unchanged.
+
+Negative/final periodic-inverse XML hashes:
+`ed05a48c1fd71c6b45392ee835df7c6dc4484edffe7de83b892d80797e7fde41` /
+`00ebb703d4fa5941ab5d8e7cb29e7b816a19baf69df04f1d29a92c7cb0b76e1e`.
+Office GPU0 final-source check is separately recorded below. GPU1 is reserved
+for the bounded Nl24 GX discriminator, not this PR's tests. No other simulation
+was interrupted. Rollback requires reverting the numerical PR and labeling
+results by operator revision; do not silently combine old/new QA outputs.
+
+Final CPU XML SHA-256:
+`d911f93d4e95d48592403181508ac6638fe7603ac263349a25f082c6fcbd3794`.
+Office archive `4a4adef60`, `/home/rjorge/gkx-spectral-contracts.KZ4pqN`,
+same selection on GPU0 with `/home/rjorge/venvs/dkx-gpu/bin/python`,
+JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=0 XLA_PYTHON_CLIENT_PREALLOCATE=false:
+**54 passed / 236 deselected**, 150.19 s, exit0; one existing invalid-escape
+docstring warning. `checks.xml` SHA-256
+`ac7fddd1ea059d3f72fa4b81284aa4cb5a8245f1b0366ead0fe4ec5d79f5d71e`.
+This is CPU/GPU correctness coverage, not a throughput comparison. The only
+subsequent source edit quotes a docstring multiplier for Sphinx. Strict docs
+initially caught the unquoted `|kz|` substitution; corrected, final CI-mode
+docs/Ruff/whitespace/architecture checks pass. Mypy: 184 source files pass.
+No numerical-test job in this entry remains running.
+
+Cross-review qualification `ae9abe7e8` labels historical QA transport in README,
+optimization/examples/AD documentation and the provisional ledger note as
+pre-correction output. Equilibrium evidence/statuses are unchanged. Reruns must
+use a fresh source-SHA-specific directory: the campaign currently skips existing
+filenames without checking operator provenance. Release/evidence owners:
+**152 passed**, 10.24 s, three existing CFL warnings; command
+`python -m pytest -q -o addopts='' tests/release/test_release_gates.py
+tests/release/test_evidence_ledger.py --junitxml=/tmp/gkx-qa-qualification-release.xml`,
+same CPU environment. XML SHA-256
+`701b4bdbe07e9a46b4c2312d1fcbeecf440cb487def2df1329ed069614b6fb46`.
 ## 2026-09-12 — parallel independent validation gates
 
 Maintainer authorized merges and independent parallel work. #223 merged through
@@ -11307,6 +11409,188 @@ No nonlinear optimization result or evidence-ledger row is promoted here.
 Final EM qualification `df9565e78`: **42 CPU tests passed**, 14.98 s, same
 two cast warnings; `/tmp/gkx-em0-qualified-field-system.xml`, SHA-256
 `279b535efc724af2cfedea6b280792ba2861ffcd0feb7958a2510f597ba51d5a`.
-All new tests remain in existing owners: net +173 test lines, +2 tool lines,
+All new tests remain in existing owners: net +177 test lines, +2 tool lines,
 zero installable source lines or modules. Budgets record the measured additions;
 slimming targets are unchanged. This is explicit validation cost, not slimming.
+
+## 2026-09-12 — terminal GX control changes the next decision
+
+The registered Nl24 run above completed **exit0**, GNU wall 30:09.92
+(1809.92 s), supervisor 1812.512 s. Different clock scopes, no speedup claim.
+1501 samples reach T=300.000014249, actual dt=.002000000095,
+(Nz,Nl,Nm,ns)=(96,24,96,1), nonzero ky=.5500000119. Terminal audit passes:
+264/42/2 finite numeric arrays in out/big/restart. This does not certify the
+known questionable finite GX geometry metadata. All owned PIDs are terminal;
+GPU1 returned idle; no follow-on solve.
+
+| Last30% observable | Nl24 repaired GX | Nl32 prior repaired GX | Nl24 historical GKX |
+| --- | ---: | ---: | ---: |
+| Mean instantaneous gamma | .03303322632138322 | .02487663027237762 | .0330096971753523 |
+| Mean omega | .5002386017543513 | .5049278882813295 | .5002360481323374 |
+| Phi² log-fit gamma | .0330093616746595 | .02485421507487127 | — |
+| Wg log-fit gamma | .033009538175237135 | .024855368462992754 | — |
+
+Repaired GX shares the Nl24→32 decrease: **24.6921%** from instantaneous
+means, 24.7056% from independent phi² fits. GKX/Nl24 GX instantaneous gamma
+differs −.07123%; comparison with the independent energy fit differs +.001016%.
+This rejects a GKX-only explanation of this historical pair, not a shared
+closure/truncation defect or finite-time bias. Nl24 half-window gamma drift is
+−.56029%, so subpercent agreement is not asymptotic time convergence.
+
+Final Wg_lmst corner/00 ratios are 3.1512e-7 / 2.9608e-7 (Nl24 /32), below
+the old 1e-5 screen, **but upper-quarter Laguerre fractions are 7.9595% /
+8.1705%**, with a hump before the cutoff. Last/first Laguerre powers are
+.006199/.004347. Upper-quarter Hermite fractions are 2.2155%/2.1689%.
+These terminal spectra are supporting diagnostics, not convergence certificates.
+The authoritative §0.5 now withdraws the unsupported universal-literature/GKX
+defect framing, requires full moment-tail evidence, and prioritizes common
+closure/truncation and residual-qualified mode identity before another rung.
+No atlas or QA transport row is promoted.
+
+All artifacts below are in
+`/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD`:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| nl24.out.nc | 94a7063d7cbdfaaa437738b5e2db86b230f37fd888898f308f6c76fb8254e556 |
+| nl24.big.nc | b31387e13a884fd07f2ea814148588d98284599274db3cbec6bd77a1e3d32f33 |
+| nl24.restart.nc | d2c9f5b757ee9d7b62a271a5dd86819e8a4f5c1506eac9a9eb3c6ffe5b30f99c |
+| audit.log | bc0ad5760570e6f8f70fdfbc8acf34791c062fb7967f602b98515804eb7e532c |
+| terminal.txt | dabc48b78197a2191f16396ffe1340bd0555491327ae93f2283a9de80c8a556e |
+| spectral-audit-v2.py | bc9666ac0728b7e457157adb2883c2a0b2a73efe7d27b43b99f3e3694a06e470 |
+| spectral-audit-v2.log | 5981c894ffb344bb02d7530b813bbd2ce55c080d0d01294afa4b1f5423941ebd |
+| completion.md | faddbaeae73ec795757d9777dc102366da4c009fee48a0a76b1e2d662e866b02 |
+
+Repeat the read-only audit in that directory with
+`/home/rjorge/venvs/dkx-gpu/bin/python audit.py --root . --stem nl24 --binary ./gx
+--binary-sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+--input-sha256 2dd1c42bf275f3784bc84f269c7763377d72e6055d4b07ee14b8025ae82e2146
+--gkx-csv /home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/results/salpha_rate50_nl24_nm96_t300.csv`,
+then `python spectral-audit-v2.py` in the same environment. Initial supplemental
+audit failed because the old-GX path was mistyped; the failed script/log are
+preserved. Only that path was corrected, not simulation inputs/outputs.
+
+Integration: #225 contains the independent tests; #226 contains the numerical
+repair, qualifications and this terminal handoff. #226 now stacks on #225 by
+history-preserving merge `ed56221b9`; both log entries retained, measured union
+test budget 87800. The parent had four lines of headroom: actual additions are
+177 validation-test lines and 114 numerical-test lines, not budget deltas.
+Strict integrated docs/architecture pass. A bounded, not-yet-run solver-cost
+diagnostic is specified in §5.1; no SOLVAX change is justified before profiling.
+At this checkpoint #224 still has two running required jobs and 38 successful
+checks; #225/#226 have their own queued/running CI. Merge in dependency order
+only when green, refresh heads after parent merges, and do not release.
+
+Final whole-tree lint/format: the shared venv exposes Ruff 0.13.1, not the
+project pin 0.16.4; its exploratory format check flagged an untouched objective
+test. No unrelated formatting was applied. Installed the pinned wheel only in
+`/tmp/gkx-pinned-lint.Vqrt9t` (shared venv unchanged), then ran its
+`bin/ruff check .` and `bin/ruff format --check .`: **pass, 407 files formatted**.
+
+## 2026-09-13 — merge, compact sharded repair and bounded conditioning pilot
+
+Maintainer renewed merge/admin authorization and required compact, tested,
+accurate changes. #224 merged normally as `d8c0139e8`, all required checks
+green. #225 reached 41 successful / one expected skipped check. Normal merge
+refused only the behind-main rule: main and its old base had identical tree
+`2a8054f9885341d594d88354efe0b2378518988d`, and `git merge-tree --write-tree
+origin/main validation/independent-gates-20260912` equaled the tested head tree
+`235aa65a35dcddeacf523a8972868199bcacb0fe`. Used authorized `--admin` with exact
+head `0e8ad94ba` for this unchanged-tree case, yielding merge `52b8dd693`.
+No failed check bypassed, force-push, repository setting change or release.
+#226 now targets main; history-preserving refresh `8bffcbbb9`.
+
+**CI exposed a missing route.** #226 run34722877136, shard4/job103631919564
+failed `test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route[None]`:
+hypercollision RHS max error .1204163, 237/768 entries outside tolerance.
+The mixed species–Hermite route still multiplied physical-z samples by |kz|.
+It now reuses `abs_z_periodic`, as the corrected serial route does: one net
+source line removed, no new kernel/communication primitive. Existing four-CPU
+tests cover independent terms and Euler/RK2 routing at omitted/explicit absorber
+rate: **2 passed**, 384.26 s, two existing complex-cast warnings. Exact command:
+
+`PYTHONPATH=$PWD/src MPLBACKEND=Agg XLA_FLAGS=--xla_force_host_platform_device_count=4
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1
+/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m pytest -q
+-o addopts='' -o junit_family=legacy tests/unit/parallel/test_parallel_linear_velocity.py
+-k mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
+--tb=short --junitxml=/tmp/gkx-sharded-periodic-fix.xml`.
+XML SHA `eabd64df04a52c2df4fb23f7b34b214027f8378b4c9ce00674e378c3109ac573`.
+The final test additionally checks the hypercollision state JVP against the
+linear RHS. An initial test-edit syntax error was caught by Ruff and corrected
+before execution. This is CPU logical-sharding coverage, not multi-GPU scaling.
+
+**Slimming without changing the algorithm.** Independent review found the
+solver's scatter helper identical to streaming's existing helper. `10cb172bb`
+reuses it at two call sites, removing **23 source lines** from one existing
+file; no new abstraction, allocation or import cycle. Linked/periodic inverse,
+coarse projection, transpose/JVP and streaming controls: **24 passed**, 40.46 s,
+five existing complex-cast warnings. Selection:
+`tests/unit/solvers/test_linear_krylov_core.py tests/unit/operators/test_linear_streaming.py
+-k 'inverts_kz_hypercollisions or linked or highest_modes'`, same CPU environment.
+XML `/tmp/gkx-shared-linked-scatter.xml`, SHA
+`329de5f7db27d68e91881ae1794aba52cf96bd7d0cded08bcd6f8a17f108ec46`.
+The full numerical repair is now **+1 net production source line**, not +25;
+no new files. Test additions are explicit validation cost, not removed to meet
+a cosmetic line target. Architecture source budget ratcheted down to 89248.
+
+**Registered GPU0 pilot, source4553389d4.** One fresh process per preconditioner,
+120-s cap (TERM then KILL after10s), no fallback or budget escalation. GPU1 was
+busy and untouched. Cyclone deck SHA
+`f2db5b3dce3e480ebd30c80d9a2849c9c10ace0bd3bcbb64e3a844bca40be405`,
+overrides exactly §5.1; fixed shift from the ky=.3 reference as seed only.
+Underresolved conditioning experiment, not a physics benchmark.
+
+| Mode | Original-operator residual | Cold API s | Process wall s | Peak RSS KiB | JAX peak device bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| damping | .658716 | 8.02925 | 10.30 | 1250024 | 33630464 |
+| hermite-line | .000357705 | 8.95402 | 11.02 | 1271224 | 33630464 |
+| field-corrected | .000504636 | 11.87100 | 13.91 | 1336948 | 33941504 |
+
+**All exited1: no accepted eigenpair, warm timing or speedup result.** Requested
+residual tolerance1e-6 was floored by the actual complex64 state to .000119209;
+all fail even that effective gate. x64 flags permit, but do not force, 64-bit
+arrays. Runtime startup explicitly allocates complex64. Next diagnostic must
+declare actual seed precision; do not silently extend iterations to get a time.
+Actual total process wall35.23s; no timeout or further solve.
+
+Remote `/home/rjorge/gkx-conditioning-pilot-20260912.4OfYd2`, local logs
+`/tmp/gkx-conditioning-pilot-20260912/`. Python3.11.15/JAX0.10.2/NumPy2.4.6/
+SOLVAX0.20.0, RTX A4000, `/home/rjorge/venvs/dkx-gpu/bin/python`,
+CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda JAX_ENABLE_X64=true GKX_X64=1
+XLA_PYTHON_CLIENT_PREALLOCATE=false PYTHONPATH=$PWD/src:$PWD.
+Command: `timeout --signal=TERM --kill-after=10s 120s /usr/bin/time -v
+/home/rjorge/venvs/dkx-gpu/bin/python pilot.py MODE`. Script SHA
+`2e41291c04e54d278059d54aac6148d5a579c583323cf25f05fb29299de123e9`;
+logs damping/hermite-line/field-corrected respectively:
+`fe2f304a17ea4832d2288354ee07c153e88888087c829d5ad0aa14f1e6556dbf`,
+`d70b3f7b9b5b6b00051f0efe51d4ddd52cceae404248a0e90170be875a44c169`,
+`e03ad50dd0ba3f8d9b8ec17ff5dfce0f651b78ac640693a53a2a2573721dceac`.
+Supervisor4110688, timeout4110691/4111178/4111860, Python4110693/4111180/4111862
+all verified gone. An initial staging race exited2 before script transfer/JAX
+startup; preserved `*.staging-error.log`, no numerical evidence or extra solve.
+
+**Precision contract, not a new option.** `e8ea36182` extends an existing test
+to verify complex64/complex128 initial-state values and dtype reach the runtime
+eigensolver unchanged. Two cases pass in x64 and default-f32 processes (2.24 /
+2.42s, test-local `jax.enable_x64()`); no actual eigensolve or production change.
+Documentation explains generated-state rounding, exact selected-ky shape, the
+existing `run_runtime_linear(initial_state=...)` API and prepared-linear API
+limitation. +19 test / +14 documentation lines, no new files. XML SHA
+`cb848419f5ebc7200c8730e23391bee4f7e184cca2dbc0e604b3c465a483337c` /
+`bed4411dcd0a5a8e4483ca8f6087c40de70353c5929d4c4f5ff5d9c59197dbf7`.
+Initial test setup used the wrong JAX context name and pre-selection shape;
+corrected, not interpreted as product defects. No SOLVAX modification justified
+by this rejected pilot. Continue with declared precision and residual gates.
+
+Final sharded JVP selection at `8a2944261`: **1 passed**, 216.58s, one existing
+complex-cast warning; same four-logical-CPU command, selecting the exact `[None]`
+test node. XML `/tmp/gkx-sharded-periodic-jvp.xml`, SHA
+`b61efa4e1ce98ebc44388da1b28961939e223b2dee19d46a8199d849ab9d8f09`.
+The two-rate primal test above preceded the extra JVP assertion; results overlap.
+Pinned Ruff0.16.4 whole-tree lint/format (407 files), mypy (184 source files),
+strict CI-mode Sphinx and architecture checks pass. Final numerical PR delta
+against merged #225: +1 production source line, +140 test lines, no new files;
+source reduction relative to the previous #226 is 24 lines. Source/test budgets
+are measured at 89248/87826; targets unchanged. All owned CPU/GPU test/pilot jobs
+have finished. Push #226 for fresh CI; do not merge based on its old failed head.

@@ -86,6 +86,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     from gkx.operators.linear.params import _as_species_array
     from gkx.operators.linear.streaming import (
         abs_z_linked_fft,
+        abs_z_periodic,
         grad_z_linked_fft,
         grad_z_periodic,
         shift_axis,
@@ -379,9 +380,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
                 linked_use_gather=cache.linked_use_gather,
             )
         else:
-            parallel_hypercollision = (
-                jnp.abs(cache.kz)[None, None, None, None, None, :] * kz_source
-            )
+            parallel_hypercollision = abs_z_periodic(kz_source, kz=cache.kz)
         hypercollisions = hypercollisions + parallel_hypercollision
 
         kperp2 = cache.ky[:, None] ** 2 + cache.kx[None, :] ** 2

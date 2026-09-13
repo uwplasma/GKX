@@ -195,10 +195,12 @@ matches finite differences to :math:`5.7\times10^{-6}` and lowers the local
 heat flux by 1.25%.
 
 These results establish a finite-window derivative and local descent. They do
-not establish an infinite-time turbulent derivative. The accepted QA campaign
+not establish an infinite-time turbulent derivative. The historical QA campaign
 has a preliminary 24-pair reduction interval of 10.64--13.88%, but it is not
 promotion evidence: 4 of 48 nominal traces fail the per-trace final-drift test,
-and no resolved transport spectra were saved. The audit and next-run contract
+and no resolved transport spectra were saved. Its traces predate the periodic
+hypercollision correction and require regeneration for the current operator.
+The audit and next-run contract
 are in :doc:`stellarator_optimization`.
 
 Device parity

@@ -171,9 +171,9 @@ Controls
 Matched validation
 ------------------
 
-The differentiated window selects a boundary direction; independent forward
-runs establish the transport result. The validation candidate uses one
-``max_mode=1`` stage from VMEX's optimized QA input. It holds the seed aspect
+The differentiated window selects a boundary direction; historical independent
+forward runs supply the conditional transport summaries below. The candidate uses
+one ``max_mode=1`` stage from VMEX's optimized QA input. It holds the seed aspect
 and iota targets, moves eight boundary coefficients, and uses the same four
 residuals and priorities as the example. The search differentiates a 16-step
 post-saturation window; centered finite-difference checks validate that local
@@ -359,18 +359,19 @@ failure, including 2 of 32 long-24x24 and 2 of 32
 
 The compact raw files contain only :math:`Q_i(t)`, so neither the increasing
 high-:math:`k_y` tail nor spectral convergence can be tested. Thus none of the
-104 matched pairs is promotion-ready. The numbers remain useful preliminary
-evidence and a reproducible cost baseline (15.32 measured GPU integration
-hours on one RTX A4000).
+104 matched pairs is promotion-ready. These outputs predate the periodic
+hypercollision correction and require regeneration: they establish neither
+transport nor cost for the corrected operator. The 15.32 GPU integration hours
+on one RTX A4000 describe the historical run only.
 
 .. figure:: _static/qa_transport_reduction.svg
    :width: 900px
    :alt: matched QA heat-flux traces and transport-reduction convergence
 
-   Initial and optimized nominal ensemble means with seed SEM; the shaded
+   Historical initial and candidate ensemble means with seed SEM; the shaded
    interval is the measured window. Error bars are autocorrelation-corrected
-   conditional summaries. Per-trace stationarity and spectral gates remain
-   open.
+   conditional summaries. Regeneration with the corrected periodic operator,
+   per-trace stationarity and spectral gates remain open.
 
 Reproduce
 ---------
@@ -389,18 +390,21 @@ The checked-in workflow has three owners:
 The exact accepted boundaries are
 :download:`initial <../examples/optimization/input.qa_transport_baseline>` and
 :download:`optimized <../examples/optimization/input.qa_transport_candidate>`.
-For example,
+Use a fresh, source-SHA-specific output directory: the campaign skips existing
+filenames without checking source provenance. Never mix pre-correction and
+corrected-operator traces. For example,
 
 .. code-block:: bash
 
+   campaign_dir="campaign/transport-$(git rev-parse --short=12 HEAD)"
    python tools/campaigns/qa_transport_validation.py nominal \
-     --seed-stop 24 --output-dir campaign/transport
+     --seed-stop 24 --output-dir "$campaign_dir"
    python tools/campaigns/qa_transport_validation.py perp24long \
-     --seed-stop 16 --output-dir campaign/transport
+     --seed-stop 16 --output-dir "$campaign_dir"
    python tools/campaigns/qa_transport_validation.py v612 \
-     --seed-stop 16 --output-dir campaign/transport
+     --seed-stop 16 --output-dir "$campaign_dir"
    python tools/artifacts/build_qa_transport_figures.py \
-     --raw-dir campaign/transport --output-dir docs/_static
+     --raw-dir "$campaign_dir" --output-dir docs/_static
 
 Use the case names and pair counts in the table for the timestep, perpendicular,
 parallel, and velocity-space scans. Each ``.npz`` stores only ``time``,
