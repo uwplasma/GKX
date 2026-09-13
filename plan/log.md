@@ -11594,3 +11594,86 @@ against merged #225: +1 production source line, +140 test lines, no new files;
 source reduction relative to the previous #226 is 24 lines. Source/test budgets
 are measured at 89248/87826; targets unchanged. All owned CPU/GPU test/pilot jobs
 have finished. Push #226 for fresh CI; do not merge based on its old failed head.
+
+## 2026-09-13 — Q1 inner-solve diagnostics (plan §5.1 L1)
+
+Branch `fix/inner-solve-diagnostics` from `origin/main` `06606e404`, handoff #228
+row Q1. Instrumentation only: no preconditioner, tolerance, default or SOLVAX
+change.
+
+**Decision.** (1) Every inner FGMRES solve of the shift-invert Arnoldi build
+keeps SOLVAX's true residual, iterations and converged flag; they are folded over
+all restarts × Krylov vectors into `InnerSolveStats(max_relative_residual,
+total_iterations, solves, unconverged_solves)` by the private jitted
+`_shift_invert_eigenpair_with_inner_stats`. The host gate prints
+`inner converged=… unconverged=k/n max_relative_residual=… tol=… iterations=…` in
+the `shift-invert solve finished` status and in all three rejection
+`RuntimeError`s. Public `dominant_eigenpair_shift_invert_cached` still returns
+`(eig, vec)`. (2) `shift_solve_method`/`gmres_solve_method` stays accepted and
+validated (same `ValueError`) but is no longer threaded or a `static_argnames`
+key; documented as an alias of the one SOLVAX FGMRES. (3) `implicit_maxiter`
+counts iterations on both implicit routes through `_gmres_iteration_budget`:
+`restart=min(restart,maxiter)`, `max_restarts=ceil(maxiter/restart)`, cap
+`restart·ceil(maxiter/restart)` (200 at the 200/20 default, previously 4000).
+Non-convergence is surfaced only where a channel exists: `_implicit_gmres_solution`
+returns the `KrylovSolution`; the linear scan result `(G, phi_t)`,
+`SimulationDiagnostics` and IMEX `linear_solve` (solver returns `x` only) have no
+solver-status field, and no host callback was added inside traced scans.
+
+**Which tests' numbers could change (none did).** Before editing, a scratch pytest
+plugin (not committed) wrapped `gmres` in `solvers_linear_implicit` and
+`solvers_nonlinear_imex` on pristine main and recorded SOLVAX iterations and
+convergence for every real solve in 13 implicit/IMEX-selected files (55 tests):
+76 recorded calls, all converged, maximum 8 iterations, every one under the new
+cap. The only budget whose cycle size changes (restart 2, maxiter 1, in
+`test_implicit_standard_and_diagnostic_routes_match`) did 0 iterations. The plugin
+run had one failure, `test_nonlinear_imex_state_gradient_matches_finite_difference[True]`
+(`reduce_precision does not accept dtype complex128`). Without the plugin both
+parameters pass on the branch (XML `f81cea8cec07…`) and on the clean main worktree
+(`b3566d6ed113…`), so this is an artifact of `jax.debug.callback` on that AD path,
+not a defect on main.
+
+**One allowlist re-key.** `test_hot_path_matrix_contractions_are_pinned` keys its
+unpinned-contraction allowlist by line; the unchanged overlap-ranking `tensordot`
+moved `solvers_linear_krylov_algorithms.py:675 -> 749`. Entry re-keyed, same code.
+
+| Selection (one file per invocation) | Result | XML SHA-256 prefix |
+| --- | --- | --- |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 84 passed | `5f97a5993940` |
+| `tests/unit/solvers/test_time_integrators.py` | 94 passed | `7d83e6bdccc1` |
+| `tests/integration/test_adaptive_eigenmodes.py` | 7 passed, 3 skipped (VMEC backend/eik cache) | `9f7917556c71` |
+| `tests/unit/linear/test_linear.py -k "krylov or shift or implicit"` | 8 passed | `bc2376de4b33` |
+| `tests/unit/nonlinear/test_nonlinear.py -k "implicit or imex or IMEX"` | 9 passed | `71bedea6d5ab` |
+| `tests/unit/nonlinear/test_nonlinear_helpers_extra.py -k …` | 15 passed | `53a067a2d519` |
+| `tests/unit/linear/test_linear_helpers_extra.py -k …` | 8 passed | `75ec05232d38` |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k …` + `test_compare_runtime_window_writes_csv` | 3 + 1 passed | `c0c632d28032`, `01bcc93cdb90` |
+| runtime runner / CLI nodes referencing `implicit_maxiter` | 2 + 1 passed | `61af1e7fe513`, `9a80d58f2a55` |
+| sharded velocity node (2 forced host devices) | 1 passed | `bc034a1557b4` |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed | `56a26d29f8a4` |
+
+New/extended tests: a forced 1-iteration inner budget reports `converged=False`,
+6/6 unconverged and relative residual > 1e-10, and the status and rejection text
+carry them; an unrestarted 400-iteration budget reports converged and residual ≤
+1e-3; the three labels give bitwise-identical pairs from one trace; implicit
+`maxiter=8, restart=4` stops by 8 iterations (32 before) unconverged, and IMEX
+passes budget `(4, 2)`.
+
+Checks: pinned ruff 0.16.4 check/format (407 files), `mypy` as CI (184 source
+files, no issues), `check_package_architecture_manifest.py`,
+`check_repository_size_manifest.py`, gitleaks 8.30.1 on changed files. Line budgets
+measured: source 89248 → 89409 (+161), tests 87826 → 88018 (+192); targets
+unchanged; no new files, no docs change.
+
+Environment: local shared Mac (load 9–33 during the run), Python 3.11.14,
+JAX/jaxlib 0.10.2, NumPy 2.4.6, SOLVAX 0.20.0, `PYTHONPATH=$PWD/src:$PWD
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu`, `nice -n 19`,
+`pytest -q -o addopts='' -p no:cacheprovider --junitxml=…`. Worktrees
+`~/local/GKX-worktrees/inner-solve-diagnostics` (branch) and
+`~/local/GKX-worktrees/inner-solve-baseline` (detached clean `06606e404`).
+
+Limitations: the per-solve statistics are not yet on a public result; the implicit
+routes still discard their flag inside scans; with ceil budgeting a solve may exceed
+`maxiter` by less than one cycle; no runtime or memory measurement was made (the
+extra carry is four scalars per Arnoldi build). The registered §5.1 pilot was not
+re-run, so no preconditioner's inner statistics are published yet. Next: re-run
+that pilot per mode so its rejection names the inner budget, then L2/L3.

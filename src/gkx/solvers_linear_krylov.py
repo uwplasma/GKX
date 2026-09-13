@@ -27,7 +27,10 @@ from gkx.solvers_linear_krylov_algorithms import (
     _normalize,
 )
 from gkx.solvers_linear_krylov_algorithms import (
+    InnerSolveStats,
     _arnoldi,
+    _shift_invert_eigenpair_with_inner_stats,
+    _validate_shift_solve_method,
     build_shift_invert_preconditioner,
     _mode_family_sign,
     _omega_scale,
@@ -60,6 +63,8 @@ class KrylovConfig:
     shift_tol: float = 1.0e-4
     shift_maxiter: int = 50
     shift_restart: int = 20
+    # Compatibility alias: "batched", "incremental" and "flexible" are validated
+    # but all run the one SOLVAX FGMRES solve; the label is not a compile key.
     shift_solve_method: str = "batched"
     shift_preconditioner: str | None = "auto"
     shift_selection: str = "targeted"
@@ -315,6 +320,19 @@ def _eigenpair_relative_residual(
     return float(np.asarray(numerator / denominator))
 
 
+def _inner_solve_summary(stats: InnerSolveStats, tol: float) -> str:
+    """Describe every inner GMRES solve of one shift-invert build on the host."""
+
+    solves = int(np.asarray(stats.solves))
+    unconverged = int(np.asarray(stats.unconverged_solves))
+    residual = float(np.asarray(stats.max_relative_residual))
+    return (
+        f"inner converged={unconverged == 0} unconverged={unconverged}/{solves} "
+        f"max_relative_residual={residual:.3g} tol={tol:.3g} "
+        f"iterations={int(np.asarray(stats.total_iterations))}"
+    )
+
+
 def _shift_invert_fallback(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
@@ -371,6 +389,7 @@ def _shift_invert_branch(
     *,
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    _validate_shift_solve_method(cfg.shift_solve_method)
     residual_tol = certifiable_residual_tolerance(
         cfg.shift_outer_residual_tol, v0.dtype
     )
@@ -411,7 +430,7 @@ def _shift_invert_branch(
     )
     for attempt, mode in enumerate(preconditioners):
         _status(status_callback, f"running shift-invert Arnoldi ({mode})")
-        eig_si, vec_si = dominant_eigenpair_shift_invert_cached(
+        eig_si, vec_si, inner_stats = _shift_invert_eigenpair_with_inner_stats(
             v_init,
             v_ref,
             cache,
@@ -427,7 +446,6 @@ def _shift_invert_branch(
             gmres_tol=cfg.shift_tol,
             gmres_maxiter=cfg.shift_maxiter,
             gmres_restart=cfg.shift_restart,
-            gmres_solve_method=cfg.shift_solve_method,
             shift_preconditioner=mode,
             select_targeted=select_targeted,
             select_growth=select_growth,
@@ -435,10 +453,12 @@ def _shift_invert_branch(
         )
         eig_host = complex(np.asarray(eig_si))
         residual = _eigenpair_relative_residual(eig_si, vec_si, cache, params, term_cfg)
+        inner = _inner_solve_summary(inner_stats, cfg.shift_tol)
         _status(
             status_callback,
             "shift-invert solve finished with "
-            f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g}",
+            f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j residual={residual:.3g}; "
+            f"{inner}",
         )
         nonfinite_pair = not np.isfinite(eig_host.real) or not np.isfinite(
             eig_host.imag
@@ -469,16 +489,17 @@ def _shift_invert_branch(
         if residual_failed:
             raise RuntimeError(
                 "shift-invert eigenpair failed the outer residual gate: "
-                f"residual={residual:.6g}, tolerance={residual_tol:.6g}"
+                f"residual={residual:.6g}, tolerance={residual_tol:.6g}; {inner}"
             )
         if growth_floor_failed:
             raise RuntimeError(
                 "shift-invert eigenpair failed the growth-selection floor: "
-                f"growth={eig_host.real:.6g}, floor={cfg.fallback_real_floor:.6g}"
+                f"growth={eig_host.real:.6g}, floor={cfg.fallback_real_floor:.6g}; "
+                f"{inner}"
             )
         raise RuntimeError(
             "shift-invert eigenpair is non-finite: "
-            f"eigenvalue={eig_host.real:.6g}{eig_host.imag:+.6g}j"
+            f"eigenvalue={eig_host.real:.6g}{eig_host.imag:+.6g}j; {inner}"
         )
     return eig_si, vec_si
 
