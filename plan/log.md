@@ -11731,3 +11731,59 @@ PYTHONPATH/x64/CPU environment above, `/usr/bin/time -l`, argument
 these CPU candidates. Next: fixed-budget streaming-only/full-operator
 preconditioner-defect controls before a production solver change. Keep the
 source PR #226 frozen for CI; this evidence updates the existing docs PR #227.
+
+## 2026-09-13 — independent review: exact-operator solver analysis, GX output re-read, HLO counts
+
+Read-only review of #227 `3fb7d5c35` (on #226 `1e11faf7a`); no source, test,
+default or reference changed. Full note:
+[plan/research/2026-09-13_solver_velocity_throughput_review.md](research/2026-09-13_solver_velocity_throughput_review.md);
+scripts and logs in `plan/research/scripts/2026-09-13/`. Fresh venv
+`~/local/venvs/gkx-review-20260913`: Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0; M3 Max CPU, complex128, one XLA
+thread. The machine carried load 8–60 from unrelated jobs: **times are
+indicative only**; iteration counts, residuals, fill, HLO counts and spectra
+are load-independent. Office GPUs untouched; one read-only NetCDF re-read on
+the office CPU.
+
+**Decision.** Reorder, not replace: §5.1 gains L1–L6 (instrument inner
+solves; exact sparse ladder; restrict to linked-covered rows; preconditioner
+bake-off on the exact-operator harness; recycled/thick-restart structure;
+shift policy); §0.5 gains a mechanism-first order (drift ablations, eigen
+ℓ-spectra, Laguerre sink, Dougherty ν→0) before another Nl rung; §5.3 gains
+N0–N7 (HLO ledger, complete once per step, batched chain FFTs,
+half-spectrum layout, packed transforms, f32 bracket, avoidable work,
+sharding last).
+
+**Commands.** From the pinned worktree,
+`env PYTHONPATH=$PWD/src:$PWD MPLBACKEND=Agg JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1" nice -n 10 python plan/research/scripts/2026-09-13/<script>.py`
+for `d1_preconditioner_defect.py` (89 s, 1.04 GB peak), `d1b_neutral_modes.py`
+(21 s), `d3_bmap.py`, `d5_bakeoff.py` (37 s, 1.13 GB), `d6_ladder.py`,
+`d7_hlo.py 32 32 16 2 4` (no x64; the deck resolves Nz=24); `v1_reread.py` on office with
+`/home/rjorge/venvs/dkx-gpu/bin/python`, reading
+`gkx-nl24-discriminator-20260912.vvmgDD/nl24.{out,big}.nc` and
+`gx-nyquist-resolution-20260905.Ut2U6L/full96.{out,big}.nc`, `full192.out.nc`.
+
+**Results.** Pilot (Ny16, ky=+.3, n=4096): certified λ0=.115621−.241179j
+(SuperLU, residual 1.3e-15, ≈0.1 s); Hermite-line 90 unrestarted iterations
+to 1e-5, GMRES(20) never; drifts off 7 (field-corrected 1); mirror/drive/end
+damping ≈10; 1536 unknowns on kx rows outside the linked chains are exactly
+decoupled, undamped and host the Re=0 eigenvalues at |λ−σ|=.093 next to the
+target at .047; ILU(1e-2) 6 iterations, per-ℓ block 33; over 12 outer RHSs
+`gcrot(20,10,"harmonic")` 12/12 in 2233 iterations vs `gmres(20)` 2/12.
+Ladder (Nx1): Hermite-line 26/24/159/—/— at (Nz,Nl,Nm)=(16,4,8)/(32,4,8)/
+(32,8,16)/(48,8,16)/(64,8,32); LU fill ratio 5–12, factor ≈n^1.7; the Nx4
+multi-link rung hit the 2400 s alarm on the loaded host and is not reported.
+GX re-read: γ stationary from t≈100 (Nl24 .033009, Nl32 .024858 on
+[200,300]; Nz192 .024944); |⟨φ24|φ32⟩|=.991; Laguerre spectrum a stationary
+plateau ≈1–2%/index to the cutoff (upper quarter .0796/.0817); P(ℓ=Nl−1)/total
+2.1e-3/1.3e-3. b_max=12.7 on this nkx=1 chain; Nl16 captures Γ0 to 4e-6.
+HLO at 32×32×24, Nl2/Nm4: RHS fft=45, concatenate=9, gather=31, copy=55
+(88 MB written, 55× state); RK3 step fft=135, copy=178 (297 MB, 185×);
+projector idempotence on the RHS output exactly 0.
+
+**Limitations.** One σ; pilot σ reused on ladder rungs where it is no longer
+near the target; ILU/block-LU are host SciPy instruments, production-size
+assembly and fill extrapolated; GKX's own W(ℓ) for the same runs not yet
+compared; HLO counts at a small CPU grid, no per-op time share. Nothing here
+certifies a speedup, a default change or a converged growth rate. #226
+remains to be merged on its green head; #227 retargeted after it.
