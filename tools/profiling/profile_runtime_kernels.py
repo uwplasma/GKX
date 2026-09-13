@@ -6,6 +6,7 @@ Subcommands:
 - ``nonlinear-step-split``: field solve, nonlinear bracket, linear RHS, full RHS split.
 - ``full-linear-rhs``: HLO/Perfetto/memory triage for the fused linear RHS.
 - ``full-nonlinear-rhs``: HLO/Perfetto/memory triage for the fused nonlinear RHS.
+- ``nonlinear-step-hlo``: optimized-HLO op ledger per nonlinear RHS and RK step.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import resource
 import sys
 import time
@@ -38,7 +40,10 @@ from gkx.core_grid import build_spectral_grid
 from gkx.geometry import apply_imported_geometry_grid_defaults
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+from gkx.solvers_nonlinear_state_integration import (
+    integrate_nonlinear,
+    nonlinear_rhs_cached,
+)
 from gkx.runtime import (
     _build_initial_condition,
     _runtime_external_phi,
@@ -146,6 +151,61 @@ def _hlo_token_counts(
 
     lower = hlo_text.lower()
     return {token: lower.count(token) for token in tokens}
+
+
+HLO_OPS = (
+    "fft",
+    "concatenate",
+    "gather",
+    "scatter",
+    "transpose",
+    "copy",
+    "dynamic-update-slice",
+    "reverse",
+)
+HLO_WRITE_OPS = ("concatenate", "copy")
+_HLO_INSTRUCTION = re.compile(
+    r"^\s*(?:ROOT\s+)?%[\w.\-]+ = "
+    r"(?:(?P<dtype>[a-z]+\d+)\[(?P<shape>[\d,]*)\](?:\{[\d,]*\})?|\(.*?\)) "
+    r"(?P<op>[a-z][\w\-]*)\(",
+    flags=re.MULTILINE,
+)
+RK_RHS_EVALUATIONS = {
+    "euler": 1,
+    "rk2": 2,
+    "rk3": 3,
+    "rk3_heun": 3,
+    "rk3_classic": 3,
+    "rk4": 4,
+    "sspx3": 3,
+    "k10": 10,
+}
+
+
+def _hlo_op_counts(
+    hlo_text: str,
+    ops: tuple[str, ...] = HLO_OPS,
+    write_ops: tuple[str, ...] = HLO_WRITE_OPS,
+) -> dict[str, int]:
+    """Count optimized-HLO instructions by op name and the bytes some write.
+
+    ``_hlo_token_counts`` counts substrings, metadata included. This matches
+    the op name of each instruction, so on a fixed jax/XLA version it is a
+    load-independent ledger of one compiled graph.
+    """
+
+    counts = dict.fromkeys(ops, 0)
+    written = 0
+    for match in _HLO_INSTRUCTION.finditer(hlo_text):
+        op = match.group("op")
+        if op in counts:
+            counts[op] += 1
+        if op in write_ops and match.group("dtype"):
+            bits = int(re.sub(r"\D", "", match.group("dtype")))
+            dims = [int(dim) for dim in match.group("shape").split(",") if dim]
+            written += int(np.prod(dims, dtype=np.int64)) * max(1, bits // 8)
+    counts["bytes_written"] = written
+    return counts
 
 
 def _write_summary_json(payload: dict[str, Any], path: Path) -> None:
@@ -981,10 +1041,130 @@ def main_full_nonlinear_rhs(argv: list[str] | None = None) -> int:
     return 0
 
 
+def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Count optimized-HLO ops per nonlinear RHS and per RK step."
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+    )
+    for name, default in (("--Nx", 32), ("--Ny", 32), ("--Nz", 24)):
+        parser.add_argument(name, type=int, default=default)
+    parser.add_argument("--Nl", type=int, default=2)
+    parser.add_argument("--Nm", type=int, default=4)
+    parser.add_argument("--ky", type=float, default=0.3)
+    parser.add_argument("--methods", type=str, default="rk3,rk4")
+    parser.add_argument("--out", type=Path, default=None)
+    return parser
+
+
+def _compiled_hlo_text(fn: Callable[..., Any], *args: Any) -> str:
+    return jax.jit(fn).lower(*args).compile().as_text()
+
+
+def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
+    """Ledger the ops one RHS issues and what each RK step adds beyond them."""
+
+    args = build_nonlinear_step_hlo_parser().parse_args(argv)
+    cfg, _ = load_runtime_from_toml(args.config)
+    cfg = replace(cfg, grid=replace(cfg.grid, Nx=args.Nx, Ny=args.Ny, Nz=args.Nz))
+    geom = build_runtime_geometry(cfg)
+    grid = build_spectral_grid(apply_imported_geometry_grid_defaults(geom, cfg.grid))
+    params = build_runtime_linear_params(cfg, Nm=args.Nm, geom=geom)
+    term_cfg = build_runtime_term_config(cfg)
+    ky_index, kx_index = _select_nonlinear_mode_indices(
+        grid,
+        ky_target=args.ky,
+        kx_target=None,
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+    )
+    g0 = jnp.asarray(
+        _build_initial_condition(
+            grid,
+            geom,
+            cfg,
+            ky_index=ky_index,
+            kx_index=kx_index,
+            Nl=args.Nl,
+            Nm=args.Nm,
+            nspecies=len(cfg.species),
+        )
+    )
+    cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
+    compressed = bool(cfg.time.compressed_real_fft)
+    laguerre_mode = str(cfg.time.laguerre_nonlinear_mode)
+
+    def rhs(state: jnp.ndarray) -> jnp.ndarray:
+        return nonlinear_rhs_cached(
+            state,
+            cache,
+            params,
+            term_cfg,
+            compressed_real_fft=compressed,
+            laguerre_mode=laguerre_mode,
+        )[0]
+
+    rhs_counts = _hlo_op_counts(_compiled_hlo_text(rhs, g0))
+    steps: dict[str, Any] = {}
+    for method in (m.strip() for m in args.methods.split(",") if m.strip()):
+
+        def step(state: jnp.ndarray, method: str = method) -> Any:
+            return integrate_nonlinear(
+                state,
+                grid,
+                geom,
+                params,
+                dt=float(cfg.time.dt),
+                steps=1,
+                method=method,
+                cache=cache,
+                terms=term_cfg,
+                compressed_real_fft=compressed,
+                laguerre_mode=laguerre_mode,
+                return_fields=False,
+            )
+
+        counts = _hlo_op_counts(_compiled_hlo_text(step, g0))
+        evaluations = RK_RHS_EVALUATIONS[method]
+        steps[method] = {
+            "rhs_evaluations": evaluations,
+            "counts": counts,
+            "beyond_rhs_evaluations": {
+                key: value - evaluations * rhs_counts[key]
+                for key, value in counts.items()
+            },
+        }
+    summary = {
+        "kind": "nonlinear_step_hlo_ledger",
+        "config": str(args.config),
+        "grid": {key: getattr(args, key) for key in ("Nx", "Ny", "Nz", "Nl", "Nm")},
+        "state_shape": list(g0.shape),
+        "state_dtype": str(g0.dtype),
+        "state_bytes": int(g0.size * g0.dtype.itemsize),
+        "compressed_real_fft": compressed,
+        "laguerre_mode": laguerre_mode,
+        "jax": jax.__version__,
+        "backend": jax.default_backend(),
+        "rhs": rhs_counts,
+        "steps": steps,
+        "claim_scope": (
+            "Op counts of one optimized XLA graph for one jax version and backend. "
+            "They locate materialized work; they are not a runtime claim."
+        ),
+    }
+    if args.out is not None:
+        _write_summary_json(summary, args.out)
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
 SUBCOMMANDS: dict[str, Callable[[list[str] | None], int]] = {
     "cyclone": main_cyclone,
     "full-linear-rhs": main_full_linear_rhs,
     "full-nonlinear-rhs": main_full_nonlinear_rhs,
+    "nonlinear-step-hlo": main_nonlinear_step_hlo,
     "nonlinear-step-split": main_nonlinear_step_split,
 }
 

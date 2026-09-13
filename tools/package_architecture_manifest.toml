@@ -907,7 +907,9 @@ recursive = true
 # Host-only metadata; no new module or per-step work. Phase 0.1 migration gate.
 # +1: spectral/weighted line inverse and periodic RHS repairs, offset by sharing
 # the identical linked scatter kernel (-23) and shortening the sharded RHS (-1).
-baseline = 89248
+# +77: Hermitian completion once per explicit step (plan 5.3 N1): the projector
+# declares its stage part, and a fixed mode resets its conjugate partner.
+baseline = 89325
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1080,7 +1082,9 @@ recursive = true
 # admission, consolidated into existing owners; measured count, no new test file.
 # Measured union of the two independent validation/numerical branches.
 # +26: sharded hypercollision JVP and explicit-runtime-state precision controls.
-baseline = 87826
+# +89: bitwise once-per-step completion trajectory, fixed-mode stage projection
+# branches and the HLO op-ledger parser, in existing owners.
+baseline = 87915
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1146,7 +1150,9 @@ recursive = true
 # comment is longer than the deletion because the reason a provenance field is
 # absent has to live where someone would otherwise re-add it.
 # +2: later-rung and cumulative-drift veto in the existing refinement driver.
-baseline = 77825
+# +180: nonlinear-step-hlo, the per-RHS and per-RK-step optimized-HLO op ledger
+# (plan 5.3 N0) in the existing runtime-kernel profiler.
+baseline = 78005
 target = 0
 
 [[line_budget_policy.counts]]

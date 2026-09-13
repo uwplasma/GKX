@@ -23,7 +23,10 @@ from gkx.operators.linear.params import (
     _SPECIES_PARAM_NAMES,
 )
 from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
-from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
+from gkx.operators.nonlinear.projection import (
+    _make_compressed_real_fft_projector,
+    _stage_projection,
+)
 from gkx.terms.config import FieldState, TermConfig
 
 
@@ -217,6 +220,11 @@ def _compiled_nonlinear_sharded_runner(
                 state = projector(state)
             return maybe_shard(jnp.asarray(state, dtype=state_dtype))
 
+        def stage_shard(state: jnp.ndarray) -> jnp.ndarray:
+            if projector is not None:
+                state = _stage_projection(projector)(state)
+            return maybe_shard(jnp.asarray(state, dtype=state_dtype))
+
         def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
             dG, fields = rhs_fn(
                 state,
@@ -231,14 +239,13 @@ def _compiled_nonlinear_sharded_runner(
         def stage(
             state: jnp.ndarray, increment: jnp.ndarray, scale: float
         ) -> jnp.ndarray:
-            return project_shard(
+            return stage_shard(
                 state + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
             )
 
         def step(
             G: jnp.ndarray, _unused: None
         ) -> tuple[jnp.ndarray, FieldState | None]:
-            G = project_shard(G)
             k1, _ = rhs(G)
             G_next = _nonlinear_explicit_update(
                 method_key,
@@ -246,7 +253,7 @@ def _compiled_nonlinear_sharded_runner(
                 k1,
                 rhs=rhs,
                 stage=stage,
-                project_shard=project_shard,
+                project_shard=stage_shard,
                 dt_val=dt_val,
             )
             G_next = project_shard(G_next)
@@ -255,7 +262,9 @@ def _compiled_nonlinear_sharded_runner(
             _dG_next, fields_next = rhs(G_next)
             return G_next, fields_next
 
-        G_final, fields_t = jax.lax.scan(step, G_init, xs=None, length=steps)
+        G_final, fields_t = jax.lax.scan(
+            step, project_shard(G_init), xs=None, length=steps
+        )
         if return_fields:
             return G_final, cast(FieldState, fields_t)
         return G_final
@@ -899,6 +908,7 @@ def integrate_nonlinear_species_hermite(
         if compressed_real_fft
         else None
     )
+    stage_projector = None if projector is None else _stage_projection(projector)
     dt_val = _dt_array(dt, state_dtype)
     scalar_spec = jax.sharding.PartitionSpec()
 
@@ -908,24 +918,26 @@ def integrate_nonlinear_species_hermite(
 
         def stage(value, increment, scale):
             nxt = value + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
-            return _project_local(nxt, projector, state_dtype)
+            return _project_local(nxt, stage_projector, state_dtype)
 
         def step(carry, _unused):
-            value = _project_local(carry, projector, state_dtype)
-            k1, scalars = rhs(value)
+            k1, scalars = rhs(carry)
             nxt = _nonlinear_explicit_update(
                 method_key,
-                value,
+                carry,
                 k1,
                 rhs=lambda arg: (rhs(arg)[0], None),
                 stage=stage,
-                project_shard=lambda arg: _project_local(arg, projector, state_dtype),
+                project_shard=lambda arg: _project_local(
+                    arg, stage_projector, state_dtype
+                ),
                 dt_val=dt_val,
             )
             nxt = _project_local(nxt, projector, state_dtype)
             return nxt, (scalars if record else None)
 
-        final, stacked = jax.lax.scan(step, local, xs=None, length=steps)
+        start = _project_local(local, projector, state_dtype)
+        final, stacked = jax.lax.scan(step, start, xs=None, length=steps)
         return (final, stacked) if record else (final, None)
 
     out_specs = (
