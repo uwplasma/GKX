@@ -11731,3 +11731,112 @@ PYTHONPATH/x64/CPU environment above, `/usr/bin/time -l`, argument
 these CPU candidates. Next: fixed-budget streaming-only/full-operator
 preconditioner-defect controls before a production solver change. Keep the
 source PR #226 frozen for CI; this evidence updates the existing docs PR #227.
+
+## 2026-09-13 — Q4: Hermitian completion once per step (plan §5.3 N0 + N1)
+
+**Outcome: N0 adopted, N1 rejected on HLO evidence.** The once-per-step
+completion is exact but regresses materialization on the runtime diagnostics
+scan. Branch `perf/hermitian-completion-once`: prototype `e154f30f5` (+ gate
+fixes `904641389`), source reverted to main in `f812d724d`.
+
+**N0 ledger.** `tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo`
+counts optimized-HLO instructions by op name (fft, concatenate, gather,
+scatter, transpose, copy, dynamic-update-slice, reverse) and the bytes written
+by concatenate/copy outputs, per RHS and per RK step. `--route scan` passes
+cache/params as graph arguments (as `integrate_nonlinear_scan` does); `--route
+diagnostics` lowers `PreparedExplicitNonlinearDiagnostics._run_raw`, the scan
+`run_runtime_nonlinear` executes, which captures them as constants;
+`--hlo-dir` dumps the text. Compile only, load-independent for one jax/XLA
+build. Counts below are XLA:CPU, jax/jaxlib 0.10.2, Cyclone nonlinear deck,
+ky .3 initial condition, complex64 state.
+
+**Correction to review §5 (`d7_hlo.py`).** Its regex matched a token anywhere
+on an instruction line, metadata included. Matching op names, the same
+closure-constant RHS at 32×32×24 Nl2/Nm4 issues fft **23** (not 45), copy
+**35** (not 55), transpose **35** (not 78), concatenate 9 (agrees), and writes
+46.1 MB (29× state, not 88.4 MB). The profile quoted in `docs/performance.rst`
+("four ``copy_concatenate_fusion`` kernels ... running four times per RK3
+step") matches the bracket's own completion inside the four RHS evaluations of
+a diagnosed RK3 step; N1 does not remove those.
+
+| graph (32×32×24 Nl2/Nm4 unless noted) | concat | copy | transpose | bytes written |
+|---|---:|---:|---:|---:|
+| RHS, cache as args | 11→11 | 35→35 | 35→35 | 46,295,964→46,295,964 |
+| scan rk2 step, args | 23→22 | 73→72 | 73→72 | 99,324,828→97,014,684 |
+| scan rk3 step, args | 34→31 | 114→111 | 114→111 | 156,335,004→149,404,572 |
+| scan rk3_classic step, args | 33→31 | 109→107 | 109→107 | 147,733,404→143,113,116 |
+| scan rk4 step, args | 43→40 | 153→150 | 153→150 | 208,724,892→201,794,460 |
+| scan sspx3 step, args | 35→31 | 111→107 | 111→107 | 152,353,692→143,113,116 |
+| scan k10 step, args | 103→94 | 361→356 | 361→356 | 486,593,436→472,093,596 |
+| runtime diagnostics rk3 step, captured | 32→29 | 136→309 | 117→290 | 156,556,500→426,450,132 |
+| runtime diagnostics rk4 step, captured | 41→38 | 175→344 | 156→325 | 208,946,388→472,548,564 |
+| runtime diagnostics rk3, 64×64×24 Nl4/Nm8, captured | 32→29 | 163→360 | 144→341 | 2,884,020,404→7,805,118,644 |
+
+(main → prototype; fft unchanged everywhere; reverse and gather drop by the
+removed completions.) Runtime diagnostics with cache/params as arguments
+(`_run_dynamic_raw`, fixed dt, 2-step graph): copy 225→222, 164,129,164→
+157,198,732 B at 32×32×24; 249→246, 2,989,416,216→2,877,349,656 B at
+64×64×24 Nl4/Nm8. Attribution from rk3 dumps (`hlo_diff.py`): the extra pairs
+are inside `assemble_rhs_cached_electrostatic_jit`, multiply→transpose/copy to
+`(1,2,4,1024,24)` and bitcast→transpose/copy back, 14→102 each. Keeping the
+full projection at stages but the step-boundary changes reproduces main exactly
+(231 copies, 164,742,640 B); an `optimization_barrier` or a slice-concatenate
+stage producer changes nothing. So the trigger is removing the stage
+completion in a graph with a constant-captured cache.
+
+**Identity gates (prototype vs main, 100 steps).** Deck at Nx=Ny=16 (Nz=24 from
+`ntheta`), Nl2/Nm4, dt .01, `init_amp=10` so ‖NL‖/‖L‖ = .0506 at t0,
+`compressed_real_fft` on. Cases: `integrate_nonlinear` euler/rk2/rk3/
+rk3_classic/rk4/sspx3/k10 (state and 100-step φ history); `run_runtime_nonlinear`
+rk3/rk4 × {adaptive dt, `collision_split` implicit, fixed mode iky=ky(.3)
+ikx=1}, with t, dt_t, Wg, Wphi, heat flux, φ mode and state;
+`integrate_nonlinear_sharded` rk3/rk3_classic/rk4; `integrate_nonlinear_species_hermite`
+rk3/rk4 (num_devices=1); `nonlinear_heat_flux_window` 20 steps checkpointed,
+value and d/dtprim, rk3/rk4.
+- default f32: **65/65** `np.array_equal` and byte-identical; the two npz
+  archives have the same SHA-256.
+- `JAX_ENABLE_X64=true GKX_X64=1`: **64/65**; window rk4 d/dtprim differs by
+  2.2e-16 (one ulp of 2.0), its value is bitwise. The runtime route allocates a
+  complex64 state even in x64, so its f64 cases repeat the complex64 check.
+- prototype unit tests (fixed-mode stage projection branches, once-per-step
+  scan vs per-stage callable): 10 passed x64, 9 passed f32.
+- An initial f32 smoke of the touched owners gave 13 failed/149 passed: two were
+  a donated-state reuse in the new test (fixed), eleven are f32-only
+  window-gradient tolerance failures that main also fails in f32
+  (`baseline_es_rk2` rel .0133 on the exported main source); CI runs them in x64.
+  Two gate queues were killed before use (donated `G0` reused in `gate.py`);
+  their outputs were deleted.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, numpy 2.4.6, solvax 0.20.0,
+`/Users/rogeriojorge/local/venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src`,
+`JAX_PLATFORMS=cpu`, `XLA_FLAGS="--xla_cpu_multi_thread_eigen=false
+intra_op_parallelism_threads=1"`, `nice -n 10`, one heavy process at a time,
+each step held until the 1-min load was below 20. Main side: `git archive
+origin/main src` at `06606e404` in a scratch directory. Load ranged 8–60 during
+the session: **no timing is reported**. Scratch evidence (session-local):
+`gate.py` d4e5a6e38cb1…ac41, `compare.py` deb37b30ab06…d01f, `diag_hlo2.py`
+0ea6c9dac6d1…78b2e3, `hlo_diff.py` 98ca3be49f15…15dd, `queue3.sh`
+6f7dbc9242b5…72ad; npz f32 main/prototype 67bd0b87882f…0a9a (both); f64
+f22fc6ea025f…d4b1 / 95eb250ded28…d624; ledger JSON scan 66f0e32c…8323 /
+cc0b33c0…159e, diagnostics 652b5456…ba40 / 14feb8f2…629e, 64-grid
+5846d008…77ac / 36cae48c…46bf.
+
+Commands: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo
+--route {scan,diagnostics} --methods rk2,rk3,rk3_classic,rk4,sspx3,k10
+[--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8] --out <json>` with `PYTHONPATH` set to
+the main export or the prototype tree; `GATE_AMP=10 python gate.py <npz>`, then
+`python compare.py <main.npz> <prototype.npz>`.
+
+**Limitations.** XLA:CPU only; GPU layout heuristics may differ. Bytes written
+are a proxy for materialization, not a runtime. Species×Hermite ran on one
+device. Fixed mode covered one paired row; collision split only the implicit
+scheme. IMEX was never changed (its implicit solve is not bitwise
+conjugation-symmetric).
+
+**Next question.** Either give the runtime diagnostics scan its cache and
+params as graph arguments for adaptive dt too (`_run_dynamic_raw` already does
+for fixed dt; the bitwise-vs-constant-folded risk must be measured), after
+which N1 is a clean ~4% bytes saving; or go to N3, which removes the bracket's
+completion (the profiled 41.9%) and the transposes that trigger this layout
+choice.
