@@ -11781,6 +11781,14 @@ HLO at 32×32×24, Nl2/Nm4: RHS fft=45, concatenate=9, gather=31, copy=55
 (88 MB written, 55× state); RK3 step fft=135, copy=178 (297 MB, 185×);
 projector idempotence on the RHS output exactly 0.
 
+**Position versus other codes.** Added §2.4 (capability matrix from
+upstream sources: GX `Nyc` storage, stella/GS2 response-matrix implicit
+streaming, GENE harmonic Krylov–Schur, GX hypercollision defaults) and
+§5.4 (response-matrix implicit streaming with an entry trigger and gates);
+§5.3 N3 is now the ky ≥ 0 state-layout contract with memory, HLO and
+identity gates rather than an optimization item. E×B shear stays parked on
+its trigger and is named as the largest physics gap for experiments.
+
 **Limitations.** One σ; pilot σ reused on ladder rungs where it is no longer
 near the target; ILU/block-LU are host SciPy instruments, production-size
 assembly and fill extrapolated; GKX's own W(ℓ) for the same runs not yet
