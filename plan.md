@@ -60,14 +60,15 @@ inside items 2 and 3 above and inside Phase 5, not the phases themselves:
 the exact sparse route and a size ladder come before any preconditioner
 change (§5.1 L1–L6); the Nl swing is a stationary truncated eigenmode with a
 non-decaying Laguerre spectrum, so drift ablations and a Laguerre sink come
-before another resolution rung (§0.5); and Hermitian completion once per
-step plus batched linked-chain FFTs come before scatter micro-work or
-sharding (§5.3 N0–N7).
+before another resolution rung (§0.5); and an op-name HLO ledger, batched
+linked-chain FFTs and the ky ≥ 0 layout come before scatter micro-work or
+sharding (§5.3 N0–N7; once-per-step Hermitian completion was measured and
+rejected in #231).
 
 **Handoff queue, 2026-09-13 (execution resumed).** #226 merged normally as
-`06606e404`. #227 was retargeted to `main` and updated (`1c383c50e`); merge
-it on fresh green CI, then retarget #228 (this plan revision) to `main`,
-update and merge it. No release. Work continues in the order below; each row
+`06606e404`; #227 merged as `578b97074` after a fresh green run on its updated
+head; #228 (this plan revision) targets `main` and merges on green. No
+release. Work continues in the order below; each row
 is one PR from a fresh worktree off `origin/main`. Rows marked *parallel*
 may run concurrently; the others wait for the named dependency. The #228 PR
 body carries the same queue with per-row entry points, commands, gates and
@@ -76,16 +77,18 @@ the repository rules an agent must follow.
 | ID | Branch | Plan step | Depends on | Compute |
 |---|---|---|---|---|
 | Q1 | `fix/inner-solve-diagnostics` | §5.1 L1: inner-solve statistics surfaced; `shift_solve_method` no longer a recompile key; `implicit_maxiter` counts iterations | — (*parallel*) | CPU |
-| Q2 | `evidence/exact-shift-invert-ladder` | §5.1 L2: exact sparse reference ladder to production single-chain size | — (*parallel*) | office CPU, ≤2 h |
+| Q2 | `evidence/exact-shift-invert-ladder` | §5.1 L2: exact sparse reference ladder to production single-chain size — **done, #232**: exact route fastest only below n≈1e4; the runtime default `adaptive` route certifies the production pair (n=73728) in 761 s on CPU | — (*parallel*) | office CPU, ≤2 h |
 | Q3 | `evidence/laguerre-drift-ablation` | §0.5 (i): `gradb=0` / `curvature=0` at Nl 24/32, Nm96, current source | — (*parallel*) | office GPU1, ≤2 h |
-| Q4 | `perf/hermitian-completion-once` | §5.3 N0+N1: HLO-count ledger and one Hermitian completion per step | — (*parallel*) | CPU |
-| Q5 | `chore/solvax-pin` | housekeeping: align `requirements.txt` with `pyproject.toml` | — (*parallel*) | none |
+| Q4 | `perf/hermitian-completion-once` | §5.3 N0+N1: HLO-count ledger and one Hermitian completion per step — **done, #231**: N0 adopted; N1 rejected (bitwise-neutral, but 2.3–2.7× more bytes on the captured-constant runtime route) | — (*parallel*) | CPU |
+| Q5 | `chore/solvax-pin` | housekeeping: align `requirements.txt` with `pyproject.toml` — **done, #229**: unused file deleted; floor stays `solvax>=0.12.0` with first-appearance evidence | — (*parallel*) | none |
 | Q6 | `fix/eigen-covered-subspace` | §5.1 L3 | Q1 merged | CPU |
 | Q7 | preconditioner bake-off | §5.1 L4 | Q2 recorded | CPU |
 | Q8 | §0.5 (ii)–(v) | eigen ℓ-spectra, Laguerre sink, Dougherty ν→0, R/L_T | Q3 recorded; Q2 for affordability | CPU/GPU |
 | Q9 | batched chain FFTs | §5.3 N2 | Q4 merged | CPU |
-| Q10 | ky ≥ 0 layout contract | §5.3 N3 | Q4 merged, Q9 measured | CPU, then GPU |
+| Q10 | ky ≥ 0 layout contract | §5.3 N3 | Q4 merged (N0 ledger), Q9 measured | CPU, then GPU |
 | Q11 | implicit streaming | §5.4 | its entry trigger | CPU, GPU day |
+| Q12 | `fix/certify-every-eigenpair` | correctness: `KrylovConfig()` defaults to the ungated `propagator` route (wrong mode, residual ≈1, on every #232 rung); `ETG_KRYLOV_DEFAULT`, `arnoldi` and `power` are ungated too. Every returned pair carries its original-operator residual and fails closed or is flagged uncertified; dataclass default becomes `adaptive`; the `L-lin-etg` pair's residual is reported | Q1 merged | CPU |
+| Q13 | runtime diagnostics scan with cache/params as graph arguments | §5.3 N1′: bitwise identity against the captured graph (adaptive dt included), then re-evaluate once-per-step completion | Q4 merged | CPU |
 
 This branch no longer carries a README rewrite. `main`'s README has since taken
 the corrections that mattered (the capability table, the Cite section, the demo's
@@ -1225,15 +1228,22 @@ memory; mixed precision and custom kernels later, with CPU fallback.
 
 **Ordered 2026-09-13 from load-independent HLO counts**
 ([review §5](plan/research/2026-09-13_solver_velocity_throughput_review.md)):
-at 32×32×24 one nonlinear RHS issues 45 FFT ops (5 linked-chain classes,
-each with its own gather/FFT/IFFT/scatter in streaming and again in
-hypercollisions; 9 classes at 96×96×48) and one RK3 step writes ≈185× the
-state size through concatenate/copy ops; the Hermitian projector applied to
-the RHS output is exactly idempotent, so completion after every stage is
-redundant work (the profiled 41.9%). Order: N0 an HLO-count ledger per RK
-stage plus A/B/A/B timings on an idle pinned checkout, gating every change;
-N1 complete once per step and let the bracket return its positive half to
-that single completion (identity ≤1e-13 in f64 over 100 steps, VJP parity);
+counted by op name (#231, correcting a first count that included metadata),
+at 32×32×24 one nonlinear RHS issues 23 FFTs, 9 concatenates, 35 transposes
+and 35 copies writing 46 MB (29× the state), with 5 linked-chain classes each
+carrying its own gather/FFT/IFFT/scatter in streaming and again in
+hypercollisions (9 classes at 96×96×48); a diagnosed RK3 step writes
+≈157 MB. The Hermitian projector applied to the RHS output is exactly
+idempotent, and completing once per step is bitwise identical, **but #231
+rejected it**: with cache/params captured as constants (the runtime
+diagnostics route) XLA:CPU then materializes 2.3–2.7× more bytes; only with
+them as graph arguments does it save ≈4%. The profiled 41.9% is the bracket's
+own completion inside each RHS, which only N3 removes. Order: N0 the op-name
+HLO ledger (`profile_runtime_kernels.py nonlinear-step-hlo`, #231) plus
+A/B/A/B timings on an idle pinned checkout, gating every change; N1′ give
+the runtime diagnostics scan its cache/params as graph arguments (bitwise
+identity, adaptive dt included) and only then re-evaluate once-per-step
+completion;
 N2 batch the chain classes so streaming and hypercollisions issue O(1) FFT
 launches, and re-measure the CPU FFT thread pool
 (`xla_cpu_multi_thread_eigen`, restored for the thunk runtime in jax 0.5.1);
@@ -1248,8 +1258,7 @@ introduced behind a layout adapter so diagnostics, fields, I/O, sharding and
 the VJP migrate one consumer at a time. Gates: state memory halves; zero
 `concatenate` or restore ops in the RK stage HLO; RHS and 100-step
 trajectory identity ≤1e-13 (f64) against the two-sided route; VJP parity;
-every promoted operator exercised. Start after N1 quantifies the residual
-completion cost;
+every promoted operator exercised. Start once the N0 ledger is on main;
 N4 pack ∂x/∂y of each operand into one complex transform (with the ky=0
 (kx,−kx) symmetrization gyaradax needed) and compute ∇(J0χ) once without
 the Hermite index;

@@ -11777,9 +11777,16 @@ GX re-read: γ stationary from t≈100 (Nl24 .033009, Nl32 .024858 on
 [200,300]; Nz192 .024944); |⟨φ24|φ32⟩|=.991; Laguerre spectrum a stationary
 plateau ≈1–2%/index to the cutoff (upper quarter .0796/.0817); P(ℓ=Nl−1)/total
 2.1e-3/1.3e-3. b_max=12.7 on this nkx=1 chain; Nl16 captures Γ0 to 4e-6.
-HLO at 32×32×24, Nl2/Nm4: RHS fft=45, concatenate=9, gather=31, copy=55
-(88 MB written, 55× state); RK3 step fft=135, copy=178 (297 MB, 185×);
-projector idempotence on the RHS output exactly 0.
+HLO at 32×32×24, Nl2/Nm4, as first recorded by `d7_hlo.py`: RHS fft=45,
+concatenate=9, gather=31, copy=55 (88 MB written, 55× state); RK3 step
+fft=135, copy=178 (297 MB, 185×); projector idempotence on the RHS output
+exactly 0. **Correction (same day, #231):** `d7_hlo.py` matched tokens inside
+instruction metadata; by op name the RHS issues fft 23, concatenate 9,
+transpose 35, copy 35 (46.1 MB, 29× state). #231 also measured once-per-step
+Hermitian completion: bitwise identical, but rejected because the captured-
+constant runtime diagnostics route then materializes 2.3–2.7× more bytes;
+the plan's N1 target of "most of the 41.9%" was wrong — that share is the
+bracket's own per-RHS completion, removed only by the ky ≥ 0 layout (N3).
 
 **Position versus other codes.** Added §2.4 (capability matrix from
 upstream sources: GX `Nyc` storage, stella/GS2 response-matrix implicit

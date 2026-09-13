@@ -1,6 +1,13 @@
 # ruff: noqa: E402
 """D7: load-independent HLO op counts for the nonlinear RHS and one RK3 step,
-plus Hermitian-projector idempotence on the RHS output (read-only review)."""
+plus Hermitian-projector idempotence on the RHS output (read-only review).
+
+SUPERSEDED for op counts (2026-09-13, #231): ``count`` matches a token
+anywhere on an instruction line, including metadata such as
+``op_name="jit(f)/fft"``, so the counts in ``d7.txt`` are inflated. Use
+``tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo`` (op-name
+matching). The idempotence check below remains valid.
+"""
 
 import re
 import sys

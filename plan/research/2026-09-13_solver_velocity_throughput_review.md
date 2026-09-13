@@ -31,8 +31,12 @@ GPUs were not used; one read-only NetCDF re-read ran on the office CPU.
 4. **The nonlinear step's largest lever is structural** (§5): the state carries
    both ky halves and rebuilds the negative half in the bracket and again after
    every stage although the RHS output is already Hermitian-complete
-   (idempotence error exactly 0). The unrolled per-chain-class linked FFTs
-   issue 45 FFT ops per RHS at 32×32×24 (9 chain classes at 96×96×48).
+   (idempotence error exactly 0). **Corrected by #231:** removing the
+   per-stage completion is bitwise-neutral but was measured and rejected —
+   XLA:CPU then materializes 2.3–2.7× more bytes on the runtime diagnostics
+   route — and the profiled 41.9% sits in the bracket's own completion inside
+   every RHS, which only the ky ≥ 0 layout removes. By op name one RHS issues
+   23 FFTs (the 45 first reported here counted metadata).
 5. **Process**: the evidence discipline is good, but fixed-budget pass/fail
    pilots on one configuration consumed days that an exact-matrix analysis at
    n=4096 settles in minutes. Cheapest decisive instrument first.
@@ -300,20 +304,37 @@ the GM spectrum (both Hermite and Laguerre moments)"; agreement with GENE at
 Cyclone nonlinear deck at 32×32×24, Nl2/Nm4, rk3, compressed real FFT,
 Laguerre grid mode; state 1.6 MB complex64:
 
-| jitted function | fft | concatenate | gather | transpose | copy | while | bytes written by concatenate/copy ops |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| nonlinear RHS | **45** | 9 | 31 | 78 | 55 | 0 | 88 MB (55× state) |
-| one RK3 step, `return_fields=False` | 135 | 31 | 113 | 252 | 178 | 2949 | 297 MB (185× state) |
+**Correction (2026-09-13, from #231).** The first version of this table came
+from `d7_hlo.py`, whose regex matched a token anywhere on an HLO instruction
+line, metadata included (`op_name="jit(f)/fft"`), so it over-counted. The
+op-name ledger added in #231 (`tools/profiling/profile_runtime_kernels.py
+nonlinear-step-hlo`) gives, on the same deck, XLA:CPU, jax 0.10.2:
+
+| optimized-HLO graph | fft | concatenate | transpose | copy | bytes written by concatenate/copy |
+|---|---:|---:|---:|---:|---:|
+| nonlinear RHS, cache captured (as in `d7`) | 23 | 9 | 35 | 35 | 46.1 MB (29× state) |
+| RK3 scan step, cache/params as graph arguments | — | 34 | 114 | 114 | 156.3 MB |
+| runtime diagnostics RK3 step, cache captured | — | 32 | 117 | 136 | 156.6 MB |
+
+Superseded `d7` counts (metadata-inflated): RHS fft 45, transpose 78, copy 55,
+88 MB; RK3 step copy 178, 297 MB.
 
 Projector idempotence on the RHS output: ‖P(rhs(PG))−rhs(PG)‖/‖rhs‖ = **0**
-and 0 on G+dt·dG — Hermitian completion after every stage
-(`projection.py:169–172`, `solvers_nonlinear_explicit.py:52–72,353`) is exact
-redundant work. Linked chain classes: 5 at 32×32×24, 7 at 64×64×24, 9 at
-96×96×48 (`(nChains,nLinks)` from (1452,1) to (3,13)); each class issues its
-own gather/FFT/IFFT/scatter in streaming and again in hypercollisions, which
-is where 45 FFT ops per RHS come from. The repository's XLA profile
-(`docs/performance.rst`) already attributes 41.9% of step time to four
-`_complete_hermitian_ky` concatenations and ~39% to FFTs. GX stores only
+and 0 on G+dt·dG, and #231's prototype confirmed bitwise identity of
+once-per-step completion (f32 65/65 cases; x64 64/65, one ulp in one
+gradient). It nevertheless **rejected** that change: on the default runtime
+diagnostics route, where cache and params are captured constants, XLA:CPU
+chose a layout that multiplies copies and transposes (copy 136→309, bytes
+156.6→426.5 MB at 32×32×24; 2.88→7.81 GB at 64×64×24 Nl4/Nm8), while with
+cache/params as graph arguments the same change saves only ≈4%. Linked chain
+classes: 5 at 32×32×24, 7 at 64×64×24, 9 at 96×96×48 (`(nChains,nLinks)`
+from (1452,1) to (3,13)); each class issues its own gather/FFT/IFFT/scatter
+in streaming and again in hypercollisions. The repository's XLA profile
+(`docs/performance.rst`) attributes 41.9% of step time to four
+`_complete_hermitian_ky` concatenations running inside the four RHS
+evaluations of a diagnosed RK3 step — the bracket's own completion, which the
+ky ≥ 0 layout removes and per-stage projector changes cannot — and ~39% to
+FFTs. GX stores only
 `Nyc=1+Ny/2` rows (`grids.cu:12`). The `integrate_nonlinear_from_config`
 route (runtime "diagnostics disabled") pays a fourth full RHS per RK3 step for
 fields it only needs at the end (`solvers_nonlinear_explicit.py:367–378`,
@@ -337,7 +358,7 @@ Literature and runtime facts (fetched 2026-09-13):
   `lax.fft` ("XLA only supports FFTs over the innermost axes",
   `jax/_src/numpy/fft.py`); GKX's `(…, Ny, Nx, Nz)` layout with transforms
   on `(Ny, Nx)` pays two transposes per perpendicular transform — consistent
-  with the 78 `transpose` ops per RHS above.
+  with the 35 op-name `transpose` instructions per RHS above.
 - XLA:CPU FFTs are DUCC `FftThunk`s that receive the intra-op thread pool
   only when `xla_cpu_multi_thread_eigen` is true (`fft_thunk.cc`); the thunk
   runtime dropped that pool in jaxlib 0.4.32 (jax#25808, 3–4× `fftn`
@@ -421,15 +442,18 @@ regularization and report the ν→0 extrapolation.
 N0 load-independent ledger per RK stage (HLO counts and bytes of fft,
 concatenate, gather, scatter, transpose, copy) plus A/B/A/B timings on a
 pinned SHA on an idle machine; gate for every N change.
-N1 complete once per step, not per stage, and let the bracket return its
-positive half to a single completion (idempotence is exact); target most of
-the 41.9%; gate RHS/trajectory identity ≤1e-13 (f64) over 100 steps and VJP
-parity.
+N1 complete once per step, not per stage — **measured and rejected in #231**
+(bitwise identical, but 2.3–2.7× more materialized bytes on the runtime
+diagnostics route where cache/params are captured constants; ≈4% saving only
+when they are graph arguments). N1′: give the runtime diagnostics scan its
+cache/params as graph arguments (bitwise identity against the captured graph,
+adaptive dt included), then re-evaluate N1.
 N2 batch the linked-chain classes (pad chains to a common length or group
 classes) so streaming and hypercollisions issue O(1) FFT launches per RHS
 instead of 2×classes; gate identity plus FFT-op count.
-N3 half-spectrum state (Nyc rows) behind a layout adapter; start after N1
-quantifies the residual completion cost.
+N3 half-spectrum state (Nyc rows) behind a layout adapter; the only change
+that removes the bracket's per-RHS completion (the profiled 41.9%); start once
+the N0 ledger (#231) is on main.
 N4 fewer transforms: pack ∂x/∂y of each operand into one complex transform,
 batch G and χ, compute ∇(J0χ) once without the Hermite index; gate transform
 count halves, ky=0 symmetry defect ≤1e-6 in f32.
