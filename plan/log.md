@@ -11677,3 +11677,159 @@ routes still discard their flag inside scans; with ceil budgeting a solve may ex
 extra carry is four scalars per Arnoldi build). The registered §5.1 pilot was not
 re-run, so no preconditioner's inner statistics are published yet. Next: re-run
 that pilot per mode so its rejection names the inner budget, then L2/L3.
+
+## 2026-09-13 — Q12 certify every returned eigenpair; KrylovConfig defaults to adaptive
+
+Branch `fix/certify-every-eigenpair`, handoff #228 row Q12. It is stacked on
+`fix/inner-solve-diagnostics` (#230, head `0cce177f6`) and must be retargeted to
+`main` after #230 merges.
+
+**Contract: fail closed, with an explicit opt-out.** The raw `power`,
+`propagator` and `arnoldi` routes of `dominant_eigenpair` return a Rayleigh or
+Ritz pair without a convergence test. Each pair is now checked with
+`_eigenpair_relative_residual` against
+`certifiable_residual_tolerance(shift_outer_residual_tol, dtype)`, the
+shift-invert outer gate. A failing pair raises
+`RuntimeError("<method> eigenpair failed the outer residual gate: residual=…,
+tolerance=…; …")`.
+
+`KrylovConfig.certify` and `dominant_eigenpair(certify=...)` default to `True`.
+With `certify=False` the pair is returned and the status callback reports
+`returning an UNCERTIFIED <method> eigenpair (certify=False): residual=…,
+tolerance=…`. The opt-out affects those three routes only:
+- `adaptive`, `shift_invert` and `sparse_shift_invert` keep their own
+  fail-closed gates (a test pins that `certify=False` does not relax
+  shift-invert);
+- shift-invert seeds are not gated;
+- shift-invert fallbacks were already gated and are unchanged.
+
+`KrylovConfig.method` changes `"propagator"` → `"adaptive"`, and
+`dominant_eigenpair(method=...)` changes `"power"` → `"adaptive"`. The generic
+runtime default `KrylovConfig(method="adaptive")` now equals `KrylovConfig()`.
+There is no CHANGELOG, so the API change is recorded in `docs/solvers.rst`
+("Eigenpair certification").
+
+Why fail closed rather than a result flag: `RuntimeLinearResult` has no residual
+field, and a flag nobody reads is the silent return this row removes. The
+residual goes to the status stream on every route; no public result field was
+added.
+
+**Defect found by the converged-case test.** The Arnoldi route seeded with an
+exact eigenvector returns `(0, 0)` (breakdown). `_eigenpair_relative_residual`
+scored that as `0 / 1e-30 = 0`, so a zero vector "certified" on every gate that
+uses it: shift-invert, fallback, sparse, and the new raw gate. A zero or
+non-finite eigenvector now has infinite residual. The Arnoldi breakdown itself
+is not fixed here; it now fails closed.
+
+**Callers.**
+- No caller constructs `KrylovConfig()` without `method=`. The only
+  `dominant_eigenpair` default user is `dominant_eigenvalue`, which becomes
+  certified adaptive; its unit test mocks the eigenpair.
+- Changed: `workflows/linear.py` forwards `certify` from the runtime config.
+- Changed: `tools/comparison/ky_diagnostics.py` compares raw routes against time
+  integration by design. It passes `certify=False` explicitly and writes each
+  pair's `residual` and `certified` into its summary.
+- Unchanged: `CYCLONE/KINETIC/KBM/TEM_KRYLOV_DEFAULT` (shift-invert with a gated
+  fallback), the ETG runtime default (shift-invert with a gated Arnoldi
+  fallback), and `make_tables.py` (TEM/kinetic shift-invert).
+- `ETG_KRYLOV_DEFAULT` keeps `method="propagator"` and now fails closed; see
+  below. Its `continuation=True`/`continuation_selection` fields are read by
+  nothing.
+
+**ETG, ledger row `L-lin-etg`.** The artifact `docs/_static/etg_mismatch_table.csv`
+is written by `tools/artifacts/make_tables.py --case etg` with
+`ETG_SOLVER = "time"`: an RK4 runtime scan of `etg.toml` at Nl=24, Nm=8, with
+dt .00016, T=2, tmin 1 and z_index fit. `benchmarks/etg_linear_benchmark.py` also
+uses `solver="time"`. `ETG_KRYLOV_DEFAULT` is on neither path, so no Krylov pair
+sits behind the published number.
+
+The run was `plan/research/scripts/2026-09-13-certify-eigenpair/`
+(`etg_residuals.py`, `run_etg.sh`, per-cell `*.txt` with one `RESULT` line).
+Source was a detached clean `0cce177f6` worktree, one fresh process per cell,
+`nice -n 19`, 30-min guard. `ruff format` rewrapped the script after the run;
+the run hash was `4dab8c6e…` and the committed hash is `7fd99f5f…`, whitespace
+only. Every pair was re-checked against the matrix-free operator.
+
+| arm | ky=10 | ky=20 | ky=30 |
+|---|---|---|---|
+| generator scan (γ, ω) | 4.002631, −8.707053 | 6.186927, −18.527648 | 3.880504, −26.544553 |
+| tracked CSV (γ, ω) | 4.002765, −8.706666 | 6.186927, −18.527647 | 3.880680, −26.544902 |
+| time-integrated final state: residual at fitted λ / at its Rayleigh quotient (complex128) | 2.4e-4 / 4.5e-5 | 4.1e-6 / 1.9e-7 | 4.8e-5 / 1.1e-5 |
+| `ETG_KRYLOV_DEFAULT` (γ, ω, residual; gate 1.19e-4, complex64 seed, ≈2 s) | −3.017, −17.162, **0.989** | 3.858, −14.804, **0.990** | 0.224, −25.391, **0.982** |
+| runtime ETG default (shift-invert → Arnoldi fallback) | raises: 0.957, fallback 0.977 | raises: 1.000, fallback 0.995 | raises: 0.996, fallback 0.991 |
+| `KrylovConfig(method="adaptive")` | no pair within 30 min | not run | not run |
+
+Reading the table:
+- The scan reproduces the CSV to ≤4.5e-5 relative. The time-integrated modes are
+  near-eigenmodes, not certified pairs.
+- `ETG_KRYLOV_DEFAULT` returns wrong branches on every row.
+- The runtime ETG default already failed closed before this PR. 16/16 inner
+  solves were unconverged, with max relative inner residual 31.7–47.4.
+
+**Decision:** no published number moves and the ledger row is unchanged.
+`ETG_KRYLOV_DEFAULT` is not given `certify=False`: there is no reason to accept
+wrong-branch pairs. It is not switched to `adaptive` either, because adaptive
+produced no certified ETG pair within 30 min at ky=10. It now raises on use, and
+a comment records these residuals.
+
+Stopped state: the driver (PID 6389) was killed by the operator at
+21:36:57Z, after adaptive ky=10 hit its guard (rc=124); adaptive ky=20 was
+killed at start. No ETG process remains.
+
+**Tests.** Each selection ran in its own invocation.
+
+| Selection | Result |
+| --- | --- |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 88 passed (84 before; the finite-values test is replaced) |
+| `tests/integration/test_adaptive_eigenmodes.py` | 7 passed, 3 skipped (VMEC backend / eik cache) |
+| `tests/unit/linear/test_linear.py -k "krylov or eigen or propagator or arnoldi or power"` | 1 passed |
+| `tests/unit/linear/test_linear.py -k "krylov or shift or implicit"` | 8 passed |
+| `tests/validation/benchmarks/test_benchmarks_helpers.py test_benchmarking.py test_benchmark_contracts.py` | 114 passed |
+| `tests/unit/core/test_core_numerics.py` (the `*_KRYLOV_DEFAULT` assertions) | 50 passed |
+| `tests/integration/runtime/test_runtime_runner.py` | 167 passed |
+| `tests/unit/quasilinear/test_quasilinear.py -k krylov` | 1 passed |
+| `tests/validation/physics_gates/test_validation_gates.py -k demo_reports_the_eigenvalue` | 1 passed |
+| three `test_cli.py` runtime Krylov-default nodes | 3 passed |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k "ky_diagnostics or krylov"` | 4 passed |
+| `tests/unit/api/test_public_types.py` | 33 passed |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+New or changed tests:
+- A four-vector raw solve on the tiny operator raises for power, propagator and
+  Arnoldi, with a parsed residual above the parsed tolerance. Under
+  `certify=False` the same call returns a finite pair flagged `UNCERTIFIED` with
+  that residual.
+- A real converged pair certifies: the propagator seeded with an exact dense
+  eigenvector at dt 1e-3 reaches residual ≈9e-8 against a 1.19e-4 gate.
+- A zero eigenvector has infinite residual, and the Arnoldi route raises
+  `residual=inf`.
+- `KrylovConfig()`, `gkx.api.KrylovConfig` and the `dominant_eigenpair`
+  defaults resolve to adaptive with `certify=True`.
+- `certify=False` leaves the shift-invert gate in force.
+- The runtime runner forwards `certify=True`.
+- The Arnoldi flag-normalization fake now supplies an eigen-consistent operator.
+
+No other test's numbers changed.
+
+Line budgets: source 89409 → 89492 (+83), tests 88018 → 88130 (+112), tools
+77825 → 77839 (+14, `ky_diagnostics.py`); targets unchanged; no new source, test
+or tool module.
+
+Checks: pinned ruff 0.16.4 check/format (408 files); `mypy` as CI (mypy 2.3.1,
+184 source files, no issues); strict `python -m sphinx -W -b html docs` (build
+succeeded); `check_package_architecture_manifest.py`;
+`check_repository_size_manifest.py` (20.5 MB tracked); gitleaks 8.30.1 on the
+36 changed files (no leaks).
+
+Environment: local shared Mac (load 7–26), Python 3.11.14, JAX/jaxlib 0.10.2,
+SOLVAX 0.20.0, `PYTHONPATH=$PWD/src:$PWD JAX_ENABLE_X64=true GKX_X64=1
+MPLBACKEND=Agg JAX_PLATFORMS=cpu`, `pytest -q -o addopts='' -p no:cacheprovider`.
+
+Limitations and next:
+- The residual is not on a public result object.
+- The Arnoldi breakdown on an exact-eigenvector seed returns `(0, 0)`.
+- No Krylov route certifies ETG at Nl=24, Nm=8 on this deck: shift-invert inner
+  solves do not converge, and adaptive exceeded 30 min.
+- The runtime still seeds complex64, so the raw gates floor at 1.19e-4.
+- Next: an ETG preconditioner/σ study (with Q7), or an explicit ETG
+  `sparse_shift_invert` rung at n=18432 with σ from the time-integrated λ.

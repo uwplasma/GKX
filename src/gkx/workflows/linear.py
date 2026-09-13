@@ -287,6 +287,7 @@ def _run_krylov_linear(
         mode_family=kcfg.mode_family,
         fallback_method=kcfg.fallback_method,
         fallback_real_floor=kcfg.fallback_real_floor,
+        certify=kcfg.certify,
         status_callback=lambda message: _status(status_callback, message),
     )
     gamma = float(jnp.real(eig))
