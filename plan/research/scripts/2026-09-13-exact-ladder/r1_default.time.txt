@@ -1,0 +1,23 @@
+	Command being timed: "/home/rjorge/venvs/gkx-nl/bin/python /home/rjorge/gkx-q2-exact-ladder-20260913.zXGFAw/exact_ladder.py --repo /home/rjorge/gkx-q2-exact-ladder-20260913.zXGFAw --rung 1 --arm default --shift 0.1157314425-0.2416600155j"
+	User time (seconds): 16.52
+	System time (seconds): 0.47
+	Percent of CPU this job got: 157%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:10.78
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1207412
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 217516
+	Voluntary context switches: 11804
+	Involuntary context switches: 458
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

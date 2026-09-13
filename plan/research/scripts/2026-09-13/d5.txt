@@ -1,0 +1,20 @@
+setup 3.9s n=4096 nnz(S)=133598
+exact LU fill=603873
+
+Part A: iterations to 1e-5 (cap 300); fill = factor nnz
+  none                       unrestarted=None (true 6.7e-05)  GMRES(20)=None (true 8.3e-01)  fill=0  t=0.5s
+  hermite-line               unrestarted=90 (true 7.6e-13)  GMRES(20)=None (true 4.3e-04)  fill=0  t=0.4s
+  block-jacobi-l             unrestarted=33 (true 6.6e-13)  GMRES(20)=57 (true 8.2e-13)  fill=177080  t=0.1s
+  block-jacobi-m             unrestarted=None (true 1.5e-03)  GMRES(20)=None (true 9.5e-01)  fill=56489  t=0.6s
+  ilu(drop=0.01,fill=3)      unrestarted=6 (true 8.3e-13)  GMRES(20)=6 (true 8.3e-13)  fill=325491  t=0.0s
+  ilu(drop=0.0001,fill=10)   unrestarted=2 (true 1.7e-13)  GMRES(20)=2 (true 1.7e-13)  fill=547810  t=0.0s
+
+Part B: 12 outer shift-invert RHSs, hermite-line right preconditioner, rtol 1e-5
+  cold gmres(20):  its = [400, 400, 400, 400, 400, 400, 398, 400, 400, 400, 400, 400] converged = 2 /12 total = 4798
+  gcrot(20,10) fifo    : its = [277, 299, 400, 400, 400, 400, 400, 339, 319, 380, 352, 378] converged = 7/12 total = 4344
+  gcrot(20,10) harmonic: its = [179, 176, 175, 180, 189, 195, 188, 180, 197, 199, 195, 180] converged = 12/12 total = 2233
+
+total 35.2s
+       37.15 real        99.82 user         6.15 sys
+       1027312907986  instructions retired
+exit 0
