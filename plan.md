@@ -64,6 +64,29 @@ before another resolution rung (§0.5); and Hermitian completion once per
 step plus batched linked-chain FFTs come before scatter micro-work or
 sharding (§5.3 N0–N7).
 
+**Handoff queue, 2026-09-13 (execution resumed).** #226 merged normally as
+`06606e404`. #227 was retargeted to `main` and updated (`1c383c50e`); merge
+it on fresh green CI, then retarget #228 (this plan revision) to `main`,
+update and merge it. No release. Work continues in the order below; each row
+is one PR from a fresh worktree off `origin/main`. Rows marked *parallel*
+may run concurrently; the others wait for the named dependency. The #228 PR
+body carries the same queue with per-row entry points, commands, gates and
+the repository rules an agent must follow.
+
+| ID | Branch | Plan step | Depends on | Compute |
+|---|---|---|---|---|
+| Q1 | `fix/inner-solve-diagnostics` | §5.1 L1: inner-solve statistics surfaced; `shift_solve_method` no longer a recompile key; `implicit_maxiter` counts iterations | — (*parallel*) | CPU |
+| Q2 | `evidence/exact-shift-invert-ladder` | §5.1 L2: exact sparse reference ladder to production single-chain size | — (*parallel*) | office CPU, ≤2 h |
+| Q3 | `evidence/laguerre-drift-ablation` | §0.5 (i): `gradb=0` / `curvature=0` at Nl 24/32, Nm96, current source | — (*parallel*) | office GPU1, ≤2 h |
+| Q4 | `perf/hermitian-completion-once` | §5.3 N0+N1: HLO-count ledger and one Hermitian completion per step | — (*parallel*) | CPU |
+| Q5 | `chore/solvax-pin` | housekeeping: align `requirements.txt` with `pyproject.toml` | — (*parallel*) | none |
+| Q6 | `fix/eigen-covered-subspace` | §5.1 L3 | Q1 merged | CPU |
+| Q7 | preconditioner bake-off | §5.1 L4 | Q2 recorded | CPU |
+| Q8 | §0.5 (ii)–(v) | eigen ℓ-spectra, Laguerre sink, Dougherty ν→0, R/L_T | Q3 recorded; Q2 for affordability | CPU/GPU |
+| Q9 | batched chain FFTs | §5.3 N2 | Q4 merged | CPU |
+| Q10 | ky ≥ 0 layout contract | §5.3 N3 | Q4 merged, Q9 measured | CPU, then GPU |
+| Q11 | implicit streaming | §5.4 | its entry trigger | CPU, GPU day |
+
 This branch no longer carries a README rewrite. `main`'s README has since taken
 the corrections that mattered (the capability table, the Cite section, the demo's
 resolution, the prepare paragraph, the CONTRIBUTING link), so the conflict was
