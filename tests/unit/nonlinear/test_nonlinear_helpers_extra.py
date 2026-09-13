@@ -610,7 +610,7 @@ def test_hermitian_completion_once_per_step_is_bitwise_the_per_stage_route(
     def run(project_state):
         return nonlinear_state_integration_mod.integrate_nonlinear_scan(
             nonlinear_state_integration_mod._nonlinear_rhs_scan,
-            jnp.asarray(G0, dtype=jnp.complex64),
+            jnp.array(G0, dtype=jnp.complex64),  # the scan donates its state
             0.01,
             5,
             method=method,

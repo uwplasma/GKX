@@ -40,6 +40,9 @@ from gkx.core_grid import build_spectral_grid
 from gkx.geometry import apply_imported_geometry_grid_defaults
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.solvers_nonlinear_diagnostic_integration import (
+    prepare_nonlinear_explicit_diagnostics,
+)
 from gkx.solvers_nonlinear_state_integration import (
     integrate_nonlinear,
     nonlinear_rhs_cached,
@@ -1057,11 +1060,70 @@ def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ky", type=float, default=0.3)
     parser.add_argument("--methods", type=str, default="rk3,rk4")
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--hlo-dir", type=Path, default=None)
+    parser.add_argument(
+        "--route",
+        choices=("scan", "diagnostics"),
+        default="scan",
+        help="scan: cache/params as graph arguments; diagnostics: the runtime "
+        "diagnostics scan, which captures them as constants",
+    )
     return parser
 
 
-def _compiled_hlo_text(fn: Callable[..., Any], *args: Any) -> str:
-    return jax.jit(fn).lower(*args).compile().as_text()
+def _compiled_hlo_text(
+    fn: Callable[..., Any], *args: Any, dump: Path | None = None
+) -> str:
+    text = jax.jit(fn).lower(*args).compile().as_text()
+    if dump is not None:
+        dump.parent.mkdir(parents=True, exist_ok=True)
+        dump.write_text(text, encoding="utf-8")
+    return text
+
+
+def _diagnostics_scan_hlo(
+    cfg: Any,
+    g0: jnp.ndarray,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    cache: Any,
+    term_cfg: Any,
+    *,
+    method: str,
+    ky_index: int,
+    kx_index: int,
+    dump: Path | None,
+) -> str:
+    """Lower one step of the runtime diagnostics scan exactly as the runtime jits it."""
+
+    kwargs = dict(
+        build_runtime_nonlinear_diagnostics_kwargs(
+            cfg,
+            dt=float(cfg.time.dt),
+            steps=1,
+            method=method,
+            term_config=term_cfg,
+            sample_stride=1,
+            diagnostics_stride=1,
+            laguerre_mode=str(cfg.time.laguerre_nonlinear_mode),
+            ky_index=int(ky_index),
+            kx_index=int(kx_index),
+            fixed_dt=bool(cfg.time.fixed_dt),
+            fixed_mode_ky_index=None,
+            fixed_mode_kx_index=None,
+            external_phi=None,
+            resolved_diagnostics=True,
+            show_progress=False,
+        )
+    )
+    dt = kwargs.pop("dt", float(cfg.time.dt))
+    steps = kwargs.pop("steps", 1)
+    kwargs["cache"] = cache
+    prepared = prepare_nonlinear_explicit_diagnostics(
+        g0, grid, geom, params, dt, steps, **kwargs
+    )
+    return _compiled_hlo_text(prepared._run_raw, prepared.initial_state, dump=dump)
 
 
 def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
@@ -1096,45 +1158,78 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
     compressed = bool(cfg.time.compressed_real_fft)
     laguerre_mode = str(cfg.time.laguerre_nonlinear_mode)
 
-    def rhs(state: jnp.ndarray) -> jnp.ndarray:
+    # Cache and parameters stay graph arguments, as in the runtime scan, so the
+    # ledger does not count a constant-folded graph.
+    def rhs(state: jnp.ndarray, run_cache: Any, run_params: Any) -> jnp.ndarray:
         return nonlinear_rhs_cached(
             state,
-            cache,
-            params,
+            run_cache,
+            run_params,
             term_cfg,
             compressed_real_fft=compressed,
             laguerre_mode=laguerre_mode,
         )[0]
 
-    rhs_counts = _hlo_op_counts(_compiled_hlo_text(rhs, g0))
+    def dump(name: str) -> Path | None:
+        return None if args.hlo_dir is None else args.hlo_dir / f"{name}.hlo.txt"
+
+    rhs_counts = _hlo_op_counts(
+        _compiled_hlo_text(rhs, g0, cache, params, dump=dump("rhs"))
+    )
     steps: dict[str, Any] = {}
     for method in (m.strip() for m in args.methods.split(",") if m.strip()):
 
-        def step(state: jnp.ndarray, method: str = method) -> Any:
+        def step(
+            state: jnp.ndarray, run_cache: Any, run_params: Any, method: str = method
+        ) -> Any:
             return integrate_nonlinear(
                 state,
                 grid,
                 geom,
-                params,
+                run_params,
                 dt=float(cfg.time.dt),
                 steps=1,
                 method=method,
-                cache=cache,
+                cache=run_cache,
                 terms=term_cfg,
                 compressed_real_fft=compressed,
                 laguerre_mode=laguerre_mode,
                 return_fields=False,
             )
 
-        counts = _hlo_op_counts(_compiled_hlo_text(step, g0))
+        if args.route == "diagnostics":
+            text = _diagnostics_scan_hlo(
+                cfg,
+                g0,
+                grid,
+                geom,
+                params,
+                cache,
+                term_cfg,
+                method=method,
+                ky_index=ky_index,
+                kx_index=kx_index,
+                dump=dump(f"diagnostics_{method}"),
+            )
+        else:
+            text = _compiled_hlo_text(
+                step, g0, cache, params, dump=dump(f"step_{method}")
+            )
+        counts = _hlo_op_counts(text)
         evaluations = RK_RHS_EVALUATIONS[method]
+        # The diagnostics graph also holds the field solve and diagnostics.
+        beyond = (
+            None
+            if args.route == "diagnostics"
+            else {
+                key: value - evaluations * rhs_counts[key]
+                for key, value in counts.items()
+            }
+        )
         steps[method] = {
             "rhs_evaluations": evaluations,
             "counts": counts,
-            "beyond_rhs_evaluations": {
-                key: value - evaluations * rhs_counts[key]
-                for key, value in counts.items()
-            },
+            "beyond_rhs_evaluations": beyond,
         }
     summary = {
         "kind": "nonlinear_step_hlo_ledger",
@@ -1145,6 +1240,7 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
         "state_bytes": int(g0.size * g0.dtype.itemsize),
         "compressed_real_fft": compressed,
         "laguerre_mode": laguerre_mode,
+        "route": args.route,
         "jax": jax.__version__,
         "backend": jax.default_backend(),
         "rhs": rhs_counts,
