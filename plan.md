@@ -65,10 +65,12 @@ linked-chain FFTs and the ky ≥ 0 layout come before scatter micro-work or
 sharding (§5.3 N0–N7; once-per-step Hermitian completion was measured and
 rejected in #231).
 
-**Handoff queue, 2026-09-13 (execution resumed).** #226 merged normally as
-`06606e404`; #227 merged as `578b97074` after a fresh green run on its updated
-head; #228 (this plan revision) targets `main` and merges on green. No
-release. Work continues in the order below; each row
+**Handoff queue, 2026-09-13 (execution resumed; updated 2026-09-14).** #226
+merged normally as `06606e404`; #227 merged as `578b97074` after a fresh green
+run on its updated head. The results of the first queue batch land together
+through one merge chain in which each branch merges its predecessor (§14
+rule 9): #228 plan → #230 Q1 → #231 Q4 → #229 Q5 → #232 Q2 → #233 Q12 →
+#234 Q3 → the queue-update PR. No release. Work continues in the order below; each row
 is one PR from a fresh worktree off `origin/main`. Rows marked *parallel*
 may run concurrently; the others wait for the named dependency. The #228 PR
 body carries the same queue with per-row entry points, commands, gates and
@@ -76,19 +78,21 @@ the repository rules an agent must follow.
 
 | ID | Branch | Plan step | Depends on | Compute |
 |---|---|---|---|---|
-| Q1 | `fix/inner-solve-diagnostics` | §5.1 L1: inner-solve statistics surfaced; `shift_solve_method` no longer a recompile key; `implicit_maxiter` counts iterations | — (*parallel*) | CPU |
+| Q1 | `fix/inner-solve-diagnostics` | §5.1 L1: inner-solve statistics surfaced; `shift_solve_method` no longer a recompile key; `implicit_maxiter` counts iterations — **done, #230** (no test number changed; 76 recorded implicit/IMEX solves converge within 8 iterations) | — (*parallel*) | CPU |
 | Q2 | `evidence/exact-shift-invert-ladder` | §5.1 L2: exact sparse reference ladder to production single-chain size — **done, #232**: exact route fastest only below n≈1e4; the runtime default `adaptive` route certifies the production pair (n=73728) in 761 s on CPU | — (*parallel*) | office CPU, ≤2 h |
-| Q3 | `evidence/laguerre-drift-ablation` | §0.5 (i): `gradb=0` / `curvature=0` at Nl 24/32, Nm96, current source | — (*parallel*) | office GPU1, ≤2 h |
+| Q3 | `evidence/laguerre-drift-ablation` | §0.5 (i): `gradb=0` / `curvature=0` at Nl 24/32, Nm96, current source — **done, #234**: `gradb=0` removes the ITG itself (ω .50→.03), so drift ablation does not discriminate; collisionless γ .0328/.0250/.0198 at Nl 24/32/48 (unsettled past 24); species ν=1e-2 gives .0174/.0172 at Nl 24/32 and ν=1e-3 .0291/.0174 — the collisionless references at this ky may be unconverged by ~2× (Q8 tests it) | — (*parallel*) | office GPU, ≤2.5 h |
 | Q4 | `perf/hermitian-completion-once` | §5.3 N0+N1: HLO-count ledger and one Hermitian completion per step — **done, #231**: N0 adopted; N1 rejected (bitwise-neutral, but 2.3–2.7× more bytes on the captured-constant runtime route) | — (*parallel*) | CPU |
 | Q5 | `chore/solvax-pin` | housekeeping: align `requirements.txt` with `pyproject.toml` — **done, #229**: unused file deleted; floor stays `solvax>=0.12.0` with first-appearance evidence | — (*parallel*) | none |
 | Q6 | `fix/eigen-covered-subspace` | §5.1 L3 | Q1 merged | CPU |
-| Q7 | preconditioner bake-off | §5.1 L4 | Q2 recorded | CPU |
-| Q8 | §0.5 (ii)–(v) | eigen ℓ-spectra, Laguerre sink, Dougherty ν→0, R/L_T | Q3 recorded; Q2 for affordability | CPU/GPU |
+| Q7 | `evidence/preconditioner-bakeoff` | §5.1 L4 — **in progress**: "pr3-cm" (three Peaceman–Rachford sweeps pairing the exact streaming line solve with the exact z-local drift/mirror/φ block) reaches 1e-5 in 30 (pilot), 45 (32,8,16), 88 (64,8,32), 164 (96,8,24) iterations where Hermite-line needs 90, 366, stalls, stalls at ky=+0.3; one production apply ≈22 matvecs, 8 s setup, 0.91 GB; not yet shown faster than the adaptive route's 761 s; next: per-kz sweep parameters and a same-host time-to-certified-pair comparison | Q2 recorded | CPU |
+| Q8 | `evidence/collisional-laguerre-convergence` | §0.5 (ii)–(iv), revised by Q3 — **in progress**: ν ∈ {1e-3, 3e-3, 1e-2} × Nl {16, 24, 32, 48}, collisionless Nl64, a Sugama control (no runtime Dougherty exists), GX with `vnewk=1e-2` at Nl 24/32; predictions registered in its manifest | Q3 recorded | office GPU |
 | Q9 | batched chain FFTs | §5.3 N2 | Q4 merged | CPU |
 | Q10 | ky ≥ 0 layout contract | §5.3 N3 | Q4 merged (N0 ledger), Q9 measured | CPU, then GPU |
 | Q11 | implicit streaming | §5.4 | its entry trigger | CPU, GPU day |
-| Q12 | `fix/certify-every-eigenpair` | correctness: `KrylovConfig()` defaults to the ungated `propagator` route (wrong mode, residual ≈1, on every #232 rung); `ETG_KRYLOV_DEFAULT`, `arnoldi` and `power` are ungated too. Every returned pair carries its original-operator residual and fails closed or is flagged uncertified; dataclass default becomes `adaptive`; the `L-lin-etg` pair's residual is reported | Q1 merged | CPU |
+| Q12 | `fix/certify-every-eigenpair` | correctness: `KrylovConfig()` defaulted to the ungated `propagator` route (wrong mode, residual ≈1, on every #232 rung); `ETG_KRYLOV_DEFAULT`, `arnoldi` and `power` were ungated too — **done, #233**: raw routes fail closed at the shift-invert outer gate with an explicit `certify=False` opt-out; `KrylovConfig()` and `dominant_eigenpair` default to `adaptive`; a zero eigenvector no longer scores residual 0; `L-lin-etg` is time-integrated and unaffected | Q1 merged | CPU |
 | Q13 | runtime diagnostics scan with cache/params as graph arguments | §5.3 N1′: bitwise identity against the captured graph (adaptive dt included), then re-evaluate once-per-step completion | Q4 merged | CPU |
+| Q14 | float32 window-gradient tolerances | 11 finite-window gradient tests fail on unmodified `main` in float32 (found in #231); CI runs them only in x64 while f32 is the documented default precision. Decide per test: tighten the method, loosen the tolerance with a derivation, or declare f64 in scope, and run the chosen set in CI | — | CPU |
+| Q15 | solver status on results | #230 and #233 surface inner/outer residuals in status and errors only: `RuntimeLinearResult` has no residual/certified fields and implicit/IMEX scans have no convergence channel. Add them without silently returning uncertified values | Q1, Q12 merged | CPU |
 
 This branch no longer carries a README rewrite. `main`'s README has since taken
 the corrections that mattered (the capability table, the Cite section, the demo's
@@ -1152,7 +1156,9 @@ operator needs 6 iterations, an exact per-ℓ block 33; over the 12 RHSs an
 outer Arnoldi actually generates, SOLVAX `gcrot(m=20,k=10,"harmonic")`
 converges 12/12 (2233 iterations) where cold `gmres(restart=20)` converges
 2/12. On a single-chain ladder the Hermite-line count grows to 159 at
-(Nz,Nl,Nm)=(32,8,16) and exceeds 400 from (48,8,16); exact LU fill ratio is
+(Nz,Nl,Nm)=(32,8,16) and exceeds 400 from (48,8,16) (that ladder resolved
+ky=−0.1, not +0.3; at ky=+0.3 Q7 measured 366 at (32,8,16) and stalls from
+(64,8,32)); exact LU fill ratio is
 ≈10–12 with factor time ≈n^1.7, so an exact factor is not viable at a
 production chain without a banded streaming approximation. Order of work:
 L1 return true residual/iterations/converged from every inner solve and
@@ -1503,6 +1509,17 @@ needs an alternative allocation before its pilot.
    upstream licenses and credit.
 7. Physics sentinels run on solver changes even when no assertion changed;
    coverage is a secondary check.
+8. Secret scanning: run gitleaks on changed files before pushing; never add
+   `.gitleaksignore` entries or inline scanner-exemption comments. Rename or
+   remove a false-positive identifier; report a real finding to the
+   maintainer before pushing anything.
+9. Parallel PRs all append to `plan/log.md`, so ready PRs are integrated as a
+   chain: each branch merges its predecessor (log entries kept in merge order,
+   shared architecture-manifest baselines set to the measured sum), CI runs on
+   intermediate heads are cancelled, and the last head merges once its
+   `ci-required` passes. `enforce_admins` is on, so `--admin` does not skip a
+   required check that has not reported. Run the size check only after
+   committing a merge (an unmerged index lists conflicted paths per stage).
 
 ---
 

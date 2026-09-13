@@ -12512,3 +12512,39 @@ nonfinite value. At 16:54:06 every listed PID was verified gone and no
 cleanup: the source tarball and `src_stage/` were removed; `logs/` and
 `results/` (780 KB) are kept at
 `/home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq`. Local tarball removed.
+
+## 2026-09-14 — queue results recorded, merge chain, corrections
+
+Docs-only. Records the first queue batch in `plan.md` (status block, rows
+Q1/Q3/Q7/Q8/Q12, new rows Q14/Q15, §14 rules 8–9) and corrects earlier claims.
+
+**Merge integration.** Every parallel PR appends to this log, so each one
+conflicted with the others here. Ready PRs were integrated as one chain in
+merge order, each branch merging its predecessor with log entries kept in order:
+#228 `7d9d2b5d9` → #230 `b6208b42a` → #231 `1384001d2` → #229 `62c94773b` →
+#232 `7c8a76194` → #233 `f6976d5e9` → #234 `900c5c35c` → this PR. Shared
+`tools/package_architecture_manifest.toml` baselines were set to measured sums
+(tests 87826+192+15+112 = 88145; tools 77825+14+276 = 78115). CI runs on
+intermediate heads were cancelled to free saturated runners. `enforce_admins`
+is on: `--admin` refused a merge whose `ci-required` had not reported on the
+exact head, so each merge waits for that check. A size-check reading of
+22.3 MB during an unmerged index was an artifact (conflicted paths listed per
+stage); committed trees measure 20.6–20.9 MB.
+
+**Corrections.**
+- The review's single-chain ladder (`d6_ladder.py`, research note §3.5) ran at
+  ky=−0.1, not +0.3: with Nx=1, Ny=4 and y0=20 the +0.3 target resolves to
+  −0.1. Q7 reproduced 26 and 159 there and measured 366 at (32,8,16) and
+  stalls from (64,8,32) at ky=+0.3.
+- #234's first manifest used inline scanner-exemption comments for two
+  never-run case names; they were removed with the cases, and the default
+  collision term is now described as Lenard–Bernstein damping ν(m+2ℓ+b) plus
+  `_collision_moment_correction`, not a purely diagonal term.
+
+**Lane state.** Q7 (`evidence/preconditioner-bakeoff`, local `ef071e0a8`) and
+Q8 (`evidence/collisional-laguerre-convergence`, local `22d39e9ea`) resumed on
+2026-09-14 after the pause and will open their own PRs. The Q12 agent stalled
+after pushing a complete #233; its head was integrated as above. Two findings
+enter the queue: 11 finite-window gradient tests fail on unmodified `main` in
+float32 while CI runs them only in x64 (Q14), and residual/convergence status is
+not carried on result objects (Q15).
