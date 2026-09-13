@@ -44,6 +44,7 @@ from gkx.terms.nonlinear import (
     placeholder_nonlinear_contribution,
 )
 from types import SimpleNamespace
+import gkx.solvers_linear_implicit as implicit_linear
 import gkx.solvers_nonlinear_imex as imex_module
 import gkx.solvers_nonlinear_imex_diagnostics as imex_diagnostics
 import gkx.solvers_time_explicit as eti
@@ -1379,6 +1380,70 @@ def test_solve_imex_step_identity_system_returns_rhs_shape() -> None:
     )
 
     np.testing.assert_allclose(np.asarray(out), np.asarray(G_rhs), rtol=1e-6)
+
+
+def test_implicit_maxiter_counts_iterations_on_both_implicit_routes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``implicit_maxiter`` caps Arnoldi iterations; it used to count cycles."""
+
+    assert implicit_linear._gmres_iteration_budget(200, 20) == (20, 10)
+    assert implicit_linear._gmres_iteration_budget(45, 20) == (20, 3)
+    assert implicit_linear._gmres_iteration_budget(7, 20) == (7, 1)
+    monkeypatch.setattr(
+        implicit_linear,
+        "linear_rhs_cached",
+        lambda g, *_args, **_kwargs: (jnp.zeros_like(g), None),
+    )
+    diagonal = jnp.linspace(1.0, 100.0, 64)
+    rhs = jnp.ones_like(diagonal)
+    solution = implicit_linear._implicit_gmres_solution(
+        rhs,
+        cache=None,
+        params=None,
+        terms=None,
+        dt_val=jnp.asarray(0.1),
+        size=64,
+        matvec=lambda flat: diagonal * flat,
+        precond_op=None,
+        implicit_tol=1.0e-12,
+        implicit_maxiter=8,
+        implicit_iters=0,
+        implicit_relax=1.0,
+        implicit_restart=4,
+    )
+    # The cycle-count reading allowed 8 cycles of 4, i.e. 32 iterations.
+    assert int(solution.iterations) <= 8
+    assert not bool(solution.converged)
+    assert float(solution.residual_norm) > 1.0e-12 * float(jnp.linalg.norm(rhs))
+
+    budgets: list[tuple[int, int]] = []
+    real_gmres = imex_module.gmres
+
+    def recording_gmres(*args, **kwargs):
+        budgets.append((kwargs["restart"], kwargs["max_restarts"]))
+        return real_gmres(*args, **kwargs)
+
+    monkeypatch.setattr(imex_module, "gmres", recording_gmres)
+    G_rhs = jnp.asarray([[2.0]], dtype=jnp.float32)
+    solve_imex_step(
+        jnp.zeros_like(G_rhs),
+        G_rhs,
+        linear_rhs_fn=lambda g, *_args, **_kwargs: (jnp.zeros_like(g), None),
+        cache=SimpleNamespace(),
+        params=SimpleNamespace(),
+        linear_cfg=SimpleNamespace(),
+        external_phi=None,
+        dt_val=jnp.asarray(0.1, dtype=jnp.float32),
+        implicit_iters=0,
+        implicit_relax=1.0,
+        matvec=lambda flat: flat,
+        shape=tuple(G_rhs.shape),
+        implicit_tol=1.0e-8,
+        implicit_maxiter=8,
+        implicit_restart=4,
+    )
+    assert budgets and set(budgets) == {(4, 2)}
 
 
 def test_make_imex_nonlinear_term_forwards_injected_kernels() -> None:

@@ -1,0 +1,11 @@
+Nx1 Nz16 (ntheta16 nperiod1) Nl4 Nm8: n=512 chains=[(1, 1)] dead_rows=0.00 nnz=24409 nnz/row=47.7 LU_fill=126210 fill_ratio=5.2 asm=0.3s lu=0.01s solve=0.8ms | nearest eigs: -0.06303-0.29457j; -0.05971-0.22429j; -0.07655-0.33781j | hermite-line its_to_1e-5: full=26 (res@400 9.7e-13) drifts_off=22 | rung 3s
+Nx1 Nz32 (ntheta32 nperiod1) Nl4 Nm8: n=1024 chains=[(1, 1)] dead_rows=0.00 nnz=94169 nnz/row=92.0 LU_fill=507526 fill_ratio=5.4 asm=0.3s lu=0.08s solve=0.7ms | nearest eigs: -0.06270-0.29529j; -0.06110-0.22054j; -0.07564-0.33448j | hermite-line its_to_1e-5: full=24 (res@400 9.9e-13) drifts_off=21 | rung 2s
+Nx1 Nz32 (ntheta32 nperiod1) Nl8 Nm16: n=4096 chains=[(1, 1)] dead_rows=0.00 nnz=428213 nnz/row=104.5 LU_fill=4490919 fill_ratio=10.5 asm=0.9s lu=1.38s solve=9.6ms | nearest eigs: -0.01817-0.23956j; -0.01865-0.23962j; -0.01729-0.34708j | hermite-line its_to_1e-5: full=159 (res@400 8.7e-13) drifts_off=104 | rung 6s
+Nx1 Nz48 (ntheta16 nperiod2) Nl8 Nm16: n=6144 chains=[(1, 1)] dead_rows=0.00 nnz=956341 nnz/row=155.7 LU_fill=9414243 fill_ratio=9.8 asm=1.6s lu=3.48s solve=10.9ms | nearest eigs: -0.01981-0.25361j; -0.01823-0.24526j; -0.02369-0.26303j | hermite-line its_to_1e-5: full=None (res@400 1.6e-01) drifts_off=216 | rung 13s
+Nx1 Nz64 (ntheta64 nperiod1) Nl8 Nm32: n=16384 chains=[(1, 1)] dead_rows=0.00 nnz=3273781 nnz/row=199.8 LU_fill=38385309 fill_ratio=11.7 asm=7.8s lu=18.93s solve=37.6ms | nearest eigs: -0.00650-0.23093j; -0.01481-0.24504j; -0.01491-0.24516j | hermite-line its_to_1e-5: full=None (res@400 5.7e-03) drifts_off=225 | rung 52s
+time: command terminated abnormally
+     2400.05 real      2337.59 user        74.53 sys
+      40923474388757  instructions retired
+       8388142909867  cycles elapsed
+exit 142
+note: the Nx4 rung did not finish within the 2400 s alarm (exit 142 = SIGALRM); five Nx1 rungs above are complete.

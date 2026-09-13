@@ -1,0 +1,7 @@
+state (1, 2, 4, 32, 32, 24) complex64 ky axis [0.0, 0.03500000014901161, 0.07100000232458115, 0.10599999874830246, 0.1420000046491623, 0.1770000010728836] ... compressed_real_fft True laguerre_mode grid method rk3
+rhs: fft=45 concatenate=9 gather=31 scatter=1 transpose=78 copy=55 dynamic-update-slice=0 reverse=5 reduce=0 dot=0 fusion=37 custom-call=0 while=0 select=37
+   approx bytes written by concatenate/copy ops: 88.4 MB (state 1.6 MB)
+rk_step(return_fields=False): fft=135 concatenate=31 gather=113 scatter=1 transpose=252 copy=178 dynamic-update-slice=0 reverse=20 reduce=0 dot=0 fusion=131 custom-call=0 while=2949 select=132
+   approx bytes written by concatenate/copy ops: 297.2 MB (state 1.6 MB)
+projector idempotence: ||P(rhs(PG)) - rhs(PG)||/||rhs|| = 0.00e+00; on G+dt*dG: 0.00e+00 (dtype complex64)
+exit 0

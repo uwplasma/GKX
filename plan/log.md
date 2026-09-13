@@ -11732,6 +11732,160 @@ these CPU candidates. Next: fixed-budget streaming-only/full-operator
 preconditioner-defect controls before a production solver change. Keep the
 source PR #226 frozen for CI; this evidence updates the existing docs PR #227.
 
+## 2026-09-13 — independent review: exact-operator solver analysis, GX output re-read, HLO counts
+
+Read-only review of #227 `3fb7d5c35` (on #226 `1e11faf7a`); no source, test,
+default or reference changed. Full note:
+[plan/research/2026-09-13_solver_velocity_throughput_review.md](research/2026-09-13_solver_velocity_throughput_review.md);
+scripts and logs in `plan/research/scripts/2026-09-13/`. Fresh venv
+`~/local/venvs/gkx-review-20260913`: Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0; M3 Max CPU, complex128, one XLA
+thread. The machine carried load 8–60 from unrelated jobs: **times are
+indicative only**; iteration counts, residuals, fill, HLO counts and spectra
+are load-independent. Office GPUs untouched; one read-only NetCDF re-read on
+the office CPU.
+
+**Decision.** Reorder, not replace: §5.1 gains L1–L6 (instrument inner
+solves; exact sparse ladder; restrict to linked-covered rows; preconditioner
+bake-off on the exact-operator harness; recycled/thick-restart structure;
+shift policy); §0.5 gains a mechanism-first order (drift ablations, eigen
+ℓ-spectra, Laguerre sink, Dougherty ν→0) before another Nl rung; §5.3 gains
+N0–N7 (HLO ledger, complete once per step, batched chain FFTs,
+half-spectrum layout, packed transforms, f32 bracket, avoidable work,
+sharding last).
+
+**Commands.** From the pinned worktree,
+`env PYTHONPATH=$PWD/src:$PWD MPLBACKEND=Agg JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1" nice -n 10 python plan/research/scripts/2026-09-13/<script>.py`
+for `d1_preconditioner_defect.py` (89 s, 1.04 GB peak), `d1b_neutral_modes.py`
+(21 s), `d3_bmap.py`, `d5_bakeoff.py` (37 s, 1.13 GB), `d6_ladder.py`,
+`d7_hlo.py 32 32 16 2 4` (no x64; the deck resolves Nz=24); `v1_reread.py` on office with
+`/home/rjorge/venvs/dkx-gpu/bin/python`, reading
+`gkx-nl24-discriminator-20260912.vvmgDD/nl24.{out,big}.nc` and
+`gx-nyquist-resolution-20260905.Ut2U6L/full96.{out,big}.nc`, `full192.out.nc`.
+
+**Results.** Pilot (Ny16, ky=+.3, n=4096): certified λ0=.115621−.241179j
+(SuperLU, residual 1.3e-15, ≈0.1 s); Hermite-line 90 unrestarted iterations
+to 1e-5, GMRES(20) never; drifts off 7 (field-corrected 1); mirror/drive/end
+damping ≈10; 1536 unknowns on kx rows outside the linked chains are exactly
+decoupled, undamped and host the Re=0 eigenvalues at |λ−σ|=.093 next to the
+target at .047; ILU(1e-2) 6 iterations, per-ℓ block 33; over 12 outer RHSs
+`gcrot(20,10,"harmonic")` 12/12 in 2233 iterations vs `gmres(20)` 2/12.
+Ladder (Nx1): Hermite-line 26/24/159/—/— at (Nz,Nl,Nm)=(16,4,8)/(32,4,8)/
+(32,8,16)/(48,8,16)/(64,8,32); LU fill ratio 5–12, factor ≈n^1.7; the Nx4
+multi-link rung hit the 2400 s alarm on the loaded host and is not reported.
+GX re-read: γ stationary from t≈100 (Nl24 .033009, Nl32 .024858 on
+[200,300]; Nz192 .024944); |⟨φ24|φ32⟩|=.991; Laguerre spectrum a stationary
+plateau ≈1–2%/index to the cutoff (upper quarter .0796/.0817); P(ℓ=Nl−1)/total
+2.1e-3/1.3e-3. b_max=12.7 on this nkx=1 chain; Nl16 captures Γ0 to 4e-6.
+HLO at 32×32×24, Nl2/Nm4, as first recorded by `d7_hlo.py`: RHS fft=45,
+concatenate=9, gather=31, copy=55 (88 MB written, 55× state); RK3 step
+fft=135, copy=178 (297 MB, 185×); projector idempotence on the RHS output
+exactly 0. **Correction (same day, #231):** `d7_hlo.py` matched tokens inside
+instruction metadata; by op name the RHS issues fft 23, concatenate 9,
+transpose 35, copy 35 (46.1 MB, 29× state). #231 also measured once-per-step
+Hermitian completion: bitwise identical, but rejected because the captured-
+constant runtime diagnostics route then materializes 2.3–2.7× more bytes;
+the plan's N1 target of "most of the 41.9%" was wrong — that share is the
+bracket's own per-RHS completion, removed only by the ky ≥ 0 layout (N3).
+
+**Position versus other codes.** Added §2.4 (capability matrix from
+upstream sources: GX `Nyc` storage, stella/GS2 response-matrix implicit
+streaming, GENE harmonic Krylov–Schur, GX hypercollision defaults) and
+§5.4 (response-matrix implicit streaming with an entry trigger and gates);
+§5.3 N3 is now the ky ≥ 0 state-layout contract with memory, HLO and
+identity gates rather than an optimization item. E×B shear stays parked on
+its trigger and is named as the largest physics gap for experiments.
+
+**Limitations.** One σ; pilot σ reused on ladder rungs where it is no longer
+near the target; ILU/block-LU are host SciPy instruments, production-size
+assembly and fill extrapolated; GKX's own W(ℓ) for the same runs not yet
+compared; HLO counts at a small CPU grid, no per-op time share. Nothing here
+certifies a speedup, a default change or a converged growth rate. #226
+remains to be merged on its green head; #227 retargeted after it.
+
+## 2026-09-13 — Q1 inner-solve diagnostics (plan §5.1 L1)
+
+Branch `fix/inner-solve-diagnostics` from `origin/main` `06606e404`, handoff #228
+row Q1. Instrumentation only: no preconditioner, tolerance, default or SOLVAX
+change.
+
+**Decision.** (1) Every inner FGMRES solve of the shift-invert Arnoldi build
+keeps SOLVAX's true residual, iterations and converged flag; they are folded over
+all restarts × Krylov vectors into `InnerSolveStats(max_relative_residual,
+total_iterations, solves, unconverged_solves)` by the private jitted
+`_shift_invert_eigenpair_with_inner_stats`. The host gate prints
+`inner converged=… unconverged=k/n max_relative_residual=… tol=… iterations=…` in
+the `shift-invert solve finished` status and in all three rejection
+`RuntimeError`s. Public `dominant_eigenpair_shift_invert_cached` still returns
+`(eig, vec)`. (2) `shift_solve_method`/`gmres_solve_method` stays accepted and
+validated (same `ValueError`) but is no longer threaded or a `static_argnames`
+key; documented as an alias of the one SOLVAX FGMRES. (3) `implicit_maxiter`
+counts iterations on both implicit routes through `_gmres_iteration_budget`:
+`restart=min(restart,maxiter)`, `max_restarts=ceil(maxiter/restart)`, cap
+`restart·ceil(maxiter/restart)` (200 at the 200/20 default, previously 4000).
+Non-convergence is surfaced only where a channel exists: `_implicit_gmres_solution`
+returns the `KrylovSolution`; the linear scan result `(G, phi_t)`,
+`SimulationDiagnostics` and IMEX `linear_solve` (solver returns `x` only) have no
+solver-status field, and no host callback was added inside traced scans.
+
+**Which tests' numbers could change (none did).** Before editing, a scratch pytest
+plugin (not committed) wrapped `gmres` in `solvers_linear_implicit` and
+`solvers_nonlinear_imex` on pristine main and recorded SOLVAX iterations and
+convergence for every real solve in 13 implicit/IMEX-selected files (55 tests):
+76 recorded calls, all converged, maximum 8 iterations, every one under the new
+cap. The only budget whose cycle size changes (restart 2, maxiter 1, in
+`test_implicit_standard_and_diagnostic_routes_match`) did 0 iterations. The plugin
+run had one failure, `test_nonlinear_imex_state_gradient_matches_finite_difference[True]`
+(`reduce_precision does not accept dtype complex128`). Without the plugin both
+parameters pass on the branch (XML `f81cea8cec07…`) and on the clean main worktree
+(`b3566d6ed113…`), so this is an artifact of `jax.debug.callback` on that AD path,
+not a defect on main.
+
+**One allowlist re-key.** `test_hot_path_matrix_contractions_are_pinned` keys its
+unpinned-contraction allowlist by line; the unchanged overlap-ranking `tensordot`
+moved `solvers_linear_krylov_algorithms.py:675 -> 749`. Entry re-keyed, same code.
+
+| Selection (one file per invocation) | Result | XML SHA-256 prefix |
+| --- | --- | --- |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 84 passed | `5f97a5993940` |
+| `tests/unit/solvers/test_time_integrators.py` | 94 passed | `7d83e6bdccc1` |
+| `tests/integration/test_adaptive_eigenmodes.py` | 7 passed, 3 skipped (VMEC backend/eik cache) | `9f7917556c71` |
+| `tests/unit/linear/test_linear.py -k "krylov or shift or implicit"` | 8 passed | `bc2376de4b33` |
+| `tests/unit/nonlinear/test_nonlinear.py -k "implicit or imex or IMEX"` | 9 passed | `71bedea6d5ab` |
+| `tests/unit/nonlinear/test_nonlinear_helpers_extra.py -k …` | 15 passed | `53a067a2d519` |
+| `tests/unit/linear/test_linear_helpers_extra.py -k …` | 8 passed | `75ec05232d38` |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k …` + `test_compare_runtime_window_writes_csv` | 3 + 1 passed | `c0c632d28032`, `01bcc93cdb90` |
+| runtime runner / CLI nodes referencing `implicit_maxiter` | 2 + 1 passed | `61af1e7fe513`, `9a80d58f2a55` |
+| sharded velocity node (2 forced host devices) | 1 passed | `bc034a1557b4` |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed | `56a26d29f8a4` |
+
+New/extended tests: a forced 1-iteration inner budget reports `converged=False`,
+6/6 unconverged and relative residual > 1e-10, and the status and rejection text
+carry them; an unrestarted 400-iteration budget reports converged and residual ≤
+1e-3; the three labels give bitwise-identical pairs from one trace; implicit
+`maxiter=8, restart=4` stops by 8 iterations (32 before) unconverged, and IMEX
+passes budget `(4, 2)`.
+
+Checks: pinned ruff 0.16.4 check/format (407 files), `mypy` as CI (184 source
+files, no issues), `check_package_architecture_manifest.py`,
+`check_repository_size_manifest.py`, gitleaks 8.30.1 on changed files. Line budgets
+measured: source 89248 → 89409 (+161), tests 87826 → 88018 (+192); targets
+unchanged; no new files, no docs change.
+
+Environment: local shared Mac (load 9–33 during the run), Python 3.11.14,
+JAX/jaxlib 0.10.2, NumPy 2.4.6, SOLVAX 0.20.0, `PYTHONPATH=$PWD/src:$PWD
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu`, `nice -n 19`,
+`pytest -q -o addopts='' -p no:cacheprovider --junitxml=…`. Worktrees
+`~/local/GKX-worktrees/inner-solve-diagnostics` (branch) and
+`~/local/GKX-worktrees/inner-solve-baseline` (detached clean `06606e404`).
+
+Limitations: the per-solve statistics are not yet on a public result; the implicit
+routes still discard their flag inside scans; with ceil budgeting a solve may exceed
+`maxiter` by less than one cycle; no runtime or memory measurement was made (the
+extra carry is four scalars per Arnoldi build). The registered §5.1 pilot was not
+re-run, so no preconditioner's inner statistics are published yet. Next: re-run
+that pilot per mode so its rejection names the inner budget, then L2/L3.
+
 ## 2026-09-13 — Q4: Hermitian completion once per step (plan §5.3 N0 + N1)
 
 **Outcome: N0 adopted, N1 rejected on HLO evidence.** The once-per-step
