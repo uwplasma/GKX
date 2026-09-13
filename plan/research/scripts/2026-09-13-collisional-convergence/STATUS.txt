@@ -1,0 +1,95 @@
+Q8 collisional Laguerre convergence -- STATUS at pause (2026-09-13 ~17:08 CDT)
+
+State: PAUSED by the maintainer before any run. Nothing was executed.
+- No GKX or GX run was started on office; no office staging directory was
+  created (ls /home/rjorge/gkx-q8-* -> none at 17:07 CDT); no process of this
+  row exists and nvidia-smi listed no compute processes on either GPU.
+- Nothing pushed, no PR opened.
+- Committed here: manifest.toml (registered question, predictions and the
+  8 new GKX cases + preflight), three fixture copies differing from
+  tools/comparison/fixtures/parity/cyclone_salpha_itg.toml only in
+  [[species]] nu (1e-3, 3e-3, 1e-2; header comment added), this file.
+
+Base: origin/main 578b970742b4e0dec19f0cfbb177139b9c65cc73. `git diff --stat
+06606e404 578b97074 -- src tools tests pyproject.toml` is empty, so Q3's
+physics source and runner are unchanged and Q3's four collisional results
+(nu1e-3/nu1e-2 x Nl24/Nl32; branch evidence/laguerre-drift-ablation,
+summary.csv) are reusable. Re-check this against origin/main at resume.
+
+Verified from source before the pause (origin/main 578b97074)
+1. GKX collision term with [time] collision_operator unset ("none") or
+   "lenard_bernstein": _resolve_config_collision_operator returns None, and
+   the runtime scan (workflows/runtime/orchestration_scan.py
+   _run_batch_diagnostics) resolves it too, so the built-in term is used.
+   It is NOT purely diagonal: base damping nu*(nu_laguerre*l + nu_hermite*m
+   + b) = nu*(2l + m + b) (cache_arrays.py lb_lam + collision_damping), plus
+   _collision_moment_correction (dissipation.py) with u_par, u_perp and
+   temperature restoring terms, applied because terms/assembly.py passes
+   G, Jl, JlB, b to collisions_contribution. I.e. the GX-style conserving
+   model. The Q3 manifest's "diagonal Lenard-Bernstein" wording is
+   incomplete.
+2. Runtime choices (params.py COLLISION_OPERATOR_NAMES): none,
+   lenard_bernstein, sugama, improved_sugama, coulomb, coulomb_finite_kperp.
+   There is NO runtime-selectable "dougherty"; drift_kinetic_dougherty_
+   contribution (dissipation.py) exists only as a library function. The
+   sugama/improved_sugama choices build a dense drift-kinetic moment
+   operator from the six-moment tables; whether it acts (or is valid) on an
+   Nl32 x Nm96 state was NOT verified. P3 is therefore not runnable as
+   registered; decide at resume between (a) reporting P3 as not run, or
+   (b) a sugama control at nu=3e-3, Nl32 after a CPU preflight proves it
+   reaches every moment the built-in term damps.
+3. GX (/home/rjorge/GX at 3865a537): vnewk sets species nu_ss;
+   collisions = any nu_ss > 0; coll_conservation defaults true
+   (parameters.cu:543), so conservation_terms (u_par, u_perp, t) are applied
+   in Linear_GK::rhs. The exact collision expression inside rhs_linear
+   (device_funcs.cu ~3100) was not yet read line by line; confirm it is
+   nu*(b + 2l + m) before claiming GX and GKX run the same operator.
+   `hypercollisions = true` in the deck selects the kz branch.
+   Output diagnostics: fields/moments default false, save_for_restart
+   default true, free_energy default true, nwrite_big = 100*nwrite.
+4. Office disk at 17:05 CDT: 66 GB free on / (not ~5 GB). Both A4000s idle.
+5. Existing GX discriminator (/home/rjorge/gkx-nl24-discriminator-20260912.
+   vvmgDD): ./gx SHA-256 96a53403...0d70536 verified; nl24.in is T=300,
+   nky=2, save_for_restart=true, fields=true, moments=true; its wall time
+   was 30:10 (so T=150 is ~15 min at Nl24, ~18 min at Nl32).
+
+Remaining work, in order (resume steps)
+1. git -C /Users/rogeriojorge/local/GKX-worktrees/perf-review fetch origin;
+   confirm the physics-source diff above is still empty for the new main
+   SHA (else rerun the Q3 reuse cases). Rebase this branch if main moved.
+2. Stage: git archive origin/main -> /tmp/gkx-q8-src.tgz; mktemp -d
+   /home/rjorge/gkx-q8-collisional-convergence-20260913.XXXXXX; extract to
+   src_stage/ and copy this directory to the same relative path.
+3. CPU preflight (office or local): adapt Q3's preflight_collisions.py to
+   nu in {0, 1e-3, 3e-3, 1e-2}, print resolved collision settings
+   (terms.collisions, params.nu, nu_hermite, nu_laguerre, collision_operator,
+   absorber 50) and assert RHS change scales linearly in nu.
+4. GPU policy: poll nvidia-smi every ~5 min; use GPU0 or GPU1 only with no
+   compute processes and <5% utilization on two consecutive polls; wait cap
+   3 h; per-run timeout 45 min (2700 s).
+5. Supervisor (copy Q3 run_ablation.sh, point MANIFEST at this manifest,
+   timeout 2700 s), env: PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cuda
+   XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_ENABLE_X64=true GKX_X64=1
+   MPLBACKEND=Agg CUDA_VISIBLE_DEVICES=<chosen>
+   GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs
+   python /home/rjorge/venvs/gkx-nl/bin/python. Keys in order:
+   preflight-nu3e-3-nl24; then nu3e-3-nl24 nu3e-3-nl32 nu1e-3-nl48
+   nu3e-3-nl48 nu1e-2-nl48 nu1e-3-nl16 nu3e-3-nl16 nu1e-2-nl16
+   collisionless-nl64 (check free device memory before Nl64; Q3 Nl48 peak
+   was 93 MB). Launch with setsid nohup, record PIDs, poll terminal files.
+   Rerun at T=300 (steps=150000) only a case whose settled flag is false.
+   Expected GPU time ~80-90 min.
+6. GX, after GKX and only on a free GPU: copy nl24.in into the staging dir,
+   change only nlaguerre (24, 32), t_max=150, vnewk=[1e-2, 0.0],
+   save_for_restart=false, fields=false, moments=false (record each delta;
+   hypercollisions stays true; optionally one run with hypercollisions=false).
+   Fit gamma from Diagnostics/Phi2_t on [105,150] (gamma = slope/2 of
+   log Phi2) and report Diagnostics/omega_kxkyt at late time. Delete
+   big.nc/restart files after extraction.
+7. Record: summarize.py (ruff-clean) -> summary.csv, per-run *.txt logs,
+   SHA256SUMS.txt (< 300 KB), plan/log.md entry at the END, one or two
+   sentences in plan.md 0.5; checks (ruff 0.16.4 check/format, size
+   manifest, release gates + evidence ledger tests, gitleaks 8.30.x on the
+   changed files, no gitleaks:allow and no .gitleaksignore edits); PR titled
+   "evidence: collisional Laguerre convergence of the Cyclone ky=0.55 growth
+   rate (Q8)" with the plan 14 template, not merged.

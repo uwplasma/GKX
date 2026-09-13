@@ -1,0 +1,231 @@
+# Q8 collisional Laguerre convergence of the Cyclone ky=.55 growth rate
+# (registered 2026-09-13, NOT YET EXECUTED; session paused before any run).
+#
+# Question: is the Nl-converged linear growth rate of this mode ~.017 once a
+# small physical collision frequency regularizes the Hermite-Laguerre
+# truncation, with the collisionless runs converging slowly toward it from
+# above, and does GX agree with a matched collisional run?
+# Predictions:
+#  P1 for each nu in {1e-3, 3e-3, 1e-2}: |gamma(Nl48) - gamma(Nl32)|/gamma < 2%,
+#     the three gamma(Nl48) agree within a few %, and extrapolate smoothly as
+#     nu -> 0;
+#  P2 collisionless gamma(Nl64) < gamma(Nl48) and moves toward that limit;
+#  P3 a conserving Dougherty operator at nu=3e-3, Nl32 gives gamma within 2% of
+#     the built-in term (no runtime-selectable Dougherty on main; see STATUS.txt);
+#  P4 GX with vnewk=1e-2 at Nl 24/32 agrees with the matched GKX runs to <= 2%.
+#
+# Settings are identical to Q3 (plan/research/scripts/2026-09-13-drift-ablation,
+# branch evidence/laguerre-drift-ablation): Nm96, Nz96 (ntheta32, nperiod2),
+# nkx=1, ky=.550000011920929, rk4, dt=.002, steps=75000 (T=150), fit
+# [105,150] (fit_start_fraction .7), half-time probe [52.5,75], absorber
+# damp_ends_amp/dt = 50, f64. Collision term: [time] collision_operator unset
+# ("none") = built-in Lenard-Bernstein path with [collisions] nu_hermite=1,
+# nu_laguerre=2. Only [[species]] nu differs from the tracked fixture.
+# Run with tools/comparison/build_gx_parity_matrix.py and GX_PARITY_REF_DIR at
+# the directory holding ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc
+# (geometry import and comparison column only; that reference is GX Nl16/Nm48
+# collisionless, so the runner's comparison column is not a matched control).
+#
+# Reuse: origin/main 578b97074 has no change under src/, tools/, tests/ or
+# pyproject.toml since Q3's 06606e404, so Q3's nu1e-3/nu1e-2 x Nl24/Nl32
+# results are reused and are not listed here.
+
+[[case]]
+key = "preflight-nu3e-3-nl24"
+label = "preflight, species nu=3e-3, Nl24, 500 steps"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu3e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "preflight only"
+Nl = 24
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 500
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu1e-3-nl16"
+label = "Cyclone ITG s-alpha, species nu=1e-3, Nl16"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu1e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 16
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu1e-3-nl48"
+label = "Cyclone ITG s-alpha, species nu=1e-3, Nl48"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu1e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 48
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu3e-3-nl16"
+label = "Cyclone ITG s-alpha, species nu=3e-3, Nl16"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu3e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 16
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu3e-3-nl24"
+label = "Cyclone ITG s-alpha, species nu=3e-3, Nl24"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu3e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 24
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu3e-3-nl32"
+label = "Cyclone ITG s-alpha, species nu=3e-3, Nl32"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu3e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 32
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu3e-3-nl48"
+label = "Cyclone ITG s-alpha, species nu=3e-3, Nl48"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu3e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 48
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu1e-2-nl16"
+label = "Cyclone ITG s-alpha, species nu=1e-2, Nl16"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu1e-2.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 16
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu1e-2-nl48"
+label = "Cyclone ITG s-alpha, species nu=1e-2, Nl48"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu1e-2.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 48
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "collisionless-nl64"
+label = "Cyclone ITG s-alpha, all terms, collisionless, Nl64"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "tools/comparison/fixtures/parity/cyclone_salpha_itg.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 shipped-deck reference; comparison column not a matched control"
+Nl = 64
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
