@@ -1,0 +1,23 @@
+	Command being timed: "/home/rjorge/venvs/gkx-nl/bin/python plan/research/scripts/2026-09-13-drift-ablation/preflight.py"
+	User time (seconds): 23.40
+	System time (seconds): 0.79
+	Percent of CPU this job got: 230%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:10.50
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1214212
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 297122
+	Voluntary context switches: 10237
+	Involuntary context switches: 2808
+	Swaps: 0
+	File system inputs: 9224
+	File system outputs: 2736
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

@@ -11731,3 +11731,185 @@ PYTHONPATH/x64/CPU environment above, `/usr/bin/time -l`, argument
 these CPU candidates. Next: fixed-budget streaming-only/full-operator
 preconditioner-defect controls before a production solver change. Keep the
 source PR #226 frozen for CI; this evidence updates the existing docs PR #227.
+
+## 2026-09-13 — Q3: velocity-truncation discriminators for the shared Nl24→32 growth change (evidence only)
+
+**Question (registered before running).** In the collisionless Cyclone s-α
+adiabatic-electron ITG control at ky=.55, Nm96, Nz96 (ntheta32, nperiod2,
+nkx=1), GKX and GX both change γ by ≈−24.7% from Nl24 (γ≈.0330) to Nl32
+(γ≈.0249). Hypothesis: ∇B-drift μ-space phase mixing with no Laguerre sink.
+Registered prediction: with `gradb=0` the Nl24→32 γ change is <1%; with
+`curvature=0` it persists; both persisting or both vanishing to be reported as
+such.
+
+**Source and environment.** `origin/main` `06606e404771b4c5217f07c284a9003e12d9c982`
+(#226 merged); `git archive` tarball SHA-256
+`a7fe0365d2d2ccc5e553704bda94971f33982e4c07c98c187b57c10e141bfea0`, staged at
+office `pop-os:/home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/src_stage`.
+`/home/rjorge/venvs/gkx-nl/bin/python` (Python 3.11.15, JAX 0.10.2, SOLVAX
+0.20.0), `gkx.__file__` in the stage, `jax.devices()` = `[CudaDevice(id=0)]`,
+x64 on (f64, as in the 2026-09-05 control, whose f32 variant was the marked
+exception). RTX A4000 **GPU0** (see occupancy). Env per run:
+`CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda XLA_PYTHON_CLIENT_PREALLOCATE=false
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg PYTHONPATH=$PWD/src:$PWD
+GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs`.
+
+**Protocol.** In-repo runner `tools/comparison/build_gx_parity_matrix.py`,
+unchanged; manifest `plan/research/scripts/2026-09-13-drift-ablation/manifest.toml`
+(Nm96, ky=[.550000011920929], dt .002, rk4, `fit_start_fraction` .7; runner
+defaults `mode_method="z_index"`, phi fit, batch ky; it also runs a half-time
+scan). Configurations: the tracked fixture
+`tools/comparison/fixtures/parity/cyclone_salpha_itg.toml` ("full") and copies
+that differ in exactly one line (`[terms] gradb = 0.0`, `[terms] curvature =
+0.0`, `[[species]] nu = 1e-3`, `[[species]] nu = 1e-2`). The runner ignores the
+manifest's `damp_ends_rate`; the fixtures leave `[time] damp_ends_rate` unset,
+so the absorber is `damp_ends_amp/dt` = .1/.002 = 50 (asserted in both CPU
+preflights). Command per run, sequential, one process per key, via
+`run_ablation.sh RUN_DIR 0 KEY...` (stops on nonzero exit or nonfinite γ/ω):
+`timeout --signal=TERM --kill-after=10s 1800s /usr/bin/time -v python
+tools/comparison/build_gx_parity_matrix.py --manifest
+plan/research/scripts/2026-09-13-drift-ablation/manifest.toml --cases KEY
+--stem RUN_DIR/results/KEY`.
+
+**Documented deviations.**
+1. *T=150 instead of the historical T=300* (coordinator, before any long run,
+   to halve GPU time): steps=75000, fit window [105,150] instead of [210,300];
+   the runner's half-time probe is then [52.5,75]. Basis: the 2026-09-13 GX
+   re-read found γ stationary from t≈100. The full-terms control was re-run on
+   current source at T=150: Nl24 .0328280 vs .0330097 at T300 on 2026-09-05
+   (−0.55%), Nl32 .0249958 vs .0248521 (+0.58%).
+2. *Drift ablations reported as non-discriminating; curvature runs skipped;
+   collision and Nl48 runs added* (lead, ≈15:58, after `gradb0_nl24` finished
+   and while `gradb0_nl32` ran). Removing the ∇B drift removes the toroidal ITG
+   itself (ω .50→.03, unsettled), so drift ablations cannot discriminate
+   truncation effects on this mode and are not read as confirming or refuting
+   the hypothesis. The supervisor (pid 224119) was sent SIGTERM at 15:58:52
+   between runs; `gradb0_nl32` finished under its own cap;
+   `curvature0_nl24`/`curvature0_nl32` never started. Mode-preserving
+   replacements at the same settings: species ν ∈ {1e-3, 1e-2} × Nl {24, 32},
+   then one collisionless full-terms Nl48 run. Prediction registered before
+   those runs: under a truncation-reflection mechanism the Nl24→32 γ gap
+   shrinks strongly with ν and γ(ν) extrapolates smoothly toward the
+   collisionless value.
+3. *GPU0 instead of GPU1*, by the coordinator's occupancy policy (below).
+
+**Collision operator (code reading at the pinned SHA, plus preflight).** With
+`[time] collision_operator` unset (`"none"`), `_resolve_config_collision_operator`
+returns `None` and the linear RHS keeps its built-in diagonal Lenard–Bernstein
+term, rate ν·(nu_laguerre·ℓ + nu_hermite·m + b) = ν·(2ℓ + m + b) with the
+fixture's `[collisions] nu_hermite=1, nu_laguerre=2`, plus
+`_collision_moment_correction` (the runtime assembly passes G/Jl/JlB/b). The
+collision weight is on only with `[physics] collisions = true` (fixture) and a
+nonzero species ν. The conservation properties of the correction were not
+tested here.
+
+**Preflights (not evidence).**
+- Drift CPU RHS check (`preflight.py`, office CPU, 10.5 s): term weights as
+  intended, absorber 50; on one fixed random state at ky .55/Nl24/Nm96 the
+  relative RHS change versus full is .207 (`gradb=0`) and .834
+  (`curvature=0`); the two ablations differ by .750.
+- Collision CPU RHS check (`preflight_collisions.py`, office CPU, 9.3 s):
+  collision weight 0/1/1 for ν 0/1e-3/1e-2, `params.nu` matches, built-in LB
+  path, absorber 50; relative RHS change 8.412427e-4 (ν=1e-3) and 8.412427e-3
+  (ν=1e-2), ratio 10.000000.
+- GPU runner path at steps=500: `preflight_full_nl24` exit 0 (11.65 s wall),
+  `preflight_nu1e-2_nl24` exit 0 (13.42 s); finite γ/ω at T=1 (transient).
+
+**GPU occupancy and selection.** Policy (coordinator): never preempt, signal or
+share; poll ≈5 min; first GPU (1 preferred, 0 acceptable) with no compute
+processes and <5% utilization on two consecutive polls; wait cap 3 h from
+14:38:33. Polls 1–10 (14:38:33–15:24:03): no eligible GPU. GPU0 held by
+another user's `run_collapse.py` (pid 147360, which also kept a 162 MiB context
+on GPU1) until between 14:58:57 and 15:03:58, then by the maintainer's lmx
+`gpu_bench.py` jobs; GPU1 at 99–100% throughout with the maintainer's vmex
+`validate_refinement.py` / `2D_Orszag_Tang_optimization.py` and lmx
+`gpu_bench.py` / `gpu_timing.py` / pytest jobs. Polls 11–12 (15:29:04,
+15:34:09): GPU0 0%, no compute apps → selected; rechecked 0 apps immediately
+before the GPU preflight and before launch. Batch 2: GPU0 eligible at 16:03:18
+and 16:09:57, rechecked before the preflight and launch. GPU1 was never
+eligible and was not used. An earlier background GPU1 watcher (local task) was
+stopped at the coordinator's request before any launch.
+
+**Results** (T=150, fit [105,150]; "half shift" = runner's relative change of
+the [52.5,75] estimate from the [105,150] estimate; "settled" = runner flag,
+|half shift| ≤ 5%; Δγ is from the next lower Nl of the same configuration;
+wall = `/usr/bin/time` process wall including the half-time scan).
+
+| key | ν | terms | Nl | γ | ω | half shift γ | half shift ω | settled | Δγ | wall | peak RSS KiB | device MB |
+|---|---:|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|
+| full_nl24 | 0 | full | 24 | .0328280 | .500108 | +.0174 | −.0056 | yes | — | 5:20.56 | 1239900 | 103.0 |
+| full_nl32 | 0 | full | 32 | .0249958 | .504821 | −.1399 | +.0097 | no | −23.86% | 8:25.91 | 1240436 | 53.8 |
+| full_nl48 | 0 | full | 48 | .0197718 | .496919 | +.0566 | +.0001 | no | −20.90% (32→48) | 12:18.46 | 1240352 | 93.3 |
+| gradb0_nl24 | 0 | gradb=0 | 24 | .0102031 | .026863 | +5.816 | +9.071 | no | — | 5:19.26 | 1243280 | 103.0 |
+| gradb0_nl32 | 0 | gradb=0 | 32 | .0139783 | .018382 | +1.731 | +3.879 | no | +37.0% | 8:19.39 | 1235656 | 53.8 |
+| curvature0_nl24, _nl32 | 0 | curvature=0 | 24, 32 | skipped | | | | | | | | |
+| nu1e-3_nl24 | 1e-3 | full | 24 | .0291274 | .497333 | +.0101 | −.0005 | yes | — | 5:55.29 | 1262808 | 103.0 |
+| nu1e-3_nl32 | 1e-3 | full | 32 | .0174118 | .501087 | −.0384 | −6.5e-5 | yes | −40.22% | 8:17.83 | 1250004 | 85.8 |
+| nu1e-2_nl24 | 1e-2 | full | 24 | .0174378 | .495769 | +2.4e-5 | +4.1e-6 | yes | — | 5:59.52 | 1262780 | 103.0 |
+| nu1e-2_nl32 | 1e-2 | full | 32 | .0171657 | .495705 | +2.3e-5 | +4.2e-6 | yes | −1.56% | 8:17.33 | 1249492 | 85.8 |
+
+**Result statements.**
+1. *Drift ablation: non-discriminating.* `gradb=0` removes the ITG itself (ω
+   .500→.027/.018, runner-unsettled with γ half shifts 5.8/1.7); its Nl24→32
+   change (+37%) says nothing about Laguerre truncation of the ITG.
+   `curvature=0` was not run. The registered drift prediction is therefore
+   neither confirmed nor refuted.
+2. *Collision prediction, as registered, is not supported by these points.*
+   The Nl24→32 gap shrinks at ν=1e-2 (−1.56%, both settled) but is larger at
+   ν=1e-3 (−40.22%, both settled) than collisionless (−23.86%), so it is not
+   monotone in ν over these two values. At Nl32, γ is .017166 (ν=1e-2),
+   .017412 (ν=1e-3) and .024996 (ν=0): γ(ν) does not extrapolate smoothly to
+   the collisionless Nl32 value.
+3. *The collisionless γ is not converged in Nl at Nl32.* Nl24/32/48 give
+   .0328/.0250/.0198 (−23.9%, then −20.9%; Nl32 and Nl48 runner-unsettled), so
+   the collisionless value used in (2) is itself a moving target. The three
+   settled collisional values with Nl above a ν-dependent threshold
+   (ν=1e-3 Nl32, ν=1e-2 Nl24 and Nl32) agree to 1.6% at .0172–.0174. This is
+   consistent with, but does not demonstrate, slow collisionless Laguerre
+   convergence toward that level, with weak collisions shortening it (Nl24
+   insufficient at ν=1e-3, sufficient at ν=1e-2).
+
+**Limitations.** T=150 only; for collisionless Nl32/48 the runner's half-time
+probe [52.5,75] lies in the transient (the GX Nl32 re-read showed
+instantaneous γ rising .02363→.02487 over t=100–300), so those two γ may be
+biased low by a few percent and their settled flag is uninformative. One
+late-window fit per run; no eigenvalue and no Laguerre spectrum (the runner
+returns no state). Only two ν values, at Nl ≤ 32; no ν→0 extrapolation; no
+collisional GX run. The ν=1e-2 FLR part ν·b reaches ≈.13 at b_max=12.7, above
+γ, so ν=1e-2 is a strong perturbation at large |θ|; the collisional γ is not
+established as the collisionless limit. Nl48 is a single rung; Nl64 not run.
+The JSON comparison columns are against the GX Nl16/Nm48/T150 shipped
+reference and are not matched controls. Timings are from a shared host with
+the other GPU busy; not benchmark-grade.
+
+**Artifacts** (`plan/research/scripts/2026-09-13-drift-ablation/`, 49 text
+files, 82 KB before `SHA256SUMS.txt`): `SHA256SUMS.txt` lists SHA-256 for every
+other file; its own SHA-256 is `74e7f834dd6ca2260161c6a42f22a2b9718207966280f0ec75d96178c9432ba0`. Key hashes: `manifest.toml`
+`77481411c46a804db22b4fda1622064db5ba87d4fbfb989bc71464566f1924c5` (as executed on office: `00e8d3ab18c2523ae5aefd55623e5377ee6f31d168285414ad8aa9e2736fb94d`),
+`summary.csv` `d2a9b50546a56b6df5ef8be20bae0a835bb6105a95571d349d0c103c4d9899d2`,
+`logs/supervisor.txt` `921e9b4f0b0dbb7ce0794456bb3855320ea4afb4ee8605ad50a864f79dd1ad3f`,
+`run_ablation.sh` `f6b0f219bc7ee40ed3ce5da077d01ce04c3b6ccae9137d3caba2397ad1e2a4b1`,
+`preflight.py` `bca22f5681610824aef437638f6c340aa133e41e1228369a376d887b6b736d83`,
+`preflight_collisions.py` `0e81db4369dbcde656872f04497bf21b8d3dd8323cc80d2691a46ebd602e8339`,
+`summarize.py` `bd658b45795b46adb80abf58a6d99062083833cbfa3fcbbda66f15992c185100`.
+PNGs written by the runner stay on office only.
+**Flag for the maintainer:** gitleaks 8.30.1 reported two `generic-api-key`
+false positives on the manifest `key` fields of the two skipped curvature cases
+(case names curvature0_nl24 and curvature0_nl32, entropy 3.64). The committed
+manifest adds an inline `# gitleaks:allow` comment to those two lines only; the
+parsed TOML is identical to the executed copy (asserted), and `.gitleaksignore`
+is unchanged.
+
+**Terminal job state.** Batch 1: supervisor 224119 (launched 15:35:07 via
+wrapper 224117) ran `full_nl24` (timeout 224124, python 224127), `full_nl32`
+(227264/227267) and `gradb0_nl24` (231307/231310), then was stopped by SIGTERM
+at 15:58:52; `gradb0_nl32` (233060/233063) exited 0 at ≈16:02:32. Batch 2:
+supervisor 237506 (`setsid`, 16:11:24) ran `nu1e-3_nl24` (237512/237515),
+`nu1e-3_nl32` (238722/238725), `nu1e-2_nl24` (239840/239843), `nu1e-2_nl32`
+(240728/240731) and `full_nl48` (242390/242393), `DONE` 16:52:13. All nine runs
+and both GPU preflights (223534…223542, 236877…236885) exited 0; no timeout, no
+nonfinite value. At 16:54:06 every listed PID was verified gone and no
+`build_gx_parity_matrix`/`run_ablation`/preflight process remained. Office
+cleanup: the source tarball and `src_stage/` were removed; `logs/` and
+`results/` (780 KB) are kept at
+`/home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq`. Local tarball removed.

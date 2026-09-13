@@ -578,6 +578,16 @@ claim that this contradicts every published study and must be a GKX defect
 is withdrawn: published resolutions are not convergence guarantees for this
 case. Shared closure/truncation, domain and finite-time/mode-selection effects
 remain unresolved. The terminal audit and spectra are in [the log](plan/log.md).
+
+**Updated 2026-09-13 by the Q3 runs** (current main, T=150, fit [105,150];
+[log](plan/log.md)): removing the ∇B drift removes the ITG itself (ω .50→.03),
+so drift ablations do not discriminate truncation effects on this mode; with
+species ν=1e-2 the Nl24→32 γ change is −1.6% (.0174→.0172), with ν=1e-3 it is
+−40.2% (.0291→.0174), and the collisionless sequence Nl24/32/48 is
+.0328/.0250/.0198 (Nl32 and Nl48 not settled by the runner's half-time probe),
+so the collisionless growth rate is still moving past Nl32 toward the
+collisional values.
+
 Use the [convergence report](plan/research/2026-09-06_hermite_laguerre_convergence.md)
 as the investigation protocol, with matched contracts below:
 

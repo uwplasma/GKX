@@ -1,0 +1,8 @@
+real dtype float64
+nu0     nu=0 terms.collisions=0.0 collision_operator='none' (built-in LB) nu_hermite=1.0 nu_laguerre=2.0 end_damping_strength=50 |RHS|=6.531153e+04
+nu1e-3  nu=0.001 terms.collisions=1.0 collision_operator='none' (built-in LB) nu_hermite=1.0 nu_laguerre=2.0 end_damping_strength=50 |RHS|=6.531552e+04
+nu1e-2  nu=0.01 terms.collisions=1.0 collision_operator='none' (built-in LB) nu_hermite=1.0 nu_laguerre=2.0 end_damping_strength=50 |RHS|=6.535351e+04
+relative RHS change nu1e-3 vs nu0: 8.412427e-04
+relative RHS change nu1e-2 vs nu0: 8.412427e-03
+ratio (nu1e-2 / nu1e-3): 10.000000
+PREFLIGHT PASS
