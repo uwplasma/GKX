@@ -14,6 +14,7 @@ import jax
 import jax.numpy as jnp
 from solvax import gmres, linear_solve
 
+from gkx.solvers_linear_implicit import _gmres_iteration_budget
 from gkx.solvers_nonlinear_imex_diagnostics import (
     advance_imex_nonlinear_state,
     make_imex_diagnostic_step,
@@ -87,7 +88,12 @@ def solve_imex_step(
     The primal and transpose solves use the same tolerance-controlled FGMRES
     policy. Reverse mode differentiates the converged linear system through
     SOLVAX rather than tracing the dynamic Krylov stopping loop.
+    ``implicit_maxiter`` counts iterations. The convergence flag is not
+    surfaced: ``linear_solve`` accepts a solver returning only ``x``, and the
+    diagnostics contract has no solver-status field.
     """
+
+    restart, max_restarts = _gmres_iteration_budget(implicit_maxiter, implicit_restart)
 
     G_guess = imex_fixed_point_guess(
         G_in,
@@ -108,10 +114,10 @@ def solve_imex_step(
             rhs,
             x0=G_guess.reshape(-1),
             precond=precond_op,
-            restart=implicit_restart,
+            restart=restart,
             rtol=implicit_tol,
             atol=0.0,
-            max_restarts=implicit_maxiter,
+            max_restarts=max_restarts,
         ).x
 
     solution = linear_solve(matvec, G_rhs.reshape(-1), solver)
