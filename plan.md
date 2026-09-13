@@ -1029,12 +1029,24 @@ time-to-accepted-result. Synchronize; fresh-process cold runs; ≥5 warm
 repetitions; medians and spread; peak resident and device memory; compiler
 temporaries are not peak memory. Time-to-accuracy plots, not ms/step.
 
-**Solver diagnostic: first pilot completed, none accepted (§log, September 13).**
-The three GPU0 cold runs failed the original-operator residual gate; no warm
-timings or speedup result. Generated runtime seeds stayed complex64 despite x64
-flags. Next use the existing explicit `initial_state` API with a verified,
-identical complex128 seed, recording its hash and any earlier rounding; do not
-change defaults or enlarge budgets to obtain a passing timing. Protocol:
+**Solver diagnostic: precision is not the sole cause (September 13).**
+All three modes still fail in complex128 on CPU and GPU, with matching seed
+hashes and essentially unchanged residuals. One direct Hermite-line inner solve
+already misses its 1e-5 tolerance: true residual1.02915e-4 at60/60 iterations.
+The signed-mode control (Ny16, +.3, non-Nyquist) also rejects the outer pair
+(residual .0415641). At fixed60 inner iterations, restart20/30/60 gives true
+residual .2673/.09007/.007999: restart loss matters, but none meets1e-5.
+Do not promote a longer restart or change SOLVAX on these rejected results.
+Next measure the preconditioned operator defect on streaming-only and full-RHS
+controls, with the same signed mode/seed and fixed budget; this separates an
+implementation mismatch from omitted physics before adding a preconditioner.
+Then inspect later Arnoldi RHSs and mode selection only after the first shifted
+solve is admitted. Record
+the resolved signed ky: this small grid selects **-.3**, its negative Nyquist,
+for `ky_target=.3`. Keep it as a conditioning stress case, not a published +.3
+physics reference. Pin a non-Nyquist signed mode before an admitted benchmark.
+The existing `initial_state` API preserves explicit complex128 seeds, including
+any prior initialization rounding. Registered pilot protocol:
 reuse `run_runtime_linear(..., krylov_cfg=KrylovConfig(...))` and the existing
 `tools.profiling.profile_runtime_kernels._runtime_memory_summary`; the profiler
 CLIs do not currently compare interior-mode preconditioners. One fresh process
@@ -1047,6 +1059,11 @@ residual≤1e-6. Record cold/warm calls, residual/eigenbranch, RSS/device peak a
 timeouts. This underresolved conditioning pilot cannot establish physics or
 speedup; only successful matched-branch results justify repeated measurements
 under the protocol above. Do not alter SOLVAX before locating the dominant cost.
+For the next inner-solve diagnostic, retain SOLVAX's true residual, iteration
+count and convergence flag; the current inverse factory returns only `x`.
+The `batched`/`incremental`/`flexible` labels currently call the same SOLVAX
+implementation and are not three algorithms to benchmark. A converged first
+RHS alone would not certify later Arnoldi RHSs or the outer eigenpair.
 
 | Workload | Sweep |
 |---|---|
