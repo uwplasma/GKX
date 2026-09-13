@@ -1,0 +1,88 @@
+ENV {"python": "3.11.14", "platform": "macOS-14.4.1-arm64-arm-64bit", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "solvax": "0.20.0", "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py", "x64": true, "devices": "[CpuDevice(id=0)]", "threads": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "loadavg": [18.19482421875, 20.810546875, 19.2548828125], "script_sha256": "9ffbf1595d2a6067fbd8c2184bd54a9a53a02e2b6869020a4293ac0305a8d9a6", "sha": "578b970742b4e0dec19f0cfbb177139b9c65cc73", "dirty_src": false}
+[     2.6s rss<=0.40G] case r32 dims={'Nx': 1, 'Ny': 24, 'Nz': 32, 'ntheta': 32, 'nperiod': 1, 'Nl': 8, 'Nm': 16} shape=(1, 8, 16, 1, 1, 32) n=4096 ky=+0.300 dead_rows=0.000
+[     2.9s rss<=0.43G] matrix-free matvec 0.203 ms (jit, warm median)
+[     6.8s rss<=0.66G] assembly 0.8s nnz={'A': 428213, 'S': 346336, 'Db': 18432, 'Dc': 36603} |A-S-Dc|/|A|=1.363e-02 csr matvec 0.358 ms
+[     7.4s rss<=0.71G] off-block rel: {'Db': 0.0, 'Dc': 0.0, 'S': 0.9467982905571856}  Dc structure {'l_bandwidth_no_phi': 1, 'phi_part_rank_max': 1, 'phi_part_rel_fro': 0.012110771255009265}  probing Dc blocks {'cold': 0.2263528750045225, 'warm': 0.24262291700142669} maxdiff 0.00e+00
+[    10.4s rss<=0.80G] growing mode 0.114606-0.271538j -> sigma 0.164606-0.271538j
+[    12.8s rss<=0.88G] exact LU {'seconds': 1.2086054579995107, 'fill': 4447545} nearest [ 0.11460611-0.27153754j -0.01565751-0.27867809j -0.01613264-0.25192555j] separation 3.608 Arnoldi certification {'1e-06': {'steps': 9, 'lambda': [np.float64(0.11460611065437828), np.float64(-0.27153754588551693)]}, '1e-09': {'steps': 13, 'lambda': [np.float64(0.11460611063510115), np.float64(-0.27153754148639275)]}}
+[    14.1s rss<=0.95G] |(S - sigma) Sinv x - x|/|x| = 1.935e-15
+[    15.0s rss<=0.97G] |(S + mean drift - sigma) HL x - x|/|x| = 1.691e-15
+[    16.8s rss<=1.05G] adi-b[matched] alpha=-0.0823+0.1358j s1=0.1646-0.2715j {'its_1e5': None, 'its_1e8': None, 'last': 0.0045237508808432005, 'true': 0.00452375088084346, 'n_its': 400}
+[    18.2s rss<=1.08G] adi-b[2x] alpha=-0.1646+0.2715j s1=0.2469-0.4073j {'its_1e5': None, 'its_1e8': None, 'last': 0.0022328559597424988, 'true': 0.0022328559597422884, 'n_its': 400}
+[    19.6s rss<=1.09G] adi-b[4x] alpha=-0.3292+0.5431j s1=0.4115-0.6788j {'its_1e5': None, 'its_1e8': None, 'last': 0.002037578622846884, 'true': 0.00203757862284692, 'n_its': 400}
+[    21.0s rss<=1.10G] adi-b[10x] alpha=-0.8230+1.3577j s1=0.9053-1.4935j {'its_1e5': None, 'its_1e8': None, 'last': 0.09797206853422348, 'true': 0.09797206853422451, 'n_its': 400}
+[    22.5s rss<=1.11G] adi-b[re-0.1] alpha=-0.1000+0.0000j s1=0.1823-0.1358j {'its_1e5': None, 'its_1e8': None, 'last': 0.003092491290096664, 'true': 0.0030924912900971006, 'n_its': 400}
+[    24.0s rss<=1.13G] adi-b[re-0.3] alpha=-0.3000+0.0000j s1=0.3823-0.1358j {'its_1e5': None, 'its_1e8': None, 'last': 0.0003226840026700724, 'true': 0.00032268400267002935, 'n_its': 400}
+[    25.4s rss<=1.13G] adi-b[re-1] alpha=-1.0000+0.0000j s1=1.0823-0.1358j {'its_1e5': 270, 'its_1e8': None, 'last': 3.632395285899296e-08, 'true': 3.632395289159801e-08, 'n_its': 400}
+[    26.4s rss<=1.15G] adi-b[re-3] alpha=-3.0000+0.0000j s1=3.0823-0.1358j {'its_1e5': 162, 'its_1e8': 250, 'last': 9.3107357621315e-10, 'true': 9.310733187948378e-10, 'n_its': 280}
+[    27.8s rss<=1.16G] adi-b[re-10] alpha=-10.0000+0.0000j s1=10.0823-0.1358j {'its_1e5': 340, 'its_1e8': None, 'last': 8.835920394999987e-07, 'true': 8.835920395135731e-07, 'n_its': 400}
+[    29.5s rss<=1.17G] adi-c[matched] alpha=-0.0823+0.1358j s1=0.1646-0.2715j {'its_1e5': None, 'its_1e8': None, 'last': 0.003937985983416911, 'true': 0.003937985983416677, 'n_its': 400}
+[    31.5s rss<=1.17G] adi-c[2x] alpha=-0.1646+0.2715j s1=0.2469-0.4073j {'its_1e5': None, 'its_1e8': None, 'last': 0.0018999405585076654, 'true': 0.0018999405585076092, 'n_its': 400}
+[    33.1s rss<=1.18G] adi-c[4x] alpha=-0.3292+0.5431j s1=0.4115-0.6788j {'its_1e5': None, 'its_1e8': None, 'last': 0.0018249833027199776, 'true': 0.0018249833027198634, 'n_its': 400}
+[    34.6s rss<=1.18G] adi-c[10x] alpha=-0.8230+1.3577j s1=0.9053-1.4935j {'its_1e5': None, 'its_1e8': None, 'last': 0.07209015412234614, 'true': 0.07209015412234668, 'n_its': 400}
+[    36.2s rss<=1.18G] adi-c[re-0.1] alpha=-0.1000+0.0000j s1=0.1823-0.1358j {'its_1e5': None, 'its_1e8': None, 'last': 0.0027102394085872492, 'true': 0.0027102394085871512, 'n_its': 400}
+[    37.7s rss<=1.18G] adi-c[re-0.3] alpha=-0.3000+0.0000j s1=0.3823-0.1358j {'its_1e5': None, 'its_1e8': None, 'last': 0.0002627028125540815, 'true': 0.0002627028125539617, 'n_its': 400}
+[    39.1s rss<=1.19G] adi-c[re-1] alpha=-1.0000+0.0000j s1=1.0823-0.1358j {'its_1e5': 251, 'its_1e8': None, 'last': 1.1876006303030087e-08, 'true': 1.1876006440186779e-08, 'n_its': 400}
+[    39.9s rss<=1.21G] adi-c[re-3] alpha=-3.0000+0.0000j s1=3.0823-0.1358j {'its_1e5': 143, 'its_1e8': 225, 'last': 9.496169446627465e-10, 'true': 9.496171066933364e-10, 'n_its': 252}
+[    41.3s rss<=1.21G] adi-c[re-10] alpha=-10.0000+0.0000j s1=10.0823-0.1358j {'its_1e5': 327, 'its_1e8': None, 'last': 4.489315951863618e-07, 'true': 4.48931594939171e-07, 'n_its': 400}
+[    42.7s rss<=1.21G] adi-cm[matched] alpha=-0.0823+0.1358j s1=0.1646-0.2715j {'its_1e5': None, 'its_1e8': None, 'last': 0.011238490137191847, 'true': 0.01123849013719132, 'n_its': 400}
+[    44.2s rss<=1.21G] adi-cm[2x] alpha=-0.1646+0.2715j s1=0.2469-0.4073j {'its_1e5': None, 'its_1e8': None, 'last': 0.00178149659419985, 'true': 0.001781496594199221, 'n_its': 400}
+[    45.7s rss<=1.21G] adi-cm[4x] alpha=-0.3292+0.5431j s1=0.4115-0.6788j {'its_1e5': None, 'its_1e8': None, 'last': 0.0005095774070009997, 'true': 0.0005095774070006702, 'n_its': 400}
+[    47.2s rss<=1.22G] adi-cm[10x] alpha=-0.8230+1.3577j s1=0.9053-1.4935j {'its_1e5': None, 'its_1e8': None, 'last': 0.009133868083152549, 'true': 0.009133868083152355, 'n_its': 400}
+[    48.6s rss<=1.22G] adi-cm[re-0.1] alpha=-0.1000+0.0000j s1=0.1823-0.1358j {'its_1e5': None, 'its_1e8': None, 'last': 0.0051275760521926955, 'true': 0.005127576052192393, 'n_its': 400}
+[    50.2s rss<=1.22G] adi-cm[re-0.3] alpha=-0.3000+0.0000j s1=0.3823-0.1358j {'its_1e5': None, 'its_1e8': None, 'last': 4.993272522326986e-05, 'true': 4.9932725223291694e-05, 'n_its': 400}
+[    51.3s rss<=1.23G] adi-cm[re-1] alpha=-1.0000+0.0000j s1=1.0823-0.1358j {'its_1e5': 182, 'its_1e8': 279, 'last': 9.696376386962362e-10, 'true': 9.696379565452905e-10, 'n_its': 310}
+[    52.0s rss<=1.24G] adi-cm[re-3] alpha=-3.0000+0.0000j s1=3.0823-0.1358j {'its_1e5': 131, 'its_1e8': 196, 'last': 9.903819992831364e-10, 'true': 9.903821446461815e-10, 'n_its': 217}
+[    53.6s rss<=1.26G] adi-cm[re-10] alpha=-10.0000+0.0000j s1=10.0823-0.1358j {'its_1e5': 329, 'its_1e8': None, 'last': 5.080947947757267e-07, 'true': 5.080947943920276e-07, 'n_its': 400}
+[    54.7s rss<=1.26G] none         its 1e-5/1e-8=None/None (last 1.3e-01, true 1.3e-01) GMRES(20)=None apply/matvec=0.00 setup=0.000s mem=0.00MB
+[    56.3s rss<=1.26G] hl           its 1e-5/1e-8=366/None (last 4.1e-07, true 4.1e-07) GMRES(20)=None apply/matvec=0.98 setup=0.000s mem=0.00MB
+[    57.9s rss<=1.26G] zjac-b       its 1e-5/1e-8=None/None (last 8.3e-01, true 8.3e-01) GMRES(20)=None apply/matvec=2.01 setup=0.050s mem=8.39MB
+[    59.4s rss<=1.26G] zjac-c       its 1e-5/1e-8=None/None (last 9.1e-01, true 9.1e-01) GMRES(20)=None apply/matvec=2.00 setup=0.046s mem=8.39MB
+[    61.6s rss<=1.26G] ms-b         its 1e-5/1e-8=None/None (last 7.9e-01, true 7.9e-01) GMRES(20)=None apply/matvec=4.61 setup=0.050s mem=8.39MB
+[    64.0s rss<=1.26G] ms-c         its 1e-5/1e-8=None/None (last 2.7e-01, true 2.7e-01) GMRES(20)=None apply/matvec=4.73 setup=0.046s mem=8.39MB
+[    66.2s rss<=1.27G] ms-c-rev     its 1e-5/1e-8=None/None (last 1.7e-01, true 1.7e-01) GMRES(20)=None apply/matvec=5.13 setup=0.046s mem=8.39MB
+[    69.1s rss<=1.27G] sym-c        its 1e-5/1e-8=None/None (last 9.9e-01, true 9.9e-01) GMRES(20)=None apply/matvec=8.11 setup=0.046s mem=8.39MB
+[    70.7s rss<=1.27G] adi-b        its 1e-5/1e-8=162/250 (last 9.3e-10, true 9.3e-10) GMRES(20)=322 apply/matvec=7.37 setup=0.047s mem=8.39MB
+[    72.1s rss<=1.28G] adi-b-rev    its 1e-5/1e-8=161/250 (last 9.6e-10, true 9.6e-10) GMRES(20)=326 apply/matvec=3.15 setup=0.047s mem=8.39MB
+[    73.2s rss<=1.28G] pr2-b        its 1e-5/1e-8=108/159 (last 9.1e-10, true 9.1e-10) GMRES(20)=222 apply/matvec=6.38 setup=0.047s mem=8.39MB
+[    74.6s rss<=1.28G] pr3-b        its 1e-5/1e-8=99/145 (last 8.8e-10, true 8.8e-10) GMRES(20)=220 apply/matvec=17.33 setup=0.047s mem=8.39MB
+[    75.8s rss<=1.29G] adi-c        its 1e-5/1e-8=143/225 (last 9.5e-10, true 9.5e-10) GMRES(20)=228 apply/matvec=3.33 setup=0.041s mem=8.39MB
+[    76.8s rss<=1.29G] adi-c-rev    its 1e-5/1e-8=142/224 (last 9.5e-10, true 9.5e-10) GMRES(20)=227 apply/matvec=3.42 setup=0.041s mem=8.39MB
+[    77.5s rss<=1.30G] pr2-c        its 1e-5/1e-8=74/115 (last 9.4e-10, true 9.4e-10) GMRES(20)=99 apply/matvec=4.87 setup=0.041s mem=8.39MB
+[    78.1s rss<=1.30G] pr3-c        its 1e-5/1e-8=50/79 (last 9.9e-10, true 9.9e-10) GMRES(20)=56 apply/matvec=8.01 setup=0.041s mem=8.39MB
+[    79.0s rss<=1.31G] adi-cm       its 1e-5/1e-8=131/196 (last 9.9e-10, true 9.9e-10) GMRES(20)=211 apply/matvec=2.94 setup=0.044s mem=8.39MB
+[    79.9s rss<=1.31G] adi-cm-rev   its 1e-5/1e-8=130/195 (last 1.0e-09, true 1.0e-09) GMRES(20)=212 apply/matvec=2.84 setup=0.044s mem=8.39MB
+[    80.5s rss<=1.31G] pr2-cm       its 1e-5/1e-8=66/99 (last 9.1e-10, true 9.1e-10) GMRES(20)=95 apply/matvec=5.10 setup=0.044s mem=8.39MB
+[    81.1s rss<=1.32G] pr3-cm       its 1e-5/1e-8=45/72 (last 8.3e-10, true 8.3e-10) GMRES(20)=56 apply/matvec=8.19 setup=0.044s mem=8.39MB
+Traceback (most recent call last):
+  File "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 1068, in <module>
+    main()
+  File "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 1053, in main
+    rec = run_production_timing(args) if args.case == "prod" else run_case(args)
+                                                                  ^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 773, in run_case
+    ilu = spla.spilu(Sc, drop_tol=1e-2, fill_factor=3)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/venvs/gkx-review-20260913/lib/python3.11/site-packages/scipy/sparse/linalg/_dsolve/linsolve.py", line 535, in spilu
+    return _superlu.gstrf(N, A.nnz, A.data, indices, indptr,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Factor is exactly singular
+       82.41 real        97.07 user         5.12 sys
+          1444937728  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              117359  page reclaims
+                 124  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 233  voluntary context switches
+              257083  involuntary context switches
+       1190567897862  instructions retired
+        352077550140  cycles elapsed
+           731977856  peak memory footprint
+exit 1

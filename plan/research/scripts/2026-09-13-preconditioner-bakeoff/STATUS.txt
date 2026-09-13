@@ -1,0 +1,88 @@
+Q7 (plan 5.1 L4) structured preconditioner bake-off -- PAUSED 2026-09-13 ~18:08 CDT by the maintainer.
+Worktree /Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff, branch evidence/preconditioner-bakeoff,
+base origin/main 578b970742b4e0dec19f0cfbb177139b9c65cc73. No src/ change. NOT pushed, no PR.
+
+Host: M3 Max (14 cores, 36 GB), shared, load 13-77 during runs. Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6 (system BLAS), SciPy 1.17.1, SOLVAX 0.20.0, complex128, one XLA/BLAS thread, nice 10.
+bakeoff.py sha256 182757ff3c580d7231fb44eca9d79c5a05418e73da2d3a48625bb7f7fa0d9eaa (all final *.txt);
+prod_solve.py sha256 1607be99657bdbdea1b3445ac1e07e35d802cb4a4d68faed38b50405cb0cea59.
+
+COMPLETED (exit 0, one fresh process each, 2400 s alarm):
+  pilot.txt (+gcrot), r16.txt, r32.txt, r48.txt, r64.txt, r96.txt (sigma from #232 lambda+0.05, no exact LU,
+  no ceilings), r16-ny4.txt, r32-ny4.txt (ky=-0.1 controls at d6's sigma), prod.txt (production apply timing).
+  Superseded/diagnostic: v1_pilot_before_ilu_fallback.txt (identical counts), v1_r32_ilu_singular.txt
+  (SciPy spilu "exactly singular" crash that motivated the ILU fallback), v1_stopped_supervisor.txt.
+PARTIAL: prod_solve.txt -- Part A complete; Part B (shift-invert Arnoldi, pr3-cm alpha=-10, inner rtol 1e-9,
+  cap 600) stopped by me at step 2 of <=24 (residual .974 -> .300); no RESULT line.
+NOT STARTED: same-host run of #232's adaptive route; plan/log.md entry; plan.md 5.1 sentence; release checks;
+  gitleaks; push; PR.
+
+KEY CHECKS (all rungs): GKX line solve inverts S - s to <=4e-15 (with and without the z-mean drift);
+  Db and Dc exactly z-local (off-block norm 0); Dc = l-tridiagonal + rank-1 phi part per (kx,z);
+  probing (Nl*Nm probes) reproduces the extracted blocks exactly; |A - S - Dc|/|A| = .027 -> .004 (phi streaming).
+  d6's Nx1 Ny4 ladder actually resolves ky=-0.1 (no growing mode near sigma): control reproduces its
+  hermite-line 26 (r16) and 159 (r32). The ladder here uses Ny24 (ky=+0.3) and sigma = growing lambda + 0.05.
+
+UNRESTARTED GMRES iterations to 1e-5/1e-8 (cap 400) [GMRES(20) to 1e-5]; "(x)" = residual at 400.
+| candidate | pilot n=4096 | r16 n=512 | r32 n=4096 | r48 n=6144 | r64 n=16384 | r96 n=18432 |
+| hl      | 90/110 [-]   | 68/92 [163] | 366/- [-]   | (0.9) [-]   | (0.5) [-]    | (1) [-]      |
+| zjac-c  | 368/396 [-]  | 328/364 [-] | (0.9) [-]   | (0.8) [-]   | (1) [-]      | (0.9) [-]    |
+| ms-c    | 224/251 [-]  | 172/201 [-] | (0.3) [-]   | (0.9) [-]   | (1) [-]      | (0.9) [-]    |
+| adi-b   | 82/121 [156] | 65/97 [80]  | 162/250 [322] | 250/- [-] | 348/- [-]    | (7e-05) [-]  |
+| adi-c   | 80/119 [143] | 64/97 [76]  | 143/225 [228] | 219/372 [295] | 275/- [328] | (3e-05) [-] |
+| adi-cm  | 77/113 [148] | 58/84 [77]  | 131/196 [211] | 229/373 [298] | 220/350 [316] | (4e-05) [-] |
+| pr2-c   | 43/64 [56]   | 35/52 [36]  | 74/115 [99] | 112/189 [144] | 138/247 [156] | 238/- [-]  |
+| pr2-cm  | 40/60 [52]   | 30/44 [34]  | 66/99 [95]  | 116/189 [144] | 111/176 [126] | 245/- [-]  |
+| pr3-b   | 36/53 [42]   | 29/43 [30]  | 99/145 [220] | 138/199 [359] | 256/360 [-] | 228/379 [-]  |
+| pr3-c   | 30/46 [35]   | 25/37 [26]  | 50/79 [56]  | 75/128 [88] | 93/167 [97]   | 160/295 [266] |
+| pr3-cm  | 30/45 [35]   | 22/33 [22]  | 45/72 [56]  | 78/127 [92] | 88/156 [97]   | 164/301 [267] |
+| perl-lu | 33/45 [57]   | 28/38 [36]  | 117/150 [-] | 245/315 [-] | 186/233 [-]   | not run      |
+| ilu     | 6/9 (1e-2,3) | 26/34 (1e-2,3) | (1) (1e-2,3) | 2/3 (1e-4,10)* | 22/28 (1e-4,10)* | not run |
+  * ILU(1e-2,3) and (1e-3,5) "exactly singular"; ILU(1e-4,10) factor ~0.8-0.95x exact-LU fill (not a structured ceiling).
+  Best PR alpha (real, scanned -sigma/2..-5sigma and -0.1..-10): -1 (pilot,r16), -3 (r32-r64), -10 (r96);
+  the "matched" ADI scaling alpha=-sigma/2 (s1=s2=sigma, scale -sigma) fails from the pilot on.
+
+APPLY COST / one matrix-free GKX matvec (same process, loaded host; dense per-z block inverse), memory MB:
+  r64: hl 1.4; adi-cm 4.2; pr2-cm 8.2; pr3-cm 21.5 (67 MB); perl-lu 14.1 (102 MB); ilu(1e-4) 59.7 (597 MB).
+  r96: hl 2.4; adi-cm 8.0; pr2-cm 15.0; pr3-cm 20.0 (57 MB).
+  prod.txt (n=73728): matvec 2.12 ms; hl 1.59 ms; dense z-block solve 13.8 ms; adi-cm 15.4; pr2-cm 31.3;
+  pr3-cm 45.8 ms (21.6 matvec-eq); probes 1.4 s; dense inverse 6.6 s, 0.91 GB; CGS 0.15 ms/vector.
+SOLVAX gcrot(m=20,k=10,"harmonic"), 12 exact-LU Arnoldi RHSs, pilot, rtol 1e-5 (total its, converged):
+  hl 2223 12/12; zjac-c 4800 0/12; ms-c 4800 0/12; adi-b 939; adi-c 905; adi-cm 706; pr2-c 457; pr2-cm 384;
+  pr3-cm 304 12/12 (7.3x fewer than hl).
+Exact-LU shift-invert Arnoldi steps to certify (1e-6/1e-9): 9-10 / 12-13 on every +0.3 rung; separation 3.3-3.7
+  (pilot 2.0).
+
+PRODUCTION CHAIN, matrix-free (prod_solve.txt Part A, one RHS, cap 600, sigma = #232 lambda + 0.05):
+  hl (0.99); adi-cm alpha -3/-10/-30: (1.6e-3)/(9.4e-5)/(1.0e-2); pr2-cm: (1.9e-4)/1e-5 at 468 (1.7e-6)/(2.0e-5);
+  pr3-cm: (4.0e-5)/1e-5 at 313 (2.7e-8 at 600)/1e-5 at 424 (4.4e-8 at 600). Nothing reaches 1e-8 in 600.
+  Part B steps 1-2: 600 inner its each (true 2.7e-8, 1.9e-8), ~55-62 s per step; Ritz residual .974, .300.
+
+PROVISIONAL READING (not final, no log entry written):
+  Three Peaceman-Rachford double sweeps of the exact spectral Hermite-line streaming solve with the z-local
+  (drift + mirror + local phi) block recover and then exceed the per-l exact-block "ceiling" from r32 on and
+  cut recycled gcrot iterations 7.3x on the pilot; single-sweep ADI products and z-block Jacobi/multiplicative
+  forms do not. But iterations grow with Nz (not n): 45/72 (Nz32) -> 164/301 (Nz96), and at the production
+  chain pr3-cm misses 1e-8 in 600, so matrix-free shift-invert with this preconditioner is not yet shown to
+  beat the adaptive route's 761 s (#232, office, 12 threads). Power-law extrapolation in n is unusable
+  (r64->r96: n x1.13, its x1.9). Next: per-kz PR parameter alpha(kz) (S is diagonal in kz), inner
+  tolerance schedule / recycling at production, then the FD response-matrix candidate.
+
+RESUME (from the worktree root; one heavy process at a time; check `sysctl -n vm.loadavg`):
+  D=plan/research/scripts/2026-09-13-preconditioner-bakeoff; V=/Users/rogeriojorge/local/venvs/gkx-review-20260913/bin
+  export PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg \
+    XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1" OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
+  1. Part B only (certify at the sparse route's 1e-6 gate first; ~60 s/step):
+     /usr/bin/time -l nice -n 10 perl -e 'alarm shift; exec @ARGV' 2400 $V/python $D/prod_solve.py \
+       --skip-part-a --candidate pr3-cm@-10 --cap 600 --inner-rtol 1e-9 --certify 1e-6 > $D/prod_solve_b.txt 2>&1
+  2. Same-host adaptive baseline (#232 script, commit 7c8a76194121acbd0611f3d43814b5173e00dbd7, sha256 181b380f...):
+     git show origin/evidence/exact-shift-invert-ladder:plan/research/scripts/2026-09-13-exact-ladder/exact_ladder.py > /tmp/exact_ladder.py
+     /usr/bin/time -l nice -n 10 perl -e 'alarm shift; exec @ARGV' 2400 $V/python /tmp/exact_ladder.py \
+       --rung 4 --arm default --repo $PWD > $D/adaptive_same_host.txt 2>&1
+  3. Rerun the (labelled) extrapolation table if wanted: $V/python $D/bakeoff.py --extrapolate $D --candidates pr3-cm,pr3-c
+  4. Then: plan/log.md entry at the end; one or two sentences at the end of plan.md 5.1 (before 5.2; #228's
+     "Resolved" paragraph is not on main); ruff check/format --check; tools/release/check_repository_size_manifest.py;
+     pytest tests/release/test_release_gates.py tests/release/test_evidence_ledger.py; gitleaks on a copy of the
+     changed files; push; PR "evidence: structured preconditioner bake-off on the exact operator (plan 5.1 L4)"
+     with the plan 14 template; do not merge.
