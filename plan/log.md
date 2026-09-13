@@ -11594,3 +11594,40 @@ against merged #225: +1 production source line, +140 test lines, no new files;
 source reduction relative to the previous #226 is 24 lines. Source/test budgets
 are measured at 89248/87826; targets unchanged. All owned CPU/GPU test/pilot jobs
 have finished. Push #226 for fresh CI; do not merge based on its old failed head.
+
+## 2026-09-13 — Q5: one SOLVAX floor (`chore/solvax-pin`)
+
+- finding: `requirements.txt` pinned `solvax>=0.7.3,<0.8` against
+  `pyproject.toml` `solvax>=0.12.0`, and had already drifted in other ways too:
+  jax unpinned (pyproject `>=0.10.1`), no `booz_xform_jax`, and a dead `tomli`
+  marker although Python `>=3.11` is required. `docs/numerics.rst` repeated the
+  stale pin.
+- consumers: none. CI, the release workflow, and README/CONTRIBUTING install from
+  `pyproject.toml`; `.readthedocs.yaml` reads `docs/requirements.txt` only. There
+  is no Dockerfile, binder, MANIFEST.in, setup.cfg, tox or nox file, and no
+  size/release manifest or release test names the file.
+- change: delete `requirements.txt`, so `pyproject.toml` is the only dependency
+  list, and correct the `docs/numerics.rst` paragraph. Aligning the file instead
+  would keep a copy nothing reads.
+- floor evidence: the tracked Python was AST-scanned for SOLVAX names (12 in
+  `src`, plus `AdaptiveEigenSolution` in tests; `gcrot` is not used). Each name
+  was checked against the SOLVAX tags. `adaptive_eigenpair`, `eigenpair_reverse`,
+  `estimate_rk4_timestep`, `exponential_eigenpairs`, `propagator_eigenpairs`,
+  `sparse_eigenpairs` and `sparse_operator_matrix` first appear in v0.12.0;
+  `gmres`, `linear_solve` and `SpluFactorization` date from v0.1.0, and
+  `tridiagonal_solve` and `chunked_jacfwd` from v0.2.0. The call-site keywords
+  exist in the v0.12.0 and v0.20.0 signatures. As a runtime check,
+  `git archive v0.12.0 src/solvax` (SOLVAX 0.12.0 sources) was placed first
+  on `PYTHONPATH` ahead of the installed 0.20.0, with
+  `GKX_REQUIRE_PAIRED_SOLVAX=1`, x64, CPU, and the CI paired-SOLVAX files in
+  full plus `tests/unit/solvers/test_time_integrators.py`. Result: 277 passed,
+  3 skipped in 482 s. All 3 skips come from
+  `test_adaptive_eigenmodes.py:75`, "VMEC integration needs its backend or a
+  generated eik cache", an environment check unrelated to SOLVAX. The floor
+  stays `>=0.12.0`, with no evidence for raising it.
+- checks (Python 3.11, jax/jaxlib 0.10.2, SOLVAX 0.20.0, `gkx.__file__` in the
+  worktree): ruff 0.16.4 check/format pass (407 files); size, readiness
+  (`version`), and architecture manifests pass; release gates + evidence
+  ledger + public types 185 passed; strict `sphinx -W` pass, and
+  `numerics.html` now renders `solvax>=0.12.0`; gitleaks 8.30.1 on the changed
+  files is clean. Size: −1 tracked file (95 bytes), `docs/numerics.rst` +10/−6.

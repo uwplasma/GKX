@@ -1,9 +1,0 @@
-jax
-jaxlib
-numpy
-matplotlib
-scipy
-netCDF4
-solvax>=0.7.3,<0.8
-tqdm
-tomli; python_version<"3.11"
