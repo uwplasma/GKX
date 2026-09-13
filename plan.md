@@ -51,6 +51,45 @@ The next order is:
 
 No new experimental lane or broad nonlinear campaign is introduced here.
 
+**Review checkpoint, 2026-09-13:** an independent read-only review
+([research note](plan/research/2026-09-13_solver_velocity_throughput_review.md),
+scripts and logs beside it) measured the rejected shift-invert pilot on its
+exact assembled operator, re-read the existing GX Nl24/Nl32 outputs, and
+counted the nonlinear step's HLO operations. It changes the order of work
+inside items 2 and 3 above and inside Phase 5, not the phases themselves:
+the exact sparse route and a size ladder come before any preconditioner
+change (§5.1 L1–L6); the Nl swing is a stationary truncated eigenmode with a
+non-decaying Laguerre spectrum, so drift ablations and a Laguerre sink come
+before another resolution rung (§0.5); and an op-name HLO ledger, batched
+linked-chain FFTs and the ky ≥ 0 layout come before scatter micro-work or
+sharding (§5.3 N0–N7; once-per-step Hermitian completion was measured and
+rejected in #231).
+
+**Handoff queue, 2026-09-13 (execution resumed).** #226 merged normally as
+`06606e404`; #227 merged as `578b97074` after a fresh green run on its updated
+head; #228 (this plan revision) targets `main` and merges on green. No
+release. Work continues in the order below; each row
+is one PR from a fresh worktree off `origin/main`. Rows marked *parallel*
+may run concurrently; the others wait for the named dependency. The #228 PR
+body carries the same queue with per-row entry points, commands, gates and
+the repository rules an agent must follow.
+
+| ID | Branch | Plan step | Depends on | Compute |
+|---|---|---|---|---|
+| Q1 | `fix/inner-solve-diagnostics` | §5.1 L1: inner-solve statistics surfaced; `shift_solve_method` no longer a recompile key; `implicit_maxiter` counts iterations | — (*parallel*) | CPU |
+| Q2 | `evidence/exact-shift-invert-ladder` | §5.1 L2: exact sparse reference ladder to production single-chain size — **done, #232**: exact route fastest only below n≈1e4; the runtime default `adaptive` route certifies the production pair (n=73728) in 761 s on CPU | — (*parallel*) | office CPU, ≤2 h |
+| Q3 | `evidence/laguerre-drift-ablation` | §0.5 (i): `gradb=0` / `curvature=0` at Nl 24/32, Nm96, current source | — (*parallel*) | office GPU1, ≤2 h |
+| Q4 | `perf/hermitian-completion-once` | §5.3 N0+N1: HLO-count ledger and one Hermitian completion per step — **done, #231**: N0 adopted; N1 rejected (bitwise-neutral, but 2.3–2.7× more bytes on the captured-constant runtime route) | — (*parallel*) | CPU |
+| Q5 | `chore/solvax-pin` | housekeeping: align `requirements.txt` with `pyproject.toml` — **done, #229**: unused file deleted; floor stays `solvax>=0.12.0` with first-appearance evidence | — (*parallel*) | none |
+| Q6 | `fix/eigen-covered-subspace` | §5.1 L3 | Q1 merged | CPU |
+| Q7 | preconditioner bake-off | §5.1 L4 | Q2 recorded | CPU |
+| Q8 | §0.5 (ii)–(v) | eigen ℓ-spectra, Laguerre sink, Dougherty ν→0, R/L_T | Q3 recorded; Q2 for affordability | CPU/GPU |
+| Q9 | batched chain FFTs | §5.3 N2 | Q4 merged | CPU |
+| Q10 | ky ≥ 0 layout contract | §5.3 N3 | Q4 merged (N0 ledger), Q9 measured | CPU, then GPU |
+| Q11 | implicit streaming | §5.4 | its entry trigger | CPU, GPU day |
+| Q12 | `fix/certify-every-eigenpair` | correctness: `KrylovConfig()` defaults to the ungated `propagator` route (wrong mode, residual ≈1, on every #232 rung); `ETG_KRYLOV_DEFAULT`, `arnoldi` and `power` are ungated too. Every returned pair carries its original-operator residual and fails closed or is flagged uncertified; dataclass default becomes `adaptive`; the `L-lin-etg` pair's residual is reported | Q1 merged | CPU |
+| Q13 | runtime diagnostics scan with cache/params as graph arguments | §5.3 N1′: bitwise identity against the captured graph (adaptive dt included), then re-evaluate once-per-step completion | Q4 merged | CPU |
+
 This branch no longer carries a README rewrite. `main`'s README has since taken
 the corrections that mattered (the capability table, the Cite section, the demo's
 resolution, the prepare paragraph, the CONTRIBUTING link), so the conflict was
@@ -191,6 +230,27 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 | #202 | fixed-rate absorber plus streaming/coefficient repairs | closed as superseded; closure does not certify its collision tables or complete reference migration |
 | #211; #212 | species-parallel traced-state repair; opt-in differentiable `damp_ends_rate` | #211 carried by #219; #212 merged `c0c818361`; reference migration still open |
 | #198, #203, #204, #205 | planning | superseded by this plan; closed with a pointer here; branches kept |
+
+### 2.4 Position relative to other codes (2026-09-13)
+
+Facts fetched from upstream sources on 2026-09-13
+([review §9](plan/research/2026-09-13_solver_velocity_throughput_review.md));
+"UNVERIFIED" marks a claim not read from a primary page. The last column is
+what this plan commits to so that GKX is not merely at parity.
+
+| Capability | GX | stella / GS2 | GENE / CGYRO | GKX today | Commitment |
+|---|---|---|---|---|---|
+| ky storage | ky ≥ 0 (`Nyc = 1 + Ny/2`), reality condition by construction | ky ≥ 0 (stated in the stella paper for both) | GENE/CGYRO: positive-only storage UNVERIFIED | full two-sided ky in memory; restart files already store Nyc rows; the −ky half is rebuilt in the bracket and after every stage (41.9% of step time) | §5.3 N3: ky ≥ 0 state-layout contract |
+| Parallel streaming | spectral in z, explicit RK; IMEX "future work" | implicit FD streaming with response matrices (Δt up to ≈100× explicit at kyρ≈1) | explicit FD / upwind | spectral in z, explicit RK; kinetic-electron Δt set by the streaming CFL | §5.4: response-matrix implicit streaming, sharing the factorization with the eigen preconditioner |
+| Eigensolver | none (initial value) | GS2: SLEPc on the time-step operator; stella: none | GENE: SLEPc Krylov–Schur/JD (harmonic ≥5× faster than inexact shift-invert); CGYRO: DMD on time series | shift-invert, propagator, exact sparse routes with an original-operator residual gate; inner solves currently fail on the pilot | §5.1 L1–L6: certified time-to-eigenpair below GENE-style budgets |
+| Derivatives | none | none | none (iGENE: TensorFlow prototype) | implicit eigenpair sensitivities; checkpointed finite-window heat-flux VJP | Phase 4; derivatives through implicit solves by the implicit-function theorem when §5.4 lands |
+| Velocity regularization | Hermite-only kz hypercollisions; `nu_hyper_l` inert in that branch, default 0.0 (docs stale) | grid codes: physical ν | GENE hyperdiffusion in v∥/μ; GYACOMO: Dougherty ν=1e-3 ("hypcoll unadvised") | both branches plus a const-branch Laguerre term; no declared regularization contract | §0.5: every collisionless atlas row declares its regularization and reports the ν→0 extrapolation |
+| Electromagnetics | φ, A∥, δB∥ validated | stella EM recent; GS2 full | full | three-field solves with custom VJP; EM0 partial | Phase 3 unchanged |
+| Collisions | Dougherty | Sugama / Fokker–Planck (GS2) | Landau / Sugama | LB/Dougherty, Sugama, improved Sugama, drift-kinetic Coulomb low-moment; finite-k Coulomb research-only | Phase 6 unchanged |
+| Multi-GPU | species×Hermite, >75% efficiency at 4 A100s | MPI | MPI | species×Hermite 1.26–1.48× on 2 A4000s; whole-state 0.21× | §5.3 N7 after N1–N4; never shard FFT axes |
+| Precision | f32 throughout | f64 | f64 | f32 default, f64 opt-in | §5.3 N5 mixed precision with declared error gates |
+| E×B flow shear | yes | yes | yes | parked (E0–E2, §12) | unchanged trigger; noted as the largest physics gap for experimental comparison |
+| Reproducibility | benchmark decks and goldens | benchmark suites | benchmark suites | evidence ledger regenerated by CI | keep; extend to time-to-accuracy rows (§5.1) |
 
 ---
 
@@ -578,6 +638,36 @@ claim that this contradicts every published study and must be a GKX defect
 is withdrawn: published resolutions are not convergence guarantees for this
 case. Shared closure/truncation, domain and finite-time/mode-selection effects
 remain unresolved. The terminal audit and spectra are in [the log](plan/log.md).
+
+**Updated 2026-09-13 from a read-only re-read of the GX outputs**
+([review §4](plan/research/2026-09-13_solver_velocity_throughput_review.md)):
+γ(t) is stationary from t≈100 in both runs (Nl24 fits .032847/.033009 on
+[100,200]/[200,300]; Nl32 .024910/.024858), the complex φ(θ) overlap between
+the runs is 0.991, Nz192 moves γ by +0.4%, and the Laguerre free-energy
+spectrum is a stationary plateau of ≈1–2% per index from ℓ≈6 to the cutoff
+in both runs (upper-quarter fraction constant at .080/.082 from t≈100). So
+the swing is a property of the truncated eigenmode — not a fit window,
+transient, z-resolution or mode-identity effect. Large-b truncation of the
+gyroaverage is refuted for this deck: nkx=1 gives b_max=12.7 and Nl=16
+already captures Γ0 to 4e-6. Neither code applies a Laguerre sink here (GX's
+`nu_hyper_l` acts only in the const-coefficient branch and defaults to 0.0;
+the kz branch kernel has no ℓ index — verified on upstream head
+`3865a5377886`, whose docs still advertise a 0.5 default), and the ∇B drift
+is the only linear term that moves free energy in ℓ (Mandell 2018 App. C).
+GX's shipped Nl16 reference gives γ=.0346 at this ky, so the sequence
+Nl 16/24/32 → .0346/.0330/.0249 is monotone and accelerating.
+GYACOMO regularizes collisionless linear scans with Dougherty ν=1e-3
+rather than Laguerre hyperdiffusion. Therefore, before another rung, run in
+this order, eigen-based where §5.1 L2 makes it affordable: (i) `gradb=0`
+then `curvature=0` at Nl 24/32; (ii) eigenvalues at Nl 16/24/32/48 with the
+ℓ-spectrum of the eigenvector; (iii) `nu_hyper_l ∈ {0.01, 0.1, 0.5}`,
+`p_hyper_l=6`, with the const-branch Hermite coefficient zeroed so Hermite
+damping is not applied twice; (iv) Dougherty ν ∈ {1e-3, 3e-3, 1e-2} with a
+ν→0 extrapolation (ν·b≈0.13 at b=12.7 exceeds γ, so 1e-2 is not adopted
+blindly); (v) a higher R/L_T point. Collisionless atlas rows must declare
+their regularization and report the ν→0 extrapolation if (iii)/(iv) confirm
+the mechanism. Steps 1–7 below stay as the matched contracts.
+
 Use the [convergence report](plan/research/2026-09-06_hermite_laguerre_convergence.md)
 as the investigation protocol, with matched contracts below:
 
@@ -1029,12 +1119,56 @@ time-to-accepted-result. Synchronize; fresh-process cold runs; ≥5 warm
 repetitions; medians and spread; peak resident and device memory; compiler
 temporaries are not peak memory. Time-to-accuracy plots, not ms/step.
 
-**Solver diagnostic: first pilot completed, none accepted (§log, September 13).**
-The three GPU0 cold runs failed the original-operator residual gate; no warm
-timings or speedup result. Generated runtime seeds stayed complex64 despite x64
-flags. Next use the existing explicit `initial_state` API with a verified,
-identical complex128 seed, recording its hash and any earlier rounding; do not
-change defaults or enlarge budgets to obtain a passing timing. Protocol:
+**Solver diagnostic: precision is not the sole cause (September 13).**
+All three modes still fail in complex128 on CPU and GPU, with matching seed
+hashes and essentially unchanged residuals. One direct Hermite-line inner solve
+already misses its 1e-5 tolerance: true residual1.02915e-4 at60/60 iterations.
+The signed-mode control (Ny16, +.3, non-Nyquist) also rejects the outer pair
+(residual .0415641). At fixed60 inner iterations, restart20/30/60 gives true
+residual .2673/.09007/.007999: restart loss matters, but none meets1e-5.
+Do not promote a longer restart or change SOLVAX on these rejected results.
+
+**Resolved 2026-09-13 on the exact assembled operator of the same Ny16 pilot**
+([review §3](plan/research/2026-09-13_solver_velocity_throughput_review.md)):
+the Hermite-line preconditioner reaches 1e-5 in 90 unrestarted iterations
+(1e-8 in 110), so the 60-iteration restart-20 budget could not converge;
+with drifts off it needs 7 iterations (field-corrected 1), so the principal
+part is implemented correctly and the z-averaged drift is the dominant
+omission at this size, while mirror, drive and end damping together add ≈10;
+1536 of 4096 unknowns (kx rows outside the linked chains) are exactly
+decoupled, undamped and host the Re=0 eigenvalues next to σ (separation
+|λ1−σ|/|λ0−σ| = 2.0); and the existing `method="sparse_shift_invert"` gives
+the certified target λ0=.115621−.241179j in ≈0.1 s. ILU(1e-2) of the exact
+operator needs 6 iterations, an exact per-ℓ block 33; over the 12 RHSs an
+outer Arnoldi actually generates, SOLVAX `gcrot(m=20,k=10,"harmonic")`
+converges 12/12 (2233 iterations) where cold `gmres(restart=20)` converges
+2/12. On a single-chain ladder the Hermite-line count grows to 159 at
+(Nz,Nl,Nm)=(32,8,16) and exceeds 400 from (48,8,16); exact LU fill ratio is
+≈10–12 with factor time ≈n^1.7, so an exact factor is not viable at a
+production chain without a banded streaming approximation. Order of work:
+L1 return true residual/iterations/converged from every inner solve and
+remove or wire `shift_solve_method`; L2 exact reference ladder with the
+sparse route; L3 restrict the eigenproblem to linked-covered rows; L4
+preconditioner bake-off on the exact-operator harness (current line solve;
+the operator-split product of the exact streaming line solve and a z-local
+exact-drift block solve, which keeps spectral streaming and is the cheapest
+candidate; a low-order per-chain physics matrix with banded FD streaming,
+z-dependent drift, mirror, fields by a per-(kx,z) Schur complement,
+ILU/banded LU — the stella/GS2 response-matrix structure that also yields an
+implicit electron-streaming step; per-ℓ block and ILU as ceilings),
+adopting at ≥3× fewer matvec-equivalents to a certified pair, setup
+included; L5 recycled inner solves (SOLVAX `gcrot` harmonic, i.e. GCRO-DR)
+with a tolerance schedule ∝ the outer residual and a thick-restart harmonic
+outer loop (GENE measured ≥5× over inexact shift-invert without inner
+solves), compared by time-to-certified-pair against exact LU and propagator
+Krylov; L6 report the separation ratio and place σ beyond the target. A
+sparse direct factor of the spectral-streaming block is not a candidate:
+each (ℓ,m) row is a z-clique, so the fill is dense in (m,z) per ℓ. Record
+the resolved signed ky: this small grid selects **-.3**, its negative Nyquist,
+for `ky_target=.3`. Keep it as a conditioning stress case, not a published +.3
+physics reference. Pin a non-Nyquist signed mode before an admitted benchmark.
+The existing `initial_state` API preserves explicit complex128 seeds, including
+any prior initialization rounding. Registered pilot protocol:
 reuse `run_runtime_linear(..., krylov_cfg=KrylovConfig(...))` and the existing
 `tools.profiling.profile_runtime_kernels._runtime_memory_summary`; the profiler
 CLIs do not currently compare interior-mode preconditioners. One fresh process
@@ -1047,6 +1181,11 @@ residual≤1e-6. Record cold/warm calls, residual/eigenbranch, RSS/device peak a
 timeouts. This underresolved conditioning pilot cannot establish physics or
 speedup; only successful matched-branch results justify repeated measurements
 under the protocol above. Do not alter SOLVAX before locating the dominant cost.
+For the next inner-solve diagnostic, retain SOLVAX's true residual, iteration
+count and convergence flag; the current inverse factory returns only `x`.
+The `batched`/`incremental`/`flexible` labels currently call the same SOLVAX
+implementation and are not three algorithms to benchmark. A converged first
+RHS alone would not certify later Arnoldi RHSs or the outer eigenpair.
 
 | Workload | Sweep |
 |---|---|
@@ -1096,8 +1235,85 @@ couplings and test their transposes; reuse SOLVAX only where a matched stiff
 workload beats explicit RK at converged accuracy including setup and VJP
 memory; mixed precision and custom kernels later, with CPU fallback.
 
+**Ordered 2026-09-13 from load-independent HLO counts**
+([review §5](plan/research/2026-09-13_solver_velocity_throughput_review.md)):
+counted by op name (#231, correcting a first count that included metadata),
+at 32×32×24 one nonlinear RHS issues 23 FFTs, 9 concatenates, 35 transposes
+and 35 copies writing 46 MB (29× the state), with 5 linked-chain classes each
+carrying its own gather/FFT/IFFT/scatter in streaming and again in
+hypercollisions (9 classes at 96×96×48); a diagnosed RK3 step writes
+≈157 MB. The Hermitian projector applied to the RHS output is exactly
+idempotent, and completing once per step is bitwise identical, **but #231
+rejected it**: with cache/params captured as constants (the runtime
+diagnostics route) XLA:CPU then materializes 2.3–2.7× more bytes; only with
+them as graph arguments does it save ≈4%. The profiled 41.9% is the bracket's
+own completion inside each RHS, which only N3 removes. Order: N0 the op-name
+HLO ledger (`profile_runtime_kernels.py nonlinear-step-hlo`, #231) plus
+A/B/A/B timings on an idle pinned checkout, gating every change; N1′ give
+the runtime diagnostics scan its cache/params as graph arguments (bitwise
+identity, adaptive dt included) and only then re-evaluate once-per-step
+completion;
+N2 batch the chain classes so streaming and hypercollisions issue O(1) FFT
+launches, and re-measure the CPU FFT thread pool
+(`xla_cpu_multi_thread_eigen`, restored for the thunk runtime in jax 0.5.1);
+N3 the **ky ≥ 0 state-layout contract**: the evolved state carries only
+the `Nyc = 1 + Ny/2` non-negative-ky rows (as GX, stella and GS2 do, and as
+GKX's restart files already do), the reality condition holds by
+construction, the linked-chain conjugate-partner map replaces the
+negative-row restore in streaming and hypercollisions, ky=0 is symmetrized
+in (kx,−kx) after every gyroaverage, and the perpendicular transform axes
+sit innermost so `jnp.fft` stops inserting two transposes per transform;
+introduced behind a layout adapter so diagnostics, fields, I/O, sharding and
+the VJP migrate one consumer at a time. Gates: state memory halves; zero
+`concatenate` or restore ops in the RK stage HLO; RHS and 100-step
+trajectory identity ≤1e-13 (f64) against the two-sided route; VJP parity;
+every promoted operator exercised. Start once the N0 ledger is on main;
+N4 pack ∂x/∂y of each operand into one complex transform (with the ky=0
+(kx,−kx) symmetrization gyaradax needed) and compute ∇(J0χ) once without
+the Hermite index;
+N5 f32 bracket with f64 linear/fields/accumulation (flux within replicate
+spread, window-gradient cosine >0.99 vs f64); N6 a field solve instead of a
+fourth RHS in the final-state runtime route, strided diagnostics inside the
+scan, incremental stop buffers, fused drift kernels; N7 species×Hermite
+sharding re-measured only after N1–N4 (no all-gather/all-to-all on 6-D
+arrays; adopt at ≤0.8× single-GPU step time at 96×96×48).
+
 Exit: profiles and time-to-accuracy figures as rows for the four workloads;
 the species×Hermite ladder closed or its blocking step named.
+
+### 5.4 Implicit parallel streaming by response matrices (added 2026-09-13)
+
+Why: stella and GS2 remove the parallel-streaming CFL for kinetic electrons
+with Kotschenreuther's response-matrix scheme (unit field impulses per
+extended-z point, one LU per chain, bidiagonal sweeps per step; stella
+reports stable steps ≈100× explicit at kyρ≈1); GX is explicit and lists
+IMEX as future work. The same per-chain factorization is the §5.1 L4(b)
+preconditioner for `(A − σI)`, so one structure serves the eigensolver and
+the time step, and the implicit solve's derivative is available through the
+implicit-function theorem rather than by unrolling.
+
+Entry trigger: §5.1 L4 has measured the low-order per-chain physics
+operator on the exact-operator harness, **and** a kinetic-electron workload
+(EM3 or the atlas) has its explicit step bounded by the electron streaming
+CFL rather than by accuracy. Do not start it from the electrostatic
+adiabatic-electron channel, where explicit RK is not step-limited.
+
+Design constraints: banded (FD or compact) streaming only inside the implicit
+operator, spectral streaming kept in the explicit residual so the converged
+solution is unchanged; fields by the per-(kx,z) Schur complement over the
+low-order moments; zonal chain solved with its periodicity fix; mirror and
+drifts explicit at first (stella's Lie split), then evaluated for inclusion
+by measurement.
+
+Gates: identity with the explicit route at small Δt (trajectory ≤1e-10 in
+f64 over the streaming time); linear growth rates within the fit's
+reported uncertainty at Δt ≥10× the explicit limit on the kinetic-electron
+Cyclone deck; energy-budget residual unchanged; CPU/GPU parity; VJP of a
+finite-window objective through the implicit step matches finite
+differences to the plan's existing tolerance; peak memory reported with and
+without the stored factors. Cost: CPU for the operator and gates; one GPU
+day for the Δt ladder. Exit: a time-to-accuracy row for the kinetic-electron
+workload comparing explicit, IMEX and (where available) GX's explicit step.
 
 ---
 
@@ -1292,7 +1508,7 @@ needs an alternative allocation before its pilot.
 - [ ] 2 statistics calibrated; Table 1; Dimits bracket; dataset-100; W7-X bean.
 - [ ] 3 EM0–EM3 passing; EM4 linear passing, nonlinear point recorded; EM5 linear/QL derivatives.
 - [ ] 4 contributions A and B passing; C reported; QA claim replaced or withdrawn.
-- [ ] 5 profiles and time-to-accuracy; species×Hermite ladder closed or blocked-step named.
+- [ ] 5 profiles and time-to-accuracy; species×Hermite ladder closed or blocked-step named; ky ≥ 0 layout contract landed (5.3 N3); implicit-streaming decision recorded (5.4).
 - [ ] 6 C0–C2 passing; envelope published.
 - [ ] 7 docs generated from the ledger; examples regenerate; paper 1 bundle; 2.1.0 reviewed by the maintainer.
 
@@ -1308,7 +1524,9 @@ needs an alternative allocation before its pilot.
   [Hermite–Laguerre convergence](plan/research/2026-09-06_hermite_laguerre_convergence.md),
   [differentiable landscape](plan/research/2026-09-06_differentiable_landscape.md),
   [saturation statistics](plan/research/2026-09-06_saturation_statistics.md),
-  [README and software norms](plan/research/2026-09-06_readme_and_software_norms.md).
+  [README and software norms](plan/research/2026-09-06_readme_and_software_norms.md),
+  [solver, velocity and throughput review 2026-09-13](plan/research/2026-09-13_solver_velocity_throughput_review.md)
+  (scripts and logs in [plan/research/scripts/2026-09-13](plan/research/scripts/2026-09-13/)).
 - Technical decisions: [docs/research_grade_program.rst](docs/research_grade_program.rst);
   status: [docs/research_grade_plan.rst](docs/research_grade_plan.rst);
   claim boundaries: [docs/release_scope.rst](docs/release_scope.rst).

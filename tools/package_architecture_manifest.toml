@@ -907,7 +907,11 @@ recursive = true
 # Host-only metadata; no new module or per-step work. Phase 0.1 migration gate.
 # +1: spectral/weighted line inverse and periodic RHS repairs, offset by sharing
 # the identical linked scatter kernel (-23) and shortening the sharded RHS (-1).
-baseline = 89248
+# +161: inner-solve diagnostics (plan 5.1 L1). Every shift-invert inner GMRES
+# solve keeps SOLVAX's true residual, iterations and converged flag, folded over
+# the Arnoldi build into the host gate's status and rejection text; the
+# shift_solve_method alias leaves the jit key; implicit_maxiter counts iterations.
+baseline = 89409
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1080,7 +1084,11 @@ recursive = true
 # admission, consolidated into existing owners; measured count, no new test file.
 # Measured union of the two independent validation/numerical branches.
 # +26: sharded hypercollision JVP and explicit-runtime-state precision controls.
-baseline = 87826
+# +192: forced non-converging and converged inner solves, rejection text, one
+# compile across shift_solve_method labels, implicit iteration-budget semantics,
+# and the contraction allowlist re-keyed to the moved line (675 -> 749).
+# +15: the optimized-HLO op-ledger parser contract, in the existing profiling owner.
+baseline = 88033
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1146,7 +1154,10 @@ recursive = true
 # comment is longer than the deletion because the reason a provenance field is
 # absent has to live where someone would otherwise re-add it.
 # +2: later-rung and cumulative-drift veto in the existing refinement driver.
-baseline = 77825
+# +276: nonlinear-step-hlo, the optimized-HLO op ledger per RHS and RK step for
+# the argument-passing scan and the runtime diagnostics scan (plan 5.3 N0), in
+# the existing runtime-kernel profiler.
+baseline = 78101
 target = 0
 
 [[line_budget_policy.counts]]

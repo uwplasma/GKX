@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jax.scipy.linalg import lu_factor, lu_solve
-from solvax import gmres, tridiagonal_solve
+from solvax import KrylovSolution, gmres, tridiagonal_solve
 
 from gkx.operators.linear.cache_arrays import (
     collision_damping,
@@ -778,7 +780,27 @@ def _implicit_fixed_point_guess(
     return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
 
 
+def _gmres_iteration_budget(maxiter: int, restart: int) -> tuple[int, int]:
+    """Map an iteration budget onto SOLVAX's static cycle size and cycle count.
+
+    ``maxiter`` counts Arnoldi iterations, as in the shift-invert inner solve:
+    the cycle is capped at ``maxiter`` and ``ceil(maxiter / restart)`` cycles run.
+    """
+
+    maxiter = max(int(maxiter), 1)
+    restart = min(max(int(restart), 1), maxiter)
+    return restart, math.ceil(maxiter / restart)
+
+
 def _implicit_gmres_step(
+    G_in: jnp.ndarray, *, shape: tuple[int, ...], **kwargs: Any
+) -> jnp.ndarray:
+    """Advance one implicit step with a fixed-point warm start and GMRES."""
+
+    return _implicit_gmres_solution(G_in, **kwargs).x.reshape(shape)
+
+
+def _implicit_gmres_solution(
     G_in: jnp.ndarray,
     *,
     cache: LinearCache,
@@ -786,7 +808,6 @@ def _implicit_gmres_step(
     terms: LinearTerms,
     dt_val: jnp.ndarray,
     size: int,
-    shape: tuple[int, ...],
     matvec: Callable[[jnp.ndarray], jnp.ndarray],
     precond_op: Callable[[jnp.ndarray], jnp.ndarray],
     implicit_tol: float,
@@ -794,8 +815,12 @@ def _implicit_gmres_step(
     implicit_iters: int,
     implicit_relax: float,
     implicit_restart: int,
-) -> jnp.ndarray:
-    """Advance one implicit step with a fixed-point warm start and GMRES."""
+) -> KrylovSolution:
+    """Return SOLVAX's flat solution with its true residual and converged flag.
+
+    The scan routes keep only ``x``: their ``(G, phi_t)`` result has no solver
+    status channel, and a host callback inside the traced scan is not added.
+    """
 
     G_guess = _implicit_fixed_point_guess(
         G_in,
@@ -806,17 +831,17 @@ def _implicit_gmres_step(
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
     )
-    solution = gmres(
+    restart, max_restarts = _gmres_iteration_budget(implicit_maxiter, implicit_restart)
+    return gmres(
         matvec,
         G_in.reshape(size),
         x0=G_guess.reshape(size),
         precond=precond_op,
-        restart=implicit_restart,
+        restart=restart,
         rtol=implicit_tol,
         atol=0.0,
-        max_restarts=implicit_maxiter,
+        max_restarts=max_restarts,
     )
-    return solution.x.reshape(shape)
 
 
 def _implicit_phi_diagnostic(

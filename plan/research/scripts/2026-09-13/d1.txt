@@ -1,0 +1,55 @@
+env 3.11.14 0.10.2 2.4.6 1.17.1 0.20.0 [CpuDevice(id=0)]
+case shape (1, 4, 8, 1, 8, 16) n 4096 ky 0.3 linked [(5, 1)] base_terms {'streaming': 1.0, 'mirror': 1.0, 'curvature': 1.0, 'gradb': 1.0, 'diamagnetic': 1.0, 'collisions': 0.0, 'hypercollisions': 1.0, 'hyperdiffusion': 0.0, 'end_damping': 1.0, 'apar': 0.0, 'bpar': 0.0, 'nonlinear': 0.0}
+setup_s 5.31
+
+== full overrides={} nnz=133598 asm_s=2.15 lu_s=0.077 lu_nnz=603873 exact_solve_rel_res=3.18e-14
+   nearest eigs: +0.115621-0.241179j (res 1.3e-15); +0.000000-0.285794j (res 2.8e-13); +0.000000-0.285794j (res 1.5e-15); +0.000000-0.277311j (res 1.8e-15); +0.000000-0.277311j (res 1.2e-14); -0.000000-0.272878j (res 2.5e-15)
+   |lambda0-sigma|=4.6651e-02 |lambda1-sigma|=9.3107e-02 max|eig A|~1.485e+01 sigma_min(A-sI)=2.363e-02
+   [none           ] GMRES(200) rel_res@20/60/120/200=8.41e-01/7.99e-01/3.54e-01/1.70e-02 its_to_1e-5=None its_to_1e-8=None final_true=1.70e-02 t=0.4s
+   [damping        ] GMRES(200) rel_res@20/60/120/200=8.78e-01/8.58e-01/7.73e-01/1.65e-01 its_to_1e-5=None its_to_1e-8=None final_true=1.65e-01 | max|z|=2.508e+01 min|z|=1.382e-02 smallest z=-1.37e-02+1.61e-03j, +1.32e-02-2.58e-02j t=2.3s
+   [hermite-line   ] GMRES(200) rel_res@20/60/120/200=6.68e-01/9.66e-03/2.09e-10/— its_to_1e-5=90 its_to_1e-8=110 final_true=7.59e-13 | max|z|=6.135e+00 min|z|=7.879e-03 smallest z=-4.83e-03-6.23e-03j, +8.41e-03-2.29e-02j t=1.9s
+   [field-corrected] GMRES(200) rel_res@20/60/120/200=6.88e-01/9.47e-03/1.28e-10/— its_to_1e-5=89 its_to_1e-8=109 final_true=7.77e-13 | max|z|=6.260e+00 min|z|=5.087e-03 smallest z=-1.14e-03-4.96e-03j, +1.44e-02-8.03e-03j t=10.9s
+
+== no_end_damping overrides={'end_damping': 0.0} nnz=133598 asm_s=1.47 lu_s=0.071 lu_nnz=602931 exact_solve_rel_res=2.95e-14
+   nearest eigs: +0.120367-0.237842j (res 1.3e-15); +0.000000-0.285794j (res 1.1e-15); +0.000000-0.277311j (res 9.6e-16); -0.000000-0.272878j (res 1.7e-15); +0.000000-0.293575j (res 7.8e-15); +0.000000-0.297009j (res 3.8e-13)
+   |lambda0-sigma|=5.1930e-02 |lambda1-sigma|=9.3107e-02 max|eig A|~1.485e+01 sigma_min(A-sI)=2.615e-02
+   [none           ] GMRES(200) rel_res@20/60/120/200=8.41e-01/8.02e-01/3.66e-01/2.13e-02 its_to_1e-5=None its_to_1e-8=None final_true=2.13e-02 t=0.4s
+   [damping        ] GMRES(200) rel_res@20/60/120/200=8.78e-01/8.59e-01/7.64e-01/1.62e-01 its_to_1e-5=None its_to_1e-8=None final_true=1.62e-01 | max|z|=2.508e+01 min|z|=1.534e-02 smallest z=-1.51e-02+2.54e-03j, +1.32e-02-2.58e-02j t=0.8s
+   [hermite-line   ] GMRES(200) rel_res@20/60/120/200=6.55e-01/1.59e-02/6.49e-10/— its_to_1e-5=93 its_to_1e-8=113 final_true=9.50e-13 | max|z|=6.130e+00 min|z|=8.860e-03 smallest z=-6.00e-03-6.52e-03j, +5.38e-03-2.15e-02j t=0.9s
+   [field-corrected] GMRES(200) rel_res@20/60/120/200=6.89e-01/1.48e-02/3.91e-10/— its_to_1e-5=92 its_to_1e-8=112 final_true=9.46e-13 | max|z|=6.266e+00 min|z|=5.567e-03 smallest z=-1.76e-03-5.28e-03j, +1.16e-02-1.12e-02j t=3.8s
+
+== no_mirror overrides={'mirror': 0.0} nnz=126128 asm_s=2.26 lu_s=0.079 lu_nnz=585964 exact_solve_rel_res=2.78e-14
+   nearest eigs: +0.108024-0.236243j (res 1.3e-15); +0.000000-0.277327j (res 2.8e-15); +0.000000-0.277327j (res 2.9e-15); +0.000000-0.274385j (res 5.5e-15); +0.000000-0.274385j (res 4.9e-13); +0.000000-0.294321j (res 7.4e-15)
+   |lambda0-sigma|=4.8145e-02 |lambda1-sigma|=9.3147e-02 max|eig A|~1.481e+01 sigma_min(A-sI)=2.323e-02
+   [none           ] GMRES(200) rel_res@20/60/120/200=8.26e-01/7.60e-01/3.58e-01/2.23e-02 its_to_1e-5=None its_to_1e-8=None final_true=2.23e-02 t=0.5s
+   [damping        ] GMRES(200) rel_res@20/60/120/200=8.71e-01/8.42e-01/7.68e-01/1.71e-01 its_to_1e-5=None its_to_1e-8=None final_true=1.71e-01 | max|z|=2.492e+01 min|z|=1.425e-02 smallest z=-1.42e-02-1.02e-03j, +4.07e-03-2.83e-02j t=1.2s
+   [hermite-line   ] GMRES(200) rel_res@20/60/120/200=5.96e-01/8.48e-04/9.19e-12/— its_to_1e-5=83 its_to_1e-8=101 final_true=7.49e-13 | max|z|=6.054e+00 min|z|=8.099e-03 smallest z=-3.79e-03-7.16e-03j, +8.77e-03-2.34e-02j t=1.2s
+   [field-corrected] GMRES(200) rel_res@20/60/120/200=6.05e-01/8.12e-04/5.20e-12/— its_to_1e-5=82 its_to_1e-8=102 final_true=6.84e-13 | max|z|=6.158e+00 min|z|=5.310e-03 smallest z=-6.64e-05-5.31e-03j, +1.41e-02-1.16e-02j t=4.2s
+
+== no_diamagnetic overrides={'diamagnetic': 0.0} nnz=133598 asm_s=1.68 lu_s=0.082 lu_nnz=603967 exact_solve_rel_res=8.09e-15
+   nearest eigs: +0.000000-0.277318j (res 1.7e-15); +0.000000-0.277318j (res 2.0e-15); +0.000000-0.289036j (res 3.1e-15); -0.000000-0.289036j (res 2.9e-15); +0.000000-0.274842j (res 3.8e-15); +0.000000-0.274842j (res 5.6e-13)
+   |lambda0-sigma|=9.3147e-02 |lambda1-sigma|=9.3147e-02 max|eig A|~1.485e+01 sigma_min(A-sI)=7.248e-02
+   [none           ] GMRES(200) rel_res@20/60/120/200=6.91e-01/2.67e-01/6.09e-02/2.33e-03 its_to_1e-5=None its_to_1e-8=None final_true=2.33e-03 t=0.3s
+   [damping        ] GMRES(200) rel_res@20/60/120/200=7.93e-01/6.08e-01/3.68e-01/3.29e-02 its_to_1e-5=None its_to_1e-8=None final_true=3.29e-02 | max|z|=2.508e+01 min|z|=2.937e-02 smallest z=+1.21e-02-2.68e-02j, +7.91e-03-2.85e-02j t=1.0s
+   [hermite-line   ] GMRES(200) rel_res@20/60/120/200=2.01e-01/1.66e-03/4.89e-11/— its_to_1e-5=85 its_to_1e-8=104 final_true=7.16e-13 | max|z|=6.153e+00 min|z|=2.484e-02 smallest z=+2.23e-02+1.09e-02j, +2.52e-02+1.25e-02j t=0.7s
+   [field-corrected] GMRES(200) rel_res@20/60/120/200=1.83e-01/1.50e-03/2.22e-11/— its_to_1e-5=84 its_to_1e-8=103 final_true=7.21e-13 | max|z|=6.146e+00 min|z|=1.978e-02 smallest z=+1.64e-02+1.10e-02j, +2.15e-02-1.32e-02j t=3.0s
+
+== covered_only overrides={'mirror': 0.0, 'diamagnetic': 0.0, 'end_damping': 0.0, 'apar': 0.0, 'bpar': 0.0} nnz=126128 asm_s=1.41 lu_s=0.051 lu_nnz=586332 exact_solve_rel_res=8.68e-15
+   nearest eigs: +0.000000-0.275477j (res 5.2e-15); +0.000000-0.275477j (res 6.4e-15); +0.000000-0.289838j (res 9.4e-15); +0.000000-0.289838j (res 3.6e-15); +0.000000-0.296705j (res 6.8e-15); +0.000000-0.296705j (res 3.7e-13)
+   |lambda0-sigma|=9.3258e-02 |lambda1-sigma|=9.3258e-02 max|eig A|~1.481e+01 sigma_min(A-sI)=9.274e-02
+   [none           ] GMRES(200) rel_res@20/60/120/200=6.64e-01/2.26e-01/4.97e-02/3.65e-03 its_to_1e-5=None its_to_1e-8=None final_true=3.65e-03 t=0.3s
+   [damping        ] GMRES(200) rel_res@20/60/120/200=7.84e-01/5.95e-01/3.37e-01/3.85e-02 its_to_1e-5=None its_to_1e-8=None final_true=3.85e-02 | max|z|=2.492e+01 min|z|=2.856e-02 smallest z=+4.28e-03-2.82e-02j, +1.23e-02-2.67e-02j t=0.9s
+   [hermite-line   ] GMRES(200) rel_res@20/60/120/200=1.35e-01/2.57e-04/4.38e-12/— its_to_1e-5=80 its_to_1e-8=102 final_true=9.90e-13 | max|z|=6.064e+00 min|z|=2.708e-02 smallest z=+2.55e-02+8.98e-03j, +2.86e-02+1.12e-02j t=0.8s
+   [field-corrected] GMRES(200) rel_res@20/60/120/200=1.49e-01/2.29e-04/2.79e-12/— its_to_1e-5=79 its_to_1e-8=101 final_true=8.24e-13 | max|z|=6.057e+00 min|z|=2.201e-02 smallest z=+2.04e-02+8.25e-03j, +2.01e-02-1.31e-02j t=2.7s
+
+== covered_no_drifts overrides={'mirror': 0.0, 'diamagnetic': 0.0, 'end_damping': 0.0, 'apar': 0.0, 'bpar': 0.0, 'curvature': 0.0, 'gradb': 0.0} nnz=109040 asm_s=1.07 lu_s=0.009 lu_nnz=243760 exact_solve_rel_res=5.23e-15
+   nearest eigs: +0.000000-0.000000j (res 2.3e-15); +0.000000-0.000000j (res 7.4e-13); +0.000000-0.000000j (res 8.1e-13); -0.000000-0.000000j (res 7.5e-14); +0.000000+0.000000j (res 1.4e-15); +0.000000+0.000000j (res 1.4e-13)
+   |lambda0-sigma|=2.9694e-01 |lambda1-sigma|=2.9694e-01 max|eig A|~7.324e+00 sigma_min(A-sI)=1.519e-01
+   [none           ] GMRES(200) rel_res@20/60/120/200=5.67e-01/6.15e-02/5.90e-05/3.56e-10 its_to_1e-5=135 its_to_1e-8=185 final_true=3.56e-10 t=0.3s
+   [damping        ] GMRES(200) rel_res@20/60/120/200=7.43e-01/5.11e-01/2.17e-01/4.01e-02 its_to_1e-5=None its_to_1e-8=None final_true=4.01e-02 | max|z|=1.836e+01 min|z|=8.818e-02 smallest z=-7.09e-02-5.25e-02j, -7.09e-02-5.25e-02j t=0.6s
+   [hermite-line   ] GMRES(200) rel_res@20/60/120/200=—/—/—/— its_to_1e-5=7 its_to_1e-8=9 final_true=2.59e-15 | max|z|=1.794e+00 min|z|=8.818e-02 smallest z=-7.09e-02-5.25e-02j, -7.09e-02-5.25e-02j t=0.6s
+   [field-corrected] GMRES(200) rel_res@20/60/120/200=—/—/—/— its_to_1e-5=1 its_to_1e-8=1 final_true=2.33e-15 | max|z|=1.000e+00 min|z|=8.818e-02 smallest z=-7.09e-02-5.25e-02j, -7.09e-02-5.25e-02j t=2.2s
+
+total_s 66.7
+       89.47 real        65.77 user         8.65 sys
+exit 0

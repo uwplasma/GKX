@@ -11595,6 +11595,443 @@ source reduction relative to the previous #226 is 24 lines. Source/test budgets
 are measured at 89248/87826; targets unchanged. All owned CPU/GPU test/pilot jobs
 have finished. Push #226 for fresh CI; do not merge based on its old failed head.
 
+## 2026-09-13 — precision ruled out as sole cause; first inner solve unresolved
+
+Source fixed at `1e11faf7a1257608cd5b502ca80ad38bee37e048`; #226's head was
+left unchanged so its CI can finish. This evidence-only follow-up modifies no
+production source, tests, solver default, tolerance or iteration budget.
+
+**Registered matched precision control:** same §5.1 case and three modes,
+one fresh process per mode per host, 120-s cap plus10-s owned-process cleanup,
+no fallback/retry. CPU and office GPU0 construct the same original complex64
+seed, then widen it without changing its values. Shape(1,4,8,1,8,16), final
+dtype complex128; old/new byte hashes respectively
+`22f9570989dad9b6df827674c005270ace7f100dc3a4e2e9a2cd63ac9c17eb72` /
+`d851962ad739bb0fb29b7b37eaf6618bbebb72d49230c11ecc4ad6a94c71325c`.
+All six runs agree on these hashes. Earlier initialization rounding is retained
+intentionally; this tests arithmetic precision alone, not a new perturbation.
+The helper `_prepare_linear_runtime_context` supplies the resolved selected-ky
+shape; the solve uses public `run_runtime_linear(initial_state=seed)`.
+
+| Mode | Outer residual, CPU and GPU to reported digits | CPU cold API / process s | GPU cold API / process s | CPU peak RSS bytes | GPU peak RSS KiB / JAX device bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| damping | .658715 | 2.95756 / 4.81 | 6.90345 / 10.17 | 651952128 | 1299216 / 33697792 |
+| hermite-line | .000357697 | 3.30329 / 4.61 | 8.63156 / 11.72 | 678887424 | 1308152 / 33697792 |
+| field-corrected | .000504621 | 6.08765 / 7.40 | 10.54906 / 14.98 | 766279680 | 1368008 / 67861760 |
+
+All exit1, rejected at the requested1e-6 outer gate. Float32 values from the
+preceding pilot were .658716/.000357705/.000504636: precision alone is not the
+cause. No accepted eigenpair, warm timing or speedup. Seed preparation is now
+separate (CPU .506/.409/.407s; GPU1.000/1.080/2.212s), so API times are not
+directly comparable to the implicit-initialization pilot. Process times include
+preparation; one unaccepted case and one sample cannot establish scaling.
+The previous float32 threshold .000119209 is the configured1000*epsilon floor,
+not a measured hardware precision limit.
+
+Reproduction script `/tmp/gkx-conditioning-f64-pilot.py`, identical remote
+`/home/rjorge/gkx-conditioning-f64-20260913.GA7A8d/pilot.py`, SHA
+`e2b7983f5e8633b4c691b6c67dc45ac5774ce5930e457835ad5411c377b85cd4`.
+It prints exact configuration, dtype, hashes, timings and allocator statistics.
+CPU wrapper `/tmp/gkx-conditioning-f64-cpu.BYgQiE/run.py` SHA
+`62f148d3bee9362d4a1d71d27d434fb37d32765245850c43ddafbfe10faa6452`;
+launch from the pinned worktree with the existing CPU venv. Wrapper sets
+PYTHONPATH=$PWD/src:$PWD, JAX_PLATFORMS=cpu, JAX_ENABLE_X64=true, GKX_X64=1,
+uses `/usr/bin/time -l`, and enforces each process-group cap.
+CPU Python3.11.14/JAX0.10.2/NumPy2.4.6/SOLVAX0.20.0; no environment mutation.
+GPU environment and command are those of the previous pilot, using the new
+script and verified-idle GPU0 only; GPU1 untouched. Staging verified before run.
+
+| Log | CPU SHA-256 (`/tmp/gkx-conditioning-f64-cpu.BYgQiE`) | GPU SHA-256 (remote directory above) |
+| --- | --- | --- |
+| damping.log | a205c6a78cf2fa3494954eba51a08ec1c24415f636eba21ec2d23acc1bf0281c | bd30a42b51ee9e616604167c7f0a50be52cbc3ca9a29cb8754f94ea1472ed207 |
+| hermite-line.log | 922607cca93c21164076376630f4ed064e342b87f3989ce7cbc6c9d0087bb8f8 | e16098c0e606723a89f03c25e36ef2c5b649ef80fb0b7c93de5a4a6fcb6e35be |
+| field-corrected.log | c025af93a21d7e0398a42345367b3f21594b9c62a6883e4bd7f574f18227ce86 | 87e73c5ba85d3c733e73ae3791eb4922bdb5cf5691943ab3db633fd74c70cbdf |
+
+CPU group leaders27696/27711/27736 terminal. GPU supervisor4154214,
+timeout4154215/4154732/4155283, Python4154217/4154734/4155285 all terminal;
+GPU0 returned idle. No timeout or warm/follow-on eigensolve.
+
+**One additional, separately bounded discriminant:** direct shifted GMRES on
+CPU, Hermite-line only, same context/shift, normalized original seed, complex128,
+rtol1e-5/restart20/max_restarts3 (60 iterations), one call, 120-s cap. Seed hash
+after normalization `b3d0aa240eae80e7333952530d9790fff3d8159ce2bd1d4d3603dab619eb07f8`.
+Independent `norm(b-(A-sigma I)x)/norm(b)` =1.0291520586296631e-4;
+SOLVAX reports1.0291520586295848e-4, iterations60, converged=False.
+Setup2.074s, solve+compile.777s, process4.06s, peakRSS682885120bytes, exit0.
+This establishes an inner limitation on the first RHS, not behavior of every
+later Arnoldi vector, and does not exclude outer-subspace limitations.
+
+Script `/tmp/gkx-first-shifted-gmres.CxgjNE/run.py` SHA
+`51ad52138052676eac144d41125e4fa1c0bf053f527bdad8a6ea1bba9443bcc9`;
+`result.log` SHA `a564c0effbe1fea7cd8a975b11c70874ec03f79a52c7fb7d5c8c612e6d5e3652`.
+PID28442 completed; no retry or repository edit. Review of actual selection
+found **ky=-.3**, the Ny12 grid's negative Nyquist, for requested target+.3.
+All controls preserved it; the historical shift was only a seed, never a
+qualified reference for this underresolved case. §5.1 now requires the resolved
+signed mode and a non-Nyquist reference before a physics/time-to-accuracy claim.
+This is the documented magnitude-first selection contract in
+`diagnostics/modes.py::select_ky_index`, not evidence of a selection-code defect.
+
+Read-only solver review: `_shift_invert_apply_factory` discards SOLVAX's true
+residual/iterations/converged and returns only x; current outer logs cannot
+diagnose every inner failure. The `batched`, `incremental`, `flexible` strings
+all reach that same SOLVAX call. The physical Rayleigh quotient already minimizes
+residual over scalar eigenvalues for the selected vector. Next investigate
+inner conditioning with explicit diagnostics, not another scalar eigenvalue,
+alias-string switch, precision-only repeat or unconstrained grid sweep.
+All owned jobs finished. No production code, source-line budget or file-count
+increase is justified by these rejected candidates.
+
+### September 13 — signed-mode / fixed-budget restart discriminator
+
+Source `1e11faf7a1257608cd5b502ca80ad38bee37e048`, same CPU environment,
+complex128 initialization and shift as above. Change only Ny12→16 to select
+**ky=+.3**, full index6/16, not Nyquist. This changes the operator/sign, not
+the retained state shape `(1,4,8,1,8,16)` or original/widened/normalized seed
+hashes. Do not compare against the preceding -.3 run as a restart-only change.
+Actual linked layout `[(5,1)]` comprises five single-link chains, not an
+extended multi-link benchmark.
+
+Three fresh CPU processes, Hermite-line, rtol1e-5, fixed60 iterations maximum,
+120-s process caps. All consumed60, converged=False; independently recomputed
+true residuals agree with SOLVAX to roundoff.
+
+| Restart × cycles | True relative residual | Compile + solve (s) | Process (s) | Peak RSS (bytes) |
+| --- | ---: | ---: | ---: | ---: |
+| 20 × 3 | .2673133777267872 | .795 | 5.50 | 685375488 |
+| 30 × 2 | .09006584000462337 | .797 | 4.37 | 680591360 |
+| 60 × 1 | .007999488306488984 | .824 | 4.27 | 693141504 |
+
+Full retention improves residual33× at fixed iterations but still misses the
+tolerance800×. These single cold timings do not establish performance or
+memory scaling; there is no accepted result and no justified default change.
+Shifted-operator-on-normalized-seed SHA (identical across the three controls):
+`d6075c86cc18817facc42adc9e25e52c07725f421f262165fe2f1a9b026f2649`.
+Artifacts `/tmp/gkx-gmres-restart-control.beZ0sR`:
+
+| File | SHA-256 |
+| --- | --- |
+| run.py | e09350dabf167ec4df82f03077bbec96d621728b480ec6091b622ab49e9a7db1 |
+| restart-20.log | 4a109f5fca0b67b4864e9a82373969020257825c6ddeb62f75ae13d93a09d90a |
+| restart-30.log | c4560b34bf6f85c9d6b2f601ced42e5ae21437f096f3fa4c67e0fdf554e1c47d |
+| restart-60.log | 151d81b9c691291c9935c3675144ac303b68f3c86a74c3585174dcca348d3cef |
+
+Root independently ran one cold outer control with Ny16, all other Krylov
+settings unchanged (restart20, maxiter60, space12/restarts2). Explicit signed
+ky assertion passes; the physical residual .0415641 fails1e-6, exit1.
+Preparation .477s, API3.425s, process4.92s, peakRSS682393600bytes. No warm call,
+fallback or retry. Script `/tmp/gkx-signed-outer-control.py` reads the preceding
+f64 pilot, changes Ny and limits execution to cold, verifies the source SHA.
+Wrapper SHA `046a478c4b676d29db820113d48409bca9bd463cffd8bd697671fd9794932a80`;
+log `/tmp/gkx-signed-outer-control.log` SHA
+`cfde63218bb480c0360408166d9d3a7acc5f152b291d321be31c86d37afedd04`.
+Run from the pinned spectral-contracts worktree with the CPU venv, the same
+PYTHONPATH/x64/CPU environment above, `/usr/bin/time -l`, argument
+`hermite-line`. All four jobs are terminal; no GPU job was needed to reject
+these CPU candidates. Next: fixed-budget streaming-only/full-operator
+preconditioner-defect controls before a production solver change. Keep the
+source PR #226 frozen for CI; this evidence updates the existing docs PR #227.
+
+## 2026-09-13 — independent review: exact-operator solver analysis, GX output re-read, HLO counts
+
+Read-only review of #227 `3fb7d5c35` (on #226 `1e11faf7a`); no source, test,
+default or reference changed. Full note:
+[plan/research/2026-09-13_solver_velocity_throughput_review.md](research/2026-09-13_solver_velocity_throughput_review.md);
+scripts and logs in `plan/research/scripts/2026-09-13/`. Fresh venv
+`~/local/venvs/gkx-review-20260913`: Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0; M3 Max CPU, complex128, one XLA
+thread. The machine carried load 8–60 from unrelated jobs: **times are
+indicative only**; iteration counts, residuals, fill, HLO counts and spectra
+are load-independent. Office GPUs untouched; one read-only NetCDF re-read on
+the office CPU.
+
+**Decision.** Reorder, not replace: §5.1 gains L1–L6 (instrument inner
+solves; exact sparse ladder; restrict to linked-covered rows; preconditioner
+bake-off on the exact-operator harness; recycled/thick-restart structure;
+shift policy); §0.5 gains a mechanism-first order (drift ablations, eigen
+ℓ-spectra, Laguerre sink, Dougherty ν→0) before another Nl rung; §5.3 gains
+N0–N7 (HLO ledger, complete once per step, batched chain FFTs,
+half-spectrum layout, packed transforms, f32 bracket, avoidable work,
+sharding last).
+
+**Commands.** From the pinned worktree,
+`env PYTHONPATH=$PWD/src:$PWD MPLBACKEND=Agg JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1" nice -n 10 python plan/research/scripts/2026-09-13/<script>.py`
+for `d1_preconditioner_defect.py` (89 s, 1.04 GB peak), `d1b_neutral_modes.py`
+(21 s), `d3_bmap.py`, `d5_bakeoff.py` (37 s, 1.13 GB), `d6_ladder.py`,
+`d7_hlo.py 32 32 16 2 4` (no x64; the deck resolves Nz=24); `v1_reread.py` on office with
+`/home/rjorge/venvs/dkx-gpu/bin/python`, reading
+`gkx-nl24-discriminator-20260912.vvmgDD/nl24.{out,big}.nc` and
+`gx-nyquist-resolution-20260905.Ut2U6L/full96.{out,big}.nc`, `full192.out.nc`.
+
+**Results.** Pilot (Ny16, ky=+.3, n=4096): certified λ0=.115621−.241179j
+(SuperLU, residual 1.3e-15, ≈0.1 s); Hermite-line 90 unrestarted iterations
+to 1e-5, GMRES(20) never; drifts off 7 (field-corrected 1); mirror/drive/end
+damping ≈10; 1536 unknowns on kx rows outside the linked chains are exactly
+decoupled, undamped and host the Re=0 eigenvalues at |λ−σ|=.093 next to the
+target at .047; ILU(1e-2) 6 iterations, per-ℓ block 33; over 12 outer RHSs
+`gcrot(20,10,"harmonic")` 12/12 in 2233 iterations vs `gmres(20)` 2/12.
+Ladder (Nx1): Hermite-line 26/24/159/—/— at (Nz,Nl,Nm)=(16,4,8)/(32,4,8)/
+(32,8,16)/(48,8,16)/(64,8,32); LU fill ratio 5–12, factor ≈n^1.7; the Nx4
+multi-link rung hit the 2400 s alarm on the loaded host and is not reported.
+GX re-read: γ stationary from t≈100 (Nl24 .033009, Nl32 .024858 on
+[200,300]; Nz192 .024944); |⟨φ24|φ32⟩|=.991; Laguerre spectrum a stationary
+plateau ≈1–2%/index to the cutoff (upper quarter .0796/.0817); P(ℓ=Nl−1)/total
+2.1e-3/1.3e-3. b_max=12.7 on this nkx=1 chain; Nl16 captures Γ0 to 4e-6.
+HLO at 32×32×24, Nl2/Nm4, as first recorded by `d7_hlo.py`: RHS fft=45,
+concatenate=9, gather=31, copy=55 (88 MB written, 55× state); RK3 step
+fft=135, copy=178 (297 MB, 185×); projector idempotence on the RHS output
+exactly 0. **Correction (same day, #231):** `d7_hlo.py` matched tokens inside
+instruction metadata; by op name the RHS issues fft 23, concatenate 9,
+transpose 35, copy 35 (46.1 MB, 29× state). #231 also measured once-per-step
+Hermitian completion: bitwise identical, but rejected because the captured-
+constant runtime diagnostics route then materializes 2.3–2.7× more bytes;
+the plan's N1 target of "most of the 41.9%" was wrong — that share is the
+bracket's own per-RHS completion, removed only by the ky ≥ 0 layout (N3).
+
+**Position versus other codes.** Added §2.4 (capability matrix from
+upstream sources: GX `Nyc` storage, stella/GS2 response-matrix implicit
+streaming, GENE harmonic Krylov–Schur, GX hypercollision defaults) and
+§5.4 (response-matrix implicit streaming with an entry trigger and gates);
+§5.3 N3 is now the ky ≥ 0 state-layout contract with memory, HLO and
+identity gates rather than an optimization item. E×B shear stays parked on
+its trigger and is named as the largest physics gap for experiments.
+
+**Limitations.** One σ; pilot σ reused on ladder rungs where it is no longer
+near the target; ILU/block-LU are host SciPy instruments, production-size
+assembly and fill extrapolated; GKX's own W(ℓ) for the same runs not yet
+compared; HLO counts at a small CPU grid, no per-op time share. Nothing here
+certifies a speedup, a default change or a converged growth rate. #226
+remains to be merged on its green head; #227 retargeted after it.
+
+## 2026-09-13 — Q1 inner-solve diagnostics (plan §5.1 L1)
+
+Branch `fix/inner-solve-diagnostics` from `origin/main` `06606e404`, handoff #228
+row Q1. Instrumentation only: no preconditioner, tolerance, default or SOLVAX
+change.
+
+**Decision.** (1) Every inner FGMRES solve of the shift-invert Arnoldi build
+keeps SOLVAX's true residual, iterations and converged flag; they are folded over
+all restarts × Krylov vectors into `InnerSolveStats(max_relative_residual,
+total_iterations, solves, unconverged_solves)` by the private jitted
+`_shift_invert_eigenpair_with_inner_stats`. The host gate prints
+`inner converged=… unconverged=k/n max_relative_residual=… tol=… iterations=…` in
+the `shift-invert solve finished` status and in all three rejection
+`RuntimeError`s. Public `dominant_eigenpair_shift_invert_cached` still returns
+`(eig, vec)`. (2) `shift_solve_method`/`gmres_solve_method` stays accepted and
+validated (same `ValueError`) but is no longer threaded or a `static_argnames`
+key; documented as an alias of the one SOLVAX FGMRES. (3) `implicit_maxiter`
+counts iterations on both implicit routes through `_gmres_iteration_budget`:
+`restart=min(restart,maxiter)`, `max_restarts=ceil(maxiter/restart)`, cap
+`restart·ceil(maxiter/restart)` (200 at the 200/20 default, previously 4000).
+Non-convergence is surfaced only where a channel exists: `_implicit_gmres_solution`
+returns the `KrylovSolution`; the linear scan result `(G, phi_t)`,
+`SimulationDiagnostics` and IMEX `linear_solve` (solver returns `x` only) have no
+solver-status field, and no host callback was added inside traced scans.
+
+**Which tests' numbers could change (none did).** Before editing, a scratch pytest
+plugin (not committed) wrapped `gmres` in `solvers_linear_implicit` and
+`solvers_nonlinear_imex` on pristine main and recorded SOLVAX iterations and
+convergence for every real solve in 13 implicit/IMEX-selected files (55 tests):
+76 recorded calls, all converged, maximum 8 iterations, every one under the new
+cap. The only budget whose cycle size changes (restart 2, maxiter 1, in
+`test_implicit_standard_and_diagnostic_routes_match`) did 0 iterations. The plugin
+run had one failure, `test_nonlinear_imex_state_gradient_matches_finite_difference[True]`
+(`reduce_precision does not accept dtype complex128`). Without the plugin both
+parameters pass on the branch (XML `f81cea8cec07…`) and on the clean main worktree
+(`b3566d6ed113…`), so this is an artifact of `jax.debug.callback` on that AD path,
+not a defect on main.
+
+**One allowlist re-key.** `test_hot_path_matrix_contractions_are_pinned` keys its
+unpinned-contraction allowlist by line; the unchanged overlap-ranking `tensordot`
+moved `solvers_linear_krylov_algorithms.py:675 -> 749`. Entry re-keyed, same code.
+
+| Selection (one file per invocation) | Result | XML SHA-256 prefix |
+| --- | --- | --- |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 84 passed | `5f97a5993940` |
+| `tests/unit/solvers/test_time_integrators.py` | 94 passed | `7d83e6bdccc1` |
+| `tests/integration/test_adaptive_eigenmodes.py` | 7 passed, 3 skipped (VMEC backend/eik cache) | `9f7917556c71` |
+| `tests/unit/linear/test_linear.py -k "krylov or shift or implicit"` | 8 passed | `bc2376de4b33` |
+| `tests/unit/nonlinear/test_nonlinear.py -k "implicit or imex or IMEX"` | 9 passed | `71bedea6d5ab` |
+| `tests/unit/nonlinear/test_nonlinear_helpers_extra.py -k …` | 15 passed | `53a067a2d519` |
+| `tests/unit/linear/test_linear_helpers_extra.py -k …` | 8 passed | `75ec05232d38` |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k …` + `test_compare_runtime_window_writes_csv` | 3 + 1 passed | `c0c632d28032`, `01bcc93cdb90` |
+| runtime runner / CLI nodes referencing `implicit_maxiter` | 2 + 1 passed | `61af1e7fe513`, `9a80d58f2a55` |
+| sharded velocity node (2 forced host devices) | 1 passed | `bc034a1557b4` |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed | `56a26d29f8a4` |
+
+New/extended tests: a forced 1-iteration inner budget reports `converged=False`,
+6/6 unconverged and relative residual > 1e-10, and the status and rejection text
+carry them; an unrestarted 400-iteration budget reports converged and residual ≤
+1e-3; the three labels give bitwise-identical pairs from one trace; implicit
+`maxiter=8, restart=4` stops by 8 iterations (32 before) unconverged, and IMEX
+passes budget `(4, 2)`.
+
+Checks: pinned ruff 0.16.4 check/format (407 files), `mypy` as CI (184 source
+files, no issues), `check_package_architecture_manifest.py`,
+`check_repository_size_manifest.py`, gitleaks 8.30.1 on changed files. Line budgets
+measured: source 89248 → 89409 (+161), tests 87826 → 88018 (+192); targets
+unchanged; no new files, no docs change.
+
+Environment: local shared Mac (load 9–33 during the run), Python 3.11.14,
+JAX/jaxlib 0.10.2, NumPy 2.4.6, SOLVAX 0.20.0, `PYTHONPATH=$PWD/src:$PWD
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu`, `nice -n 19`,
+`pytest -q -o addopts='' -p no:cacheprovider --junitxml=…`. Worktrees
+`~/local/GKX-worktrees/inner-solve-diagnostics` (branch) and
+`~/local/GKX-worktrees/inner-solve-baseline` (detached clean `06606e404`).
+
+Limitations: the per-solve statistics are not yet on a public result; the implicit
+routes still discard their flag inside scans; with ceil budgeting a solve may exceed
+`maxiter` by less than one cycle; no runtime or memory measurement was made (the
+extra carry is four scalars per Arnoldi build). The registered §5.1 pilot was not
+re-run, so no preconditioner's inner statistics are published yet. Next: re-run
+that pilot per mode so its rejection names the inner budget, then L2/L3.
+
+## 2026-09-13 — Q4: Hermitian completion once per step (plan §5.3 N0 + N1)
+
+**Outcome: N0 adopted, N1 rejected on HLO evidence.** The once-per-step
+completion is exact but regresses materialization on the runtime diagnostics
+scan. Branch `perf/hermitian-completion-once`: prototype `e154f30f5` (+ gate
+fixes `904641389`), source reverted to main in `f812d724d`.
+
+**N0 ledger.** `tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo`
+counts optimized-HLO instructions by op name (fft, concatenate, gather,
+scatter, transpose, copy, dynamic-update-slice, reverse) and the bytes written
+by concatenate/copy outputs, per RHS and per RK step. `--route scan` passes
+cache/params as graph arguments (as `integrate_nonlinear_scan` does); `--route
+diagnostics` lowers `PreparedExplicitNonlinearDiagnostics._run_raw`, the scan
+`run_runtime_nonlinear` executes, which captures them as constants;
+`--hlo-dir` dumps the text. Compile only, load-independent for one jax/XLA
+build. Counts below are XLA:CPU, jax/jaxlib 0.10.2, Cyclone nonlinear deck,
+ky .3 initial condition, complex64 state.
+
+**Correction to review §5 (`d7_hlo.py`).** Its regex matched a token anywhere
+on an instruction line, metadata included. Matching op names, the same
+closure-constant RHS at 32×32×24 Nl2/Nm4 issues fft **23** (not 45), copy
+**35** (not 55), transpose **35** (not 78), concatenate 9 (agrees), and writes
+46.1 MB (29× state, not 88.4 MB). The profile quoted in `docs/performance.rst`
+("four ``copy_concatenate_fusion`` kernels ... running four times per RK3
+step") matches the bracket's own completion inside the four RHS evaluations of
+a diagnosed RK3 step; N1 does not remove those.
+
+| graph (32×32×24 Nl2/Nm4 unless noted) | concat | copy | transpose | bytes written |
+|---|---:|---:|---:|---:|
+| RHS, cache as args | 11→11 | 35→35 | 35→35 | 46,295,964→46,295,964 |
+| scan rk2 step, args | 23→22 | 73→72 | 73→72 | 99,324,828→97,014,684 |
+| scan rk3 step, args | 34→31 | 114→111 | 114→111 | 156,335,004→149,404,572 |
+| scan rk3_classic step, args | 33→31 | 109→107 | 109→107 | 147,733,404→143,113,116 |
+| scan rk4 step, args | 43→40 | 153→150 | 153→150 | 208,724,892→201,794,460 |
+| scan sspx3 step, args | 35→31 | 111→107 | 111→107 | 152,353,692→143,113,116 |
+| scan k10 step, args | 103→94 | 361→356 | 361→356 | 486,593,436→472,093,596 |
+| runtime diagnostics rk3 step, captured | 32→29 | 136→309 | 117→290 | 156,556,500→426,450,132 |
+| runtime diagnostics rk4 step, captured | 41→38 | 175→344 | 156→325 | 208,946,388→472,548,564 |
+| runtime diagnostics rk3, 64×64×24 Nl4/Nm8, captured | 32→29 | 163→360 | 144→341 | 2,884,020,404→7,805,118,644 |
+
+(main → prototype; fft unchanged everywhere; reverse and gather drop by the
+removed completions.) Runtime diagnostics with cache/params as arguments
+(`_run_dynamic_raw`, fixed dt, 2-step graph): copy 225→222, 164,129,164→
+157,198,732 B at 32×32×24; 249→246, 2,989,416,216→2,877,349,656 B at
+64×64×24 Nl4/Nm8. Attribution from rk3 dumps (`hlo_diff.py`): the extra pairs
+are inside `assemble_rhs_cached_electrostatic_jit`, multiply→transpose/copy to
+`(1,2,4,1024,24)` and bitcast→transpose/copy back, 14→102 each. Keeping the
+full projection at stages but the step-boundary changes reproduces main exactly
+(231 copies, 164,742,640 B); an `optimization_barrier` or a slice-concatenate
+stage producer changes nothing. So the trigger is removing the stage
+completion in a graph with a constant-captured cache.
+
+**Identity gates (prototype vs main, 100 steps).** Deck at Nx=Ny=16 (Nz=24 from
+`ntheta`), Nl2/Nm4, dt .01, `init_amp=10` so ‖NL‖/‖L‖ = .0506 at t0,
+`compressed_real_fft` on. Cases: `integrate_nonlinear` euler/rk2/rk3/
+rk3_classic/rk4/sspx3/k10 (state and 100-step φ history); `run_runtime_nonlinear`
+rk3/rk4 × {adaptive dt, `collision_split` implicit, fixed mode iky=ky(.3)
+ikx=1}, with t, dt_t, Wg, Wphi, heat flux, φ mode and state;
+`integrate_nonlinear_sharded` rk3/rk3_classic/rk4; `integrate_nonlinear_species_hermite`
+rk3/rk4 (num_devices=1); `nonlinear_heat_flux_window` 20 steps checkpointed,
+value and d/dtprim, rk3/rk4.
+- default f32: **65/65** `np.array_equal` and byte-identical; the two npz
+  archives have the same SHA-256.
+- `JAX_ENABLE_X64=true GKX_X64=1`: **64/65**; window rk4 d/dtprim differs by
+  2.2e-16 (one ulp of 2.0), its value is bitwise. The runtime route allocates a
+  complex64 state even in x64, so its f64 cases repeat the complex64 check.
+- prototype unit tests (fixed-mode stage projection branches, once-per-step
+  scan vs per-stage callable): 10 passed x64, 9 passed f32.
+- An initial f32 smoke of the touched owners gave 13 failed/149 passed: two were
+  a donated-state reuse in the new test (fixed), eleven are f32-only
+  window-gradient tolerance failures that main also fails in f32
+  (`baseline_es_rk2` rel .0133 on the exported main source); CI runs them in x64.
+  Two gate queues were killed before use (donated `G0` reused in `gate.py`);
+  their outputs were deleted.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, numpy 2.4.6, solvax 0.20.0,
+`/Users/rogeriojorge/local/venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src`,
+`JAX_PLATFORMS=cpu`, `XLA_FLAGS="--xla_cpu_multi_thread_eigen=false
+intra_op_parallelism_threads=1"`, `nice -n 10`, one heavy process at a time,
+each step held until the 1-min load was below 20. Main side: `git archive
+origin/main src` at `06606e404` in a scratch directory. Load ranged 8–60 during
+the session: **no timing is reported**. Scratch evidence (session-local):
+`gate.py` d4e5a6e38cb1…ac41, `compare.py` deb37b30ab06…d01f, `diag_hlo2.py`
+0ea6c9dac6d1…78b2e3, `hlo_diff.py` 98ca3be49f15…15dd, `queue3.sh`
+6f7dbc9242b5…72ad; npz f32 main/prototype 67bd0b87882f…0a9a (both); f64
+f22fc6ea025f…d4b1 / 95eb250ded28…d624; ledger JSON scan 66f0e32c…8323 /
+cc0b33c0…159e, diagnostics 652b5456…ba40 / 14feb8f2…629e, 64-grid
+5846d008…77ac / 36cae48c…46bf.
+
+Commands: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo
+--route {scan,diagnostics} --methods rk2,rk3,rk3_classic,rk4,sspx3,k10
+[--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8] --out <json>` with `PYTHONPATH` set to
+the main export or the prototype tree; `GATE_AMP=10 python gate.py <npz>`, then
+`python compare.py <main.npz> <prototype.npz>`.
+
+**Limitations.** XLA:CPU only; GPU layout heuristics may differ. Bytes written
+are a proxy for materialization, not a runtime. Species×Hermite ran on one
+device. Fixed mode covered one paired row; collision split only the implicit
+scheme. IMEX was never changed (its implicit solve is not bitwise
+conjugation-symmetric).
+
+**Next question.** Either give the runtime diagnostics scan its cache and
+params as graph arguments for adaptive dt too (`_run_dynamic_raw` already does
+for fixed dt; the bitwise-vs-constant-folded risk must be measured), after
+which N1 is a clean ~4% bytes saving; or go to N3, which removes the bracket's
+completion (the profiled 41.9%) and the transposes that trigger this layout
+choice.
+
+## 2026-09-13 — Q5: one SOLVAX floor (`chore/solvax-pin`)
+
+- finding: `requirements.txt` pinned `solvax>=0.7.3,<0.8` against
+  `pyproject.toml` `solvax>=0.12.0`, and had already drifted in other ways too:
+  jax unpinned (pyproject `>=0.10.1`), no `booz_xform_jax`, and a dead `tomli`
+  marker although Python `>=3.11` is required. `docs/numerics.rst` repeated the
+  stale pin.
+- consumers: none. CI, the release workflow, and README/CONTRIBUTING install from
+  `pyproject.toml`; `.readthedocs.yaml` reads `docs/requirements.txt` only. There
+  is no Dockerfile, binder, MANIFEST.in, setup.cfg, tox or nox file, and no
+  size/release manifest or release test names the file.
+- change: delete `requirements.txt`, so `pyproject.toml` is the only dependency
+  list, and correct the `docs/numerics.rst` paragraph. Aligning the file instead
+  would keep a copy nothing reads.
+- floor evidence: the tracked Python was AST-scanned for SOLVAX names (12 in
+  `src`, plus `AdaptiveEigenSolution` in tests; `gcrot` is not used). Each name
+  was checked against the SOLVAX tags. `adaptive_eigenpair`, `eigenpair_reverse`,
+  `estimate_rk4_timestep`, `exponential_eigenpairs`, `propagator_eigenpairs`,
+  `sparse_eigenpairs` and `sparse_operator_matrix` first appear in v0.12.0;
+  `gmres`, `linear_solve` and `SpluFactorization` date from v0.1.0, and
+  `tridiagonal_solve` and `chunked_jacfwd` from v0.2.0. The call-site keywords
+  exist in the v0.12.0 and v0.20.0 signatures. As a runtime check,
+  `git archive v0.12.0 src/solvax` (SOLVAX 0.12.0 sources) was placed first
+  on `PYTHONPATH` ahead of the installed 0.20.0, with
+  `GKX_REQUIRE_PAIRED_SOLVAX=1`, x64, CPU, and the CI paired-SOLVAX files in
+  full plus `tests/unit/solvers/test_time_integrators.py`. Result: 277 passed,
+  3 skipped in 482 s. All 3 skips come from
+  `test_adaptive_eigenmodes.py:75`, "VMEC integration needs its backend or a
+  generated eik cache", an environment check unrelated to SOLVAX. The floor
+  stays `>=0.12.0`, with no evidence for raising it.
+- checks (Python 3.11, jax/jaxlib 0.10.2, SOLVAX 0.20.0, `gkx.__file__` in the
+  worktree): ruff 0.16.4 check/format pass (407 files); size, readiness
+  (`version`), and architecture manifests pass; release gates + evidence
+  ledger + public types 185 passed; strict `sphinx -W` pass, and
+  `numerics.html` now renders `solvax>=0.12.0`; gitleaks 8.30.1 on the changed
+  files is clean. Size: −1 tracked file (95 bytes), `docs/numerics.rst` +10/−6.
+
 ## 2026-09-13 — exact sparse shift-invert size ladder (Q2, plan §5.1 L2)
 
 **Question.** Up to what single-ky linked-Cyclone size is the existing exact route
