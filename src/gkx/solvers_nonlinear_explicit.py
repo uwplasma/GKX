@@ -14,8 +14,6 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
-from gkx.operators.nonlinear.projection import _stage_projection
-
 RhsFn = Callable[..., tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
 ScanFn = Callable[..., tuple[jnp.ndarray, Any]]
@@ -185,11 +183,7 @@ def advance_explicit_nonlinear_state(
     project_state: ProjectFn,
     state_dtype: jnp.dtype,
 ) -> jnp.ndarray:
-    """Advance one explicit nonlinear step with a static method string.
-
-    Stages re-apply only ``_stage_projection(project_state)``; the whole
-    projection runs once, on the result.
-    """
+    """Advance one explicit nonlinear step with a static method string."""
 
     G_new = _explicit_stage_update(
         G,
@@ -197,7 +191,7 @@ def advance_explicit_nonlinear_state(
         dt_local,
         method=method,
         rhs_fn=rhs_fn,
-        project_state=_stage_projection(project_state),
+        project_state=project_state,
     )
     G_new = project_state(G_new)
     return jnp.asarray(G_new, dtype=state_dtype)
@@ -339,12 +333,10 @@ def integrate_nonlinear_scan(
     """Integrate a cached nonlinear RHS using the explicit solver scan policy."""
 
     state_dtype = jnp.result_type(G0, jnp.complex64)
+    G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     projector = project_state if project_state is not None else (lambda G: G)
-    # Every step ends projected, so one projection of the initial state gives
-    # each step a projected start without re-projecting the carry.
-    G0 = jnp.asarray(projector(jnp.asarray(G0, dtype=state_dtype)), dtype=state_dtype)
 
     def bound_rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, object]:
         return rhs_fn(state, *rhs_args, *rhs_static_args)
@@ -358,6 +350,7 @@ def integrate_nonlinear_scan(
             real_dtype=real_dtype,
             show_progress=show_progress,
         )
+        G = jnp.asarray(projector(G), dtype=state_dtype)
         dG, _fields = bound_rhs(G)
         dG = jnp.asarray(dG, dtype=state_dtype)
         G_new = advance_explicit_nonlinear_state(
@@ -466,17 +459,15 @@ def _advance_explicit_diagnostic_state(
     )
     if max_dt is not None:
         dt_local = jnp.minimum(dt_local, jnp.maximum(max_dt, 0.0))
-    G_new = _explicit_stage_update(
+    G_new = advance_explicit_nonlinear_state(
         G,
         dG,
         dt_local,
         method=method,
         rhs_fn=rhs_fn,
-        project_state=_stage_projection(project_state),
+        project_state=project_state,
+        state_dtype=state_dtype,
     )
-    G_new = jnp.asarray(G_new, dtype=state_dtype)
-    # The step's one projection comes after the split: the split is diagonal
-    # in every mode, so projecting before it too would not change the result.
     G_new = _apply_explicit_collision_split(
         G_new,
         dt_local,

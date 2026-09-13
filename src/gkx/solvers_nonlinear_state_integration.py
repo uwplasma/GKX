@@ -344,6 +344,7 @@ def nonlinear_heat_flux_window(
 
     def advance(carry: tuple[jnp.ndarray, jnp.ndarray], index: jnp.ndarray):
         state, total_heat = carry
+        state = project_state(state)
         derivative, _ = rhs(state)
         next_state = advance_explicit_nonlinear_state(
             state,
@@ -369,8 +370,7 @@ def nonlinear_heat_flux_window(
         include = jnp.asarray(index >= count - tail, dtype=heat.dtype)
         return (next_state, total_heat + include * heat), None
 
-    # Every step ends projected, so the window projects its start once.
-    initial_state = project_state(jax.lax.stop_gradient(jnp.asarray(saturated_state)))
+    initial_state = jax.lax.stop_gradient(jnp.asarray(saturated_state))
     heat_dtype = jnp.result_type(
         jnp.real(initial_state), flux_factor, *jax.tree_util.tree_leaves(params)
     )

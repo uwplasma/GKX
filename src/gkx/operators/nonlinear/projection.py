@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, NamedTuple
 
@@ -146,26 +145,6 @@ def advance_shearing_coordinates(
     )
 
 
-def _identity(G_state: jnp.ndarray) -> jnp.ndarray:
-    return G_state
-
-
-@dataclass(frozen=True, eq=False)
-class _StateProjector:
-    """A state projection plus what an explicit RK stage must still re-apply.
-
-    The compressed RHS returns Hermitian-complete derivatives, and conjugation,
-    the ky reversal and the kx gather commute exactly with real RK
-    coefficients, so the completion is a bitwise identity on stage states.
-    """
-
-    project: Callable[[jnp.ndarray], jnp.ndarray]
-    stage_projection: Callable[[jnp.ndarray], jnp.ndarray]
-
-    def __call__(self, G_state: jnp.ndarray) -> jnp.ndarray:
-        return self.project(G_state)
-
-
 @lru_cache(maxsize=32)
 def _cached_hermitian_projector(
     ny_full: int, two_sided: bool, nx: int
@@ -173,7 +152,7 @@ def _cached_hermitian_projector(
     nyc = ny_full // 2 + 1
     use_hermitian = nyc > 2 and two_sided
     if not use_hermitian:
-        return _identity
+        return lambda G_state: G_state
 
     # The conjugate kx ordering stays a host array. These projectors are cached
     # and reused across traces, and a device constant materialized here would
@@ -191,17 +170,7 @@ def _cached_hermitian_projector(
         pos = G_state[..., :nyc, :, :]
         return _complete_hermitian_ky(pos, ny_full, nx, kx_neg)
 
-    return _StateProjector(project, _identity)
-
-
-def _stage_projection(
-    project_state: Callable[[jnp.ndarray], jnp.ndarray],
-) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Return what a stage re-applies; other callables are re-applied whole."""
-
-    if isinstance(project_state, _StateProjector):
-        return project_state.stage_projection
-    return project_state
+    return project
 
 
 _TRACED_KY_AXIS_MESSAGE = (
@@ -266,11 +235,7 @@ def _make_nonlinear_state_projector(
     fixed_mode_ky_index: int | None,
     fixed_mode_kx_index: int | None,
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Compose fixed-mode and Hermitian projections for nonlinear state scans.
-
-    The RHS does not preserve a fixed mode, so stages still reset it and the
-    conjugate partner the completion would rewrite from it.
-    """
+    """Compose fixed-mode and Hermitian projections for nonlinear state scans."""
 
     fixed_projector = _make_fixed_mode_projector(
         fixed_state,
@@ -280,36 +245,15 @@ def _make_nonlinear_state_projector(
     hermitian_projector = (
         _make_hermitian_projector(np.asarray(ky_vals), nx=int(nx))
         if compressed_real_fft
-        else _identity
+        else (lambda G_state: G_state)
     )
-    if fixed_projector is None or fixed_state is None:
-        return hermitian_projector
-    fixed_reset = fixed_projector
 
     def project(G_state: jnp.ndarray) -> jnp.ndarray:
-        return hermitian_projector(fixed_reset(G_state))
+        if fixed_projector is not None:
+            G_state = fixed_projector(G_state)
+        return hermitian_projector(G_state)
 
-    if not isinstance(hermitian_projector, _StateProjector):
-        return _StateProjector(project, fixed_reset)
-    ky_i, kx_i = int(fixed_mode_ky_index or 0), int(fixed_mode_kx_index or 0)
-    ny_full = int(np.asarray(ky_vals).size)
-    nyc = ny_full // 2 + 1
-    if not (0 <= ky_i < ny_full and 0 <= kx_i < int(nx)):
-        return _StateProjector(project, project)
-    if ky_i >= nyc:  # the completion overwrites a negative-ky reset
-        return _StateProjector(project, _identity)
-    if ky_i == 0 or ky_i >= (nyc - 1 if ny_full % 2 == 0 else nyc):
-        return _StateProjector(project, fixed_reset)  # no conjugate partner
-    ky_p, kx_p = ny_full - ky_i, (int(nx) - kx_i) % int(nx)
-    partner = jnp.conj(
-        jnp.asarray(fixed_state)[..., ky_i : ky_i + 1, kx_i : kx_i + 1, :]
-    )
-
-    def stage(G_state: jnp.ndarray) -> jnp.ndarray:
-        reset = fixed_reset(G_state)
-        return reset.at[..., ky_p : ky_p + 1, kx_p : kx_p + 1, :].set(partner)
-
-    return _StateProjector(project, stage)
+    return project
 
 
 def _make_fixed_mode_projector(
