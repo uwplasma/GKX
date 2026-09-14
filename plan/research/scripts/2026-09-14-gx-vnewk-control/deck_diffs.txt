@@ -1,0 +1,103 @@
+matched collisionless deck: office gkx-nl24-discriminator-20260912.vvmgDD/nl24.in sha256 2dd1c42bf275f3784bc84f269c7763377d72e6055d4b07ee14b8025ae82e2146
+=== diff nl24.in gx-nu1e-2-nl24.in (sha256 b3ea3f4e474a85b0b6eb939f2e3f2293701bbb8297b9a1e91c7671e76d46b281)
+28c28
+<  t_max = 300.0          # matched nonlinear-free linear control
+---
+>  t_max = 150.0          # matched nonlinear-free linear control
+40c40
+<  save_for_restart = true
+---
+>  save_for_restart = false
+58c58
+<  vnewk = [ 0.0,       0.0     ]         # collision frequency
+---
+>  vnewk = [ 1.0e-2,    0.0     ]         # collision frequency
+75,76c75,76
+<  fields = true                  # write fields on the grid
+<  moments = true                 # write moments on the grid
+---
+>  fields = false                 # write fields on the grid
+>  moments = false                # write moments on the grid
+=== diff nl24.in gx-nu1e-2-nl32.in (sha256 122ff125a83fde04e7107d49c88226529ee6dbba0fe8ff11381c67d45dc544b3)
+14c14
+<  nlaguerre = 24         # number of laguerre moments (mu B resolution)
+---
+>  nlaguerre = 32         # number of laguerre moments (mu B resolution)
+28c28
+<  t_max = 300.0          # matched nonlinear-free linear control
+---
+>  t_max = 150.0          # matched nonlinear-free linear control
+40c40
+<  save_for_restart = true
+---
+>  save_for_restart = false
+58c58
+<  vnewk = [ 0.0,       0.0     ]         # collision frequency
+---
+>  vnewk = [ 1.0e-2,    0.0     ]         # collision frequency
+75,76c75,76
+<  fields = true                  # write fields on the grid
+<  moments = true                 # write moments on the grid
+---
+>  fields = false                 # write fields on the grid
+>  moments = false                # write moments on the grid
+=== diff nl24.in gx-nu1e-2-nl32-nohyper.in (sha256 be15843b7c1d4579c5133709dd028592504f417635929c1fdd89963eff6b3940)
+14c14
+<  nlaguerre = 24         # number of laguerre moments (mu B resolution)
+---
+>  nlaguerre = 32         # number of laguerre moments (mu B resolution)
+28c28
+<  t_max = 300.0          # matched nonlinear-free linear control
+---
+>  t_max = 150.0          # matched nonlinear-free linear control
+40c40
+<  save_for_restart = true
+---
+>  save_for_restart = false
+58c58
+<  vnewk = [ 0.0,       0.0     ]         # collision frequency
+---
+>  vnewk = [ 1.0e-2,    0.0     ]         # collision frequency
+68c68
+<  hypercollisions = true          # use hypercollision model
+---
+>  hypercollisions = false         # use hypercollision model
+75,76c75,76
+<  fields = true                  # write fields on the grid
+<  moments = true                 # write moments on the grid
+---
+>  fields = false                 # write fields on the grid
+>  moments = false                # write moments on the grid
+=== diff nl24.in gx-nu1e-2-nl48.in (sha256 5c553884bd8abb3a871577c0a120ccb4f4140ef4fb1582d22dfd238c7821c87d)
+14c14
+<  nlaguerre = 24         # number of laguerre moments (mu B resolution)
+---
+>  nlaguerre = 48         # number of laguerre moments (mu B resolution)
+28c28
+<  t_max = 300.0          # matched nonlinear-free linear control
+---
+>  t_max = 150.0          # matched nonlinear-free linear control
+40c40
+<  save_for_restart = true
+---
+>  save_for_restart = false
+58c58
+<  vnewk = [ 0.0,       0.0     ]         # collision frequency
+---
+>  vnewk = [ 1.0e-2,    0.0     ]         # collision frequency
+75,76c75,76
+<  fields = true                  # write fields on the grid
+<  moments = true                 # write moments on the grid
+---
+>  fields = false                 # write fields on the grid
+>  moments = false                # write moments on the grid
+=== diff gx-nu1e-2-nl32.in gx-nu1e-2-nl48.in
+14c14
+<  nlaguerre = 32         # number of laguerre moments (mu B resolution)
+---
+>  nlaguerre = 48         # number of laguerre moments (mu B resolution)
+=== cmp Q8 gx/ decks vs this directory
+gx-nu1e-2-nl24.in identical
+gx-nu1e-2-nl32.in identical
+gx-nu1e-2-nl32-nohyper.in identical
+gx_fit.py identical to Q8
