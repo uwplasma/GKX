@@ -13401,3 +13401,17 @@ load gate below 20. Load ranged 7–23, so **no timing is reported**.
 4.4× margin is a judgement, and CI on x86 is its first test. Only the two Q4 owner
 files were reproduced in float32; other window-gradient FD tests
 (`test_nonlinear.py` linked boundary, objectives) were not swept in float32 here.
+
+**Paused 2026-09-14 (maintainer pause of all GKX work).** PR #240 is open as a
+draft.
+- **Done:**
+  - reproduction of the 11 float32 failures;
+  - per-test decisions with derivations;
+  - the test, conftest, CI and manifest changes;
+  - every local gate listed above, plus gitleaks and the repository size manifest on `89620f61c`.
+- **Not done:** CI on #240 never reported. Run 34879507171 was cancelled to free runners for the merge chain; its `python-floor` "failure" is that cancellation, not a test result. So the new float32 step has not yet run on Linux x86, the one untested risk above.
+- **Resume:**
+  1. After the merge chain lands, update the branch onto `main` (merge, keep both `plan/log.md` entries, re-measure the architecture test baseline with `python tools/release/check_package_architecture_manifest.py`).
+  2. Push and wait for `ci-required`. Read the `python-floor` step "Default-f32 nonlinear window-gradient matrix" first.
+  3. If x86 exceeds `F32_WINDOW_ROUNDOFF`, record the measured x86 roundoff here before changing the bound.
+  4. Mark ready with `gh pr ready 240`.
