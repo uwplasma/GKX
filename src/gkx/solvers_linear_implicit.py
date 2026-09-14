@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -35,11 +35,113 @@ from gkx.terms.assembly import assemble_rhs_cached_with_fields, compute_fields_c
 from gkx.terms.config import FieldState, TermConfig
 
 __all__ = [
+    "ImplicitSolveStats",
+    "ImplicitSolveSummary",
     "_build_field_corrected_shifted_preconditioner",
     "_build_implicit_operator",
     "_build_shifted_hermite_preconditioner",
     "_integrate_linear_implicit_cached",
+    "require_converged_implicit_solves",
 ]
+
+
+class ImplicitSolveStats(NamedTuple):
+    """Convergence summary of every implicit GMRES solve in one run.
+
+    Each field is a scalar array, so the summary rides through ``lax.scan`` and
+    ``fori_loop`` carries without a host callback. ``max_relative_residual`` is
+    the largest SOLVAX true residual ``||b - A x|| / ||b||``; with right
+    preconditioning this is the physical norm. ``unconverged_solves`` counts
+    solves whose SOLVAX ``converged`` flag was false at ``rtol=implicit_tol``.
+    """
+
+    max_relative_residual: jax.Array
+    max_iterations: jax.Array
+    solves: jax.Array
+    unconverged_solves: jax.Array
+
+
+def _empty_implicit_solve_stats(state_dtype: Any) -> ImplicitSolveStats:
+    zero = jnp.asarray(0, dtype=jnp.int32)
+    residual = jnp.asarray(0.0, dtype=jnp.finfo(state_dtype).dtype)
+    return ImplicitSolveStats(residual, zero, zero, zero)
+
+
+def _fold_implicit_solve_stats(
+    total: ImplicitSolveStats, solution: KrylovSolution, rhs_flat: jnp.ndarray
+) -> ImplicitSolveStats:
+    """Fold one solve into a running summary; no gradient flows through it."""
+
+    squared = jnp.maximum(jnp.real(jnp.vdot(rhs_flat, rhs_flat)), 0.0)
+    rhs_norm = jnp.sqrt(jnp.where(squared > 0, squared, 1.0))
+    relative = jax.lax.stop_gradient(solution.residual_norm / rhs_norm)
+    unconverged = jnp.where(jax.lax.stop_gradient(solution.converged), 0, 1)
+    return ImplicitSolveStats(
+        jnp.maximum(
+            total.max_relative_residual,
+            relative.astype(total.max_relative_residual.dtype),
+        ),
+        jnp.maximum(total.max_iterations, solution.iterations.astype(jnp.int32)),
+        total.solves + 1,
+        total.unconverged_solves + unconverged.astype(jnp.int32),
+    )
+
+
+@dataclass(frozen=True)
+class ImplicitSolveSummary:
+    """Host-side :class:`ImplicitSolveStats` of one run, as Python scalars."""
+
+    max_relative_residual: float
+    max_iterations: int
+    solves: int
+    unconverged_solves: int
+
+    @property
+    def converged(self) -> bool:
+        return self.unconverged_solves == 0 and math.isfinite(
+            self.max_relative_residual
+        )
+
+    @classmethod
+    def from_stats(cls, stats: ImplicitSolveStats) -> ImplicitSolveSummary:
+        return cls(
+            max_relative_residual=float(np.asarray(stats.max_relative_residual)),
+            max_iterations=int(np.asarray(stats.max_iterations)),
+            solves=int(np.asarray(stats.solves)),
+            unconverged_solves=int(np.asarray(stats.unconverged_solves)),
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "converged": self.converged,
+            "max_relative_residual": self.max_relative_residual,
+            "max_iterations": self.max_iterations,
+            "solves": self.solves,
+            "unconverged_solves": self.unconverged_solves,
+        }
+
+
+def require_converged_implicit_solves(
+    stats: ImplicitSolveStats, *, label: str
+) -> ImplicitSolveSummary:
+    """Fail closed at the host boundary when any implicit solve did not converge.
+
+    The traced scans cannot raise, so they carry :class:`ImplicitSolveStats` and
+    the runtime checks it here, as the eigen gates do for their residuals.
+    """
+
+    summary = ImplicitSolveSummary.from_stats(stats)
+    if summary.converged:
+        return summary
+    raise RuntimeError(
+        f"{label}: {summary.unconverged_solves} of {summary.solves} implicit GMRES "
+        "solves did not converge "
+        f"(max_relative_residual={summary.max_relative_residual:.6g}, "
+        f"max_iterations={summary.max_iterations}); refusing to return an "
+        "unconverged trajectory. Raise implicit_maxiter or implicit_restart, use "
+        "a stronger implicit_preconditioner or a smaller dt; call the integrator "
+        "with return_solve_stats=True to inspect such a trajectory"
+    )
 
 
 @dataclass(frozen=True)
@@ -793,11 +895,18 @@ def _gmres_iteration_budget(maxiter: int, restart: int) -> tuple[int, int]:
 
 
 def _implicit_gmres_step(
-    G_in: jnp.ndarray, *, shape: tuple[int, ...], **kwargs: Any
-) -> jnp.ndarray:
+    G_in: jnp.ndarray,
+    stats: ImplicitSolveStats,
+    *,
+    shape: tuple[int, ...],
+    size: int,
+    **kwargs: Any,
+) -> tuple[jnp.ndarray, ImplicitSolveStats]:
     """Advance one implicit step with a fixed-point warm start and GMRES."""
 
-    return _implicit_gmres_solution(G_in, **kwargs).x.reshape(shape)
+    solution = _implicit_gmres_solution(G_in, size=size, **kwargs)
+    folded = _fold_implicit_solve_stats(stats, solution, G_in.reshape(size))
+    return solution.x.reshape(shape), folded
 
 
 def _implicit_gmres_solution(
@@ -875,6 +984,11 @@ def _validate_implicit_sample_policy(*, steps: int, sample_stride: int) -> None:
         raise ValueError("steps must be divisible by sample_stride")
 
 
+ImplicitSolveStepFn = Callable[
+    [jnp.ndarray, ImplicitSolveStats], tuple[jnp.ndarray, ImplicitSolveStats]
+]
+
+
 def _build_implicit_solve_step(
     *,
     cache: LinearCache,
@@ -886,12 +1000,19 @@ def _build_implicit_solve_step(
     matvec: Callable[[jnp.ndarray], jnp.ndarray],
     precond_op: Callable[[jnp.ndarray], jnp.ndarray],
     options: _ImplicitSolveOptions,
-) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """Return the per-step GMRES solve closure used by scan paths."""
+) -> ImplicitSolveStepFn:
+    """Return the per-step GMRES solve closure used by scan paths.
 
-    def solve_step(G_in: jnp.ndarray) -> jnp.ndarray:
+    The closure maps ``(state, stats)`` to ``(next state, stats)``: every solve
+    folds its SOLVAX status into the carried :class:`ImplicitSolveStats`.
+    """
+
+    def solve_step(
+        G_in: jnp.ndarray, stats: ImplicitSolveStats
+    ) -> tuple[jnp.ndarray, ImplicitSolveStats]:
         return _implicit_gmres_step(
             G_in,
+            stats,
             cache=cache,
             params=params,
             terms=terms,
@@ -917,15 +1038,17 @@ def _scan_implicit_outputs(
     params: LinearParams,
     terms: LinearTerms,
     dt_val: jnp.ndarray,
-    solve_step: Callable[[jnp.ndarray], jnp.ndarray],
+    solve_step: ImplicitSolveStepFn,
     steps: int,
     sample_stride: int,
     checkpoint: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Integrate implicit steps and collect saved field diagnostics."""
+) -> tuple[tuple[jnp.ndarray, ImplicitSolveStats], jnp.ndarray]:
+    """Integrate implicit steps, carrying solve status, and save field diagnostics."""
 
-    def step(G_in, _):
-        G_new = solve_step(G_in)
+    carry0 = (G, _empty_implicit_solve_stats(G.dtype))
+
+    def step(carry, _):
+        G_new, stats = solve_step(*carry)
         phi_new = _implicit_phi_diagnostic(
             G_new,
             cache=cache,
@@ -933,17 +1056,17 @@ def _scan_implicit_outputs(
             terms=terms,
             dt_val=dt_val,
         )
-        return G_new, phi_new
+        return (G_new, stats), phi_new
 
     step_fn = jax.checkpoint(step) if checkpoint else step
     if sample_stride <= 1:
-        return jax.lax.scan(step_fn, G, None, length=steps)
+        return jax.lax.scan(step_fn, carry0, None, length=steps)
 
-    def sample_step(G_in, _):
-        def inner_step(_i, g):
-            return solve_step(g)
+    def sample_step(carry, _):
+        def inner_step(_i, inner_carry):
+            return solve_step(*inner_carry)
 
-        G_out_local = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
+        G_out_local, stats = jax.lax.fori_loop(0, sample_stride, inner_step, carry)
         phi_out = _implicit_phi_diagnostic(
             G_out_local,
             cache=cache,
@@ -951,9 +1074,9 @@ def _scan_implicit_outputs(
             terms=terms,
             dt_val=dt_val,
         )
-        return G_out_local, phi_out
+        return (G_out_local, stats), phi_out
 
-    return jax.lax.scan(sample_step, G, None, length=steps // sample_stride)
+    return jax.lax.scan(sample_step, carry0, None, length=steps // sample_stride)
 
 
 def _integrate_linear_implicit_cached(
@@ -972,8 +1095,15 @@ def _integrate_linear_implicit_cached(
     implicit_preconditioner: PreconditionerSpec = None,
     checkpoint: bool = False,
     sample_stride: int = 1,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Implicit linear integrator using GMRES with a diagonal preconditioner."""
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
+    """Implicit linear integrator using GMRES with a diagonal preconditioner.
+
+    Returns ``(G_out, phi_t)``, or ``(G_out, phi_t, stats)`` with
+    ``return_solve_stats=True``. The traced scan cannot raise on an unconverged
+    solve, so ``stats`` (:class:`ImplicitSolveStats`) is the convergence channel;
+    the runtime checks it with :func:`require_converged_implicit_solves`.
+    """
     terms = LinearTerms() if terms is None else terms
     _validate_implicit_sample_policy(steps=steps, sample_stride=sample_stride)
 
@@ -997,7 +1127,7 @@ def _integrate_linear_implicit_cached(
             restart=implicit_restart,
         ),
     )
-    G_out, phi_t = _scan_implicit_outputs(
+    (G_out, solve_stats), phi_t = _scan_implicit_outputs(
         G,
         cache=cache,
         params=params,
@@ -1010,4 +1140,6 @@ def _integrate_linear_implicit_cached(
     )
 
     G_out = G_out[0] if squeeze_species else G_out
+    if return_solve_stats:
+        return G_out, phi_t, solve_stats
     return G_out, phi_t

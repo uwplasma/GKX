@@ -13299,3 +13299,96 @@ to find which piece keeps XLA:CPU from the N1 layout, HLO-only. Or go to N3, who
 layout removes the transposes that choice acts on. Separately, the prepared and runtime
 routes disagree at roundoff. Choosing one as the reference, and giving `gkx.prepare` the
 runtime's operand placement, is a correctness question, not a speed one.
+
+## 2026-09-14 — Q15 solver status on results (paused)
+
+Branch `fix/solver-status-on-results` from `origin/perf/runtime-scan-graph-args`
+(`ccdd4bf12`, head of the merge chain carrying Q6/Q12/Q1). Paused by the coordinator
+during the gate run; this commit is work in progress and no PR is open.
+
+**Design decided.**
+- Eigen: `EigenSolveStatus(method, route, residual, tolerance, certified, inner)` in
+  `solvers_linear_krylov.py`. `residual` is `_eigenpair_relative_residual` of the returned
+  pair on every route; the adaptive gate divides by |λ|‖v‖ only, so its pair is recomputed
+  with the shared definition, which is never larger. `route` names the method that produced
+  the pair (a shift-invert fallback reports its fallback). `inner` is the shift-invert
+  build's `InnerSolveStats` as host scalars plus tolerance and preconditioner, else `None`.
+  `dominant_eigenpair(..., return_status=True)` appends it. Gates are unchanged, so
+  `certified=False` comes only from a raw route with `certify=False`.
+- Scans: `ImplicitSolveStats(max_relative_residual, max_iterations, solves,
+  unconverged_solves)`, four scalars carried through `lax.scan`/`fori_loop` in
+  `_scan_implicit_outputs`, the linear diagnostics scans (explicit methods carry `None`,
+  which adds no leaves) and `integrate_cached_imex_scan`. IMEX takes SOLVAX's status out of
+  `linear_solve(..., has_aux=True)` in the new `solve_imex_step_with_stats`;
+  `solve_imex_step` keeps its graph. No host callback inside a scan.
+- Policy: fail closed at the host boundary, as #233 does. `run_runtime_linear`
+  (`method="implicit"`, phi and density paths) and `run_runtime_nonlinear` (IMEX final-state
+  route; the diagnostics route already rejects IMEX) call
+  `require_converged_implicit_solves`, which raises `RuntimeError("<label>: k of n implicit
+  GMRES solves did not converge (max_relative_residual=…, max_iterations=…); …")`. No TOML
+  key is added. The library integrators stay traceable: `return_solve_stats=True` appends
+  the stats (`None` for methods without an implicit solve) and the default return is
+  unchanged. A float32 probe (reduced Cyclone runtime deck, Nl4/Nm8, dt .05, 40 implicit
+  steps) converged every solve within 4 iterations at max relative residual 5.7e-7 in both
+  float32 and x64, so SOLVAX's flag needs no dtype floor on this route.
+- Results: trailing `RuntimeLinearResult.eigen_status`, `RuntimeLinearResult.implicit_solve`
+  and `RuntimeNonlinearResult.implicit_solve` (host `ImplicitSolveSummary`), default `None`;
+  `summary()` gains flat `eigen_*` and `implicit_*` keys, `None` where no such solve ran.
+  The artifact summary JSON writer is unchanged. `docs/solvers.rst` has a "Solver status on
+  results" section.
+
+**HLO** (compile-only optimized HLO, 4×4×8 Cyclone, Nl2/Nm4, damping preconditioner;
+baseline is a clean detached `ccdd4bf12`). Graphs that do not request stats keep identical
+instruction counts and ledgers (float32/x64): implicit linear 3834/3835, stride 2
+3945/3946, implicit diagnostics 3883/3884, rk4 diagnostics control 9395/9470, IMEX cached
+3968/3982, IMEX value_and_grad 7012/7013, checkpointed 8716/8718. With stats: implicit
+linear 4443/4452 (fft 16→20, copy 20→25), stride 2 4602/4607, diagnostics 4492/4501, IMEX
+4486/4729. A fold of the iteration count alone gives 3853 (fft 16) and of `converged` alone
+4403 (fft 20): the cost is SOLVAX's true-residual recomputation, one operator application
+per solve that XLA removes when nothing reads it, plus about 19 scalar instructions. No jit
+static argument or compile key is added.
+
+**Implemented and tested** (x64 unless noted).
+- New tests: `test_implicit_scan_carries_unconverged_solves_to_the_host_gate[1|2]` and
+  `test_imex_step_status_matches_the_plain_step_and_its_vjp` (float32 and x64); the
+  converged propagator pair reports its residual, tolerance and route;
+  `test_runtime_linear_implicit_run_fails_closed_on_unconverged_solves[phi|density]`;
+  `test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves`; the Krylov
+  fallback runtime result carries `eigen_status`. Two runtime eigenpair fakes now return a
+  status.
+- Passed before the pause: `test_linear_krylov_core.py` 98; `test_time_integrators.py` 97;
+  `test_adaptive_eigenmodes.py` 8 passed, 3 skipped; `test_runtime_runner.py` 170;
+  `test_autodiff_solver_objectives.py` 97; `test_linear.py -k "krylov or eigen or shift or
+  implicit or linked"` 16; `test_nonlinear.py -k "implicit or imex or IMEX"` 9. ruff 0.16.4
+  check and format on the touched files, `mypy` as CI (184 source files) and `sphinx -W`
+  passed.
+
+**Not done.**
+- `test_linear_helpers_extra.py::test_integrate_linear_implicit_cached_sampled_path` fails:
+  its `gmres` fake returns `SimpleNamespace(x=rhs, converged=True)` without `residual_norm`
+  or `iterations`, which the carried fold now reads. Fix the fake, not the code.
+- Not run: `test_nonlinear_helpers_extra.py`; `test_public_types.py` with
+  `test_nonlinear_operator_packages.py`; `test_cli.py -k "final_state or krylov or Krylov"`;
+  `test_reference_comparison_tools.py -k "ky_diagnostics or krylov or implicit"`;
+  `test_parallel_linear_velocity.py -k implicit`; `tests/release/test_release_gates.py
+  tests/release/test_evidence_ledger.py`.
+- `tools/package_architecture_manifest.toml` baselines are not updated (source and test line
+  budgets; `workflows/nonlinear.py` now exceeds its 1023-line complexity baseline);
+  `tools/release/check_package_architecture_manifest.py` and
+  `check_repository_size_manifest.py` were not run.
+- The IMEX diagnostics scan and the sheared IMEX route carry no stats (documented as not
+  yet).
+
+**Resume steps.**
+1. Worktree `~/local/GKX-worktrees/solver-status-on-results`, venv `gkx-review-20260913`,
+   `PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1`; verify
+   `gkx.__file__`.
+2. Add `residual_norm=jnp.zeros(()), iterations=jnp.asarray(0)` to the `gmres` fake in
+   `test_integrate_linear_implicit_cached_sampled_path`; rerun that file.
+3. Run the not-yet-run selections above, one process at a time, `nice -n 10`, load below 20.
+4. Run `python tools/release/check_package_architecture_manifest.py` and set the baselines
+   to the measured counts with a comment naming Q15.
+5. ruff, mypy, `sphinx -W`; commit; `check_repository_size_manifest.py`; gitleaks on the
+   range; push; open the PR against `main` (do not merge) with the contract, policy, HLO
+   table and test table above. The detached baseline worktree
+   `~/local/GKX-worktrees/solver-status-baseline` can re-run the HLO comparison.

@@ -55,7 +55,7 @@ class FullNonlinearRuntimeDeps:
     integrate_nonlinear_explicit_diagnostics_state: Callable[..., Any]
     run_adaptive_runtime_chunk_loop: Callable[..., Any]
     build_runtime_nonlinear_result: Callable[..., RuntimeNonlinearResult]
-    integrate_nonlinear_from_config: Callable[..., tuple[Any, Any]]
+    integrate_nonlinear_from_config: Callable[..., tuple[Any, ...]]
 
 
 @dataclass(frozen=True)
@@ -560,7 +560,10 @@ def _run_final_state(
     kwargs = {"terms": ctx.terms}
     if policy.show_progress:
         kwargs["show_progress"] = True
-    G_final, fields = deps.integrate_nonlinear_from_config(
+    imex = str(time_cfg.method).strip().lower() in {"imex", "semi-implicit"}
+    if imex:
+        kwargs["return_solve_stats"] = True
+    G_final, fields, *solve_stats = deps.integrate_nonlinear_from_config(
         ctx.G0,
         ctx.grid,
         ctx.geom,
@@ -569,19 +572,25 @@ def _run_final_state(
         **kwargs,
     )
     status("completed nonlinear final-state integration")
-    return (
-        _result(
-            ctx,
-            policy,
-            deps=deps,
-            t=np.asarray([]),
-            diagnostics=None,
-            fields=fields,
-            state=G_final,
-            summarize_fields=True,
-        ),
-        G_final,
+    result = _result(
+        ctx,
+        policy,
+        deps=deps,
+        t=np.asarray([]),
+        diagnostics=None,
+        fields=fields,
+        state=G_final,
+        summarize_fields=True,
     )
+    if imex:
+        from gkx.solvers_linear_implicit import require_converged_implicit_solves
+
+        # A scan step cannot raise, so an unconverged IMEX solve is refused here.
+        summary = require_converged_implicit_solves(
+            solve_stats[0], label="nonlinear IMEX run"
+        )
+        result = replace(result, implicit_solve=summary)
+    return result, G_final
 
 
 def _diagnostic_run_result(

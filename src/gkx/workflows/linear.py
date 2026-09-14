@@ -38,9 +38,9 @@ class FullLinearRuntimeDeps:
     normalize_linear_solver_name: Callable[..., str]
     runtime_default_krylov_config: Callable[..., Any]
     build_linear_cache: Callable[..., Any]
-    dominant_eigenpair: Callable[..., tuple[Any, Any]]
+    dominant_eigenpair: Callable[..., tuple[Any, ...]]
     apply_diagnostic_normalization: Callable[..., tuple[float, float]]
-    integrate_linear_from_config: Callable[..., tuple[Any, Any]]
+    integrate_linear_from_config: Callable[..., tuple[Any, ...]]
     integrate_linear_diagnostics: Callable[..., tuple[Any, ...]]
     fit_runtime_linear_diagnostics: Callable[..., Any]
     finalize_runtime_linear_quasilinear: Callable[..., RuntimeLinearResult]
@@ -97,6 +97,7 @@ class _LinearTrajectory:
     phi_t: Any
     density_t: Any | None
     t: Any | None = None
+    implicit_solve: Any | None = None
 
     def as_numpy(self, time_config: Any) -> _LinearTrajectory:
         """Materialize saved diagnostics and infer fixed-step sample times."""
@@ -111,7 +112,22 @@ class _LinearTrajectory:
             phi_t=phi_t,
             density_t=density_t,
             t=np.asarray(times, dtype=float),
+            implicit_solve=self.implicit_solve,
         )
+
+
+def _is_implicit_method(time_config: Any) -> bool:
+    """Whether a time run takes GMRES solves inside its scan."""
+
+    return str(time_config.method).strip().lower() == "implicit"
+
+
+def _checked_implicit_solve(stats: Any) -> Any:
+    """Fail closed on an unconverged implicit solve and return its summary."""
+
+    from gkx.solvers_linear_implicit import require_converged_implicit_solves
+
+    return require_converged_implicit_solves(stats, label="linear implicit run")
 
 
 def _status(callback: _StatusCallback, message: str) -> None:
@@ -250,7 +266,7 @@ def _run_krylov_linear(
     deps: FullLinearRuntimeDeps,
     krylov_cfg: Any | None,
     status_callback: _StatusCallback,
-) -> tuple[float, float, np.ndarray]:
+) -> tuple[float, float, np.ndarray, Any]:
     _status(status_callback, "starting Krylov solve")
     kcfg = krylov_cfg or deps.runtime_default_krylov_config(ctx.cfg)
     _status(status_callback, "building linear cache")
@@ -261,7 +277,7 @@ def _run_krylov_linear(
         ctx.n_laguerre,
         ctx.n_hermite,
     )
-    eig, vec = deps.dominant_eigenpair(
+    eig, vec, eigen_status = deps.dominant_eigenpair(
         ctx.initial_state,
         cache,
         ctx.params,
@@ -289,6 +305,7 @@ def _run_krylov_linear(
         fallback_real_floor=kcfg.fallback_real_floor,
         certify=kcfg.certify,
         status_callback=lambda message: _status(status_callback, message),
+        return_status=True,
     )
     gamma = float(jnp.real(eig))
     omega = float(-jnp.imag(eig))
@@ -301,7 +318,7 @@ def _run_krylov_linear(
     _status(
         status_callback, f"Krylov solve complete: gamma={gamma:.6f} omega={omega:.6f}"
     )
-    return gamma, omega, np.asarray(vec)
+    return gamma, omega, np.asarray(vec), eigen_status
 
 
 def _resolve_linear_time_config(
@@ -371,6 +388,8 @@ def _integrate_linear_density_path(
     # This is the executable's density-diagnostic path, so the TOML
     # collision_operator selection has to be resolved here as well as on the
     # cached-phi path.
+    implicit = _is_implicit_method(tcfg)
+    stats_kwargs = {"return_solve_stats": True} if implicit else {}
     diag = deps.integrate_linear_diagnostics(
         ctx.initial_state,
         ctx.grid,
@@ -389,11 +408,13 @@ def _integrate_linear_density_path(
         collision_operator=_resolve_config_collision_operator(
             tcfg, ctx.params, ctx.initial_state
         ),
+        **stats_kwargs,
     )
     return _LinearTrajectory(
         g_last=diag[0],
         phi_t=diag[1],
         density_t=diag[2] if len(diag) > 2 else None,
+        implicit_solve=_checked_implicit_solve(diag[-1]) if implicit else None,
     )
 
 
@@ -404,7 +425,9 @@ def _integrate_linear_cached_phi_path(
     tcfg: Any,
     show_progress: bool,
 ) -> _LinearTrajectory:
-    g_last, phi_t = deps.integrate_linear_from_config(
+    implicit = _is_implicit_method(tcfg)
+    stats_kwargs = {"return_solve_stats": True} if implicit else {}
+    g_last, phi_t, *solve_stats = deps.integrate_linear_from_config(
         ctx.initial_state,
         ctx.grid,
         ctx.geom,
@@ -413,8 +436,14 @@ def _integrate_linear_cached_phi_path(
         terms=ctx.terms,
         show_progress=show_progress,
         parallel=ctx.cfg.parallel,
+        **stats_kwargs,
     )
-    return _LinearTrajectory(g_last=g_last, phi_t=phi_t, density_t=None)
+    return _LinearTrajectory(
+        g_last=g_last,
+        phi_t=phi_t,
+        density_t=None,
+        implicit_solve=_checked_implicit_solve(solve_stats[0]) if implicit else None,
+    )
 
 
 def _linear_saved_sample_times(phi_t: np.ndarray, tcfg: Any) -> np.ndarray:
@@ -561,6 +590,7 @@ def _fit_linear_time_series(
         omega_stderr=None if omega_stderr is None else float(omega_stderr),
         fit_r2=fit_result.fit_r2,
         fit_settled=fit_result.fit_settled,
+        implicit_solve=trajectory.implicit_solve,
     )
 
 
@@ -572,7 +602,7 @@ def _run_krylov_linear_runtime(
     status_callback: _StatusCallback,
 ) -> RuntimeLinearResult:
     """Run the Krylov branch and finalize any requested quasilinear diagnostics."""
-    gamma, omega, vec = _run_krylov_linear(
+    gamma, omega, vec, eigen_status = _run_krylov_linear(
         ctx,
         deps=deps,
         krylov_cfg=krylov_cfg,
@@ -584,6 +614,7 @@ def _run_krylov_linear_runtime(
         omega=omega,
         selection=ctx.selection,
         state=vec if ctx.return_state_effective else None,
+        eigen_status=eigen_status,
     )
     return _finalize_linear_result(
         result,
