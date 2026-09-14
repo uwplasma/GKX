@@ -1,0 +1,6 @@
+2026-09-13 19:42:11 start pk_pilot (nice 10, cap 2400s, load { 11.51 12.90 14.12 }) pid 54948: pr_kz.py --case pilot --alpha-best -1 --gcrot --rules scalar-best,scalar-sym,kz-geo,kz-geo-best,kz-lin,kz-geo-half,kz-sqrt-best,kz-inv-best,kz-inv-sym
+2026-09-13 19:45:32 end pk_pilot exit 0 load { 27.26 19.35 16.50 }
+2026-09-13 19:46:32 start pk_r64 (nice 10, cap 2400s, load { 16.53 17.72 16.08 }) pid 54948: pr_kz.py --case r64 --sigma 0.16268013050461985-0.27079063054988406j --alpha-best -3 --gcrot --rules scalar-best,scalar-sym,kz-geo,kz-lin,kz-inv-best,kz-inv-sym
+2026-09-13 19:55:24 end pk_r64 exit 0 load { 26.34 23.65 19.63 }
+2026-09-13 19:56:54 start pk_r96 (nice 10, cap 2400s, load { 18.71 22.27 19.53 }) pid 54948: pr_kz.py --case r96 --sigma 0.1487757-0.2769046j --alpha-best -10 --gcrot --rules scalar-best,scalar-sym,kz-geo,kz-lin,kz-inv-best,kz-inv-sym
+2026-09-13 20:05:52 end pk_r96 exit 0 load { 20.55 18.18 18.41 }

@@ -52,7 +52,12 @@ from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.solvers_linear_integrators import integrate_linear_diagnostics
-from gkx.solvers_linear_krylov import KrylovConfig, dominant_eigenpair
+from gkx.solvers_linear_krylov import (
+    KrylovConfig,
+    _eigenpair_relative_residual,
+    certifiable_residual_tolerance,
+    dominant_eigenpair,
+)
 from gkx.terms.assembly import compute_fields_cached
 from gkx.terms.config import TermConfig
 from gkx.workflows.runtime.startup import (
@@ -505,7 +510,9 @@ def _run_krylov_method(
     fit_cfg: dict,
     ref: tuple[float, float] | None,
 ):
-    krylov_cfg = KrylovConfig(method=label.replace("krylov-", ""))
+    # This diagnostic compares the raw routes against time integration, so it
+    # opts out of the fail-closed gate and records each pair's residual instead.
+    krylov_cfg = KrylovConfig(method=label.replace("krylov-", ""), certify=False)
     if G0.ndim != 5:
         raise ValueError(
             "Expected G0 shape (Nl, Nm, Ny, Nx, Nz) for Krylov diagnostics"
@@ -532,6 +539,7 @@ def _run_krylov_method(
         shift_restart=krylov_cfg.shift_restart,
         shift_solve_method=krylov_cfg.shift_solve_method,
         shift_preconditioner=krylov_cfg.shift_preconditioner,
+        certify=krylov_cfg.certify,
     )
     term_cfg = TermConfig(
         streaming=terms.streaming,
@@ -567,10 +575,16 @@ def _run_krylov_method(
     np.save(outdir / f"{prefix}_eigenfunction.npy", eigen)
     _plot_eigenfunction(outdir, prefix, np.asarray(grid.z), eigen)
 
+    residual = _eigenpair_relative_residual(eig, vec, cache, params, term_cfg)
+    tolerance = certifiable_residual_tolerance(
+        krylov_cfg.shift_outer_residual_tol, vec.dtype
+    )
     summary = {
         "method": label,
         "gamma": gamma,
         "omega": omega,
+        "residual": residual,
+        "certified": bool(np.isfinite(residual) and residual <= tolerance),
     }
     if ref is not None:
         summary["ref"] = {"gamma": ref[0], "omega": ref[1]}

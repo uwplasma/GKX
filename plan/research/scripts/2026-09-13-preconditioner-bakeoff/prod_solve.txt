@@ -1,0 +1,37 @@
+ENV {"jax": "0.10.2", "numpy": "2.4.6", "x64": true, "loadavg": [17.2880859375, 18.15673828125, 19.08642578125], "script_sha256": "1607be99657bdbdea1b3445ac1e07e35d802cb4a4d68faed38b50405cb0cea59", "bakeoff_sha256": "182757ff3c580d7231fb44eca9d79c5a05418e73da2d3a48625bb7f7fa0d9eaa", "sha": "578b970742b4e0dec19f0cfbb177139b9c65cc73", "dirty_src": false}
+[     3.2s rss<=0.41G] production chain n=73728 ky=+0.300 sigma=0.143091-0.282033j
+[     6.8s rss<=1.45G] z-local blocks (Dc minus z-mean drift) by 2x768 probes: 3.6s
+[    27.3s rss<=2.41G] A hl[None] {'its': 600, 'its_1e5': None, 'its_1e8': None, 'true': 0.9899363331355315, 'seconds': 18.44113083400589, 'alpha': None, 'apply_s': 0.0035811250054393895, 'apply_over_matvec': 2.7784006161291814, 'inverse_s': 0.0, 'inverse_bytes': 0, 'work_1e8_matvec_eq': None}
+[    62.6s rss<=3.52G] A adi-cm[-3.0] {'its': 600, 'its_1e5': None, 'its_1e8': None, 'true': 0.0016122958294392303, 'seconds': 27.71382941599586, 'alpha': -3.0, 'apply_s': 0.017814792001445312, 'apply_over_matvec': 13.821530663645692, 'inverse_s': 7.204090833001828, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[    99.8s rss<=3.63G] A adi-cm[-10.0] {'its': 600, 'its_1e5': None, 'its_1e8': None, 'true': 9.423201211131736e-05, 'seconds': 29.905878040997777, 'alpha': -10.0, 'apply_s': 0.018117708001227584, 'apply_over_matvec': 14.056546754721012, 'inverse_s': 6.8790547079988755, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[   139.4s rss<=3.63G] A adi-cm[-30.0] {'its': 600, 'its_1e5': None, 'its_1e8': None, 'true': 0.010025903453000461, 'seconds': 32.106501541995385, 'alpha': -30.0, 'apply_s': 0.017553375000716187, 'apply_over_matvec': 13.618711394620112, 'inverse_s': 6.951286417002848, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[   205.9s rss<=3.63G] A pr2-cm[-3.0] {'its': 600, 'its_1e5': None, 'its_1e8': None, 'true': 0.0001881746764285675, 'seconds': 55.665742500001215, 'alpha': -3.0, 'apply_s': 0.052868458995362744, 'apply_over_matvec': 41.0177692271017, 'inverse_s': 9.937164208000468, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[   266.7s rss<=3.63G] A pr2-cm[-10.0] {'its': 600, 'its_1e5': 468, 'its_1e8': None, 'true': 1.700921392622521e-06, 'seconds': 49.90077516599558, 'alpha': -10.0, 'apply_s': 0.05854091700166464, 'apply_over_matvec': 45.41872166404194, 'inverse_s': 10.16246775000036, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[   316.2s rss<=3.63G] A pr2-cm[-30.0] {'its': 600, 'its_1e5': None, 'its_1e8': None, 'true': 1.973798291377849e-05, 'seconds': 41.019584249996115, 'alpha': -30.0, 'apply_s': 0.03460229199845344, 'apply_over_matvec': 26.846041191513507, 'inverse_s': 7.901470207994862, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[   383.8s rss<=3.63G] A pr3-cm[-3.0] {'its': 600, 'its_1e5': None, 'its_1e8': None, 'true': 4.02342526442324e-05, 'seconds': 59.80453504199977, 'alpha': -3.0, 'apply_s': 0.0813637910032412, 'apply_over_matvec': 63.125751463756714, 'inverse_s': 6.8440728330024285, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[   448.9s rss<=3.63G] A pr3-cm[-10.0] {'its': 600, 'its_1e5': 313, 'its_1e8': None, 'true': 2.6619476169237793e-08, 'seconds': 56.60019529199781, 'alpha': -10.0, 'apply_s': 0.07536362500104588, 'apply_over_matvec': 58.47054817092125, 'inverse_s': 7.569092042002012, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[   512.6s rss<=3.63G] A pr3-cm[-30.0] {'its': 600, 'its_1e5': 424, 'its_1e8': None, 'true': 4.3732848545538025e-08, 'seconds': 55.13061341599678, 'alpha': -30.0, 'apply_s': 0.0634437090047868, 'apply_over_matvec': 49.22253200340106, 'inverse_s': 7.867658625000331, 'inverse_bytes': 905969664, 'work_1e8_matvec_eq': None}
+[   522.4s rss<=3.63G] B shift-invert Arnoldi with pr3-cm[-10.0] (setup 9.8s)
+[   584.4s rss<=3.63G] B step 1: inner {'its': 600, 'its_1e5': 313, 'its_1e8': None, 'true': 2.6619476169237793e-08, 'seconds': 61.97072333300457} lambda -0.0018204-0.2736186j residual 9.74e-01
+[   638.0s rss<=3.63G] B step 2: inner {'its': 600, 'its_1e5': 303, 'its_1e8': None, 'true': 1.9138179400253283e-08, 'seconds': 53.5761480000001} lambda 0.0943741-0.2831170j residual 3.00e-01
+[   696.7s rss<=3.63G] B step 3: inner {'its': 600, 'its_1e5': 295, 'its_1e8': None, 'true': 1.3918156284535343e-08, 'seconds': 58.63869287499983} lambda 0.0925938-0.2822757j residual 6.78e-02
+time: command terminated abnormally
+      704.45 real      2805.67 user        79.40 sys
+          3901014016  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             2877245  page reclaims
+                 110  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  12  voluntary context switches
+             5437819  involuntary context switches
+      10919774198056  instructions retired
+       9654557566654  cycles elapsed
+          3383371520  peak memory footprint
+exit 143

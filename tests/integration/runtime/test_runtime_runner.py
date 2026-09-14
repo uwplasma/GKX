@@ -300,6 +300,7 @@ def test_runtime_linear_etg_defaults_to_frequency_targeted_krylov(
     assert captured["shift_source"] == "target"
     assert captured["shift_selection"] == "targeted"
     assert captured["mode_family"] == "etg"
+    assert captured["certify"] is True
 
 
 def test_runtime_terms_and_params_follow_toggles() -> None:

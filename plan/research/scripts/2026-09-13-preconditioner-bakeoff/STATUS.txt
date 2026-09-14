@@ -1,0 +1,15 @@
+Q7 (plan 5.1 L4) structured preconditioner bake-off -- COMPLETE 2026-09-14.
+The authoritative record is the plan/log.md entry "2026-09-14 — structured preconditioner bake-off on the
+exact operator (Q7, plan §5.1 L4)" and the plan.md 5.1 paragraph after the L2 ladder.
+
+History: the study was paused twice (2026-09-13 ~18:08 and ~20:12 CDT); the runs stopped by those pauses are
+kept as v1_* files (v1_pilot_before_ilu_fallback, v1_r32_ilu_singular, v1_stopped_supervisor,
+v1_adaptive_same_host_stopped, v1_supervisor_production_stopped) and prod_solve.txt (Part A complete, Part B
+stopped at step 2). Every table in the log uses only completed runs.
+
+Measurement source: origin/main 578b970742b4e0dec19f0cfbb177139b9c65cc73 (no src/ change); origin/main
+4460c1a8e was merged into the branch afterwards for the PR.
+
+Re-run the production comparison (same host, one heavy process at a time, 45-min cap each):
+  nohup plan/research/scripts/2026-09-13-preconditioner-bakeoff/run_production.sh \
+    > plan/research/scripts/2026-09-13-preconditioner-bakeoff/supervisor_production.txt 2>&1 &

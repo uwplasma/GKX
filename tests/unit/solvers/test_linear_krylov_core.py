@@ -26,6 +26,7 @@ from gkx.operators.linear.params import (
 import gkx.solvers_linear_implicit as implicit
 from support.paired_solvax import requires_paired_solvax
 from types import SimpleNamespace
+import inspect
 import re
 import gkx.solvers_linear_adaptive_propagator as ap
 import gkx.solvers_linear_krylov as lk
@@ -321,6 +322,11 @@ def test_dominant_eigenpair_arnoldi_branch_normalizes_wrapper_flags(
         return jnp.asarray(0.1 + 0.2j, dtype=v0.dtype), jnp.full_like(v0, 3.0 + 0.0j)
 
     monkeypatch.setattr(lk, "dominant_eigenpair_cached", _fake_arnoldi)
+    monkeypatch.setattr(
+        lk,
+        "_apply_operator",
+        lambda vector, *_args: jnp.asarray(0.1 + 0.2j, vector.dtype) * vector,
+    )
 
     eig, vec = lk.dominant_eigenpair(
         v0,
@@ -908,12 +914,11 @@ def test_shift_solve_method_labels_share_one_compiled_solve(
 
 
 @pytest.mark.parametrize("method", ["power", "propagator", "arnoldi"])
-def test_dominant_eigenpair_methods_produce_finite_values(method: str) -> None:
+def test_raw_eigenpair_routes_fail_closed_unless_certify_is_false(method: str) -> None:
+    """A four-vector raw solve is unconverged: it must raise, or be flagged."""
+
     _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    eig, vec = lk.dominant_eigenpair(
-        v0,
-        cache,
-        params,
+    options = dict(
         terms=terms,
         method=method,
         krylov_dim=4,
@@ -921,9 +926,115 @@ def test_dominant_eigenpair_methods_produce_finite_values(method: str) -> None:
         power_iters=4,
         power_dt=0.05,
     )
+    tolerance = lk.certifiable_residual_tolerance(1.0e-6, v0.dtype)
+    with pytest.raises(RuntimeError) as rejected:
+        lk.dominant_eigenpair(v0, cache, params, **options)
+    match = re.match(
+        rf"{method} eigenpair failed the outer residual gate: "
+        r"residual=(\S+), tolerance=(\S+); ",
+        str(rejected.value),
+    )
+    assert match is not None, str(rejected.value)
+    assert float(match.group(1)) > tolerance
+    assert float(match.group(2)) == pytest.approx(tolerance, rel=1.0e-5)
+
+    messages: list[str] = []
+    eig, vec = lk.dominant_eigenpair(
+        v0, cache, params, certify=False, status_callback=messages.append, **options
+    )
     assert vec.shape == v0.shape
     assert jnp.isfinite(jnp.real(eig))
     assert jnp.isfinite(jnp.imag(eig))
+    flagged = [item for item in messages if f"UNCERTIFIED {method} eigenpair" in item]
+    assert flagged and f"residual={match.group(1)}" in flagged[0]
+
+
+def test_raw_propagator_route_returns_a_converged_pair() -> None:
+    """Seeded with an exact eigenvector, the propagator route certifies it.
+
+    The propagator's Ritz vector carries an O(dt) splitting error; dt=1e-3 in
+    complex64 leaves it near 1e-7, three decades under the dtype-floored gate.
+    """
+
+    _grid, cache, params, v0, term_cfg, terms = _tiny_krylov_setup(linked=False)
+    dtype = v0.dtype
+    basis = jnp.eye(v0.size, dtype=dtype).reshape((v0.size, *v0.shape))
+    columns = jax.vmap(lambda e: lk._apply_operator(e, cache, params, term_cfg))(basis)
+    matrix = np.asarray(columns).reshape((v0.size, v0.size)).T.astype(np.complex128)
+    values, vectors = np.linalg.eig(matrix)
+    index = int(np.argmax(np.where(np.abs(values) > 1.0e-2, values.real, -np.inf)))
+    seed = jnp.asarray(vectors[:, index].reshape(v0.shape), dtype=dtype)
+
+    messages: list[str] = []
+    eig, vec = lk.dominant_eigenpair(
+        seed,
+        cache,
+        params,
+        terms=terms,
+        method="propagator",
+        krylov_dim=4,
+        restarts=1,
+        power_dt=1.0e-3,
+        status_callback=messages.append,
+    )
+    assert complex(np.asarray(eig)) == pytest.approx(complex(values[index]), rel=1e-4)
+    residual = lk._eigenpair_relative_residual(eig, vec, cache, params, term_cfg)
+    assert residual <= lk.certifiable_residual_tolerance(1.0e-6, dtype)
+    assert any("certified=True" in item for item in messages)
+
+
+def test_a_zero_eigenvector_never_certifies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A breakdown that returns ``(0, 0)`` scored ``0 / floor = 0`` and passed."""
+
+    _grid, cache, params, v0, term_cfg, terms = _tiny_krylov_setup(linked=False)
+    zero = jnp.zeros_like(v0)
+    assert lk._eigenpair_relative_residual(
+        jnp.asarray(0.0j, v0.dtype), zero, cache, params, term_cfg
+    ) == float("inf")
+    monkeypatch.setattr(
+        lk,
+        "dominant_eigenpair_cached",
+        lambda *args, **kwargs: (jnp.asarray(0.0j, v0.dtype), zero),
+    )
+    with pytest.raises(RuntimeError, match="residual=inf, tolerance="):
+        lk.dominant_eigenpair(v0, cache, params, terms=terms, method="arnoldi")
+
+
+def test_default_krylov_config_and_wrapper_resolve_to_certified_adaptive() -> None:
+    from gkx.api import KrylovConfig
+    from gkx.config import RuntimeConfig
+    from gkx.workflows.runtime.startup import _runtime_default_krylov_config
+
+    assert KrylovConfig is lk.KrylovConfig
+    assert KrylovConfig().method == "adaptive"
+    assert KrylovConfig().certify is True
+    assert _runtime_default_krylov_config(RuntimeConfig()) == KrylovConfig()
+    parameters = inspect.signature(lk.dominant_eigenpair).parameters
+    assert parameters["method"].default == "adaptive"
+    assert parameters["certify"].default is True
+
+
+def test_certify_opt_out_does_not_relax_the_shift_invert_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    _patch_shift_invert(
+        monkeypatch,
+        lambda *args, **kwargs: (jnp.asarray(0.4 + 0.2j, v0.dtype), jnp.ones_like(v0)),
+    )
+    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_args: 1.0)
+    with pytest.raises(RuntimeError, match="shift-invert eigenpair failed the outer"):
+        lk.dominant_eigenpair(
+            v0,
+            cache,
+            params,
+            terms=terms,
+            method="shift_invert",
+            shift=0.4 + 0.2j,
+            shift_source="reference",
+            fallback_method="none",
+            certify=False,
+        )
 
 
 def test_long_horizon_propagator_selects_growth_and_recovers_frequency(

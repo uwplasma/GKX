@@ -36,6 +36,38 @@ can reuse the same factors for the adjoint inverse in implicit eigenpair AD.
 This path is eager and CPU-factorized; it is not the default for small or
 target-free solves.
 
+Eigenpair certification
+-----------------------
+
+``KrylovConfig()`` and ``dominant_eigenpair`` default to ``method="adaptive"``,
+the residual-certified eigensolve that runtime linear runs already use for
+generic contracts.  No method returns a pair above its original-operator
+residual gate
+:math:`\lVert Av-\lambda v\rVert/\max(\lVert Av\rVert,|\lambda|\lVert v\rVert)`:
+
+* ``adaptive``, ``shift_invert`` and ``sparse_shift_invert`` raise when their
+  gates reject the pair;
+* ``power``, ``propagator`` and ``arnoldi`` return a Rayleigh or Ritz pair
+  without a convergence test of their own.  The pair is checked against
+  ``certifiable_residual_tolerance(shift_outer_residual_tol, dtype)``, the same
+  gate as shift-invert, and a failing pair raises ``RuntimeError`` with the
+  residual and tolerance;
+* ``certify=False`` (on ``KrylovConfig`` or ``dominant_eigenpair``) is the
+  explicit opt-out for these three raw routes only.  The pair is returned and
+  the status callback reports it as uncertified, with its residual.  It does
+  not relax the other gates, and shift-invert seeds and fallbacks are
+  unchanged;
+* a zero or non-finite eigenvector has infinite residual, so a breakdown that
+  returns ``(0, 0)`` cannot pass any gate.
+
+API change (queue row Q12, 2026-09-13): ``KrylovConfig.method`` previously
+defaulted to ``"propagator"`` and ``dominant_eigenpair(method=...)`` to
+``"power"``.  Both raw routes returned unchecked pairs.  On the linked Cyclone
+deck, a bare ``KrylovConfig()`` returned the wrong branch with relative
+residual 0.98--1.00.  Code that relies on the raw routes must now name the
+method, and must pass ``certify=False`` if it knowingly accepts an
+unconverged pair.
+
 Differentiable eigenmodes
 -------------------------
 

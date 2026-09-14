@@ -1,0 +1,4 @@
+gradb0_nl32                        settled 0/1 ky  max|d gamma|(settled)=nan  at peak ky=0.550: d gamma=-0.5874 d omega=-0.9631
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/gradb0_nl32.json
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/gradb0_nl32.csv
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/gradb0_nl32.png

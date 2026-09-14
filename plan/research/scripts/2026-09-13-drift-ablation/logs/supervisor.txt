@@ -1,0 +1,40 @@
+supervisor pid 223534 host pop-os gpu 0 start 2026-09-13T15:34:36-05:00 keys: preflight_full_nl24
+preflight_full_nl24 start 2026-09-13T15:34:36-05:00
+preflight_full_nl24 timeout pid 223539 python pids 223539 223541 223542 
+preflight_full_nl24 exit 0 end 2026-09-13T15:34:48-05:00
+DONE 2026-09-13T15:34:48-05:00
+supervisor pid 224119 host pop-os gpu 0 start 2026-09-13T15:35:07-05:00 keys: full_nl24 full_nl32 gradb0_nl24 gradb0_nl32 curvature0_nl24 curvature0_nl32
+full_nl24 start 2026-09-13T15:35:07-05:00
+full_nl24 timeout pid 224124 python pids 224124 224126 224127 
+full_nl24 exit 0 end 2026-09-13T15:40:27-05:00
+full_nl32 start 2026-09-13T15:40:27-05:00
+full_nl32 timeout pid 227264 python pids 227264 227266 227267 
+full_nl32 exit 0 end 2026-09-13T15:48:53-05:00
+gradb0_nl24 start 2026-09-13T15:48:53-05:00
+gradb0_nl24 timeout pid 231307 python pids 231307 231309 231310 
+gradb0_nl24 exit 0 end 2026-09-13T15:54:13-05:00
+gradb0_nl32 start 2026-09-13T15:54:13-05:00
+gradb0_nl32 timeout pid 233060 python pids 233060 233062 233063 
+OPERATOR 2026-09-13T15:58:52-05:00: supervisor 224119 sent SIGTERM to skip curvature0_nl24/curvature0_nl32 per lead instruction (drift ablations non-discriminating); gradb0_nl32 (timeout 233060, python 233063) left running under its own 1800 s cap
+supervisor pid 236877 host pop-os gpu 0 start 2026-09-13T16:10:45-05:00 keys: preflight_nu1e-2_nl24
+preflight_nu1e-2_nl24 start 2026-09-13T16:10:45-05:00
+preflight_nu1e-2_nl24 timeout pid 236882 python pids 236882 236884 236885 
+preflight_nu1e-2_nl24 exit 0 end 2026-09-13T16:10:59-05:00
+DONE 2026-09-13T16:10:59-05:00
+supervisor pid 237506 host pop-os gpu 0 start 2026-09-13T16:11:24-05:00 keys: nu1e-3_nl24 nu1e-3_nl32 nu1e-2_nl24 nu1e-2_nl32 full_nl48
+nu1e-3_nl24 start 2026-09-13T16:11:24-05:00
+nu1e-3_nl24 timeout pid 237512 python pids 237512 237514 237515 
+nu1e-3_nl24 exit 0 end 2026-09-13T16:17:19-05:00
+nu1e-3_nl32 start 2026-09-13T16:17:19-05:00
+nu1e-3_nl32 timeout pid 238722 python pids 238722 238724 238725 
+nu1e-3_nl32 exit 0 end 2026-09-13T16:25:37-05:00
+nu1e-2_nl24 start 2026-09-13T16:25:37-05:00
+nu1e-2_nl24 timeout pid 239840 python pids 239840 239842 239843 
+nu1e-2_nl24 exit 0 end 2026-09-13T16:31:37-05:00
+nu1e-2_nl32 start 2026-09-13T16:31:37-05:00
+nu1e-2_nl32 timeout pid 240728 python pids 240728 240730 240731 
+nu1e-2_nl32 exit 0 end 2026-09-13T16:39:54-05:00
+full_nl48 start 2026-09-13T16:39:54-05:00
+full_nl48 timeout pid 242390 python pids 242390 242392 242393 
+full_nl48 exit 0 end 2026-09-13T16:52:13-05:00
+DONE 2026-09-13T16:52:13-05:00

@@ -1,0 +1,8 @@
+real dtype float64
+full       ky=0.550000 shape=(1, 24, 96, 1, 1, 96) terms(curv,gradb,stream,mirror,diamag,hyper,end)=(1.0,1.0,1.0,1.0,1.0,1.0,1.0) end_damping_strength=50 |RHS|=6.531153e+04
+gradb0     ky=0.550000 shape=(1, 24, 96, 1, 1, 96) terms(curv,gradb,stream,mirror,diamag,hyper,end)=(1.0,0.0,1.0,1.0,1.0,1.0,1.0) end_damping_strength=50 |RHS|=5.773948e+04
+curvature0 ky=0.550000 shape=(1, 24, 96, 1, 1, 96) terms(curv,gradb,stream,mirror,diamag,hyper,end)=(0.0,1.0,1.0,1.0,1.0,1.0,1.0) end_damping_strength=50 |RHS|=2.344365e+04
+relative RHS difference gradb0 vs full: 2.073385e-01
+relative RHS difference curvature0 vs full: 8.341311e-01
+relative RHS difference gradb0 vs curvature0: 7.504813e-01
+PREFLIGHT PASS

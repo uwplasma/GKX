@@ -1,0 +1,33 @@
+ENV {"python": "3.11.14", "platform": "macOS-14.4.1-arm64-arm-64bit", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "solvax": "0.20.0", "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py", "x64": true, "devices": "[CpuDevice(id=0)]", "threads": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "loadavg": [13.03857421875, 17.82470703125, 20.03466796875], "script_sha256": "182757ff3c580d7231fb44eca9d79c5a05418e73da2d3a48625bb7f7fa0d9eaa", "sha": "578b970742b4e0dec19f0cfbb177139b9c65cc73", "dirty_src": false}
+[     2.3s rss<=0.41G] production timing dims={'Nx': 1, 'Ny': 24, 'Nz': 96, 'ntheta': 32, 'nperiod': 2, 'Nl': 16, 'Nm': 48} n=73728 ky=+0.300 blocks=96x768
+[     2.6s rss<=0.48G] matvec 2.12 ms
+[     4.5s rss<=0.66G] hl 1.59 ms, streaming line 1.59 ms, line with mean drift 1.59 ms
+[     5.9s rss<=1.68G] Dc blocks by 768 probes: 1.4s
+[    12.5s rss<=3.52G] dense z-block inverse 6.6s 0.91 GB
+[    12.7s rss<=3.52G] apply dinv: 13.81 ms
+[    13.0s rss<=3.52G] apply adi: 15.61 ms
+[    13.3s rss<=3.52G] apply adi-cm: 15.43 ms
+[    13.8s rss<=3.52G] apply pr2-cm: 31.28 ms
+[    14.5s rss<=3.52G] apply pr3-cm: 45.78 ms
+[    14.9s rss<=3.52G] apply ms: 16.62 ms
+[    15.0s rss<=3.52G] CGS per vector 0.150 ms
+RESULT {"case": "prod", "dims": {"Nx": 1, "Ny": 24, "Nz": 96, "ntheta": 32, "nperiod": 2, "Nl": 16, "Nm": 48}, "n": 73728, "shape": [1, 16, 48, 1, 1, 96], "ky": 0.3, "sigma": [0.1430912, -0.2820327], "alpha": [-1.0, 0.0], "t_matvec_s": 0.0021207500030868687, "t_hl_s": 0.0015868330010562204, "t_sinv_s": 0.0015879999991739169, "t_sinv_mean_s": 0.0015917499986244366, "probe_setup_s": 1.386416499997722, "dense_inverse_s": 6.57495829200343, "dense_inverse_bytes": 905969664, "t_apply_s": {"dinv": 0.013810083997668698, "adi": 0.015608875000907574, "adi-cm": 0.01542524999968009, "pr2-cm": 0.03127637499710545, "pr3-cm": 0.0457819590010331, "ms": 0.016624459000013303}, "t_cgs_per_vector_s": 0.0001498671640001703, "tag": "prod", "wall_s": 15.007948541999212, "peak_rss_gib": 3.515960693359375, "loadavg_end": [10.87548828125, 17.11328125, 19.74169921875]}
+       15.29 real        31.02 user         2.47 sys
+          3775234048  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              311501  page reclaims
+                  97  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   8  voluntary context switches
+               39981  involuntary context switches
+        266130566363  instructions retired
+        114597543132  cycles elapsed
+          3254986112  peak memory footprint
+exit 0
