@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from functools import partial
-from typing import Callable
+from typing import Any, Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -299,6 +299,39 @@ def dominant_eigenpair_power(
     return eig, v
 
 
+class InnerSolveStats(NamedTuple):
+    """Aggregate of the shifted GMRES solves inside a shift-invert Arnoldi build.
+
+    ``max_relative_residual`` is the largest true residual
+    ``||b - (A - sigma I) x|| / ||b||`` that SOLVAX recomputes after each solve,
+    and ``unconverged_solves`` counts solves that exhausted their iteration
+    budget above the relative tolerance. A converged first right-hand side does
+    not certify the later ones, so every solve of the build is folded in.
+    """
+
+    max_relative_residual: jnp.ndarray
+    total_iterations: jnp.ndarray
+    solves: jnp.ndarray
+    unconverged_solves: jnp.ndarray
+
+
+def _empty_inner_solve_stats(dtype: Any) -> InnerSolveStats:
+    zero = jnp.asarray(0, dtype=jnp.int32)
+    real_dtype = jnp.real(jnp.empty((), dtype=dtype)).dtype
+    return InnerSolveStats(jnp.asarray(0.0, dtype=real_dtype), zero, zero, zero)
+
+
+def _merge_inner_solve_stats(
+    total: InnerSolveStats, new: InnerSolveStats
+) -> InnerSolveStats:
+    return InnerSolveStats(
+        jnp.maximum(total.max_relative_residual, new.max_relative_residual),
+        total.total_iterations + new.total_iterations,
+        total.solves + new.solves,
+        total.unconverged_solves + new.unconverged_solves,
+    )
+
+
 def _arnoldi(
     v0: jnp.ndarray,
     apply_op,
@@ -307,14 +340,41 @@ def _arnoldi(
     term_cfg: TermConfig,
     krylov_dim: int,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    V, H, _stats = _arnoldi_with_stats(
+        v0,
+        lambda value, *args: (apply_op(value, *args), ()),
+        cache,
+        params,
+        term_cfg,
+        krylov_dim,
+        stats0=(),
+        merge=lambda total, _new: total,
+    )
+    return V, H
+
+
+def _arnoldi_with_stats(
+    v0: jnp.ndarray,
+    apply_op,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    krylov_dim: int,
+    *,
+    stats0: Any,
+    merge: Callable[[Any, Any], Any],
+) -> tuple[jnp.ndarray, jnp.ndarray, Any]:
+    """Arnoldi build whose operator returns ``(w, stats)`` for each application."""
+
     v0 = _normalize(v0)
     V = jnp.zeros((krylov_dim + 1,) + v0.shape, dtype=v0.dtype)
     H = jnp.zeros((krylov_dim + 1, krylov_dim), dtype=v0.dtype)
     V = V.at[0].set(v0)
 
     def outer(i, carry):
-        V, H = carry
-        w = apply_op(V[i], cache, params, term_cfg)
+        V, H, stats = carry
+        w, applied = apply_op(V[i], cache, params, term_cfg)
+        stats = merge(stats, applied)
         operator_scale = jnp.linalg.norm(w)
 
         def inner(j, inner_carry):
@@ -341,10 +401,19 @@ def _arnoldi(
         safe_norm = jnp.where(resolved, h_next, 1.0)
         v_next = jnp.where(resolved, w / safe_norm, jnp.zeros_like(w))
         V = V.at[i + 1].set(v_next)
-        return V, H
+        return V, H, stats
 
-    V, H = jax.lax.fori_loop(0, krylov_dim, outer, (V, H))
-    return V, H
+    V, H, stats = jax.lax.fori_loop(0, krylov_dim, outer, (V, H, stats0))
+    return V, H, stats
+
+
+def _validate_shift_solve_method(method: str) -> None:
+    """Accept the historical labels, which all select the one SOLVAX FGMRES."""
+
+    if method not in {"batched", "incremental", "flexible"}:
+        raise ValueError(
+            "shift_solve_method must be 'batched', 'incremental', or 'flexible'"
+        )
 
 
 def _shift_invert_apply_factory(
@@ -357,13 +426,8 @@ def _shift_invert_apply_factory(
     gmres_tol: float,
     gmres_maxiter: int,
     gmres_restart: int,
-    gmres_solve_method: str,
     shift_preconditioner: str | None,
-):
-    if gmres_solve_method not in {"batched", "incremental", "flexible"}:
-        raise ValueError(
-            "shift_solve_method must be 'batched', 'incremental', or 'flexible'"
-        )
+) -> Callable[..., tuple[jnp.ndarray, InnerSolveStats]]:
     shape = v0.shape
     size = v0.size
     _precond, precond_op = build_shift_invert_preconditioner(
@@ -376,7 +440,9 @@ def _shift_invert_apply_factory(
             size
         )
 
-    def apply_shift_invert(x: jnp.ndarray, _cache, _params, _term_cfg) -> jnp.ndarray:
+    def apply_shift_invert(
+        x: jnp.ndarray, _cache, _params, _term_cfg
+    ) -> tuple[jnp.ndarray, InnerSolveStats]:
         b = x.reshape(size)
         # SOLVAX FGMRES applies the structured inverse on the right, so its
         # least-squares norm is the physical residual ||b - (A-sigma I)x||.
@@ -395,7 +461,15 @@ def _shift_invert_apply_factory(
             restart=restart,
             max_restarts=max_restarts,
         )
-        return solution.x.reshape(shape)
+        b_norm = jnp.linalg.norm(b)
+        relative = solution.residual_norm / jnp.where(b_norm > 0.0, b_norm, 1.0)
+        stats = InnerSolveStats(
+            max_relative_residual=jnp.asarray(relative, dtype=b_norm.dtype),
+            total_iterations=jnp.asarray(solution.iterations, dtype=jnp.int32),
+            solves=jnp.asarray(1, dtype=jnp.int32),
+            unconverged_solves=jnp.where(solution.converged, 0, 1).astype(jnp.int32),
+        )
+        return solution.x.reshape(shape), stats
 
     return apply_shift_invert
 
@@ -738,8 +812,17 @@ def _shift_invert_restart_step(
     select_targeted: bool,
     select_growth: bool,
     select_overlap: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    V, H = _arnoldi(v, apply_shift_invert, cache, params, term_cfg, krylov_dim)
+) -> tuple[jnp.ndarray, jnp.ndarray, InnerSolveStats]:
+    V, H, inner_stats = _arnoldi_with_stats(
+        v,
+        apply_shift_invert,
+        cache,
+        params,
+        term_cfg,
+        krylov_dim,
+        stats0=_empty_inner_solve_stats(v.dtype),
+        merge=_merge_inner_solve_stats,
+    )
     Hk = H[:krylov_dim, :krylov_dim]
     eigvals, eigvecs = jnp.linalg.eig(Hk)
     lam, real_part, imag_part, finite = _shift_invert_spectrum(eigvals, sigma_val)
@@ -776,7 +859,7 @@ def _shift_invert_restart_step(
     # two-norm residual over scalar eigenvalues and cannot weaken the outer gate.
     eig_refined = _rayleigh_quotient(v_next, cache, params, term_cfg)
     eig_out = jnp.where(jnp.any(mask0), eig_refined, jnp.nan + 1.0j * jnp.nan)
-    return v_next, eig_out
+    return v_next, eig_out, inner_stats
 
 
 @partial(
@@ -787,13 +870,12 @@ def _shift_invert_restart_step(
         "shift_preconditioner",
         "gmres_restart",
         "gmres_maxiter",
-        "gmres_solve_method",
         "select_targeted",
         "select_growth",
         "select_overlap",
     ),
 )
-def dominant_eigenpair_shift_invert_cached(
+def _shift_invert_eigenpair_with_inner_stats(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
     cache: LinearCache,
@@ -810,13 +892,12 @@ def dominant_eigenpair_shift_invert_cached(
     gmres_tol: float,
     gmres_maxiter: int,
     gmres_restart: int,
-    gmres_solve_method: str,
     shift_preconditioner: str | None,
     select_targeted: bool,
     select_growth: bool,
     select_overlap: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Restarted shift-invert Arnoldi with GMRES solves."""
+) -> tuple[jnp.ndarray, jnp.ndarray, InnerSolveStats]:
+    """Restarted shift-invert Arnoldi; also folds every inner GMRES solve."""
 
     sigma_val = jnp.asarray(sigma, dtype=v0.dtype)
     apply_shift_invert = _shift_invert_apply_factory(
@@ -828,14 +909,13 @@ def dominant_eigenpair_shift_invert_cached(
         gmres_tol=gmres_tol,
         gmres_maxiter=gmres_maxiter,
         gmres_restart=gmres_restart,
-        gmres_solve_method=gmres_solve_method,
         shift_preconditioner=shift_preconditioner,
     )
 
     def restart_body(i, state):
         del i
-        v, _eig_prev = state
-        v_next, eig_out = _shift_invert_restart_step(
+        v, _eig_prev, stats = state
+        v_next, eig_out, build_stats = _shift_invert_restart_step(
             v,
             v_ref,
             apply_shift_invert,
@@ -852,10 +932,39 @@ def dominant_eigenpair_shift_invert_cached(
             select_growth=select_growth,
             select_overlap=select_overlap,
         )
-        return v_next, eig_out
+        return v_next, eig_out, _merge_inner_solve_stats(stats, build_stats)
 
-    v, eig = jax.lax.fori_loop(
-        0, restarts, restart_body, (v0, jnp.asarray(0.0, dtype=v0.dtype))
+    initial = (
+        v0,
+        jnp.asarray(0.0, dtype=v0.dtype),
+        _empty_inner_solve_stats(v0.dtype),
+    )
+    v, eig, stats = jax.lax.fori_loop(0, restarts, restart_body, initial)
+    return eig, v, stats
+
+
+def dominant_eigenpair_shift_invert_cached(
+    v0: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+    *,
+    gmres_solve_method: str = "batched",
+    **options: Any,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Restarted shift-invert Arnoldi with GMRES solves.
+
+    ``gmres_solve_method`` is a compatibility alias: every label has always
+    reached the same SOLVAX FGMRES call, so it is validated here and is not a
+    compilation key. ``options`` are the keywords of
+    :func:`_shift_invert_eigenpair_with_inner_stats`, which also returns the
+    inner-solve statistics this wrapper drops.
+    """
+
+    _validate_shift_solve_method(gmres_solve_method)
+    eig, v, _stats = _shift_invert_eigenpair_with_inner_stats(
+        v0, v_ref, cache, params, term_cfg, **options
     )
     return eig, v
 

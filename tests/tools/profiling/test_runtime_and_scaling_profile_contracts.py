@@ -266,6 +266,21 @@ def test_full_linear_trace_hlo_token_counts_are_coarse_but_stable() -> None:
     assert counts["gather"] == 0
 
 
+def test_hlo_op_counts_read_op_names_not_metadata() -> None:
+    hlo = """
+  %copy.6 = c64[2,4]{1,0} copy(%t), metadata={op_name="jit(f)/concatenate"}
+  %concatenate.0 = c64[2,8]{1,0} concatenate(%copy.6, %c), dimensions={1}
+  %gather.2 = f32[3] gather(%concatenate.0, %i), metadata={op_name="jit(f)/fft"}
+  ROOT %copy.4 = f64[5] copy(%x)
+  %while.1 = (c64[2], s32[]) while(%tuple), condition=%cond, body=%body
+"""
+    counts = runtime_kernels._hlo_op_counts(hlo)
+
+    assert (counts["copy"], counts["concatenate"], counts["gather"]) == (2, 1, 1)
+    assert counts["fft"] == 0
+    assert counts["bytes_written"] == 8 * 8 + 16 * 8 + 5 * 8
+
+
 def test_full_linear_trace_summary_contains_metadata() -> None:
     payload = linear_trace._build_summary(
         config="examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml",

@@ -26,6 +26,7 @@ from gkx.operators.linear.params import (
 import gkx.solvers_linear_implicit as implicit
 from support.paired_solvax import requires_paired_solvax
 from types import SimpleNamespace
+import re
 import gkx.solvers_linear_adaptive_propagator as ap
 import gkx.solvers_linear_krylov as lk
 import gkx.solvers_linear_krylov_algorithms as ka
@@ -111,6 +112,16 @@ def _tiny_krylov_setup(*, linked: bool = False):
     )
     term_cfg = linear_terms_to_term_config(terms)
     return grid, cache, params, v0, term_cfg, terms
+
+
+def _patch_shift_invert(monkeypatch: pytest.MonkeyPatch, fake) -> None:
+    """Route a faked ``(eig, vec)`` solve through the inner-statistics seam."""
+
+    def with_stats(*args, **kwargs):
+        eig, vec = fake(*args, **kwargs)
+        return eig, vec, ka._empty_inner_solve_stats(vec.dtype)
+
+    monkeypatch.setattr(lk, "_shift_invert_eigenpair_with_inner_stats", with_stats)
 
 
 def test_mode_family_and_target_selection_helpers() -> None:
@@ -361,7 +372,7 @@ def test_shift_invert_selection_key_controls_cached_branch_flags(
         captured.update(kwargs)
         return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.full_like(v0, 5.0 + 0.0j)
 
-    monkeypatch.setattr(lk, "dominant_eigenpair_shift_invert_cached", _fake_shift)
+    _patch_shift_invert(monkeypatch, _fake_shift)
     monkeypatch.setattr(
         lk,
         "_apply_operator",
@@ -753,7 +764,12 @@ def test_shift_invert_uses_right_preconditioning_and_physical_fgmres_residual(
 
     def fake_gmres(_matvec, b, *, precond, x0, max_restarts, **_kwargs):
         calls.append((precond is not None, x0, max_restarts))
-        return SimpleNamespace(x=b)
+        return SimpleNamespace(
+            x=b,
+            residual_norm=jnp.asarray(0.5),
+            iterations=jnp.asarray(2, dtype=jnp.int32),
+            converged=jnp.asarray(False),
+        )
 
     monkeypatch.setattr(ka, "gmres", fake_gmres)
     apply_inverse = ka._shift_invert_apply_factory(
@@ -765,17 +781,130 @@ def test_shift_invert_uses_right_preconditioning_and_physical_fgmres_residual(
         gmres_tol=1.0e-4,
         gmres_maxiter=2,
         gmres_restart=2,
-        gmres_solve_method="batched",
         shift_preconditioner="damping",
     )
 
-    observed = apply_inverse(v0, cache, params, term_cfg)
+    observed, stats = apply_inverse(v0, cache, params, term_cfg)
 
     assert len(calls) == 1
     assert calls[0][0]
     assert jnp.allclose(calls[0][1], 0.1 * v0.reshape(-1))
     assert calls[0][2] == 1
     assert jnp.allclose(observed, v0)
+    # SOLVAX's true residual is kept relative to ||b||, with the budget outcome.
+    relative = 0.5 / float(jnp.linalg.norm(v0))
+    assert np.isclose(float(stats.max_relative_residual), relative, rtol=1.0e-6)
+    assert (int(stats.total_iterations), int(stats.solves)) == (2, 1)
+    assert int(stats.unconverged_solves) == 1
+
+
+def _shift_invert_options(tol: float, maxiter: int, restart: int) -> dict[str, object]:
+    return dict(
+        krylov_dim=3,
+        restarts=2,
+        sigma=0.5j,
+        omega_min_factor=0.0,
+        omega_target_factor=0.0,
+        omega_cap_factor=2.0,
+        omega_sign=0,
+        gmres_tol=tol,
+        gmres_maxiter=maxiter,
+        gmres_restart=restart,
+        shift_preconditioner="damping",
+        select_targeted=False,
+        select_growth=False,
+        select_overlap=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("maxiter", "tol", "converged"), [(1, 1.0e-10, False), (400, 1.0e-3, True)]
+)
+def test_shift_invert_inner_stats_cover_every_arnoldi_rhs(
+    maxiter: int, tol: float, converged: bool
+) -> None:
+    """Every inner solve of the build reports its true residual and budget."""
+
+    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
+    _eig, _vec, stats = ka._shift_invert_eigenpair_with_inner_stats(
+        v0, v0, cache, params, term_cfg, **_shift_invert_options(tol, maxiter, maxiter)
+    )
+    residual = float(stats.max_relative_residual)
+    assert int(stats.solves) == 6
+    assert (int(stats.unconverged_solves) == 0) is converged
+    assert (residual <= tol) is converged
+    assert 0 < int(stats.total_iterations) <= 6 * (maxiter + v0.size)
+    summary = lk._inner_solve_summary(stats, tol)
+    assert f"converged={converged}" in summary
+    assert f"max_relative_residual={residual:.3g} tol={tol:.3g}" in summary
+
+
+def test_shift_invert_rejection_names_unconverged_inner_solves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A starved inner budget is named in the status stream and the rejection."""
+
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_args: 1.0)
+    messages: list[str] = []
+    with pytest.raises(RuntimeError, match="outer residual gate") as rejected:
+        lk.dominant_eigenpair(
+            v0,
+            cache,
+            params,
+            terms=terms,
+            method="shift_invert",
+            krylov_dim=3,
+            restarts=2,
+            shift=0.5j,
+            shift_source="reference",
+            shift_tol=1.0e-10,
+            shift_maxiter=1,
+            shift_restart=1,
+            shift_preconditioner="damping",
+            shift_selection="nearest",
+            mode_family="none",
+            fallback_method="none",
+            status_callback=messages.append,
+        )
+    finished = [m for m in messages if m.startswith("shift-invert solve finished")]
+    for text in (finished[-1], str(rejected.value)):
+        assert "inner converged=False unconverged=6/6" in text
+        assert "tol=1e-10" in text
+    reported = re.search(r"max_relative_residual=(\S+)", str(rejected.value))
+    assert reported is not None and float(reported.group(1)) > 1.0e-10
+
+
+def test_shift_solve_method_labels_share_one_compiled_solve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The historical labels are validated but neither change nor recompile."""
+
+    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
+    traces = 0
+    factory = ka._shift_invert_apply_factory
+
+    def counting_factory(*args, **kwargs):
+        nonlocal traces
+        traces += 1
+        return factory(*args, **kwargs)
+
+    monkeypatch.setattr(ka, "_shift_invert_apply_factory", counting_factory)
+    options = _shift_invert_options(1.0e-4, 7, 5)
+    pairs = [
+        ka.dominant_eigenpair_shift_invert_cached(
+            v0, v0, cache, params, term_cfg, gmres_solve_method=label, **options
+        )
+        for label in ("batched", "incremental", "flexible")
+    ]
+    assert traces == 1
+    for eig, vec in pairs[1:]:
+        np.testing.assert_array_equal(np.asarray(eig), np.asarray(pairs[0][0]))
+        np.testing.assert_array_equal(np.asarray(vec), np.asarray(pairs[0][1]))
+    with pytest.raises(ValueError, match="shift_solve_method"):
+        lk.dominant_eigenpair(
+            v0, cache, params, method="shift_invert", shift_solve_method="bogus"
+        )
 
 
 @pytest.mark.parametrize("method", ["power", "propagator", "arnoldi"])
@@ -1287,7 +1416,7 @@ def test_dominant_eigenpair_explicit_shift_uses_requested_seed_source(
         captured["sigma"] = sigma
         return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.full_like(v0, 5.0 + 0.0j)
 
-    monkeypatch.setattr(lk, "dominant_eigenpair_shift_invert_cached", _fake_shift)
+    _patch_shift_invert(monkeypatch, _fake_shift)
     monkeypatch.setattr(
         lk,
         "_apply_operator",
@@ -1342,7 +1471,7 @@ def test_dominant_eigenpair_explicit_shift_defaults_to_reference_seed(
         captured["sigma"] = sigma
         return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.full_like(v0, 5.0 + 0.0j)
 
-    monkeypatch.setattr(lk, "dominant_eigenpair_shift_invert_cached", _fake_shift)
+    _patch_shift_invert(monkeypatch, _fake_shift)
     monkeypatch.setattr(
         lk,
         "_apply_operator",
@@ -1382,7 +1511,7 @@ def test_dominant_eigenpair_target_shift_uses_physical_omega_sign(
         captured["sigma"] = sigma
         return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.full_like(v0, 5.0 + 0.0j)
 
-    monkeypatch.setattr(lk, "dominant_eigenpair_shift_invert_cached", _fake_shift)
+    _patch_shift_invert(monkeypatch, _fake_shift)
     monkeypatch.setattr(
         lk,
         "_apply_operator",
@@ -1426,7 +1555,7 @@ def test_shift_invert_fallback_policy(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_power(*args, **kwargs):
         return jnp.asarray(0.2 + 0.05j, dtype=v0.dtype), jnp.full_like(v0, 4.0 + 0.0j)
 
-    monkeypatch.setattr(lk, "dominant_eigenpair_shift_invert_cached", fake_shift)
+    _patch_shift_invert(monkeypatch, fake_shift)
     monkeypatch.setattr(lk, "dominant_eigenpair_propagator_cached", fake_prop)
     monkeypatch.setattr(lk, "dominant_eigenpair_cached", fake_arnoldi)
     monkeypatch.setattr(lk, "dominant_eigenpair_power", fake_power)
@@ -1470,9 +1599,8 @@ def test_shift_invert_fallback_policy(monkeypatch: pytest.MonkeyPatch) -> None:
     assert jnp.allclose(vec_w, 4.0 + 0.0j)
 
     # Nearest-shift selection may intentionally target a stable eigenvalue.
-    monkeypatch.setattr(
-        lk,
-        "dominant_eigenpair_shift_invert_cached",
+    _patch_shift_invert(
+        monkeypatch,
         lambda *args, **kwargs: (
             jnp.asarray(-0.2 + 0.5j, dtype=v0.dtype),
             jnp.ones_like(v0),
@@ -1507,7 +1635,7 @@ def test_shift_invert_fallback_policy(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     # A rejected pair without a fallback must fail rather than escape as NaN.
-    monkeypatch.setattr(lk, "dominant_eigenpair_shift_invert_cached", fake_shift)
+    _patch_shift_invert(monkeypatch, fake_shift)
     with pytest.raises(RuntimeError, match="non-finite"):
         lk.dominant_eigenpair(
             v0,
@@ -1559,7 +1687,7 @@ def test_shift_invert_auto_selects_and_certifies_physics_preconditioner(
         calls.append(shift_preconditioner)
         return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.ones_like(v0)
 
-    monkeypatch.setattr(lk, "dominant_eigenpair_shift_invert_cached", fake_shift)
+    _patch_shift_invert(monkeypatch, fake_shift)
     monkeypatch.setattr(
         lk, "_eigenpair_relative_residual", lambda *_args: next(remaining)
     )
@@ -1632,9 +1760,8 @@ def test_shift_invert_outer_residual_triggers_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    monkeypatch.setattr(
-        lk,
-        "dominant_eigenpair_shift_invert_cached",
+    _patch_shift_invert(
+        monkeypatch,
         lambda *args, **kwargs: (
             jnp.asarray(0.4 + 0.2j, dtype=v0.dtype),
             jnp.ones_like(v0),
@@ -1685,9 +1812,8 @@ def test_dominant_eigenpair_reports_shift_invert_status(
             jnp.full_like(v0, 2.0 + 0.0j),
         ),
     )
-    monkeypatch.setattr(
-        lk,
-        "dominant_eigenpair_shift_invert_cached",
+    _patch_shift_invert(
+        monkeypatch,
         lambda *args, **kwargs: (
             jnp.asarray(0.3 + 0.4j, dtype=v0.dtype),
             jnp.full_like(v0, 3.0 + 0.0j),
@@ -1894,8 +2020,9 @@ EXACT = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
 
 ALLOWED_UNPINNED_MATRIX_DOTS = {
     # Renamed by the flat-layout pass; the file, the line and the measurement
-    # behind the exemption are unchanged, only the module path is.
-    "solvers_linear_krylov_algorithms.py:675": "overlap ranking only; argmax provably unmoved",
+    # behind the exemption are unchanged, only the module path is. The line moved
+    # 675 -> 749 when the inner-solve statistics were added above it; same code.
+    "solvers_linear_krylov_algorithms.py:749": "overlap ranking only; argmax provably unmoved",
 }
 
 

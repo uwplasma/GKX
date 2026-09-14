@@ -1,0 +1,15 @@
+[     1.19s] env ok gkx=/home/rjorge/gkx-q2-exact-ladder-20260913.zXGFAw/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
+[     1.69s] ky {'grid_Ny': 24, 'grid_size': 24, 'selected_index': 6, 'selected_ky': 0.3, 'signed_match': True, 'max_abs_ky': 0.6, 'nyquist': False, 'opposite_sign_partner': True, 'grid_Nz': 96}
+[     1.96s] n=73728 shape=(1, 16, 48, 1, 1, 96) seed native dtype=complex64
+[     1.96s] status: building runtime geometry
+[     1.96s] status: building spectral grid
+[     1.97s] status: building runtime linear parameters
+[     1.97s] status: selected ky index 6 at ky=0.3000
+[     1.98s] status: starting Krylov solve
+[     1.98s] status: building linear cache
+[     3.32s] status: krylov method=sparse_shift_invert dim=24 restarts=2
+[     3.32s] status: assembling sparse operator in bounded column batches
+[     3.32s] probe assembly start n=73728 batch_size=64
+[   296.24s] probe assembly done nnz=18226036 292.91s
+[   296.24s] status: factoring coupled sparse operator n=73728 nnz=18226036
+[   296.31s] SuperLU factor start

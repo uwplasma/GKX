@@ -11731,3 +11731,445 @@ PYTHONPATH/x64/CPU environment above, `/usr/bin/time -l`, argument
 these CPU candidates. Next: fixed-budget streaming-only/full-operator
 preconditioner-defect controls before a production solver change. Keep the
 source PR #226 frozen for CI; this evidence updates the existing docs PR #227.
+
+## 2026-09-13 — independent review: exact-operator solver analysis, GX output re-read, HLO counts
+
+Read-only review of #227 `3fb7d5c35` (on #226 `1e11faf7a`); no source, test,
+default or reference changed. Full note:
+[plan/research/2026-09-13_solver_velocity_throughput_review.md](research/2026-09-13_solver_velocity_throughput_review.md);
+scripts and logs in `plan/research/scripts/2026-09-13/`. Fresh venv
+`~/local/venvs/gkx-review-20260913`: Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0; M3 Max CPU, complex128, one XLA
+thread. The machine carried load 8–60 from unrelated jobs: **times are
+indicative only**; iteration counts, residuals, fill, HLO counts and spectra
+are load-independent. Office GPUs untouched; one read-only NetCDF re-read on
+the office CPU.
+
+**Decision.** Reorder, not replace: §5.1 gains L1–L6 (instrument inner
+solves; exact sparse ladder; restrict to linked-covered rows; preconditioner
+bake-off on the exact-operator harness; recycled/thick-restart structure;
+shift policy); §0.5 gains a mechanism-first order (drift ablations, eigen
+ℓ-spectra, Laguerre sink, Dougherty ν→0) before another Nl rung; §5.3 gains
+N0–N7 (HLO ledger, complete once per step, batched chain FFTs,
+half-spectrum layout, packed transforms, f32 bracket, avoidable work,
+sharding last).
+
+**Commands.** From the pinned worktree,
+`env PYTHONPATH=$PWD/src:$PWD MPLBACKEND=Agg JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1" nice -n 10 python plan/research/scripts/2026-09-13/<script>.py`
+for `d1_preconditioner_defect.py` (89 s, 1.04 GB peak), `d1b_neutral_modes.py`
+(21 s), `d3_bmap.py`, `d5_bakeoff.py` (37 s, 1.13 GB), `d6_ladder.py`,
+`d7_hlo.py 32 32 16 2 4` (no x64; the deck resolves Nz=24); `v1_reread.py` on office with
+`/home/rjorge/venvs/dkx-gpu/bin/python`, reading
+`gkx-nl24-discriminator-20260912.vvmgDD/nl24.{out,big}.nc` and
+`gx-nyquist-resolution-20260905.Ut2U6L/full96.{out,big}.nc`, `full192.out.nc`.
+
+**Results.** Pilot (Ny16, ky=+.3, n=4096): certified λ0=.115621−.241179j
+(SuperLU, residual 1.3e-15, ≈0.1 s); Hermite-line 90 unrestarted iterations
+to 1e-5, GMRES(20) never; drifts off 7 (field-corrected 1); mirror/drive/end
+damping ≈10; 1536 unknowns on kx rows outside the linked chains are exactly
+decoupled, undamped and host the Re=0 eigenvalues at |λ−σ|=.093 next to the
+target at .047; ILU(1e-2) 6 iterations, per-ℓ block 33; over 12 outer RHSs
+`gcrot(20,10,"harmonic")` 12/12 in 2233 iterations vs `gmres(20)` 2/12.
+Ladder (Nx1): Hermite-line 26/24/159/—/— at (Nz,Nl,Nm)=(16,4,8)/(32,4,8)/
+(32,8,16)/(48,8,16)/(64,8,32); LU fill ratio 5–12, factor ≈n^1.7; the Nx4
+multi-link rung hit the 2400 s alarm on the loaded host and is not reported.
+GX re-read: γ stationary from t≈100 (Nl24 .033009, Nl32 .024858 on
+[200,300]; Nz192 .024944); |⟨φ24|φ32⟩|=.991; Laguerre spectrum a stationary
+plateau ≈1–2%/index to the cutoff (upper quarter .0796/.0817); P(ℓ=Nl−1)/total
+2.1e-3/1.3e-3. b_max=12.7 on this nkx=1 chain; Nl16 captures Γ0 to 4e-6.
+HLO at 32×32×24, Nl2/Nm4, as first recorded by `d7_hlo.py`: RHS fft=45,
+concatenate=9, gather=31, copy=55 (88 MB written, 55× state); RK3 step
+fft=135, copy=178 (297 MB, 185×); projector idempotence on the RHS output
+exactly 0. **Correction (same day, #231):** `d7_hlo.py` matched tokens inside
+instruction metadata; by op name the RHS issues fft 23, concatenate 9,
+transpose 35, copy 35 (46.1 MB, 29× state). #231 also measured once-per-step
+Hermitian completion: bitwise identical, but rejected because the captured-
+constant runtime diagnostics route then materializes 2.3–2.7× more bytes;
+the plan's N1 target of "most of the 41.9%" was wrong — that share is the
+bracket's own per-RHS completion, removed only by the ky ≥ 0 layout (N3).
+
+**Position versus other codes.** Added §2.4 (capability matrix from
+upstream sources: GX `Nyc` storage, stella/GS2 response-matrix implicit
+streaming, GENE harmonic Krylov–Schur, GX hypercollision defaults) and
+§5.4 (response-matrix implicit streaming with an entry trigger and gates);
+§5.3 N3 is now the ky ≥ 0 state-layout contract with memory, HLO and
+identity gates rather than an optimization item. E×B shear stays parked on
+its trigger and is named as the largest physics gap for experiments.
+
+**Limitations.** One σ; pilot σ reused on ladder rungs where it is no longer
+near the target; ILU/block-LU are host SciPy instruments, production-size
+assembly and fill extrapolated; GKX's own W(ℓ) for the same runs not yet
+compared; HLO counts at a small CPU grid, no per-op time share. Nothing here
+certifies a speedup, a default change or a converged growth rate. #226
+remains to be merged on its green head; #227 retargeted after it.
+
+## 2026-09-13 — Q1 inner-solve diagnostics (plan §5.1 L1)
+
+Branch `fix/inner-solve-diagnostics` from `origin/main` `06606e404`, handoff #228
+row Q1. Instrumentation only: no preconditioner, tolerance, default or SOLVAX
+change.
+
+**Decision.** (1) Every inner FGMRES solve of the shift-invert Arnoldi build
+keeps SOLVAX's true residual, iterations and converged flag; they are folded over
+all restarts × Krylov vectors into `InnerSolveStats(max_relative_residual,
+total_iterations, solves, unconverged_solves)` by the private jitted
+`_shift_invert_eigenpair_with_inner_stats`. The host gate prints
+`inner converged=… unconverged=k/n max_relative_residual=… tol=… iterations=…` in
+the `shift-invert solve finished` status and in all three rejection
+`RuntimeError`s. Public `dominant_eigenpair_shift_invert_cached` still returns
+`(eig, vec)`. (2) `shift_solve_method`/`gmres_solve_method` stays accepted and
+validated (same `ValueError`) but is no longer threaded or a `static_argnames`
+key; documented as an alias of the one SOLVAX FGMRES. (3) `implicit_maxiter`
+counts iterations on both implicit routes through `_gmres_iteration_budget`:
+`restart=min(restart,maxiter)`, `max_restarts=ceil(maxiter/restart)`, cap
+`restart·ceil(maxiter/restart)` (200 at the 200/20 default, previously 4000).
+Non-convergence is surfaced only where a channel exists: `_implicit_gmres_solution`
+returns the `KrylovSolution`; the linear scan result `(G, phi_t)`,
+`SimulationDiagnostics` and IMEX `linear_solve` (solver returns `x` only) have no
+solver-status field, and no host callback was added inside traced scans.
+
+**Which tests' numbers could change (none did).** Before editing, a scratch pytest
+plugin (not committed) wrapped `gmres` in `solvers_linear_implicit` and
+`solvers_nonlinear_imex` on pristine main and recorded SOLVAX iterations and
+convergence for every real solve in 13 implicit/IMEX-selected files (55 tests):
+76 recorded calls, all converged, maximum 8 iterations, every one under the new
+cap. The only budget whose cycle size changes (restart 2, maxiter 1, in
+`test_implicit_standard_and_diagnostic_routes_match`) did 0 iterations. The plugin
+run had one failure, `test_nonlinear_imex_state_gradient_matches_finite_difference[True]`
+(`reduce_precision does not accept dtype complex128`). Without the plugin both
+parameters pass on the branch (XML `f81cea8cec07…`) and on the clean main worktree
+(`b3566d6ed113…`), so this is an artifact of `jax.debug.callback` on that AD path,
+not a defect on main.
+
+**One allowlist re-key.** `test_hot_path_matrix_contractions_are_pinned` keys its
+unpinned-contraction allowlist by line; the unchanged overlap-ranking `tensordot`
+moved `solvers_linear_krylov_algorithms.py:675 -> 749`. Entry re-keyed, same code.
+
+| Selection (one file per invocation) | Result | XML SHA-256 prefix |
+| --- | --- | --- |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 84 passed | `5f97a5993940` |
+| `tests/unit/solvers/test_time_integrators.py` | 94 passed | `7d83e6bdccc1` |
+| `tests/integration/test_adaptive_eigenmodes.py` | 7 passed, 3 skipped (VMEC backend/eik cache) | `9f7917556c71` |
+| `tests/unit/linear/test_linear.py -k "krylov or shift or implicit"` | 8 passed | `bc2376de4b33` |
+| `tests/unit/nonlinear/test_nonlinear.py -k "implicit or imex or IMEX"` | 9 passed | `71bedea6d5ab` |
+| `tests/unit/nonlinear/test_nonlinear_helpers_extra.py -k …` | 15 passed | `53a067a2d519` |
+| `tests/unit/linear/test_linear_helpers_extra.py -k …` | 8 passed | `75ec05232d38` |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k …` + `test_compare_runtime_window_writes_csv` | 3 + 1 passed | `c0c632d28032`, `01bcc93cdb90` |
+| runtime runner / CLI nodes referencing `implicit_maxiter` | 2 + 1 passed | `61af1e7fe513`, `9a80d58f2a55` |
+| sharded velocity node (2 forced host devices) | 1 passed | `bc034a1557b4` |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed | `56a26d29f8a4` |
+
+New/extended tests: a forced 1-iteration inner budget reports `converged=False`,
+6/6 unconverged and relative residual > 1e-10, and the status and rejection text
+carry them; an unrestarted 400-iteration budget reports converged and residual ≤
+1e-3; the three labels give bitwise-identical pairs from one trace; implicit
+`maxiter=8, restart=4` stops by 8 iterations (32 before) unconverged, and IMEX
+passes budget `(4, 2)`.
+
+Checks: pinned ruff 0.16.4 check/format (407 files), `mypy` as CI (184 source
+files, no issues), `check_package_architecture_manifest.py`,
+`check_repository_size_manifest.py`, gitleaks 8.30.1 on changed files. Line budgets
+measured: source 89248 → 89409 (+161), tests 87826 → 88018 (+192); targets
+unchanged; no new files, no docs change.
+
+Environment: local shared Mac (load 9–33 during the run), Python 3.11.14,
+JAX/jaxlib 0.10.2, NumPy 2.4.6, SOLVAX 0.20.0, `PYTHONPATH=$PWD/src:$PWD
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu`, `nice -n 19`,
+`pytest -q -o addopts='' -p no:cacheprovider --junitxml=…`. Worktrees
+`~/local/GKX-worktrees/inner-solve-diagnostics` (branch) and
+`~/local/GKX-worktrees/inner-solve-baseline` (detached clean `06606e404`).
+
+Limitations: the per-solve statistics are not yet on a public result; the implicit
+routes still discard their flag inside scans; with ceil budgeting a solve may exceed
+`maxiter` by less than one cycle; no runtime or memory measurement was made (the
+extra carry is four scalars per Arnoldi build). The registered §5.1 pilot was not
+re-run, so no preconditioner's inner statistics are published yet. Next: re-run
+that pilot per mode so its rejection names the inner budget, then L2/L3.
+
+## 2026-09-13 — Q4: Hermitian completion once per step (plan §5.3 N0 + N1)
+
+**Outcome: N0 adopted, N1 rejected on HLO evidence.** The once-per-step
+completion is exact but regresses materialization on the runtime diagnostics
+scan. Branch `perf/hermitian-completion-once`: prototype `e154f30f5` (+ gate
+fixes `904641389`), source reverted to main in `f812d724d`.
+
+**N0 ledger.** `tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo`
+counts optimized-HLO instructions by op name (fft, concatenate, gather,
+scatter, transpose, copy, dynamic-update-slice, reverse) and the bytes written
+by concatenate/copy outputs, per RHS and per RK step. `--route scan` passes
+cache/params as graph arguments (as `integrate_nonlinear_scan` does); `--route
+diagnostics` lowers `PreparedExplicitNonlinearDiagnostics._run_raw`, the scan
+`run_runtime_nonlinear` executes, which captures them as constants;
+`--hlo-dir` dumps the text. Compile only, load-independent for one jax/XLA
+build. Counts below are XLA:CPU, jax/jaxlib 0.10.2, Cyclone nonlinear deck,
+ky .3 initial condition, complex64 state.
+
+**Correction to review §5 (`d7_hlo.py`).** Its regex matched a token anywhere
+on an instruction line, metadata included. Matching op names, the same
+closure-constant RHS at 32×32×24 Nl2/Nm4 issues fft **23** (not 45), copy
+**35** (not 55), transpose **35** (not 78), concatenate 9 (agrees), and writes
+46.1 MB (29× state, not 88.4 MB). The profile quoted in `docs/performance.rst`
+("four ``copy_concatenate_fusion`` kernels ... running four times per RK3
+step") matches the bracket's own completion inside the four RHS evaluations of
+a diagnosed RK3 step; N1 does not remove those.
+
+| graph (32×32×24 Nl2/Nm4 unless noted) | concat | copy | transpose | bytes written |
+|---|---:|---:|---:|---:|
+| RHS, cache as args | 11→11 | 35→35 | 35→35 | 46,295,964→46,295,964 |
+| scan rk2 step, args | 23→22 | 73→72 | 73→72 | 99,324,828→97,014,684 |
+| scan rk3 step, args | 34→31 | 114→111 | 114→111 | 156,335,004→149,404,572 |
+| scan rk3_classic step, args | 33→31 | 109→107 | 109→107 | 147,733,404→143,113,116 |
+| scan rk4 step, args | 43→40 | 153→150 | 153→150 | 208,724,892→201,794,460 |
+| scan sspx3 step, args | 35→31 | 111→107 | 111→107 | 152,353,692→143,113,116 |
+| scan k10 step, args | 103→94 | 361→356 | 361→356 | 486,593,436→472,093,596 |
+| runtime diagnostics rk3 step, captured | 32→29 | 136→309 | 117→290 | 156,556,500→426,450,132 |
+| runtime diagnostics rk4 step, captured | 41→38 | 175→344 | 156→325 | 208,946,388→472,548,564 |
+| runtime diagnostics rk3, 64×64×24 Nl4/Nm8, captured | 32→29 | 163→360 | 144→341 | 2,884,020,404→7,805,118,644 |
+
+(main → prototype; fft unchanged everywhere; reverse and gather drop by the
+removed completions.) Runtime diagnostics with cache/params as arguments
+(`_run_dynamic_raw`, fixed dt, 2-step graph): copy 225→222, 164,129,164→
+157,198,732 B at 32×32×24; 249→246, 2,989,416,216→2,877,349,656 B at
+64×64×24 Nl4/Nm8. Attribution from rk3 dumps (`hlo_diff.py`): the extra pairs
+are inside `assemble_rhs_cached_electrostatic_jit`, multiply→transpose/copy to
+`(1,2,4,1024,24)` and bitcast→transpose/copy back, 14→102 each. Keeping the
+full projection at stages but the step-boundary changes reproduces main exactly
+(231 copies, 164,742,640 B); an `optimization_barrier` or a slice-concatenate
+stage producer changes nothing. So the trigger is removing the stage
+completion in a graph with a constant-captured cache.
+
+**Identity gates (prototype vs main, 100 steps).** Deck at Nx=Ny=16 (Nz=24 from
+`ntheta`), Nl2/Nm4, dt .01, `init_amp=10` so ‖NL‖/‖L‖ = .0506 at t0,
+`compressed_real_fft` on. Cases: `integrate_nonlinear` euler/rk2/rk3/
+rk3_classic/rk4/sspx3/k10 (state and 100-step φ history); `run_runtime_nonlinear`
+rk3/rk4 × {adaptive dt, `collision_split` implicit, fixed mode iky=ky(.3)
+ikx=1}, with t, dt_t, Wg, Wphi, heat flux, φ mode and state;
+`integrate_nonlinear_sharded` rk3/rk3_classic/rk4; `integrate_nonlinear_species_hermite`
+rk3/rk4 (num_devices=1); `nonlinear_heat_flux_window` 20 steps checkpointed,
+value and d/dtprim, rk3/rk4.
+- default f32: **65/65** `np.array_equal` and byte-identical; the two npz
+  archives have the same SHA-256.
+- `JAX_ENABLE_X64=true GKX_X64=1`: **64/65**; window rk4 d/dtprim differs by
+  2.2e-16 (one ulp of 2.0), its value is bitwise. The runtime route allocates a
+  complex64 state even in x64, so its f64 cases repeat the complex64 check.
+- prototype unit tests (fixed-mode stage projection branches, once-per-step
+  scan vs per-stage callable): 10 passed x64, 9 passed f32.
+- An initial f32 smoke of the touched owners gave 13 failed/149 passed: two were
+  a donated-state reuse in the new test (fixed), eleven are f32-only
+  window-gradient tolerance failures that main also fails in f32
+  (`baseline_es_rk2` rel .0133 on the exported main source); CI runs them in x64.
+  Two gate queues were killed before use (donated `G0` reused in `gate.py`);
+  their outputs were deleted.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, numpy 2.4.6, solvax 0.20.0,
+`/Users/rogeriojorge/local/venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src`,
+`JAX_PLATFORMS=cpu`, `XLA_FLAGS="--xla_cpu_multi_thread_eigen=false
+intra_op_parallelism_threads=1"`, `nice -n 10`, one heavy process at a time,
+each step held until the 1-min load was below 20. Main side: `git archive
+origin/main src` at `06606e404` in a scratch directory. Load ranged 8–60 during
+the session: **no timing is reported**. Scratch evidence (session-local):
+`gate.py` d4e5a6e38cb1…ac41, `compare.py` deb37b30ab06…d01f, `diag_hlo2.py`
+0ea6c9dac6d1…78b2e3, `hlo_diff.py` 98ca3be49f15…15dd, `queue3.sh`
+6f7dbc9242b5…72ad; npz f32 main/prototype 67bd0b87882f…0a9a (both); f64
+f22fc6ea025f…d4b1 / 95eb250ded28…d624; ledger JSON scan 66f0e32c…8323 /
+cc0b33c0…159e, diagnostics 652b5456…ba40 / 14feb8f2…629e, 64-grid
+5846d008…77ac / 36cae48c…46bf.
+
+Commands: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo
+--route {scan,diagnostics} --methods rk2,rk3,rk3_classic,rk4,sspx3,k10
+[--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8] --out <json>` with `PYTHONPATH` set to
+the main export or the prototype tree; `GATE_AMP=10 python gate.py <npz>`, then
+`python compare.py <main.npz> <prototype.npz>`.
+
+**Limitations.** XLA:CPU only; GPU layout heuristics may differ. Bytes written
+are a proxy for materialization, not a runtime. Species×Hermite ran on one
+device. Fixed mode covered one paired row; collision split only the implicit
+scheme. IMEX was never changed (its implicit solve is not bitwise
+conjugation-symmetric).
+
+**Next question.** Either give the runtime diagnostics scan its cache and
+params as graph arguments for adaptive dt too (`_run_dynamic_raw` already does
+for fixed dt; the bitwise-vs-constant-folded risk must be measured), after
+which N1 is a clean ~4% bytes saving; or go to N3, which removes the bracket's
+completion (the profiled 41.9%) and the transposes that trigger this layout
+choice.
+
+## 2026-09-13 — Q5: one SOLVAX floor (`chore/solvax-pin`)
+
+- finding: `requirements.txt` pinned `solvax>=0.7.3,<0.8` against
+  `pyproject.toml` `solvax>=0.12.0`, and had already drifted in other ways too:
+  jax unpinned (pyproject `>=0.10.1`), no `booz_xform_jax`, and a dead `tomli`
+  marker although Python `>=3.11` is required. `docs/numerics.rst` repeated the
+  stale pin.
+- consumers: none. CI, the release workflow, and README/CONTRIBUTING install from
+  `pyproject.toml`; `.readthedocs.yaml` reads `docs/requirements.txt` only. There
+  is no Dockerfile, binder, MANIFEST.in, setup.cfg, tox or nox file, and no
+  size/release manifest or release test names the file.
+- change: delete `requirements.txt`, so `pyproject.toml` is the only dependency
+  list, and correct the `docs/numerics.rst` paragraph. Aligning the file instead
+  would keep a copy nothing reads.
+- floor evidence: the tracked Python was AST-scanned for SOLVAX names (12 in
+  `src`, plus `AdaptiveEigenSolution` in tests; `gcrot` is not used). Each name
+  was checked against the SOLVAX tags. `adaptive_eigenpair`, `eigenpair_reverse`,
+  `estimate_rk4_timestep`, `exponential_eigenpairs`, `propagator_eigenpairs`,
+  `sparse_eigenpairs` and `sparse_operator_matrix` first appear in v0.12.0;
+  `gmres`, `linear_solve` and `SpluFactorization` date from v0.1.0, and
+  `tridiagonal_solve` and `chunked_jacfwd` from v0.2.0. The call-site keywords
+  exist in the v0.12.0 and v0.20.0 signatures. As a runtime check,
+  `git archive v0.12.0 src/solvax` (SOLVAX 0.12.0 sources) was placed first
+  on `PYTHONPATH` ahead of the installed 0.20.0, with
+  `GKX_REQUIRE_PAIRED_SOLVAX=1`, x64, CPU, and the CI paired-SOLVAX files in
+  full plus `tests/unit/solvers/test_time_integrators.py`. Result: 277 passed,
+  3 skipped in 482 s. All 3 skips come from
+  `test_adaptive_eigenmodes.py:75`, "VMEC integration needs its backend or a
+  generated eik cache", an environment check unrelated to SOLVAX. The floor
+  stays `>=0.12.0`, with no evidence for raising it.
+- checks (Python 3.11, jax/jaxlib 0.10.2, SOLVAX 0.20.0, `gkx.__file__` in the
+  worktree): ruff 0.16.4 check/format pass (407 files); size, readiness
+  (`version`), and architecture manifests pass; release gates + evidence
+  ledger + public types 185 passed; strict `sphinx -W` pass, and
+  `numerics.html` now renders `solvax>=0.12.0`; gitleaks 8.30.1 on the changed
+  files is clean. Size: −1 tracked file (95 bytes), `docs/numerics.rst` +10/−6.
+
+## 2026-09-13 — exact sparse shift-invert size ladder (Q2, plan §5.1 L2)
+
+**Question.** Up to what single-ky linked-Cyclone size is the existing exact route
+`KrylovConfig(method="sparse_shift_invert")` (SOLVAX `sparse_operator_matrix` column
+probing in 64-column batches, SciPy SuperLU of A−σI, `sparse_eigenpairs`,
+original-operator residual gate) the fastest route to a certified eigenpair on CPU, and
+what does it cost in time and memory against the runtime-default Krylov route on the
+same rungs? Measurement only; no source, test, default or reference change.
+
+**Source and setup.** `origin/main` `06606e404771b4c5217f07c284a9003e12d9c982`, staged
+by `git archive` (tarball SHA
+`a7fe0365d2d2ccc5e553704bda94971f33982e4c07c98c187b57c10e141bfea0`, removed after the
+run) to office `pop-os:/home/rjorge/gkx-q2-exact-ladder-20260913.zXGFAw`. Xeon W-2295,
+18 cores / 36 threads, 62 GB (≈43 GB available), shared with a DKX `cpu_lu.py`
+benchmark pinned to CPUs 24–28,30–32, an LMX `gpu_bench` run, a VMEX
+`validate_refinement.py` run and another user's GPU0 job; GPUs untouched. Python
+3.11.15, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0
+(`/home/rjorge/venvs/gkx-nl/bin/python`; SOLVAX resolves through that venv's
+`zz_dkx_gpu.pth`); `gkx.__file__` verified inside the staging `src`. Env
+`JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES= JAX_ENABLE_X64=true GKX_X64=1
+PYTHONPATH=$PWD/src:$PWD OMP_NUM_THREADS=12 OPENBLAS_NUM_THREADS=12
+XLA_FLAGS=--xla_cpu_multi_thread_eigen=true`. Each cell is one fresh process, run
+serially by `run_ladder.sh`:
+`nohup nice -n 10 systemd-run --user --scope -p MemoryMax=20G taskset -c 0-11 timeout
+--signal=TERM --kill-after=10s 7200s /usr/bin/time -v python exact_ladder.py --repo
+$DIR --rung R --arm A --shift σ`, with a 30-min wall guard per cell and a 2-h total
+cap. The 20 G scope cap and CPU/thread limits are the coordinator's resource correction
+of the original 50 GB guard; no cell reached the memory cap.
+
+Deck `examples/linear/axisymmetric/cyclone.toml` (SHA `f2db5b3d…be405`) with only
+(Nz, ntheta, nperiod) overridden and (Nl, Nm) passed to `run_runtime_linear(solver=
+"krylov", return_state=True, initial_state=seed)`. On the Ny=24 grid ky index 6 is
+**+0.3**, sign-matched and non-Nyquist (max |ky| 0.6, the −0.3 partner present) on
+every rung. The runtime generates the seed as complex64; it is cast to complex128 before
+the call (hash per rung in the RESULT lines). σ for rung 1 is the reference
+.09302951−.28199404j; each later rung uses the previous rung's certified sparse
+eigenvalue. Arms: `sparse` = `KrylovConfig(method="sparse_shift_invert", shift=σ)`;
+`default` = `krylov_cfg=None`, which for the cyclone contract resolves to
+`KrylovConfig(method="adaptive")` (certified adaptive propagator, 1e-9 base gate);
+`propagator` = the bare dataclass default `KrylovConfig()` (no certification gate; the
+residual is measured). Every returned pair is re-checked with
+`_eigenpair_relative_residual` against the matrix-free operator. SOLVAX helpers are
+wrapped at module-attribute level for timing and nnz only.
+
+**Per-rung results.** "route s" is the `run_runtime_linear` call (geometry, cache, JIT,
+solve and the branch's own residual gate); "wall" is the fresh process under
+`/usr/bin/time`. Where both certify, the arms agree on the eigenvalue to the printed
+digits.
+
+| rung (Nz,ntheta,nperiod,Nl,Nm) | n | arm | probe batches | nnz (per row) | L+U nnz (fill) | assembly / factor / eigs s (LU solves) | route s | wall s | peak RSS GiB | residual | γ | ω |
+|---|---:|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|
+| 1 (32,32,1,4,8) | 1024 | sparse | 16 | 85,714 (83.7) | 503,860 (5.9) | 0.63 / 0.12 / 0.13 (65) | **3.03** | 5.1 | 0.91 | 1.5e-14 | .1157314 | .2416600 |
+| 1 | 1024 | default (adaptive) | — | — | — | — | 8.41 | 10.8 | 1.15 | 4.0e-15 | .1157314 | .2416600 |
+| 1 | 1024 | propagator | — | — | — | — | 2.75 | 5.9 | 0.91 | .983 (rejected) | .0255 | .2108 |
+| 2 (48,16,2,8,16) | 6144 | sparse | 96 | 831,831 (135.4) | 8,507,897 (10.2) | 2.48 / 5.99 / 2.98 (156) | **13.57** | 15.8 | 1.05 | 5.2e-14 | .0982475 | .2770518 |
+| 2 | 6144 | default (adaptive) | — | — | — | — | 27.79 | 30.2 | 1.17 | 3.2e-15 | .0982475 | .2770518 |
+| 2 | 6144 | propagator | — | — | — | — | 2.79 | 5.9 | 0.92 | .989 (rejected) | .0453 | .3405 |
+| 3 (96,32,2,8,24) | 18432 | sparse | 288 | 4,760,571 (258.3) | 58,803,460 (12.4) | 17.2 / 115.1 / 20.7 (161) | 155.27 | 157.8 | 2.36 | 3.1e-13 | .0987757 | .2769046 |
+| 3 | 18432 | default (adaptive) | — | — | — | — | **82.03** | 84.6 | 1.22 | 6.5e-15 | .0987757 | .2769046 |
+| 3 | 18432 | propagator | — | — | — | — | 2.96 | 6.1 | 0.93 | .999 (rejected) | .0749 | .1662 |
+| 4 (96,32,2,16,48) production | 73728 | sparse | 1152 | 18,226,036 (247.2) | not reached | 292.9 / **>1509, unfinished** / — | **stopped at 1805 s by the 30-min wall guard** | — (rc 143) | cgroup 7.10 when stopped (RSS 5.65 at 1192 s) | — | — | — |
+| 4 | 73728 | default (adaptive) | — | — | — | — | **760.88** | 763.4 | 1.27 (process 1.33) | 1.1e-14 | .0930912 | .2820327 |
+| 4 | 73728 | propagator | — | — | — | — | 3.30 | 6.4 | 0.93 | .996 (rejected) | .0431 | .3922 |
+
+**Crossover.** The exact route is the fastest certified route at n=1024 (3.0 s against
+8.4 s) and n=6144 (13.6 s against 27.8 s). At n=18432 the adaptive route is 1.9× faster
+(82 s against 155 s; the SuperLU factor alone is 115 s, 74 % of the sparse route). At
+the production chain n=73728 the exact route produced no pair within 30 min, while the
+adaptive route certified λ=.0930912−.282033j (γ +0.07 %, ω +0.01 % from the plan's
+reference) in 761 s at 1.3 GiB. **Crossover between n=6144 and n=18432 (n≈1e4 on this
+host).** Scaling across rungs: nnz/row 84→135→258→247 (saturates once Nz=96), LU fill
+5.9→10.2→12.4, factor time 0.12→6.0→115 s (local exponents n^2.2 and n^2.7, steeper
+than the n^1.7 of the fixed-Nz ladder in review §3.5 because Nz also grows); at
+n^2.7 the rung-4 factor alone extrapolates to ≈80 min. Assembly by probing grows as n²
+(0.6→2.5→17→293 s). Sparse peak memory 0.9→1.1→2.4→≥7.1 GiB when stopped; the
+adaptive route stays at 1.15–1.33 GiB and grows as ≈n^1.6 in time between rungs 3
+and 4. The dataclass-default `propagator` returns an uncertified wrong branch (relative
+residual ≈1) on every rung in ≈3 s and is not a competitor for a certified pair.
+Reading: exact LU is the reference and preconditioner harness for small rungs (§5.1 L4
+bake-off), not a production eigensolver; plan §5.1 now says so.
+
+**Limitations.** One cold process per cell and no repetitions, so times include runtime
+import, geometry, cache build and JIT (the adaptive arm is JIT-heavy, the sparse arm
+host-heavy). The host was shared (load 5–24 on 36 threads from other jobs), so ratios
+within ≈1.5× are not resolved. SciPy SuperLU used its default COLAMD ordering with one
+factor per σ; nested dissection, ILU and multithreaded supernodal solvers were not
+tried, so this bounds the existing route, not exact LU in general. The rung-4 factor
+time is a lower bound; its memory is the maximum of the scope's `memory.current` over
+5-s polls (page cache included), and its `/usr/bin/time` file is empty because the wall
+guard terminated the whole process group. The supervisor's process-group RSS poll read
+0 throughout (procps `ps -g` selects sessions or groups by name, not process groups);
+the scope enforced the 20 G cap, and peaks come from `/usr/bin/time`, `ru_maxrss` and
+cgroup memory. The routes certify at different gates (sparse 1e-6, adaptive 1e-9 base),
+but every certified residual is ≤3.1e-13 against the same matrix-free operator. The
+plan §5.1 protocol's ≥5 warm repetitions were not run.
+
+**Superseded first launch (recorded, not used).** A first supervisor (14:35–14:40 CDT;
+unpinned, then CPUs 0–23 via `taskset`; 50 GB guard; no thread caps) ran rungs 1–2
+under load 16–41, with its OpenBLAS threads spinning during SuperLU on cores shared with
+the DKX benchmark. It was stopped for the coordinator's resource correction during rung
+3's factor (n=18432, nnz 4,760,571, assembly 21.5 s). Its eigenvalues equal the final
+run's; its rung-2 sparse time (87 s against 18 s process elapsed) was contention. Its
+outputs stay on office in `out_v1_superseded/`; its supervisor log is committed as
+`v1_superseded_supervisor.txt`.
+
+**plan.md.** The crossover is two sentences at the end of §5.1. Main does not yet carry
+#228's "Resolved 2026-09-13" paragraph, so they are placed before §5.2, outside the
+#227/#228 hunks; move them into that paragraph when #228 lands.
+
+**Artifacts** (`plan/research/scripts/2026-09-13-exact-ladder/`, SHA-256):
+
+```
+181b380fe7c483c7a8f819975849df7165322a957a46cbafd4ae0f3c51f0f160  exact_ladder.py
+50f7cc9b4ddc10d8e1ae7fc05964a606bffcfa7f845c2f0e7243d2baeeb3b018  run_ladder.sh
+aa02b34ce4bdf9ab275b1b0f26536a3b0329647cb8f42994510b82dbfc580b5d  supervisor.txt
+92c1efdaed01d6fbf95d640133d861c0b39db81cd007ae331d03bcd8b3ae5940  summary.txt
+fd2970827c3dfbba9ee8f8dc648b5e1647dffe8be777b3d574b0d038a04e82fb  v1_superseded_supervisor.txt
+149075d9f6e40481540d21a7d4b03d27c71336b181889cb73d65aa83a565124d  r1_sparse.txt
+419a128f97860bf4b425320a055b1b15a9124758258c48cfad7cd9c2d2e6a0ef  r1_default.txt
+0a9b0da11472be1a188b3aa824dbc7b6fb124a94e9f22eefc27059ef2afa5b7d  r1_propagator.txt
+53838cb75ec5781a87b887fc26853820e6104728d517bd6bb6e0f0882599a457  r2_sparse.txt
+63e0d74ab59d4d7d533a8e029254b1153533d883ac494b5d77735e47bd2e0956  r2_default.txt
+35a521198b9ce57dfcbdb6966c03c52c59cbe8e400d7896cc6d4cd84bec1d90e  r2_propagator.txt
+52a2e05fc08f47e9e65353eac65f6a511124ec43a448810e0e2aa158e349a527  r3_sparse.txt
+06cb32dca2727e799d9e07e9fa480d5ffd97dd51d6de4d3a1a4a78e8894575fe  r3_default.txt
+9f1cd76cbbdc0c628f826b1c05b2bd9de4b0f63144944e3069e290b260944fac  r3_propagator.txt
+30d3c07dd4046dd974b0735d767d73e4b3fd5d950a27bdb30a95204c73c28b42  r4_sparse.txt
+ac360dc147e7f6e61e543f34d9a556a52ed6c616f63f8a7b989d2aac02298ff8  r4_default.txt
+56b9c79efb44f12c4107fce28c8c8a09adc54ce990142fb661c63f60d058c1c2  r4_propagator.txt
+```
+
+The `r*_*.time.txt` files are the `/usr/bin/time -v` reports (none for `r4_sparse`).
+
+**Terminal state.** Supervisor PID 165423 ended 15:30:02 CDT (2935 s, `breach=1` =
+the rung-4 sparse wall guard). Launcher/Python PIDs 165434/165437, 165587/165590,
+165733/165736, 165980/165983, 166405/166410, 168469/168472, 169798/169801,
+208756/208759, 220834/220837, 220967/220970, 221103/221106, 221240/221243, plus the
+first launch's 160692, 160703/160706, 161207/161210, 161623/161626, 162566/162569,
+163424/163427 and pin watcher 163032, were all verified absent at 15:31; no `gkx-q2-*`
+systemd units remain. Staging tarballs were removed on office and locally. The 27 MB
+staging directory stays for provenance; office disk had 66 GB free.
