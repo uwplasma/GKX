@@ -911,7 +911,11 @@ recursive = true
 # solve keeps SOLVAX's true residual, iterations and converged flag, folded over
 # the Arnoldi build into the host gate's status and rejection text; the
 # shift_solve_method alias leaves the jit key; implicit_maxiter counts iterations.
-baseline = 89409
+# +83: certify every returned eigenpair (Q12). The raw propagator/power/Arnoldi
+# routes pass the shift-invert outer residual gate or raise; certify=False is the
+# explicit opt-out; a zero eigenvector has infinite residual; KrylovConfig and
+# dominant_eigenpair default to adaptive; ETG_KRYLOV_DEFAULT records why it fails.
+baseline = 89492
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1088,7 +1092,10 @@ recursive = true
 # compile across shift_solve_method labels, implicit iteration-budget semantics,
 # and the contraction allowlist re-keyed to the moved line (675 -> 749).
 # +15: the optimized-HLO op-ledger parser contract, in the existing profiling owner.
-baseline = 88033
+# +112: raw routes fail closed with residual and tolerance or are flagged under
+# certify=False, a real converged propagator pair certifies, a zero eigenvector
+# never certifies, adaptive defaults, and the opt-out leaves shift-invert gated.
+baseline = 88145
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1157,7 +1164,10 @@ recursive = true
 # +276: nonlinear-step-hlo, the optimized-HLO op ledger per RHS and RK step for
 # the argument-passing scan and the runtime diagnostics scan (plan 5.3 N0), in
 # the existing runtime-kernel profiler.
-baseline = 78101
+# +14: ky_diagnostics compares raw eigen routes against time integration, so
+# under Q12's fail-closed gate it opts out explicitly (certify=False) and writes
+# each pair's residual and certified flag instead of an unlabelled growth rate.
+baseline = 78115
 target = 0
 
 [[line_budget_policy.counts]]

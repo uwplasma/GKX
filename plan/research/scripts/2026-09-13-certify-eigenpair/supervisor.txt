@@ -1,0 +1,26 @@
+repo=/Users/rogeriojorge/local/GKX-worktrees/certify-baseline-0cce177 sha=0cce177f6031b9b2a7f0d8a2f7bf68f729161821 dirty=0
+script_sha256=4dab8c6e9871d9854eeb3eab5d6bdaeda3d1568804c285113ee6c784b006652c host=Rogerios-MacBook-Pro.local pid=6389
+START etg_default_ky10 2026-09-13T21:02:29Z load={ 7.35 14.50 18.13 }
+END etg_default_ky10 rc=0 2026-09-13T21:02:33Z
+START etg_default_ky20 2026-09-13T21:02:33Z load={ 6.92 14.29 18.03 }
+END etg_default_ky20 rc=0 2026-09-13T21:02:37Z
+START etg_default_ky30 2026-09-13T21:02:37Z load={ 7.33 14.25 18.00 }
+END etg_default_ky30 rc=0 2026-09-13T21:02:40Z
+START runtime_default_ky10 2026-09-13T21:02:40Z load={ 7.33 14.25 18.00 }
+END runtime_default_ky10 rc=0 2026-09-13T21:02:52Z
+START runtime_default_ky20 2026-09-13T21:02:52Z load={ 8.58 14.20 17.92 }
+END runtime_default_ky20 rc=0 2026-09-13T21:03:03Z
+START runtime_default_ky30 2026-09-13T21:03:03Z load={ 9.92 14.30 17.91 }
+END runtime_default_ky30 rc=0 2026-09-13T21:03:15Z
+START scan 2026-09-13T21:03:15Z load={ 9.31 14.02 17.77 }
+END scan rc=0 2026-09-13T21:05:18Z
+START time_ky10 2026-09-13T21:05:18Z load={ 14.35 14.74 17.56 }
+END time_ky10 rc=0 2026-09-13T21:05:44Z
+START time_ky20 2026-09-13T21:05:44Z load={ 13.94 14.56 17.41 }
+END time_ky20 rc=0 2026-09-13T21:06:10Z
+START time_ky30 2026-09-13T21:06:10Z load={ 15.23 14.88 17.45 }
+END time_ky30 rc=0 2026-09-13T21:06:35Z
+START adaptive_ky10 2026-09-13T21:06:35Z load={ 12.34 14.22 17.14 }
+END adaptive_ky10 rc=124 2026-09-13T21:36:38Z
+START adaptive_ky20 2026-09-13T21:36:38Z load={ 12.46 18.84 21.45 }
+STOPPED by operator 2026-09-13T21:36:57Z: adaptive_ky10 hit the 30-min guard (rc=124, no restart status after 2.14 s); adaptive ky20 (killed at start) and ky30 not run

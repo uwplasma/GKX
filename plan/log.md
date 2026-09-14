@@ -12174,6 +12174,391 @@ first launch's 160692, 160703/160706, 161207/161210, 161623/161626, 162566/16256
 systemd units remain. Staging tarballs were removed on office and locally. The 27 MB
 staging directory stays for provenance; office disk had 66 GB free.
 
+## 2026-09-13 — Q12 certify every returned eigenpair; KrylovConfig defaults to adaptive
+
+Branch `fix/certify-every-eigenpair`, handoff #228 row Q12. It is stacked on
+`fix/inner-solve-diagnostics` (#230, head `0cce177f6`) and must be retargeted to
+`main` after #230 merges.
+
+**Contract: fail closed, with an explicit opt-out.** The raw `power`,
+`propagator` and `arnoldi` routes of `dominant_eigenpair` return a Rayleigh or
+Ritz pair without a convergence test. Each pair is now checked with
+`_eigenpair_relative_residual` against
+`certifiable_residual_tolerance(shift_outer_residual_tol, dtype)`, the
+shift-invert outer gate. A failing pair raises
+`RuntimeError("<method> eigenpair failed the outer residual gate: residual=…,
+tolerance=…; …")`.
+
+`KrylovConfig.certify` and `dominant_eigenpair(certify=...)` default to `True`.
+With `certify=False` the pair is returned and the status callback reports
+`returning an UNCERTIFIED <method> eigenpair (certify=False): residual=…,
+tolerance=…`. The opt-out affects those three routes only:
+- `adaptive`, `shift_invert` and `sparse_shift_invert` keep their own
+  fail-closed gates (a test pins that `certify=False` does not relax
+  shift-invert);
+- shift-invert seeds are not gated;
+- shift-invert fallbacks were already gated and are unchanged.
+
+`KrylovConfig.method` changes `"propagator"` → `"adaptive"`, and
+`dominant_eigenpair(method=...)` changes `"power"` → `"adaptive"`. The generic
+runtime default `KrylovConfig(method="adaptive")` now equals `KrylovConfig()`.
+There is no CHANGELOG, so the API change is recorded in `docs/solvers.rst`
+("Eigenpair certification").
+
+Why fail closed rather than a result flag: `RuntimeLinearResult` has no residual
+field, and a flag nobody reads is the silent return this row removes. The
+residual goes to the status stream on every route; no public result field was
+added.
+
+**Defect found by the converged-case test.** The Arnoldi route seeded with an
+exact eigenvector returns `(0, 0)` (breakdown). `_eigenpair_relative_residual`
+scored that as `0 / 1e-30 = 0`, so a zero vector "certified" on every gate that
+uses it: shift-invert, fallback, sparse, and the new raw gate. A zero or
+non-finite eigenvector now has infinite residual. The Arnoldi breakdown itself
+is not fixed here; it now fails closed.
+
+**Callers.**
+- No caller constructs `KrylovConfig()` without `method=`. The only
+  `dominant_eigenpair` default user is `dominant_eigenvalue`, which becomes
+  certified adaptive; its unit test mocks the eigenpair.
+- Changed: `workflows/linear.py` forwards `certify` from the runtime config.
+- Changed: `tools/comparison/ky_diagnostics.py` compares raw routes against time
+  integration by design. It passes `certify=False` explicitly and writes each
+  pair's `residual` and `certified` into its summary.
+- Unchanged: `CYCLONE/KINETIC/KBM/TEM_KRYLOV_DEFAULT` (shift-invert with a gated
+  fallback), the ETG runtime default (shift-invert with a gated Arnoldi
+  fallback), and `make_tables.py` (TEM/kinetic shift-invert).
+- `ETG_KRYLOV_DEFAULT` keeps `method="propagator"` and now fails closed; see
+  below. Its `continuation=True`/`continuation_selection` fields are read by
+  nothing.
+
+**ETG, ledger row `L-lin-etg`.** The artifact `docs/_static/etg_mismatch_table.csv`
+is written by `tools/artifacts/make_tables.py --case etg` with
+`ETG_SOLVER = "time"`: an RK4 runtime scan of `etg.toml` at Nl=24, Nm=8, with
+dt .00016, T=2, tmin 1 and z_index fit. `benchmarks/etg_linear_benchmark.py` also
+uses `solver="time"`. `ETG_KRYLOV_DEFAULT` is on neither path, so no Krylov pair
+sits behind the published number.
+
+The run was `plan/research/scripts/2026-09-13-certify-eigenpair/`
+(`etg_residuals.py`, `run_etg.sh`, per-cell `*.txt` with one `RESULT` line).
+Source was a detached clean `0cce177f6` worktree, one fresh process per cell,
+`nice -n 19`, 30-min guard. `ruff format` rewrapped the script after the run;
+the run hash was `4dab8c6e…` and the committed hash is `7fd99f5f…`, whitespace
+only. Every pair was re-checked against the matrix-free operator.
+
+| arm | ky=10 | ky=20 | ky=30 |
+|---|---|---|---|
+| generator scan (γ, ω) | 4.002631, −8.707053 | 6.186927, −18.527648 | 3.880504, −26.544553 |
+| tracked CSV (γ, ω) | 4.002765, −8.706666 | 6.186927, −18.527647 | 3.880680, −26.544902 |
+| time-integrated final state: residual at fitted λ / at its Rayleigh quotient (complex128) | 2.4e-4 / 4.5e-5 | 4.1e-6 / 1.9e-7 | 4.8e-5 / 1.1e-5 |
+| `ETG_KRYLOV_DEFAULT` (γ, ω, residual; gate 1.19e-4, complex64 seed, ≈2 s) | −3.017, −17.162, **0.989** | 3.858, −14.804, **0.990** | 0.224, −25.391, **0.982** |
+| runtime ETG default (shift-invert → Arnoldi fallback) | raises: 0.957, fallback 0.977 | raises: 1.000, fallback 0.995 | raises: 0.996, fallback 0.991 |
+| `KrylovConfig(method="adaptive")` | no pair within 30 min | not run | not run |
+
+Reading the table:
+- The scan reproduces the CSV to ≤4.5e-5 relative. The time-integrated modes are
+  near-eigenmodes, not certified pairs.
+- `ETG_KRYLOV_DEFAULT` returns wrong branches on every row.
+- The runtime ETG default already failed closed before this PR. 16/16 inner
+  solves were unconverged, with max relative inner residual 31.7–47.4.
+
+**Decision:** no published number moves and the ledger row is unchanged.
+`ETG_KRYLOV_DEFAULT` is not given `certify=False`: there is no reason to accept
+wrong-branch pairs. It is not switched to `adaptive` either, because adaptive
+produced no certified ETG pair within 30 min at ky=10. It now raises on use, and
+a comment records these residuals.
+
+Stopped state: the driver (PID 6389) was killed by the operator at
+21:36:57Z, after adaptive ky=10 hit its guard (rc=124); adaptive ky=20 was
+killed at start. No ETG process remains.
+
+**Tests.** Each selection ran in its own invocation.
+
+| Selection | Result |
+| --- | --- |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 88 passed (84 before; the finite-values test is replaced) |
+| `tests/integration/test_adaptive_eigenmodes.py` | 7 passed, 3 skipped (VMEC backend / eik cache) |
+| `tests/unit/linear/test_linear.py -k "krylov or eigen or propagator or arnoldi or power"` | 1 passed |
+| `tests/unit/linear/test_linear.py -k "krylov or shift or implicit"` | 8 passed |
+| `tests/validation/benchmarks/test_benchmarks_helpers.py test_benchmarking.py test_benchmark_contracts.py` | 114 passed |
+| `tests/unit/core/test_core_numerics.py` (the `*_KRYLOV_DEFAULT` assertions) | 50 passed |
+| `tests/integration/runtime/test_runtime_runner.py` | 167 passed |
+| `tests/unit/quasilinear/test_quasilinear.py -k krylov` | 1 passed |
+| `tests/validation/physics_gates/test_validation_gates.py -k demo_reports_the_eigenvalue` | 1 passed |
+| three `test_cli.py` runtime Krylov-default nodes | 3 passed |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k "ky_diagnostics or krylov"` | 4 passed |
+| `tests/unit/api/test_public_types.py` | 33 passed |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+New or changed tests:
+- A four-vector raw solve on the tiny operator raises for power, propagator and
+  Arnoldi, with a parsed residual above the parsed tolerance. Under
+  `certify=False` the same call returns a finite pair flagged `UNCERTIFIED` with
+  that residual.
+- A real converged pair certifies: the propagator seeded with an exact dense
+  eigenvector at dt 1e-3 reaches residual ≈9e-8 against a 1.19e-4 gate.
+- A zero eigenvector has infinite residual, and the Arnoldi route raises
+  `residual=inf`.
+- `KrylovConfig()`, `gkx.api.KrylovConfig` and the `dominant_eigenpair`
+  defaults resolve to adaptive with `certify=True`.
+- `certify=False` leaves the shift-invert gate in force.
+- The runtime runner forwards `certify=True`.
+- The Arnoldi flag-normalization fake now supplies an eigen-consistent operator.
+
+No other test's numbers changed.
+
+Line budgets: source 89409 → 89492 (+83), tests 88018 → 88130 (+112), tools
+77825 → 77839 (+14, `ky_diagnostics.py`); targets unchanged; no new source, test
+or tool module.
+
+Checks: pinned ruff 0.16.4 check/format (408 files); `mypy` as CI (mypy 2.3.1,
+184 source files, no issues); strict `python -m sphinx -W -b html docs` (build
+succeeded); `check_package_architecture_manifest.py`;
+`check_repository_size_manifest.py` (20.5 MB tracked); gitleaks 8.30.1 on the
+36 changed files (no leaks).
+
+Environment: local shared Mac (load 7–26), Python 3.11.14, JAX/jaxlib 0.10.2,
+SOLVAX 0.20.0, `PYTHONPATH=$PWD/src:$PWD JAX_ENABLE_X64=true GKX_X64=1
+MPLBACKEND=Agg JAX_PLATFORMS=cpu`, `pytest -q -o addopts='' -p no:cacheprovider`.
+
+Limitations and next:
+- The residual is not on a public result object.
+- The Arnoldi breakdown on an exact-eigenvector seed returns `(0, 0)`.
+- No Krylov route certifies ETG at Nl=24, Nm=8 on this deck: shift-invert inner
+  solves do not converge, and adaptive exceeded 30 min.
+- The runtime still seeds complex64, so the raw gates floor at 1.19e-4.
+- Next: an ETG preconditioner/σ study (with Q7), or an explicit ETG
+  `sparse_shift_invert` rung at n=18432 with σ from the time-integrated λ.
+
+## 2026-09-13 — Q3: velocity-truncation discriminators for the shared Nl24→32 growth change (evidence only)
+
+**Question (registered before running).** In the collisionless Cyclone s-α
+adiabatic-electron ITG control at ky=.55, Nm96, Nz96 (ntheta32, nperiod2,
+nkx=1), GKX and GX both change γ by ≈−24.7% from Nl24 (γ≈.0330) to Nl32
+(γ≈.0249). Hypothesis: ∇B-drift μ-space phase mixing with no Laguerre sink.
+Registered prediction: with `gradb=0` the Nl24→32 γ change is <1%; with
+`curvature=0` it persists; both persisting or both vanishing to be reported as
+such.
+
+**Source and environment.** `origin/main` `06606e404771b4c5217f07c284a9003e12d9c982`
+(#226 merged); `git archive` tarball SHA-256
+`a7fe0365d2d2ccc5e553704bda94971f33982e4c07c98c187b57c10e141bfea0`, staged at
+office `pop-os:/home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/src_stage`.
+`/home/rjorge/venvs/gkx-nl/bin/python` (Python 3.11.15, JAX 0.10.2, SOLVAX
+0.20.0), `gkx.__file__` in the stage, `jax.devices()` = `[CudaDevice(id=0)]`,
+x64 on (f64, as in the 2026-09-05 control, whose f32 variant was the marked
+exception). RTX A4000 **GPU0** (see occupancy). Env per run:
+`CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda XLA_PYTHON_CLIENT_PREALLOCATE=false
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg PYTHONPATH=$PWD/src:$PWD
+GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs`.
+
+**Protocol.** In-repo runner `tools/comparison/build_gx_parity_matrix.py`,
+unchanged; manifest `plan/research/scripts/2026-09-13-drift-ablation/manifest.toml`
+(Nm96, ky=[.550000011920929], dt .002, rk4, `fit_start_fraction` .7; runner
+defaults `mode_method="z_index"`, phi fit, batch ky; it also runs a half-time
+scan). Configurations: the tracked fixture
+`tools/comparison/fixtures/parity/cyclone_salpha_itg.toml` ("full") and copies
+that differ in exactly one line (`[terms] gradb = 0.0`, `[terms] curvature =
+0.0`, `[[species]] nu = 1e-3`, `[[species]] nu = 1e-2`). The runner ignores the
+manifest's `damp_ends_rate`; the fixtures leave `[time] damp_ends_rate` unset,
+so the absorber is `damp_ends_amp/dt` = .1/.002 = 50 (asserted in both CPU
+preflights). Command per run, sequential, one process per key, via
+`run_ablation.sh RUN_DIR 0 KEY...` (stops on nonzero exit or nonfinite γ/ω):
+`timeout --signal=TERM --kill-after=10s 1800s /usr/bin/time -v python
+tools/comparison/build_gx_parity_matrix.py --manifest
+plan/research/scripts/2026-09-13-drift-ablation/manifest.toml --cases KEY
+--stem RUN_DIR/results/KEY`.
+
+**Documented deviations.**
+1. *T=150 instead of the historical T=300* (coordinator, before any long run,
+   to halve GPU time): steps=75000, fit window [105,150] instead of [210,300];
+   the runner's half-time probe is then [52.5,75]. Basis: the 2026-09-13 GX
+   re-read found γ stationary from t≈100. The full-terms control was re-run on
+   current source at T=150: Nl24 .0328280 vs .0330097 at T300 on 2026-09-05
+   (−0.55%), Nl32 .0249958 vs .0248521 (+0.58%).
+2. *Drift ablations reported as non-discriminating; curvature runs skipped;
+   collision and Nl48 runs added* (lead, ≈15:58, after `gradb0_nl24` finished
+   and while `gradb0_nl32` ran). Removing the ∇B drift removes the toroidal ITG
+   itself (ω .50→.03, unsettled), so drift ablations cannot discriminate
+   truncation effects on this mode and are not read as confirming or refuting
+   the hypothesis. The supervisor (pid 224119) was sent SIGTERM at 15:58:52
+   between runs; `gradb0_nl32` finished under its own cap;
+   `curvature0_nl24`/`curvature0_nl32` never started. Mode-preserving
+   replacements at the same settings: species ν ∈ {1e-3, 1e-2} × Nl {24, 32},
+   then one collisionless full-terms Nl48 run. Prediction registered before
+   those runs: under a truncation-reflection mechanism the Nl24→32 γ gap
+   shrinks strongly with ν and γ(ν) extrapolates smoothly toward the
+   collisionless value.
+3. *GPU0 instead of GPU1*, by the coordinator's occupancy policy (below).
+
+**Collision operator (code reading at the pinned SHA, plus preflight).** With
+`[time] collision_operator` unset (`"none"`), `_resolve_config_collision_operator`
+returns `None` and the linear RHS keeps its built-in diagonal Lenard–Bernstein
+term, rate ν·(nu_laguerre·ℓ + nu_hermite·m + b) = ν·(2ℓ + m + b) with the
+fixture's `[collisions] nu_hermite=1, nu_laguerre=2`, plus
+`_collision_moment_correction` (the runtime assembly passes G/Jl/JlB/b). The
+collision weight is on only with `[physics] collisions = true` (fixture) and a
+nonzero species ν. The conservation properties of the correction were not
+tested here.
+
+**Preflights (not evidence).**
+- Drift CPU RHS check (`preflight.py`, office CPU, 10.5 s): term weights as
+  intended, absorber 50; on one fixed random state at ky .55/Nl24/Nm96 the
+  relative RHS change versus full is .207 (`gradb=0`) and .834
+  (`curvature=0`); the two ablations differ by .750.
+- Collision CPU RHS check (`preflight_collisions.py`, office CPU, 9.3 s):
+  collision weight 0/1/1 for ν 0/1e-3/1e-2, `params.nu` matches, built-in LB
+  path, absorber 50; relative RHS change 8.412427e-4 (ν=1e-3) and 8.412427e-3
+  (ν=1e-2), ratio 10.000000.
+- GPU runner path at steps=500: `preflight_full_nl24` exit 0 (11.65 s wall),
+  `preflight_nu1e-2_nl24` exit 0 (13.42 s); finite γ/ω at T=1 (transient).
+
+**GPU occupancy and selection.** Policy (coordinator): never preempt, signal or
+share; poll ≈5 min; first GPU (1 preferred, 0 acceptable) with no compute
+processes and <5% utilization on two consecutive polls; wait cap 3 h from
+14:38:33. Polls 1–10 (14:38:33–15:24:03): no eligible GPU. GPU0 held by
+another user's `run_collapse.py` (pid 147360, which also kept a 162 MiB context
+on GPU1) until between 14:58:57 and 15:03:58, then by the maintainer's lmx
+`gpu_bench.py` jobs; GPU1 at 99–100% throughout with the maintainer's vmex
+`validate_refinement.py` / `2D_Orszag_Tang_optimization.py` and lmx
+`gpu_bench.py` / `gpu_timing.py` / pytest jobs. Polls 11–12 (15:29:04,
+15:34:09): GPU0 0%, no compute apps → selected; rechecked 0 apps immediately
+before the GPU preflight and before launch. Batch 2: GPU0 eligible at 16:03:18
+and 16:09:57, rechecked before the preflight and launch. GPU1 was never
+eligible and was not used. An earlier background GPU1 watcher (local task) was
+stopped at the coordinator's request before any launch.
+
+**Results** (T=150, fit [105,150]; "half shift" = runner's relative change of
+the [52.5,75] estimate from the [105,150] estimate; "settled" = runner flag,
+|half shift| ≤ 5%; Δγ is from the next lower Nl of the same configuration;
+wall = `/usr/bin/time` process wall including the half-time scan).
+
+| key | ν | terms | Nl | γ | ω | half shift γ | half shift ω | settled | Δγ | wall | peak RSS KiB | device MB |
+|---|---:|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|
+| full_nl24 | 0 | full | 24 | .0328280 | .500108 | +.0174 | −.0056 | yes | — | 5:20.56 | 1239900 | 103.0 |
+| full_nl32 | 0 | full | 32 | .0249958 | .504821 | −.1399 | +.0097 | no | −23.86% | 8:25.91 | 1240436 | 53.8 |
+| full_nl48 | 0 | full | 48 | .0197718 | .496919 | +.0566 | +.0001 | no | −20.90% (32→48) | 12:18.46 | 1240352 | 93.3 |
+| gradb0_nl24 | 0 | gradb=0 | 24 | .0102031 | .026863 | +5.816 | +9.071 | no | — | 5:19.26 | 1243280 | 103.0 |
+| gradb0_nl32 | 0 | gradb=0 | 32 | .0139783 | .018382 | +1.731 | +3.879 | no | +37.0% | 8:19.39 | 1235656 | 53.8 |
+| curvature0_nl24, _nl32 | 0 | curvature=0 | 24, 32 | skipped | | | | | | | | |
+| nu1e-3_nl24 | 1e-3 | full | 24 | .0291274 | .497333 | +.0101 | −.0005 | yes | — | 5:55.29 | 1262808 | 103.0 |
+| nu1e-3_nl32 | 1e-3 | full | 32 | .0174118 | .501087 | −.0384 | −6.5e-5 | yes | −40.22% | 8:17.83 | 1250004 | 85.8 |
+| nu1e-2_nl24 | 1e-2 | full | 24 | .0174378 | .495769 | +2.4e-5 | +4.1e-6 | yes | — | 5:59.52 | 1262780 | 103.0 |
+| nu1e-2_nl32 | 1e-2 | full | 32 | .0171657 | .495705 | +2.3e-5 | +4.2e-6 | yes | −1.56% | 8:17.33 | 1249492 | 85.8 |
+
+**Result statements.**
+1. *Drift ablation: non-discriminating.* `gradb=0` removes the ITG itself (ω
+   .500→.027/.018, runner-unsettled with γ half shifts 5.8/1.7); its Nl24→32
+   change (+37%) says nothing about Laguerre truncation of the ITG.
+   `curvature=0` was not run. The registered drift prediction is therefore
+   neither confirmed nor refuted.
+2. *Collision prediction, as registered, is not supported by these points.*
+   The Nl24→32 gap shrinks at ν=1e-2 (−1.56%, both settled) but is larger at
+   ν=1e-3 (−40.22%, both settled) than collisionless (−23.86%), so it is not
+   monotone in ν over these two values. At Nl32, γ is .017166 (ν=1e-2),
+   .017412 (ν=1e-3) and .024996 (ν=0): γ(ν) does not extrapolate smoothly to
+   the collisionless Nl32 value.
+3. *The collisionless γ is not converged in Nl at Nl32.* Nl24/32/48 give
+   .0328/.0250/.0198 (−23.9%, then −20.9%; Nl32 and Nl48 runner-unsettled), so
+   the collisionless value used in (2) is itself a moving target. The three
+   settled collisional values with Nl above a ν-dependent threshold
+   (ν=1e-3 Nl32, ν=1e-2 Nl24 and Nl32) agree to 1.6% at .0172–.0174. This is
+   consistent with, but does not demonstrate, slow collisionless Laguerre
+   convergence toward that level, with weak collisions shortening it (Nl24
+   insufficient at ν=1e-3, sufficient at ν=1e-2).
+
+**Limitations.** T=150 only; for collisionless Nl32/48 the runner's half-time
+probe [52.5,75] lies in the transient (the GX Nl32 re-read showed
+instantaneous γ rising .02363→.02487 over t=100–300), so those two γ may be
+biased low by a few percent and their settled flag is uninformative. One
+late-window fit per run; no eigenvalue and no Laguerre spectrum (the runner
+returns no state). Only two ν values, at Nl ≤ 32; no ν→0 extrapolation; no
+collisional GX run. The ν=1e-2 FLR part ν·b reaches ≈.13 at b_max=12.7, above
+γ, so ν=1e-2 is a strong perturbation at large |θ|; the collisional γ is not
+established as the collisionless limit. Nl48 is a single rung; Nl64 not run.
+The JSON comparison columns are against the GX Nl16/Nm48/T150 shipped
+reference and are not matched controls. Timings are from a shared host with
+the other GPU busy; not benchmark-grade.
+
+**Artifacts** (`plan/research/scripts/2026-09-13-drift-ablation/`, 49 text
+files, 82 KB before `SHA256SUMS.txt`): `SHA256SUMS.txt` lists SHA-256 for every
+other file; its own SHA-256 is `74e7f834dd6ca2260161c6a42f22a2b9718207966280f0ec75d96178c9432ba0`. Key hashes: `manifest.toml`
+`c483306abe264eca78fe86c56fffaf7ce85646f0087ce55bcaffb3dad1438527` (as executed on office: `00e8d3ab18c2523ae5aefd55623e5377ee6f31d168285414ad8aa9e2736fb94d`),
+`summary.csv` `d2a9b50546a56b6df5ef8be20bae0a835bb6105a95571d349d0c103c4d9899d2`,
+`logs/supervisor.txt` `921e9b4f0b0dbb7ce0794456bb3855320ea4afb4ee8605ad50a864f79dd1ad3f`,
+`run_ablation.sh` `f6b0f219bc7ee40ed3ce5da077d01ce04c3b6ccae9137d3caba2397ad1e2a4b1`,
+`preflight.py` `bca22f5681610824aef437638f6c340aa133e41e1228369a376d887b6b736d83`,
+`preflight_collisions.py` `af2c3ddf063283eaaa6b5160510ea59b7a7379caf8bf19c6fca1984184dcdbe9`,
+`summarize.py` `bd658b45795b46adb80abf58a6d99062083833cbfa3fcbbda66f15992c185100`.
+PNGs written by the runner stay on office only.
+**Secret-scan note:** gitleaks 8.30.1 reported two `generic-api-key` false
+positives on the manifest `key` fields of the two never-started curvature=0
+cases. Rather than suppress the scanner, those two case blocks were removed
+from the committed manifest (a comment records that they were registered and
+skipped); the executed cases are unchanged, no inline scanner-exemption
+comment or `.gitleaksignore` entry is used, and gitleaks is clean on the
+directory.
+
+**Terminal job state.** Batch 1: supervisor 224119 (launched 15:35:07 via
+wrapper 224117) ran `full_nl24` (timeout 224124, python 224127), `full_nl32`
+(227264/227267) and `gradb0_nl24` (231307/231310), then was stopped by SIGTERM
+at 15:58:52; `gradb0_nl32` (233060/233063) exited 0 at ≈16:02:32. Batch 2:
+supervisor 237506 (`setsid`, 16:11:24) ran `nu1e-3_nl24` (237512/237515),
+`nu1e-3_nl32` (238722/238725), `nu1e-2_nl24` (239840/239843), `nu1e-2_nl32`
+(240728/240731) and `full_nl48` (242390/242393), `DONE` 16:52:13. All nine runs
+and both GPU preflights (223534…223542, 236877…236885) exited 0; no timeout, no
+nonfinite value. At 16:54:06 every listed PID was verified gone and no
+`build_gx_parity_matrix`/`run_ablation`/preflight process remained. Office
+cleanup: the source tarball and `src_stage/` were removed; `logs/` and
+`results/` (780 KB) are kept at
+`/home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq`. Local tarball removed.
+
+## 2026-09-14 — queue results recorded, merge chain, corrections
+
+Docs-only. Records the first queue batch in `plan.md` (status block, rows
+Q1/Q3/Q7/Q8/Q12, new rows Q14/Q15, §14 rules 8–9) and corrects earlier claims.
+
+**Merge integration.** Every parallel PR appends to this log, so each one
+conflicted with the others here. Ready PRs were integrated as one chain in
+merge order, each branch merging its predecessor with log entries kept in order:
+#228 `7d9d2b5d9` → #230 `b6208b42a` → #231 `1384001d2` → #229 `62c94773b` →
+#232 `7c8a76194` → #233 `f6976d5e9` → #234 `900c5c35c` → this PR. Shared
+`tools/package_architecture_manifest.toml` baselines were set to measured sums
+(tests 87826+192+15+112 = 88145; tools 77825+14+276 = 78115). CI runs on
+intermediate heads were cancelled to free saturated runners. `enforce_admins`
+is on: `--admin` refused a merge whose `ci-required` had not reported on the
+exact head, so each merge waits for that check. A size-check reading of
+22.3 MB during an unmerged index was an artifact (conflicted paths listed per
+stage); committed trees measure 20.6–20.9 MB.
+
+**Corrections.**
+- The review's single-chain ladder (`d6_ladder.py`, research note §3.5) ran at
+  ky=−0.1, not +0.3: with Nx=1, Ny=4 and y0=20 the +0.3 target resolves to
+  −0.1. Q7 reproduced 26 and 159 there and measured 366 at (32,8,16) and
+  stalls from (64,8,32) at ky=+0.3.
+- #234's first manifest used inline scanner-exemption comments for two
+  never-run case names; they were removed with the cases, and the default
+  collision term is now described as Lenard–Bernstein damping ν(m+2ℓ+b) plus
+  `_collision_moment_correction`, not a purely diagonal term.
+
+**Lane state.** Q7 (`evidence/preconditioner-bakeoff`, local `ef071e0a8`) and
+Q8 (`evidence/collisional-laguerre-convergence`, local `22d39e9ea`) resumed on
+2026-09-14 after the pause and will open their own PRs. The Q12 agent stalled
+after pushing a complete #233; its head was integrated as above. Two findings
+enter the queue: 11 finite-window gradient tests fail on unmodified `main` in
+float32 while CI runs them only in x64 (Q14), and residual/convergence status is
+not carried on result objects (Q15).
+
+**Addendum (2026-09-14, before merge).** Q8's first collisional rungs (local
+branch `evidence/collisional-laguerre-convergence`, GPU1, f64, T=150, all
+settled): ν=3e-3 gives γ .0234/.0175 at Nl 24/32, and ν=1e-3 at Nl48 gives
+.0200, up 15% from .0174 at Nl32 and next to the collisionless Nl48 .0198. The
+working reading "converged ≈.017, collisionless references ≈2× high" is
+therefore not established; the Q3 queue row and §0.5 were softened
+accordingly. The Sugama operator is restricted to its 2×4 basis, so the
+conserving-operator control (P3) cannot run on an Nl32×Nm96 state. #232 merged
+as `4460c1a8e`, landing #228, #229, #230 and #231 with it.
+
 ## 2026-09-14 — structured preconditioner bake-off on the exact operator (Q7, plan §5.1 L4)
 
 **Question.** Which structured right preconditioner for B = A − σI (GMRES on the exact

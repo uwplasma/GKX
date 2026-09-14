@@ -1,0 +1,76 @@
+{
+  "gate_index_include": false,
+  "description": "Linear growth rate and frequency parity between GKX and the reference comparison code, with matched velocity resolution and imported reference geometry.",
+  "manifest": "plan/research/scripts/2026-09-13-drift-ablation/manifest.toml",
+  "cases": [
+    {
+      "key": "full_nl48",
+      "order": 11,
+      "label": "Cyclone ITG s-alpha, all terms, collisionless, Nl48",
+      "configuration": "tools/comparison/fixtures/parity/cyclone_salpha_itg.toml",
+      "reference_output": "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc",
+      "reference_provenance": "GX Nl16 Nm48 shipped-deck reference; comparison column not a matched control",
+      "device": "tokamak",
+      "drive": "ITG",
+      "electrons": "adiabatic",
+      "field_model": "electrostatic",
+      "geometry": "s-alpha analytic",
+      "resolution": {
+        "Nl": 48,
+        "Nm": 96,
+        "Nz": 96,
+        "Ny": 34,
+        "dt": 0.002,
+        "steps": 75000,
+        "t_end": 150.0,
+        "fit_window": [
+          105.0,
+          150.0
+        ],
+        "half_time_probe": [
+          52.5,
+          75.0
+        ]
+      },
+      "reference_trace": {
+        "samples": 751,
+        "t_end": 150.0000071246177,
+        "nonfinite_values": 0
+      },
+      "cost": {
+        "gkx_scan_seconds": 490.729669873137,
+        "gkx_peak_host_rss_mb": 1110.1015625,
+        "gkx_peak_device_mb": 93.30419921875,
+        "reference_seconds": null,
+        "reference_peak_host_rss_mb": null,
+        "reference_peak_device_mb": null
+      },
+      "build_reproducibility_floor": null,
+      "summary": {
+        "settled_ky_count": 0,
+        "total_ky_count": 1,
+        "max_absolute_gamma_relative_difference_settled": NaN,
+        "peak_ky": 0.550000011920929,
+        "gamma_relative_difference_at_peak": -0.41634837412405484,
+        "omega_relative_difference_at_peak": -0.0031858406113630306
+      },
+      "rows": [
+        {
+          "case": "full_nl48",
+          "ky": 0.550000011920929,
+          "ky_reference": 0.550000011920929,
+          "gamma_reference": 0.033875983515556186,
+          "gamma_gkx": 0.019771772857001085,
+          "gamma_relative_difference": -0.41634837412405484,
+          "omega_reference": 0.498507642286255,
+          "omega_gkx": 0.4969194763943846,
+          "omega_relative_difference": -0.0031858406113630306,
+          "gamma_half_time_shift": 0.05656502877908262,
+          "omega_half_time_shift": 0.00010884342371036308,
+          "converged": false,
+          "within_build_reproducibility_floor": null
+        }
+      ]
+    }
+  ]
+}

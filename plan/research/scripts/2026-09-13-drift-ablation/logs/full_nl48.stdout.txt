@@ -1,0 +1,4 @@
+full_nl48                          settled 0/1 ky  max|d gamma|(settled)=nan  at peak ky=0.550: d gamma=-0.4163 d omega=-0.0032
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/full_nl48.json
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/full_nl48.csv
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/full_nl48.png
