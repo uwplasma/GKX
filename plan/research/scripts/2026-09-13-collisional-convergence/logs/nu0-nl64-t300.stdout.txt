@@ -1,0 +1,4 @@
+nu0-nl64-t300                      settled 0/1 ky  max|d gamma|(settled)=nan  at peak ky=0.550: d gamma=-0.5209 d omega=-0.0209
+saved /home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/results/nu0-nl64-t300.json
+saved /home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/results/nu0-nl64-t300.csv
+saved /home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/results/nu0-nl64-t300.png

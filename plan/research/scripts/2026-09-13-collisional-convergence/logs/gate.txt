@@ -1,0 +1,22 @@
+gate pid 310799 host pop-os start 2026-09-13T19:07:28-05:00 wait cap 10200s
+poll 2026-09-13T19:07:28-05:00 waited 0s idle [] previous [] gpus 0, 100 %, 5397 MiB;1, 0 %, 949 MiB; apps GPU-c64146c9-227c-496f-974a-d1a66ec55673, 302336, /home/rjorge/venvs/vmex-gpu/bin/python, 5374 MiB;GPU-602c12ca-df78-5f19-8e2b-ad946b7a030a, 303210, /home/rjorge/venvs/lmx-gpu/bin/python, 454 MiB;
+poll 2026-09-13T19:12:29-05:00 waited 300s idle [1 0] previous [] gpus 0, 0 %, 15 MiB;1, 0 %, 487 MiB; apps 
+OPERATOR 2026-09-13T19:17:17-05:00: maintainer pause; gate 310799 (in sleep 300 after an idle [1 0] poll, nothing launched) killed by TERM/KILL of its process group; verified at 19:17:29 no gate/supervisor/runner/gx process and no compute process on either GPU
+OPERATOR 2026-09-14 resume: staged scripts/manifest replaced by the committed renamed versions (collisionless-nl64 -> nu0-nl64) and the reordered gate (Nl48, Nl64, Nl16, GX, then T=300); source stays 578b97074
+gate pid 370388 host pop-os start 2026-09-14T07:01:08-05:00 wait cap 9600s
+poll 2026-09-14T07:01:08-05:00 waited 0s idle [1 0] previous [] gpus 0, 0 %, 15 MiB;1, 0 %, 487 MiB; apps 
+poll 2026-09-14T07:06:08-05:00 waited 300s idle [1] previous [1 0] gpus 0, 0 %, 1530 MiB;1, 0 %, 487 MiB; apps GPU-c64146c9-227c-496f-974a-d1a66ec55673, 373570, /home/rjorge/venvs/lmx-gpu/bin/python, 1198 MiB;GPU-c64146c9-227c-496f-974a-d1a66ec55673, 374047, /home/rjorge/venvs/lmx-gpu/bin/python, 304 MiB;
+launch gkx gpu 1 keys nu3e-3-nl48 nu1e-2-nl48 nu0-nl64 nu1e-3-nl16 nu3e-3-nl16 nu1e-2-nl16 2026-09-14T07:06:08-05:00
+supervisor exit 0 2026-09-14T07:57:07-05:00
+poll 2026-09-14T07:57:08-05:00 waited 300s idle [1] previous [] gpus 0, 0 %, 209 MiB;1, 0 %, 487 MiB; apps GPU-c64146c9-227c-496f-974a-d1a66ec55673, 438621, /home/rjorge/venvs/lmx-gpu/bin/python, 186 MiB;
+poll 2026-09-14T08:02:08-05:00 waited 600s idle [1 0] previous [1] gpus 0, 0 %, 15 MiB;1, 0 %, 487 MiB; apps 
+launch gx gpu 1 keys gx-nu1e-2-nl24 gx-nu1e-2-nl32 gx-nu1e-2-nl32-nohyper 2026-09-14T08:02:08-05:00
+supervisor exit 1 2026-09-14T08:02:13-05:00
+ABORT supervisor exit 1
+OPERATOR 2026-09-14T08:0x: first GX launch exited 127 (gx RUNPATH /home/rjorge/local/install/* no longer exists: libcutensor/nccl/openmpi/hdf5/gsl missing); gate aborted as designed; relaunching with phases [gkx t300] for the unsettled nu0-nl64 T=300 rerun while GX libraries are investigated
+gate pid 443420 host pop-os start 2026-09-14T08:04:26-05:00 wait cap 8700s phases [gkx t300]
+poll 2026-09-14T08:04:26-05:00 waited 0s idle [1 0] previous [] gpus 0, 0 %, 15 MiB;1, 0 %, 487 MiB; apps 
+poll 2026-09-14T08:09:26-05:00 waited 300s idle [1 0] previous [1 0] gpus 0, 0 %, 15 MiB;1, 0 %, 487 MiB; apps 
+launch gkx t300 gpu 1 keys nu0-nl64-t300 2026-09-14T08:09:26-05:00
+supervisor exit 0 2026-09-14T08:37:22-05:00
+ALL DONE 2026-09-14T08:37:22-05:00
