@@ -96,7 +96,7 @@ the repository rules an agent must follow.
 | Q14 | float32 window-gradient tolerances | 11 finite-window gradient tests fail on unmodified `main` in float32 (found in #231); CI runs them only in x64 while f32 is the documented default precision. Decide per test: tighten the method, loosen the tolerance with a derivation, or declare f64 in scope, and run the chosen set in CI | — | CPU |
 | Q15 | solver status on results | #230 and #233 surface inner/outer residuals in status and errors only: `RuntimeLinearResult` has no residual/certified fields and implicit/IMEX scans have no convergence channel. Add them without silently returning uncertified values | Q1, Q12 merged | CPU |
 | Q16 | eigen ℓ-spectrum of the ky=.55 mode | §0.5 (ii): the certified adaptive eigenpair (not a time fit) at Nl {24, 32, 48, 64} collisionless and ν ∈ {1e-3, 3e-3, 1e-2}, Nm96, reporting λ, residual and the Laguerre spectrum of the eigenvector; explains Q8's non-monotone small-ν ladders (branch change or μ-space recurrence) and whether a collisionless limit exists at this ky | Q6 merged, Q8 recorded | office CPU/GPU |
-| Q17 | GX matched controls on the rebuilt toolchain | Q8 P4: first confirm the rebuilt libraries reproduce the shipped Cyclone deck with both GX binaries (787eb014 and pristine upstream 3865a537; reference γ≈.0346, ω≈.498 at ky=.55) and the repaired 96a53403 parity binary; then run Q8's three `vnewk` decks (kept in its `gx/` directory) | GX verification passed | office GPU, idle only |
+| Q17 | GX matched controls on the rebuilt toolchain | Q8 P4 — **in progress**: the rebuilt libraries are verified (Cyclone and Nl24 outputs bitwise identical to pre-deletion runs; log 2026-09-14 "queue update"); run Q8's `vnewk` decks (kept in its `gx/` directory) at Nl 24/32, with the GX `vnewk` ↔ GKX ν normalization derived from source | GX verification passed (done) | office GPU, idle only |
 | Q18 | reference route for runtime vs `gkx.prepare` | #239 found the prepared (captured-constant) and runtime (eager-scan) nonlinear routes differ at roundoff (f32 ≤2.1e-7, two near-cancelling diagnostics O(1)). Choose one as the reference, give the other its operand placement or declare and test the tolerance, and bisect `_run_dynamic_raw`'s in-graph setup only if N1 is revisited | Q13 merged | CPU |
 | Q19 | off-chain rows of supplied states | Q6 follow-up (a): zero the off-chain rows of a user `initial_state` or restart on linked runs, as GX masks after `restart_read`; test free-energy and spectrum sums before and after | Q6 merged | CPU |
 | Q20 | cross-code linear Cyclone controls | §2.4: matched adiabatic-electron Cyclone s-alpha ky scans with declared resolution ladders in GS2 8.2.1 and stella v1.0 (office CPU), gyaradax (office GPU) and GX, against GKX's certified eigenpairs; resolve the unexplained ≈2× stella/GS2 γ gap on the install checks first (Miller vs s-alpha, `fexpr`/`bakdif`, normalization); record wall time to a converged γ per code | — (*parallel*) | office CPU, GPU when idle |
@@ -267,8 +267,9 @@ what this plan commits to so that GKX is not merely at parity.
 **Installed for comparison (2026-09-14; inventory and commands in `plan/log.md`).**
 On office: GS2 8.2.1 and stella v1.0, built and passing their shipped linear tests (v1.0
 exits with status 2 after writing outputs, a known format-string bug); gyaradax with a
-CUDA-12 venv, not yet run on a GPU; the GX runtime toolchain rebuilt, with the GX
-physics check pending an idle GPU. On the Mac: source clones of GYACOMO, GKW, gacode (CGYRO)
+CUDA-12 venv, not yet run on a GPU; the GX runtime toolchain rebuilt, and its
+Cyclone and Nl24 outputs are bitwise identical to office runs made before the libraries
+were deleted. On the Mac: source clones of GYACOMO, GKW, gacode (CGYRO)
 and upstream GX. The install-check values of GS2 and stella are not like-for-like and
 disagree by ≈2× in γ, so no cross-code number from them is cited until Q20 matches the
 setups.
