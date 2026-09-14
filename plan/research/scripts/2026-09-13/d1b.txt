@@ -1,0 +1,18 @@
+shape (1, 4, 8, 1, 8, 16) n 4096 kx grid [0.0, 0.2513, 0.5027, 0.754, -1.0053, -0.754, -0.5027, -0.2513] covered kx indices [0, 1, 2, 6, 7]
+dealias kx row (ky sel) [1, 1, 1, 1, 1, 1, 1, 1]
+rows covered=2560 uncovered=1536 | nnz Acc=122045 Acu=0 Auc=0 Auu=11553 | ||Acu||_max=0.00e+00 ||Auc||_max=0.00e+00
+Auu diagonal only? off-diag nnz=10017; diag real range [0.00e+00,0.00e+00] imag range [-10.948,4.976]
+seed norm fraction on uncovered rows = 0.000e+00
+  eig +0.115621-0.241179j  |eig-sigma|=0.0467 uncovered-row weight=1.027e-31
+  eig +0.000000-0.285794j  |eig-sigma|=0.0931 uncovered-row weight=1.000e+00
+  eig +0.000000-0.285794j  |eig-sigma|=0.0931 uncovered-row weight=1.000e+00
+  eig +0.000000-0.277311j  |eig-sigma|=0.0931 uncovered-row weight=1.000e+00
+  eig +0.000000-0.277311j  |eig-sigma|=0.0931 uncovered-row weight=1.000e+00
+  eig +0.000000-0.272878j  |eig-sigma|=0.0935 uncovered-row weight=1.000e+00
+  eig +0.000000-0.272878j  |eig-sigma|=0.0935 uncovered-row weight=1.000e+00
+  eig +0.000000-0.293575j  |eig-sigma|=0.0937 uncovered-row weight=1.000e+00
+  eig +0.000000-0.297009j  |eig-sigma|=0.0942 uncovered-row weight=1.000e+00
+  eig +0.000000-0.297009j  |eig-sigma|=0.0942 uncovered-row weight=1.000e+00
+covered block nearest eigs: +0.115621-0.241179j; -0.021165-0.289326j; -0.021450-0.290317j; -0.018880-0.253518j; +0.046613-0.175350j; +0.046281-0.174922j
+       20.55 real         8.05 user         1.23 sys
+exit 0
