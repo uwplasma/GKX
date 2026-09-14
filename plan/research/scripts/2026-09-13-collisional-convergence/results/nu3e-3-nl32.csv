@@ -1,0 +1,2 @@
+case,ky,gamma_reference,gamma_gkx,gamma_relative_difference,omega_reference,omega_gkx,omega_relative_difference,gamma_half_time_shift,omega_half_time_shift,converged,within_build_reproducibility_floor
+nu3e-3-nl32,0.550000011920929,0.033875983515556186,0.017487290016205907,-0.48378502403699747,0.498507642286255,0.495787430297559,-0.00545671070601958,-0.00020826226903273895,-3.7397972969120095e-05,True,

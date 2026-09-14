@@ -915,7 +915,13 @@ recursive = true
 # routes pass the shift-invert outer residual gate or raise; certify=False is the
 # explicit opt-out; a zero eigenvector has infinite residual; KrylovConfig and
 # dominant_eigenpair default to adaptive; ETG_KRYLOV_DEFAULT records why it fails.
-baseline = 89492
+# 89492 -> 89618: eigen solves restricted to the linked-chain modes (Q6, plan
+# 5.1 L3). One mask helper derived from the linked gather metadata (with the
+# conjugate-mirror rule of the linked derivative), projection of seeds, Arnoldi,
+# power and inner-GMRES vectors, a seed guard, and covered-column assembly in
+# the sparse route. Most of the lines are the docstrings that state why modes
+# outside every chain are decoupled; target unchanged.
+baseline = 89618
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1095,9 +1101,15 @@ recursive = true
 # +112: raw routes fail closed with residual and tolerance or are flagged under
 # certify=False, a real converged propagator pair certifies, a zero eigenvector
 # never certifies, adaptive defaults, and the opt-out leaves shift-invert gated.
+# 88145 -> 88396: Q6 linked-chain eigen tests (plan 5.1 L3). A small selected-ky
+# linked case, the mask/decoupling contracts (including the two-sided conjugate
+# mirror), covered-column sparse assembly against the full assembly, zero
+# off-chain weight on every route and the inner solve, the seed guard, the
+# Nx=8 Cyclone pilot identity, and the moved line of the one allowlisted
+# unpinned contraction; target unchanged.
 # +32: the runtime HLO route lowers eager scan-body closures as arguments, not
 # the constants a jit embeds, in the existing profiling owner.
-baseline = 88177
+baseline = 88428
 target = 35000
 
 [[line_budget_policy.counts]]

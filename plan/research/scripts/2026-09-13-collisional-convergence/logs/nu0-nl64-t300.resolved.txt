@@ -1,0 +1,1 @@
+resolved nu0-nl64-t300: config=tools/comparison/fixtures/parity/cyclone_salpha_itg.toml Nl=64 Nm=96 steps=150000 dt=0.002 method=rk4 species_nu=0.0 params_nu=[0.0] collision_operator='none' terms.collisions=0.0 nu_hermite=1.0 nu_laguerre=2.0 hypercollisions_kz=1.0 hypercollisions_const=0.0 terms.hypercollisions=1.0 end_damping_strength=50

@@ -1,0 +1,5 @@
+gx supervisor pid 441963 host pop-os gpu 1 start 2026-09-14T08:02:08-05:00 keys: gx-nu1e-2-nl24 gx-nu1e-2-nl32 gx-nu1e-2-nl32-nohyper
+gx-nu1e-2-nl24 start 2026-09-14T08:02:08-05:00 input sha b3ea3f4e474a85b0b6eb939f2e3f2293701bbb8297b9a1e91c7671e76d46b281
+gx-nu1e-2-nl24 timeout pid 441977 gx pids 
+gx-nu1e-2-nl24 exit 127 reason completed end 2026-09-14T08:02:13-05:00
+STOP at gx-nu1e-2-nl24

@@ -1,0 +1,80 @@
+# Independent GX velocity-refinement control, matched to GKX Nl32/Nm96/T300.
+# Keep baseline ntheta32/Nz96, dt.002 and fixed end-damping rate50.
+# This test uses a Boltzmann adiabatic electron response.
+
+ debug = false
+
+[Dimensions]
+ ntheta = 32            # 96 total points at nperiod=2
+ nperiod = 2            # number of 2pi segments along field line is 2*nperiod-1
+ nky = 2                # isolated linear ky=.55 control
+ nkx = 1                # number of (de-aliased) fourier modes in x
+
+ nhermite = 96          # number of hermite moments (v_parallel resolution)
+ nlaguerre = 32         # number of laguerre moments (mu B resolution)
+ nspecies = 1           # number of evolved kinetic species (adiabatic electrons don't count towards nspecies)
+
+[Domain]
+ y0 = 1.8181817787737895 # reciprocal of float32 ky=.550000011920929
+ boundary = "linked"    # use twist-shift boundary conditions along field line
+
+[Physics]
+ beta = 0.0                      # reference normalized pressure, beta = n_ref T_ref / ( B_ref^2 / (8 pi))
+ nonlinear_mode = false          # this is a linear calculation
+
+[Time]
+ fixed_dt = true        # keep A/dt=50 rather than allowing a CFL-dependent rate
+ dt = 0.002 # Matched fixed damping rate: .1/.002=50.
+ t_max = 150.0          # matched nonlinear-free linear control
+ scheme = "rk4"         # use RK4 timestepping scheme (with adaptive timestepping)
+
+[Initialization]
+ gaussian_init = true            # initial perturbation is a gaussian in theta
+ init_field = "density"          # initial condition set in density
+ init_amp = 1.0e-10              # amplitude of initial condition
+
+[Restart]
+ restart = false
+ restart_with_perturb = false
+ append_on_restart = false
+ save_for_restart = false
+
+[Geometry]
+ geo_option = "s-alpha"          # use s-alpha analytical model geometry
+ eps = 0.18                      # inverse aspect ratio of flux surface, r/R
+ Rmaj = 2.77778                  # major radius of center of flux surface, normalized to L_ref
+ qinp = 1.4                      # safety factor
+ shat = 0.8                      # magnetic shear
+ shift = 0.0                     # shafranov shift
+
+# it is okay to have extra species data here; only the first nspecies elements of each item are used
+[species]
+ z     = [ 1.0,      -1.0     ]         # charge (normalized to Z_ref)
+ mass  = [ 1.0,       2.7e-4  ]         # mass (normalized to m_ref)
+ dens  = [ 1.0,       1.0     ]         # density (normalized to dens_ref)
+ temp  = [ 1.0,       1.0     ]         # temperature (normalized to T_ref)
+ tprim = [ 2.49,       0.0     ]        # temperature gradient, L_ref/L_T
+ fprim = [ 0.8,       0.0     ]         # density gradient, L_ref/L_n
+ vnewk = [ 1.0e-2,    0.0     ]         # collision frequency
+ type  = [ "ion",  "electron" ]         # species type
+
+[Boltzmann]
+ add_Boltzmann_species = true    # use a Boltzmann species
+ Boltzmann_type = "electrons"    # the Boltzmann species will be electrons
+ tau_fac = 1.0                   # temperature ratio, T_i/T_e
+
+[Dissipation]
+ closure_model = "none"          # no closure assumptions (just truncation)
+ hypercollisions = false         # use hypercollision model
+
+[Diagnostics]
+ nwrite = 100
+ omega  = true                  # compute and write growth rates and frequencies
+ free_energy = true             # compute and write free energy spectra (Wg, Wphi, Phi**2)
+ fluxes = true                  # compute and write flux spectra (Q, Gamma)
+ fields = false                 # write fields on the grid
+ moments = false                # write moments on the grid
+
+[Expert]
+ damp_ends_amp = 0.1
+ damp_ends_widthfrac = 0.125
