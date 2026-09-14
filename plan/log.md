@@ -12548,3 +12548,13 @@ after pushing a complete #233; its head was integrated as above. Two findings
 enter the queue: 11 finite-window gradient tests fail on unmodified `main` in
 float32 while CI runs them only in x64 (Q14), and residual/convergence status is
 not carried on result objects (Q15).
+
+**Addendum (2026-09-14, before merge).** Q8's first collisional rungs (local
+branch `evidence/collisional-laguerre-convergence`, GPU1, f64, T=150, all
+settled): ν=3e-3 gives γ .0234/.0175 at Nl 24/32, and ν=1e-3 at Nl48 gives
+.0200, up 15% from .0174 at Nl32 and next to the collisionless Nl48 .0198. The
+working reading "converged ≈.017, collisionless references ≈2× high" is
+therefore not established; the Q3 queue row and §0.5 were softened
+accordingly. The Sugama operator is restricted to its 2×4 basis, so the
+conserving-operator control (P3) cannot run on an Nl32×Nm96 state. #232 merged
+as `4460c1a8e`, landing #228, #229, #230 and #231 with it.

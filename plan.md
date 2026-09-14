@@ -80,7 +80,7 @@ the repository rules an agent must follow.
 |---|---|---|---|---|
 | Q1 | `fix/inner-solve-diagnostics` | §5.1 L1: inner-solve statistics surfaced; `shift_solve_method` no longer a recompile key; `implicit_maxiter` counts iterations — **done, #230** (no test number changed; 76 recorded implicit/IMEX solves converge within 8 iterations) | — (*parallel*) | CPU |
 | Q2 | `evidence/exact-shift-invert-ladder` | §5.1 L2: exact sparse reference ladder to production single-chain size — **done, #232**: exact route fastest only below n≈1e4; the runtime default `adaptive` route certifies the production pair (n=73728) in 761 s on CPU | — (*parallel*) | office CPU, ≤2 h |
-| Q3 | `evidence/laguerre-drift-ablation` | §0.5 (i): `gradb=0` / `curvature=0` at Nl 24/32, Nm96, current source — **done, #234**: `gradb=0` removes the ITG itself (ω .50→.03), so drift ablation does not discriminate; collisionless γ .0328/.0250/.0198 at Nl 24/32/48 (unsettled past 24); species ν=1e-2 gives .0174/.0172 at Nl 24/32 and ν=1e-3 .0291/.0174 — the collisionless references at this ky may be unconverged by ~2× (Q8 tests it) | — (*parallel*) | office GPU, ≤2.5 h |
+| Q3 | `evidence/laguerre-drift-ablation` | §0.5 (i): `gradb=0` / `curvature=0` at Nl 24/32, Nm96, current source — **done, #234**: `gradb=0` removes the ITG itself (ω .50→.03), so drift ablation does not discriminate; collisionless γ .0328/.0250/.0198 at Nl 24/32/48 (unsettled past 24); species ν=1e-2 gives .0174/.0172 at Nl 24/32 and ν=1e-3 .0291/.0174. Q8's first rungs do not support a converged ≈.017: ν=1e-3 rises 15% from Nl32 to Nl48 (.0174→.0200, next to the collisionless Nl48 .0198) and ν=3e-3 gives .0234/.0175 at Nl 24/32, so no Nl-converged growth rate is established and the status of the collisionless references at this ky stays open (Q8) | — (*parallel*) | office GPU, ≤2.5 h |
 | Q4 | `perf/hermitian-completion-once` | §5.3 N0+N1: HLO-count ledger and one Hermitian completion per step — **done, #231**: N0 adopted; N1 rejected (bitwise-neutral, but 2.3–2.7× more bytes on the captured-constant runtime route) | — (*parallel*) | CPU |
 | Q5 | `chore/solvax-pin` | housekeeping: align `requirements.txt` with `pyproject.toml` — **done, #229**: unused file deleted; floor stays `solvax>=0.12.0` with first-appearance evidence | — (*parallel*) | none |
 | Q6 | `fix/eigen-covered-subspace` | §5.1 L3 | Q1 merged | CPU |
@@ -678,8 +678,11 @@ so drift ablations do not discriminate truncation effects on this mode; with
 species ν=1e-2 the Nl24→32 γ change is −1.6% (.0174→.0172), with ν=1e-3 it is
 −40.2% (.0291→.0174), and the collisionless sequence Nl24/32/48 is
 .0328/.0250/.0198 (Nl32 and Nl48 not settled by the runner's half-time probe),
-so the collisionless growth rate is still moving past Nl32 toward the
-collisional values.
+so the collisionless growth rate is not converged in Nl up to 48. Q8's first
+collisional rungs do not yet establish a converged value either: ν=1e-3 rises
+from .0174 at Nl32 to .0200 at Nl48, next to the collisionless Nl48 value, and
+ν=3e-3 gives .0234/.0175 at Nl 24/32; the ν=3e-3 and 1e-2 Nl48 rungs, Nl16,
+collisionless Nl64 and the GX `vnewk` runs decide it.
 
 Use the [convergence report](plan/research/2026-09-06_hermite_laguerre_convergence.md)
 as the investigation protocol, with matched contracts below:
