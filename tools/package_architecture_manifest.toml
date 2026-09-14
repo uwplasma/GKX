@@ -1109,7 +1109,10 @@ recursive = true
 # unpinned contraction; target unchanged.
 # +32: the runtime HLO route lowers eager scan-body closures as arguments, not
 # the constants a jit embeds, in the existing profiling owner.
-baseline = 88428
+# +51: Q14. The window-gradient matrix checks its float32 adjoint against a
+# float64 centered difference, with the roundoff bound derived in plan/log.md,
+# and the precision banner no longer lists that matrix; no new test.
+baseline = 88479
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -13299,3 +13299,105 @@ to find which piece keeps XLA:CPU from the N1 layout, HLO-only. Or go to N3, who
 layout removes the transposes that choice acts on. Separately, the prepared and runtime
 routes disagree at roundoff. Choosing one as the reference, and giving `gkx.prepare` the
 runtime's operand placement, is a correctness question, not a speed one.
+
+## 2026-09-14 — Q14: float32 window-gradient tolerances (`test/f32-window-gradients`)
+
+**Outcome: the 11 failures are a float64-scale finite-difference reference, not a
+float32 adjoint bug. No `src/` change.** The float32 reverse-mode gradient of every
+matrix case agrees with the float64 gradient to at most 5.7e-6 (48 float32 ulps).
+What failed is the centered difference used as its reference, which is
+roundoff-limited in float32 at steps chosen for float64. Under float32 the ten
+matrix cases now check the float32 adjoint against the same centered difference
+evaluated in float64 in the same process. The checkpoint parity test keeps 1e-12
+in float64 and uses a derived float32 bound. CI runs all 11 in float32, and the
+float64 runs are unchanged.
+
+**Reproduction (unmodified `ccdd4bf12`, head of the merge chain, which contains
+main).** `JAX_ENABLE_X64=false GKX_X64=0 pytest -o addopts= -m "not slow" -rf
+tests/unit/nonlinear/test_nonlinear_helpers_extra.py
+tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py` gives
+**11 failed, 108 passed**. That is the Q4 smoke's pair of owners without Q4's two new
+tests. The failures are `test_window_gradient_matches_centered_finite_difference`
+for all ten `COVERAGE_MATRIX` cases, plus
+`test_block_checkpointed_window_matches_plain_reverse_pass`.
+
+**Why the step cannot be fixed in float32.** For a window value Q(p) and relative
+step r = h/|p|, the centered difference error is
+
+|D_h − Q'| / |Q'| ≤ T(h) + E / (r·S),  with S = |p·Q'/Q|,
+
+where E ≥ ε32 = 1.19e-7 is the relative forward roundoff of Q.
+- T(h), the truncation, measured by the same sweep in float64 where roundoff is negligible, is ≤ 3.4e-6 up to r = 0.1.
+- These windows are weakly sensitive to their parameters: S runs from 2.7e-4 (hypercollision rate) to 0.62.
+- At the float64 test steps the floor ε32/(rS) predicts 1e-2 to 1 (rk2: 1.9e-2 against 1.3e-2 observed; custom ν: 0.8 against 1.2).
+- Even at r = 0.1, the float32 sweep's best errors are 6.8e-4 (custom ν) and 8.0e-3 (hypercollision).
+
+Tightening the step would therefore need per-case tolerances from 1e-4 to 1e-2.
+It was rejected for a reference that is precise in both precisions.
+
+**Float64 reference.** `_float64_centered_difference` rebuilds grid, seed and
+parameters inside `jax.enable_x64(True)`, and asserts the evaluated values are
+float64. GKX reads `jax.config` at call time (`operators/linear/params.py`
+`_x64_enabled`). In a float32 process the reference is **bitwise equal** to the
+pure-x64 centered difference for all ten cases. The next float32 evaluation is
+float32 and bitwise equal to a fresh float32 run. The float64 assertion holds the
+reference within 1e-6 of the exact derivative; measured against the x64 adjoint it
+is within 5.8e-11 or better. The float32 bound is therefore rtol = 1e-6 +
+`F32_WINDOW_ROUNDOFF`, with `F32_WINDOW_ROUNDOFF` = 2.5e-5. That is 4.4× the
+largest measured float32 roundoff, max(|g32/g64 − 1|, |Q32/Q64 − 1|) = 5.66e-6, with
+the margin for another CPU's fusion choices. It still discriminates: the rk2 and rk3
+gradients differ by 7.3e-5.
+
+| test (f32) | S = \|pQ'/Q\| | before: \|AD−FD\|/\|FD\| vs rtol | after: \|AD32−FD64\|/\|FD64\| vs rtol | decision | derivation / reason |
+|---|---:|---|---|---|---|
+| baseline_es_rk2 | 6.1e-2 | 1.33e-2 vs 1e-6 | 1.52e-6 vs 2.6e-5 | (a) f64 reference | FD floor ε32/(rS)=1.9e-2; adjoint roundoff bound |
+| baseline_es_rk3 | 6.1e-2 | 1.39e-2 vs 1e-6 | 1.53e-6 vs 2.6e-5 | (a) | same |
+| baseline_es_rk4 | 6.1e-2 | 3.97e-2 vs 1e-6 | 1.48e-6 vs 2.6e-5 | (a) | same |
+| multispecies_kinetic_electrons | 8.1e-2 | 2.55e-2 vs 1e-6 | 5.66e-6 vs 2.6e-5 | (a) | largest adjoint roundoff (48 ulps) sets the bound |
+| multispecies_two_ions | 4.1e-2 | 2.24e-2 vs 1e-6 | 1.26e-6 vs 2.6e-5 | (a) | same |
+| electromagnetic_d_beta | 2.8e-2 | 3.25e-3 vs 1e-6 | 2.98e-7 vs 2.6e-5 | (a) | same |
+| electromagnetic_d_drive | 6.2e-2 | 1.57e-2 vs 1e-6 | 1.81e-6 vs 2.6e-5 | (a) | same |
+| custom_collisions_d_nu | 4.5e-3 | 1.20 vs 1e-6 | 1.87e-6 vs 2.6e-5 | (a) | FD floor ε32/(rS)=0.8 at h=1e-5 |
+| hypercollisions_d_nu_hyper_m | 2.7e-4 | 4.46e-2 vs 1e-6 | 1.99e-6 vs 2.6e-5 | (a) | FD floor 0.2 at h=1e-3; best f32 step still 4e-3 |
+| combined_ms_em_coll_hyper_rk3 | 0.62 | 3.80e-3 vs 1e-6 | 1.76e-6 vs 2.6e-5 | (a) | same as baseline |
+| block_checkpointed vs plain | — | 1.90e-7 (value), 1.46e-7 (grad) vs 1e-12 | same vs 5.0e-5 | (b) loosen in f32 only | two compilations of one arithmetic each lie within F32_WINDOW_ROUNDOFF of the exact window, so within 2× of each other; f64 keeps 1e-12 (measured 4.1e-16) |
+
+No test was declared x64-only. The float64 tolerances and steps are unchanged, and
+no physics number moved. `tests/conftest.py`'s precision banner no longer lists
+the window AD/FD matrix. Its 17-test count is kept as the #217 history, and the
+remaining default-precision failures outside this matrix were not re-measured.
+
+**CI.** A new step in `python-floor`, "Default-f32 nonlinear window-gradient
+matrix", runs the 11 tests with `JAX_ENABLE_X64=false GKX_X64=0`. It sits next to the
+existing f32 compressed-gradient step; that job completed in about two minutes on
+the last green main run. `nonlinear-core` and wide coverage still run the same
+tests in float64. Risk: this is the first Linux x86 float32 run of the matrix
+in-process. The #196 YNN crash class is f32-only, but locally (jaxlib 0.10.2,
+arm64) the matrix did not reach it.
+
+**Counts after the change.**
+- float32 CI selection: 11 passed; whole `test_nonlinear_helpers_extra.py`: 82 passed.
+- float64 selection: 11 passed; whole file: 82 passed.
+- `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py`: 152 passed.
+- mypy: no issues in 184 source files.
+- ruff 0.16.4 check and format: pass (430 files).
+- Architecture manifest: tests +51 (88428→88479), no new test file.
+
+**Commands.** `python measure.py <test module> <json>` in each precision records, per
+case: value; eager and jitted AD; the test-form and actual-step centered differences;
+a 2- and 4-point step sweep over r ∈ [1e-5, 1e-1]; blocked vs plain.
+`python ref64.py <test module> f64.json f32.json` in float32 runs the in-process
+float64 reference check. Scratch evidence (session-local, SHA-256 prefixes):
+`measure.py` b8e1ac5cd7d7…ca2e, `ref64.py` 478b81966711…61b4, f32 JSON
+1eb6b856e95e…70c7, f64 JSON 7d755f58c29a…203a, reproduction log
+86e0d85a8e95…b5c0.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, the review venv, `PYTHONPATH=<tree>/src:<tree>`,
+`JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at a time behind a 1-minute
+load gate below 20. Load ranged 7–23, so **no timing is reported**.
+
+**Limitations.** The roundoff constant is measured on XLA:CPU arm64 only. The
+4.4× margin is a judgement, and CI on x86 is its first test. Only the two Q4 owner
+files were reproduced in float32; other window-gradient FD tests
+(`test_nonlinear.py` linked boundary, objectives) were not swept in float32 here.
