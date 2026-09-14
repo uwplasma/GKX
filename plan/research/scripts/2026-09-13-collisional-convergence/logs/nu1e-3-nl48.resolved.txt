@@ -1,0 +1,1 @@
+resolved nu1e-3-nl48: config=plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu1e-3.toml Nl=48 Nm=96 steps=75000 dt=0.002 method=rk4 species_nu=0.001 params_nu=[0.001] collision_operator='none' terms.collisions=1.0 nu_hermite=1.0 nu_laguerre=2.0 hypercollisions_kz=1.0 hypercollisions_const=0.0 terms.hypercollisions=1.0 end_damping_strength=50

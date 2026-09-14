@@ -1,0 +1,78 @@
+### September 13–14 — Q8 collisional Laguerre convergence, Cyclone ky=.55
+
+Queue row Q8 (#228), follow-up to Q3 (#234). Measurement only; no source,
+test, default or reference change. Files:
+`plan/research/scripts/2026-09-13-collisional-convergence/`.
+
+**Question (registered before any run, local commit 22d39e9 on this branch).**
+Is the Nl-converged linear growth rate of the collisionless Cyclone s-α
+adiabatic-electron ITG control (ky=.55, Nm96, Nz96, nkx=1, rk4, dt .002,
+absorber rate 50, f64, T=150, fit [105,150]) ≈.017 once a small physical
+collision frequency regularizes the Hermite–Laguerre truncation, with the
+collisionless runs converging slowly toward it from above, and does GX agree
+with a matched collisional run? Predictions: **P1** for each ν ∈ {1e-3, 3e-3,
+1e-2}, |γ(Nl48)−γ(Nl32)|/γ < 2%, the three γ(Nl48) within a few % of each
+other and extrapolating smoothly as ν→0; **P2** collisionless γ(Nl64) <
+γ(Nl48) and moving toward that limit; **P3** a conserving Dougherty operator at
+ν=3e-3 gives γ(Nl32) within 2% of the default term; **P4** GX with
+`vnewk=1e-2` at Nl 24/32 agrees with GKX's matched runs to ≤2%.
+
+**Source and reuse.** `origin/main` `578b970742b4` at launch (unchanged at
+resume). `git diff 06606e404 578b97074 -- src tools tests pyproject.toml` is
+empty, so Q3's four collisional runs (ν 1e-3/1e-2 × Nl 24/32; branch
+`evidence/laguerre-drift-ablation` `04a0cd28c`, `summary.csv` blob
+`10273ec3`) are reused as `q3_reused.csv` together with Q3's collisionless
+Nl24/32/48 rows.
+
+**Collision operators, read from source.**
+- GKX, `[time] collision_operator` unset: damping ν(ν_L ℓ + ν_H m + b) =
+  ν(2ℓ + m + b) (`src/gkx/operators/linear/cache_arrays.py:54-57` `lb_lam`,
+  `:197-229` `collision_damping`) plus conserving u⊥ (m=0), u∥ (m=1) and
+  temperature (m=0, m=2) restoring terms
+  (`src/gkx/operators/linear/dissipation.py:293-325`
+  `_collision_moment_correction`, `:460-491` `collisions_contribution`),
+  applied because `src/gkx/terms/assembly.py:188-198` passes G, Jl, JlB and b.
+  This is not the "diagonal Lenard–Bernstein" term the Q3 manifest named.
+- GKX runtime choices (`params.py:451-458`): none, lenard_bernstein, sugama,
+  improved_sugama, coulomb, coulomb_finite_kperp; no Dougherty. The Sugama
+  matrix is the fixed 8-moment truncation and
+  `src/gkx/solvers_time_runners.py:85-115` rejects any other Nl·Nm.
+- GX (3865a537 + the discriminator's repairs; `device_funcs.cu` SHA-256
+  `a67e0062…`, binary `96a53403…`): `rhs_linear` applies
+  −(ν+ν_ei)(b+2ℓ+m)H (`device_funcs.cu:3178`), u⊥ and temperature restoring
+  terms at m=0 (`:3193-3194`), u∥ at m=1 (`:3206`), temperature at m=2
+  (`:3213`), with u∥, u⊥, T̄ from `conservation_terms` (`:3464-3520`), called
+  when `collisions && coll_conservation` (`linear.cu:171`;
+  `coll_conservation` defaults true, `parameters.cu:543`; `collisions` is
+  any `vnewk > 0`, `:570-572`). The temperature weight
+  ℓJ_{ℓ−1} + 2ℓJ_ℓ + (ℓ+1)J_{ℓ+1} and T̄ = √2/3 ΣJ_ℓ G_{ℓ,2} + 2/3 Σ(weight)H_{ℓ,0}
+  have the same form in both codes; the u⊥ weight (GKX `JlB`, GX
+  √b(J_ℓ+J_{ℓ−1})) was not compared term by term. Same structure, not a
+  numerical equivalence check; P4 is the numerical check.
+
+**Host and environment.** office (`pop-os`), RTX A4000 GPU1 (UUID
+`GPU-602c12ca…`), `/home/rjorge/venvs/gkx-nl` (Python 3.11.15, JAX 0.10.2,
+SOLVAX 0.20.0). Run directory
+`/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z` (`src.tgz`
+SHA-256 `b1c256e5…`, `git archive` of 22d39e9 = main + registration; scripts
+then synced, executed manifest SHA-256 `410201b3…` = committed). Env:
+`PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cuda XLA_PYTHON_CLIENT_PREALLOCATE=false
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg CUDA_VISIBLE_DEVICES=1
+GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs`.
+GPU polls (CDT): 18:32:45 both idle; 18:33:57 both idle; 18:36:36 GPU0 held
+by another session's `lmx-gpu` process (2234 MiB), GPU1 idle; 18:38:16 both
+idle → GPU1. GPU0 kept showing short `lmx-gpu` processes during the campaign;
+it was not used.
+
+**Preflights (CPU, office).**
+- `preflight_collisions.py` (18.6 s): all four configs resolve to the
+  built-in term with `nu_hermite=1`, `nu_laguerre=2`, kz hypercollisions,
+  absorber 50; relative RHS change against ν=0 at Nl24/Nm96 is 8.412427e-4,
+  2.523728e-3, 8.412427e-3 (ratios 3.000000, 10.000000). **Sugama at
+  Nl32×Nm96: rejected** (`ValueError: … 8-moment drift-kinetic matrix, but
+  the run uses Nl*Nm = 32*96 = 3072 moments`); on its own 2×4 basis it
+  resolves (matrix (1,1,8,8)) and changes the RHS by 1.84e-4 (built-in
+  1.72e-3).
+- Runner path `preflight-sugama-nu3e-3-nl32` (CPU, 500 steps): exit 1 after
+  4.2 s with the same `ValueError`. **P3 was therefore not run.**
+- GPU runner path `preflight-nu3e-3-nl24` (500 steps): exit 0 in 13 s.

@@ -1,0 +1,8 @@
+P1: GKX collisional ladders
+  nu=0.001: Nl24 0.029127, Nl32 0.017412, Nl48 0.020051  (* = not settled)
+    |g48-g32|/g48 = 13.1629%  (P1 threshold 2%)
+  nu=0.003: Nl24 0.023414, Nl32 0.017487  (* = not settled)
+  nu=0.01: Nl24 0.017438, Nl32 0.017166  (* = not settled)
+P2: GKX collisionless ladder
+  Nl24 0.032828, Nl32 0.024996*, Nl48 0.019772*
+P4: GX vs GKX at nu=1e-2

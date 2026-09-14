@@ -1,0 +1,14 @@
+supervisor pid 260994 host pop-os gpu 1 start 2026-09-13T18:38:51-05:00 keys: preflight-nu3e-3-nl24 nu3e-3-nl24 nu3e-3-nl32 nu1e-3-nl48 nu3e-3-nl48 nu1e-2-nl48 nu1e-3-nl16 nu3e-3-nl16 nu1e-2-nl16 collisionless-nl64
+preflight-nu3e-3-nl24 start 2026-09-13T18:38:53-05:00
+preflight-nu3e-3-nl24 timeout pid 261215 python pids 261215 261217 261218 
+preflight-nu3e-3-nl24 exit 0 end 2026-09-13T18:39:06-05:00
+nu3e-3-nl24 start 2026-09-13T18:39:07-05:00
+nu3e-3-nl24 timeout pid 261922 python pids 261922 261924 261925 
+nu3e-3-nl24 exit 0 end 2026-09-13T18:44:49-05:00
+nu3e-3-nl32 start 2026-09-13T18:44:51-05:00
+nu3e-3-nl32 timeout pid 272886 python pids 272886 272888 272889 
+nu3e-3-nl32 exit 0 end 2026-09-13T18:53:01-05:00
+nu1e-3-nl48 start 2026-09-13T18:53:03-05:00
+nu1e-3-nl48 timeout pid 289413 python pids 289413 289415 289416 
+nu1e-3-nl48 exit 0 end 2026-09-13T19:05:07-05:00
+STOP gpu 1 has compute processes (303210 ) before nu3e-3-nl48 2026-09-13T19:05:07-05:00
