@@ -12173,3 +12173,288 @@ first launch's 160692, 160703/160706, 161207/161210, 161623/161626, 162566/16256
 163424/163427 and pin watcher 163032, were all verified absent at 15:31; no `gkx-q2-*`
 systemd units remain. Staging tarballs were removed on office and locally. The 27 MB
 staging directory stays for provenance; office disk had 66 GB free.
+
+## 2026-09-14 — structured preconditioner bake-off on the exact operator (Q7, plan §5.1 L4)
+
+**Question.** Which structured right preconditioner for B = A − σI (GMRES on the exact
+assembled operator) recovers most of the gap between the current Hermite-line solve and
+exact per-block solves, at an apply cost that scales to a production chain, and does it
+make matrix-free shift-invert competitive with the runtime-default adaptive route's time
+to a certified pair? Measurement only; no source, test, default or reference change.
+
+**Source and setup.** Measurements on `origin/main` `578b970742b4e0dec19f0cfbb177139b9c65cc73`
+(worktree `~/local/GKX-worktrees/preconditioner-bakeoff`, `gkx.__file__` verified inside it);
+`origin/main` `4460c1a8e` was merged into the branch only afterwards. M3 Max (14 cores,
+36 GB), shared with unrelated jobs (1-min load 4–143). Python 3.11.14, JAX/jaxlib 0.10.2,
+NumPy 2.4.6 (system BLAS), SciPy 1.17.1, SOLVAX 0.20.0, complex128. One fresh process per
+run under `/usr/bin/time -l nice -n 10 perl -e 'alarm shift; exec @ARGV' 2400` (2700 for the
+two production runs) with `PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu JAX_ENABLE_X64=true
+GKX_X64=1 XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1`, launched serially by
+`run_ladder.sh`, `run_series.sh` and `run_production.sh` (1-min load gate 20, else wait
+≤15 min, then nice 19; every run started at nice 10). These flags do not make JAX
+single-core (CPU/wall 1.1–4.8), so CPU time is reported next to wall time. Iteration counts,
+residuals, fill and memory are load-independent. Deck `examples/linear/axisymmetric/cyclone.toml`,
+`damp_ends_rate=.1`, jtwist 1. Scripts and outputs:
+`plan/research/scripts/2026-09-13-preconditioner-bakeoff/`.
+
+**Harness (`bakeoff.py`).** A and its term splits are assembled by SOLVAX
+`sparse_operator_matrix` from GKX's own RHS: S = streaming + hypercollisions with φ removed
+(`external_phi = −φ(G)`), Db = curvature + ∇B drift + end damping (φ removed), Dc = every
+term except streaming and hypercollisions (φ kept). Checks on every rung: GKX's shifted
+Hermite-line solve inverts S − s to ≤4e-15, with and without the z-mean drift; Db and Dc
+are exactly z-local (off-block norm 0); Dc is tridiagonal in ℓ plus a rank-1 φ part per
+(kx,z); Nl·Nm probes reproduce the extracted blocks exactly; ‖A − S − Dc‖/‖A‖ = .027 → .004
+(the φ streaming the split leaves out). Candidates (right preconditioners; streaming always
+spectral):
+- `hl`: GKX Hermite-line.
+- `zjac-b/c`: dense per-(kx,z) block solve of Db or Dc plus the z-diagonal of S.
+- `ms-*`, `sym-c`: multiplicative hl/zjac forms (one or two inner matvecs).
+- `adi-*`: one Peaceman–Rachford (PR) step 2α(D − s₁)⁻¹(S − s₁)⁻¹ with s₁ = σ/2 − α (σ split
+  evenly, 2s₁ + 2α = σ); α = −σ/2 is the plain ADI product (s₁ = σ, scale −σ).
+- `pr2-*`, `pr3-*`: two or three PR double sweeps, with no extra matvec.
+- Suffixes: `-b` drift-only D; `-c` drift + mirror + local φ; `-cm` as `-c` with the z-mean
+  drift diagonal moved into the streaming line solve.
+
+α is scanned per rung over −σ/2·{1,2,4,10} and −{0.1,0.3,1,3,10}. The best by iterations to
+1e-5 is used for every sweep form. Ceilings: exact LU per Laguerre index, and SciPy ILU
+(1e-2/fill 3, falling back to 1e-3/5 and 1e-4/10 when SuperLU reports an exactly singular
+factor). Counts are unrestarted GMRES (cap 400) to 1e-5 and 1e-8 and GMRES(20) to 1e-5 on
+the seed RHS.
+
+**ky and shifts.** The pilot is Nx8/Ny16/Nz16, Nl4/Nm8, **ky=+0.3**, with 1536 decoupled
+unknowns and σ = .09302951−.28199404j. The ladder here is Nx1/**Ny24, ky=+0.3** (as #232),
+with σ = the growing eigenvalue from the exact route + 0.05 in growth (separation
+|λ1−σ|/|λ0−σ| = 3.3–3.7). The (96,8,24) rung uses σ = #232's certified λ + 0.05, with no exact
+LU in `bakeoff.py`. **The review's d6 ladder, and the Hermite-line counts
+26/24/159/>400/>400 quoted in the handoff, used Nx1/Ny4, which resolves ky=−0.1**; no growing
+mode lies near its σ there (separation 1.0–1.04; exact-LU Arnoldi does not certify in 38
+steps). The controls `r16-ny4` and `r32-ny4` reproduce d6 at ky=−0.1 (Hermite-line 26/38 at
+(16,4,8) and 159/196 at (32,8,16)). Every other number below is ky=+0.3.
+
+**Iterations to 1e-5 / 1e-8, unrestarted (cap 400) [GMRES(20) to 1e-5]; "(r)" = residual at 400.**
+
+| candidate | pilot n=4096 | (16,4,8) n=512 | (32,8,16) n=4096 | (48,8,16) n=6144 | (64,8,32) n=16384 | (96,8,24) n=18432 |
+|---|---|---|---|---|---|---|
+| hl | 90/110 [—] | 68/92 [163] | 366/— [—] | (0.94) | (0.52) | (0.96) |
+| zjac-c | 368/396 | 328/364 | (0.9) | (0.8) | (1.0) | (0.9) |
+| ms-c | 224/251 | 172/201 | (0.3) | (0.9) | (1.0) | (0.9) |
+| adi-b | 82/121 [156] | 65/97 [80] | 162/250 [322] | 250/— | 348/— | (7e-5) |
+| adi-c | 80/119 [143] | 64/97 [76] | 143/225 [228] | 219/372 [295] | 275/— [328] | (3e-5) |
+| adi-cm | 77/113 [148] | 58/84 [77] | 131/196 [211] | 229/373 [298] | 220/350 [316] | (4e-5) |
+| pr2-c | 43/64 [56] | 35/52 [36] | 74/115 [99] | 112/189 [144] | 138/247 [156] | 238/— |
+| pr2-cm | 40/60 [52] | 30/44 [34] | 66/99 [95] | 116/189 [144] | 111/176 [126] | 245/— |
+| pr3-b | 36/53 [42] | 29/43 [30] | 99/145 [220] | 138/199 [359] | 256/360 | 228/379 |
+| pr3-c | 30/46 [35] | 25/37 [26] | 50/79 [56] | 75/128 [88] | 93/167 [97] | 160/295 [266] |
+| **pr3-cm** | **30/45 [35]** | **22/33 [22]** | **45/72 [56]** | **78/127 [92]** | **88/156 [97]** | **164/301 [267]** |
+| per-ℓ exact LU | 33/45 [57] | 28/38 [36] | 117/150 [—] | 245/315 [—] | 186/233 [—] | not run |
+| ILU | 6/9 (1e-2) | 26/34 (1e-2) | (1.0) (1e-2) | 2/3 (1e-4)* | 22/28 (1e-4)* | not run |
+
+\* ILU(1e-2, 3) and ILU(1e-3, 5) report "exactly singular" from (48,8,16) up. ILU(1e-4, 10)
+has 0.8–0.95× the exact-LU fill (8.0M vs 8.5M; 29.9M vs 38.3M), so it is an exact factor, not a
+structured ceiling. In one (32,8,16) process ILU(1e-2) was singular as well
+(`v1_r32_ilu_singular.txt`); in the recorded process it factors but stalls.
+
+Best α is −1 on the pilot and (16,4,8), −3 from (32,8,16) to (64,8,32), and −10 at (96,8,24).
+The matched ADI scaling α = −σ/2 fails from the pilot on. Exact-LU shift-invert Arnoldi needs
+9–10 steps to a 1e-6 pair and 12–13 to 1e-9 on every ky=+0.3 rung. Process wall and peak RSS:
+pilot 231 s / 2.3 GB, (48,8,16) 139 s / 2.2 GB, (64,8,32) 519 s / 4.8 GB, (96,8,24) 439 s / 2.5 GB.
+
+**Apply cost** (one apply per matrix-free GKX matvec, same process; dense per-(kx,z) block
+inverses; preconditioner memory):
+- (64,8,32): hl 1.4, adi-cm 4.2, pr2-cm 8.2, pr3-cm 21.5 (67 MB), per-ℓ LU 14.1 (102 MB),
+  ILU(1e-4) 59.7 (597 MB).
+- (96,8,24): hl 2.4, adi-cm 8.0, pr2-cm 15.0, pr3-cm 20.0 (57 MB).
+- Production chain (n=73728, `prod.txt`): matvec 2.12 ms, hl 1.59 ms, one dense z-block solve
+  13.8 ms, adi-cm 15.4 ms, pr2-cm 31.3 ms, pr3-cm 45.8 ms (21.6 matvecs); setup 1.4 s of probes
+  plus 6.6 s for the dense inverse, 0.91 GB.
+- Structured alternative (arithmetic, not measured): Dc is ℓ-tridiagonal plus rank 1, so
+  block-Thomas in ℓ with Nm×Nm blocks plus Sherman–Morrison factors in ≈Nz·Nl·(8/3)Nm³ ≈ 4.5e8
+  flops (dense: (2/3)Nz(NlNm)³ ≈ 2.9e10), solves with ≈4× fewer flops, and needs ≈0.17 GB
+  instead of 0.91 GB at production.
+
+**Recycled inner solves, pilot.** SOLVAX `gcrot(m=20, k=10, "harmonic")` over 12 exact-LU
+Arnoldi RHSs at rtol 1e-5 (total iterations, converged):
+- hl 2223 (12/12); zjac-c and ms-c 4800 (0/12);
+- adi-b 939, adi-c 905, adi-cm 706, pr2-c 457, pr2-cm 384;
+- **pr3-cm 304** (12/12), 7.3× fewer than hl.
+
+**Per-kz PR parameters (`pr_kz.py`).** S′ = streaming + hypercollisions + z-mean drift is
+diagonal in kz, so its half-step accepts an operator parameter Λ = F⁻¹diag(a(kz))F at no extra
+cost. The z-local half-step keeps a scalar b: two-parameter PR, two extra FFT pairs per sweep,
+no matvec. The per-kz line solve reproduces GKX's line solve to ≤5e-16.
+
+Symbol bounds: s(kz) = |w·kpar·vth·kz|·x_max(ladder) + max hyper(kz); d = spectral radius of
+the D′ blocks; s₁ = s at the smallest |kz|. Values (s_max / s₁ / d): pilot 16.6 / 2.07 / 14.9;
+(64,8,32) 139 / 4.34 / 19.8; (96,8,24) 59.7 / 1.24 / 62.6.
+
+Rules:
+- `scalar-best`: the scanned α*.
+- `scalar-sym`: a = b = −√(s₁d).
+- `kz-geo`: a = −√(max(s,s₁)d), b = −√(s₁d).
+- `kz-geo-best`: a as kz-geo, b = α*.
+- `kz-lin`: a = −max(s, √(s₁d)), b = −√(s₁d).
+- `kz-geo-half`: half of kz-geo.
+- `kz-sqrt-best`: grows from α* as √(s/s₁).
+- `kz-inv-best`: shrinks from α* as s₁/s.
+- `kz-inv-sym`: shrinks from −√(s₁d) as s₁/s.
+
+Cells are iterations to 1e-5/1e-8 [GMRES(20)] and gcrot total over 12 RHSs (converged); all
+three sweeps with the -cm split, ky=+0.3.
+
+| rule | pilot, α*=−1 | (64,8,32), α*=−3 | (96,8,24), α*=−10 |
+|---|---|---|---|
+| hl | 90/110 [—] 2223 (12/12) | (0.52) 4800 (0/12) | (0.96) 4800 (0/12) |
+| **scalar-best** | 30/45 [35] 304 (12/12) | **88/156 [97] 1127 (12/12)** | **164/301 [267] 2371 (12/12)** |
+| scalar-sym | 75/111 [158] 745 (12/12) | 120/181 [200] 1393 (12/12) | 167/308 [228] 2399 (12/12) |
+| kz-geo | 119/169 [—] 4722 (1/12) | (0.85) 4800 (0/12) | (0.82) 4800 (0/12) |
+| kz-geo-best | 348/367 [—] 4800 (0/12) | not run | not run |
+| kz-lin | 101/144 [—] 2785 (12/12) | (0.86) 4800 (0/12) | (0.77) 4800 (0/12) |
+| kz-geo-half | 156/192 [—] 4800 (0/12) | not run | not run |
+| kz-sqrt-best | 252/269 [—] 4800 (0/12) | not run | not run |
+| kz-inv-best | **26/38 [31] 238 (12/12)** | 142/207 [—] 4800 (0/12) | (0.90) 4800 (0/12) |
+| kz-inv-sym | 64/92 [153] 654 (12/12) | 152/220 [—] 3618 (11/12) | (0.91) 4800 (0/12) |
+
+Reading:
+- Every rule that raises the parameter where the streaming symbol is large fails on every rung.
+- Shrinking the parameter with kz helps only on the pilot and fails from (64,8,32) up.
+- The symbol scalar −√(s₁d) is as good as the scan at the production Nz (96,8,24) but 1.2×
+  worse at (64,8,32).
+- Per-kz parameters from symbol bounds are rejected; a scalar α ≈ −√(s₁d), or a three-point
+  scan, stays.
+
+Process wall / peak RSS: pilot 201 s / 2.4 GB, (64,8,32) 532 s / 6.6 GB, (96,8,24) 538 s / 3.5 GB.
+
+**Production chain, matrix-free, one RHS (`prod_solve.py` Part A; cap 600; σ = #232 λ + 0.05).**
+Nothing reaches 1e-8 in 600 unrestarted iterations:
+- hl: (0.99).
+- adi-cm at α −3 / −10 / −30: (1.6e-3) / (9.4e-5) / (1.0e-2).
+- pr2-cm at the same α: (1.9e-4) / 1e-5 at 468 (1.7e-6) / (2.0e-5).
+- pr3-cm at the same α: (4.0e-5) / **1e-5 at 313 (2.7e-8 at 600)** / 1e-5 at 424 (4.4e-8).
+
+Part B (unrecycled Arnoldi) was stopped at step 2 by a session pause and is superseded by the
+run below.
+
+**Production time to a certified pair (same host, same process conditions, cold, one fresh
+process each, 2700 s cap).** Linked Cyclone Nx1/Ny24/Nz96 (ntheta32, nperiod2), Nl16/Nm48,
+ky=+0.3, n=73728. `run_production.sh`, 2026-09-14 07:00–07:32 CDT.
+
+| route | time to certified pair | CPU (user) | peak RSS | certified residual | γ, ω |
+|---|---|---|---|---|---|
+| runtime-default adaptive (`KrylovConfig(method="adaptive")` via #232's `exact_ladder.py --rung 4 --arm default`, commit `7c8a761`, SHA-256 `181b380f…` checked) | **408.7 s** wall (route 405.9 s) | 1015 s | 1.07 GB | 1.1e-14 (gate 1e-9) | .0930912, .2820327 |
+| matrix-free shift-invert (`prod_certify.py`): scalar `pr3-cm` α=−10, SOLVAX `gcrot(20,10,"harmonic")` with recycling carried across steps, inner rtol 1e-9 | **918 s** to 1e-6 (step 10, 9289 inner its); **1281 s** to 1e-9 (step 14, 13055 inner its) | 6117 s | 3.01 GB | 8.1e-10 | .0930912, .2820327 |
+
+Shift-invert details: σ = the plan reference (.09302951−.28199404j) + 0.05. Setup took 4.6 s
+of context, 9.4 s of probes and symbol bounds, and 12.1 s for the dense inverse (0.91 GB).
+Inner iterations per outer step were 798, 906, 1002, 955, 960, 937, 955, 907, 951, 918, 947, 946,
+923, 950, and each step took 71–106 s. The Ritz residual fell about 4.8× per step
+(.974 → 8.1e-10), and both routes land on the same eigenvalue to the printed digits.
+
+Recycling does not flatten the inner cost: with a fixed preconditioner, the right-hand sides
+of later steps are no cheaper to solve. Against the adaptive route, shift-invert is 2.2× slower
+in wall time to the 1e-6 gate, 3.1× slower to 1e-9, and 6.0× in CPU time. The machine load was
+6–30 during the adaptive run and 18–143 during the shift-invert run, but the CPU ratio is not
+explained by contention. On office (#232, 12 threads) the adaptive route took 761 s.
+
+**Extrapolation (labelled estimate, rejected).** A power law in n over the ladder
+(`bakeoff.py --extrapolate`) is unusable: from (64,8,32) to (96,8,24) n grows 1.13× while
+pr3-cm iterations to 1e-8 grow 1.93× (156 → 301). The iterations follow Nz (streaming
+stiffness), not n. The measured production comparison above replaces the estimate.
+
+**Verdict.**
+1. **Adopt `pr3-cm` as the L4 structured-preconditioner design:** three Peaceman–Rachford double
+   sweeps of the exact spectral Hermite-line streaming solve (with the z-mean drift) and an exact
+   z-local drift + mirror + local-φ block, with a scalar α ≈ −√(s₁d) or a three-point scan.
+   - It matches the per-Laguerre exact-block ceiling on the pilot and beats it from n=4096 up.
+   - It is the only structured candidate still convergent at the production Nz, and the best
+     measured on the production chain.
+   - It cuts recycled iterations 7.3× on the pilot, keeps spectral streaming, and needs no layout
+     change.
+2. **Reject** per-kz PR parameters from symbol bounds, single ADI products, z-block Jacobi and the
+   multiplicative forms. Exact LU and ILU are not scalable ceilings.
+3. **Matrix-free shift-invert with `pr3-cm` does not beat the adaptive route at production size**
+   (409 s against 918 s / 1281 s wall, 1015 s against 6117 s CPU). The §5.1 L4 adoption gate
+   (≥3× fewer matvec-equivalents to a certified pair) fails, and the adaptive route stays the
+   runtime default.
+4. **Next (L5).** The inner cost of ≈950 iterations per outer step is the bottleneck. Candidates:
+   - an inner tolerance proportional to the outer residual (the first steps solved to 1e-9 while
+     the Ritz residual was .97);
+   - a tuned preconditioner P_i = P + (A−P)X_iX_iᴴ (Freitag–Spence) to keep inner iterations flat;
+   - harmonic Krylov–Schur without inner solves;
+   - separately, a block-Thomas D solve (≈4× cheaper apply, ≈5× less memory) and device applies.
+
+**Limitations.**
+- Single cold processes on a shared host, and the JAX CPU pools were not single-core despite the
+  flags, so times are indicative within ≈1.5×. The 2.2–6× production gaps exceed that.
+- The prototypes use dense per-z block inverses and host-JAX composition; the structured
+  factorization is arithmetic only.
+- Shifts use known eigenvalues + 0.05 (the adaptive route needs none). α is scanned coarsely
+  (≈3× steps).
+- The per-kz line solve and the mean-drift split cover single-link chains only; multi-link chains
+  were not tested. The pilot is the only case with decoupled rows.
+- gcrot comparisons use rtol 1e-5 (as in d5), and the production run uses a fixed 1e-9 inner
+  tolerance with no schedule.
+- ILU ceilings are fragile (nondeterministically singular).
+- #230 and #226 were merged after the measurements; they change inner-solve diagnostics and
+  implicit_maxiter semantics, which this harness does not use (it calls SOLVAX directly), and
+  nothing was re-run on the merged source.
+- Stopped runs are kept as `v1_*` and are not used in any table.
+
+**Commands** (repository root, environment above; `D=plan/research/scripts/2026-09-13-preconditioner-bakeoff`):
+```
+$D/run_ladder.sh "pilot:pilot:--gcrot" r16 r32 r48 r64 \
+  "r16:r16-ny4:--ny 4 --skip-ceilings --sigma 0.09302951-0.28199404j" \
+  "r32:r32-ny4:--ny 4 --skip-ceilings --sigma 0.09302951-0.28199404j" "prod:prod:--alpha=-1"
+$D/run_ladder.sh "r96:r96:--sigma 0.1487757-0.2769046j --no-exact --skip-ceilings"
+python $D/prod_solve.py --alphas=-3,-10,-30 --cap 600
+$D/run_series.sh \
+  "pk_pilot::pr_kz.py --case pilot --alpha-best -1 --gcrot --rules scalar-best,scalar-sym,kz-geo,kz-geo-best,kz-lin,kz-geo-half,kz-sqrt-best,kz-inv-best,kz-inv-sym" \
+  "pk_r64::pr_kz.py --case r64 --sigma 0.16268013050461985-0.27079063054988406j --alpha-best -3 --gcrot --rules scalar-best,scalar-sym,kz-geo,kz-lin,kz-inv-best,kz-inv-sym" \
+  "pk_r96::pr_kz.py --case r96 --sigma 0.1487757-0.2769046j --alpha-best -10 --gcrot --rules scalar-best,scalar-sym,kz-geo,kz-lin,kz-inv-best,kz-inv-sym"
+$D/run_production.sh
+python $D/bakeoff.py --extrapolate $D --candidates pr3-cm,pr3-c
+```
+
+**Artifacts** (`plan/research/scripts/2026-09-13-preconditioner-bakeoff/`, SHA-256):
+
+```
+1b131518c88be13806ce42930f7ab70c02ac303a43123827a80eb51c07593e32  STATUS.txt
+7dd59bbfa117ec10bd3585272b473f7c2b18d16de9c2f43080014d9ebe11c1de  adaptive_same_host.txt
+182757ff3c580d7231fb44eca9d79c5a05418e73da2d3a48625bb7f7fa0d9eaa  bakeoff.py
+3a231896e494f4cd244292502753046c3dd09b7885ce0ee2c088a258bf6183d0  pilot.txt
+95f9f535ad39726497ed029c7f2465f63604abcbe254df9bf5e13d4e873092f1  pk_pilot.txt
+3b744d516cf1f413f7740fbbe0612179ce4929a6cf7496d1cc8d99e231d58724  pk_r64.txt
+4d2df74f05b1fb28b49b687a73bca4692d81dc394c0a526d140e1f231a292417  pk_r96.txt
+1a51de2a224be584619c0a64d93d46919b55e43230c456c03df0a3dd692ecd22  pr_kz.py
+8982e48de32c45e3005cbd20c662bec330e0043dd03a6088c3e1c8c6cd851402  prod.txt
+a674cfd5586c547cd618ae365fb4bed381d57ee5ac92d52ab88c51112469ce75  prod_certify.py
+0d54e2b7f26fba0533503a3d3441606bbb2cd0e6e8547ba2aa3a72b34bae0dbd  prod_certify.txt
+1607be99657bdbdea1b3445ac1e07e35d802cb4a4d68faed38b50405cb0cea59  prod_solve.py
+f5693e414f089fbdf10dc78f97b8bc3843db81a6d9f3635a99dc1615de67631c  prod_solve.txt
+7311261ee820f46be9a0e552b9a523778d23060d0c74eaa52125047087187569  r16-ny4.txt
+7216552c3b309f920ac91ceda30221875010c36a3270ee1857cbf204c576982f  r16.txt
+60ff18b1f8ddd35db7a537a6b7bc609da41b45065d4c7d6f15e4818ae272f18e  r32-ny4.txt
+a9670c52eec802342b5b6f62bd05824ff0ea478946754bfb2e29237fcb37bcec  r32.txt
+23d4d496cdef2f67a158ddef0130ac4f2fb3785a47c5451c5011dfdf82915dad  r48.txt
+d12c6eaae403afe70c494d1ea72ff724344240c06b6784fff3b7fef384f801ed  r64.txt
+d3d9f6a4eddb692f57e091351603ceb7c1e706c0da094c8dc44f892fbb3d7080  r96.txt
+947331eb6cdf9ff8676c64164b3ac8fcb867fe3b92a13880a25d950c67bdfc71  run_ladder.sh
+517958710eb5251888f9e59f4ca202aea4689462b4999c4a467fc87ac71f0aa6  run_production.sh
+50993b033f919867df0c4ecfd6b5409b3a5e29c68d601d77f226db6ab175513d  run_series.sh
+bc030c0a78178de20c1d47e3ff2ed41e830171a23d3b01f77eacc86864e5cb74  supervisor.txt
+0f800898c62363fe7650420b22e45b656cffbfa3fb7d60d7f8cb11bee9523222  supervisor_pr_kz.txt
+4ae978a5b49862045d8ccd52fad7f702f256fb0a0707112458f3e8c7705ad60d  supervisor_prod_solve.txt
+46d337ad5bdb734a4e4bbfb84457f93f765264c72e712a2930dd4ab62feb2fb6  supervisor_production.txt
+08ccb3d665eeaef9d061e2b6ae5a43de73a122726372dc1d93f08f1e06aa3374  supervisor_r96.txt
+10286919f802e8add9aa73b71b14fd8276b327d6c865ca454e890d01f26ef2bf  v1_adaptive_same_host_stopped.txt
+218d050387c6dc0bbf34131d2a69411b888deb5e5e978faeb8c773b325885924  v1_pilot_before_ilu_fallback.txt
+6191ab03cd7c77286e637295b0697ffdfac655f0c98bd063367dde6f4a64021a  v1_r32_ilu_singular.txt
+60cc32405e4ff64bfce23265e1ca48387ec5d70f3fe18e4dcb83e53aa11b6dc9  v1_stopped_supervisor.txt
+d977f541651001dd3f3a227056da3a3a935a58947b64f2fe1df31effcb390f7d  v1_supervisor_production_stopped.txt
+```
+
+**Terminal state.** Every owned process ended: the supervisors (PIDs 17235, 30655, 36374,
+54948, 65626, 86816, 93350) and all of their Python children. The runs stopped by the two
+session pauses were killed by owner PID (prod_solve 36384; adaptive 68797 with its launcher
+65626) and verified absent. No owned process was running at the commit, and the 2700 s cap was
+never reached.

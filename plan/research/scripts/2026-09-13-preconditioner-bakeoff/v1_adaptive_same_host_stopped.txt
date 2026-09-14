@@ -1,0 +1,30 @@
+[     0.84s] env ok gkx=/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
+[     1.18s] ky {'grid_Ny': 24, 'grid_size': 24, 'selected_index': 6, 'selected_ky': 0.3, 'signed_match': True, 'max_abs_ky': 0.6, 'nyquist': False, 'opposite_sign_partner': True, 'grid_Nz': 96}
+[     1.37s] n=73728 shape=(1, 16, 48, 1, 1, 96) seed native dtype=complex64
+[     1.37s] status: building runtime geometry
+[     1.37s] status: building spectral grid
+[     1.37s] status: building runtime linear parameters
+[     1.37s] status: selected ky index 6 at ky=0.3000
+[     1.38s] status: starting Krylov solve
+[     1.38s] status: building linear cache
+[     2.44s] status: krylov method=adaptive dim=24 restarts=2
+[     2.44s] status: running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09
+time: command terminated abnormally
+      164.80 real       413.06 user        27.24 sys
+          1086472192  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               78241  page reclaims
+                 140  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                1161  voluntary context switches
+             4047560  involuntary context switches
+       4012301243135  instructions retired
+       1301567935385  cycles elapsed
+           745263616  peak memory footprint

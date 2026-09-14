@@ -1,30 +1,33 @@
-[     0.84s] env ok gkx=/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
-[     1.18s] ky {'grid_Ny': 24, 'grid_size': 24, 'selected_index': 6, 'selected_ky': 0.3, 'signed_match': True, 'max_abs_ky': 0.6, 'nyquist': False, 'opposite_sign_partner': True, 'grid_Nz': 96}
-[     1.37s] n=73728 shape=(1, 16, 48, 1, 1, 96) seed native dtype=complex64
-[     1.37s] status: building runtime geometry
-[     1.37s] status: building spectral grid
-[     1.37s] status: building runtime linear parameters
-[     1.37s] status: selected ky index 6 at ky=0.3000
-[     1.38s] status: starting Krylov solve
-[     1.38s] status: building linear cache
-[     2.44s] status: krylov method=adaptive dim=24 restarts=2
-[     2.44s] status: running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09
-time: command terminated abnormally
-      164.80 real       413.06 user        27.24 sys
-          1086472192  maximum resident set size
+[     1.18s] env ok gkx=/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
+[     1.57s] ky {'grid_Ny': 24, 'grid_size': 24, 'selected_index': 6, 'selected_ky': 0.3, 'signed_match': True, 'max_abs_ky': 0.6, 'nyquist': False, 'opposite_sign_partner': True, 'grid_Nz': 96}
+[     1.75s] n=73728 shape=(1, 16, 48, 1, 1, 96) seed native dtype=complex64
+[     1.75s] status: building runtime geometry
+[     1.75s] status: building spectral grid
+[     1.75s] status: building runtime linear parameters
+[     1.75s] status: selected ky index 6 at ky=0.3000
+[     1.76s] status: starting Krylov solve
+[     1.76s] status: building linear cache
+[     2.74s] status: krylov method=adaptive dim=24 restarts=2
+[     2.74s] status: running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09
+[   407.55s] status: adaptive solve finished with eig=0.0930912-0.282033j residual=1.07e-14 converged=True stable=True
+[   407.63s] status: Krylov solve complete: gamma=0.093091 omega=0.282033
+RESULT {"rung": 4, "rung_dims": [96, 32, 2, 16, 48], "arm": "default", "host": "Rogerios-MacBook-Pro.local", "python": "3.11.14", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "solvax": "0.20.0", "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py", "x64": true, "cpu_count": 14, "env": {"JAX_PLATFORMS": "cpu", "CUDA_VISIBLE_DEVICES": null, "JAX_ENABLE_X64": "true", "GKX_X64": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1", "PYTHONPATH": "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src:/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff"}, "loadavg_start": [6.7802734375, 13.69091796875, 22.3583984375], "deck_sha256": "f2db5b3dce3e480ebd30c80d9a2849c9c10ace0bd3bcbb64e3a844bca40be405", "ky": {"grid_Ny": 24, "grid_size": 24, "selected_index": 6, "selected_ky": 0.3, "signed_match": true, "max_abs_ky": 0.6, "nyquist": false, "opposite_sign_partner": true, "grid_Nz": 96}, "seed": {"native_dtype": "complex64", "dtype": "complex128", "shape": [1, 16, 48, 1, 1, 96], "sha256": "92bd73efa8f3fbc21a8b7706aea82078675d44322f47c8eb744ac4adadeab970"}, "n": 73728, "shift": [0.09302951, -0.28199404], "krylov_cfg": {"krylov_dim": "24", "restarts": "2", "omega_min_factor": "0.0", "omega_target_factor": "0.0", "omega_cap_factor": "2.0", "omega_sign": "0", "method": "adaptive", "power_iters": "200", "power_dt": "0.01", "propagator_steps": "1", "shift": "None", "shift_source": "propagator", "shift_tol": "0.0001", "shift_maxiter": "50", "shift_restart": "20", "shift_solve_method": "batched", "shift_preconditioner": "auto", "shift_selection": "targeted", "shift_outer_residual_tol": "1e-06", "mode_family": "auto", "fallback_method": "propagator", "fallback_real_floor": "-1e-06", "continuation": "False", "continuation_selection": "overlap"}, "residual_gate": 1e-09, "rss_before_route_kib": 318472192, "route_s": 405.87323904200457, "peak_rss_route_kib": 1066795008, "gamma": 0.09309117334775535, "omega": 0.28203273152699443, "result_ky": 0.3, "state_dtype": "complex128", "residual": 1.0688853365910458e-14, "certified": true, "error": null, "sparse": {}, "statuses": [[1.753, "building runtime geometry"], [1.753, "building spectral grid"], [1.754, "building runtime linear parameters"], [1.754, "selected ky index 6 at ky=0.3000"], [1.76, "starting Krylov solve"], [1.76, "building linear cache"], [2.744, "krylov method=adaptive dim=24 restarts=2"], [2.744, "running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09"], [407.547, "adaptive solve finished with eig=0.0930912-0.282033j residual=1.07e-14 converged=True stable=True"], [407.625, "Krylov solve complete: gamma=0.093091 omega=0.282033"]], "loadavg_end": [30.28466796875, 21.40283203125, 22.5478515625], "process_peak_rss_kib": 1066795008}
+      408.72 real      1015.13 user        70.49 sys
+          1066795008  maximum resident set size
                    0  average shared memory size
                    0  average unshared data size
                    0  average unshared stack size
-               78241  page reclaims
-                 140  page faults
+               77847  page reclaims
+                6603  page faults
                    0  swaps
                    0  block input operations
                    0  block output operations
                    0  messages sent
                    0  messages received
                    0  signals received
-                1161  voluntary context switches
-             4047560  involuntary context switches
-       4012301243135  instructions retired
-       1301567935385  cycles elapsed
-           745263616  peak memory footprint
+                1680  voluntary context switches
+            11019187  involuntary context switches
+      11228218942002  instructions retired
+       3563480171310  cycles elapsed
+           715690560  peak memory footprint
+exit 0

@@ -1204,6 +1204,22 @@ factor was unfinished after 30 min (assembly 293 s, 7.1 GiB when stopped) while 
 certified λ=.0930912−.282033j in 761 s at 1.3 GiB. Crossover n≈1e4: exact LU is a
 small-rung reference and preconditioner harness for L4, not a production eigensolver.
 
+**Structured preconditioner bake-off (L4, 2026-09-14; [log](plan/log.md)).** Three
+Peaceman–Rachford double sweeps of the exact spectral Hermite-line streaming solve with an
+exact z-local drift + mirror + local-φ block (`pr3-cm`, scalar α ≈ −√(s₁d)) is the best
+structured preconditioner measured and the L4 design to carry forward: 30/45 iterations to
+1e-5/1e-8 on the pilot against 33/45 for exact per-Laguerre blocks and 90/110 for
+Hermite-line, 7.3× fewer recycled gcrot iterations, and still convergent at ky=+.3 up to
+(Nz,Nl,Nm)=(96,8,24) (164/301) where Hermite-line stalls (the review's d6 ladder was at
+ky=−0.1); per-kz parameters from symbol bounds, single ADI products and z-block
+Jacobi/multiplicative forms do not help. It does not make matrix-free shift-invert
+competitive at the production chain: on one host under the same process conditions the
+adaptive route certified λ=.0930912−.282033j in 409 s (1015 s CPU, 1.1 GiB) while
+shift-invert with `pr3-cm` and gcrot recycling needed 918 s to 1e-6 and 1281 s to 1e-9
+(6117 s CPU, 3.0 GiB), because each outer step still costs ≈950 inner iterations, so the
+L4 adoption gate fails, the adaptive route stays the default, and L5 (inner tolerance ∝
+outer residual, tuned preconditioner) is the next lever.
+
 ### 5.2 Sharding acceptance ladder (species×Hermite only)
 
 1. Share RK, projector, field, damping and collision semantics; exercise
