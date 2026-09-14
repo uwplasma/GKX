@@ -4,9 +4,10 @@
 # Usage: gate.sh RUN_DIR WAIT_CAP_SECONDS
 # Policy: never share or preempt a GPU. Poll both GPUs every 300 s; a GPU is
 # eligible when it has no compute process and utilization < 5% on two
-# consecutive polls (GPU1 preferred). On eligibility run, in order: the GKX
-# base keys without a result, then the T=300 rerun of any base key whose
-# settled flag is false, then the GX keys without a result. A supervisor that
+# consecutive polls (GPU1 preferred). On eligibility run, in order (lead's
+# priority at the 2026-09-14 resume): the GKX base keys without a result in
+# BASE order (Nl48, then Nl64, then Nl16), then the GX keys without a result,
+# then the T=300 rerun of any base key whose settled flag is false. A supervisor that
 # stops because the GPU became busy (exit 4) re-arms the gate with fresh
 # polls; any other nonzero exit aborts. Cumulative sleep is capped.
 set -u
@@ -16,7 +17,7 @@ D=plan/research/scripts/2026-09-13-collisional-convergence
 S="$RUN_DIR/src_stage/$D"
 PY=/home/rjorge/venvs/gkx-nl/bin/python
 LOG="$RUN_DIR/logs/gate.txt"
-BASE="nu3e-3-nl24 nu3e-3-nl32 nu1e-3-nl48 nu3e-3-nl48 nu1e-2-nl48 nu1e-3-nl16 nu3e-3-nl16 nu1e-2-nl16 nu0-nl64"
+BASE="nu3e-3-nl24 nu3e-3-nl32 nu1e-3-nl48 nu3e-3-nl48 nu1e-2-nl48 nu0-nl64 nu1e-3-nl16 nu3e-3-nl16 nu1e-2-nl16"
 GX="gx-nu1e-2-nl24 gx-nu1e-2-nl32 gx-nu1e-2-nl32-nohyper"
 
 settled() {
@@ -28,13 +29,17 @@ remaining_gkx() {
   for k in $BASE; do
     [ -f "$RUN_DIR/results/$k.json" ] || keys="$keys $k"
   done
-  if [ -z "$keys" ]; then
-    for k in $BASE; do
-      if ! settled "$RUN_DIR/results/$k.json" && [ ! -f "$RUN_DIR/results/$k-t300.json" ]; then
-        keys="$keys $k-t300"
-      fi
-    done
-  fi
+  echo $keys
+}
+
+remaining_t300() {
+  local k keys=""
+  for k in $BASE; do
+    if [ -f "$RUN_DIR/results/$k.json" ] && ! settled "$RUN_DIR/results/$k.json" \
+      && [ ! -f "$RUN_DIR/results/$k-t300.json" ]; then
+      keys="$keys $k-t300"
+    fi
+  done
   echo $keys
 }
 
@@ -59,7 +64,11 @@ previous=""
 while true; do
   keys_gkx=$(remaining_gkx)
   keys_gx=$(remaining_gx)
+  keys_t300=""
   if [ -z "$keys_gkx" ] && [ -z "$keys_gx" ]; then
+    keys_t300=$(remaining_t300)
+  fi
+  if [ -z "$keys_gkx" ] && [ -z "$keys_gx" ] && [ -z "$keys_t300" ]; then
     echo "ALL DONE $(date -Is)" >> "$LOG"
     exit 0
   fi
@@ -78,9 +87,12 @@ while true; do
     if [ -n "$keys_gkx" ]; then
       echo "launch gkx gpu $chosen keys $keys_gkx $(date -Is)" >> "$LOG"
       bash "$S/run_convergence.sh" "$RUN_DIR" "$chosen" $keys_gkx
-    else
+    elif [ -n "$keys_gx" ]; then
       echo "launch gx gpu $chosen keys $keys_gx $(date -Is)" >> "$LOG"
       bash "$S/run_gx.sh" "$RUN_DIR" "$chosen" $keys_gx
+    else
+      echo "launch gkx t300 gpu $chosen keys $keys_t300 $(date -Is)" >> "$LOG"
+      bash "$S/run_convergence.sh" "$RUN_DIR" "$chosen" $keys_t300
     fi
     rc=$?
     echo "supervisor exit $rc $(date -Is)" >> "$LOG"
