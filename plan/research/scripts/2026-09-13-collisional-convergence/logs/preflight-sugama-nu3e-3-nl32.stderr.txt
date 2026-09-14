@@ -1,0 +1,58 @@
+Traceback (most recent call last):
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/tools/comparison/build_gx_parity_matrix.py", line 528, in <module>
+    main()
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/tools/comparison/build_gx_parity_matrix.py", line 481, in main
+    records = [
+              ^
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/tools/comparison/build_gx_parity_matrix.py", line 482, in <listcomp>
+    run_case(case, reference_dir=reference_dir, order=order[case["key"]])
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/tools/comparison/build_gx_parity_matrix.py", line 179, in run_case
+    primary = run_runtime_scan(
+              ^^^^^^^^^^^^^^^^^
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/src/gkx/runtime.py", line 401, in run_runtime_scan
+    return _run_runtime_scan_orchestration_impl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/src/gkx/workflows/runtime/orchestration_scan.py", line 767, in run_runtime_scan_orchestration
+    return _run_combined_ky_scan(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/src/gkx/workflows/runtime/orchestration_scan.py", line 356, in _run_combined_ky_scan
+    return deps.run_runtime_scan_batch(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/src/gkx/runtime.py", line 448, in _run_runtime_scan_batch
+    return _run_runtime_scan_batch_impl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/src/gkx/workflows/runtime/orchestration_scan.py", line 844, in run_runtime_scan_batch
+    diagnostics = _run_batch_diagnostics(
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/src/gkx/workflows/runtime/orchestration_scan.py", line 540, in _run_batch_diagnostics
+    collision_operator = _resolve_config_collision_operator(tcfg, setup.params, g0)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/src/gkx/solvers_time_runners.py", line 71, in _resolve_config_collision_operator
+    _check_moment_basis_matches_operator(operator, name, G0)
+  File "/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/src_stage/src/gkx/solvers_time_runners.py", line 111, in _check_moment_basis_matches_operator
+    raise ValueError(
+ValueError: collision_operator='sugama' provides a 8-moment drift-kinetic matrix, but the run uses Nl*Nm = 32*96 = 3072 moments. Choose Nl and Nm with Nl*Nm = 8 (for example Nl=4, Nm=2), or select collision_operator = "lenard_bernstein".
+Command exited with non-zero status 1
+	Command being timed: "/home/rjorge/venvs/gkx-nl/bin/python tools/comparison/build_gx_parity_matrix.py --manifest plan/research/scripts/2026-09-13-collisional-convergence/manifest.toml --cases preflight-sugama-nu3e-3-nl32 --stem /home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/results/preflight-sugama-nu3e-3-nl32"
+	User time (seconds): 9.87
+	System time (seconds): 0.31
+	Percent of CPU this job got: 242%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.19
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 827036
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 125016
+	Voluntary context switches: 1169
+	Involuntary context switches: 302
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 1168
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1

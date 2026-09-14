@@ -1,0 +1,10 @@
+[     0.70s] env ok gkx=/Users/rogeriojorge/local/GKX-worktrees/certify-baseline-0cce177/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
+[     1.25s] status: building runtime geometry
+[     1.25s] status: building spectral grid
+[     1.25s] status: building runtime linear parameters
+[     1.25s] status: selected ky index 4 at ky=20.0000
+[     1.25s] status: building initial condition
+[     1.25s] status: starting Krylov solve
+[     1.25s] status: building linear cache
+[     2.32s] status: krylov method=adaptive dim=24 restarts=2
+[     2.32s] status: running certified adaptive propagator with dim=24 max_restarts=4 tol=0.000119

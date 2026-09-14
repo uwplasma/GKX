@@ -1,0 +1,4 @@
+preflight_nu1e-2_nl24              settled 0/1 ky  max|d gamma|(settled)=nan  at peak ky=0.550: d gamma=-10.3894 d omega=-0.0169
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/preflight_nu1e-2_nl24.json
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/preflight_nu1e-2_nl24.csv
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/preflight_nu1e-2_nl24.png

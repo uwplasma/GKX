@@ -1,0 +1,20 @@
+real dtype float64
+Part A: built-in collision term, ky=.55, Nl24, Nm96
+  nu0     nu=0 terms.collisions=0.0 collision_operator='none' -> built-in nu_hermite=1.0 nu_laguerre=2.0 hypercollisions_kz=1.0 hypercollisions_const=0.0 end_damping_strength=50 |RHS|=6.531153e+04
+  nu1e-3  nu=0.001 terms.collisions=1.0 collision_operator='none' -> built-in nu_hermite=1.0 nu_laguerre=2.0 hypercollisions_kz=1.0 hypercollisions_const=0.0 end_damping_strength=50 |RHS|=6.531552e+04
+  nu3e-3  nu=0.003 terms.collisions=1.0 collision_operator='none' -> built-in nu_hermite=1.0 nu_laguerre=2.0 hypercollisions_kz=1.0 hypercollisions_const=0.0 end_damping_strength=50 |RHS|=6.532364e+04
+  nu1e-2  nu=0.01 terms.collisions=1.0 collision_operator='none' -> built-in nu_hermite=1.0 nu_laguerre=2.0 hypercollisions_kz=1.0 hypercollisions_const=0.0 end_damping_strength=50 |RHS|=6.535351e+04
+  relative RHS change nu1e-3 vs nu0: 8.412427e-04
+  relative RHS change nu3e-3 vs nu0: 2.523728e-03
+  relative RHS change nu1e-2 vs nu0: 8.412427e-03
+  ratios nu3e-3/nu1e-3 = 3.000000, nu1e-2/nu1e-3 = 10.000000
+PART_A PASS
+Part B: collision_operator='sugama', nu=3e-3, Nl32, Nm96
+  config collision_operator='sugama' state shape=(1, 32, 96, 1, 1, 96)
+  REJECTED at resolution: ValueError: collision_operator='sugama' provides a 8-moment drift-kinetic matrix, but the run uses Nl*Nm = 32*96 = 3072 moments. Choose Nl and Nm with Nl*Nm = 8 (for example Nl=4, Nm=2), or select collision_operator = "lenard_bernstein".
+SUGAMA_NL32_NM96 REJECTED
+Part C: collision_operator='sugama', nu=3e-3, Nl2, Nm4
+  config collision_operator='sugama' state shape=(1, 2, 4, 1, 1, 96)
+  resolved DriftKineticMomentCollisionOperator matrix shape=(1, 1, 8, 8)
+  relative RHS change vs collisionless: sugama 1.840275e-04, built-in 1.718936e-03; sugama vs built-in 1.628608e-03
+SUGAMA_NL2_NM4 RUNS

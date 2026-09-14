@@ -1,0 +1,4 @@
+nu1e-3-nl16                        settled 1/1 ky  max|d gamma|(settled)=0.0053  at peak ky=0.550: d gamma=-0.0053 d omega=-0.0217
+saved /home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/results/nu1e-3-nl16.json
+saved /home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/results/nu1e-3-nl16.csv
+saved /home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/results/nu1e-3-nl16.png

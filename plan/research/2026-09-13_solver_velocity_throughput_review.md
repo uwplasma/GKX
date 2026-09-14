@@ -119,6 +119,12 @@ GCRO-DR deflated restarting.
 
 ### 3.5 Size ladder (`d6_ladder.py`; Nx=1 single chain unless noted; same σ)
 
+**Correction (2026-09-14, from Q7).** These rungs resolved **ky=−0.1**, not the
++0.3 of the pilot: with Nx=1, Ny=4 and y0=20 the +0.3 target selects −0.1.
+Q7 reproduced the Hermite-line counts 26 and 159 at ky=−0.1; at ky=+0.3 it
+measured 366 at (32,8,16) and no convergence within 400 iterations from
+(64,8,32).
+
 | (Nz, Nl, Nm) | n | nnz/row | LU fill ratio | LU (s, loaded) | hermite-line its to 1e-5 | drifts off |
 |---|---:|---:|---:|---:|---:|---:|
 | (16,4,8) | 512 | 48 | 5.2 | 0.01 | 26 | 22 |

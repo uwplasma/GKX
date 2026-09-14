@@ -1,0 +1,263 @@
+# Q3 drift ablation of the shared Nl24->32 growth change (registered 2026-09-13).
+#
+# Question: in the collisionless Cyclone s-alpha adiabatic-electron ITG control
+# at ky=.55, Nm96, Nz96, both GKX and GX change gamma by about -24.7% from Nl24
+# to Nl32. Hypothesis: grad-B drift mu-space phase mixing with no Laguerre sink.
+# Prediction: with gradb=0 the Nl24->32 gamma change is < 1%; with curvature=0
+# it persists. Both persisting, or both vanishing, are reported as such.
+#
+# Settings are the 2026-09-05 office control
+# (/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/salpha_nl24_nm96_t300.toml)
+# except for the term weights and one declared deviation: T=150 (steps=75000)
+# instead of T=300, so the fit window is [105,150] instead of [210,300] and the
+# runner's half-time probe is [52.5,75]. The 2026-09-13 re-read of the GX
+# outputs found gamma stationary from t~100 (fits on [100,200] and [200,300]
+# agree to <=0.5%). All six runs, including the full-terms control, use T=150
+# on current source. Run with tools/comparison/build_gx_parity_matrix.py
+# from a checkout that also contains this directory, GX_PARITY_REF_DIR pointing
+# at the directory holding ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc
+# (geometry import and comparison columns only; that reference is GX Nl16/Nm48).
+# The runner does not read damp_ends_rate; it is metadata here. The fixtures
+# leave [time] damp_ends_rate unset, so the absorber is damp_ends_amp/dt =
+# 0.1/0.002 = 50, which the preflight asserts.
+
+[[case]]
+key = "full_nl24"
+label = "Cyclone ITG s-alpha, all terms, Nl24"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "tools/comparison/fixtures/parity/cyclone_salpha_itg.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 shipped-deck reference; comparison column not a matched control"
+Nl = 24
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "full_nl32"
+label = "Cyclone ITG s-alpha, all terms, Nl32"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "tools/comparison/fixtures/parity/cyclone_salpha_itg.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 shipped-deck reference; comparison column not a matched control"
+Nl = 32
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "gradb0_nl24"
+label = "Cyclone ITG s-alpha, gradb=0, Nl24"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_gradb0.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 shipped-deck reference (all terms); comparison column meaningless for this ablation"
+Nl = 24
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "gradb0_nl32"
+label = "Cyclone ITG s-alpha, gradb=0, Nl32"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_gradb0.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 shipped-deck reference (all terms); comparison column meaningless for this ablation"
+Nl = 32
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+# The two registered curvature=0 cases (Nl24, Nl32; fixture
+# cyclone_salpha_itg_curvature0.toml) were never started and are not listed here;
+# see the lead change below.
+
+# Preflight: the runner path at steps=500 (T=1) on the GPU, to verify the CUDA
+# route, config loading and output writing before the long runs. Not evidence.
+
+[[case]]
+key = "preflight_full_nl24"
+label = "preflight, all terms, Nl24, 500 steps"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "tools/comparison/fixtures/parity/cyclone_salpha_itg.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "preflight only"
+Nl = 24
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 500
+method = "rk4"
+fit_start_fraction = 0.7
+
+# ---------------------------------------------------------------------------
+# Lead change, 2026-09-13 ~15:58 (documented deviation). gradb0_nl24 showed that
+# removing the grad-B drift removes the toroidal ITG itself (omega .50 -> .03,
+# unsettled), so drift ablations cannot discriminate truncation effects on this
+# mode. The two registered curvature=0 cases were SKIPPED (never started).
+# Replacement, mode-preserving discriminators at the same T=150 settings:
+# physical collisions via [[species]] nu in {1e-3, 1e-2} x Nl {24, 32}, with the
+# fixture's built-in operator ([time] collision_operator unset = "none": the
+# Lenard-Bernstein damping nu*(m + 2*l + b) from [collisions] nu_hermite=1,
+# nu_laguerre=2, plus the moment correction _collision_moment_correction),
+# then one collisionless full-terms Nl48 run. Registered prediction under a
+# truncation-reflection mechanism: the Nl24->32 gamma gap shrinks strongly with
+# nu, and gamma(nu) extrapolates smoothly toward the collisionless value.
+
+[[case]]
+key = "nu1e-3_nl24"
+label = "Cyclone ITG s-alpha, species nu=1e-3, Nl24"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_nu1e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 24
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu1e-3_nl32"
+label = "Cyclone ITG s-alpha, species nu=1e-3, Nl32"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_nu1e-3.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 32
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu1e-2_nl24"
+label = "Cyclone ITG s-alpha, species nu=1e-2, Nl24"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_nu1e-2.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 24
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "nu1e-2_nl32"
+label = "Cyclone ITG s-alpha, species nu=1e-2, Nl32"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_nu1e-2.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 collisionless shipped-deck reference; comparison column not a matched control"
+Nl = 32
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "full_nl48"
+label = "Cyclone ITG s-alpha, all terms, collisionless, Nl48"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "tools/comparison/fixtures/parity/cyclone_salpha_itg.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "GX Nl16 Nm48 shipped-deck reference; comparison column not a matched control"
+Nl = 48
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 75000
+method = "rk4"
+fit_start_fraction = 0.7
+
+[[case]]
+key = "preflight_nu1e-2_nl24"
+label = "preflight, species nu=1e-2, Nl24, 500 steps"
+device = "tokamak"
+drive = "ITG"
+electrons = "adiabatic"
+field_model = "electrostatic"
+geometry = "s-alpha analytic"
+config = "plan/research/scripts/2026-09-13-drift-ablation/cyclone_salpha_itg_nu1e-2.toml"
+reference_output = "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc"
+reference_provenance = "preflight only"
+Nl = 24
+Nm = 96
+ky = [0.550000011920929]
+damp_ends_rate = 50.0
+dt = 0.002
+steps = 500
+method = "rk4"
+fit_start_fraction = 0.7

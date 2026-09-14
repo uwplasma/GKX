@@ -1,0 +1,4 @@
+nu1e-3_nl24                        settled 1/1 ky  max|d gamma|(settled)=0.1402  at peak ky=0.550: d gamma=-0.1402 d omega=-0.0024
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/nu1e-3_nl24.json
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/nu1e-3_nl24.csv
+saved /home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/results/nu1e-3_nl24.png

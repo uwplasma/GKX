@@ -1,0 +1,76 @@
+{
+  "gate_index_include": false,
+  "description": "Linear growth rate and frequency parity between GKX and the reference comparison code, with matched velocity resolution and imported reference geometry.",
+  "manifest": "plan/research/scripts/2026-09-13-collisional-convergence/manifest.toml",
+  "cases": [
+    {
+      "key": "preflight-nu3e-3-nl24",
+      "order": 0,
+      "label": "preflight, species nu=3e-3, Nl24, 500 steps",
+      "configuration": "plan/research/scripts/2026-09-13-collisional-convergence/cyclone_salpha_itg_nu3e-3.toml",
+      "reference_output": "ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc",
+      "reference_provenance": "preflight only",
+      "device": "tokamak",
+      "drive": "ITG",
+      "electrons": "adiabatic",
+      "field_model": "electrostatic",
+      "geometry": "s-alpha analytic",
+      "resolution": {
+        "Nl": 24,
+        "Nm": 96,
+        "Nz": 96,
+        "Ny": 34,
+        "dt": 0.002,
+        "steps": 500,
+        "t_end": 1.0,
+        "fit_window": [
+          0.7,
+          1.0
+        ],
+        "half_time_probe": [
+          0.35,
+          0.5
+        ]
+      },
+      "reference_trace": {
+        "samples": 751,
+        "t_end": 150.0000071246177,
+        "nonfinite_values": 0
+      },
+      "cost": {
+        "gkx_scan_seconds": 6.701166142011061,
+        "gkx_peak_host_rss_mb": 1102.41796875,
+        "gkx_peak_device_mb": 44.099365234375,
+        "reference_seconds": null,
+        "reference_peak_host_rss_mb": null,
+        "reference_peak_device_mb": null
+      },
+      "build_reproducibility_floor": null,
+      "summary": {
+        "settled_ky_count": 0,
+        "total_ky_count": 1,
+        "max_absolute_gamma_relative_difference_settled": NaN,
+        "peak_ky": 0.550000011920929,
+        "gamma_relative_difference_at_peak": -10.360825007982934,
+        "omega_relative_difference_at_peak": -0.016190401666205053
+      },
+      "rows": [
+        {
+          "case": "preflight-nu3e-3-nl24",
+          "ky": 0.550000011920929,
+          "ky_reference": 0.550000011920929,
+          "gamma_reference": 0.033875983515556186,
+          "gamma_gkx": -0.31710715366243597,
+          "gamma_relative_difference": -10.360825007982934,
+          "omega_reference": 0.498507642286255,
+          "omega_gkx": 0.49043660332396766,
+          "omega_relative_difference": -0.016190401666205053,
+          "gamma_half_time_shift": 0.372337603483969,
+          "omega_half_time_shift": 0.060928558528372125,
+          "converged": false,
+          "within_build_reproducibility_floor": null
+        }
+      ]
+    }
+  ]
+}
