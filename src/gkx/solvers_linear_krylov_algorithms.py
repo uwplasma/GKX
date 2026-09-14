@@ -27,6 +27,74 @@ def _normalize(v: jnp.ndarray) -> jnp.ndarray:
     return v / norm_safe
 
 
+def _linked_covered_mode_mask(cache: Any) -> jnp.ndarray | None:
+    """Return the ``(ky, kx)`` modes a linked chain couples, or ``None`` for all.
+
+    Only the linked parallel derivative, its kz hypercollisions and the chain
+    end damping couple modes, and they act on chain members (and, on a two-sided
+    ky grid, their conjugate mirrors); every other linear term is local in
+    ``(ky, kx)``. A mode outside that set -- a kx row outside the dealiased
+    ``1 + 2 * ((Nx - 1) // 3)`` set -- has no coupling to the chains either way and only
+    adds undamped drift eigenvalues. Periodic and full-cover caches return
+    ``None``, so eigen routes on them trace exactly as before.
+    """
+
+    if not bool(getattr(cache, "linked_use_gather", False)) or bool(
+        getattr(cache, "linked_full_cover", False)
+    ):
+        return None
+    ny, nx = int(jnp.size(cache.ky)), int(jnp.size(cache.kx))
+    flat = jnp.asarray(cache.linked_gather_mask, dtype=bool)
+    if int(flat.size) != ny * nx:
+        return None
+    mask = jnp.reshape(flat, (nx, ny)).T  # linked flat index is ky + ny * kx
+    if ny > 1:
+        # Mirror of _restore_linked_real_fft_conjugates: a row no chain visits
+        # whose -ky row is visited is filled from the (-ky, -kx) modes.
+        rows = jnp.any(mask, axis=1)
+        mirror_rows = jnp.mod(-jnp.arange(ny), ny)
+        fill = ~rows & rows[mirror_rows] & (jnp.arange(ny) != 0)
+        mirrored = mask[mirror_rows][:, jnp.mod(-jnp.arange(nx), nx)]
+        mask = mask | (fill[:, None] & mirrored)
+    return mask
+
+
+def _project_to_linked_cover(v: jnp.ndarray, mask: jnp.ndarray | None) -> jnp.ndarray:
+    """Zero a ``(..., ky, kx, z)`` state outside ``mask``; ``None`` is the identity."""
+
+    if mask is None:
+        return v
+    return jnp.where(mask[:, :, None], v, jnp.zeros((), dtype=v.dtype))
+
+
+def _projected_flat_operator(
+    op: Callable[[jnp.ndarray], jnp.ndarray] | None,
+    mask: jnp.ndarray | None,
+    shape: tuple[int, ...],
+) -> Callable[[jnp.ndarray], jnp.ndarray] | None:
+    """Compose a flat-vector operator with the linked-cover projection."""
+
+    if op is None or mask is None:
+        return op
+    inner = op
+
+    def projected(x_flat: jnp.ndarray) -> jnp.ndarray:
+        image = _project_to_linked_cover(inner(x_flat).reshape(shape), mask)
+        return image.reshape(x_flat.shape)
+
+    return projected
+
+
+def _require_linked_cover_seed(v: jnp.ndarray) -> None:
+    """Refuse a host seed that projection onto the linked chains made zero."""
+
+    if not float(jnp.linalg.norm(v)) > 0.0:
+        raise ValueError(
+            "the eigen seed has no component on the linked-chain modes; only "
+            "those modes carry an eigenvector of the linked operator"
+        )
+
+
 @jax.jit
 def _assemble_rhs_cached_novjp(
     G: jnp.ndarray,
@@ -281,6 +349,7 @@ def dominant_eigenpair_power(
     """Power iteration on an explicit-Euler propagator to target the rightmost mode."""
 
     dt_val = jnp.asarray(dt, dtype=jnp.real(v0).dtype)
+    covered = _linked_covered_mode_mask(cache)
 
     def step(state, _):
         v, _mu = state
@@ -288,10 +357,10 @@ def dominant_eigenpair_power(
         denom = jnp.vdot(v, v)
         denom = jnp.where(denom == 0.0, 1.0, denom)
         mu = jnp.vdot(v, v_next_raw) / denom
-        v_next = _normalize(v_next_raw)
+        v_next = _normalize(_project_to_linked_cover(v_next_raw, covered))
         return (v_next, mu), None
 
-    v0 = _normalize(v0)
+    v0 = _normalize(_project_to_linked_cover(v0, covered))
     (v, mu), _ = jax.lax.scan(
         step, (v0, jnp.asarray(0.0, dtype=v0.dtype)), None, length=iterations
     )
@@ -364,9 +433,14 @@ def _arnoldi_with_stats(
     stats0: Any,
     merge: Callable[[Any, Any], Any],
 ) -> tuple[jnp.ndarray, jnp.ndarray, Any]:
-    """Arnoldi build whose operator returns ``(w, stats)`` for each application."""
+    """Arnoldi build whose operator returns ``(w, stats)`` for each application.
 
-    v0 = _normalize(v0)
+    On a linked cache every basis vector is projected onto the chain modes, so
+    decoupled modes outside every chain never enter the Ritz problem.
+    """
+
+    covered = _linked_covered_mode_mask(cache)
+    v0 = _normalize(_project_to_linked_cover(v0, covered))
     V = jnp.zeros((krylov_dim + 1,) + v0.shape, dtype=v0.dtype)
     H = jnp.zeros((krylov_dim + 1, krylov_dim), dtype=v0.dtype)
     V = V.at[0].set(v0)
@@ -374,6 +448,7 @@ def _arnoldi_with_stats(
     def outer(i, carry):
         V, H, stats = carry
         w, applied = apply_op(V[i], cache, params, term_cfg)
+        w = _project_to_linked_cover(w, covered)
         stats = merge(stats, applied)
         operator_scale = jnp.linalg.norm(w)
 
@@ -430,9 +505,11 @@ def _shift_invert_apply_factory(
 ) -> Callable[..., tuple[jnp.ndarray, InnerSolveStats]]:
     shape = v0.shape
     size = v0.size
-    _precond, precond_op = build_shift_invert_preconditioner(
+    _precond, precond_raw = build_shift_invert_preconditioner(
         v0, cache, params, term_cfg, sigma_val, shift_preconditioner
     )
+    covered = _linked_covered_mode_mask(cache)
+    precond_op = _projected_flat_operator(precond_raw, covered, shape)
 
     def matvec(x_flat: jnp.ndarray) -> jnp.ndarray:
         x = x_flat.reshape(shape)
@@ -469,7 +546,9 @@ def _shift_invert_apply_factory(
             solves=jnp.asarray(1, dtype=jnp.int32),
             unconverged_solves=jnp.where(solution.converged, 0, 1).astype(jnp.int32),
         )
-        return solution.x.reshape(shape), stats
+        # Commutes with the block-diagonal operator, so it cannot raise the
+        # recorded residual; it only removes roundoff outside the chains.
+        return _project_to_linked_cover(solution.x.reshape(shape), covered), stats
 
     return apply_shift_invert
 

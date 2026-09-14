@@ -13016,3 +13016,286 @@ Nl48 11:34–12:04, Nl64 14:27, Nl64 T=300 27:52.3); peak host RSS
 1.23–1.26 GB; peak device 93–173 MB. GX: 5 s (failed launch).
 
 **Terminal job state.** All verified absent at 2026-09-14T08:38:05-05:00 (no gate, supervisor, runner or GX process; no compute process on either GPU). Gates 310799, 370388, 443420 (310799 killed at the 2026-09-13 pause before launching; 370388 aborted after the GX exit 127; 443420 logged ALL DONE 08:37:22). Supervisors 260994, 374915, 447062 (260994 stopped on the busy-GPU guard; the others DONE). GX supervisor 441963 (STOP) and its timeout 441977. Runner timeout/python PIDs: preflight-nu3e-3-nl24 261215/261218; nu3e-3-nl24 261922/261925; nu3e-3-nl32 272886/272889; nu1e-3-nl48 289413/289416; nu3e-3-nl48 375281/375284; nu1e-2-nl48 394790/394793; nu0-nl64 405595/405598; nu1e-3-nl16 415490/415493; nu3e-3-nl16 418619/418622; nu1e-2-nl16 429629/429632; nu0-nl64-t300 447256/447259. The office run directory is kept at 296 KB (logs, results, GX decks, validation); its `src_stage/` and `src.tgz` and the local staging tarball were deleted.
+
+## 2026-09-14 — eigen routes solve on the linked-chain modes (Q6, plan §5.1 L3)
+
+Branch `fix/eigen-covered-subspace`, based on `b45b017ed` (head of #236, which contains
+#233 certify-every-eigenpair); it shows those commits until #236 merges.
+
+**Question.** On the linked Cyclone pilot (Nx8/Ny16/Nz16, Nl4/Nm8, ntheta16/nperiod1/
+jtwist1, ky=+.3, rate .1, n=4096) the chains cover kx rows {0,1,2,6,7}; rows {3,4,5}
+(1536 unknowns) are exactly decoupled and host the Re=0 eigenvalues next to σ (review
+§3.1, `d1b.txt`). Can every linear eigen route drop them without moving the certified
+target, and should time integration drop them too?
+
+**Contract.**
+- `_linked_covered_mode_mask(cache)` (`solvers_linear_krylov_algorithms.py`) returns the
+  `(ky, kx)` modes the linked chains couple, from `cache.linked_gather_mask` (flat index
+  ky + Ny·kx), extended on a two-sided ky grid by the conjugate-mirror rows that
+  `_restore_linked_real_fft_conjugates` rebuilds from (−ky, −kx). It returns `None` for
+  periodic caches (`linked_use_gather` false) and full-cover caches, so those routes trace
+  the same graph as before; the Nx=1 pilot is full-cover.
+- Projection (a `jnp.where` on the state, no layout change) is applied to: the seed and
+  reference vector in `dominant_eigenpair`; the seed in `adaptive_propagator_eigenpair`;
+  every Arnoldi basis vector (`_arnoldi_with_stats`, so the operator, propagator,
+  multi-candidate propagator and shift-invert Arnoldi all inherit it); the power
+  iterate; the shift-invert preconditioner output and the inner GMRES solution. A seed
+  that projects to zero raises `ValueError`.
+- `sparse_shift_invert` assembles only the chain columns (a scatter/gather wrapper around
+  the RHS) and lifts eigenvectors back to the full state shape with exact zeros.
+- Certification is unchanged: every residual gate applies the unprojected operator to the
+  full-shape vector, so a coupling the mask misses fails closed instead of being hidden.
+- Public signatures unchanged. SOLVAX's `exponential_eigenpairs` branch gets only the
+  projected seed; the objective adjoint Krylov start is not projected.
+
+**Decoupling checked, not assumed.** Unit tests apply the RHS to the chain part and to
+the off-chain part of a broadband state: off-chain output of the first and chain output
+of the second are exactly 0, on a selected-ky Nx=8 case with every term on (drifts,
+mirror, drive, fields, end damping) and on the two-sided Nx4/Ny4 streaming case.
+
+**Pilot identity** (`plan/research/scripts/2026-09-14-covered-subspace/pilot_identity.py`,
+before = clean detached `b45b017ed` in `~/local/GKX-worktrees/integrate-chain`, after =
+this branch; one process each, runtime seed, complex128):
+
+| route | before | after |
+|---|---|---|
+| sparse_shift_invert, σ=.09302951−.28199404j | n=4096, nnz 125500, λ=.115621260554220423−.241178813750643928j, res 5.3e-15, 1.85 s | **n=2560**, nnz 114250, λ imag …643956 (rel 1.04e-16), res 5.4e-15, 1.66 s |
+| adaptive (runtime default) | λ=.115621260554220492−.241178813750643983j, res 1.9e-15 | bitwise identical eigenvalue and eigenvector |
+| adaptive, golden-angle seed nonzero on every row | λ rel diff 5e-16 from runtime-seed λ, off-chain max 1.47e-16 | off-chain exactly 0, res 3.1e-15 |
+| Nx=1 (full cover), adaptive | λ=.115621260554220437−.241178813750643983j | bitwise identical eigenvalue and eigenvector |
+
+The runtime seed already has zero off-chain weight (multimode Gaussian/random seeds loop
+over `1+(Nx−1)//3` kx only, as GX `initialConditions` does), which is why the default
+route was already exact.
+
+**Small-gap control** (`tiny_adaptive.py`; selected-ky Nx8/Ny4/Nz8, Nl2/Nm4, n=512):
+before, a broadband seed sends the adaptive route to an off-chain neutral drift mode
+(λ=.00277734−.0999921j, residual .227, rejected); after, and before with a chain-projected
+seed, it reaches λ=.00277555−.100065j at residual 6.75e-7 (identical in all three), still
+above the 1e-9 gate. This case is not certifiable by the adaptive route within its
+restarts; the change removes the wrong-branch attraction, not the small gap.
+
+**Time integration (item 3; `time_uncovered_rows.py`, pilot, RK4 dt=.004663, 6000
+steps).** Decision: no change here.
+- The off-chain rows start at exactly 0 from the runtime initial condition and stay
+  exactly 0 through 6000 steps of `_linear_explicit_step` (chain max 6.107e-10).
+- Adding off-chain content of the same peak amplitude (1.3e-10) leaves the runtime
+  explicit-time fit bitwise unchanged (γ=.10388112444370544, ω=.2602860270892239) and the
+  chain amplitude identical; the off-chain rows just persist (max 3.7e-10).
+- The explicit CFL bound already uses kx[(Nx−1)//3] (.5027, not the grid maximum 1.0053),
+  and on full nonlinear grids the two-thirds mask equals this set (the bracket output is
+  multiplied by it), so dt and nonlinear drive are unaffected.
+- GX (clean `bc2fe552`, `~/local/gx-main-clean-20260312`) stores the full Nx too:
+  `Nakx = 1 + 2*((Nx-1)/3)` (`grids.cu:14`), `unmasked`/`masked` (`device_funcs.cu:734/746`)
+  gate field solves, initial conditions loop over the Nakx rows, and `mask()` zeroes the
+  masked rows after `restart_read` (`moments.cu:862`) and each SSPX3 step
+  (`ts_sspx3.cu:136`). GKX evolves the same rows, and on the pilot they hold the same
+  zeros.
+
+**Proposed follow-ups (not implemented).** (a) Zero the off-chain rows of a user-supplied
+`initial_state` or restart on linked runs, as GX does on `restart_read`; today they persist
+as neutral waves that no fit reads but free-energy and spectrum sums would include
+(not measured). (b) With the ky ≥ 0 layout contract (§5.3 N3, Q10), measure dropping the
+off-chain rows from the linear layout: 1536/4096 unknowns (37.5%) on the pilot,
+1 − Nakx/Nx ≈ 1/3 in general, for the RHS work that scales with the state (drifts, fields,
+velocity ladders), not the chain FFTs.
+
+**Tests** (branch head before commit, environment below; one invocation per row):
+
+| selection | result |
+|---|---|
+| `tests/unit/solvers/test_linear_krylov_core.py` | 98 passed (88 on #233 + 10 new) |
+| `tests/integration/test_adaptive_eigenmodes.py` | 8 passed, 3 skipped (VMEC backend / eik cache) |
+| `tests/unit/linear/test_linear.py -k "krylov or eigen or shift or linked"` | 13 passed |
+| `tests/unit/operators/test_linear_streaming.py -k linked` | 7 passed |
+| `tests/validation/benchmarks/{test_benchmarks_helpers,test_benchmarking,test_benchmark_contracts}.py` | 114 passed |
+| `tests/integration/runtime/test_runtime_runner.py` | 167 passed |
+| `tests/unit/objectives/test_autodiff_solver_objectives.py` | 97 passed |
+| `tests/unit/core/test_core_numerics.py` | 50 passed |
+| `tests/unit/quasilinear/test_quasilinear.py -k krylov` | 1 passed |
+| `tests/validation/physics_gates/test_validation_gates.py -k demo_reports_the_eigenvalue` | 1 passed |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k "ky_diagnostics or krylov"` | 4 passed |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+No existing test's asserted numbers changed. Two failures on the first run were fixed, not
+waived: the dot-precision allowlist is keyed by `file:line`, and the one allowlisted
+unpinned overlap contraction moved 749 → 828 (same code); a core docstring named the
+comparison code, which the terminology gate forbids in `src/`. Also passing: ruff 0.16.4
+check/format (426 files), mypy as CI (184 source files), `sphinx -W`,
+`check_package_architecture_manifest.py` (source 89492 → 89618, tests 88145 → 88396,
+targets unchanged), gitleaks 8.30.1 on the changed files.
+
+**Environment.** Apple M3 Max (14 cores, 36 GiB), shared (1-min load 10–28), Python
+3.11.14, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0; `PYTHONPATH=$PWD/src:$PWD
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu nice -n 10`, one heavy process
+at a time, `gkx.__file__` verified in each worktree. Commands (repository root):
+```
+D=plan/research/scripts/2026-09-14-covered-subspace
+python $D/pilot_identity.py <before|after> <out_dir>   # run once per worktree
+python $D/tiny_adaptive.py                             # once per worktree
+python $D/time_uncovered_rows.py
+```
+The `.txt` outputs were copied from those runs with local paths replaced by
+`<worktrees>`/`<scratch>`; `tiny_adaptive.py` was reformatted by ruff after it ran.
+
+**Artifacts** (`plan/research/scripts/2026-09-14-covered-subspace/`, SHA-256):
+```
+238e3dfc0a616dff3152a688ee1ce629ad8e8091102e890ac694da3aa9c6a049  pilot_identity.py
+baece16a1b8746c9755acee3380651458fb746fdd64d4e3a707e5ae857e0ba97  pilot_identity_after.txt
+d1de55a9190120525b142cb60c66f31dbff68d3b8b2328e92387db0ea77f218d  pilot_identity_before.txt
+91402fe03fc9ff8c0d4ef0bc9af82bf8b5515f3f70b7b3bd4d467994b76d8500  time_uncovered_rows.py
+e90a3885b69ce80c6a5301594af5552c0b7dd5df125786821a51f338ca701f13  time_uncovered_rows.txt
+1964c3877bb54abda61a5f15b5e5cb962afa8e0fd6dd86236c9a7a5a5e56f373  tiny_adaptive.py
+abff903d8ea7d114190abb55ab50cecaea6aae3ddde0733c9a43ded7b296cbd4  tiny_adaptive_after.txt
+837986d719d8af67343d144ff0f6c183cf428e7e42363dd590ababdf67a9a66d  tiny_adaptive_before.txt
+```
+
+**Terminal state.** Every owned process ended; nothing was left running at the commit.
+
+**Next question.** Does the chain-mode restriction change L4/L5 counts at the production
+chain, where Nx=1 is full-cover (no), or on multi-link Nx>1 decks where preconditioners
+other than Hermite-line previously saw the off-chain block?
+
+## 2026-09-14 — Q13: runtime diagnostics scan with cache/params as graph arguments (plan §5.3 N1′)
+
+**Outcome: no `src/` change; N1 stays rejected; the HLO ledger gains the route the
+runtime actually compiles.** Branch `perf/runtime-scan-graph-args`, based on
+`b45b017ed` (#236's head).
+
+**What `run_runtime_nonlinear` compiles.** Q4 and plan §5.3 call
+`PreparedExplicitNonlinearDiagnostics._run_raw` the runtime scan. It is the
+`gkx.prepare` (`prepare_only`) scan. `run_full_nonlinear_runtime` calls
+`integrate_nonlinear_explicit_diagnostics_state` on the fixed-window, chunked and
+sharded (`_run_sharded` → `_run_once`) routes, which runs the same raw scan function
+outside jit. JAX then compiles the scan primitive alone (`dispatch.apply_primitive` →
+`jit(prim.bind)`), and the arrays its body closes over are arguments of that module
+(93 of 171 operands at 32×32×24). `_run_raw`'s jit instead embeds them (87 constants,
+30 larger than 16 elements). New `nonlinear-step-hlo --route runtime` binds that scan
+equation on arguments; its counts equal the `jit_scan` module of an XLA dump of the
+eager run at 8×8×8 Nl2/Nm2 and at 32×32×24 Nl2/Nm4 (main and N1).
+
+| route (main, adaptive) | grid | rk3 concat/copy/transpose/bytes | rk4 concat/copy/transpose/bytes |
+|---|---|---|---|
+| diagnostics (prepared, captured) | 32×32×24 Nl2/Nm4 | 32/136/117/156,556,500 | 41/175/156/208,946,388 |
+| runtime (eager scan, operands) | 32×32×24 Nl2/Nm4 | 33/277/115/156,134,052 | 42/316/154/208,523,940 |
+| diagnostics (prepared, captured) | 64×64×24 Nl4/Nm8 | 32/163/144/2,884,020,404 | 41/210/191/3,849,267,380 |
+| runtime (eager scan, operands) | 64×64×24 Nl4/Nm8 | 33/303/141/2,873,459,056 | 42/350/188/3,838,706,032 |
+
+The runtime row is the scan module only; the diagnostics graph also holds the pre-scan
+field solve and first diagnostic.
+
+**Graph-argument prepared scan (prototype, not merged).** `_run_raw`'s body traced once
+to a jaxpr and evaluated under jit (`jax.extend.core.jaxpr_as_fun`) with some or all of
+its constants as arguments: the op sequence is unchanged, only constant placement
+differs. One jit trace served two different states. HLO, adaptive rk3:
+
+| placement | 32×32×24 Nl2/Nm4 concat/copy/transpose/bytes | 64×64×24 Nl4/Nm8 |
+|---|---|---|
+| captured (main) | 32/136/117/156,556,500 | 32/163/144/2,884,020,404 |
+| every constant an argument | 34/136/117/156,754,032 | 34/162/143/2,885,203,836 |
+| inexact constants | 33/136/117/156,753,108 | — |
+| inexact, >16 elements, `cache.Jl` kept captured | 33/136/117/156,753,108 | 33/162/143/2,885,200,052 |
+
+Bytes rise by 196,608–197,532 (+0.13%) at 32 and 1.18 MB (+0.04%) at 64. The
+`f32[Nl,1,Ny,Nx,Nz]` concatenate in `assemble_rhs_cached_electrostatic_jit` (plus an
+`s32[231]` one) that XLA folds when its input is constant is computed instead. Copies
+fall by one at 64 only.
+
+Identity on a tiny Cyclone case (4×4×8, 3 rk3 steps). With every constant still captured,
+the jaxpr evaluation is bitwise (0/18 outputs), so the conversion itself is exact.
+Hoisting `cache.Jl` alone changes 6 of 18 outputs; each of the other eight large float
+arrays alone changes none. Keeping `Jl` captured and hoisting the rest is bitwise in x64
+for fixed/adaptive × nonlinear on/off, but not in f32 with the nonlinear term off
+(3/18). No placement rule is bitwise across both precisions. The folding step that
+moves the bits is not isolated; `build_H` forms zt·Jl·φ in one expression.
+
+100-step gate: Cyclone deck at 16×16×24, Nl2/Nm4, `init_amp` ×10, compressed real FFT;
+rk3/rk4 × {adaptive dt, collision split (implicit), fixed mode ky(.3), ikx=1}; inexact
+constants with >16 elements as arguments. Differences are ‖Δ‖/‖ref‖ per output.
+- argument route vs captured: **0/12 bitwise** in f32 and x64. State: f32 7.8e-8 to
+  2.1e-7; x64 4e-22 to 2e-21 for adaptive and fixed mode, 1.5e-7 with collision split.
+  Two near-cancelling diagnostic outputs (`[1][0][10]`, `[1][0][12][k]`) reach 0.55 to
+  0.93.
+- eager runtime route vs captured: also **0/12 bitwise**, up to 2.1e-7 in f32 and 9e-17
+  to 1.6e-7 in x64. The two shipped routes already disagree at roundoff.
+- argument route vs eager runtime route: **bitwise for adaptive rk3 and rk4** in f32 and
+  x64; 4.7e-9 to 6.9e-8 for collision split and fixed mode.
+
+VJP: on the tiny case (rk3, fixed dt, checkpointed), the value and d/dscale of
+‖G_final‖² through the argument route are bitwise equal to the captured route (f32).
+The Cyclone window VJP was not run for the prototype.
+
+Verdict: the bitwise-against-captured gate fails for every placement that moves the
+cache, and bytes rise. Not adopted.
+
+**N1 re-evaluated** (prototype `e154f30f5` applied to `b45b017ed` sources):
+
+| graph | copy main → N1 | transpose | bytes |
+|---|---:|---:|---:|
+| prepared, captured, adaptive rk3, 32 | 136→309 | 117→290 | 156,556,500→426,450,132 |
+| prepared, every constant an argument, 32 | 136→309 | 117→290 | 156,754,032→426,647,664 |
+| prepared, `Jl` captured, rest inexact arguments, 32 | 136→309 | 117→290 | 156,753,108→426,646,740 |
+| runtime (eager scan), adaptive rk3, 32 | 277→450 | 115→288 | 156,134,052→426,027,684 |
+| prepared, captured, 64×64×24 Nl4/Nm8 | 163→360 | 144→341 | 2,884,020,404→7,805,118,644 |
+| prepared, every constant an argument, 64 | 162→365 | 143→346 | 2,885,203,836→7,964,571,516 |
+| runtime (eager scan), 64 | 303→506 | 141→344 | 2,873,459,056→7,952,826,736 |
+| prepared, fixed dt, captured, 32 | 135→308 | 115→288 | 156,347,608→426,241,240 |
+| prepared, fixed dt, every constant an argument, 32 | 135→308 | 115→288 | 156,545,140→426,438,772 |
+| `_run_dynamic_raw`, fixed dt, 32 | 134→131 | 115→112 | 156,348,532→149,418,100 |
+
+N1 is rejected again. Materialized bytes grow 2.7× on every graph `gkx.prepare` or
+`run_runtime_nonlinear` compiles. That includes the eager scan, whose cache is already
+an argument. **Correction to Q4:** captured constants do not cause the regression.
+Hoisting every constant leaves it unchanged. It disappears only in
+`_run_dynamic_raw`, which rebuilds the diagnostic setup (quadrature weights, ω mask,
+state projector) inside the graph from traced geometry, cache and params. #231's
+argument-route comparison changed that rebuild, fixed dt and constant placement at
+once. Which part of the rebuild changes XLA:CPU's layout choice is unresolved.
+
+**Tests and checks** (x64, `gkx.__file__` in the worktree):
+- `tests/unit/nonlinear/test_nonlinear.py`: 42 passed.
+- `test_nonlinear_helpers_extra.py`: 82 passed.
+- `tests/unit/solvers/test_time_integrators.py`: 94 passed.
+- `tests/unit/parallel/test_parallel_linear_velocity.py` with
+  `--xla_force_host_platform_device_count=4`: 71 passed.
+- `tests/integration/runtime/test_runtime_runner.py -k nonlinear`: 28 passed.
+- `tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py`: 37 passed,
+  including the new `test_runtime_route_lowers_scan_body_arrays_as_arguments`. It fails
+  if the runtime route embeds a closed-over array as a constant.
+- `tests/release/test_release_gates.py` and `tests/release/test_evidence_ledger.py`:
+  152 passed.
+- `mypy`: no issues in 184 source files.
+- ruff 0.16.4 check and format: pass (423 files).
+- gitleaks 8.30.1 on the changed files: no leaks.
+- Architecture manifest: tools +50 (78115→78165), tests +32 (88145→88177), source +0.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, `/Users/rogeriojorge/local/venvs/gkx-review-20260913`,
+`PYTHONPATH=<tree>/src:<tree>`, `JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at
+a time behind a 1-minute load gate below 20. Load was 11–23 during the session, so
+**no timing is reported**. HLO counts are XLA:CPU compile-only and load-independent.
+Scratch evidence (session-local, SHA-256 prefixes):
+- scripts: `args_route_hlo.py` eb98e4f8c5c2…598f, `dump_routes.py` d30824c96cfb…e4a7,
+  `gate_cyclone.py` 2d7091b3f6e5…92ba, `probe_diff.py` 594123f77819…4aea,
+  `probe_bisect.py` 0f02bf7731b1…3d4e, `probe_allbut.py` f3cc1eaa6fb4…8143,
+  `runtime_route_hlo.py` 0be5ef8232fe…cf76, `hlo_op_diff.py` 2fecca4c146c…b510;
+- N1 patch: e8125646922a…d42a;
+- gate: f32 524e090894a0…7a8a, x64 65386562361f…1b3f;
+- ledger JSON: diagnostics 32 652b54567a5a…ba40 (equal to Q4's), diagnostics 64
+  56df8d7d35f9…029e, runtime 32 424792698500…472d, runtime 64 84364b4a9664…58cd.
+
+Commands: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo --route
+{diagnostics,runtime} --methods rk3,rk4 [--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8] --out
+<json>`; `python gate_cyclone.py <json>` with and without `JAX_ENABLE_X64=true
+GKX_X64=1`.
+
+**Limitations.** XLA:CPU only. Species×Hermite was not re-measured: it passes only its
+species-dependent cache/params leaves as arguments and captures the rest, but it is not
+the diagnostics scan. The whole-state sharded runner already takes cache/params as
+arguments. The Cyclone gate used one grid and one amplitude.
+
+**Next question.** Bisect `_run_dynamic_raw`'s in-graph setup (weights, mask, projector)
+to find which piece keeps XLA:CPU from the N1 layout, HLO-only. Or go to N3, whose ky ≥ 0
+layout removes the transposes that choice acts on. Separately, the prepared and runtime
+routes disagree at roundoff. Choosing one as the reference, and giving `gkx.prepare` the
+runtime's operand placement, is a correctness question, not a speed one.

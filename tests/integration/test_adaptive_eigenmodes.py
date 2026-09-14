@@ -257,6 +257,72 @@ def test_qi_sparse_full_frequency_ladder() -> None:
     assert frequency_drifts[-1] < 0.01
 
 
+def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Q6: the Nx=8 linked Cyclone pilot solves on its 2560 chain unknowns.
+
+    Rows {3, 4, 5} (1536 unknowns) have no coupling to the chains and host Re=0
+    eigenvalues next to the shift (plan §5.1 L3). Dropping them must not move
+    the certified target.
+    """
+
+    import gkx.solvers_linear_krylov as krylov
+    from gkx.runtime import _runtime_linear_dispatch_deps
+    from gkx.workflows.linear import _prepare_linear_runtime_context
+
+    runtime, _ = load_runtime_from_toml(
+        _ROOT / "examples/linear/axisymmetric/cyclone.toml"
+    )
+    runtime = replace(
+        runtime,
+        grid=replace(runtime.grid, Nx=8, Ny=16, Nz=16, ntheta=16, nperiod=1, jtwist=1),
+        time=replace(runtime.time, damp_ends_rate=0.1),
+    )
+    deps = _runtime_linear_dispatch_deps().full_deps
+    context = _prepare_linear_runtime_context(
+        runtime,
+        deps=deps,
+        ky_target=0.3,
+        n_laguerre=4,
+        n_hermite=8,
+        solver="krylov",
+        fit_signal="auto",
+        return_state=False,
+        initial_state=None,
+        status_callback=None,
+    )
+    cache = deps.build_linear_cache(context.grid, context.geom, context.params, 4, 8)
+    seed = jnp.asarray(np.asarray(context.initial_state), dtype=jnp.complex128)
+    off_chain = np.ones(seed.shape, dtype=bool)
+    off_chain[..., [0, 1, 2, 6, 7], :] = False
+
+    def solve(method: str, **options):
+        messages: list[str] = []
+        value, vector = dominant_eigenpair(
+            seed,
+            cache,
+            context.params,
+            terms=context.terms,
+            method=method,
+            status_callback=messages.append,
+            **options,
+        )
+        assert np.max(np.abs(np.asarray(vector)[off_chain])) == 0.0
+        return complex(np.asarray(value)), " ".join(messages)
+
+    sigma = 0.09302951 - 0.28199404j
+    sparse, status = solve("sparse_shift_invert", shift=sigma)
+    adaptive, _ = solve("adaptive")
+    assert "n=2560 " in status and "(2560 of 4096 unknowns)" in status
+    monkeypatch.setattr(krylov, "_linked_covered_mode_mask", lambda _cache: None)
+    full_sparse, full_status = solve("sparse_shift_invert", shift=sigma)
+    assert "n=4096 " in full_status
+    assert abs(sparse - (0.115621 - 0.241179j)) < 1.0e-6
+    for value in (sparse, adaptive):
+        assert abs(value - full_sparse) <= 1.0e-12 * abs(full_sparse)
+
+
 def test_biorthogonal_continuation_crosses_real_growth_ordering() -> None:
     """Track a Cyclone ITG mode after it becomes the third-fastest branch."""
 

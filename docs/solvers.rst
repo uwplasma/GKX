@@ -36,6 +36,20 @@ can reuse the same factors for the adjoint inverse in implicit eigenpair AD.
 This path is eager and CPU-factorized; it is not the default for small or
 target-free solves.
 
+On a linked boundary the eigen routes solve on the modes the linked chains
+couple.  Only the linked parallel derivative, its kz hypercollisions and the
+chain end damping couple ``(ky, kx)`` modes, and they act on chain members; a
+kx row outside GX's dealiased ``Nakx`` set therefore has no coupling to the
+chains in either direction and contributes only undamped drift eigenvalues
+next to a physical shift.  Seeds and every Krylov, power-iteration and inner
+GMRES vector are projected onto the chain modes, and ``sparse_shift_invert``
+assembles only their columns (2560 of 4096 unknowns on the Nx=8 linked Cyclone
+pilot).  Returned eigenvectors keep the full state shape with exact zeros on
+the other rows, and certification still applies the unprojected operator, so
+any unexpected coupling fails the residual gate instead of being hidden.
+Periodic boundaries and full-cover linked grids (for example Nx=1 at one ky)
+are unchanged; a seed with no chain component raises ``ValueError``.
+
 Eigenpair certification
 -----------------------
 

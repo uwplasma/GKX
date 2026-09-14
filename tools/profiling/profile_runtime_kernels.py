@@ -1063,10 +1063,13 @@ def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hlo-dir", type=Path, default=None)
     parser.add_argument(
         "--route",
-        choices=("scan", "diagnostics"),
+        choices=("scan", "diagnostics", "runtime"),
         default="scan",
-        help="scan: cache/params as graph arguments; diagnostics: the runtime "
-        "diagnostics scan, which captures them as constants",
+        help="scan: integrate_nonlinear with cache/params as graph arguments; "
+        "diagnostics: the prepared diagnostics scan (gkx.prepare), whose jit "
+        "captures cache/params as constants; runtime: the scan "
+        "run_runtime_nonlinear compiles, lowered outside jit with cache/params "
+        "as scan operands",
     )
     return parser
 
@@ -1081,7 +1084,7 @@ def _compiled_hlo_text(
     return text
 
 
-def _diagnostics_scan_hlo(
+def _prepared_diagnostics_for_hlo(
     cfg: Any,
     g0: jnp.ndarray,
     grid: Any,
@@ -1093,9 +1096,8 @@ def _diagnostics_scan_hlo(
     method: str,
     ky_index: int,
     kx_index: int,
-    dump: Path | None,
-) -> str:
-    """Lower one step of the runtime diagnostics scan exactly as the runtime jits it."""
+) -> Any:
+    """Prepare a one-step diagnostics scan with the runtime's keyword policy."""
 
     kwargs = dict(
         build_runtime_nonlinear_diagnostics_kwargs(
@@ -1120,10 +1122,55 @@ def _diagnostics_scan_hlo(
     dt = kwargs.pop("dt", float(cfg.time.dt))
     steps = kwargs.pop("steps", 1)
     kwargs["cache"] = cache
-    prepared = prepare_nonlinear_explicit_diagnostics(
+    return prepare_nonlinear_explicit_diagnostics(
         g0, grid, geom, params, dt, steps, **kwargs
     )
+
+
+def _diagnostics_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
+    """Lower the prepared diagnostics scan as ``gkx.prepare`` jits it.
+
+    That jit closes over cache, params and policy arrays, so XLA sees them as
+    constants. ``run_runtime_nonlinear`` does not run this graph.
+    """
+
     return _compiled_hlo_text(prepared._run_raw, prepared.initial_state, dump=dump)
+
+
+def _scan_equation_hlo(
+    fn: Callable[..., Any], *args: Any, dump: Path | None = None
+) -> str:
+    """Lower the one top-level ``lax.scan`` that ``fn`` stages, operands as arguments.
+
+    Outside jit, JAX compiles a scan primitive on its own and passes the arrays
+    its body closes over as arguments (``dispatch.apply_primitive``). Binding the
+    same primitive and parameters on arguments of the same avals reproduces
+    that module.
+    """
+
+    closed = jax.make_jaxpr(fn)(*args)
+    scans = [eqn for eqn in closed.jaxpr.eqns if eqn.primitive.name == "scan"]
+    if len(scans) != 1:
+        raise ValueError(f"expected one top-level scan, found {len(scans)}")
+    eqn = scans[0]
+    operands = [jnp.zeros(var.aval.shape, var.aval.dtype) for var in eqn.invars]
+
+    def bind_scan(*values: Any) -> Any:
+        return eqn.primitive.bind(*values, **eqn.params)
+
+    return _compiled_hlo_text(bind_scan, *operands, dump=dump)
+
+
+def _runtime_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
+    """Lower the scan ``run_runtime_nonlinear`` compiles.
+
+    The runtime calls the same raw scan function outside jit, so XLA compiles
+    its scan alone, with cache, params and policy arrays as operands.
+    """
+
+    return _scan_equation_hlo(
+        prepared._run_raw.__wrapped__, prepared.initial_state, dump=dump
+    )
 
 
 def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
@@ -1197,8 +1244,12 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
                 return_fields=False,
             )
 
-        if args.route == "diagnostics":
-            text = _diagnostics_scan_hlo(
+        if args.route == "scan":
+            text = _compiled_hlo_text(
+                step, g0, cache, params, dump=dump(f"step_{method}")
+            )
+        else:
+            prepared = _prepared_diagnostics_for_hlo(
                 cfg,
                 g0,
                 grid,
@@ -1209,18 +1260,17 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
                 method=method,
                 ky_index=ky_index,
                 kx_index=kx_index,
-                dump=dump(f"diagnostics_{method}"),
             )
-        else:
-            text = _compiled_hlo_text(
-                step, g0, cache, params, dump=dump(f"step_{method}")
+            route_hlo = (
+                _runtime_scan_hlo if args.route == "runtime" else _diagnostics_scan_hlo
             )
+            text = route_hlo(prepared, dump=dump(f"{args.route}_{method}"))
         counts = _hlo_op_counts(text)
         evaluations = RK_RHS_EVALUATIONS[method]
-        # The diagnostics graph also holds the field solve and diagnostics.
+        # The diagnostics graphs also hold the field solve and diagnostics.
         beyond = (
             None
-            if args.route == "diagnostics"
+            if args.route != "scan"
             else {
                 key: value - evaluations * rhs_counts[key]
                 for key, value in counts.items()

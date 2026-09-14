@@ -1867,6 +1867,190 @@ def test_sparse_shift_invert_selects_only_original_operator_certified_modes(
     assert captured["factorization"] == "factor"
 
 
+def _selected_linked_case(nx: int = 8):
+    """One-ky linked grid; at Nx=8 its five-link chain skips kx rows {3, 4, 5}."""
+
+    from gkx.core_grid import select_ky_grid
+
+    grid_cfg = GridConfig(
+        Nx=nx,
+        Ny=4,
+        Nz=8,
+        Ly=2.0 * np.pi * 10.0,
+        boundary="linked",
+        y0=10.0,
+        jtwist=1,
+    )
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams(damp_ends_amp=0.1)
+    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
+    shape = (2, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    index = jnp.arange(int(np.prod(shape)), dtype=jnp.float64)
+    # Golden-angle start, nonzero on every row like gkx.objectives.core's.
+    seed = jnp.reshape(jnp.exp(1j * (index + 1.0) * 0.6180339887498948), shape)
+    return cache, params, seed, LinearTerms()
+
+
+def _chain_modes(cache) -> np.ndarray:
+    ny, nx = int(cache.ky.size), int(cache.kx.size)
+    visited = np.zeros(ny * nx, dtype=bool)
+    for chain in cache.linked_indices:
+        visited[np.asarray(chain).reshape(-1)] = True  # flat index ky + ny * kx
+    return visited.reshape(nx, ny).T
+
+
+def _off_chain_weight(vector, mask) -> float:
+    outside = np.asarray(vector)[..., ~np.asarray(mask), :]
+    return float(np.max(np.abs(outside), initial=0.0))
+
+
+def test_linked_cover_mask_is_the_chain_modes_and_none_when_all_are() -> None:
+    cache, _params, seed, _terms = _selected_linked_case()
+    mask = np.asarray(ka._linked_covered_mode_mask(cache))
+    np.testing.assert_array_equal(mask, _chain_modes(cache))
+    assert np.flatnonzero(mask[0]).tolist() == [0, 1, 2, 6, 7]  # GX Nakx = 5
+    projected = ka._project_to_linked_cover(seed, jnp.asarray(mask))
+    assert _off_chain_weight(projected, mask) == 0.0
+    np.testing.assert_array_equal(
+        np.asarray(projected)[..., mask, :], np.asarray(seed)[..., mask, :]
+    )
+
+    # Two-sided ky: chains visit rows {0, 1}; row -1 is rebuilt from the
+    # conjugate (-ky, -kx) modes, so it is coupled; the Nyquist row is not.
+    _grid, two_sided, _p, _v, _t, _terms2 = _tiny_krylov_setup(linked=True)
+    chain = _chain_modes(two_sided)
+    two_sided_mask = np.asarray(ka._linked_covered_mode_mask(two_sided))
+    np.testing.assert_array_equal(two_sided_mask[:3], chain[:3])
+    np.testing.assert_array_equal(two_sided_mask[3], chain[1][[0, 3, 2, 1]])
+    assert not two_sided_mask[2].any()
+
+    _grid, periodic, _p, periodic_seed, _t, _terms3 = _tiny_krylov_setup()
+    full_cover, _p1, _s1, _t1 = _selected_linked_case(nx=1)
+    assert full_cover.linked_full_cover
+    for unchanged in (periodic, full_cover):
+        assert ka._linked_covered_mode_mask(unchanged) is None
+    assert ka._project_to_linked_cover(periodic_seed, None) is periodic_seed
+
+
+@pytest.mark.parametrize("two_sided", [False, True])
+def test_modes_outside_linked_chains_are_decoupled_from_them(two_sided) -> None:
+    if two_sided:
+        _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=True)
+        state = jnp.asarray(np.random.default_rng(3).normal(size=v0.shape), v0.dtype)
+    else:
+        cache, params, state, terms = _selected_linked_case()
+        term_cfg = linear_terms_to_term_config(terms)
+    mask = ka._linked_covered_mode_mask(cache)
+    on_chain = ka._project_to_linked_cover(state, mask)
+    image_on = ka._apply_operator(on_chain, cache, params, term_cfg)
+    image_off = ka._apply_operator(state - on_chain, cache, params, term_cfg)
+    assert float(jnp.linalg.norm(image_on)) > 0.0
+    assert _off_chain_weight(image_on, mask) == 0.0
+    assert float(jnp.max(jnp.abs(ka._project_to_linked_cover(image_off, mask)))) == 0.0
+
+
+def _dense_chain_target(cache, params, term_cfg, seed) -> complex:
+    columns = jax.vmap(
+        lambda column: ka._apply_operator(
+            column.reshape(seed.shape), cache, params, term_cfg
+        ).reshape(-1)
+    )(jnp.eye(seed.size, dtype=seed.dtype))
+    values, vectors = np.linalg.eig(np.asarray(columns).T)
+    mask = np.broadcast_to(np.asarray(_chain_modes(cache))[:, :, None], seed.shape)
+    chain = np.linalg.norm(vectors[mask.reshape(-1)], axis=0) > 0.5
+    return complex(values[chain][np.argmax(values[chain].real)])
+
+
+def test_sparse_shift_invert_assembles_linked_chain_columns_only(monkeypatch) -> None:
+    cache, params, seed, terms = _selected_linked_case()
+    term_cfg = linear_terms_to_term_config(terms)
+    target = _dense_chain_target(cache, params, term_cfg, seed)
+    mask = _chain_modes(cache)
+
+    def solve():
+        messages: list[str] = []
+        pair = lk.dominant_eigenpair(
+            seed,
+            cache,
+            params,
+            terms=terms,
+            method="sparse_shift_invert",
+            shift=target + 0.01,
+            status_callback=messages.append,
+        )
+        return pair, " ".join(messages)
+
+    (value, vector), status = solve()
+    assert "n=320 " in status and "(320 of 512 unknowns)" in status
+    assert vector.shape == seed.shape
+    assert _off_chain_weight(vector, mask) == 0.0
+    assert abs(complex(value) - target) <= 1.0e-9 * abs(target)
+    monkeypatch.setattr(lk, "_linked_covered_mode_mask", lambda _cache: None)
+    (full_value, _full_vector), full_status = solve()
+    assert "n=512 " in full_status
+    assert abs(complex(value) - complex(full_value)) <= 1.0e-12 * abs(target)
+
+
+@pytest.mark.parametrize("method", ["power", "propagator", "arnoldi", "adaptive"])
+def test_eigen_routes_return_no_weight_outside_linked_chains(method) -> None:
+    cache, params, seed, terms = _selected_linked_case()
+    if method == "adaptive":
+        # One bounded restart: this small-gap case is not certified, and the
+        # contract under test is the support of every vector the route returns.
+        solution = ap.adaptive_propagator_eigenpair(
+            seed,
+            cache,
+            params,
+            terms,
+            krylov_dim=8,
+            max_restarts=1,
+            chunk_horizon=5.0,
+            max_stability_retries=0,
+            candidate_count=2,
+        )
+        vector = solution.eigenvector
+    else:
+        _value, vector = lk.dominant_eigenpair(
+            seed, cache, params, terms=terms, method=method, certify=False
+        )
+    assert vector.shape == seed.shape
+    assert float(jnp.linalg.norm(vector)) > 0.0
+    assert _off_chain_weight(vector, _chain_modes(cache)) == 0.0
+
+
+def test_shift_invert_inner_solve_stays_on_linked_chain_modes() -> None:
+    cache, params, seed, terms = _selected_linked_case()
+    term_cfg = linear_terms_to_term_config(terms)
+    mask = ka._linked_covered_mode_mask(cache)
+    solve = ka._shift_invert_apply_factory(
+        seed,
+        cache,
+        params,
+        term_cfg,
+        sigma_val=jnp.asarray(0.05 - 0.1j, dtype=seed.dtype),
+        gmres_tol=1.0e-8,
+        gmres_maxiter=40,
+        gmres_restart=20,
+        shift_preconditioner="hermite-line",
+    )
+    x, stats = solve(ka._project_to_linked_cover(seed, mask), cache, params, term_cfg)
+    assert float(jnp.linalg.norm(x)) > 0.0
+    assert _off_chain_weight(x, np.asarray(mask)) == 0.0
+    assert np.isfinite(float(stats.max_relative_residual))
+
+
+def test_seed_without_linked_chain_component_is_refused() -> None:
+    cache, params, seed, terms = _selected_linked_case()
+    mask = ka._linked_covered_mode_mask(cache)
+    off_chain = seed - ka._project_to_linked_cover(seed, mask)
+    with pytest.raises(ValueError, match="linked-chain modes"):
+        lk.dominant_eigenpair(off_chain, cache, params, terms=terms)
+    with pytest.raises(ValueError, match="linked-chain modes"):
+        ap.adaptive_propagator_eigenpair(off_chain, cache, params, terms)
+
+
 def test_shift_invert_outer_residual_triggers_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2132,8 +2316,9 @@ EXACT = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
 ALLOWED_UNPINNED_MATRIX_DOTS = {
     # Renamed by the flat-layout pass; the file, the line and the measurement
     # behind the exemption are unchanged, only the module path is. The line moved
-    # 675 -> 749 when the inner-solve statistics were added above it; same code.
-    "solvers_linear_krylov_algorithms.py:749": "overlap ranking only; argmax provably unmoved",
+    # 675 -> 749 when the inner-solve statistics were added above it, then
+    # 749 -> 828 when the linked-chain mask helpers were (Q6); same code.
+    "solvers_linear_krylov_algorithms.py:828": "overlap ranking only; argmax provably unmoved",
 }
 
 
