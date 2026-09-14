@@ -1,0 +1,18 @@
+supervisor pid=160692 start=2026-09-13T14:35:44-05:00 shift0=0.09302951-0.28199404j
+launch rung=1 arm=sparse shift=0.09302951-0.28199404j cap=1800s 2026-09-13T14:35:44-05:00 load=16.10 9.25 4.71 memavail_kb=43369916
+  pids timeout=160703 python=160706
+  done rung=1 arm=sparse rc=0 elapsed=12s maxrss_kb=975408 2026-09-13T14:35:56-05:00
+  shift for rung 2 = 0.1157314425-0.2416600155j (rung 1 certified sparse eigenvalue)
+launch rung=1 arm=default shift=0.1157314425-0.2416600155j cap=1800s 2026-09-13T14:35:56-05:00 load=19.10 10.25 5.11 memavail_kb=42875408
+  pids timeout=161207 python=161210
+  done rung=1 arm=default rc=0 elapsed=17s maxrss_kb=1258204 2026-09-13T14:36:13-05:00
+launch rung=2 arm=sparse shift=0.1157314425-0.2416600155j cap=1800s 2026-09-13T14:36:13-05:00 load=18.43 10.53 5.29 memavail_kb=43355260
+  pids timeout=161623 python=161626
+  done rung=2 arm=sparse rc=0 elapsed=87s maxrss_kb=1157088 2026-09-13T14:37:40-05:00
+  shift for rung 3 = 0.09824745845-0.2770517769j (rung 2 certified sparse eigenvalue)
+launch rung=2 arm=default shift=0.09824745845-0.2770517769j cap=1800s 2026-09-13T14:37:40-05:00 load=41.45 20.03 9.10 memavail_kb=43274072
+  pids timeout=162566 python=162569
+  done rung=2 arm=default rc=0 elapsed=37s maxrss_kb=1276096 2026-09-13T14:38:17-05:00
+launch rung=3 arm=sparse shift=0.09824745845-0.2770517769j cap=1800s 2026-09-13T14:38:17-05:00 load=31.91 20.16 9.60 memavail_kb=43219540
+  pids timeout=163424 python=163427
+superseded by coordinator resource correction (20G/cores 0-11/thread caps) 2026-09-13T14:39:21-05:00
