@@ -13299,3 +13299,175 @@ to find which piece keeps XLA:CPU from the N1 layout, HLO-only. Or go to N3, who
 layout removes the transposes that choice acts on. Separately, the prepared and runtime
 routes disagree at roundoff. Choosing one as the reference, and giving `gkx.prepare` the
 runtime's operand placement, is a correctness question, not a speed one.
+
+## 2026-09-14 — Q9: batched linked-chain transforms (plan §5.3 N2)
+
+**Outcome: paused before the timing gate; no verdict.** The shared transform plus the transpose-free chain layout (S+T) halves the chain FFT launches and cuts materialized bytes 43–48% on every ledgered graph, bitwise on 100-step trajectories; neither S+T nor T alone is adopted until primal and VJP A/B/A/B timings exist. Branch `perf/batched-chain-fft`, based on
+`ccdd4bf12` (#239's head).
+
+**O(1) exact launches do not exist for this operator.** A chain of `L` links owns
+`N = L·Nz` samples and the periodic spectral operator on `Z_N`, with wavenumbers
+`k_j = 2πj/(N dz)`. One FFT launch has one length `M`.
+- Zero-padding a chain to `M` samples its DTFT at `j·N/M`, not at `j`. That is a
+  different operator: ‖Δ‖/‖ref‖ of the padded derivative is .21–.45 for
+  `(N, M)` ∈ {(24,48), (48,120), (72,120), (24,72), (96,288)} (f64, `census.py`).
+- Tiling a chain `M/N` times (exact only when `N | M`) puts `(M/N)·f̂_N[j]` in bin
+  `j·M/N`, at the same `k` (Nyquist sign included; the frequency tables agree to
+  roundoff) and zeros elsewhere. Measured: tiled derivative ‖Δ‖/‖ref‖ 1.4e-16 to
+  4.2e-16, off-bins ≤1e-14. One launch per RHS would need `M = lcm` of all chain
+  lengths.
+- Equal lengths are already grouped: the cache holds one class per distinct length.
+
+Chain classes of the Cyclone nonlinear deck, and what one launch would transform
+(`census.py`):
+
+| grid | classes `(nChains, nLinks)` | chain samples | padded to longest | tiled to lcm |
+|---|---|---:|---:|---:|
+| 32×32×24 | (175,1) (16,2) (1,3) (4,4) (1,5) | 5,544 | 4.26× | 51× (lcm 60) |
+| 64×64×24 | (690,1) (61,2) (16,3) (7,4) (3,5) (2,8) (3,9) | 22,704 | 7.44× | 298× (lcm 360) |
+| 96×96×48 | (1452,1) (132,2) (33,3) (15,4) (3,5) (7,6) (3,7) (2,12) (3,13) | 96,768 | 10.6× (not exact) | 4,469× (lcm 5460) |
+
+So the exact minimum is one FFT and one IFFT per class for everything that
+transforms on the chains. The RHS had four per class: streaming (`i k_z` on the
+Hermite-ladder and field-drive operand) and the `|k_z|` hypercollision branch
+(`c(s,m)·G`) each gathered, transformed and scattered on their own.
+
+**What changed (two pieces, measured separately).**
+- **S, shared transform.** Both operands scale the state by coefficients that do
+  not depend on `(ky, kx, z)`, then apply a diagonal multiplier of the same chain
+  spectrum. `_linked_fft_apply` accepts a tuple of operands with one operator each;
+  per class it gathers each operand, stacks the two chain arrays, and issues one
+  FFT, one multiply by `[i k_z, |k_z|]`, one IFFT and one output write.
+  `assembly._shared_linked_streaming_hypercollisions` takes that route when both
+  terms are statically on, the tube is linked and the dtypes agree; otherwise the
+  separate routes run unchanged. Per-element arithmetic is unchanged.
+- **T, chain layout without transposes.** The chain gather used to swap `kx` in
+  front of `ky` (`ky + Ny·kx` flat order) and swap back after the output gather.
+  It now reshapes in the state's own `(ky, kx)` row order and translates the chain
+  maps at trace time (`_state_mode_rows`, `_state_row_table`). Only data movement
+  changes.
+- A first S prototype stacked the two full operands before the gather (`jnp.stack`).
+  It halved launches too, but wrote two extra states per RHS (+3,151,488 B at 32,
+  +6.8%). Stacking after the gather keeps only the chain-sized stack.
+
+**HLO ledger** (`profile_runtime_kernels.py nonlinear-step-hlo`, XLA:CPU, jax 0.10.2;
+base → S+T; T alone in brackets):
+
+| graph | fft | concatenate | copy | transpose | bytes written |
+|---|---:|---:|---:|---:|---:|
+| RHS 32×32×24 Nl2/Nm4 | 23→13 [23] | 11→18 [11] | 35→19 [21] | 35→19 [21] | 46,295,964→24,991,260 [24,275,868] |
+| diagnostics rk3, 32 | 74→44 [74] | 32→38 [32] | 136→85 [92] | 117→66 [73] | 156,556,500→89,479,380 [87,350,484] |
+| diagnostics rk4, 32 | 97→57 [97] | 41→49 [41] | 175→105 [115] | 156→86 [96] | 208,946,388→117,413,076 [114,574,548] |
+| runtime rk3, 32 | 73→43 [73] | 33→44 [33] | 277→226 [233] | 115→64 [71] | 156,134,052→89,062,692 [86,928,036] |
+| runtime rk4, 32 | 96→56 [96] | 42→55 [42] | 316→246 [256] | 154→84 [94] | 208,523,940→116,996,388 [114,152,100] |
+| RHS 64×64×24 Nl4/Nm8 | 31→17 [31] | 11→22 [11] | 43→23 [25] | 43→23 [25] | 866,160,328→424,812,232 [413,175,496] |
+| diagnostics rk3, 64 | 98→56 [98] | 32→44 [32] | 163→100 [107] | 144→81 [88] | 2,884,020,404→1,509,607,604 [1,474,734,260] |
+| diagnostics rk4, 64 | 129→73 [129] | 41→57 [41] | 210→124 [134] | 191→105 [115] | 3,849,267,380→1,983,162,548 [1,936,664,756] |
+| runtime rk3, 64 | 97→55 [97] | 33→52 [33] | 303→240 [247] | 141→78 [85] | 2,873,459,056→1,499,058,544 [1,464,172,912] |
+| runtime rk4, 64 | 128→72 [128] | 42→65 [42] | 350→264 [274] | 188→102 [112] | 3,838,706,032→1,972,613,488 [1,926,103,408] |
+
+The base rows equal #239's (same JSON SHA-256). Per RHS at 32, the 20 chain
+launches become 10 (5 classes × FFT+IFFT) and the 3 bracket transforms are
+unchanged. Attribution (`hlo_bytes.py`, RHS at 32): T removes four
+`c64[1,2,4,1024,24]` copies (the flatten transposes, 6.29 MB) and XLA then also drops
+fourteen full-state `c64[1,2,4,32,32,24]` copies (22.0 MB). S adds the per-class
+stack concatenates (0.83 MB); its 2-slot copies replace pairs of 1-slot copies
+byte for byte. So S+T writes 2.4–2.9% more than T alone, and 43–48% less than base.
+
+**Identity.** `‖Δ‖/‖ref‖` per output against base.
+- **RHS terms and VJPs** (`rhs_identity.py`). Every named term of
+  `assemble_rhs_terms_cached`, the total, the full nonlinear RHS, and the VJP of
+  `Re⟨c, rhs_linear(G)⟩` wrt G, tprim and nu_hyper_m. Cases: the linked Cyclone
+  pilot (Nx=8, Ny=16, Nz=16, jtwist=1, Nl4/Nm8, classes (14,1) (4,2) (1,3) (1,5)),
+  the same with nu_hyper_m=.5, and the nonlinear deck at 32×32×24 and 64×64×24.
+  The shared route traced in every case.
+
+  | tree | f32 bitwise | f32 largest | x64 bitwise | x64 largest |
+  |---|---:|---|---:|---|
+  | S+T | 51/58 | vjp_G 4.1e-8 to 4.6e-8; nl64 hypercollisions 5.4e-9, total 2.8e-9, nonlinear RHS 2.8e-10 | 51/58 | vjp_G 6.3e-17 to 8.6e-17; nl64 hypercollisions 4.0e-18; nl32 nonlinear RHS 1.5e-19 |
+  | T | 56/58 | nonlinear RHS 3.2e-11 (32), 1.6e-9 (64) | 58/58 | — |
+
+- **100-step trajectories** (Q4's gate, `gate_traj.py`). Deck at 16×16×24, Nl2/Nm4,
+  dt .01, `init_amp=10` (‖NL‖/‖L‖ = .0506), classes (53,1) (5,2) (1,3). Cases:
+  `integrate_nonlinear` with euler, rk2, rk3, rk3_classic, rk4, sspx3 and k10;
+  `run_runtime_nonlinear` rk3/rk4 × {adaptive, collision split implicit, fixed
+  mode}; `integrate_nonlinear_sharded` rk3, rk3_classic, rk4;
+  `integrate_nonlinear_species_hermite` rk3/rk4; and the checkpointed
+  `nonlinear_heat_flux_window` value and d/dtprim for rk3/rk4. Result: **65/65
+  bitwise in f32 and in x64.** The archives have the same SHA-256 as base and as
+  #231's main archives.
+
+**Why the roundoff, algebraically.** Two causes, both outside the operator algebra.
+- *FFT batch layout.* The XLA:CPU FFT thunk splits a batch of lines across the
+  intra-op pool. DUCC processes lines in SIMD lanes with a scalar remainder, so the
+  lanes can round differently. Stacking doubles the line count and moves some lines
+  between the two paths. `probe_stack_bits.py` at 64×64×24:
+  - default flags: FFT, multiply and IFFT of a 2-slot batch differ from the single
+    slot for classes of length 24, 48, 72 and 216;
+  - `--xla_cpu_multi_thread_eigen=false`: all seven classes are bitwise, and so is
+    the full stacked `_linked_fft_apply`.
+- *Adjoint and fusion order.* In the VJP the two branches' cotangents reach G
+  through one stacked adjoint instead of two added separately. Floating-point
+  addition is not associative, so the sum is the same to one ulp (f32 ε=1.2e-7
+  against 4.6e-8; f64 ε=2.2e-16 against 8.6e-17). T alone changes no FFT batch, and
+  moves only the bracket's result (≤1.6e-9 f32, bitwise x64), because XLA fuses
+  differently around arrays that are no longer transposed.
+
+**VJP gate.** Linear RHS VJP: as in the identity table. Checkpointed window
+(20 steps, rk3/rk4): value and d/dtprim bitwise in both precisions.
+
+**Timing.** Not run. The Mac is shared (load 9–22). Office (Xeon W-2295, 18 cores/36 threads) was staged with base/S+T/T trees (`git archive`, tarball SHA-256 4cc4a1cd2d82…c874) and a self-gating driver (`run_ab.sh`: cores 10–17 pinned, 10–17 and 28–35 idle below 10% busy, 1-min load below 10). Load stayed 29–32 (Q20 GS2 rungs, GKX eigen runs, VMEX b3b, DKX HSX ladders), so no arm started before the pause. The `xla_cpu_multi_thread_eigen` re-measurement was not run either; only its effect on bitwise identity is known (above).
+
+**Tests and checks** (x64 unless noted, `gkx.__file__` in the worktree):
+- `tests/unit/operators/test_linear_streaming.py` + `test_terms_assembly.py`: 50 passed, 1 skipped (full cover needs an even mode count on Ny=2); the new stacked and shared-route tests also pass in f32 (15 selected).
+- New tests: stacked `_linked_fft_apply` against the per-class operator and a per-chain numpy reference for three chain-length mixes × gather/full-cover/scatter routes; operand validation; RHS terms, total and state VJP through the shared route against the separate routes on a four-class linked pilot; fallback when hypercollisions, the |kz| branch or streaming are statically off, or the tube is periodic.
+- `mypy`: no issues in 184 source files. ruff 0.16.4 check and format: pass on changed files.
+- Not run before the pause: the remaining required files (`test_nonlinear.py`, `test_nonlinear_helpers_extra.py`, `test_time_integrators.py`, `test_linear_krylov_core.py`, `test_runtime_and_scaling_profile_contracts.py`, `test_autodiff_solver_objectives.py`; the run was stopped at 14% with no failure), the hypercollision-touching suites, the release gates, and the architecture manifest (source lines 89618→89859 measured, tests not yet).
+
+**Environment.** HLO counts, identity and trajectories: Apple M3 Max, 14 logical CPUs,
+macOS 14.4.1, Python 3.11.14, jax/jaxlib 0.10.2, numpy 2.4.6,
+`/Users/rogeriojorge/local/venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src:<tree>`,
+`JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at a time behind a 1-minute load
+gate below 20. Every tree was pinned: base `git archive ccdd4bf12`, S+T `a86c435b2`,
+T = S+T with the shared route disabled (one-line patch `tonly.patch` daad1b480980…fe29).
+Scripts, ledger JSONs and comparison JSONs are in `plan/research/scripts/2026-09-14-q9-batched-chain-fft/` (shell runners take `Q9_DIR` and `PY`; `gate_traj.py` is #231's gate with the deck path relative). Scratch SHA-256 (first 12 and last 4 hex digits; `gate_traj.py` and the runners before path scrubbing):
+- ledger JSON base = #239's; S+T diagnostics 32 35a6f18f571d…2696, 64
+  db98d467855f…85df, runtime 32 f54e4d165279…4355, 64 f91145f51566…273a; T
+  diagnostics 32 7ec5c929bb9b…2f8a, 64 468b459b7c5a…f60d, runtime 32
+  d7bb8eccf88a…8307, 64 05742aac49d1…ae48;
+- identity npz: base f32 b0f36f7e4e5e…edf5, x64 673da52c7396…cf6f; S+T f32
+  175ee99096fd…59f3, x64 84f8263bfc03…c37d; T f32 83db81a6936e…f624, x64 equal to
+  base;
+- trajectories: f32 67bd0b87882f…0a9a, x64 f22fc6ea025f…b4d1 (base = S+T);
+- scripts: `census.py` e84e224c5106…367f, `rhs_identity.py` 56fc9704f762…e77d,
+  `compare_npz.py` 3f4f98be42ee…b89d, `gate_traj.py` fddfdf3ae156…fe9a,
+  `probe_stack_bits.py` 22d0d696fab8…08d0, `hlo_bytes.py` a6d0a72158ce…c4c6,
+  `bench_q9.py` ad27f4bb593f…6766, `run_ab.sh` 7597e411117c…aecd.
+
+Commands: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo --route
+{diagnostics,runtime} --methods rk3,rk4 [--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8] --out
+<json> --hlo-dir <dir>`; `python rhs_identity.py <npz>` and `GATE_GRID=16,16,24,2,4
+GATE_AMP=10 GATE_STEPS=100 python gate_traj.py <npz>`, each with and without
+`JAX_ENABLE_X64=true GKX_X64=1`, then `python compare_npz.py <base> <other>`.
+
+**Limitations.** XLA:CPU only; GPU fusion and cuFFT plans differ. 96×96×48 was
+censused, not lowered. The reflectionless Hermite closure keeps its own `|k_z|`
+transform (not on any assembled route). The implicit linear streaming solver
+(`solvers_linear_implicit.py`) keeps the `ky + Ny·kx` flat order. Species×Hermite and
+the sharded runner ran on one device.
+
+**Next question.** Is T alone the whole win? T writes 2.4–2.9% fewer bytes than S+T but keeps twice the chain launches; only timing separates them.
+
+### Paused 2026-09-14 — state and resume steps
+
+**Done.** Algebra and census (O(1) exact launches impossible; minimum one FFT+IFFT per class). S+T implemented and committed (`a86c435b2`), with tests. HLO ledger base/S+T/T at 32 and 64, rk3/rk4, diagnostics and runtime routes. RHS/VJP identity in f32 and x64. 100-step trajectory gate bitwise (65/65 both precisions). FFT batch-layout roundoff traced to the intra-op pool. mypy clean.
+
+**Not done.** (1) Office A/B/A/B timings of base, S+T and T at 64×64×24 Nl4/Nm8 (RHS, RHS VJP, 5-step rk3 scan, 6-step checkpointed window VJP), with and without `--xla_cpu_multi_thread_eigen=false`. (2) Choose S+T, T alone, or reject; if T alone, drop the shared route and its tests. (3) Remaining gate tests and release gates. (4) `tools/package_architecture_manifest.toml` baselines at measured counts, then `check_package_architecture_manifest.py` and, after committing, `check_repository_size_manifest.py`. (5) PR against `main`.
+
+**Resume.**
+1. `git -C ~/local/GKX-worktrees/integrate-chain worktree add ../batched-chain-fft-resume origin/perf/batched-chain-fft` (or reuse `~/local/GKX-worktrees/batched-chain-fft`); `git status` must be clean.
+2. Stage on office in a fresh `mktemp -d /home/rjorge/gkx-q9-...` directory: `git archive ccdd4bf12 src tools examples` → `base/`, `git archive a86c435b2 src tools examples` → `p2t/`, the same into `tonly/` with `return None` inserted at the top of `_shared_linked_streaming_hypercollisions`; copy `bench_q9.py` and `run_ab.sh`.
+3. Check `uptime` and per-core idleness first. Then from that directory: `PY=/home/rjorge/venvs/gkx-nl/bin/python LOADMAX=10 CHECK_CORES=10-17,28-35 ./run_ab.sh $PWD 10-17 3 "--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8 --reps 7" pool`, then the same with `nopool`, launched with `setsid nohup ... < /dev/null &`. Start it from a script file, because a `pgrep -f` pattern typed on the ssh command line matches that command line itself.
+4. Adopt only if the per-rep medians of S+T (or T) are not slower than base for `rhs`, `rhs_vjp`, `scan_rk3` and `window_vjp` in every block. Then run the gates of step (3) and the manifests of step (4), and delete the office directory.
+
+**Process state at pause.** Local: none (the gate chain and its pytest were stopped; verified absent). Office: driver PIDs 949852 (`launch_ab.sh`) and 949854 (`run_ab.sh`) killed and verified absent; no timing arm had started; `/home/rjorge/gkx-q9-batched-chain-fft-20260914.tDIJSZ` deleted. No other remote job was launched by this lane.

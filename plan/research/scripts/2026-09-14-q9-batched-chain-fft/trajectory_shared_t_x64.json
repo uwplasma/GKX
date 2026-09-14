@@ -1,0 +1,464 @@
+{
+  "summary": {
+    "n": 65,
+    "bitwise": 65,
+    "max_rel": 0.0
+  },
+  "rows": {
+    "runtime/adaptive/rk3/Wg_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10264.065640614555,
+      "dtype": "float64"
+    },
+    "runtime/adaptive/rk3/Wphi_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 235.18034586391377,
+      "dtype": "float64"
+    },
+    "runtime/adaptive/rk3/dt_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.5000000074505806,
+      "dtype": "float32"
+    },
+    "runtime/adaptive/rk3/heat_flux_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 504.39432989874757,
+      "dtype": "float64"
+    },
+    "runtime/adaptive/rk3/phi_mode_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 28.544775094476286,
+      "dtype": "complex128"
+    },
+    "runtime/adaptive/rk3/state": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 247.22153481975067,
+      "dtype": "complex64"
+    },
+    "runtime/adaptive/rk3/t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 29.08391991979835,
+      "dtype": "float32"
+    },
+    "runtime/adaptive/rk4/Wg_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10264.180973106357,
+      "dtype": "float64"
+    },
+    "runtime/adaptive/rk4/Wphi_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 235.18067770872037,
+      "dtype": "float64"
+    },
+    "runtime/adaptive/rk4/dt_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.5000000074505806,
+      "dtype": "float32"
+    },
+    "runtime/adaptive/rk4/heat_flux_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 504.39475746249235,
+      "dtype": "float64"
+    },
+    "runtime/adaptive/rk4/phi_mode_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 28.544832211057642,
+      "dtype": "complex128"
+    },
+    "runtime/adaptive/rk4/state": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 247.222337716393,
+      "dtype": "complex64"
+    },
+    "runtime/adaptive/rk4/t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 29.08391991979835,
+      "dtype": "float32"
+    },
+    "runtime/collision_split/rk3/Wg_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10261.024360893907,
+      "dtype": "float64"
+    },
+    "runtime/collision_split/rk3/Wphi_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 234.9613164725225,
+      "dtype": "float64"
+    },
+    "runtime/collision_split/rk3/dt_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.5000000074505806,
+      "dtype": "float32"
+    },
+    "runtime/collision_split/rk3/heat_flux_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 504.6554659675979,
+      "dtype": "float64"
+    },
+    "runtime/collision_split/rk3/phi_mode_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 28.46158750930768,
+      "dtype": "complex128"
+    },
+    "runtime/collision_split/rk3/state": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 247.53801580122283,
+      "dtype": "complex64"
+    },
+    "runtime/collision_split/rk3/t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 29.08391991979835,
+      "dtype": "float32"
+    },
+    "runtime/collision_split/rk4/Wg_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10261.100273368862,
+      "dtype": "float64"
+    },
+    "runtime/collision_split/rk4/Wphi_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 234.9614855977408,
+      "dtype": "float64"
+    },
+    "runtime/collision_split/rk4/dt_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.5000000074505806,
+      "dtype": "float32"
+    },
+    "runtime/collision_split/rk4/heat_flux_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 504.65589685951323,
+      "dtype": "float64"
+    },
+    "runtime/collision_split/rk4/phi_mode_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 28.46164646423269,
+      "dtype": "complex128"
+    },
+    "runtime/collision_split/rk4/state": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 247.5385645958737,
+      "dtype": "complex64"
+    },
+    "runtime/collision_split/rk4/t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 29.08391991979835,
+      "dtype": "float32"
+    },
+    "runtime/fixed_mode/rk3/Wg_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10279.460165789042,
+      "dtype": "float64"
+    },
+    "runtime/fixed_mode/rk3/Wphi_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 236.37761299032525,
+      "dtype": "float64"
+    },
+    "runtime/fixed_mode/rk3/dt_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.5000000074505806,
+      "dtype": "float32"
+    },
+    "runtime/fixed_mode/rk3/heat_flux_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 496.8927260314543,
+      "dtype": "float64"
+    },
+    "runtime/fixed_mode/rk3/phi_mode_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 29.462220528428016,
+      "dtype": "complex128"
+    },
+    "runtime/fixed_mode/rk3/state": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 248.18255199319418,
+      "dtype": "complex64"
+    },
+    "runtime/fixed_mode/rk3/t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 29.08391991979835,
+      "dtype": "float32"
+    },
+    "runtime/fixed_mode/rk4/Wg_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10279.574299954536,
+      "dtype": "float64"
+    },
+    "runtime/fixed_mode/rk4/Wphi_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 236.37791787744086,
+      "dtype": "float64"
+    },
+    "runtime/fixed_mode/rk4/dt_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.5000000074505806,
+      "dtype": "float32"
+    },
+    "runtime/fixed_mode/rk4/heat_flux_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 496.8931675896776,
+      "dtype": "float64"
+    },
+    "runtime/fixed_mode/rk4/phi_mode_t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 29.46225709572306,
+      "dtype": "complex128"
+    },
+    "runtime/fixed_mode/rk4/state": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 248.18332356393455,
+      "dtype": "complex64"
+    },
+    "runtime/fixed_mode/rk4/t": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 29.08391991979835,
+      "dtype": "float32"
+    },
+    "scan/euler/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 204.05564525712416,
+      "dtype": "complex128"
+    },
+    "scan/euler/phi": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1885.8522403779787,
+      "dtype": "complex128"
+    },
+    "scan/k10/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89776536084622,
+      "dtype": "complex128"
+    },
+    "scan/k10/phi": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1885.670049688338,
+      "dtype": "complex128"
+    },
+    "scan/rk2/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89740507104085,
+      "dtype": "complex128"
+    },
+    "scan/rk2/phi": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1885.6692636498974,
+      "dtype": "complex128"
+    },
+    "scan/rk3/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89775321271273,
+      "dtype": "complex128"
+    },
+    "scan/rk3/phi": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1885.6700449860643,
+      "dtype": "complex128"
+    },
+    "scan/rk3_classic/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89775323263936,
+      "dtype": "complex128"
+    },
+    "scan/rk3_classic/phi": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1885.6700450746296,
+      "dtype": "complex128"
+    },
+    "scan/rk4/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89776541572093,
+      "dtype": "complex128"
+    },
+    "scan/rk4/phi": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1885.6700497228703,
+      "dtype": "complex128"
+    },
+    "scan/sspx3/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89775321050763,
+      "dtype": "complex128"
+    },
+    "scan/sspx3/phi": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1885.670044979708,
+      "dtype": "complex128"
+    },
+    "sharded/rk3/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89775321271273,
+      "dtype": "complex128"
+    },
+    "sharded/rk3_classic/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89775323263936,
+      "dtype": "complex128"
+    },
+    "sharded/rk4/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89776541572093,
+      "dtype": "complex128"
+    },
+    "species_hermite/rk3/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89775321271273,
+      "dtype": "complex128"
+    },
+    "species_hermite/rk4/G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 203.89776541572093,
+      "dtype": "complex128"
+    },
+    "window/rk3/grad_tprim": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1.9995157833920167,
+      "dtype": "float64"
+    },
+    "window/rk3/value": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 3.236116236701842,
+      "dtype": "float64"
+    },
+    "window/rk4/grad_tprim": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1.999515798947352,
+      "dtype": "float64"
+    },
+    "window/rk4/value": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 3.2361163143119875,
+      "dtype": "float64"
+    }
+  }
+}
