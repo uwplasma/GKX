@@ -1,0 +1,60 @@
+lane=gs2 pid=938591 start=2026-09-14T12:54:50-05:00 np=8 cpus=0-7 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_gs2.txt
+gs2 gs2_M_ky0.15_r1 start=2026-09-14T12:54:50-05:00
+gs2 gs2_M_ky0.15_r1 rc=0 wall=7.38 end=2026-09-14T12:54:58-05:00
+lane=gs2 ALL DONE 2026-09-14T12:54:58-05:00
+lane=gs2 pid=940562 start=2026-09-14T12:58:23-05:00 np=8 cpus=0-7 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_gs2.txt
+gs2 gs2_M_ky0.30_r1 start=2026-09-14T12:58:23-05:00
+gs2 gs2_M_ky0.30_r1 rc=0 wall=6.66 end=2026-09-14T12:58:30-05:00
+gs2 gs2_M_ky0.40_r1 start=2026-09-14T12:58:30-05:00
+gs2 gs2_M_ky0.40_r1 rc=0 wall=6.66 end=2026-09-14T12:58:36-05:00
+gs2 gs2_M_ky0.50_r1 start=2026-09-14T12:58:36-05:00
+gs2 gs2_M_ky0.50_r1 rc=0 wall=6.72 end=2026-09-14T12:58:43-05:00
+gs2 gs2_M_ky0.55_r1 start=2026-09-14T12:58:43-05:00
+gs2 gs2_M_ky0.55_r1 rc=0 wall=6.97 end=2026-09-14T12:58:50-05:00
+gs2 gs2_S_ky0.15_r1 start=2026-09-14T12:58:50-05:00
+gs2 gs2_S_ky0.15_r1 rc=0 wall=11.18 end=2026-09-14T12:59:01-05:00
+gs2 gs2_S_ky0.30_r1 start=2026-09-14T12:59:01-05:00
+gs2 gs2_S_ky0.30_r1 rc=0 wall=7.69 end=2026-09-14T12:59:09-05:00
+gs2 gs2_S_ky0.40_r1 start=2026-09-14T12:59:09-05:00
+gs2 gs2_S_ky0.40_r1 rc=0 wall=7.72 end=2026-09-14T12:59:16-05:00
+gs2 gs2_S_ky0.50_r1 start=2026-09-14T12:59:17-05:00
+gs2 gs2_S_ky0.50_r1 rc=0 wall=9.52 end=2026-09-14T12:59:26-05:00
+gs2 gs2_S_ky0.55_r1 start=2026-09-14T12:59:26-05:00
+gs2 gs2_S_ky0.55_r1 rc=0 wall=14.50 end=2026-09-14T12:59:41-05:00
+gs2 gs2_M_ky0.15_r2 start=2026-09-14T12:59:41-05:00
+gs2 gs2_M_ky0.15_r2 rc=0 wall=21.70 end=2026-09-14T13:00:02-05:00
+gs2 gs2_M_ky0.30_r2 start=2026-09-14T13:00:02-05:00
+gs2 gs2_M_ky0.30_r2 rc=0 wall=17.50 end=2026-09-14T13:00:20-05:00
+gs2 gs2_M_ky0.40_r2 start=2026-09-14T13:00:20-05:00
+gs2 gs2_M_ky0.40_r2 rc=0 wall=17.32 end=2026-09-14T13:00:37-05:00
+gs2 gs2_M_ky0.50_r2 start=2026-09-14T13:00:37-05:00
+gs2 gs2_M_ky0.50_r2 rc=0 wall=17.61 end=2026-09-14T13:00:55-05:00
+gs2 gs2_M_ky0.55_r2 start=2026-09-14T13:00:55-05:00
+gs2 gs2_M_ky0.55_r2 rc=0 wall=17.95 end=2026-09-14T13:01:13-05:00
+gs2 gs2_S_ky0.15_r2 start=2026-09-14T13:01:13-05:00
+gs2 gs2_S_ky0.15_r2 rc=0 wall=30.23 end=2026-09-14T13:01:43-05:00
+gs2 gs2_S_ky0.40_r2 start=2026-09-14T13:01:43-05:00
+gs2 gs2_S_ky0.40_r2 rc=0 wall=21.69 end=2026-09-14T13:02:05-05:00
+gs2 gs2_S_ky0.50_r2 start=2026-09-14T13:02:05-05:00
+gs2 gs2_S_ky0.50_r2 rc=0 wall=30.49 end=2026-09-14T13:02:35-05:00
+gs2 gs2_S_ky0.55_r2 start=2026-09-14T13:02:35-05:00
+gs2 gs2_S_ky0.55_r2 rc=0 wall=56.32 end=2026-09-14T13:03:31-05:00
+gs2 G1_gs2_S_shipped_fexpr0.45 start=2026-09-14T13:03:31-05:00
+gs2 G1_gs2_S_shipped_fexpr0.45 rc=0 wall=4.39 end=2026-09-14T13:03:36-05:00
+gs2 G1_gs2_S_shipped_fexpr0.48 start=2026-09-14T13:03:36-05:00
+gs2 G1_gs2_S_shipped_fexpr0.48 rc=0 wall=4.25 end=2026-09-14T13:03:40-05:00
+gs2 G2_gs2_S_r2 start=2026-09-14T13:03:40-05:00
+gs2 G2_gs2_S_r2 rc=0 wall=10.98 end=2026-09-14T13:03:51-05:00
+gs2 G3_gs2_M18_r2 start=2026-09-14T13:03:51-05:00
+gs2 G3_gs2_M18_r2 rc=0 wall=11.19 end=2026-09-14T13:04:02-05:00
+gs2 gs2_M_ky0.15_r3 start=2026-09-14T13:04:02-05:00
+gs2 gs2_M_ky0.15_r3 rc=0 wall=165.42 end=2026-09-14T13:06:48-05:00
+gs2 gs2_M_ky0.30_r3 start=2026-09-14T13:06:48-05:00
+gs2 gs2_M_ky0.30_r3 rc=0 wall=125.88 end=2026-09-14T13:08:54-05:00
+gs2 gs2_M_ky0.40_r3 start=2026-09-14T13:08:54-05:00
+gs2 gs2_M_ky0.40_r3 rc=0 wall=125.53 end=2026-09-14T13:10:59-05:00
+gs2 gs2_M_ky0.50_r3 start=2026-09-14T13:10:59-05:00
+gs2 gs2_M_ky0.50_r3 rc=0 wall=125.69 end=2026-09-14T13:13:05-05:00
+gs2 gs2_M_ky0.55_r3 start=2026-09-14T13:13:05-05:00
+gs2 gs2_M_ky0.55_r3 rc=0 wall=127.17 end=2026-09-14T13:15:12-05:00
+gs2 gs2_S_ky0.15_r3 start=2026-09-14T13:15:12-05:00

@@ -13351,3 +13351,168 @@ done:** both A4000s were fully used by another session's jobs, so the Cyclone de
 **Terminal state.** No process owned by this entry runs except the office GX queue
 (`queue_long.pid`), which waits up to 12 h for an idle GPU and then writes `check.txt` in
 each run directory.
+
+## 2026-09-14 — Q20 cross-code linear Cyclone controls (paused)
+
+Queue row Q20 (§2.4). The maintainer paused all GKX work at 13:15 CDT, about 40 minutes into the
+runs. Measurement only: no source, test, default or reference change, and no PR. **Every number below
+is preliminary.** Several ladders are incomplete and no verdict on the registered P1–P5 is recorded.
+Files: `plan/research/scripts/2026-09-14-cross-code-cyclone/`. The manifest, predictions and ladders
+were registered before any run in `bb55831bf`.
+
+**Setup.** One physical case, stated in GX/GKX units: q 1.4, ŝ 0.8, ε 0.18, R/a 2.77778,
+a/L_T 2.49, a/L_n 0.8, τ = 1, collisionless, electrostatic, ky_GX ∈ {.15, .30, .40, .50, .55}.
+- **S (s-alpha):** GS2, GKX, gyaradax.
+- **M (circular local Miller, rhoc 0.5, R_maj = R_geo = 2.77778):** GS2, stella, GKX. stella v1.0
+  has no s-alpha option.
+
+**Normalization map.**
+
+| code | L_ref | v_ref | ky input for ky_GX | γ_GX from the code's γ |
+|---|---|---|---|---|
+| GX, GKX | a | √(T/m) | ky_GX | γ |
+| GS2 8.2.1, stella v1.0 (Q20 inputs) | a | √(2T/m) | √2·ky_GX | √2·γ |
+| GS2 shipped test, stella install check | R | √(2T/m) | √2·ky_GX | √2·γ·a/R = γ·√2/2.77778 |
+| gyaradax (GKW conventions) | R | √(2T/m) | `krhomax` = √2·ky_GX | γ·√2/2.77778 |
+
+- **Drift coefficients:** GS2 output and `*.eiknc.nc` files store 2× the GX `gbdrift`/`cvdrift`;
+  stella stores the GX convention.
+- **GS2 s-alpha with L_ref = a:** `epsl` = 2a/R = 0.72 and `pk` = `epsl`/q.
+- **Gradients** are convention-free once L_ref is fixed.
+
+**Geometry cross-check** (`results/geometry_compare.txt`, GX convention, max relative difference over |θ| ≤ π):
+- **s-alpha:** GS2, GKX and the GX golden agree to ≤ 7e-8 in bmag, gradpar, gds2, gbdrift and cvdrift.
+- **Miller, against GS2:** stella differs by ≤ 1.3% (gds2 1.25%, drifts 1.06%). The GX golden and
+  GKX's generated eik file differ by ≤ 1.3% (drifts 1.3%, gradpar 0.5%).
+
+**The ≈2× install-check gap, decomposed** at ky_gs2 = 0.5 and L_ref = R, γ in GX units:
+
+| step | case | γ_GX | ratio |
+|---|---|---:|---:|
+| GS2 shipped grids (ntheta 12, negrid 12, ngauss 3), fexpr 0.45 | G1 | .08691 | 1 |
+| same, fexpr 0.48 | G1 | .08721 | 1.003 |
+| GS2 s-alpha on r2 grids | G2 | .08547 | 0.983 |
+| GS2 on stella's circular Miller surface (rhoc .18, rmaj = r_geo = 1), r2 | G3 | .13645 | 1.597 vs G2 |
+| stella install check (same Miller surface, nperiod 1) | — | .18776 | 1.376 vs G3 |
+
+The chain multiplies to the whole gap: .3688/.1707 = 2.16. Preliminary reading of the three factors:
+- **Geometry model, ≈1.6×:** s-alpha against Miller, measured within GS2 alone.
+- **GS2 grids and fexpr, < 2%.**
+- **stella against GS2 on the same Miller input, ≈1.38×.** The matched runs reproduce this (1.39× at
+  ky .30), and stella's resolution does not remove it (r1→r2 +0.09%).
+
+The cause of the stella excess is **not found**:
+- stella's drive prefactor is (1/C)·dydalpha·drhodpsi = 0.3629 × 2.7554 = 1.000.
+- The geometry coefficients agree to about 1%.
+- A GS2 diagnostic with `bess_fac` = 1/√2 gives γ_GX = .1487 (.0843 at √2), so a √2 in the Bessel
+  argument alone does not reproduce stella's .1750 (`results/fit_diag_bess_fac.txt`).
+
+**Preliminary matched values, Miller (GX units; the goldens are GX shipped outputs at Nl16/Nm48, rank-3 source).**
+
+| ky | GS2 r1 | GS2 r2 | GS2 r3 | r2→r3 | GX golden | stella | GKX |
+|---|---:|---:|---:|---:|---:|---|---|
+| .15 | .05495 | .05808 | .05783 | −0.4% | .05841 | not run | not run |
+| .30 | .12389 | .12529 | .12546 (ω .2157) | +0.1% | .12586 (ω .2155) | r1 .17481, r2 .17496 (ω .2512) | killed after 22 min, no pair |
+| .40 | .14326 | .14235 | .14297 | +0.4% | .14312 | not run | not run |
+| .50 | .13722 | .13393 | .13636 | +1.8% | .13642 | not run | not run |
+| .55 | .12414 | .12110 | .12493 | +3.2% (unconverged) | .12594 | r1 killed at t = 105, unsettled | not run |
+
+**Preliminary matched values, s-alpha (GX units).**
+
+| ky | GS2 r1 | GS2 r2 | GX golden | GKX (Nz96, Nl16, Nm48) certified | gyaradax g1 |
+|---|---:|---:|---:|---|---:|
+| .15 | .04829 | .05420 | .05497 | not run | not run |
+| .30 | .08781 | .09089 (ω .2807) | .09303 | .0930912 (ω .282033, residual 1.1e-14) | .09202 |
+| .40 | .06721 | .07829 | .08091 | not run | not run |
+| .50 | .01024 (unsettled) | .05352 | .05406 | not run | not run |
+| .55 | .00900 (unsettled) | .03907 (ω .4805) | .0346 | killed after 1.5 min | not run |
+
+- **Converged so far:** only the GS2 Miller ladder meets the registered 2% rule, at ky .15–.50 on r3.
+  There it matches the GX goldens to ≤ 1.0% in γ.
+- **s-alpha is not converged:** GS2 r3/r4 did not run (ky .15 r3 was killed at t = 289 of 600), and
+  the r1→r2 steps are large at every ky.
+- **ky .55 s-alpha (P4) is therefore open:** the r2 value .0391 lies above the Hermite–Laguerre Nl24
+  values (.0328–.0330), but it is not a converged number.
+
+**Cost so far.**
+- **GS2**, 8 ranks, per case: r1 7–15 s, r2 17–56 s, r3 125–165 s.
+- **stella** Miller ky .30, 8 ranks: r1 376 s, r2 844 s.
+- **GKX** adaptive at (96,16,48), s-alpha ky .30: 1242 s on 10 threads at load ≈ 30 (Q2: 761 s on 12 threads).
+- **gyaradax** g1 at ky .30: 37 s on an idle A4000, including 23 s of compilation.
+
+**Not done.**
+- **GS2:** s-alpha r3/r4 at every ky; Miller r4.
+- **stella:** r1/r2 at ky .15, .40, .50 and .55; r3; the L_ref = R install ladder (G4).
+- **GKX:** everything except s-alpha ky .30, including the Nl 8/24 extras.
+- **gyaradax:** the g1–g3 ladders (`run_gyaradax_queue.sh` is written but has not run).
+- **GX:** not run. The goldens are used, and GPU1 was running the lead's GX verification during this row.
+- **Open question:** the stella/GS2 Miller discrepancy is unexplained.
+- **Plan:** the plan.md Q20 row is unchanged.
+
+**Environment.**
+- **Host:** office, pop-os.
+- **GS2 and stella:** GS2 8.2.1 `4d8c94bc` and stella v1.0 `058d98db` in micromamba `gk-fortran`;
+  `mpirun -np 8 --bind-to none taskset -c <cpus>`, `nice -n 10`, `OMP_NUM_THREADS=1`.
+- **GKX:** staged by `git archive 2c38fa970`, venv `gkx-nl` (Python 3.11.15, JAX 0.10.2, SOLVAX 0.20.0),
+  `JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1`. `gkx.__file__` was checked to lie inside the run
+  directory.
+- **gyaradax:** `8d9dc2d2`, venv `gyaradax` (JAX 0.11.1, CUDA 12), `CUDA_VISIBLE_DEVICES=0
+  XLA_PYTHON_CLIENT_PREALLOCATE=false`, started only after `nvidia-smi --query-compute-apps` listed
+  nothing on GPU0.
+- **Mac smoke:** `gkx_eigen.py` on Miller at Nl4/Nm8 certified a pair with residual 4.5e-15.
+
+**Commands** (run directory `$R`):
+- `python cases.py write $R 'gs2_*' 'stella_*' 'G*'`
+- `run_grid_queue.sh $R/q_gs2.txt gs2 8 0-7`
+- `run_grid_queue.sh $R/q_stella.txt stella 8 8-15`
+- `run_gkx_queue.sh $R/q_gkx_A.txt gkxA 16-25 10` and `run_gkx_queue.sh $R/q_gkx_B.txt gkxB 26-35 10`
+- `gyaradax_salpha.py --ky-gx 0.30 --rung g1`
+- `fit.py $R`
+- `geometry_compare.py`
+
+The first GS2 lane stopped after one case because `mpirun` read the rest of the queue from stdin. Both
+runners now take the child's stdin from `/dev/null`.
+
+**Resume steps.**
+1. The office run directory `/home/rjorge/gkx-q20-cross-code-20260914.FavgA4` (140 MB) keeps the
+   inputs, outputs, `DONE` markers and the queue files `q_gs2.txt`, `q_stella.txt`, `q_gkx_A.txt` and
+   `q_gkx_B.txt`. Its staged GKX source was deleted. Re-stage it with
+   `git archive 2c38fa970 src examples pyproject.toml | ssh office tar -x -C $R`, then rsync this
+   directory's scripts to `$R`.
+2. Remove the partial outputs of the cases without `DONE`: the `*.out.nc` in `gs2/gs2_S_ky0.15_r3` and
+   `stella/stella_M_ky0.55_r1`. Remove the GKX outputs without a `RESULT` line:
+   `gkx/M_ky0.30_nl16_nm48*` and `gkx/S_ky0.55_nl16_nm48*`. The runners skip completed cases.
+3. Relaunch the lanes with the commands above (`setsid nohup … < /dev/null`). Put GS2 s-alpha ky .50
+   and .55 r3/r4 at the head of `q_gs2.txt`.
+4. Run gyaradax only while GPU0 lists no compute process. Write a queue (g1 at every ky, g2 at every
+   ky, g3 at .30 and .55) and run `run_gyaradax_queue.sh`, which stops if GPU0 becomes busy.
+5. Discriminators still to try for the stella/GS2 Miller excess:
+   - stella with `xdriftknob`/`ydriftknob` = 0.5 and with `wstarknob` variations, at r1, ky .30;
+   - the same input in stella v0.7 (`AUTOMATIC_TESTS/stella_releases`) or upstream master `2b8e269f`;
+   - GS2 fed stella's geometry through a grid file.
+6. Fit, append the final Q20 entry, update the plan.md Q20 row and open the PR.
+
+**Artifact SHA-256 (first 16 hex digits).**
+- **Scripts and inputs:** `manifest.toml` 0c4a908979e9671d, `cases.py` 23a3d4401a7d01c5, `fit.py` 2d433b57b957e9ee,
+  `gkx_eigen.py` 9e40d4f1c8f78539, `gyaradax_salpha.py` fc39d03f1f178428, `geometry_compare.py`
+  f8f63e77e1258dfb, `cyclone_miller_linear.toml` 7c28a068401c5d24, `run_grid_queue.sh` 88db34ad98427f0b,
+  `run_gkx_queue.sh` 3cce79134c568f44, `run_gyaradax_queue.sh` 6b3d7d79075951c4.
+- **Fits and geometry:** `results/fit_gs2_stella.txt` e01c6aab52d33fa1, `results/fit_diag_bess_fac.txt`
+  20ee1f8d0a7438ab, `results/geometry_compare.txt` 43c48ad264b037a5.
+- **GKX logs:** `results/gkx_S_ky0.30_nl16_nm48.txt` 51d917bff3cf3b5e, `results/gkx_S_ky0.30_nl16_nm48.time.txt`
+  1e1905daad49e543, `results/gkx_M_ky0.30_nl16_nm48.txt` b3ef3313fe6a2362,
+  `results/gkx_S_ky0.55_nl16_nm48.txt` e7a3935c048e8b35.
+- **gyaradax logs:** `results/gyaradax_S_ky0.30_g1.txt` 7f220cd7f456a145,
+  `results/gyaradax_S_ky0.30_g1.time.txt` 39d7e50d0e4b42f4.
+- **Supervisor logs:** `results/supervisor_{gs2,stella,gkxA,gkxB,smoke_gs2,smoke_stella}.txt`
+  5202f73042576b5e, 14af25ea1515b3cf, d405734125745057, 33c46d32bbfd7cf4, 2fe291d2d7222d0e,
+  9b95e9e40b3d9c78.
+
+**Terminal process state.** At 2026-09-14T13:17:17-05:00 all 33 processes this row owned on office
+were sent TERM:
+- GKX lanes 938592 and 938593, with python 938616 and 951985 and wrappers 938612, 938614, 951983 and 951984;
+- stella lane 939675, with wrappers 951261–951263 and ranks 951272–951279;
+- GS2 lane 940562 and its launcher 940558, with wrappers 951690–951692 and ranks 951695–951702.
+
+Each was verified absent at 13:17:36; at that time neither GPU listed a compute process. No local
+process runs.

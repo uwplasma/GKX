@@ -23,7 +23,7 @@ while read -r geom ky nl nm tcap; do
   cd "$ROOT"
   timeout --signal=TERM --kill-after=20s "${tcap}s" nice -n 10 /usr/bin/time -v \
     taskset -c "$CPUS" "$PY" "$ROOT/gkx_eigen.py" --geometry "$geom" --ky "$ky" --Nl "$nl" --Nm "$nm" --repo "$ROOT" \
-    > "$out" 2> "${out%.txt}.time.txt"
+    > "$out" 2> "${out%.txt}.time.txt" < /dev/null
   rc=$?
   t1=$(date +%s.%N)
   wall=$(awk "BEGIN{printf \"%.2f\", $t1 - $t0}")

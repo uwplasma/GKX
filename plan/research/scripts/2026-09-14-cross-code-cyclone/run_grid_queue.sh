@@ -23,7 +23,7 @@ while read -r code case tcap; do
   t0=$(date +%s.%N)
   echo "$code $case start=$(date -Is)" >> "$SUP"
   timeout --signal=TERM --kill-after=20s "${tcap}s" nice -n 10 /usr/bin/time -v \
-    mpirun -np "$NP" --bind-to none taskset -c "$CPUS" "$exe" "$case.in" > run.stdout.txt 2> run.time.txt
+    mpirun -np "$NP" --bind-to none taskset -c "$CPUS" "$exe" "$case.in" > run.stdout.txt 2> run.time.txt < /dev/null
   rc=$?
   t1=$(date +%s.%N)
   wall=$(awk "BEGIN{printf \"%.2f\", $t1 - $t0}")

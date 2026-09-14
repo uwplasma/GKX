@@ -1,0 +1,4 @@
+lane=gkxA pid=938592 start=2026-09-14T12:54:50-05:00 cpus=16-25 threads=10 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_gkx_A.txt
+gkx S ky=0.30 Nl=16 Nm=48 start=2026-09-14T12:54:50-05:00
+gkx S ky=0.30 Nl=16 Nm=48 rc=0 wall=1246.56 end=2026-09-14T13:15:37-05:00
+gkx S ky=0.55 Nl=16 Nm=48 start=2026-09-14T13:15:37-05:00
