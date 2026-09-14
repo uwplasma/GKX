@@ -1,0 +1,6 @@
+gkx <worktrees>/eigen-covered-subspace/src/gkx/__init__.py
+state (1, 4, 8, 1, 8, 16) n=4096 off-chain unknowns=1536 (0.375); IC off-chain max=0.000e+00 IC max=1.414e-10
+kx grid [0.0, 0.2513, 0.5027, 0.754, -1.0053, -0.754, -0.5027, -0.2513]; CFL kx_max=0.5027 (max |kx| on grid 1.0053)
+dt=0.004663 steps=6000 method=rk4
+[runtime-ic] fit gamma=0.10388112444370544 omega=0.2602860270892239 (29.0s); after 6000 rk4 steps of _linear_explicit_step: off-chain max=0.000e+00 (start 0.000e+00), chain max=6.107e-10
+[ic+off-chain] fit gamma=0.10388112444370544 omega=0.2602860270892239 (28.0s); after 6000 rk4 steps of _linear_explicit_step: off-chain max=3.699e-10 (start 1.299e-10), chain max=6.107e-10

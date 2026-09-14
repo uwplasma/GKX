@@ -1,0 +1,5 @@
+gkx <worktrees>/integrate-chain/src/gkx/__init__.py
+[fullseed] raised RuntimeError: certified adaptive eigensolve rejected the dominant eigenpair: stable=True converged=False residual=0.227072 tolerance=1e-09; refusing to report an uncertified growth rate t=29.7s
+    adaptive solve finished with eig=0.00277734-0.0999921j residual=0.227 converged=False stable=True
+[chainseed] raised RuntimeError: certified adaptive eigensolve rejected the dominant eigenpair: stable=True converged=False residual=6.75038e-07 tolerance=1e-09; refusing to report an uncertified growth rate t=14.0s
+    adaptive solve finished with eig=0.00277555-0.100065j residual=6.75e-07 converged=False stable=True

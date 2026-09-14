@@ -17,6 +17,9 @@ from gkx.operators.linear.params import (
 )
 from gkx.solvers_linear_krylov_algorithms import (
     _apply_operator,
+    _linked_covered_mode_mask,
+    _project_to_linked_cover,
+    _require_linked_cover_seed,
     dominant_eigenpair_propagator_cached,
 )
 from gkx.solvers_linear_krylov_propagator import (
@@ -169,6 +172,12 @@ def adaptive_propagator_eigenpair(
         raise ValueError("continuation_overlap_floor must be non-negative")
     if continuation_spectral_gap_floor < 0.0:
         raise ValueError("continuation_spectral_gap_floor must be non-negative")
+    covered = _linked_covered_mode_mask(cache)
+    if covered is not None:
+        # Modes outside every linked chain are decoupled neutral drift waves;
+        # a seed component there is never part of a chain eigenvector.
+        v0 = _project_to_linked_cover(v0, covered)
+        _require_linked_cover_seed(v0)
     tol = certifiable_residual_tolerance(tol, v0.dtype)
     selection_reference = (
         continuation_covector

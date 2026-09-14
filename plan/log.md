@@ -12843,3 +12843,142 @@ d977f541651001dd3f3a227056da3a3a935a58947b64f2fe1df31effcb390f7d  v1_supervisor_
 session pauses were killed by owner PID (prod_solve 36384; adaptive 68797 with its launcher
 65626) and verified absent. No owned process was running at the commit, and the 2700 s cap was
 never reached.
+
+## 2026-09-14 — eigen routes solve on the linked-chain modes (Q6, plan §5.1 L3)
+
+Branch `fix/eigen-covered-subspace`, based on `b45b017ed` (head of #236, which contains
+#233 certify-every-eigenpair); it shows those commits until #236 merges.
+
+**Question.** On the linked Cyclone pilot (Nx8/Ny16/Nz16, Nl4/Nm8, ntheta16/nperiod1/
+jtwist1, ky=+.3, rate .1, n=4096) the chains cover kx rows {0,1,2,6,7}; rows {3,4,5}
+(1536 unknowns) are exactly decoupled and host the Re=0 eigenvalues next to σ (review
+§3.1, `d1b.txt`). Can every linear eigen route drop them without moving the certified
+target, and should time integration drop them too?
+
+**Contract.**
+- `_linked_covered_mode_mask(cache)` (`solvers_linear_krylov_algorithms.py`) returns the
+  `(ky, kx)` modes the linked chains couple, from `cache.linked_gather_mask` (flat index
+  ky + Ny·kx), extended on a two-sided ky grid by the conjugate-mirror rows that
+  `_restore_linked_real_fft_conjugates` rebuilds from (−ky, −kx). It returns `None` for
+  periodic caches (`linked_use_gather` false) and full-cover caches, so those routes trace
+  the same graph as before; the Nx=1 pilot is full-cover.
+- Projection (a `jnp.where` on the state, no layout change) is applied to: the seed and
+  reference vector in `dominant_eigenpair`; the seed in `adaptive_propagator_eigenpair`;
+  every Arnoldi basis vector (`_arnoldi_with_stats`, so the operator, propagator,
+  multi-candidate propagator and shift-invert Arnoldi all inherit it); the power
+  iterate; the shift-invert preconditioner output and the inner GMRES solution. A seed
+  that projects to zero raises `ValueError`.
+- `sparse_shift_invert` assembles only the chain columns (a scatter/gather wrapper around
+  the RHS) and lifts eigenvectors back to the full state shape with exact zeros.
+- Certification is unchanged: every residual gate applies the unprojected operator to the
+  full-shape vector, so a coupling the mask misses fails closed instead of being hidden.
+- Public signatures unchanged. SOLVAX's `exponential_eigenpairs` branch gets only the
+  projected seed; the objective adjoint Krylov start is not projected.
+
+**Decoupling checked, not assumed.** Unit tests apply the RHS to the chain part and to
+the off-chain part of a broadband state: off-chain output of the first and chain output
+of the second are exactly 0, on a selected-ky Nx=8 case with every term on (drifts,
+mirror, drive, fields, end damping) and on the two-sided Nx4/Ny4 streaming case.
+
+**Pilot identity** (`plan/research/scripts/2026-09-14-covered-subspace/pilot_identity.py`,
+before = clean detached `b45b017ed` in `~/local/GKX-worktrees/integrate-chain`, after =
+this branch; one process each, runtime seed, complex128):
+
+| route | before | after |
+|---|---|---|
+| sparse_shift_invert, σ=.09302951−.28199404j | n=4096, nnz 125500, λ=.115621260554220423−.241178813750643928j, res 5.3e-15, 1.85 s | **n=2560**, nnz 114250, λ imag …643956 (rel 1.04e-16), res 5.4e-15, 1.66 s |
+| adaptive (runtime default) | λ=.115621260554220492−.241178813750643983j, res 1.9e-15 | bitwise identical eigenvalue and eigenvector |
+| adaptive, golden-angle seed nonzero on every row | λ rel diff 5e-16 from runtime-seed λ, off-chain max 1.47e-16 | off-chain exactly 0, res 3.1e-15 |
+| Nx=1 (full cover), adaptive | λ=.115621260554220437−.241178813750643983j | bitwise identical eigenvalue and eigenvector |
+
+The runtime seed already has zero off-chain weight (multimode Gaussian/random seeds loop
+over `1+(Nx−1)//3` kx only, as GX `initialConditions` does), which is why the default
+route was already exact.
+
+**Small-gap control** (`tiny_adaptive.py`; selected-ky Nx8/Ny4/Nz8, Nl2/Nm4, n=512):
+before, a broadband seed sends the adaptive route to an off-chain neutral drift mode
+(λ=.00277734−.0999921j, residual .227, rejected); after, and before with a chain-projected
+seed, it reaches λ=.00277555−.100065j at residual 6.75e-7 (identical in all three), still
+above the 1e-9 gate. This case is not certifiable by the adaptive route within its
+restarts; the change removes the wrong-branch attraction, not the small gap.
+
+**Time integration (item 3; `time_uncovered_rows.py`, pilot, RK4 dt=.004663, 6000
+steps).** Decision: no change here.
+- The off-chain rows start at exactly 0 from the runtime initial condition and stay
+  exactly 0 through 6000 steps of `_linear_explicit_step` (chain max 6.107e-10).
+- Adding off-chain content of the same peak amplitude (1.3e-10) leaves the runtime
+  explicit-time fit bitwise unchanged (γ=.10388112444370544, ω=.2602860270892239) and the
+  chain amplitude identical; the off-chain rows just persist (max 3.7e-10).
+- The explicit CFL bound already uses kx[(Nx−1)//3] (.5027, not the grid maximum 1.0053),
+  and on full nonlinear grids the two-thirds mask equals this set (the bracket output is
+  multiplied by it), so dt and nonlinear drive are unaffected.
+- GX (clean `bc2fe552`, `~/local/gx-main-clean-20260312`) stores the full Nx too:
+  `Nakx = 1 + 2*((Nx-1)/3)` (`grids.cu:14`), `unmasked`/`masked` (`device_funcs.cu:734/746`)
+  gate field solves, initial conditions loop over the Nakx rows, and `mask()` zeroes the
+  masked rows after `restart_read` (`moments.cu:862`) and each SSPX3 step
+  (`ts_sspx3.cu:136`). GKX evolves the same rows, and on the pilot they hold the same
+  zeros.
+
+**Proposed follow-ups (not implemented).** (a) Zero the off-chain rows of a user-supplied
+`initial_state` or restart on linked runs, as GX does on `restart_read`; today they persist
+as neutral waves that no fit reads but free-energy and spectrum sums would include
+(not measured). (b) With the ky ≥ 0 layout contract (§5.3 N3, Q10), measure dropping the
+off-chain rows from the linear layout: 1536/4096 unknowns (37.5%) on the pilot,
+1 − Nakx/Nx ≈ 1/3 in general, for the RHS work that scales with the state (drifts, fields,
+velocity ladders), not the chain FFTs.
+
+**Tests** (branch head before commit, environment below; one invocation per row):
+
+| selection | result |
+|---|---|
+| `tests/unit/solvers/test_linear_krylov_core.py` | 98 passed (88 on #233 + 10 new) |
+| `tests/integration/test_adaptive_eigenmodes.py` | 8 passed, 3 skipped (VMEC backend / eik cache) |
+| `tests/unit/linear/test_linear.py -k "krylov or eigen or shift or linked"` | 13 passed |
+| `tests/unit/operators/test_linear_streaming.py -k linked` | 7 passed |
+| `tests/validation/benchmarks/{test_benchmarks_helpers,test_benchmarking,test_benchmark_contracts}.py` | 114 passed |
+| `tests/integration/runtime/test_runtime_runner.py` | 167 passed |
+| `tests/unit/objectives/test_autodiff_solver_objectives.py` | 97 passed |
+| `tests/unit/core/test_core_numerics.py` | 50 passed |
+| `tests/unit/quasilinear/test_quasilinear.py -k krylov` | 1 passed |
+| `tests/validation/physics_gates/test_validation_gates.py -k demo_reports_the_eigenvalue` | 1 passed |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k "ky_diagnostics or krylov"` | 4 passed |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+No existing test's asserted numbers changed. Two failures on the first run were fixed, not
+waived: the dot-precision allowlist is keyed by `file:line`, and the one allowlisted
+unpinned overlap contraction moved 749 → 828 (same code); a core docstring named the
+comparison code, which the terminology gate forbids in `src/`. Also passing: ruff 0.16.4
+check/format (426 files), mypy as CI (184 source files), `sphinx -W`,
+`check_package_architecture_manifest.py` (source 89492 → 89618, tests 88145 → 88396,
+targets unchanged), gitleaks 8.30.1 on the changed files.
+
+**Environment.** Apple M3 Max (14 cores, 36 GiB), shared (1-min load 10–28), Python
+3.11.14, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0; `PYTHONPATH=$PWD/src:$PWD
+JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu nice -n 10`, one heavy process
+at a time, `gkx.__file__` verified in each worktree. Commands (repository root):
+```
+D=plan/research/scripts/2026-09-14-covered-subspace
+python $D/pilot_identity.py <before|after> <out_dir>   # run once per worktree
+python $D/tiny_adaptive.py                             # once per worktree
+python $D/time_uncovered_rows.py
+```
+The `.txt` outputs were copied from those runs with local paths replaced by
+`<worktrees>`/`<scratch>`; `tiny_adaptive.py` was reformatted by ruff after it ran.
+
+**Artifacts** (`plan/research/scripts/2026-09-14-covered-subspace/`, SHA-256):
+```
+238e3dfc0a616dff3152a688ee1ce629ad8e8091102e890ac694da3aa9c6a049  pilot_identity.py
+baece16a1b8746c9755acee3380651458fb746fdd64d4e3a707e5ae857e0ba97  pilot_identity_after.txt
+d1de55a9190120525b142cb60c66f31dbff68d3b8b2328e92387db0ea77f218d  pilot_identity_before.txt
+91402fe03fc9ff8c0d4ef0bc9af82bf8b5515f3f70b7b3bd4d467994b76d8500  time_uncovered_rows.py
+e90a3885b69ce80c6a5301594af5552c0b7dd5df125786821a51f338ca701f13  time_uncovered_rows.txt
+1964c3877bb54abda61a5f15b5e5cb962afa8e0fd6dd86236c9a7a5a5e56f373  tiny_adaptive.py
+abff903d8ea7d114190abb55ab50cecaea6aae3ddde0733c9a43ded7b296cbd4  tiny_adaptive_after.txt
+837986d719d8af67343d144ff0f6c183cf428e7e42363dd590ababdf67a9a66d  tiny_adaptive_before.txt
+```
+
+**Terminal state.** Every owned process ended; nothing was left running at the commit.
+
+**Next question.** Does the chain-mode restriction change L4/L5 counts at the production
+chain, where Nx=1 is full-cover (no), or on multi-link Nx>1 decks where preconditioners
+other than Hermite-line previously saw the off-chain block?

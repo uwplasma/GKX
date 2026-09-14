@@ -24,7 +24,10 @@ from gkx.solvers_linear_krylov_algorithms import (
     _apply_operator,
     _assemble_rhs_cached_novjp,
     _compute_damping,
+    _linked_covered_mode_mask,
     _normalize,
+    _project_to_linked_cover,
+    _require_linked_cover_seed,
 )
 from gkx.solvers_linear_krylov_algorithms import (
     InnerSolveStats,
@@ -583,9 +586,23 @@ def _sparse_shift_invert_branch(
     *,
     select_overlap: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Factor the exact sparse shifted operator when matrix-free cold solves stall."""
+    """Factor the exact sparse shifted operator when matrix-free cold solves stall.
 
-    if int(v0.size) < 3:
+    On a linked cache only the chain-mode columns are assembled; eigenvectors
+    are returned in the full state shape with exact zeros elsewhere.
+    """
+
+    covered = _linked_covered_mode_mask(cache)
+    size = int(v0.size)
+    rows = (
+        None
+        if covered is None
+        else jnp.asarray(
+            np.flatnonzero(np.broadcast_to(np.asarray(covered)[:, :, None], v0.shape))
+        )
+    )
+    n = size if rows is None else int(rows.size)
+    if n < 3:
         raise ValueError(
             "sparse shift-invert requires an operator of size at least three"
         )
@@ -602,29 +619,45 @@ def _sparse_shift_invert_branch(
     )
 
     def apply(state):
-        return _apply_operator(state, cache, params, term_cfg)
+        if rows is None:
+            return _apply_operator(state, cache, params, term_cfg)
+        full = jnp.zeros((size,), dtype=v0.dtype).at[rows].set(state)
+        image = _apply_operator(full.reshape(v0.shape), cache, params, term_cfg)
+        return image.reshape(size)[rows]
 
+    prototype = v0 if rows is None else v0.reshape(size)[rows]
     _status(status_callback, "assembling sparse operator in bounded column batches")
-    matrix = sparse_operator_matrix(apply, v0, batch_size=64, drop_tolerance=1.0e-14)
+    matrix = sparse_operator_matrix(
+        apply, prototype, batch_size=64, drop_tolerance=1.0e-14
+    )
     shift = complex(cfg.shift)
+    scope = "" if rows is None else f" on linked-chain modes ({n} of {size} unknowns)"
     _status(
         status_callback,
-        f"factoring coupled sparse operator n={matrix.shape[0]} nnz={matrix.nnz}",
+        f"factoring coupled sparse operator n={matrix.shape[0]} nnz={matrix.nnz}"
+        + scope,
     )
     factor = SpluFactorization(
         matrix - shift * eye(matrix.shape[0], format="csr", dtype=matrix.dtype)
     )
     modes = sparse_eigenpairs(
         matrix,
-        candidates=min(6, int(v0.size) - 2),
+        candidates=min(6, n - 2),
         shift=shift,
-        initial=v0,
+        initial=prototype,
         tolerance=min(cfg.shift_tol, 1.0e-10),
         maxiter=max(cfg.shift_maxiter, 20_000),
         residual_tolerance=residual_tol,
         factorization=factor,
     )
-    vectors = modes.eigenvectors.reshape((modes.eigenvectors.shape[0], *v0.shape))
+    eigenvectors = modes.eigenvectors
+    if rows is not None:
+        eigenvectors = (
+            jnp.zeros((eigenvectors.shape[0], size), dtype=eigenvectors.dtype)
+            .at[:, rows]
+            .set(eigenvectors)
+        )
+    vectors = eigenvectors.reshape((eigenvectors.shape[0], *v0.shape))
     residuals = np.asarray(
         [
             _eigenpair_relative_residual(value, vector, cache, params, term_cfg)
@@ -819,6 +852,11 @@ def dominant_eigenpair(
     cfg = _normalized_config(locals())
     term_cfg = linear_terms_to_term_config(terms)
     v_ref_use = v0 if v_ref is None else v_ref
+    covered = _linked_covered_mode_mask(cache)
+    if covered is not None:
+        v0 = _project_to_linked_cover(v0, covered)
+        v_ref_use = _project_to_linked_cover(v_ref_use, covered)
+        _require_linked_cover_seed(v0)
     _status(
         status_callback,
         f"krylov method={cfg.method} dim={cfg.krylov_dim} restarts={cfg.restarts}",

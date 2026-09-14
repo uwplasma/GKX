@@ -1,0 +1,15 @@
+gkx <worktrees>/eigen-covered-subspace/src/gkx/__init__.py
+[pilot] shape=(1, 4, 8, 1, 8, 16) n=4096 covered_kx=[0, 1, 2, 6, 7] covered=2560 full_cover=False seed_uncovered_norm2_frac=0.000e+00
+[pilot:sparse_shift_invert] eig=+1.15621260554220423e-01-2.41178813750643956e-01j residual=5.383e-15 uncovered_weight=0.000e+00 max|uncovered|=0.000e+00 time=1.66s
+   status: krylov method=sparse_shift_invert dim=24 restarts=2
+   status: assembling sparse operator in bounded column batches
+   status: factoring coupled sparse operator n=2560 nnz=114250 on linked-chain modes (2560 of 4096 unknowns)
+   status: sparse shift-invert residual=5.38e-15
+[pilot:adaptive] eig=+1.15621260554220492e-01-2.41178813750643983e-01j residual=1.940e-15 uncovered_weight=0.000e+00 max|uncovered|=0.000e+00 time=7.43s
+   status: adaptive solve finished with eig=0.115621-0.241179j residual=1.94e-15 converged=True stable=True
+[pilot:adaptive_fullseed] eig=+1.15621260554220492e-01-2.41178813750644039e-01j residual=3.087e-15 uncovered_weight=0.000e+00 max|uncovered|=0.000e+00 time=3.39s
+   status: adaptive solve finished with eig=0.115621-0.241179j residual=3.09e-15 converged=True stable=True
+[nx1] shape=(1, 4, 8, 1, 1, 16) n=512 covered_kx=[0] covered=512 full_cover=True seed_uncovered_norm2_frac=0.000e+00
+[nx1:adaptive] eig=+1.15621260554220437e-01-2.41178813750643983e-01j residual=1.784e-15 uncovered_weight=0.000e+00 max|uncovered|=0.000e+00 time=3.76s
+   status: adaptive solve finished with eig=0.115621-0.241179j residual=1.78e-15 converged=True stable=True
+wrote <scratch>/after2.npz
