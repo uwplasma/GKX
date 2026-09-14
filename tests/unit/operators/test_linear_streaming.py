@@ -431,3 +431,136 @@ def test_terms_config_pytrees_roundtrip() -> None:
     assert jnp.allclose(state_rt.phi, state.phi)
     assert jnp.allclose(state_rt.apar, state.apar)
     assert state_rt.bpar is None
+
+
+# --- Q9 (plan 5.3 N2): stacked operands share one transform per chain class ---
+
+_CHAIN_MIXES = (
+    ((3, 1),),
+    ((2, 1), (1, 2)),
+    ((4, 1), (2, 2), (1, 3), (1, 5)),
+)
+
+
+def _chain_mix_maps(classes, *, ny: int, nx: int, nz: int, dz: float):
+    """Chain maps ``ky + ny * kx`` over distinct modes, one class per length."""
+
+    import numpy as np
+
+    modes = iter(ky + ny * kx for kx in range(nx) for ky in range(ny))
+    indices = tuple(
+        np.asarray(
+            [[next(modes) for _ in range(nlinks)] for _ in range(nchains)], np.int32
+        )
+        for nchains, nlinks in classes
+    )
+    kz = tuple(2.0 * np.pi * np.fft.fftfreq(nlinks * nz, d=dz) for _, nlinks in classes)
+    return indices, kz
+
+
+def _per_chain_reference(f, indices, *, nz: int, dz: float, operator: str):
+    """One numpy FFT per chain, of that chain's own length ``nLinks * nz``."""
+
+    import numpy as np
+
+    f = np.asarray(f)
+    ny = f.shape[-3]
+    out = np.zeros_like(f)
+    for idx in indices:
+        for chain in idx:
+            rows = [(int(m) % ny, int(m) // ny) for m in chain]
+            signal = np.concatenate([f[..., y, x, :] for y, x in rows], axis=-1)
+            k = 2.0 * np.pi * np.fft.fftfreq(signal.shape[-1], d=dz)
+            multiplier = 1j * k if operator == "grad" else np.abs(k)
+            result = np.fft.ifft(multiplier * np.fft.fft(signal, axis=-1), axis=-1)
+            for link, (y, x) in enumerate(rows):
+                out[..., y, x, :] = result[..., link * nz : (link + 1) * nz]
+    return out
+
+
+@pytest.mark.parametrize("classes", _CHAIN_MIXES)
+@pytest.mark.parametrize("route", ["gather", "full_cover", "scatter"])
+def test_stacked_linked_fft_matches_per_class_operators(classes, route) -> None:
+    """Slot i of the stacked call is the per-class operator i on operand i.
+
+    Ny=2 keeps the conjugate restore out of the reference (row 1 is its own
+    partner); the full-cover route needs every mode in a chain, the others
+    leave three modes outside all chains, which must come back zero.
+    """
+
+    import numpy as np
+
+    from gkx.operators.linear.cache_builder import _linked_fft_gather_metadata
+    from gkx.operators.linear.streaming import _linked_fft_apply
+
+    ny, nz, dz = 2, 4, 0.3
+    n_chain_modes = sum(nchains * nlinks for nchains, nlinks in classes)
+    nx = -(-n_chain_modes // ny) if route == "full_cover" else n_chain_modes // ny + 2
+    if route == "full_cover" and n_chain_modes % ny:
+        pytest.skip("full cover needs an even mode count on Ny=2")
+    indices, kz = _chain_mix_maps(classes, ny=ny, nx=nx, nz=nz, dz=dz)
+    inverse, full_cover, gather_map, gather_mask, use_gather = (
+        _linked_fft_gather_metadata(indices, n_modes=ny * nx)
+    )
+    options = {
+        "gather": dict(
+            linked_gather_map=gather_map,
+            linked_gather_mask=gather_mask,
+            linked_use_gather=use_gather,
+        ),
+        "full_cover": dict(
+            linked_inverse_permutation=inverse, linked_full_cover=full_cover
+        ),
+        "scatter": {},
+    }[route]
+    if route == "full_cover":
+        assert full_cover
+    rng = np.random.default_rng(len(classes))
+    shape = (1, 2, 3, ny, nx, nz)
+    f = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    g = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    kz_dev = tuple(jnp.asarray(k, dtype=jnp.real(f).dtype) for k in kz)
+
+    stacked = _linked_fft_apply(
+        (f, g), indices, kz_dev, operator=("grad", "abs"), **options
+    )
+    swapped = _linked_fft_apply(
+        (g, f), indices, kz_dev, operator=("abs", "grad"), **options
+    )
+    assert stacked.shape == (2, *shape)
+    for slot, (operand, operator) in enumerate(((f, "grad"), (g, "abs"))):
+        single = _linked_fft_apply(
+            operand, indices, kz_dev, operator=operator, **options
+        )
+        reference = _per_chain_reference(
+            operand, indices, nz=nz, dz=dz, operator=operator
+        )
+        scale = float(np.max(np.abs(reference)))
+        np.testing.assert_allclose(
+            np.asarray(stacked[slot]), np.asarray(single), rtol=1e-6, atol=1e-6 * scale
+        )
+        np.testing.assert_allclose(
+            np.asarray(swapped[1 - slot]),
+            np.asarray(single),
+            rtol=1e-6,
+            atol=1e-6 * scale,
+        )
+        np.testing.assert_allclose(
+            np.asarray(single), reference, rtol=1e-5, atol=1e-5 * scale
+        )
+
+
+def test_stacked_linked_fft_validates_operands() -> None:
+    from gkx.operators.linear.streaming import _linked_fft_apply
+
+    idx = (jnp.asarray([[0, 1]], dtype=jnp.int32),)
+    kz = (2.0 * jnp.pi * jnp.fft.fftfreq(8, d=0.3),)
+    f = jnp.zeros((1, 2, 4), dtype=jnp.complex64)
+    with pytest.raises(ValueError, match="one operator each"):
+        _linked_fft_apply((f, f), idx, kz, operator="grad")
+    with pytest.raises(ValueError, match="one operator each"):
+        _linked_fft_apply((f, f), idx, kz, operator=("grad",))
+    with pytest.raises(ValueError, match="share shape and dtype"):
+        _linked_fft_apply((f, f[..., :2]), idx, kz, operator=("grad", "abs"))
+    with pytest.raises(ValueError, match="unsupported linked FFT operator"):
+        _linked_fft_apply((f, f), idx, kz, operator=("grad", "curl"))
