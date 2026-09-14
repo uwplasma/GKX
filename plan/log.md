@@ -13299,3 +13299,72 @@ to find which piece keeps XLA:CPU from the N1 layout, HLO-only. Or go to N3, who
 layout removes the transposes that choice acts on. Separately, the prepared and runtime
 routes disagree at roundoff. Choosing one as the reference, and giving `gkx.prepare` the
 runtime's operand placement, is a correctness question, not a speed one.
+
+## 2026-09-14 — queue update: second batch recorded, comparison codes installed
+
+Plan-only change (`plan.md`, this entry). Rows Q6 (#237), Q7 (#236), Q8 (#238) and Q13
+(#239) now carry their verdicts; §5.3 no longer attributes the once-per-step completion
+regression to captured constants (#239 corrected #231); §2.4 lists the codes installed for
+comparison. New rows:
+- Q16: certified eigenpair and Laguerre spectrum at ky=.55 (Q8 had fits only).
+- Q17: GX matched controls once the rebuilt toolchain is verified.
+- Q18: pick the reference between the prepared and runtime nonlinear routes, which differ at
+  roundoff.
+- Q19: zero off-chain rows of supplied states on linked runs.
+- Q20: cross-code linear Cyclone controls.
+- Q21: L5 inner-solve cost.
+
+**GX toolchain (office).** The runtime libraries every GX binary on office links against
+(`/home/rjorge/local/install/{gsl-2.7.1, openmpi-4.1.6, hdf5-1.14.5, netcdf-c-4.9.2,
+libcutensor-1.7.0.1, nccl-2.18.1}`, plus gcc-10.4.0 as the nvcc 11.5 host compiler) had been
+deleted, which is why Q8's GX control exited 127. They were rebuilt into the same prefixes
+from upstream releases (archives with verified checksums or signatures; NCCL from its
+`v2.18.1-1` tag). Provenance and a do-not-delete
+notice are in that directory's `README.txt`. A pristine upstream GX (`gx` branch
+`3865a537`) was also built at `/home/rjorge/gx-upstream-3865a537/gx`. `ldd` resolves every
+library for the 787eb014, 96a53403 and upstream binaries.
+
+**Physics check on the rebuilt toolchain** (office GPU 0 once idle, 2026-09-14 12:27–13:05 CDT;
+run directories under `/home/rjorge/gx-toolchain-rebuild-20260914/`):
+- Shipped Cyclone s-alpha adiabatic deck (inputs checked by SHA-256). The 787eb014 output is
+  **bitwise identical, 264 of 264 netCDF variables**, to office runs of the same binary
+  made before the deletion (`gx_rebaseline_20260818`, `gx_refs_lin` of 2026-09-02). The
+  pristine upstream 3865a537 build is bitwise identical to 787eb014 in `omega_kxkyt`. At
+  ky=.55: γ=.034483, ω=.498361.
+- GX's own `check.py` against the shipped `_correct` file reports max relative differences
+  7.3e-3 in γ and 6.3e-4 in ω, above its 1e-3 threshold. The worst row is ky=.05, where γ is
+  small; ky=.55 differs by −3.5e-3. The reference file is sampled at different times (30
+  against 34 writes), so the two half-window averages cover different samples. Since the
+  output is bitwise equal to the pre-deletion runs, this "TEST FAILS" predates the rebuild.
+  It is not a library regression.
+- The repaired 96a53403 parity binary ran the Nl24 deck with `t_max` 300 → 2. All 264
+  variables are bitwise identical to its 2026-09-12 output over the ten overlapping writes.
+  Only the final write differs, because it lands at t=2.000 rather than 2.002. The run took
+  10.5 ms per step.
+
+Q17 can proceed.
+
+**Comparison codes** (upstream sources, unpatched; inventory with commands in
+`~/local/gk-codes/README.txt` and `/home/rjorge/gk-codes/README.txt` on office):
+- GS2 8.2.1 (`4d8c94bc`), office. Built with a user-space conda-forge toolchain (gfortran 13.4,
+  OpenMPI 5, netCDF-Fortran, FFTW 3). `linear_tests` cyclone_itg passes 8/8. The shipped
+  low-resolution Cyclone case gives γ=.1703, ω=.6534 at ky=.5 (Lref=R), 2.4 s on 4 ranks.
+  This is an install check, not a converged value.
+- stella v1.0 (`058d98db`), office. Built with CMake; numerical-tests-1 passes 3/3. v1.0 has a
+  missing comma in a format string (`init_stella.f90:1084`), so every run exits with
+  status 2 after its outputs are written; upstream master no longer has the line. It is not
+  patched here. A kinetic-electron Miller CBC ky scan is resolution-stable to <4% (not
+  benchmarked). On GS2's parameters on a circular Miller surface, stella gives γ=.3688
+  against GS2's .1703. The cases are not like-for-like and the gap is uninvestigated (Q20).
+- gyaradax (`8d9dc2d2`, JAX), office CUDA-12 venv and a Mac CPU venv. 27 CPU unit tests pass;
+  170 skip for GKW reference data absent from the public repository. No GPU run was possible
+  (both GPUs busy). The shipped linear example costs ≈100 s per RK4 step on 16 CPU cores
+  and needs a GPU.
+- Source-only clones on the Mac: GYACOMO `a5d2c5ca`, GKW `2e05eb4b` (develop), gacode
+  `b4933975` (CGYRO), GX upstream `3865a537`. GENE is not openly distributed and is not
+  included.
+
+**Terminal state.** The office GX queue (`queue_long.sh`) ended at 13:05 CDT with all three
+runs at rc=0. It had invoked `check.py` without its stem argument; the checks above were
+re-run by hand with `check.py itg_salpha_adiabatic_electrons`. No process owned by this
+entry is running.
