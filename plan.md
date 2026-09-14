@@ -70,7 +70,9 @@ merged normally as `06606e404`; #227 merged as `578b97074` after a fresh green
 run on its updated head. The results of the first queue batch land together
 through one merge chain in which each branch merges its predecessor (§14
 rule 9): #228 plan → #230 Q1 → #231 Q4 → #229 Q5 → #232 Q2 → #233 Q12 →
-#234 Q3 → the queue-update PR. No release. Work continues in the order below; each row
+#234 Q3 → the queue-update PR (#235). The second batch landed as #236 Q7, #238
+Q8 and the chain #237 Q6 → #239 Q13; Q16–Q21 were added from their results
+and from the comparison codes installed on 2026-09-14 (§2.4). No release. Work continues in the order below; each row
 is one PR from a fresh worktree off `origin/main`. Rows marked *parallel*
 may run concurrently; the others wait for the named dependency. The #228 PR
 body carries the same queue with per-row entry points, commands, gates and
@@ -83,16 +85,22 @@ the repository rules an agent must follow.
 | Q3 | `evidence/laguerre-drift-ablation` | §0.5 (i): `gradb=0` / `curvature=0` at Nl 24/32, Nm96, current source — **done, #234**: `gradb=0` removes the ITG itself (ω .50→.03), so drift ablation does not discriminate; collisionless γ .0328/.0250/.0198 at Nl 24/32/48 (unsettled past 24); species ν=1e-2 gives .0174/.0172 at Nl 24/32 and ν=1e-3 .0291/.0174. Q8's first rungs do not support a converged ≈.017: ν=1e-3 rises 15% from Nl32 to Nl48 (.0174→.0200, next to the collisionless Nl48 .0198) and ν=3e-3 gives .0234/.0175 at Nl 24/32, so no Nl-converged growth rate is established and the status of the collisionless references at this ky stays open (Q8) | — (*parallel*) | office GPU, ≤2.5 h |
 | Q4 | `perf/hermitian-completion-once` | §5.3 N0+N1: HLO-count ledger and one Hermitian completion per step — **done, #231**: N0 adopted; N1 rejected (bitwise-neutral, but 2.3–2.7× more bytes on the captured-constant runtime route) | — (*parallel*) | CPU |
 | Q5 | `chore/solvax-pin` | housekeeping: align `requirements.txt` with `pyproject.toml` — **done, #229**: unused file deleted; floor stays `solvax>=0.12.0` with first-appearance evidence | — (*parallel*) | none |
-| Q6 | `fix/eigen-covered-subspace` | §5.1 L3 | Q1 merged | CPU |
-| Q7 | `evidence/preconditioner-bakeoff` | §5.1 L4 — **in progress**: "pr3-cm" (three Peaceman–Rachford sweeps pairing the exact streaming line solve with the exact z-local drift/mirror/φ block) reaches 1e-5 in 30 (pilot), 45 (32,8,16), 88 (64,8,32), 164 (96,8,24) iterations where Hermite-line needs 90, 366, stalls, stalls at ky=+0.3; one production apply ≈22 matvecs, 8 s setup, 0.91 GB; not yet shown faster than the adaptive route's 761 s; next: per-kz sweep parameters and a same-host time-to-certified-pair comparison | Q2 recorded | CPU |
-| Q8 | `evidence/collisional-laguerre-convergence` | §0.5 (ii)–(iv), revised by Q3 — **in progress**: ν ∈ {1e-3, 3e-3, 1e-2} × Nl {16, 24, 32, 48}, collisionless Nl64, a Sugama control (no runtime Dougherty exists), GX with `vnewk=1e-2` at Nl 24/32; predictions registered in its manifest | Q3 recorded | office GPU |
+| Q6 | `fix/eigen-covered-subspace` | §5.1 L3 — **done, #237**: every eigen route (Arnoldi, power, shift-invert, adaptive seeds) projects onto the linked-chain modes; `sparse_shift_invert` assembles only chain columns (pilot n 4096→2560, same λ to 1e-16); certification still applies the unprojected operator; the adaptive default was already exact because runtime seeds carry no off-chain weight; time integration unchanged (off-chain rows stay exactly 0, as in GX) | Q1 merged | CPU |
+| Q7 | `evidence/preconditioner-bakeoff` | §5.1 L4 — **done, #236**: `pr3-cm` (three Peaceman–Rachford sweeps pairing the exact streaming line solve with the exact z-local drift/mirror/φ block) adopted as the L4 design: 30/45/88/164 iterations to 1e-5 from pilot to (96,8,24) where Hermite-line stalls; per-kz parameters, single ADI, z-block Jacobi and multiplicative forms rejected. Matrix-free shift-invert with it does **not** beat the adaptive route at production size (409 s against 918/1281 s wall, but 1015 s against 6117 s CPU fails the ≥3× matvec gate), so `adaptive` stays the default; the ≈950 inner iterations per outer step are the L5 target (Q21) | Q2 recorded | CPU |
+| Q8 | `evidence/collisional-laguerre-convergence` | §0.5 (ii)–(iv), revised by Q3 — **done, #238**: only ν=1e-2 converges in Nl (γ=.01717, Nl32→48 +0.02%), and it is collision-modified (ν·b_max ≈ .13 ≫ γ); ν ≤ 3e-3 ladders are non-monotone and unconverged to Nl48; collisionless Nl64 is unsettled (.0177 at T=150, .0162 on [210,300]). The collisionless references at ky=.55 (GX Nl16 .0346, GKX/GX Nl24 .0328–.0330) are unconverged truncation values and may not be used as converged growth rates or regularization targets. P3 (conserving control) not runnable on `main`; P4 (GX `vnewk`) blocked by the missing GX toolchain, now rebuilt (Q17) | Q3 recorded | office GPU |
 | Q9 | batched chain FFTs | §5.3 N2 | Q4 merged | CPU |
 | Q10 | ky ≥ 0 layout contract | §5.3 N3 | Q4 merged (N0 ledger), Q9 measured | CPU, then GPU |
 | Q11 | implicit streaming | §5.4 | its entry trigger | CPU, GPU day |
 | Q12 | `fix/certify-every-eigenpair` | correctness: `KrylovConfig()` defaulted to the ungated `propagator` route (wrong mode, residual ≈1, on every #232 rung); `ETG_KRYLOV_DEFAULT`, `arnoldi` and `power` were ungated too — **done, #233**: raw routes fail closed at the shift-invert outer gate with an explicit `certify=False` opt-out; `KrylovConfig()` and `dominant_eigenpair` default to `adaptive`; a zero eigenvector no longer scores residual 0; `L-lin-etg` is time-integrated and unaffected | Q1 merged | CPU |
-| Q13 | runtime diagnostics scan with cache/params as graph arguments | §5.3 N1′: bitwise identity against the captured graph (adaptive dt included), then re-evaluate once-per-step completion | Q4 merged | CPU |
+| Q13 | `perf/runtime-scan-graph-args` | §5.3 N1′ — **done, #239**, no `src/` change: `nonlinear-step-hlo --route runtime` counts the scan `run_runtime_nonlinear` actually compiles (eager scan, closed-over arrays as operands); no graph-argument placement of `_run_raw` is bitwise against the captured graph in both f32 and x64, and bytes rise, so it is not adopted; N1 rejected again (2.7× bytes on every prepared and runtime graph); corrects #231's attribution of that regression to captured constants (§5.3) | Q4 merged | CPU |
 | Q14 | float32 window-gradient tolerances | 11 finite-window gradient tests fail on unmodified `main` in float32 (found in #231); CI runs them only in x64 while f32 is the documented default precision. Decide per test: tighten the method, loosen the tolerance with a derivation, or declare f64 in scope, and run the chosen set in CI | — | CPU |
 | Q15 | solver status on results | #230 and #233 surface inner/outer residuals in status and errors only: `RuntimeLinearResult` has no residual/certified fields and implicit/IMEX scans have no convergence channel. Add them without silently returning uncertified values | Q1, Q12 merged | CPU |
+| Q16 | eigen ℓ-spectrum of the ky=.55 mode | §0.5 (ii): the certified adaptive eigenpair (not a time fit) at Nl {24, 32, 48, 64} collisionless and ν ∈ {1e-3, 3e-3, 1e-2}, Nm96, reporting λ, residual and the Laguerre spectrum of the eigenvector; explains Q8's non-monotone small-ν ladders (branch change or μ-space recurrence) and whether a collisionless limit exists at this ky | Q6 merged, Q8 recorded | office CPU/GPU |
+| Q17 | GX matched controls on the rebuilt toolchain | Q8 P4: first confirm the rebuilt libraries reproduce the shipped Cyclone deck with both GX binaries (787eb014 and pristine upstream 3865a537; reference γ≈.0346, ω≈.498 at ky=.55) and the repaired 96a53403 parity binary; then run Q8's three `vnewk` decks (kept in its `gx/` directory) | GX verification passed | office GPU, idle only |
+| Q18 | reference route for runtime vs `gkx.prepare` | #239 found the prepared (captured-constant) and runtime (eager-scan) nonlinear routes differ at roundoff (f32 ≤2.1e-7, two near-cancelling diagnostics O(1)). Choose one as the reference, give the other its operand placement or declare and test the tolerance, and bisect `_run_dynamic_raw`'s in-graph setup only if N1 is revisited | Q13 merged | CPU |
+| Q19 | off-chain rows of supplied states | Q6 follow-up (a): zero the off-chain rows of a user `initial_state` or restart on linked runs, as GX masks after `restart_read`; test free-energy and spectrum sums before and after | Q6 merged | CPU |
+| Q20 | cross-code linear Cyclone controls | §2.4: matched adiabatic-electron Cyclone s-alpha ky scans with declared resolution ladders in GS2 8.2.1 and stella v1.0 (office CPU), gyaradax (office GPU) and GX, against GKX's certified eigenpairs; resolve the unexplained ≈2× stella/GS2 γ gap on the install checks first (Miller vs s-alpha, `fexpr`/`bakdif`, normalization); record wall time to a converged γ per code | — (*parallel*) | office CPU, GPU when idle |
+| Q21 | inner-solve cost (L5) | §5.1 L5 from Q7: inner tolerance proportional to the outer residual, tuned preconditioner P + (A−P)XXᴴ (Freitag–Spence), harmonic Krylov–Schur without inner solves; adoption gate as L4 (≥3× fewer matvec-equivalents to a certified pair than `adaptive`) | Q6, Q7 recorded | CPU |
 
 This branch no longer carries a README rewrite. `main`'s README has since taken
 the corrections that mattered (the capability table, the Cite section, the demo's
@@ -255,6 +263,15 @@ what this plan commits to so that GKX is not merely at parity.
 | Precision | f32 throughout | f64 | f64 | f32 default, f64 opt-in | §5.3 N5 mixed precision with declared error gates |
 | E×B flow shear | yes | yes | yes | parked (E0–E2, §12) | unchanged trigger; noted as the largest physics gap for experimental comparison |
 | Reproducibility | benchmark decks and goldens | benchmark suites | benchmark suites | evidence ledger regenerated by CI | keep; extend to time-to-accuracy rows (§5.1) |
+
+**Installed for comparison (2026-09-14; inventory and commands in `plan/log.md`).**
+On office: GS2 8.2.1 and stella v1.0, built and passing their shipped linear tests (v1.0
+exits with status 2 after writing outputs, a known format-string bug); gyaradax with a
+CUDA-12 venv, not yet run on a GPU; the GX runtime toolchain rebuilt, with the GX
+physics check pending an idle GPU. On the Mac: source clones of GYACOMO, GKW, gacode (CGYRO)
+and upstream GX. The install-check values of GS2 and stella are not like-for-like and
+disagree by ≈2× in γ, so no cross-code number from them is cited until Q20 matches the
+setups.
 
 ---
 
@@ -1280,15 +1297,21 @@ carrying its own gather/FFT/IFFT/scatter in streaming and again in
 hypercollisions (9 classes at 96×96×48); a diagnosed RK3 step writes
 ≈157 MB. The Hermitian projector applied to the RHS output is exactly
 idempotent, and completing once per step is bitwise identical, **but #231
-rejected it**: with cache/params captured as constants (the runtime
-diagnostics route) XLA:CPU then materializes 2.3–2.7× more bytes; only with
-them as graph arguments does it save ≈4%. The profiled 41.9% is the bracket's
-own completion inside each RHS, which only N3 removes. Order: N0 the op-name
-HLO ledger (`profile_runtime_kernels.py nonlinear-step-hlo`, #231) plus
-A/B/A/B timings on an idle pinned checkout, gating every change; N1′ give
-the runtime diagnostics scan its cache/params as graph arguments (bitwise
-identity, adaptive dt included) and only then re-evaluate once-per-step
-completion;
+and #239 rejected it**: XLA:CPU then materializes 2.3–2.7× more bytes on every
+graph `gkx.prepare` or `run_runtime_nonlinear` compiles. #231 attributed that
+to cache/params captured as constants; #239 showed it is not: hoisting every
+constant leaves the regression unchanged, the runtime's eager scan already
+takes the cache as operands and regresses too, and only `_run_dynamic_raw`
+(which rebuilds weights, ω mask and projector in-graph) avoids it. The
+profiled 41.9% is the bracket's own completion inside each RHS, which only
+N3 removes. Order: N0 the op-name HLO ledger (`profile_runtime_kernels.py
+nonlinear-step-hlo`, #231, with `--route runtime` for the scan the runtime
+actually compiles, #239) plus A/B/A/B timings on an idle pinned checkout,
+gating every change; N1′ (done, #239, not adopted: no constant placement is
+bitwise against the captured graph in both precisions, and bytes rise);
+the prepared and runtime routes already differ at roundoff (f32 ≤2.1e-7),
+so choosing the reference route is an open correctness item (Q18), not a
+speed one;
 N2 batch the chain classes so streaming and hypercollisions issue O(1) FFT
 launches, and re-measure the CPU FFT thread pool
 (`xla_cpu_multi_thread_eigen`, restored for the thunk runtime in jax 0.5.1);
