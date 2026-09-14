@@ -1095,7 +1095,9 @@ recursive = true
 # +112: raw routes fail closed with residual and tolerance or are flagged under
 # certify=False, a real converged propagator pair certifies, a zero eigenvector
 # never certifies, adaptive defaults, and the opt-out leaves shift-invert gated.
-baseline = 88145
+# +32: the runtime HLO route lowers eager scan-body closures as arguments, not
+# the constants a jit embeds, in the existing profiling owner.
+baseline = 88177
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1167,7 +1169,10 @@ recursive = true
 # +14: ky_diagnostics compares raw eigen routes against time integration, so
 # under Q12's fail-closed gate it opts out explicitly (certify=False) and writes
 # each pair's residual and certified flag instead of an unlabelled growth rate.
-baseline = 78115
+# +50: nonlinear-step-hlo --route runtime lowers the scan run_runtime_nonlinear
+# compiles, with cache/params as operands; the diagnostics route was that of the
+# prepared scan, so the N1 gate had measured a graph the runtime does not run.
+baseline = 78165
 target = 0
 
 [[line_budget_policy.counts]]

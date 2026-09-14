@@ -4,9 +4,11 @@ import ast
 import inspect
 import json
 from pathlib import Path
+import re
 import textwrap
 from types import SimpleNamespace
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -279,6 +281,36 @@ def test_hlo_op_counts_read_op_names_not_metadata() -> None:
     assert (counts["copy"], counts["concatenate"], counts["gather"]) == (2, 1, 1)
     assert counts["fft"] == 0
     assert counts["bytes_written"] == 8 * 8 + 16 * 8 + 5 * 8
+
+
+def test_runtime_route_lowers_scan_body_arrays_as_arguments() -> None:
+    """The runtime ledger must count the eager scan, whose closures are operands.
+
+    A jit of the same function embeds the closed-over array as a constant,
+    which is the prepared graph and not what ``run_runtime_nonlinear`` compiles.
+    """
+
+    weights = jnp.linspace(0.5, 1.5, 64, dtype=jnp.float32)
+
+    def run(state: jnp.ndarray) -> jnp.ndarray:
+        def step(carry: jnp.ndarray, _unused: None) -> tuple[jnp.ndarray, None]:
+            return carry * weights, None
+
+        return jax.lax.scan(step, state, None, length=3)[0]
+
+    state = jnp.ones(64, dtype=jnp.float32)
+    constant = re.compile(r"= f32\[64\]\S* constant\(")
+    entry = re.compile(r"entry_computation_layout=\{\((?P<arguments>[^)]*)\)->")
+    captured = runtime_kernels._compiled_hlo_text(run, state)
+    bound = runtime_kernels._scan_equation_hlo(run, state)
+
+    def entry_arguments(text: str) -> int:
+        match = entry.search(text)
+        assert match is not None
+        return match.group("arguments").count("f32[64]")
+
+    assert constant.search(captured) and entry_arguments(captured) == 1
+    assert not constant.search(bound) and entry_arguments(bound) == 2
 
 
 def test_full_linear_trace_summary_contains_metadata() -> None:

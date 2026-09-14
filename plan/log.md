@@ -12843,3 +12843,147 @@ d977f541651001dd3f3a227056da3a3a935a58947b64f2fe1df31effcb390f7d  v1_supervisor_
 session pauses were killed by owner PID (prod_solve 36384; adaptive 68797 with its launcher
 65626) and verified absent. No owned process was running at the commit, and the 2700 s cap was
 never reached.
+
+## 2026-09-14 — Q13: runtime diagnostics scan with cache/params as graph arguments (plan §5.3 N1′)
+
+**Outcome: no `src/` change; N1 stays rejected; the HLO ledger gains the route the
+runtime actually compiles.** Branch `perf/runtime-scan-graph-args`, based on
+`b45b017ed` (#236's head).
+
+**What `run_runtime_nonlinear` compiles.** Q4 and plan §5.3 call
+`PreparedExplicitNonlinearDiagnostics._run_raw` the runtime scan. It is the
+`gkx.prepare` (`prepare_only`) scan. `run_full_nonlinear_runtime` calls
+`integrate_nonlinear_explicit_diagnostics_state` on the fixed-window, chunked and
+sharded (`_run_sharded` → `_run_once`) routes, which runs the same raw scan function
+outside jit. JAX then compiles the scan primitive alone (`dispatch.apply_primitive` →
+`jit(prim.bind)`), and the arrays its body closes over are arguments of that module
+(93 of 171 operands at 32×32×24). `_run_raw`'s jit instead embeds them (87 constants,
+30 larger than 16 elements). New `nonlinear-step-hlo --route runtime` binds that scan
+equation on arguments; its counts equal the `jit_scan` module of an XLA dump of the
+eager run at 8×8×8 Nl2/Nm2 and at 32×32×24 Nl2/Nm4 (main and N1).
+
+| route (main, adaptive) | grid | rk3 concat/copy/transpose/bytes | rk4 concat/copy/transpose/bytes |
+|---|---|---|---|
+| diagnostics (prepared, captured) | 32×32×24 Nl2/Nm4 | 32/136/117/156,556,500 | 41/175/156/208,946,388 |
+| runtime (eager scan, operands) | 32×32×24 Nl2/Nm4 | 33/277/115/156,134,052 | 42/316/154/208,523,940 |
+| diagnostics (prepared, captured) | 64×64×24 Nl4/Nm8 | 32/163/144/2,884,020,404 | 41/210/191/3,849,267,380 |
+| runtime (eager scan, operands) | 64×64×24 Nl4/Nm8 | 33/303/141/2,873,459,056 | 42/350/188/3,838,706,032 |
+
+The runtime row is the scan module only; the diagnostics graph also holds the pre-scan
+field solve and first diagnostic.
+
+**Graph-argument prepared scan (prototype, not merged).** `_run_raw`'s body traced once
+to a jaxpr and evaluated under jit (`jax.extend.core.jaxpr_as_fun`) with some or all of
+its constants as arguments: the op sequence is unchanged, only constant placement
+differs. One jit trace served two different states. HLO, adaptive rk3:
+
+| placement | 32×32×24 Nl2/Nm4 concat/copy/transpose/bytes | 64×64×24 Nl4/Nm8 |
+|---|---|---|
+| captured (main) | 32/136/117/156,556,500 | 32/163/144/2,884,020,404 |
+| every constant an argument | 34/136/117/156,754,032 | 34/162/143/2,885,203,836 |
+| inexact constants | 33/136/117/156,753,108 | — |
+| inexact, >16 elements, `cache.Jl` kept captured | 33/136/117/156,753,108 | 33/162/143/2,885,200,052 |
+
+Bytes rise by 196,608–197,532 (+0.13%) at 32 and 1.18 MB (+0.04%) at 64. The
+`f32[Nl,1,Ny,Nx,Nz]` concatenate in `assemble_rhs_cached_electrostatic_jit` (plus an
+`s32[231]` one) that XLA folds when its input is constant is computed instead. Copies
+fall by one at 64 only.
+
+Identity on a tiny Cyclone case (4×4×8, 3 rk3 steps). With every constant still captured,
+the jaxpr evaluation is bitwise (0/18 outputs), so the conversion itself is exact.
+Hoisting `cache.Jl` alone changes 6 of 18 outputs; each of the other eight large float
+arrays alone changes none. Keeping `Jl` captured and hoisting the rest is bitwise in x64
+for fixed/adaptive × nonlinear on/off, but not in f32 with the nonlinear term off
+(3/18). No placement rule is bitwise across both precisions. The folding step that
+moves the bits is not isolated; `build_H` forms zt·Jl·φ in one expression.
+
+100-step gate: Cyclone deck at 16×16×24, Nl2/Nm4, `init_amp` ×10, compressed real FFT;
+rk3/rk4 × {adaptive dt, collision split (implicit), fixed mode ky(.3), ikx=1}; inexact
+constants with >16 elements as arguments. Differences are ‖Δ‖/‖ref‖ per output.
+- argument route vs captured: **0/12 bitwise** in f32 and x64. State: f32 7.8e-8 to
+  2.1e-7; x64 4e-22 to 2e-21 for adaptive and fixed mode, 1.5e-7 with collision split.
+  Two near-cancelling diagnostic outputs (`[1][0][10]`, `[1][0][12][k]`) reach 0.55 to
+  0.93.
+- eager runtime route vs captured: also **0/12 bitwise**, up to 2.1e-7 in f32 and 9e-17
+  to 1.6e-7 in x64. The two shipped routes already disagree at roundoff.
+- argument route vs eager runtime route: **bitwise for adaptive rk3 and rk4** in f32 and
+  x64; 4.7e-9 to 6.9e-8 for collision split and fixed mode.
+
+VJP: on the tiny case (rk3, fixed dt, checkpointed), the value and d/dscale of
+‖G_final‖² through the argument route are bitwise equal to the captured route (f32).
+The Cyclone window VJP was not run for the prototype.
+
+Verdict: the bitwise-against-captured gate fails for every placement that moves the
+cache, and bytes rise. Not adopted.
+
+**N1 re-evaluated** (prototype `e154f30f5` applied to `b45b017ed` sources):
+
+| graph | copy main → N1 | transpose | bytes |
+|---|---:|---:|---:|
+| prepared, captured, adaptive rk3, 32 | 136→309 | 117→290 | 156,556,500→426,450,132 |
+| prepared, every constant an argument, 32 | 136→309 | 117→290 | 156,754,032→426,647,664 |
+| prepared, `Jl` captured, rest inexact arguments, 32 | 136→309 | 117→290 | 156,753,108→426,646,740 |
+| runtime (eager scan), adaptive rk3, 32 | 277→450 | 115→288 | 156,134,052→426,027,684 |
+| prepared, captured, 64×64×24 Nl4/Nm8 | 163→360 | 144→341 | 2,884,020,404→7,805,118,644 |
+| prepared, every constant an argument, 64 | 162→365 | 143→346 | 2,885,203,836→7,964,571,516 |
+| runtime (eager scan), 64 | 303→506 | 141→344 | 2,873,459,056→7,952,826,736 |
+| prepared, fixed dt, captured, 32 | 135→308 | 115→288 | 156,347,608→426,241,240 |
+| prepared, fixed dt, every constant an argument, 32 | 135→308 | 115→288 | 156,545,140→426,438,772 |
+| `_run_dynamic_raw`, fixed dt, 32 | 134→131 | 115→112 | 156,348,532→149,418,100 |
+
+N1 is rejected again. Materialized bytes grow 2.7× on every graph `gkx.prepare` or
+`run_runtime_nonlinear` compiles. That includes the eager scan, whose cache is already
+an argument. **Correction to Q4:** captured constants do not cause the regression.
+Hoisting every constant leaves it unchanged. It disappears only in
+`_run_dynamic_raw`, which rebuilds the diagnostic setup (quadrature weights, ω mask,
+state projector) inside the graph from traced geometry, cache and params. #231's
+argument-route comparison changed that rebuild, fixed dt and constant placement at
+once. Which part of the rebuild changes XLA:CPU's layout choice is unresolved.
+
+**Tests and checks** (x64, `gkx.__file__` in the worktree):
+- `tests/unit/nonlinear/test_nonlinear.py`: 42 passed.
+- `test_nonlinear_helpers_extra.py`: 82 passed.
+- `tests/unit/solvers/test_time_integrators.py`: 94 passed.
+- `tests/unit/parallel/test_parallel_linear_velocity.py` with
+  `--xla_force_host_platform_device_count=4`: 71 passed.
+- `tests/integration/runtime/test_runtime_runner.py -k nonlinear`: 28 passed.
+- `tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py`: 37 passed,
+  including the new `test_runtime_route_lowers_scan_body_arrays_as_arguments`. It fails
+  if the runtime route embeds a closed-over array as a constant.
+- `tests/release/test_release_gates.py` and `tests/release/test_evidence_ledger.py`:
+  152 passed.
+- `mypy`: no issues in 184 source files.
+- ruff 0.16.4 check and format: pass (423 files).
+- gitleaks 8.30.1 on the changed files: no leaks.
+- Architecture manifest: tools +50 (78115→78165), tests +32 (88145→88177), source +0.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, `/Users/rogeriojorge/local/venvs/gkx-review-20260913`,
+`PYTHONPATH=<tree>/src:<tree>`, `JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at
+a time behind a 1-minute load gate below 20. Load was 11–23 during the session, so
+**no timing is reported**. HLO counts are XLA:CPU compile-only and load-independent.
+Scratch evidence (session-local, SHA-256 prefixes):
+- scripts: `args_route_hlo.py` eb98e4f8c5c2…598f, `dump_routes.py` d30824c96cfb…e4a7,
+  `gate_cyclone.py` 2d7091b3f6e5…92ba, `probe_diff.py` 594123f77819…4aea,
+  `probe_bisect.py` 0f02bf7731b1…3d4e, `probe_allbut.py` f3cc1eaa6fb4…8143,
+  `runtime_route_hlo.py` 0be5ef8232fe…cf76, `hlo_op_diff.py` 2fecca4c146c…b510;
+- N1 patch: e8125646922a…d42a;
+- gate: f32 524e090894a0…7a8a, x64 65386562361f…1b3f;
+- ledger JSON: diagnostics 32 652b54567a5a…ba40 (equal to Q4's), diagnostics 64
+  56df8d7d35f9…029e, runtime 32 424792698500…472d, runtime 64 84364b4a9664…58cd.
+
+Commands: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo --route
+{diagnostics,runtime} --methods rk3,rk4 [--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8] --out
+<json>`; `python gate_cyclone.py <json>` with and without `JAX_ENABLE_X64=true
+GKX_X64=1`.
+
+**Limitations.** XLA:CPU only. Species×Hermite was not re-measured: it passes only its
+species-dependent cache/params leaves as arguments and captures the rest, but it is not
+the diagnostics scan. The whole-state sharded runner already takes cache/params as
+arguments. The Cyclone gate used one grid and one amplitude.
+
+**Next question.** Bisect `_run_dynamic_raw`'s in-graph setup (weights, mask, projector)
+to find which piece keeps XLA:CPU from the N1 layout, HLO-only. Or go to N3, whose ky ≥ 0
+layout removes the transposes that choice acts on. Separately, the prepared and runtime
+routes disagree at roundoff. Choosing one as the reference, and giving `gkx.prepare` the
+runtime's operand placement, is a correctness question, not a speed one.
