@@ -668,6 +668,8 @@ blindly); (v) a higher R/L_T point. Collisionless atlas rows must declare
 their regularization and report the ν→0 extrapolation if (iii)/(iv) confirm
 the mechanism. Steps 1–7 below stay as the matched contracts.
 
+**Updated 2026-09-14 by the Q8 runs** ([log](plan/log.md); GKX's default conserving collision term, T=150, fit [105,150]): only ν=1e-2 is converged in Nl (γ .01744/.01717/.01717 at Nl 24/32/48); at ν=3e-3 and 1e-3 the ladders dip at Nl32 (.0175, .0174) and rise at Nl48 (.0187, .0201), and the collisionless γ is still falling and unsettled at Nl64 (0.0177 at T=150, 0.0162 on [210,300]), so no Nl-converged collisionless growth rate exists at this ky up to Nl64 and the Nl16–24 references (.0346, .0330) are unconverged truncation values. Step (iv)'s ν→0 extrapolation is therefore not available from these ladders and (ii)'s eigen ℓ-spectra come first; a conserving Dougherty control is not runnable on main (Sugama is restricted to its 2×4 basis) and the GX `vnewk` control did not run because the GX binary's shared libraries are gone from office.
+
 Use the [convergence report](plan/research/2026-09-06_hermite_laguerre_convergence.md)
 as the investigation protocol, with matched contracts below:
 

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # GPU occupancy gate for Q8 (office). Written after GPU1 was taken by another
 # session's process at 19:05 CDT and run_convergence.sh stopped (exit 4).
-# Usage: gate.sh RUN_DIR WAIT_CAP_SECONDS
+# Usage: gate.sh RUN_DIR WAIT_CAP_SECONDS [PHASES]
+# PHASES is a space-separated subset of "gkx gx t300" (default all three); it
+# was added after the first GX launch failed on missing shared libraries, so
+# the GKX T=300 rerun could proceed without GX.
 # Policy: never share or preempt a GPU. Poll both GPUs every 300 s; a GPU is
 # eligible when it has no compute process and utilization < 5% on two
 # consecutive polls (GPU1 preferred). On eligibility run, in order (lead's
@@ -13,6 +16,7 @@
 set -u
 RUN_DIR=$1
 WAIT_CAP=$2
+PHASES=${3:-gkx gx t300}
 D=plan/research/scripts/2026-09-13-collisional-convergence
 S="$RUN_DIR/src_stage/$D"
 PY=/home/rjorge/venvs/gkx-nl/bin/python
@@ -58,15 +62,17 @@ idle() {
   [ -z "$apps" ] && [ "$util" -lt 5 ]
 }
 
-echo "gate pid $$ host $(hostname) start $(date -Is) wait cap ${WAIT_CAP}s" >> "$LOG"
+echo "gate pid $$ host $(hostname) start $(date -Is) wait cap ${WAIT_CAP}s phases [$PHASES]" >> "$LOG"
 waited=0
 previous=""
 while true; do
-  keys_gkx=$(remaining_gkx)
-  keys_gx=$(remaining_gx)
+  keys_gkx=""
+  keys_gx=""
   keys_t300=""
+  case " $PHASES " in *" gkx "*) keys_gkx=$(remaining_gkx) ;; esac
+  case " $PHASES " in *" gx "*) keys_gx=$(remaining_gx) ;; esac
   if [ -z "$keys_gkx" ] && [ -z "$keys_gx" ]; then
-    keys_t300=$(remaining_t300)
+    case " $PHASES " in *" t300 "*) keys_t300=$(remaining_t300) ;; esac
   fi
   if [ -z "$keys_gkx" ] && [ -z "$keys_gx" ] && [ -z "$keys_t300" ]; then
     echo "ALL DONE $(date -Is)" >> "$LOG"

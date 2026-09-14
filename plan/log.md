@@ -12173,3 +12173,176 @@ first launch's 160692, 160703/160706, 161207/161210, 161623/161626, 162566/16256
 163424/163427 and pin watcher 163032, were all verified absent at 15:31; no `gkx-q2-*`
 systemd units remain. Staging tarballs were removed on office and locally. The 27 MB
 staging directory stays for provenance; office disk had 66 GB free.
+
+### September 14 — Q8 collisional Laguerre convergence of the Cyclone ky=.55 growth rate
+
+Queue row Q8 (#228), follow-up to Q3 (#234, carried by #235). Measurement
+only; no source, test, default or reference change. Files:
+`plan/research/scripts/2026-09-13-collisional-convergence/`.
+
+**Question (registered in `manifest.toml` before any run, commit `22d39e9`).**
+Is the Nl-converged linear growth rate of the Cyclone s-α adiabatic-electron
+ITG control (ky=.55, Nm96, Nz96 = ntheta32 × nperiod2, nkx=1, rk4, dt .002,
+absorber rate 50, f64, T=150, fit [105,150]) ≈.017 once a small physical
+collision frequency regularizes the Hermite–Laguerre truncation, with the
+collisionless runs converging slowly toward it from above; and does GX agree
+with a matched collisional run? Predictions: **P1** for each ν ∈ {1e-3, 3e-3,
+1e-2}, |γ(Nl48)−γ(Nl32)|/γ < 2%, the three γ(Nl48) within a few % of each
+other, extrapolating smoothly as ν→0; **P2** collisionless γ(Nl64) < γ(Nl48)
+and moving toward that limit; **P3** a conserving Dougherty operator at ν=3e-3
+gives γ(Nl32) within 2% of the default term; **P4** GX with `vnewk=1e-2` at
+Nl 24/32 agrees with GKX's matched runs to ≤2%.
+
+**Source and reuse.** Staged source `578b970742b4` (a `git archive` of this
+branch at `22d39e9`) for every Q8 run. `git diff 06606e404 578b97074 -- src
+tools tests pyproject.toml` is empty, so Q3's runs (collisionless Nl 24/32/48;
+ν 1e-3 and 1e-2 at Nl 24/32; `summary.csv` blob `10273ec3`, identical on
+#234's branch and in #235) are reused as `q3_reused.csv`. The branch was later
+merged with `origin/main` `4460c1a8e`: `git diff 578b97074 4460c1a8e --
+src/gkx/operators src/gkx/terms src/gkx/solvers_time* src/gkx/solvers_linear_integrators.py
+tools/comparison` is empty; the four changed source files
+(`solvers_linear_implicit.py`, `solvers_linear_krylov.py`,
+`solvers_linear_krylov_algorithms.py`, `solvers_nonlinear_imex.py`, #230) are
+imported by the linear integrators but the changed `_implicit_gmres_step` runs
+only for `method == "implicit"`, not on this rk4 route.
+
+**Collision operators, read from source.**
+- GKX with `[time] collision_operator` unset: damping ν(ν_L ℓ + ν_H m + b) =
+  ν(2ℓ + m + b) (`src/gkx/operators/linear/cache_arrays.py:54-57` `lb_lam`,
+  `:197-229` `collision_damping`) plus conserving u⊥ (m=0), u∥ (m=1) and
+  temperature (m=0, m=2) restoring terms
+  (`src/gkx/operators/linear/dissipation.py:293-325`
+  `_collision_moment_correction`, `:460-491` `collisions_contribution`),
+  applied because `src/gkx/terms/assembly.py:188-198` passes G, Jl, JlB and b.
+  This is not the "diagonal Lenard–Bernstein" term Q3's manifest named.
+- GKX runtime choices (`src/gkx/operators/linear/params.py:451-458`): none,
+  lenard_bernstein, sugama, improved_sugama, coulomb, coulomb_finite_kperp; no
+  Dougherty. The Sugama matrix is the fixed 8-moment (Nl·Nm = 8) truncation;
+  `src/gkx/solvers_time_runners.py:85-115` (`_check_moment_basis_matches_operator`)
+  rejects any other moment count.
+- GX (3865a537 + the 2026-09-12 discriminator repairs; `device_funcs.cu`
+  SHA-256 `a67e0062…`, binary `96a53403…`): `rhs_linear` applies
+  −(ν+ν_ei)(b+2ℓ+m)H (`device_funcs.cu:3178`), u⊥ and temperature restoring
+  terms at m=0 (`:3193-3194`), u∥ at m=1 (`:3206`), temperature at m=2
+  (`:3213`), with ū∥, ū⊥, T̄ from `conservation_terms` (`:3464-3520`), called
+  when `collisions && coll_conservation` (`linear.cu:171`; `coll_conservation`
+  defaults true, `parameters.cu:543`; `collisions` is any `vnewk > 0`,
+  `:570-572`). The temperature weight ℓJ_{ℓ−1} + 2ℓJ_ℓ + (ℓ+1)J_{ℓ+1} and T̄
+  have the same form in both codes; the u⊥ weight (GKX `JlB`, GX
+  √b(J_ℓ+J_{ℓ−1})) was not compared term by term. Same structure by reading,
+  not a numerical check.
+
+**Host and environment.** office (`pop-os`), RTX A4000 GPU1 for every GPU
+run, `/home/rjorge/venvs/gkx-nl` (Python 3.11.15, JAX 0.10.2, SOLVAX 0.20.0).
+Run directory `/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z`.
+Env: `PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cuda
+XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_ENABLE_X64=true GKX_X64=1
+MPLBACKEND=Agg CUDA_VISIBLE_DEVICES=1
+GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs`.
+Runs go through `run_convergence.sh` (one `build_gx_parity_matrix.py` process
+per key, `timeout --signal=TERM --kill-after=10s 2700s`, `/usr/bin/time -v`,
+stop on nonzero exit or nonfinite γ/ω, refuse to start a key if the GPU has
+any compute process) launched by `gate.sh` (polls both GPUs every 300 s,
+launches only after two consecutive polls with no compute process and <5%
+utilization, re-arms after a busy-GPU stop, aborts on any other failure).
+
+**Preflights.**
+- CPU `preflight_collisions.py`: the four configurations resolve to the
+  default term with `nu_hermite=1`, `nu_laguerre=2`, kz hypercollisions and
+  absorber 50; the relative RHS change against ν=0 at Nl24/Nm96 is 8.412427e-4,
+  2.523728e-3, 8.412427e-3 (ratios 3.000000, 10.000000). Sugama at Nl32×Nm96 is
+  rejected (`ValueError: collision_operator='sugama' provides a 8-moment
+  drift-kinetic matrix, but the run uses Nl*Nm = 32*96 = 3072 moments`); on
+  its 2×4 basis it resolves (matrix (1,1,8,8)) and changes the RHS by 1.84e-4
+  (default term 1.72e-3). The parity-runner preflight
+  `preflight-sugama-nu3e-3-nl32` (CPU, 500 steps) exits 1 after 4.2 s with the
+  same error.
+- GPU `preflight-nu3e-3-nl24` (500 steps): exit 0 in 13 s.
+- `gx_fit.py` on the existing collisionless GX Nl24 T=300 output: γ(Phi2,
+  [210,300]) = .0330094, ω = .500247 (recorded fits .033009, .50025).
+
+**Chronology.** 2026-09-13 18:38 launch on GPU1 after four idle polls (GPU0
+was intermittently used by other sessions); `nu3e-3-nl24`, `nu3e-3-nl32`,
+`nu1e-3-nl48` completed; at 19:05 another session's `lmx-gpu` pytest took
+GPU1 and the supervisor stopped before the next key (exit 4, GPU never
+shared); maintainer pause at 19:17 (gate 310799 killed during its sleep,
+nothing launched). 2026-09-14 07:01 resume with the lead's priority (Nl48,
+Nl64, Nl16, GX, T=300); the never-run key `collisionless-nl64` was renamed
+`nu0-nl64` for gitleaks. 07:06–07:57 the six remaining GKX keys completed.
+08:02 the GX launch exited 127 (see P4); the gate aborted as designed and was
+relaunched for the T=300 phase only; 08:09 `nu0-nl64-t300` started and at
+08:37 exited 0, still unsettled (the only base case that was not settled at
+T=150); the gate logged ALL DONE.
+
+**Results** (GKX; T=150 unless stated; "half shift" = runner's relative
+change of the [52.5,75] estimate, settled if |shift| ≤ 5%; Δγ from the next
+lower Nl of the same ν):
+
+| code | key | source | nu | Nl | T | gamma | omega | half shift | settled | d gamma vs prev Nl | wall s | device MB |
+|---|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| GKX | full_nl24 | Q3 06606e404 (reused) | 0 | 24 | 150 | 0.0328280 | 0.500108 | +1.74e-02 | yes |  | 321 | 103 |
+| GKX | full_nl32 | Q3 06606e404 (reused) | 0 | 32 | 150 | 0.0249958 | 0.504821 | -1.40e-01 | no | -23.86% | 506 | 54 |
+| GKX | full_nl48 | Q3 06606e404 (reused) | 0 | 48 | 150 | 0.0197718 | 0.496919 | +5.66e-02 | no | -20.90% | 738 | 93 |
+| GKX | nu0-nl64 | Q8 578b97074 | 0 | 64 | 150 | 0.0177001 | 0.489399 | +1.93e-01 | no (superseded) |  | 867 | 173 |
+| GKX | nu0-nl64-t300 | Q8 578b97074 | 0 | 64 | 300 | 0.0162303 | 0.488070 | +9.06e-02 | no | -17.91% | 1672 | 173 |
+| GKX | nu1e-3-nl16 | Q8 578b97074 | 0.001 | 16 | 150 | 0.0336955 | 0.487696 | -4.23e-04 | yes |  | 260 | 101 |
+| GKX | nu1e-3_nl24 | Q3 06606e404 (reused) | 0.001 | 24 | 150 | 0.0291274 | 0.497333 | +1.01e-02 | yes | -13.56% | 355 | 103 |
+| GKX | nu1e-3_nl32 | Q3 06606e404 (reused) | 0.001 | 32 | 150 | 0.0174118 | 0.501087 | -3.84e-02 | yes | -40.22% | 498 | 86 |
+| GKX | nu1e-3-nl48 | Q8 578b97074 | 0.001 | 48 | 150 | 0.0200511 | 0.494403 | -9.68e-03 | yes | +15.16% | 724 | 93 |
+| GKX | nu3e-3-nl16 | Q8 578b97074 | 0.003 | 16 | 150 | 0.0298942 | 0.490399 | +4.95e-04 | yes |  | 260 | 101 |
+| GKX | nu3e-3-nl24 | Q8 578b97074 | 0.003 | 24 | 150 | 0.0234140 | 0.496538 | +7.39e-04 | yes | -21.68% | 342 | 103 |
+| GKX | nu3e-3-nl32 | Q8 578b97074 | 0.003 | 32 | 150 | 0.0174873 | 0.495787 | -2.08e-04 | yes | -25.31% | 490 | 86 |
+| GKX | nu3e-3-nl48 | Q8 578b97074 | 0.003 | 48 | 150 | 0.0186981 | 0.494389 | -2.04e-04 | yes | +6.92% | 694 | 93 |
+| GKX | nu1e-2-nl16 | Q8 578b97074 | 0.01 | 16 | 150 | 0.0196801 | 0.494703 | +5.63e-06 | yes |  | 260 | 101 |
+| GKX | nu1e-2_nl24 | Q3 06606e404 (reused) | 0.01 | 24 | 150 | 0.0174378 | 0.495769 | +2.42e-05 | yes | -11.39% | 360 | 103 |
+| GKX | nu1e-2_nl32 | Q3 06606e404 (reused) | 0.01 | 32 | 150 | 0.0171657 | 0.495705 | +2.30e-05 | yes | -1.56% | 497 | 86 |
+| GKX | nu1e-2-nl48 | Q8 578b97074 | 0.01 | 48 | 150 | 0.0171695 | 0.495685 | +2.29e-05 | yes | +0.02% | 707 | 93 |
+
+**Verdicts.**
+- **P1 fails.** |γ(Nl48)−γ(Nl32)|/γ(Nl48) is 13.2% at ν=1e-3 and 6.5% at
+  ν=3e-3; only ν=1e-2 passes (0.02%). The three γ(Nl48) (.02005, .01870,
+  .01717) spread by 15.5% and rise as ν decreases, reaching and passing the
+  collisionless Nl48 value (.01977), so they do not extrapolate to ≈.017. The
+  ν ≤ 3e-3 ladders are non-monotone (minimum at Nl32): their Nl32 values
+  (.01741, .01749) sit next to the ν=1e-2 value by coincidence, not
+  convergence. Every collisional run is settled by the runner's criterion.
+- **P2: first clause observed on unsettled values; second clause not testable.** γ(Nl64) < γ(Nl48) holds — .01770 at T=150 (−10.5% from Nl48's .01977) and .01623 on [210,300] at T=300 — but neither Nl64 run is settled (half-time shifts +19.3% and +9.1%), and the collisionless Nl32/Nl48 rows were not settled either, so the collisionless growth rate is still drifting in time as well as in Nl. "Moving toward the ν→0 limit" cannot be evaluated because P1 established no limit; the T=300 Nl64 value is already below every collisional Nl48 value, including the converged ν=1e-2 value .01717.
+- **P3 not run (not runnable on main).** GKX has no runtime Dougherty
+  operator (`params.py:451-458`); the chosen conserving substitute, Sugama, is
+  restricted to its 2×4 basis by `solvers_time_runners.py:85-115`, and both
+  preflights show the rejection at Nl32×Nm96.
+- **P4 not run.** The GX binary's `RUNPATH`
+  (`/home/rjorge/local/install/{libcutensor-1.7.0.1/lib/11,nccl-2.18.1/lib,openmpi-4.1.6/lib,netcdf-c-4.9.2/lib,hdf5-1.14.5/lib,gsl-2.7.1/lib}`)
+  no longer exists on office; `ldd` reports `libcutensor.so.1`,
+  `libnccl.so.2`, `libmpi.so.40`, `libhdf5.so.310`, `libgsl.so.27` and
+  `libgslcblas.so.0` not found, and `gx-nu1e-2-nl24` exited 127 after 5 s
+  (`logs/gx-nu1e-2-nl24.run.txt`). A host-wide search found no GSL 2.7 and
+  no OpenMPI 4 library (only GSL 2.8, OpenMPI 5 in a conda package cache and
+  profiler-cache copies of cuTENSOR/netCDF); running the validated binary
+  against substitutes would not be the same control, and rebuilding the
+  dependencies is outside this row. The three GX decks and their one-line
+  diffs are kept in `gx/`.
+
+**Best estimate and consequence.** The only Nl-converged growth rate
+measured is the collisional ν=1e-2 value γ = .01717 (Nl32→48 change +0.02%,
+ω .4957); with ν·b ≈ .13 at b_max = 12.7, well above γ, that value is
+collision-modified and is not a collisionless limit. For ν ≤ 3e-3 and for the
+collisionless problem no converged value exists up to Nl48 (collisional) and
+Nl64 (collisionless; unsettled even at T=300); the data bracket nothing tighter than "below
+the Nl24 values". The collisionless reference rows at this ky (GX Nl16 .0346;
+GKX and GX Nl24 .0328–.0330) are therefore unconverged truncation values,
+1.85–2.13 times the unsettled Nl64 values (.0162–.0177), and cannot be used as converged growth rates or regularization
+targets.
+
+**Limitations.** Initial-value fits on one window per run, no eigenvalue,
+residual or Laguerre spectrum (the runner returns no state), so the
+non-monotone small-ν ladders (a branch change or slow μ-space recurrence) are
+not explained; one ky, Nm96, Nz96, dt .002 and absorber 50 were not varied;
+GX was not run, so the operator match is structural only; Q3's reused rows
+ran on `06606e404` (identical physics source).
+
+**Cost.** Q8 GKX GPU wall 105 min (Nl16 ≈4:20, Nl24 ≈5:42, Nl32 ≈8:10,
+Nl48 11:34–12:04, Nl64 14:27, Nl64 T=300 27:52.3); peak host RSS
+1.23–1.26 GB; peak device 93–173 MB. GX: 5 s (failed launch).
+
+**Terminal job state.** All verified absent at 2026-09-14T08:38:05-05:00 (no gate, supervisor, runner or GX process; no compute process on either GPU). Gates 310799, 370388, 443420 (310799 killed at the 2026-09-13 pause before launching; 370388 aborted after the GX exit 127; 443420 logged ALL DONE 08:37:22). Supervisors 260994, 374915, 447062 (260994 stopped on the busy-GPU guard; the others DONE). GX supervisor 441963 (STOP) and its timeout 441977. Runner timeout/python PIDs: preflight-nu3e-3-nl24 261215/261218; nu3e-3-nl24 261922/261925; nu3e-3-nl32 272886/272889; nu1e-3-nl48 289413/289416; nu3e-3-nl48 375281/375284; nu1e-2-nl48 394790/394793; nu0-nl64 405595/405598; nu1e-3-nl16 415490/415493; nu3e-3-nl16 418619/418622; nu1e-2-nl16 429629/429632; nu0-nl64-t300 447256/447259. The office run directory is kept at 296 KB (logs, results, GX decks, validation); its `src_stage/` and `src.tgz` and the local staging tarball were deleted.

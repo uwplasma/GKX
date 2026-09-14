@@ -146,6 +146,31 @@ def gx_rows(run_dir: Path) -> list[dict]:
     return rows
 
 
+def markdown_table(rows: list[dict]) -> str:
+    """Return the run table as Markdown for plan/log.md and the PR body."""
+
+    lines = [
+        "| code | key | source | nu | Nl | T | gamma | omega | half shift | settled"
+        " | d gamma vs prev Nl | wall s | device MB |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|",
+    ]
+    for row in rows:
+        change = row.get("gamma_rel_change_from_prev_nl")
+        wall = row.get("process_wall_seconds")
+        device = row.get("peak_device_mb")
+        lines.append(
+            f"| {row['code']} | {row['key']} | {row['source']} | {row['nu']:g}"
+            f" | {row['Nl']} | {row['t_end']:g} | {row['gamma']:.7f}"
+            f" | {row['omega']:.6f} | {row['gamma_half_time_shift']:+.2e}"
+            f" | {'yes' if row['settled'] else 'no'}"
+            f"{' (superseded)' if row.get('superseded') else ''}"
+            f" | {'' if change is None else f'{change:+.2%}'}"
+            f" | {'' if wall is None else f'{wall:.0f}'}"
+            f" | {'' if device is None else f'{device:.0f}'} |"
+        )
+    return "\n".join(lines)
+
+
 def main() -> None:
     run_dir, out_csv = Path(sys.argv[1]), Path(sys.argv[2])
     rows = gkx_rows(run_dir) + gx_rows(run_dir)
@@ -179,6 +204,8 @@ def main() -> None:
             writer.writerow({field: row.get(field) for field in FIELDS})
 
     gkx = {nu: levels for (code, nu, hyp), levels in ladder.items() if code == "GKX"}
+    print(markdown_table(rows))
+    print()
     print("P1: GKX collisional ladders")
     gamma48 = {}
     for nu in (1e-3, 3e-3, 1e-2):
