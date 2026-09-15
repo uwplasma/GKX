@@ -13369,6 +13369,1018 @@ runs at rc=0. It had invoked `check.py` without its stem argument; the checks ab
 re-run by hand with `check.py itg_salpha_adiabatic_electrons`. No process owned by this
 entry is running.
 
+## 2026-09-14 — Q14: float32 window-gradient tolerances (`test/f32-window-gradients`)
+
+**Outcome: the 11 failures are a float64-scale finite-difference reference, not a
+float32 adjoint bug. No `src/` change.** The float32 reverse-mode gradient of every
+matrix case agrees with the float64 gradient to at most 5.7e-6 (48 float32 ulps).
+What failed is the centered difference used as its reference, which is
+roundoff-limited in float32 at steps chosen for float64. Under float32 the ten
+matrix cases now check the float32 adjoint against the same centered difference
+evaluated in float64 in the same process. The checkpoint parity test keeps 1e-12
+in float64 and uses a derived float32 bound. CI runs all 11 in float32, and the
+float64 runs are unchanged.
+
+**Reproduction (unmodified `ccdd4bf12`, head of the merge chain, which contains
+main).** `JAX_ENABLE_X64=false GKX_X64=0 pytest -o addopts= -m "not slow" -rf
+tests/unit/nonlinear/test_nonlinear_helpers_extra.py
+tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py` gives
+**11 failed, 108 passed**. That is the Q4 smoke's pair of owners without Q4's two new
+tests. The failures are `test_window_gradient_matches_centered_finite_difference`
+for all ten `COVERAGE_MATRIX` cases, plus
+`test_block_checkpointed_window_matches_plain_reverse_pass`.
+
+**Why the step cannot be fixed in float32.** For a window value Q(p) and relative
+step r = h/|p|, the centered difference error is
+
+|D_h − Q'| / |Q'| ≤ T(h) + E / (r·S),  with S = |p·Q'/Q|,
+
+where E ≥ ε32 = 1.19e-7 is the relative forward roundoff of Q.
+- T(h), the truncation, measured by the same sweep in float64 where roundoff is negligible, is ≤ 3.4e-6 up to r = 0.1.
+- These windows are weakly sensitive to their parameters: S runs from 2.7e-4 (hypercollision rate) to 0.62.
+- At the float64 test steps the floor ε32/(rS) predicts 1e-2 to 1 (rk2: 1.9e-2 against 1.3e-2 observed; custom ν: 0.8 against 1.2).
+- Even at r = 0.1, the float32 sweep's best errors are 6.8e-4 (custom ν) and 8.0e-3 (hypercollision).
+
+Tightening the step would therefore need per-case tolerances from 1e-4 to 1e-2.
+It was rejected for a reference that is precise in both precisions.
+
+**Float64 reference.** `_float64_centered_difference` rebuilds grid, seed and
+parameters inside `jax.enable_x64(True)`, and asserts the evaluated values are
+float64. GKX reads `jax.config` at call time (`operators/linear/params.py`
+`_x64_enabled`). In a float32 process the reference is **bitwise equal** to the
+pure-x64 centered difference for all ten cases. The next float32 evaluation is
+float32 and bitwise equal to a fresh float32 run. The float64 assertion holds the
+reference within 1e-6 of the exact derivative; measured against the x64 adjoint it
+is within 5.8e-11 or better. The float32 bound is therefore rtol = 1e-6 +
+`F32_WINDOW_ROUNDOFF`, with `F32_WINDOW_ROUNDOFF` = 2.5e-5. That is 4.4× the
+largest measured float32 roundoff, max(|g32/g64 − 1|, |Q32/Q64 − 1|) = 5.66e-6, with
+the margin for another CPU's fusion choices. It still discriminates: the rk2 and rk3
+gradients differ by 7.3e-5.
+
+| test (f32) | S = \|pQ'/Q\| | before: \|AD−FD\|/\|FD\| vs rtol | after: \|AD32−FD64\|/\|FD64\| vs rtol | decision | derivation / reason |
+|---|---:|---|---|---|---|
+| baseline_es_rk2 | 6.1e-2 | 1.33e-2 vs 1e-6 | 1.52e-6 vs 2.6e-5 | (a) f64 reference | FD floor ε32/(rS)=1.9e-2; adjoint roundoff bound |
+| baseline_es_rk3 | 6.1e-2 | 1.39e-2 vs 1e-6 | 1.53e-6 vs 2.6e-5 | (a) | same |
+| baseline_es_rk4 | 6.1e-2 | 3.97e-2 vs 1e-6 | 1.48e-6 vs 2.6e-5 | (a) | same |
+| multispecies_kinetic_electrons | 8.1e-2 | 2.55e-2 vs 1e-6 | 5.66e-6 vs 2.6e-5 | (a) | largest adjoint roundoff (48 ulps) sets the bound |
+| multispecies_two_ions | 4.1e-2 | 2.24e-2 vs 1e-6 | 1.26e-6 vs 2.6e-5 | (a) | same |
+| electromagnetic_d_beta | 2.8e-2 | 3.25e-3 vs 1e-6 | 2.98e-7 vs 2.6e-5 | (a) | same |
+| electromagnetic_d_drive | 6.2e-2 | 1.57e-2 vs 1e-6 | 1.81e-6 vs 2.6e-5 | (a) | same |
+| custom_collisions_d_nu | 4.5e-3 | 1.20 vs 1e-6 | 1.87e-6 vs 2.6e-5 | (a) | FD floor ε32/(rS)=0.8 at h=1e-5 |
+| hypercollisions_d_nu_hyper_m | 2.7e-4 | 4.46e-2 vs 1e-6 | 1.99e-6 vs 2.6e-5 | (a) | FD floor 0.2 at h=1e-3; best f32 step still 4e-3 |
+| combined_ms_em_coll_hyper_rk3 | 0.62 | 3.80e-3 vs 1e-6 | 1.76e-6 vs 2.6e-5 | (a) | same as baseline |
+| block_checkpointed vs plain | — | 1.90e-7 (value), 1.46e-7 (grad) vs 1e-12 | same vs 5.0e-5 | (b) loosen in f32 only | two compilations of one arithmetic each lie within F32_WINDOW_ROUNDOFF of the exact window, so within 2× of each other; f64 keeps 1e-12 (measured 4.1e-16) |
+
+No test was declared x64-only. The float64 tolerances and steps are unchanged, and
+no physics number moved. `tests/conftest.py`'s precision banner no longer lists
+the window AD/FD matrix. Its 17-test count is kept as the #217 history, and the
+remaining default-precision failures outside this matrix were not re-measured.
+
+**CI.** A new step in `python-floor`, "Default-f32 nonlinear window-gradient
+matrix", runs the 11 tests with `JAX_ENABLE_X64=false GKX_X64=0`. It sits next to the
+existing f32 compressed-gradient step; that job completed in about two minutes on
+the last green main run. `nonlinear-core` and wide coverage still run the same
+tests in float64. Risk: this is the first Linux x86 float32 run of the matrix
+in-process. The #196 YNN crash class is f32-only, but locally (jaxlib 0.10.2,
+arm64) the matrix did not reach it.
+
+**Counts after the change.**
+- float32 CI selection: 11 passed; whole `test_nonlinear_helpers_extra.py`: 82 passed.
+- float64 selection: 11 passed; whole file: 82 passed.
+- `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py`: 152 passed.
+- mypy: no issues in 184 source files.
+- ruff 0.16.4 check and format: pass (430 files).
+- Architecture manifest: tests +51 (88428→88479), no new test file.
+
+**Commands.** `python measure.py <test module> <json>` in each precision records, per
+case: value; eager and jitted AD; the test-form and actual-step centered differences;
+a 2- and 4-point step sweep over r ∈ [1e-5, 1e-1]; blocked vs plain.
+`python ref64.py <test module> f64.json f32.json` in float32 runs the in-process
+float64 reference check. Scratch evidence (session-local, SHA-256 prefixes):
+`measure.py` b8e1ac5cd7d7…ca2e, `ref64.py` 478b81966711…61b4, f32 JSON
+1eb6b856e95e…70c7, f64 JSON 7d755f58c29a…203a, reproduction log
+86e0d85a8e95…b5c0.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, the review venv, `PYTHONPATH=<tree>/src:<tree>`,
+`JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at a time behind a 1-minute
+load gate below 20. Load ranged 7–23, so **no timing is reported**.
+
+**Limitations.** The roundoff constant is measured on XLA:CPU arm64 only. The
+4.4× margin is a judgement, and CI on x86 is its first test. Only the two Q4 owner
+files were reproduced in float32; other window-gradient FD tests
+(`test_nonlinear.py` linked boundary, objectives) were not swept in float32 here.
+
+**Final 2026-09-15.** Merged `main` at `7d94d5986` (after #237, #239 and #241);
+the float32 and float64 selections, release and evidence-ledger tests, ruff, mypy,
+both manifest checks and gitleaks were re-run on the merged tree. PR #240 is ready
+for the lead's merge chain; its float32 `python-floor` step on Linux x86 is the
+first check of the arm64-measured roundoff bound.
+
+## 2026-09-15 — Q15 solver status on results
+
+Branch `fix/solver-status-on-results`, merged with `main` at `7d94d5986`; `src/`,
+`tests/` and `tools/` are identical between that merge's two bases, so results measured
+on the pre-merge base still describe this code. Replaces the paused entry of 2026-09-14.
+
+**Contract.**
+- Eigen: `EigenSolveStatus(method, route, residual, tolerance, certified, inner)`.
+  `residual` is `_eigenpair_relative_residual` of the returned pair on every route (the
+  adaptive gate divides by |λ|‖v‖ only, so its pair is recomputed with the shared
+  definition, which is never larger). `route` names the method that produced the pair;
+  a shift-invert fallback reports its fallback. `inner` is the shift-invert build's
+  inner FGMRES summary (converged, solves, max relative residual, iterations, tolerance,
+  preconditioner), else `None`. `dominant_eigenpair(..., return_status=True)` appends
+  it. The gates are unchanged, so `certified=False` comes only from a raw route with
+  `certify=False`.
+- Scans: `ImplicitSolveStats(max_relative_residual, max_iterations, solves,
+  unconverged_solves)`, four scalars carried through `lax.scan`/`fori_loop` in the
+  implicit linear scan, both linear diagnostics scan forms (explicit methods carry
+  `None`, which adds no leaves) and the cached IMEX scan. IMEX returns SOLVAX's status
+  from `linear_solve(..., has_aux=True)` in `solve_imex_step_with_stats`;
+  `solve_imex_step` keeps its graph. No host callback runs inside a scan.
+- Results: trailing `RuntimeLinearResult.eigen_status`,
+  `RuntimeLinearResult.implicit_solve` and `RuntimeNonlinearResult.implicit_solve`
+  (default `None`); `summary()` adds flat `eigen_*` and `implicit_*` keys, `None` where
+  no such solve ran. Library integrators accept `return_solve_stats=True` and append the
+  stats (`None` for methods without an implicit solve); default returns are unchanged.
+- The runtime check lives in `workflows/runtime/solver_status.py`
+  (`solve_stats_request`, `checked_solve_summary`), imported by both workflow
+  dispatchers, so `workflows/nonlinear.py` stays at 1022 lines under its unchanged
+  1023-line budget.
+
+**Policy: fail closed at the host boundary**, as #233 does for eigenpairs. A traced
+step cannot raise, so `run_runtime_linear` (`method="implicit"`, phi and density paths)
+and `run_runtime_nonlinear` (IMEX final-state route; the diagnostics route already
+rejects IMEX) raise `RuntimeError("<label>: k of n implicit GMRES solves did not
+converge (max_relative_residual=…, max_iterations=…); …")` and never return a trajectory
+with an unconverged implicit step. No TOML key is added. A float32 probe on a reduced
+Cyclone runtime deck (Nl4/Nm8, dt .05, 40 implicit steps) converged every solve within 4
+iterations at max relative residual 5.7e-7 in float32 and x64, so SOLVAX's flag needs no
+dtype floor on this route.
+
+**HLO** (compile-only optimized HLO, 4×4×8 Cyclone, Nl2/Nm4, damping preconditioner;
+baseline is a clean `ccdd4bf12`; re-measured after the merge with identical counts).
+
+| graph (float32 / x64 instructions) | before | after, stats not requested | after, `return_solve_stats=True` |
+|---|---|---|---|
+| implicit linear scan | 3834 / 3835 | 3834 / 3835 | 4443 / 4452 |
+| implicit linear, stride 2 | 3945 / 3946 | 3945 / 3946 | 4602 / 4607 |
+| implicit linear diagnostics | 3883 / 3884 | 3883 / 3884 | 4492 / 4501 |
+| rk4 linear diagnostics (control) | 9395 / 9470 | 9395 / 9470 | — |
+| cached IMEX scan | 3968 / 3982 | 3968 / 3982 | 4486 / 4729 |
+| IMEX value_and_grad | 7012 / 7013 | 7012 / 7013 | — |
+| IMEX value_and_grad, checkpointed | 8716 / 8718 | 8716 / 8718 | — |
+
+Graphs that do not request stats keep identical counts and op ledgers. With stats, FFTs
+go 16→20 and copies 20→25 on the implicit linear scan. Attribution: folding only the
+iteration count gives 3853 instructions with 16 FFTs; reading `converged` alone gives
+4403 with 20. The cost is SOLVAX's true-residual recomputation, one operator application
+per solve that XLA removes when nothing reads it, plus about 19 scalar instructions. No
+jit static argument or compile key is added. No timing is reported (shared machine).
+
+**Tests** (x64 unless noted; one process at a time, `nice -n 10`, load below 20).
+
+| selection | result |
+|---|---|
+| `tests/unit/solvers/test_linear_krylov_core.py` | 98 passed |
+| `tests/unit/solvers/test_time_integrators.py` | 97 passed (new status tests also pass in float32) |
+| `tests/integration/test_adaptive_eigenmodes.py` | 8 passed, 3 skipped |
+| `tests/integration/runtime/test_runtime_runner.py` | 170 passed |
+| `tests/unit/objectives/test_autodiff_solver_objectives.py` | 97 passed |
+| `tests/unit/linear/test_linear.py -k "krylov or eigen or shift or implicit or linked"` | 16 passed |
+| `tests/unit/linear/test_linear_helpers_extra.py` | 61 passed |
+| `tests/unit/nonlinear/test_nonlinear.py -k "implicit or imex or IMEX"` | 9 passed |
+| `tests/unit/nonlinear/test_nonlinear_helpers_extra.py` | 82 passed |
+| `tests/unit/api/test_public_types.py tests/unit/operators/test_nonlinear_operator_packages.py` | 37 passed |
+| `tests/integration/runtime/test_cli.py -k "final_state or krylov or Krylov"` | 2 passed |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k "ky_diagnostics or krylov or implicit"` | 4 passed |
+| `tests/unit/parallel/test_parallel_linear_velocity.py` (4 forced host devices) | 71 passed |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+New tests: a starved inner budget is carried by both implicit scan forms and refused by
+the host gate while a converged budget passes; the IMEX status step returns the plain
+step's state and gradient and counts a starved solve; the certified propagator pair
+reports its residual, tolerance and route; both runtime implicit paths and the IMEX
+final-state route request stats and fail closed; the Krylov fallback result carries
+`eigen_status`. Five fakes changed shape only: two runtime eigenpair fakes return a
+status, and three `gmres`/IMEX fakes gain the SOLVAX status fields the scans now read.
+No asserted number changed.
+
+Checks: ruff 0.16.4 check and format, `mypy` as CI (185 source files), `sphinx -W`,
+`check_package_architecture_manifest.py`, `check_repository_size_manifest.py`, gitleaks on
+the range.
+
+**Manifest.** `installable_source_python_lines` 89618 → 90139 and `test_python_lines`
+88428 → 88728, both measured; tool lines unchanged at 78165; the new module leaves the
+source file count (185) under its baseline (193); `workflows/nonlinear.py` complexity
+budget unchanged at 1023. `tools/validation_coverage_manifest.toml` gives
+`gkx.workflows.runtime.solver_status` to the `orchestration_scan` owner beside `results`.
+
+**Follow-up for the plan.** The IMEX diagnostics scan (`integrate_nonlinear_imex_diagnostics`,
+via `make_imex_diagnostic_step`) and the sheared IMEX route (`solve_imex_step` in
+`solvers_nonlinear_state_integration.py`) still carry no `ImplicitSolveStats`, and the
+artifact summary JSON does not record solver status. A later row should thread the stats
+through that diagnostics carry and the sheared scan, apply the same host check wherever a
+runtime route reaches them, and write the status into saved summaries.
+
+## 2026-09-14 — Q9: batched linked-chain transforms (plan §5.3 N2)
+
+**Outcome: S+T adopted by the registered timing gate; T alone rejected.** The shared linked-chain transform plus the transpose-free chain layout halves the chain FFT launches, cuts materialized bytes 43–48% on every ledgered graph, is bitwise on 100-step trajectories in f32 and x64, and was not slower than base beyond the measured noise in any block for RHS, RHS gradient, scan or window gradient. The timings ran on contended hardware, so they bound a slowdown; they do not establish a speed-up. Branch `perf/batched-chain-fft`, based on
+`ccdd4bf12` (#239's head).
+
+**O(1) exact launches do not exist for this operator.** A chain of `L` links owns
+`N = L·Nz` samples and the periodic spectral operator on `Z_N`, with wavenumbers
+`k_j = 2πj/(N dz)`. One FFT launch has one length `M`.
+- Zero-padding a chain to `M` samples its DTFT at `j·N/M`, not at `j`. That is a
+  different operator: ‖Δ‖/‖ref‖ of the padded derivative is .21–.45 for
+  `(N, M)` ∈ {(24,48), (48,120), (72,120), (24,72), (96,288)} (f64, `census.py`).
+- Tiling a chain `M/N` times (exact only when `N | M`) puts `(M/N)·f̂_N[j]` in bin
+  `j·M/N`, at the same `k` (Nyquist sign included; the frequency tables agree to
+  roundoff) and zeros elsewhere. Measured: tiled derivative ‖Δ‖/‖ref‖ 1.4e-16 to
+  4.2e-16, off-bins ≤1e-14. One launch per RHS would need `M = lcm` of all chain
+  lengths.
+- Equal lengths are already grouped: the cache holds one class per distinct length.
+
+Chain classes of the Cyclone nonlinear deck, and what one launch would transform
+(`census.py`):
+
+| grid | classes `(nChains, nLinks)` | chain samples | padded to longest | tiled to lcm |
+|---|---|---:|---:|---:|
+| 32×32×24 | (175,1) (16,2) (1,3) (4,4) (1,5) | 5,544 | 4.26× | 51× (lcm 60) |
+| 64×64×24 | (690,1) (61,2) (16,3) (7,4) (3,5) (2,8) (3,9) | 22,704 | 7.44× | 298× (lcm 360) |
+| 96×96×48 | (1452,1) (132,2) (33,3) (15,4) (3,5) (7,6) (3,7) (2,12) (3,13) | 96,768 | 10.6× (not exact) | 4,469× (lcm 5460) |
+
+So the exact minimum is one FFT and one IFFT per class for everything that
+transforms on the chains. The RHS had four per class: streaming (`i k_z` on the
+Hermite-ladder and field-drive operand) and the `|k_z|` hypercollision branch
+(`c(s,m)·G`) each gathered, transformed and scattered on their own.
+
+**What changed (two pieces, measured separately).**
+- **S, shared transform.** Both operands scale the state by coefficients that do
+  not depend on `(ky, kx, z)`, then apply a diagonal multiplier of the same chain
+  spectrum. `_linked_fft_apply` accepts a tuple of operands with one operator each;
+  per class it gathers each operand, stacks the two chain arrays, and issues one
+  FFT, one multiply by `[i k_z, |k_z|]`, one IFFT and one output write.
+  `assembly._shared_linked_streaming_hypercollisions` takes that route when both
+  terms are statically on, the tube is linked and the dtypes agree; otherwise the
+  separate routes run unchanged. Per-element arithmetic is unchanged.
+- **T, chain layout without transposes.** The chain gather used to swap `kx` in
+  front of `ky` (`ky + Ny·kx` flat order) and swap back after the output gather.
+  It now reshapes in the state's own `(ky, kx)` row order and translates the chain
+  maps at trace time (`_state_mode_rows`, `_state_row_table`). Only data movement
+  changes.
+- A first S prototype stacked the two full operands before the gather (`jnp.stack`).
+  It halved launches too, but wrote two extra states per RHS (+3,151,488 B at 32,
+  +6.8%). Stacking after the gather keeps only the chain-sized stack.
+
+**HLO ledger** (`profile_runtime_kernels.py nonlinear-step-hlo`, XLA:CPU, jax 0.10.2;
+base → S+T; T alone in brackets):
+
+| graph | fft | concatenate | copy | transpose | bytes written |
+|---|---:|---:|---:|---:|---:|
+| RHS 32×32×24 Nl2/Nm4 | 23→13 [23] | 11→18 [11] | 35→19 [21] | 35→19 [21] | 46,295,964→24,991,260 [24,275,868] |
+| diagnostics rk3, 32 | 74→44 [74] | 32→38 [32] | 136→85 [92] | 117→66 [73] | 156,556,500→89,479,380 [87,350,484] |
+| diagnostics rk4, 32 | 97→57 [97] | 41→49 [41] | 175→105 [115] | 156→86 [96] | 208,946,388→117,413,076 [114,574,548] |
+| runtime rk3, 32 | 73→43 [73] | 33→44 [33] | 277→226 [233] | 115→64 [71] | 156,134,052→89,062,692 [86,928,036] |
+| runtime rk4, 32 | 96→56 [96] | 42→55 [42] | 316→246 [256] | 154→84 [94] | 208,523,940→116,996,388 [114,152,100] |
+| RHS 64×64×24 Nl4/Nm8 | 31→17 [31] | 11→22 [11] | 43→23 [25] | 43→23 [25] | 866,160,328→424,812,232 [413,175,496] |
+| diagnostics rk3, 64 | 98→56 [98] | 32→44 [32] | 163→100 [107] | 144→81 [88] | 2,884,020,404→1,509,607,604 [1,474,734,260] |
+| diagnostics rk4, 64 | 129→73 [129] | 41→57 [41] | 210→124 [134] | 191→105 [115] | 3,849,267,380→1,983,162,548 [1,936,664,756] |
+| runtime rk3, 64 | 97→55 [97] | 33→52 [33] | 303→240 [247] | 141→78 [85] | 2,873,459,056→1,499,058,544 [1,464,172,912] |
+| runtime rk4, 64 | 128→72 [128] | 42→65 [42] | 350→264 [274] | 188→102 [112] | 3,838,706,032→1,972,613,488 [1,926,103,408] |
+
+The base rows equal #239's (same JSON SHA-256). Per RHS at 32, the 20 chain
+launches become 10 (5 classes × FFT+IFFT) and the 3 bracket transforms are
+unchanged. Attribution (`hlo_bytes.py`, RHS at 32): T removes four
+`c64[1,2,4,1024,24]` copies (the flatten transposes, 6.29 MB) and XLA then also drops
+fourteen full-state `c64[1,2,4,32,32,24]` copies (22.0 MB). S adds the per-class
+stack concatenates (0.83 MB); its 2-slot copies replace pairs of 1-slot copies
+byte for byte. So S+T writes 2.4–2.9% more than T alone, and 43–48% less than base.
+
+**Identity.** `‖Δ‖/‖ref‖` per output against base.
+- **RHS terms and VJPs** (`rhs_identity.py`). Every named term of
+  `assemble_rhs_terms_cached`, the total, the full nonlinear RHS, and the VJP of
+  `Re⟨c, rhs_linear(G)⟩` wrt G, tprim and nu_hyper_m. Cases: the linked Cyclone
+  pilot (Nx=8, Ny=16, Nz=16, jtwist=1, Nl4/Nm8, classes (14,1) (4,2) (1,3) (1,5)),
+  the same with nu_hyper_m=.5, and the nonlinear deck at 32×32×24 and 64×64×24.
+  The shared route traced in every case.
+
+  | tree | f32 bitwise | f32 largest | x64 bitwise | x64 largest |
+  |---|---:|---|---:|---|
+  | S+T | 51/58 | vjp_G 4.1e-8 to 4.6e-8; nl64 hypercollisions 5.4e-9, total 2.8e-9, nonlinear RHS 2.8e-10 | 51/58 | vjp_G 6.3e-17 to 8.6e-17; nl64 hypercollisions 4.0e-18; nl32 nonlinear RHS 1.5e-19 |
+  | T | 56/58 | nonlinear RHS 3.2e-11 (32), 1.6e-9 (64) | 58/58 | — |
+
+- **100-step trajectories** (Q4's gate, `gate_traj.py`). Deck at 16×16×24, Nl2/Nm4,
+  dt .01, `init_amp=10` (‖NL‖/‖L‖ = .0506), classes (53,1) (5,2) (1,3). Cases:
+  `integrate_nonlinear` with euler, rk2, rk3, rk3_classic, rk4, sspx3 and k10;
+  `run_runtime_nonlinear` rk3/rk4 × {adaptive, collision split implicit, fixed
+  mode}; `integrate_nonlinear_sharded` rk3, rk3_classic, rk4;
+  `integrate_nonlinear_species_hermite` rk3/rk4; and the checkpointed
+  `nonlinear_heat_flux_window` value and d/dtprim for rk3/rk4. Result: **65/65
+  bitwise in f32 and in x64.** The archives have the same SHA-256 as base and as
+  #231's main archives.
+
+**Why the roundoff, algebraically.** Two causes, both outside the operator algebra.
+- *FFT batch layout.* The XLA:CPU FFT thunk splits a batch of lines across the
+  intra-op pool. DUCC processes lines in SIMD lanes with a scalar remainder, so the
+  lanes can round differently. Stacking doubles the line count and moves some lines
+  between the two paths. `probe_stack_bits.py` at 64×64×24:
+  - default flags: FFT, multiply and IFFT of a 2-slot batch differ from the single
+    slot for classes of length 24, 48, 72 and 216;
+  - `--xla_cpu_multi_thread_eigen=false`: all seven classes are bitwise, and so is
+    the full stacked `_linked_fft_apply`.
+- *Adjoint and fusion order.* In the VJP the two branches' cotangents reach G
+  through one stacked adjoint instead of two added separately. Floating-point
+  addition is not associative, so the sum is the same to one ulp (f32 ε=1.2e-7
+  against 4.6e-8; f64 ε=2.2e-16 against 8.6e-17). T alone changes no FFT batch, and
+  moves only the bracket's result (≤1.6e-9 f32, bitwise x64), because XLA fuses
+  differently around arrays that are no longer transposed.
+
+**VJP gate.** Linear RHS VJP: as in the identity table. Checkpointed window
+(20 steps, rk3/rk4): value and d/dtprim bitwise in both precisions.
+
+**Timing** (office, Xeon W-2295, 18 cores/36 threads, `taskset -c 2-17`, jax 0.10.2,
+`bench_q9.py`, Cyclone nonlinear deck 64×64×24 Nl4/Nm8, complex64). Arms per block ran in
+the order base → S+T → T, each in a fresh process from `git archive` trees: base
+`ccdd4bf12`, S+T `a86c435b2`, T = S+T with the shared route disabled. Kernels: jit
+`nonlinear_rhs_cached`; jit gradient of Re⟨c, rhs(G)⟩; jit `integrate_nonlinear` rk3 for
+5 steps; eager `value_and_grad` of the checkpointed `nonlinear_heat_flux_window` (rk3,
+6 steps) wrt tprim. The window gradient is eager because the window rebuilds its linked
+cache from the geometry, which an outer jit would trace. 7 reps each, 3 for the window.
+
+**The hardware was not idle.** The core split was cores 2–17 for Q9, 18–35 for Q20 and 1 for
+Q17, but at least eight unpinned VMEX agent jobs floated over all cores. Recorded at each
+arm start: 1-min load 24.8–41.2, cores 2–17 mean 21–71% busy, busiest core 60–100%. An
+idleness gate (mean below 10%, then 25%, then 35%) never passed in 45 minutes, so the
+three blocks ran ungated with busy levels logged (`timing/runs_pool.txt`). One arm under
+7 window reps and a jit-wrapped window kernel were discarded before the campaign.
+
+Registered gate, written in `ab_table.py` before the first measurement: a variant passes a
+kernel if, in every block, its median is at most base's median × (1 + tol), where tol =
+max(2%, (max − min)/median of base's reps in that block). Median ms and variant/base
+ratio; `*` marks a failed block:
+
+| kernel | block | tol | base | S+T | S+T/base | T | T/base |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| RHS | 1 | .208 | 370.3 | 333.2 | .900 | 315.7 | .853 |
+| RHS | 2 | .225 | 368.9 | 388.8 | 1.054 | 447.3 | 1.213 |
+| RHS | 3 | .164 | 387.0 | 335.3 | .866 | 364.3 | .941 |
+| RHS gradient | 1 | .263 | 601.3 | 439.9 | .731 | 476.2 | .792 |
+| RHS gradient | 2 | .201 | 632.8 | 570.4 | .901 | 656.1 | 1.037 |
+| RHS gradient | 3 | .112 | 610.6 | 523.3 | .857 | 601.0 | .984 |
+| scan rk3 ×5 | 1 | .042 | 5656.8 | 5043.4 | .892 | 4684.4 | .828 |
+| scan rk3 ×5 | 2 | .112 | 5721.2 | 6267.3 | 1.095 | 6341.1 | 1.108 |
+| scan rk3 ×5 | 3 | .247 | 4864.2 | 5190.6 | 1.067 | 5444.9 | 1.119 |
+| window gradient | 1 | .169 | 51520 | 43000 | .835 | 50296 | .976 |
+| window gradient | 2 | .174 | 55924 | 60889 | 1.089 | 60747 | 1.086 |
+| window gradient | 3 | .124 | 48179 | 53506 | 1.111 | 56234 | 1.167* |
+
+S+T passes all twelve kernel-blocks and T fails one, so S+T is adopted and T is not. The
+tolerances are 4–26% because of the contention, and that caveat matters:
+- S+T's RHS gradient was faster than base in every block (.73–.90).
+- Its RHS was faster in two blocks of three.
+- Its scan and window gradient were 7–11% above base in blocks 2 and 3, inside the noise
+  but not demonstrably equal.
+- In block 2 the load rose from 30 during the base arm to 38–41 during the variant arms,
+  and the fixed arm order puts that trend against the variants.
+
+A clean-hardware A/B/A/B is still owed before any throughput claim.
+
+**CPU FFT thread pool** (`--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1`
+against the default pool, same arms and cores; RHS, RHS gradient and a 2-step rk3 scan,
+7 reps). Median ms:
+
+| kernel | arm | pool (default) | no pool | no pool / pool |
+|---|---|---:|---:|---:|
+| RHS | base | 373.5 | 375.5 | 1.01 |
+| RHS | S+T | 345.7 | 380.3 | 1.10 |
+| RHS | T | 341.1 | 368.2 | 1.08 |
+| RHS gradient | base | 613.8 | 614.0 | 1.00 |
+| RHS gradient | S+T | 521.3 | 578.8 | 1.11 |
+| RHS gradient | T | 601.0 | 592.0 | 0.99 |
+| rk3 step | base | 1131.4 | 1219.0 | 1.08 |
+| rk3 step | S+T | 1038.1 | 1235.5 | 1.19 |
+| rk3 step | T | 1089.0 | 1193.1 | 1.10 |
+
+Within the no-pool blocks (median ms; ratio to base in the same block):
+
+| kernel | block | base | S+T | S+T/base | T | T/base |
+|---|---:|---:|---:|---:|---:|---:|
+| RHS | 1 | 372.8 | 382.7 | 1.027 | 375.4 | 1.007 |
+| RHS | 2 | 375.5 | 422.6 | 1.125 | 368.2 | 0.981 |
+| RHS | 3 | 384.7 | 350.1 | 0.910 | 363.2 | 0.944 |
+| RHS gradient | 1 | 628.6 | 553.5 | 0.881 | 592.5 | 0.943 |
+| RHS gradient | 2 | 609.9 | 569.4 | 0.934 | 583.8 | 0.957 |
+| RHS gradient | 3 | 614.7 | 594.7 | 0.967 | 599.0 | 0.974 |
+| scan rk3 ×2 | 1 | 2481.6 | 2465.9 | 0.994 | 2369.7 | 0.955 |
+| scan rk3 ×2 | 2 | 2438.0 | 2466.5 | 1.012 | 2404.9 | 0.986 |
+| scan rk3 ×2 | 3 | 2336.9 | 2557.0 | 1.094 | 2386.2 | 1.021 |
+
+**Tests and checks** (x64 unless noted, `gkx.__file__` in the worktree):
+- `tests/unit/operators/test_linear_streaming.py` + `test_terms_assembly.py`: 50 passed, 1 skipped (full cover needs an even mode count on Ny=2); the new stacked and shared-route tests also pass in f32 (15 selected).
+- New tests: stacked `_linked_fft_apply` against the per-class operator and a per-chain numpy reference for three chain-length mixes × gather/full-cover/scatter routes; operand validation; RHS terms, total and state VJP through the shared route against the separate routes on a four-class linked pilot; fallback when hypercollisions, the |kz| branch or streaming are statically off, or the tube is periodic.
+- `mypy`: no issues in 184 source files. ruff 0.16.4 check and format: pass on changed files.
+- Merged head (`origin/main` 7d94d5986 merged into the branch), x64, `nice -n 10`, one suite
+  at a time. The eight required files: 499 passed, 1 skipped. Hypercollision-touching
+  suites (parallel routing, linear, linear helpers, operator kernels, sharding profile,
+  comparison tools, end-damping, geometry and Hermite-hierarchy physics gates,
+  benchmark helpers and contracts): 472 passed, 15 skipped.
+  `test_parallel_linear_velocity.py` with 4 host devices: 71 passed. Runtime config,
+  artifacts, CLI and runner: 456 passed, 1 skipped. `test_adaptive_eigenmodes.py`: 8
+  passed, 2 skipped. `tests/release/test_release_gates.py` and
+  `tests/release/test_evidence_ledger.py`: 152 passed.
+- Architecture manifest: source 89618→89859, tests 88428→88686, tools unchanged.
+
+**Environment.** HLO counts, identity and trajectories: Apple M3 Max, 14 logical CPUs,
+macOS 14.4.1, Python 3.11.14, jax/jaxlib 0.10.2, numpy 2.4.6,
+`/Users/rogeriojorge/local/venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src:<tree>`,
+`JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at a time behind a 1-minute load
+gate below 20. Every tree was pinned: base `git archive ccdd4bf12`, S+T `a86c435b2`,
+T = S+T with the shared route disabled (one-line patch `tonly.patch` daad1b480980…fe29).
+Scripts, ledger JSONs and comparison JSONs are in `plan/research/scripts/2026-09-14-q9-batched-chain-fft/` (shell runners take `Q9_DIR` and `PY`; `gate_traj.py` is #231's gate with the deck path relative). Scratch SHA-256 (first 12 and last 4 hex digits; `gate_traj.py` and the runners before path scrubbing):
+- ledger JSON base = #239's; S+T diagnostics 32 35a6f18f571d…2696, 64
+  db98d467855f…85df, runtime 32 f54e4d165279…4355, 64 f91145f51566…273a; T
+  diagnostics 32 7ec5c929bb9b…2f8a, 64 468b459b7c5a…f60d, runtime 32
+  d7bb8eccf88a…8307, 64 05742aac49d1…ae48;
+- identity npz: base f32 b0f36f7e4e5e…edf5, x64 673da52c7396…cf6f; S+T f32
+  175ee99096fd…59f3, x64 84f8263bfc03…c37d; T f32 83db81a6936e…f624, x64 equal to
+  base;
+- trajectories: f32 67bd0b87882f…0a9a, x64 f22fc6ea025f…b4d1 (base = S+T);
+- scripts: `census.py` e84e224c5106…367f, `rhs_identity.py` 56fc9704f762…e77d,
+  `compare_npz.py` 3f4f98be42ee…b89d, `gate_traj.py` fddfdf3ae156…fe9a,
+  `probe_stack_bits.py` 22d0d696fab8…08d0, `hlo_bytes.py` a6d0a72158ce…c4c6,
+  `bench_q9.py` ad27f4bb593f…6766, `run_ab.sh` 7597e411117c…aecd.
+
+Commands: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo --route
+{diagnostics,runtime} --methods rk3,rk4 [--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8] --out
+<json> --hlo-dir <dir>`; `python rhs_identity.py <npz>` and `GATE_GRID=16,16,24,2,4
+GATE_AMP=10 GATE_STEPS=100 python gate_traj.py <npz>`, each with and without
+`JAX_ENABLE_X64=true GKX_X64=1`, then `python compare_npz.py <base> <other>`.
+
+**Limitations.** XLA:CPU only; GPU fusion and cuFFT plans differ. 96×96×48 was
+censused, not lowered. The reflectionless Hermite closure keeps its own `|k_z|`
+transform (not on any assembled route). The implicit linear streaming solver
+(`solvers_linear_implicit.py`) keeps the `ky + Ny·kx` flat order. Species×Hermite and
+the sharded runner ran on one device.
+
+**Next question.** Re-run the A/B/A/B on idle hardware (arm order rotated per block) to
+turn "not slower beyond noise" into a measured speed-up or a measured tie. Then N3: the
+ky ≥ 0 layout removes the conjugate restore, whose mirrored copies are now the largest
+remaining writes in the chain transform. Separately, T's disappearance of fourteen
+full-state copies suggests the N1 layout regression (#231, #239) may be worth re-checking
+on this tree.
+
+## 2026-09-14 — Q17 GX vnewk control: GX reproduces GKX's collisional Nl convergence at ν=1e-2 (Q8 P4)
+
+Queue row Q17 (Q8's registered P4). Measurement only: no source, test, default, reference or
+release change. Files are in `plan/research/scripts/2026-09-14-gx-vnewk-control/`. This entry
+replaces the "Q17 GX vnewk control (paused)" entry from earlier the same day. The branch was merged
+with `origin/main` `7d94d5986`.
+
+**Question and prediction.** Q8 registered P4 in its `manifest.toml` before any run: GX with
+`vnewk=1e-2` at Nl 24/32 agrees with GKX's matched runs to ≤2%. The GKX reference values are
+from Q3/Q8 (T=150, fit [105,150]):
+
+| Nl | GKX γ | GKX ω |
+|---:|---:|---:|
+| 24 | .0174378 | .495769 |
+| 32 | .0171657 | .495705 |
+| 48 | .0171695 | .495685 |
+
+Before this row, it was not established whether GX `vnewk` and GKX species ν correspond
+one-to-one.
+
+**Decks.**
+- Q8's GX decks are unchanged (`cmp` identical). The Nl48 deck differs from the Nl32 deck in
+  `nlaguerre` only.
+- Relative to the matched collisionless deck (office
+  `gkx-nl24-discriminator-20260912.vvmgDD/nl24.in`, SHA-256 `2dd1c42b…`), the physics changes
+  are `vnewk = [1.0e-2, 0.0]` and, for Nl32/48, `nlaguerre`.
+- Every deck also sets `t_max` 300→150, `save_for_restart`→false and `fields`/`moments`→false.
+  These change output only (`deck_diffs.txt`).
+- Binary: the repaired parity binary `96a53403…`, the one Q8's `run_gx.sh` names.
+- `gx_fit.py`: Q8's script, unchanged. γ is half the slope of log Phi2_t on [0.7T, T]; ω is
+  the second-half mean of `omega_kxkyt`. The half-time probe is [0.35T, 0.5T], settled if the
+  shift is ≤5% (the runner's rule).
+
+**Operator and normalization map (source reading, now confirmed numerically at this deck).**
+- *GX* (upstream `3865a537`):
+  - **Input:** `nu_ss` is `vnewk`, read unscaled (`src/parameters.cu:559`); collisions are on
+    for any `vnewk > 0` (`:570-572`).
+  - **Damping:** `rhs_linear` applies −(ν_ss+ν_ei)(b_s+2ℓ+m)·H (`src/device_funcs.cu:3178`),
+    with ν_ei = 0 for the ion species.
+  - **b_s:** b_s = k⊥²ρ², with ρ² = T·m/Z² = 1 (`parameters.cu:1065`).
+  - **Restoring terms:**
+    - m=0: +ν√b·JflrB_ℓ·ū⊥, with ū⊥ = √b·Σ JflrB_ℓ′ H_ℓ′0 (`:3501`, `:3519`) and
+      JflrB_ℓ = J_ℓ + J_{ℓ−1} (`:146`); also +ν·2(ℓJ_{ℓ−1}+2ℓJ_ℓ+(ℓ+1)J_{ℓ+1})·T̄;
+    - m=1: +ν·J_ℓ·ū∥;
+    - m=2: +ν·√2·J_ℓ·T̄.
+- *GKX*:
+  - **Input:** species `nu` is passed unscaled (`src/gkx/workflows/runtime/startup.py:77`).
+  - **Damping:** ν(ν_L ℓ + ν_H m) + ν·b = ν(2ℓ+m+b) with the fixture's `nu_hermite=1`,
+    `nu_laguerre=2` (`src/gkx/operators/linear/cache_arrays.py:54-57`, `collision_damping`).
+  - **Restoring terms** (`_collision_moment_correction` in
+    `src/gkx/operators/linear/dissipation.py`):
+    - m=0: ν·b·JlB·Σ JlB H_m0 + ν·2·coeff_t·T̄, with JlB = J_ℓ + J_{ℓ−1}
+      (`cache_arrays.py:139`);
+    - m=1: ν·Jl·ū∥;
+    - m=2: ν·√2·Jl·T̄.
+- *Map:*
+  - The damping and all four restoring terms have the same coefficients.
+  - Neither code puts v_t or mass in the collision rate.
+  - Both use the time normalization of the matched collisionless parity.
+  - So for this ion (m = T = Z = 1), `vnewk` = ν one-to-one; no rescaled matched value exists
+    or was needed.
+  - GX zeroes J_ℓ for ℓ>30. That touches ℓ=31 at Nl32; the Nl32 agreement below bounds its
+    effect on this mode.
+
+**Runs.**
+- **Host:** office (`pop-os`), RTX A4000 GPU0 for both runs. GX host process pinned to core 1
+  (`taskset -c 1`; cores 2–17 reserved for Q9, 18–35 for Q20). Supervisor `run_q17.sh`
+  (SHA-256 `76db0358…`, the version executed).
+- **Supervisor guards:**
+  - binary hash and `ldd` checked;
+  - a GPU is taken only after two polls 60 s apart with no compute process and <5%
+    utilization, plus a recheck at launch;
+  - one 2 h polling deadline for the batch;
+  - per-run cap 2700 s;
+  - the log is scanned for NaN/Inf;
+  - restart and big files are deleted.
+- **GPU wait:** 21:17:55–22:17:03 CDT. Both GPUs held a compute context of another user's
+  `python run_collapse.py` (pid 1005182; GPU0 at 100%) until about 22:14.
+- **Nl24:** 22:17:03–22:41:11, exit 0, `/usr/bin/time` wall 23:48.3, 18.9 ms/step, device
+  882 MiB.
+- **Nl32:** 22:42:12–23:13:50, exit 0, wall 31:20.2, 25.0 ms/step.
+- **Nl48 not run.** Measured 18.9 and 25.0 ms/step project ≈37 ms/step, ≈47 GPU-min. That is
+  over the row's 30-min criterion and the 2700 s cap. The supervisor (pid 1115042) was sent
+  SIGTERM at 23:13:52, during its first poll after the Nl32 fit and before any Nl48 launch
+  (`results/stop_note.txt`).
+- **Also not run:** the `nohyper` Nl32 deck.
+
+**Results** (`summary.txt`, from `summarize_q17.py`; rel = (GX−GKX)/GKX):
+
+| Nl | GKX γ | GX γ | rel γ | GKX ω | GX ω | rel ω | GX half shift | GX settled | P4 (≤2%) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 24 | .0174378 | .0174378 | −1.73e-07 | .495769 | .495771 | +3.33e-06 | +3.01e-05 | yes | pass |
+| 32 | .0171657 | .0171657 | −4.67e-07 | .495705 | .495705 | −6.88e-07 | +3.44e-05 | yes | pass |
+| 48 | .0171695 | not run | | .495685 | not run | | | | not run |
+
+The Nl24→32 γ change is −1.5602% in both codes. GKX's Nl32→48 change is +0.02%.
+
+**Verdict.**
+- **P4 passes.** At ν=1e-2, GX reproduces GKX's growth rate and frequency at Nl 24 and 32 to
+  ≤5e-7 relative in γ and ≤3.3e-6 in ω, and the same Nl24→32 step (−1.5602%).
+- The collisional Laguerre convergence Q8 found at ν=1e-2 is therefore shared by an
+  independent implementation, at least through Nl32.
+- This also confirms numerically that `vnewk` and GKX species ν are the same parameter for
+  this deck.
+- The agreement is at the level of the fits' round-off. It shows that the two codes integrate
+  the same discrete collisional system on the same imported geometry. It does not make
+  γ=.01717 a collisionless limit, since Q8's ν·b ≈ .13 ≫ γ caveat stands.
+
+**Limitations.**
+- One ky, one ν, T=150 fits on a single window; no eigenvalue or Laguerre spectrum.
+- Nl48 was not run on GX, so the Nl32→48 plateau is shown by GKX only.
+- The mapping is checked for a species with m = T = Z = 1 only.
+- GX's own `omega_kxkyt` growth diagnostic (second-half means .0174707/.0171924) is 0.19% and
+  0.16% above its Phi2 fit. It is a different estimator; the Phi2 late fit is the quantity
+  matched to the GKX runner.
+- Timings are on a shared host with the process pinned to one core (71–77% CPU); they are
+  slower than the 10.5 ms/step smoke run and not benchmark-grade.
+
+**Environment.**
+- GX binary `/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx` (SHA-256
+  `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536`), on the rebuilt
+  toolchain.
+- Fit: `/home/rjorge/local/micromamba/envs/gk-fortran/bin/python` (netCDF4 1.7.4, NumPy
+  2.5.3).
+- Run directory: `/home/rjorge/gkx-q17-gx-vnewk-20260914` (31 MB, kept).
+
+**Commands.**
+- Launch, from the run directory after `sha256sum -c q17.sha`:
+  `env GPU_WAIT_S=7200 BUDGET_END=<start+10620 s> MIN_LEFT_S=3600 SKIP_IF_SHORT=gx-nu1e-2-nl48 GX_CORE=1 setsid nohup ./run_q17.sh gx-nu1e-2-nl24 gx-nu1e-2-nl32 gx-nu1e-2-nl48 > supervisor.txt 2>&1 < /dev/null &`
+- Per key, the supervisor runs
+  `CUDA_VISIBLE_DEVICES=<gpu> setsid timeout --signal=TERM --kill-after=10s 2700s /usr/bin/time -v -o KEY.time.txt taskset -c 1 gx KEY.in`,
+  then `python gx_fit.py KEY.out.nc KEY KEY.json`.
+- Table, from the repository root:
+  `python plan/research/scripts/2026-09-14-gx-vnewk-control/summarize_q17.py`.
+
+**Artifacts.**
+- `SHA256SUMS.txt` lists every other file in the directory (96 KB); its own SHA-256 is
+  `973884c55f83f350a8f148ef824c664c7fce4060a91048580c217e0a241435c6`.
+- Key hashes:
+  - `summary.txt` `11d49a409db1f2461dfed8e6a5461de38515764dfba746a004399051df4386bf`
+  - `results/gx-nu1e-2-nl24.json` `b3fd4be1ab852a8f3e13fd7bcfbd44506704c10e28fb01f9917a93f01ecc12cc`
+  - `results/gx-nu1e-2-nl32.json` `a2532847bdd0707b345e8116aa776f127487442767643ae0123b88549ff0e423`
+  - `run_q17.sh` `76db0358f72c95dbe24599f2d59a6e0bd4ff50ddd3726e3eaffd159de3a97879`
+- netCDF outputs, not committed (on office):
+  - `gx-nu1e-2-nl24.out.nc` `2739ca80c19f1f798e959e38e7845dcf9ab79a15efeda990d2be6c4880213255`
+  - `gx-nu1e-2-nl32.out.nc` `6f679e747549dc601b41671a69543988fbb8dee48dc44ef416ea5b63dcb3abab`
+
+**Terminal process state.** At 2026-09-14T23:15:10-05:00 every process this row started on
+office was verified absent, and `nvidia-smi --query-compute-apps` listed no process on either
+GPU. The PIDs checked:
+- launch shell wrappers 1115036 and 1115037;
+- supervisor 1115042 (SIGTERM 23:13:52);
+- Nl24 timeout, time and gx: 1141459, 1141461, 1141462;
+- Nl32 timeout, time and gx: 1150862, 1150864, 1150865;
+- the supervisor's orphaned `sleep 60`, 1164702.
+
+No `run_q17` or parity-binary `gx` process remained. The local ssh session that launched the
+supervisor exited with it.
+
+## 2026-09-14 — Q20 cross-code linear Cyclone controls (paused)
+
+Queue row Q20 (§2.4). The maintainer paused all GKX work at 13:15 CDT, about 40 minutes into the
+runs. Measurement only: no source, test, default or reference change, and no PR. **Every number below
+is preliminary.** Several ladders are incomplete and no verdict on the registered P1–P5 is recorded.
+Files: `plan/research/scripts/2026-09-14-cross-code-cyclone/`. The manifest, predictions and ladders
+were registered before any run in `bb55831bf`.
+
+**Setup.** One physical case, stated in GX/GKX units: q 1.4, ŝ 0.8, ε 0.18, R/a 2.77778,
+a/L_T 2.49, a/L_n 0.8, τ = 1, collisionless, electrostatic, ky_GX ∈ {.15, .30, .40, .50, .55}.
+- **S (s-alpha):** GS2, GKX, gyaradax.
+- **M (circular local Miller, rhoc 0.5, R_maj = R_geo = 2.77778):** GS2, stella, GKX. stella v1.0
+  has no s-alpha option.
+
+**Normalization map.**
+
+| code | L_ref | v_ref | ky input for ky_GX | γ_GX from the code's γ |
+|---|---|---|---|---|
+| GX, GKX | a | √(T/m) | ky_GX | γ |
+| GS2 8.2.1, stella v1.0 (Q20 inputs) | a | √(2T/m) | √2·ky_GX | √2·γ |
+| GS2 shipped test, stella install check | R | √(2T/m) | √2·ky_GX | √2·γ·a/R = γ·√2/2.77778 |
+| gyaradax (GKW conventions) | R | √(2T/m) | `krhomax` = √2·ky_GX | γ·√2/2.77778 |
+
+- **Drift coefficients:** GS2 output and `*.eiknc.nc` files store 2× the GX `gbdrift`/`cvdrift`;
+  stella stores the GX convention.
+- **GS2 s-alpha with L_ref = a:** `epsl` = 2a/R = 0.72 and `pk` = `epsl`/q.
+- **Gradients** are convention-free once L_ref is fixed.
+
+**Geometry cross-check** (`results/geometry_compare.txt`, GX convention, max relative difference over |θ| ≤ π):
+- **s-alpha:** GS2, GKX and the GX golden agree to ≤ 7e-8 in bmag, gradpar, gds2, gbdrift and cvdrift.
+- **Miller, against GS2:** stella differs by ≤ 1.3% (gds2 1.25%, drifts 1.06%). The GX golden and
+  GKX's generated eik file differ by ≤ 1.3% (drifts 1.3%, gradpar 0.5%).
+
+**The ≈2× install-check gap, decomposed** at ky_gs2 = 0.5 and L_ref = R, γ in GX units:
+
+| step | case | γ_GX | ratio |
+|---|---|---:|---:|
+| GS2 shipped grids (ntheta 12, negrid 12, ngauss 3), fexpr 0.45 | G1 | .08691 | 1 |
+| same, fexpr 0.48 | G1 | .08721 | 1.003 |
+| GS2 s-alpha on r2 grids | G2 | .08547 | 0.983 |
+| GS2 on stella's circular Miller surface (rhoc .18, rmaj = r_geo = 1), r2 | G3 | .13645 | 1.597 vs G2 |
+| stella install check (same Miller surface, nperiod 1) | — | .18776 | 1.376 vs G3 |
+
+The chain multiplies to the whole gap: .3688/.1707 = 2.16. Preliminary reading of the three factors:
+- **Geometry model, ≈1.6×:** s-alpha against Miller, measured within GS2 alone.
+- **GS2 grids and fexpr, < 2%.**
+- **stella against GS2 on the same Miller input, ≈1.38×.** The matched runs reproduce this (1.39× at
+  ky .30), and stella's resolution does not remove it (r1→r2 +0.09%).
+
+The cause of the stella excess is **not found**:
+- stella's drive prefactor is (1/C)·dydalpha·drhodpsi = 0.3629 × 2.7554 = 1.000.
+- The geometry coefficients agree to about 1%.
+- A GS2 diagnostic with `bess_fac` = 1/√2 gives γ_GX = .1487 (.0843 at √2), so a √2 in the Bessel
+  argument alone does not reproduce stella's .1750 (`results/fit_diag_bess_fac.txt`).
+
+**Preliminary matched values, Miller (GX units; the goldens are GX shipped outputs at Nl16/Nm48, rank-3 source).**
+
+| ky | GS2 r1 | GS2 r2 | GS2 r3 | r2→r3 | GX golden | stella | GKX |
+|---|---:|---:|---:|---:|---:|---|---|
+| .15 | .05495 | .05808 | .05783 | −0.4% | .05841 | not run | not run |
+| .30 | .12389 | .12529 | .12546 (ω .2157) | +0.1% | .12586 (ω .2155) | r1 .17481, r2 .17496 (ω .2512) | killed after 22 min, no pair |
+| .40 | .14326 | .14235 | .14297 | +0.4% | .14312 | not run | not run |
+| .50 | .13722 | .13393 | .13636 | +1.8% | .13642 | not run | not run |
+| .55 | .12414 | .12110 | .12493 | +3.2% (unconverged) | .12594 | r1 killed at t = 105, unsettled | not run |
+
+**Preliminary matched values, s-alpha (GX units).**
+
+| ky | GS2 r1 | GS2 r2 | GX golden | GKX (Nz96, Nl16, Nm48) certified | gyaradax g1 |
+|---|---:|---:|---:|---|---:|
+| .15 | .04829 | .05420 | .05497 | not run | not run |
+| .30 | .08781 | .09089 (ω .2807) | .09303 | .0930912 (ω .282033, residual 1.1e-14) | .09202 |
+| .40 | .06721 | .07829 | .08091 | not run | not run |
+| .50 | .01024 (unsettled) | .05352 | .05406 | not run | not run |
+| .55 | .00900 (unsettled) | .03907 (ω .4805) | .0346 | killed after 1.5 min | not run |
+
+- **Converged so far:** only the GS2 Miller ladder meets the registered 2% rule, at ky .15–.50 on r3.
+  There it matches the GX goldens to ≤ 1.0% in γ.
+- **s-alpha is not converged:** GS2 r3/r4 did not run (ky .15 r3 was killed at t = 289 of 600), and
+  the r1→r2 steps are large at every ky.
+- **ky .55 s-alpha (P4) is therefore open:** the r2 value .0391 lies above the Hermite–Laguerre Nl24
+  values (.0328–.0330), but it is not a converged number.
+
+**Cost so far.**
+- **GS2**, 8 ranks, per case: r1 7–15 s, r2 17–56 s, r3 125–165 s.
+- **stella** Miller ky .30, 8 ranks: r1 376 s, r2 844 s.
+- **GKX** adaptive at (96,16,48), s-alpha ky .30: 1242 s on 10 threads at load ≈ 30 (Q2: 761 s on 12 threads).
+- **gyaradax** g1 at ky .30: 37 s on an idle A4000, including 23 s of compilation.
+
+**Not done.**
+- **GS2:** s-alpha r3/r4 at every ky; Miller r4.
+- **stella:** r1/r2 at ky .15, .40, .50 and .55; r3; the L_ref = R install ladder (G4).
+- **GKX:** everything except s-alpha ky .30, including the Nl 8/24 extras.
+- **gyaradax:** the g1–g3 ladders (`run_gyaradax_queue.sh` is written but has not run).
+- **GX:** not run. The goldens are used, and GPU1 was running the lead's GX verification during this row.
+- **Open question:** the stella/GS2 Miller discrepancy is unexplained.
+- **Plan:** the plan.md Q20 row is unchanged.
+
+**Environment.**
+- **Host:** office, pop-os.
+- **GS2 and stella:** GS2 8.2.1 `4d8c94bc` and stella v1.0 `058d98db` in micromamba `gk-fortran`;
+  `mpirun -np 8 --bind-to none taskset -c <cpus>`, `nice -n 10`, `OMP_NUM_THREADS=1`.
+- **GKX:** staged by `git archive 2c38fa970`, venv `gkx-nl` (Python 3.11.15, JAX 0.10.2, SOLVAX 0.20.0),
+  `JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1`. `gkx.__file__` was checked to lie inside the run
+  directory.
+- **gyaradax:** `8d9dc2d2`, venv `gyaradax` (JAX 0.11.1, CUDA 12), `CUDA_VISIBLE_DEVICES=0
+  XLA_PYTHON_CLIENT_PREALLOCATE=false`, started only after `nvidia-smi --query-compute-apps` listed
+  nothing on GPU0.
+- **Mac smoke:** `gkx_eigen.py` on Miller at Nl4/Nm8 certified a pair with residual 4.5e-15.
+
+**Commands** (run directory `$R`):
+- `python cases.py write $R 'gs2_*' 'stella_*' 'G*'`
+- `run_grid_queue.sh $R/q_gs2.txt gs2 8 0-7`
+- `run_grid_queue.sh $R/q_stella.txt stella 8 8-15`
+- `run_gkx_queue.sh $R/q_gkx_A.txt gkxA 16-25 10` and `run_gkx_queue.sh $R/q_gkx_B.txt gkxB 26-35 10`
+- `gyaradax_salpha.py --ky-gx 0.30 --rung g1`
+- `fit.py $R`
+- `geometry_compare.py`
+
+The first GS2 lane stopped after one case because `mpirun` read the rest of the queue from stdin. Both
+runners now take the child's stdin from `/dev/null`.
+
+**Resume steps.**
+1. The office run directory `/home/rjorge/gkx-q20-cross-code-20260914.FavgA4` (140 MB) keeps the
+   inputs, outputs, `DONE` markers and the queue files `q_gs2.txt`, `q_stella.txt`, `q_gkx_A.txt` and
+   `q_gkx_B.txt`. Its staged GKX source was deleted. Re-stage it with
+   `git archive 2c38fa970 src examples pyproject.toml | ssh office tar -x -C $R`, then rsync this
+   directory's scripts to `$R`.
+2. Remove the partial outputs of the cases without `DONE`: the `*.out.nc` in `gs2/gs2_S_ky0.15_r3` and
+   `stella/stella_M_ky0.55_r1`. Remove the GKX outputs without a `RESULT` line:
+   `gkx/M_ky0.30_nl16_nm48*` and `gkx/S_ky0.55_nl16_nm48*`. The runners skip completed cases.
+3. Relaunch the lanes with the commands above (`setsid nohup … < /dev/null`). Put GS2 s-alpha ky .50
+   and .55 r3/r4 at the head of `q_gs2.txt`.
+4. Run gyaradax only while GPU0 lists no compute process. Write a queue (g1 at every ky, g2 at every
+   ky, g3 at .30 and .55) and run `run_gyaradax_queue.sh`, which stops if GPU0 becomes busy.
+5. Discriminators still to try for the stella/GS2 Miller excess:
+   - stella with `xdriftknob`/`ydriftknob` = 0.5 and with `wstarknob` variations, at r1, ky .30;
+   - the same input in stella v0.7 (`AUTOMATIC_TESTS/stella_releases`) or upstream master `2b8e269f`;
+   - GS2 fed stella's geometry through a grid file.
+6. Fit, append the final Q20 entry, update the plan.md Q20 row and open the PR.
+
+**Artifact SHA-256 (first 16 hex digits).**
+- **Scripts and inputs:** `manifest.toml` 0c4a908979e9671d, `cases.py` 23a3d4401a7d01c5, `fit.py` 2d433b57b957e9ee,
+  `gkx_eigen.py` 9e40d4f1c8f78539, `gyaradax_salpha.py` fc39d03f1f178428, `geometry_compare.py`
+  f8f63e77e1258dfb, `cyclone_miller_linear.toml` 7c28a068401c5d24, `run_grid_queue.sh` 88db34ad98427f0b,
+  `run_gkx_queue.sh` 3cce79134c568f44, `run_gyaradax_queue.sh` 6b3d7d79075951c4.
+- **Fits and geometry:** `results/fit_gs2_stella.txt` e01c6aab52d33fa1, `results/fit_diag_bess_fac.txt`
+  20ee1f8d0a7438ab, `results/geometry_compare.txt` 43c48ad264b037a5.
+- **GKX logs:** `results/gkx_S_ky0.30_nl16_nm48.txt` 51d917bff3cf3b5e, `results/gkx_S_ky0.30_nl16_nm48.time.txt`
+  1e1905daad49e543, `results/gkx_M_ky0.30_nl16_nm48.txt` b3ef3313fe6a2362,
+  `results/gkx_S_ky0.55_nl16_nm48.txt` e7a3935c048e8b35.
+- **gyaradax logs:** `results/gyaradax_S_ky0.30_g1.txt` 7f220cd7f456a145,
+  `results/gyaradax_S_ky0.30_g1.time.txt` 39d7e50d0e4b42f4.
+- **Supervisor logs:** `results/supervisor_{gs2,stella,gkxA,gkxB,smoke_gs2,smoke_stella}.txt`
+  5202f73042576b5e, 14af25ea1515b3cf, d405734125745057, 33c46d32bbfd7cf4, 2fe291d2d7222d0e,
+  9b95e9e40b3d9c78.
+
+**Terminal process state.** At 2026-09-14T13:17:17-05:00 all 33 processes this row owned on office
+were sent TERM:
+- GKX lanes 938592 and 938593, with python 938616 and 951985 and wrappers 938612, 938614, 951983 and 951984;
+- stella lane 939675, with wrappers 951261–951263 and ranks 951272–951279;
+- GS2 lane 940562 and its launcher 940558, with wrappers 951690–951692 and ranks 951695–951702.
+
+Each was verified absent at 13:17:36; at that time neither GPU listed a compute process. No local
+process runs.
+
+## 2026-09-14 — Q20 cross-code linear Cyclone controls (final)
+
+Queue row Q20 (§2.4), finished after the pause recorded in the entry above; this entry supersedes that
+entry's preliminary numbers. Measurement only: no source, test, default or reference change. Files:
+`plan/research/scripts/2026-09-14-cross-code-cyclone/`; manifest, predictions and ladders registered
+before any run in `bb55831bf`. Final tables: `results/final_tables.txt` (`summarize.py`).
+
+**Question.** For the adiabatic-electron Cyclone base case, do GS2 8.2.1 and stella v1.0, grid codes
+with physical velocity grids, agree with GKX's certified eigenpairs once the setups are matched? Why did
+the install checks differ by ≈2×? Does a grid code converge at the GX-normalized ky = .55, where Q8
+found the Hermite–Laguerre γ unconverged in Nl?
+
+**Case.** GX/GKX units (L_ref = a, v_t = √(T/m)): q 1.4, ŝ 0.8, ε 0.18, R/a 2.77778, a/L_T 2.49,
+a/L_n 0.8, τ = 1, collisionless, electrostatic.
+- **S (s-alpha):** GS2, GKX, gyaradax (rungs g1: nperiod 3, ns 96, nvpar 32, nmu 8, dt .003; g2: nperiod 5, ns 144, nvpar 64, nmu 16; GKW parallel dissipation `disp_par` = 1, other dissipation 0).
+- **M (circular local Miller, rhoc 0.5, R_maj = R_geo = 2.77778):** GS2, stella (v1.0 has no s-alpha), GKX.
+
+**Normalization map.**
+
+| code | L_ref | v_ref | ky input for ky_GX | γ_GX from the code's γ |
+|---|---|---|---|---|
+| GX, GKX | a | √(T/m) | ky_GX | γ |
+| GS2 8.2.1, stella v1.0 (Q20 inputs) | a | √(2T/m) | √2·ky_GX | √2·γ |
+| GS2 shipped test, stella install check | R | √(2T/m) | √2·ky_GX | √2·γ·a/R = γ·√2/2.77778 |
+| gyaradax (GKW conventions) | R | √(2T/m) | `krhomax` = √2·ky_GX | γ·√2/2.77778 |
+
+ω converts like γ. GS2 output and `*.eiknc.nc` files store 2× the GX `gbdrift`/`cvdrift`; stella stores
+the GX convention. GS2 s-alpha with L_ref = a uses `epsl` = 2a/R = 0.72 and `pk` = `epsl`/q. The geometry
+coefficients agree across codes after this map: s-alpha GS2/GKX/GX to ≤ 7e-8; Miller stella and GX/GKX
+against GS2 to ≤ 1.3% (`results/geometry_compare.txt`).
+
+**Convergence labels.** A value is *converged* when a registered ladder step changes γ by < 2% between two
+settled rungs (`manifest.toml`); otherwise the whole ladder is shown and labeled *unconverged*. GKX values
+are single-resolution certified eigenpairs (relative residual ≤ 1e-9) at the GX deck's (Nz96, Nl16, Nm48)
+unless an Nl rung is listed. GX values are the shipped goldens (upstream `3865a537`, Nl16/Nm48 time
+integration, back-half mean as in `check.py`; rank-3 source, not converged values).
+
+**s-alpha (γ, ω in GX units).**
+
+| ky | GS2 ladder r1 / r2 / r3 / r4 | GS2 label | GKX certified | GX golden | gyaradax g1 / g2 (γ only) |
+|---|---|---|---|---|---|
+| .15 | .04829 / .05420 | unconverged (r1→r2 +10.9%; r3/r4 not run) | not run | .05497 / .12685 | not run |
+| .30 | .08781 / .09089 / .09171 / .09219 | **converged .09219, ω .2840** (r3→r4 +0.5%) | .0930912 / .282033 (res 1.1e-14) | .09303 / .28199 | .09202 / .09209, **converged .09209** (+0.08%) |
+| .40 | .06721 / .07829 | unconverged (+14.2%; r3/r4 not run) | not run | .08091 / .37494 | not run |
+| .50 | .01023 (unsettled) / .05352 | unconverged (r3/r4 not run) | not run | .05406 / .45591 | not run |
+| .55 | .00900 (unsettled) / .03907 / .02200 / .02780 | **unconverged** (+77%, −78%, +21%) | Nl16 .033892 / .498189 (res 2.9e-14); Nl24 .036126 / .489348 (res 2.1e-14; Nl16→24 +6.6%, unconverged) | .03460 / .49835 | .02486 / .02485, **converged .02485** (−0.04%) |
+
+**ky .55 one-axis attribution** at the GS2 r3 base (ntheta 48, nperiod 3, negrid 16, ngauss 8, delt .025, t = 1200):
+
+| variant | γ | ω | wall |
+|---|---:|---:|---:|
+| r3 base | .022001 | .47482 | 653 s |
+| nperiod 4 | .022001 | .47482 | 962 s |
+| ntheta 64 | .021984 | .47463 | 1032 s |
+| negrid 24, ngauss 12 | .027723 | .49587 | 1105 s |
+| ngauss 12 only | .022001 | .47482 | 1200 s (8 ranks) |
+| r4 (all three) | .027799 | .49570 | 2947 s |
+
+nperiod 3→4 changes nothing to six digits and ntheta 48→64 changes γ by −0.08%. Refining the velocity grid alone (negrid 16→24, ngauss 8→12) moves γ +26% and reproduces r4 to 0.3%. Raising ngauss 8→12 alone changes nothing (.022001), so the sensitive axis is the energy grid (negrid 16→24, run with ngauss 12). The s-alpha ky .55 ladder is limited by GS2's energy grid: it does not converge this weakly growing mode on the rungs run here (negrid ≤ 24).
+
+**Miller (γ, ω in GX units).**
+
+| ky | GS2 ladder | GS2 label | stella ladder r1 / r2 / r3 | stella label | GKX certified | GX golden |
+|---|---|---|---|---|---|---|
+| .15 | .05495 / .05808 / .05783 | **converged .05783**, ω .0916 | not run | — | not run | .05841 / .09182 |
+| .30 | .12389 / .12529 / .12546 | **converged .12546**, ω .2157 | .17481 / .17496 / .17496 | **converged .17496**, ω .2512 | not run (killed at the pause) | .12586 / .21547 |
+| .40 | .14326 / .14235 / .14297 | **converged .14297**, ω .3078 | not run | — | not run | .14312 / .30669 |
+| .50 | .13722 / .13393 / .13636 | **converged .13636**, ω .3980 (r2→r3 +1.8%) | not run | — | not run | .13642 / .39400 |
+| .55 | .12414 / .12110 / .12493 / .12516 | **converged .12516**, ω .4399 (r3→r4 +0.2%) | .18323 / .18621 / .18451 | **converged .18451**, ω .4809 | .125975 / .433617 (res 8.6e-15, 2836 s) | .12594 / .43364 |
+
+**The install-check gap.** At ky_gs2 = 0.5, L_ref = R, the ratio .3688/.1707 = 2.16 factors into:
+- **Geometry model, 1.597×:** GS2 on stella's circular Miller surface against GS2 s-alpha.
+- **Code difference, 1.376×:** stella against GS2 on that same surface.
+- **GS2 shipped grids and `fexpr`, < 2%.**
+
+On the matched Q20 input the stella/GS2 ratio persists at converged resolution: 1.395 at ky .30 and 1.474 at
+ky .55 (ω +16% and +9%).
+
+**stella-excess discriminators** (stella Miller ky .30, r1 grids, t = 150 unless stated; the GS2 target is .1255 / .2157):
+
+| variant | γ | ω | settled |
+|---|---:|---:|---|
+| baseline | .17304 | .25264 | yes |
+| x/y drift ×0.5 | .16327 | .09750 | yes |
+| x/y drift ×2 | .12410 | .22469 | no (−21%) |
+| x/y drift ×2, t = 300 | .13320 | .19710 | no (+1.3%) |
+| drive (`wstarknob`) ×0.5 | .07081 | .12002 | no |
+| drive ×1/√2 | .10030 | .27559 | no |
+| drive ×0.85 | .13840 | .26138 | no |
+| `bess_fac` √2 | .13660 | .26079 | yes |
+| GS2 r2 `bess_fac` 1/√2 (GS2, not stella) | .14865 | .20609 | yes |
+| GS2 r2 `bess_fac` √2 | .08429 | .21879 | yes |
+
+No single knob moves stella onto GS2's settled (γ, ω). Halving the drifts leaves γ within 6%, so the
+excess is not a doubled drift. The drive prefactor is exactly 1 (0.3629 × 2.7554 = 1.000) and the geometry
+coefficients agree to ≈1%. The cause is **open**.
+
+**Verdicts.**
+- **P1 fails.**
+  - The install gap is mostly the geometry model (1.6×).
+  - But on identical, resolution-converged Miller input stella's γ is 1.40–1.47× GS2's.
+  - GS2 agrees with the independently developed GX goldens to ≤ 1.0% at every Miller ky.
+  - The disagreement is therefore stella-specific; it is not a setup difference.
+- **P2 passes at ky .30, the only s-alpha point where GS2 converged.** Against GKX: γ −1.0%, ω +0.7%. gyaradax's converged γ (.09209) is −1.1% from GKX and −0.1% from GS2. It is untested at ky .15, .40 and .50 (GS2 ladders incomplete).
+- **P3 is not tested at ky ≤ .50 for GKX** (the Miller GKX pair at ky .30 was killed at the pause). Its stella clause fails: stella is +39% at ky .30. Beyond the registered range, at ky .55, GKX's certified Miller pair is within +0.65% in γ and −1.4% in ω of the converged GS2 reference.
+- **P4 fails.**
+  - GS2 s-alpha at ky .55 does not converge: the ladder oscillates between .022 and .039 up to r4.
+  - The swing is energy-grid resolution. The nperiod, ntheta and ngauss variants leave r3 unchanged; negrid 24 with ngauss 12 reproduces r4.
+  - GKX's certified s-alpha value rises from .033892 at Nl16 to .036126 at Nl24 (Nm48). Q8's Nm96 time fits fall with Nl, so the HL value at this ky is unconverged too.
+  - **No cross-code s-alpha reference is established at ky .55.** gyaradax, with a v∥–μ grid, converges on its ladder to .02485, inside GS2's unconverged bracket (.0220 at negrid 16, .0278 at negrid 24). Only one code gives a converged value, with a fixed numerical parallel dissipation, so it is a provisional value, not a reference. GKX's Nl16/Nl24 certified values (.0339/.0361) are 36–45% above it, and GX's Nl16 golden (.0346) is 39% above it.
+  - On Miller at ky .55 a converged grid-code reference exists: GS2 .12516, within 0.6% of the GX golden.
+  - stella is converged there too but disagrees (.18451).
+  - GKX's certified Miller pair agrees with that reference (.125975, +0.65%).
+- **P5:** see the cost table. The grid codes meet it for Miller and s-alpha ky .30, and gyaradax reaches its converged γ in under 5 min on one GPU; GKX's adaptive route
+  takes 21–80 min per point on 5–10 threads under load 25–40, above the predicted 10–20 min.
+
+**Cost to a converged γ** (office, wall).
+
+| code, point | first converged rung | that rung alone | cumulative ladder | cores |
+|---|---|---:|---:|---:|
+| GS2 S ky .30 | r3 (r2→r3 +0.9%) | 180 s | 206 s | 8 (r1/r2) / 5 (r3) |
+| GS2 M ky .30 | r2 (r1→r2 +1.1%) | 17.5 s | 24 s | 8 |
+| GS2 M ky .55 | r4 (r3→r4 +0.2%) | 836 s | 988 s | 8 |
+| stella M ky .30 | r2 (quiet-host re-timing) | 138 s | 161 s | 5 |
+| stella M ky .55 | r2 (r1→r2 +1.6%) | 76 s | 87 s | 5 |
+| GKX S ky .30, Nl16 | certified pair, single resolution | 1242 s | — | 10 threads |
+| GKX S ky .55, Nl16 | certified pair, not Nl-converged | 2861 s | — | 8 threads |
+| GKX S ky .55, Nl24 | certified pair (Nl16→24 +6.6%) | 4805 s | — | 5 threads |
+| GKX M ky .55, Nl16 | certified pair, single resolution | 2836 s | — | 8 threads |
+| gyaradax S ky .30 | g2 (g1→g2 +0.08%) | 79 s (20 s compile) | 116 s | 1 A4000 |
+| gyaradax S ky .55 | g2 (g1→g2 −0.04%) | 224 s | 289 s | 1 A4000 |
+
+Timings earlier than the finalize session (GS2 r1/r2/r3 and stella r1/r2 from 13:00 CDT) ran under core
+contention; stella was 16× slower then (r1 376 s against the quiet re-timing's 23 s).
+
+**Open items.**
+- The cause of the stella excess on Miller input.
+- Convergence of s-alpha GS2 at ky .15, .40 and .50, and at ky .55 in negrid beyond 24.
+- GKX Miller pairs at ky ≤ .50, and Nl ladders for GKX Miller.
+- An Nl ladder for GKX at ky .30.
+- gyaradax g3 and gyaradax at ky .15, .40 and .50; the dependence of the gyaradax value on its fixed `disp_par` = 1.
+- GX runs: not run (goldens used).
+- stella r3 at ky .15, .40 and .50.
+
+**Environment.**
+- **Host:** office, pop-os.
+- **Finalize session:** only cores 18–35 (outer `taskset` on every lane; 2–17 reserved for Q9, 1 for Q17).
+- **GS2 and stella:** GS2 8.2.1 `4d8c94bc` and stella v1.0 `058d98db` in micromamba `gk-fortran`, `mpirun
+  --bind-to none` with 5–8 ranks, `OMP_NUM_THREADS=1`.
+- **GKX:** staged from `2c38fa970` (the same source as the paused session), venv `gkx-nl` (Python 3.11.15,
+  JAX 0.10.2, SOLVAX 0.20.0), CPU, x64, `gkx.__file__` inside the run directory. `main` `7d94d5986` (#237,
+  #239, #241) was merged into the branch afterwards; the pairs were not re-run on it.
+- **gyaradax:** `8d9dc2d2`, JAX 0.11.1 CUDA 12, float64. It ran on GPU0 while GPU0 listed no compute process: ky .30 g1 in the paused session, the rest from 23:36 CDT after `nvidia-smi --query-compute-apps` came back empty. The runner re-checks before each run; host threads were pinned to cores 18–35.
+
+**Commands** (run directory `$R`):
+- `python cases.py write $R …`
+- `run_grid_queue.sh <queue> <lane> <ranks> <cpus>` under `taskset -c <cpus> setsid nohup`
+- `run_gkx_queue.sh <queue> <lane> <cpus> <threads>`
+- `gyaradax_salpha.py --ky-gx 0.30 --rung g1`
+- `fit.py $R`
+- `summarize.py results/`
+- `geometry_compare.py`
+
+The discriminator inputs are the r1 inputs with `&scale_gyrokinetic_terms` or `bess_fac` appended
+(`stellaD_*`). The one-axis GS2 inputs come from `cases.gs2_input` with a rung override (`gs2X_*`).
+
+**Artifact SHA-256 (first 16 hex digits)**, every file under this row's directory (`artifact_hashes.py`):
+- `artifact_hashes.py` 480b0238df906a4e
+- `cases.py` 23a3d4401a7d01c5
+- `cyclone_miller_linear.toml` 7c28a068401c5d24
+- `fit.py` 2d433b57b957e9ee
+- `geometry_compare.py` f8f63e77e1258dfb
+- `gkx_eigen.py` 9e40d4f1c8f78539
+- `gyaradax_salpha.py` fc39d03f1f178428
+- `manifest.toml` 0c4a908979e9671d
+- `results/final_tables.txt` aa3305fcf48f6467
+- `results/fit_diag_bess_fac.txt` 20ee1f8d0a7438ab
+- `results/fit_gs2_stella.txt` cc1cb433c34d6511
+- `results/geometry_compare.txt` 43c48ad264b037a5
+- `results/gkx_M_ky0.55_nl16_nm48.time.txt` 36398b64accc7b7f
+- `results/gkx_M_ky0.55_nl16_nm48.txt` 2e24807b0db6c199
+- `results/gkx_S_ky0.30_nl16_nm48.time.txt` 1e1905daad49e543
+- `results/gkx_S_ky0.30_nl16_nm48.txt` 51d917bff3cf3b5e
+- `results/gkx_S_ky0.55_nl16_nm48.time.txt` 73d5002279e823a3
+- `results/gkx_S_ky0.55_nl16_nm48.txt` 38e3d677b90949c7
+- `results/gkx_S_ky0.55_nl24_nm48.time.txt` 13210718e5c7c76e
+- `results/gkx_S_ky0.55_nl24_nm48.txt` 0b4a57ef6d209061
+- `results/gyaradax_S_ky0.30_g1.time.txt` 39d7e50d0e4b42f4
+- `results/gyaradax_S_ky0.30_g1.txt` 7f220cd7f456a145
+- `results/gyaradax_S_ky0.30_g2.time.txt` dc78ee4173bc20ea
+- `results/gyaradax_S_ky0.30_g2.txt` c1932bea67bdf5a2
+- `results/gyaradax_S_ky0.55_g1.time.txt` 877cd209f3097131
+- `results/gyaradax_S_ky0.55_g1.txt` ba4897d42ece3d68
+- `results/gyaradax_S_ky0.55_g2.time.txt` 6e0be5a17b337576
+- `results/gyaradax_S_ky0.55_g2.txt` e647e5a14743c5f3
+- `results/supervisor_fgkx.txt` a60eaeec2ae8b67f
+- `results/supervisor_fgkx2.txt` da2aae51a79db347
+- `results/supervisor_fgkx3.txt` 7b942e182ac84b78
+- `results/supervisor_fgs2.txt` 882f13260c30c2ac
+- `results/supervisor_fgs2b.txt` bc4bf5372d71633e
+- `results/supervisor_fgs2c.txt` be4e60bffda45d04
+- `results/supervisor_fgs2x.txt` 43022b2e8d29ca44
+- `results/supervisor_fgs2y.txt` 937ec0cbc39685db
+- `results/supervisor_fstella.txt` 1a103e26e9dee21a
+- `results/supervisor_fstella2.txt` 0d929147b7c84386
+- `results/supervisor_fstella3.txt` dc4ad30873180544
+- `results/supervisor_fstella4.txt` 647045394303494a
+- `results/supervisor_fstella5.txt` 1907106e27fe95ed
+- `results/supervisor_gkxA.txt` d405734125745057
+- `results/supervisor_gkxB.txt` 33c46d32bbfd7cf4
+- `results/supervisor_gs2.txt` 5202f73042576b5e
+- `results/supervisor_gyaradax.txt` 79d1b5af1580cf89
+- `results/supervisor_smoke_gs2.txt` 2fe291d2d7222d0e
+- `results/supervisor_smoke_stella.txt` 9b95e9e40b3d9c78
+- `results/supervisor_stella.txt` 14af25ea1515b3cf
+- `run_gkx_queue.sh` 3cce79134c568f44
+- `run_grid_queue.sh` 88db34ad98427f0b
+- `run_gyaradax_queue.sh` 6b3d7d79075951c4
+- `summarize.py` 2e9eeb1a0211823a
+
+**Terminal process state.**
+- **Lanes that ended by themselves** (CDT): gs2 21:46:56, gs2b 22:28:09, gs2c 22:21:27, gs2x 23:20:36, gs2y 23:35:16; stella2 21:38:11, stella3 21:38:58, stella5 21:57:41; gkx 22:07:07, gkx2 23:18:35, gkx3 23:14:51; gyaradax 23:42:26.
+- **Killed lanes:** the first gs2/stella/gkx lanes of 21:18 were killed at 21:19, after stella had finished three cases, and relaunched under an outer `taskset` (verified absent). stella4 was killed at 21:57 after oversubscribing cores 23–27 (verified absent); its case was re-run alone as stella5.
+- **Final check:** at 2026-09-14T23:42:56-05:00 no process owned by this row remained on office and neither GPU listed a compute process. No local process runs.
+- **Kept:** the office run directory `/home/rjorge/gkx-q20-cross-code-20260914.FavgA4` (207 MB of inputs, outputs and logs); its staged GKX source copy was deleted.
+
 ## 2026-09-15 — release 2.1.0: version, scope snapshot and milestone rename
 
 **Version.** The maintainer chose 2.1.0.
@@ -13407,6 +14419,7 @@ Gates on the bumped tree:
 - `check_release_readiness.py version --tag v2.1.0 --require-tag`;
 - `tests/release/test_release_gates.py` and `tests/release/test_evidence_ledger.py`.
 
-**Order.** This branch is the last link of the merge chain that lands the finalized queue
-lanes (Q14 #240, Q15, Q9, Q17, Q20). It is tagged `v2.1.0` only after that chain's head
-passes `ci-required` and merges. `release.yml` then publishes from the tag.
+**Order.** The finalized queue lanes landed first: #240 (Q14), #242 (Q15) and #243 (Q9)
+merged on their own green heads. This branch then carries #244 (Q17) and #245 (Q20) as
+merged links, and records their rows as done. It is tagged `v2.1.0` only after this
+branch passes `ci-required` and merges. `release.yml` then publishes from the tag.

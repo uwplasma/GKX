@@ -16,6 +16,9 @@ from gkx.operators.linear.params import LinearParams, _as_species_array
 from gkx.terms.config import FieldState, TermConfig
 from gkx.terms.fields import _solve_fields_impl, solve_fields
 from gkx.operators.linear.dissipation import (
+    _constant_hypercollision_contribution,
+    _hypercollision_kz_source,
+    _hypercollision_operator_is_static_zero,
     _is_static_zero,
     collisions_contribution,
     custom_collision_contribution,
@@ -24,10 +27,13 @@ from gkx.operators.linear.dissipation import (
     hyperdiffusion_contribution,
     terms_without_builtin_collisions,
 )
+from gkx.operators.linear.params import _check_positive
+from gkx.operators.linear.streaming import _linked_fft_apply
 from gkx.terms.linear_terms import (
     curvature_gradb_contribution,
     diamagnetic_contribution,
     linked_streaming_contribution,
+    linked_streaming_operand,
     mirror_contribution,
 )
 
@@ -483,6 +489,110 @@ def _diamagnetic_contribution(
     )
 
 
+def _shared_linked_streaming_hypercollisions(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    species: _SpeciesArrays,
+    scalars: _ScalarParams,
+    weights: _TermWeights,
+    rhs_fields: _RHSFields,
+    hermite_window: HermiteWindow | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray] | None:
+    """Streaming and hypercollisions through one linked transform per chain class.
+
+    On linked tubes both terms scale the state by coefficients that do not
+    depend on ``(ky, kx, z)`` and then apply one diagonal multiplier of the
+    same chain spectrum: ``i k_z`` for streaming, ``|k_z|`` for the
+    hypercollision branch. Stacked on a leading axis, the two operands share
+    each class's gather, FFT, IFFT and scatter, halving the transform launches
+    without changing any per-element operation. Chains of different lengths
+    still need their own transform (a length-``N`` chain owns the frequencies
+    ``2 pi j / (N dz)``), so launches stay proportional to the class count.
+    ``None`` means a static switch leaves one of the two terms off, or the
+    operands differ in dtype; the separate routes then apply.
+    """
+
+    real_dtype = jnp.real(G).dtype
+    kz_off = (
+        _is_static_zero(weights.hypercollisions, real_dtype)
+        or _hypercollision_operator_is_static_zero(
+            weight=weights.hypercollisions,
+            nu_hyper=scalars.nu_hyper,
+            nu_hyper_l=scalars.nu_hyper_l,
+            nu_hyper_m=scalars.nu_hyper_m,
+            nu_hyper_lm=scalars.nu_hyper_lm,
+            hypercollisions_const=scalars.hypercollisions_const,
+            hypercollisions_kz=scalars.hypercollisions_kz,
+            dtype=real_dtype,
+        )
+        or _is_static_zero(
+            weights.hypercollisions * scalars.hypercollisions_kz, real_dtype
+        )
+    )
+    if (
+        kz_off
+        or not (cache.use_twist_shift and cache.linked_indices and cache.linked_kz)
+        or _is_static_zero(weights.streaming, real_dtype)
+    ):
+        return None
+    operand = linked_streaming_operand(
+        G,
+        phi=rhs_fields.fields.phi,
+        apar=rhs_fields.h_apar,
+        bpar=rhs_fields.h_bpar,
+        Jl=cache.Jl,
+        JlB=cache.JlB,
+        tz=species.tz,
+        vth=species.vth,
+        sqrt_p=cache.sqrt_p,
+        sqrt_m=cache.sqrt_m_ladder,
+        kpar_scale=scalars.kpar_scale,
+        hermite_window=hermite_window,
+    )
+    kz_source = _hypercollision_kz_source(
+        G,
+        weight=weights.hypercollisions,
+        hypercollisions_kz=scalars.hypercollisions_kz,
+        nu_hyper_m=scalars.nu_hyper_m,
+        m_norm_kz_factor=cache.m_norm_kz_factor,
+        vth=species.vth,
+        kpar_scale=scalars.kpar_scale,
+        mask_kz=cache.mask_kz,
+        m_pow=cache.m_pow,
+    )
+    if operand.dtype != kz_source.dtype:
+        return None
+    _check_positive(cache.dz, "dz")
+    transformed = _linked_fft_apply(
+        (operand, kz_source),
+        cache.linked_indices,
+        cache.linked_kz,
+        operator=("grad", "abs"),
+        linked_inverse_permutation=cache.linked_inverse_permutation,
+        linked_full_cover=cache.linked_full_cover,
+        linked_gather_map=cache.linked_gather_map,
+        linked_gather_mask=cache.linked_gather_mask,
+        linked_use_gather=cache.linked_use_gather,
+    )
+    local = _constant_hypercollision_contribution(
+        G,
+        vth=species.vth,
+        nu_hyper=scalars.nu_hyper,
+        nu_hyper_l=scalars.nu_hyper_l,
+        nu_hyper_m=scalars.nu_hyper_m,
+        nu_hyper_lm=scalars.nu_hyper_lm,
+        hyper_ratio=cache.hyper_ratio,
+        ratio_l=cache.ratio_l,
+        ratio_m=cache.ratio_m,
+        ratio_lm=cache.ratio_lm,
+        mask_const=cache.mask_const,
+        hypercollisions_const=scalars.hypercollisions_const,
+        weight=weights.hypercollisions,
+        hermite_window=hermite_window,
+    )
+    return weights.streaming * transformed[0], local + transformed[1]
+
+
 def _dissipation_contributions(
     G: jnp.ndarray,
     H: jnp.ndarray,
@@ -491,6 +601,7 @@ def _dissipation_contributions(
     scalars: _ScalarParams,
     weights: _TermWeights,
     hermite_window: HermiteWindow | None = None,
+    hypercollisions: jnp.ndarray | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     collisions = _collision_contribution_or_zero(
         H,
@@ -503,35 +614,36 @@ def _dissipation_contributions(
         lb_lam=cache.lb_lam,
         weight=weights.collisions,
     )
-    hypercollisions = hypercollisions_contribution(
-        G,
-        vth=species.vth,
-        nu_hyper=scalars.nu_hyper,
-        nu_hyper_l=scalars.nu_hyper_l,
-        nu_hyper_m=scalars.nu_hyper_m,
-        nu_hyper_lm=scalars.nu_hyper_lm,
-        hyper_ratio=cache.hyper_ratio,
-        ratio_l=cache.ratio_l,
-        ratio_m=cache.ratio_m,
-        ratio_lm=cache.ratio_lm,
-        mask_const=cache.mask_const,
-        mask_kz=cache.mask_kz,
-        m_pow=cache.m_pow,
-        m_norm_kz_factor=cache.m_norm_kz_factor,
-        kz=cache.kz,
-        kpar_scale=scalars.kpar_scale,
-        hypercollisions_const=scalars.hypercollisions_const,
-        hypercollisions_kz=scalars.hypercollisions_kz,
-        weight=weights.hypercollisions,
-        linked_indices=cache.linked_indices,
-        linked_kz=cache.linked_kz,
-        linked_inverse_permutation=cache.linked_inverse_permutation,
-        linked_full_cover=cache.linked_full_cover,
-        linked_gather_map=cache.linked_gather_map,
-        linked_gather_mask=cache.linked_gather_mask,
-        linked_use_gather=cache.linked_use_gather,
-        hermite_window=hermite_window,
-    )
+    if hypercollisions is None:
+        hypercollisions = hypercollisions_contribution(
+            G,
+            vth=species.vth,
+            nu_hyper=scalars.nu_hyper,
+            nu_hyper_l=scalars.nu_hyper_l,
+            nu_hyper_m=scalars.nu_hyper_m,
+            nu_hyper_lm=scalars.nu_hyper_lm,
+            hyper_ratio=cache.hyper_ratio,
+            ratio_l=cache.ratio_l,
+            ratio_m=cache.ratio_m,
+            ratio_lm=cache.ratio_lm,
+            mask_const=cache.mask_const,
+            mask_kz=cache.mask_kz,
+            m_pow=cache.m_pow,
+            m_norm_kz_factor=cache.m_norm_kz_factor,
+            kz=cache.kz,
+            kpar_scale=scalars.kpar_scale,
+            hypercollisions_const=scalars.hypercollisions_const,
+            hypercollisions_kz=scalars.hypercollisions_kz,
+            weight=weights.hypercollisions,
+            linked_indices=cache.linked_indices,
+            linked_kz=cache.linked_kz,
+            linked_inverse_permutation=cache.linked_inverse_permutation,
+            linked_full_cover=cache.linked_full_cover,
+            linked_gather_map=cache.linked_gather_map,
+            linked_gather_mask=cache.linked_gather_mask,
+            linked_use_gather=cache.linked_use_gather,
+            hermite_window=hermite_window,
+        )
     hyperdiffusion = hyperdiffusion_contribution(
         G,
         kx=cache.kx_grid,
@@ -573,6 +685,13 @@ def _rhs_term_contributions(
         weights,
         state.imag,
     )
+    shared = (
+        None
+        if skip_dissipation
+        else _shared_linked_streaming_hypercollisions(
+            state.G, cache, species, scalars, weights, rhs_fields, hermite_window
+        )
+    )
     if skip_dissipation:
         collisions = hypercollisions = hyperdiffusion = end_damping = jnp.zeros_like(
             state.G
@@ -580,12 +699,23 @@ def _rhs_term_contributions(
     else:
         collisions, hypercollisions, hyperdiffusion, end_damping = (
             _dissipation_contributions(
-                state.G, rhs_fields.H, cache, species, scalars, weights, hermite_window
+                state.G,
+                rhs_fields.H,
+                cache,
+                species,
+                scalars,
+                weights,
+                hermite_window,
+                hypercollisions=None if shared is None else shared[1],
             )
         )
     return {
-        "streaming": _streaming_contribution(
-            state.G, cache, species, scalars, weights, rhs_fields, hermite_window
+        "streaming": (
+            _streaming_contribution(
+                state.G, cache, species, scalars, weights, rhs_fields, hermite_window
+            )
+            if shared is None
+            else shared[0]
         ),
         "mirror": mirror,
         "curvature": curvature,

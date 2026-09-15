@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import jax.numpy as jnp
 import numpy as np
@@ -12,6 +12,25 @@ import numpy as np
 from gkx.diagnostics.modes import ModeSelection
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.terms.config import FieldState
+
+if TYPE_CHECKING:
+    from gkx.solvers_linear_implicit import ImplicitSolveSummary
+    from gkx.solvers_linear_krylov import EigenSolveStatus
+
+
+def _implicit_solve_summary(summary: ImplicitSolveSummary | None) -> dict[str, Any]:
+    """Flatten an implicit-solve summary into scalar keys; None when none ran."""
+
+    return {
+        "implicit_converged": None if summary is None else summary.converged,
+        "implicit_max_relative_residual": (
+            None if summary is None else summary.max_relative_residual
+        ),
+        "implicit_max_iterations": None if summary is None else summary.max_iterations,
+        "implicit_unconverged_solves": (
+            None if summary is None else summary.unconverged_solves
+        ),
+    }
 
 
 def _dataset_payload(
@@ -103,14 +122,21 @@ class RuntimeLinearResult(_ResultArtifacts):
     fit_r2: float | None = None
     fit_settled: bool | None = None
     quasilinear: dict[str, Any] | None = None
+    # Solver status. ``eigen_status`` is the returned pair's residual, gate and
+    # route (Krylov runs only); ``implicit_solve`` summarizes every GMRES solve
+    # of a method="implicit" time run. None where no such solve ran.
+    eigen_status: EigenSolveStatus | None = None
+    implicit_solve: ImplicitSolveSummary | None = None
 
     @staticmethod
     def _artifact_writer(io_module: Any) -> Any:
         return io_module.write_runtime_linear_artifacts
 
     def summary(self) -> dict[str, Any]:
-        """Return the typed scalar diagnostics, including fit status."""
+        """Return the typed scalar diagnostics, including fit and solver status."""
 
+        eigen = self.eigen_status
+        inner = None if eigen is None else eigen.inner
         return {
             "kind": "linear",
             "ky": float(self.ky),
@@ -123,6 +149,12 @@ class RuntimeLinearResult(_ResultArtifacts):
             "fit_signal_used": self.fit_signal_used,
             "fit_window_tmin": self.fit_window_tmin,
             "fit_window_tmax": self.fit_window_tmax,
+            "eigen_route": None if eigen is None else eigen.route,
+            "eigen_residual": None if eigen is None else eigen.residual,
+            "eigen_tolerance": None if eigen is None else eigen.tolerance,
+            "eigen_certified": None if eigen is None else eigen.certified,
+            "eigen_inner_converged": None if inner is None else inner["converged"],
+            **_implicit_solve_summary(self.implicit_solve),
         }
 
     def to_dataset(self) -> dict[str, Any]:
@@ -217,6 +249,8 @@ class RuntimeNonlinearResult(_ResultArtifacts):
     # and whether the run stopped before t_max. None when the run was not
     # driven by the saturation stop policy.
     saturation: dict[str, Any] | None = None
+    # Every GMRES solve of an IMEX run; None for explicit methods.
+    implicit_solve: ImplicitSolveSummary | None = None
 
     @staticmethod
     def _artifact_writer(io_module: Any) -> Any:
@@ -245,6 +279,7 @@ class RuntimeNonlinearResult(_ResultArtifacts):
             "heat_flux_sem": saturation.get("sem"),
             "window_tmin": saturation.get("window_tmin"),
             "window_tmax": saturation.get("window_tmax"),
+            **_implicit_solve_summary(self.implicit_solve),
         }
 
     def to_dataset(self) -> dict[str, Any]:

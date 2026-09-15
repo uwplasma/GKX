@@ -1,0 +1,23 @@
+	Command being timed: "taskset -c 1 /home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx gx-nu1e-2-nl32.in"
+	User time (seconds): 791.98
+	System time (seconds): 543.92
+	Percent of CPU this job got: 71%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 31:20.20
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1633404
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 373158
+	Voluntary context switches: 37899
+	Involuntary context switches: 283300
+	Swaps: 0
+	File system inputs: 48
+	File system outputs: 635344
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

@@ -1,0 +1,4 @@
+lane=fstella5 pid=1134842 start=2026-09-14T21:57:22-05:00 np=5 cpus=18-22 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_stella5.txt
+stella stellaD_M_ky0.30_r1_drift2.0_t300 start=2026-09-14T21:57:22-05:00
+stella stellaD_M_ky0.30_r1_drift2.0_t300 rc=2 wall=19.09 end=2026-09-14T21:57:41-05:00
+lane=fstella5 ALL DONE 2026-09-14T21:57:41-05:00

@@ -213,6 +213,38 @@ def _streaming_parallel_derivative(
     )
 
 
+def linked_streaming_operand(
+    G: jnp.ndarray,
+    *,
+    phi: jnp.ndarray,
+    apar: jnp.ndarray | None,
+    bpar: jnp.ndarray | None,
+    Jl: jnp.ndarray,
+    JlB: jnp.ndarray,
+    tz: jnp.ndarray,
+    vth: jnp.ndarray,
+    sqrt_p: jnp.ndarray,
+    sqrt_m: jnp.ndarray,
+    kpar_scale: jnp.ndarray,
+    hermite_window: HermiteWindow | None = None,
+) -> jnp.ndarray:
+    """Return the Hermite-ladder and field-drive operand of the parallel derivative."""
+
+    ladder_rhs = _streaming_ladder_rhs(G, vth=vth, sqrt_p=sqrt_p, sqrt_m=sqrt_m)
+    field_rhs = _streaming_field_drive(
+        ladder_rhs,
+        phi=phi,
+        apar=apar,
+        bpar=bpar,
+        Jl=Jl,
+        JlB=JlB,
+        tz=tz,
+        vth=vth,
+        hermite_window=hermite_window,
+    )
+    return kpar_scale * (ladder_rhs + field_rhs)
+
+
 def linked_streaming_contribution(
     G: jnp.ndarray,
     *,
@@ -252,9 +284,8 @@ def linked_streaming_contribution(
     if _is_static_zero(weight, jnp.real(G).dtype):
         return _zeros_like_result(G, weight)
 
-    ladder_rhs = _streaming_ladder_rhs(G, vth=vth, sqrt_p=sqrt_p, sqrt_m=sqrt_m)
-    field_rhs = _streaming_field_drive(
-        ladder_rhs,
+    rhs = linked_streaming_operand(
+        G,
         phi=phi,
         apar=apar,
         bpar=bpar,
@@ -262,9 +293,11 @@ def linked_streaming_contribution(
         JlB=JlB,
         tz=tz,
         vth=vth,
+        sqrt_p=sqrt_p,
+        sqrt_m=sqrt_m,
+        kpar_scale=kpar_scale,
         hermite_window=hermite_window,
     )
-    rhs = kpar_scale * (ladder_rhs + field_rhs)
     streamed = weight * _streaming_parallel_derivative(
         rhs,
         kz=kz,

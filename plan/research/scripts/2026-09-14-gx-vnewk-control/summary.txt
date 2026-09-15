@@ -1,0 +1,11 @@
+Q17: GX vnewk=1e-2 vs GKX species nu=1e-2, Cyclone s-alpha ITG ky=.55, Nm96, Nz96,
+rk4 dt .002, absorber 50, T=150, fit [105,150]; rel = (GX-GKX)/GKX; P4 pass if |rel| <= 2%
+
+| Nl | GKX gamma | GX gamma | rel gamma | GKX omega | GX omega | rel omega | GX half shift | GX settled | P4 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 24 | 0.0174378 | 0.0174378 | -1.73e-07 | 0.495769 | 0.495771 | +3.33e-06 | +3.01e-05 | yes | pass |
+| 32 | 0.0171657 | 0.0171657 | -4.67e-07 | 0.495705 | 0.495705 | -6.88e-07 | +3.44e-05 | yes | pass |
+| 48 | 0.0171695 | not run | | 0.495685 | not run | | | | not run |
+
+Nl24->32 gamma change: GX -1.5602%, GKX -1.5602%
+GKX Nl32->48 gamma change: +0.0219%

@@ -1,0 +1,4 @@
+lane=fgs2b pid=1126425 start=2026-09-14T21:39:02-05:00 np=5 cpus=23-27 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_gs2b.txt
+gs2 gs2_S_ky0.55_r4 start=2026-09-14T21:39:02-05:00
+gs2 gs2_S_ky0.55_r4 rc=0 wall=2947.44 end=2026-09-14T22:28:09-05:00
+lane=fgs2b ALL DONE 2026-09-14T22:28:09-05:00

@@ -1,0 +1,6 @@
+lane=fgkx pid=1115190 start=2026-09-14T21:18:17-05:00 cpus=28-35 threads=8 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_gkx.txt
+gkx S ky=0.55 Nl=16 Nm=48 start=2026-09-14T21:18:17-05:00
+lane=fgkx pid=1115856 start=2026-09-14T21:19:23-05:00 cpus=28-35 threads=8 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_gkx.txt
+gkx S ky=0.55 Nl=16 Nm=48 start=2026-09-14T21:19:23-05:00
+gkx S ky=0.55 Nl=16 Nm=48 rc=0 wall=2864.36 end=2026-09-14T22:07:07-05:00
+lane=fgkx ALL DONE 2026-09-14T22:07:07-05:00

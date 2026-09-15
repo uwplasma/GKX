@@ -1,0 +1,19 @@
+22:35:39 block=1 arm=base flags=nopool load=34.91 mean_core_busy=0.533 worst_core_busy=0.864
+22:36:28 rc=0 load_after=35.53
+22:36:31 block=1 arm=p2t flags=nopool load=35.53 mean_core_busy=0.576 worst_core_busy=0.914
+22:37:23 rc=0 load_after=33.24
+22:37:26 block=1 arm=tonly flags=nopool load=33.24 mean_core_busy=0.590 worst_core_busy=0.913
+22:38:15 rc=0 load_after=32.96
+22:38:18 block=2 arm=base flags=nopool load=32.96 mean_core_busy=0.561 worst_core_busy=1.000
+22:39:07 rc=0 load_after=31.38
+22:39:10 block=2 arm=p2t flags=nopool load=31.38 mean_core_busy=0.558 worst_core_busy=0.934
+22:40:02 rc=0 load_after=31.61
+22:40:05 block=2 arm=tonly flags=nopool load=31.61 mean_core_busy=0.565 worst_core_busy=0.970
+22:40:54 rc=0 load_after=33.52
+22:40:57 block=3 arm=base flags=nopool load=33.52 mean_core_busy=0.550 worst_core_busy=0.900
+22:41:45 rc=0 load_after=32.16
+22:41:49 block=3 arm=p2t flags=nopool load=32.16 mean_core_busy=0.644 worst_core_busy=0.980
+22:42:42 rc=0 load_after=36.72
+22:42:45 block=3 arm=tonly flags=nopool load=36.72 mean_core_busy=0.518 worst_core_busy=1.000
+22:43:34 rc=0 load_after=37.09
+ALLDONE
