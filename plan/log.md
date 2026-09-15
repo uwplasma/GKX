@@ -14131,9 +14131,9 @@ runners now take the child's stdin from `/dev/null`.
 6. Fit, append the final Q20 entry, update the plan.md Q20 row and open the PR.
 
 **Artifact SHA-256 (first 16 hex digits).**
-- **Scripts and inputs:** `manifest.toml` 0c4a908979e9671d, `cases.py` 23a3d4401a7d01c5, `fit.py` 2d433b57b957e9ee,
-  `gkx_eigen.py` 9e40d4f1c8f78539, `gyaradax_salpha.py` fc39d03f1f178428, `geometry_compare.py`
-  f8f63e77e1258dfb, `cyclone_miller_linear.toml` 7c28a068401c5d24, `run_grid_queue.sh` 88db34ad98427f0b,
+- **Scripts and inputs:** `manifest.toml` 0c4a908979e9671d, `cases.py` 3fc82d711698134c, `fit.py` 7f052a980663d41c,
+  `gkx_eigen.py` dd79dad767406ed1, `gyaradax_salpha.py` 1df61c322ca8534c, `geometry_compare.py`
+  452b019c8817bf2f, `cyclone_miller_linear.toml` 7c28a068401c5d24, `run_grid_queue.sh` 88db34ad98427f0b,
   `run_gkx_queue.sh` 3cce79134c568f44, `run_gyaradax_queue.sh` 6b3d7d79075951c4.
 - **Fits and geometry:** `results/fit_gs2_stella.txt` e01c6aab52d33fa1, `results/fit_diag_bess_fac.txt`
   20ee1f8d0a7438ab, `results/geometry_compare.txt` 43c48ad264b037a5.
@@ -14322,13 +14322,13 @@ The discriminator inputs are the r1 inputs with `&scale_gyrokinetic_terms` or `b
 (`stellaD_*`). The one-axis GS2 inputs come from `cases.gs2_input` with a rung override (`gs2X_*`).
 
 **Artifact SHA-256 (first 16 hex digits)**, every file under this row's directory (`artifact_hashes.py`):
-- `artifact_hashes.py` 480b0238df906a4e
-- `cases.py` 23a3d4401a7d01c5
+- `artifact_hashes.py` 13776cc82a35db5a
+- `cases.py` 3fc82d711698134c
 - `cyclone_miller_linear.toml` 7c28a068401c5d24
-- `fit.py` 2d433b57b957e9ee
-- `geometry_compare.py` f8f63e77e1258dfb
-- `gkx_eigen.py` 9e40d4f1c8f78539
-- `gyaradax_salpha.py` fc39d03f1f178428
+- `fit.py` 7f052a980663d41c
+- `geometry_compare.py` 452b019c8817bf2f
+- `gkx_eigen.py` dd79dad767406ed1
+- `gyaradax_salpha.py` 1df61c322ca8534c
 - `manifest.toml` 0c4a908979e9671d
 - `results/final_tables.txt` aa3305fcf48f6467
 - `results/fit_diag_bess_fac.txt` 20ee1f8d0a7438ab
@@ -14373,10 +14373,12 @@ The discriminator inputs are the r1 inputs with `&scale_gyrokinetic_terms` or `b
 - `run_gkx_queue.sh` 3cce79134c568f44
 - `run_grid_queue.sh` 88db34ad98427f0b
 - `run_gyaradax_queue.sh` 6b3d7d79075951c4
-- `summarize.py` 2e9eeb1a0211823a
+- `summarize.py` e19525570c8cf98a
 
 **Terminal process state.**
 - **Lanes that ended by themselves** (CDT): gs2 21:46:56, gs2b 22:28:09, gs2c 22:21:27, gs2x 23:20:36, gs2y 23:35:16; stella2 21:38:11, stella3 21:38:58, stella5 21:57:41; gkx 22:07:07, gkx2 23:18:35, gkx3 23:14:51; gyaradax 23:42:26.
 - **Killed lanes:** the first gs2/stella/gkx lanes of 21:18 were killed at 21:19, after stella had finished three cases, and relaunched under an outer `taskset` (verified absent). stella4 was killed at 21:57 after oversubscribing cores 23–27 (verified absent); its case was re-run alone as stella5.
 - **Final check:** at 2026-09-14T23:42:56-05:00 no process owned by this row remained on office and neither GPU listed a compute process. No local process runs.
 - **Kept:** the office run directory `/home/rjorge/gkx-q20-cross-code-20260914.FavgA4` (207 MB of inputs, outputs and logs); its staged GKX source copy was deleted.
+
+**Formatting note (2026-09-15, release integration).** The repository's `ruff format --check` gate rejected seven scripts in this directory: `artifact_hashes.py`, `cases.py`, `fit.py`, `geometry_compare.py`, `gkx_eigen.py`, `gyaradax_salpha.py` and `summarize.py`. They were reformatted with ruff 0.16.4 after they ran. Six have an identical Python AST before and after. In `artifact_hashes.py` only the module docstring changed (its usage line lost its indentation). The recorded SHA-256 values above now match the formatted files.

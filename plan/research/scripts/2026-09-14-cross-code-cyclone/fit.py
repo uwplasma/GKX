@@ -48,7 +48,9 @@ def gs2_fit(d: Path):
     phi = np.asarray(ds.variables["phi_igomega_by_mode"][:], dtype=float)
     z = phi[:, 0, -1, 0] + 1j * phi[:, 0, -1, 1]
     w = (t >= 0.8 * t[-1]) & (np.abs(z) > 0)
-    gfit = float(np.polyfit(t[w], np.log(np.abs(z[w])), 1)[0]) if w.sum() > 3 else math.nan
+    gfit = (
+        float(np.polyfit(t[w], np.log(np.abs(z[w])), 1)[0]) if w.sum() > 3 else math.nan
+    )
     return ky, T, g, o, drift, gfit
 
 
@@ -62,7 +64,11 @@ def stella_fit(d: Path):
     g, o, drift, T = window_stats(t, omega, gamma)
     phi2 = np.asarray(ds.variables["phi2"][:], dtype=float)
     w = (t >= 0.8 * t[-1]) & (phi2 > 0)
-    gfit = float(0.5 * np.polyfit(t[w], np.log(phi2[w]), 1)[0]) if w.sum() > 3 else math.nan
+    gfit = (
+        float(0.5 * np.polyfit(t[w], np.log(phi2[w]), 1)[0])
+        if w.sum() > 3
+        else math.nan
+    )
     return ky, T, g, o, drift, gfit
 
 
@@ -80,8 +86,17 @@ def done_info(d: Path):
 def main() -> None:
     root = Path(sys.argv[1])
     pats = sys.argv[2:] or ["*"]
-    dirs = sorted({Path(p) for pat in pats for p in glob.glob(str(root / "*" / pat)) if Path(p).is_dir()})
-    print("code,case,ky_code,ky_gx,t_end,gamma_code,omega_code,drift,settled,gamma_gx,omega_gx,gamma_crosscheck_code,wall_s,np,rc")
+    dirs = sorted(
+        {
+            Path(p)
+            for pat in pats
+            for p in glob.glob(str(root / "*" / pat))
+            if Path(p).is_dir()
+        }
+    )
+    print(
+        "code,case,ky_code,ky_gx,t_end,gamma_code,omega_code,drift,settled,gamma_gx,omega_gx,gamma_crosscheck_code,wall_s,np,rc"
+    )
     for d in dirs:
         code = d.parent.name
         if code not in {"gs2", "stella"}:
@@ -90,12 +105,16 @@ def main() -> None:
         try:
             ky, T, g, o, drift, gfit = (gs2_fit if code == "gs2" else stella_fit)(d)
         except Exception as exc:  # missing/partial output is reported, not hidden
-            print(f"{code},{d.name},,,,,,,error:{type(exc).__name__},,,,{wall},{np_},{rc}")
+            print(
+                f"{code},{d.name},,,,,,,error:{type(exc).__name__},,,,{wall},{np_},{rc}"
+            )
             continue
         scale = SQRT2 * (A_OVER_R if d.name.startswith("G") else 1.0)
         settled = "yes" if abs(drift) <= 0.01 else "no"
-        print(f"{code},{d.name},{ky:.5f},{ky / SQRT2:.4f},{T:.1f},{g:.6f},{o:.6f},{drift:+.2e},{settled},"
-              f"{g * scale:.6f},{o * scale:.6f},{gfit:.6f},{wall:.1f},{np_},{rc}")
+        print(
+            f"{code},{d.name},{ky:.5f},{ky / SQRT2:.4f},{T:.1f},{g:.6f},{o:.6f},{drift:+.2e},{settled},"
+            f"{g * scale:.6f},{o * scale:.6f},{gfit:.6f},{wall:.1f},{np_},{rc}"
+        )
 
 
 if __name__ == "__main__":
