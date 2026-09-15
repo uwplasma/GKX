@@ -13369,107 +13369,161 @@ runs at rc=0. It had invoked `check.py` without its stem argument; the checks ab
 re-run by hand with `check.py itg_salpha_adiabatic_electrons`. No process owned by this
 entry is running.
 
-## 2026-09-14 — Q17 GX vnewk control (paused)
+## 2026-09-14 — Q17 GX vnewk control: GX reproduces GKX's collisional Nl convergence at ν=1e-2 (Q8 P4)
 
-Queue row Q17 (Q8's registered P4). Paused by the maintainer before any GX run. Nothing was
-measured, and there are no γ/ω values, preliminary or otherwise. Files are in
-`plan/research/scripts/2026-09-14-gx-vnewk-control/`.
+Queue row Q17 (Q8's registered P4). Measurement only: no source, test, default, reference or
+release change. Files are in `plan/research/scripts/2026-09-14-gx-vnewk-control/`. This entry
+replaces the "Q17 GX vnewk control (paused)" entry from earlier the same day. The branch was merged
+with `origin/main` `7d94d5986`.
 
-**Question and prediction (Q8 `manifest.toml`, P4).** GX with `vnewk=1e-2` at Nl 24/32
-agrees with the matched GKX runs to ≤2%. GKX's ν=1e-2 values are γ .0174378/.0171657 at
-Nl 24/32 and .0171695 at Nl48, with ω .495769/.495705/.495685 (T=150, fit [105,150]).
+**Question and prediction.** Q8 registered P4 in its `manifest.toml` before any run: GX with
+`vnewk=1e-2` at Nl 24/32 agrees with GKX's matched runs to ≤2%. The GKX reference values are
+from Q3/Q8 (T=150, fit [105,150]):
 
-**Decks (checked, not run).**
-- Q8's three GX decks were copied unchanged (`cmp` identical, recorded in `deck_diffs.txt`).
-- `gx-nu1e-2-nl48.in` was added. It differs from the Nl32 deck in the `nlaguerre` line only.
-- Against the matched collisionless deck (office
-  `gkx-nl24-discriminator-20260912.vvmgDD/nl24.in`, SHA-256 `2dd1c42b…`), the physics
-  diffs are one line: `vnewk = [1.0e-2, 0.0]`, plus `nlaguerre` for Nl32/48, and
-  `hypercollisions=false` in the `nohyper` deck.
-- The decks are not literally one-line diffs. Every deck also sets `t_max` 300→150,
-  `save_for_restart`→false and `fields`/`moments`→false, which only change output.
-- Binary: the repaired parity binary `gkx-nl24-discriminator-20260912.vvmgDD/gx`
-  (SHA-256 `96a53403…`). It is named by Q8's `run_gx.sh`, and `ldd` resolves every library.
-- `gx_fit.py` is Q8's script, unchanged (validated there on the collisionless Nl24 output).
-  - γ is half the slope of log Phi2_t on [0.7T, T] = [105,150].
-  - The half-time probe is [0.35T, 0.5T] = [52.5,75]; the run counts as settled if the
-    probe shifts γ by ≤5%, the runner's rule.
+| Nl | GKX γ | GKX ω |
+|---:|---:|---:|
+| 24 | .0174378 | .495769 |
+| 32 | .0171657 | .495705 |
+| 48 | .0171695 | .495685 |
 
-**Operator map, read from source; not yet numerically confirmed.**
-- *GX* (upstream `3865a537`, `src/device_funcs.cu` `rhs_linear`, `src/parameters.cu`):
-  - Input: `nu_ss` = `vnewk`, read unscaled (`parameters.cu:559`); `collisions` is on if any
-    `vnewk > 0` (`:570-572`).
-  - Damping: −(ν_ss+ν_ei)(b_s + 2ℓ + m)·H (`device_funcs.cu:3178`), with ν_ei = 0 for the
-    ion species (type 0; the electrons are Boltzmann).
-  - b_s = k⊥²·ρ², with ρ² = T·m/Z² = 1 (`parameters.cu:1065`). v_t = √(T/m) = 1 does not
-    enter the collision terms.
-  - m=0 temperature term: +ν·2(ℓJ_{ℓ−1} + 2ℓJ_ℓ + (ℓ+1)J_{ℓ+1})·T̄.
-  - m=0 u⊥ term: +ν√b·JflrB_ℓ·ū⊥, where ū⊥ = √b·Σ_ℓ′ JflrB_ℓ′ H_ℓ′0 (`:3501`, `:3519`)
-    and JflrB_ℓ = J_ℓ + J_{ℓ−1} (`:146`). The term is therefore ν·b·JflrB_ℓ·Σ JflrB H.
-  - m=1: +ν·J_ℓ·ū∥. m=2: +ν·√2·J_ℓ·T̄.
-- *GKX* (`src/`):
-  - Input: species `nu` is passed unscaled (`workflows/runtime/startup.py:77`).
-  - Damping: ν(ν_L·ℓ + ν_H·m) + ν·b (`operators/linear/cache_arrays.py:54-57`,
-    `collision_damping`), which is ν(2ℓ + m + b) with the fixture's `nu_hermite=1`,
-    `nu_laguerre=2`.
-  - `_collision_moment_correction` (`operators/linear/dissipation.py`), per moment:
-    - m=0: ν·b·JlB·Σ JlB H_m0 + ν·2·coeff_t·T̄;
+Before this row, it was not established whether GX `vnewk` and GKX species ν correspond
+one-to-one.
+
+**Decks.**
+- Q8's GX decks are unchanged (`cmp` identical). The Nl48 deck differs from the Nl32 deck in
+  `nlaguerre` only.
+- Relative to the matched collisionless deck (office
+  `gkx-nl24-discriminator-20260912.vvmgDD/nl24.in`, SHA-256 `2dd1c42b…`), the physics changes
+  are `vnewk = [1.0e-2, 0.0]` and, for Nl32/48, `nlaguerre`.
+- Every deck also sets `t_max` 300→150, `save_for_restart`→false and `fields`/`moments`→false.
+  These change output only (`deck_diffs.txt`).
+- Binary: the repaired parity binary `96a53403…`, the one Q8's `run_gx.sh` names.
+- `gx_fit.py`: Q8's script, unchanged. γ is half the slope of log Phi2_t on [0.7T, T]; ω is
+  the second-half mean of `omega_kxkyt`. The half-time probe is [0.35T, 0.5T], settled if the
+  shift is ≤5% (the runner's rule).
+
+**Operator and normalization map (source reading, now confirmed numerically at this deck).**
+- *GX* (upstream `3865a537`):
+  - **Input:** `nu_ss` is `vnewk`, read unscaled (`src/parameters.cu:559`); collisions are on
+    for any `vnewk > 0` (`:570-572`).
+  - **Damping:** `rhs_linear` applies −(ν_ss+ν_ei)(b_s+2ℓ+m)·H (`src/device_funcs.cu:3178`),
+    with ν_ei = 0 for the ion species.
+  - **b_s:** b_s = k⊥²ρ², with ρ² = T·m/Z² = 1 (`parameters.cu:1065`).
+  - **Restoring terms:**
+    - m=0: +ν√b·JflrB_ℓ·ū⊥, with ū⊥ = √b·Σ JflrB_ℓ′ H_ℓ′0 (`:3501`, `:3519`) and
+      JflrB_ℓ = J_ℓ + J_{ℓ−1} (`:146`); also +ν·2(ℓJ_{ℓ−1}+2ℓJ_ℓ+(ℓ+1)J_{ℓ+1})·T̄;
+    - m=1: +ν·J_ℓ·ū∥;
+    - m=2: +ν·√2·J_ℓ·T̄.
+- *GKX*:
+  - **Input:** species `nu` is passed unscaled (`src/gkx/workflows/runtime/startup.py:77`).
+  - **Damping:** ν(ν_L ℓ + ν_H m) + ν·b = ν(2ℓ+m+b) with the fixture's `nu_hermite=1`,
+    `nu_laguerre=2` (`src/gkx/operators/linear/cache_arrays.py:54-57`, `collision_damping`).
+  - **Restoring terms** (`_collision_moment_correction` in
+    `src/gkx/operators/linear/dissipation.py`):
+    - m=0: ν·b·JlB·Σ JlB H_m0 + ν·2·coeff_t·T̄, with JlB = J_ℓ + J_{ℓ−1}
+      (`cache_arrays.py:139`);
     - m=1: ν·Jl·ū∥;
-    - m=2: ν·√2·Jl·T̄;
-    - JlB = J_ℓ + J_{ℓ−1} (`cache_arrays.py:139`).
-- *Correspondence:*
-  - The damping and all four restoring terms have the same coefficients term by term, and
-    neither code carries a v_t or mass factor in the collision rate.
-  - Both codes share the time and length normalization, as the collisionless Nl24 parity
-    (−0.07%) shows.
-  - So at this deck's ion (m = T = Z = 1), GX `vnewk` and GKX species ν correspond
-    one-to-one: vnewk=1e-2 ↔ ν=1e-2. No rescaled "matched" value is needed.
-- *Not checked:*
-  - that GKX's J_ℓ closed form equals GX's e^{−b/2}(−b/2)^ℓ/ℓ!;
-  - GX's `Jflr` returns 0 for ℓ>30 (float underflow guard). At b=12.7, J_31 ≈ 2e-12, so
-    this should be negligible at Nl32/48 but is untested;
-  - the T̄ and ū∥ definitions (Q8 compared their form by reading only);
-  - GX evaluates the kernel coefficients in float32.
+    - m=2: ν·√2·Jl·T̄.
+- *Map:*
+  - The damping and all four restoring terms have the same coefficients.
+  - Neither code puts v_t or mass in the collision rate.
+  - Both use the time normalization of the matched collisionless parity.
+  - So for this ion (m = T = Z = 1), `vnewk` = ν one-to-one; no rescaled matched value exists
+    or was needed.
+  - GX zeroes J_ℓ for ℓ>30. That touches ℓ=31 at Nl32; the Nl32 agreement below bounds its
+    effect on this mode.
 
-**Not done.**
-- The GX runs at Nl 24/32 (registered) and Nl48 (added; estimated ≈26 min at the measured
-  10.5 ms/step for Nl24 scaled with Nl), and the optional `nohyper` Nl32 deck.
-- The γ/ω table against GKX, the verdict, the Q17 row update and the PR.
+**Runs.**
+- **Host:** office (`pop-os`), RTX A4000 GPU0 for both runs. GX host process pinned to core 1
+  (`taskset -c 1`; cores 2–17 reserved for Q9, 18–35 for Q20). Supervisor `run_q17.sh`
+  (SHA-256 `76db0358…`, the version executed).
+- **Supervisor guards:**
+  - binary hash and `ldd` checked;
+  - a GPU is taken only after two polls 60 s apart with no compute process and <5%
+    utilization, plus a recheck at launch;
+  - one 2 h polling deadline for the batch;
+  - per-run cap 2700 s;
+  - the log is scanned for NaN/Inf;
+  - restart and big files are deleted.
+- **GPU wait:** 21:17:55–22:17:03 CDT. Both GPUs held a compute context of another user's
+  `python run_collapse.py` (pid 1005182; GPU0 at 100%) until about 22:14.
+- **Nl24:** 22:17:03–22:41:11, exit 0, `/usr/bin/time` wall 23:48.3, 18.9 ms/step, device
+  882 MiB.
+- **Nl32:** 22:42:12–23:13:50, exit 0, wall 31:20.2, 25.0 ms/step.
+- **Nl48 not run.** Measured 18.9 and 25.0 ms/step project ≈37 ms/step, ≈47 GPU-min. That is
+  over the row's 30-min criterion and the 2700 s cap. The supervisor (pid 1115042) was sent
+  SIGTERM at 23:13:52, during its first poll after the Nl32 fit and before any Nl48 launch
+  (`results/stop_note.txt`).
+- **Also not run:** the `nohyper` Nl32 deck.
 
-**Resume steps.**
-1. On office, run `nvidia-smi --query-compute-apps=gpu_uuid,pid --format=csv,noheader`.
-   Continue only when a GPU has no process.
-2. `mkdir /home/rjorge/gkx-q17-gx-vnewk-20260914` (not yet created). Copy the four decks,
-   `gx_fit.py` and `run_q17.sh` from this directory into it. Check SHA-256 against the list
-   below.
-3. In that directory, launch
-   `setsid nohup ./run_q17.sh gx-nu1e-2-nl24 gx-nu1e-2-nl32 gx-nu1e-2-nl48 > supervisor.txt 2>&1 < /dev/null &`
-   and record the PID.
-   - The supervisor checks the binary hash and `ldd`, and takes a GPU only after two idle
-     polls plus a recheck at launch.
-   - It aborts after 2 h without an idle GPU and caps each run at 2700 s.
-   - It deletes the restart and big files, then fits each output.
-4. Wait with a foreground loop: `while ssh office "kill -0 PID"; do sleep 30; done`.
-5. Copy back each `*.json`, `*.fit.txt` and `*.time.txt`, and `supervisor.txt`; keep only
-   the SHA-256 of each `*.out.nc`. Tabulate against the GKX values above and write the
-   verdict (P4: ≤2%). Set Q17 to "done, #PR" and open the PR on `main` without merging.
-   - Also check whether `run_q17.sh` should record per-process GPU memory rather than the
-     full `--query-compute-apps` listing it writes now.
+**Results** (`summary.txt`, from `summarize_q17.py`; rel = (GX−GKX)/GKX):
 
-**Environment.** Branch `evidence/gx-vnewk-control` from `origin/plan/queue-update-20260914b`
-`f0d431b93`. The GX source reading is from the local clone of upstream `3865a537`. office
-has 36 cores; at 13:14 its load average was 31.5 and neither A4000 had a compute process.
+| Nl | GKX γ | GX γ | rel γ | GKX ω | GX ω | rel ω | GX half shift | GX settled | P4 (≤2%) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 24 | .0174378 | .0174378 | −1.73e-07 | .495769 | .495771 | +3.33e-06 | +3.01e-05 | yes | pass |
+| 32 | .0171657 | .0171657 | −4.67e-07 | .495705 | .495705 | −6.88e-07 | +3.44e-05 | yes | pass |
+| 48 | .0171695 | not run | | .495685 | not run | | | | not run |
 
-**Artifacts** (SHA-256): `gx-nu1e-2-nl24.in`
-`b3ea3f4e474a85b0b6eb939f2e3f2293701bbb8297b9a1e91c7671e76d46b281`, `gx-nu1e-2-nl32.in`
-`122ff125a83fde04e7107d49c88226529ee6dbba0fe8ff11381c67d45dc544b3`, `gx-nu1e-2-nl48.in`
-`5c553884bd8abb3a871577c0a120ccb4f4140ef4fb1582d22dfd238c7821c87d`,
-`gx-nu1e-2-nl32-nohyper.in` `be15843b7c1d4579c5133709dd028592504f417635929c1fdd89963eff6b3940`,
-`gx_fit.py` `4b09142ad6151507db96d0a5c99d4f7a26d4713001713857be756d8d5f48ee66`, `run_q17.sh`
-`7879d8f0d7ee0478b595c35ad78a2b0df90d5ef75f408975f317980aecfb08f8`, `deck_diffs.txt`
-`ce88053278f1831f569bfc4ce2171e4528afd86d27be71c0fe5d221ae90ceb70`.
+The Nl24→32 γ change is −1.5602% in both codes. GKX's Nl32→48 change is +0.02%.
 
-**Terminal process state.** This row started no process on office: no supervisor, GPU
-guard or GX job, and the run directory was never created. At 2026-09-14T13:18:07-05:00
-`ps -u rjorge` showed no `run_q17`, `gpu_run` or parity-binary `gx` process, and
-`nvidia-smi --query-compute-apps` listed no process on either GPU.
+**Verdict.**
+- **P4 passes.** At ν=1e-2, GX reproduces GKX's growth rate and frequency at Nl 24 and 32 to
+  ≤5e-7 relative in γ and ≤3.3e-6 in ω, and the same Nl24→32 step (−1.5602%).
+- The collisional Laguerre convergence Q8 found at ν=1e-2 is therefore shared by an
+  independent implementation, at least through Nl32.
+- This also confirms numerically that `vnewk` and GKX species ν are the same parameter for
+  this deck.
+- The agreement is at the level of the fits' round-off. It shows that the two codes integrate
+  the same discrete collisional system on the same imported geometry. It does not make
+  γ=.01717 a collisionless limit, since Q8's ν·b ≈ .13 ≫ γ caveat stands.
+
+**Limitations.**
+- One ky, one ν, T=150 fits on a single window; no eigenvalue or Laguerre spectrum.
+- Nl48 was not run on GX, so the Nl32→48 plateau is shown by GKX only.
+- The mapping is checked for a species with m = T = Z = 1 only.
+- GX's own `omega_kxkyt` growth diagnostic (second-half means .0174707/.0171924) is 0.19% and
+  0.16% above its Phi2 fit. It is a different estimator; the Phi2 late fit is the quantity
+  matched to the GKX runner.
+- Timings are on a shared host with the process pinned to one core (71–77% CPU); they are
+  slower than the 10.5 ms/step smoke run and not benchmark-grade.
+
+**Environment.**
+- GX binary `/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx` (SHA-256
+  `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536`), on the rebuilt
+  toolchain.
+- Fit: `/home/rjorge/local/micromamba/envs/gk-fortran/bin/python` (netCDF4 1.7.4, NumPy
+  2.5.3).
+- Run directory: `/home/rjorge/gkx-q17-gx-vnewk-20260914` (31 MB, kept).
+
+**Commands.**
+- Launch, from the run directory after `sha256sum -c q17.sha`:
+  `env GPU_WAIT_S=7200 BUDGET_END=<start+10620 s> MIN_LEFT_S=3600 SKIP_IF_SHORT=gx-nu1e-2-nl48 GX_CORE=1 setsid nohup ./run_q17.sh gx-nu1e-2-nl24 gx-nu1e-2-nl32 gx-nu1e-2-nl48 > supervisor.txt 2>&1 < /dev/null &`
+- Per key, the supervisor runs
+  `CUDA_VISIBLE_DEVICES=<gpu> setsid timeout --signal=TERM --kill-after=10s 2700s /usr/bin/time -v -o KEY.time.txt taskset -c 1 gx KEY.in`,
+  then `python gx_fit.py KEY.out.nc KEY KEY.json`.
+- Table, from the repository root:
+  `python plan/research/scripts/2026-09-14-gx-vnewk-control/summarize_q17.py`.
+
+**Artifacts.**
+- `SHA256SUMS.txt` lists every other file in the directory (96 KB); its own SHA-256 is
+  `973884c55f83f350a8f148ef824c664c7fce4060a91048580c217e0a241435c6`.
+- Key hashes:
+  - `summary.txt` `11d49a409db1f2461dfed8e6a5461de38515764dfba746a004399051df4386bf`
+  - `results/gx-nu1e-2-nl24.json` `b3fd4be1ab852a8f3e13fd7bcfbd44506704c10e28fb01f9917a93f01ecc12cc`
+  - `results/gx-nu1e-2-nl32.json` `a2532847bdd0707b345e8116aa776f127487442767643ae0123b88549ff0e423`
+  - `run_q17.sh` `76db0358f72c95dbe24599f2d59a6e0bd4ff50ddd3726e3eaffd159de3a97879`
+- netCDF outputs, not committed (on office):
+  - `gx-nu1e-2-nl24.out.nc` `2739ca80c19f1f798e959e38e7845dcf9ab79a15efeda990d2be6c4880213255`
+  - `gx-nu1e-2-nl32.out.nc` `6f679e747549dc601b41671a69543988fbb8dee48dc44ef416ea5b63dcb3abab`
+
+**Terminal process state.** At 2026-09-14T23:15:10-05:00 every process this row started on
+office was verified absent, and `nvidia-smi --query-compute-apps` listed no process on either
+GPU. The PIDs checked:
+- launch shell wrappers 1115036 and 1115037;
+- supervisor 1115042 (SIGTERM 23:13:52);
+- Nl24 timeout, time and gx: 1141459, 1141461, 1141462;
+- Nl32 timeout, time and gx: 1150862, 1150864, 1150865;
+- the supervisor's orphaned `sleep 60`, 1164702.
+
+No `run_q17` or parity-binary `gx` process remained. The local ssh session that launched the
+supervisor exited with it.

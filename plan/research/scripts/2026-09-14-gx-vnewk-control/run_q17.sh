@@ -1,14 +1,17 @@
 #!/bin/bash
-# Q17 sequential GX supervisor (office). NOT YET RUN (Q17 paused 2026-09-14).
+# Q17 sequential GX supervisor (office).
 # Usage: run_q17.sh KEY [KEY ...]   (each KEY.in in the run directory R)
 # Modeled on gx-toolchain-rebuild-20260914/gpu_run_long.sh. For every key:
 # binary SHA-256 and ldd checked; a GPU is chosen only if it has no compute
 # process and <5% utilization on two polls 60 s apart, and has no compute
-# process again immediately before launch (never share or preempt); GPU wait
-# capped by GPU_WAIT_S (default 7200 s, then abort); per-run cap RUN_CAP_S
-# (default 2700 s); the log is scanned for nan/inf tokens every 30 s; one GX
-# job at a time; restart/big files are deleted after the fit; stop on the first
-# nonzero exit, nonfinite token or failed fit.
+# process again immediately before launch (never share or preempt). GPU
+# polling for the whole batch is capped by one deadline (GPU_WAIT_S from the
+# supervisor start, default 7200 s, then abort). Keys named in SKIP_IF_SHORT
+# are skipped when fewer than MIN_LEFT_S seconds remain before BUDGET_END
+# (epoch). Per-run cap RUN_CAP_S (default 2700 s). The GX host process is
+# pinned to CPU core GX_CORE (default 1). The log is scanned for nan/inf tokens
+# every 30 s; one GX job at a time; restart/big files are deleted after the
+# run; stop on the first nonzero exit, nonfinite token or failed fit.
 set -uo pipefail
 export PATH=/usr/local/bin:/usr/bin:/bin
 R=/home/rjorge/gkx-q17-gx-vnewk-20260914
@@ -16,10 +19,14 @@ BIN=/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx
 BINSHA=96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
 PY=/home/rjorge/local/micromamba/envs/gk-fortran/bin/python
 CAP=${RUN_CAP_S:-2700}
-WAIT=${GPU_WAIT_S:-7200}
+POLL_DEADLINE=$(( $(date +%s) + ${GPU_WAIT_S:-7200} ))
+BUDGET_END=${BUDGET_END:-0}
+MIN_LEFT=${MIN_LEFT_S:-3600}
+SKIP_IF_SHORT=${SKIP_IF_SHORT:-}
+CORE=${GX_CORE:-1}
 cd "$R" || exit 2
 log(){ echo "=== $(date -Is) $*"; }
-log "supervisor pid $$ host $(hostname) keys: $*"
+log "supervisor pid $$ host $(hostname) keys: $* poll_deadline=$(date -Is -d @$POLL_DEADLINE) budget_end=$BUDGET_END core=$CORE"
 [ "$(sha256sum "$BIN" | cut -d' ' -f1)" = "$BINSHA" ] || { log "ABORT binary sha mismatch"; exit 5; }
 if ldd "$BIN" | grep -q "not found"; then log "ABORT ldd not found"; exit 90; fi
 declare -A UUID2IDX
@@ -31,10 +38,12 @@ poll(){
   echo $out
 }
 pick_gpu(){
-  local deadline=$(( $(date +%s) + WAIT )) a b g
+  local a b g
   GPU=""
-  while [ "$(date +%s)" -lt "$deadline" ]; do
-    a=$(poll); log "poll1 idle=[$a]"; sleep 60; b=$(poll); log "poll2 idle=[$b]"
+  while [ "$(date +%s)" -lt "$POLL_DEADLINE" ]; do
+    a=$(poll); log "poll1 idle=[$a] apps=[$(nvidia-smi --query-compute-apps=gpu_uuid,pid --format=csv,noheader | tr '\n' ';')]"
+    sleep 60
+    b=$(poll); log "poll2 idle=[$b]"
     for g in $a; do if [[ " $b " == *" $g "* ]]; then GPU=$g; break; fi; done
     if [ -n "$GPU" ] && [ -z "$(nvidia-smi -i "$GPU" --query-compute-apps=pid --format=csv,noheader)" ]; then return 0; fi
     GPU=""; sleep 60
@@ -42,14 +51,17 @@ pick_gpu(){
   return 1
 }
 for key in "$@"; do
-  pick_gpu || { log "ABORT no idle GPU within ${WAIT}s before $key"; exit 91; }
-  log "$key start gpu=$GPU input sha256 $(sha256sum "$key.in" | cut -d' ' -f1)"
+  if [[ " $SKIP_IF_SHORT " == *" $key "* ]] && [ "$BUDGET_END" -gt 0 ] && [ $(( BUDGET_END - $(date +%s) )) -lt "$MIN_LEFT" ]; then
+    log "SKIP $key: $(( BUDGET_END - $(date +%s) )) s of budget left < $MIN_LEFT"; continue
+  fi
+  pick_gpu || { log "ABORT no idle GPU before poll deadline, before $key"; exit 91; }
+  log "$key start gpu=$GPU core=$CORE input sha256 $(sha256sum "$key.in" | cut -d' ' -f1)"
   T0=$(date +%s)
   CUDA_VISIBLE_DEVICES=$GPU setsid timeout --signal=TERM --kill-after=10s "${CAP}s" \
-    /usr/bin/time -v -o "$key.time.txt" "$BIN" "$key.in" > "$key.run.log" 2>&1 &
+    /usr/bin/time -v -o "$key.time.txt" taskset -c "$CORE" "$BIN" "$key.in" > "$key.run.log" 2>&1 &
   child=$!
   sleep 5
-  log "$key timeout pid $child gx pids $(pgrep -f -- "$BIN $key.in" | tr '\n' ' ')"
+  log "$key timeout pid $child gx pids $(pgrep -f -- "$BIN $key.in" | tr '\n' ' ') affinity $(for p in $(pgrep -f -- "^$BIN $key.in"); do taskset -cp "$p"; done | tr '\n' ' ')"
   reason=completed
   : > "$key.gpumem.txt"
   while kill -0 "$child" 2> /dev/null; do
