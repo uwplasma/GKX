@@ -163,8 +163,13 @@ def integrate_linear_from_config(
     terms: LinearTerms | None = None,
     show_progress: bool | None = None,
     parallel: Any | None = None,
+    return_solve_stats: bool = False,
 ) -> tuple:
-    """Integrate the linear system using TimeConfig settings."""
+    """Integrate the linear system using TimeConfig settings.
+
+    ``return_solve_stats=True`` appends :func:`integrate_linear`'s implicit
+    solve summary (``None`` for methods without an implicit solve).
+    """
 
     steps = _steps_from_time(time_cfg)
     show_progress_use = bool(
@@ -187,6 +192,7 @@ def integrate_linear_from_config(
         show_progress=show_progress_use,
         parallel=parallel,
         collision_operator=_resolve_config_collision_operator(time_cfg, params, G0),
+        return_solve_stats=return_solve_stats,
     )
 
 
@@ -200,8 +206,13 @@ def integrate_nonlinear_from_config(
     cache: LinearCache | None = None,
     terms: TermConfig | None = None,
     show_progress: bool | None = None,
+    return_solve_stats: bool = False,
 ) -> tuple:
-    """Integrate the nonlinear system using TimeConfig settings."""
+    """Integrate the nonlinear system using TimeConfig settings.
+
+    ``return_solve_stats=True`` appends the IMEX implicit solve summary
+    (``None`` for explicit and sharded runs, which have no implicit solve).
+    """
 
     steps = _steps_from_time(time_cfg)
     show_progress_use = bool(
@@ -214,7 +225,7 @@ def integrate_nonlinear_from_config(
         if cache is None:
             nl, nm = _gyrokinetic_moment_shape(G0)
             cache = build_linear_cache(grid, geom, params, nl, nm)
-        return cast(
+        sharded = cast(
             tuple,
             integrate_nonlinear_sharded(
                 G0,
@@ -230,6 +241,7 @@ def integrate_nonlinear_from_config(
                 return_fields=True,
             ),
         )
+        return (*sharded, None) if return_solve_stats else sharded
     return cast(
         tuple,
         integrate_nonlinear(
@@ -248,5 +260,6 @@ def integrate_nonlinear_from_config(
             show_progress=show_progress_use,
             return_fields=True,
             collision_operator=_resolve_config_collision_operator(time_cfg, params, G0),
+            return_solve_stats=return_solve_stats,
         ),
     )

@@ -1543,7 +1543,12 @@ def test_integrate_linear_implicit_cached_sampled_path(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "gkx.solvers_linear_implicit.gmres",
-        lambda matvec, rhs, **kwargs: SimpleNamespace(x=rhs, converged=True),
+        lambda matvec, rhs, **kwargs: SimpleNamespace(
+            x=rhs,
+            converged=True,
+            residual_norm=jnp.zeros((), dtype=jnp.float32),
+            iterations=jnp.asarray(0, dtype=jnp.int32),
+        ),
     )
     monkeypatch.setattr(
         "gkx.solvers_linear_implicit.linear_rhs_cached",

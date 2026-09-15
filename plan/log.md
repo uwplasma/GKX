@@ -13476,3 +13476,110 @@ the float32 and float64 selections, release and evidence-ledger tests, ruff, myp
 both manifest checks and gitleaks were re-run on the merged tree. PR #240 is ready
 for the lead's merge chain; its float32 `python-floor` step on Linux x86 is the
 first check of the arm64-measured roundoff bound.
+
+## 2026-09-15 — Q15 solver status on results
+
+Branch `fix/solver-status-on-results`, merged with `main` at `7d94d5986`; `src/`,
+`tests/` and `tools/` are identical between that merge's two bases, so results measured
+on the pre-merge base still describe this code. Replaces the paused entry of 2026-09-14.
+
+**Contract.**
+- Eigen: `EigenSolveStatus(method, route, residual, tolerance, certified, inner)`.
+  `residual` is `_eigenpair_relative_residual` of the returned pair on every route (the
+  adaptive gate divides by |λ|‖v‖ only, so its pair is recomputed with the shared
+  definition, which is never larger). `route` names the method that produced the pair;
+  a shift-invert fallback reports its fallback. `inner` is the shift-invert build's
+  inner FGMRES summary (converged, solves, max relative residual, iterations, tolerance,
+  preconditioner), else `None`. `dominant_eigenpair(..., return_status=True)` appends
+  it. The gates are unchanged, so `certified=False` comes only from a raw route with
+  `certify=False`.
+- Scans: `ImplicitSolveStats(max_relative_residual, max_iterations, solves,
+  unconverged_solves)`, four scalars carried through `lax.scan`/`fori_loop` in the
+  implicit linear scan, both linear diagnostics scan forms (explicit methods carry
+  `None`, which adds no leaves) and the cached IMEX scan. IMEX returns SOLVAX's status
+  from `linear_solve(..., has_aux=True)` in `solve_imex_step_with_stats`;
+  `solve_imex_step` keeps its graph. No host callback runs inside a scan.
+- Results: trailing `RuntimeLinearResult.eigen_status`,
+  `RuntimeLinearResult.implicit_solve` and `RuntimeNonlinearResult.implicit_solve`
+  (default `None`); `summary()` adds flat `eigen_*` and `implicit_*` keys, `None` where
+  no such solve ran. Library integrators accept `return_solve_stats=True` and append the
+  stats (`None` for methods without an implicit solve); default returns are unchanged.
+- The runtime check lives in `workflows/runtime/solver_status.py`
+  (`solve_stats_request`, `checked_solve_summary`), imported by both workflow
+  dispatchers, so `workflows/nonlinear.py` stays at 1022 lines under its unchanged
+  1023-line budget.
+
+**Policy: fail closed at the host boundary**, as #233 does for eigenpairs. A traced
+step cannot raise, so `run_runtime_linear` (`method="implicit"`, phi and density paths)
+and `run_runtime_nonlinear` (IMEX final-state route; the diagnostics route already
+rejects IMEX) raise `RuntimeError("<label>: k of n implicit GMRES solves did not
+converge (max_relative_residual=…, max_iterations=…); …")` and never return a trajectory
+with an unconverged implicit step. No TOML key is added. A float32 probe on a reduced
+Cyclone runtime deck (Nl4/Nm8, dt .05, 40 implicit steps) converged every solve within 4
+iterations at max relative residual 5.7e-7 in float32 and x64, so SOLVAX's flag needs no
+dtype floor on this route.
+
+**HLO** (compile-only optimized HLO, 4×4×8 Cyclone, Nl2/Nm4, damping preconditioner;
+baseline is a clean `ccdd4bf12`; re-measured after the merge with identical counts).
+
+| graph (float32 / x64 instructions) | before | after, stats not requested | after, `return_solve_stats=True` |
+|---|---|---|---|
+| implicit linear scan | 3834 / 3835 | 3834 / 3835 | 4443 / 4452 |
+| implicit linear, stride 2 | 3945 / 3946 | 3945 / 3946 | 4602 / 4607 |
+| implicit linear diagnostics | 3883 / 3884 | 3883 / 3884 | 4492 / 4501 |
+| rk4 linear diagnostics (control) | 9395 / 9470 | 9395 / 9470 | — |
+| cached IMEX scan | 3968 / 3982 | 3968 / 3982 | 4486 / 4729 |
+| IMEX value_and_grad | 7012 / 7013 | 7012 / 7013 | — |
+| IMEX value_and_grad, checkpointed | 8716 / 8718 | 8716 / 8718 | — |
+
+Graphs that do not request stats keep identical counts and op ledgers. With stats, FFTs
+go 16→20 and copies 20→25 on the implicit linear scan. Attribution: folding only the
+iteration count gives 3853 instructions with 16 FFTs; reading `converged` alone gives
+4403 with 20. The cost is SOLVAX's true-residual recomputation, one operator application
+per solve that XLA removes when nothing reads it, plus about 19 scalar instructions. No
+jit static argument or compile key is added. No timing is reported (shared machine).
+
+**Tests** (x64 unless noted; one process at a time, `nice -n 10`, load below 20).
+
+| selection | result |
+|---|---|
+| `tests/unit/solvers/test_linear_krylov_core.py` | 98 passed |
+| `tests/unit/solvers/test_time_integrators.py` | 97 passed (new status tests also pass in float32) |
+| `tests/integration/test_adaptive_eigenmodes.py` | 8 passed, 3 skipped |
+| `tests/integration/runtime/test_runtime_runner.py` | 170 passed |
+| `tests/unit/objectives/test_autodiff_solver_objectives.py` | 97 passed |
+| `tests/unit/linear/test_linear.py -k "krylov or eigen or shift or implicit or linked"` | 16 passed |
+| `tests/unit/linear/test_linear_helpers_extra.py` | 61 passed |
+| `tests/unit/nonlinear/test_nonlinear.py -k "implicit or imex or IMEX"` | 9 passed |
+| `tests/unit/nonlinear/test_nonlinear_helpers_extra.py` | 82 passed |
+| `tests/unit/api/test_public_types.py tests/unit/operators/test_nonlinear_operator_packages.py` | 37 passed |
+| `tests/integration/runtime/test_cli.py -k "final_state or krylov or Krylov"` | 2 passed |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k "ky_diagnostics or krylov or implicit"` | 4 passed |
+| `tests/unit/parallel/test_parallel_linear_velocity.py` (4 forced host devices) | 71 passed |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+New tests: a starved inner budget is carried by both implicit scan forms and refused by
+the host gate while a converged budget passes; the IMEX status step returns the plain
+step's state and gradient and counts a starved solve; the certified propagator pair
+reports its residual, tolerance and route; both runtime implicit paths and the IMEX
+final-state route request stats and fail closed; the Krylov fallback result carries
+`eigen_status`. Five fakes changed shape only: two runtime eigenpair fakes return a
+status, and three `gmres`/IMEX fakes gain the SOLVAX status fields the scans now read.
+No asserted number changed.
+
+Checks: ruff 0.16.4 check and format, `mypy` as CI (185 source files), `sphinx -W`,
+`check_package_architecture_manifest.py`, `check_repository_size_manifest.py`, gitleaks on
+the range.
+
+**Manifest.** `installable_source_python_lines` 89618 → 90139 and `test_python_lines`
+88428 → 88728, both measured; tool lines unchanged at 78165; the new module leaves the
+source file count (185) under its baseline (193); `workflows/nonlinear.py` complexity
+budget unchanged at 1023. `tools/validation_coverage_manifest.toml` gives
+`gkx.workflows.runtime.solver_status` to the `orchestration_scan` owner beside `results`.
+
+**Follow-up for the plan.** The IMEX diagnostics scan (`integrate_nonlinear_imex_diagnostics`,
+via `make_imex_diagnostic_step`) and the sheared IMEX route (`solve_imex_step` in
+`solvers_nonlinear_state_integration.py`) still carry no `ImplicitSolveStats`, and the
+artifact summary JSON does not record solver status. A later row should thread the stats
+through that diagnostics carry and the sheared scan, apply the same host check wherever a
+runtime route reaches them, and write the status into saved summaries.

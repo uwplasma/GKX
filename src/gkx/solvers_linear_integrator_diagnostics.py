@@ -25,7 +25,9 @@ from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.solvers_linear_implicit import (
     _ImplicitSolveOptions,
     _build_implicit_operator,
+    ImplicitSolveStats,
     _build_implicit_solve_step,
+    _empty_implicit_solve_stats,
 )
 from gkx.solvers_time_explicit_steps import _linear_native_step
 
@@ -182,6 +184,11 @@ def _diagnostic_sample(
     return phi, density
 
 
+# One step maps (state, carried solve status) to the same pair. Explicit
+# methods carry None; the implicit route folds ImplicitSolveStats.
+AdvanceFn = Callable[[jnp.ndarray, Any], tuple[jnp.ndarray, Any]]
+
+
 def _every_step_scan(
     G0: jnp.ndarray,
     cache: LinearCache,
@@ -190,14 +197,15 @@ def _every_step_scan(
     *,
     dt_val: jnp.ndarray,
     steps: int,
-    advance: Callable[[jnp.ndarray], jnp.ndarray],
+    advance: AdvanceFn,
     species_index: int | None,
     record_hl_energy: bool,
     show_progress: bool,
     collision_operator: Any | None = None,
-) -> tuple[jnp.ndarray, tuple[jnp.ndarray, ...]]:
-    def step(G_in: jnp.ndarray, idx: jnp.ndarray):
-        G_out = advance(G_in)
+    initial_stats: ImplicitSolveStats | None = None,
+) -> tuple[tuple[jnp.ndarray, Any], tuple[jnp.ndarray, ...]]:
+    def step(carry: tuple[jnp.ndarray, Any], idx: jnp.ndarray):
+        G_out, stats = advance(*carry)
         outputs = _diagnostic_sample(
             G_out,
             cache,
@@ -217,9 +225,9 @@ def _every_step_scan(
             outputs[1],
             show_progress=show_progress,
         )
-        return G_out, outputs
+        return (G_out, stats), outputs
 
-    return jax.lax.scan(step, G0, jnp.arange(steps))
+    return jax.lax.scan(step, (G0, initial_stats), jnp.arange(steps))
 
 
 def _strided_sample_scan(
@@ -231,17 +239,18 @@ def _strided_sample_scan(
     dt_val: jnp.ndarray,
     steps: int,
     sample_stride: int,
-    advance: Callable[[jnp.ndarray], jnp.ndarray],
+    advance: AdvanceFn,
     species_index: int | None,
     record_hl_energy: bool,
     show_progress: bool,
     collision_operator: Any | None = None,
-) -> tuple[jnp.ndarray, tuple[jnp.ndarray, ...]]:
-    def sample_step(G_in: jnp.ndarray, idx: jnp.ndarray):
-        def inner_step(_i: jnp.ndarray, g: jnp.ndarray) -> jnp.ndarray:
-            return advance(g)
+    initial_stats: ImplicitSolveStats | None = None,
+) -> tuple[tuple[jnp.ndarray, Any], tuple[jnp.ndarray, ...]]:
+    def sample_step(carry: tuple[jnp.ndarray, Any], idx: jnp.ndarray):
+        def inner_step(_i: jnp.ndarray, inner: tuple[jnp.ndarray, Any]):
+            return advance(*inner)
 
-        G_out = jax.lax.fori_loop(0, sample_stride, inner_step, G_in)
+        G_out, stats = jax.lax.fori_loop(0, sample_stride, inner_step, carry)
         outputs = _diagnostic_sample(
             G_out,
             cache,
@@ -262,10 +271,10 @@ def _strided_sample_scan(
             show_progress=show_progress,
             step_multiplier=sample_stride,
         )
-        return G_out, outputs
+        return (G_out, stats), outputs
 
     num_samples = steps // sample_stride
-    return jax.lax.scan(sample_step, G0, jnp.arange(num_samples))
+    return jax.lax.scan(sample_step, (G0, initial_stats), jnp.arange(num_samples))
 
 
 def integrate_linear_diagnostics(
@@ -290,11 +299,15 @@ def integrate_linear_diagnostics(
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
     implicit_preconditioner: PreconditionerSpec = None,
-) -> (
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-    | tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]
-):
-    """Integrate and return (G_out, phi_t, density_t) for diagnostics."""
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
+    """Integrate and return (G_out, phi_t, density_t) for diagnostics.
+
+    ``record_hl_energy`` appends ``hl_t``. ``return_solve_stats=True`` appends
+    the implicit GMRES convergence summary as the last element
+    (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`, or ``None`` for
+    methods without an implicit solve).
+    """
 
     terms_use = terms or LinearTerms()
     _validate_linear_sampling(steps=steps, sample_stride=sample_stride)
@@ -345,8 +358,8 @@ def integrate_linear_diagnostics(
             include_collisions=collision_operator is None,
         )
 
-        def advance(state: jnp.ndarray) -> jnp.ndarray:
-            return _linear_native_step(
+        def advance(state: jnp.ndarray, stats: Any) -> tuple[jnp.ndarray, Any]:
+            next_state = _linear_native_step(
                 state,
                 damping,
                 dt_val,
@@ -355,9 +368,14 @@ def integrate_linear_diagnostics(
                     value, cache_use, params, terms_use, dt_val, collision_operator
                 )[0],
             )
+            return next_state, stats
 
+    # Explicit methods carry None, which adds no leaves to the scan carry.
+    initial_stats = (
+        _empty_implicit_solve_stats(G.dtype) if method == "implicit" else None
+    )
     if sample_stride <= 1:
-        G_out, outputs = _every_step_scan(
+        (G_out, solve_stats), outputs = _every_step_scan(
             G,
             cache_use,
             params,
@@ -369,9 +387,10 @@ def integrate_linear_diagnostics(
             record_hl_energy=record_hl_energy,
             show_progress=show_progress,
             collision_operator=collision_operator,
+            initial_stats=initial_stats,
         )
     else:
-        G_out, outputs = _strided_sample_scan(
+        (G_out, solve_stats), outputs = _strided_sample_scan(
             G,
             cache_use,
             params,
@@ -384,14 +403,12 @@ def integrate_linear_diagnostics(
             record_hl_energy=record_hl_energy,
             show_progress=show_progress,
             collision_operator=collision_operator,
+            initial_stats=initial_stats,
         )
     if squeeze_species:
         G_out = G_out[0]
-    if record_hl_energy:
-        phi_t, density_t, hl_t = outputs
-        return G_out, phi_t, density_t, hl_t
-    phi_t, density_t = outputs
-    return G_out, phi_t, density_t
+    result = (G_out, *outputs)
+    return (*result, solve_stats) if return_solve_stats else result
 
 
 __all__ = ["integrate_linear_diagnostics"]

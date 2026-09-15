@@ -1805,7 +1805,7 @@ def test_apply_collision_split_and_nonlinear_wrapper_routing(monkeypatch) -> Non
 
     monkeypatch.setattr(
         "gkx.solvers_nonlinear_state_integration.integrate_nonlinear_imex_cached",
-        lambda *args, **kwargs: ("imex", "fields"),
+        lambda *args, **kwargs: ("imex", "fields", "stats"),
     )
     assert integrate_nonlinear_cached(
         G,
@@ -2669,6 +2669,8 @@ def test_integrate_nonlinear_imex_cached_shape_mismatch_and_zero_nonlinear(
         lambda matvec, rhs, **kwargs: SimpleNamespace(
             x=gmres_calls.append(rhs.size) or rhs,
             converged=True,
+            residual_norm=jnp.zeros((), dtype=jnp.float32),
+            iterations=jnp.asarray(0, dtype=jnp.int32),
         ),
     )
     monkeypatch.setattr(

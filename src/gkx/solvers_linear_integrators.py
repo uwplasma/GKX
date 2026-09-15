@@ -633,8 +633,16 @@ def integrate_linear(
     show_progress: bool = False,
     parallel: Any | None = None,
     collision_operator: CollisionOperator | None = None,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Time integrate the linear system using a fixed-step scheme."""
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
+    """Time integrate the linear system using a fixed-step scheme.
+
+    ``return_solve_stats=True`` appends the convergence summary of the implicit
+    GMRES solves (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`) for
+    ``method="implicit"`` and ``None`` for methods without an implicit solve.
+    """
+    if return_solve_stats and method != "implicit":
+        return (*integrate_linear(**{**locals(), "return_solve_stats": False}), None)
     terms = LinearTerms() if terms is None else terms
     _validate_linear_sampling(steps=steps, sample_stride=sample_stride)
     cache = _linear_cache_or_build(
@@ -690,6 +698,7 @@ def integrate_linear(
             implicit_preconditioner=implicit_preconditioner,
             checkpoint=checkpoint,
             sample_stride=sample_stride,
+            return_solve_stats=return_solve_stats,
         )
     if parallel_strategy != "serial":
         return _dispatch_parallel_linear(

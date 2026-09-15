@@ -921,7 +921,14 @@ recursive = true
 # power and inner-GMRES vectors, a seed guard, and covered-column assembly in
 # the sparse route. Most of the lines are the docstrings that state why modes
 # outside every chain are decoupled; target unchanged.
-baseline = 89618
+# 89618 -> 90126: solver status on results (Q15). EigenSolveStatus on every
+# eigen route and RuntimeLinearResult; ImplicitSolveStats carried through the
+# implicit and IMEX scans with the host-side summary and fail-closed check;
+# return_solve_stats forwarded through the integrator entry points; the runtime
+# check lives in the new workflows/runtime/solver_status.py so
+# workflows/nonlinear.py stays under its 1023-line budget. Measured; target
+# unchanged.
+baseline = 90139
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1112,7 +1119,13 @@ recursive = true
 # +51: Q14. The window-gradient matrix checks its float32 adjoint against a
 # float64 centered difference, with the roundoff bound derived in plan/log.md,
 # and the precision banner no longer lists that matrix; no new test.
-baseline = 88479
+# +300 (88479 -> 88779 after Q14): solver status on results (Q15). A starved inner budget is
+# carried by both implicit scan forms and refused at the host; the IMEX status
+# step matches the plain step's state and VJP; a certified pair reports its
+# residual and route; both runtime implicit paths and the IMEX final-state route
+# fail closed; and three fakes gain the SOLVAX status fields the scans now read.
+# Measured; target unchanged.
+baseline = 88779
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -1446,6 +1446,128 @@ def test_implicit_maxiter_counts_iterations_on_both_implicit_routes(
     assert budgets and set(budgets) == {(4, 2)}
 
 
+@pytest.mark.parametrize("sample_stride", [1, 2])
+def test_implicit_scan_carries_unconverged_solves_to_the_host_gate(
+    monkeypatch: pytest.MonkeyPatch, sample_stride: int
+) -> None:
+    """A starved inner budget is visible in the scan result and refused at the host."""
+
+    monkeypatch.setattr(
+        implicit_linear,
+        "linear_rhs_cached",
+        lambda g, *_args, **_kwargs: (jnp.zeros_like(g), None),
+    )
+    # The warm start is x0 = G_in, so r0 = (1 - lambda) b. Three distinct
+    # eigenvalues other than 1 keep all three components: GMRES needs exactly
+    # three iterations, and a budget of two is starved at every precision.
+    diagonal = jnp.repeat(jnp.asarray([2.0, 3.0, 7.0]), 22)[:64]
+
+    def run(maxiter: int, tol: float):
+        solve_step = implicit_linear._build_implicit_solve_step(
+            cache=None,
+            params=None,
+            terms=None,
+            dt_val=jnp.asarray(0.1),
+            size=64,
+            shape=(64,),
+            matvec=lambda flat: diagonal * flat,
+            precond_op=None,
+            options=implicit_linear._ImplicitSolveOptions(
+                tol=tol, maxiter=maxiter, iters=0, relax=1.0, restart=4
+            ),
+        )
+        (_state, stats), _phi = implicit_linear._scan_implicit_outputs(
+            jnp.ones(64),
+            cache=None,
+            params=None,
+            terms=None,
+            dt_val=jnp.asarray(0.1),
+            solve_step=solve_step,
+            steps=4,
+            sample_stride=sample_stride,
+            checkpoint=False,
+        )
+        return stats
+
+    starved = run(maxiter=2, tol=1.0e-12)
+    assert int(starved.solves) == 4
+    assert int(starved.unconverged_solves) == 4
+    assert int(starved.max_iterations) <= 2
+    assert float(starved.max_relative_residual) > 1.0e-12
+    with pytest.raises(RuntimeError, match="4 of 4 implicit GMRES solves did not"):
+        implicit_linear.require_converged_implicit_solves(starved, label="probe")
+
+    summary = implicit_linear.require_converged_implicit_solves(
+        run(maxiter=20, tol=1.0e-6), label="probe"
+    )
+    assert summary.converged and summary.solves == 4
+    assert summary.unconverged_solves == 0 and summary.max_iterations <= 4
+    assert summary.max_relative_residual <= 1.0e-6
+
+
+def test_imex_step_status_matches_the_plain_step_and_its_vjp() -> None:
+    """The status form returns the same state and gradient and counts starvation."""
+
+    diagonal = jnp.repeat(jnp.asarray([1.0, 2.0, 5.0]), 3)
+    rhs = jnp.ones(9)
+    common = dict(
+        linear_rhs_fn=lambda g, *_args, **_kwargs: (jnp.zeros_like(g), None),
+        cache=SimpleNamespace(),
+        params=SimpleNamespace(),
+        linear_cfg=SimpleNamespace(),
+        external_phi=None,
+        dt_val=jnp.asarray(0.1),
+        implicit_iters=0,
+        implicit_relax=1.0,
+        matvec=lambda flat: diagonal * flat,
+        shape=(9,),
+        implicit_restart=4,
+    )
+    empty = implicit_linear._empty_implicit_solve_stats(rhs.dtype)
+    x, stats = imex_module.solve_imex_step_with_stats(
+        jnp.zeros(9), rhs, empty, implicit_tol=1.0e-6, implicit_maxiter=20, **common
+    )
+    plain = solve_imex_step(
+        jnp.zeros(9), rhs, implicit_tol=1.0e-6, implicit_maxiter=20, **common
+    )
+    np.testing.assert_array_equal(np.asarray(x), np.asarray(plain))
+    np.testing.assert_allclose(np.asarray(x), np.asarray(rhs / diagonal), rtol=1e-5)
+    assert (int(stats.solves), int(stats.unconverged_solves)) == (1, 0)
+
+    _x, starved = imex_module.solve_imex_step_with_stats(
+        jnp.zeros(9), rhs, stats, implicit_tol=1.0e-12, implicit_maxiter=1, **common
+    )
+    assert (int(starved.solves), int(starved.unconverged_solves)) == (2, 1)
+    assert float(starved.max_relative_residual) > 1.0e-12
+
+    def energy_plain(scale):
+        out = solve_imex_step(
+            jnp.zeros(9),
+            scale * rhs,
+            implicit_tol=1.0e-6,
+            implicit_maxiter=20,
+            **common,
+        )
+        return jnp.sum(out**2)
+
+    def energy_status(scale):
+        out, _ = imex_module.solve_imex_step_with_stats(
+            jnp.zeros(9),
+            scale * rhs,
+            empty,
+            implicit_tol=1.0e-6,
+            implicit_maxiter=20,
+            **common,
+        )
+        return jnp.sum(out**2)
+
+    np.testing.assert_allclose(
+        np.asarray(jax.grad(energy_status)(1.0)),
+        np.asarray(jax.grad(energy_plain)(1.0)),
+        rtol=1e-6,
+    )
+
+
 def test_make_imex_nonlinear_term_forwards_injected_kernels() -> None:
     seen: dict[str, object] = {}
 
