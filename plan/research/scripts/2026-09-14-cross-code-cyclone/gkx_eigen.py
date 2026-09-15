@@ -81,9 +81,17 @@ record: dict = {
     "x64": bool(jax.config.jax_enable_x64),
     "env": {
         k: os.environ.get(k)
-        for k in ("JAX_PLATFORMS", "JAX_ENABLE_X64", "GKX_X64", "XLA_FLAGS", "OMP_NUM_THREADS")
+        for k in (
+            "JAX_PLATFORMS",
+            "JAX_ENABLE_X64",
+            "GKX_X64",
+            "XLA_FLAGS",
+            "OMP_NUM_THREADS",
+        )
     },
-    "affinity": sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
+    "affinity": sorted(os.sched_getaffinity(0))
+    if hasattr(os, "sched_getaffinity")
+    else None,
     "loadavg_start": os.getloadavg(),
 }
 if not record["x64"] or not str(gkx.__file__).startswith(str(args.repo.resolve())):

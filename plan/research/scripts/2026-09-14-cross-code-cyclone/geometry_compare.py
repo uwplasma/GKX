@@ -76,7 +76,11 @@ def gkx_salpha(theta: np.ndarray) -> dict:
 
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
     th = np.asarray(theta, float)
-    out = {"theta": th, "bmag": np.asarray(geom.bmag(th), float), "gradpar": np.full_like(th, geom.gradpar())}
+    out = {
+        "theta": th,
+        "bmag": np.asarray(geom.bmag(th), float),
+        "gradpar": np.full_like(th, geom.gradpar()),
+    }
     gds2, _, _ = geom.metric_coeffs(th)
     out["gds2"] = np.asarray(gds2, float)
     cv, gb, _, _ = geom.drift_coeffs(th)
@@ -105,7 +109,15 @@ def main() -> None:
     a = p.parse_args()
     sets = {
         "S": ("gx", {"gx": gx(a.gx_s), "gs2": gs2(a.gs2_s)}),
-        "M": ("gs2", {"gs2": gs2(a.gs2_m), "stella": stella(a.stella_m), "gx": gx(a.gx_m), "gkx": eik(a.gkx_m)}),
+        "M": (
+            "gs2",
+            {
+                "gs2": gs2(a.gs2_m),
+                "stella": stella(a.stella_m),
+                "gx": gx(a.gx_m),
+                "gkx": eik(a.gkx_m),
+            },
+        ),
     }
     try:
         sets["S"][1]["gkx"] = gkx_salpha(sets["S"][1]["gx"]["theta"])
@@ -117,8 +129,10 @@ def main() -> None:
             for k in Q:
                 if k not in src:
                     continue
-                print(f"{geo},{code},{k},{at(src, k, 0.0):.5f},{at(src, k, math.pi):.5f},"
-                      f"{maxdiff(src, codes[ref], k):.2e},{ref}")
+                print(
+                    f"{geo},{code},{k},{at(src, k, 0.0):.5f},{at(src, k, math.pi):.5f},"
+                    f"{maxdiff(src, codes[ref], k):.2e},{ref}"
+                )
 
 
 if __name__ == "__main__":

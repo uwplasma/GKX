@@ -19,10 +19,20 @@ KY = ["0.15", "0.30", "0.40", "0.50", "0.55"]
 # GX shipped goldens (benchmarks/linear/ITG_cyclone/*_correct.out.nc, upstream 3865a537; Nl16 Nm48,
 # back-half mean of omega_kxkyt as the upstream check.py computes it). (gamma, omega)
 GX = {
-    "S": {"0.15": (0.05497, 0.12685), "0.30": (0.09303, 0.28199), "0.40": (0.08091, 0.37494),
-          "0.50": (0.05406, 0.45591), "0.55": (0.03460, 0.49835)},
-    "M": {"0.15": (0.05841, 0.09182), "0.30": (0.12586, 0.21547), "0.40": (0.14312, 0.30669),
-          "0.50": (0.13642, 0.39400), "0.55": (0.12594, 0.43364)},
+    "S": {
+        "0.15": (0.05497, 0.12685),
+        "0.30": (0.09303, 0.28199),
+        "0.40": (0.08091, 0.37494),
+        "0.50": (0.05406, 0.45591),
+        "0.55": (0.03460, 0.49835),
+    },
+    "M": {
+        "0.15": (0.05841, 0.09182),
+        "0.30": (0.12586, 0.21547),
+        "0.40": (0.14312, 0.30669),
+        "0.50": (0.13642, 0.39400),
+        "0.55": (0.12594, 0.43364),
+    },
 }
 
 
@@ -41,7 +51,14 @@ def ladder(rows: dict, code: str, geom: str, ky: str) -> str:
     for rung in ("r1", "r2", "r3", "r4"):
         r = rows.get(f"{code}_{geom}_ky{ky}_{rung}")
         if r is not None and r["settled"] in ("yes", "no"):
-            vals.append((rung, float(r["gamma_gx"]), float(r["omega_gx"]), r["settled"] == "yes"))
+            vals.append(
+                (
+                    rung,
+                    float(r["gamma_gx"]),
+                    float(r["omega_gx"]),
+                    r["settled"] == "yes",
+                )
+            )
     if not vals:
         return "not run"
     parts, verdict = [], None
@@ -58,7 +75,9 @@ def ladder(rows: dict, code: str, geom: str, ky: str) -> str:
         if verdict is None:
             verdict = "unconverged"
         elif abs((last[1] - vals[-2][1]) / last[1]) >= 0.02:
-            verdict = f"unconverged (last step {(last[1] - vals[-2][1]) / last[1]:+.1%})"
+            verdict = (
+                f"unconverged (last step {(last[1] - vals[-2][1]) / last[1]:+.1%})"
+            )
     return "; ".join(parts) + f" -> {verdict}"
 
 
@@ -76,8 +95,10 @@ def gkx(root: Path, geom: str, ky: str) -> str:
         if r.get("error"):
             out.append(f"Nl{nl}: rejected ({r['error'][:60]})")
         else:
-            out.append(f"Nl{nl} {r['gamma']:.6f} (omega {r['omega']:.5f}, res {r['residual']:.1e}, "
-                       f"{r['route_s']:.0f} s)")
+            out.append(
+                f"Nl{nl} {r['gamma']:.6f} (omega {r['omega']:.5f}, res {r['residual']:.1e}, "
+                f"{r['route_s']:.0f} s)"
+            )
     return "; ".join(out) if out else "not run"
 
 
@@ -92,7 +113,9 @@ def gyaradax(root: Path, ky: str) -> str:
             out.append(f"{rung}: no result")
             continue
         r = json.loads(lines[-1][7:])
-        out.append(f"{rung} {r['gamma_gx']:.5f} (drift {r['drift']:+.1e}, {r['wall_s']:.0f} s)")
+        out.append(
+            f"{rung} {r['gamma_gx']:.5f} (drift {r['drift']:+.1e}, {r['wall_s']:.0f} s)"
+        )
     return "; ".join(out) if out else "not run"
 
 
@@ -102,7 +125,9 @@ def main() -> None:
     for geom, codes in (("S", ["gs2"]), ("M", ["gs2", "stella"])):
         print(f"## geometry {geom}")
         for ky in KY:
-            print(f"ky {ky}: GX golden gamma {GX[geom][ky][0]:.5f} omega {GX[geom][ky][1]:.5f}")
+            print(
+                f"ky {ky}: GX golden gamma {GX[geom][ky][0]:.5f} omega {GX[geom][ky][1]:.5f}"
+            )
             for code in codes:
                 print(f"  {code}: {ladder(rows, code, geom, ky)}")
             print(f"  gkx: {gkx(root, geom, ky)}")
