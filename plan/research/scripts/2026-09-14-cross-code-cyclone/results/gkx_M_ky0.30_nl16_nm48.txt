@@ -1,9 +1,0 @@
-[     1.95s] env ok gkx=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
-[     5.68s] status: building runtime geometry
-[     5.69s] status: building spectral grid
-[     5.69s] status: building runtime linear parameters
-[     5.69s] status: selected ky index 6 at ky=0.3000
-[     5.71s] status: starting Krylov solve
-[     5.71s] status: building linear cache
-[     7.70s] status: krylov method=adaptive dim=24 restarts=2
-[     7.70s] status: running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09

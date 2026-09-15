@@ -1,9 +1,12 @@
-[     2.35s] env ok gkx=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
-[     4.00s] status: building runtime geometry
-[     4.00s] status: building spectral grid
-[     4.00s] status: building runtime linear parameters
-[     4.00s] status: selected ky index 11 at ky=0.5500
-[     4.02s] status: starting Krylov solve
-[     4.02s] status: building linear cache
-[     7.05s] status: krylov method=adaptive dim=24 restarts=2
-[     7.05s] status: running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09
+[     1.16s] env ok gkx=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
+[     2.05s] status: building runtime geometry
+[     2.05s] status: building spectral grid
+[     2.06s] status: building runtime linear parameters
+[     2.06s] status: selected ky index 11 at ky=0.5500
+[     2.07s] status: starting Krylov solve
+[     2.07s] status: building linear cache
+[     3.85s] status: krylov method=adaptive dim=24 restarts=2
+[     3.85s] status: running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09
+[  2862.71s] status: adaptive solve finished with eig=0.0338921-0.498189j residual=2.89e-14 converged=True stable=True
+[  2862.80s] status: Krylov solve complete: gamma=0.033892 omega=0.498189
+RESULT {"geometry": "S", "ky_target": 0.55, "Nl": 16, "Nm": 48, "deck": "cyclone.toml", "deck_sha256": "f2db5b3dce3e480ebd30c80d9a2849c9c10ace0bd3bcbb64e3a844bca40be405", "host": "pop-os", "python": "3.11.15", "jax": "0.10.2", "numpy": "2.4.6", "solvax": "0.20.0", "gkx_file": "/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/src/gkx/__init__.py", "x64": true, "env": {"JAX_PLATFORMS": "cpu", "JAX_ENABLE_X64": "true", "GKX_X64": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=true", "OMP_NUM_THREADS": "8"}, "affinity": [28, 29, 30, 31, 32, 33, 34, 35], "loadavg_start": [11.69287109375, 7.73486328125, 6.60986328125], "n": 73728, "shape": [1, 16, 48, 1, 1, 96], "krylov_cfg": {"krylov_dim": "24", "restarts": "2", "omega_min_factor": "0.0", "omega_target_factor": "0.0", "omega_cap_factor": "2.0", "omega_sign": "0", "method": "adaptive", "power_iters": "200", "power_dt": "0.01", "propagator_steps": "1", "shift": "None", "shift_source": "propagator", "shift_tol": "0.0001", "shift_maxiter": "50", "shift_restart": "20", "shift_solve_method": "batched", "shift_preconditioner": "auto", "shift_selection": "targeted", "shift_outer_residual_tol": "1e-06", "mode_family": "auto", "fallback_method": "propagator", "fallback_real_floor": "-1e-06", "continuation": "False", "continuation_selection": "overlap", "certify": "True"}, "residual_gate": 1e-09, "route_s": 2860.7499164030887, "gamma": 0.03389208605721717, "omega": 0.4981885382801229, "result_ky": 0.55, "residual": 2.890365169668647e-14, "certified": true, "laguerre_spectrum": [0.3693550873675094, 0.12868007385642777, 0.08990812918605834, 0.04565007599227279, 0.03740883737537853, 0.046897903132954805, 0.04817692397272488, 0.036811563742562566, 0.024271724423011717, 0.02103554863344524, 0.027236906218317203, 0.03525408833606664, 0.03725367450047337, 0.030083899731113677, 0.01702787764643488, 0.004947685885248209], "hermite_upper_quarter_fraction": 0.0362604980582072, "laguerre_upper_quarter_fraction": 0.08931313776327016, "error": null, "statuses": [[2.054, "building runtime geometry"], [2.054, "building spectral grid"], [2.057, "building runtime linear parameters"], [2.059, "selected ky index 11 at ky=0.5500"], [2.071, "starting Krylov solve"], [2.071, "building linear cache"], [3.853, "krylov method=adaptive dim=24 restarts=2"], [3.853, "running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09"], [2862.712, "adaptive solve finished with eig=0.0338921-0.498189j residual=2.89e-14 converged=True stable=True"], [2862.803, "Krylov solve complete: gamma=0.033892 omega=0.498189"]], "peak_rss_kib": 1264020, "loadavg_end": [36.59228515625, 33.2783203125, 29.86572265625]}

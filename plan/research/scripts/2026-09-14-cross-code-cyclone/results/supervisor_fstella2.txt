@@ -1,0 +1,12 @@
+lane=fstella2 pid=1116298 start=2026-09-14T21:20:14-05:00 np=5 cpus=23-27 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_stella2.txt
+stella stella_M_ky0.55_r2 start=2026-09-14T21:20:14-05:00
+stella stella_M_ky0.55_r2 rc=2 wall=76.43 end=2026-09-14T21:21:30-05:00
+stella stella_M_ky0.30_r3 start=2026-09-14T21:21:30-05:00
+stella stella_M_ky0.30_r3 rc=0 wall=416.95 end=2026-09-14T21:28:27-05:00
+stella stella_M_ky0.55_r3 start=2026-09-14T21:28:27-05:00
+stella stella_M_ky0.55_r3 rc=0 wall=423.63 end=2026-09-14T21:35:31-05:00
+stella stellaT_M_ky0.30_r1 start=2026-09-14T21:35:31-05:00
+stella stellaT_M_ky0.30_r1 rc=2 wall=23.20 end=2026-09-14T21:35:54-05:00
+stella stellaT_M_ky0.30_r2 start=2026-09-14T21:35:54-05:00
+stella stellaT_M_ky0.30_r2 rc=2 wall=137.56 end=2026-09-14T21:38:11-05:00
+lane=fstella2 ALL DONE 2026-09-14T21:38:11-05:00

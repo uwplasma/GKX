@@ -1,0 +1,8 @@
+lane=gyaradax pid=1172299 start=2026-09-14T23:36:15-05:00 gpu=GPU-c64146c9-227c-496f-974a-d1a66ec55673 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_gyaradax.txt
+gyaradax ky=0.55 rung=g1 start=2026-09-14T23:36:15-05:00
+gyaradax ky=0.55 rung=g1 rc=0 wall=66.23 end=2026-09-14T23:37:21-05:00
+gyaradax ky=0.30 rung=g2 start=2026-09-14T23:37:22-05:00
+gyaradax ky=0.30 rung=g2 rc=0 wall=79.60 end=2026-09-14T23:38:41-05:00
+gyaradax ky=0.55 rung=g2 start=2026-09-14T23:38:41-05:00
+gyaradax ky=0.55 rung=g2 rc=0 wall=224.80 end=2026-09-14T23:42:26-05:00
+lane=gyaradax ALL DONE 2026-09-14T23:42:26-05:00

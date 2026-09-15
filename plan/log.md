@@ -13533,3 +13533,229 @@ were sent TERM:
 
 Each was verified absent at 13:17:36; at that time neither GPU listed a compute process. No local
 process runs.
+
+## 2026-09-14 — Q20 cross-code linear Cyclone controls (final)
+
+Queue row Q20 (§2.4), finished after the pause recorded in the entry above; this entry supersedes that
+entry's preliminary numbers. Measurement only: no source, test, default or reference change. Files:
+`plan/research/scripts/2026-09-14-cross-code-cyclone/`; manifest, predictions and ladders registered
+before any run in `bb55831bf`. Final tables: `results/final_tables.txt` (`summarize.py`).
+
+**Question.** For the adiabatic-electron Cyclone base case, do GS2 8.2.1 and stella v1.0, grid codes
+with physical velocity grids, agree with GKX's certified eigenpairs once the setups are matched? Why did
+the install checks differ by ≈2×? Does a grid code converge at the GX-normalized ky = .55, where Q8
+found the Hermite–Laguerre γ unconverged in Nl?
+
+**Case.** GX/GKX units (L_ref = a, v_t = √(T/m)): q 1.4, ŝ 0.8, ε 0.18, R/a 2.77778, a/L_T 2.49,
+a/L_n 0.8, τ = 1, collisionless, electrostatic.
+- **S (s-alpha):** GS2, GKX, gyaradax (rungs g1: nperiod 3, ns 96, nvpar 32, nmu 8, dt .003; g2: nperiod 5, ns 144, nvpar 64, nmu 16; GKW parallel dissipation `disp_par` = 1, other dissipation 0).
+- **M (circular local Miller, rhoc 0.5, R_maj = R_geo = 2.77778):** GS2, stella (v1.0 has no s-alpha), GKX.
+
+**Normalization map.**
+
+| code | L_ref | v_ref | ky input for ky_GX | γ_GX from the code's γ |
+|---|---|---|---|---|
+| GX, GKX | a | √(T/m) | ky_GX | γ |
+| GS2 8.2.1, stella v1.0 (Q20 inputs) | a | √(2T/m) | √2·ky_GX | √2·γ |
+| GS2 shipped test, stella install check | R | √(2T/m) | √2·ky_GX | √2·γ·a/R = γ·√2/2.77778 |
+| gyaradax (GKW conventions) | R | √(2T/m) | `krhomax` = √2·ky_GX | γ·√2/2.77778 |
+
+ω converts like γ. GS2 output and `*.eiknc.nc` files store 2× the GX `gbdrift`/`cvdrift`; stella stores
+the GX convention. GS2 s-alpha with L_ref = a uses `epsl` = 2a/R = 0.72 and `pk` = `epsl`/q. The geometry
+coefficients agree across codes after this map: s-alpha GS2/GKX/GX to ≤ 7e-8; Miller stella and GX/GKX
+against GS2 to ≤ 1.3% (`results/geometry_compare.txt`).
+
+**Convergence labels.** A value is *converged* when a registered ladder step changes γ by < 2% between two
+settled rungs (`manifest.toml`); otherwise the whole ladder is shown and labeled *unconverged*. GKX values
+are single-resolution certified eigenpairs (relative residual ≤ 1e-9) at the GX deck's (Nz96, Nl16, Nm48)
+unless an Nl rung is listed. GX values are the shipped goldens (upstream `3865a537`, Nl16/Nm48 time
+integration, back-half mean as in `check.py`; rank-3 source, not converged values).
+
+**s-alpha (γ, ω in GX units).**
+
+| ky | GS2 ladder r1 / r2 / r3 / r4 | GS2 label | GKX certified | GX golden | gyaradax g1 / g2 (γ only) |
+|---|---|---|---|---|---|
+| .15 | .04829 / .05420 | unconverged (r1→r2 +10.9%; r3/r4 not run) | not run | .05497 / .12685 | not run |
+| .30 | .08781 / .09089 / .09171 / .09219 | **converged .09219, ω .2840** (r3→r4 +0.5%) | .0930912 / .282033 (res 1.1e-14) | .09303 / .28199 | .09202 / .09209, **converged .09209** (+0.08%) |
+| .40 | .06721 / .07829 | unconverged (+14.2%; r3/r4 not run) | not run | .08091 / .37494 | not run |
+| .50 | .01023 (unsettled) / .05352 | unconverged (r3/r4 not run) | not run | .05406 / .45591 | not run |
+| .55 | .00900 (unsettled) / .03907 / .02200 / .02780 | **unconverged** (+77%, −78%, +21%) | Nl16 .033892 / .498189 (res 2.9e-14); Nl24 .036126 / .489348 (res 2.1e-14; Nl16→24 +6.6%, unconverged) | .03460 / .49835 | .02486 / .02485, **converged .02485** (−0.04%) |
+
+**ky .55 one-axis attribution** at the GS2 r3 base (ntheta 48, nperiod 3, negrid 16, ngauss 8, delt .025, t = 1200):
+
+| variant | γ | ω | wall |
+|---|---:|---:|---:|
+| r3 base | .022001 | .47482 | 653 s |
+| nperiod 4 | .022001 | .47482 | 962 s |
+| ntheta 64 | .021984 | .47463 | 1032 s |
+| negrid 24, ngauss 12 | .027723 | .49587 | 1105 s |
+| ngauss 12 only | .022001 | .47482 | 1200 s (8 ranks) |
+| r4 (all three) | .027799 | .49570 | 2947 s |
+
+nperiod 3→4 changes nothing to six digits and ntheta 48→64 changes γ by −0.08%. Refining the velocity grid alone (negrid 16→24, ngauss 8→12) moves γ +26% and reproduces r4 to 0.3%. Raising ngauss 8→12 alone changes nothing (.022001), so the sensitive axis is the energy grid (negrid 16→24, run with ngauss 12). The s-alpha ky .55 ladder is limited by GS2's energy grid: it does not converge this weakly growing mode on the rungs run here (negrid ≤ 24).
+
+**Miller (γ, ω in GX units).**
+
+| ky | GS2 ladder | GS2 label | stella ladder r1 / r2 / r3 | stella label | GKX certified | GX golden |
+|---|---|---|---|---|---|---|
+| .15 | .05495 / .05808 / .05783 | **converged .05783**, ω .0916 | not run | — | not run | .05841 / .09182 |
+| .30 | .12389 / .12529 / .12546 | **converged .12546**, ω .2157 | .17481 / .17496 / .17496 | **converged .17496**, ω .2512 | not run (killed at the pause) | .12586 / .21547 |
+| .40 | .14326 / .14235 / .14297 | **converged .14297**, ω .3078 | not run | — | not run | .14312 / .30669 |
+| .50 | .13722 / .13393 / .13636 | **converged .13636**, ω .3980 (r2→r3 +1.8%) | not run | — | not run | .13642 / .39400 |
+| .55 | .12414 / .12110 / .12493 / .12516 | **converged .12516**, ω .4399 (r3→r4 +0.2%) | .18323 / .18621 / .18451 | **converged .18451**, ω .4809 | .125975 / .433617 (res 8.6e-15, 2836 s) | .12594 / .43364 |
+
+**The install-check gap.** At ky_gs2 = 0.5, L_ref = R, the ratio .3688/.1707 = 2.16 factors into:
+- **Geometry model, 1.597×:** GS2 on stella's circular Miller surface against GS2 s-alpha.
+- **Code difference, 1.376×:** stella against GS2 on that same surface.
+- **GS2 shipped grids and `fexpr`, < 2%.**
+
+On the matched Q20 input the stella/GS2 ratio persists at converged resolution: 1.395 at ky .30 and 1.474 at
+ky .55 (ω +16% and +9%).
+
+**stella-excess discriminators** (stella Miller ky .30, r1 grids, t = 150 unless stated; the GS2 target is .1255 / .2157):
+
+| variant | γ | ω | settled |
+|---|---:|---:|---|
+| baseline | .17304 | .25264 | yes |
+| x/y drift ×0.5 | .16327 | .09750 | yes |
+| x/y drift ×2 | .12410 | .22469 | no (−21%) |
+| x/y drift ×2, t = 300 | .13320 | .19710 | no (+1.3%) |
+| drive (`wstarknob`) ×0.5 | .07081 | .12002 | no |
+| drive ×1/√2 | .10030 | .27559 | no |
+| drive ×0.85 | .13840 | .26138 | no |
+| `bess_fac` √2 | .13660 | .26079 | yes |
+| GS2 r2 `bess_fac` 1/√2 (GS2, not stella) | .14865 | .20609 | yes |
+| GS2 r2 `bess_fac` √2 | .08429 | .21879 | yes |
+
+No single knob moves stella onto GS2's settled (γ, ω). Halving the drifts leaves γ within 6%, so the
+excess is not a doubled drift. The drive prefactor is exactly 1 (0.3629 × 2.7554 = 1.000) and the geometry
+coefficients agree to ≈1%. The cause is **open**.
+
+**Verdicts.**
+- **P1 fails.**
+  - The install gap is mostly the geometry model (1.6×).
+  - But on identical, resolution-converged Miller input stella's γ is 1.40–1.47× GS2's.
+  - GS2 agrees with the independently developed GX goldens to ≤ 1.0% at every Miller ky.
+  - The disagreement is therefore stella-specific; it is not a setup difference.
+- **P2 passes at ky .30, the only s-alpha point where GS2 converged.** Against GKX: γ −1.0%, ω +0.7%. gyaradax's converged γ (.09209) is −1.1% from GKX and −0.1% from GS2. It is untested at ky .15, .40 and .50 (GS2 ladders incomplete).
+- **P3 is not tested at ky ≤ .50 for GKX** (the Miller GKX pair at ky .30 was killed at the pause). Its stella clause fails: stella is +39% at ky .30. Beyond the registered range, at ky .55, GKX's certified Miller pair is within +0.65% in γ and −1.4% in ω of the converged GS2 reference.
+- **P4 fails.**
+  - GS2 s-alpha at ky .55 does not converge: the ladder oscillates between .022 and .039 up to r4.
+  - The swing is energy-grid resolution. The nperiod, ntheta and ngauss variants leave r3 unchanged; negrid 24 with ngauss 12 reproduces r4.
+  - GKX's certified s-alpha value rises from .033892 at Nl16 to .036126 at Nl24 (Nm48). Q8's Nm96 time fits fall with Nl, so the HL value at this ky is unconverged too.
+  - **No cross-code s-alpha reference is established at ky .55.** gyaradax, with a v∥–μ grid, converges on its ladder to .02485, inside GS2's unconverged bracket (.0220 at negrid 16, .0278 at negrid 24). Only one code gives a converged value, with a fixed numerical parallel dissipation, so it is a provisional value, not a reference. GKX's Nl16/Nl24 certified values (.0339/.0361) are 36–45% above it, and GX's Nl16 golden (.0346) is 39% above it.
+  - On Miller at ky .55 a converged grid-code reference exists: GS2 .12516, within 0.6% of the GX golden.
+  - stella is converged there too but disagrees (.18451).
+  - GKX's certified Miller pair agrees with that reference (.125975, +0.65%).
+- **P5:** see the cost table. The grid codes meet it for Miller and s-alpha ky .30, and gyaradax reaches its converged γ in under 5 min on one GPU; GKX's adaptive route
+  takes 21–80 min per point on 5–10 threads under load 25–40, above the predicted 10–20 min.
+
+**Cost to a converged γ** (office, wall).
+
+| code, point | first converged rung | that rung alone | cumulative ladder | cores |
+|---|---|---:|---:|---:|
+| GS2 S ky .30 | r3 (r2→r3 +0.9%) | 180 s | 206 s | 8 (r1/r2) / 5 (r3) |
+| GS2 M ky .30 | r2 (r1→r2 +1.1%) | 17.5 s | 24 s | 8 |
+| GS2 M ky .55 | r4 (r3→r4 +0.2%) | 836 s | 988 s | 8 |
+| stella M ky .30 | r2 (quiet-host re-timing) | 138 s | 161 s | 5 |
+| stella M ky .55 | r2 (r1→r2 +1.6%) | 76 s | 87 s | 5 |
+| GKX S ky .30, Nl16 | certified pair, single resolution | 1242 s | — | 10 threads |
+| GKX S ky .55, Nl16 | certified pair, not Nl-converged | 2861 s | — | 8 threads |
+| GKX S ky .55, Nl24 | certified pair (Nl16→24 +6.6%) | 4805 s | — | 5 threads |
+| GKX M ky .55, Nl16 | certified pair, single resolution | 2836 s | — | 8 threads |
+| gyaradax S ky .30 | g2 (g1→g2 +0.08%) | 79 s (20 s compile) | 116 s | 1 A4000 |
+| gyaradax S ky .55 | g2 (g1→g2 −0.04%) | 224 s | 289 s | 1 A4000 |
+
+Timings earlier than the finalize session (GS2 r1/r2/r3 and stella r1/r2 from 13:00 CDT) ran under core
+contention; stella was 16× slower then (r1 376 s against the quiet re-timing's 23 s).
+
+**Open items.**
+- The cause of the stella excess on Miller input.
+- Convergence of s-alpha GS2 at ky .15, .40 and .50, and at ky .55 in negrid beyond 24.
+- GKX Miller pairs at ky ≤ .50, and Nl ladders for GKX Miller.
+- An Nl ladder for GKX at ky .30.
+- gyaradax g3 and gyaradax at ky .15, .40 and .50; the dependence of the gyaradax value on its fixed `disp_par` = 1.
+- GX runs: not run (goldens used).
+- stella r3 at ky .15, .40 and .50.
+
+**Environment.**
+- **Host:** office, pop-os.
+- **Finalize session:** only cores 18–35 (outer `taskset` on every lane; 2–17 reserved for Q9, 1 for Q17).
+- **GS2 and stella:** GS2 8.2.1 `4d8c94bc` and stella v1.0 `058d98db` in micromamba `gk-fortran`, `mpirun
+  --bind-to none` with 5–8 ranks, `OMP_NUM_THREADS=1`.
+- **GKX:** staged from `2c38fa970` (the same source as the paused session), venv `gkx-nl` (Python 3.11.15,
+  JAX 0.10.2, SOLVAX 0.20.0), CPU, x64, `gkx.__file__` inside the run directory. `main` `7d94d5986` (#237,
+  #239, #241) was merged into the branch afterwards; the pairs were not re-run on it.
+- **gyaradax:** `8d9dc2d2`, JAX 0.11.1 CUDA 12, float64. It ran on GPU0 while GPU0 listed no compute process: ky .30 g1 in the paused session, the rest from 23:36 CDT after `nvidia-smi --query-compute-apps` came back empty. The runner re-checks before each run; host threads were pinned to cores 18–35.
+
+**Commands** (run directory `$R`):
+- `python cases.py write $R …`
+- `run_grid_queue.sh <queue> <lane> <ranks> <cpus>` under `taskset -c <cpus> setsid nohup`
+- `run_gkx_queue.sh <queue> <lane> <cpus> <threads>`
+- `gyaradax_salpha.py --ky-gx 0.30 --rung g1`
+- `fit.py $R`
+- `summarize.py results/`
+- `geometry_compare.py`
+
+The discriminator inputs are the r1 inputs with `&scale_gyrokinetic_terms` or `bess_fac` appended
+(`stellaD_*`). The one-axis GS2 inputs come from `cases.gs2_input` with a rung override (`gs2X_*`).
+
+**Artifact SHA-256 (first 16 hex digits)**, every file under this row's directory (`artifact_hashes.py`):
+- `artifact_hashes.py` 480b0238df906a4e
+- `cases.py` 23a3d4401a7d01c5
+- `cyclone_miller_linear.toml` 7c28a068401c5d24
+- `fit.py` 2d433b57b957e9ee
+- `geometry_compare.py` f8f63e77e1258dfb
+- `gkx_eigen.py` 9e40d4f1c8f78539
+- `gyaradax_salpha.py` fc39d03f1f178428
+- `manifest.toml` 0c4a908979e9671d
+- `results/final_tables.txt` aa3305fcf48f6467
+- `results/fit_diag_bess_fac.txt` 20ee1f8d0a7438ab
+- `results/fit_gs2_stella.txt` cc1cb433c34d6511
+- `results/geometry_compare.txt` 43c48ad264b037a5
+- `results/gkx_M_ky0.55_nl16_nm48.time.txt` 36398b64accc7b7f
+- `results/gkx_M_ky0.55_nl16_nm48.txt` 2e24807b0db6c199
+- `results/gkx_S_ky0.30_nl16_nm48.time.txt` 1e1905daad49e543
+- `results/gkx_S_ky0.30_nl16_nm48.txt` 51d917bff3cf3b5e
+- `results/gkx_S_ky0.55_nl16_nm48.time.txt` 73d5002279e823a3
+- `results/gkx_S_ky0.55_nl16_nm48.txt` 38e3d677b90949c7
+- `results/gkx_S_ky0.55_nl24_nm48.time.txt` 13210718e5c7c76e
+- `results/gkx_S_ky0.55_nl24_nm48.txt` 0b4a57ef6d209061
+- `results/gyaradax_S_ky0.30_g1.time.txt` 39d7e50d0e4b42f4
+- `results/gyaradax_S_ky0.30_g1.txt` 7f220cd7f456a145
+- `results/gyaradax_S_ky0.30_g2.time.txt` dc78ee4173bc20ea
+- `results/gyaradax_S_ky0.30_g2.txt` c1932bea67bdf5a2
+- `results/gyaradax_S_ky0.55_g1.time.txt` 877cd209f3097131
+- `results/gyaradax_S_ky0.55_g1.txt` ba4897d42ece3d68
+- `results/gyaradax_S_ky0.55_g2.time.txt` 6e0be5a17b337576
+- `results/gyaradax_S_ky0.55_g2.txt` e647e5a14743c5f3
+- `results/supervisor_fgkx.txt` a60eaeec2ae8b67f
+- `results/supervisor_fgkx2.txt` da2aae51a79db347
+- `results/supervisor_fgkx3.txt` 7b942e182ac84b78
+- `results/supervisor_fgs2.txt` 882f13260c30c2ac
+- `results/supervisor_fgs2b.txt` bc4bf5372d71633e
+- `results/supervisor_fgs2c.txt` be4e60bffda45d04
+- `results/supervisor_fgs2x.txt` 43022b2e8d29ca44
+- `results/supervisor_fgs2y.txt` 937ec0cbc39685db
+- `results/supervisor_fstella.txt` 1a103e26e9dee21a
+- `results/supervisor_fstella2.txt` 0d929147b7c84386
+- `results/supervisor_fstella3.txt` dc4ad30873180544
+- `results/supervisor_fstella4.txt` 647045394303494a
+- `results/supervisor_fstella5.txt` 1907106e27fe95ed
+- `results/supervisor_gkxA.txt` d405734125745057
+- `results/supervisor_gkxB.txt` 33c46d32bbfd7cf4
+- `results/supervisor_gs2.txt` 5202f73042576b5e
+- `results/supervisor_gyaradax.txt` 79d1b5af1580cf89
+- `results/supervisor_smoke_gs2.txt` 2fe291d2d7222d0e
+- `results/supervisor_smoke_stella.txt` 9b95e9e40b3d9c78
+- `results/supervisor_stella.txt` 14af25ea1515b3cf
+- `run_gkx_queue.sh` 3cce79134c568f44
+- `run_grid_queue.sh` 88db34ad98427f0b
+- `run_gyaradax_queue.sh` 6b3d7d79075951c4
+- `summarize.py` 2e9eeb1a0211823a
+
+**Terminal process state.**
+- **Lanes that ended by themselves** (CDT): gs2 21:46:56, gs2b 22:28:09, gs2c 22:21:27, gs2x 23:20:36, gs2y 23:35:16; stella2 21:38:11, stella3 21:38:58, stella5 21:57:41; gkx 22:07:07, gkx2 23:18:35, gkx3 23:14:51; gyaradax 23:42:26.
+- **Killed lanes:** the first gs2/stella/gkx lanes of 21:18 were killed at 21:19, after stella had finished three cases, and relaunched under an outer `taskset` (verified absent). stella4 was killed at 21:57 after oversubscribing cores 23–27 (verified absent); its case was re-run alone as stella5.
+- **Final check:** at 2026-09-14T23:42:56-05:00 no process owned by this row remained on office and neither GPU listed a compute process. No local process runs.
+- **Kept:** the office run directory `/home/rjorge/gkx-q20-cross-code-20260914.FavgA4` (207 MB of inputs, outputs and logs); its staged GKX source copy was deleted.

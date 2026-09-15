@@ -1,0 +1,10 @@
+lane=fgs2 pid=1115188 start=2026-09-14T21:18:17-05:00 np=5 cpus=18-22 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_gs2.txt
+gs2 gs2_S_ky0.30_r3 start=2026-09-14T21:18:17-05:00
+lane=fgs2 pid=1115855 start=2026-09-14T21:19:23-05:00 np=5 cpus=18-22 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_gs2.txt
+gs2 gs2_S_ky0.30_r3 start=2026-09-14T21:19:23-05:00
+gs2 gs2_S_ky0.30_r3 rc=0 wall=180.42 end=2026-09-14T21:22:23-05:00
+gs2 gs2_S_ky0.55_r3 start=2026-09-14T21:22:23-05:00
+gs2 gs2_S_ky0.55_r3 rc=0 wall=653.19 end=2026-09-14T21:33:16-05:00
+gs2 gs2_S_ky0.30_r4 start=2026-09-14T21:33:16-05:00
+gs2 gs2_S_ky0.30_r4 rc=0 wall=819.40 end=2026-09-14T21:46:56-05:00
+lane=fgs2 ALL DONE 2026-09-14T21:46:56-05:00
