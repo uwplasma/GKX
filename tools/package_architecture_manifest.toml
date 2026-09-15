@@ -1116,13 +1116,16 @@ recursive = true
 # unpinned contraction; target unchanged.
 # +32: the runtime HLO route lowers eager scan-body closures as arguments, not
 # the constants a jit embeds, in the existing profiling owner.
-# 88428 -> 88728: solver status on results (Q15). A starved inner budget is
+# +51: Q14. The window-gradient matrix checks its float32 adjoint against a
+# float64 centered difference, with the roundoff bound derived in plan/log.md,
+# and the precision banner no longer lists that matrix; no new test.
+# +300 (88479 -> 88779 after Q14): solver status on results (Q15). A starved inner budget is
 # carried by both implicit scan forms and refused at the host; the IMEX status
 # step matches the plain step's state and VJP; a certified pair reports its
 # residual and route; both runtime implicit paths and the IMEX final-state route
 # fail closed; and three fakes gain the SOLVAX status fields the scans now read.
 # Measured; target unchanged.
-baseline = 88728
+baseline = 88779
 target = 35000
 
 [[line_budget_policy.counts]]
