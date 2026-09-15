@@ -3127,14 +3127,39 @@ SECOND_ION = Species(
 )
 
 
-@pytest.fixture(scope="module")
-def case_grid():
+# The steps below were chosen for float64, where they leave the centered
+# difference truncation-limited. Under float32 the same difference is
+# roundoff-limited, with relative error about eps32 |Q| / (h |dQ/dp|): 3e-3 to
+# 1.2 at these steps, because the window is only weakly sensitive to its design
+# parameters (|p dQ/dp| / |Q| is 2.7e-4 for the hypercollision rate). A float32
+# run therefore keeps its float32 adjoint and checks it against the same centered
+# difference evaluated in float64.
+X64_WINDOW_RTOL = 1.0e-6
+
+
+# Float32 roundoff of this six-step window relative to the same window in
+# float64, for the value and the reverse-mode gradient alike: at most 5.7e-6
+# (48 float32 ulps) across the matrix on XLA:CPU. The bound carries a 4x margin
+# for another CPU's fusion choices. Measured in plan/log.md, Q14.
+F32_WINDOW_ROUNDOFF = 2.5e-5
+
+
+def _float64_active() -> bool:
+    return bool(jax.config.read("jax_enable_x64"))
+
+
+def _build_case_grid():
     cfg = CycloneBaseCase(grid=GridConfig(Nx=NX, Ny=NY, Nz=NZ, Lx=6.0, Ly=6.0))
     grid = build_spectral_grid(cfg.grid)
     geom = ensure_flux_tube_geometry_data(
         SAlphaGeometry.from_config(cfg.geometry), grid.z
     )
     return grid, geom
+
+
+@pytest.fixture(scope="module")
+def case_grid():
+    return _build_case_grid()
 
 
 def _seed(grid, n_species: int, key: int) -> jnp.ndarray:
@@ -3330,6 +3355,21 @@ COVERAGE_MATRIX = (
 )
 
 
+def _float64_centered_difference(case: str) -> float:
+    """The case's centered difference, evaluated in float64 in this process.
+
+    Grid, seed and parameters are rebuilt inside the context, so nothing
+    captured at float32 enters the reference.
+    """
+
+    with jax.enable_x64(True):
+        grid, geom = _build_case_grid()
+        evaluate, point, step = _build_case(case, grid, geom)
+        upper, lower = evaluate(point + step), evaluate(point - step)
+        assert upper.dtype == jnp.float64 and lower.dtype == jnp.float64
+        return float((upper - lower) / (2.0 * step))
+
+
 @pytest.mark.parametrize("case", COVERAGE_MATRIX)
 def test_window_gradient_matches_centered_finite_difference(case, case_grid):
     """Every production switch must reach the adjoint of the physical flux."""
@@ -3341,9 +3381,16 @@ def test_window_gradient_matches_centered_finite_difference(case, case_grid):
     assert bool(jnp.isfinite(gradient))
     assert float(gradient) != 0.0, f"{case} left the design parameter disconnected"
 
-    centered = (evaluate(point + step) - evaluate(point - step)) / (2.0 * step)
+    if _float64_active():
+        centered = (evaluate(point + step) - evaluate(point - step)) / (2.0 * step)
+        rtol = X64_WINDOW_RTOL
+    else:
+        # The float64 assertion holds the reference within X64_WINDOW_RTOL; the
+        # float32 adjoint adds its own roundoff on top.
+        centered = _float64_centered_difference(case)
+        rtol = X64_WINDOW_RTOL + F32_WINDOW_ROUNDOFF
     np.testing.assert_allclose(
-        np.asarray(gradient), np.asarray(centered), rtol=1.0e-6, atol=0.0
+        np.asarray(gradient), np.asarray(centered), rtol=rtol, atol=0.0
     )
 
 
@@ -3358,8 +3405,12 @@ def test_block_checkpointed_window_matches_plain_reverse_pass(case_grid):
     evaluate, point, _step = _build_case("multispecies_kinetic_electrons", grid, geom)
     blocked = jax.value_and_grad(evaluate)(point)
     plain = jax.value_and_grad(lambda value: evaluate(value, False))(point)
+    # Blocked and plain are two compilations of the same arithmetic. Each lies
+    # within its precision's roundoff of the exact window, so under float32 they
+    # lie within twice F32_WINDOW_ROUNDOFF of each other. Float64 keeps 1e-12.
+    rtol = 1.0e-12 if _float64_active() else 2.0 * F32_WINDOW_ROUNDOFF
     np.testing.assert_allclose(
-        np.asarray(blocked), np.asarray(plain), rtol=1.0e-12, atol=0.0
+        np.asarray(blocked), np.asarray(plain), rtol=rtol, atol=0.0
     )
 
 

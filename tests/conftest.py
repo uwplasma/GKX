@@ -43,11 +43,12 @@ def pytest_report_header(config) -> str:
 def pytest_configure(config) -> None:
     """Warn, unmissably, when the suite is about to run at the wrong precision.
 
-    Parts of this suite assert float64-scale tolerances: finite-difference
-    agreement for the nonlinear window gradients, Krylov preconditioner
-    conditioning, the electromagnetic zonal solve. At default precision 17 of
-    them fail on the format rather than on the physics, and they read as broken
-    solvers to anyone who does not already know that.
+    Parts of this suite assert float64-scale tolerances: Krylov preconditioner
+    conditioning, the electromagnetic zonal solve. When this banner was added
+    (#217), 17 tests failed at default precision on the format rather than on
+    the physics, and they read as broken solvers to anyone who does not already
+    know that. The nonlinear window AD/FD matrix was among them; it now checks
+    its float32 adjoint against a float64 reference instead.
 
     This cannot go through ``pytest_report_header`` or a warning alone, because
     ``pytest.ini`` passes ``-q --disable-warnings`` and a plain ``pytest`` run --
@@ -64,9 +65,8 @@ def pytest_configure(config) -> None:
         "  gkx: running at DEFAULT (float32) precision -- missing "
         + " ".join(missing)
         + "\n"
-        "  Tests asserting float64-scale tolerances (nonlinear window AD/FD,\n"
-        "  Krylov conditioning, the EM zonal solve) will fail on precision, not\n"
-        "  on physics. CI runs:\n"
+        "  Tests asserting float64-scale tolerances (Krylov conditioning, the\n"
+        "  EM zonal solve) will fail on precision, not on physics. CI runs:\n"
         "      MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 pytest\n"
         "\n"
     )
