@@ -147,6 +147,19 @@ jobs:
           pytest -q -rx tests/unit/nonlinear/test_nonlinear.py \
             -k compressed_real_fft_heat_flux_window_gradient_matches_finite_difference
 
+      - name: Default-f32 nonlinear window-gradient matrix
+        # nonlinear-core runs this matrix in float64. Here the float32 adjoint,
+        # the documented default, is checked against a float64 centered
+        # difference evaluated in the same process, and the blocked checkpoint
+        # against the plain reverse pass within float32 roundoff.
+        env:
+          MPLBACKEND: Agg
+          JAX_ENABLE_X64: "false"
+          GKX_X64: "0"
+        run: |
+          pytest -q -rf --maxfail=20 tests/unit/nonlinear/test_nonlinear_helpers_extra.py \
+            -k "window_gradient_matches_centered_finite_difference or block_checkpointed_window_matches_plain_reverse_pass"
+
       - name: Portability gates
         env:
           MPLBACKEND: Agg

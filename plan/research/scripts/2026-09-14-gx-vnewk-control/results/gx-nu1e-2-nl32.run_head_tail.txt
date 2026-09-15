@@ -1,0 +1,20 @@
+ky	kx		omega		gamma
+0.0000	0.0000
+0.5500	0.0000		0.495698	0.017203
+
+gx-nu1e-2-nl32: Step   75000: Time =  150.00001  dt = 2.000e-03   Phi**2 = 1.954e-20   Q_i = 1.273e-20   Gam_i = 0.000e+00   Heat_i = 1.228e-25   
+ky	kx		omega		gamma
+0.0000	0.0000
+0.5500	0.0000		0.495725	0.017203
+
+Total runtime = 31.276042 min (0.025021 s / timestep)
+End time: Mon Sep 14 23:13:31 2026
+
+[32mRunning gx-nu1e-2-nl32 
+Start time: Mon Sep 14 22:42:12 2026
+
+[0mVersion: 3865a537-dirty 	 Compiled: Sat Sep  5 06:30:59 CDT 2026 
+Using i_share = 8 would exceed shared memory limits. Setting i_share = 3 instead.
+Using hypercollisions with coefficient proportional to kz (default).
+[0m[31m[0m[35mUsing (generalized) twist-and-shift BCs. Final values are jtwist = 15, shat = 0.800000, x0 = 1.808579, y0 = 1.818182
+[0m[32mDevice 0: GPU ID: c64146c9-227c-496f-974a-d1a66ec55673, GPU type: NVIDIA RTX A4000, GPU memory usage: used = 934.375000 MB (5.849280 %), free = 15039.812500 MB (94.150720 %)

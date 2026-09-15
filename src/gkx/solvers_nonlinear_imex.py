@@ -12,9 +12,15 @@ from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
-from solvax import gmres, linear_solve
+from solvax import KrylovSolution, gmres, linear_solve
 
-from gkx.solvers_linear_implicit import _gmres_iteration_budget
+from gkx.solvers_linear_implicit import (
+    ImplicitSolveStats,
+    _GmresStatus,
+    _empty_implicit_solve_stats,
+    _fold_implicit_solve_stats,
+    _gmres_iteration_budget,
+)
 from gkx.solvers_nonlinear_imex_diagnostics import (
     advance_imex_nonlinear_state,
     make_imex_diagnostic_step,
@@ -37,6 +43,7 @@ DiagnosticStepFn = Callable[
     tuple[tuple[Any, Any, Any, Any, Any], tuple[Any, Any]],
 ]
 DiagnosticScanOutput = tuple[jnp.ndarray, tuple[Any, Any]]
+CachedImexCarry = tuple[jnp.ndarray, ImplicitSolveStats]
 
 
 def imex_fixed_point_guess(
@@ -64,6 +71,55 @@ def imex_fixed_point_guess(
     return jax.lax.fori_loop(0, max(int(implicit_iters), 0), body, G_in)
 
 
+def _imex_gmres_solver(
+    G_in: jnp.ndarray,
+    G_rhs: jnp.ndarray,
+    *,
+    linear_rhs_fn: LinearRhsFn,
+    cache: object,
+    params: object,
+    linear_cfg: object,
+    external_phi: jnp.ndarray | float | None,
+    dt_val: jnp.ndarray,
+    implicit_iters: int,
+    implicit_relax: float,
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_restart: int,
+    precond_op: PreconditionerFn | None,
+) -> Callable[[MatvecFn, jnp.ndarray], KrylovSolution]:
+    """Return the predictor-seeded FGMRES solve shared by both IMEX step forms."""
+
+    restart, max_restarts = _gmres_iteration_budget(implicit_maxiter, implicit_restart)
+
+    G_guess = imex_fixed_point_guess(
+        G_in,
+        G_rhs,
+        linear_rhs_fn=linear_rhs_fn,
+        cache=cache,
+        params=params,
+        linear_cfg=linear_cfg,
+        external_phi=external_phi,
+        dt_val=dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+    )
+
+    def solve(operator: MatvecFn, rhs: jnp.ndarray) -> KrylovSolution:
+        return gmres(
+            operator,
+            rhs,
+            x0=G_guess.reshape(-1),
+            precond=precond_op,
+            restart=restart,
+            rtol=implicit_tol,
+            atol=0.0,
+            max_restarts=max_restarts,
+        )
+
+    return solve
+
+
 def solve_imex_step(
     G_in: jnp.ndarray,
     G_rhs: jnp.ndarray,
@@ -88,14 +144,11 @@ def solve_imex_step(
     The primal and transpose solves use the same tolerance-controlled FGMRES
     policy. Reverse mode differentiates the converged linear system through
     SOLVAX rather than tracing the dynamic Krylov stopping loop.
-    ``implicit_maxiter`` counts iterations. The convergence flag is not
-    surfaced: ``linear_solve`` accepts a solver returning only ``x``, and the
-    diagnostics contract has no solver-status field.
+    ``implicit_maxiter`` counts iterations. This form returns only the state;
+    :func:`solve_imex_step_with_stats` also returns the convergence summary.
     """
 
-    restart, max_restarts = _gmres_iteration_budget(implicit_maxiter, implicit_restart)
-
-    G_guess = imex_fixed_point_guess(
+    gmres_solve = _imex_gmres_solver(
         G_in,
         G_rhs,
         linear_rhs_fn=linear_rhs_fn,
@@ -106,22 +159,74 @@ def solve_imex_step(
         dt_val=dt_val,
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        precond_op=precond_op,
     )
 
     def solver(operator: MatvecFn, rhs: jnp.ndarray) -> jnp.ndarray:
-        return gmres(
-            operator,
-            rhs,
-            x0=G_guess.reshape(-1),
-            precond=precond_op,
-            restart=restart,
-            rtol=implicit_tol,
-            atol=0.0,
-            max_restarts=max_restarts,
-        ).x
+        return gmres_solve(operator, rhs).x
 
     solution = linear_solve(matvec, G_rhs.reshape(-1), solver)
     return solution.reshape(shape)
+
+
+def solve_imex_step_with_stats(
+    G_in: jnp.ndarray,
+    G_rhs: jnp.ndarray,
+    stats: ImplicitSolveStats,
+    *,
+    linear_rhs_fn: LinearRhsFn,
+    cache: object,
+    params: object,
+    linear_cfg: object,
+    external_phi: jnp.ndarray | float | None,
+    dt_val: jnp.ndarray,
+    implicit_iters: int,
+    implicit_relax: float,
+    matvec: MatvecFn,
+    shape: tuple[int, ...],
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_restart: int,
+    precond_op: PreconditionerFn | None = None,
+) -> tuple[jnp.ndarray, ImplicitSolveStats]:
+    """Solve one IMEX system as :func:`solve_imex_step` and fold its status.
+
+    SOLVAX's true residual, iteration count and converged flag leave
+    ``linear_solve`` as auxiliary data, so reverse mode still differentiates
+    the solved system and never the stopping loop.
+    """
+
+    gmres_solve = _imex_gmres_solver(
+        G_in,
+        G_rhs,
+        linear_rhs_fn=linear_rhs_fn,
+        cache=cache,
+        params=params,
+        linear_cfg=linear_cfg,
+        external_phi=external_phi,
+        dt_val=dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        precond_op=precond_op,
+    )
+
+    def solver(
+        operator: MatvecFn, rhs: jnp.ndarray
+    ) -> tuple[jnp.ndarray, _GmresStatus]:
+        result = gmres_solve(operator, rhs)
+        return result.x, _GmresStatus(
+            result.residual_norm, result.iterations, result.converged
+        )
+
+    rhs_flat = G_rhs.reshape(-1)
+    solution, info = linear_solve(matvec, rhs_flat, solver, has_aux=True)
+    return solution.reshape(shape), _fold_implicit_solve_stats(stats, info, rhs_flat)
 
 
 def make_imex_nonlinear_term(
@@ -321,8 +426,8 @@ def _make_cached_imex_scan_step(
     implicit_tol: float,
     implicit_maxiter: int,
     implicit_restart: int,
-) -> Callable[[jnp.ndarray, Any], tuple[jnp.ndarray, Any]]:
-    """Build the cached IMEX scan body from explicit nonlinear and GMRES parts."""
+) -> Callable[[CachedImexCarry, Any], tuple[CachedImexCarry, Any]]:
+    """Build the cached IMEX scan body; the carry holds the solve status."""
 
     nonlinear_term = make_imex_nonlinear_term(
         cache,
@@ -335,48 +440,51 @@ def _make_cached_imex_scan_step(
         nonlinear_term_fn=nonlinear_term_fn,
         nonlinear_contribution_fn=nonlinear_contribution_fn,
     )
-    solve_step = make_imex_solve_step(
-        linear_rhs_fn=linear_rhs_fn,
-        cache=cache,
-        params=params,
-        linear_cfg=linear_cfg,
-        external_phi=external_phi,
-        dt_val=setup.dt_val,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        matvec=setup.matvec,
-        shape=setup.shape,
-        implicit_tol=implicit_tol,
-        implicit_maxiter=implicit_maxiter,
-        implicit_restart=implicit_restart,
-        precond_op=setup.precond_op,
-        solve_step_fn=solve_imex_step,
-    )
 
-    def step(G_in: jnp.ndarray, _unused: Any) -> tuple[jnp.ndarray, Any]:
+    def step(carry: CachedImexCarry, _unused: Any) -> tuple[CachedImexCarry, Any]:
+        G_in, solve_stats = carry
         rhs = G_in + setup.dt_val * nonlinear_term(G_in)
-        G_new = solve_step(G_in, rhs)
+        G_new, solve_stats = solve_imex_step_with_stats(
+            G_in,
+            rhs,
+            solve_stats,
+            linear_rhs_fn=linear_rhs_fn,
+            cache=cache,
+            params=params,
+            linear_cfg=linear_cfg,
+            external_phi=external_phi,
+            dt_val=setup.dt_val,
+            implicit_iters=implicit_iters,
+            implicit_relax=implicit_relax,
+            matvec=setup.matvec,
+            shape=setup.shape,
+            implicit_tol=implicit_tol,
+            implicit_maxiter=implicit_maxiter,
+            implicit_restart=implicit_restart,
+            precond_op=setup.precond_op,
+        )
         _dG_new, fields_new = linear_rhs_fn(
             G_new, cache, params, linear_cfg, external_phi=external_phi
         )
-        return G_new, fields_new
+        return (G_new, solve_stats), fields_new
 
     return step
 
 
 def _run_cached_imex_scan(
     setup: _CachedImexScanSetup,
-    step: Callable[[jnp.ndarray, Any], tuple[jnp.ndarray, Any]],
+    step: Callable[[CachedImexCarry, Any], tuple[CachedImexCarry, Any]],
     *,
     steps: int,
     checkpoint: bool,
-) -> tuple[jnp.ndarray, Any]:
+) -> tuple[jnp.ndarray, Any, ImplicitSolveStats]:
     """Run the cached IMEX scan and restore single-species output rank."""
 
     step_fn = jax.checkpoint(step) if checkpoint else step
-    G_out, fields_t = jax.lax.scan(step_fn, setup.G, None, length=steps)
+    carry0 = (setup.G, _empty_implicit_solve_stats(setup.G.dtype))
+    (G_out, solve_stats), fields_t = jax.lax.scan(step_fn, carry0, None, length=steps)
     G_out = G_out[0] if setup.squeeze_species else G_out
-    return G_out, fields_t
+    return G_out, fields_t, solve_stats
 
 
 def integrate_cached_imex_scan(
@@ -406,11 +514,14 @@ def integrate_cached_imex_scan(
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, Any]:
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
     """Run the cached IMEX nonlinear scan.
 
     The public facade injects field solves, operator construction, and RHS
     kernels so debug and monkeypatch seams stay outside this pure solver owner.
+    Returns ``(G_out, fields_t)``, or ``(G_out, fields_t, stats)`` with
+    ``return_solve_stats=True``; ``stats`` summarizes every GMRES solve.
     """
 
     del show_progress  # Progress belongs to diagnostics/runtime scans.
@@ -445,7 +556,12 @@ def integrate_cached_imex_scan(
         implicit_maxiter=implicit_maxiter,
         implicit_restart=implicit_restart,
     )
-    return _run_cached_imex_scan(setup, step, steps=steps, checkpoint=checkpoint)
+    G_out, fields_t, solve_stats = _run_cached_imex_scan(
+        setup, step, steps=steps, checkpoint=checkpoint
+    )
+    if return_solve_stats:
+        return G_out, fields_t, solve_stats
+    return G_out, fields_t
 
 
 __all__ = [
@@ -457,4 +573,5 @@ __all__ = [
     "make_imex_solve_step",
     "run_imex_diagnostic_scan",
     "solve_imex_step",
+    "solve_imex_step_with_stats",
 ]

@@ -966,7 +966,7 @@ def test_raw_propagator_route_returns_a_converged_pair() -> None:
     seed = jnp.asarray(vectors[:, index].reshape(v0.shape), dtype=dtype)
 
     messages: list[str] = []
-    eig, vec = lk.dominant_eigenpair(
+    eig, vec, status = lk.dominant_eigenpair(
         seed,
         cache,
         params,
@@ -976,11 +976,21 @@ def test_raw_propagator_route_returns_a_converged_pair() -> None:
         restarts=1,
         power_dt=1.0e-3,
         status_callback=messages.append,
+        return_status=True,
     )
     assert complex(np.asarray(eig)) == pytest.approx(complex(values[index]), rel=1e-4)
     residual = lk._eigenpair_relative_residual(eig, vec, cache, params, term_cfg)
     assert residual <= lk.certifiable_residual_tolerance(1.0e-6, dtype)
     assert any("certified=True" in item for item in messages)
+    # The certified pair reports the residual it was gated on, beside the gate.
+    assert (status.method, status.route, status.certified) == (
+        "propagator",
+        "propagator",
+        True,
+    )
+    assert status.residual == residual
+    assert status.tolerance == lk.certifiable_residual_tolerance(1.0e-6, dtype)
+    assert status.inner is None
 
 
 def test_a_zero_eigenvector_never_certifies(monkeypatch: pytest.MonkeyPatch) -> None:

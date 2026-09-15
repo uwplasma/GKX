@@ -13369,6 +13369,627 @@ runs at rc=0. It had invoked `check.py` without its stem argument; the checks ab
 re-run by hand with `check.py itg_salpha_adiabatic_electrons`. No process owned by this
 entry is running.
 
+## 2026-09-14 — Q14: float32 window-gradient tolerances (`test/f32-window-gradients`)
+
+**Outcome: the 11 failures are a float64-scale finite-difference reference, not a
+float32 adjoint bug. No `src/` change.** The float32 reverse-mode gradient of every
+matrix case agrees with the float64 gradient to at most 5.7e-6 (48 float32 ulps).
+What failed is the centered difference used as its reference, which is
+roundoff-limited in float32 at steps chosen for float64. Under float32 the ten
+matrix cases now check the float32 adjoint against the same centered difference
+evaluated in float64 in the same process. The checkpoint parity test keeps 1e-12
+in float64 and uses a derived float32 bound. CI runs all 11 in float32, and the
+float64 runs are unchanged.
+
+**Reproduction (unmodified `ccdd4bf12`, head of the merge chain, which contains
+main).** `JAX_ENABLE_X64=false GKX_X64=0 pytest -o addopts= -m "not slow" -rf
+tests/unit/nonlinear/test_nonlinear_helpers_extra.py
+tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py` gives
+**11 failed, 108 passed**. That is the Q4 smoke's pair of owners without Q4's two new
+tests. The failures are `test_window_gradient_matches_centered_finite_difference`
+for all ten `COVERAGE_MATRIX` cases, plus
+`test_block_checkpointed_window_matches_plain_reverse_pass`.
+
+**Why the step cannot be fixed in float32.** For a window value Q(p) and relative
+step r = h/|p|, the centered difference error is
+
+|D_h − Q'| / |Q'| ≤ T(h) + E / (r·S),  with S = |p·Q'/Q|,
+
+where E ≥ ε32 = 1.19e-7 is the relative forward roundoff of Q.
+- T(h), the truncation, measured by the same sweep in float64 where roundoff is negligible, is ≤ 3.4e-6 up to r = 0.1.
+- These windows are weakly sensitive to their parameters: S runs from 2.7e-4 (hypercollision rate) to 0.62.
+- At the float64 test steps the floor ε32/(rS) predicts 1e-2 to 1 (rk2: 1.9e-2 against 1.3e-2 observed; custom ν: 0.8 against 1.2).
+- Even at r = 0.1, the float32 sweep's best errors are 6.8e-4 (custom ν) and 8.0e-3 (hypercollision).
+
+Tightening the step would therefore need per-case tolerances from 1e-4 to 1e-2.
+It was rejected for a reference that is precise in both precisions.
+
+**Float64 reference.** `_float64_centered_difference` rebuilds grid, seed and
+parameters inside `jax.enable_x64(True)`, and asserts the evaluated values are
+float64. GKX reads `jax.config` at call time (`operators/linear/params.py`
+`_x64_enabled`). In a float32 process the reference is **bitwise equal** to the
+pure-x64 centered difference for all ten cases. The next float32 evaluation is
+float32 and bitwise equal to a fresh float32 run. The float64 assertion holds the
+reference within 1e-6 of the exact derivative; measured against the x64 adjoint it
+is within 5.8e-11 or better. The float32 bound is therefore rtol = 1e-6 +
+`F32_WINDOW_ROUNDOFF`, with `F32_WINDOW_ROUNDOFF` = 2.5e-5. That is 4.4× the
+largest measured float32 roundoff, max(|g32/g64 − 1|, |Q32/Q64 − 1|) = 5.66e-6, with
+the margin for another CPU's fusion choices. It still discriminates: the rk2 and rk3
+gradients differ by 7.3e-5.
+
+| test (f32) | S = \|pQ'/Q\| | before: \|AD−FD\|/\|FD\| vs rtol | after: \|AD32−FD64\|/\|FD64\| vs rtol | decision | derivation / reason |
+|---|---:|---|---|---|---|
+| baseline_es_rk2 | 6.1e-2 | 1.33e-2 vs 1e-6 | 1.52e-6 vs 2.6e-5 | (a) f64 reference | FD floor ε32/(rS)=1.9e-2; adjoint roundoff bound |
+| baseline_es_rk3 | 6.1e-2 | 1.39e-2 vs 1e-6 | 1.53e-6 vs 2.6e-5 | (a) | same |
+| baseline_es_rk4 | 6.1e-2 | 3.97e-2 vs 1e-6 | 1.48e-6 vs 2.6e-5 | (a) | same |
+| multispecies_kinetic_electrons | 8.1e-2 | 2.55e-2 vs 1e-6 | 5.66e-6 vs 2.6e-5 | (a) | largest adjoint roundoff (48 ulps) sets the bound |
+| multispecies_two_ions | 4.1e-2 | 2.24e-2 vs 1e-6 | 1.26e-6 vs 2.6e-5 | (a) | same |
+| electromagnetic_d_beta | 2.8e-2 | 3.25e-3 vs 1e-6 | 2.98e-7 vs 2.6e-5 | (a) | same |
+| electromagnetic_d_drive | 6.2e-2 | 1.57e-2 vs 1e-6 | 1.81e-6 vs 2.6e-5 | (a) | same |
+| custom_collisions_d_nu | 4.5e-3 | 1.20 vs 1e-6 | 1.87e-6 vs 2.6e-5 | (a) | FD floor ε32/(rS)=0.8 at h=1e-5 |
+| hypercollisions_d_nu_hyper_m | 2.7e-4 | 4.46e-2 vs 1e-6 | 1.99e-6 vs 2.6e-5 | (a) | FD floor 0.2 at h=1e-3; best f32 step still 4e-3 |
+| combined_ms_em_coll_hyper_rk3 | 0.62 | 3.80e-3 vs 1e-6 | 1.76e-6 vs 2.6e-5 | (a) | same as baseline |
+| block_checkpointed vs plain | — | 1.90e-7 (value), 1.46e-7 (grad) vs 1e-12 | same vs 5.0e-5 | (b) loosen in f32 only | two compilations of one arithmetic each lie within F32_WINDOW_ROUNDOFF of the exact window, so within 2× of each other; f64 keeps 1e-12 (measured 4.1e-16) |
+
+No test was declared x64-only. The float64 tolerances and steps are unchanged, and
+no physics number moved. `tests/conftest.py`'s precision banner no longer lists
+the window AD/FD matrix. Its 17-test count is kept as the #217 history, and the
+remaining default-precision failures outside this matrix were not re-measured.
+
+**CI.** A new step in `python-floor`, "Default-f32 nonlinear window-gradient
+matrix", runs the 11 tests with `JAX_ENABLE_X64=false GKX_X64=0`. It sits next to the
+existing f32 compressed-gradient step; that job completed in about two minutes on
+the last green main run. `nonlinear-core` and wide coverage still run the same
+tests in float64. Risk: this is the first Linux x86 float32 run of the matrix
+in-process. The #196 YNN crash class is f32-only, but locally (jaxlib 0.10.2,
+arm64) the matrix did not reach it.
+
+**Counts after the change.**
+- float32 CI selection: 11 passed; whole `test_nonlinear_helpers_extra.py`: 82 passed.
+- float64 selection: 11 passed; whole file: 82 passed.
+- `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py`: 152 passed.
+- mypy: no issues in 184 source files.
+- ruff 0.16.4 check and format: pass (430 files).
+- Architecture manifest: tests +51 (88428→88479), no new test file.
+
+**Commands.** `python measure.py <test module> <json>` in each precision records, per
+case: value; eager and jitted AD; the test-form and actual-step centered differences;
+a 2- and 4-point step sweep over r ∈ [1e-5, 1e-1]; blocked vs plain.
+`python ref64.py <test module> f64.json f32.json` in float32 runs the in-process
+float64 reference check. Scratch evidence (session-local, SHA-256 prefixes):
+`measure.py` b8e1ac5cd7d7…ca2e, `ref64.py` 478b81966711…61b4, f32 JSON
+1eb6b856e95e…70c7, f64 JSON 7d755f58c29a…203a, reproduction log
+86e0d85a8e95…b5c0.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, the review venv, `PYTHONPATH=<tree>/src:<tree>`,
+`JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at a time behind a 1-minute
+load gate below 20. Load ranged 7–23, so **no timing is reported**.
+
+**Limitations.** The roundoff constant is measured on XLA:CPU arm64 only. The
+4.4× margin is a judgement, and CI on x86 is its first test. Only the two Q4 owner
+files were reproduced in float32; other window-gradient FD tests
+(`test_nonlinear.py` linked boundary, objectives) were not swept in float32 here.
+
+**Final 2026-09-15.** Merged `main` at `7d94d5986` (after #237, #239 and #241);
+the float32 and float64 selections, release and evidence-ledger tests, ruff, mypy,
+both manifest checks and gitleaks were re-run on the merged tree. PR #240 is ready
+for the lead's merge chain; its float32 `python-floor` step on Linux x86 is the
+first check of the arm64-measured roundoff bound.
+
+## 2026-09-15 — Q15 solver status on results
+
+Branch `fix/solver-status-on-results`, merged with `main` at `7d94d5986`; `src/`,
+`tests/` and `tools/` are identical between that merge's two bases, so results measured
+on the pre-merge base still describe this code. Replaces the paused entry of 2026-09-14.
+
+**Contract.**
+- Eigen: `EigenSolveStatus(method, route, residual, tolerance, certified, inner)`.
+  `residual` is `_eigenpair_relative_residual` of the returned pair on every route (the
+  adaptive gate divides by |λ|‖v‖ only, so its pair is recomputed with the shared
+  definition, which is never larger). `route` names the method that produced the pair;
+  a shift-invert fallback reports its fallback. `inner` is the shift-invert build's
+  inner FGMRES summary (converged, solves, max relative residual, iterations, tolerance,
+  preconditioner), else `None`. `dominant_eigenpair(..., return_status=True)` appends
+  it. The gates are unchanged, so `certified=False` comes only from a raw route with
+  `certify=False`.
+- Scans: `ImplicitSolveStats(max_relative_residual, max_iterations, solves,
+  unconverged_solves)`, four scalars carried through `lax.scan`/`fori_loop` in the
+  implicit linear scan, both linear diagnostics scan forms (explicit methods carry
+  `None`, which adds no leaves) and the cached IMEX scan. IMEX returns SOLVAX's status
+  from `linear_solve(..., has_aux=True)` in `solve_imex_step_with_stats`;
+  `solve_imex_step` keeps its graph. No host callback runs inside a scan.
+- Results: trailing `RuntimeLinearResult.eigen_status`,
+  `RuntimeLinearResult.implicit_solve` and `RuntimeNonlinearResult.implicit_solve`
+  (default `None`); `summary()` adds flat `eigen_*` and `implicit_*` keys, `None` where
+  no such solve ran. Library integrators accept `return_solve_stats=True` and append the
+  stats (`None` for methods without an implicit solve); default returns are unchanged.
+- The runtime check lives in `workflows/runtime/solver_status.py`
+  (`solve_stats_request`, `checked_solve_summary`), imported by both workflow
+  dispatchers, so `workflows/nonlinear.py` stays at 1022 lines under its unchanged
+  1023-line budget.
+
+**Policy: fail closed at the host boundary**, as #233 does for eigenpairs. A traced
+step cannot raise, so `run_runtime_linear` (`method="implicit"`, phi and density paths)
+and `run_runtime_nonlinear` (IMEX final-state route; the diagnostics route already
+rejects IMEX) raise `RuntimeError("<label>: k of n implicit GMRES solves did not
+converge (max_relative_residual=…, max_iterations=…); …")` and never return a trajectory
+with an unconverged implicit step. No TOML key is added. A float32 probe on a reduced
+Cyclone runtime deck (Nl4/Nm8, dt .05, 40 implicit steps) converged every solve within 4
+iterations at max relative residual 5.7e-7 in float32 and x64, so SOLVAX's flag needs no
+dtype floor on this route.
+
+**HLO** (compile-only optimized HLO, 4×4×8 Cyclone, Nl2/Nm4, damping preconditioner;
+baseline is a clean `ccdd4bf12`; re-measured after the merge with identical counts).
+
+| graph (float32 / x64 instructions) | before | after, stats not requested | after, `return_solve_stats=True` |
+|---|---|---|---|
+| implicit linear scan | 3834 / 3835 | 3834 / 3835 | 4443 / 4452 |
+| implicit linear, stride 2 | 3945 / 3946 | 3945 / 3946 | 4602 / 4607 |
+| implicit linear diagnostics | 3883 / 3884 | 3883 / 3884 | 4492 / 4501 |
+| rk4 linear diagnostics (control) | 9395 / 9470 | 9395 / 9470 | — |
+| cached IMEX scan | 3968 / 3982 | 3968 / 3982 | 4486 / 4729 |
+| IMEX value_and_grad | 7012 / 7013 | 7012 / 7013 | — |
+| IMEX value_and_grad, checkpointed | 8716 / 8718 | 8716 / 8718 | — |
+
+Graphs that do not request stats keep identical counts and op ledgers. With stats, FFTs
+go 16→20 and copies 20→25 on the implicit linear scan. Attribution: folding only the
+iteration count gives 3853 instructions with 16 FFTs; reading `converged` alone gives
+4403 with 20. The cost is SOLVAX's true-residual recomputation, one operator application
+per solve that XLA removes when nothing reads it, plus about 19 scalar instructions. No
+jit static argument or compile key is added. No timing is reported (shared machine).
+
+**Tests** (x64 unless noted; one process at a time, `nice -n 10`, load below 20).
+
+| selection | result |
+|---|---|
+| `tests/unit/solvers/test_linear_krylov_core.py` | 98 passed |
+| `tests/unit/solvers/test_time_integrators.py` | 97 passed (new status tests also pass in float32) |
+| `tests/integration/test_adaptive_eigenmodes.py` | 8 passed, 3 skipped |
+| `tests/integration/runtime/test_runtime_runner.py` | 170 passed |
+| `tests/unit/objectives/test_autodiff_solver_objectives.py` | 97 passed |
+| `tests/unit/linear/test_linear.py -k "krylov or eigen or shift or implicit or linked"` | 16 passed |
+| `tests/unit/linear/test_linear_helpers_extra.py` | 61 passed |
+| `tests/unit/nonlinear/test_nonlinear.py -k "implicit or imex or IMEX"` | 9 passed |
+| `tests/unit/nonlinear/test_nonlinear_helpers_extra.py` | 82 passed |
+| `tests/unit/api/test_public_types.py tests/unit/operators/test_nonlinear_operator_packages.py` | 37 passed |
+| `tests/integration/runtime/test_cli.py -k "final_state or krylov or Krylov"` | 2 passed |
+| `tests/tools/comparison/test_reference_comparison_tools.py -k "ky_diagnostics or krylov or implicit"` | 4 passed |
+| `tests/unit/parallel/test_parallel_linear_velocity.py` (4 forced host devices) | 71 passed |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+New tests: a starved inner budget is carried by both implicit scan forms and refused by
+the host gate while a converged budget passes; the IMEX status step returns the plain
+step's state and gradient and counts a starved solve; the certified propagator pair
+reports its residual, tolerance and route; both runtime implicit paths and the IMEX
+final-state route request stats and fail closed; the Krylov fallback result carries
+`eigen_status`. Five fakes changed shape only: two runtime eigenpair fakes return a
+status, and three `gmres`/IMEX fakes gain the SOLVAX status fields the scans now read.
+No asserted number changed.
+
+Checks: ruff 0.16.4 check and format, `mypy` as CI (185 source files), `sphinx -W`,
+`check_package_architecture_manifest.py`, `check_repository_size_manifest.py`, gitleaks on
+the range.
+
+**Manifest.** `installable_source_python_lines` 89618 → 90139 and `test_python_lines`
+88428 → 88728, both measured; tool lines unchanged at 78165; the new module leaves the
+source file count (185) under its baseline (193); `workflows/nonlinear.py` complexity
+budget unchanged at 1023. `tools/validation_coverage_manifest.toml` gives
+`gkx.workflows.runtime.solver_status` to the `orchestration_scan` owner beside `results`.
+
+**Follow-up for the plan.** The IMEX diagnostics scan (`integrate_nonlinear_imex_diagnostics`,
+via `make_imex_diagnostic_step`) and the sheared IMEX route (`solve_imex_step` in
+`solvers_nonlinear_state_integration.py`) still carry no `ImplicitSolveStats`, and the
+artifact summary JSON does not record solver status. A later row should thread the stats
+through that diagnostics carry and the sheared scan, apply the same host check wherever a
+runtime route reaches them, and write the status into saved summaries.
+
+## 2026-09-14 — Q9: batched linked-chain transforms (plan §5.3 N2)
+
+**Outcome: S+T adopted by the registered timing gate; T alone rejected.** The shared linked-chain transform plus the transpose-free chain layout halves the chain FFT launches, cuts materialized bytes 43–48% on every ledgered graph, is bitwise on 100-step trajectories in f32 and x64, and was not slower than base beyond the measured noise in any block for RHS, RHS gradient, scan or window gradient. The timings ran on contended hardware, so they bound a slowdown; they do not establish a speed-up. Branch `perf/batched-chain-fft`, based on
+`ccdd4bf12` (#239's head).
+
+**O(1) exact launches do not exist for this operator.** A chain of `L` links owns
+`N = L·Nz` samples and the periodic spectral operator on `Z_N`, with wavenumbers
+`k_j = 2πj/(N dz)`. One FFT launch has one length `M`.
+- Zero-padding a chain to `M` samples its DTFT at `j·N/M`, not at `j`. That is a
+  different operator: ‖Δ‖/‖ref‖ of the padded derivative is .21–.45 for
+  `(N, M)` ∈ {(24,48), (48,120), (72,120), (24,72), (96,288)} (f64, `census.py`).
+- Tiling a chain `M/N` times (exact only when `N | M`) puts `(M/N)·f̂_N[j]` in bin
+  `j·M/N`, at the same `k` (Nyquist sign included; the frequency tables agree to
+  roundoff) and zeros elsewhere. Measured: tiled derivative ‖Δ‖/‖ref‖ 1.4e-16 to
+  4.2e-16, off-bins ≤1e-14. One launch per RHS would need `M = lcm` of all chain
+  lengths.
+- Equal lengths are already grouped: the cache holds one class per distinct length.
+
+Chain classes of the Cyclone nonlinear deck, and what one launch would transform
+(`census.py`):
+
+| grid | classes `(nChains, nLinks)` | chain samples | padded to longest | tiled to lcm |
+|---|---|---:|---:|---:|
+| 32×32×24 | (175,1) (16,2) (1,3) (4,4) (1,5) | 5,544 | 4.26× | 51× (lcm 60) |
+| 64×64×24 | (690,1) (61,2) (16,3) (7,4) (3,5) (2,8) (3,9) | 22,704 | 7.44× | 298× (lcm 360) |
+| 96×96×48 | (1452,1) (132,2) (33,3) (15,4) (3,5) (7,6) (3,7) (2,12) (3,13) | 96,768 | 10.6× (not exact) | 4,469× (lcm 5460) |
+
+So the exact minimum is one FFT and one IFFT per class for everything that
+transforms on the chains. The RHS had four per class: streaming (`i k_z` on the
+Hermite-ladder and field-drive operand) and the `|k_z|` hypercollision branch
+(`c(s,m)·G`) each gathered, transformed and scattered on their own.
+
+**What changed (two pieces, measured separately).**
+- **S, shared transform.** Both operands scale the state by coefficients that do
+  not depend on `(ky, kx, z)`, then apply a diagonal multiplier of the same chain
+  spectrum. `_linked_fft_apply` accepts a tuple of operands with one operator each;
+  per class it gathers each operand, stacks the two chain arrays, and issues one
+  FFT, one multiply by `[i k_z, |k_z|]`, one IFFT and one output write.
+  `assembly._shared_linked_streaming_hypercollisions` takes that route when both
+  terms are statically on, the tube is linked and the dtypes agree; otherwise the
+  separate routes run unchanged. Per-element arithmetic is unchanged.
+- **T, chain layout without transposes.** The chain gather used to swap `kx` in
+  front of `ky` (`ky + Ny·kx` flat order) and swap back after the output gather.
+  It now reshapes in the state's own `(ky, kx)` row order and translates the chain
+  maps at trace time (`_state_mode_rows`, `_state_row_table`). Only data movement
+  changes.
+- A first S prototype stacked the two full operands before the gather (`jnp.stack`).
+  It halved launches too, but wrote two extra states per RHS (+3,151,488 B at 32,
+  +6.8%). Stacking after the gather keeps only the chain-sized stack.
+
+**HLO ledger** (`profile_runtime_kernels.py nonlinear-step-hlo`, XLA:CPU, jax 0.10.2;
+base → S+T; T alone in brackets):
+
+| graph | fft | concatenate | copy | transpose | bytes written |
+|---|---:|---:|---:|---:|---:|
+| RHS 32×32×24 Nl2/Nm4 | 23→13 [23] | 11→18 [11] | 35→19 [21] | 35→19 [21] | 46,295,964→24,991,260 [24,275,868] |
+| diagnostics rk3, 32 | 74→44 [74] | 32→38 [32] | 136→85 [92] | 117→66 [73] | 156,556,500→89,479,380 [87,350,484] |
+| diagnostics rk4, 32 | 97→57 [97] | 41→49 [41] | 175→105 [115] | 156→86 [96] | 208,946,388→117,413,076 [114,574,548] |
+| runtime rk3, 32 | 73→43 [73] | 33→44 [33] | 277→226 [233] | 115→64 [71] | 156,134,052→89,062,692 [86,928,036] |
+| runtime rk4, 32 | 96→56 [96] | 42→55 [42] | 316→246 [256] | 154→84 [94] | 208,523,940→116,996,388 [114,152,100] |
+| RHS 64×64×24 Nl4/Nm8 | 31→17 [31] | 11→22 [11] | 43→23 [25] | 43→23 [25] | 866,160,328→424,812,232 [413,175,496] |
+| diagnostics rk3, 64 | 98→56 [98] | 32→44 [32] | 163→100 [107] | 144→81 [88] | 2,884,020,404→1,509,607,604 [1,474,734,260] |
+| diagnostics rk4, 64 | 129→73 [129] | 41→57 [41] | 210→124 [134] | 191→105 [115] | 3,849,267,380→1,983,162,548 [1,936,664,756] |
+| runtime rk3, 64 | 97→55 [97] | 33→52 [33] | 303→240 [247] | 141→78 [85] | 2,873,459,056→1,499,058,544 [1,464,172,912] |
+| runtime rk4, 64 | 128→72 [128] | 42→65 [42] | 350→264 [274] | 188→102 [112] | 3,838,706,032→1,972,613,488 [1,926,103,408] |
+
+The base rows equal #239's (same JSON SHA-256). Per RHS at 32, the 20 chain
+launches become 10 (5 classes × FFT+IFFT) and the 3 bracket transforms are
+unchanged. Attribution (`hlo_bytes.py`, RHS at 32): T removes four
+`c64[1,2,4,1024,24]` copies (the flatten transposes, 6.29 MB) and XLA then also drops
+fourteen full-state `c64[1,2,4,32,32,24]` copies (22.0 MB). S adds the per-class
+stack concatenates (0.83 MB); its 2-slot copies replace pairs of 1-slot copies
+byte for byte. So S+T writes 2.4–2.9% more than T alone, and 43–48% less than base.
+
+**Identity.** `‖Δ‖/‖ref‖` per output against base.
+- **RHS terms and VJPs** (`rhs_identity.py`). Every named term of
+  `assemble_rhs_terms_cached`, the total, the full nonlinear RHS, and the VJP of
+  `Re⟨c, rhs_linear(G)⟩` wrt G, tprim and nu_hyper_m. Cases: the linked Cyclone
+  pilot (Nx=8, Ny=16, Nz=16, jtwist=1, Nl4/Nm8, classes (14,1) (4,2) (1,3) (1,5)),
+  the same with nu_hyper_m=.5, and the nonlinear deck at 32×32×24 and 64×64×24.
+  The shared route traced in every case.
+
+  | tree | f32 bitwise | f32 largest | x64 bitwise | x64 largest |
+  |---|---:|---|---:|---|
+  | S+T | 51/58 | vjp_G 4.1e-8 to 4.6e-8; nl64 hypercollisions 5.4e-9, total 2.8e-9, nonlinear RHS 2.8e-10 | 51/58 | vjp_G 6.3e-17 to 8.6e-17; nl64 hypercollisions 4.0e-18; nl32 nonlinear RHS 1.5e-19 |
+  | T | 56/58 | nonlinear RHS 3.2e-11 (32), 1.6e-9 (64) | 58/58 | — |
+
+- **100-step trajectories** (Q4's gate, `gate_traj.py`). Deck at 16×16×24, Nl2/Nm4,
+  dt .01, `init_amp=10` (‖NL‖/‖L‖ = .0506), classes (53,1) (5,2) (1,3). Cases:
+  `integrate_nonlinear` with euler, rk2, rk3, rk3_classic, rk4, sspx3 and k10;
+  `run_runtime_nonlinear` rk3/rk4 × {adaptive, collision split implicit, fixed
+  mode}; `integrate_nonlinear_sharded` rk3, rk3_classic, rk4;
+  `integrate_nonlinear_species_hermite` rk3/rk4; and the checkpointed
+  `nonlinear_heat_flux_window` value and d/dtprim for rk3/rk4. Result: **65/65
+  bitwise in f32 and in x64.** The archives have the same SHA-256 as base and as
+  #231's main archives.
+
+**Why the roundoff, algebraically.** Two causes, both outside the operator algebra.
+- *FFT batch layout.* The XLA:CPU FFT thunk splits a batch of lines across the
+  intra-op pool. DUCC processes lines in SIMD lanes with a scalar remainder, so the
+  lanes can round differently. Stacking doubles the line count and moves some lines
+  between the two paths. `probe_stack_bits.py` at 64×64×24:
+  - default flags: FFT, multiply and IFFT of a 2-slot batch differ from the single
+    slot for classes of length 24, 48, 72 and 216;
+  - `--xla_cpu_multi_thread_eigen=false`: all seven classes are bitwise, and so is
+    the full stacked `_linked_fft_apply`.
+- *Adjoint and fusion order.* In the VJP the two branches' cotangents reach G
+  through one stacked adjoint instead of two added separately. Floating-point
+  addition is not associative, so the sum is the same to one ulp (f32 ε=1.2e-7
+  against 4.6e-8; f64 ε=2.2e-16 against 8.6e-17). T alone changes no FFT batch, and
+  moves only the bracket's result (≤1.6e-9 f32, bitwise x64), because XLA fuses
+  differently around arrays that are no longer transposed.
+
+**VJP gate.** Linear RHS VJP: as in the identity table. Checkpointed window
+(20 steps, rk3/rk4): value and d/dtprim bitwise in both precisions.
+
+**Timing** (office, Xeon W-2295, 18 cores/36 threads, `taskset -c 2-17`, jax 0.10.2,
+`bench_q9.py`, Cyclone nonlinear deck 64×64×24 Nl4/Nm8, complex64). Arms per block ran in
+the order base → S+T → T, each in a fresh process from `git archive` trees: base
+`ccdd4bf12`, S+T `a86c435b2`, T = S+T with the shared route disabled. Kernels: jit
+`nonlinear_rhs_cached`; jit gradient of Re⟨c, rhs(G)⟩; jit `integrate_nonlinear` rk3 for
+5 steps; eager `value_and_grad` of the checkpointed `nonlinear_heat_flux_window` (rk3,
+6 steps) wrt tprim. The window gradient is eager because the window rebuilds its linked
+cache from the geometry, which an outer jit would trace. 7 reps each, 3 for the window.
+
+**The hardware was not idle.** The core split was cores 2–17 for Q9, 18–35 for Q20 and 1 for
+Q17, but at least eight unpinned VMEX agent jobs floated over all cores. Recorded at each
+arm start: 1-min load 24.8–41.2, cores 2–17 mean 21–71% busy, busiest core 60–100%. An
+idleness gate (mean below 10%, then 25%, then 35%) never passed in 45 minutes, so the
+three blocks ran ungated with busy levels logged (`timing/runs_pool.txt`). One arm under
+7 window reps and a jit-wrapped window kernel were discarded before the campaign.
+
+Registered gate, written in `ab_table.py` before the first measurement: a variant passes a
+kernel if, in every block, its median is at most base's median × (1 + tol), where tol =
+max(2%, (max − min)/median of base's reps in that block). Median ms and variant/base
+ratio; `*` marks a failed block:
+
+| kernel | block | tol | base | S+T | S+T/base | T | T/base |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| RHS | 1 | .208 | 370.3 | 333.2 | .900 | 315.7 | .853 |
+| RHS | 2 | .225 | 368.9 | 388.8 | 1.054 | 447.3 | 1.213 |
+| RHS | 3 | .164 | 387.0 | 335.3 | .866 | 364.3 | .941 |
+| RHS gradient | 1 | .263 | 601.3 | 439.9 | .731 | 476.2 | .792 |
+| RHS gradient | 2 | .201 | 632.8 | 570.4 | .901 | 656.1 | 1.037 |
+| RHS gradient | 3 | .112 | 610.6 | 523.3 | .857 | 601.0 | .984 |
+| scan rk3 ×5 | 1 | .042 | 5656.8 | 5043.4 | .892 | 4684.4 | .828 |
+| scan rk3 ×5 | 2 | .112 | 5721.2 | 6267.3 | 1.095 | 6341.1 | 1.108 |
+| scan rk3 ×5 | 3 | .247 | 4864.2 | 5190.6 | 1.067 | 5444.9 | 1.119 |
+| window gradient | 1 | .169 | 51520 | 43000 | .835 | 50296 | .976 |
+| window gradient | 2 | .174 | 55924 | 60889 | 1.089 | 60747 | 1.086 |
+| window gradient | 3 | .124 | 48179 | 53506 | 1.111 | 56234 | 1.167* |
+
+S+T passes all twelve kernel-blocks and T fails one, so S+T is adopted and T is not. The
+tolerances are 4–26% because of the contention, and that caveat matters:
+- S+T's RHS gradient was faster than base in every block (.73–.90).
+- Its RHS was faster in two blocks of three.
+- Its scan and window gradient were 7–11% above base in blocks 2 and 3, inside the noise
+  but not demonstrably equal.
+- In block 2 the load rose from 30 during the base arm to 38–41 during the variant arms,
+  and the fixed arm order puts that trend against the variants.
+
+A clean-hardware A/B/A/B is still owed before any throughput claim.
+
+**CPU FFT thread pool** (`--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1`
+against the default pool, same arms and cores; RHS, RHS gradient and a 2-step rk3 scan,
+7 reps). Median ms:
+
+| kernel | arm | pool (default) | no pool | no pool / pool |
+|---|---|---:|---:|---:|
+| RHS | base | 373.5 | 375.5 | 1.01 |
+| RHS | S+T | 345.7 | 380.3 | 1.10 |
+| RHS | T | 341.1 | 368.2 | 1.08 |
+| RHS gradient | base | 613.8 | 614.0 | 1.00 |
+| RHS gradient | S+T | 521.3 | 578.8 | 1.11 |
+| RHS gradient | T | 601.0 | 592.0 | 0.99 |
+| rk3 step | base | 1131.4 | 1219.0 | 1.08 |
+| rk3 step | S+T | 1038.1 | 1235.5 | 1.19 |
+| rk3 step | T | 1089.0 | 1193.1 | 1.10 |
+
+Within the no-pool blocks (median ms; ratio to base in the same block):
+
+| kernel | block | base | S+T | S+T/base | T | T/base |
+|---|---:|---:|---:|---:|---:|---:|
+| RHS | 1 | 372.8 | 382.7 | 1.027 | 375.4 | 1.007 |
+| RHS | 2 | 375.5 | 422.6 | 1.125 | 368.2 | 0.981 |
+| RHS | 3 | 384.7 | 350.1 | 0.910 | 363.2 | 0.944 |
+| RHS gradient | 1 | 628.6 | 553.5 | 0.881 | 592.5 | 0.943 |
+| RHS gradient | 2 | 609.9 | 569.4 | 0.934 | 583.8 | 0.957 |
+| RHS gradient | 3 | 614.7 | 594.7 | 0.967 | 599.0 | 0.974 |
+| scan rk3 ×2 | 1 | 2481.6 | 2465.9 | 0.994 | 2369.7 | 0.955 |
+| scan rk3 ×2 | 2 | 2438.0 | 2466.5 | 1.012 | 2404.9 | 0.986 |
+| scan rk3 ×2 | 3 | 2336.9 | 2557.0 | 1.094 | 2386.2 | 1.021 |
+
+**Tests and checks** (x64 unless noted, `gkx.__file__` in the worktree):
+- `tests/unit/operators/test_linear_streaming.py` + `test_terms_assembly.py`: 50 passed, 1 skipped (full cover needs an even mode count on Ny=2); the new stacked and shared-route tests also pass in f32 (15 selected).
+- New tests: stacked `_linked_fft_apply` against the per-class operator and a per-chain numpy reference for three chain-length mixes × gather/full-cover/scatter routes; operand validation; RHS terms, total and state VJP through the shared route against the separate routes on a four-class linked pilot; fallback when hypercollisions, the |kz| branch or streaming are statically off, or the tube is periodic.
+- `mypy`: no issues in 184 source files. ruff 0.16.4 check and format: pass on changed files.
+- Merged head (`origin/main` 7d94d5986 merged into the branch), x64, `nice -n 10`, one suite
+  at a time. The eight required files: 499 passed, 1 skipped. Hypercollision-touching
+  suites (parallel routing, linear, linear helpers, operator kernels, sharding profile,
+  comparison tools, end-damping, geometry and Hermite-hierarchy physics gates,
+  benchmark helpers and contracts): 472 passed, 15 skipped.
+  `test_parallel_linear_velocity.py` with 4 host devices: 71 passed. Runtime config,
+  artifacts, CLI and runner: 456 passed, 1 skipped. `test_adaptive_eigenmodes.py`: 8
+  passed, 2 skipped. `tests/release/test_release_gates.py` and
+  `tests/release/test_evidence_ledger.py`: 152 passed.
+- Architecture manifest: source 89618→89859, tests 88428→88686, tools unchanged.
+
+**Environment.** HLO counts, identity and trajectories: Apple M3 Max, 14 logical CPUs,
+macOS 14.4.1, Python 3.11.14, jax/jaxlib 0.10.2, numpy 2.4.6,
+`/Users/rogeriojorge/local/venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src:<tree>`,
+`JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at a time behind a 1-minute load
+gate below 20. Every tree was pinned: base `git archive ccdd4bf12`, S+T `a86c435b2`,
+T = S+T with the shared route disabled (one-line patch `tonly.patch` daad1b480980…fe29).
+Scripts, ledger JSONs and comparison JSONs are in `plan/research/scripts/2026-09-14-q9-batched-chain-fft/` (shell runners take `Q9_DIR` and `PY`; `gate_traj.py` is #231's gate with the deck path relative). Scratch SHA-256 (first 12 and last 4 hex digits; `gate_traj.py` and the runners before path scrubbing):
+- ledger JSON base = #239's; S+T diagnostics 32 35a6f18f571d…2696, 64
+  db98d467855f…85df, runtime 32 f54e4d165279…4355, 64 f91145f51566…273a; T
+  diagnostics 32 7ec5c929bb9b…2f8a, 64 468b459b7c5a…f60d, runtime 32
+  d7bb8eccf88a…8307, 64 05742aac49d1…ae48;
+- identity npz: base f32 b0f36f7e4e5e…edf5, x64 673da52c7396…cf6f; S+T f32
+  175ee99096fd…59f3, x64 84f8263bfc03…c37d; T f32 83db81a6936e…f624, x64 equal to
+  base;
+- trajectories: f32 67bd0b87882f…0a9a, x64 f22fc6ea025f…b4d1 (base = S+T);
+- scripts: `census.py` e84e224c5106…367f, `rhs_identity.py` 56fc9704f762…e77d,
+  `compare_npz.py` 3f4f98be42ee…b89d, `gate_traj.py` fddfdf3ae156…fe9a,
+  `probe_stack_bits.py` 22d0d696fab8…08d0, `hlo_bytes.py` a6d0a72158ce…c4c6,
+  `bench_q9.py` ad27f4bb593f…6766, `run_ab.sh` 7597e411117c…aecd.
+
+Commands: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo --route
+{diagnostics,runtime} --methods rk3,rk4 [--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8] --out
+<json> --hlo-dir <dir>`; `python rhs_identity.py <npz>` and `GATE_GRID=16,16,24,2,4
+GATE_AMP=10 GATE_STEPS=100 python gate_traj.py <npz>`, each with and without
+`JAX_ENABLE_X64=true GKX_X64=1`, then `python compare_npz.py <base> <other>`.
+
+**Limitations.** XLA:CPU only; GPU fusion and cuFFT plans differ. 96×96×48 was
+censused, not lowered. The reflectionless Hermite closure keeps its own `|k_z|`
+transform (not on any assembled route). The implicit linear streaming solver
+(`solvers_linear_implicit.py`) keeps the `ky + Ny·kx` flat order. Species×Hermite and
+the sharded runner ran on one device.
+
+**Next question.** Re-run the A/B/A/B on idle hardware (arm order rotated per block) to
+turn "not slower beyond noise" into a measured speed-up or a measured tie. Then N3: the
+ky ≥ 0 layout removes the conjugate restore, whose mirrored copies are now the largest
+remaining writes in the chain transform. Separately, T's disappearance of fourteen
+full-state copies suggests the N1 layout regression (#231, #239) may be worth re-checking
+on this tree.
+
+## 2026-09-14 — Q17 GX vnewk control: GX reproduces GKX's collisional Nl convergence at ν=1e-2 (Q8 P4)
+
+Queue row Q17 (Q8's registered P4). Measurement only: no source, test, default, reference or
+release change. Files are in `plan/research/scripts/2026-09-14-gx-vnewk-control/`. This entry
+replaces the "Q17 GX vnewk control (paused)" entry from earlier the same day. The branch was merged
+with `origin/main` `7d94d5986`.
+
+**Question and prediction.** Q8 registered P4 in its `manifest.toml` before any run: GX with
+`vnewk=1e-2` at Nl 24/32 agrees with GKX's matched runs to ≤2%. The GKX reference values are
+from Q3/Q8 (T=150, fit [105,150]):
+
+| Nl | GKX γ | GKX ω |
+|---:|---:|---:|
+| 24 | .0174378 | .495769 |
+| 32 | .0171657 | .495705 |
+| 48 | .0171695 | .495685 |
+
+Before this row, it was not established whether GX `vnewk` and GKX species ν correspond
+one-to-one.
+
+**Decks.**
+- Q8's GX decks are unchanged (`cmp` identical). The Nl48 deck differs from the Nl32 deck in
+  `nlaguerre` only.
+- Relative to the matched collisionless deck (office
+  `gkx-nl24-discriminator-20260912.vvmgDD/nl24.in`, SHA-256 `2dd1c42b…`), the physics changes
+  are `vnewk = [1.0e-2, 0.0]` and, for Nl32/48, `nlaguerre`.
+- Every deck also sets `t_max` 300→150, `save_for_restart`→false and `fields`/`moments`→false.
+  These change output only (`deck_diffs.txt`).
+- Binary: the repaired parity binary `96a53403…`, the one Q8's `run_gx.sh` names.
+- `gx_fit.py`: Q8's script, unchanged. γ is half the slope of log Phi2_t on [0.7T, T]; ω is
+  the second-half mean of `omega_kxkyt`. The half-time probe is [0.35T, 0.5T], settled if the
+  shift is ≤5% (the runner's rule).
+
+**Operator and normalization map (source reading, now confirmed numerically at this deck).**
+- *GX* (upstream `3865a537`):
+  - **Input:** `nu_ss` is `vnewk`, read unscaled (`src/parameters.cu:559`); collisions are on
+    for any `vnewk > 0` (`:570-572`).
+  - **Damping:** `rhs_linear` applies −(ν_ss+ν_ei)(b_s+2ℓ+m)·H (`src/device_funcs.cu:3178`),
+    with ν_ei = 0 for the ion species.
+  - **b_s:** b_s = k⊥²ρ², with ρ² = T·m/Z² = 1 (`parameters.cu:1065`).
+  - **Restoring terms:**
+    - m=0: +ν√b·JflrB_ℓ·ū⊥, with ū⊥ = √b·Σ JflrB_ℓ′ H_ℓ′0 (`:3501`, `:3519`) and
+      JflrB_ℓ = J_ℓ + J_{ℓ−1} (`:146`); also +ν·2(ℓJ_{ℓ−1}+2ℓJ_ℓ+(ℓ+1)J_{ℓ+1})·T̄;
+    - m=1: +ν·J_ℓ·ū∥;
+    - m=2: +ν·√2·J_ℓ·T̄.
+- *GKX*:
+  - **Input:** species `nu` is passed unscaled (`src/gkx/workflows/runtime/startup.py:77`).
+  - **Damping:** ν(ν_L ℓ + ν_H m) + ν·b = ν(2ℓ+m+b) with the fixture's `nu_hermite=1`,
+    `nu_laguerre=2` (`src/gkx/operators/linear/cache_arrays.py:54-57`, `collision_damping`).
+  - **Restoring terms** (`_collision_moment_correction` in
+    `src/gkx/operators/linear/dissipation.py`):
+    - m=0: ν·b·JlB·Σ JlB H_m0 + ν·2·coeff_t·T̄, with JlB = J_ℓ + J_{ℓ−1}
+      (`cache_arrays.py:139`);
+    - m=1: ν·Jl·ū∥;
+    - m=2: ν·√2·Jl·T̄.
+- *Map:*
+  - The damping and all four restoring terms have the same coefficients.
+  - Neither code puts v_t or mass in the collision rate.
+  - Both use the time normalization of the matched collisionless parity.
+  - So for this ion (m = T = Z = 1), `vnewk` = ν one-to-one; no rescaled matched value exists
+    or was needed.
+  - GX zeroes J_ℓ for ℓ>30. That touches ℓ=31 at Nl32; the Nl32 agreement below bounds its
+    effect on this mode.
+
+**Runs.**
+- **Host:** office (`pop-os`), RTX A4000 GPU0 for both runs. GX host process pinned to core 1
+  (`taskset -c 1`; cores 2–17 reserved for Q9, 18–35 for Q20). Supervisor `run_q17.sh`
+  (SHA-256 `76db0358…`, the version executed).
+- **Supervisor guards:**
+  - binary hash and `ldd` checked;
+  - a GPU is taken only after two polls 60 s apart with no compute process and <5%
+    utilization, plus a recheck at launch;
+  - one 2 h polling deadline for the batch;
+  - per-run cap 2700 s;
+  - the log is scanned for NaN/Inf;
+  - restart and big files are deleted.
+- **GPU wait:** 21:17:55–22:17:03 CDT. Both GPUs held a compute context of another user's
+  `python run_collapse.py` (pid 1005182; GPU0 at 100%) until about 22:14.
+- **Nl24:** 22:17:03–22:41:11, exit 0, `/usr/bin/time` wall 23:48.3, 18.9 ms/step, device
+  882 MiB.
+- **Nl32:** 22:42:12–23:13:50, exit 0, wall 31:20.2, 25.0 ms/step.
+- **Nl48 not run.** Measured 18.9 and 25.0 ms/step project ≈37 ms/step, ≈47 GPU-min. That is
+  over the row's 30-min criterion and the 2700 s cap. The supervisor (pid 1115042) was sent
+  SIGTERM at 23:13:52, during its first poll after the Nl32 fit and before any Nl48 launch
+  (`results/stop_note.txt`).
+- **Also not run:** the `nohyper` Nl32 deck.
+
+**Results** (`summary.txt`, from `summarize_q17.py`; rel = (GX−GKX)/GKX):
+
+| Nl | GKX γ | GX γ | rel γ | GKX ω | GX ω | rel ω | GX half shift | GX settled | P4 (≤2%) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 24 | .0174378 | .0174378 | −1.73e-07 | .495769 | .495771 | +3.33e-06 | +3.01e-05 | yes | pass |
+| 32 | .0171657 | .0171657 | −4.67e-07 | .495705 | .495705 | −6.88e-07 | +3.44e-05 | yes | pass |
+| 48 | .0171695 | not run | | .495685 | not run | | | | not run |
+
+The Nl24→32 γ change is −1.5602% in both codes. GKX's Nl32→48 change is +0.02%.
+
+**Verdict.**
+- **P4 passes.** At ν=1e-2, GX reproduces GKX's growth rate and frequency at Nl 24 and 32 to
+  ≤5e-7 relative in γ and ≤3.3e-6 in ω, and the same Nl24→32 step (−1.5602%).
+- The collisional Laguerre convergence Q8 found at ν=1e-2 is therefore shared by an
+  independent implementation, at least through Nl32.
+- This also confirms numerically that `vnewk` and GKX species ν are the same parameter for
+  this deck.
+- The agreement is at the level of the fits' round-off. It shows that the two codes integrate
+  the same discrete collisional system on the same imported geometry. It does not make
+  γ=.01717 a collisionless limit, since Q8's ν·b ≈ .13 ≫ γ caveat stands.
+
+**Limitations.**
+- One ky, one ν, T=150 fits on a single window; no eigenvalue or Laguerre spectrum.
+- Nl48 was not run on GX, so the Nl32→48 plateau is shown by GKX only.
+- The mapping is checked for a species with m = T = Z = 1 only.
+- GX's own `omega_kxkyt` growth diagnostic (second-half means .0174707/.0171924) is 0.19% and
+  0.16% above its Phi2 fit. It is a different estimator; the Phi2 late fit is the quantity
+  matched to the GKX runner.
+- Timings are on a shared host with the process pinned to one core (71–77% CPU); they are
+  slower than the 10.5 ms/step smoke run and not benchmark-grade.
+
+**Environment.**
+- GX binary `/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx` (SHA-256
+  `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536`), on the rebuilt
+  toolchain.
+- Fit: `/home/rjorge/local/micromamba/envs/gk-fortran/bin/python` (netCDF4 1.7.4, NumPy
+  2.5.3).
+- Run directory: `/home/rjorge/gkx-q17-gx-vnewk-20260914` (31 MB, kept).
+
+**Commands.**
+- Launch, from the run directory after `sha256sum -c q17.sha`:
+  `env GPU_WAIT_S=7200 BUDGET_END=<start+10620 s> MIN_LEFT_S=3600 SKIP_IF_SHORT=gx-nu1e-2-nl48 GX_CORE=1 setsid nohup ./run_q17.sh gx-nu1e-2-nl24 gx-nu1e-2-nl32 gx-nu1e-2-nl48 > supervisor.txt 2>&1 < /dev/null &`
+- Per key, the supervisor runs
+  `CUDA_VISIBLE_DEVICES=<gpu> setsid timeout --signal=TERM --kill-after=10s 2700s /usr/bin/time -v -o KEY.time.txt taskset -c 1 gx KEY.in`,
+  then `python gx_fit.py KEY.out.nc KEY KEY.json`.
+- Table, from the repository root:
+  `python plan/research/scripts/2026-09-14-gx-vnewk-control/summarize_q17.py`.
+
+**Artifacts.**
+- `SHA256SUMS.txt` lists every other file in the directory (96 KB); its own SHA-256 is
+  `973884c55f83f350a8f148ef824c664c7fce4060a91048580c217e0a241435c6`.
+- Key hashes:
+  - `summary.txt` `11d49a409db1f2461dfed8e6a5461de38515764dfba746a004399051df4386bf`
+  - `results/gx-nu1e-2-nl24.json` `b3fd4be1ab852a8f3e13fd7bcfbd44506704c10e28fb01f9917a93f01ecc12cc`
+  - `results/gx-nu1e-2-nl32.json` `a2532847bdd0707b345e8116aa776f127487442767643ae0123b88549ff0e423`
+  - `run_q17.sh` `76db0358f72c95dbe24599f2d59a6e0bd4ff50ddd3726e3eaffd159de3a97879`
+- netCDF outputs, not committed (on office):
+  - `gx-nu1e-2-nl24.out.nc` `2739ca80c19f1f798e959e38e7845dcf9ab79a15efeda990d2be6c4880213255`
+  - `gx-nu1e-2-nl32.out.nc` `6f679e747549dc601b41671a69543988fbb8dee48dc44ef416ea5b63dcb3abab`
+
+**Terminal process state.** At 2026-09-14T23:15:10-05:00 every process this row started on
+office was verified absent, and `nvidia-smi --query-compute-apps` listed no process on either
+GPU. The PIDs checked:
+- launch shell wrappers 1115036 and 1115037;
+- supervisor 1115042 (SIGTERM 23:13:52);
+- Nl24 timeout, time and gx: 1141459, 1141461, 1141462;
+- Nl32 timeout, time and gx: 1150862, 1150864, 1150865;
+- the supervisor's orphaned `sleep 60`, 1164702.
+
+No `run_q17` or parity-binary `gx` process remained. The local ssh session that launched the
+supervisor exited with it.
+
 ## 2026-09-14 — Q20 cross-code linear Cyclone controls (paused)
 
 Queue row Q20 (§2.4). The maintainer paused all GKX work at 13:15 CDT, about 40 minutes into the

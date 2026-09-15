@@ -82,6 +82,56 @@ residual 0.98--1.00.  Code that relies on the raw routes must now name the
 method, and must pass ``certify=False`` if it knowingly accepts an
 unconverged pair.
 
+Solver status on results
+------------------------
+
+Runtime results carry the status of the solve that produced them, so a number
+never travels without its evidence (queue row Q15):
+
+* ``RuntimeLinearResult.eigen_status`` (``EigenSolveStatus``) is set on Krylov
+  runs.  ``residual`` is the original-operator relative residual above of the
+  returned pair, ``tolerance`` the gate its route applied, ``certified``
+  whether it passed and ``route`` the method that produced the pair; a
+  shift-invert fallback names its fallback method.  ``inner`` summarizes the
+  inner FGMRES solves of the shift-invert build that produced the pair
+  (converged, unconverged and total solves, maximum relative residual,
+  iterations, tolerance and preconditioner) and is ``None`` for other routes.
+  ``dominant_eigenpair(..., return_status=True)`` returns it as a third
+  element.  Every gate raises, so ``certified`` is ``False`` only for a raw
+  route called with ``certify=False``.
+* ``implicit_solve`` (``ImplicitSolveSummary``) on ``RuntimeLinearResult`` for
+  ``method="implicit"`` and on ``RuntimeNonlinearResult`` for IMEX runs
+  summarizes every GMRES solve of the run: the largest SOLVAX true relative
+  residual ``||b - A x|| / ||b||``, the most iterations one solve used, the
+  number of solves and the number that did not converge.
+* ``summary()`` flattens both into scalar ``eigen_*`` and ``implicit_*`` keys,
+  which are ``None`` where no such solve ran.
+
+The time scans carry ``ImplicitSolveStats``, four scalars, through
+``lax.scan`` and ``fori_loop``; no host callback runs inside a traced scan.
+
+**Non-convergence fails closed at the host boundary.**  A traced step cannot
+raise, so ``run_runtime_linear`` and ``run_runtime_nonlinear`` check the
+carried stats after the scan returns and raise ``RuntimeError`` with the
+unconverged count, the maximum relative residual and the maximum iterations,
+as the eigen gates refuse an uncertified pair.  Neither returns a trajectory
+with an unconverged implicit step.  The library integrators stay traceable and
+do not raise: ``integrate_linear``, ``integrate_linear_diagnostics``,
+``integrate_linear_from_config``, ``integrate_nonlinear``,
+``integrate_nonlinear_from_config`` and ``integrate_nonlinear_imex_cached``
+accept ``return_solve_stats=True`` and append the stats (``None`` for methods
+without an implicit solve) for callers that decide for themselves; without it
+they return what they returned before.  The IMEX diagnostics scan and the
+sheared IMEX route do not carry the stats yet.
+
+**Cost.**  Callers that do not request the stats compile the graph they
+compiled before, because XLA removes the unused carry.  Requesting them reads
+SOLVAX's recomputed true residual, which XLA otherwise removes, so it costs one
+operator application per implicit solve; the scalar folds add about twenty
+instructions.  On a 4x4x8, Nl=2, Nm=4 implicit linear scan the optimized HLO
+grows from 3834 to 4443 instructions (FFT 16 to 20); a fold of the iteration
+count alone adds 19.  No jit static argument or compile key is added.
+
 Differentiable eigenmodes
 -------------------------
 
