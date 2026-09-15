@@ -1,4 +1,6 @@
-import re, sys, collections
+import re
+import sys
+import collections
 import numpy as np
 
 RX = re.compile(

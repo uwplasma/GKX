@@ -1,4 +1,5 @@
-import json, sys
+import json
+import sys
 
 a, b = sys.argv[1], sys.argv[2]
 keys = ("fft", "concatenate", "copy", "transpose", "gather", "reverse", "bytes_written")
