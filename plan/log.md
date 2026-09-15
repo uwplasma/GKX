@@ -13322,11 +13322,27 @@ from upstream releases (archives with verified checksums or signatures; NCCL fro
 `v2.18.1-1` tag). Provenance and a do-not-delete
 notice are in that directory's `README.txt`. A pristine upstream GX (`gx` branch
 `3865a537`) was also built at `/home/rjorge/gx-upstream-3865a537/gx`. `ldd` resolves every
-library for the 787eb014, 96a53403 and upstream binaries. **The physics check is not yet
-done:** both A4000s were fully used by another session's jobs, so the Cyclone deck
-(787eb014 and 3865a537 against γ≈.0346, ω≈.498 at ky=.55) and an Nl24 smoke run of the
-96a53403 parity binary wait in a queue that starts only on an idle GPU
-(`/home/rjorge/gx-toolchain-rebuild-20260914/queue_long.sh`). Q17 depends on it.
+library for the 787eb014, 96a53403 and upstream binaries.
+
+**Physics check on the rebuilt toolchain** (office GPU 0 once idle, 2026-09-14 12:27–13:05 CDT;
+run directories under `/home/rjorge/gx-toolchain-rebuild-20260914/`):
+- Shipped Cyclone s-alpha adiabatic deck (inputs checked by SHA-256). The 787eb014 output is
+  **bitwise identical, 264 of 264 netCDF variables**, to office runs of the same binary
+  made before the deletion (`gx_rebaseline_20260818`, `gx_refs_lin` of 2026-09-02). The
+  pristine upstream 3865a537 build is bitwise identical to 787eb014 in `omega_kxkyt`. At
+  ky=.55: γ=.034483, ω=.498361.
+- GX's own `check.py` against the shipped `_correct` file reports max relative differences
+  7.3e-3 in γ and 6.3e-4 in ω, above its 1e-3 threshold. The worst row is ky=.05, where γ is
+  small; ky=.55 differs by −3.5e-3. The reference file is sampled at different times (30
+  against 34 writes), so the two half-window averages cover different samples. Since the
+  output is bitwise equal to the pre-deletion runs, this "TEST FAILS" predates the rebuild.
+  It is not a library regression.
+- The repaired 96a53403 parity binary ran the Nl24 deck with `t_max` 300 → 2. All 264
+  variables are bitwise identical to its 2026-09-12 output over the ten overlapping writes.
+  Only the final write differs, because it lands at t=2.000 rather than 2.002. The run took
+  10.5 ms per step.
+
+Q17 can proceed.
 
 **Comparison codes** (upstream sources, unpatched; inventory with commands in
 `~/local/gk-codes/README.txt` and `/home/rjorge/gk-codes/README.txt` on office):
@@ -13348,9 +13364,10 @@ done:** both A4000s were fully used by another session's jobs, so the Cyclone de
   `b4933975` (CGYRO), GX upstream `3865a537`. GENE is not openly distributed and is not
   included.
 
-**Terminal state.** No process owned by this entry runs except the office GX queue
-(`queue_long.pid`), which waits up to 12 h for an idle GPU and then writes `check.txt` in
-each run directory.
+**Terminal state.** The office GX queue (`queue_long.sh`) ended at 13:05 CDT with all three
+runs at rc=0. It had invoked `check.py` without its stem argument; the checks above were
+re-run by hand with `check.py itg_salpha_adiabatic_electrons`. No process owned by this
+entry is running.
 
 ## 2026-09-14 — Q20 cross-code linear Cyclone controls (paused)
 
