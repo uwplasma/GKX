@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from gkx.core_velocity import hermite_ladder_coeffs
 
@@ -140,9 +141,10 @@ def _validate_linked_fft_inputs(
     linked_indices: tuple[jnp.ndarray, ...],
     linked_kz: tuple[jnp.ndarray, ...],
     *,
-    operator: str,
+    operator: str | tuple[str, ...],
 ) -> None:
-    if operator not in {"grad", "abs"}:
+    operators = (operator,) if isinstance(operator, str) else tuple(operator)
+    if not operators or any(op not in {"grad", "abs"} for op in operators):
         raise ValueError(f"unsupported linked FFT operator {operator!r}")
     if len(linked_indices) != len(linked_kz):
         raise ValueError("linked_indices and linked_kz must have the same length")
@@ -154,14 +156,34 @@ def _validate_linked_fft_inputs(
 def _flatten_linked_fft_state(
     f: jnp.ndarray,
 ) -> tuple[jnp.ndarray, tuple[int, ...], int, int, int]:
-    """Move spectral ``kx`` next to ``ky`` and flatten linked chain indices."""
+    """Flatten ``(ky, kx)`` into one mode axis in the state's own row order.
+
+    Row ``p`` is mode ``(ky, kx) = (p // Nx, p % Nx)``. A reshape keeps the
+    state buffer where it is; swapping ``kx`` in front of ``ky`` first, as the
+    chain index convention ``ky + Ny * kx`` would suggest, made XLA copy the
+    whole state before every gather and again after every scatter. The chain
+    maps are translated to row order by :func:`_state_mode_rows` instead.
+    """
 
     Ny = f.shape[-3]
     Nx = f.shape[-2]
     Nz = f.shape[-1]
     lead_shape = f.shape[:-3]
-    f_perm = jnp.swapaxes(f, -3, -2)
-    return f_perm.reshape(*lead_shape, Nx * Ny, Nz), lead_shape, Ny, Nx, Nz
+    return f.reshape(*lead_shape, Ny * Nx, Nz), lead_shape, Ny, Nx, Nz
+
+
+def _state_mode_rows(idx_flat: jnp.ndarray, *, Ny: int, Nx: int) -> jnp.ndarray:
+    """Map chain mode indices ``ky + Ny * kx`` to state rows ``ky * Nx + kx``."""
+
+    idx = jnp.asarray(idx_flat, dtype=jnp.int32)
+    return jnp.mod(idx, Ny) * Nx + idx // Ny
+
+
+def _state_row_table(table: jnp.ndarray, *, Ny: int, Nx: int) -> jnp.ndarray:
+    """Reorder a per-mode table indexed ``ky + Ny * kx`` into state row order."""
+
+    rows = np.arange(Ny * Nx)
+    return jnp.take(table, rows // Nx + Ny * (rows % Nx), axis=0)
 
 
 def _scatter_unique_linked_modes(
@@ -190,43 +212,77 @@ def _scatter_unique_linked_modes(
     return jnp.moveaxis(out_t, 0, -2)
 
 
+def _linked_fft_multiplier(
+    kz_link: jnp.ndarray,
+    f_hat: jnp.ndarray,
+    operator: str | tuple[str, ...],
+) -> jnp.ndarray:
+    """Return the spectral multiplier of one chain class.
+
+    A tuple names one operator per slot of the leading axis of ``f_hat``, so
+    stacked operands share the class's gather, transforms and scatter while
+    each slot keeps its own ``i k_z`` or ``|k_z|``.
+    """
+
+    def single(op: str) -> jnp.ndarray:
+        if op == "grad":
+            return _fft_ik_multiplier(kz_link, f_hat)
+        return _fft_abs_multiplier(kz_link, f_hat)
+
+    if isinstance(operator, str):
+        return single(operator)
+    stacked = jnp.stack([single(op) for op in operator])
+    return stacked.reshape((len(operator),) + (1,) * (f_hat.ndim - 2) + (-1,))
+
+
 def _linked_fft_chain_update(
-    f_flat: jnp.ndarray,
+    f_flat: jnp.ndarray | tuple[jnp.ndarray, ...],
     idx_map: jnp.ndarray,
     kz_link: jnp.ndarray,
     *,
     lead_shape: tuple[int, ...],
+    Ny: int,
+    Nx: int,
     Nz: int,
-    operator: str,
+    operator: str | tuple[str, ...],
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Apply one linked-chain FFT derivative or absolute-``k_z`` operator."""
+    """Apply one linked-chain FFT derivative or absolute-``k_z`` operator.
+
+    A tuple of flattened operands is gathered one by one and stacked in chain
+    layout, so the class issues one FFT and one IFFT for all of them without
+    first writing the stacked full states.
+    """
 
     if idx_map.ndim != 2:
         raise ValueError("linked index maps must have shape (nChains, nLinks)")
     nChains, nLinks = idx_map.shape
     idx_flat = idx_map.reshape(-1)
-    f_link = jnp.take(f_flat, idx_flat, axis=-2)
+    rows = _state_mode_rows(idx_flat, Ny=Ny, Nx=Nx)
+    if isinstance(f_flat, tuple):
+        dtype = f_flat[0].dtype
+        f_link = jnp.stack([jnp.take(part, rows, axis=-2) for part in f_flat])
+    else:
+        dtype = f_flat.dtype
+        f_link = jnp.take(f_flat, rows, axis=-2)
     f_link = f_link.reshape(*lead_shape, nChains, nLinks * Nz)
     f_hat = jnp.fft.fft(f_link, axis=-1)
-    multiplier = (
-        _fft_ik_multiplier(kz_link, f_hat)
-        if operator == "grad"
-        else _fft_abs_multiplier(kz_link, f_hat)
-    )
+    multiplier = _linked_fft_multiplier(kz_link, f_hat, operator)
     df_hat = multiplier * f_hat
     df_link = jnp.fft.ifft(df_hat, axis=-1)
     df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
-    return idx_flat, jnp.asarray(df_link, dtype=f_flat.dtype)
+    return idx_flat, jnp.asarray(df_link, dtype=dtype)
 
 
 def _linked_fft_chain_outputs(
-    f_flat: jnp.ndarray,
+    f_flat: jnp.ndarray | tuple[jnp.ndarray, ...],
     linked_indices: tuple[jnp.ndarray, ...],
     linked_kz: tuple[jnp.ndarray, ...],
     *,
     lead_shape: tuple[int, ...],
+    Ny: int,
+    Nx: int,
     Nz: int,
-    operator: str,
+    operator: str | tuple[str, ...],
 ) -> tuple[list[jnp.ndarray], list[jnp.ndarray]]:
     chain_updates: list[jnp.ndarray] = []
     chain_indices: list[jnp.ndarray] = []
@@ -236,6 +292,8 @@ def _linked_fft_chain_outputs(
             idx_map,
             kz_link,
             lead_shape=lead_shape,
+            Ny=Ny,
+            Nx=Nx,
             Nz=Nz,
             operator=operator,
         )
@@ -268,13 +326,16 @@ def _linked_fft_gather_output(
     Nz: int,
 ) -> jnp.ndarray:
     updates_cat = jnp.concatenate(chain_updates, axis=-2)
-    gather_map = jnp.asarray(linked_gather_map, dtype=jnp.int32)
-    gather_mask = jnp.asarray(linked_gather_mask, dtype=updates_cat.dtype)
+    gather_map = _state_row_table(
+        jnp.asarray(linked_gather_map, dtype=jnp.int32), Ny=Ny, Nx=Nx
+    )
+    gather_mask = _state_row_table(
+        jnp.asarray(linked_gather_mask, dtype=updates_cat.dtype), Ny=Ny, Nx=Nx
+    )
     updates_full = jnp.take(updates_cat, gather_map, axis=-2)
     mask_shape = (1,) * (updates_full.ndim - 2) + (gather_mask.shape[0], 1)
     updates_full = updates_full * gather_mask.reshape(mask_shape)
-    updates_full = updates_full.reshape(*lead_shape, Nx, Ny, Nz)
-    return jnp.swapaxes(updates_full, -3, -2)
+    return updates_full.reshape(*lead_shape, Ny, Nx, Nz)
 
 
 def _linked_fft_full_cover_output(
@@ -291,14 +352,14 @@ def _linked_fft_full_cover_output(
             "linked_inverse_permutation required when linked_full_cover is True"
         )
     updates_cat = jnp.concatenate(chain_updates, axis=-2)
-    inv = jnp.asarray(linked_inverse_permutation, dtype=jnp.int32)
+    inv = _state_row_table(
+        jnp.asarray(linked_inverse_permutation, dtype=jnp.int32), Ny=Ny, Nx=Nx
+    )
     df_flat = jnp.take(updates_cat, inv, axis=-2)
-    df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
-    return jnp.swapaxes(df_full, -3, -2)
+    return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
 
 def _linked_fft_scatter_output(
-    f_flat: jnp.ndarray,
     chain_indices: list[jnp.ndarray],
     chain_updates: list[jnp.ndarray],
     *,
@@ -307,32 +368,53 @@ def _linked_fft_scatter_output(
     Ny: int,
     Nz: int,
 ) -> jnp.ndarray:
-    df_flat = jnp.zeros_like(f_flat)
+    df_flat = jnp.zeros((*lead_shape, Ny * Nx, Nz), dtype=chain_updates[0].dtype)
     for idx_flat, df_link in zip(chain_indices, chain_updates):
-        df_flat = _scatter_unique_linked_modes(df_flat, idx_flat, df_link)
-    df_full = df_flat.reshape(*lead_shape, Nx, Ny, Nz)
-    return jnp.swapaxes(df_full, -3, -2)
+        df_flat = _scatter_unique_linked_modes(
+            df_flat, _state_mode_rows(idx_flat, Ny=Ny, Nx=Nx), df_link
+        )
+    return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
 
 def _linked_fft_apply(
-    f: jnp.ndarray,
+    f: jnp.ndarray | tuple[jnp.ndarray, ...],
     linked_indices: tuple[jnp.ndarray, ...],
     linked_kz: tuple[jnp.ndarray, ...],
     *,
-    operator: str,
+    operator: str | tuple[str, ...],
     linked_inverse_permutation: jnp.ndarray | None = None,
     linked_full_cover: bool = False,
     linked_gather_map: jnp.ndarray | None = None,
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
 ) -> jnp.ndarray:
+    """Apply linked-chain spectral operators; a tuple ``f`` returns them stacked.
+
+    With a tuple of equally shaped operands and one operator per operand, the
+    result carries a new leading axis whose slot ``i`` equals
+    ``_linked_fft_apply(f[i], ..., operator=operator[i])``: every chain class
+    then issues one gather-stack, FFT, IFFT and output write for all operands.
+    """
+
     _validate_linked_fft_inputs(linked_indices, linked_kz, operator=operator)
-    f_flat, lead_shape, Ny, Nx, Nz = _flatten_linked_fft_state(f)
+    if isinstance(f, tuple):
+        if isinstance(operator, str) or len(operator) != len(f):
+            raise ValueError("stacked linked FFT operands need one operator each")
+        if len({(part.shape, part.dtype) for part in f}) != 1:
+            raise ValueError("stacked linked FFT operands must share shape and dtype")
+        parts = [_flatten_linked_fft_state(part) for part in f]
+        f_flat: jnp.ndarray | tuple[jnp.ndarray, ...] = tuple(p[0] for p in parts)
+        _flat0, part_lead, Ny, Nx, Nz = parts[0]
+        lead_shape = (len(f), *part_lead)
+    else:
+        f_flat, lead_shape, Ny, Nx, Nz = _flatten_linked_fft_state(f)
     chain_indices, chain_updates = _linked_fft_chain_outputs(
         f_flat,
         linked_indices,
         linked_kz,
         lead_shape=lead_shape,
+        Ny=Ny,
+        Nx=Nx,
         Nz=Nz,
         operator=operator,
     )
@@ -348,9 +430,7 @@ def _linked_fft_apply(
             Ny=Ny,
             Nz=Nz,
         )
-        return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
-
-    if linked_full_cover:
+    elif linked_full_cover:
         out = _linked_fft_full_cover_output(
             chain_updates,
             linked_inverse_permutation=linked_inverse_permutation,
@@ -359,17 +439,15 @@ def _linked_fft_apply(
             Ny=Ny,
             Nz=Nz,
         )
-        return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
-
-    out = _linked_fft_scatter_output(
-        f_flat,
-        chain_indices,
-        chain_updates,
-        lead_shape=lead_shape,
-        Nx=Nx,
-        Ny=Ny,
-        Nz=Nz,
-    )
+    else:
+        out = _linked_fft_scatter_output(
+            chain_indices,
+            chain_updates,
+            lead_shape=lead_shape,
+            Nx=Nx,
+            Ny=Ny,
+            Nz=Nz,
+        )
     return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
 
 
