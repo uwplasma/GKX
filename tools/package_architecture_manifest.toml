@@ -921,7 +921,21 @@ recursive = true
 # power and inner-GMRES vectors, a seed guard, and covered-column assembly in
 # the sparse route. Most of the lines are the docstrings that state why modes
 # outside every chain are decoupled; target unchanged.
-baseline = 89618
+# 89618 -> 90139: solver status on results (Q15). EigenSolveStatus on every
+# eigen route and RuntimeLinearResult; ImplicitSolveStats carried through the
+# implicit and IMEX scans with the host-side summary and fail-closed check;
+# return_solve_stats forwarded through the integrator entry points; the runtime
+# check lives in the new workflows/runtime/solver_status.py so
+# workflows/nonlinear.py stays under its 1023-line budget. Measured; target
+# unchanged.
+# +241 (90139 -> 90380 after Q15): shared linked-chain transform and transpose-free chain layout
+# (Q9, plan 5.3 N2). Streaming and the |kz| hypercollision branch stack their
+# operands per chain class, so each class issues one gather-stack, FFT, IFFT and
+# output write for both terms, and the chain gather reshapes the state in its
+# own (ky, kx) row order with the chain maps translated at trace time instead of
+# copying a transposed state. One RHS at 32x32x24 goes from 23 to 13 FFT launches
+# and from 46.3 to 25.0 MB written; target unchanged.
+baseline = 90380
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1109,7 +1123,21 @@ recursive = true
 # unpinned contraction; target unchanged.
 # +32: the runtime HLO route lowers eager scan-body closures as arguments, not
 # the constants a jit embeds, in the existing profiling owner.
-baseline = 88428
+# +51: Q14. The window-gradient matrix checks its float32 adjoint against a
+# float64 centered difference, with the roundoff bound derived in plan/log.md,
+# and the precision banner no longer lists that matrix; no new test.
+# +300 (88479 -> 88779 after Q14): solver status on results (Q15). A starved inner budget is
+# carried by both implicit scan forms and refused at the host; the IMEX status
+# step matches the plain step's state and VJP; a certified pair reports its
+# residual and route; both runtime implicit paths and the IMEX final-state route
+# fail closed; and three fakes gain the SOLVAX status fields the scans now read.
+# Measured; target unchanged.
+# +258 (88779 -> 89037 after Q14 and Q15): Q9 equivalence tests. Stacked linked-FFT slots against the
+# per-class operator and a per-chain numpy reference for three chain-length
+# mixes on the gather, full-cover and scatter routes; operand validation; the
+# shared RHS route against the separate terms (every term, total, state VJP) on
+# a four-class linked pilot, and its static fallbacks; target unchanged.
+baseline = 89037
 target = 35000
 
 [[line_budget_policy.counts]]

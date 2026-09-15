@@ -34,6 +34,10 @@ from gkx.workflows.runtime.parallel_nonlinear import (
     shard_nonlinear_state,
 )
 from gkx.workflows.runtime.results import RuntimeNonlinearResult
+from gkx.workflows.runtime.solver_status import (
+    checked_solve_summary,
+    solve_stats_request,
+)
 
 
 @dataclass(frozen=True)
@@ -55,7 +59,7 @@ class FullNonlinearRuntimeDeps:
     integrate_nonlinear_explicit_diagnostics_state: Callable[..., Any]
     run_adaptive_runtime_chunk_loop: Callable[..., Any]
     build_runtime_nonlinear_result: Callable[..., RuntimeNonlinearResult]
-    integrate_nonlinear_from_config: Callable[..., tuple[Any, Any]]
+    integrate_nonlinear_from_config: Callable[..., tuple[Any, ...]]
 
 
 @dataclass(frozen=True)
@@ -557,31 +561,26 @@ def _run_final_state(
         f"{ctx.steps} steps with dt={ctx.dt:.6g}"
     )
     time_cfg = replace(cfg.time, dt=ctx.dt, t_max=ctx.dt * ctx.steps)
-    kwargs = {"terms": ctx.terms}
+    request = solve_stats_request(time_cfg.method, kind="nonlinear")
+    kwargs = {"terms": ctx.terms, **request}
     if policy.show_progress:
         kwargs["show_progress"] = True
-    G_final, fields = deps.integrate_nonlinear_from_config(
-        ctx.G0,
-        ctx.grid,
-        ctx.geom,
-        ctx.params,
-        time_cfg,
-        **kwargs,
+    G_final, fields, *extra = deps.integrate_nonlinear_from_config(
+        ctx.G0, ctx.grid, ctx.geom, ctx.params, time_cfg, **kwargs
     )
+    solve = checked_solve_summary(extra, request, label="nonlinear IMEX run")
     status("completed nonlinear final-state integration")
-    return (
-        _result(
-            ctx,
-            policy,
-            deps=deps,
-            t=np.asarray([]),
-            diagnostics=None,
-            fields=fields,
-            state=G_final,
-            summarize_fields=True,
-        ),
-        G_final,
+    result = _result(
+        ctx,
+        policy,
+        deps=deps,
+        t=np.asarray([]),
+        diagnostics=None,
+        fields=fields,
+        state=G_final,
+        summarize_fields=True,
     )
+    return (result if solve is None else replace(result, implicit_solve=solve)), G_final
 
 
 def _diagnostic_run_result(

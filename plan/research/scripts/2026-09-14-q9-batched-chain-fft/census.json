@@ -1,0 +1,125 @@
+[
+  {
+    "grid": "32x32x24",
+    "Nz": 24,
+    "classes": [
+      [
+        175,
+        1
+      ],
+      [
+        16,
+        2
+      ],
+      [
+        1,
+        3
+      ],
+      [
+        4,
+        4
+      ],
+      [
+        1,
+        5
+      ]
+    ],
+    "n_classes": 5,
+    "chain_samples": 5544,
+    "pad_samples": 23640,
+    "pad_ratio": 4.264,
+    "lcm_links": 60,
+    "tile_samples": 283680,
+    "tile_ratio": 51.169
+  },
+  {
+    "grid": "64x64x24",
+    "Nz": 24,
+    "classes": [
+      [
+        690,
+        1
+      ],
+      [
+        61,
+        2
+      ],
+      [
+        16,
+        3
+      ],
+      [
+        7,
+        4
+      ],
+      [
+        3,
+        5
+      ],
+      [
+        2,
+        8
+      ],
+      [
+        3,
+        9
+      ]
+    ],
+    "n_classes": 7,
+    "chain_samples": 22704,
+    "pad_samples": 168912,
+    "pad_ratio": 7.44,
+    "lcm_links": 360,
+    "tile_samples": 6756480,
+    "tile_ratio": 297.59
+  },
+  {
+    "grid": "96x96x48",
+    "Nz": 48,
+    "classes": [
+      [
+        1452,
+        1
+      ],
+      [
+        132,
+        2
+      ],
+      [
+        33,
+        3
+      ],
+      [
+        15,
+        4
+      ],
+      [
+        3,
+        5
+      ],
+      [
+        7,
+        6
+      ],
+      [
+        3,
+        7
+      ],
+      [
+        2,
+        12
+      ],
+      [
+        3,
+        13
+      ]
+    ],
+    "n_classes": 9,
+    "chain_samples": 96768,
+    "pad_samples": 1029600,
+    "pad_ratio": 10.64,
+    "lcm_links": 5460,
+    "tile_samples": 432432000,
+    "tile_ratio": 4468.75
+  }
+]

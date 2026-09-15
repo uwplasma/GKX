@@ -459,3 +459,128 @@ def test_static_zero_switches_stay_static_inside_a_trace() -> None:
         linear_rhs_jit_for_terms_impl(TermConfig(apar=1.0, bpar=0.0))
         is assemble_rhs_cached_jit
     )
+
+
+def _linked_pilot_rhs_case(**param_overrides):
+    """Nx=8/Ny=16 linked Cyclone case with four chain lengths and |kz| hypercollisions."""
+
+    from gkx.config import CycloneBaseCase
+    from gkx.geometry import ensure_flux_tube_geometry_data
+
+    grid_cfg = GridConfig(
+        Nx=8, Ny=16, Nz=8, Lx=6.28, Ly=6.28, boundary="linked", jtwist=1
+    )
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    options = dict(
+        fprim=0.8,
+        tprim=2.49,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+        nu_hyper_m=1.0,
+        hypercollisions_kz=1.0,
+    )
+    options.update(param_overrides)
+    params = LinearParams(**options)
+    Nl, Nm = 2, 4
+    cache = build_linear_cache(grid, geom, params, Nl, Nm)
+    rng = np.random.default_rng(9)
+    shape = (Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    G0 = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    return cache, params, G0
+
+
+def _shared_route_calls(monkeypatch):
+    calls: list[bool] = []
+    shared = assembly_mod._shared_linked_streaming_hypercollisions
+
+    def counting(*args, **kwargs):
+        result = shared(*args, **kwargs)
+        calls.append(result is not None)
+        return result
+
+    monkeypatch.setattr(
+        assembly_mod, "_shared_linked_streaming_hypercollisions", counting
+    )
+    return calls
+
+
+def test_linked_streaming_and_hypercollisions_share_the_chain_transform(
+    monkeypatch,
+) -> None:
+    """Q9: one stacked transform per chain class gives the separate terms.
+
+    Every named term, the total and the state VJP match the separate
+    streaming and hypercollision transforms (measured bitwise for the primal
+    terms on XLA:CPU; the tolerance leaves room for FFT batch-layout roundoff).
+    """
+
+    import jax
+
+    cache, params, G0 = _linked_pilot_rhs_case()
+    assert len(cache.linked_indices) >= 3
+    term_cfg = TermConfig(hypercollisions=1.0)
+    cotangent = jnp.conj(G0[::-1])
+
+    def run():
+        total, _fields, contrib = assemble_rhs_terms_cached(
+            G0, cache, params, terms=term_cfg
+        )
+        grad = jax.grad(
+            lambda g: jnp.real(
+                jnp.vdot(
+                    cotangent, assemble_rhs_cached(g, cache, params, terms=term_cfg)[0]
+                )
+            )
+        )(G0)
+        return total, contrib, grad
+
+    calls = _shared_route_calls(monkeypatch)
+    total, contrib, grad = run()
+    assert calls and all(calls)
+    monkeypatch.setattr(
+        assembly_mod,
+        "_shared_linked_streaming_hypercollisions",
+        lambda *args, **kwargs: None,
+    )
+    total_ref, contrib_ref, grad_ref = run()
+    assert float(jnp.linalg.norm(contrib_ref["hypercollisions"])) > 0.0
+    for key in contrib_ref:
+        np.testing.assert_allclose(
+            np.asarray(contrib[key]), np.asarray(contrib_ref[key]), rtol=1e-6, atol=1e-6
+        )
+    np.testing.assert_allclose(
+        np.asarray(total), np.asarray(total_ref), rtol=1e-6, atol=1e-6
+    )
+    np.testing.assert_allclose(
+        np.asarray(grad), np.asarray(grad_ref), rtol=1e-6, atol=1e-5
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["hypercollision_weight_zero", "kz_branch_off", "streaming_off", "periodic"],
+)
+def test_shared_linked_transform_falls_back_when_a_term_is_static_off(
+    monkeypatch, case
+) -> None:
+    if case == "periodic":
+        grid = build_spectral_grid(GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+        geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+        params = LinearParams(hypercollisions_kz=1.0, kpar_scale=float(geom.gradpar()))
+        cache = build_linear_cache(grid, geom, params, 2, 4)
+        shape = (2, 4, grid.ky.size, grid.kx.size, grid.z.size)
+        G0 = jnp.ones(shape, dtype=jnp.complex64)
+    else:
+        overrides = {"kz_branch_off": dict(hypercollisions_kz=0.0)}.get(case, {})
+        cache, params, G0 = _linked_pilot_rhs_case(**overrides)
+    term_cfg = {
+        "hypercollision_weight_zero": TermConfig(hypercollisions=0.0),
+        "streaming_off": TermConfig(hypercollisions=1.0, streaming=0.0),
+    }.get(case, TermConfig(hypercollisions=1.0))
+    calls = _shared_route_calls(monkeypatch)
+    assemble_rhs_terms_cached(G0, cache, params, terms=term_cfg)
+    assert calls == [False]

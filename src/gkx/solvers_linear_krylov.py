@@ -91,6 +91,38 @@ class KrylovConfig:
     certify: bool = True
 
 
+@dataclass(frozen=True)
+class EigenSolveStatus:
+    """Host-side status of the pair ``dominant_eigenpair`` returned.
+
+    ``residual`` is the original-operator relative residual
+    ``||A v - lambda v|| / max(||A v||, |lambda| ||v||)`` of the returned pair,
+    ``tolerance`` the gate its route applied and ``certified`` whether it passed.
+    Every gate raises on failure, so ``certified`` is false only for a raw
+    route called with ``certify=False``. ``route`` names the method that
+    produced the pair: a shift-invert fallback reports its fallback method.
+    ``inner`` summarizes the inner FGMRES solves of the shift-invert build that
+    produced the pair and is ``None`` for every other route.
+    """
+
+    method: str
+    route: str
+    residual: float
+    tolerance: float
+    certified: bool
+    inner: dict[str, Any] | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "method": self.method,
+            "route": self.route,
+            "residual": self.residual,
+            "tolerance": self.tolerance,
+            "certified": self.certified,
+            "inner": None if self.inner is None else dict(self.inner),
+        }
+
+
 _StatusCallback = Callable[[str], None] | None
 
 # Base residual gate for the certified adaptive branch. The effective gate is
@@ -354,6 +386,23 @@ def _inner_solve_summary(stats: InnerSolveStats, tol: float) -> str:
     )
 
 
+def _inner_solve_status(
+    stats: InnerSolveStats, tol: float, preconditioner: str
+) -> dict[str, Any]:
+    """Return one shift-invert build's inner FGMRES solves as host scalars."""
+
+    unconverged = int(np.asarray(stats.unconverged_solves))
+    return {
+        "converged": unconverged == 0,
+        "unconverged_solves": unconverged,
+        "solves": int(np.asarray(stats.solves)),
+        "max_relative_residual": float(np.asarray(stats.max_relative_residual)),
+        "total_iterations": int(np.asarray(stats.total_iterations)),
+        "tolerance": float(tol),
+        "preconditioner": str(preconditioner),
+    }
+
+
 def _certify_raw_eigenpair(
     pair: tuple[jnp.ndarray, jnp.ndarray],
     cache: LinearCache,
@@ -361,7 +410,7 @@ def _certify_raw_eigenpair(
     term_cfg: Any,
     cfg: KrylovConfig,
     status_callback: _StatusCallback,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
     """Gate a propagator, power or Arnoldi pair on its original-operator residual.
 
     These branches return a Rayleigh or Ritz pair without a convergence test, so
@@ -389,14 +438,21 @@ def _certify_raw_eigenpair(
         f"{cfg.method} solve finished with "
         f"eig={eig_host.real:.6g}{eig_host.imag:+.6g}j {detail} certified={certified}",
     )
+    status = EigenSolveStatus(
+        method=cfg.method,
+        route=cfg.method,
+        residual=residual,
+        tolerance=tolerance,
+        certified=certified,
+    )
     if certified:
-        return pair
+        return eigenvalue, eigenvector, status
     if not cfg.certify:
         _status(
             status_callback,
             f"returning an UNCERTIFIED {cfg.method} eigenpair (certify=False): {detail}",
         )
-        return pair
+        return eigenvalue, eigenvector, status
     raise RuntimeError(
         f"{cfg.method} eigenpair failed the outer residual gate: {detail}; use "
         "method='adaptive' for a certified solve or pass certify=False to accept "
@@ -414,7 +470,7 @@ def _shift_invert_fallback(
     status_callback: _StatusCallback,
     *,
     select_overlap: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray] | None:
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus] | None:
     fallback_key = cfg.fallback_method.strip().lower()
     _status(
         status_callback, f"shift-invert result rejected; falling back to {fallback_key}"
@@ -446,7 +502,14 @@ def _shift_invert_fallback(
     )
     if not np.isfinite(residual) or residual > residual_tol:
         return None
-    return result
+    status = EigenSolveStatus(
+        method=cfg.method,
+        route=fallback_key,
+        residual=residual,
+        tolerance=residual_tol,
+        certified=True,
+    )
+    return result[0], result[1], status
 
 
 def _shift_invert_branch(
@@ -459,7 +522,7 @@ def _shift_invert_branch(
     status_callback: _StatusCallback,
     *,
     select_overlap: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
     _validate_shift_solve_method(cfg.shift_solve_method)
     residual_tol = certifiable_residual_tolerance(
         cfg.shift_outer_residual_tol, v0.dtype
@@ -572,7 +635,15 @@ def _shift_invert_branch(
             "shift-invert eigenpair is non-finite: "
             f"eigenvalue={eig_host.real:.6g}{eig_host.imag:+.6g}j; {inner}"
         )
-    return eig_si, vec_si
+    status = EigenSolveStatus(
+        method=cfg.method,
+        route="shift_invert",
+        residual=residual,
+        tolerance=residual_tol,
+        certified=True,
+        inner=_inner_solve_status(inner_stats, cfg.shift_tol, str(mode)),
+    )
+    return eig_si, vec_si, status
 
 
 def _sparse_shift_invert_branch(
@@ -585,7 +656,7 @@ def _sparse_shift_invert_branch(
     status_callback: _StatusCallback,
     *,
     select_overlap: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
     """Factor the exact sparse shifted operator when matrix-free cold solves stall.
 
     On a linked cache only the chain-mode columns are assembled; eigenvectors
@@ -685,7 +756,14 @@ def _sparse_shift_invert_branch(
         status_callback,
         f"sparse shift-invert residual={residuals[selected]:.3g}",
     )
-    return modes.eigenvalues[selected], vectors[selected]
+    status = EigenSolveStatus(
+        method=cfg.method,
+        route="sparse_shift_invert",
+        residual=float(residuals[selected]),
+        tolerance=residual_tol,
+        certified=True,
+    )
+    return modes.eigenvalues[selected], vectors[selected], status
 
 
 def _adaptive_branch(
@@ -695,7 +773,7 @@ def _adaptive_branch(
     terms: LinearTerms | None,
     cfg: KrylovConfig,
     status_callback: _StatusCallback,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
     """Run the residual-certified adaptive eigensolve; fail closed on rejection.
 
     Unlike the raw propagator/power/arnoldi branches, this path never returns
@@ -740,7 +818,22 @@ def _adaptive_branch(
             f"residual={residual:.6g} tolerance={tol:.6g}; refusing to report "
             "an uncertified growth rate"
         )
-    return solution.eigenvalue, solution.eigenvector
+    # The adaptive gate divides by |lambda| ||v||; report the shared definition,
+    # which is never larger, so a certified pair stays within its tolerance.
+    status = EigenSolveStatus(
+        method=cfg.method,
+        route="adaptive",
+        residual=_eigenpair_relative_residual(
+            solution.eigenvalue,
+            solution.eigenvector,
+            cache,
+            params,
+            linear_terms_to_term_config(terms),
+        ),
+        tolerance=tol,
+        certified=True,
+    )
+    return solution.eigenvalue, solution.eigenvector, status
 
 
 def _dispatch_dominant_eigenpair(
@@ -753,7 +846,7 @@ def _dispatch_dominant_eigenpair(
     status_callback: _StatusCallback,
     *,
     select_overlap: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
     if cfg.method == "shift_invert":
         return _shift_invert_branch(
             v0,
@@ -840,7 +933,8 @@ def dominant_eigenpair(
     fallback_real_floor: float = -1.0e-6,
     certify: bool = True,
     status_callback: Callable[[str], None] | None = None,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
+    return_status: bool = False,
+) -> tuple[Any, ...]:
     """Python wrapper for cached matrix-free and sparse eigen solvers.
 
     No method returns a pair above its original-operator residual gate: the
@@ -848,6 +942,9 @@ def dominant_eigenpair(
     ``power``, ``propagator`` and ``arnoldi`` routes raise above
     ``certifiable_residual_tolerance(shift_outer_residual_tol, dtype)`` unless
     ``certify=False`` explicitly accepts an uncertified pair.
+
+    Returns ``(eigenvalue, eigenvector)``; ``return_status=True`` appends the
+    pair's :class:`EigenSolveStatus` (residual, gate, route, inner solves).
     """
     cfg = _normalized_config(locals())
     term_cfg = linear_terms_to_term_config(terms)
@@ -862,17 +959,19 @@ def dominant_eigenpair(
         f"krylov method={cfg.method} dim={cfg.krylov_dim} restarts={cfg.restarts}",
     )
     if cfg.method == "adaptive":
-        return _adaptive_branch(v0, cache, params, terms, cfg, status_callback)
-    return _dispatch_dominant_eigenpair(
-        v0,
-        v_ref_use,
-        cache,
-        params,
-        term_cfg,
-        cfg,
-        status_callback,
-        select_overlap=select_overlap,
-    )
+        solved = _adaptive_branch(v0, cache, params, terms, cfg, status_callback)
+    else:
+        solved = _dispatch_dominant_eigenpair(
+            v0,
+            v_ref_use,
+            cache,
+            params,
+            term_cfg,
+            cfg,
+            status_callback,
+            select_overlap=select_overlap,
+        )
+    return solved if return_status else solved[:2]
 
 
 def dominant_eigenvalue(
