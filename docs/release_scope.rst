@@ -3,12 +3,15 @@ Release Scope and Claim Boundaries
 
 .. warning::
 
-   Review snapshot: GKX 2.0.0, ``a99dac89``, 2026-09-04. End-damping
-   compatibility is unresolved (`issue 192 <https://github.com/uwplasma/GKX/issues/192>`_;
-   proposed `PR 197 <https://github.com/uwplasma/GKX/pull/197>`_).
-   The artifact-backed rows below describe their recorded experiments, not a
-   fresh verification of the affected 2.0.0 operator. Re-run affected cases
-   after the repair before promoting current-release parity. See
+   Review snapshot: GKX 2.1.0, 2026-09-15. The 2.0.0 end-damping regression
+   (`issue 192 <https://github.com/uwplasma/GKX/issues/192>`_) is closed by
+   `PR 197 <https://github.com/uwplasma/GKX/pull/197>`_, which restores the
+   per-step contract and reproduces the recorded artifact bit-identically. That
+   is not a new physics certification: historical 2.0.0 time-integrated numbers
+   still require repaired-build evidence, and the Phase 0.1 rate migration is
+   not complete. The artifact-backed rows below describe their recorded
+   experiments, not a fresh verification of the current operator. Re-run
+   affected cases before promoting current-release parity. See
    :doc:`research_grade_plan` and the :download:`roadmap <../plan.md>`.
 
 This page is the canonical claim-scope checklist for the current development

@@ -186,7 +186,7 @@ Two orderings are fixed:
 
 | Deliverable | Content | Phases |
 |---|---|---|
-| Release 2.1.0 | #192 repaired; every README/docs number ledger-gated; ES atlas and nonlinear validation closed; EM0–EM3 closed, EM4 linear closed; statistics protocol; citation and DOI | 0–3, 7 |
+| Research-grade release 2.2.0 (2.1.0 was cut on 2026-09-15 as an intermediate release; these exits were not required for it) | #192 repaired; every README/docs number ledger-gated; ES atlas and nonlinear validation closed; EM0–EM3 closed, EM4 linear closed; statistics protocol; citation and DOI | 0–3, 7 |
 | Paper 1, methods and verification | JAX Hermite–Laguerre GK; published-reference verification; dataset-scale nonlinear validation; pre-registered statistics; cost-to-accuracy on CPU/GPU; EM verification | 1–3, 5, 7 |
 | Paper 2, differentiable stellarator design | Adjoint linear/quasilinear optimization through VMEX in stellarator geometry; a physics-based differentiable proxy scored on the open dataset; finite-window nonlinear gradients validated against an SPSA control | 2, 4 |
 
@@ -598,7 +598,7 @@ reachable.
 1. README: the 270-line version on this branch (capability table with one
    command per row, expected eigenvalue under the first example, Cite section).
    The five gated scope sentences stay verbatim.
-2. `CITATION.cff` (added). Mint a Zenodo DOI at 2.1.0 and add the badge.
+2. `CITATION.cff` (added). Mint a Zenodo DOI at 2.2.0 and add the badge.
 3. Add `CONTRIBUTING.md`: how to run tiers 0–2, the PR template (§14), the
    ledger rule.
 4. **HSX: fix the provenance, do not delete the row.** *Corrected 2026-09-08;
@@ -1026,7 +1026,7 @@ Cost: EM0–EM2 CPU and tier 2. EM3 at (4,16) with kinetic electrons: GX ran
 nonlinear: one run, tens of hours.
 
 Exit: EM0–EM3 rows passing; EM4 linear rows passing and the nonlinear point
-recorded; EM5 linear/QL derivative rows passing. Required for 2.1.0.
+recorded; EM5 linear/QL derivative rows passing. Required for 2.2.0.
 
 ---
 
@@ -1463,7 +1463,7 @@ gated scope sentences.
    Zenodo.
 2. Paper 2: contributions A, B and C with held-out validation; the warm-start
    result if adopted; equal-budget SPSA control.
-3. Release 2.1.0 only when: Phase 0–3 exits met (EM4 nonlinear excepted),
+3. Release 2.2.0 only when: Phase 0–3 exits met (EM4 nonlinear excepted),
    every README and docs row passing or explicitly `pre-197`-free, the wheel
    first-run gate green, the examples regenerate their results, `CITATION.cff`
    and the Zenodo DOI in place, and the maintainer has reviewed the PR
@@ -1590,7 +1590,7 @@ needs an alternative allocation before its pilot.
 - [ ] 4 contributions A and B passing; C reported; QA claim replaced or withdrawn.
 - [ ] 5 profiles and time-to-accuracy; species×Hermite ladder closed or blocked-step named; ky ≥ 0 layout contract landed (5.3 N3); implicit-streaming decision recorded (5.4).
 - [ ] 6 C0–C2 passing; envelope published.
-- [ ] 7 docs generated from the ledger; examples regenerate; paper 1 bundle; 2.1.0 reviewed by the maintainer.
+- [ ] 7 docs generated from the ledger; examples regenerate; paper 1 bundle; 2.2.0 reviewed by the maintainer.
 
 ---
 

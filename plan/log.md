@@ -13368,3 +13368,45 @@ Q17 can proceed.
 runs at rc=0. It had invoked `check.py` without its stem argument; the checks above were
 re-run by hand with `check.py itg_salpha_adiabatic_electrons`. No process owned by this
 entry is running.
+
+## 2026-09-15 — release 2.1.0: version, scope snapshot and milestone rename
+
+**Version.** The maintainer chose 2.1.0.
+- Measured against `v2.0.0` (`46b178e19`) on `main` (`7d94d5986`) by importing each tree:
+  - no `src/gkx` module was deleted or renamed;
+  - `gkx.api.__all__` is the same 15 names;
+  - no export left the surface.
+- Two public types changed only additively. `Case` gained `run` and `damping_reference`, and
+  `TimeConfig` gained `damp_ends_rate`; the new fields are defaulted. `PreparedSimulation`
+  gained a private `_warmed` field.
+- Behaviour changed deliberately:
+  - raw eigen routes fail closed on uncertified pairs, and `KrylovConfig()` defaults to
+    `adaptive` (#233);
+  - ambiguous legacy damping scaling is rejected (#223).
+- By SemVer that is a minor release.
+
+**Milestone rename.** plan.md §1.2 had reserved "Release 2.1.0" for the research-grade
+milestone: ES atlas and nonlinear validation closed, EM0–EM3, statistics protocol, DOI. None
+of that is met, so the milestone and its four later mentions (DOI, EM exit, release rule,
+Phase 7 checklist) now read 2.2.0. Their exit criteria are unchanged.
+
+**Scope snapshot.** `docs/release_scope.rst`'s warning still described #197 as proposed.
+It now uses plan.md's wording:
+- #197 closes #192 and reproduces the recorded artifact bit-identically.
+- That is not a new physics certification.
+- Historical 2.0.0 time-integrated numbers still need repaired-build evidence.
+- The Phase 0.1 rate migration is incomplete.
+
+No pinned claim-scope phrase changed.
+
+**Release artifacts.** The four tracked JSONs were regenerated with the CI commands. Only
+`release_readiness.json` changed (three version fields); there are no absolute paths.
+Gates on the bumped tree:
+- the readiness gates as in `release.yml`: size, release-artifacts, architecture, scaling,
+  quasilinear guardrails, differentiability guard, technical status ≥98, readiness;
+- `check_release_readiness.py version --tag v2.1.0 --require-tag`;
+- `tests/release/test_release_gates.py` and `tests/release/test_evidence_ledger.py`.
+
+**Order.** This branch is the last link of the merge chain that lands the finalized queue
+lanes (Q14 #240, Q15, Q9, Q17, Q20). It is tagged `v2.1.0` only after that chain's head
+passes `ci-required` and merges. `release.yml` then publishes from the tag.
