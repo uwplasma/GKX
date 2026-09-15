@@ -1,0 +1,29 @@
+{
+  "key": "gx-nu1e-2-nl32",
+  "nlaguerre": 32,
+  "nhermite": 96,
+  "species_nu": [
+    0.009999999776482582
+  ],
+  "collisions": 1,
+  "hypercollisions_kz": 1,
+  "hypercollisions_const": 0,
+  "nu_hyper_m": 1.0,
+  "p_hyper_m": 20,
+  "dt": 0.0020000000949949026,
+  "ky": 0.550000011920929,
+  "samples": 751,
+  "t_end": 150.0000071246177,
+  "nonfinite_phi2": 0,
+  "nonfinite_omega": 0,
+  "gamma_phi2_late": 0.017165689115301672,
+  "gamma_phi2_half_probe": 0.017166280138535238,
+  "gamma_half_time_shift": 3.443049851338084e-05,
+  "settled": true,
+  "omega_second_half_mean": 0.49570505772816376,
+  "gamma_omega_output_second_half_mean": 0.01719238556069421,
+  "omega_late_mean": 0.4957054242887328,
+  "gamma_omega_output_late_mean": 0.017192772737976196,
+  "omega_final": 0.49572476744651794,
+  "gamma_omega_output_final": 0.017202530056238174
+}

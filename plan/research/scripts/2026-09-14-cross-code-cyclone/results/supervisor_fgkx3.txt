@@ -1,0 +1,4 @@
+lane=fgkx3 pid=1145111 start=2026-09-14T22:27:26-05:00 cpus=28-35 threads=8 queue=/home/rjorge/gkx-q20-cross-code-20260914.FavgA4/q_final_gkx3.txt
+gkx M ky=0.55 Nl=16 Nm=48 start=2026-09-14T22:27:26-05:00
+gkx M ky=0.55 Nl=16 Nm=48 rc=0 wall=2845.02 end=2026-09-14T23:14:51-05:00
+lane=fgkx3 ALL DONE 2026-09-14T23:14:51-05:00

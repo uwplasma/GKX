@@ -1,0 +1,94 @@
+# Q20 cross-code linear Cyclone controls -- registered before any run (2026-09-14).
+#
+# Question. For the adiabatic-electron Cyclone base case, do GS2 8.2.1 and stella v1.0 --
+# grid codes with physical energy / pitch-angle (or v_par, mu) grids -- give the same
+# linear growth rates as GKX's certified adaptive eigenpairs once the setups are matched
+# like for like? Why did the 2026-09-14 install checks disagree by ~2x? And does a grid
+# code converge at the GX-normalized ky = 0.55, where Q8 found the Hermite-Laguerre gamma
+# unconverged in Nl?
+
+[physics]
+# One physical case, written once in GX/GKX units (Lref = a, vt = sqrt(T/m)).
+# Taken from GX benchmarks/linear/ITG_cyclone/itg_{salpha,miller}_adiabatic_electrons.in.
+q = 1.4
+shat = 0.8
+eps = 0.18            # r/R
+R_over_a = 2.77778
+a_over_LT = 2.49
+a_over_Ln = 0.8
+tau = 1.0             # Ti/Te, Boltzmann electrons
+collisions = "none"
+beta = 0.0
+ky_gx = [0.15, 0.30, 0.40, 0.50, 0.55]
+
+[geometry]
+# S = s-alpha (shift 0): GS2 equilibrium_option="s-alpha" (eps, epsl=2a/R, pk=2a/(qR)); GKX [geometry] q/s_hat/epsilon/R0.
+# M = circular local Miller (rhoc = r/a = 0.5, Rmaj = R_geo = 2.77778, kappa 1, tri 0, shift 0, beta' 0):
+#     GS2 eik local_eq bishop=4; stella geometry_option="miller"; GKX model="miller".
+# stella v1.0 has no s-alpha option (no s-alpha branch in STELLA_CODE/geometry), so stella runs M only.
+S = ["gs2", "gkx"]
+M = ["gs2", "stella", "gkx"]
+
+[normalization]
+# GX / GKX : vt = sqrt(T/m), rho = vt/Omega, t in a/vt, ky in 1/rho.
+# GS2/stella: vref = sqrt(2T/m), rho_ref = vref/Omega = sqrt(2) rho_GX, t in Lref/vref.
+# With Lref = a in both:   ky_gs2 = sqrt(2) ky_gx ;  gamma_gx = sqrt(2) gamma_gs2 ;  omega_gx = sqrt(2) omega_gs2.
+# Install checks used Lref = R:  gamma_gx = gamma_gs2 * sqrt(2) * (a/R) = gamma_gs2 * sqrt(2) / 2.77778.
+# Drift coefficients: GS2 s-alpha gbdrift = 2 (Lref/R)(cos + shat theta sin); GX/GKX gbdrift = (Lref/R)(...);
+# stella stores B x gradB . grad y in the GX convention and applies 0.5 (T/Z) v_perp^2 with v in vref units.
+# Gradients a/LT, a/Ln are convention-free once Lref is fixed. B_ref: B on axis (s-alpha), B_T(R_geo) (Miller).
+sqrt2 = 1.4142135623730951
+
+[fit]
+# Grid codes (initial value): instantaneous omega(t) as written by each code
+# (GS2 `omega`, stella `omega`; both from phi at successive steps). gamma, omega = mean over the last
+# 20% of t; `drift` = (mean[0.8T,T] - mean[0.6T,0.8T]) / gamma. Settled if |drift| <= 1%.
+# GS2 cross-check: log-linear fit of phi at the outboard midplane (phi_igomega_by_mode) on [0.8T, T].
+# GKX: certified eigenpair from run_runtime_linear(solver="krylov", krylov_cfg=None) = runtime default
+# `adaptive`, original-operator relative residual <= 1e-9.
+
+[convergence]
+# gamma converged on a ladder when |gamma(R_k+1) - gamma(R_k)| / gamma(R_k+1) < 2%; the converged value is
+# gamma(R_k+1); cost to a converged gamma = wall of R_k+1 alone and cumulative over the ladder.
+rel_tol = 0.02
+
+[ladders.gs2]
+r1 = { ntheta = 16, nperiod = 2, negrid = 8,  ngauss = 4,  delt = 0.05 }
+r2 = { ntheta = 32, nperiod = 2, negrid = 12, ngauss = 6,  delt = 0.05 }
+r3 = { ntheta = 48, nperiod = 3, negrid = 16, ngauss = 8,  delt = 0.025 }
+r4 = { ntheta = 64, nperiod = 4, negrid = 24, ngauss = 12, delt = 0.025 }
+# fexpr = 0.48, bakdif = 0.05 (GS2's recommended values) on every rung; no collisions; field_option local.
+
+[ladders.stella]
+r1 = { nzed = 24, nperiod = 2, nvgrid = 12, nmu = 6,  delt = 0.02 }
+r2 = { nzed = 48, nperiod = 2, nvgrid = 24, nmu = 12, delt = 0.02 }
+r3 = { nzed = 64, nperiod = 3, nvgrid = 32, nmu = 16, delt = 0.02 }
+r4 = { nzed = 96, nperiod = 4, nvgrid = 48, nmu = 24, delt = 0.01 }
+# vpa_max = vperp_max = 3; rk2 explicit drifts, implicit streaming and mirror (the v1.0 defaults used by the install check).
+
+[ladders.gkx]
+# Nz = 96 (ntheta 32, nperiod 2), linked, GX end damping and kz hypercollisions as in the shipped deck.
+base = { Nl = 16, Nm = 48 }            # every (geometry, ky)
+extra = [ { Nl = 8, Nm = 48 }, { Nl = 24, Nm = 48 } ]   # at ky 0.30 and 0.55, both geometries, as time allows
+# ky 0.55 s-alpha collisionless Nl 24/32/48/64 (Nm96, time fits) are reused from Q8 (#238), not rerun.
+
+[gap_decomposition]
+# Install checks: GS2 shipped cyclone_itg (s-alpha, Lref=R, q=2/1.44, R/LT 6.9, R/Ln 2.2, ntheta 12, negrid 12,
+# ngauss 3, fexpr 0.45) gamma=.1703 at ky_gs2=.5; stella (circular Miller rhoc .18, rmaj=rgeo=1, same gradients,
+# nzed 48 nperiod 1 nvgrid 24 nmu 12) gamma=.3688. Decomposition runs, all at ky_gs2 = 0.5, Lref = R:
+G1 = "gs2 shipped physics + shipped grids, fexpr 0.48 (isolates fexpr)"
+G2 = "gs2 shipped physics, s-alpha, ladder r2/r3 grids (isolates GS2 resolution)"
+G3 = "gs2 shipped physics on stella's Miller surface (rhoc .18, rmaj = r_geo = 1), r2/r3 (isolates geometry model)"
+G4 = "stella install input at r2/r3 grids (isolates stella resolution / nperiod 1)"
+# G3 vs G4 is the code-to-code comparison on identical input.
+
+[predictions]
+P1 = "The ~2x install-check gap is a setup difference, not a code disagreement: on identical circular-Miller input, converged GS2 and stella gamma agree within 5% at every ky, and s-alpha vs Miller (GX goldens: Miller/s-alpha gamma = 1.53 at ky .35) accounts for most of the install-check ratio, the shipped GS2 grids for < 10%."
+P2 = "s-alpha: converged GS2 gamma (GX units) agrees with GKX's certified Nl16/Nm48 eigenvalue within 5% for ky <= 0.50, and omega within 3%."
+P3 = "Miller: converged GS2 and stella gamma agree with GKX's certified Nl16/Nm48 eigenvalue within 5% for ky <= 0.50."
+P4 = "ky = 0.55 s-alpha: GS2 converges (<2% over its ladder) to a gamma more than 10% below the Hermite-Laguerre Nl24 value .0328-.0330 (GX units), in the direction of Q8's falling Nl ladder."
+P5 = "Cost: a grid code reaches a converged gamma per ky in under 10 min wall on 8 cores; GKX's adaptive eigenpair at (96,16,48) takes 10-20 min per ky on 10-12 threads."
+
+[resources]
+office_cpu = "GS2/stella one lane, mpirun -np 8 --bind-to none, OMP_NUM_THREADS=1; GKX up to 2 lanes of 10 threads, nice 10"
+gpu = "GX and gyaradax only if nvidia-smi --query-compute-apps lists no process on the GPU; otherwise not run"
