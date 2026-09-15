@@ -42,15 +42,21 @@ from gkx.workflows.runtime.toml import load_runtime_from_toml
 
 DECK = Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml")
 out_path = Path(sys.argv[1])
-cases = set(sys.argv[2].split(",")) if len(sys.argv) > 2 else {
-    "scan",
-    "runtime",
-    "sharded",
-    "species_hermite",
-    "window",
-}
+cases = (
+    set(sys.argv[2].split(","))
+    if len(sys.argv) > 2
+    else {
+        "scan",
+        "runtime",
+        "sharded",
+        "species_hermite",
+        "window",
+    }
+)
 X64 = bool(jax.config.read("jax_enable_x64"))
-NX, NY, NZ, NL, NM = (int(v) for v in os.environ.get("GATE_GRID", "16,16,12,2,4").split(","))
+NX, NY, NZ, NL, NM = (
+    int(v) for v in os.environ.get("GATE_GRID", "16,16,12,2,4").split(",")
+)
 STEPS = int(os.environ.get("GATE_STEPS", "100"))
 DT = float(os.environ.get("GATE_DT", "0.01"))
 AMP = float(os.environ.get("GATE_AMP", "0.05"))
@@ -70,11 +76,21 @@ params = build_runtime_linear_params(cfg, Nm=NM, geom=geom)
 term_cfg = build_runtime_term_config(cfg)
 lmode = cfg.time.laguerre_nonlinear_mode
 kyi, kxi = _select_nonlinear_mode_indices(
-    grid, ky_target=0.3, kx_target=None, use_dealias_mask=bool(cfg.time.nonlinear_dealias)
+    grid,
+    ky_target=0.3,
+    kx_target=None,
+    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
 )
 G0 = jnp.asarray(
     _build_initial_condition(
-        grid, geom, cfg, ky_index=kyi, kx_index=kxi, Nl=NL, Nm=NM, nspecies=len(cfg.species)
+        grid,
+        geom,
+        cfg,
+        ky_index=kyi,
+        kx_index=kxi,
+        Nl=NL,
+        Nm=NM,
+        nspecies=len(cfg.species),
     )
 )
 if X64:
@@ -148,10 +164,14 @@ if "runtime" in cases:
     variants = {
         "adaptive": cfg,
         "collision_split": replace(
-            cfg, time=replace(cfg.time, collision_split=True, collision_scheme="implicit")
+            cfg,
+            time=replace(cfg.time, collision_split=True, collision_scheme="implicit"),
         ),
         "fixed_mode": replace(
-            cfg, expert=replace(cfg.expert, fixed_mode=True, iky_fixed=int(kyi), ikx_fixed=1)
+            cfg,
+            expert=replace(
+                cfg.expert, fixed_mode=True, iky_fixed=int(kyi), ikx_fixed=1
+            ),
         ),
     }
     for vname, vcfg in variants.items():
@@ -211,13 +231,27 @@ if "species_hermite" in cases:
             try:
                 terms = term_cfg
                 run = integrate_nonlinear_species_hermite(
-                    jnp.array(G0), cache, params, dt=DT, steps=STEPS, method=method, terms=terms, num_devices=1
+                    jnp.array(G0),
+                    cache,
+                    params,
+                    dt=DT,
+                    steps=STEPS,
+                    method=method,
+                    terms=terms,
+                    num_devices=1,
                 )
             except (ValueError, NotImplementedError) as exc:
                 meta.setdefault("species_hermite_fallback", str(exc))
                 terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
                 run = integrate_nonlinear_species_hermite(
-                    jnp.array(G0), cache, params, dt=DT, steps=STEPS, method=method, terms=terms, num_devices=1
+                    jnp.array(G0),
+                    cache,
+                    params,
+                    dt=DT,
+                    steps=STEPS,
+                    method=method,
+                    terms=terms,
+                    num_devices=1,
                 )
             return {"G": run.state}
 

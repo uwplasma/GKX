@@ -58,7 +58,9 @@ if hasattr(assembly, "_shared_linked_streaming_hypercollisions"):
 
 def setup(name):
     if name.startswith("pilot"):
-        cfg, _ = load_runtime_from_toml(Path("examples/linear/axisymmetric/cyclone.toml"))
+        cfg, _ = load_runtime_from_toml(
+            Path("examples/linear/axisymmetric/cyclone.toml")
+        )
         cfg = replace(
             cfg,
             grid=replace(cfg.grid, Nx=8, Ny=16, Nz=16, ntheta=16, nperiod=1, jtwist=1),

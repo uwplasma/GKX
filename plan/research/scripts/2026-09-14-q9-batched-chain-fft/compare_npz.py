@@ -18,7 +18,11 @@ for key in sorted(ref.files):
         rows[key] = {"missing": True}
         continue
     b = np.asarray(other[key])
-    equal = a.shape == b.shape and a.dtype == b.dtype and np.array_equal(a, b, equal_nan=True)
+    equal = (
+        a.shape == b.shape
+        and a.dtype == b.dtype
+        and np.array_equal(a, b, equal_nan=True)
+    )
     n_equal += int(equal)
     a64 = a.astype(np.complex128)
     b64 = b.astype(np.complex128)
@@ -31,8 +35,11 @@ for key in sorted(ref.files):
         "ref_norm": norm,
         "dtype": str(a.dtype),
     }
-summary = {"n": len(ref.files), "bitwise": n_equal, "max_rel": max(
-    (r["rel"] for r in rows.values() if "rel" in r), default=0.0)}
+summary = {
+    "n": len(ref.files),
+    "bitwise": n_equal,
+    "max_rel": max((r["rel"] for r in rows.values() if "rel" in r), default=0.0),
+}
 for key, row in rows.items():
     flag = "==" if row.get("bitwise") else f"rel {row.get('rel', float('nan')):.2e}"
     print(f"{key:40s} {flag}")

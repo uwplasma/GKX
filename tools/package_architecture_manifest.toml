@@ -921,7 +921,14 @@ recursive = true
 # power and inner-GMRES vectors, a seed guard, and covered-column assembly in
 # the sparse route. Most of the lines are the docstrings that state why modes
 # outside every chain are decoupled; target unchanged.
-baseline = 89618
+# 89618 -> 89859: shared linked-chain transform and transpose-free chain layout
+# (Q9, plan 5.3 N2). Streaming and the |kz| hypercollision branch stack their
+# operands per chain class, so each class issues one gather-stack, FFT, IFFT and
+# output write for both terms, and the chain gather reshapes the state in its
+# own (ky, kx) row order with the chain maps translated at trace time instead of
+# copying a transposed state. One RHS at 32x32x24 goes from 23 to 13 FFT launches
+# and from 46.3 to 25.0 MB written; target unchanged.
+baseline = 89859
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1109,7 +1116,12 @@ recursive = true
 # unpinned contraction; target unchanged.
 # +32: the runtime HLO route lowers eager scan-body closures as arguments, not
 # the constants a jit embeds, in the existing profiling owner.
-baseline = 88428
+# 88428 -> 88686: Q9 equivalence tests. Stacked linked-FFT slots against the
+# per-class operator and a per-chain numpy reference for three chain-length
+# mixes on the gather, full-cover and scatter routes; operand validation; the
+# shared RHS route against the separate terms (every term, total, state VJP) on
+# a four-class linked pilot, and its static fallbacks; target unchanged.
+baseline = 88686
 target = 35000
 
 [[line_budget_policy.counts]]

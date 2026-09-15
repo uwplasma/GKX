@@ -4,7 +4,8 @@
 #   CORES    taskset list, e.g. 20-27
 #   BLOCKS   number of alternating blocks
 #   FLAGSET  pool (default XLA flags) or nopool (--xla_cpu_multi_thread_eigen=false)
-# Before each arm: every core in CORES must be <10% busy over 3 s and the
+# Before each arm: the CHECK_CORES must average below BUSYMEAN (0.10) busy over 3 s,
+# none above BUSYWORST (0.50), and the
 # 1-minute load must be below LOADMAX (default 8); otherwise wait (logged).
 set -u
 DIR=$1; CORES=$2; BLOCKS=$3; GRID=$4; FLAGSET=$5
@@ -31,24 +32,32 @@ def snap():
     return rows
 a = snap(); time.sleep(3); b = snap()
 worst = 0.0
+fracs = []
 for c in cores:
     d = [y - x for x, y in zip(a[c], b[c])]
     total = sum(d); idle = d[3] + d[4]
-    worst = max(worst, 1.0 - idle / total if total else 0.0)
-print(f"{worst:.3f}")
+    frac = 1.0 - idle / total if total else 0.0
+    fracs.append(frac)
+    worst = max(worst, frac)
+print(f"{sum(fracs) / len(fracs):.3f} {worst:.3f}")
 PY
 }
 if [ "$FLAGSET" = nopool ]; then FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"; else FLAGS=""; fi
 for block in $(seq 1 $BLOCKS); do
   for arm in base p2t tonly; do
+    done_json=$OUT/${FLAGSET}_${arm}_b${block}.json
+    if [ -f $done_json ] && python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if len(d['kernels']) >= int(sys.argv[2]) and 'load_after' in d else 1)" $done_json ${EXPECT_KERNELS:-4}; then
+      echo "$(date +%T) block=$block arm=$arm flags=$FLAGSET kept existing complete result" >> $OUT/runs_${FLAGSET}.log
+      continue
+    fi
     while true; do
       load=$(awk '{print $1}' /proc/loadavg)
-      worst=$(busy $CORE_LIST)
-      if awk -v l=$load -v w=$worst -v m=$LOADMAX 'BEGIN{exit !(l < m && w < 0.10)}'; then break; fi
-      echo "$(date +%T) wait load=$load worst_core_busy=$worst" >> $OUT/wait_${FLAGSET}.log
+      read mean worst <<< "$(busy $CORE_LIST)"
+      if awk -v l=$load -v a=$mean -v w=$worst -v m=$LOADMAX -v am=${BUSYMEAN:-0.10} -v wm=${BUSYWORST:-0.50} 'BEGIN{exit !(l < m && a < am && w < wm)}'; then break; fi
+      echo "$(date +%T) wait load=$load mean_core_busy=$mean worst_core_busy=$worst" >> $OUT/wait_${FLAGSET}.log
       sleep 60
     done
-    echo "$(date +%T) block=$block arm=$arm flags=$FLAGSET load=$load worst_core_busy=$worst" >> $OUT/runs_${FLAGSET}.log
+    echo "$(date +%T) block=$block arm=$arm flags=$FLAGSET load=$load mean_core_busy=$mean worst_core_busy=$worst" >> $OUT/runs_${FLAGSET}.log
     (cd $DIR/$arm && XLA_FLAGS="$FLAGS" PYTHONPATH=$DIR/$arm/src:$DIR/$arm JAX_PLATFORMS=cpu \
       taskset -c $CORES $PY $DIR/bench_q9.py $OUT/${FLAGSET}_${arm}_b${block}.json $GRID \
       > $OUT/${FLAGSET}_${arm}_b${block}.log 2>&1)

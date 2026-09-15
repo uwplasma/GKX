@@ -65,7 +65,9 @@ for n, m in ((24, 48), (48, 120), (72, 120), (24, 72), (96, 288)):
     k_m = 2 * np.pi * np.fft.fftfreq(m, d=dz)
     padded = np.concatenate([f, np.zeros(m - n)])
     pad_out = np.fft.ifft(1j * k_m * np.fft.fft(padded))[:n]
-    msg = dict(N=n, M=m, pad_rel=float(np.linalg.norm(pad_out - ref) / np.linalg.norm(ref)))
+    msg = dict(
+        N=n, M=m, pad_rel=float(np.linalg.norm(pad_out - ref) / np.linalg.norm(ref))
+    )
     if m % n == 0:
         tiled = np.tile(f, m // n)
         tile_out = np.fft.ifft(1j * k_m * np.fft.fft(tiled))[:n]
@@ -78,7 +80,9 @@ for n, m in ((24, 48), (48, 120), (72, 120), (24, 72), (96, 288)):
         msg["tile_bins_rel"] = float(
             np.linalg.norm(fh_m[::r] - r * fh_n) / np.linalg.norm(r * fh_n)
         )
-        msg["tile_offbins_max"] = float(np.max(np.abs(np.delete(fh_m, np.arange(0, m, r)))))
+        msg["tile_offbins_max"] = float(
+            np.max(np.abs(np.delete(fh_m, np.arange(0, m, r))))
+        )
         msg["tile_k_equal"] = bool(np.array_equal(k_m[::r], k_n))
     print(json.dumps(msg))
 

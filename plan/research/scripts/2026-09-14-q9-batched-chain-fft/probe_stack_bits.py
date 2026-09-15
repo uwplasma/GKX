@@ -26,7 +26,9 @@ from tools.profiling.profile_runtime_kernels import (
 
 print("gkx", gkx.__file__, "x64", jax.config.read("jax_enable_x64"))
 n, nl, nm = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
-cfg, _ = load_runtime_from_toml(Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"))
+cfg, _ = load_runtime_from_toml(
+    Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml")
+)
 cfg = replace(cfg, grid=replace(cfg.grid, Nx=n, Ny=n, Nz=24))
 geom = build_runtime_geometry(cfg)
 grid = build_spectral_grid(apply_imported_geometry_grid_defaults(geom, cfg.grid))
@@ -54,16 +56,24 @@ def eq(x, y):
 
 sep_a = jax.jit(lambda x: S._linked_fft_apply(x, li, lk, operator="grad", **route))(a)
 sep_b = jax.jit(lambda x: S._linked_fft_apply(x, li, lk, operator="abs", **route))(b)
-st = jax.jit(lambda x, y: S._linked_fft_apply(jnp.stack([x, y]), li, lk, operator=("grad", "abs"), **route))(a, b)
+st = jax.jit(
+    lambda x, y: S._linked_fft_apply(
+        jnp.stack([x, y]), li, lk, operator=("grad", "abs"), **route
+    )
+)(a, b)
 print("stack  grad", eq(sep_a, st[0]), "abs", eq(sep_b, st[1]))
 try:
-    tu = jax.jit(lambda x, y: S._linked_fft_apply((x, y), li, lk, operator=("grad", "abs"), **route))(a, b)
+    tu = jax.jit(
+        lambda x, y: S._linked_fft_apply(
+            (x, y), li, lk, operator=("grad", "abs"), **route
+        )
+    )(a, b)
     print("tuple  grad", eq(sep_a, tu[0]), "abs", eq(sep_b, tu[1]))
 except Exception as exc:  # proto1 has no tuple route
     print("tuple route unavailable:", type(exc).__name__)
 
 # raw pieces per class
-for (idx, kz) in zip(li, lk):
+for idx, kz in zip(li, lk):
     nc, nlk = idx.shape
     x = jnp.asarray(rng.standard_normal((2, 1, nl, nm, nc, nlk * 24)) + 0j, cdt)
     f_st = jax.jit(lambda v: jnp.fft.fft(v, axis=-1))(x)
@@ -73,4 +83,12 @@ for (idx, kz) in zip(li, lk):
     mult_0 = jax.jit(lambda v: m_abs * v)(f_0)
     i_st = jax.jit(lambda v: jnp.fft.ifft(v, axis=-1))(mult)
     i_0 = jax.jit(lambda v: jnp.fft.ifft(v, axis=-1))(mult_0)
-    print((nc, nlk), "fft", eq(f_0, f_st[1])[0], "mult", eq(mult_0, mult[1])[0], "ifft", eq(i_0, i_st[1])[0])
+    print(
+        (nc, nlk),
+        "fft",
+        eq(f_0, f_st[1])[0],
+        "mult",
+        eq(mult_0, mult[1])[0],
+        "ifft",
+        eq(i_0, i_st[1])[0],
+    )

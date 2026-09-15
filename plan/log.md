@@ -13371,7 +13371,7 @@ entry is running.
 
 ## 2026-09-14 — Q9: batched linked-chain transforms (plan §5.3 N2)
 
-**Outcome: paused before the timing gate; no verdict.** The shared transform plus the transpose-free chain layout (S+T) halves the chain FFT launches and cuts materialized bytes 43–48% on every ledgered graph, bitwise on 100-step trajectories; neither S+T nor T alone is adopted until primal and VJP A/B/A/B timings exist. Branch `perf/batched-chain-fft`, based on
+**Outcome: S+T adopted by the registered timing gate; T alone rejected.** The shared linked-chain transform plus the transpose-free chain layout halves the chain FFT launches, cuts materialized bytes 43–48% on every ledgered graph, is bitwise on 100-step trajectories in f32 and x64, and was not slower than base beyond the measured noise in any block for RHS, RHS gradient, scan or window gradient. The timings ran on contended hardware, so they bound a slowdown; they do not establish a speed-up. Branch `perf/batched-chain-fft`, based on
 `ccdd4bf12` (#239's head).
 
 **O(1) exact launches do not exist for this operator.** A chain of `L` links owns
@@ -13485,13 +13485,97 @@ byte for byte. So S+T writes 2.4–2.9% more than T alone, and 43–48% less tha
 **VJP gate.** Linear RHS VJP: as in the identity table. Checkpointed window
 (20 steps, rk3/rk4): value and d/dtprim bitwise in both precisions.
 
-**Timing.** Not run. The Mac is shared (load 9–22). Office (Xeon W-2295, 18 cores/36 threads) was staged with base/S+T/T trees (`git archive`, tarball SHA-256 4cc4a1cd2d82…c874) and a self-gating driver (`run_ab.sh`: cores 10–17 pinned, 10–17 and 28–35 idle below 10% busy, 1-min load below 10). Load stayed 29–32 (Q20 GS2 rungs, GKX eigen runs, VMEX b3b, DKX HSX ladders), so no arm started before the pause. The `xla_cpu_multi_thread_eigen` re-measurement was not run either; only its effect on bitwise identity is known (above).
+**Timing** (office, Xeon W-2295, 18 cores/36 threads, `taskset -c 2-17`, jax 0.10.2,
+`bench_q9.py`, Cyclone nonlinear deck 64×64×24 Nl4/Nm8, complex64). Arms per block ran in
+the order base → S+T → T, each in a fresh process from `git archive` trees: base
+`ccdd4bf12`, S+T `a86c435b2`, T = S+T with the shared route disabled. Kernels: jit
+`nonlinear_rhs_cached`; jit gradient of Re⟨c, rhs(G)⟩; jit `integrate_nonlinear` rk3 for
+5 steps; eager `value_and_grad` of the checkpointed `nonlinear_heat_flux_window` (rk3,
+6 steps) wrt tprim. The window gradient is eager because the window rebuilds its linked
+cache from the geometry, which an outer jit would trace. 7 reps each, 3 for the window.
+
+**The hardware was not idle.** The core split was cores 2–17 for Q9, 18–35 for Q20 and 1 for
+Q17, but at least eight unpinned VMEX agent jobs floated over all cores. Recorded at each
+arm start: 1-min load 24.8–41.2, cores 2–17 mean 21–71% busy, busiest core 60–100%. An
+idleness gate (mean below 10%, then 25%, then 35%) never passed in 45 minutes, so the
+three blocks ran ungated with busy levels logged (`timing/runs_pool.txt`). One arm under
+7 window reps and a jit-wrapped window kernel were discarded before the campaign.
+
+Registered gate, written in `ab_table.py` before the first measurement: a variant passes a
+kernel if, in every block, its median is at most base's median × (1 + tol), where tol =
+max(2%, (max − min)/median of base's reps in that block). Median ms and variant/base
+ratio; `*` marks a failed block:
+
+| kernel | block | tol | base | S+T | S+T/base | T | T/base |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| RHS | 1 | .208 | 370.3 | 333.2 | .900 | 315.7 | .853 |
+| RHS | 2 | .225 | 368.9 | 388.8 | 1.054 | 447.3 | 1.213 |
+| RHS | 3 | .164 | 387.0 | 335.3 | .866 | 364.3 | .941 |
+| RHS gradient | 1 | .263 | 601.3 | 439.9 | .731 | 476.2 | .792 |
+| RHS gradient | 2 | .201 | 632.8 | 570.4 | .901 | 656.1 | 1.037 |
+| RHS gradient | 3 | .112 | 610.6 | 523.3 | .857 | 601.0 | .984 |
+| scan rk3 ×5 | 1 | .042 | 5656.8 | 5043.4 | .892 | 4684.4 | .828 |
+| scan rk3 ×5 | 2 | .112 | 5721.2 | 6267.3 | 1.095 | 6341.1 | 1.108 |
+| scan rk3 ×5 | 3 | .247 | 4864.2 | 5190.6 | 1.067 | 5444.9 | 1.119 |
+| window gradient | 1 | .169 | 51520 | 43000 | .835 | 50296 | .976 |
+| window gradient | 2 | .174 | 55924 | 60889 | 1.089 | 60747 | 1.086 |
+| window gradient | 3 | .124 | 48179 | 53506 | 1.111 | 56234 | 1.167* |
+
+S+T passes all twelve kernel-blocks and T fails one, so S+T is adopted and T is not. The
+tolerances are 4–26% because of the contention, and that caveat matters:
+- S+T's RHS gradient was faster than base in every block (.73–.90).
+- Its RHS was faster in two blocks of three.
+- Its scan and window gradient were 7–11% above base in blocks 2 and 3, inside the noise
+  but not demonstrably equal.
+- In block 2 the load rose from 30 during the base arm to 38–41 during the variant arms,
+  and the fixed arm order puts that trend against the variants.
+
+A clean-hardware A/B/A/B is still owed before any throughput claim.
+
+**CPU FFT thread pool** (`--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1`
+against the default pool, same arms and cores; RHS, RHS gradient and a 2-step rk3 scan,
+7 reps). Median ms:
+
+| kernel | arm | pool (default) | no pool | no pool / pool |
+|---|---|---:|---:|---:|
+| RHS | base | 373.5 | 375.5 | 1.01 |
+| RHS | S+T | 345.7 | 380.3 | 1.10 |
+| RHS | T | 341.1 | 368.2 | 1.08 |
+| RHS gradient | base | 613.8 | 614.0 | 1.00 |
+| RHS gradient | S+T | 521.3 | 578.8 | 1.11 |
+| RHS gradient | T | 601.0 | 592.0 | 0.99 |
+| rk3 step | base | 1131.4 | 1219.0 | 1.08 |
+| rk3 step | S+T | 1038.1 | 1235.5 | 1.19 |
+| rk3 step | T | 1089.0 | 1193.1 | 1.10 |
+
+Within the no-pool blocks (median ms; ratio to base in the same block):
+
+| kernel | block | base | S+T | S+T/base | T | T/base |
+|---|---:|---:|---:|---:|---:|---:|
+| RHS | 1 | 372.8 | 382.7 | 1.027 | 375.4 | 1.007 |
+| RHS | 2 | 375.5 | 422.6 | 1.125 | 368.2 | 0.981 |
+| RHS | 3 | 384.7 | 350.1 | 0.910 | 363.2 | 0.944 |
+| RHS gradient | 1 | 628.6 | 553.5 | 0.881 | 592.5 | 0.943 |
+| RHS gradient | 2 | 609.9 | 569.4 | 0.934 | 583.8 | 0.957 |
+| RHS gradient | 3 | 614.7 | 594.7 | 0.967 | 599.0 | 0.974 |
+| scan rk3 ×2 | 1 | 2481.6 | 2465.9 | 0.994 | 2369.7 | 0.955 |
+| scan rk3 ×2 | 2 | 2438.0 | 2466.5 | 1.012 | 2404.9 | 0.986 |
+| scan rk3 ×2 | 3 | 2336.9 | 2557.0 | 1.094 | 2386.2 | 1.021 |
 
 **Tests and checks** (x64 unless noted, `gkx.__file__` in the worktree):
 - `tests/unit/operators/test_linear_streaming.py` + `test_terms_assembly.py`: 50 passed, 1 skipped (full cover needs an even mode count on Ny=2); the new stacked and shared-route tests also pass in f32 (15 selected).
 - New tests: stacked `_linked_fft_apply` against the per-class operator and a per-chain numpy reference for three chain-length mixes × gather/full-cover/scatter routes; operand validation; RHS terms, total and state VJP through the shared route against the separate routes on a four-class linked pilot; fallback when hypercollisions, the |kz| branch or streaming are statically off, or the tube is periodic.
 - `mypy`: no issues in 184 source files. ruff 0.16.4 check and format: pass on changed files.
-- Not run before the pause: the remaining required files (`test_nonlinear.py`, `test_nonlinear_helpers_extra.py`, `test_time_integrators.py`, `test_linear_krylov_core.py`, `test_runtime_and_scaling_profile_contracts.py`, `test_autodiff_solver_objectives.py`; the run was stopped at 14% with no failure), the hypercollision-touching suites, the release gates, and the architecture manifest (source lines 89618→89859 measured, tests not yet).
+- Merged head (`origin/main` 7d94d5986 merged into the branch), x64, `nice -n 10`, one suite
+  at a time. The eight required files: 499 passed, 1 skipped. Hypercollision-touching
+  suites (parallel routing, linear, linear helpers, operator kernels, sharding profile,
+  comparison tools, end-damping, geometry and Hermite-hierarchy physics gates,
+  benchmark helpers and contracts): 472 passed, 15 skipped.
+  `test_parallel_linear_velocity.py` with 4 host devices: 71 passed. Runtime config,
+  artifacts, CLI and runner: 456 passed, 1 skipped. `test_adaptive_eigenmodes.py`: 8
+  passed, 2 skipped. `tests/release/test_release_gates.py` and
+  `tests/release/test_evidence_ledger.py`: 152 passed.
+- Architecture manifest: source 89618→89859, tests 88428→88686, tools unchanged.
 
 **Environment.** HLO counts, identity and trajectories: Apple M3 Max, 14 logical CPUs,
 macOS 14.4.1, Python 3.11.14, jax/jaxlib 0.10.2, numpy 2.4.6,
@@ -13525,18 +13609,9 @@ transform (not on any assembled route). The implicit linear streaming solver
 (`solvers_linear_implicit.py`) keeps the `ky + Ny·kx` flat order. Species×Hermite and
 the sharded runner ran on one device.
 
-**Next question.** Is T alone the whole win? T writes 2.4–2.9% fewer bytes than S+T but keeps twice the chain launches; only timing separates them.
-
-### Paused 2026-09-14 — state and resume steps
-
-**Done.** Algebra and census (O(1) exact launches impossible; minimum one FFT+IFFT per class). S+T implemented and committed (`a86c435b2`), with tests. HLO ledger base/S+T/T at 32 and 64, rk3/rk4, diagnostics and runtime routes. RHS/VJP identity in f32 and x64. 100-step trajectory gate bitwise (65/65 both precisions). FFT batch-layout roundoff traced to the intra-op pool. mypy clean.
-
-**Not done.** (1) Office A/B/A/B timings of base, S+T and T at 64×64×24 Nl4/Nm8 (RHS, RHS VJP, 5-step rk3 scan, 6-step checkpointed window VJP), with and without `--xla_cpu_multi_thread_eigen=false`. (2) Choose S+T, T alone, or reject; if T alone, drop the shared route and its tests. (3) Remaining gate tests and release gates. (4) `tools/package_architecture_manifest.toml` baselines at measured counts, then `check_package_architecture_manifest.py` and, after committing, `check_repository_size_manifest.py`. (5) PR against `main`.
-
-**Resume.**
-1. `git -C ~/local/GKX-worktrees/integrate-chain worktree add ../batched-chain-fft-resume origin/perf/batched-chain-fft` (or reuse `~/local/GKX-worktrees/batched-chain-fft`); `git status` must be clean.
-2. Stage on office in a fresh `mktemp -d /home/rjorge/gkx-q9-...` directory: `git archive ccdd4bf12 src tools examples` → `base/`, `git archive a86c435b2 src tools examples` → `p2t/`, the same into `tonly/` with `return None` inserted at the top of `_shared_linked_streaming_hypercollisions`; copy `bench_q9.py` and `run_ab.sh`.
-3. Check `uptime` and per-core idleness first. Then from that directory: `PY=/home/rjorge/venvs/gkx-nl/bin/python LOADMAX=10 CHECK_CORES=10-17,28-35 ./run_ab.sh $PWD 10-17 3 "--Nx 64 --Ny 64 --Nz 24 --Nl 4 --Nm 8 --reps 7" pool`, then the same with `nopool`, launched with `setsid nohup ... < /dev/null &`. Start it from a script file, because a `pgrep -f` pattern typed on the ssh command line matches that command line itself.
-4. Adopt only if the per-rep medians of S+T (or T) are not slower than base for `rhs`, `rhs_vjp`, `scan_rk3` and `window_vjp` in every block. Then run the gates of step (3) and the manifests of step (4), and delete the office directory.
-
-**Process state at pause.** Local: none (the gate chain and its pytest were stopped; verified absent). Office: driver PIDs 949852 (`launch_ab.sh`) and 949854 (`run_ab.sh`) killed and verified absent; no timing arm had started; `/home/rjorge/gkx-q9-batched-chain-fft-20260914.tDIJSZ` deleted. No other remote job was launched by this lane.
+**Next question.** Re-run the A/B/A/B on idle hardware (arm order rotated per block) to
+turn "not slower beyond noise" into a measured speed-up or a measured tie. Then N3: the
+ky ≥ 0 layout removes the conjugate restore, whose mirrored copies are now the largest
+remaining writes in the chain transform. Separately, T's disappearance of fourteen
+full-state copies suggests the N1 layout regression (#231, #239) may be worth re-checking
+on this tree.
