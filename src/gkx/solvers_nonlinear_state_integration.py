@@ -180,8 +180,13 @@ def integrate_nonlinear_cached(
     show_progress: bool = False,
     return_fields: bool = True,
     collision_operator: CollisionOperator | None = None,
-) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
-    """Integrate the nonlinear system using a cached geometry object."""
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...] | jnp.ndarray:
+    """Integrate the nonlinear system using a cached geometry object.
+
+    ``return_solve_stats=True`` appends the IMEX implicit solve summary
+    (``None`` for explicit methods, which have no implicit solve).
+    """
 
     term_cfg = terms or TermConfig()
     if method in {"imex", "semi-implicit"}:
@@ -189,7 +194,7 @@ def integrate_nonlinear_cached(
             raise NotImplementedError(
                 "custom collision operators currently require explicit nonlinear integration"
             )
-        result = integrate_nonlinear_imex_cached(
+        G_out, fields_t, solve_stats = integrate_nonlinear_imex_cached(
             G0,
             cache,
             params,
@@ -200,8 +205,12 @@ def integrate_nonlinear_cached(
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
             show_progress=show_progress,
+            return_solve_stats=True,
         )
-        return result if return_fields else result[0]
+        head = (G_out, fields_t) if return_fields else (G_out,)
+        if return_solve_stats:
+            return (*head, solve_stats)
+        return head if return_fields else G_out
 
     project_state = None
     if compressed_real_fft:
@@ -209,7 +218,7 @@ def integrate_nonlinear_cached(
             ny_full=int(cache.ky.size), nx=int(cache.kx.size)
         )
 
-    return integrate_cached_explicit_scan(
+    result = integrate_cached_explicit_scan(
         G0,
         dt,
         steps,
@@ -228,6 +237,9 @@ def integrate_nonlinear_cached(
         show_progress=show_progress,
         return_fields=return_fields,
     )
+    if not return_solve_stats:
+        return result
+    return (*result, None) if return_fields else (result, None)
 
 
 def integrate_nonlinear(
@@ -246,7 +258,8 @@ def integrate_nonlinear(
     show_progress: bool = False,
     return_fields: bool = True,
     collision_operator: CollisionOperator | None = None,
-) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...] | jnp.ndarray:
     """Integrate the nonlinear system using built-in cache construction."""
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
@@ -267,6 +280,7 @@ def integrate_nonlinear(
         show_progress=show_progress,
         return_fields=return_fields,
         collision_operator=collision_operator,
+        return_solve_stats=return_solve_stats,
     )
 
 
@@ -915,8 +929,14 @@ def integrate_nonlinear_imex_cached(
     laguerre_mode: str = "grid",
     external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, FieldState]:
-    """IMEX integrator: implicit linear operator, explicit nonlinear term."""
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
+    """IMEX integrator: implicit linear operator, explicit nonlinear term.
+
+    Returns ``(G_out, fields_t)``, or ``(G_out, fields_t, stats)`` with
+    ``return_solve_stats=True``; ``stats`` is the carried
+    :class:`~gkx.solvers_linear_implicit.ImplicitSolveStats` of every solve.
+    """
 
     term_cfg = terms or TermConfig()
     linear_cfg = replace(term_cfg, nonlinear=0.0)
@@ -935,6 +955,7 @@ def integrate_nonlinear_imex_cached(
         fields_fn=compute_fields_cached,
         nonlinear_term_fn=nonlinear_em_term_cached_impl,
         nonlinear_contribution_fn=nonlinear_em_contribution,
+        return_solve_stats=return_solve_stats,
         checkpoint=checkpoint,
         implicit_tol=implicit_tol,
         implicit_maxiter=implicit_maxiter,

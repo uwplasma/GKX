@@ -16,6 +16,8 @@ from gkx.config import (
 )
 from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics import SimulationDiagnostics, ResolvedDiagnostics
+from gkx.solvers_linear_implicit import ImplicitSolveStats
+from gkx.solvers_linear_krylov import EigenSolveStatus
 from gkx.diagnostics.modes import ModeSelection
 from gkx.geometry import (
     SAlphaGeometry,
@@ -285,8 +287,10 @@ def test_runtime_linear_etg_defaults_to_frequency_targeted_krylov(
     def fake_dominant_eigenpair(_g0, _cache, _params, terms=None, **kwargs):
         captured["terms"] = terms
         captured.update(kwargs)
-        return np.asarray(0.2 + 0.3j, dtype=np.complex64), np.zeros_like(
-            np.asarray(_g0)
+        return (
+            np.asarray(0.2 + 0.3j, dtype=np.complex64),
+            np.zeros_like(np.asarray(_g0)),
+            EigenSolveStatus("shift_invert", "shift_invert", 1.0e-9, 1.0e-6, True),
         )
 
     monkeypatch.setattr(runtime, "dominant_eigenpair", fake_dominant_eigenpair)
@@ -1090,6 +1094,7 @@ def test_runtime_linear_auto_solver_falls_back_to_krylov(
         lambda *args, **kwargs: (
             np.asarray(0.3 + 0.4j, dtype=np.complex64),
             np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64),
+            EigenSolveStatus("adaptive", "adaptive", 1.0e-12, 1.0e-9, True),
         ),
     )
     monkeypatch.setattr(
@@ -1113,6 +1118,162 @@ def test_runtime_linear_auto_solver_falls_back_to_krylov(
     assert res.gamma == pytest.approx(0.3)
     assert res.omega == pytest.approx(-0.4)
     assert any("falling back to Krylov solve" in msg for msg in status)
+    assert res.eigen_status is not None and res.eigen_status.route == "adaptive"
+    assert res.summary()["eigen_certified"] is True
+    assert res.summary()["implicit_converged"] is None
+
+
+def _runtime_implicit_stats(unconverged: int) -> ImplicitSolveStats:
+    residual = 3.0e-7 if unconverged == 0 else 0.25
+    return ImplicitSolveStats(
+        np.asarray(residual),
+        np.asarray(5, dtype=np.int32),
+        np.asarray(3, dtype=np.int32),
+        np.asarray(unconverged, dtype=np.int32),
+    )
+
+
+@pytest.mark.parametrize("fit_signal", ["phi", "density"])
+def test_runtime_linear_implicit_run_fails_closed_on_unconverged_solves(
+    monkeypatch: pytest.MonkeyPatch, fit_signal: str
+) -> None:
+    """Both implicit time paths request solve stats and refuse an unconverged run."""
+
+    import gkx.runtime as runtime
+
+    cfg0 = _base_runtime_cfg()
+    cfg = replace(
+        cfg0,
+        time=replace(
+            cfg0.time, method="implicit", sample_stride=1, dt=0.01, t_max=0.03
+        ),
+    )
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    state = np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64)
+    phi_t = np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
+    captured: list[dict[str, object]] = []
+    stats: list[ImplicitSolveStats] = []
+
+    def _fake_from_config(*args, **kwargs):
+        captured.append(kwargs)
+        return state, phi_t, stats[-1]
+
+    def _fake_diagnostics(*args, **kwargs):
+        captured.append(kwargs)
+        return state, phi_t, np.ones_like(phi_t), stats[-1]
+
+    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
+    monkeypatch.setattr(runtime, "_build_initial_condition", lambda *a, **k: state)
+    monkeypatch.setattr(runtime, "integrate_linear_from_config", _fake_from_config)
+    monkeypatch.setattr(runtime, "integrate_linear_diagnostics", _fake_diagnostics)
+    monkeypatch.setattr(
+        runtime,
+        "extract_mode_time_series",
+        lambda *args, **kwargs: np.asarray([1.0, 1.1, 1.2], dtype=np.complex128),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "fit_growth_rate_auto",
+        lambda *args, **kwargs: (0.05, -0.02, 0.01, 0.03),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "extract_eigenfunction",
+        lambda *args, **kwargs: np.ones(grid.z.size, dtype=np.complex128),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "apply_diagnostic_normalization",
+        lambda gamma, omega, **kwargs: (gamma, omega),
+    )
+    options = dict(
+        ky_target=0.1,
+        Nl=3,
+        Nm=4,
+        solver="time",
+        fit_signal=fit_signal,
+        mode_method="project",
+    )
+
+    stats.append(_runtime_implicit_stats(2))
+    with pytest.raises(
+        RuntimeError,
+        match="linear implicit run: 2 of 3 implicit GMRES solves did not converge",
+    ):
+        run_runtime_linear(cfg, **options)
+    assert captured[-1]["return_solve_stats"] is True
+
+    if fit_signal == "phi":
+        stats.append(_runtime_implicit_stats(0))
+        res = run_runtime_linear(cfg, **options)
+        assert res.implicit_solve is not None and res.implicit_solve.converged
+        summary = res.summary()
+        assert summary["implicit_converged"] is True
+        assert summary["implicit_max_iterations"] == 5
+        assert summary["implicit_unconverged_solves"] == 0
+        assert summary["implicit_max_relative_residual"] == pytest.approx(3.0e-7)
+        assert summary["eigen_route"] is None
+
+
+def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import gkx.runtime as runtime
+
+    base = replace(
+        _base_runtime_cfg(),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
+        terms=RuntimeTermsConfig(nonlinear=1.0, hypercollisions=0.0, end_damping=0.0),
+    )
+    cfg = replace(base, time=replace(base.time, method="imex"))
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    captured: dict[str, object] = {}
+    stats: list[ImplicitSolveStats] = []
+
+    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
+    monkeypatch.setattr(
+        runtime,
+        "build_runtime_linear_params",
+        lambda *args, **kwargs: SimpleNamespace(),
+    )
+    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
+    monkeypatch.setattr(
+        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    )
+    shape = (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    monkeypatch.setattr(
+        runtime,
+        "_build_initial_condition",
+        lambda *args, **kwargs: np.zeros(shape, dtype=np.complex64),
+    )
+
+    def _fake_final_state(*args, **kwargs):
+        captured.update(kwargs)
+        phi = np.ones((grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
+        return (
+            np.zeros(shape, dtype=np.complex64),
+            FieldState(phi=phi, apar=None, bpar=None),
+            stats[-1],
+        )
+
+    monkeypatch.setattr(runtime, "integrate_nonlinear_from_config", _fake_final_state)
+
+    stats.append(_runtime_implicit_stats(1))
+    with pytest.raises(
+        RuntimeError,
+        match="nonlinear IMEX run: 1 of 3 implicit GMRES solves did not converge",
+    ):
+        run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4, diagnostics=False)
+    assert captured["return_solve_stats"] is True
+
+    stats.append(_runtime_implicit_stats(0))
+    out = run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4, diagnostics=False)
+    assert out.implicit_solve is not None and out.implicit_solve.converged
+    assert out.summary()["implicit_max_relative_residual"] == pytest.approx(3.0e-7)
 
 
 def test_runtime_nonlinear_smoke() -> None:
