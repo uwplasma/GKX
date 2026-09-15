@@ -16,6 +16,7 @@ from solvax import KrylovSolution, gmres, linear_solve
 
 from gkx.solvers_linear_implicit import (
     ImplicitSolveStats,
+    _GmresStatus,
     _empty_implicit_solve_stats,
     _fold_implicit_solve_stats,
     _gmres_iteration_budget,
@@ -217,9 +218,11 @@ def solve_imex_step_with_stats(
 
     def solver(
         operator: MatvecFn, rhs: jnp.ndarray
-    ) -> tuple[jnp.ndarray, KrylovSolution]:
+    ) -> tuple[jnp.ndarray, _GmresStatus]:
         result = gmres_solve(operator, rhs)
-        return result.x, result._replace(x=None)
+        return result.x, _GmresStatus(
+            result.residual_norm, result.iterations, result.converged
+        )
 
     rhs_flat = G_rhs.reshape(-1)
     solution, info = linear_solve(matvec, rhs_flat, solver, has_aux=True)

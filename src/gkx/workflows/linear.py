@@ -19,6 +19,10 @@ from gkx.diagnostics.modes import (
 from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
 from gkx.workflows.runtime.results import RuntimeLinearResult
+from gkx.workflows.runtime.solver_status import (
+    checked_solve_summary,
+    solve_stats_request,
+)
 from gkx.solvers_time_explicit import integrate_linear_explicit_from_config
 
 
@@ -114,20 +118,6 @@ class _LinearTrajectory:
             t=np.asarray(times, dtype=float),
             implicit_solve=self.implicit_solve,
         )
-
-
-def _is_implicit_method(time_config: Any) -> bool:
-    """Whether a time run takes GMRES solves inside its scan."""
-
-    return str(time_config.method).strip().lower() == "implicit"
-
-
-def _checked_implicit_solve(stats: Any) -> Any:
-    """Fail closed on an unconverged implicit solve and return its summary."""
-
-    from gkx.solvers_linear_implicit import require_converged_implicit_solves
-
-    return require_converged_implicit_solves(stats, label="linear implicit run")
 
 
 def _status(callback: _StatusCallback, message: str) -> None:
@@ -388,8 +378,7 @@ def _integrate_linear_density_path(
     # This is the executable's density-diagnostic path, so the TOML
     # collision_operator selection has to be resolved here as well as on the
     # cached-phi path.
-    implicit = _is_implicit_method(tcfg)
-    stats_kwargs = {"return_solve_stats": True} if implicit else {}
+    request = solve_stats_request(tcfg.method, kind="linear")
     diag = deps.integrate_linear_diagnostics(
         ctx.initial_state,
         ctx.grid,
@@ -408,13 +397,15 @@ def _integrate_linear_density_path(
         collision_operator=_resolve_config_collision_operator(
             tcfg, ctx.params, ctx.initial_state
         ),
-        **stats_kwargs,
+        **request,
     )
     return _LinearTrajectory(
         g_last=diag[0],
         phi_t=diag[1],
         density_t=diag[2] if len(diag) > 2 else None,
-        implicit_solve=_checked_implicit_solve(diag[-1]) if implicit else None,
+        implicit_solve=checked_solve_summary(
+            diag, request, label="linear implicit run"
+        ),
     )
 
 
@@ -425,9 +416,8 @@ def _integrate_linear_cached_phi_path(
     tcfg: Any,
     show_progress: bool,
 ) -> _LinearTrajectory:
-    implicit = _is_implicit_method(tcfg)
-    stats_kwargs = {"return_solve_stats": True} if implicit else {}
-    g_last, phi_t, *solve_stats = deps.integrate_linear_from_config(
+    request = solve_stats_request(tcfg.method, kind="linear")
+    g_last, phi_t, *extra = deps.integrate_linear_from_config(
         ctx.initial_state,
         ctx.grid,
         ctx.geom,
@@ -436,13 +426,15 @@ def _integrate_linear_cached_phi_path(
         terms=ctx.terms,
         show_progress=show_progress,
         parallel=ctx.cfg.parallel,
-        **stats_kwargs,
+        **request,
     )
     return _LinearTrajectory(
         g_last=g_last,
         phi_t=phi_t,
         density_t=None,
-        implicit_solve=_checked_implicit_solve(solve_stats[0]) if implicit else None,
+        implicit_solve=checked_solve_summary(
+            extra, request, label="linear implicit run"
+        ),
     )
 
 

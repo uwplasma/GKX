@@ -67,8 +67,18 @@ def _empty_implicit_solve_stats(state_dtype: Any) -> ImplicitSolveStats:
     return ImplicitSolveStats(residual, zero, zero, zero)
 
 
+class _GmresStatus(NamedTuple):
+    """The status fields of one SOLVAX solve, as pytree auxiliary data."""
+
+    residual_norm: jax.Array
+    iterations: jax.Array
+    converged: jax.Array
+
+
 def _fold_implicit_solve_stats(
-    total: ImplicitSolveStats, solution: KrylovSolution, rhs_flat: jnp.ndarray
+    total: ImplicitSolveStats,
+    solution: KrylovSolution | _GmresStatus,
+    rhs_flat: jnp.ndarray,
 ) -> ImplicitSolveStats:
     """Fold one solve into a running summary; no gradient flows through it."""
 
