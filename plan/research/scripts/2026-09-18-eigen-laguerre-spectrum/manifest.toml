@@ -1,0 +1,192 @@
+# Q16 eigen l-spectrum of the Cyclone ky=.55 mode (plan §0.5 (ii))
+#
+# Registered 2026-09-18 before any run, as Q3 and Q8 did. Measurement only; no
+# source, test, default or reference change is proposed by this row.
+#
+# Question. Q8 (#238) settled the Nl ladders of this mode from initial-value
+# fits alone and said so in its Limitations paragraph: "no eigenvalue, residual
+# or Laguerre spectrum (the runner returns no state), so the non-monotone
+# small-nu ladders (a branch change or slow mu-space recurrence) are not
+# explained". This row asks the operator directly. For the Cyclone s-alpha
+# adiabatic-electron ITG control at ky=.55 (Nm96, Nz96 = ntheta32 x nperiod2,
+# nkx=1, f64, end-damping rate 50), what is the certified dominant eigenpair of
+# the linear operator at Nl in {24, 32, 48, 64}, collisionless and at species
+# nu in {1e-3, 3e-3, 1e-2}; what does the Laguerre spectrum of its eigenvector
+# show about truncation; and are Q8's non-monotone nu <= 3e-3 ladders a branch
+# change (a different eigenvalue becoming dominant between rungs) or one
+# slowly converging branch?
+#
+# Predictions.
+#  P1 (single branch). Consecutive-Nl eigenvectors of the same nu overlap
+#     strongly: |<u_a|u_b>| >= 0.99 on phi(z) and on the common Laguerre block,
+#     at every nu including the nu = 1e-3 and 3e-3 rungs that bracket Q8's Nl32
+#     dip. That is, the non-monotone ladders are ONE slowly converging branch,
+#     not a branch change. Falsified if any consecutive pair that brackets the
+#     dip overlaps below 0.9 while the others stay near 1.
+#  P2 (truncation). The Laguerre free-energy spectrum decays by at least two
+#     decades from peak to cutoff at nu = 1e-2 (the only Nl-converged ladder in
+#     Q8) at Nl 32 and 48, and is a stationary plateau at the cutoff -- order
+#     1% of the total per index in the upper quarter, as the 2026-09-13 review
+#     measured on the GX Nl24/Nl32 pair -- for the collisionless case at
+#     Nl 24/32 and for nu <= 3e-3 at Nl 24. The collisionless spectrum does not
+#     become decaying by Nl64: its upper-quarter fraction stays above 1%.
+#  P3 (certification and agreement with Q8). The adaptive route certifies every
+#     rung it completes: original-operator relative residual at or below the
+#     route's gate. The certified gamma agrees with Q8's time fit to within 2%
+#     wherever Q8 recorded the fit as settled AND Nl-converged (nu = 1e-2), and
+#     differs by more than 2% for at least one case Q8 recorded as unsettled
+#     (collisionless Nl >= 32).
+#  P4 (no collisionless limit). The certified collisionless gamma falls
+#     monotonically with Nl through 64 with no flattening: each rung's relative
+#     change |d gamma|/gamma exceeds 5%, so no collisionless eigenvalue limit
+#     exists at this ky up to Nl64 and plan §0.5 (ii) is answered in the
+#     negative. Falsified if the Nl48 -> Nl64 change is below 2%.
+#
+# Method. One fresh process per case through the runtime adaptive eigensolve:
+# run_runtime_linear(solver="krylov", krylov_cfg=KrylovConfig()). Since #233 the
+# KrylovConfig dataclass default is method="adaptive", which gates its returned
+# pair on the original-operator relative residual (the raw propagator/Arnoldi/
+# power routes fail closed instead). eigen_spectrum.py re-certifies the returned
+# pair a second time with _eigenpair_relative_residual on an independently built
+# cache. #237 (Q6) projects every eigen route onto the linked-chain modes; this
+# deck is Nx=1, i.e. full-cover, so the projection is the identity here and the
+# certified pair is the one main's default route returns.
+#
+# Deck. cyclone_salpha_itg_eigen.toml, a copy of Q8's deck
+# (plan/research/scripts/2026-09-13-collisional-convergence/) with
+# [[species]] nu overridden per case from --nu and [time] damp_ends_rate = 50.0.
+# The rate is load-bearing: a timestep-free eigensolve has no dt, so without it
+# LinearParams.end_damping_strength would apply the amplitude 0.1 as a rate
+# instead of Q8's 0.1/0.002 = 50, i.e. a different operator from the one Q8
+# integrated. Geometry is imported from the GX reference output through
+# GX_PARITY_REF_DIR, as in Q8; the comparison column of that reference is not
+# used here.
+#
+# Spectra. GKX's own free-energy measure, operators/moments.py
+# distribution_free_energy_resolved -> Wg_lmst (Hermitian mode weight,
+# field-line volume weight, density x temperature), summed to W(l) and W(m) and
+# normalized to sum 1. This is the same quantity the 2026-09-13 review called
+# the "Laguerre free-energy spectrum" when it found the stationary plateau.
+#
+# Overlaps. overlaps.py reports |<a|b>| on phi(z) (same z grid at every Nl, so
+# no embedding) and on the distribution eigenvectors restricted to the common
+# Laguerre block, with the retained norm fraction of each vector in that block.
+#
+# Order of work and budget. Cheapest rung first, largest last, so a stopped
+# lane still answers the dip: all four nu at Nl24, then Nl32, then Nl48, then
+# collisionless Nl64 and the collisional Nl64 rungs as budget allows. #232
+# measured 761 s for one certified pair at n=73728 on CPU; these cases are
+# n = Nl x 96 x 96, i.e. 221184 (Nl24) to 589824 (Nl64), run on one idle A4000.
+# Budget ~4 h wall. Rungs not reached are reported as not reached.
+
+[[case]]
+key = "nu0-nl24"
+nu = 0.0
+Nl = 24
+Nm = 96
+order = 1
+
+[[case]]
+key = "nu1e-3-nl24"
+nu = 1e-3
+Nl = 24
+Nm = 96
+order = 2
+
+[[case]]
+key = "nu3e-3-nl24"
+nu = 3e-3
+Nl = 24
+Nm = 96
+order = 3
+
+[[case]]
+key = "nu1e-2-nl24"
+nu = 1e-2
+Nl = 24
+Nm = 96
+order = 4
+
+[[case]]
+key = "nu0-nl32"
+nu = 0.0
+Nl = 32
+Nm = 96
+order = 5
+
+[[case]]
+key = "nu1e-3-nl32"
+nu = 1e-3
+Nl = 32
+Nm = 96
+order = 6
+
+[[case]]
+key = "nu3e-3-nl32"
+nu = 3e-3
+Nl = 32
+Nm = 96
+order = 7
+
+[[case]]
+key = "nu1e-2-nl32"
+nu = 1e-2
+Nl = 32
+Nm = 96
+order = 8
+
+[[case]]
+key = "nu0-nl48"
+nu = 0.0
+Nl = 48
+Nm = 96
+order = 9
+
+[[case]]
+key = "nu1e-3-nl48"
+nu = 1e-3
+Nl = 48
+Nm = 96
+order = 10
+
+[[case]]
+key = "nu3e-3-nl48"
+nu = 3e-3
+Nl = 48
+Nm = 96
+order = 11
+
+[[case]]
+key = "nu1e-2-nl48"
+nu = 1e-2
+Nl = 48
+Nm = 96
+order = 12
+
+[[case]]
+key = "nu0-nl64"
+nu = 0.0
+Nl = 64
+Nm = 96
+order = 13
+
+[[case]]
+key = "nu1e-3-nl64"
+nu = 1e-3
+Nl = 64
+Nm = 96
+order = 14
+
+[[case]]
+key = "nu3e-3-nl64"
+nu = 3e-3
+Nl = 64
+Nm = 96
+order = 15
+
+[[case]]
+key = "nu1e-2-nl64"
+nu = 1e-2
+Nl = 64
+Nm = 96
+order = 16
