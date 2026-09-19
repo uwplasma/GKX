@@ -1,0 +1,10 @@
+arm=before gkx=<worktrees>/off-chain-baseline/src/gkx/__init__.py
+linear time integration: dt=0.004663 steps=2000 method=rk4
+  masked: off-chain max start=0.000000e+00 end=0.000000e+00; chain max end=8.488549e-11
+  unmasked: off-chain max start=1.327159e-10 end=1.606939e-10; chain max end=8.488549e-11
+  chain rows bitwise identical between the two arms=True
+  unmasked off-chain amplitude end/start=1.210812 (neutral band: no decay, no secular growth)
+nonlinear grid ny=8 nx=8: chain kx rows=[0, 1, 2, 6, 7], two-thirds kx rows=[0, 1, 2, 6, 7]
+  nonlinear RHS of a chain-only state: off-chain |dG| max=0.000000e+00 (chain |dG| max 2.174235e+01)
+  chain rows of the RHS are bitwise the same with and without off-chain content=False; relative change 4.477739e-02
+restart round trip: wrote 32768 complex64 with off-chain max 6.105058e-10; read back off-chain max=6.105058e-10; chain part bitwise equal to what was written=True

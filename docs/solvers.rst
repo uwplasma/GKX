@@ -50,6 +50,42 @@ any unexpected coupling fails the residual gate instead of being hidden.
 Periodic boundaries and full-cover linked grids (for example Nx=1 at one ky)
 are unchanged; a seed with no chain component raises ``ValueError``.
 
+State intake on linked boundaries
+---------------------------------
+
+On a linked boundary the runtime zeroes the rows the chains never reach in
+every state it did not build itself: a user ``initial_state`` passed to
+``run_runtime_linear``, and a restart or init file named by ``init.init_file``.
+This is the contract GX enforces by masking after ``restart_read``.  The
+runtime's own initial conditions seed only the dealiased
+``1 + 2 * ((Nx - 1) // 3)`` kx rows, which the chains cover, so nothing that
+GKX builds is changed by the rule; periodic decks and full-cover linked grids
+have no mask at all and trace exactly as before.
+
+The mask is applied **at intake only**, not after each step.  The chains are
+closed under the whole right-hand side: a state that is zero outside them has a
+right-hand side that is exactly zero there too, in the linear operator and in
+the nonlinear bracket, whose output the two-thirds mask restricts to exactly
+the covered rows on a full grid.  Once the intake mask has run, the time loop
+keeps those rows at exact zero without doing any work, so no per-step operation
+is added to the runtime graph.
+
+The rule is not cosmetic.  Off-chain content is decoupled and undamped, so no
+growth-rate fit and no certified eigenpair reads it -- but
+:func:`~gkx.operators.moments.distribution_free_energy` and the resolved ky/kx
+spectra sum over every row, and a linear ky-selected grid carries an all-true
+dealias mask, so the sums would count it forever.  On a nonlinear grid the ExB
+bracket takes the *unmasked* state into real space, so off-chain content also
+aliases back onto the chain rows and changes the physics.
+
+:func:`~gkx.operators.linear.cache_builder.linked_chain_cover_mask` returns the
+covered ``(ky, kx)`` modes for a deck, and
+:func:`~gkx.operators.linear.cache_builder.mask_off_chain_rows` applies them to
+a state; both cost ``O(Nz + Nky * Nkx)`` and return ``None`` and the state
+unchanged when every row is reachable.  Library entry points below the runtime
+(``gkx.prepare``, the nonlinear ``simulation.run(initial_state)`` route) do not
+apply it; a state handed to those is taken as given.
+
 Eigenpair certification
 -----------------------
 

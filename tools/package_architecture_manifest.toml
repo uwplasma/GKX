@@ -935,12 +935,23 @@ recursive = true
 # own (ky, kx) row order with the chain maps translated at trace time instead of
 # copying a transposed state. One RHS at 32x32x24 goes from 23 to 13 FFT launches
 # and from 46.3 to 25.0 MB written; target unchanged.
+# +131 (90380 -> 90511): masking the off-chain rows of supplied states and
+# restarts on linked runs (Q19, plan 5.1 L3 follow-up (a)). The chain-cover
+# helper moves out of the Krylov module into operators/linear/linked.py so the
+# host and the traced callers share one definition, a light cover builder in
+# cache_builder.py resolves the twist-shift policy and the linked FFT maps
+# without the velocity-space arrays a full cache would build, and the two state
+# intakes -- the runtime init/restart file and a user initial_state -- apply it.
+# Most of the lines are the docstrings recording why intake is the only place
+# the mask is needed: the chains are closed under the whole right-hand side, so
+# the time loop keeps those rows at exact zero with no per-step work. Target
+# unchanged.
 # 90380 -> 90417: the one-reference-route contract (Q18). The runtime entry
 # point's raw scan runs under the jit gkx.prepare already compiles, so both are
 # one graph and one set of numbers; the prepared object forwards cfl_scales so
 # the two results carry the same fields; the rest is the contract, the
 # state-dtype caveat and the rejected tolerance written into three docstrings.
-baseline = 90417
+baseline = 90548
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1142,6 +1153,14 @@ recursive = true
 # mixes on the gather, full-cover and scatter routes; operand validation; the
 # shared RHS route against the separate terms (every term, total, state VJP) on
 # a four-class linked pilot, and its static fallbacks; target unchanged.
+# 89037 -> 89301: the linked-run state-intake contract (Q19). Five tests in the
+# existing tests/integration/runtime/test_runtime_runner.py -- a supplied state
+# and a restart round trip lose their off-chain rows on a linked deck and keep
+# the rest bitwise, both are untouched on a periodic deck, and the runtime's own
+# initial condition has nothing outside the chains, which is what makes an
+# intake-only mask complete -- and three in
+# tests/unit/linear/test_linear_helpers_extra.py for the cover helper itself.
+# No new test FILE: the topology count is unchanged.
 # +237 (89037 -> 89274): the Q18 reference-route gate. Every output array of
 # gkx.prepare and of integrate_nonlinear_explicit_diagnostics_state compared bit
 # for bit over {float32, x64} x {rk3, rk4} x {fixed, adaptive}, with the
@@ -1150,7 +1169,7 @@ recursive = true
 # gradient; and the ledger's new constant-bytes and route-selection contracts.
 # Most of the count is the walker and the two helpers the comparison needs, not
 # assertions; target unchanged.
-baseline = 89274
+baseline = 89538
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
@@ -11,7 +12,59 @@ __all__ = [
     "_build_linked_end_damping_profile",
     "_build_linked_fft_maps",
     "_signed_to_index",
+    "linked_cover_mask",
+    "project_to_linked_cover",
 ]
+
+
+def linked_cover_mask(
+    *,
+    gather_mask: Any | None,
+    use_gather: bool,
+    full_cover: bool,
+    ny: int,
+    nx: int,
+) -> Any | None:
+    """Return the ``(ky, kx)`` modes a linked chain couples, or ``None`` for all.
+
+    Only the linked parallel derivative, its kz hypercollisions and the chain
+    end damping couple modes, and they act on chain members (and, on a two-sided
+    ``ky`` grid, their conjugate mirrors); every other linear term is local in
+    ``(ky, kx)``. A mode outside that set -- a kx row outside the dealiased
+    ``1 + 2 * ((Nx - 1) // 3)`` set -- has no coupling to the chains either way.
+
+    ``gather_mask`` is the cache's flat chain membership, indexed ``ky + ny * kx``;
+    the returned mask keeps its namespace, so a host array gives a host mask and a
+    traced one gives a traced mask. Periodic (``use_gather`` false) and full-cover
+    grids return ``None``, so every consumer keeps its present behaviour on them.
+    """
+
+    if not bool(use_gather) or bool(full_cover) or gather_mask is None:
+        return None
+    # A cache passed into a jit is a tracer, so the chain topology has to be
+    # derived with the same namespace the caller handed in.
+    xp = np if isinstance(gather_mask, np.ndarray) else jnp
+    flat = xp.asarray(gather_mask, dtype=bool).reshape(-1)
+    if int(flat.size) != ny * nx:
+        return None
+    mask = xp.reshape(flat, (nx, ny)).T  # linked flat index is ky + ny * kx
+    if ny > 1:
+        # Mirror of _restore_linked_real_fft_conjugates: a row no chain visits
+        # whose -ky row is visited is filled from the (-ky, -kx) modes.
+        rows = xp.any(mask, axis=1)
+        mirror_rows = xp.mod(-xp.arange(ny), ny)
+        fill = ~rows & rows[mirror_rows] & (xp.arange(ny) != 0)
+        mirrored = mask[mirror_rows][:, xp.mod(-xp.arange(nx), nx)]
+        mask = mask | (fill[:, None] & mirrored)
+    return mask
+
+
+def project_to_linked_cover(v: Any, mask: Any | None) -> Any:
+    """Zero a ``(..., ky, kx, z)`` state outside ``mask``; ``None`` is the identity."""
+
+    if mask is None:
+        return v
+    return jnp.where(jnp.asarray(mask)[:, :, None], v, jnp.zeros((), dtype=v.dtype))
 
 
 @dataclass(frozen=True)
