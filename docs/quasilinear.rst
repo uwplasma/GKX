@@ -326,7 +326,10 @@ The default normalization is
    \sum_{k_x,k_y,z} w_{k_x,k_y,z} |\phi_{k_x,k_y}(z)|^2,
 
 with the same Hermitian and flux-tube weights used by
-:func:`gkx.diagnostics.quasilinear_transport.spectral_phi_weights`.
+:func:`gkx.diagnostics.quasilinear_transport.spectral_phi_weights`, whose
+``(k_y, k_x)`` factor is the layout contract's own
+:func:`gkx.core_ky_layout.hermitian_mode_weights` rather than a private copy
+of the rule (see :doc:`numerics`).
 
 Supported amplitude normalizations are:
 
