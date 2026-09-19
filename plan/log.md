@@ -15321,3 +15321,283 @@ found), 3653963, 3653967, 3654113 (`launch_idle.sh` and its runners), 3714300
 `bench_q9|run_ab_rot|launch_idle|launch_dense|launch_dscan` returns nothing. No GPU was used
 at any point. The staging directory `~/q9-idle-20260918` was removed after its artifacts were
 copied here, leaving no files on the office host.
+
+## 2026-09-18 — Q16: certified eigenpairs and Laguerre spectra of the Cyclone ky=.55 mode (plan §0.5 (ii))
+
+Queue row Q16 (#228), the follow-up Q8 (#238) named in its own **Limitations**
+paragraph: "no eigenvalue, residual or Laguerre spectrum (the runner returns no
+state), so the non-monotone small-ν ladders (a branch change or slow μ-space
+recurrence) are not explained". Measurement only; no source, test, default or
+reference change. Files:
+`plan/research/scripts/2026-09-18-eigen-laguerre-spectrum/`.
+
+**Question (registered in `manifest.toml` before any run, commit `df029eb9b`).**
+For the Cyclone s-α adiabatic-electron ITG control at ky=.55 (Nm96, Nz96 =
+ntheta32 × nperiod2, nkx=1, f64, end-damping rate 50), what is the certified
+dominant eigenpair of the linear operator at Nl ∈ {24, 32, 48, 64},
+collisionless and at species ν ∈ {1e-3, 3e-3, 1e-2}; what does the Laguerre
+spectrum of its eigenvector show about truncation; and are Q8's non-monotone
+ν ≤ 3e-3 ladders a branch change or one slowly converging branch? Predictions:
+**P1** consecutive-Nl eigenvectors of the same ν overlap ≥ 0.99 both on φ(z)
+and on the common Laguerre block, i.e. one branch, not a branch change;
+**P2** the Laguerre free-energy spectrum decays by ≥ 2 decades peak to cutoff
+at ν=1e-2 at Nl 32/48, is a stationary plateau of order 1% per index in the
+upper quarter collisionlessly at Nl 24/32 and at ν ≤ 3e-3 at Nl24, and does not
+become decaying collisionlessly by Nl64; **P3** the adaptive route certifies
+every rung, and its γ agrees with Q8's time fit to within 2% wherever Q8
+recorded the fit settled **and** Nl-converged (ν=1e-2) while differing by more
+than 2% for at least one case Q8 recorded unsettled (collisionless Nl ≥ 32);
+**P4** the certified collisionless γ falls with Nl through 64 with every rung
+change above 5%, so no collisionless limit exists at this ky up to Nl64.
+
+**Route and certification.** One fresh process per case through
+`run_runtime_linear(solver="krylov", krylov_cfg=KrylovConfig())`. Since #233 the
+dataclass default is `method="adaptive"`, the residual-certified adaptive
+propagator; the raw propagator, Arnoldi and power routes fail closed instead.
+Every run reports the route's own gate (original-operator relative residual
+against 1e-9) and a second, independent re-certification by
+`_eigenpair_relative_residual` on a cache this script builds itself. The two
+agree to the last digit in all twelve completed cases. #237 (Q6) projects every
+eigen route onto the linked-chain modes; this deck is Nx=1, i.e. full-cover, so
+the projection is the identity here and the pair is the one `main`'s default
+route returns.
+
+**Deck and the one change from Q8.** `cyclone_salpha_itg_eigen.toml` is Q8's
+deck (`plan/research/scripts/2026-09-13-collisional-convergence/`, itself
+`tools/comparison/fixtures/parity/cyclone_salpha_itg.toml`) with `[[species]]
+nu` overridden per case and `[time] damp_ends_rate = 50.0` added. The rate is
+load-bearing and not cosmetic: an eigensolve is timestep-free, so
+`LinearParams.end_damping_strength` (`operators/linear/params.py:167-175`) would
+otherwise apply the deck amplitude 0.1 as a rate rather than Q8's 0.1/dt =
+0.1/0.002 = 50, i.e. solve a different operator from the one Q8 integrated.
+Geometry is imported from the GX reference output through `GX_PARITY_REF_DIR`
+as in Q8; that reference's own comparison column is not used. Deck SHA-256
+`f2c348bf…`; resolved grid Nx1/Ny34/Nz96, ntheta32, nperiod2, linked; selected
+ky index 11 at ky=0.55, n = Nl × 96 × 96.
+
+**Spectra and overlaps, defined.** The spectra are GKX's own free-energy
+measure, `operators/moments.py distribution_free_energy_resolved` → `Wg_lmst`
+(Hermitian mode weight, field-line volume weight from
+`fieldline_quadrature_weights`, density × temperature), summed to W(ℓ) and W(m)
+and normalized to sum 1 — the quantity the 2026-09-13 review called the
+Laguerre free-energy spectrum. Overlaps are reported twice: on φ(z), which
+lives on the same 96-point z grid at every Nl so no embedding is involved, and
+on the distribution eigenvectors restricted to the common Laguerre block
+ℓ < min(Nl_a, Nl_b), with the retained norm fraction of each vector in that
+block. Eigenvectors are phase-fixed at their largest component and normalized
+to unit 2-norm before either measure.
+
+**Host and environment.** office (`pop-os`), one RTX A4000, GPU 0, used only
+while `nvidia-smi --query-compute-apps` showed no process on it (the supervisor
+re-checks before every key and stops rather than share). Host process pinned to
+cores 18–35; cores 2–17 were left to another lane. `/home/rjorge/venvs/gkx-nl`
+(Python 3.11.15, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, **SOLVAX
+0.22.0** — Q8 and Q6 ran on 0.20.0; the repository floor is `solvax>=0.12.0`).
+Env: `PYTHONPATH=$SRC/src:$SRC JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=0
+XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg
+GX_PARITY_REF_DIR=<matched_refs>`. Staged source: a `git archive` of this branch
+at the registration commit; `gkx.__file__` is asserted inside the staged tree
+and x64 asserted on, in every process. Seeds are the runtime initial condition
+cast to complex128 (native complex64), SHA-256 recorded per case.
+
+**Results — certified eigenpairs.** Every completed case is certified; the
+solver residual and the independent re-certification are identical. Δγ is from
+the next lower Nl of the same ν; the Q8 columns are that row's initial-value
+fit and settled flag from the 2026-09-14 entry.
+
+| ν | Nl | n | γ (eigen) | ω (eigen) | Δγ vs prev Nl | residual | Q8 fit γ | Q8 settled | eigen − fit | wall s |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|
+| 0 | 24 | 221184 | 0.0330056 | 0.500231 | | 4.66e-13 | 0.0328280 | yes | +0.541% | 550 |
+| 0 | 32 | 294912 | 0.0248534 | 0.504939 | −24.70% | 2.22e-10 | 0.0249958 | no | −0.570% | 766 |
+| 0 | 48 | 442368 | 0.0183456 | 0.497760 | −26.18% | 7.37e-12 | 0.0197718 | no | −7.213% | 1911 |
+| 0 | 64 | 589824 | — | — | | — | 0.0177001 | no | — | not reached |
+| 1e-3 | 24 | 221184 | 0.0291247 | 0.497333 | | 2.63e-14 | 0.0291274 | yes | −0.009% | 607 |
+| 1e-3 | 32 | 294912 | 0.0174127 | 0.501092 | −40.21% | 2.79e-14 | 0.0174118 | yes | +0.005% | 840 |
+| 1e-3 | 48 | 442368 | 0.0200518 | 0.494400 | +15.16% | 2.99e-14 | 0.0200511 | yes | +0.003% | 1368 |
+| 3e-3 | 24 | 221184 | 0.0234140 | 0.496538 | | 1.69e-14 | 0.0234140 | yes | −0.000% | 606 |
+| 3e-3 | 32 | 294912 | 0.0174873 | 0.495787 | −25.31% | 1.77e-14 | 0.0174873 | yes | −0.000% | 844 |
+| 3e-3 | 48 | 442368 | 0.0186981 | 0.494389 | +6.92% | 1.85e-14 | 0.0186981 | yes | +0.000% | 1373 |
+| 1e-2 | 24 | 221184 | 0.0174378 | 0.495769 | | 9.31e-15 | 0.0174378 | yes | −0.000% | 604 |
+| 1e-2 | 32 | 294912 | 0.0171657 | 0.495705 | −1.56% | 9.41e-15 | 0.0171657 | yes | −0.000% | 838 |
+| 1e-2 | 48 | 442368 | 0.0171695 | 0.495685 | +0.02% | 1.01e-14 | 0.0171695 | yes | −0.000% | 1375 |
+
+ω stays in 0.494–0.505 across every ν and every Nl, a 2.2% band.
+
+**Results — Laguerre spectrum of the eigenvector.** "Upper quarter" is the
+summed normalized free energy in the top Nl/4 indices; "interior maxima" counts
+local maxima at ℓ ≥ 1; "hump" is the last such maximum over the local minimum
+before it.
+
+| ν | Nl | peak ℓ | decades peak→cutoff | upper-quarter fraction | mean per index there | interior maxima | last max ℓ (as fraction of Nl) | hump ratio |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 24 | 0 | 2.21 | 0.0796 | 0.0133 | 2 | 19 (0.79) | 2.5 |
+| 0 | 32 | 0 | 2.36 | 0.0817 | 0.0102 | 3 | 27 (0.84) | 3.2 |
+| 0 | 48 | 0 | 2.77 | 0.0654 | 0.0054 | 4 | 41 (0.85) | 3.0 |
+| 1e-3 | 24 | 0 | 2.44 | 0.0548 | 0.0091 | 2 | 19 (0.79) | 2.3 |
+| 1e-3 | 32 | 0 | 2.73 | 0.0458 | 0.0057 | 3 | 26 (0.81) | 2.3 |
+| 1e-3 | 48 | 0 | 3.49 | 0.0178 | 0.0015 | 2 | 41 (0.85) | 2.1 |
+| 3e-3 | 24 | 0 | 2.87 | 0.0252 | 0.0042 | 1 | 19 (0.79) | 1.6 |
+| 3e-3 | 32 | 0 | 3.45 | 0.0117 | 0.0015 | 1 | 26 (0.81) | 1.3 |
+| 3e-3 | 48 | 0 | 4.63 | 0.0018 | 0.0002 | 1 | 41 (0.85) | 1.1 |
+| 1e-2 | 24 | 0 | 4.17 | 0.0018 | 0.0003 | **0** | — | — |
+| 1e-2 | 32 | 0 | 5.30 | 0.0003 | 0.0000 | **0** | — | — |
+| 1e-2 | 48 | 0 | 7.28 | 0.0000 | 0.0000 | **0** | — | — |
+
+The Hermite spectrum is free to report from the same reduction and is not the
+limiting axis: at Nm96 it falls 3.9–6.7 decades from peak to cutoff in every
+case, with an upper-quarter fraction of 0.022–0.025 collisionlessly and
+1e-4–1e-2 with collisions, and it barely moves with Nl (collisionless
+0.0222/0.0217/0.0251 at Nl 24/32/48).
+
+**Results — overlaps.** Full 30-pair table in `overlaps.txt`; consecutive-Nl
+pairs and the widest cross-ν pair per rung:
+
+| pair | φ(z) overlap | common-block overlap | common Nl | retained (a, b) |
+|---|---:|---:|---:|---|
+| ν=0, Nl24→32 | 0.991267 | 0.826802 | 24 | 1.000, 0.960 |
+| ν=0, Nl32→48 | 0.992315 | 0.831677 | 32 | 1.000, 0.960 |
+| ν=1e-3, Nl24→32 | 0.997416 | 0.941181 | 24 | 1.000, 0.978 |
+| ν=1e-3, Nl32→48 | 0.999117 | 0.970080 | 32 | 1.000, 0.988 |
+| ν=3e-3, Nl24→32 | 0.999701 | 0.990416 | 24 | 1.000, 0.994 |
+| ν=3e-3, Nl32→48 | 0.999970 | 0.997507 | 32 | 1.000, 0.998 |
+| ν=1e-2, Nl24→32 | 1.000000 | 0.999871 | 24 | 1.000, 1.000 |
+| ν=1e-2, Nl32→48 | 1.000000 | 0.999989 | 32 | 1.000, 1.000 |
+| ν=0 vs ν=1e-2 at Nl24 | 0.998202 | 0.813907 | 24 | 1.000, 1.000 |
+| ν=0 vs ν=1e-2 at Nl32 | 0.993721 | 0.759931 | 32 | 1.000, 1.000 |
+| ν=0 vs ν=1e-2 at Nl48 | 0.996938 | 0.734771 | 48 | 1.000, 1.000 |
+
+**Verdicts.**
+- **P1 passes as a branch test; its ≥0.99 clause on the state measure fails at
+  ν ≤ 1e-3.** No pair collapses: the φ(z) overlap is ≥ 0.991 for every one of
+  the 30 pairs, including both pairs that bracket the Nl32 dip at ν=1e-3
+  (0.9974, 0.9991) and at ν=3e-3 (0.9997, 1.0000), and ≥ 0.9937 across
+  collisionality at fixed Nl. A branch change would show one pair far from 1
+  while its neighbours stayed near 1; nothing of the kind appears, and ω is
+  within a 2.2% band throughout. **Q8's non-monotone small-ν ladders are one
+  slowly converging branch whose velocity-space tail is unresolved, not a
+  different eigenvalue becoming dominant.** The common-block overlap is the
+  weaker measure and falls where the tail is largest — 0.827/0.832
+  collisionlessly, 0.941/0.970 at ν=1e-3 — which is the same statement read on
+  the ℓ axis: what changes between rungs is the Laguerre content, not the mode.
+- **P2 passes on both clauses that could be tested; its Nl64 clause was not
+  reached.** ν=1e-2 falls 5.30 and 7.28 decades peak to cutoff at Nl 32 and 48,
+  well past the predicted 2, and is the only ladder whose spectrum has **no
+  interior local maximum at all** — a monotone decaying tail. Collisionlessly
+  the upper quarter holds 1.33%, 1.02% and 0.54% per index at Nl 24/32/48 (total
+  0.0796/0.0817/0.0654), the order-1% stationary plateau the 2026-09-13 review
+  measured on the GX pair (0.080/0.082) — reproduced here from the eigenvector
+  instead of a time trace, and independently of GX. At ν ≤ 3e-3 at Nl24 the
+  plateau is 0.91% (1e-3) and 0.42% (3e-3) per index, so the ν=3e-3 row is below
+  the predicted 1%. Whether the collisionless spectrum is still non-decaying at
+  Nl64 was not measured.
+- **P3 passes, and strengthens the runner's settled flag.** All twelve completed
+  cases certify, with residuals 9.3e-15 to 2.2e-10 against a 1e-9 gate, and the
+  independent re-certification reproduces each to the last digit. Every case Q8
+  recorded as **settled** reproduces the certified eigenvalue to ≤ 0.01% — nine
+  of them, six of those to every digit printed — so those fits were measuring
+  the eigenvalue. Both cases Q8 recorded as **not settled** differ: −0.570% at
+  collisionless Nl32 and −7.213% at Nl48. The runner's half-time criterion
+  therefore predicts, on this deck, whether a fit equals the eigenvalue.
+- **P4 holds on the rungs measured; its Nl64 clause was not reached.** The
+  certified collisionless γ falls monotonically, .0330056 → .0248534 → .0183456,
+  by −24.70% and −26.18%; the rung change is not shrinking, it grows slightly.
+  No collisionless limit exists at this ky up to **Nl48** by the eigenvalue
+  itself. Nl64 timed out (below).
+
+**What the spectra say about truncation, and the answer to §0.5 (ii).** The
+Laguerre spectrum separates the ladders exactly as the convergence does, and it
+does so one rung earlier than the growth rate can. The single ladder Q8 found
+Nl-converged, ν=1e-2, is the single ladder with a monotone decaying Laguerre
+spectrum. Every ladder that is not converged carries a cutoff pile-up whose last
+local maximum sits at 0.79–0.85 of Nl at **every** rung: raising Nl does not
+resolve the pile-up, it relocates it to the new cutoff. Collisionlessly the
+number of interior maxima grows with resolution (2, 3, 4 at Nl 24, 32, 48) while
+the per-index plateau in the upper quarter only halves (1.33% → 0.54%) — the
+signature of a truncation with no sink in ℓ, consistent with the review's
+finding that neither code applies a Laguerre sink here and that the ∇B drift is
+the only linear term moving free energy in ℓ. Collisions supply the missing
+sink: the hump ratio falls 2.5 → 2.3 → 1.6 → none at Nl24 as ν goes 0 → 1e-3 →
+3e-3 → 1e-2, and the upper-quarter fraction falls two and a half orders of
+magnitude over the same range. A practical reading of the numbers here, offered
+as a working rule for this deck and not as a general tolerance: the ladder
+converges (|Δγ| ≤ 2%) once the Laguerre spectrum has no interior maximum and the
+upper quarter holds ≲ 2e-3 of the free energy. ν=3e-3 first reaches 1.8e-3 at
+Nl48 with a hump ratio of 1.1, the level ν=1e-2 had at Nl24 where its next rung
+moved −1.56%, so ν=3e-3 is expected to be near-converged at Nl64 — a prediction
+that rung would test.
+
+So §0.5 (ii) is answered for the eigenvalue and the spectrum, and the two agree:
+**there is no collisionless Laguerre-converged mode at this ky up to Nl48**, and
+the eigenvector says why. It is not answered at Nl64, and the clean way to close
+it is a Laguerre sink or a declared regularization, which is §0.5 (iii)–(iv)
+rather than another rung. Q8's conclusion is unchanged and now rests on the
+operator rather than on fits: the collisionless reference rows at this ky (GX
+Nl16 .0346; GKX and GX Nl24 .0328–.0330) are unconverged truncation values, and
+the certified ν=1e-2 pair γ=.0171695, ω=.495685 at Nl48 is the only
+Nl-converged value, collision-modified (ν·b ≈ .13 at b_max = 12.7, far above γ)
+and not a collisionless limit.
+
+**Limitations.** The four Nl64 rungs were not reached: `nu0-nl64` ran 45:00 and
+was stopped by the per-key 2700 s cap with the adaptive solve still inside its
+first certification attempt (`results/nu0-nl64.time.txt`, exit status 124), and
+the supervisor aborted as designed before the three collisional Nl64 keys. So
+P2's and P4's Nl64 clauses, the ν=3e-3 near-convergence prediction above, and
+any eigen counterpart of Q8's unsettled Nl64 fits (.0177 at T=150, .0162 on
+[210,300]) are open. One ky, one Nm (96), one Nz (96), one absorber rate (50)
+and one geometry; nothing here varies Nm or Nz, so a Laguerre statement that is
+conditional on Nm96 is all that is established. The spectra are of the
+distribution G in GKX's own free-energy measure; no cross-code Laguerre spectrum
+was computed, and GX was not run in this row (Q17 did the `vnewk` control
+separately). The overlaps compare eigenvectors of *different* operators, so the
+common-block number depends on the truncation choice; φ(z) does not, which is
+why the verdict rests on it. SOLVAX is 0.22.0 here against 0.20.0 in Q6 and Q8;
+the eigen route's certification is against the original operator either way, but
+the two versions were not compared on a common case. No claim is made about
+solver cost: the wall times are one run each on a host whose load ran 2–8.
+
+**Cost.** GPU wall 4 h 01 min total (18:57:23 to 22:58:23 local), of which 45:00
+was the abandoned Nl64 key; per key 9:16–10:13 at Nl24, 12:52–14:11 at Nl32,
+22:54–31:57 at Nl48. Peak host RSS 1.55–1.68 GB. The run directory is 476 KB
+after cleanup; the staged source tree and the 59 MB of eigenvector `.npy` files
+were deleted.
+
+**Commands** (from the staged repository root, one per case; `run_eigen.sh`
+supplies the environment above and refuses a key if GPU 0 has any compute
+process):
+```
+D=plan/research/scripts/2026-09-18-eigen-laguerre-spectrum
+GPU=0 CORES=18-35 TIMEOUT=2700 bash $D/run_eigen.sh <run_dir> \
+  nu0-nl24 nu1e-3-nl24 nu3e-3-nl24 nu1e-2-nl24 \
+  nu0-nl32 nu1e-3-nl32 nu3e-3-nl32 nu1e-2-nl32 \
+  nu0-nl48 nu1e-3-nl48 nu3e-3-nl48 nu1e-2-nl48 \
+  nu0-nl64 nu1e-3-nl64 nu3e-3-nl64 nu1e-2-nl64
+python $D/overlaps.py --results <run_dir>/results --vectors <run_dir>/vectors \
+  --out <run_dir>/overlaps.json
+python $D/summarize.py --results $D/results > $D/summary.txt
+```
+
+**Artifacts** (`plan/research/scripts/2026-09-18-eigen-laguerre-spectrum/`,
+SHA-256 in `SHA256SUMS.txt`). The twelve eigenvectors are scratch and are not in
+git; `vectors_sha256.txt` lists the SHA-256 of each `.npy` as written, and each
+case's `RESULT` line carries the SHA-256 of the array contents and its byte
+count. `logs/` stays on the run host (`*.log` is gitignored and the run logs
+duplicate the `RESULT` lines kept under `results/`).
+
+**Terminal job state.** All verified absent at 2026-09-18T23:03:26-05:00: no
+`run_eigen.sh`, `eigen_spectrum.py`, `timeout` or `/usr/bin/time` process
+(`pgrep -af` matches nothing, rc=1), and no compute process on either GPU
+(`nvidia-smi --query-compute-apps` returns only its header). Supervisor process
+group 3646256/3646259/3646273, launched 18:57:23 and gone after it aborted on
+the Nl64 exit 124 at 22:58:23 (`supervisor.txt` records START/END/ABORT for
+every key and no ALL DONE). The Nl64 runner's python process 3737824 was the
+last compute process observed on GPU 0. All four PIDs were checked individually
+with `kill -0` at that timestamp and every one is absent. The office run directory
+`gkx-q16-eigen-spectrum-20260918.<suffix>` is kept at 476 KB (logs, results,
+overlaps, supervisor trace); its `src_stage/`, its `vectors/` and the local
+staging tarball were deleted.
+
+**Next question.** The four Nl64 rungs, run with a cap above 45 min for the
+collisionless key, and then whether a declared Laguerre sink (§0.5 (iii),
+`nu_hyper_l` with the const-branch Hermite coefficient zeroed) removes the
+cutoff pile-up and converges the collisionless ladder, or only moves the answer
+the way a finite ν does.
