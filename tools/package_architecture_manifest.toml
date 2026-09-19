@@ -215,7 +215,18 @@ recursive = true
 # live inside a per-case gate; and folding them into test_release_gates.py would
 # put the index and the things it indexes in the same file, which is exactly the
 # coupling the ledger exists to remove.
-baseline = 78
+# 78 -> 79: tests/unit/core/test_core_ky_layout.py. The target is 30, so a new
+# file needs a reason: this one owns the ky axis layout contract, which is a
+# grid-level invariant rather than a property of any solver. The rule it pins
+# -- half/full conversion, the self-conjugate rows, and the reduction weights
+# -- is consumed by the bracket, the Hermitian projector, both restart readers,
+# the artifact writers and the public prepared-simulation shape, so filing it
+# under any one of those would name it after a consumer. It sits beside
+# test_core_numerics.py because that file owns the grid the contract is about,
+# and separate from it because the contract is what plan 5.3 N3 moves the
+# evolved state against: that row rewrites this file and must not have to reach
+# into the grid's own tests to do it.
+baseline = 79
 target = 30
 
 [[topology_policy.counts]]
@@ -935,7 +946,16 @@ recursive = true
 # own (ky, kx) row order with the chain maps translated at trace time instead of
 # copying a transposed state. One RHS at 32x32x24 goes from 23 to 13 FFT launches
 # and from 46.3 to 25.0 MB written; target unchanged.
-baseline = 90380
+# +359: gkx/core_ky_layout.py, the ky axis layout contract (plan 5.3 N3). The
+# rule it states was written five times -- in the bracket, the Hermitian
+# projector, the artifact restart expander, the runtime init-file expander and
+# its in-place repair -- and the five copies did not agree: the runtime one
+# inferred Ny = 2*(Nyc-1) and silently dropped a row on an odd-Ny grid. The
+# module is longer than the deletions it replaces because the parts that were
+# never written down are the load-bearing ones: that Nyc does not determine Ny,
+# that the ky=0 and Nyquist rows are self-conjugate and are not fixed by the
+# layout, and that a half-axis reduction weight is 2 only on the paired rows.
+baseline = 90739
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1137,7 +1157,17 @@ recursive = true
 # mixes on the gather, full-cover and scatter routes; operand validation; the
 # shared RHS route against the separate terms (every term, total, state VJP) on
 # a four-class linked pilot, and its static fallbacks; target unchanged.
-baseline = 89037
+# +581: 569 for tests/unit/core/test_core_ky_layout.py and 12 for the two
+# restart-path cases that move with _expand_ky's signature (the runtime runner
+# and CLI tests). The new file is 171 cases over even and odd Ny
+# from 2 to 32: round-trip exactness, the refusals for a row count that is
+# neither layout, the self-conjugate rows that the half layout does not fix,
+# the reduction weights against a full-axis sum, numpy/jax dispatch, the VJP of
+# the widening, and the five consumers that already sit on the boundary. One
+# case records a contract violation rather than asserting the contract:
+# _hermitian_mode_weight gives an even grid's Nyquist row weight 2 on a
+# half-spectrum grid, unreachable today because dealiasing zeroes that row.
+baseline = 89618
 target = 35000
 
 [[line_budget_policy.counts]]

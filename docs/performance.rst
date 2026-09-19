@@ -57,6 +57,14 @@ float32) with the shipped default deck at ``96x96x48``:
   2.8 ms for a same-sized FFT while doing strictly less arithmetic. Those
   kernels also carry ``outer_dimension_partitions:["1","2","3"]``, so XLA
   threads them three ways regardless of core count.
+
+  Completing once per step instead of once per RHS is bitwise identical and
+  was measured, but rejected: on the captured-constant runtime route XLA:CPU
+  then materializes 2.3--2.7 times more bytes. What removes the concatenate is
+  the state layout, not the placement of the projector. The rule that switch
+  will be made against is written down and tested as the ``ky`` layout
+  contract (:mod:`gkx.core_ky_layout`, see :doc:`numerics`); the evolved state
+  is still two-sided, so no part of the 41.9 per cent has been recovered yet.
 - Geometry construction, compilation, plotting, and I/O are seconds each and
   are not worth optimizing against the stepping cost.
 

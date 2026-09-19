@@ -14425,3 +14425,220 @@ Gates on the bumped tree:
 merged on their own green heads. This branch then carries #244 (Q17) and #245 (Q20) as
 merged links, and records their rows as done. It is tagged `v2.1.0` only after this
 branch passes `ci-required` and merges. `release.yml` then publishes from the tag.
+
+## 2026-09-18 — Q10 stage 1: the ky ≥ 0 layout contract (plan §5.3 N3)
+
+**Outcome: partial. The contract is written, owned and tested; the evolved state
+is still two-sided, so none of the profiled 41.9% is recovered and no speed-up is
+claimed.** Branch `perf/ky-half-spectrum-layout` off `origin/main` `4c6c9ac8b`.
+What landed is the thing the switch was missing: one statement of the rule, one
+owner for it, the bracket's `ky ≥ 0` primitive split out as the seam the switch
+will call, and 171 cases pinning the layout over even and odd `Ny`. Every HLO
+count and byte total is unchanged from main, and the RHS, VJP and 100-step
+trajectory gates are bitwise in float32 and x64.
+
+**Why stage it.** N3's risk surface is not the bracket. A read of every ky-axis
+consumer found seven places that would be silently wrong on a half axis, none of
+them in the nonlinear kernel: the linked-chain builder walks
+`naky = 1 + (ny-1)//3` rows and writes each visited mode's conjugate partner at
+`(-ky) % ny` (`operators/linear/linked.py`), every linked apply ends in
+`_restore_linked_real_fft_conjugates` (`operators/linear/streaming.py:451`),
+`twothirds_mask` is two-sided and is sliced rather than built
+(`core_grid.py:73`), `_transport_mode_weight` is the one flux weight that does
+not branch on layout and would under-count by two (`operators/moments.py:54`),
+`_make_compressed_real_fft_projector` hard-codes `two_sided=True`
+(`operators/nonlinear/projection.py`), the sharded ky divisibility check tests
+`state.shape[-3]` against the device count and `1 + Ny//2` is odd
+(`workflows/runtime/parallel_nonlinear.py`), and two real-space output paths use
+a full complex `ifft2` (`artifacts/nonlinear_netcdf.py`,
+`artifacts/spectral_layout.py`). Flipping the state without a written contract
+would have moved all of them at once against no reference.
+
+### The contract
+
+`gkx.core_ky_layout` is the single owner. A spectral array is
+`(..., ky, kx, z)` and its ky axis is in one of two layouts.
+
+- `full`: `Nky = Ny`, two-sided `fftfreq` order. **This is what the evolved
+  state uses today.** Half of it is redundant under the reality condition
+  `F(-ky,-kx,z) = conj F(ky,kx,z)`.
+- `half`: `Nky = Nyc = 1 + Ny//2`, the non-negative `rfftfreq` rows. The reality
+  condition holds by construction.
+
+The boundary sits at I/O and at the bracket, not inside the step. Restart files
+already store `Nyc` rows and are widened on read; the compressed bracket computes
+on `Nyc` rows and widens once at the end; the per-stage Hermitian projector is
+exactly `to_full(to_half(G))`. Diagnostics, fields, sharding and the VJP are
+untouched by this stage.
+
+Three facts are stated and tested rather than rederived per call site.
+
+1. **`Nyc` does not determine `Ny`.** `2(Nyc-1)` and `2Nyc-1` share a `Nyc`, so
+   every widening takes `ny_full` explicitly (`ny_full_candidates` hands a
+   caller who thinks otherwise both answers).
+2. **The self-conjugate rows are not made real by the layout.** Row 0 always,
+   and row `Ny/2` for even `Ny`, are their own partner; there the condition
+   becomes `F(j,kx) = conj F(j,-kx)`, *within* the row, which storing `ky ≥ 0`
+   does not enforce. `symmetrize_self_conjugate_rows` imposes it by averaging
+   the pair, which is self-adjoint and idempotent.
+3. **Reductions need row weights, not a factor of two.** For `Q(-ky) = Q(ky)`,
+   the full-axis sum is the `ky_row_weights` weighted half-axis sum: 2 on the
+   paired rows, 1 on the self-conjugate ones. A blanket 2 over-counts an even
+   grid's Nyquist row.
+
+**Public behaviour.** One change, deliberate: `PreparedSimulation.state_shape`
+reported `1 + Ny//2` ky rows while the runtime allocates `Ny`
+(`api/prepared.py`), so the advertised shape and `estimate_memory()` understated
+the state by 1.92× on the default case ((1,4,8,**25**,48,64) against
+(1,4,8,**48**,48,64)). It now reports what is allocated, and moves back when the
+state does. Nothing else in the public surface changes: no default, no file
+format, no reported physics.
+
+### What changed
+
+The completion rule was written six times and the copies did not agree.
+`brackets._complete_hermitian_ky`, `artifacts/io._expand_positive_ky_to_full`,
+`startup._expand_ky`, `startup._enforce_full_ky_hermitian`, the projector's own
+slice, and `tools/comparison/compare_gx_nonlinear._expand_ky` all now call
+`core_ky_layout`. `real_fft_unique_ky`, the CFL wavenumbers and
+`_dealiased_ky_values` take `half_ky_values`; the bracket takes
+`half_dealias_mask` and `to_half`.
+
+`_spectral_bracket_half_core` is the whole pseudo-spectral kernel and returns
+`(positive_ky, ny_full, nx)`. `_spectral_bracket_real_fft_core` is now that
+function plus the widening and the real `kxfac` — the seam N3 calls directly.
+
+**Defect found and fixed.** `startup._expand_ky` inferred `ny_full = 2*(Nyc-1)`,
+the even branch. On an odd-`Ny` grid a raw binary init file therefore expanded to
+`Ny-1` rows: `Ny=9` gave 8, `Ny=3` gave 2. No error was raised. It now takes the
+grid's own `Ny`; `Ny=9` gives 9 and `Ny=3` gives 3. Its two callers in the tests
+moved to the new keyword, and a block that is neither this grid's full axis nor
+its half is now refused instead of returned unchanged.
+
+**Defect recorded, not fixed.** `_hermitian_mode_weight` gives every `ky > 0`
+row weight 2 on a half-spectrum grid, which is wrong on an even grid's Nyquist
+row. No shipped route reaches it: the only half grids GKX builds are the
+cross-code comparison views, and the two-thirds mask zeroes every row at or above
+`Ny/3`. The test records the mismatch rather than asserting the contract, so N3
+has to route that weight through `ky_row_weights` before the state moves. Same
+for the third copy of the rule in `diagnostics/quasilinear_transport`.
+
+### Gates
+
+`ruff check .`, `ruff format --check .`, `mypy` as CI runs it, `sphinx -W -b
+html`, `check_package_architecture_manifest.py` and
+`check_repository_size_manifest.py` all pass. Test selections, all green, run
+with `JAX_ENABLE_X64=true GKX_X64=1` as the CI shards do: fundamentals-core
+(plus the new file), linear-core (streaming, time integrators, Krylov core,
+assembly, fields), nonlinear-core, runtime-core, model-artifacts (profiling
+contracts), parallel-autodiff under
+`--xla_force_host_platform_device_count=4`, and
+`tests/release/test_release_gates.py tests/release/test_evidence_ledger.py`.
+`gkx.core_ky_layout` is owned by the linear-operator lane in
+`validation_coverage_manifest.toml`; the architecture manifest takes +359 source
+lines, +569 test lines and one test file, each with its reason recorded there.
+
+**HLO ledger** (`profile_runtime_kernels.py nonlinear-step-hlo`, XLA:CPU, jax
+0.10.2, complex64; `origin/main` → branch). Unchanged everywhere, so the table
+is written once:
+
+| graph | fft | concatenate | copy | transpose | gather | bytes written |
+|---|---:|---:|---:|---:|---:|---:|
+| RHS 32×32×24 Nl2/Nm4 | 13 | 18 | 19 | 19 | 14 | 24,991,260 |
+| diagnostics rk3, 32 | 44 | 38 | 85 | 66 | 41 | 89,479,380 |
+| diagnostics rk4, 32 | 57 | 49 | 105 | 86 | 53 | 117,413,076 |
+| runtime rk3, 32 | 43 | 44 | 226 | 64 | 42 | 89,062,692 |
+| runtime rk4, 32 | 56 | 55 | 246 | 84 | 54 | 116,996,388 |
+| RHS 64×64×24 Nl4/Nm8 | 17 | 22 | 23 | 23 | 18 | 424,812,232 |
+| diagnostics rk3, 64 | 56 | 44 | 100 | 81 | 53 | 1,509,607,604 |
+| diagnostics rk4, 64 | 73 | 57 | 124 | 105 | 69 | 1,983,162,548 |
+| runtime rk3, 64 | 55 | 52 | 240 | 78 | 54 | 1,499,058,544 |
+| runtime rk4, 64 | 72 | 65 | 264 | 102 | 70 | 1,972,613,488 |
+
+The eight ledger JSONs have pairwise identical SHA-256 between the two arms, and
+the four branch ones match #243's recorded `shared_t_*` archives byte for byte,
+so this is also a reproduction of Q9's ledger on different hardware. The
+optimized HLO *text* was diffed as well: identical modulo metadata and SSA
+numbering for all ten graphs.
+
+**Identity.** `‖Δ‖/‖ref‖` against `origin/main`, per output class.
+
+| gate | cases | f32 | x64 |
+|---|---:|---|---|
+| RHS terms, total, nonlinear RHS, VJPs wrt G / tprim / nu_hyper_m | 58 | 58/58 bitwise¹ | 58/58 bitwise |
+| 100-step trajectories: `integrate_nonlinear` ×7 integrators, `run_runtime_nonlinear` rk3/rk4 × 3 modes, sharded, species×Hermite, checkpointed window value and d/dtprim | 65 | 65/65 bitwise | 65/65 bitwise |
+
+¹ With default flags one pair reported `nl32/nonlinear_rhs` at 1.4e-10 (and
+`nl64/nonlinear_rhs` at 2.8e-10 in a later pair). That is not this branch, and
+the chase is worth recording because it will recur:
+
+- the optimized HLO of that graph is identical modulo metadata and SSA
+  numbering, both with cache and params captured and with them passed as graph
+  arguments (`probe_argrhs.py`);
+- every grid, cache and params leaf has the same dtype, shape and SHA-256
+  (`probe_leaves.py`);
+- **two runs of unmodified `main`, minutes apart, differ on the same key by
+  1.4e-10**, while two back-to-back runs of either tree agree bitwise;
+- with `--xla_cpu_multi_thread_eigen=false` every pair is 58/58 bitwise,
+  main against the branch included.
+
+So the float32 nonlinear RHS at 32×32×24 and 64×64×24 is **not bit-reproducible
+run to run** under the multithreaded XLA:CPU FFT thunk, on `main` as much as
+here — the mechanism #243 measured (the thunk splits a batch of lines across the
+intra-op pool; DUCC's SIMD lanes round differently from its scalar remainder),
+now shown to fire without any code change. Any future f32 bitwise gate on these
+graphs must pin that flag. The x64 and trajectory gates were unaffected.
+
+A process note on the same point: the first gate run exported
+`JAX_ENABLE_X64=true GKX_X64=1` in the calling shell, and `env $X …` inherits the
+caller's environment, so the "f32" arm silently ran in x64 (bytes exactly
+doubled, 24,991,260 → 49,981,596). The recorded run unsets both first.
+
+**Timing.** None. The Mac is shared and the office host is unreachable, so
+wall-clock was treated as unavailable, and this stage changes no arithmetic and
+no graph, so there is nothing to time. **No speed-up is claimed by this entry.**
+
+### Not done
+
+The hot-path switch. The evolved state is two-sided, the per-stage projector and
+the bracket's completion both still run, and the 41.9% stands where
+`docs/performance.rst` records it. The follow-up row must, in order: build the
+half-spectrum dealias mask instead of slicing the two-sided one; replace the
+linked-chain conjugate restore with the conjugate-partner map; fix
+`_transport_mode_weight` and the Nyquist row of `_hermitian_mode_weight` and
+`spectral_phi_weights`; give the compressed projector a layout argument; make the
+sharded ky divisibility check layout-aware; move the two `ifft2` output paths to
+`irfft2`; and only then flip the state, with this contract's tests as the
+reference and the ledger above as the before.
+
+**Environment.** macOS 23.4.0 (M3), jax/jaxlib 0.10.2, `JAX_PLATFORMS=cpu`,
+ruff 0.16.4, python 3.11 venv. Evidence, commands and artifact hashes in
+`plan/research/scripts/2026-09-18-q10-ky-layout-contract/` (`README.md`,
+`run_gates.sh`, `ledgers/`, `identity/`, `ledger_table.txt`, `probe_argrhs.py`,
+`probe_leaves.py`); the harness scripts themselves are #243's, reused verbatim.
+Also run: `tests/unit/operators/test_linear_collisions_coverage.py`,
+`test_nonlinear_operator_packages.py`, `tests/unit/linear/test_linear_helpers_extra.py`
+and `tests/unit/parallel/test_parallel_linear_velocity.py` for the collision and
+hypercollision branches.
+
+**Artifact SHA-256 (first 16).** `plan/research/scripts/2026-09-18-q10-ky-layout-contract/`:
+
+| file | sha256[:16] |
+|---|---|
+| `README.md` | `fee075160598341f` |
+| `ledger_table.txt` | `129ae072694b257f` |
+| `run_gates.sh` | `5757e554502cd1c5` |
+| `probe_argrhs.py` | `4a8b9ca2eb960bdd` |
+| `probe_leaves.py` | `5158e664cbb9fa25` |
+| `ledgers/{ref,new}_diagnostics_32.json` | `35a6f18f571d89d4` (both) |
+| `ledgers/{ref,new}_diagnostics_64.json` | `db98d467855f0521` (both) |
+| `ledgers/{ref,new}_runtime_32.json` | `f54e4d165279215b` (both) |
+| `ledgers/{ref,new}_runtime_64.json` | `f91145f51566b961` (both) |
+| `identity/cmp_rhs_identity_f32.json` | `aec6f89a54fe0357` |
+| `identity/cmp_rhs_identity_x64.json` | `e3a2d447adf87bfd` |
+| `identity/cmp_rhs_identity_f32_singlethread_fft.txt` | `b4c283c2ade7a787` |
+| `identity/cmp_gate_traj_f32.json` | `9e408af96338bf20` |
+| `identity/cmp_gate_traj_x64.json` | `c6620ebd4946102f` |
+
+Source: `src/gkx/core_ky_layout.py` `40003bd13558e9c3`,
+`tests/unit/core/test_core_ky_layout.py` `b74c2b1db788be39`.

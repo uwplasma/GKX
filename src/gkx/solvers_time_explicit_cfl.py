@@ -12,6 +12,7 @@ import jax
 import jax.numpy as jnp
 
 from gkx.core_grid import SpectralGrid
+from gkx.core_ky_layout import half_ky_values
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.params import LinearParams
 
@@ -111,8 +112,7 @@ def _cfl_wavenumber_arrays(
     elif grid.ky_mode is not None:
         ky = np.abs(ky_full)
     else:
-        nyc = 1 + ky_full.size // 2
-        ky = np.abs(ky_full[:nyc])
+        ky = half_ky_values(ky_full)
 
     for idx in range(nz):
         if idx < nz / 2 + 1:

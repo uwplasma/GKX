@@ -4644,11 +4644,17 @@ def test_runtime_initial_state_helpers(
     reshaped = _reshape_netcdf_state(raw, nspec=1, nl=2, nm=3, nyc=2, nx=4, nz=5)
     assert reshaped.shape == (1, 2, 3, 2, 4, 5)
 
-    expanded = _expand_ky(np.ones((1, 2, 3, 4, 5), dtype=np.complex64), nyc=3)
+    expanded = _expand_ky(np.ones((1, 2, 3, 4, 5), dtype=np.complex64), ny_full=4)
     assert expanded.shape[-3] == 4
+    # A ky=1 axis has nothing to widen onto and passes through.
     assert (
-        _expand_ky(np.ones((1, 2, 3, 4, 5), dtype=np.complex64), nyc=2).shape[-3] == 3
+        _expand_ky(np.ones((1, 2, 3, 4, 5), dtype=np.complex64), ny_full=1).shape[-3]
+        == 3
     )
+    # A block that is neither this grid's full axis nor its half is refused
+    # rather than returned unchanged, which is what the old nyc<=2 branch did.
+    with pytest.raises(ValueError):
+        _expand_ky(np.ones((1, 2, 3, 4, 5), dtype=np.complex64), ny_full=2)
 
 
 def test_runtime_single_mode_init_populates_zonal_ky0_branch() -> None:

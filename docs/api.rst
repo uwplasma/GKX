@@ -208,6 +208,9 @@ Grids
 .. automodule:: gkx.core_grid
    :members:
 
+.. automodule:: gkx.core_ky_layout
+   :members:
+
 Species and Linear Parameters
 -----------------------------
 

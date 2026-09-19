@@ -10,6 +10,7 @@ from matplotlib.ticker import FuncFormatter, ScalarFormatter
 import numpy as np
 
 from gkx.artifacts.figure_style import figure_style, save_figure
+from gkx.core_ky_layout import nyc_from_ny
 
 #: Shipped decks use ``diagnostic_norm = "rho_star"``; this is the
 #: rho-star-normalized potential, not ``ephi/T_i``.
@@ -32,7 +33,7 @@ def potential_real_space(
     if ny_full is None:
         ny_full = int(phi.shape[0])
     ny_full = int(ny_full)
-    nyc = ny_full // 2 + 1
+    nyc = nyc_from_ny(ny_full)
     if phi.shape[0] == ny_full:
         phi = phi[:nyc]
     elif phi.shape[0] != nyc:

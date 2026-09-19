@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.config import GridConfig
+from gkx.core_ky_layout import half_ky_values
 
 
 @jax.tree_util.register_pytree_node_class
@@ -88,8 +89,7 @@ def real_fft_unique_ky(ky: jnp.ndarray) -> jnp.ndarray:
     if ky_arr.ndim == 0:
         raise ValueError("ky must be at least 1D")
     ky_1d = ky_arr if ky_arr.ndim == 1 else ky_arr[:, 0]
-    nyc = 1 + int(ky_1d.shape[0]) // 2
-    return jnp.abs(ky_1d[:nyc])
+    return half_ky_values(ky_1d)
 
 
 def real_fft_ordered_kx(kx: jnp.ndarray) -> jnp.ndarray:
