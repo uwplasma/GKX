@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from jax import lax
 
 from gkx.core_grid import real_fft_mesh
+from gkx.core_ky_layout import half_dealias_mask, to_full, to_half
 
 
 def _fft2_xy(x: jnp.ndarray) -> jnp.ndarray:
@@ -99,33 +100,39 @@ def _complete_hermitian_ky(
     nx: int,
     conjugate_kx: Any | None = None,
 ) -> jnp.ndarray:
-    if ny_full <= 1:
-        return positive_ky
-    nyc = int(positive_ky.shape[-3])
-    neg_hi = nyc - 1 if ny_full % 2 == 0 else nyc
-    negative_ky = jnp.conj(positive_ky[..., 1:neg_hi, :, :])
-    negative_ky = negative_ky[..., ::-1, :, :]
-    if nx > 1:
-        if conjugate_kx is None:
-            conjugate_kx = jnp.asarray(
-                (0,) + tuple(range(nx - 1, 0, -1)), dtype=jnp.int32
-            )
-        negative_ky = negative_ky[..., conjugate_kx, :]
-    return jnp.concatenate([positive_ky, negative_ky], axis=-3)
+    """Widen a ``ky >= 0`` block onto the two-sided axis.
+
+    The rule lives in :mod:`gkx.core_ky_layout`; this wrapper keeps the
+    positional signature the nonlinear kernels and their tests already use.
+    """
+
+    return to_full(
+        positive_ky, ny_full=int(ny_full), nx=int(nx), conjugate_kx=conjugate_kx
+    )
 
 
-def _spectral_bracket_real_fft_core(
+def _spectral_bracket_half_core(
     G_hat: jnp.ndarray,
     chi_hat: jnp.ndarray,
     *,
     kx_grid: jnp.ndarray,
     ky_grid: jnp.ndarray,
     dealias_mask: jnp.ndarray,
-    kxfac: jnp.ndarray,
     fft_norm: float | None = None,
     radial_phase: jnp.ndarray | None = None,
     multiple_fields: bool,
-) -> jnp.ndarray:
+) -> tuple[jnp.ndarray, int, int]:
+    """Return the bracket on the ``ky >= 0`` rows, with ``(ny_full, nx)``.
+
+    This is the whole pseudo-spectral kernel: both operands are read on their
+    non-negative rows, transformed with ``irfft2``, multiplied in real space,
+    and transformed back with ``rfft2``, which lands the product back on
+    ``Nyc = 1 + Ny // 2`` rows.  Nothing in it needs the negative half, so it
+    is the primitive the ``ky >= 0`` state layout (plan 5.3 N3) will call
+    directly; :func:`_spectral_bracket_real_fft_core` is this function plus the
+    widening that a two-sided state still requires.
+    """
+
     complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=complex_dtype)).dtype
     imag = jnp.asarray(1j, dtype=complex_dtype)
@@ -147,10 +154,9 @@ def _spectral_bracket_real_fft_core(
     )
 
     ny_full = int(ky.shape[0])
-    _, ky_values, kx_nyc, ky_nyc = real_fft_mesh(kx, ky)
-    nyc = int(ky_values.shape[0])
-    G_nyc = G_hat[..., :nyc, :, :]
-    chi_nyc = chi_hat[..., :nyc, :, :]
+    _, _ky_half, kx_nyc, ky_nyc = real_fft_mesh(kx, ky)
+    G_nyc = to_half(G_hat, ny_full=ny_full)
+    chi_nyc = to_half(chi_hat, ny_full=ny_full)
     axes = (-2, -3)
 
     kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
@@ -172,10 +178,22 @@ def _spectral_bracket_real_fft_core(
     else:
         bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
     positive_ky = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
-    positive_ky *= _broadcast_mask(mask[:nyc, :], positive_ky.ndim)
-    bracket_hat = _complete_hermitian_ky(
-        positive_ky, ny_full=ny_full, nx=int(kx.shape[1])
+    positive_ky *= _broadcast_mask(
+        half_dealias_mask(mask, ny_full=ny_full), positive_ky.ndim
     )
+    return positive_ky, ny_full, int(kx.shape[1])
+
+
+def _spectral_bracket_real_fft_core(
+    G_hat: jnp.ndarray,
+    chi_hat: jnp.ndarray,
+    *,
+    kxfac: jnp.ndarray,
+    **kwargs: Any,
+) -> jnp.ndarray:
+    positive_ky, ny_full, nx = _spectral_bracket_half_core(G_hat, chi_hat, **kwargs)
+    real_dtype = jnp.real(jnp.empty((), dtype=positive_ky.dtype)).dtype
+    bracket_hat = _complete_hermitian_ky(positive_ky, ny_full, nx)
     return jnp.asarray(kxfac, dtype=real_dtype) * bracket_hat
 
 

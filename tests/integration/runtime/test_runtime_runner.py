@@ -2099,10 +2099,20 @@ def test_runtime_startup_phi_density_seed_validation_paths() -> None:
     np.testing.assert_allclose(direct_phi, delegated)
     assert (
         startup._expand_ky(
-            np.zeros((1, 1, 1, 2, 1, 1), dtype=np.complex64), nyc=1
+            np.zeros((1, 1, 1, 2, 1, 1), dtype=np.complex64), ny_full=1
         ).shape[-3]
         == 2
     )
+    # _expand_ky takes the grid's own Ny rather than inferring it from Nyc.
+    # Inferring the even branch expanded a Nyc=5 block to 8 rows on a 9-row
+    # grid; tests/unit/core/test_core_ky_layout.py owns the general statement.
+    for ny_full in (8, 9):
+        assert (
+            startup._expand_ky(
+                np.zeros((1, 1, 1, 5, 4, 1), dtype=np.complex64), ny_full=ny_full
+            ).shape[-3]
+            == ny_full
+        )
     assert (
         startup._enforce_full_ky_hermitian(
             np.zeros((1, 1, 1, 2, 1, 1), dtype=np.complex64)

@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from gkx.core_ky_layout import conjugate_kx_order, nyc_from_ny, to_half
 from gkx.operators.nonlinear.brackets import _complete_hermitian_ky
 
 __all__ = [
@@ -149,7 +150,7 @@ def advance_shearing_coordinates(
 def _cached_hermitian_projector(
     ny_full: int, two_sided: bool, nx: int
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    nyc = ny_full // 2 + 1
+    nyc = nyc_from_ny(ny_full)
     use_hermitian = nyc > 2 and two_sided
     if not use_hermitian:
         return lambda G_state: G_state
@@ -160,14 +161,10 @@ def _cached_hermitian_projector(
     # the moment a second trace reuses the same grid signature. The ordering is
     # an index reversal, so numpy holds it exactly and each trace gets its own
     # constant at use.
-    kx_neg = (
-        np.concatenate(([0], np.arange(nx - 1, 0, -1))).astype(np.int32)
-        if nx > 1
-        else None
-    )
+    kx_neg = conjugate_kx_order(nx) if nx > 1 else None
 
     def project(G_state: jnp.ndarray) -> jnp.ndarray:
-        pos = G_state[..., :nyc, :, :]
+        pos = to_half(G_state, ny_full=ny_full)
         return _complete_hermitian_ky(pos, ny_full, nx, kx_neg)
 
     return project

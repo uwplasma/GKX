@@ -253,6 +253,7 @@ owned_modules = [
   "gkx.diagnostics.modes",
   "gkx.core_velocity",
   "gkx.core_grid",
+  "gkx.core_ky_layout",
   "gkx.solvers_linear_adaptive_propagator",
   "gkx.solvers_linear_krylov_algorithms",
   "gkx.solvers_linear_krylov",

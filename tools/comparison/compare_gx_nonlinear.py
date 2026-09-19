@@ -34,6 +34,7 @@ from gkx.benchmarking_shared import (
 )
 from gkx.config import CycloneBaseCase, GridConfig, KBMBaseCase
 from gkx.core_grid import build_spectral_grid, twothirds_mask
+from gkx.core_ky_layout import to_full
 from gkx.core_velocity import laguerre_quadrature_count
 from gkx.geometry import (
     SAlphaGeometry,
@@ -848,22 +849,16 @@ def _reshape_gx(
 
 
 def _expand_ky(arr: np.ndarray, *, nyc: int) -> np.ndarray:
-    """Expand Nyc (real FFT) axis to full Ny using conjugate symmetry."""
+    """Expand a GX ``Nyc`` real-FFT axis to the full ``Ny`` by conjugate symmetry.
+
+    ``Nyc`` does not determine ``Ny`` in general (``gkx.core_ky_layout``), but a
+    GX dump is always the ``rfft`` block of an even ``Ny``, so the even branch
+    is the right one here and is chosen explicitly rather than assumed.
+    """
+
     if arr.shape[-3] != nyc:
         raise ValueError("Expected ky axis at position -3 with length nyc")
-    ny_full = 2 * (nyc - 1)
-    if ny_full <= 0:
-        return arr
-    pos = arr
-    if nyc <= 2:
-        return pos
-    neg = np.conj(pos[..., 1 : nyc - 1, :, :])
-    neg = neg[..., ::-1, :, :]
-    nx = pos.shape[-2]
-    if nx > 1:
-        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1)))
-        neg = neg[..., kx_neg, :]
-    return np.concatenate([pos, neg], axis=-3)
+    return to_full(arr, ny_full=2 * (int(nyc) - 1))
 
 
 def _resolve_dealias_mask(
