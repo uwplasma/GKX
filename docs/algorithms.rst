@@ -7,8 +7,10 @@ behind it. Derivations are in :doc:`theory` and :doc:`linear_model`; the
 term-by-term operator definitions are in :doc:`operators`; the numerical
 contracts are in :doc:`numerics` and :doc:`solvers`.
 
-Every number on this page is recomputed from a tracked artifact by the script
-named beside it. Claim boundaries are set by :doc:`release_scope`.
+Every figure on this page is regenerated from tracked evidence by the script
+named in its caption, with no literal values in the script. Every number in the
+text names the artifact or the ``plan/log.md`` row it comes from. Claim
+boundaries are set by :doc:`release_scope`.
 
 Summary of the decisions
 ------------------------
@@ -177,12 +179,13 @@ deck, not a general tolerance. Evidence: ``plan/log.md``, rows Q8 and Q16;
 plan section 0.5.
 
 An independent implementation reproduces the collisional half of this. At
-:math:`\nu = 10^{-2}` the comparison code agrees with GKX to
-:math:`\le 5\times10^{-7}` relative in :math:`\gamma` and
-:math:`\le 3.3\times10^{-6}` in :math:`\omega` at :math:`N_\ell` 24 and 32, and
-takes the same :math:`-1.5602\%` step between them. That is two codes
-integrating the same discrete collisional system, not a physics validation of
-the value.
+:math:`\nu = 10^{-2}` GX agrees with GKX to :math:`\le 5\times10^{-7}` relative
+in :math:`\gamma` and :math:`\le 3.3\times10^{-6}` in :math:`\omega` at
+:math:`N_\ell` 24 and 32, and takes the same :math:`-1.5602\%` step between
+them. That is two codes integrating the same discrete collisional system, not a
+physics validation of the value. The :math:`N_\ell = 48` rung was not run on GX,
+so the plateau there is GKX's alone
+(``plan/research/scripts/2026-09-14-gx-vnewk-control/summary.txt``).
 
 Collisions
 ----------
@@ -196,7 +199,9 @@ closed forms: conservation and Onsager self-adjointness at 5.6e-17 and 8.3e-17
 against a 5e-12 gate, published Appendix-C coefficients at 1.1e-16, and an
 H-theorem maximum eigenvalue of 9.0e-18. Coulomb tables are generated for
 like-species collisions; a multispecies request is refused rather than silently
-extrapolated. Equations, panels and the parameter surface: :doc:`operators`.
+extrapolated. Metrics:
+``docs/_static/collision_operator_verification.json``. Equations, panels and the
+parameter surface: :doc:`operators`.
 
 Collisions are also the regularization lever of the previous section. Where a
 scan is run collisionally to obtain a converged ladder, the collisionality is
@@ -249,6 +254,13 @@ supplied state is exactly zero off the chains and bitwise unchanged on them.
 Periodic decks and full-cover linked grids get the same state object back and
 trace exactly as before. Details and the entry-point list: :doc:`solvers`.
 
+The measurements in this section are CPU, x64, on one linked linear pilot, one
+linked nonlinear grid and one periodic grid, at 3--2000 step windows; no
+production-size run was made. Evidence:
+``plan/research/scripts/2026-09-14-covered-subspace/``,
+``2026-09-18-off-chain-supplied-states/`` and
+``2026-09-19-supplied-states-below-runtime/``.
+
 Eigenpair certification
 -----------------------
 
@@ -273,7 +285,9 @@ returned wrong branches at 0.982--0.990 on every row of a three-point scan. A
 number that far from an eigenpair is not a tolerance question. A related defect
 was fixed at the same time: an Arnoldi breakdown returning a zero vector scored
 :math:`0/10^{-30} = 0` and "certified" on every gate, so a zero or non-finite
-eigenvector now has infinite residual.
+eigenvector now has infinite residual. Evidence:
+``plan/research/scripts/2026-09-13-certify-eigenpair/``; contract and the API
+change it forced: :doc:`solvers`.
 
 The default is ``method="adaptive"``, the residual-certified route the runtime
 already used. Results carry the evidence: ``RuntimeLinearResult.eigen_status``
@@ -364,10 +378,10 @@ HLO *and* on a blocked A/B/A/B timing, because the two can disagree.
    XLA:CPU on one host, complex64 only, one deck; nothing here transfers to a
    GPU.
 
-The ledger improved and the clock did not. Chain FFT launches per RK3 step fell
-73 to 43, transposes 115 to 64, and materialized bytes 43--48% on every ledgered
-graph, with 100-step trajectories bitwise identical in ``float32`` and under
-x64. On an idle host the adjoint path is 12% faster (0.88 pooled on the RHS
+The ledger improved and the clock did not. Sharing the per-class chain
+transforms took the RK3 step from 73 FFT ops to 43 and from 115 transposes to
+64, and cut materialized bytes 43--48% on every ledgered graph, with 100-step
+trajectories bitwise identical in ``float32`` and under x64. On an idle host the adjoint path is 12% faster (0.88 pooled on the RHS
 gradient at both grids, at or below 0.92 in 24 of 24 blocks) and the
 checkpointed window gradient 5% faster at 64x64x24 -- but the RK3 scan, the
 kernel closest to production throughput, is 2.6--3.5% *slower* pooled and slower
@@ -424,7 +438,9 @@ back-to-back runs of either tree agree bitwise. With
 bitwise gate on those graphs has to pin that flag, and the test suite does.
 Disabling the pool is not free: on an idle host it costs 26--33% on the RHS and
 8--10% per RK3 step, so the default stays on and the bitwise-stacking trade is
-not taken.
+not taken. Evidence:
+``plan/research/scripts/2026-09-18-q10-ky-layout-contract/`` and
+``2026-09-18-q9-idle-host-timing/threadpool.txt``.
 
 Differentiability
 -----------------

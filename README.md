@@ -19,8 +19,9 @@ the loop, not growing.
 
 ## What GKX offers
 
-If you are choosing between gyrokinetic codes, these are the methods and
-features that distinguish this one. Each links to the evidence.
+If you are choosing between gyrokinetic codes, this is what GKX does and where
+each item's evidence is. It records scope, not quality; see
+[how GKX compares](#how-gkx-compares).
 
 - **Hermite-Laguerre velocity moments.** Velocity space is two spectral indices
   rather than a grid, so the state is one array and the whole step is dense
@@ -61,6 +62,8 @@ features that distinguish this one. Each links to the evidence.
 - **Under-resolved runs warn instead of reporting a number.** Saturation is a
   stationarity test on the flux and on the field and free energies, not a
   fixed horizon, and an unresolved `ky` cutoff is reported as unresolved.
+  [`saturation.py`](src/gkx/diagnostics/saturation.py),
+  [numerics](docs/numerics.rst).
 - **One compiled graph per nonlinear route.** The two entry points into an
   explicit nonlinear diagnostics run return bitwise identical arrays, in
   float32 and under x64, for value and for gradient.
