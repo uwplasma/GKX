@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -13,6 +14,38 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
+
+#: The XLA:CPU FFT is only handed to a thread pool when this flag is true, and
+#: the pool's reduction order is not reproducible run to run.
+DETERMINISTIC_CPU_FFT_FLAG = "--xla_cpu_multi_thread_eigen=false"
+
+
+def _pin_deterministic_cpu_fft() -> None:
+    """Make the CPU FFT reproducible before any JAX backend is created.
+
+    Several tests here assert *bitwise* equality rather than a tolerance --
+    ``test_prepared_and_runtime_nonlinear_routes_are_bitwise_identical`` and
+    the restart round trip among them -- and the research gates that compare a
+    branch against ``main`` assert it across dozens of arrays.  Under the
+    multithreaded XLA:CPU FFT thunk that is not a property the code controls:
+    #248 measured two runs of *unmodified* ``main``, minutes apart, differing
+    by 1.4e-10 on the float32 nonlinear RHS with no code change between them,
+    and every such pair came back bitwise with this flag set.  Pinning it here
+    keeps those gates measuring the code instead of the thread pool.
+
+    The flag is only added when the caller has not already spoken about it, so
+    an explicit ``XLA_FLAGS`` still wins.  ``conftest.py`` is imported before
+    any test module, and JAX creates its CPU client lazily on first use, so the
+    variable is in place before the flag is read.
+    """
+
+    flags = os.environ.get("XLA_FLAGS", "")
+    if "xla_cpu_multi_thread_eigen" in flags:
+        return
+    os.environ["XLA_FLAGS"] = f"{flags} {DETERMINISTIC_CPU_FFT_FLAG}".strip()
+
+
+_pin_deterministic_cpu_fft()
 
 
 def _precision_environment() -> tuple[bool, list[str]]:

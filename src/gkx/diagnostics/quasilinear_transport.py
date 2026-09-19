@@ -22,6 +22,7 @@ from gkx.diagnostics import (
 )
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.core_grid import SpectralGrid
+from gkx.core_ky_layout import hermitian_mode_weights
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.assembly import compute_fields_cached
@@ -159,14 +160,19 @@ def spectral_phi_weights(
     *,
     use_dealias: bool = True,
 ) -> jnp.ndarray:
-    """Return ``(ky, kx, z)`` weights used for ``|phi|^2`` averages."""
+    """Return ``(ky, kx, z)`` weights used for ``|phi|^2`` averages.
 
-    ky = jnp.asarray(cache.ky)
-    has_negative = jnp.any(ky < 0.0)
-    fac = jnp.where(has_negative, 1.0, jnp.where(ky == 0.0, 1.0, 2.0))
-    fac = fac[:, None] * jnp.ones((1, cache.kx.size), dtype=fac.dtype)
-    if use_dealias:
-        fac = fac * cache.dealias_mask.astype(fac.dtype)
+    The ``(ky, kx)`` factor is the layout contract's Hermitian reduction
+    weight, owned by :func:`gkx.core_ky_layout.hermitian_mode_weights`, not a
+    fourth copy of it.
+    """
+
+    fac = hermitian_mode_weights(
+        jnp.asarray(cache.ky),
+        int(cache.kx.size),
+        ny_full=getattr(cache, "ny_full", None),
+        dealias_mask=cache.dealias_mask if use_dealias else None,
+    )
     return (jnp.abs(phi) ** 2) * fac[:, :, None] * vol_fac[None, None, :]
 
 

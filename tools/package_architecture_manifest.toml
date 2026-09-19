@@ -973,6 +973,13 @@ recursive = true
 # layout, and that a half-axis reduction weight is 2 only on the paired rows.
 # Merged with Q18 and Q19 above: 90380 -> 90511 -> 90417 -> 90907, the sum of
 # the three deltas.
+# 90907 -> 91077: +170 for Q24, one owner for the ky weight rule. The rule was
+# written out three more times in the diagnostics -- the Hermitian weight, its
+# cached twin and the quasilinear copy -- plus the flux weight, and the copies
+# gave an even grid's Nyquist row the paired weight 2 on a half axis. Four call
+# sites collapse to thin forwarders, and the module grows by the two weight
+# kernels, the self-conjugate row mask and the ``ny_full`` a half axis needs to
+# find that row at all, carried on the grid and the linear cache.
 # 90907 -> 91005: the supplied-state contract below the runtime (Q23). Two
 # helpers on the linked-topology module read the chain cover off a cache a
 # caller already holds and project a supplied state with it, one call site each
@@ -982,7 +989,7 @@ recursive = true
 # points project rather than reject, why a value check cannot be written at a
 # traced boundary, and what the projection does to a supplied state's cotangent.
 # Target unchanged.
-baseline = 91005
+baseline = 91077
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1212,6 +1219,12 @@ recursive = true
 # half-spectrum grid, unreachable today because dealiasing zeroes that row.
 # Merged with Q18 and Q19 above: 89037 -> 89301 -> 89274 -> 90119, the sum of
 # the three deltas.
+# 90119 -> 90284: +165 for Q24. The case above that recorded the violation is
+# replaced by cases that assert the contract, including the one the old rule
+# fails -- an undealiased half axis with power in the Nyquist row -- plus the
+# two-sided weights that must not move, the flux weight's folded form, the mode
+# selections that may not claim a Nyquist row, and the cached and quasilinear
+# copies now reading from the one owner.
 # 90119 -> 90471: the supplied-state contract below the runtime (Q23), ten
 # cases across three suites -- the two cache-level helpers against the existing
 # grid-level mask and under jit and grad; gkx.prepare, the prepared run, the

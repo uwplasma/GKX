@@ -10,9 +10,19 @@
 #   trajectory   100-step trajectories across integrators and routes
 #
 # Q9's harness scripts are reused verbatim; this driver only sequences them.
+#
+# The float32 identity arms pin --xla_cpu_multi_thread_eigen=false. Without it
+# the XLA:CPU FFT is handed to a thread pool whose reduction order is not
+# reproducible run to run: two runs of unmodified `main`, minutes apart, differ
+# by 1.4e-10 on the f32 nonlinear RHS with no code change between them (the
+# 2026-09-18 Q10 stage-1 log entry), and with the flag set every such pair is
+# bitwise. An f32 bitwise gate without the pin measures the thread pool, not
+# the branch. Added by Q24; the 2026-09-18 outputs beside this script predate
+# it and record both arms explicitly.
 set -u
 REF=$1; NEW=$2; OUT=$3
 PY=${PY:-python}
+FFT_PIN=${FFT_PIN:---xla_cpu_multi_thread_eigen=false}
 Q9=$(cd "$(dirname "$0")/../2026-09-14-q9-batched-chain-fft" && pwd)
 mkdir -p "$OUT"
 
@@ -29,6 +39,7 @@ for arm in ref:$REF new:$NEW; do
       wait_for_load
       echo "$(date) $NAME $prec $script" >> "$OUT/progress.txt"
       (cd "$TREE" && env $X PYTHONPATH=$TREE/src:$TREE JAX_PLATFORMS=cpu \
+        XLA_FLAGS="$FFT_PIN" \
         nice -n 10 $PY "$Q9/$script.py" "$OUT/${script}_${NAME}_${prec}.npz" \
         > "$OUT/${script}_${NAME}_${prec}.log" 2>&1)
       echo "$(date) rc=$?" >> "$OUT/progress.txt"
