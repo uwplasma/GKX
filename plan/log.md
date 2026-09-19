@@ -16273,3 +16273,271 @@ row's numbers, and the tables above stand for the merged tree as well as for
 the remaining lever on the iteration side, and a device apply of `pr3-cm` (now 164 MB of
 factors rather than 864 MB, which fits a GPU comfortably) is the remaining lever on the
 apply side. Both are measured against the same gate and the same `adaptive` control.
+
+---
+
+## 2026-09-19 — Q10: the `ky >= 0` state switch works, and the ledger says do not adopt it yet (plan §5.3 N3)
+
+**Outcome: the switch is reachable, tested and measured; the default is
+unchanged and no speed-up is claimed.** Branch `perf/ky-half-spectrum-switch`
+off `origin/main` `254fcc7b7`. Stage 1 (#248) wrote the layout contract and
+split `_spectral_bracket_half_core` out as the seam; Q24 (#254) gave the ky
+weight rule one owner and pinned the float32 FFT flag. This row clears the
+seven blockers stage 1 listed, makes a half-spectrum evolved state work end to
+end through the operator layer, and then measures it — and the measurement is
+the reason the runtime still builds a two-sided grid.
+
+### What the switch removes, and what it costs
+
+`build_spectral_grid(cfg, ky_layout="half")` gives a grid of
+`Nyc = 1 + Ny//2` rows that still records `ny_full`. On it the bracket computes
+on the stored rows and **does not widen**, and the per-stage Hermitian
+projector is the *identity* — not a cheaper copy. That is exact, not an
+approximation: `to_full(to_half(G))` rebuilt the unstored rows and imposed
+nothing on the stored ones, so on a state that stores only `ky >= 0` there is
+no work left in it. (The self-conjugate rows' internal constraint was never
+part of that projector in either layout; the bracket's `irfft2` already
+discards the antisymmetric part it would remove.)
+
+The HLO ledger below is not an A/B of two trees. It is one binary lowering the
+same deck onto `Ny` and onto `Nyc` ky rows, which is the honest comparison
+because the layout is a grid argument. The `full` arm reproduces #248's
+committed ledger on all twelve graphs.
+
+**The RHS graph is exactly what N3 predicted.**
+
+| graph | fft | concatenate | copy | transpose | gather | reverse | bytes written |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| RHS 32×32×24 Nl2/Nm4 | 13 → 13 | 18 → 14 | 19 → 17 | 19 → 17 | 14 → 13 | 3 → 0 | 24,991,260 → 11,676,288 (**−53.3%**) |
+| RHS 64×64×24 Nl4/Nm8 | 17 → 17 | 22 → 18 | 23 → 21 | 23 → 21 | 18 → 17 | 3 → 0 | 424,812,232 → 201,977,856 (**−52.5%**) |
+
+`reverse` 3 → 0 is the completion itself: `to_full` is a slice, a reverse and a
+concatenate. The FFT count does not move because the bracket already
+transformed only the non-negative rows — the compression was always in the
+kernel; what the switch changes is what the kernel hands back.
+
+**The RK step graph regresses.** Both routes give identical counts (Q18 made
+`--route runtime` lower the same graph as `--route diagnostics`), so one table
+covers them.
+
+| graph | fft | concatenate | copy | transpose | gather | reverse | bytes written |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| rk3, 32 | 44 → 44 | 38 → 24 | 85 → 146 | 66 → 128 | 41 → 33 | 14 → 0 | 89,479,380 → 127,670,560 (**+42.7%**) |
+| rk4, 32 | 57 → 57 | 49 → 32 | 105 → 163 | 86 → 145 | 53 → 44 | 17 → 0 | 117,413,076 → 139,236,640 (**+18.6%**) |
+| rk3, 64 | 56 → 56 | 44 → 30 | 100 → 170 | 81 → 151 | 53 → 45 | 14 → 0 | 1,509,607,604 → 2,369,675,584 (**+57.0%**) |
+| rk4, 64 | 73 → 73 | 57 → 40 | 124 → 191 | 105 → 172 | 69 → 60 | 17 → 0 | 1,983,162,548 → 2,570,830,144 (**+29.6%**) |
+
+Every count that measures work the layout *removes* goes the right way:
+concatenates −30 to −37%, gathers −13 to −20%, reverses to zero. Copies and
+transposes rise 54–94%, and they carry the bytes.
+
+### Why, measured rather than guessed
+
+Three facts rule out an algorithm change.
+
+1. **The chain topology is identical.** Both layouts build the same five chain
+   classes `(175,1) (16,2) (1,3) (4,4) (1,5)`, the same `linked_use_gather`,
+   the same `linked_full_cover`, and visit the same physical `(ky, kx)` modes;
+   a test pins the last of those.
+2. **The logical op counts that would show extra work all fall.** Gathers go
+   *down*, 41 → 33. The growth is in `copy` and `transpose` only, which are
+   lowering artefacts, not operations anyone wrote.
+3. **The materialized shapes name the path.** The two-sided graph copies a
+   15-row slice, `c64[1,2,4,15,32,24]`, eight times. The half graph copies and
+   transposes the whole state, `c64[1,2,4,17,32,24]`, and the flattened chain
+   view `c64[2,1,2,4,544,24]` where `544 = 17 × 32` — forty times, once per
+   chain class instead of once for all of them.
+
+That is the mechanism #248 already recorded, at `_reverse_from_one`: written as
+a `jnp.take` the permutation lowers to a general gather that materializes, "a
+transpose, a full-array copy, the gather and a transpose back".
+`_flatten_linked_fft_state` avoids it by keeping the state's own row order and
+translating the chain maps with `_state_mode_rows`, and it is that index
+pattern XLA was recognizing. On the half layout the state's ky extent stops
+being the grid's power of two (32 → 17, 64 → 33) and the recognition is lost.
+
+**The control that proves the attribution.** The same deck with
+`boundary = "periodic"` has no linked chains. There the half layout wins on
+*both* graphs: RHS bytes −23.4% (gather 1 → 0, reverse 1 → 0), rk3 step bytes
+−10.5% (concatenate 16 → 6, gather 8 → 0, reverse 8 → 0). Same code, same
+layout, chains removed — the regression goes with them.
+
+**So the default is not flipped.** Doing it on this evidence would trade a
+measured 53% byte saving on the RHS for a measured 43–57% byte regression on
+the step a production linked deck actually runs. Queue row **Q25** is the fix:
+build the chain maps directly in the state's row order on a half grid (or pad
+`Nyc`), then re-run the ledger and decide.
+
+### The blockers
+
+Stage 1 listed seven; Q24 cleared two. What this row did with the rest, in
+stage 1's order:
+
+- **Linked-chain `naky` and the conjugate restore.** `naky` counts the
+  dealiased rows of the *two-sided* axis, `1 + (Ny-1)//3`, which is where
+  `|ky| < Ny/3` stops in both layouts; off the stored count it would have built
+  chains for `1 + (Nyc-1)//3` rows and left the rest of the band with no
+  parallel derivative at all, silently. The flat chain index `ky + ny·kx` keeps
+  the *stored* count. The one name `ny` was doing both jobs, and that was the
+  hazard. The conjugate restore, the cover mask's mirror and the end-damping
+  mirror are now **inapplicable** on a half axis rather than merely skipped:
+  `(-j) % Nyc` is an unrelated positive row, so running the two-sided rule
+  there would conjugate-mirror one physical mode onto another. Telling the two
+  apart needs `ny_full`, so it is threaded beside `linked_use_gather` through
+  the apply chain; on the two-sided axis every default is `None` and nothing
+  moves.
+- **The two-sided dealias mask.** `half_twothirds_mask` states the `ky >= 0`
+  rows instead of slicing. The rows agree with the slice — a test says so —
+  but only because `fftfreq` happens to put `|ky|` in the first `Nyc` entries
+  in increasing order, and a contract should not rest on a coincidence.
+- **`_transport_mode_weight`.** Decided; see below.
+- **The `two_sided=True` projector.** `_make_compressed_real_fft_projector`
+  takes `rows` and reads the layout from its arguments rather than from the
+  cache's `ky`, which is `rho_star * grid.ky` and therefore a tracer whenever
+  the cache is built inside one.
+- **The sharded ky divisibility check.** Still the same rule, but the refusal
+  now names the layout its extent came from: `Nyc` is odd whenever `Ny` is a
+  multiple of four, so every device count chosen against `Ny` fails, and
+  without the layout in the message that looks unexplained.
+- **The full-complex `ifft2` output paths.** `_spectral_to_xy` and its
+  species-axis twin take `irfft2` on a half field. Taking `np.real` of a
+  complex `ifft2` of `Nyc` rows would have returned an `Nyc`-row image against
+  an `Ny`-long `y` axis: a wrong picture with the right dtype.
+- **The Nyquist row of `_hermitian_mode_weight`.** Q24's, already done.
+
+Three more found on the way, none of them on stage 1's list:
+
+- **`kperp2_max`** (`dissipation.py`, and an independent copy in
+  `solvers_linear_parallel_streaming.py`) took its cutoff row from the stored
+  count. On a half grid that puts the cutoff at roughly half the true `ky` and
+  inflates every hyperdiffusion rate by `4 ** p_hyper_kperp`, with no shape
+  error to show for it. It takes `ny_full` now.
+- **The restart writer** derived the dealiased block's length from
+  `state.shape[3]`. On a half state that keeps `1 + (Nyc-1)//3` rows, about a
+  third of the band, and writes the file without complaint.
+- **The seeded initial band** (`_dealiased_initial_mode_pairs`) had the same
+  shape of defect and would have seeded a third of the intended modes.
+
+### The flux convention
+
+Q24 deliberately left this one here. On the two-sided axis
+`_transport_mode_weight` selected the `ky > 0` rows as pair representatives,
+which drops an even grid's Nyquist row — stored once, as `-Ny/2` — from the
+flux; the half axis stores the same row as `+Ny/2` and counted it. The two
+layouts therefore named different sums, which is not a convention question but
+a contradiction.
+
+**Decision: the Nyquist row is a flux representative in both layouts, at the
+self-conjugate weight.** The two-sided weights are now the half-axis weights
+padded with zeros on the rows the half axis does not store.
+
+The argument is that the flux may not depend on which sign of `|ky| = Ny/2` a
+layout happens to store. The flux kernel carries an explicit `i·ky`, so that
+row's contribution is *odd* under the sign choice, and a physical quantity
+cannot be. What makes counting it safe rather than a change of answer is that
+the contribution is identically zero on any state representing a real field: on
+a self-conjugate row the reality condition reads `F(kx) = conj(F(-kx))`, under
+which the summand `Im(conj(phi)·moment)` is odd in `kx` and cancels pairwise
+across the row.
+
+**No live flux spectrum changes value.** The weight moves only for an
+explicitly undealiased reduction, and no shipped route asks for one — there is
+no `use_dealias=False` call site in `src/`. Two-thirds dealiasing zeroes every
+row at or above `Ny/3`, and `Ny/2` is always above it. The identity gate below
+includes `heat_flux_t` on 100-step trajectories and is bitwise.
+
+### The one row the layouts disagree on
+
+Worth recording because it looks like a bug and is not. `fftfreq` stores
+`|ky| = Ny/2` once, as `-Ny/2`; the half axis stores it as `+Ny/2`. Both are
+legitimate representations of the same real field — the row is its own
+conjugate partner — but they are different arrays, and any term carrying an odd
+power of `ky` sees the difference. Measured per row at `Ny = 16`: rows 1–7
+agree **bitwise** on the linear RHS and to 1e-18 on the nonlinear one, row 0 to
+2e-16, and row 8 — the Nyquist row — differs by O(1). It is zero in every run.
+
+### Identity: the default path is bitwise
+
+`origin/main` `254fcc7b7`'s tree against this branch, separate processes, the
+float32 FFT thread pool pinned off.
+
+| gate | cases | float32 | x64 |
+|---|---:|---|---|
+| RHS terms, total, nonlinear RHS, VJPs wrt G / tprim / nu_hyper_m | 58 | 58/58 bitwise | 58/58 bitwise |
+| 100-step trajectories: 7 integrators, runtime rk3/rk4 × 3 modes, sharded, species×Hermite, checkpointed window value and d/dtprim | 65 | 65/65 bitwise | 65/65 bitwise |
+
+`max_rel` is exactly 0 in all four comparisons. `heat_flux_t`, `Wg_t` and
+`Wphi_t` are in the trajectory rows, so the flux and energy paths are covered,
+not only the RHS.
+
+Between the two *layouts* the comparison is necessarily weaker than bitwise on
+the nonlinear path and is stated as such: the linear RHS is bitwise on every
+dealiased row (the operator is block diagonal in ky, so nothing about the
+arithmetic changes), and the nonlinear RHS agrees to below 1e-13 relative,
+because a half-spectrum operand changes the shape of the batch handed to
+`irfft2`/`rfft2` and the XLA:CPU FFT's reduction order depends on it. Gradients
+through the linear RHS agree to 1e-12.
+
+### Not done
+
+The runtime still builds a two-sided grid, so no production run uses the half
+layout and the 41.9 per cent stands where `docs/performance.rst` records it —
+now with the measured reason. Left, beyond Q25:
+
+- the runtime/workflow grid flip and `PreparedSimulation.state_shape` with it;
+- the diagnostics and NetCDF condensation chain — `_condense_ky_for_output`,
+  `_condense_kykx_for_output`, the `y` dimension built from `grid.ky.size`, and
+  the `full_ny`/`active_ny` pair — which fails *loudly* on an `Nyc`-long
+  diagnostic rather than silently, and is the next coherent slice;
+- the eigen branch-selection question: because `L(-ky)` is the conjugate of
+  `L(+ky)`, a two-sided spectrum contains every eigenvalue and its `λ*` copy,
+  and a half axis does not. Growth rates are unaffected; frequency-sign branch
+  selection is, and it needs its own decision.
+- the end-damping row set: on the two-sided axis `ky > 0` leaves the stored
+  negative rows undamped, which is invisible in every shipped route because
+  they are the conjugates of the damped ones and are rewritten from them. On a
+  half state the mask selects exactly the non-zonal modes. The behaviour is
+  kept and documented rather than changed, but it is the reason the *assembled*
+  RHS is not Hermitian on a two-sided axis, which surprised this row and is
+  worth someone deciding deliberately.
+
+### Timing
+
+**None, and none is claimed.** The machine was shared throughout — a co-tenant
+job held the one-minute load between 130 and 215 for the whole session — so
+wall-clock was treated as unavailable. Every number in this entry is a bitwise
+comparison or an operation count, neither of which depends on load, and the
+drivers keep `nice -n 10` but do not wait for an idle host, which is recorded
+at the pin. The adoption decision above rests entirely on that
+load-independent evidence.
+
+### Gates
+
+`ruff check .`, `ruff format --check .`, `mypy` as CI runs it,
+`python -m sphinx -W -b html docs docs/_build/html`, both release manifests,
+`tests/release/test_release_gates.py`, `tests/release/test_evidence_ledger.py`,
+and the nonlinear, streaming, hypercollision, time-integrator, Krylov-core,
+runtime-runner, parallel (`--xla_force_host_platform_device_count=4`),
+profiling-contract, quasilinear and autodiff-objective selections, run with
+`JAX_ENABLE_X64=true GKX_X64=1` as the CI shards do.
+
+`tests/unit/nonlinear/test_ky_half_spectrum_state.py` is new: 60 cases over the
+layout predicate, the grid, the evolved state row by row, the per-stage
+projector, each cleared blocker, the restart block, the supplied-state intake
+and the gradient. `tests/unit/core/test_core_ky_layout.py`'s flux-weight case
+is rewritten to the decision above.
+
+### Environment
+
+macOS 14.4.1 arm64 (M3), python 3.11.14, jax/jaxlib 0.10.2, `JAX_PLATFORMS=cpu`,
+`XLA_FLAGS=--xla_cpu_multi_thread_eigen=false`, ruff 0.16.4, `nice -n 10`.
+Evidence, commands and the tables above in
+`plan/research/scripts/2026-09-19-q10-ky-half-spectrum-switch/`
+(`README.md`, `run_identity.sh`, `run_ledgers.sh`, `ledger_table.py`,
+`ledger_table.txt`, `ledgers/`, `identity/`); Q9's `rhs_identity.py`,
+`gate_traj.py` and `compare_npz.py` are reused verbatim.
+
+**Next question.** Q25: does building the linked chain maps in the state's own
+row order on a half grid restore the fused gather? If it does, the RHS's 53 per
+cent and the periodic deck's step saving should both survive onto a linked
+deck, and the default flip becomes a measurement rather than a judgement call.

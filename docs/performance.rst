@@ -62,9 +62,21 @@ float32) with the shipped default deck at ``96x96x48``:
   was measured, but rejected: on the captured-constant runtime route XLA:CPU
   then materializes 2.3--2.7 times more bytes. What removes the concatenate is
   the state layout, not the placement of the projector. The rule that switch
-  will be made against is written down and tested as the ``ky`` layout
-  contract (:mod:`gkx.core_ky_layout`, see :doc:`numerics`); the evolved state
-  is still two-sided, so no part of the 41.9 per cent has been recovered yet.
+  is made against is written down and tested as the ``ky`` layout contract
+  (:mod:`gkx.core_ky_layout`, see :doc:`numerics`).
+
+  That switch now works and has been measured, and the measurement is why the
+  evolved state is **still two-sided by default**. Lowering the same deck onto
+  the half layout removes the completion exactly as predicted --- on the RHS
+  graph the byte total falls 53.3 per cent at 32x32x24 and 52.5 per cent at
+  64x64x24, and the ``reverse`` count goes to zero, which is the completion
+  itself --- but on the RK *step* graph of a linked deck the byte total rises
+  42.7 per cent (rk3) and 18.6 per cent (rk4), because the linked-chain gather
+  stops fusing once the state's ``ky`` extent is no longer the grid's power of
+  two. The same deck with ``boundary = "periodic"``, which has no chains, wins
+  on both graphs. Until that lowering is fixed the layout is available below
+  the runtime and is not the default, and **no part of the 41.9 per cent is
+  claimed as recovered**.
 - Geometry construction, compilation, plotting, and I/O are seconds each and
   are not worth optimizing against the stepping cost.
 

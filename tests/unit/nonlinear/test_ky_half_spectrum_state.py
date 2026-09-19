@@ -624,3 +624,73 @@ def test_the_linear_rhs_gradient_matches_between_the_layouts(ny: int) -> None:
         rtol=1e-12,
         atol=1e-18,
     )
+
+
+# --------------------------------------------------------------------------
+# supplied-state intake (#247, #253)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("ny", (12, 16))
+def test_the_supplied_state_intake_reaches_the_same_modes_in_both_layouts(
+    ny: int,
+) -> None:
+    """The chain cover is the same physical mode set, however it is stored.
+
+    The cover mask is built from the chain membership indexed ``ky + ny * kx``
+    and then, on a two-sided axis, widened by the conjugate mirror so a row no
+    chain visits is kept when its ``-ky`` partner is.  ``(-j) % Nyc`` names an
+    unrelated positive row, so on a half axis the mirror is inapplicable rather
+    than merely unnecessary: running it would keep rows that carry no physics
+    and zero rows that do.
+    """
+
+    from gkx.operators.linear.cache_builder import linked_chain_cover_mask
+
+    cfg = GridConfig(Nx=8, Ny=ny, Nz=8, Lx=62.8, Ly=62.8, boundary="linked", jtwist=1)
+    geom, params = _geometry(), _params()
+    full_grid = build_spectral_grid(cfg)
+    half_grid = build_spectral_grid(cfg, ky_layout=HALF)
+
+    full_mask = linked_chain_cover_mask(full_grid, geom, params)
+    half_mask = linked_chain_cover_mask(half_grid, geom, params)
+    if full_mask is None:  # periodic or full-cover deck: nothing to compare
+        assert half_mask is None
+        return
+    full_mask = np.asarray(full_mask)
+    half_mask = np.asarray(half_mask)
+    assert half_mask.shape == (nyc_from_ny(ny), 8)
+    # The half cover is the two-sided cover's non-negative rows.
+    np.testing.assert_array_equal(half_mask, full_mask[: nyc_from_ny(ny)])
+
+
+@pytest.mark.parametrize("ny", (12, 16))
+def test_masking_a_supplied_half_state_keeps_the_chain_rows_untouched(
+    ny: int,
+) -> None:
+    """Intake is a ``where`` against a fixed mask, so it traces either way."""
+
+    from gkx.operators.linear.cache_builder import (
+        linked_chain_cover_mask,
+        mask_off_chain_rows,
+    )
+
+    cfg = GridConfig(Nx=8, Ny=ny, Nz=8, Lx=62.8, Ly=62.8, boundary="linked", jtwist=1)
+    geom, params = _geometry(), _params()
+    half_grid = build_spectral_grid(cfg, ky_layout=HALF)
+    linked = linked_chain_cover_mask(half_grid, geom, params)
+    nyc = nyc_from_ny(ny)
+    rng = np.random.default_rng(404)
+    state = jnp.asarray(
+        rng.standard_normal((1, 2, 3, nyc, 8, 8))
+        + 1j * rng.standard_normal((1, 2, 3, nyc, 8, 8)),
+        jnp.complex128,
+    )
+    out = np.asarray(mask_off_chain_rows(state, half_grid, geom, params))
+    assert out.shape == (1, 2, 3, nyc, 8, 8)
+    if linked is None:
+        np.testing.assert_array_equal(out, np.asarray(state))
+        return
+    mask = np.asarray(linked)
+    kept = np.where(mask[None, None, None, :, :, None], np.asarray(state), 0.0)
+    np.testing.assert_array_equal(out, kept)
