@@ -14428,8 +14428,8 @@ branch passes `ci-required` and merges. `release.yml` then publishes from the ta
 
 ## 2026-09-18 — Q10 stage 1: the ky ≥ 0 layout contract (plan §5.3 N3)
 
-**Outcome: partial. The contract is written, owned and tested; the evolved state
-is still two-sided, so none of the profiled 41.9% is recovered and no speed-up is
+**Outcome: partial (#248). The contract is written, owned and tested; the evolved
+state is still two-sided, so none of the profiled 41.9% is recovered and no speed-up is
 claimed.** Branch `perf/ky-half-spectrum-layout` off `origin/main` `4c6c9ac8b`.
 What landed is the thing the switch was missing: one statement of the rule, one
 owner for it, the bracket's `ky ≥ 0` primitive split out as the seam the switch
