@@ -1,0 +1,38 @@
+supervisor pid 92519 started 2026-09-19 02:08:48 cap 1500s
+2026-09-19 02:08:48 start s01_adaptive nice 10 load { 1.81 3.63 6.39 }
+2026-09-19 02:09:31 end s01_adaptive exit 0 load { 2.53 3.57 6.23 }
+2026-09-19 02:09:31 start s02_si_fixed nice 10 load { 2.53 3.57 6.23 }
+2026-09-19 02:10:30 end s02_si_fixed exit 0 load { 2.21 3.31 5.96 }
+2026-09-19 02:10:30 start s03_si_outer_k1e-2 nice 10 load { 2.21 3.31 5.96 }
+2026-09-19 02:11:16 end s03_si_outer_k1e-2 exit 0 load { 2.86 3.35 5.83 }
+2026-09-19 02:11:16 start s04_si_inexact_k1 nice 10 load { 2.86 3.35 5.83 }
+2026-09-19 02:11:50 end s04_si_inexact_k1 exit 0 load { 2.25 3.14 5.65 }
+2026-09-19 02:11:50 start s05_si_inexact_k3 nice 10 load { 2.25 3.14 5.65 }
+2026-09-19 02:12:24 end s05_si_inexact_k3 exit 0 load { 2.51 3.10 5.54 }
+2026-09-19 02:12:24 start s06_si_inexact_k10 nice 10 load { 2.51 3.10 5.54 }
+2026-09-19 02:12:56 end s06_si_inexact_k10 exit 0 load { 2.45 3.02 5.42 }
+2026-09-19 02:12:56 start s07_si_tuned1 nice 10 load { 2.45 3.02 5.42 }
+2026-09-19 02:13:55 end s07_si_tuned1 exit 0 load { 3.18 3.15 5.31 }
+2026-09-19 02:13:55 start s08_si_inexact_tuned2 nice 10 load { 3.18 3.15 5.31 }
+2026-09-19 02:14:31 end s08_si_inexact_tuned2 exit 0 load { 4.31 3.43 5.31 }
+2026-09-19 02:14:31 start s09_si_fixed_bigm nice 10 load { 4.31 3.43 5.31 }
+2026-09-19 02:15:32 end s09_si_fixed_bigm exit 0 load { 3.46 3.37 5.16 }
+2026-09-19 02:15:32 start s10_si_inexact_bigm nice 10 load { 3.46 3.37 5.16 }
+2026-09-19 02:16:08 end s10_si_inexact_bigm exit 0 load { 3.77 3.42 5.11 }
+2026-09-19 02:16:08 start s11_si_inexact_bt nice 10 load { 3.77 3.42 5.11 }
+2026-09-19 02:16:38 end s11_si_inexact_bt exit 0 load { 3.97 3.49 5.07 }
+2026-09-19 02:16:38 start s12_hks_d400 nice 10 load { 3.97 3.49 5.07 }
+2026-09-19 02:17:37 end s12_hks_d400 exit 0 load { 2.26 3.08 4.81 }
+2026-09-19 02:17:37 start s13_hks_d160 nice 10 load { 2.26 3.08 4.81 }
+2026-09-19 02:18:04 end s13_hks_d160 exit 0 load { 2.18 2.99 4.73 }
+supervisor pid 92519 finished 2026-09-19 02:18:04
+supervisor pid 2486 started 2026-09-19 03:01:39 cap 900s
+2026-09-19 03:01:39 start s14_hks_r16_d120 nice 10 load { 1.83 5.98 8.32 }
+2026-09-19 03:01:42 end s14_hks_r16_d120 exit 0 load { 1.93 5.93 8.29 }
+2026-09-19 03:01:42 start s15_hks_r16_d240 nice 10 load { 1.93 5.93 8.29 }
+2026-09-19 03:01:45 end s15_hks_r16_d240 exit 0 load { 1.93 5.93 8.29 }
+2026-09-19 03:01:45 start s16_hks_r16_d460 nice 10 load { 1.93 5.93 8.29 }
+2026-09-19 03:01:47 end s16_hks_r16_d460 exit 0 load { 1.85 5.85 8.25 }
+2026-09-19 03:01:48 start s17_si_r16_fixed nice 10 load { 1.85 5.85 8.25 }
+2026-09-19 03:01:54 end s17_si_r16_fixed exit 0 load { 1.78 5.77 8.21 }
+supervisor pid 2486 finished 2026-09-19 03:01:54

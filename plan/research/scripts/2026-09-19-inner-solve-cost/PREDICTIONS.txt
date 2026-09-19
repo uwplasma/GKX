@@ -1,0 +1,79 @@
+Q21 — inner-solve cost (plan §5.1 L5). Predictions registered before any run.
+
+Question
+--------
+Q7 (#236) adopted `pr3-cm` as the L4 structured preconditioner but measured that
+matrix-free shift-invert with it does not beat the runtime-default `adaptive`
+route at the production chain (n=73728), because each outer Arnoldi step costs
+about 950 inner gcrot iterations at a fixed inner tolerance of 1e-9. Does any of
+the L5 levers below reach the L4 adoption gate — **at least 3x fewer
+matvec-equivalents to an original-operator-certified pair than `adaptive`,
+measured on the same host in the same session, setup included** — with the
+certification gate unchanged?
+
+Arms, in the order information is bought fastest
+------------------------------------------------
+A0  `adaptive` control: the runtime-default route, same host, same session.
+A1  inner tolerance schedule tied to the outer residual:
+    rtol_j = clip(kappa * res_{j-1}, floor, cap), res_0 = 1.
+A2  tuned preconditioner (Freitag-Spence) M_i = P + (B - P) X_i X_i^H applied by
+    Woodbury, X_i the current Ritz vector(s); optionally with A1.
+A3  thick-restart harmonic Rayleigh-Ritz on the original operator, no inner
+    solves (the Krylov-Schur-style arm; GENE reports >=5x over inexact
+    shift-invert).
+A4  block-Thomas apply of the z-local D block (about 4x cheaper apply, about 5x
+    less memory) — an orthogonal cost reduction, run only if the budget allows.
+
+Definitions fixed before measuring
+----------------------------------
+* matvec-equivalent = one application of the matrix-free linear operator
+  A = _apply_operator(., cache, params, terms) at the arm's own size.
+* For the shift-invert arms the preconditioner apply is converted to
+  matvec-equivalents by c_P = t_P / t_mv, both medians measured in the same
+  process. One gcrot inner iteration costs 1 + c_P. Warm-started recycling costs
+  k matvecs per solve (A U is re-established), the per-step true-residual check
+  and the certification each cost about one apply, and setup seconds are
+  converted by t_mv.
+* For the `adaptive` arm the count is the route's own `operator_applications`
+  field plus one certification apply.
+* Certification is unchanged: `_eigenpair_relative_residual` of the pair against
+  the original matrix-free operator; the shift-invert outer gate is 1e-6 and the
+  adaptive base gate is 1e-9.
+
+Predictions
+-----------
+P1 (A1, schedule). Relaxing the inner tolerance with the outer residual cuts
+   total inner iterations to a 1e-9-certified pair by at least 2x relative to
+   Q7's fixed 1e-9 run (13055 inner iterations over 14 outer steps), because the
+   first steps ran at 1e-9 while the Ritz residual was 0.97. It does **not**
+   reach the 3x gate on its own, because the later steps still need a tight
+   solve and they dominate.
+
+P2 (A2, tuned). The tuned preconditioner reduces inner iterations by less than
+   1.5x on top of A1, because the Arnoldi right-hand sides after the first step
+   are orthogonal to the retained Ritz directions, which is where the tuning
+   acts.
+
+P3 (A3, harmonic, no inner solves). A polynomial Krylov basis of A with harmonic
+   extraction at the target does **not** certify the production pair within the
+   matvec budget the `adaptive` route uses, because the streaming spectrum
+   reaches |lambda| ~ 140 while the wanted mode sits at |lambda| ~ 0.3, so the
+   unfiltered Krylov space is dominated by the fast damped directions. GENE's
+   >=5x is reported against inexact shift-invert, not against a certified
+   exponential-propagator filter.
+
+P4 (gate). No arm reaches >=3x fewer matvec-equivalents than `adaptive`; the
+   `adaptive` route stays the runtime default. If an arm does pass, it must also
+   certify to the same residual on the original operator before it is adopted.
+
+P5 (accounting). The `adaptive` route's wall time per matvec-equivalent is lower
+   than a dispatched standalone apply, because its applies sit inside one jitted
+   RK4 scan; the matvec-equivalent ratio and the wall-time ratio will therefore
+   not agree, and both are reported.
+
+Screening
+---------
+A1, A2 and A3 are screened at the `r96` rung (Nz=96, Nl8/Nm24, n=18432, the same
+streaming stiffness as production) before any production run, so that a losing
+arm costs minutes rather than half an hour. Only arms that survive screening are
+run at n=73728 against a same-session `adaptive` control, alternated A/B/A/B.

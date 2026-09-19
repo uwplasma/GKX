@@ -1,0 +1,23 @@
+ENV {"python": "3.11.14", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "solvax": "0.20.0", "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/inner-solve-cost/src/gkx/__init__.py", "x64": true, "cpu_count": 14, "loadavg_start": [1.80908203125, 2.79052734375, 4.57080078125], "argv": ["--arm", "adaptive", "--case", "prod", "--label", "p1_adaptive"], "env": {"JAX_PLATFORMS": "cpu", "JAX_ENABLE_X64": "true", "GKX_X64": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1", "OMP_NUM_THREADS": "1", "PYTHONPATH": "/Users/rogeriojorge/local/GKX-worktrees/inner-solve-cost/src:/Users/rogeriojorge/local/GKX-worktrees/inner-solve-cost"}, "script_sha256": "78fddc305c20af20140794a1d831e70cd2c53017f3b213843d3681d515606b84", "bakeoff_sha256": "182757ff3c580d7231fb44eca9d79c5a05418e73da2d3a48625bb7f7fa0d9eaa", "pr_kz_sha256": "1a51de2a224be584619c0a64d93d46919b55e43230c456c03df0a3dd692ecd22", "sha": "cf89dcc707ba20cbd6fe56b98e8455810976252c", "dirty_src": false}
+[     2.0s rss<=0.47G] cost model {'t_matvec_s': 0.0013550000148825347}
+[   310.0s rss<=1.08G] gates None wall 310.0s
+RESULT {"arm": "adaptive", "case": "prod", "label": "p1_adaptive", "env": {"python": "3.11.14", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "solvax": "0.20.0", "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/inner-solve-cost/src/gkx/__init__.py", "x64": true, "cpu_count": 14, "loadavg_start": [1.80908203125, 2.79052734375, 4.57080078125], "argv": ["--arm", "adaptive", "--case", "prod", "--label", "p1_adaptive"], "env": {"JAX_PLATFORMS": "cpu", "JAX_ENABLE_X64": "true", "GKX_X64": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1", "OMP_NUM_THREADS": "1", "PYTHONPATH": "/Users/rogeriojorge/local/GKX-worktrees/inner-solve-cost/src:/Users/rogeriojorge/local/GKX-worktrees/inner-solve-cost"}, "script_sha256": "78fddc305c20af20140794a1d831e70cd2c53017f3b213843d3681d515606b84", "bakeoff_sha256": "182757ff3c580d7231fb44eca9d79c5a05418e73da2d3a48625bb7f7fa0d9eaa", "pr_kz_sha256": "1a51de2a224be584619c0a64d93d46919b55e43230c456c03df0a3dd692ecd22", "sha": "cf89dcc707ba20cbd6fe56b98e8455810976252c", "dirty_src": false}, "t_context_s": 0.5752455409965478, "n": 73728, "ky": 0.3, "cost": {"t_matvec_s": 0.0013550000148825347}, "residual_gate": 1e-09, "route_s": 307.96926812501624, "state_native_dtype": "complex128", "adaptive": {"operator_applications": 195195, "restarts": 1, "filter_steps": 2033, "filter_dt": 0.014756517461878997, "adaptive_residual": 1.068885336591046e-14, "solver_s": 307.9416052909801, "krylov_kwargs": {"krylov_dim": 24, "restart_krylov_dim": 12, "candidate_count": 2, "max_restarts": 4}}, "statuses": [[2.02, "building runtime geometry"], [2.02, "building spectral grid"], [2.02, "building runtime linear parameters"], [2.02, "selected ky index 6 at ky=0.3000"], [2.02, "starting Krylov solve"], [2.02, "building linear cache"], [2.03, "krylov method=adaptive dim=24 restarts=2"], [2.03, "running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09"], [309.97, "adaptive solve finished with eig=0.0930912-0.282033j residual=1.07e-14 converged=True stable=True"], [309.99, "Krylov solve complete: gamma=0.093091 omega=0.282033"]], "lambda": [0.09309117334775535, -0.28203273152699443], "gamma_omega": [0.09309117334775535, 0.28203273152699443], "certified_residual": 1.0688853365910458e-14, "certified": true, "matvec_equivalents": {"route_operator_applications": 195195, "certification": 1, "total": 195196}, "wall_s": 309.990892166039, "peak_rss_gib": 1.0820159912109375, "loadavg_end": [5.01513671875, 4.1552734375, 4.63671875]}
+      310.33 real       963.28 user        49.67 sys
+          1161871360  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               91648  page reclaims
+                  95  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   3  voluntary context switches
+             6616731  involuntary context switches
+      11132758568944  instructions retired
+       3542911128325  cycles elapsed
+           668324480  peak memory footprint
+exit 0
