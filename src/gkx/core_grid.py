@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.config import GridConfig
-from gkx.core_ky_layout import half_ky_values
+from gkx.core_ky_layout import half_ky_values, nyc_from_ny
 
 
 @jax.tree_util.register_pytree_node_class
@@ -29,6 +29,12 @@ class SpectralGrid:
     non_twist: bool
     kxfac: float
     ky_mode: jnp.ndarray | None = None
+    #: Length of the two-sided ``ky`` axis this grid's rows were taken from,
+    #: or ``None`` when the rows are not a complete axis.  A half-spectrum
+    #: block cannot say how long its own full axis is
+    #: (:mod:`gkx.core_ky_layout`), and the reduction weights of an even grid's
+    #: Nyquist row depend on the answer, so the grid carries it.
+    ny_full: int | None = None
 
     def tree_flatten(self):
         children = (
@@ -47,12 +53,13 @@ class SpectralGrid:
             self.non_twist,
             self.kxfac,
             self.ky_mode,
+            self.ny_full,
         )
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        y0, x0, boundary, jtwist, non_twist, kxfac, ky_mode = aux_data
+        y0, x0, boundary, jtwist, non_twist, kxfac, ky_mode, ny_full = aux_data
         return cls(
             *children,
             y0=y0,
@@ -62,6 +69,7 @@ class SpectralGrid:
             non_twist=non_twist,
             kxfac=kxfac,
             ky_mode=ky_mode,
+            ny_full=ny_full,
         )
 
 
@@ -172,7 +180,41 @@ def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
         non_twist=bool(cfg.non_twist),
         kxfac=float(cfg.kxfac),
         ky_mode=None,
+        ny_full=int(ky.shape[0]),
     )
+
+
+def _parent_ny_full(grid: SpectralGrid) -> int:
+    """Return the two-sided ``ky`` length behind `grid`'s rows."""
+
+    if grid.ny_full is not None:
+        return int(grid.ny_full)
+    return int(grid.ky.shape[0])
+
+
+def _selected_ny_full(grid: SpectralGrid, ky_vals: jnp.ndarray) -> int | None:
+    """Return ``ny_full`` for a selection, or ``None`` when it is a subset.
+
+    Only a complete axis may carry the parent length: the reduction weights
+    read the Nyquist row by index, and an index into an arbitrary selection of
+    modes names the wrong row.  The two complete cases are the full axis itself
+    and the leading ``ky >= 0`` block, and the block is recognized by value so
+    that a list of wave numbers read from another code's dump -- which
+    :func:`select_real_fft_ky_grid` also accepts -- is not mistaken for it.
+    """
+
+    parent = _parent_ny_full(grid)
+    rows = int(ky_vals.shape[0])
+    if rows == parent:
+        return parent
+    if rows != nyc_from_ny(parent):
+        return None
+    try:
+        selected = np.asarray(ky_vals, dtype=float)
+        expected = np.abs(np.asarray(grid.ky, dtype=float)[:rows])
+    except (TypeError, ValueError):
+        return None
+    return parent if np.array_equal(selected, expected) else None
 
 
 def select_ky_grid(
@@ -209,6 +251,7 @@ def select_ky_grid(
         non_twist=grid.non_twist,
         kxfac=grid.kxfac,
         ky_mode=ky_mode,
+        ny_full=_selected_ny_full(grid, ky),
     )
 
 
@@ -243,4 +286,5 @@ def select_real_fft_ky_grid(
         non_twist=grid.non_twist,
         kxfac=grid.kxfac,
         ky_mode=ky_mode,
+        ny_full=_selected_ny_full(grid, ky_vals),
     )

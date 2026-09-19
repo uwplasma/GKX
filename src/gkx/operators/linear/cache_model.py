@@ -107,6 +107,12 @@ class LinearCache:
     linked_kz: tuple[jnp.ndarray, ...] = ()
     use_twist_shift: bool = False
     jtwist: int = 0
+    #: Length of the two-sided ``ky`` axis behind ``ky``, or ``None`` when the
+    #: cached rows are not a complete axis.  Carried from the grid because a
+    #: half-spectrum block cannot say how long its own full axis is, and the
+    #: reduction weight of an even grid's Nyquist row depends on the answer
+    #: (:mod:`gkx.core_ky_layout`).
+    ny_full: int | None = None
 
     def tree_flatten(self):
         children = (
@@ -172,6 +178,7 @@ class LinearCache:
             len(linked_kz),
             self.linked_full_cover,
             self.linked_use_gather,
+            self.ny_full,
         )
         return children, aux_data
 
@@ -185,6 +192,7 @@ class LinearCache:
             n_linked_kz,
             linked_full_cover,
             linked_use_gather,
+            ny_full,
         ) = aux_data
         base_count = 50
         base_children = list(children[:base_count])
@@ -203,4 +211,5 @@ class LinearCache:
             jtwist=jtwist,
             linked_full_cover=linked_full_cover,
             linked_use_gather=linked_use_gather,
+            ny_full=ny_full,
         )

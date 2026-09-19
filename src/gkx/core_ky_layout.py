@@ -58,16 +58,19 @@ __all__ = [
     "describe",
     "half_dealias_mask",
     "half_ky_values",
+    "hermitian_mode_weights",
     "ky_row_weights",
     "negative_ky_block",
     "ny_full_candidates",
     "nyc_from_ny",
     "nyquist_row",
     "reality_residual",
+    "self_conjugate_row_mask",
     "self_conjugate_rows",
     "symmetrize_self_conjugate_rows",
     "to_full",
     "to_half",
+    "transport_mode_weights",
 ]
 
 #: Axis of the ``ky`` rows in a ``(..., ky, kx, z)`` spectral array.
@@ -306,6 +309,120 @@ def ky_row_weights(ny_full: int, *, dtype: Any = float) -> np.ndarray:
     for row in self_conjugate_rows(ny_full):
         weights[row] = 1.0
     return weights
+
+
+def _nyquist_index(rows: int, ny_full: int | None) -> int | None:
+    """Return the index of the Nyquist row in a complete axis, or ``None``.
+
+    Both layouts put it at ``Ny // 2``: that is the ``-Ny/2`` entry of the
+    two-sided ``fftfreq`` order and the last entry ``Nyc - 1`` of the half
+    axis.  ``None`` is returned when the grid has no Nyquist row (odd ``Ny``,
+    or ``Ny < 2``), when ``ny_full`` is unknown, and when the array is not a
+    complete axis -- a selected subset of modes keeps its parent's ``ny_full``
+    nowhere, and an index into it would name the wrong row.
+    """
+
+    if ny_full is None:
+        return None
+    ny = int(ny_full)
+    row = nyquist_row(ny)
+    if row is None or row == 0:
+        return None
+    if int(rows) not in (ny, nyc_from_ny(ny)):
+        return None
+    return row
+
+
+def self_conjugate_row_mask(ky: Any, *, ny_full: int | None = None) -> Any:
+    """Return a boolean mask of the ``ky`` rows that are their own partner.
+
+    Row ``ky = 0`` always is.  The Nyquist row of an even grid also is, and it
+    cannot be recognized from a non-negative axis alone (see the module
+    docstring on why ``Nyc`` does not determine ``Ny``), so ``ny_full`` has to
+    be supplied for it to be found.  Without it the mask names only the zonal
+    row, which is what every caller did before this function existed.
+    """
+
+    arr = jnp.asarray(ky)
+    if arr.ndim != 1:
+        raise ValueError(f"ky must be a 1D axis, got shape {arr.shape}")
+    zonal = arr == 0.0
+    row = _nyquist_index(int(arr.shape[0]), ny_full)
+    if row is None:
+        return zonal
+    return zonal | (jnp.arange(int(arr.shape[0])) == row)
+
+
+def _weight_grid(fac: Any, nx: int, dealias_mask: Any | None) -> Any:
+    """Broadcast a ``ky`` row weight over ``kx`` and apply the dealias mask."""
+
+    grid = fac[:, None] * jnp.ones((1, int(nx)), dtype=fac.dtype)
+    if dealias_mask is None:
+        return grid
+    return grid * jnp.asarray(dealias_mask).astype(grid.dtype)
+
+
+def hermitian_mode_weights(
+    ky: Any,
+    nx: int,
+    *,
+    ny_full: int | None = None,
+    dealias_mask: Any | None = None,
+) -> Any:
+    """Return the ``(ky, kx)`` reduction weight for a Hermitian-pair quantity.
+
+    This is :func:`ky_row_weights` as a traced kernel, for the quadrature,
+    energy and spectral reductions of quantities obeying ``Q[-ky] = Q[ky]``.
+    On a two-sided axis every row of the pair is stored and each is counted
+    once.  On a half axis a paired row stands for itself and its unstored
+    partner and is counted twice, while a self-conjugate row -- ``ky = 0``, and
+    an even grid's Nyquist row -- stands only for itself and is counted once.
+
+    ``ny_full`` is what makes the Nyquist row findable on a half axis; without
+    it the weight is the pre-contract one, 2 on every ``ky > 0``.
+    """
+
+    arr = jnp.asarray(ky)
+    two_sided = jnp.any(arr < 0.0)
+    self_conj = self_conjugate_row_mask(arr, ny_full=ny_full)
+    fac = jnp.where(two_sided, 1.0, jnp.where(self_conj, 1.0, 2.0))
+    return _weight_grid(fac, nx, dealias_mask)
+
+
+def transport_mode_weights(
+    ky: Any,
+    nx: int,
+    *,
+    ny_full: int | None = None,
+    dealias_mask: Any | None = None,
+) -> Any:
+    """Return the ``(ky, kx)`` representative weight used by the flux kernels.
+
+    The flux kernels carry the Hermitian pair factor of two in the kernel
+    expression, so this weight selects one representative per conjugate pair
+    rather than weighting a reduction, and drops the zonal row, which carries
+    no flux because the kernel's ``i*ky`` factor vanishes on it.
+
+    On the two-sided axis the representatives are the ``ky > 0`` rows, each
+    standing for itself and its stored negative partner.  On a half axis every
+    row is a representative, and a self-conjugate row stands only for itself,
+    so it takes half the weight and the kernel's factor of two restores it to
+    one.
+
+    The two-sided convention is unchanged from the pre-contract rule on every
+    row, Nyquist included: an even grid's Nyquist row is stored at ``ky < 0``
+    there and is left out of the flux, which is a question about which modes
+    the flux sums rather than about how a folded axis is weighted.  Moving it
+    changes live two-sided flux spectra, so it belongs to the state switch
+    (plan 5.3 N3), not to this rule.
+    """
+
+    arr = jnp.asarray(ky)
+    two_sided = jnp.any(arr < 0.0)
+    self_conj = self_conjugate_row_mask(arr, ny_full=ny_full)
+    folded = jnp.where(arr == 0.0, 0.0, jnp.where(self_conj, 0.5, 1.0))
+    fac = jnp.where(two_sided, jnp.where(arr > 0.0, 1.0, 0.0), folded)
+    return _weight_grid(fac, nx, dealias_mask)
 
 
 def half_ky_values(ky_full: Any) -> Any:

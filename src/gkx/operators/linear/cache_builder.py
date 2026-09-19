@@ -1021,6 +1021,7 @@ def _pack_linear_cache(
         linked_kz=linked_cache["linked_kz"],
         use_twist_shift=twist.use_twist_shift,
         jtwist=int(linked_cache["jtwist"]),
+        ny_full=getattr(grid, "ny_full", None),
     )
 
 

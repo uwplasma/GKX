@@ -526,40 +526,172 @@ def test_prepared_simulation_reports_the_state_it_actually_allocates() -> None:
     assert prepared.estimate_memory()["elements"] == int(np.prod(prepared.state_shape))
 
 
-def test_the_moment_weight_follows_the_contract_except_on_the_nyquist_row() -> None:
-    """Records the one place the contract is not yet honoured.
-
-    ``_hermitian_mode_weight`` gives every ``ky > 0`` row weight 2 on a
-    half-spectrum grid.  That is the contract on the paired rows and wrong on
-    an even grid's Nyquist row, which has no partner.  No shipped route reaches
-    the mismatch today: the only half-spectrum grids GKX builds are the
-    GX-comparison views, and the two-thirds mask zeroes every row at or above
-    ``Ny/3``, Nyquist included.  Plan 5.3 N3 must route this weight through
-    :func:`ky_row_weights` before the evolved state moves, because a
-    half-spectrum run needs the undealiased weight to be right.
-    """
+def _grids(ny: int, nx: int = 4):
+    """Return the two-sided grid for ``ny`` and its ``ky >= 0`` view."""
 
     from gkx.config import GridConfig
     from gkx.core_grid import build_spectral_grid, select_real_fft_ky_grid
+
+    full_grid = build_spectral_grid(
+        GridConfig(Nx=nx, Ny=ny, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
+    )
+    return full_grid, select_real_fft_ky_grid(full_grid, half_ky_values(full_grid.ky))
+
+
+@pytest.mark.parametrize("ny", ALL_NY)
+def test_the_moment_weight_is_the_contract_weight_on_a_half_axis(ny: int) -> None:
+    """``_hermitian_mode_weight`` and :func:`ky_row_weights` are one rule.
+
+    Queue row Q24.  The rule used to be written out three times and the copies
+    gave an even grid's Nyquist row weight 2, which is the paired weight on a
+    row that has no partner.  Nothing shipped reached it -- the only
+    half-spectrum grids GKX builds are the GX-comparison views, and the
+    two-thirds mask zeroes every row at or above ``Ny/3``, Nyquist included --
+    but plan 5.3 N3 moves the evolved state onto this axis, where the
+    undealiased weight has to be right.
+    """
+
     from gkx.operators.moments import _hermitian_mode_weight
 
-    ny = 8
-    full_grid = build_spectral_grid(
-        GridConfig(Nx=4, Ny=ny, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
-    )
-    half_grid = select_real_fft_ky_grid(full_grid, half_ky_values(full_grid.ky))
-    row = nyquist_row(ny)
-    assert row is not None
-
+    _full_grid, half_grid = _grids(ny)
     bare = np.asarray(_hermitian_mode_weight(half_grid, use_dealias=False))[:, 0]
-    contract = ky_row_weights(ny)
-    np.testing.assert_allclose(bare[:row], contract[:row])
-    assert bare[row] == 2.0 and contract[row] == 1.0
+    np.testing.assert_array_equal(bare, ky_row_weights(ny))
 
-    dealiased = np.asarray(_hermitian_mode_weight(half_grid, use_dealias=True))[:, 0]
-    assert dealiased[row] == 0.0
 
-    # The two-sided grid the code evolves today is unaffected: it weights every
-    # stored row once, which is the contract when no row is folded away.
+@pytest.mark.parametrize("ny", EVEN_NY)
+def test_the_half_axis_weight_sums_a_non_zero_nyquist_row_correctly(ny: int) -> None:
+    """The case the old rule got wrong, with the Nyquist row carrying power.
+
+    This is the whole point of the fix: with the row zeroed, weight 1 and
+    weight 2 agree, so only an undealiased field with power at ``ky = Ny/2``
+    tells them apart.  The old blanket-two rule over-counts that row's
+    ``|F|^2`` by exactly itself and fails here.
+    """
+
+    from gkx.operators.moments import _hermitian_mode_weight
+
+    row = nyquist_row(ny)
+    assert row is not None and row != 0
+
+    full = _real_field(ny, 4, 3, seed=ny + 71)
+    assert float(np.max(np.abs(full[row]))) > 0.0
+    _full_grid, half_grid = _grids(ny, nx=4)
+
+    weight = np.asarray(_hermitian_mode_weight(half_grid, use_dealias=False))
+    half = np.abs(full[: nyc_from_ny(ny)]) ** 2
+    got = float(np.sum(weight[:, :, None] * half))
+    np.testing.assert_allclose(got, float(np.sum(np.abs(full) ** 2)), rtol=1e-12)
+
+    blanket = np.where(np.arange(nyc_from_ny(ny))[:, None] == 0, 1.0, 2.0)
+    over = float(np.sum(blanket[:, :, None] * half))
+    assert over > got
+    np.testing.assert_allclose(
+        over - got, float(np.sum(np.abs(full[row]) ** 2)), rtol=1e-12
+    )
+
+
+@pytest.mark.parametrize("ny", ALL_NY)
+def test_the_two_sided_moment_weight_counts_every_stored_row_once(ny: int) -> None:
+    """The layout the code evolves today is untouched by the Q24 rule."""
+
+    from gkx.operators.moments import _hermitian_mode_weight
+
+    full_grid, _half_grid = _grids(ny)
     two_sided = np.asarray(_hermitian_mode_weight(full_grid, use_dealias=False))[:, 0]
     np.testing.assert_array_equal(two_sided, np.ones(ny))
+
+
+@pytest.mark.parametrize("ny", EVEN_NY)
+def test_dealiasing_still_zeroes_the_nyquist_row_in_both_weights(ny: int) -> None:
+    """Why no shipped number moves: the row the rule changed is masked away."""
+
+    from gkx.operators.moments import _hermitian_mode_weight, _transport_mode_weight
+
+    row = nyquist_row(ny)
+    assert row is not None
+    _full_grid, half_grid = _grids(ny)
+    for weight in (_hermitian_mode_weight, _transport_mode_weight):
+        masked = np.asarray(weight(half_grid, use_dealias=True))
+        np.testing.assert_array_equal(masked[row], np.zeros(masked.shape[1]))
+
+
+@pytest.mark.parametrize("ny", ALL_NY)
+def test_the_flux_weight_folds_the_pair_and_halves_a_self_conjugate_row(
+    ny: int,
+) -> None:
+    """``_transport_mode_weight`` picks one representative per conjugate pair.
+
+    The flux kernels carry the factor of two themselves, so a row that stands
+    for itself and its unstored partner takes weight 1 and a self-conjugate row
+    takes 0.5.  The two-sided convention -- representatives are the ``ky > 0``
+    rows -- is deliberately unchanged; see the function's docstring.
+    """
+
+    from gkx.operators.moments import _transport_mode_weight
+
+    full_grid, half_grid = _grids(ny)
+    half = np.asarray(_transport_mode_weight(half_grid, use_dealias=False))[:, 0]
+    expected = ky_row_weights(ny) / 2.0
+    expected[0] = 0.0
+    np.testing.assert_array_equal(half, expected)
+
+    two_sided = np.asarray(_transport_mode_weight(full_grid, use_dealias=False))[:, 0]
+    np.testing.assert_array_equal(
+        two_sided, (np.asarray(full_grid.ky) > 0.0).astype(two_sided.dtype)
+    )
+
+
+def test_a_selected_subset_of_modes_does_not_claim_a_nyquist_row() -> None:
+    """An index into a mode selection would name the wrong row, so it is not used."""
+
+    from gkx.core_grid import select_ky_grid, select_real_fft_ky_grid
+    from gkx.operators.moments import _hermitian_mode_weight
+
+    full_grid, half_grid = _grids(8)
+    assert full_grid.ny_full == 8 and half_grid.ny_full == 8
+
+    # Fewer rows than the half block: not a complete axis, so no parent length.
+    subset = select_ky_grid(full_grid, [0, 1, 2, 3])
+    assert subset.ny_full is None
+    np.testing.assert_array_equal(
+        np.asarray(_hermitian_mode_weight(subset, use_dealias=False))[:, 0],
+        np.array([1.0, 2.0, 2.0, 2.0]),
+    )
+
+    # As many rows as the half block, but another code's wave numbers rather
+    # than this grid's: the value check is what keeps row 4 from being called
+    # a Nyquist row it is not.
+    dump = select_real_fft_ky_grid(full_grid, np.array([0.0, 1.0, 2.0, 3.0, 5.0]))
+    assert dump.ny_full is None
+    np.testing.assert_array_equal(
+        np.asarray(_hermitian_mode_weight(dump, use_dealias=False))[:, 0],
+        np.array([1.0, 2.0, 2.0, 2.0, 2.0]),
+    )
+
+
+def test_the_cached_weight_and_the_quasilinear_weight_are_the_same_rule() -> None:
+    """The third and fourth copies of the rule now read from one owner."""
+
+    from types import SimpleNamespace
+
+    from gkx.diagnostics.quasilinear_transport import spectral_phi_weights
+    from gkx.operators.moments import _cached_hermitian_mode_weight
+
+    ny, nx = 8, 2
+    _full_grid, half_grid = _grids(ny, nx=nx)
+    cache = SimpleNamespace(
+        ky=half_grid.ky,
+        kx=half_grid.kx,
+        dealias_mask=half_grid.dealias_mask,
+        ny_full=half_grid.ny_full,
+    )
+    cached = np.asarray(_cached_hermitian_mode_weight(cache, use_dealias=False))
+    np.testing.assert_array_equal(cached[:, 0], ky_row_weights(ny))
+
+    nz = 3
+    phi = jnp.ones((cached.shape[0], nx, nz), dtype=jnp.complex64)
+    vol_fac = jnp.ones((nz,), dtype=jnp.float32) / nz
+    weights = np.asarray(spectral_phi_weights(phi, cache, vol_fac, use_dealias=False))
+    # ``vol_fac`` sums to one, so the z sum of the quasilinear weight of a
+    # unit field is exactly the cached ``(ky, kx)`` weight.
+    np.testing.assert_allclose(weights.sum(axis=2), cached, rtol=1e-6, atol=1e-7)

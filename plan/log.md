@@ -15641,3 +15641,144 @@ collisionless key, and then whether a declared Laguerre sink (§0.5 (iii),
 `nu_hyper_l` with the const-branch Hermite coefficient zeroed) removes the
 cutoff pile-up and converges the collisionless ladder, or only moves the answer
 the way a finite ν does.
+
+---
+
+## 2026-09-19 — Q24: one owner for the ky weight rule, and the f32 identity pin (plan §5.3 N3 prerequisite)
+
+**Question.** #248 left two things in the way of the `ky >= 0` state switch.
+The weight that folds a conjugate pair into a reduction was written out three
+times — `_transport_mode_weight`, `_hermitian_mode_weight` (with
+`_cached_hermitian_mode_weight` a fourth copy of the same expression) and
+`spectral_phi_weights` in `diagnostics/quasilinear_transport` — and on a half
+axis the Hermitian copies gave an even grid's Nyquist row the paired weight 2,
+a row that has no partner. Separately, #248 measured that the float32 nonlinear
+RHS is not bit-reproducible run to run under the multithreaded XLA:CPU FFT
+thunk, so any f32 bitwise gate was measuring the thread pool. Both had to be
+settled before the state moves, and neither is the state switch (that stays
+Q10).
+
+**Decision on the weight, and why.** An even grid's Nyquist row takes **weight
+1**, not 2. The weight counts how many rows of the *two-sided* axis a stored
+row stands for. In `fftfreq` order an even `Ny` stores `|ky| = Ny/2` exactly
+once, as the single entry `-Ny/2`; there is no `+Ny/2` twin to fold in, so the
+row stands only for itself. Row `0` is the same case and was already handled.
+That is `ky_row_weights` as #248 wrote it, and the weight is now that function
+as a traced kernel: `gkx.core_ky_layout.hermitian_mode_weights` for reductions,
+`transport_mode_weights` for the flux kernels, which carry the pair factor of
+two in the kernel expression and so take 1 on a folded pair and 0.5 on a
+self-conjugate row. All four call sites read from them.
+
+Finding that row needs `Ny`, and a half axis cannot supply it — `2(Nyc-1)` and
+`2Nyc-1` share a `Nyc`, the contract's first fact, and the same inference is
+what made an odd-`Ny` restart expand to `Ny-1` rows in #248. So
+`SpectralGrid` and `LinearCache` now carry `ny_full`: the length of the
+two-sided axis their rows came from, or `None` when the rows are a selection of
+modes rather than a complete axis. `select_ky_grid` and
+`select_real_fft_ky_grid` propagate it only for a complete axis, and the
+half-block case is recognized **by value**, so a list of wave numbers read from
+another code's dump — which `select_real_fft_ky_grid` also accepts — is not
+mistaken for this grid's half axis. Without `ny_full` the weight is the
+pre-contract one, which is correct on every two-sided axis and on any selection
+that does not contain a Nyquist row.
+
+**One thing deliberately not changed.** On the two-sided axis
+`_transport_mode_weight` selects the `ky > 0` rows as pair representatives, so
+an even grid's Nyquist row, stored at `ky < 0`, is left out of the flux
+altogether. That is a question about which modes the flux sums, not about how a
+folded axis is weighted; it is invisible under dealiasing but would move live
+two-sided flux spectra if changed, and `active = fac != 0` also gates which
+modes enter the kernel. It belongs to the state switch. The two-sided weight is
+byte-for-byte what it was, and the function's docstring and a test say so.
+
+**What stayed bit-identical (measured, not assumed).** The weight rule is all
+this row changes, so the weight arrays are the direct evidence.
+`weights_ab.py` dumps every shipped weight over `Ny` 2..17 (even and odd), `Nx`
+in {1, 2, 3, 4, 8}, both layouts, dealiased and not, and compares raw bytes:
+**560 of 640 cases bitwise**, and the 80 that move are exactly the *undealiased
+half-axis* weights of the eight even `Ny` — the Nyquist row and nothing else.
+Every two-sided case, every dealiased case and every odd-`Ny` case is
+unchanged, which is why no run moves: the evolved state is two-sided, and the
+two-thirds mask zeroes every row at or above `Ny/3`, Nyquist included.
+
+Q9's gates agree, `origin/main` at `cf89dcc70` against the branch, in separate
+processes, with the FFT flag pinned:
+
+| gate | cases | float32 | x64 |
+|---|---:|---|---|
+| RHS terms, total, nonlinear RHS, VJPs wrt G / tprim / nu_hyper_m | 58 | 58/58 bitwise | 58/58 bitwise |
+| 100-step trajectories: integrators, runtime rk3/rk4 x 3 modes, sharded, species-Hermite, checkpointed window value and d/dtprim | 65 | 65/65 bitwise | 65/65 bitwise |
+
+`max_rel` is exactly 0 in all four comparisons. The trajectory rows include
+`heat_flux_t`, `Wg_t` and `Wphi_t` — the diagnostics that read the two weights
+— so the flux and energy paths are covered, not only the RHS.
+
+**Where the f32 pin went.** `tests/conftest.py` adds
+`--xla_cpu_multi_thread_eigen=false` to `XLA_FLAGS` before any JAX backend is
+created, unless the caller already spoke about that flag. That is the earliest
+point that covers every pytest run however it is launched, and it is where the
+repository's own bitwise assertions live:
+`test_prepared_and_runtime_nonlinear_routes_are_bitwise_identical` (both
+precisions), its value-and-gradient twin, and the bitwise restart round trip.
+The Q10 stage-1 driver `run_gates.sh` pins the same flag for its arms, with
+`FFT_PIN` to override; its 2026-09-18 outputs predate the pin and record both
+arms explicitly, so they are left as they are. The reason is written at both
+pins: #248 measured two runs of unmodified `main`, minutes apart, differing by
+1.4e-10 on `nl32/nonlinear_rhs` with no code change between them, and every
+such pair came back bitwise with the flag set.
+
+**Tests.** `tests/unit/core/test_core_ky_layout.py` goes from 171 to 209 cases.
+The row that recorded the defect
+(`test_the_moment_weight_follows_the_contract_except_on_the_nyquist_row`) is
+replaced by ones that assert the contract:
+`test_the_moment_weight_is_the_contract_weight_on_a_half_axis` over even and
+odd `Ny`; `test_the_half_axis_weight_sums_a_non_zero_nyquist_row_correctly`,
+which is the test the old rule fails — it puts power in the Nyquist row, sums
+`|F|^2` over the half axis, and shows the blanket-two rule over-counting by
+exactly that row's power; `test_the_two_sided_moment_weight_counts_every_stored_row_once`;
+`test_dealiasing_still_zeroes_the_nyquist_row_in_both_weights`, which is why
+nothing shipped moves; `test_the_flux_weight_folds_the_pair_and_halves_a_self_conjugate_row`;
+`test_a_selected_subset_of_modes_does_not_claim_a_nyquist_row`, covering both
+the short selection and the foreign-dump selection of the same length as the
+half block; and
+`test_the_cached_weight_and_the_quasilinear_weight_are_the_same_rule`.
+
+**Gates.** `ruff check .`, `ruff format --check .`, `mypy` as CI runs it (186
+files), `python -m sphinx -W -b html docs docs/_build/html`,
+`tests/unit/core`, `tests/unit/quasilinear`, `tests/unit/nonlinear`,
+`tests/unit/diagnostics`, `tests/unit/linear`,
+`tests/integration/runtime/test_runtime_artifacts.py`,
+`tests/release/test_release_gates.py`, `tests/release/test_evidence_ledger.py`,
+and both release manifests.
+
+**Environment.** macOS 14.4.1 arm64, python 3.11.14, jax 0.10.2, ruff 0.16.4,
+`JAX_PLATFORMS=cpu`, `JAX_ENABLE_X64=true GKX_X64=1` for the suites,
+`XLA_FLAGS=--xla_cpu_multi_thread_eigen=false`, `nice -n 10`.
+
+**Commands** (from the repository root; `$REF` is a detached worktree at
+`origin/main`, `$OUT` a scratch directory):
+```
+D=plan/research/scripts/2026-09-19-q24-mode-weight-owner
+Q9=plan/research/scripts/2026-09-14-q9-batched-chain-fft
+for TREE in $REF .; do (cd $TREE && PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu \
+  XLA_FLAGS=--xla_cpu_multi_thread_eigen=false nice -n 10 \
+  python $D/weights_ab.py $OUT/ab_$(basename $TREE).json); done
+python $D/weights_ab.py --diff $OUT/ab_<ref>.json $OUT/ab_<new>.json
+for TREE in $REF .; do for PREC in f32 x64; do for S in rhs_identity gate_traj; do
+  (cd $TREE && env PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu \
+    XLA_FLAGS=--xla_cpu_multi_thread_eigen=false nice -n 10 \
+    python $Q9/$S.py $OUT/${S}_$(basename $TREE)_$PREC.npz); done; done; done
+python $Q9/compare_npz.py $OUT/<ref>.npz $OUT/<new>.npz $OUT/cmp.json
+```
+
+**Artifacts.** `plan/research/scripts/2026-09-19-q24-mode-weight-owner/`:
+`weights_ab.py` and its `weights_ab.txt`, and the four `cmp_*.json` from the
+RHS and trajectory gates. The `.npz` arms are scratch and are not in git.
+
+**Next question.** Q10's remaining work is unchanged apart from this row: the
+hot-path switch still has to build the half-spectrum dealias mask rather than
+slice the two-sided one, replace the linked-chain conjugate restore with the
+conjugate-partner map, give the compressed projector a layout argument, make
+the sharded `ky` divisibility check layout-aware, move the two `ifft2` output
+paths to `irfft2`, and decide whether the two-sided flux should represent an
+even grid's Nyquist row at all before it flips the state.
