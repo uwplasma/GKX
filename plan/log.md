@@ -16541,3 +16541,85 @@ Evidence, commands and the tables above in
 row order on a half grid restore the fused gather? If it does, the RHS's 53 per
 cent and the periodic deck's step saving should both survive onto a linked
 deck, and the default flip becomes a measurement rather than a judgement call.
+
+### Paused 2026-09-19
+
+**Work in progress, paused mid-gate-run at the maintainer's request. The tree
+is in a working state, not mid-refactor**: `ruff check`, `ruff format --check`,
+`mypy` (186 files) and `sphinx -W` all pass, both release manifests pass, and
+every test selection run so far is green. It is *not* gate-complete: the full
+`tests/unit tests/integration/runtime tests/release` sweep was killed partway.
+
+**Blockers handled** (stage 1's seven, in its order):
+
+1. linked-chain `naky` and the conjugate restore — **done**. `naky` counts the
+   dealiased rows of the two-sided axis, the flat chain index keeps the stored
+   count, and the restore, the cover mask's mirror and the end-damping mirror
+   are inapplicable rather than skipped on a half axis. `ny_full` is threaded
+   beside `linked_use_gather` through the apply chain.
+2. the two-sided dealias mask — **done**, `half_twothirds_mask` builds the
+   half rows instead of slicing.
+3. `_transport_mode_weight` — **done**, the flux convention is decided below.
+4. the `two_sided=True` projector — **done**, it takes `rows` and reads the
+   layout from its arguments, never from a traced `ky`.
+5. the sharded ky divisibility check — **done**, the refusal names the layout
+   its extent came from.
+6. the full-complex `ifft2` output paths — **done**, `irfft2` on a half field
+   in both the field and the species-moment writer.
+7. the Nyquist row of `_hermitian_mode_weight` — Q24's, already done.
+
+Three more found here and fixed: `kperp2_max` (two independent copies), the
+restart block's length, and the seeded initial band all derived a two-sided
+quantity from the stored row count and would have been silently wrong.
+
+**Not handled**: the runtime grid flip (the default is deliberately unchanged,
+see the ledger), the diagnostics/NetCDF condensation chain
+(`_condense_ky_for_output`, the `y` dimension, `full_ny`/`active_ny` — it fails
+loudly, not silently, and is the next coherent slice), the eigen
+branch-selection question, and the end-damping row set.
+
+**Measurements already in hand** (all recorded above with their artifacts):
+
+- Identity against `origin/main` `254fcc7b7`, float32 FFT thread pool pinned
+  off: **58/58 and 65/65 bitwise in both float32 and x64, `max_rel` exactly
+  0**, VJPs and `heat_flux_t`/`Wg_t`/`Wphi_t` included.
+- Between the layouts: the linear RHS **bitwise** on every dealiased row, the
+  nonlinear RHS **< 1e-13** relative (the transform batch changes shape), the
+  linear-RHS gradient to 1e-12, and the Nyquist row differing by O(1) from its
+  `ky` sign convention alone.
+- HLO ledger, full -> half: **RHS bytes -53.3% (32) and -52.5% (64)**, reverse
+  3 -> 0; **RK step bytes +42.7%/+57.0% (rk3) and +18.6%/+29.6% (rk4)**, traced
+  to the linked-chain gather losing its fused lowering, with a chain-free
+  control winning on both graphs (RHS -23.4%, rk3 -10.5%). The `full` arm
+  reproduces #248's committed ledger on all twelve graphs.
+- No timing, and none claimed: the machine was shared throughout.
+
+**Flux convention: decided.** An even grid's Nyquist row is a flux
+representative in **both** layouts, at the self-conjugate weight, so the
+two-sided weights are the half-axis weights padded with zeros. Reason and the
+proof that no live spectrum moves are in the section above. Two tests that
+pinned the old rule are rewritten to the decision.
+
+**Resume steps**, in order:
+
+1. `git -C <worktree> log --oneline origin/main..HEAD` — four commits, nothing
+   else outstanding; the branch is pushed.
+2. Merge `origin/main` in: #256 (docs) and #257 (defaults) land first, and
+   #250's merge already cost this row's queue entry once (2026-09-18
+   "Correction"), so check the Q10 and Q25 rows survive the merge.
+3. Re-run the interrupted sweep:
+   `PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1
+   nice -n 10 python -m pytest tests/unit tests/integration/runtime
+   tests/release -q -p no:randomly`. One failure was found and fixed before the
+   pause (`test_flux_fac_nonzero_matches_positive_ky_convention`, the second
+   test pinning the old flux rule); expect none, but any further failure is
+   most likely a third such test.
+4. Run the parallel selection separately, under
+   `--xla_force_host_platform_device_count=4`.
+5. Re-run the size manifest *after* committing, as its check reads tracked
+   files.
+6. `gitleaks git . --log-opts="origin/main..HEAD" --no-banner`, then open the
+   PR against main, ready, with the ledger tables and the two "not done" lists
+   from this entry in the body. Do not merge.
+7. Q25 is the follow-up that decides the default flip; it is already in the
+   queue table with its own dependency and evidence plan.

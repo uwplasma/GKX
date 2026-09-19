@@ -2312,13 +2312,39 @@ def test_jl_family_accepts_four_dimensional_arrays_and_rejects_bad_ranks() -> No
 
 
 def test_flux_fac_nonzero_matches_positive_ky_convention() -> None:
+    """Flux representatives on a two-sided axis: ``ky > 0``, plus Nyquist.
+
+    The rule used to be exactly ``ky > 0``, which drops an even grid's Nyquist
+    row -- ``fftfreq`` stores ``|ky| = Ny/2`` once, as ``-Ny/2`` -- from the
+    flux, while a half-spectrum axis stores the same row as ``+Ny/2`` and
+    counted it. The two layouts therefore named different sums. Plan 5.3 N3
+    settles it in favour of counting the row, at the self-conjugate weight
+    ``0.5`` that the kernel's own factor of two restores to one: the flux
+    kernel carries an explicit ``i*ky``, so that row's contribution is odd
+    under a sign choice that is pure convention, and a flux may not be.
+
+    Nothing shipped moves. The contribution is identically zero on any state
+    representing a real field, and two-thirds dealiasing zeroes the row in
+    every run; only an explicitly undealiased reduction sees the weight at all.
+    """
+
     cfg = CycloneBaseCase()
     grid = build_spectral_grid(replace(cfg.grid, Ny=8, Nx=4))
     fac = np.asarray(_transport_mode_weight(grid, use_dealias=False))
     ky = np.asarray(grid.ky, dtype=float)
+    nyquist = np.argmin(ky)  # the single -Ny/2 entry
+    assert ky[nyquist] < 0.0
+
     pos = ky > 0.0
     assert np.allclose(fac[pos], 1.0)
-    assert np.allclose(fac[~pos], 0.0)
+    assert np.allclose(fac[nyquist], 0.5)
+    other = ~pos
+    other[nyquist] = False
+    assert np.allclose(fac[other], 0.0)
+
+    # Dealiased -- which is every shipped reduction -- the row is gone again.
+    dealiased = np.asarray(_transport_mode_weight(grid, use_dealias=True))
+    assert np.allclose(dealiased[nyquist], 0.0)
 
 
 def test_state_mask_and_apply_mask_remove_dealiased_and_zonal00_modes() -> None:
