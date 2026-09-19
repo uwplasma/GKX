@@ -32,6 +32,12 @@ from pathlib import Path
 from typing import cast
 import numpy as np
 from gkx.core_grid import SpectralGrid
+from gkx.core_ky_layout import (
+    negative_ky_block,
+    nyc_from_ny,
+    paired_row_limit,
+    to_full,
+)
 from gkx.operators.linear.cache_builder import build_linear_cache, mask_off_chain_rows
 from gkx.workflows.runtime.initial_phi import _density_moments_for_target_phi
 from gkx.workflows.runtime.initial_phi import (
@@ -460,20 +466,18 @@ def _reshape_netcdf_state(
     return arr_reordered.reshape((nspec, nl, nm, nyc, nx, nz))
 
 
-def _expand_ky(arr: np.ndarray, *, nyc: int) -> np.ndarray:
-    ny_full = 2 * (nyc - 1)
-    if ny_full <= 0 or arr.shape[-3] == ny_full:
+def _expand_ky(arr: np.ndarray, *, ny_full: int) -> np.ndarray:
+    """Widen a stored ``ky >= 0`` init state onto this grid's two-sided axis.
+
+    ``ny_full`` is passed in rather than inferred from ``Nyc``: the two map
+    many-to-one (``gkx.core_ky_layout``), and inferring the even branch
+    silently produced an ``Ny - 1`` row state for an odd-``Ny`` grid.
+    """
+
+    ny = int(ny_full)
+    if ny <= 1 or arr.shape[-3] == ny:
         return arr
-    if nyc <= 2:
-        return arr
-    pos = arr
-    neg = np.conj(pos[..., 1 : nyc - 1, :, :])
-    neg = neg[..., ::-1, :, :]
-    nx = pos.shape[-2]
-    if nx > 1:
-        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1)))
-        neg = neg[..., kx_neg, :]
-    return np.concatenate([pos, neg], axis=-3)
+    return to_full(arr, ny_full=ny)
 
 
 def _enforce_full_ky_hermitian(arr: np.ndarray) -> np.ndarray:
@@ -483,16 +487,10 @@ def _enforce_full_ky_hermitian(arr: np.ndarray) -> np.ndarray:
     ny = int(state.shape[-3])
     if ny <= 1:
         return state
-    nyc = ny // 2 + 1
-    neg_hi = nyc - 1 if (ny % 2) == 0 else nyc
-    if neg_hi <= 1:
+    nyc = nyc_from_ny(ny)
+    if paired_row_limit(ny) <= 1:
         return state
-    neg = np.conj(state[..., 1:neg_hi, :, :])[..., ::-1, :, :]
-    nx = int(state.shape[-2])
-    if nx > 1:
-        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1)))
-        neg = neg[..., kx_neg, :]
-    state[..., nyc:, :, :] = neg
+    state[..., nyc:, :, :] = negative_ky_block(state, ny_full=ny)
     return state
 
 
@@ -517,14 +515,14 @@ def _load_initial_state_from_file(
             nz=nz,
         )
     raw = np.fromfile(path, dtype=np.complex64)
-    nyc = ny // 2 + 1
+    nyc = nyc_from_ny(ny)
     expected_nyc = nspecies * Nl * Nm * nyc * nx * nz
     expected_full = nspecies * Nl * Nm * ny * nx * nz
     if raw.size == expected_nyc:
         arr = _reshape_netcdf_state(
             raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz
         )
-        return _expand_ky(arr, nyc=nyc)
+        return _expand_ky(arr, ny_full=ny)
     if raw.size == expected_full:
         return raw.reshape((nspecies, Nl, Nm, ny, nx, nz))
     raise ValueError(

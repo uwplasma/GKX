@@ -1,0 +1,415 @@
+{
+  "summary": {
+    "n": 58,
+    "bitwise": 57,
+    "max_rel": 1.431981218588275e-10
+  },
+  "rows": {
+    "nl32/collisions": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0,
+      "dtype": "complex64"
+    },
+    "nl32/curvature": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.19972511066821358,
+      "dtype": "complex64"
+    },
+    "nl32/diamagnetic": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.21583777055861392,
+      "dtype": "complex64"
+    },
+    "nl32/end_damping": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.013966688078142558,
+      "dtype": "complex64"
+    },
+    "nl32/gradb": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.09944475930648744,
+      "dtype": "complex64"
+    },
+    "nl32/hypercollisions": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 2.199678450216823,
+      "dtype": "complex64"
+    },
+    "nl32/hyperdiffusion": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0056871085324167224,
+      "dtype": "complex64"
+    },
+    "nl32/mirror": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.05066789484777752,
+      "dtype": "complex64"
+    },
+    "nl32/nonlinear_rhs": {
+      "bitwise": false,
+      "rel": 1.431981218588275e-10,
+      "abs_max": 1.1641532182693481e-10,
+      "ref_norm": 2.589548227748346,
+      "dtype": "complex64"
+    },
+    "nl32/streaming": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1.3254738188350672,
+      "dtype": "complex64"
+    },
+    "nl32/total": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 2.589549659808014,
+      "dtype": "complex64"
+    },
+    "nl32/vjp_G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 2560.51183447865,
+      "dtype": "complex64"
+    },
+    "nl32/vjp_nu_hyper_m": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.8620640635490417,
+      "dtype": "float32"
+    },
+    "nl32/vjp_tprim": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.13502821326255798,
+      "dtype": "float32"
+    },
+    "nl32/vjp_value": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 2.178403854370117,
+      "dtype": "float32"
+    },
+    "nl64/collisions": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0,
+      "dtype": "complex64"
+    },
+    "nl64/curvature": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 3.488964907194191,
+      "dtype": "complex64"
+    },
+    "nl64/diamagnetic": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.8304227844071097,
+      "dtype": "complex64"
+    },
+    "nl64/end_damping": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.05284463641191537,
+      "dtype": "complex64"
+    },
+    "nl64/gradb": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1.7362696349781461,
+      "dtype": "complex64"
+    },
+    "nl64/hypercollisions": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 4.8842257510348555,
+      "dtype": "complex64"
+    },
+    "nl64/hyperdiffusion": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.021200359050963204,
+      "dtype": "complex64"
+    },
+    "nl64/mirror": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.6599246702156732,
+      "dtype": "complex64"
+    },
+    "nl64/nonlinear_rhs": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10.528060829675495,
+      "dtype": "complex64"
+    },
+    "nl64/streaming": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 7.989613781832172,
+      "dtype": "complex64"
+    },
+    "nl64/total": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10.5280307114947,
+      "dtype": "complex64"
+    },
+    "nl64/vjp_G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 10512.064239506655,
+      "dtype": "complex64"
+    },
+    "nl64/vjp_nu_hyper_m": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 1.6665741205215454,
+      "dtype": "float32"
+    },
+    "nl64/vjp_tprim": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0007179677486419678,
+      "dtype": "float32"
+    },
+    "nl64/vjp_value": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 24.13690948486328,
+      "dtype": "float32"
+    },
+    "pilot/collisions": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0,
+      "dtype": "complex64"
+    },
+    "pilot/curvature": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.2701740563626531,
+      "dtype": "complex64"
+    },
+    "pilot/diamagnetic": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.04208927876163678,
+      "dtype": "complex64"
+    },
+    "pilot/end_damping": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0072168446669459655,
+      "dtype": "complex64"
+    },
+    "pilot/gradb": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.13267384379104266,
+      "dtype": "complex64"
+    },
+    "pilot/hypercollisions": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.4545966743490656,
+      "dtype": "complex64"
+    },
+    "pilot/hyperdiffusion": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0,
+      "dtype": "complex64"
+    },
+    "pilot/mirror": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.09532618322790011,
+      "dtype": "complex64"
+    },
+    "pilot/streaming": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.7485920346721815,
+      "dtype": "complex64"
+    },
+    "pilot/total": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.9511631362333804,
+      "dtype": "complex64"
+    },
+    "pilot/vjp_G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 957.317509588023,
+      "dtype": "complex64"
+    },
+    "pilot/vjp_nu_hyper_m": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.295529842376709,
+      "dtype": "float32"
+    },
+    "pilot/vjp_tprim": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.02605121210217476,
+      "dtype": "float32"
+    },
+    "pilot/vjp_value": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.7268581986427307,
+      "dtype": "float32"
+    },
+    "pilot_hkz/collisions": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/curvature": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.2701740563626531,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/diamagnetic": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.04208927876163678,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/end_damping": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0072168446669459655,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/gradb": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.13267384379104266,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/hypercollisions": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.2272983371745328,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/hyperdiffusion": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.0,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/mirror": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.09532618322790011,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/streaming": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.7485920346721815,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/total": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.8674645902254827,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/vjp_G": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 872.8446453678553,
+      "dtype": "complex64"
+    },
+    "pilot_hkz/vjp_nu_hyper_m": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.295529842376709,
+      "dtype": "float32"
+    },
+    "pilot_hkz/vjp_tprim": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.02605121210217476,
+      "dtype": "float32"
+    },
+    "pilot_hkz/vjp_value": {
+      "bitwise": true,
+      "rel": 0.0,
+      "abs_max": 0.0,
+      "ref_norm": 0.8746228218078613,
+      "dtype": "float32"
+    }
+  }
+}

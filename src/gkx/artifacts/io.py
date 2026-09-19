@@ -20,6 +20,7 @@ from gkx.artifacts.spectral_layout import (
     _require_netcdf4,
     _validate_netcdf_schema_version,
 )
+from gkx.core_ky_layout import nyc_from_ny, to_full
 from gkx.diagnostics import (
     ResolvedDiagnostics,
     SimulationDiagnostics,
@@ -663,18 +664,12 @@ def _expand_positive_ky_to_full(
     if state.ndim != 6:
         raise ValueError("state_positive_ky must have shape (Ns, Nl, Nm, Nyc, Nx, Nz)")
     nyc = state.shape[3]
-    expected_nyc = int(ny_full) // 2 + 1
+    expected_nyc = nyc_from_ny(int(ny_full))
     if nyc != expected_nyc:
         raise ValueError(
             f"positive-ky state Nyc={nyc} does not match ny_full={ny_full}"
         )
-    neg_hi = nyc - 1 if (int(ny_full) % 2) == 0 else nyc
-    neg = np.conj(state[..., 1:neg_hi, :, :])[..., ::-1, :, :]
-    nx = state.shape[4]
-    if nx > 1:
-        kx_neg = np.concatenate(([0], np.arange(nx - 1, 0, -1)))
-        neg = neg[..., kx_neg, :]
-    return np.concatenate([state, neg], axis=3)
+    return to_full(state, ny_full=int(ny_full))
 
 
 def _expand_netcdf_restart_state_to_full_positive_ky(

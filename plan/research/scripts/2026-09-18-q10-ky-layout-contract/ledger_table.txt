@@ -1,0 +1,10 @@
+rhs 32: fft 13->13  concatenate 18->18  copy 19->19  transpose 19->19  gather 14->14  reverse 3->3  bytes_written 24991260->24991260
+diagnostics 32 rk3: fft 44->44  concatenate 38->38  copy 85->85  transpose 66->66  gather 41->41  reverse 14->14  bytes_written 89479380->89479380
+diagnostics 32 rk4: fft 57->57  concatenate 49->49  copy 105->105  transpose 86->86  gather 53->53  reverse 17->17  bytes_written 117413076->117413076
+rhs 64: fft 17->17  concatenate 22->22  copy 23->23  transpose 23->23  gather 18->18  reverse 3->3  bytes_written 424812232->424812232
+diagnostics 64 rk3: fft 56->56  concatenate 44->44  copy 100->100  transpose 81->81  gather 53->53  reverse 14->14  bytes_written 1509607604->1509607604
+diagnostics 64 rk4: fft 73->73  concatenate 57->57  copy 124->124  transpose 105->105  gather 69->69  reverse 17->17  bytes_written 1983162548->1983162548
+runtime     32 rk3: fft 43->43  concatenate 44->44  copy 226->226  transpose 64->64  gather 42->42  reverse 13->13  bytes_written 89062692->89062692
+runtime     32 rk4: fft 56->56  concatenate 55->55  copy 246->246  transpose 84->84  gather 54->54  reverse 16->16  bytes_written 116996388->116996388
+runtime     64 rk3: fft 55->55  concatenate 52->52  copy 240->240  transpose 78->78  gather 54->54  reverse 13->13  bytes_written 1499058544->1499058544
+runtime     64 rk4: fft 72->72  concatenate 65->65  copy 264->264  transpose 102->102  gather 70->70  reverse 16->16  bytes_written 1972613488->1972613488

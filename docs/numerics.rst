@@ -198,6 +198,64 @@ quadrature transform and instead use the spectral gyroaverage factors ``Jl``
 directly. The default ``"grid"`` mode applies the quadrature
 transform.
 
+The ``ky`` layout contract
+--------------------------
+
+Every spectral array in GKX has the shape ``(..., ky, kx, z)``, and its ``ky``
+axis is in one of two layouts. :mod:`gkx.core_ky_layout` states the rule and
+owns every conversion between them; nothing else may write a Hermitian
+completion by hand.
+
+``full``
+  ``Nky = Ny``, the two-sided ``fftfreq`` order
+  :math:`[0, 1, \dots, N_y/2 - 1, -N_y/2, \dots, -1]`. This is the layout the
+  **evolved state uses today**. Half of it is redundant, because a real field
+  obeys the reality condition
+  :math:`F(-k_y, -k_x, z) = F^{*}(k_y, k_x, z)`.
+
+``half``
+  ``Nky = Nyc = 1 + Ny // 2``, the non-negative ``rfftfreq`` rows. The reality
+  condition holds by construction. GX, stella and GS2 evolve this layout, and
+  GKX already uses it for restart files, NetCDF output, the ``ky`` spectra and
+  real-space snapshots.
+
+The boundary between the two sits at I/O and at the nonlinear bracket, not in
+the middle of the step. Restart files store ``Nyc`` rows and
+:func:`gkx.core_ky_layout.to_full` widens them on read; the compressed bracket
+computes on ``Nyc`` rows
+(:func:`gkx.operators.nonlinear.brackets._spectral_bracket_half_core`) and
+widens its result once at the end; the Hermitian projector applied after each
+Runge--Kutta stage is exactly ``to_full(to_half(G))``.
+
+Three properties of the contract are easy to get wrong, so they are stated and
+tested rather than rederived at each call site.
+
+**Nyc does not determine Ny.** Both :math:`N_y = 2(N_{yc}-1)` and
+:math:`N_y = 2N_{yc}-1` give the same :math:`N_{yc}`, so a stored half-spectrum
+array cannot say how long its own full axis is. Every widening takes
+``ny_full`` explicitly. Inferring the even branch is what made an odd-``Ny``
+raw restart expand to ``Ny - 1`` rows.
+
+**The self-conjugate rows are not made real by the layout.** Row ``0`` always,
+and row ``Ny/2`` when ``Ny`` is even, are their own conjugate partners; on them
+the reality condition becomes a constraint *within* the row,
+:math:`F(k_y^{sc}, k_x) = F^{*}(k_y^{sc}, -k_x)`. Storing only ``ky >= 0`` does
+not enforce it. A real inverse transform imposes it silently by discarding the
+anti-symmetric part, but an operator that writes those rows directly must call
+:func:`gkx.core_ky_layout.symmetrize_self_conjugate_rows`.
+
+**Reductions need row weights, not a factor of two.** For any quantity with
+:math:`Q(-k_y) = Q(k_y)` -- :math:`|F|^2`, :math:`\mathrm{Re}(F G^{*})`, every
+flux -- the sum over the full axis equals the
+:func:`gkx.core_ky_layout.ky_row_weights` weighted sum over the half axis: 2 on
+the paired rows, 1 on the self-conjugate rows. A blanket factor of two
+over-counts an even grid's Nyquist row.
+
+Plan 5.3 N3 moves the evolved state to the ``half`` layout, which removes the
+per-stage completion that the repository XLA profile attributes 41.9 per cent
+of step time to. That switch is not in place: the state is still two-sided, and
+the contract above is what it will be moved against.
+
 Equilibrium-flow shearing coordinates
 --------------------------------------
 

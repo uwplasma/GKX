@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from gkx.core_ky_layout import half_ky_values
+
 NETCDF_SCHEMA_VERSION = 1
 
 
@@ -66,8 +68,8 @@ def _dealiased_kx_values(kx: np.ndarray) -> np.ndarray:
 
 def _dealiased_ky_values(ky: np.ndarray) -> np.ndarray:
     ky_arr = np.asarray(ky, dtype=np.float32)
-    nyc = 1 + ky_arr.shape[0] // 2
-    return np.abs(ky_arr[:nyc])[: _dealiased_ky_count(int(ky_arr.shape[0]))]
+    half = half_ky_values(ky_arr)
+    return half[: _dealiased_ky_count(int(ky_arr.shape[0]))]
 
 
 def _take_axis(arr: np.ndarray, indices: np.ndarray, axis: int) -> np.ndarray:
