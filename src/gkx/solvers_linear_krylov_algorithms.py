@@ -15,6 +15,10 @@ from gkx.operators.linear.cache_arrays import (
     hypercollision_damping,
 )
 from gkx.operators.linear.cache_model import LinearCache
+from gkx.operators.linear.linked import (
+    linked_cover_mask,
+    project_to_linked_cover,
+)
 from gkx.operators.linear.params import LinearParams
 from gkx.solvers_time_explicit_steps import _linear_native_step
 from gkx.terms.assembly import assemble_rhs_cached
@@ -30,41 +34,26 @@ def _normalize(v: jnp.ndarray) -> jnp.ndarray:
 def _linked_covered_mode_mask(cache: Any) -> jnp.ndarray | None:
     """Return the ``(ky, kx)`` modes a linked chain couples, or ``None`` for all.
 
-    Only the linked parallel derivative, its kz hypercollisions and the chain
-    end damping couple modes, and they act on chain members (and, on a two-sided
-    ky grid, their conjugate mirrors); every other linear term is local in
-    ``(ky, kx)``. A mode outside that set -- a kx row outside the dealiased
-    ``1 + 2 * ((Nx - 1) // 3)`` set -- has no coupling to the chains either way and only
-    adds undamped drift eigenvalues. Periodic and full-cover caches return
+    The chain topology itself lives in :func:`linked_cover_mask`; this wrapper
+    only reads it off a built cache. Periodic and full-cover caches return
     ``None``, so eigen routes on them trace exactly as before.
     """
 
-    if not bool(getattr(cache, "linked_use_gather", False)) or bool(
-        getattr(cache, "linked_full_cover", False)
-    ):
+    if not bool(getattr(cache, "linked_use_gather", False)):
         return None
-    ny, nx = int(jnp.size(cache.ky)), int(jnp.size(cache.kx))
-    flat = jnp.asarray(cache.linked_gather_mask, dtype=bool)
-    if int(flat.size) != ny * nx:
-        return None
-    mask = jnp.reshape(flat, (nx, ny)).T  # linked flat index is ky + ny * kx
-    if ny > 1:
-        # Mirror of _restore_linked_real_fft_conjugates: a row no chain visits
-        # whose -ky row is visited is filled from the (-ky, -kx) modes.
-        rows = jnp.any(mask, axis=1)
-        mirror_rows = jnp.mod(-jnp.arange(ny), ny)
-        fill = ~rows & rows[mirror_rows] & (jnp.arange(ny) != 0)
-        mirrored = mask[mirror_rows][:, jnp.mod(-jnp.arange(nx), nx)]
-        mask = mask | (fill[:, None] & mirrored)
-    return mask
+    return linked_cover_mask(
+        gather_mask=cache.linked_gather_mask,
+        use_gather=True,
+        full_cover=bool(getattr(cache, "linked_full_cover", False)),
+        ny=int(jnp.size(cache.ky)),
+        nx=int(jnp.size(cache.kx)),
+    )
 
 
 def _project_to_linked_cover(v: jnp.ndarray, mask: jnp.ndarray | None) -> jnp.ndarray:
     """Zero a ``(..., ky, kx, z)`` state outside ``mask``; ``None`` is the identity."""
 
-    if mask is None:
-        return v
-    return jnp.where(mask[:, :, None], v, jnp.zeros((), dtype=v.dtype))
+    return project_to_linked_cover(v, mask)
 
 
 def _projected_flat_operator(

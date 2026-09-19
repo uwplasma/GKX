@@ -24,7 +24,10 @@ from gkx.geometry import (
     apply_geometry_grid_defaults,
     sample_flux_tube_geometry,
 )
-from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.linear.cache_builder import (
+    build_linear_cache,
+    linked_chain_cover_mask,
+)
 from gkx.operators.linear.params import LinearParams
 from gkx.runtime import (
     _build_initial_condition,
@@ -5475,3 +5478,187 @@ def test_restart_gate_append_on_restart_preserves_full_history(tmp_path: Path) -
         rtol=1.0e-6,
         atol=1.0e-8,
     )
+
+
+def _linked_intake_cfg(boundary: str) -> RuntimeConfig:
+    """A small linked (or periodic) deck whose chains leave kx rows uncovered."""
+
+    return replace(
+        _base_runtime_cfg(),
+        grid=GridConfig(
+            Nx=8,
+            Ny=8,
+            Nz=8,
+            Lx=6.28,
+            Ly=6.28,
+            boundary=boundary,
+            jtwist=1 if boundary == "linked" else None,
+        ),
+    )
+
+
+def _intake_context(cfg: RuntimeConfig, initial_state):
+    from gkx.runtime import _runtime_linear_dispatch_deps
+    from gkx.workflows.linear import _prepare_linear_runtime_context
+
+    return _prepare_linear_runtime_context(
+        cfg,
+        deps=_runtime_linear_dispatch_deps().full_deps,
+        ky_target=float(np.asarray(build_spectral_grid(cfg.grid).ky)[1]),
+        n_laguerre=2,
+        n_hermite=3,
+        solver="explicit_time",
+        fit_signal="phi",
+        return_state=True,
+        initial_state=initial_state,
+        status_callback=None,
+    )
+
+
+def _broadband_state(ctx, nspecies: int = 1, Nl: int = 2, Nm: int = 3) -> np.ndarray:
+    rng = np.random.default_rng(1919)
+    shape = (
+        nspecies,
+        Nl,
+        Nm,
+        int(np.asarray(ctx.grid.ky).size),
+        int(np.asarray(ctx.grid.kx).size),
+        int(np.asarray(ctx.grid.z).size),
+    )
+    return (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(np.complex64)
+
+
+def test_supplied_initial_state_loses_its_off_chain_rows_on_a_linked_deck() -> None:
+    """A user state's rows outside the linked chains are zeroed once, at intake.
+
+    They are neutral there -- no growth-rate fit reads them -- but every
+    free-energy and spectrum sum would, and on a nonlinear grid the bracket
+    aliases them back onto the chain rows.
+    """
+
+    cfg = _linked_intake_cfg("linked")
+    base = _intake_context(cfg, None)
+    cover = np.asarray(
+        linked_chain_cover_mask(base.grid, base.geom, base.params), dtype=bool
+    )
+    assert not cover.all(), "this deck must leave some rows outside the chains"
+
+    supplied = _broadband_state(base)
+    off = np.broadcast_to(~cover[:, :, None], supplied.shape)
+    assert np.max(np.abs(supplied[off])) > 0.0
+
+    state = np.asarray(_intake_context(cfg, supplied).initial_state)
+
+    assert np.max(np.abs(state[off])) == 0.0
+    np.testing.assert_array_equal(state[~off], supplied[~off])
+
+
+def test_runtime_initial_condition_has_no_off_chain_rows_to_mask() -> None:
+    """Intake-only is complete: nothing the runtime seeds is outside the chains."""
+
+    cfg = _linked_intake_cfg("linked")
+    ctx = _intake_context(cfg, None)
+    cover = np.asarray(
+        linked_chain_cover_mask(ctx.grid, ctx.geom, ctx.params), dtype=bool
+    )
+    seeded = np.asarray(ctx.initial_state)
+    off = np.broadcast_to(~cover[:, :, None], seeded.shape)
+    assert np.max(np.abs(seeded)) > 0.0
+    assert np.max(np.abs(seeded[off])) == 0.0
+
+
+def test_supplied_initial_state_is_untouched_on_a_periodic_deck() -> None:
+    cfg = _linked_intake_cfg("periodic")
+    base = _intake_context(cfg, None)
+    assert linked_chain_cover_mask(base.grid, base.geom, base.params) is None
+
+    supplied = _broadband_state(base)
+    state = np.asarray(_intake_context(cfg, supplied).initial_state)
+
+    np.testing.assert_array_equal(state, supplied)
+
+
+def test_restart_round_trip_drops_off_chain_rows_and_keeps_the_rest(tmp_path) -> None:
+    cfg = _linked_intake_cfg("linked")
+    grid = build_spectral_grid(cfg.grid)
+    geom = build_runtime_geometry(cfg)
+    params = build_runtime_linear_params(cfg, Nm=3, geom=geom)
+    cover = np.asarray(linked_chain_cover_mask(grid, geom, params), dtype=bool)
+
+    rng = np.random.default_rng(2020)
+    shape = (
+        1,
+        2,
+        3,
+        int(np.asarray(grid.ky).size),
+        int(np.asarray(grid.kx).size),
+        int(np.asarray(grid.z).size),
+    )
+    written = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(
+        np.complex64
+    )
+    off = np.broadcast_to(~cover[:, :, None], shape)
+    assert np.max(np.abs(written[off])) > 0.0
+
+    path = tmp_path / "state.restart.bin"
+    write_netcdf_restart_state(path, written)
+    cfg_restart = replace(
+        cfg,
+        init=replace(cfg.init, init_file=str(path), init_file_mode="replace"),
+    )
+    read_back = np.asarray(
+        _build_initial_condition(
+            grid,
+            geom,
+            cfg_restart,
+            ky_index=1,
+            kx_index=0,
+            Nl=2,
+            Nm=3,
+            nspecies=1,
+        )
+    )
+
+    assert read_back.shape == shape
+    assert np.max(np.abs(read_back[off])) == 0.0
+    np.testing.assert_array_equal(read_back[~off], written[~off])
+
+
+def test_restart_round_trip_is_bitwise_on_a_periodic_deck(tmp_path) -> None:
+    cfg = _linked_intake_cfg("periodic")
+    grid = build_spectral_grid(cfg.grid)
+    geom = build_runtime_geometry(cfg)
+
+    rng = np.random.default_rng(2021)
+    shape = (
+        1,
+        2,
+        3,
+        int(np.asarray(grid.ky).size),
+        int(np.asarray(grid.kx).size),
+        int(np.asarray(grid.z).size),
+    )
+    written = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(
+        np.complex64
+    )
+    path = tmp_path / "state.restart.bin"
+    write_netcdf_restart_state(path, written)
+    cfg_restart = replace(
+        cfg,
+        init=replace(cfg.init, init_file=str(path), init_file_mode="replace"),
+    )
+
+    read_back = np.asarray(
+        _build_initial_condition(
+            grid,
+            geom,
+            cfg_restart,
+            ky_index=1,
+            kx_index=0,
+            Nl=2,
+            Nm=3,
+            nspecies=1,
+        )
+    )
+
+    np.testing.assert_array_equal(read_back, written)

@@ -946,6 +946,17 @@ recursive = true
 # own (ky, kx) row order with the chain maps translated at trace time instead of
 # copying a transposed state. One RHS at 32x32x24 goes from 23 to 13 FFT launches
 # and from 46.3 to 25.0 MB written; target unchanged.
+# +131 (90380 -> 90511): masking the off-chain rows of supplied states and
+# restarts on linked runs (Q19, plan 5.1 L3 follow-up (a)). The chain-cover
+# helper moves out of the Krylov module into operators/linear/linked.py so the
+# host and the traced callers share one definition, a light cover builder in
+# cache_builder.py resolves the twist-shift policy and the linked FFT maps
+# without the velocity-space arrays a full cache would build, and the two state
+# intakes -- the runtime init/restart file and a user initial_state -- apply it.
+# Most of the lines are the docstrings recording why intake is the only place
+# the mask is needed: the chains are closed under the whole right-hand side, so
+# the time loop keeps those rows at exact zero with no per-step work. Target
+# unchanged.
 # +359: gkx/core_ky_layout.py, the ky axis layout contract (plan 5.3 N3). The
 # rule it states was written five times -- in the bracket, the Hermitian
 # projector, the artifact restart expander, the runtime init-file expander and
@@ -955,7 +966,8 @@ recursive = true
 # never written down are the load-bearing ones: that Nyc does not determine Ny,
 # that the ky=0 and Nyquist rows are self-conjugate and are not fixed by the
 # layout, and that a half-axis reduction weight is 2 only on the paired rows.
-baseline = 90739
+# Merged with Q19 above: 90380 -> 90511 -> 90870, the sum of the two.
+baseline = 90870
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1157,6 +1169,14 @@ recursive = true
 # mixes on the gather, full-cover and scatter routes; operand validation; the
 # shared RHS route against the separate terms (every term, total, state VJP) on
 # a four-class linked pilot, and its static fallbacks; target unchanged.
+# 89037 -> 89301: the linked-run state-intake contract (Q19). Five tests in the
+# existing tests/integration/runtime/test_runtime_runner.py -- a supplied state
+# and a restart round trip lose their off-chain rows on a linked deck and keep
+# the rest bitwise, both are untouched on a periodic deck, and the runtime's own
+# initial condition has nothing outside the chains, which is what makes an
+# intake-only mask complete -- and three in
+# tests/unit/linear/test_linear_helpers_extra.py for the cover helper itself.
+# No new test FILE: the topology count is unchanged.
 # +581: 569 for tests/unit/core/test_core_ky_layout.py and 12 for the two
 # restart-path cases that move with _expand_ky's signature (the runtime runner
 # and CLI tests). The new file is 171 cases over even and odd Ny
@@ -1167,7 +1187,8 @@ recursive = true
 # case records a contract violation rather than asserting the contract:
 # _hermitian_mode_weight gives an even grid's Nyquist row weight 2 on a
 # half-spectrum grid, unreachable today because dealiasing zeroes that row.
-baseline = 89618
+# Merged with Q19 above: 89037 -> 89301 -> 89882, the sum of the two.
+baseline = 89882
 target = 35000
 
 [[line_budget_policy.counts]]
