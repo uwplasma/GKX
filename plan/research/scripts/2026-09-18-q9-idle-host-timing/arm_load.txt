@@ -1,0 +1,183 @@
+== runs_pool64.log ==
+19:06:47 block=1 arm=base tag=pool64 order=base p2t load=5.28 mean_core_busy=0.019 worst_core_busy=0.076 sib_mean=0.110 sib_worst=0.228
+19:10:48 rc=0 load_after=7.94
+19:10:54 block=1 arm=p2t tag=pool64 order=base p2t load=7.94 mean_core_busy=0.001 worst_core_busy=0.007 sib_mean=0.089 sib_worst=1.000
+19:14:50 rc=0 load_after=5.32
+19:14:56 block=2 arm=p2t tag=pool64 order=p2t base load=5.32 mean_core_busy=0.001 worst_core_busy=0.007 sib_mean=0.089 sib_worst=1.000
+19:19:00 rc=0 load_after=7.46
+19:19:06 block=2 arm=base tag=pool64 order=p2t base load=7.46 mean_core_busy=0.005 worst_core_busy=0.027 sib_mean=0.010 sib_worst=0.030
+19:23:08 rc=0 load_after=7.85
+19:23:14 block=3 arm=base tag=pool64 order=base p2t load=7.85 mean_core_busy=0.002 worst_core_busy=0.013 sib_mean=0.093 sib_worst=1.000
+19:27:19 rc=0 load_after=7.91
+19:27:25 block=3 arm=p2t tag=pool64 order=base p2t load=7.91 mean_core_busy=0.005 worst_core_busy=0.026 sib_mean=0.006 sib_worst=0.027
+19:31:13 rc=0 load_after=6.28
+19:31:20 block=4 arm=p2t tag=pool64 order=p2t base load=6.28 mean_core_busy=0.009 worst_core_busy=0.070 sib_mean=0.009 sib_worst=0.020
+19:35:15 rc=0 load_after=6.29
+19:35:21 block=4 arm=base tag=pool64 order=p2t base load=6.29 mean_core_busy=0.006 worst_core_busy=0.023 sib_mean=0.009 sib_worst=0.020
+19:39:27 rc=0 load_after=7.46
+ALLDONE
+-- wait_pool64.log: no arm ever waited on the idleness gate
+
+== runs_nopool64.log ==
+19:39:33 block=1 arm=base tag=nopool64 order=base p2t load=7.46 mean_core_busy=0.003 worst_core_busy=0.017 sib_mean=0.010 sib_worst=0.027
+19:39:55 rc=0 load_after=6.22
+19:40:01 block=1 arm=p2t tag=nopool64 order=base p2t load=6.22 mean_core_busy=0.003 worst_core_busy=0.013 sib_mean=0.006 sib_worst=0.023
+19:40:25 rc=0 load_after=6.63
+19:40:31 block=2 arm=p2t tag=nopool64 order=p2t base load=6.63 mean_core_busy=0.004 worst_core_busy=0.027 sib_mean=0.007 sib_worst=0.020
+19:40:55 rc=0 load_after=7.17
+19:41:01 block=2 arm=base tag=nopool64 order=p2t base load=7.17 mean_core_busy=0.004 worst_core_busy=0.026 sib_mean=0.005 sib_worst=0.013
+19:41:24 rc=0 load_after=7.01
+19:41:30 block=3 arm=base tag=nopool64 order=base p2t load=7.01 mean_core_busy=0.001 worst_core_busy=0.003 sib_mean=0.008 sib_worst=0.013
+19:41:52 rc=0 load_after=6.12
+19:41:59 block=3 arm=p2t tag=nopool64 order=base p2t load=6.12 mean_core_busy=0.001 worst_core_busy=0.003 sib_mean=0.008 sib_worst=0.020
+19:42:22 rc=0 load_after=6.30
+19:42:29 block=4 arm=p2t tag=nopool64 order=p2t base load=6.30 mean_core_busy=0.000 worst_core_busy=0.003 sib_mean=0.010 sib_worst=0.020
+19:42:52 rc=0 load_after=6.47
+19:42:59 block=4 arm=base tag=nopool64 order=p2t base load=6.47 mean_core_busy=0.004 worst_core_busy=0.030 sib_mean=0.008 sib_worst=0.026
+19:43:21 rc=0 load_after=6.47
+ALLDONE
+-- wait_nopool64.log: no arm ever waited on the idleness gate
+
+== runs_pool32.log ==
+19:43:27 block=1 arm=base tag=pool32 order=base p2t load=6.47 mean_core_busy=0.002 worst_core_busy=0.023 sib_mean=0.009 sib_worst=0.027
+19:45:36 rc=0 load_after=6.32
+19:45:42 block=1 arm=p2t tag=pool32 order=base p2t load=6.32 mean_core_busy=0.003 worst_core_busy=0.033 sib_mean=0.007 sib_worst=0.013
+19:47:56 rc=0 load_after=7.44
+19:48:02 block=2 arm=p2t tag=pool32 order=p2t base load=7.44 mean_core_busy=0.005 worst_core_busy=0.017 sib_mean=0.008 sib_worst=0.026
+19:50:17 rc=0 load_after=7.11
+19:50:23 block=2 arm=base tag=pool32 order=p2t base load=7.11 mean_core_busy=0.056 worst_core_busy=0.480 sib_mean=0.172 sib_worst=0.689
+19:52:37 rc=0 load_after=10.50
+19:52:43 block=3 arm=base tag=pool32 order=base p2t load=10.50 mean_core_busy=0.057 worst_core_busy=0.166 sib_mean=0.379 sib_worst=1.000
+19:55:28 rc=0 load_after=13.54
+19:58:43 block=3 arm=p2t tag=pool32 order=base p2t load=9.80 mean_core_busy=0.052 worst_core_busy=0.280 sib_mean=0.014 sib_worst=0.057
+20:01:15 rc=0 load_after=10.28
+20:06:37 block=4 arm=p2t tag=pool32 order=p2t base load=7.21 mean_core_busy=0.060 worst_core_busy=0.203 sib_mean=0.010 sib_worst=0.030
+20:09:30 rc=0 load_after=14.79
+20:11:42 block=4 arm=base tag=pool32 order=p2t base load=8.40 mean_core_busy=0.060 worst_core_busy=0.312 sib_mean=0.032 sib_worst=0.100
+20:14:21 rc=0 load_after=11.22
+ALLDONE
+-- wait_pool32.log: 19:55:31 wait load=13.54 mean_core_busy=0.146 worst_core_busy=0.251
+19:56:34 wait load=10.87 mean_core_busy=0.151 worst_core_busy=0.266
+19:57:37 wait load=9.62 mean_core_busy=0.170 worst_core_busy=0.397
+20:01:18 wait load=10.28 mean_core_busy=0.156 worst_core_busy=0.338
+20:02:21 wait load=9.91 mean_core_busy=0.174 worst_core_busy=0.339
+20:03:24 wait load=10.53 mean_core_busy=0.169 worst_core_busy=0.359
+20:04:28 wait load=10.07 mean_core_busy=0.149 worst_core_busy=0.197
+20:05:31 wait load=10.29 mean_core_busy=0.157 worst_core_busy=0.363
+20:09:33 wait load=14.79 mean_core_busy=0.163 worst_core_busy=0.237
+20:10:36 wait load=10.73 mean_core_busy=0.175 worst_core_busy=0.282
+
+== runs_dense64.log ==
+20:17:08 block=1 arm=base tag=dense64 order=base p2t load=10.00 mean_core_busy=0.040 worst_core_busy=0.046 sib_mean=0.009 sib_worst=0.020
+20:17:31 rc=0 load_after=9.23
+20:17:37 block=1 arm=p2t tag=dense64 order=base p2t load=9.23 mean_core_busy=0.028 worst_core_busy=0.276 sib_mean=0.013 sib_worst=0.037
+20:18:01 rc=0 load_after=7.67
+20:18:07 block=2 arm=p2t tag=dense64 order=p2t base load=7.67 mean_core_busy=0.002 worst_core_busy=0.017 sib_mean=0.017 sib_worst=0.036
+20:18:31 rc=0 load_after=7.35
+20:18:37 block=2 arm=base tag=dense64 order=p2t base load=7.35 mean_core_busy=0.012 worst_core_busy=0.066 sib_mean=0.069 sib_worst=0.311
+20:19:00 rc=0 load_after=6.64
+20:19:06 block=3 arm=base tag=dense64 order=base p2t load=6.64 mean_core_busy=0.026 worst_core_busy=0.116 sib_mean=0.042 sib_worst=0.074
+20:19:29 rc=0 load_after=7.31
+20:19:35 block=3 arm=p2t tag=dense64 order=base p2t load=7.31 mean_core_busy=0.027 worst_core_busy=0.090 sib_mean=0.017 sib_worst=0.043
+20:19:58 rc=0 load_after=7.51
+20:20:04 block=4 arm=p2t tag=dense64 order=p2t base load=7.51 mean_core_busy=0.010 worst_core_busy=0.040 sib_mean=0.020 sib_worst=0.077
+20:20:27 rc=0 load_after=7.68
+20:20:33 block=4 arm=base tag=dense64 order=p2t base load=7.68 mean_core_busy=0.005 worst_core_busy=0.040 sib_mean=0.009 sib_worst=0.020
+20:20:56 rc=0 load_after=6.87
+20:21:02 block=5 arm=base tag=dense64 order=base p2t load=6.87 mean_core_busy=0.032 worst_core_busy=0.342 sib_mean=0.017 sib_worst=0.040
+20:21:25 rc=0 load_after=6.77
+20:21:31 block=5 arm=p2t tag=dense64 order=base p2t load=6.77 mean_core_busy=0.025 worst_core_busy=0.259 sib_mean=0.011 sib_worst=0.040
+20:21:54 rc=0 load_after=6.36
+20:22:00 block=6 arm=p2t tag=dense64 order=p2t base load=6.36 mean_core_busy=0.002 worst_core_busy=0.010 sib_mean=0.007 sib_worst=0.017
+20:22:23 rc=0 load_after=6.09
+20:22:29 block=6 arm=base tag=dense64 order=p2t base load=6.09 mean_core_busy=0.002 worst_core_busy=0.013 sib_mean=0.007 sib_worst=0.020
+20:22:52 rc=0 load_after=5.68
+ALLDONE
+-- wait_dense64.log: 20:14:59 wait load=10.12 mean_core_busy=0.179 worst_core_busy=0.219
+20:16:02 wait load=10.58 mean_core_busy=0.188 worst_core_busy=0.305
+
+== runs_dense32.log ==
+20:22:58 block=1 arm=base tag=dense32 order=base p2t load=5.68 mean_core_busy=0.037 worst_core_busy=0.179 sib_mean=0.097 sib_worst=1.000
+20:23:13 rc=0 load_after=7.03
+20:23:19 block=1 arm=p2t tag=dense32 order=base p2t load=7.03 mean_core_busy=0.077 worst_core_busy=0.425 sib_mean=0.091 sib_worst=1.000
+20:23:34 rc=0 load_after=7.68
+20:23:40 block=2 arm=p2t tag=dense32 order=p2t base load=7.68 mean_core_busy=0.005 worst_core_busy=0.030 sib_mean=0.013 sib_worst=0.030
+20:23:54 rc=0 load_after=7.80
+20:24:00 block=2 arm=base tag=dense32 order=p2t base load=7.80 mean_core_busy=0.002 worst_core_busy=0.017 sib_mean=0.008 sib_worst=0.027
+20:24:14 rc=0 load_after=7.31
+20:24:20 block=3 arm=base tag=dense32 order=base p2t load=7.31 mean_core_busy=0.002 worst_core_busy=0.010 sib_mean=0.009 sib_worst=0.030
+20:24:35 rc=0 load_after=7.67
+20:24:41 block=3 arm=p2t tag=dense32 order=base p2t load=7.67 mean_core_busy=0.001 worst_core_busy=0.010 sib_mean=0.012 sib_worst=0.030
+20:24:55 rc=0 load_after=7.90
+20:25:01 block=4 arm=p2t tag=dense32 order=p2t base load=7.90 mean_core_busy=0.001 worst_core_busy=0.003 sib_mean=0.008 sib_worst=0.030
+20:25:16 rc=0 load_after=8.11
+20:25:22 block=4 arm=base tag=dense32 order=p2t base load=8.11 mean_core_busy=0.003 worst_core_busy=0.033 sib_mean=0.010 sib_worst=0.026
+20:25:36 rc=0 load_after=7.88
+20:25:42 block=5 arm=base tag=dense32 order=base p2t load=7.88 mean_core_busy=0.002 worst_core_busy=0.017 sib_mean=0.052 sib_worst=0.116
+20:25:56 rc=0 load_after=10.05
+20:26:02 block=5 arm=p2t tag=dense32 order=base p2t load=10.05 mean_core_busy=0.026 worst_core_busy=0.113 sib_mean=0.017 sib_worst=0.070
+20:26:17 rc=0 load_after=8.99
+20:26:23 block=6 arm=p2t tag=dense32 order=p2t base load=8.99 mean_core_busy=0.072 worst_core_busy=0.169 sib_mean=0.014 sib_worst=0.046
+20:26:38 rc=0 load_after=8.50
+20:26:44 block=6 arm=base tag=dense32 order=p2t base load=8.50 mean_core_busy=0.059 worst_core_busy=0.260 sib_mean=0.019 sib_worst=0.033
+20:26:59 rc=0 load_after=8.61
+ALLDONE
+-- wait_dense32.log: no arm ever waited on the idleness gate
+
+== runs_dscan64.log ==
+20:28:33 block=1 arm=base tag=dscan64 order=base p2t load=7.79 mean_core_busy=0.022 worst_core_busy=0.043 sib_mean=0.005 sib_worst=0.020
+20:29:22 rc=0 load_after=7.30
+20:29:28 block=1 arm=p2t tag=dscan64 order=base p2t load=7.30 mean_core_busy=0.004 worst_core_busy=0.017 sib_mean=0.011 sib_worst=0.030
+20:30:18 rc=0 load_after=7.11
+20:30:24 block=2 arm=p2t tag=dscan64 order=p2t base load=7.11 mean_core_busy=0.001 worst_core_busy=0.003 sib_mean=0.009 sib_worst=0.027
+20:31:14 rc=0 load_after=6.59
+20:31:20 block=2 arm=base tag=dscan64 order=p2t base load=6.59 mean_core_busy=0.001 worst_core_busy=0.007 sib_mean=0.011 sib_worst=0.030
+20:32:09 rc=0 load_after=7.03
+20:32:15 block=3 arm=base tag=dscan64 order=base p2t load=7.03 mean_core_busy=0.003 worst_core_busy=0.030 sib_mean=0.005 sib_worst=0.020
+20:33:05 rc=0 load_after=8.19
+20:33:11 block=3 arm=p2t tag=dscan64 order=base p2t load=8.19 mean_core_busy=0.006 worst_core_busy=0.036 sib_mean=0.012 sib_worst=0.023
+20:34:03 rc=0 load_after=9.12
+20:34:09 block=4 arm=p2t tag=dscan64 order=p2t base load=9.12 mean_core_busy=0.001 worst_core_busy=0.007 sib_mean=0.014 sib_worst=0.053
+20:35:00 rc=0 load_after=7.42
+20:35:07 block=4 arm=base tag=dscan64 order=p2t base load=7.42 mean_core_busy=0.002 worst_core_busy=0.013 sib_mean=0.008 sib_worst=0.017
+20:35:56 rc=0 load_after=7.00
+20:36:02 block=5 arm=base tag=dscan64 order=base p2t load=7.00 mean_core_busy=0.002 worst_core_busy=0.010 sib_mean=0.009 sib_worst=0.023
+20:36:52 rc=0 load_after=7.61
+20:36:58 block=5 arm=p2t tag=dscan64 order=base p2t load=7.61 mean_core_busy=0.003 worst_core_busy=0.020 sib_mean=0.008 sib_worst=0.030
+20:37:50 rc=0 load_after=7.43
+20:37:56 block=6 arm=p2t tag=dscan64 order=p2t base load=7.43 mean_core_busy=0.002 worst_core_busy=0.030 sib_mean=0.007 sib_worst=0.013
+20:38:47 rc=0 load_after=7.35
+20:38:53 block=6 arm=base tag=dscan64 order=p2t base load=7.35 mean_core_busy=0.002 worst_core_busy=0.007 sib_mean=0.009 sib_worst=0.023
+20:39:43 rc=0 load_after=7.82
+ALLDONE
+-- wait_dscan64.log: 20:27:27 wait load=7.72 mean_core_busy=0.119 worst_core_busy=0.683
+
+== runs_dscan32.log ==
+20:39:49 block=1 arm=base tag=dscan32 order=base p2t load=7.82 mean_core_busy=0.001 worst_core_busy=0.017 sib_mean=0.011 sib_worst=0.030
+20:40:10 rc=0 load_after=8.37
+20:40:16 block=1 arm=p2t tag=dscan32 order=base p2t load=8.37 mean_core_busy=0.004 worst_core_busy=0.043 sib_mean=0.035 sib_worst=0.349
+20:40:37 rc=0 load_after=8.40
+20:40:43 block=2 arm=p2t tag=dscan32 order=p2t base load=8.40 mean_core_busy=0.005 worst_core_busy=0.020 sib_mean=0.090 sib_worst=1.000
+20:41:04 rc=0 load_after=8.17
+20:41:10 block=2 arm=base tag=dscan32 order=p2t base load=8.17 mean_core_busy=0.004 worst_core_busy=0.027 sib_mean=0.011 sib_worst=0.056
+20:41:31 rc=0 load_after=8.53
+20:41:37 block=3 arm=base tag=dscan32 order=base p2t load=8.53 mean_core_busy=0.036 worst_core_busy=0.129 sib_mean=0.021 sib_worst=0.070
+20:41:58 rc=0 load_after=7.93
+20:42:05 block=3 arm=p2t tag=dscan32 order=base p2t load=7.93 mean_core_busy=0.008 worst_core_busy=0.053 sib_mean=0.145 sib_worst=1.000
+20:42:29 rc=0 load_after=8.68
+20:43:38 block=4 arm=p2t tag=dscan32 order=p2t base load=7.74 mean_core_busy=0.004 worst_core_busy=0.010 sib_mean=0.011 sib_worst=0.026
+20:44:00 rc=0 load_after=9.80
+20:44:06 block=4 arm=base tag=dscan32 order=p2t base load=9.80 mean_core_busy=0.033 worst_core_busy=0.245 sib_mean=0.064 sib_worst=0.679
+20:44:27 rc=0 load_after=8.57
+20:44:33 block=5 arm=base tag=dscan32 order=base p2t load=8.57 mean_core_busy=0.035 worst_core_busy=0.063 sib_mean=0.038 sib_worst=0.053
+20:44:58 rc=0 load_after=8.55
+20:46:07 block=5 arm=p2t tag=dscan32 order=base p2t load=8.04 mean_core_busy=0.044 worst_core_busy=0.063 sib_mean=0.008 sib_worst=0.027
+20:46:28 rc=0 load_after=8.04
+20:46:34 block=6 arm=p2t tag=dscan32 order=p2t base load=8.04 mean_core_busy=0.051 worst_core_busy=0.113 sib_mean=0.007 sib_worst=0.017
+20:46:56 rc=0 load_after=7.91
+20:47:02 block=6 arm=base tag=dscan32 order=p2t base load=7.91 mean_core_busy=0.010 worst_core_busy=0.050 sib_mean=0.019 sib_worst=0.054
+20:47:22 rc=0 load_after=7.85
+ALLDONE
+-- wait_dscan32.log: 20:42:32 wait load=8.68 mean_core_busy=0.151 worst_core_busy=0.340
+20:45:01 wait load=8.55 mean_core_busy=0.119 worst_core_busy=0.243
+

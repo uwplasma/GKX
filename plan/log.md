@@ -15068,3 +15068,256 @@ hypercollision branches.
 
 Source: `src/gkx/core_ky_layout.py` `40003bd13558e9c3`,
 `tests/unit/core/test_core_ky_layout.py` `b74c2b1db788be39`.
+
+## 2026-09-18 — Q9 follow-up: the idle-host A/B/A/B of the shared linked-chain transforms (plan §5.3 N2)
+
+Queue row Q9's open follow-up. Measurement only: no source, test, default, deck, reference
+or release change. The 2026-09-14 Q9 entry adopted S+T on load-independent evidence and
+recorded that "timings on a loaded office host were inconclusive, so no speed claim; an
+idle-host A/B/A/B rerun is a follow-up". This is that rerun, on a quiet host, with the arm
+order rotated between blocks. Scripts and outputs are in
+`plan/research/scripts/2026-09-18-q9-idle-host-timing/`.
+
+**Outcome: the shared transform is faster on the adjoint path and slower on the forward
+path, and it does not pass Q9's own timing gate on an idle host.** Pooled over all blocks,
+S+T/base is 0.88 on the RHS gradient at both grids (a 12% speed-up, at or below 0.92 in 24
+of 24 blocks) and 0.94 on the checkpointed window gradient at 64×64×24, but 1.03 on the rk3
+scan at both grids (1.035 at 64×64×24, 1.026 at 32×32×24) and 1.22 on the standalone RHS at
+32×32×24 (1.01 at 64×64×24). The rk3 scan is the kernel closest to production throughput,
+and it is slower in 20 of the 24 blocks that timed it, by 2.6–3.5% pooled, with base rep
+spreads of 2.3–8.2% in the dense 64×64×24 blocks. **This is a
+measured regression on the forward path; nothing is reverted here** — see "Regression and
+the proposed follow-up row". #243's adoption evidence — 43–48% fewer bytes written, chain
+FFT launches halved, bitwise 100-step trajectories — is untouched by this row.
+
+**The registered gate, quoted from the 2026-09-14 Q9 entry.** "Registered gate, written in
+`ab_table.py` before the first measurement: a variant passes a kernel if, in every block,
+its median is at most base's median × (1 + tol), where tol = max(2%, (max − min)/median of
+base's reps in that block)." That rule is applied here unchanged, by `ab_table2.py`.
+
+Registered in `ab_table2.py`'s docstring before this campaign's first measurement, so that
+an idle host can say more than "not slower": the mirror of the same rule decides a
+speed-up. "A variant is called FASTER on a kernel only if in every block its median is at
+most base's median x (1 - tol) with the same per-block tol; SLOWER if in every block it is
+at least base's median x (1 + tol); otherwise INDISTINGUISHABLE. A variant that fails the
+pass gate in any block is reported as a regression on that kernel regardless of the other
+blocks."
+
+**Arms.** Two, not three; T alone was rejected in #243 and is not re-timed.
+- **base** `e0cd294b8` — `origin/main` immediately before #243 merged (`a32705ad5^1`).
+- **S+T** `4c6c9ac8b` — `origin/main` at GKX 2.1.0.
+Between them `src/` differs only in `operators/linear/streaming.py`, `terms/assembly.py`,
+`terms/linear_terms.py` (Q9's change) and a `_version.py` bump; `examples/` is unchanged,
+so both arms run the identical Cyclone nonlinear deck. Each arm was staged by
+`git archive <sha>` from a clean checkout into its own fresh directory on the office host —
+no shared checkout was benchmarked, and neither tree has a `.git` to be written into.
+Whole-tree manifest SHA-256 (`find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum`),
+computed on both machines and equal:
+base `5cd2edbe7040afdae64494cba04e3f80cb790d5c690af54a439f97a5b3bc7ca1`, S+T
+`194f2b05f4a89da4284f8c236ba93a96dd73622defdfb0e8eb90f19fd668d79d`. The source checkout the
+archives came from was clean (`git status --porcelain` empty). `origin/main` moved past the S+T
+arm while this campaign ran (#247, Q19, touching the linked cache and the runtime's state
+intake); this branch merges it, and the A/B above remains pinned to `e0cd294b8` against
+`4c6c9ac8b`, which is where both arms were archived from.
+
+**Cores, and a lane that was not honoured.** This lane owns office cores 2–17. The first
+launch was discarded after four minutes: at 19:02 another lane's DKX bench appeared with an
+affinity of 8–11 (`taskset -pc 3674751`), squarely inside 2–17, and held it for the rest of
+the session. Rather than benchmark against it or step outside the allocation, the campaign
+was restarted on the free subset **2–7,12–17** — 12 cores, still inside this lane, identical
+for both arms — and the idleness gate was narrowed to the same 12 cores. One consequence is
+recorded under limitations: cores 18–35 are the hyperthread siblings of 0–17, so the
+neighbouring lane's jobs share physical cores with this one by construction; sibling busy is
+logged at every arm (`block_load.txt`, `arm_load.txt`).
+
+**The host was idle this time.** Mean busy of the 12 benchmark cores over a 3 s sample taken
+immediately before each arm: **0.0–7.7%**, worst single core 0.3–48%, across all 72 arms.
+The Q9 campaign's comparable figures were 21–71% mean and 60–100% worst. Four arms waited
+once each on the idleness gate and then started; no other arm ever waited. The 1-minute load
+average is reported at every arm but is not the gate: after a 12-core arm it is dominated by
+this campaign's own decaying threads (hence values of 5–10 beside 0.2%-busy cores), which
+would stall the run without saying anything about contention. The two tags with visible
+outside contention are `pool32` and, to a lesser extent, `dense32`/`dscan32`: between 19:44
+and 20:12 another user's unpinned `anaconda3` job (affinity 0–35, ~400% CPU) floated over
+the machine. It is called out where it matters below.
+
+**Blocks.** Odd blocks ran base first, even blocks ran S+T first, so a drifting machine no
+longer favours one arm — the earlier campaign put base first in all three blocks, which bit
+against the variant. Seven tags, 72 arms in total, all on the same 12 cores.
+
+**64×64×24 Nl4/Nm8, default XLA flags, 7 reps (window gradient 7 reps too — on an idle host
+it costs 23 s/rep, not the ~50 s/rep of the loaded run, so the 3-rep compromise was not
+needed).** Median ms, `*` marks a block that fails the registered gate, "busy" is the mean
+fraction of the 12 cores busy at the start of the base / S+T arm:
+
+| kernel | block | first | base | S+T | ratio | tol | busy base / S+T |
+|---|---:|---|---:|---:|---:|---:|---|
+| RHS | 1 | base | 170.1 | 151.1 | .888 | .474 | .019 / .001 |
+| RHS | 2 | S+T | 131.1 | 182.9 | 1.395* | .367 | .005 / .001 |
+| RHS | 3 | base | 138.3 | 145.0 | 1.048 | .319 | .002 / .005 |
+| RHS | 4 | S+T | 141.0 | 182.8 | 1.296 | .408 | .006 / .009 |
+| RHS gradient | 1 | base | 284.8 | 257.0 | .903 | .168 | .019 / .001 |
+| RHS gradient | 2 | S+T | 284.2 | 250.3 | .881 | .084 | .005 / .001 |
+| RHS gradient | 3 | base | 290.1 | 246.3 | .849 | .175 | .002 / .005 |
+| RHS gradient | 4 | S+T | 279.1 | 245.5 | .880 | .165 | .006 / .009 |
+| scan rk3 ×5 | 1 | base | 2624.2 | 2793.5 | 1.065 | .084 | .019 / .001 |
+| scan rk3 ×5 | 2 | S+T | 2467.2 | 2573.2 | 1.043* | .024 | .005 / .001 |
+| scan rk3 ×5 | 3 | base | 2564.8 | 2525.2 | .985 | .068 | .002 / .005 |
+| scan rk3 ×5 | 4 | S+T | 2496.5 | 2577.8 | 1.033 | .094 | .006 / .009 |
+| window gradient | 1 | base | 24965.5 | 23484.4 | .941 | .154 | .019 / .001 |
+| window gradient | 2 | S+T | 25673.4 | 25157.2 | .980 | .117 | .005 / .001 |
+| window gradient | 3 | base | 24949.0 | 23360.7 | .936 | .095 | .002 / .005 |
+| window gradient | 4 | S+T | 25252.5 | 23848.1 | .944 | .037 | .006 / .009 |
+
+The RHS medians are unusable at 7 reps: every arm's reps are **bimodal**, base clustering at
+~132 ms with excursions to ~180 ms and S+T at ~144 ms with excursions to ~185 ms, so the
+median lands in whichever mode won that block and swings .89 to 1.40 with tolerances of
+32–47% (`raw_reps.txt`). Two denser tags were therefore run, with the same rotation, the same
+gate and the same cores.
+
+**Dense blocks, 64×64×24 (31 reps on the two cheap kernels, 15 on the scan; 6 blocks each).**
+
+| kernel | b1 | b2 | b3 | b4 | b5 | b6 | pooled base → S+T | pooled ratio |
+|---|---:|---:|---:|---:|---:|---:|---|---:|
+| RHS | 1.010 | 1.028 | .919 | 1.001 | .921 | 1.059 | 168.6 → 170.3 ms | 1.010 |
+| RHS gradient | .900 | .922 | .880 | .849 | .900 | .845 | 286.7 → 252.8 ms | .882 |
+| scan rk3 ×5 | 1.028* | 1.033 | 1.033 | 1.026 | 1.037* | 1.028 | 2649.3 → 2741.8 ms | 1.035 |
+
+Base rep spread on the dense scan blocks is 2.3–8.2%, and S+T's *fastest* rep is 1.8–4.1%
+above base's fastest in all six blocks, so the scan result is not a median artefact.
+
+**32×32×24 Nl4/Nm8, default XLA flags** (`pool32`, 7 reps, 4 blocks; `dense32`, 61 reps,
+6 blocks; `dscan32`, 21 reps, 6 blocks):
+
+| kernel | tag | per-block ratios | pooled base → S+T | pooled ratio |
+|---|---|---|---|---:|
+| RHS | pool32 | 1.231* 1.152 1.010 1.317 | 36.6 → 43.9 ms | 1.200 |
+| RHS | dense32 | 1.211 1.262 1.200 1.232 1.270 1.185 | 35.2 → 43.0 ms | 1.223 |
+| RHS gradient | pool32 | .913 .856 .758 .855 | 72.0 → 61.2 ms | .850 |
+| RHS gradient | dense32 | .865 .853 .863 .889 .875 .902 | 69.0 → 60.8 ms | .882 |
+| scan rk3 ×5 | pool32 | 1.049* 1.024 .816 1.051 | 614.4 → 631.9 ms | 1.028 |
+| scan rk3 ×5 | dscan32 | 1.038 .999 1.164* 1.062 .795 1.073 | 639.3 → 655.8 ms | 1.026 |
+| window gradient | pool32 | 1.018 .981 .964 1.014 | — | — |
+
+The small grid is where the shared transform costs most: the standalone RHS is 18.5–27.0%
+slower in **all six** dense blocks, and S+T's fastest rep is 6.8–33.4% above base's. The
+`pool32` and `dscan32` outliers (.816, .795, 1.164) are the foreign anaconda job, which also
+drifts `pool32`'s window-gradient base from 13.4 s in block 1 to 18.2 s in block 4; the
+per-block window ratios .96–1.02 are the usable statement there, not a pooled ratio across a
+drifting baseline.
+
+**Verdict per kernel, in the terms registered above.**
+
+| kernel | verdict | number |
+|---|---|---|
+| RHS gradient | consistently faster; INDISTINGUISHABLE only by the letter of the FASTER rule | .88 pooled at both grids (.76–.92, at or below .92 in 24 of 24 blocks); the per-block tol is 8–45%, wider than the 12% effect, so the strict rule cannot call it |
+| window gradient (64) | faster, same caveat | .945 pooled, .936–.980 in 4/4 blocks |
+| window gradient (32) | indistinguishable | .96–1.02 per block |
+| RHS (64) | indistinguishable | 1.010 pooled over 6 dense blocks |
+| RHS (32) | **slower** | 1.223 pooled, 1.185–1.270 in 6/6 dense blocks |
+| scan rk3 (64) | **slower, fails the registered gate** | 1.035 pooled, gate fails in blocks 1 and 5 of `dscan64` and block 2 of `pool64` |
+| scan rk3 (32) | **slower, fails the registered gate** | 1.026–1.028 pooled, gate fails in `dscan32` block 3 and `pool32` block 1 |
+| scan rk3 (64, no FFT thread pool) | **slower, fails the registered gate** | 1.027 pooled, gate fails in 3 of 4 blocks |
+
+Read physically, this is coherent with #243's own HLO ledger. The shared route halves the
+chain FFT launches but adds the per-class stack concatenates (+0.83 MB on the RHS at 32), and
+on an idle 12-core lane the launches it removes were cheap while the extra data movement is
+not — hence a forward-path cost that is largest where the transform is smallest (32×32×24,
+where 175 of the 197 chains are single-link). The adjoint gains because the two branches'
+cotangents reach G through **one** stacked adjoint instead of two added separately, which
+removes work from the backward pass rather than adding a stack to it. The loaded campaign saw
+the opposite sign on the forward path (RHS .87–1.05, scan .89–1.10) because under contention
+launch count dominates data movement.
+
+**CPU FFT thread pool** (the other half of §5.3 N2, re-measured on the merged state).
+`--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1` against the default pool,
+same arms, same cores, 4 rotated blocks of 7 reps; medians pooled over every rep of the tag,
+the scan normalised per step because the pool tag ran 5 steps and the no-pool tag 2:
+
+| kernel | arm | pool | no pool | no pool / pool |
+|---|---|---:|---:|---:|
+| RHS | base | 137.2 | 182.5 | 1.330 |
+| RHS | S+T | 153.3 | 192.4 | 1.255 |
+| RHS gradient | base | 285.1 | 290.7 | 1.020 |
+| RHS gradient | S+T | 249.3 | 256.0 | 1.027 |
+| scan rk3, per step | base | 509.6 | 549.6 | 1.079 |
+| scan rk3, per step | S+T | 515.1 | 564.4 | 1.096 |
+
+Disabling the pool is slower on every kernel and both arms on an idle host — 26–33% on the
+RHS, 8–10% per rk3 step, 2–3% on the RHS gradient — so the default multi-threaded FFT pool
+stays. It does not change the A/B either: within the no-pool tag S+T is .88 on the RHS
+gradient, 1.05 on the RHS and 1.027 on the scan, the same pattern as with the pool. Note that
+the pool is also what makes the stacked transform non-bitwise (#243 measured all seven chain
+classes bitwise with the pool off), so "turn the pool off to recover bitwise stacking" would
+cost 8–10% per step; that trade is not taken here.
+
+**Regression and the proposed follow-up row.** Nothing was reverted, and no default, deck or
+source file changed in this branch. What the maintainer now has that #243 did not: under the
+gate Q9 itself registered, S+T does **not** pass the rk3 scan on an idle host, in either grid
+and with or without the FFT thread pool, by 2.6–3.5%; and its standalone RHS at 32×32×24 is
+22% slower. Proposed queue row, to be scheduled after N3 rather than before it, since N3
+removes the conjugate restore that is now the largest write in the chain transform and will
+change these ratios:
+
+> | Q22 | `perf/shared-chain-forward-cost` | §5.3 N2 follow-up — the idle-host A/B/A/B (2026-09-18) measures the adopted shared transform 3% slower on the rk3 scan at both grids and 22% slower on the standalone RHS at 32×32×24, while the RHS gradient is 12% faster and the window gradient 5%: attribute the forward cost to the per-class stack concatenates against the halved launch count, and decide between (a) applying the shared route only when the class count or chain length makes it pay, (b) keeping it only on the adjoint, or (c) accepting it, with the numbers stated. Must be re-measured after N3 lands | Q9 merged, N3 (Q10) landed | CPU, idle office cores |
+
+**Limitations.**
+- XLA:CPU only, one host, 12 cores. GPU fusion and cuFFT plans differ; nothing here transfers
+  to the A4000s.
+- 12 cores, not the 16 of the Q9 campaign, because another lane held 8–11. Ratios are within
+  one core set and both arms share it, but absolute ms are not comparable with the
+  2026-09-14 table (which was also contended).
+- Cores 18–35 are the hyperthread siblings of 0–17, so a job in the neighbouring lane shares
+  physical cores with this one whatever the pinning. Sibling busy was ≤11% mean at every arm
+  of the two clean 64×64×24 tags, with one core at 100% during three `pool64` arms.
+- `pool32`, and three blocks of `dense32`/`dscan32`, overlapped another user's unpinned
+  400%-CPU job; their outlier blocks are named above and the dense tags' medians survive it,
+  but the 32×32×24 window-gradient baseline drifts and no pooled ratio is quoted for it.
+- Only complex64 and only the Cyclone nonlinear deck, as in #243. No x64 timing.
+- Compile time is recorded per kernel but not analysed; the first call of every kernel is
+  excluded from the reps.
+- This row measures time only. Identity, bytes and launch counts are #243's and were not
+  re-run.
+
+**Environment.** Office host (Intel Xeon W-2295, 18 cores/36 threads, Pop!\_OS),
+`taskset -c 2-7,12-17`, `JAX_PLATFORMS=cpu`, Python 3.11.15, jax/jaxlib 0.10.2, numpy 2.4.6,
+venv `~/venvs/gkx-nl`, `PYTHONPATH=<tree>/src:<tree>`, one benchmark process at a time,
+staged under `~/q9-idle-20260918` (58 MB, deleted after the artifacts were collected). The
+bench script is #243's own `bench_q9.py`, reused byte for byte from
+`plan/research/scripts/2026-09-14-q9-batched-chain-fft/bench_q9.py`
+(SHA-256 `882f885e9b1f…c46b3`), so the kernels, the deck, the initial condition and the
+forcing to host are identical to the loaded campaign.
+
+**Commands.**
+- Stage: `git archive <sha> | tar xz -C <dir>` for each arm, then the whole-tree manifest
+  hash on both machines.
+- Campaign: `./launch_idle.sh` (tags `pool64`, `nopool64`, `pool32`), `./launch_dense.sh`
+  (`dense64`, `dense32`), `./launch_dscan.sh` (`dscan64`, `dscan32`); each calls
+  `./run_ab_rot.sh DIR 2-7,12-17 BLOCKS "<grid args>" {pool|nopool} TAG`, which runs
+  `taskset -c 2-7,12-17 python bench_q9.py OUT.json <grid args>` per arm behind the idleness
+  gate.
+- Tables: `python ab_table2.py out pool64 nopool64 pool32 dense64 dense32 dscan64 dscan32 >
+  ab_tables.txt`; artifacts: `python summarize.py out artifacts`.
+
+**Artifacts** in `plan/research/scripts/2026-09-18-q9-idle-host-timing/`, SHA-256:
+- `run_ab_rot.sh` `7ff169dd8d7b3ec10cdbbbee6d051c7d80afd06ad01d705884fd9ab886e048d0`
+- `launch_idle.sh` `2460cb0ee7c83d8d05b76a49b3e1abb391fd48c7fc59bec633603f3b801a8c8a`
+- `launch_dense.sh` `86e42a2dbeca10147a3b6c5db5c0b86566eb99e71c89e8198731cf7c92986fdb`
+- `launch_dscan.sh` `09315760ad195f912ba1cb7e0bb82fafe0bfcccc896efc20eae1e411e024bcf9`
+- `ab_table2.py` `795fb04d8ef26004fa5a1cd94f9b506eb6b097b3b4338f7bd981cbf94cb06d92`
+- `summarize.py` `366d7fa38c3439a32d58649fd211a54e46582b5a41db6ccad891a05a940e8b62`
+- `ab_tables.txt` `277c74c2667ef78fc6ab4032315dc0eb2a644c8cae481694be7b80c9a9b97e3c`
+- `raw_reps.txt` `5c4cd0c6075fba2ed3434f6d7732cbedd52451ffc6ee966eddfec155b2e7b94e`
+- `block_load.txt` `3cd6868c8bdd41e6f4901825a54240d7b8c4d4a0a9e74509b266b68123f5a5f8`
+- `arm_load.txt` `7dd49ae62c9029715de1bce966feb8820221964a6c96cedf83a6940b40247ad2`
+- `threadpool.txt` `bba255b19337b937b833158fff0c4035307dbe19d1fa620f0fd27f991a3956e8`
+- `env.txt` `74c2b82a7fd2c1e70ffc822f62061407a3731b00ac6d197b9c38ceb82525ca62`
+
+**Terminal process state.** Every process this row started on the office host was launched
+with `(setsid nohup ... &)` and verified gone at 20:50 with `kill -0`: driver PIDs 3644624,
+3644628, 3644631 (the discarded first launch, stopped at 19:06 when the core conflict was
+found), 3653963, 3653967, 3654113 (`launch_idle.sh` and its runners), 3714300
+(`launch_dense.sh`) and 3731776 (`launch_dscan.sh`) — all absent. `pgrep -af` for
+`bench_q9|run_ab_rot|launch_idle|launch_dense|launch_dscan` returns nothing. No GPU was used
+at any point. The staging directory `~/q9-idle-20260918` was removed after its artifacts were
+copied here, leaving no files on the office host.

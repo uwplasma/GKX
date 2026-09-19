@@ -1,0 +1,42 @@
+Machine state at the start of every arm, by tag and block.
+first = which arm ran first in that block (the order rotates).
+load = 1-minute load average, dominated by this campaign's own decaying
+threads; busy = mean/worst fraction of the 12 benchmark cores busy over a
+3 s sample, which is the quantity the idleness gate actually tests.
+
+dense32   b1 first=base base load= 5.68 busy=0.037/0.179   p2t load= 7.03 busy=0.077/0.425
+dense32   b2 first=p2t  base load= 7.80 busy=0.002/0.017   p2t load= 7.68 busy=0.005/0.030
+dense32   b3 first=base base load= 7.31 busy=0.002/0.010   p2t load= 7.67 busy=0.001/0.010
+dense32   b4 first=p2t  base load= 8.11 busy=0.003/0.033   p2t load= 7.90 busy=0.001/0.003
+dense32   b5 first=base base load= 7.88 busy=0.002/0.017   p2t load=10.05 busy=0.026/0.113
+dense32   b6 first=p2t  base load= 8.50 busy=0.059/0.260   p2t load= 8.99 busy=0.072/0.169
+dense64   b1 first=base base load=10.00 busy=0.040/0.046   p2t load= 9.23 busy=0.028/0.276
+dense64   b2 first=p2t  base load= 7.35 busy=0.012/0.066   p2t load= 7.67 busy=0.002/0.017
+dense64   b3 first=base base load= 6.64 busy=0.026/0.116   p2t load= 7.31 busy=0.027/0.090
+dense64   b4 first=p2t  base load= 7.68 busy=0.005/0.040   p2t load= 7.51 busy=0.010/0.040
+dense64   b5 first=base base load= 6.87 busy=0.032/0.342   p2t load= 6.77 busy=0.025/0.259
+dense64   b6 first=p2t  base load= 6.09 busy=0.002/0.013   p2t load= 6.36 busy=0.002/0.010
+dscan32   b1 first=base base load= 7.82 busy=0.001/0.017   p2t load= 8.37 busy=0.004/0.043
+dscan32   b2 first=p2t  base load= 8.17 busy=0.004/0.027   p2t load= 8.40 busy=0.005/0.020
+dscan32   b3 first=base base load= 8.53 busy=0.036/0.129   p2t load= 7.93 busy=0.008/0.053
+dscan32   b4 first=p2t  base load= 9.80 busy=0.033/0.245   p2t load= 7.74 busy=0.004/0.010
+dscan32   b5 first=base base load= 8.57 busy=0.035/0.063   p2t load= 8.04 busy=0.044/0.063
+dscan32   b6 first=p2t  base load= 7.91 busy=0.010/0.050   p2t load= 8.04 busy=0.051/0.113
+dscan64   b1 first=base base load= 7.79 busy=0.022/0.043   p2t load= 7.30 busy=0.004/0.017
+dscan64   b2 first=p2t  base load= 6.59 busy=0.001/0.007   p2t load= 7.11 busy=0.001/0.003
+dscan64   b3 first=base base load= 7.03 busy=0.003/0.030   p2t load= 8.19 busy=0.006/0.036
+dscan64   b4 first=p2t  base load= 7.42 busy=0.002/0.013   p2t load= 9.12 busy=0.001/0.007
+dscan64   b5 first=base base load= 7.00 busy=0.002/0.010   p2t load= 7.61 busy=0.003/0.020
+dscan64   b6 first=p2t  base load= 7.35 busy=0.002/0.007   p2t load= 7.43 busy=0.002/0.030
+nopool64  b1 first=base base load= 7.46 busy=0.003/0.017   p2t load= 6.22 busy=0.003/0.013
+nopool64  b2 first=p2t  base load= 7.17 busy=0.004/0.026   p2t load= 6.63 busy=0.004/0.027
+nopool64  b3 first=base base load= 7.01 busy=0.001/0.003   p2t load= 6.12 busy=0.001/0.003
+nopool64  b4 first=p2t  base load= 6.47 busy=0.004/0.030   p2t load= 6.30 busy=0.000/0.003
+pool32    b1 first=base base load= 6.47 busy=0.002/0.023   p2t load= 6.32 busy=0.003/0.033
+pool32    b2 first=p2t  base load= 7.11 busy=0.056/0.480   p2t load= 7.44 busy=0.005/0.017
+pool32    b3 first=base base load=10.50 busy=0.057/0.166   p2t load= 9.80 busy=0.052/0.280
+pool32    b4 first=p2t  base load= 8.40 busy=0.060/0.312   p2t load= 7.21 busy=0.060/0.203
+pool64    b1 first=base base load= 5.28 busy=0.019/0.076   p2t load= 7.94 busy=0.001/0.007
+pool64    b2 first=p2t  base load= 7.46 busy=0.005/0.027   p2t load= 5.32 busy=0.001/0.007
+pool64    b3 first=base base load= 7.85 busy=0.002/0.013   p2t load= 7.91 busy=0.005/0.026
+pool64    b4 first=p2t  base load= 6.29 busy=0.006/0.023   p2t load= 6.28 busy=0.009/0.070
