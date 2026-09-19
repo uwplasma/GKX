@@ -946,7 +946,12 @@ recursive = true
 # the mask is needed: the chains are closed under the whole right-hand side, so
 # the time loop keeps those rows at exact zero with no per-step work. Target
 # unchanged.
-baseline = 90511
+# 90380 -> 90417: the one-reference-route contract (Q18). The runtime entry
+# point's raw scan runs under the jit gkx.prepare already compiles, so both are
+# one graph and one set of numbers; the prepared object forwards cfl_scales so
+# the two results carry the same fields; the rest is the contract, the
+# state-dtype caveat and the rejected tolerance written into three docstrings.
+baseline = 90548
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1156,7 +1161,15 @@ recursive = true
 # intake-only mask complete -- and three in
 # tests/unit/linear/test_linear_helpers_extra.py for the cover helper itself.
 # No new test FILE: the topology count is unchanged.
-baseline = 89301
+# +237 (89037 -> 89274): the Q18 reference-route gate. Every output array of
+# gkx.prepare and of integrate_nonlinear_explicit_diagnostics_state compared bit
+# for bit over {float32, x64} x {rk3, rk4} x {fixed, adaptive}, with the
+# diagnostics dataclass walked field by field rather than through tree_flatten,
+# which would have hidden it as one opaque leaf; the same for value and
+# gradient; and the ledger's new constant-bytes and route-selection contracts.
+# Most of the count is the walker and the two helpers the comparison needs, not
+# assertions; target unchanged.
+baseline = 89538
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1231,7 +1244,12 @@ recursive = true
 # +50: nonlinear-step-hlo --route runtime lowers the scan run_runtime_nonlinear
 # compiles, with cache/params as operands; the diagnostics route was that of the
 # prepared scan, so the N1 gate had measured a graph the runtime does not run.
-baseline = 78165
+# +22: Q18 made --route runtime and --route diagnostics the one graph both
+# nonlinear entry points compile, moved the retired operand placement to
+# --route eager-scan so the rejected option stays priceable, and made the
+# ledger report constant_bytes, the literal payload a captured array costs the
+# compiled module.
+baseline = 78187
 target = 0
 
 [[line_budget_policy.counts]]
