@@ -973,7 +973,16 @@ recursive = true
 # layout, and that a half-axis reduction weight is 2 only on the paired rows.
 # Merged with Q18 and Q19 above: 90380 -> 90511 -> 90417 -> 90907, the sum of
 # the three deltas.
-baseline = 90907
+# 90907 -> 91005: the supplied-state contract below the runtime (Q23). Two
+# helpers on the linked-topology module read the chain cover off a cache a
+# caller already holds and project a supplied state with it, one call site each
+# in the shared explicit nonlinear component builder, the prepared object's
+# run_arrays and the differentiable heat-flux window, and one carried field.
+# The rest is the contract in the docstrings users meet it in: that these entry
+# points project rather than reject, why a value check cannot be written at a
+# traced boundary, and what the projection does to a supplied state's cotangent.
+# Target unchanged.
+baseline = 91005
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1203,7 +1212,15 @@ recursive = true
 # half-spectrum grid, unreachable today because dealiasing zeroes that row.
 # Merged with Q18 and Q19 above: 89037 -> 89301 -> 89274 -> 90119, the sum of
 # the three deltas.
-baseline = 90119
+# 90119 -> 90471: the supplied-state contract below the runtime (Q23), ten
+# cases across three suites -- the two cache-level helpers against the existing
+# grid-level mask and under jit and grad; gkx.prepare, the prepared run, the
+# function entry point that shares its graph, the state cotangent and the
+# objective adjoint on a linked deck; and the periodic no-op on each. Each one
+# builds its own deck and its own supplied state, which is most of the lines:
+# the claim is about a state the caller built, so a shared fixture would be
+# asserting on a state the suite built instead.
+baseline = 90471
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -305,7 +305,7 @@ def solve(case: Case, **options: Any) -> RuntimeLinearResult | RuntimeNonlinearR
 
 
 def prepare(case: Case, **options: Any) -> Any:
-    """Prepare a reusable compiled nonlinear simulation for one case."""
+    """Prepare a reusable compiled nonlinear simulation; see its class docstring."""
     if not case.physics.nonlinear:
         raise ValueError("prepare currently requires nonlinear physics")
     if options.pop("diagnostics", True) is not True:

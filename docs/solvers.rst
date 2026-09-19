@@ -82,9 +82,55 @@ aliases back onto the chain rows and changes the physics.
 covered ``(ky, kx)`` modes for a deck, and
 :func:`~gkx.operators.linear.cache_builder.mask_off_chain_rows` applies them to
 a state; both cost ``O(Nz + Nky * Nkx)`` and return ``None`` and the state
-unchanged when every row is reachable.  Library entry points below the runtime
-(``gkx.prepare``, the nonlinear ``simulation.run(initial_state)`` route) do not
-apply it; a state handed to those is taken as given.
+unchanged when every row is reachable.  A caller that already holds a built
+cache -- every nonlinear entry point does -- reads the same cover off it with
+:func:`~gkx.operators.linear.linked.linked_cover_mask_from_cache` and applies it
+with :func:`~gkx.operators.linear.linked.mask_supplied_state`, which costs
+nothing beyond the cache it already built.
+
+Supplied states below the runtime
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same rule holds one floor down, at the library entry points that accept a
+state the caller built: ``gkx.prepare`` and the prepared object's ``run`` /
+``run_arrays`` (including ``PreparedSimulation.solve(initial_state=...)``),
+``integrate_nonlinear_explicit_diagnostics_state``, and the differentiable
+objective :func:`~gkx.solvers_nonlinear_state_integration.nonlinear_heat_flux_window`.
+Each **projects** the state it is given onto the linked chain cover; none of
+them rejects it.
+
+Projection rather than rejection, for two reasons.  These are differentiable
+entry points: the prepared object's ``run_arrays`` is the traced boundary, and
+the objective's state is an array a design loop hands in, so an error condition
+would have to read values a tracer does not have -- and on a concrete array it
+would force a host synchronization on every call, on the route whose whole
+purpose is a reused compiled graph.  And the runtime above them already
+projects, so rejecting here would make two doors into the same solver disagree
+about the same array.
+
+What the projection does and does not change:
+
+* it is a ``where`` against a mask fixed by the deck's topology, never a branch
+  on the state's values, so it holds under ``jit`` and under reverse-mode AD;
+* the cotangent of a supplied state is **exactly zero** on the off-chain rows
+  and bitwise unchanged on the chain rows, which is the same statement as those
+  rows carrying no physics forward;
+* ``nonlinear_heat_flux_window`` keeps its documented gradient contract -- the
+  saturated state is detached and only ``geom`` and ``params`` carry
+  derivatives -- and the projection changes the trajectory the window starts
+  on, not what is differentiated;
+* periodic decks and full-cover linked grids get ``None`` and the same state
+  object back, so they trace exactly as before.
+
+The reason to project here is the bracket, not the diagnostics.  On a **full**
+nonlinear grid the chain cover equals the two-thirds dealias mask, so the free
+energy and its spectra already exclude the off-chain rows and are not inflated
+by them; what does change is the physics.  Measured on a linked Cyclone grid at
+Nx8/Ny8/Nz16 with a saturated-amplitude broadband state, one right-hand side's
+chain rows move ``2.37e-02`` relative when off-chain content is present, and a
+three-step trajectory from it is a different trajectory.  The effect is
+quadratic in amplitude -- ``2.37e-04`` at ``max|G| = 1e-2`` -- so a linear-seed
+state shows almost nothing and a saturated restart shows all of it.
 
 Eigenpair certification
 -----------------------

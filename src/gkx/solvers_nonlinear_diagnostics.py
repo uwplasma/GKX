@@ -18,6 +18,11 @@ from gkx.diagnostics_contract import SimulationDiagnostics
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache
+from gkx.operators.linear.linked import (
+    linked_cover_mask_from_cache,
+    mask_supplied_state,
+    project_to_linked_cover,
+)
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import FieldState, TermConfig
 from gkx.solvers_nonlinear_imex_diagnostics import (
@@ -110,6 +115,7 @@ class _ExplicitScanComponents:
     policies: _ExplicitRuntimePolicies
     step: Callable[..., Any]
     compute_diag_from_state: Callable[..., Any]
+    cover_mask: Any = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +134,19 @@ class PreparedExplicitNonlinearDiagnostics:
     casts every later state to it, while the function entry point takes the
     dtype of the ``G0`` it is called with. Feeding a promoted state to one and
     not the other is a precision change, not a route difference.
+
+    **Supplied states** (queue row Q23). On a linked (twist-shift) deck the
+    ``kx`` rows outside the linked chains are decoupled, and the runtime's own
+    initial conditions never populate them. Every state this object is given --
+    the ``G0`` it was prepared with and any ``initial_state`` passed to
+    :meth:`run` or :meth:`run_arrays` -- is projected onto the chain cover
+    before it is integrated, because the ExB bracket takes the whole state to
+    real space and dealiases only its output, so off-chain content aliases back
+    onto the chain rows. The projection is a mask fixed by the deck's topology,
+    not a check on the state's values, so it holds under ``jit`` and under
+    reverse-mode AD; gradients with respect to a supplied state are exactly
+    zero on the off-chain rows and unchanged elsewhere. Periodic and full-cover
+    decks are untouched and trace exactly as before.
     """
 
     initial_state: jnp.ndarray
@@ -144,6 +163,7 @@ class PreparedExplicitNonlinearDiagnostics:
     resolved_diagnostics: bool
     fixed_dt: bool
     cfl_scales: Any = None
+    cover_mask: Any = None
 
     def run_arrays(
         self,
@@ -161,6 +181,11 @@ class PreparedExplicitNonlinearDiagnostics:
         that pair. Grid layout and numerical policy remain fixed by
         :func:`prepare_nonlinear_explicit_diagnostics`; adaptive runs currently
         support state changes but reject traced model overrides.
+
+        A supplied ``initial_state`` is projected onto the linked chain cover
+        first, as the class docstring describes. The prepared state was
+        projected once at preparation, so passing ``None`` runs exactly the
+        graph it ran before.
         """
 
         if (cache is None) != (params is None):
@@ -169,7 +194,19 @@ class PreparedExplicitNonlinearDiagnostics:
             raise ValueError(
                 "dynamic geometry requires matched cache and params inputs"
             )
-        state = self.initial_state if initial_state is None else initial_state
+        if initial_state is None:
+            state = self.initial_state
+        else:
+            # The cover belongs to the operator this call will use, so a
+            # dynamic cache supplies its own instead of reusing the prepared
+            # one; on a periodic or full-cover deck both are ``None``.
+            state = (
+                mask_supplied_state(jnp.asarray(initial_state), cache)
+                if cache is not None
+                else project_to_linked_cover(
+                    jnp.asarray(initial_state), self.cover_mask
+                )
+            )
         if geometry is None and cache is None:
             return self._run_raw(jnp.asarray(state))
         if not self.fixed_dt:
@@ -630,6 +667,14 @@ def _build_explicit_scan_components(
         fixed_mode_ky_index=options.fixed_mode_ky_index,
         fixed_mode_kx_index=options.fixed_mode_kx_index,
     )
+    # Supplied-state contract (queue row Q23). ``G0`` is a state this module did
+    # not build, so on a linked deck it can carry kx rows the chains never
+    # reach; the bracket would alias them back onto the chain rows. Project it
+    # once here, where both the prepared object and the function entry point
+    # pass, so the two stay the one graph row Q18 made them. Periodic and
+    # full-cover decks get ``None`` and the same object back.
+    cover_mask = linked_cover_mask_from_cache(prepared.cache)
+    prepared = replace(prepared, G0=project_to_linked_cover(prepared.G0, cover_mask))
     policies = _build_explicit_runtime_policies(
         prepared,
         grid,
@@ -659,6 +704,7 @@ def _build_explicit_scan_components(
         policies=policies,
         step=step,
         compute_diag_from_state=compute_diag_from_state,
+        cover_mask=cover_mask,
     )
 
 
@@ -843,6 +889,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         resolved_diagnostics=resolved_diagnostics,
         fixed_dt=options.fixed_dt,
         cfl_scales=getattr(components.policies.time_step_policy, "cfl_scales", None),
+        cover_mask=components.cover_mask,
     )
 
 

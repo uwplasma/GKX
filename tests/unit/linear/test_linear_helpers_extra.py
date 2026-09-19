@@ -25,6 +25,10 @@ from gkx.operators.linear.cache_builder import (
     linked_chain_cover_mask,
     mask_off_chain_rows,
 )
+from gkx.operators.linear.linked import (
+    linked_cover_mask_from_cache,
+    mask_supplied_state,
+)
 from gkx.operators.linear.moments import build_H, lenard_bernstein_eigenvalues
 from gkx.solvers_linear_krylov_algorithms import _linked_covered_mode_mask
 from gkx.operators.linear.params import (
@@ -1901,3 +1905,105 @@ def test_mask_off_chain_rows_is_the_identity_on_a_periodic_grid(spectral_grid) -
 
     # Identity, and the same object: a periodic deck adds no array op at all.
     assert mask_off_chain_rows(state, grid, geom, params) is state
+
+
+# ---- the supplied-state contract's helper (queue row Q23) -----------------
+#
+# #247 masked the two states the *runtime* does not build. The library entry
+# points underneath -- ``gkx.prepare``, the prepared nonlinear ``run``, the
+# objective adjoint -- all already hold a built cache, so they read the cover
+# off that instead of resolving the twist-shift policy a second time. These
+# pin that the two ways of asking agree, and that a periodic deck still gets
+# the identity.
+
+
+def test_mask_supplied_state_matches_the_grid_level_mask(spectral_grid) -> None:
+    grid = spectral_grid(
+        Nx=8,
+        Ny=8,
+        Nz=8,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        boundary="linked",
+        jtwist=1,
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=1.0, epsilon=0.1)
+    params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_widthfrac=0.25)
+    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=3)
+    cover = np.asarray(linked_cover_mask_from_cache(cache))
+    assert not cover.all()
+    np.testing.assert_array_equal(
+        cover, np.asarray(linked_chain_cover_mask(grid, geom, params))
+    )
+
+    rng = np.random.default_rng(23)
+    shape = (1, 2, 3, int(grid.ky.size), int(grid.kx.size), int(grid.z.size))
+    state = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(np.complex64)
+
+    from_cache = np.asarray(mask_supplied_state(state, cache))
+
+    np.testing.assert_array_equal(
+        from_cache, np.asarray(mask_off_chain_rows(state, grid, geom, params))
+    )
+    off = np.broadcast_to(~cover[:, :, None], shape)
+    assert np.max(np.abs(from_cache[off])) == 0.0
+    np.testing.assert_array_equal(from_cache[~off], state[~off])
+
+
+def test_mask_supplied_state_is_the_identity_on_a_periodic_cache(spectral_grid) -> None:
+    grid = spectral_grid(
+        Nx=8, Ny=8, Nz=8, Lx=2.0 * np.pi, Ly=2.0 * np.pi, boundary="periodic"
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=1.0, epsilon=0.1)
+    params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_widthfrac=0.25)
+    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=3)
+
+    assert linked_cover_mask_from_cache(cache) is None
+
+    rng = np.random.default_rng(24)
+    shape = (1, 2, 3, int(grid.ky.size), int(grid.kx.size), int(grid.z.size))
+    state = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(np.complex64)
+
+    # The same object, so a periodic deck adds no array op and no graph node.
+    assert mask_supplied_state(state, cache) is state
+
+
+def test_mask_supplied_state_differentiates_without_a_value_branch(
+    spectral_grid,
+) -> None:
+    """The contract is a mask, not a check, so it survives ``grad`` and ``jit``.
+
+    Rejecting a state instead would need its values, which a traced array does
+    not have; this is the measurement behind that argument rather than a
+    restatement of it.
+    """
+
+    grid = spectral_grid(
+        Nx=8,
+        Ny=8,
+        Nz=8,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        boundary="linked",
+        jtwist=1,
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=1.0, epsilon=0.1)
+    params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_widthfrac=0.25)
+    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=3)
+    cover = np.asarray(linked_cover_mask_from_cache(cache))
+
+    rng = np.random.default_rng(25)
+    shape = (1, 2, 3, int(grid.ky.size), int(grid.kx.size), int(grid.z.size))
+    state = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(np.complex64)
+
+    masked = jax.jit(lambda s: mask_supplied_state(s, cache))(jnp.asarray(state))
+    off = np.broadcast_to(~cover[:, :, None], shape)
+    assert np.max(np.abs(np.asarray(masked)[off])) == 0.0
+
+    cotangent = np.asarray(
+        jax.grad(lambda s: jnp.sum(jnp.abs(mask_supplied_state(s, cache)) ** 2))(
+            jnp.asarray(state)
+        )
+    )
+    assert np.max(np.abs(cotangent[off])) == 0.0
+    assert np.max(np.abs(cotangent[~off])) > 0.0
