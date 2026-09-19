@@ -1,0 +1,18 @@
+arm=after gkx=<worktrees>/off-chain-supplied-states/src/gkx/__init__.py
+grid ny=1 nx=8 nz=16; dealias_mask all-true=True; chain kx rows=[0, 1, 2, 6, 7] off-chain kx rows=[3, 4, 5]
+state (1, 4, 8, 1, 8, 16) n=4096 off-chain unknowns=1536 (0.3750 of the state)
+runtime initial condition: max|G|=1.414214e-10 off-chain max=0.000000e+00
+supplied state: off-chain max=1.327159e-10 chain part bitwise equal to the runtime IC=True
+--- runtime initial condition (arm A)
+    off-chain max|G|=0.000000e+00 Wg=2.344411307433e-21 off-chain share of Wg=0.000000
+    Wg(kx) = [2.344411e-21 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00
+ 0.000000e+00 0.000000e+00 0.000000e+00]
+    Wg(ky) = [2.344411e-21]
+--- state the runtime integrates from the supplied array (arm B)
+    off-chain max|G|=0.000000e+00 Wg=2.344411307433e-21 off-chain share of Wg=0.000000
+    Wg(kx) = [2.344411e-21 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00
+ 0.000000e+00 0.000000e+00 0.000000e+00]
+    Wg(ky) = [2.344411e-21]
+    chain part of the integrated state bitwise equal to the supplied one=True
+certified eigenpair (krylov) from the supplied state: gamma=1.156212538480758667e-01 omega=2.411787658929824829e-01 residual=8.319672e-07 certified=True route=adaptive
+time fit (explicit_time) from the supplied state: gamma=1.156180399480198906e-01 omega=2.411964219216982674e-01

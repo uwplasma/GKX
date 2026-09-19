@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import cast
 import numpy as np
 from gkx.core_grid import SpectralGrid
-from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.linear.cache_builder import build_linear_cache, mask_off_chain_rows
 from gkx.workflows.runtime.initial_phi import _density_moments_for_target_phi
 from gkx.workflows.runtime.initial_phi import (
     _as_runtime_species_array,
@@ -827,6 +827,21 @@ def _build_initial_condition_impl(
         dtype=np.complex64,
     )
     loaded_state = _scaled_restart_state(cfg, grid, Nl=Nl, Nm=Nm, nspecies=nspecies)
+    if loaded_state is not None:
+        # A restart or init file is state this runtime did not build, so it can
+        # carry rows the linked chains never reach. Zero them here, once, on
+        # read. Nothing this module seeds is outside the chains, so the
+        # runtime's own initial conditions are untouched, and periodic decks
+        # have no mask at all.
+        loaded_state = np.asarray(
+            mask_off_chain_rows(
+                loaded_state,
+                grid,
+                geom,
+                build_runtime_linear_params_fn(cfg, Nm=Nm, geom=geom),
+            ),
+            dtype=np.complex64,
+        )
     amp = float(cfg.init.init_amp)
     builder = _InitialConditionBuilder(
         grid=grid,

@@ -14426,6 +14426,168 @@ merged on their own green heads. This branch then carries #244 (Q17) and #245 (Q
 merged links, and records their rows as done. It is tagged `v2.1.0` only after this
 branch passes `ci-required` and merges. `release.yml` then publishes from the tag.
 
+## 2026-09-18 — off-chain rows of supplied states and restarts (Q19, plan §5.1 L3 follow-up (a))
+
+Branch `fix/off-chain-supplied-states`, from `4c6c9ac8b` (`origin/main`, GKX 2.1.0).
+
+**Question.** Q6 established that on a linked deck the kx rows outside the linked
+chains are exactly decoupled and undamped, and that the runtime's own initial
+conditions never populate them. A user `initial_state` or a restart written
+elsewhere can. What do those rows actually cost, and where should they be zeroed
+-- at state intake only, or after every step?
+
+**Decision: intake only.** The mask is applied to the two states the runtime does
+not build -- a user `initial_state` passed to `run_runtime_linear`, and the
+restart/init file named by `init.init_file` -- and nowhere in the time loop, so
+no operation is added to the runtime graph. The reason is that the chains are
+closed under the whole right-hand side, measured both ways on the pilot and on a
+full nonlinear grid:
+
+- the linear operator applied to a chain-only state gives exactly `0` outside the
+  chains (max |dG| off-chain `0.000000e+00`);
+- so does the nonlinear right-hand side, bracket included (chain max |dG| 21.7,
+  off-chain max exactly `0`), because on a full grid the chain cover **equals**
+  the two-thirds mask the bracket output is multiplied by (both `{0,1,2,6,7}` in
+  kx at Nx=8, and the equality is asserted in a test, not assumed);
+- 2000 rk4 steps from a masked state leave the off-chain rows at exactly `0`.
+
+So once intake has run, the time loop keeps those rows at exact zero for free.
+A per-step mask would be work that provably changes nothing.
+
+**What the rows cost, measured** (pilot: linked Cyclone Nx8/Ny16/Nz16, Nl4/Nm8,
+ntheta16/nperiod1/jtwist1, ky=+.3, damp_ends_rate .1, n=4096; chains cover kx
+rows `{0,1,2,6,7}`, rows `{3,4,5}` = 1536 unknowns = 37.5% of the state; the
+supplied state is the runtime initial condition plus off-chain noise of the same
+peak amplitude, 1.327159e-10):
+
+| quantity, state the runtime integrates | before | after |
+|---|---|---|
+| off-chain max \|G\| | 1.327159e-10 | 0 |
+| free energy `Wg` | 2.694591178281e-19 | 2.344411307433e-21 |
+| off-chain share of `Wg` | 99.13% | 0 |
+| `Wg(kx)` rows 3/4/5 | 9.338300e-20 / 8.885293e-20 / 8.487878e-20 | 0 / 0 / 0 |
+| `Wg(ky)` (one selected row) | 2.694591e-19 | 2.344411e-21 |
+| certified eigenpair (`adaptive`) | γ=.1156212538480758667, ω=.2411787658929824829, residual 8.319672e-07, certified | identical to all printed digits |
+| explicit-time fit | γ=.1156180399480198906, ω=.2411964219216982674 | identical to all printed digits |
+
+`Wg` is inflated 114.9× by rows no fit reads. The after value is bitwise the
+free energy of the runtime's own initial condition, and the chain part of the
+supplied state survives the mask bitwise. A linear ky-selected grid carries an
+all-true dealias mask (`select_ky_grid`), which is why the sums count those rows
+at all; on a full nonlinear grid the free-energy weight already excludes them.
+
+**The rule is not cosmetic on nonlinear decks.** The ExB bracket takes the
+*unmasked* state into real space and dealiases only its output, so off-chain
+content aliases back onto the chain rows: on the Nx8/Ny8 linked grid the chain
+rows of one right-hand side change by 4.477739e-02 relative when off-chain
+content is present. A nonlinear restart carrying those rows therefore changes the
+physics, not just the diagnostics. After the intake mask the feedback is
+identically zero, because the state has nothing there to alias.
+
+**Off-chain rows are neutral, not stationary.** Over 2000 rk4 steps an unmasked
+off-chain band goes 1.327159e-10 -> 1.606939e-10 (×1.21) under the local terms
+while the chain rows stay *bitwise* identical to the masked arm. They neither
+decay nor grow secularly; they persist, and every sum keeps counting them.
+
+**Restart round trip.** `write_netcdf_restart_state` writes the flat complex64
+layout and `_load_initial_state_from_file` reads it back through
+`_build_initial_condition`. On the Nx8/Ny8 linked grid a state written with
+off-chain max 6.105058e-10 reads back with off-chain max 6.105058e-10 before and
+exactly `0` after, with the chain part bitwise equal to what was written in both
+arms. Two loader notes, neither changed here: the **NetCDF** reader already
+stores only the dealiased `Nakx` columns and expands with zeros, so a NetCDF
+restart cannot carry off-chain kx rows in the first place; and the raw-binary
+reader's `nyc` and `full` sizes coincide when `ny == 1`, so a ky-selected linear
+state round-trips through the NetCDF-layout reshape. That ambiguity predates this
+branch and is recorded as a limitation, not fixed.
+
+**Contract.**
+- `linked_cover_mask` (`operators/linear/linked.py`) is now the single definition
+  of the chain cover, including the conjugate-mirror rule; it keeps the caller's
+  array namespace, because the eigen routes read it off a cache that is a tracer
+  inside `jit` while intake reads it off host arrays.
+  `_linked_covered_mode_mask` is a thin wrapper and the eigen routes are unchanged.
+- `linked_chain_cover_mask(grid, geom, params)`
+  (`operators/linear/cache_builder.py`) resolves the twist-shift policy and the
+  linked FFT maps only -- `O(Nz + Nky*Nkx)`, no velocity-space arrays -- so
+  intake does not build a cache it would throw away.
+  `mask_off_chain_rows(state, grid, geom, params)` applies it.
+- Both return `None` / the state unchanged (the same object) on periodic
+  boundaries and full-cover linked grids, so those decks trace exactly as today.
+- Applied at `_build_initial_condition_impl` (only when a file was loaded) and in
+  `_prepare_linear_runtime_context` (only when `initial_state` was supplied).
+  Public signatures unchanged.
+
+**Limitations.**
+- Library entry points below the runtime -- `gkx.prepare`, the nonlinear
+  `simulation.run(initial_state)` route, the objective adjoints -- do not apply
+  the mask; a state handed to those is still taken as given. Only the runtime
+  intakes are covered.
+- The raw-binary loader's `ny == 1` size ambiguity above is untouched.
+- Measurements are CPU, x64, on one pilot deck plus one Nx8/Ny8 nonlinear grid.
+  No production-size run was made; the rule is size-independent by construction,
+  but that is an argument, not a measurement.
+
+**Tests** (one invocation per row; x64 as CI runs):
+
+| selection | result |
+|---|---|
+| `tests/integration/runtime/test_runtime_runner.py` | 175 passed (170 + 5 new) |
+| `tests/unit/linear/test_linear_helpers_extra.py` | 64 passed (61 + 3 new) |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 98 passed |
+| `tests/integration/runtime/test_runtime_artifacts.py` | 85 passed |
+| `tests/integration/test_adaptive_eigenmodes.py` | 8 passed, 2 skipped |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+The eight new tests pin: a supplied state and a restart round trip lose their
+off-chain rows on a linked deck and keep the rest bitwise; both are untouched on
+a periodic deck; the runtime's own initial condition has nothing outside the
+chains (which is what makes an intake-only mask complete); the light cover
+builder agrees with the one the eigen routes read off a cache, and equals the
+two-thirds mask on a full grid.
+
+No existing test's asserted numbers changed. Two pre-existing gates had to be
+repaired rather than waived: the dot-precision allowlist is keyed by `file:line`
+and the one allowlisted unpinned overlap contraction moved 828 -> 817 (same code,
+the mask helpers left the module); and a `src/` comment named the comparison
+code, which the terminology gate forbids. Also passing: ruff 0.16.4 check and
+format (451 files), mypy as CI (185 source files), `sphinx -W`,
+`check_package_architecture_manifest.py` (source 90380 -> 90511, tests
+89037 -> 89301, targets unchanged), `check_repository_size_manifest.py`,
+gitleaks 8.30.1 on the branch range.
+
+**Environment.** Apple M3 Max (14 cores, 36 GiB), shared (1-min load 5-10),
+Python 3.11.14, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0;
+`PYTHONPATH=$PWD/src:$PWD JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg
+JAX_PLATFORMS=cpu nice -n 10`, one heavy process at a time, `gkx.__file__`
+verified in each worktree. Commands (repository root), run once per worktree with
+`before` = a detached checkout of `4c6c9ac8b` and `after` = this branch:
+```
+D=plan/research/scripts/2026-09-18-off-chain-supplied-states
+python $D/supplied_state_offchain.py <before|after>
+python $D/offchain_time_and_restart.py <before|after>
+```
+The `.txt` logs are those runs with local paths replaced by `<worktrees>`; both
+scripts were ruff-formatted before the recorded runs, so the committed scripts
+are the ones that produced them.
+
+**Artifacts** (`plan/research/scripts/2026-09-18-off-chain-supplied-states/`, SHA-256):
+```
+43e569fc9b30b14f4ed32f1e4b28f8647aaae5025c8977e187471ba3f41ec15d  offchain_time_and_restart.py
+064b6d365fc380a8345cb6080f85653cacdc24d273534ffc83a3aba595879b8d  offchain_time_and_restart_after.txt
+76b66efa5b59bbf29a2741a8294c2b1e9d657ca53a474367f2ce61afb632d35b  offchain_time_and_restart_before.txt
+7261e0b147ccf476f6379fd48564d02c3b4dc7e935e46b9baec6a872a5895d5e  supplied_state_offchain.py
+e4077b5322ed2521b0da57f89c4795ad04d088bf9823ade3dfe7423f3c011e29  supplied_state_offchain_after.txt
+9242e75e4ba39e65a766baa8575b64c96cabb0a03cefbf31dcb73a390a0af84a  supplied_state_offchain_before.txt
+```
+
+**Terminal state.** Every owned process ended; nothing was left running at the commit.
+
+**Next question.** Should the same intake contract extend below the runtime to
+`gkx.prepare` and the nonlinear `simulation.run(initial_state)` route, where the
+nonlinear aliasing feedback measured above applies just as much, or is "the
+library takes the state you give it" the contract those entry points should keep?
+
 ## 2026-09-18 — Q9 follow-up: the idle-host A/B/A/B of the shared linked-chain transforms (plan §5.3 N2)
 
 Queue row Q9's open follow-up. Measurement only: no source, test, default, deck, reference
@@ -14472,7 +14634,10 @@ Whole-tree manifest SHA-256 (`find . -type f | LC_ALL=C sort | xargs sha256sum |
 computed on both machines and equal:
 base `5cd2edbe7040afdae64494cba04e3f80cb790d5c690af54a439f97a5b3bc7ca1`, S+T
 `194f2b05f4a89da4284f8c236ba93a96dd73622defdfb0e8eb90f19fd668d79d`. The source checkout the
-archives came from was clean (`git status --porcelain` empty).
+archives came from was clean (`git status --porcelain` empty). `origin/main` moved past the S+T
+arm while this campaign ran (#247, Q19, touching the linked cache and the runtime's state
+intake); this branch merges it, and the A/B above remains pinned to `e0cd294b8` against
+`4c6c9ac8b`, which is where both arms were archived from.
 
 **Cores, and a lane that was not honoured.** This lane owns office cores 2–17. The first
 launch was discarded after four minutes: at 19:02 another lane's DKX bench appeared with an
