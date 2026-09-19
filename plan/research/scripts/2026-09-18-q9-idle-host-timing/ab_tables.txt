@@ -1,0 +1,111 @@
+== pool64 (4 blocks)
+kernel      blk  reps   base ms  spread    S+T ms  spread  ratio   tol
+rhs           1     7     170.1   0.474     151.1   0.266  0.888 0.474  min-rep 1.153
+rhs           2     7     131.1   0.367     182.9   0.239  1.395* 0.367  min-rep 1.124
+rhs           3     7     138.3   0.319     145.0   0.304  1.048 0.319  min-rep 1.045
+rhs           4     7     141.0   0.408     182.8   0.226  1.296 0.408  min-rep 1.070
+rhs         all           137.2             153.3          1.118         pass=False verdict=REGRESSION
+rhs_vjp       1     7     284.8   0.168     257.0   0.593  0.903 0.168  min-rep 0.918
+rhs_vjp       2     7     284.2   0.084     250.3   0.108  0.881 0.084  min-rep 0.874
+rhs_vjp       3     7     290.1   0.175     246.3   0.124  0.849 0.175  min-rep 0.944
+rhs_vjp       4     7     279.1   0.165     245.5   0.055  0.880 0.165  min-rep 0.980
+rhs_vjp     all           285.1             249.3          0.874         pass=True verdict=INDISTINGUISHABLE
+scan_rk3      1     7    2624.2   0.084    2793.5   0.029  1.065 0.084  min-rep 1.129
+scan_rk3      2     7    2467.2   0.024    2573.2   0.059  1.043* 0.024  min-rep 1.028
+scan_rk3      3     7    2564.8   0.068    2525.2   0.011  0.985 0.068  min-rep 1.007
+scan_rk3      4     7    2496.5   0.094    2577.8   0.037  1.033 0.094  min-rep 1.040
+scan_rk3    all          2547.9            2575.5          1.011         pass=False verdict=REGRESSION
+window_vjp    1     7   24965.5   0.154   23484.4   0.035  0.941 0.154  min-rep 1.035
+window_vjp    2     7   25673.4   0.117   25157.2   0.082  0.980 0.117  min-rep 1.023
+window_vjp    3     7   24949.0   0.095   23360.7   0.026  0.936 0.095  min-rep 0.956
+window_vjp    4     7   25252.5   0.037   23848.1   0.034  0.944 0.037  min-rep 0.943
+window_vjp  all         25112.4           23733.0          0.945         pass=True verdict=INDISTINGUISHABLE
+== nopool64 (4 blocks)
+kernel      blk  reps   base ms  spread    S+T ms  spread  ratio   tol
+rhs           1     7     183.2   0.110     185.6   0.193  1.013 0.110  min-rep 1.075
+rhs           2     7     177.8   0.159     189.5   0.146  1.066 0.159  min-rep 1.094
+rhs           3     7     187.5   0.174     191.3   0.132  1.020 0.174  min-rep 1.131
+rhs           4     7     178.5   0.195     199.2   0.195  1.116 0.195  min-rep 1.045
+rhs         all           182.5             192.4          1.054         pass=True verdict=INDISTINGUISHABLE
+rhs_vjp       1     7     288.8   0.140     252.6   0.232  0.875 0.140  min-rep 0.859
+rhs_vjp       2     7     312.2   0.152     261.0   0.204  0.836 0.152  min-rep 0.896
+rhs_vjp       3     7     290.9   0.116     258.8   0.236  0.890 0.116  min-rep 0.826
+rhs_vjp       4     7     285.6   0.179     251.3   0.178  0.880 0.179  min-rep 0.912
+rhs_vjp     all           290.7             256.0          0.881         pass=True verdict=INDISTINGUISHABLE
+scan_rk3      1     7    1105.5   0.039    1128.3   0.025  1.021 0.039  min-rep 1.024
+scan_rk3      2     7    1093.2   0.017    1125.0   0.026  1.029* 0.020  min-rep 1.025
+scan_rk3      3     7    1099.8   0.019    1130.2   0.026  1.028* 0.020  min-rep 1.015
+scan_rk3      4     7    1098.6   0.015    1129.3   0.020  1.028* 0.020  min-rep 1.017
+scan_rk3    all          1099.2            1128.8          1.027         pass=False verdict=REGRESSION
+== pool32 (4 blocks)
+kernel      blk  reps   base ms  spread    S+T ms  spread  ratio   tol
+rhs           1     7      35.7   0.175      43.9   0.124  1.231* 0.175  min-rep 1.358
+rhs           2     7      37.2   0.216      42.8   0.193  1.152 0.216  min-rep 1.227
+rhs           3     7      42.8   1.805      43.2   0.119  1.010 1.805  min-rep 1.218
+rhs           4     7      36.4   0.411      47.9   0.896  1.317 0.411  min-rep 1.327
+rhs         all            36.6              43.9          1.200         pass=False verdict=REGRESSION
+rhs_vjp       1     7      68.2   0.451      62.3   0.322  0.913 0.451  min-rep 0.954
+rhs_vjp       2     7      70.5   0.337      60.3   0.155  0.856 0.337  min-rep 0.966
+rhs_vjp       3     7      79.9   0.332      60.5   0.317  0.758 0.332  min-rep 0.750
+rhs_vjp       4     7      71.8   0.370      61.4   0.237  0.855 0.370  min-rep 0.922
+rhs_vjp     all            72.0              61.2          0.850         pass=True verdict=INDISTINGUISHABLE
+scan_rk3      1     7     604.0   0.019     633.5   0.080  1.049* 0.020  min-rep 1.030
+scan_rk3      2     7     611.7   0.033     626.3   0.025  1.024 0.033  min-rep 1.028
+scan_rk3      3     7     777.6   0.142     634.8   0.055  0.816 0.142  min-rep 0.845
+scan_rk3      4     7     623.8   0.060     655.7   0.440  1.051 0.060  min-rep 1.016
+scan_rk3    all           614.4             631.9          1.028         pass=False verdict=REGRESSION
+window_vjp    1     7   13449.2   0.023   13695.5   0.041  1.018 0.023  min-rep 1.014
+window_vjp    2     7   14186.6   0.122   13910.1   0.065  0.981 0.122  min-rep 1.007
+window_vjp    3     7   17262.7   0.022   16648.3   0.265  0.964 0.022  min-rep 0.828
+window_vjp    4     7   18243.0   0.270   18501.8   0.108  1.014 0.270  min-rep 1.250
+window_vjp  all         14943.1           14238.6          0.953         pass=True verdict=INDISTINGUISHABLE
+== dense64 (6 blocks)
+kernel      blk  reps   base ms  spread    S+T ms  spread  ratio   tol
+rhs           1    31     174.0   0.398     175.8   0.363  1.010 0.398  min-rep 1.137
+rhs           2    31     165.7   0.445     170.3   0.419  1.028 0.445  min-rep 1.059
+rhs           3    31     164.9   0.399     151.5   0.409  0.919 0.399  min-rep 1.020
+rhs           4    31     170.0   0.407     170.1   0.371  1.001 0.407  min-rep 1.079
+rhs           5    31     171.2   0.450     157.6   0.386  0.921 0.450  min-rep 1.063
+rhs           6    31     166.0   0.425     175.8   0.375  1.059 0.425  min-rep 1.107
+rhs         all           168.6             170.3          1.010         pass=True verdict=INDISTINGUISHABLE
+rhs_vjp       1    31     286.0   0.279     257.5   0.232  0.900 0.279  min-rep 0.980
+rhs_vjp       2    31     289.0   0.323     266.5   0.353  0.922 0.323  min-rep 0.951
+rhs_vjp       3    31     285.9   0.292     251.6   0.257  0.880 0.292  min-rep 0.927
+rhs_vjp       4    31     285.7   0.280     242.5   0.259  0.849 0.280  min-rep 0.930
+rhs_vjp       5    31     280.9   0.282     252.8   0.196  0.900 0.282  min-rep 0.969
+rhs_vjp       6    31     290.3   0.274     245.4   0.215  0.845 0.274  min-rep 0.943
+rhs_vjp     all           286.7             252.8          0.882         pass=True verdict=INDISTINGUISHABLE
+== dense32 (6 blocks)
+kernel      blk  reps   base ms  spread    S+T ms  spread  ratio   tol
+rhs           1    61      35.8   0.405      43.3   0.362  1.211 0.405  min-rep 1.251
+rhs           2    61      34.5   0.397      43.5   0.433  1.262 0.397  min-rep 1.334
+rhs           3    61      35.7   0.297      42.8   0.360  1.200 0.297  min-rep 1.124
+rhs           4    61      34.8   0.298      42.9   0.385  1.232 0.298  min-rep 1.204
+rhs           5    61      34.1   0.335      43.2   0.572  1.270 0.335  min-rep 1.068
+rhs           6    61      36.2   0.432      42.8   0.323  1.185 0.432  min-rep 1.239
+rhs         all            35.2              43.0          1.223         pass=True verdict=INDISTINGUISHABLE
+rhs_vjp       1    61      70.1   0.327      60.6   0.554  0.865 0.327  min-rep 0.845
+rhs_vjp       2    61      69.9   0.434      59.6   0.432  0.853 0.434  min-rep 0.895
+rhs_vjp       3    61      69.4   0.365      59.9   0.397  0.863 0.365  min-rep 0.876
+rhs_vjp       4    61      67.0   0.408      59.5   0.446  0.889 0.408  min-rep 0.884
+rhs_vjp       5    61      69.5   0.434      60.8   0.452  0.875 0.434  min-rep 0.889
+rhs_vjp       6    61      68.8   0.446      62.1   0.452  0.902 0.446  min-rep 0.925
+rhs_vjp     all            69.0              60.8          0.882         pass=True verdict=INDISTINGUISHABLE
+== dscan64 (6 blocks)
+kernel      blk  reps   base ms  spread    S+T ms  spread  ratio   tol
+scan_rk3      1    15    2611.1   0.023    2684.3   0.034  1.028* 0.023  min-rep 1.018
+scan_rk3      2    15    2604.8   0.040    2690.0   0.024  1.033 0.040  min-rep 1.037
+scan_rk3      3    15    2687.2   0.082    2776.7   0.047  1.033 0.082  min-rep 1.041
+scan_rk3      4    15    2678.5   0.037    2747.2   0.057  1.026 0.037  min-rep 1.018
+scan_rk3      5    15    2666.7   0.026    2764.5   0.026  1.037* 0.026  min-rep 1.030
+scan_rk3      6    15    2678.5   0.041    2752.7   0.032  1.028 0.041  min-rep 1.025
+scan_rk3    all          2649.3            2741.8          1.035         pass=False verdict=REGRESSION
+== dscan32 (6 blocks)
+kernel      blk  reps   base ms  spread    S+T ms  spread  ratio   tol
+scan_rk3      1    21     625.9   0.046     649.5   0.064  1.038 0.046  min-rep 1.046
+scan_rk3      2    21     642.6   0.137     641.9   0.050  0.999 0.137  min-rep 1.004
+scan_rk3      3    21     648.1   0.106     754.5   0.462  1.164* 0.106  min-rep 0.989
+scan_rk3      4    21     635.3   0.090     674.5   0.123  1.062 0.090  min-rep 1.039
+scan_rk3      5    21     803.2   0.376     638.9   0.081  0.795 0.376  min-rep 1.004
+scan_rk3      6    21     620.2   0.117     665.4   0.049  1.073 0.117  min-rep 1.077
+scan_rk3    all           639.3             655.8          1.026         pass=False verdict=REGRESSION

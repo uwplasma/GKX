@@ -1,0 +1,13 @@
+CPU FFT thread pool, plan 5.3 N2 re-measurement (64x64x24 Nl4/Nm8).
+pool   = default XLA CPU flags (multi-threaded Eigen/DUCC FFT).
+nopool = --xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1.
+Medians pooled over every rep of every block of that tag; the rk3 scan is
+reported per step because the pool tag ran 5 steps and the nopool tag 2.
+
+kernel        arm      pool ms  nopool ms  nopool/pool
+rhs           base       137.2      182.5        1.330
+rhs           p2t        153.3      192.4        1.255
+rhs_vjp       base       285.1      290.7        1.020
+rhs_vjp       p2t        249.3      256.0        1.027
+scan_rk3/step base       509.6      549.6        1.079
+scan_rk3/step p2t        515.1      564.4        1.096
