@@ -16287,6 +16287,45 @@ seven blockers stage 1 listed, makes a half-spectrum evolved state work end to
 end through the operator layer, and then measures it — and the measurement is
 the reason the runtime still builds a two-sided grid.
 
+### Three latent defects, which stand on their own
+
+These are correctness fixes and have nothing to do with performance. All three
+are the same mistake — a quantity that is a property of the **two-sided** `ky`
+axis derived instead from however many rows the array happens to store — and
+all three are silent: no shape changes, no error is raised, the run simply
+computes something else. They are harmless on `main` today only because the
+stored count *is* `Ny` there, so each one was a trap armed for whoever moved
+the state first. They are listed first because a reviewer should not have to
+find them inside a layout change.
+
+1. **`kperp2_max` inflates every hyperdiffusion rate**
+   (`operators/linear/dissipation.py`, and an independent second copy in
+   `solvers_linear_parallel_streaming.py` that does not import the first).
+   The normalizing cutoff is the largest dealiased row, index `(Ny-1)//3`.
+   Taken from the stored count on a half grid it lands at `(Nyc-1)//3`, whose
+   `ky` is roughly half the true cutoff, so `kperp2_max` falls about 4x and
+   `Dfac = D_hyper * (kperp2/kperp2_max)**p_hyper_kperp` is inflated by
+   `4 ** p_hyper_kperp` — a factor of 16 at the default `p_hyper_kperp = 2`.
+   A run would damp the whole spectrum an order of magnitude too hard and look
+   perfectly healthy doing it. Both copies now take `ny_full`.
+2. **The restart writer truncates the band.**
+   `_restart_to_netcdf_layout` read the dealiased block's length from
+   `state.shape[3]`. The file has always stored the dealiased `ky >= 0` block,
+   `1 + (Ny-1)//3` rows; from a half state that becomes `1 + (Nyc-1)//3`,
+   roughly a third of the modes, written with no complaint and reloaded later
+   as if complete. It takes `ny_full` now, and refuses a state with fewer rows
+   than the block needs rather than padding.
+3. **The seeded initial band is a third of what it should be.**
+   `_dealiased_initial_mode_pairs` had the same shape of defect, so a
+   half-layout run would have started from a third of the intended modes.
+
+The three share a root cause worth naming: the single identifier `ny` was doing
+two jobs across `linked.py`, `dissipation.py` and the artifact writers — "how
+long is the physical axis" and "how many rows does this array hold". They were
+the same number, so nothing distinguished them. Splitting them is most of this
+branch's diff, and `gkx.core_ky_layout.source_ny_full` is where the first
+meaning now lives.
+
 ### What the switch removes, and what it costs
 
 `build_spectral_grid(cfg, ky_layout="half")` gives a grid of
@@ -16364,7 +16403,7 @@ layout, chains removed — the regression goes with them.
 
 **So the default is not flipped.** Doing it on this evidence would trade a
 measured 53% byte saving on the RHS for a measured 43–57% byte regression on
-the step a production linked deck actually runs. Queue row **Q25** is the fix:
+the step a production linked deck actually runs. Queue row **Q26** is the fix:
 build the chain maps directly in the state's row order on a half grid (or pad
 `Nyc`), then re-run the ledger and decide.
 
@@ -16405,18 +16444,10 @@ stage 1's order:
   an `Ny`-long `y` axis: a wrong picture with the right dtype.
 - **The Nyquist row of `_hermitian_mode_weight`.** Q24's, already done.
 
-Three more found on the way, none of them on stage 1's list:
-
-- **`kperp2_max`** (`dissipation.py`, and an independent copy in
-  `solvers_linear_parallel_streaming.py`) took its cutoff row from the stored
-  count. On a half grid that puts the cutoff at roughly half the true `ky` and
-  inflates every hyperdiffusion rate by `4 ** p_hyper_kperp`, with no shape
-  error to show for it. It takes `ny_full` now.
-- **The restart writer** derived the dealiased block's length from
-  `state.shape[3]`. On a half state that keeps `1 + (Nyc-1)//3` rows, about a
-  third of the band, and writes the file without complaint.
-- **The seeded initial band** (`_dealiased_initial_mode_pairs`) had the same
-  shape of defect and would have seeded a third of the intended modes.
+Three more were found on the way, none of them on stage 1's list:
+`kperp2_max` in two independent copies, the restart writer's block length, and
+the seeded initial band. They are correctness fixes rather than layout work and
+are written up at the top of this entry.
 
 ### The flux convention
 
@@ -16482,7 +16513,7 @@ through the linear RHS agree to 1e-12.
 
 The runtime still builds a two-sided grid, so no production run uses the half
 layout and the 41.9 per cent stands where `docs/performance.rst` records it —
-now with the measured reason. Left, beyond Q25:
+now with the measured reason. Left, beyond Q26:
 
 - the runtime/workflow grid flip and `PreparedSimulation.state_shape` with it;
 - the diagnostics and NetCDF condensation chain — `_condense_ky_for_output`,
@@ -16537,89 +16568,22 @@ Evidence, commands and the tables above in
 `ledger_table.txt`, `ledgers/`, `identity/`); Q9's `rhs_identity.py`,
 `gate_traj.py` and `compare_npz.py` are reused verbatim.
 
-**Next question.** Q25: does building the linked chain maps in the state's own
+**Next question.** Q26: does building the linked chain maps in the state's own
 row order on a half grid restore the fused gather? If it does, the RHS's 53 per
 cent and the periodic deck's step saving should both survive onto a linked
 deck, and the default flip becomes a measurement rather than a judgement call.
 
-### Paused 2026-09-19
+### Merge order
 
-**Work in progress, paused mid-gate-run at the maintainer's request. The tree
-is in a working state, not mid-refactor**: `ruff check`, `ruff format --check`,
-`mypy` (186 files) and `sphinx -W` all pass, both release manifests pass, and
-every test selection run so far is green. It is *not* gate-complete: the full
-`tests/unit tests/integration/runtime tests/release` sweep was killed partway.
+`#256` (docs) and `#257` (defaults) land before this branch, so the queue rows
+have to be re-read after those merges rather than assumed. That is not
+caution in the abstract: integrating #250 on 2026-09-18 silently reverted this
+very row to its pre-#248 text, because the conflict rule in use preferred the
+branch's own copy of every queue row and #250 had branched before #248 landed
+(the "Correction" note in that entry). The rows to check after the merge are
+**Q10** and the new **Q26**.
 
-**Blockers handled** (stage 1's seven, in its order):
-
-1. linked-chain `naky` and the conjugate restore — **done**. `naky` counts the
-   dealiased rows of the two-sided axis, the flat chain index keeps the stored
-   count, and the restore, the cover mask's mirror and the end-damping mirror
-   are inapplicable rather than skipped on a half axis. `ny_full` is threaded
-   beside `linked_use_gather` through the apply chain.
-2. the two-sided dealias mask — **done**, `half_twothirds_mask` builds the
-   half rows instead of slicing.
-3. `_transport_mode_weight` — **done**, the flux convention is decided below.
-4. the `two_sided=True` projector — **done**, it takes `rows` and reads the
-   layout from its arguments, never from a traced `ky`.
-5. the sharded ky divisibility check — **done**, the refusal names the layout
-   its extent came from.
-6. the full-complex `ifft2` output paths — **done**, `irfft2` on a half field
-   in both the field and the species-moment writer.
-7. the Nyquist row of `_hermitian_mode_weight` — Q24's, already done.
-
-Three more found here and fixed: `kperp2_max` (two independent copies), the
-restart block's length, and the seeded initial band all derived a two-sided
-quantity from the stored row count and would have been silently wrong.
-
-**Not handled**: the runtime grid flip (the default is deliberately unchanged,
-see the ledger), the diagnostics/NetCDF condensation chain
-(`_condense_ky_for_output`, the `y` dimension, `full_ny`/`active_ny` — it fails
-loudly, not silently, and is the next coherent slice), the eigen
-branch-selection question, and the end-damping row set.
-
-**Measurements already in hand** (all recorded above with their artifacts):
-
-- Identity against `origin/main` `254fcc7b7`, float32 FFT thread pool pinned
-  off: **58/58 and 65/65 bitwise in both float32 and x64, `max_rel` exactly
-  0**, VJPs and `heat_flux_t`/`Wg_t`/`Wphi_t` included.
-- Between the layouts: the linear RHS **bitwise** on every dealiased row, the
-  nonlinear RHS **< 1e-13** relative (the transform batch changes shape), the
-  linear-RHS gradient to 1e-12, and the Nyquist row differing by O(1) from its
-  `ky` sign convention alone.
-- HLO ledger, full -> half: **RHS bytes -53.3% (32) and -52.5% (64)**, reverse
-  3 -> 0; **RK step bytes +42.7%/+57.0% (rk3) and +18.6%/+29.6% (rk4)**, traced
-  to the linked-chain gather losing its fused lowering, with a chain-free
-  control winning on both graphs (RHS -23.4%, rk3 -10.5%). The `full` arm
-  reproduces #248's committed ledger on all twelve graphs.
-- No timing, and none claimed: the machine was shared throughout.
-
-**Flux convention: decided.** An even grid's Nyquist row is a flux
-representative in **both** layouts, at the self-conjugate weight, so the
-two-sided weights are the half-axis weights padded with zeros. Reason and the
-proof that no live spectrum moves are in the section above. Two tests that
-pinned the old rule are rewritten to the decision.
-
-**Resume steps**, in order:
-
-1. `git -C <worktree> log --oneline origin/main..HEAD` — four commits, nothing
-   else outstanding; the branch is pushed.
-2. Merge `origin/main` in: #256 (docs) and #257 (defaults) land first, and
-   #250's merge already cost this row's queue entry once (2026-09-18
-   "Correction"), so check the Q10 and Q25 rows survive the merge.
-3. Re-run the interrupted sweep:
-   `PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1
-   nice -n 10 python -m pytest tests/unit tests/integration/runtime
-   tests/release -q -p no:randomly`. One failure was found and fixed before the
-   pause (`test_flux_fac_nonzero_matches_positive_ky_convention`, the second
-   test pinning the old flux rule); expect none, but any further failure is
-   most likely a third such test.
-4. Run the parallel selection separately, under
-   `--xla_force_host_platform_device_count=4`.
-5. Re-run the size manifest *after* committing, as its check reads tracked
-   files.
-6. `gitleaks git . --log-opts="origin/main..HEAD" --no-banner`, then open the
-   PR against main, ready, with the ledger tables and the two "not done" lists
-   from this entry in the body. Do not merge.
-7. Q25 is the follow-up that decides the default flip; it is already in the
-   queue table with its own dependency and evidence plan.
+The follow-up row is numbered **Q26, not Q25**: #257 already claims Q25
+(`perf/fast-accurate-defaults`, the §5.1 adoption-gate rewrite) and #256 is its
+docs companion, both open against the same queue table. Numbering this row Q25
+would have produced two different Q25s on `main` the moment either side merged.
