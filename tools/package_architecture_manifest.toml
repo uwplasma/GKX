@@ -935,7 +935,12 @@ recursive = true
 # own (ky, kx) row order with the chain maps translated at trace time instead of
 # copying a transposed state. One RHS at 32x32x24 goes from 23 to 13 FFT launches
 # and from 46.3 to 25.0 MB written; target unchanged.
-baseline = 90380
+# 90380 -> 90417: the one-reference-route contract (Q18). The runtime entry
+# point's raw scan runs under the jit gkx.prepare already compiles, so both are
+# one graph and one set of numbers; the prepared object forwards cfl_scales so
+# the two results carry the same fields; the rest is the contract, the
+# state-dtype caveat and the rejected tolerance written into three docstrings.
+baseline = 90417
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1137,7 +1142,15 @@ recursive = true
 # mixes on the gather, full-cover and scatter routes; operand validation; the
 # shared RHS route against the separate terms (every term, total, state VJP) on
 # a four-class linked pilot, and its static fallbacks; target unchanged.
-baseline = 89037
+# +237 (89037 -> 89274): the Q18 reference-route gate. Every output array of
+# gkx.prepare and of integrate_nonlinear_explicit_diagnostics_state compared bit
+# for bit over {float32, x64} x {rk3, rk4} x {fixed, adaptive}, with the
+# diagnostics dataclass walked field by field rather than through tree_flatten,
+# which would have hidden it as one opaque leaf; the same for value and
+# gradient; and the ledger's new constant-bytes and route-selection contracts.
+# Most of the count is the walker and the two helpers the comparison needs, not
+# assertions; target unchanged.
+baseline = 89274
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1212,7 +1225,12 @@ recursive = true
 # +50: nonlinear-step-hlo --route runtime lowers the scan run_runtime_nonlinear
 # compiles, with cache/params as operands; the diagnostics route was that of the
 # prepared scan, so the N1 gate had measured a graph the runtime does not run.
-baseline = 78165
+# +22: Q18 made --route runtime and --route diagnostics the one graph both
+# nonlinear entry points compile, moved the retired operand placement to
+# --route eager-scan so the rejected option stays priceable, and made the
+# ledger report constant_bytes, the literal payload a captured array costs the
+# compiled module.
+baseline = 78187
 target = 0
 
 [[line_budget_policy.counts]]

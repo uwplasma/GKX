@@ -99,7 +99,7 @@ the repository rules an agent must follow.
 | Q15 | `fix/solver-status-on-results` | #230 and #233 surface inner/outer residuals in status and errors only: `RuntimeLinearResult` has no residual/certified fields and implicit/IMEX scans have no convergence channel. Add them without silently returning uncertified values — **done, #242**: runtime linear results carry `eigen_status` (original-operator residual, tolerance, certified, route, inner stats) and `implicit_solve`, as do IMEX nonlinear results; `run_runtime_linear`/`run_runtime_nonlinear` raise after an unconverged scan (fail closed, as #233); library integrators opt in with `return_solve_stats=True`; graphs without stats compile unchanged. Follow-up: stats for the IMEX diagnostics and sheared routes and in saved summaries | Q1, Q12 merged | CPU |
 | Q16 | eigen ℓ-spectrum of the ky=.55 mode | §0.5 (ii): the certified adaptive eigenpair (not a time fit) at Nl {24, 32, 48, 64} collisionless and ν ∈ {1e-3, 3e-3, 1e-2}, Nm96, reporting λ, residual and the Laguerre spectrum of the eigenvector; explains Q8's non-monotone small-ν ladders (branch change or μ-space recurrence) and whether a collisionless limit exists at this ky | Q6 merged, Q8 recorded | office CPU/GPU |
 | Q17 | `evidence/gx-vnewk-control` | Q8 P4 — **done, #244**: GX `vnewk=1e-2` matches GKX species ν=1e-2 at Nl 24/32 to ≤5e-7 relative in γ and ≤3.3e-6 in ω (γ .0174378/.0171657 in both, Nl24→32 −1.5602% in both), so P4 passes and `vnewk` ≡ ν one-to-one for this ion (same ν(b+2ℓ+m) damping and restoring-term coefficients by source reading); Nl48 not run on GX (projected ≈47 GPU-min) | GX verification passed (done) | office GPU, idle only |
-| Q18 | reference route for runtime vs `gkx.prepare` | #239 found the prepared (captured-constant) and runtime (eager-scan) nonlinear routes differ at roundoff (f32 ≤2.1e-7, two near-cancelling diagnostics O(1)). Choose one as the reference, give the other its operand placement or declare and test the tolerance, and bisect `_run_dynamic_raw`'s in-graph setup only if N1 is revisited | Q13 merged | CPU |
+| Q18 | `fix/nonlinear-route-reference` | #239 found the prepared (captured-constant) and runtime (eager-scan) nonlinear routes differ at roundoff (f32 ≤2.1e-7, two near-cancelling diagnostics O(1)) — **done, #247**: one reference route, taken by giving `integrate_nonlinear_explicit_diagnostics_state` the prepared route's jit rather than the reverse, so both compile one graph and every output array is bitwise equal in f32 and x64 (12/12 gate cases, 79–80 arrays each; 8/8 of the new tests fail on `main`); declaring a tolerance was rejected because the near-cancelling turbulent-heating diagnostics are unbounded in relative terms (0.93 f32, 1.41 x64); cost is one-directional — runtime RK3 `copy` 226→85 and 89,062,692→89,479,380 bytes written (+0.47%), module literals 7,140→6,553,260 B, peak RSS over eight chunked calls 1,200→826 MB, compiles per call unchanged; VJP value and gradient were already bitwise on both routes and are unchanged; `--route runtime` now names the shared graph and `--route eager-scan` keeps the retired placement | Q13 merged | CPU |
 | Q19 | off-chain rows of supplied states | Q6 follow-up (a): zero the off-chain rows of a user `initial_state` or restart on linked runs, as GX masks after `restart_read`; test free-energy and spectrum sums before and after | Q6 merged | CPU |
 | Q20 | `evidence/cross-code-cyclone` | §2.4 cross-code linear Cyclone controls: matched adiabatic-electron Cyclone s-alpha ky scans with declared resolution ladders in GS2 8.2.1 and stella v1.0 (office CPU), gyaradax (office GPU) and GX, against GKX's certified eigenpairs; resolve the ≈2× stella/GS2 γ gap on the install checks first; record wall time to a converged γ per code — **done, #245**: on identical converged circular-Miller input GS2 matches the GX goldens to ≤1% at ky .15–.55 and GKX's certified ky=.55 pair to 0.65%, while stella is 1.40–1.47× high (cause open); the install-check gap is ≈1.6× geometry model × that excess; s-alpha ky .30 agrees across GS2/gyaradax/GKX within 1.1%; at s-alpha ky .55 no cross-code reference is established (GS2 energy-grid limited; gyaradax alone converges, .02485, 36–45% below the unconverged Hermite–Laguerre values) | — (*parallel*) | office CPU, GPU when idle |
 | Q21 | inner-solve cost (L5) | §5.1 L5 from Q7: inner tolerance proportional to the outer residual, tuned preconditioner P + (A−P)XXᴴ (Freitag–Spence), harmonic Krylov–Schur without inner solves; adoption gate as L4 (≥3× fewer matvec-equivalents to a certified pair than `adaptive`) | Q6, Q7 recorded | CPU |
@@ -1308,13 +1308,17 @@ takes the cache as operands and regresses too, and only `_run_dynamic_raw`
 (which rebuilds weights, ω mask and projector in-graph) avoids it. The
 profiled 41.9% is the bracket's own completion inside each RHS, which only
 N3 removes. Order: N0 the op-name HLO ledger (`profile_runtime_kernels.py
-nonlinear-step-hlo`, #231, with `--route runtime` for the scan the runtime
-actually compiles, #239) plus A/B/A/B timings on an idle pinned checkout,
+nonlinear-step-hlo`, #231, with `--route runtime` for the graph the runtime
+actually compiles, #239 and #247, and `--route eager-scan` for the placement
+#247 retired) plus A/B/A/B timings on an idle pinned checkout,
 gating every change; N1′ (done, #239, not adopted: no constant placement is
 bitwise against the captured graph in both precisions, and bytes rise);
-the prepared and runtime routes already differ at roundoff (f32 ≤2.1e-7),
-so choosing the reference route is an open correctness item (Q18), not a
-speed one;
+the prepared and runtime routes differed at roundoff (f32 ≤2.1e-7), which
+**#247 closed the other way** (Q18): the runtime entry point now runs the
+prepared route's jit, both compile one graph, and every output array is
+bitwise equal in f32 and x64; the runtime's own RK3 graph loses 141 copies
+for +0.47% bytes written and 6.5 MB of module literals, and peak resident
+memory over eight chunked calls falls from 1,200 MB to 826 MB;
 N2 batch the chain classes so streaming and hypercollisions issue O(1) FFT
 launches, and re-measure the CPU FFT thread pool
 (`xla_cpu_multi_thread_eigen`, restored for the thunk runtime in jax 0.5.1);

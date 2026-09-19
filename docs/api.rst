@@ -67,6 +67,13 @@ matching shapes and dtypes; ``simulation.run_arrays`` is the differentiable
 array-only boundary. Prepared execution currently rejects linear, IMEX,
 parallel-sharded, and active run-to-saturation cases with explicit errors.
 
+``prepare`` and ``integrate_nonlinear_explicit_diagnostics_state`` compile one
+graph and return bitwise identical arrays for the same inputs, so either may be
+used as the reference; see :doc:`solvers` for the contract, the state-dtype
+caveat, and what it costs. Prefer ``prepare`` when a case is run more than
+once, because it keeps the compiled graph while each call to the function entry
+point compiles its own.
+
 .. automodule:: gkx.api
    :members:
    :exclude-members: KrylovConfig

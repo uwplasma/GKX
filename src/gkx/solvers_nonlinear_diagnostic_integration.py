@@ -376,7 +376,15 @@ def integrate_nonlinear_explicit_diagnostics_state(
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Integrate nonlinear system and return runtime diagnostics plus the final state."""
+    """Integrate nonlinear system and return runtime diagnostics plus the final state.
+
+    This is the entry point ``run_runtime_nonlinear`` uses on its fixed-window,
+    chunked and sharded routes. It runs the same jitted graph as
+    :func:`prepare_nonlinear_explicit_diagnostics` and returns bitwise
+    identical arrays for the same inputs (plan §5.3, queue row Q18). Prefer the
+    prepared object when the same case is run more than once: it keeps the
+    compiled graph, while each call here compiles its own.
+    """
 
     if method in _IMEX_METHODS:
         raise ValueError(
