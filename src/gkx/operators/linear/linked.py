@@ -13,6 +13,8 @@ __all__ = [
     "_build_linked_fft_maps",
     "_signed_to_index",
     "linked_cover_mask",
+    "linked_cover_mask_from_cache",
+    "mask_supplied_state",
     "project_to_linked_cover",
 ]
 
@@ -59,12 +61,50 @@ def linked_cover_mask(
     return mask
 
 
+def linked_cover_mask_from_cache(cache: Any) -> Any | None:
+    """Return the chain cover of a **built** cache, or ``None`` for all modes.
+
+    :func:`linked_cover_mask` holds the topology; this reads it off the cache the
+    operator will actually be applied with, so a caller that already has one --
+    every nonlinear entry point does -- pays nothing to resolve the twist-shift
+    policy a second time. Periodic and full-cover caches return ``None``.
+    """
+
+    if not bool(getattr(cache, "linked_use_gather", False)):
+        return None
+    return linked_cover_mask(
+        gather_mask=cache.linked_gather_mask,
+        use_gather=True,
+        full_cover=bool(getattr(cache, "linked_full_cover", False)),
+        ny=int(jnp.size(cache.ky)),
+        nx=int(jnp.size(cache.kx)),
+    )
+
+
 def project_to_linked_cover(v: Any, mask: Any | None) -> Any:
     """Zero a ``(..., ky, kx, z)`` state outside ``mask``; ``None`` is the identity."""
 
     if mask is None:
         return v
     return jnp.where(jnp.asarray(mask)[:, :, None], v, jnp.zeros((), dtype=v.dtype))
+
+
+def mask_supplied_state(state: Any, cache: Any) -> Any:
+    """Apply the supplied-state contract for ``cache``: zero the off-chain rows.
+
+    This is the library-level form of the rule the runtime applies at intake
+    (queue row Q19): a state the caller supplies is projected onto the modes the
+    linked chains reach, because the ExB bracket takes the *whole* state to real
+    space and dealiases only its output, so off-chain content aliases back onto
+    the chain rows. The projection is a ``where`` against a mask fixed by the
+    deck's topology, never a value-dependent branch, so it traces and
+    differentiates: the returned state's off-chain entries carry no cotangent
+    back to the supplied array, which is the same statement as their carrying no
+    physics forward. Periodic and full-cover decks return the *same object*, so
+    they trace exactly as before.
+    """
+
+    return project_to_linked_cover(state, linked_cover_mask_from_cache(cache))
 
 
 @dataclass(frozen=True)

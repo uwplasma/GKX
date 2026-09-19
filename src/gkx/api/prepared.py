@@ -75,6 +75,13 @@ class PreparedSimulation:
         ``parameters`` is reserved for the differentiable path and must be
         ``None`` here; a prepared object must not silently solve a different
         physics problem than the one it reports.
+
+        A nonlinear ``initial_state`` on a linked (twist-shift) deck is
+        projected onto the linked chain cover before it is integrated, which is
+        the same rule the runtime applies at intake (queue rows Q19 and Q23):
+        the rows outside the chains are decoupled, and the ExB bracket would
+        alias whatever sits there back onto the chain rows. Periodic and
+        full-cover decks are untouched.
         """
 
         if parameters is not None:

@@ -2327,9 +2327,10 @@ ALLOWED_UNPINNED_MATRIX_DOTS = {
     # Renamed by the flat-layout pass; the file, the line and the measurement
     # behind the exemption are unchanged, only the module path is. The line moved
     # 675 -> 749 when the inner-solve statistics were added above it,
-    # 749 -> 828 when the linked-chain mask helpers were (Q6), and 828 -> 817
-    # when those helpers moved to operators/linear/linked.py (Q19); same code.
-    "solvers_linear_krylov_algorithms.py:817": "overlap ranking only; argmax provably unmoved",
+    # 749 -> 828 when the linked-chain mask helpers were (Q6), 828 -> 817
+    # when those helpers moved to operators/linear/linked.py (Q19), and
+    # 817 -> 809 when Q23 and Q24 merged above it; same code.
+    "solvers_linear_krylov_algorithms.py:809": "overlap ranking only; argmax provably unmoved",
 }
 
 

@@ -18,6 +18,7 @@ from gkx.operators.fluxes import heat_flux_species, heat_flux_total
 from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.solvers_linear_implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
+from gkx.operators.linear.linked import mask_supplied_state
 from gkx.operators.linear.cache_builder import (
     build_linear_cache,
     update_linear_cache_for_sheared_kx,
@@ -309,6 +310,15 @@ def nonlinear_heat_flux_window(
     checkpointing retains :math:`O(\sqrt{N})` distribution states instead of
     :math:`O(N)` for a window of ``N`` steps.
 
+    On a linked (twist-shift) deck ``saturated_state`` is projected onto the
+    linked chain cover before the window starts (queue row Q23): it is a state
+    this function did not build, and the ExB bracket takes the whole state to
+    real space while dealiasing only its output, so off-chain rows would alias
+    back onto the chain rows and change the flux this objective returns. The
+    projection does not change the gradient contract, which is that
+    ``saturated_state`` is detached and only ``geom`` and ``params`` carry
+    derivatives. Periodic and full-cover decks are untouched.
+
     ``collision_operator`` is the same custom model
     :func:`integrate_nonlinear` accepts, and must be passed here too: a run
     saturated with a custom operator and then differentiated without one is a
@@ -384,7 +394,9 @@ def nonlinear_heat_flux_window(
         include = jnp.asarray(index >= count - tail, dtype=heat.dtype)
         return (next_state, total_heat + include * heat), None
 
-    initial_state = jax.lax.stop_gradient(jnp.asarray(saturated_state))
+    initial_state = jax.lax.stop_gradient(
+        mask_supplied_state(jnp.asarray(saturated_state), cache)
+    )
     heat_dtype = jnp.result_type(
         jnp.real(initial_state), flux_factor, *jax.tree_util.tree_leaves(params)
     )

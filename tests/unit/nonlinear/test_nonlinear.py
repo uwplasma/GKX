@@ -9,6 +9,10 @@ from gkx.operators.fluxes import heat_flux_total
 from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
 from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.linear.linked import (
+    linked_cover_mask_from_cache,
+    mask_supplied_state,
+)
 from gkx.operators.linear.params import LinearParams
 from gkx.operators.nonlinear.diagnostic_state import (
     NonlinearDiagnosticKernels,
@@ -1860,3 +1864,192 @@ def test_nonlinear_route_reference_holds_for_value_and_gradient(x64: bool) -> No
     assert float(prepared_grad) != 0.0
     assert _bitwise_equal(np.asarray(prepared_value), np.asarray(runtime_value))
     assert _bitwise_equal(np.asarray(prepared_grad), np.asarray(runtime_grad))
+
+
+# ---- supplied states below the runtime (queue row Q23) --------------------
+#
+# #247 zeroes the off-chain rows of a user ``initial_state`` and of a restart
+# file at runtime intake. The entry points underneath took whatever state they
+# were handed, and on a linked deck that is not harmless: the ExB bracket takes
+# the *whole* state to real space and dealiases only its output, so off-chain
+# content aliases back onto the chain rows. Measured on this deck at saturated
+# amplitude, one right-hand side's chain rows move 2.37e-02 relative.
+#
+# The contract these pin is: project, do not reject. A rejection would have to
+# read the state's values, and these are differentiable entry points whose
+# state is a tracer under ``jit`` and ``grad``; the projection is a mask fixed
+# by the deck's topology and survives both.
+
+
+def _linked_nonlinear_deck(boundary: str = "linked"):
+    """A small nonlinear deck whose linked chains leave kx rows uncovered."""
+
+    grid_cfg = GridConfig(
+        Nx=8,
+        Ny=8,
+        Nz=8,
+        Lx=6.28,
+        Ly=6.28,
+        boundary=boundary,
+        jtwist=1 if boundary == "linked" else None,
+    )
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams()
+    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=3)
+    return grid, geom, params, cache
+
+
+def _supplied_and_on_cover(grid, cache, *, seed: int = 2301):
+    """A saturated-amplitude broadband state and its projection onto the cover."""
+
+    cover = linked_cover_mask_from_cache(cache)
+    shape = (1, 2, 3, int(grid.ky.size), int(grid.kx.size), int(grid.z.size))
+    rng = np.random.default_rng(seed)
+    supplied = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(
+        np.complex64
+    )
+    supplied = (supplied / np.max(np.abs(supplied))).astype(np.complex64)
+    if cover is None:
+        return supplied, supplied, None, np.zeros(shape, dtype=bool)
+    cover_np = np.asarray(cover)
+    off = np.broadcast_to(~cover_np[:, :, None], shape)
+    on_cover = np.where(off, 0.0, supplied).astype(np.complex64)
+    return supplied, on_cover, cover_np, off
+
+
+_Q23_OPTIONS = dict(
+    dt=1.0e-3,
+    steps=3,
+    method="rk3",
+    terms=TermConfig(nonlinear=1.0),
+    fixed_dt=True,
+    resolved_diagnostics=False,
+)
+
+
+def test_prepare_projects_the_state_it_was_given_onto_the_linked_cover() -> None:
+    grid, geom, params, cache = _linked_nonlinear_deck()
+    supplied, on_cover, _cover, off = _supplied_and_on_cover(grid, cache)
+    assert np.max(np.abs(supplied[off])) > 0.0
+
+    prepared = prepare_nonlinear_explicit_diagnostics(
+        jnp.asarray(supplied), grid, geom, params, **_Q23_OPTIONS
+    )
+    from_on_cover = prepare_nonlinear_explicit_diagnostics(
+        jnp.asarray(on_cover), grid, geom, params, **_Q23_OPTIONS
+    )
+
+    assert prepared.cover_mask is not None
+    held = np.asarray(prepared.initial_state)
+    assert np.max(np.abs(held[off])) == 0.0
+    # The state the object holds is the one it would have held had the caller
+    # projected first -- bitwise, not to a tolerance.
+    np.testing.assert_array_equal(held, np.asarray(from_on_cover.initial_state))
+
+
+def test_prepared_run_with_a_supplied_state_matches_the_projected_state() -> None:
+    grid, geom, params, cache = _linked_nonlinear_deck()
+    supplied, on_cover, _cover, off = _supplied_and_on_cover(grid, cache)
+    prepared = prepare_nonlinear_explicit_diagnostics(
+        jnp.asarray(on_cover), grid, geom, params, **_Q23_OPTIONS
+    )
+
+    from_supplied, _diag_s, _fields_s = prepared.run_arrays(jnp.asarray(supplied))
+    from_on_cover, _diag_c, _fields_c = prepared.run_arrays(jnp.asarray(on_cover))
+
+    assert np.max(np.abs(np.asarray(from_supplied)[off])) == 0.0
+    np.testing.assert_array_equal(np.asarray(from_supplied), np.asarray(from_on_cover))
+
+
+def test_the_function_entry_point_takes_the_same_view_as_the_prepared_object() -> None:
+    """Q18 made these one graph; the supplied-state contract must not split them."""
+
+    grid, geom, params, cache = _linked_nonlinear_deck()
+    supplied, _on_cover, _cover, _off = _supplied_and_on_cover(grid, cache)
+    prepared = prepare_nonlinear_explicit_diagnostics(
+        jnp.asarray(supplied), grid, geom, params, **_Q23_OPTIONS
+    )
+
+    _t, _diag, final_state, _fields = integrate_nonlinear_explicit_diagnostics_state(
+        jnp.asarray(supplied), grid, geom, params, **_Q23_OPTIONS
+    )
+    prepared_final, _pdiag, _pfields = prepared.run_arrays()
+
+    np.testing.assert_array_equal(np.asarray(final_state), np.asarray(prepared_final))
+
+
+def test_a_supplied_states_off_chain_rows_carry_no_gradient() -> None:
+    """The VJP of the projection: exactly zero off the chains, unchanged on them."""
+
+    grid, geom, params, cache = _linked_nonlinear_deck()
+    supplied, on_cover, _cover, off = _supplied_and_on_cover(grid, cache)
+    prepared = prepare_nonlinear_explicit_diagnostics(
+        jnp.asarray(on_cover), grid, geom, params, **_Q23_OPTIONS
+    )
+
+    def final_energy(state):
+        final_state, _diag, _fields = prepared.run_arrays(state)
+        return jnp.sum(jnp.abs(final_state) ** 2)
+
+    cotangent = np.asarray(jax.grad(final_energy)(jnp.asarray(supplied)))
+    reference = np.asarray(jax.grad(final_energy)(jnp.asarray(on_cover)))
+
+    assert np.max(np.abs(cotangent[off])) == 0.0
+    assert np.max(np.abs(cotangent[~off])) > 0.0
+    np.testing.assert_array_equal(cotangent[~off], reference[~off])
+
+
+def test_the_objective_adjoint_projects_its_saturated_state() -> None:
+    grid, geom, params, cache = _linked_nonlinear_deck()
+    supplied, on_cover, _cover, _off = _supplied_and_on_cover(grid, cache)
+    geom_data = ensure_flux_tube_geometry_data(geom, grid.z)
+
+    def window(state, drift_scale):
+        scaled = replace(
+            geom_data,
+            gb_profile=geom_data.gb_profile * drift_scale,
+            cv_profile=geom_data.cv_profile * drift_scale,
+        )
+        return nonlinear_heat_flux_window(
+            jnp.asarray(state),
+            grid,
+            scaled,
+            params,
+            dt=1.0e-3,
+            steps=3,
+            method="rk2",
+            terms=TermConfig(nonlinear=1.0),
+        )
+
+    one = jnp.asarray(1.0)
+    value_s, grad_s = jax.value_and_grad(lambda a: window(supplied, a))(one)
+    value_c, grad_c = jax.value_and_grad(lambda a: window(on_cover, a))(one)
+
+    assert float(grad_c) != 0.0
+    np.testing.assert_array_equal(np.asarray(value_s), np.asarray(value_c))
+    np.testing.assert_array_equal(np.asarray(grad_s), np.asarray(grad_c))
+
+
+def test_a_periodic_deck_is_untouched_by_the_supplied_state_contract() -> None:
+    """No cover, no mask, no extra array op: these decks trace exactly as before."""
+
+    grid, geom, params, cache = _linked_nonlinear_deck("periodic")
+    supplied, _on_cover, cover, _off = _supplied_and_on_cover(grid, cache)
+    assert cover is None
+    assert linked_cover_mask_from_cache(cache) is None
+    assert mask_supplied_state(supplied, cache) is supplied
+
+    prepared = prepare_nonlinear_explicit_diagnostics(
+        jnp.asarray(supplied), grid, geom, params, **_Q23_OPTIONS
+    )
+
+    assert prepared.cover_mask is None
+    final_state, _diag, _fields = prepared.run_arrays(jnp.asarray(supplied))
+    _t, _rdiag, runtime_final, _rfields = (
+        integrate_nonlinear_explicit_diagnostics_state(
+            jnp.asarray(supplied), grid, geom, params, **_Q23_OPTIONS
+        )
+    )
+    np.testing.assert_array_equal(np.asarray(final_state), np.asarray(runtime_final))

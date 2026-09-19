@@ -137,6 +137,16 @@ custom model ``integrate_nonlinear`` takes. Pass it here whenever the saturation
 run used one: a window differentiated without it is the derivative of different
 physics from the trajectory it starts on.
 
+On a linked (twist-shift) deck the saturated state is projected onto the linked
+chain cover before the window starts, the same rule the runtime applies to a
+supplied ``initial_state`` at intake: the kx rows outside the chains are
+decoupled, and the bracket takes the whole state to real space while dealiasing
+only its output, so content there would alias back onto the chain rows and
+change the flux this objective returns. The gradient contract is unchanged --
+the state stays detached and only ``geom`` and ``params`` carry derivatives --
+and periodic decks are untouched. :doc:`solvers` has the rule and its
+measurements.
+
 Choosing the window
 -------------------
 

@@ -16,7 +16,7 @@ from gkx.operators.linear.cache_arrays import (
 )
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.linked import (
-    linked_cover_mask,
+    linked_cover_mask_from_cache,
     project_to_linked_cover,
 )
 from gkx.operators.linear.params import LinearParams
@@ -39,15 +39,7 @@ def _linked_covered_mode_mask(cache: Any) -> jnp.ndarray | None:
     ``None``, so eigen routes on them trace exactly as before.
     """
 
-    if not bool(getattr(cache, "linked_use_gather", False)):
-        return None
-    return linked_cover_mask(
-        gather_mask=cache.linked_gather_mask,
-        use_gather=True,
-        full_cover=bool(getattr(cache, "linked_full_cover", False)),
-        ny=int(jnp.size(cache.ky)),
-        nx=int(jnp.size(cache.kx)),
-    )
+    return linked_cover_mask_from_cache(cache)
 
 
 def _project_to_linked_cover(v: jnp.ndarray, mask: jnp.ndarray | None) -> jnp.ndarray:
