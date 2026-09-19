@@ -31,6 +31,8 @@ import numpy as np
 def load_results(results_dir: Path) -> dict[str, dict]:
     records: dict[str, dict] = {}
     for path in sorted(results_dir.glob("*.txt")):
+        if path.name.endswith(".time.txt"):
+            continue
         record = None
         for line in path.read_text().splitlines():
             if line.startswith("RESULT "):

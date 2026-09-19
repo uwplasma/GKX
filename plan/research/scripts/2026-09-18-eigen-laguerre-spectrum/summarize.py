@@ -15,6 +15,8 @@ from pathlib import Path
 def load(results_dir: Path) -> list[dict]:
     records = []
     for path in sorted(results_dir.glob("*.txt")):
+        if path.name.endswith(".time.txt"):
+            continue
         record = None
         for line in path.read_text().splitlines():
             if line.startswith("RESULT "):
@@ -76,6 +78,44 @@ for axis in ("laguerre", "hermite"):
             f"{fmt(tail['decades_peak_to_cutoff'], '.2f')} | "
             f"{fmt(tail['log10_slope_per_index_top_half'], '.4f')} |"
         )
+
+print("\n### Laguerre cutoff structure\n")
+print(
+    "A monotone spectrum has no interior local maximum. A cutoff pile-up shows "
+    "one or more, and the last one sits near the cutoff; ``hump ratio`` is that "
+    "maximum divided by the local minimum before it.\n"
+)
+print(
+    "| key | nu | Nl | interior maxima | last max index | last max / Nl | "
+    "hump ratio | mean fraction per index, upper quarter |"
+)
+print("|" + "---|" * 8)
+for r in records:
+    spectrum = r.get("laguerre_spectrum")
+    if spectrum is None:
+        continue
+    n = len(spectrum)
+    maxima = [
+        i
+        for i in range(1, n - 1)
+        if spectrum[i] > spectrum[i - 1] and spectrum[i] > spectrum[i + 1]
+    ]
+    minima = [
+        i
+        for i in range(1, n - 1)
+        if spectrum[i] < spectrum[i - 1] and spectrum[i] < spectrum[i + 1]
+    ]
+    if maxima:
+        top = maxima[-1]
+        before = [j for j in minima if j < top] or [0]
+        cell = f"{top} | {top / n:.2f} | {spectrum[top] / spectrum[before[-1]]:.1f}"
+    else:
+        cell = "— | — | —"
+    quarter = spectrum[(3 * n) // 4 :]
+    print(
+        f"| {r['key']} | {fmt(r['nu'], '.0e') if r['nu'] else '0'} | {r['Nl']} | "
+        f"{len(maxima)} | {cell} | {sum(quarter) / len(quarter):.4f} |"
+    )
 
 print("\n### Laguerre spectrum per index (normalized free energy)\n")
 for r in records:
