@@ -55,6 +55,7 @@ class _HypercollisionLinkedRoute:
     linked_gather_map: jnp.ndarray | None
     linked_gather_mask: jnp.ndarray | None
     linked_use_gather: bool
+    ny_full: int | None = None
 
 
 class CollisionInvariantRates(NamedTuple):
@@ -668,6 +669,7 @@ def _apply_parallel_hypercollision(
     linked_gather_map: jnp.ndarray | None,
     linked_gather_mask: jnp.ndarray | None,
     linked_use_gather: bool,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
     if linked_indices and linked_kz:
         return abs_z_linked_fft(
@@ -679,6 +681,7 @@ def _apply_parallel_hypercollision(
             linked_gather_map=linked_gather_map,
             linked_gather_mask=linked_gather_mask,
             linked_use_gather=linked_use_gather,
+            ny_full=ny_full,
         )
     return abs_z_periodic(kz_source, kz=kz)
 
@@ -739,6 +742,7 @@ def _parallel_hypercollision_contribution(
     linked_gather_map: jnp.ndarray | None,
     linked_gather_mask: jnp.ndarray | None,
     linked_use_gather: bool,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
     """Compute the ``|k_z|`` hypercollision branch, including linked tubes."""
 
@@ -763,6 +767,7 @@ def _parallel_hypercollision_contribution(
         linked_gather_map=linked_gather_map,
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
+        ny_full=ny_full,
     )
 
 
@@ -794,6 +799,7 @@ def hypercollisions_contribution(
     linked_gather_map: jnp.ndarray | None = None,
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
+    ny_full: int | None = None,
     hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     coeffs = _HypercollisionCoefficients(
@@ -821,6 +827,7 @@ def hypercollisions_contribution(
         linked_gather_map=linked_gather_map,
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
+        ny_full=ny_full,
     )
     real_dtype = jnp.real(G).dtype
     inactive_result = _inactive_hypercollision_result(
@@ -873,6 +880,7 @@ def hypercollisions_contribution(
         linked_gather_map=route.linked_gather_map,
         linked_gather_mask=route.linked_gather_mask,
         linked_use_gather=route.linked_use_gather,
+        ny_full=route.ny_full,
     )
 
 
@@ -885,8 +893,16 @@ def hyperdiffusion_contribution(
     D_hyper: jnp.ndarray,
     p_hyper_kperp: jnp.ndarray,
     weight: jnp.ndarray,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
-    """Hyperdiffusion in k_perp following Laguerre-Hermite conventions."""
+    """Hyperdiffusion in k_perp following Laguerre-Hermite conventions.
+
+    ``ny_full`` is the length of the two-sided ``ky`` axis, which is what the
+    normalizing cutoff ``kperp2_max`` is a property of: the largest dealiased
+    row is at index ``(Ny - 1) // 3`` in both layouts, and deriving it from the
+    stored row count would halve the cutoff on a half-spectrum grid and inflate
+    ``Dfac`` by ``4 ** p_hyper_kperp`` with no shape error to show for it.
+    """
 
     real_dtype = jnp.real(G).dtype
     if _is_static_zero(weight, real_dtype) or _is_static_zero(D_hyper, real_dtype):
@@ -902,9 +918,9 @@ def hyperdiffusion_contribution(
         raise ValueError("kx must have shape (kx,) or (ky, kx)")
 
     nx = int(dealias_mask.shape[1])
-    ny = ky.size
+    ny = int(ky.size)
     kx_idx = max((nx - 1) // 3, 0)
-    ky_idx = max((ny - 1) // 3, 0)
+    ky_idx = min(max(((ny if ny_full is None else int(ny_full)) - 1) // 3, 0), ny - 1)
     kx2_max = kx2[kx_idx] if kx2.ndim == 1 else kx2[ky_idx, kx_idx]
     kperp2_max = kx2_max + ky2[ky_idx]
     kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
@@ -932,6 +948,13 @@ def end_damping_contribution(
         damp = weight * damp_amp * linked_damp_profile[None, None, None, ...]
         return -(damp * H)
     damp = weight * damp_amp * damp_profile[None, None, None, None, None, :]
+    # ``ky > 0`` is the non-zonal set in both layouts, and the rule is written
+    # on the representatives: the zonal row carries no end damping, every other
+    # physical mode does. On the two-sided axis that leaves the stored ``ky < 0``
+    # rows undamped, which is invisible in every shipped route because they are
+    # the conjugates of the damped ones and are rewritten from them; on a
+    # half-spectrum state there are no such rows and the mask selects exactly
+    # the non-zonal modes (plan 5.3 N3).
     ky_mask = (ky > 0.0).astype(damp.dtype)[None, None, None, :, None, None]
     return -(ky_mask * damp * H)
 

@@ -36,8 +36,13 @@ def _state_shape(case: Any, *, n_laguerre: int, n_hermite: int) -> tuple[int, ..
     # The evolved state is two-sided in ky (gkx.core_ky_layout): the runtime
     # allocates grid.ky.size == Ny rows and rebuilds the negative half by the
     # reality condition. Reporting Nyc here advertised, and costed, half the
-    # array the run actually holds. Plan 5.3 N3 moves the state to the half
-    # layout, and this line moves with it.
+    # array the run actually holds.
+    #
+    # Plan 5.3 N3 moves the state to the half layout and this line moves with
+    # it. The half layout is available below the runtime today
+    # (build_spectral_grid(..., ky_layout=HALF)), but the runtime still builds
+    # its grid two-sided, so Ny is still what a prepared case allocates. What
+    # this line must never do is report a layout the runtime did not build.
     n_ky = int(grid.Ny)
     return (
         max(n_species, 1),

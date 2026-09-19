@@ -623,8 +623,14 @@ def test_the_flux_weight_folds_the_pair_and_halves_a_self_conjugate_row(
 
     The flux kernels carry the factor of two themselves, so a row that stands
     for itself and its unstored partner takes weight 1 and a self-conjugate row
-    takes 0.5.  The two-sided convention -- representatives are the ``ky > 0``
-    rows -- is deliberately unchanged; see the function's docstring.
+    takes 0.5.
+
+    The two-sided convention now says the same thing (plan 5.3 N3, the decision
+    Q24 handed to the state switch): an even grid's Nyquist row is a
+    representative there too, at the same 0.5, so the two-sided weights are the
+    half-axis weights padded with zeros on the rows the half axis does not
+    store.  Before the switch that row was dropped from the flux on a two-sided
+    axis and counted on a half one, which made the flux depend on the layout.
     """
 
     from gkx.operators.moments import _transport_mode_weight
@@ -636,9 +642,9 @@ def test_the_flux_weight_folds_the_pair_and_halves_a_self_conjugate_row(
     np.testing.assert_array_equal(half, expected)
 
     two_sided = np.asarray(_transport_mode_weight(full_grid, use_dealias=False))[:, 0]
-    np.testing.assert_array_equal(
-        two_sided, (np.asarray(full_grid.ky) > 0.0).astype(two_sided.dtype)
-    )
+    padded = np.zeros(ny, dtype=two_sided.dtype)
+    padded[: expected.size] = expected
+    np.testing.assert_array_equal(two_sided, padded)
 
 
 def test_a_selected_subset_of_modes_does_not_claim_a_nyquist_row() -> None:

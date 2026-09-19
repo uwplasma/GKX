@@ -7,8 +7,8 @@ from typing import Any, Sequence
 import jax.numpy as jnp
 from jax import lax
 
-from gkx.core_grid import real_fft_mesh
-from gkx.core_ky_layout import half_dealias_mask, to_full, to_half
+from gkx.core_grid import real_fft_mesh, real_fft_ordered_kx
+from gkx.core_ky_layout import half_dealias_mask, is_half, to_full, to_half
 
 
 def _fft2_xy(x: jnp.ndarray) -> jnp.ndarray:
@@ -82,12 +82,17 @@ def _fft_scales(
     *,
     real_dtype: jnp.dtype,
     fft_norm: float | None = None,
+    ny_full: int | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
-    norm = (
-        float(ky_grid.shape[0] * ky_grid.shape[1])
-        if fft_norm is None
-        else float(fft_norm)
-    )
+    """Return the ``(ifft, fft)`` normalizations for an ``Ny x Nx`` transform.
+
+    The pair is fixed by the *physical* grid, ``Ny * Nx``, not by how many
+    ``ky`` rows the operand stores: a half-spectrum operand is transformed with
+    ``irfft2``/``rfft2`` over the same ``Ny`` real-space rows.
+    """
+
+    rows = int(ky_grid.shape[0]) if ny_full is None else int(ny_full)
+    norm = float(rows * ky_grid.shape[1]) if fft_norm is None else float(fft_norm)
     return (
         jnp.asarray(norm, dtype=real_dtype),
         jnp.asarray(1.0 / norm, dtype=real_dtype),
@@ -120,6 +125,7 @@ def _spectral_bracket_half_core(
     dealias_mask: jnp.ndarray,
     fft_norm: float | None = None,
     radial_phase: jnp.ndarray | None = None,
+    ny_full: int | None = None,
     multiple_fields: bool,
 ) -> tuple[jnp.ndarray, int, int]:
     """Return the bracket on the ``ky >= 0`` rows, with ``(ny_full, nx)``.
@@ -128,9 +134,17 @@ def _spectral_bracket_half_core(
     non-negative rows, transformed with ``irfft2``, multiplied in real space,
     and transformed back with ``rfft2``, which lands the product back on
     ``Nyc = 1 + Ny // 2`` rows.  Nothing in it needs the negative half, so it
-    is the primitive the ``ky >= 0`` state layout (plan 5.3 N3) will call
-    directly; :func:`_spectral_bracket_real_fft_core` is this function plus the
-    widening that a two-sided state still requires.
+    is the primitive the ``ky >= 0`` state layout (plan 5.3 N3) calls directly;
+    :func:`_spectral_bracket_real_fft_core` is this function plus the widening
+    that a two-sided state still requires.
+
+    ``ny_full`` is the length of the two-sided ``ky`` axis and must be supplied
+    whenever the operands are already in the half layout, because ``Nyc`` alone
+    cannot say how long its own full axis is (:mod:`gkx.core_ky_layout`).
+    Omitting it on a half operand is not a shape error -- the slice, the
+    ``irfft2`` length and the mask all still compose -- it just computes the
+    bracket of a different grid, which is why the argument is explicit rather
+    than inferred.
     """
 
     complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
@@ -149,28 +163,37 @@ def _spectral_bracket_half_core(
         # cancels from their Poisson bracket, leaving the canonical shearing-
         # coordinate derivatives represented by the row-relative kx mesh.
         kx = kx - kx[:, :1]
+    rows = int(ky.shape[0])
+    ny = rows if ny_full is None else int(ny_full)
     ifft_scale, fft_scale = _fft_scales(
-        ky_grid, real_dtype=real_dtype, fft_norm=fft_norm
+        ky_grid, real_dtype=real_dtype, fft_norm=fft_norm, ny_full=ny
     )
 
-    ny_full = int(ky.shape[0])
-    _, _ky_half, kx_nyc, ky_nyc = real_fft_mesh(kx, ky)
-    G_nyc = to_half(G_hat, ny_full=ny_full)
-    chi_nyc = to_half(chi_hat, ny_full=ny_full)
+    if is_half(rows, ny_full):
+        # The operands already carry the ``ky >= 0`` rows, so only the ``kx``
+        # axis needs the real-FFT ordering: ``irfft2`` transforms ``ky``, which
+        # leaves ``kx`` two-sided, and its Nyquist column's derivative
+        # multiplier has to be taken with a positive sign there exactly as on a
+        # full-axis operand.  ``real_fft_mesh`` cannot be reused because its
+        # ``ky`` reduction would slice this axis a second time.
+        kx_1d = real_fft_ordered_kx(kx)
+        ky_nyc, kx_nyc = jnp.meshgrid(ky[:, 0], kx_1d, indexing="ij")
+    else:
+        _, _ky_half, kx_nyc, ky_nyc = real_fft_mesh(kx, ky)
+    G_nyc = to_half(G_hat, ny_full=ny)
+    chi_nyc = to_half(chi_hat, ny_full=ny)
     axes = (-2, -3)
 
     kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
     ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
     grad_G = jnp.stack([imag * kx_b * G_nyc, imag * ky_b * G_nyc], axis=0)
-    grad_G = jnp.fft.irfft2(grad_G, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
+    grad_G = jnp.fft.irfft2(grad_G, s=(kx.shape[1], ny), axes=axes) * ifft_scale
     dG_dx, dG_dy = grad_G
 
     kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
     ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
     grad_chi = jnp.stack([imag * kx_chi * chi_nyc, imag * ky_chi * chi_nyc], axis=0)
-    grad_chi = (
-        jnp.fft.irfft2(grad_chi, s=(kx.shape[1], ny_full), axes=axes) * ifft_scale
-    )
+    grad_chi = jnp.fft.irfft2(grad_chi, s=(kx.shape[1], ny), axes=axes) * ifft_scale
     dchi_dx, dchi_dy = grad_chi
 
     if multiple_fields:
@@ -179,9 +202,9 @@ def _spectral_bracket_half_core(
         bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
     positive_ky = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
     positive_ky *= _broadcast_mask(
-        half_dealias_mask(mask, ny_full=ny_full), positive_ky.ndim
+        half_dealias_mask(mask, ny_full=ny), positive_ky.ndim
     )
-    return positive_ky, ny_full, int(kx.shape[1])
+    return positive_ky, ny, int(kx.shape[1])
 
 
 def _spectral_bracket_real_fft_core(
@@ -191,9 +214,23 @@ def _spectral_bracket_real_fft_core(
     kxfac: jnp.ndarray,
     **kwargs: Any,
 ) -> jnp.ndarray:
+    """Return the bracket in the ``ky`` layout its operands arrived in.
+
+    The kernel is the same either way.  A two-sided operand pays the widening
+    back onto ``Ny`` rows; a half-spectrum one does not, which is the whole of
+    plan 5.3 N3 in the bracket -- the reality condition is a property of what
+    is stored rather than something restored after the fact.
+    """
+
+    rows = int(jnp.asarray(kwargs["ky_grid"]).shape[0])
+    half_operands = is_half(rows, kwargs.get("ny_full"))
     positive_ky, ny_full, nx = _spectral_bracket_half_core(G_hat, chi_hat, **kwargs)
     real_dtype = jnp.real(jnp.empty((), dtype=positive_ky.dtype)).dtype
-    bracket_hat = _complete_hermitian_ky(positive_ky, ny_full, nx)
+    bracket_hat = (
+        positive_ky
+        if half_operands
+        else _complete_hermitian_ky(positive_ky, ny_full, nx)
+    )
     return jnp.asarray(kxfac, dtype=real_dtype) * bracket_hat
 
 
@@ -207,8 +244,23 @@ def _spectral_bracket_full_core(
     kxfac: jnp.ndarray,
     fft_norm: float | None = None,
     radial_phase: jnp.ndarray | None = None,
+    ny_full: int | None = None,
     multiple_fields: bool,
 ) -> jnp.ndarray:
+    """Return the bracket by full complex transforms on a two-sided ``ky`` axis.
+
+    This route multiplies the whole two-sided spectrum in real space, so it has
+    no half-spectrum form: a state carrying only ``ky >= 0`` is refused here
+    rather than transformed as if its rows were the full axis, which would
+    silently compute the bracket of a different field.
+    """
+
+    if is_half(int(jnp.asarray(ky_grid).shape[0]), ny_full):
+        raise ValueError(
+            "the full-complex bracket needs the two-sided ky axis; this grid "
+            "stores the ky >= 0 half. Use the compressed real-FFT bracket "
+            "(compressed_real_fft=True) with a half-spectrum state."
+        )
     complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
     real_dtype = jnp.real(jnp.empty((), dtype=complex_dtype)).dtype
     imag = jnp.asarray(1j, dtype=complex_dtype)

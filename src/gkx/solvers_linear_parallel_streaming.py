@@ -14,6 +14,7 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
+from gkx.core_ky_layout import source_ny_full
 
 
 def _species_hermite_mesh_and_state_sharding(
@@ -233,6 +234,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
                 linked_gather_map=cache.linked_gather_map,
                 linked_gather_mask=cache.linked_gather_mask,
                 linked_use_gather=cache.linked_use_gather,
+                ny_full=getattr(cache, "ny_full", None),
             )
         else:
             parallel_derivative = grad_z_periodic(pre_derivative, kz=cache.kz)
@@ -378,14 +380,19 @@ def linear_rhs_electrostatic_species_hermite_sharded(
                 linked_gather_map=cache.linked_gather_map,
                 linked_gather_mask=cache.linked_gather_mask,
                 linked_use_gather=cache.linked_use_gather,
+                ny_full=getattr(cache, "ny_full", None),
             )
         else:
             parallel_hypercollision = abs_z_periodic(kz_source, kz=cache.kz)
         hypercollisions = hypercollisions + parallel_hypercollision
 
         kperp2 = cache.ky[:, None] ** 2 + cache.kx[None, :] ** 2
+        ny_rows = int(cache.ky.size)
+        ny_full = source_ny_full(cache)
         kx_index = max((int(cache.kx.size) - 1) // 3, 0)
-        ky_index = max((int(cache.ky.size) - 1) // 3, 0)
+        # The dealias cutoff row is a property of the two-sided ky axis; see
+        # gkx.operators.linear.dissipation.hyperdiffusion_contribution.
+        ky_index = min(max((ny_full - 1) // 3, 0), ny_rows - 1)
         kperp2_max = cache.kx[kx_index] ** 2 + cache.ky[ky_index] ** 2
         kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
         hyperdiffusion_rate = jnp.asarray(params.D_hyper, dtype=real_dtype) * (

@@ -12,6 +12,7 @@ import numpy as np
 
 from gkx.config import resolve_cfl_fac
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
+from gkx.core_ky_layout import source_ny_full
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.operators.collision import CollisionOperator
 from gkx.operators.fluxes import heat_flux_species, heat_flux_total
@@ -216,7 +217,9 @@ def integrate_nonlinear_cached(
     project_state = None
     if compressed_real_fft:
         project_state = _make_compressed_real_fft_projector(
-            ny_full=int(cache.ky.size), nx=int(cache.kx.size)
+            ny_full=source_ny_full(cache),
+            nx=int(cache.kx.size),
+            rows=int(cache.ky.size),
         )
 
     result = integrate_cached_explicit_scan(
