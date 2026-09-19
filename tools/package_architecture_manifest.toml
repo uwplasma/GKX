@@ -957,6 +957,11 @@ recursive = true
 # the mask is needed: the chains are closed under the whole right-hand side, so
 # the time loop keeps those rows at exact zero with no per-step work. Target
 # unchanged.
+# 90380 -> 90417: the one-reference-route contract (Q18). The runtime entry
+# point's raw scan runs under the jit gkx.prepare already compiles, so both are
+# one graph and one set of numbers; the prepared object forwards cfl_scales so
+# the two results carry the same fields; the rest is the contract, the
+# state-dtype caveat and the rejected tolerance written into three docstrings.
 # +359: gkx/core_ky_layout.py, the ky axis layout contract (plan 5.3 N3). The
 # rule it states was written five times -- in the bracket, the Hermitian
 # projector, the artifact restart expander, the runtime init-file expander and
@@ -966,8 +971,9 @@ recursive = true
 # never written down are the load-bearing ones: that Nyc does not determine Ny,
 # that the ky=0 and Nyquist rows are self-conjugate and are not fixed by the
 # layout, and that a half-axis reduction weight is 2 only on the paired rows.
-# Merged with Q19 above: 90380 -> 90511 -> 90870, the sum of the two.
-baseline = 90870
+# Merged with Q18 and Q19 above: 90380 -> 90511 -> 90417 -> 90907, the sum of
+# the three deltas.
+baseline = 90907
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1177,6 +1183,14 @@ recursive = true
 # intake-only mask complete -- and three in
 # tests/unit/linear/test_linear_helpers_extra.py for the cover helper itself.
 # No new test FILE: the topology count is unchanged.
+# +237 (89037 -> 89274): the Q18 reference-route gate. Every output array of
+# gkx.prepare and of integrate_nonlinear_explicit_diagnostics_state compared bit
+# for bit over {float32, x64} x {rk3, rk4} x {fixed, adaptive}, with the
+# diagnostics dataclass walked field by field rather than through tree_flatten,
+# which would have hidden it as one opaque leaf; the same for value and
+# gradient; and the ledger's new constant-bytes and route-selection contracts.
+# Most of the count is the walker and the two helpers the comparison needs, not
+# assertions; target unchanged.
 # +581: 569 for tests/unit/core/test_core_ky_layout.py and 12 for the two
 # restart-path cases that move with _expand_ky's signature (the runtime runner
 # and CLI tests). The new file is 171 cases over even and odd Ny
@@ -1187,8 +1201,9 @@ recursive = true
 # case records a contract violation rather than asserting the contract:
 # _hermitian_mode_weight gives an even grid's Nyquist row weight 2 on a
 # half-spectrum grid, unreachable today because dealiasing zeroes that row.
-# Merged with Q19 above: 89037 -> 89301 -> 89882, the sum of the two.
-baseline = 89882
+# Merged with Q18 and Q19 above: 89037 -> 89301 -> 89274 -> 90119, the sum of
+# the three deltas.
+baseline = 90119
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1263,7 +1278,12 @@ recursive = true
 # +50: nonlinear-step-hlo --route runtime lowers the scan run_runtime_nonlinear
 # compiles, with cache/params as operands; the diagnostics route was that of the
 # prepared scan, so the N1 gate had measured a graph the runtime does not run.
-baseline = 78165
+# +22: Q18 made --route runtime and --route diagnostics the one graph both
+# nonlinear entry points compile, moved the retired operand placement to
+# --route eager-scan so the rejected option stays priceable, and made the
+# ledger report constant_bytes, the literal payload a captured array costs the
+# compiled module.
+baseline = 78187
 target = 0
 
 [[line_budget_policy.counts]]

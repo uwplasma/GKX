@@ -283,11 +283,60 @@ def test_hlo_op_counts_read_op_names_not_metadata() -> None:
     assert counts["bytes_written"] == 8 * 8 + 16 * 8 + 5 * 8
 
 
-def test_runtime_route_lowers_scan_body_arrays_as_arguments() -> None:
-    """The runtime ledger must count the eager scan, whose closures are operands.
+def test_hlo_op_counts_price_captured_arrays_as_module_literals() -> None:
+    """The ledger must price what a captured array costs the executable.
 
-    A jit of the same function embeds the closed-over array as a constant,
-    which is the prepared graph and not what ``run_runtime_nonlinear`` compiles.
+    The reference-route contract (queue row Q18) puts both nonlinear routes on
+    the captured graph, so the module carries its cache, parameter and policy
+    arrays as literals. ``constant_bytes`` is that payload and is counted apart
+    from ``bytes_written``, which prices materialized copies.
+    """
+
+    hlo = """
+  %constant.1 = f32[64]{0} constant({...})
+  %constant.2 = s32[8]{0} constant({...})
+  %copy.3 = f32[64]{0} copy(%constant.1)
+"""
+    counts = runtime_kernels._hlo_op_counts(hlo)
+
+    assert counts["constant_bytes"] == 64 * 4 + 8 * 4
+    assert counts["bytes_written"] == 64 * 4
+    assert counts["copy"] == 1
+
+
+def test_nonlinear_step_hlo_routes_name_one_reference_graph() -> None:
+    """``--route runtime`` and ``--route diagnostics`` are the same graph.
+
+    Queue row Q18 gave ``integrate_nonlinear_explicit_diagnostics_state`` the
+    prepared route's jit, so the ledger must not keep lowering a separate
+    module for the runtime. ``--route eager-scan`` keeps the retired operand
+    placement so the rejected option stays priceable.
+    """
+
+    parser = runtime_kernels.build_nonlinear_step_hlo_parser()
+    choices = parser.parse_known_args(["--route", "eager-scan"])[0]
+    assert choices.route == "eager-scan"
+
+    source = textwrap.dedent(inspect.getsource(runtime_kernels.main_nonlinear_step_hlo))
+    tree = ast.parse(source)
+    selectors = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.IfExp)
+        and isinstance(node.body, ast.Name)
+        and node.body.id == "_eager_scan_hlo"
+    ]
+    assert len(selectors) == 1
+    assert isinstance(selectors[0].orelse, ast.Name)
+    assert selectors[0].orelse.id == "_diagnostics_scan_hlo"
+
+
+def test_eager_scan_route_still_lowers_scan_body_arrays_as_arguments() -> None:
+    """The retired placement must stay measurable, and stay the rejected one.
+
+    A jit of the same function embeds the closed-over array as a constant.
+    That captured graph is what both shipped routes now compile; the bound
+    module below is the eager scan the contract retired.
     """
 
     weights = jnp.linspace(0.5, 1.5, 64, dtype=jnp.float32)

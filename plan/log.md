@@ -14588,6 +14588,255 @@ e4077b5322ed2521b0da57f89c4795ad04d088bf9823ade3dfe7423f3c011e29  supplied_state
 nonlinear aliasing feedback measured above applies just as much, or is "the
 library takes the state you give it" the contract those entry points should keep?
 
+## 2026-09-18 — Q18: one reference route for `gkx.prepare` and the nonlinear runtime (plan §5.3)
+
+**Question.** #239 (Q13) found that the two shipped explicit nonlinear diagnostics
+routes are not bitwise equal. `gkx.prepare` jits its raw scan, so cache, parameter
+and policy arrays are constants of the compiled module.
+`integrate_nonlinear_explicit_diagnostics_state` — the entry point
+`run_runtime_nonlinear` reaches on its fixed-window, chunked and sharded routes —
+ran the same raw scan function outside jit, so XLA compiled the scan primitive
+alone with those arrays as operands and optimized the pre-scan field solve and the
+first diagnostic as separate modules. Neither was documented as the reference and
+no test pinned the difference. Branch `fix/nonlinear-route-reference` off
+`origin/main` (`4c6c9ac8b`).
+
+**Decision: one reference route (option (a)), taken in the direction #239 had not
+tried.** #239 rejected hoisting `_run_raw`'s constants into arguments. This entry
+goes the other way: `_run_explicit_diagnostic_scan_and_finalize` now calls its raw
+scan under `jax.jit`, over the same components
+`prepare_explicit_nonlinear_diagnostics_impl` closes over. The two routes are then
+not two graphs that agree to a tolerance; they are one graph. Declaring a
+tolerance (option (b)) is rejected below on its own numbers.
+
+**It is one graph, by dump, not by inference.** `--xla_dump_to` on a real
+8×8×8 Nl2/Nm2 two-step adaptive run:
+
+| route | optimized modules dumped | scan module |
+|---|---:|---|
+| runtime, `main` | 204 | `jit_scan` |
+| prepared, `main` | 143 | `jit_run_raw` |
+| runtime, this branch | 143 | `jit_run_raw` |
+| prepared, this branch | 143 | `jit_run_raw` |
+
+On this branch the runtime and prepared runs dump the same multiset of module
+names, and their `jit_run_raw` modules have 9,693 optimized instructions that are
+identical line for line once the Python call-stack metadata is stripped (SHA-256
+`a00a1ec2cd92…1735`). Only that metadata differs, because the two traces enter
+through different Python frames.
+
+**Bitwise gate.** #239's gate: Cyclone deck at 16×16×24, Nl2/Nm4, `init_amp` ×10,
+compressed real FFT, 100 steps, rk3/rk4 × {adaptive dt, implicit collision split,
+fixed mode ky(.3) ikx=1}, comparing every array of `(t, diagnostics, G_final,
+fields_final)` — 79 or 80 arrays per case, the diagnostics dataclass walked field
+by field rather than through `tree_flatten`, which would hide it as one leaf.
+
+| tree | float32 | x64 |
+|---|---|---|
+| `main` | 12/12 cases non-bitwise, 36–43 arrays each | 12/12 non-bitwise, 36–42 arrays each |
+| this branch | **0/12 non-bitwise** | **0/12 non-bitwise** |
+
+The `main` differences, pooled over the twelve cases, by output class
+(‖Δ‖/‖ref‖, prepared as reference):
+
+| class | arrays | differing | float32 | x64 |
+|---|---:|---:|---|---|
+| final state `G_final` | 6 | 6 | 8.0e-8 – 2.1e-7 | 1.5e-21 – 1.6e-7 |
+| `fields_final` | 18 | 6 | 6.9e-8 – 1.7e-7 | 9.2e-17 – 4.5e-8 |
+| other diagnostics | 366 | 162 / 148 | 2.0e-8 – 1.1e-7 | 6.7e-17 – 7.0e-8 |
+| zonal potential diagnostics | 30 | 30 | 1.4e-7 – 2.1e-6 | 1.8e-16 – 2.0e-7 |
+| `gamma_t`, `omega_t` | 12 | 12 | 4.5e-6 – 1.2e-3 | 8.8e-15 – 3.9e-5 |
+| turbulent heating (near-cancelling) | 36 | 36 | 0.64 – 0.93 | 9.8e-8 – 1.41 |
+| `t` | 6 | 0 | — | — |
+
+`cfl_scales` was in the runtime result and absent from the prepared one, because
+`PreparedExplicitNonlinearDiagnostics.run` did not forward it. The prepared object
+now carries it (one defaulted field, `cfl_scales=None`), so the two results have
+the same fields as well as the same numbers.
+
+**Why option (b) was rejected.** The turbulent-heating diagnostics
+(`turbulent_heating_t`, `turbulent_heating_species_t` and the four
+`TurbulentHeating_*` resolved channels) are a near-cancelling difference of two
+larger terms. Their relative difference between two roundoff-equivalent routes is
+not bounded by the roundoff of either: it reached 0.93 in float32 and 1.41 in x64
+on this gate, with no resolution or method dependence that a tolerance could be
+derived from. Any bound that passes them is vacuous for every other output, and
+any bound that is meaningful elsewhere fails on them. `gamma_t` and `omega_t` are
+ratios and amplify by three to four orders of magnitude for the same reason. A
+tolerance contract would therefore have had to say "compare the terms these are
+built from instead", which is a worse contract than "the routes are equal".
+
+**Cost, and why no one opts in.** HLO at 32×32×24 Nl2/Nm4 on the shipped Cyclone
+deck, XLA:CPU, compile only, load-independent. `constant_bytes` is new in the
+ledger: the literal payload the module carries, which is what a captured array
+costs the executable.
+
+| graph | method | concat | copy | transpose | fft | bytes written | constant bytes |
+|---|---|---:|---:|---:|---:|---:|---:|
+| prepared (`main` and branch, unchanged) | rk3 | 38 | 85 | 66 | 44 | 89,479,380 | 6,553,260 |
+| runtime, `main` (eager scan) | rk3 | 44 | 226 | 64 | 43 | 89,062,692 | 7,140 |
+| **runtime, branch** | rk3 | 38 | 85 | 66 | 44 | 89,479,380 | 6,553,260 |
+| prepared (`main` and branch, unchanged) | rk4 | 49 | 105 | 86 | 57 | 117,413,076 | 6,553,484 |
+| runtime, `main` (eager scan) | rk4 | 55 | 246 | 84 | 56 | 116,996,388 | 7,656 |
+| **runtime, branch** | rk4 | 49 | 105 | 86 | 57 | 117,413,076 | 6,553,484 |
+
+The runtime graph loses 141 copies at rk3 and 141 at rk4, gains two transposes and
+one FFT, and writes 0.47% more bytes. It gains 6,546,120 bytes of module literals,
+4.2× the 1,572,864-byte state: that is the real price of the captured graph, and
+it is paid once per compile, not per step. No step does more work, and there is
+nothing to opt into — the change is which graph the same call compiles.
+
+Process memory moves the other way, because one jit replaces the ~60 extra small
+modules the eager route compiled around its scan. Eight successive chunked calls
+at 16×16×24 Nl2/Nm4, 8 steps each:
+
+| tree | peak RSS | growth after the first call |
+|---|---:|---:|
+| `main` | 1,199,718,400 B | 413,384,704 B |
+| branch | 825,901,056 B | 125,026,304 B |
+
+Compilations per call are unchanged: three repeated calls compile three scan
+modules on `main` and three `run_raw` modules on the branch (220 against 145
+optimized modules in total for the three calls). The prepared object still keeps
+its compile across `run()` calls and the function entry point still compiles per
+call, as before. **No timing is reported**: the 1-minute load was 5–16 during the
+session and no idle core set could be pinned. Every number above is a compile-time
+count, a byte count or an RSS reading.
+
+**VJP: checked, and it was never the affected surface.** `d/dscale ‖G_final‖²` at
+16×16×24 Nl2/Nm4, rk3, 20 steps, fixed dt, with and without checkpointing. Value
+and gradient are bitwise equal between the two routes on `main` **and** on this
+branch, in float32 and x64 — the float32 artifacts of the two trees have the same
+SHA-256 (`5be4b03c6cc6…f08e`), as do the x64 ones (`4fdb4c0ac6fe…81ee`). Under
+`jax.grad` the eager route's scan was already staged into the caller's trace
+rather than dispatched on its own, so the route split only ever moved the primal
+eager execution. The change leaves the gradients bit for bit as they were.
+
+**A dtype trap found while gating the VJP, now documented.** A first VJP gate
+reported a 1.09e-7 value difference under x64 that survived the fix. It is not a
+route difference. `prepare` freezes the state dtype of the `G0` it was built with
+and casts later states to it; the function entry point takes the dtype of the `G0`
+it is handed. Scaling a `complex64` state by a `float64` scalar under
+`JAX_ENABLE_X64` promotes it, so the prepared route cast back to `complex64` while
+the function entry point ran the whole simulation in `complex128`. With the scale
+in the real dtype of the state, both are bitwise. This is now stated in
+`PreparedExplicitNonlinearDiagnostics`, in `docs/solvers.rst` and in the test that
+would otherwise have been written around it.
+
+**One existing test had to move, and it says something.**
+`test_nonlinear_gamma_omega_use_previous_step_not_previous_diagnostic` asserts
+that gamma and omega do not depend on `diagnostics_stride`, and in float32 it
+now fails at `np.allclose`'s default 1e-5 on the first gamma sample: 0.0994371
+at stride 1 against 0.09944008 at stride 2, 3.0e-5 relative. The state and the
+energy diagnostics are bitwise equal between the two strides, and in x64 gamma
+is exactly equal and omega differs by 1.7e-15. The stride-2 value is not new:
+**`gkx.prepare` on `main` already produced 0.09944008**, and only the eager
+route produced 0.0994371, so the test was passing because it exercised the one
+route that did not have the sensitivity. It is now inherited by the runtime,
+which is the contract working as intended. The cause is that the pre-scan first
+diagnostic is now inside the same module and XLA fuses it differently under the
+two strides; gamma is a per-step log-amplitude ratio, so a relative perturbation
+`e` moves it by `2e/(dt |gamma|)`, here 500·`e`. The test now takes 1e-12 in
+x64 and, in float32, `4 · 2 · eps32 / (dt |gamma|)` = 4.8e-4, with the
+derivation in its docstring. The observed 3.0e-5 corresponds to `e` ≈ 0.25
+float32 eps, so the bound has 16× headroom. This is the Q14 amplification
+class, not a physics change.
+
+**Changes.**
+- `src/gkx/solvers_nonlinear_diagnostics.py`: the raw scan in
+  `_run_explicit_diagnostic_scan_and_finalize` runs under `jax.jit`;
+  `PreparedExplicitNonlinearDiagnostics` gains `cfl_scales` (defaulted) and
+  forwards it to `_finalize`; the contract is in both docstrings.
+- `src/gkx/solvers_nonlinear_diagnostic_integration.py`: the contract in
+  `integrate_nonlinear_explicit_diagnostics_state`'s docstring.
+- `tools/profiling/profile_runtime_kernels.py`: `_hlo_op_counts` reports
+  `constant_bytes`; `--route runtime` and `--route diagnostics` name the one
+  shared graph; the retired placement moves to `--route eager-scan`
+  (`_eager_scan_hlo`, the former `_runtime_scan_hlo`).
+- `docs/solvers.rst` gains "One nonlinear diagnostics graph"; `docs/api.rst`
+  points `prepare` at it.
+
+**Tests.**
+- `tests/unit/nonlinear/test_nonlinear.py`:
+  `test_prepared_and_runtime_nonlinear_routes_are_bitwise_identical`, over
+  {float32, x64} × {rk3, rk4} × {fixed, adaptive} on a 4×4×4 nonlinear case,
+  comparing every output array bit for bit; and
+  `test_nonlinear_route_reference_holds_for_value_and_gradient`. On unmodified
+  `main` the eight bitwise cases fail (29–34 arrays differing each) and the two
+  gradient cases pass, which is the split the evidence predicts.
+- `test_nonlinear_gamma_omega_use_previous_step_not_previous_diagnostic` takes
+  precision-aware tolerances, derived above.
+- `tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py`:
+  `test_hlo_op_counts_price_captured_arrays_as_module_literals`,
+  `test_nonlinear_step_hlo_routes_name_one_reference_graph`, and
+  `test_runtime_route_lowers_scan_body_arrays_as_arguments` renamed to
+  `test_eager_scan_route_still_lowers_scan_body_arrays_as_arguments`, which keeps
+  #239's guard on the retired placement.
+
+**Gates** (x64 as CI runs them unless stated, `gkx.__file__` in the worktree):
+
+| gate | result |
+|---|---|
+| `tests/unit/nonlinear/test_nonlinear.py` | 52 passed |
+| `tests/unit/nonlinear/test_nonlinear_helpers_extra.py` | 82 passed |
+| `tests/unit/solvers/test_time_integrators.py` | 97 passed |
+| `tests/integration/runtime/test_runtime_runner.py` | 170 passed |
+| `tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py` | 39 passed |
+| `tests/unit/objectives/test_autodiff_solver_objectives.py` | 97 passed |
+| `tests/release/test_release_gates.py`, `tests/release/test_evidence_ledger.py` | 152 passed |
+| all six suites above again in float32 (`JAX_ENABLE_X64=false GKX_X64=0`) | pass |
+| ruff 0.16.4 `check` and `format --check`, repo-wide | pass |
+| mypy as CI runs it | pass |
+| `tools/release/check_package_architecture_manifest.py` | pass |
+| `tools/release/check_repository_size_manifest.py` | pass |
+| gitleaks on `origin/main..HEAD` | no leaks |
+
+**Limitations.** XLA:CPU and jax 0.10.2 only; no GPU and no sharded-device run.
+IMEX is untouched and keeps its own route. `_run_dynamic_raw` is unchanged, so the
+open N1 question — which part of its in-graph rebuild avoids the 2.7× byte
+regression — is still open and was not bisected here. The bitwise gate covers one
+grid, one amplitude and one deck at 100 steps, plus the 4×4×4 case in CI; it is an
+identity gate, not a physics gate. Runtime diagnostics that are ratios do move
+for users of the function entry point, to the values `gkx.prepare` already
+produced — `gamma_t[0]` by 3.0e-5 relative in float32 on the stride test above;
+nothing that is not a ratio moved by more than the roundoff tabulated here. The RSS readings are single measurements on a
+loaded machine and are indicative, not a benchmark. Nothing here changes any
+numerical result of the prepared route, which is what the archived artifacts were
+produced with.
+
+**Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
+jax/jaxlib 0.10.2, `gkx-review-20260913` venv, `PYTHONPATH=<tree>/src:<tree>`,
+`JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at a time behind a 1-minute
+load gate below 20. The `main` comparison tree is a `git archive` export of
+`4c6c9ac8b`, never a shared checkout.
+
+**Commands.**
+- gate: `python gate_routes.py --Nx 16 --Ny 16 --Nz 24 --Nl 2 --Nm 4 --steps 100
+  --methods rk3,rk4 --modes adaptive,collision_split,fixed_mode --out <json>`,
+  with and without `JAX_ENABLE_X64=true GKX_X64=1`.
+- ledger: `python tools/profiling/profile_runtime_kernels.py nonlinear-step-hlo
+  --route {diagnostics,runtime,eager-scan} --methods rk3,rk4 --out <json>`.
+- dumps: `XLA_FLAGS=--xla_dump_to=<dir> python route_dump_driver.py --which
+  {runtime,prepared}`.
+- VJP: `python vjp_routes.py --out <json>`; memory: `python repeat_calls.py
+  --calls 8 --out <json>`.
+
+**Scratch evidence** (session-local, SHA-256 prefixes): scripts `gate_routes.py`
+a9532e444e84…6481, `vjp_routes.py` fbc970703d21…14a0, `repeat_calls.py`
+673cc37f6fcd…49c8, `route_dump_driver.py` 30b4c7ece5d5…89c8; gate JSON `main` f32
+0c0f7dd20570…329d and x64 1ead8a340d55…2080, branch f32 c3f71d1a2094…d74e and x64
+c21c5fb36423…bcef; ledger JSON `main` diagnostics 35a6f18f571d…2696 and runtime
+f54e4d165279…4355, branch diagnostics 967553b0fc11…10e4, runtime
+ef90d164308b…fdec and eager-scan 227e81bdb679…53bd; VJP JSON f32
+5be4b03c6cc6…f08e (both trees) and x64 4fdb4c0ac6fe…81ee (both trees); RSS JSON
+`main` af2fcd26c02d…471c and branch 9500383fe539…0e25; stripped `jit_run_raw`
+instruction listing a00a1ec2cd92…1735.
+
+**Next question.** N1's byte regression is still attributed to nothing in
+particular: bisect `_run_dynamic_raw`'s in-graph rebuild (quadrature weights, ω
+mask, state projector) to find which piece keeps XLA:CPU from that layout, HLO
+only. Or go to N3, whose ky ≥ 0 layout removes the transposes that choice acts on.
+
 ## 2026-09-18 — Q10 stage 1: the ky ≥ 0 layout contract (plan §5.3 N3)
 
 **Outcome: partial (#248). The contract is written, owned and tested; the evolved
@@ -14723,6 +14972,15 @@ so this is also a reproduction of Q9's ledger on different hardware. The
 optimized HLO *text* was diffed as well: identical modulo metadata and SSA
 numbering for all ten graphs.
 
+**Re-measured after merging #247 (Q19) and #249 (Q18).** Q18 made `--route
+runtime` lower the same graph as `--route diagnostics`, so on the merged tree
+the four `runtime` rows above are replaced by their `diagnostics` twins; the
+`diagnostics` and RHS rows are unchanged from the table. The A/B was re-run on
+the merged tree and is still identical on all ten graphs
+(`ledgers_after_q18/`, `ledger_table_after_q18.txt`; the four ref/new pairs
+again share a SHA-256). The pre-merge table is kept because it is the one whose
+`runtime` rows are comparable to #239's and #243's.
+
 **Identity.** `‖Δ‖/‖ref‖` against `origin/main`, per output class.
 
 | gate | cases | f32 | x64 |
@@ -14787,7 +15045,7 @@ hypercollision branches.
 
 | file | sha256[:16] |
 |---|---|
-| `README.md` | `fee075160598341f` |
+| `README.md` | `2f5c8befef9e80b7` |
 | `ledger_table.txt` | `129ae072694b257f` |
 | `run_gates.sh` | `5757e554502cd1c5` |
 | `probe_argrhs.py` | `4a8b9ca2eb960bdd` |
@@ -14801,6 +15059,12 @@ hypercollision branches.
 | `identity/cmp_rhs_identity_f32_singlethread_fft.txt` | `b4c283c2ade7a787` |
 | `identity/cmp_gate_traj_f32.json` | `9e408af96338bf20` |
 | `identity/cmp_gate_traj_x64.json` | `c6620ebd4946102f` |
+
+| `ledger_table_after_q18.txt` | `183692c4a0736abb` |
+| `ledgers_after_q18/{ref,new}_diagnostics_32.json` | `967553b0fc115053` (both) |
+| `ledgers_after_q18/{ref,new}_diagnostics_64.json` | `d01bc780be1662ab` (both) |
+| `ledgers_after_q18/{ref,new}_runtime_32.json` | `ef90d164308b88d6` (both) |
+| `ledgers_after_q18/{ref,new}_runtime_64.json` | `a00a8ef028de9f60` (both) |
 
 Source: `src/gkx/core_ky_layout.py` `40003bd13558e9c3`,
 `tests/unit/core/test_core_ky_layout.py` `b74c2b1db788be39`.

@@ -30,6 +30,12 @@ scripts (`../2026-09-14-q9-batched-chain-fft/`), which are reused verbatim.
   the full nonlinear RHS and the VJPs, four cases.
 - `identity/cmp_rhs_identity_f32_singlethread_fft.txt` — the same f32 A/B with
   the multithreaded CPU FFT off: 58/58 bitwise.
+- `ledgers_after_q18/` and `ledger_table_after_q18.txt` — the same A/B re-run
+  after merging Q18 and Q19 into this branch. Q18 made `--route runtime` lower
+  the same graph as `--route diagnostics`, so on the merged tree the `runtime`
+  rows equal the `diagnostics` ones; the A/B is still identical on all ten
+  graphs. `ledgers/` is kept because its `runtime` rows are the ones comparable
+  to the earlier recorded ledgers.
 - `identity/cmp_gate_traj_{f32,x64}.json` — 100-step trajectories over the
   integrators, routes and checkpointed window: 65/65 bitwise in both.
 
