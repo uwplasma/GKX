@@ -15321,3 +15321,30 @@ found), 3653963, 3653967, 3654113 (`launch_idle.sh` and its runners), 3714300
 `bench_q9|run_ab_rot|launch_idle|launch_dense|launch_dscan` returns nothing. No GPU was used
 at any point. The staging directory `~/q9-idle-20260918` was removed after its artifacts were
 copied here, leaving no files on the office host.
+
+## 2026-09-19 — queue follow-ups after the post-2.1.0 batch
+
+Plan-only change.
+
+**Correction.** Integrating #250 re-introduced Q10's pre-#248 row: the conflict rule used while
+merging `main` into that branch preferred the branch's own copy of every queue row, and #250 had
+branched before #248 landed. The row is restored here from `8ab55bc72`. Nothing else regressed; the
+Q9 row on `main` is the richer one, carrying #250's timing verdict. The lesson for the next merge
+chain is to prefer, per row, the copy that names a merged PR rather than the branch's own.
+
+**New rows.**
+- **Q22** recovers the forward-path cost that #250 measured on an idle host: the rk3 scan runs
+  1.026–1.035× base and the standalone 32×32×24 RHS 1.223×, while the RHS gradient runs 0.88× and
+  the window gradient 0.94×. Q9's shared per-class transforms are kept for the adjoint path and the
+  43–48% byte reduction, and the forward cost is treated as its own question, after Q10's switch
+  moves the same per-class concatenates.
+- **Q23** extends #247's intake contract to the library entry points below the runtime, where an
+  unmasked nonlinear state still aliases onto the chain rows at 4.5e-2 relative.
+- **Q24** collects the N3 prerequisites #248 found: one owner for the three copies of the ky weight
+  rule, including the even-grid Nyquist row that takes weight 2 on a half axis, and pinning
+  `--xla_cpu_multi_thread_eigen=false` in the float32 identity harness, since two runs of unmodified
+  `main` differ by 1.4e-10 on the f32 nonlinear RHS under the multithreaded FFT thunk.
+
+**State.** `main` is `018477cb8`. Merged since 2.1.0: #247 (Q19), #249 (Q18), #248 (Q10 stage 1),
+#250 (Q9 idle-host timing). Open rows: Q10 (the layout switch), Q11, Q16 (running), Q21, Q22, Q23,
+Q24.
