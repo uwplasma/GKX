@@ -20,8 +20,13 @@ import gkx.solvers_linear_implicit as linear_implicit
 import gkx.operators.linear.dissipation as linear_dissipation
 import gkx.terms.linear_terms as linear_terms
 from gkx.operators.linear.cache_arrays import hypercollision_damping
-from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.linear.cache_builder import (
+    build_linear_cache,
+    linked_chain_cover_mask,
+    mask_off_chain_rows,
+)
 from gkx.operators.linear.moments import build_H, lenard_bernstein_eigenvalues
+from gkx.solvers_linear_krylov_algorithms import _linked_covered_mode_mask
 from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
@@ -1825,3 +1830,74 @@ def test_integrate_linear_cached_impl_observed_order_against_exact_solution(
 
     metrics = estimate_observed_order(np.array(step_sizes), np.array(errors))
     assert metrics.asymptotic_order >= min_order
+
+
+def test_linked_chain_cover_mask_matches_the_built_cache(spectral_grid) -> None:
+    """The light cover builder agrees with the one the eigen routes read off a cache."""
+
+    grid = spectral_grid(
+        Nx=8,
+        Ny=8,
+        Nz=8,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        boundary="linked",
+        jtwist=1,
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=1.0, epsilon=0.1)
+    params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_widthfrac=0.25)
+
+    cover = linked_chain_cover_mask(grid, geom, params)
+    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=3)
+    from_cache = _linked_covered_mode_mask(cache)
+
+    assert cover is not None and from_cache is not None
+    np.testing.assert_array_equal(np.asarray(cover), np.asarray(from_cache))
+    # On a full grid the chains reach exactly the two-thirds modes, which is
+    # why the nonlinear bracket cannot write outside them.
+    np.testing.assert_array_equal(
+        np.asarray(cover), np.asarray(grid.dealias_mask, dtype=bool)
+    )
+
+
+def test_mask_off_chain_rows_zeroes_only_the_unreachable_rows(spectral_grid) -> None:
+    grid = spectral_grid(
+        Nx=8,
+        Ny=8,
+        Nz=8,
+        Lx=2.0 * np.pi,
+        Ly=2.0 * np.pi,
+        boundary="linked",
+        jtwist=1,
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=1.0, epsilon=0.1)
+    params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_widthfrac=0.25)
+    cover = np.asarray(linked_chain_cover_mask(grid, geom, params))
+    assert not cover.all()
+
+    rng = np.random.default_rng(19)
+    shape = (1, 2, 3, int(grid.ky.size), int(grid.kx.size), int(grid.z.size))
+    state = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(np.complex64)
+
+    masked = np.asarray(mask_off_chain_rows(state, grid, geom, params))
+
+    off = np.broadcast_to(~cover[:, :, None], shape)
+    assert np.max(np.abs(masked[off])) == 0.0
+    np.testing.assert_array_equal(masked[~off], state[~off])
+
+
+def test_mask_off_chain_rows_is_the_identity_on_a_periodic_grid(spectral_grid) -> None:
+    grid = spectral_grid(
+        Nx=8, Ny=8, Nz=8, Lx=2.0 * np.pi, Ly=2.0 * np.pi, boundary="periodic"
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=1.0, epsilon=0.1)
+    params = LinearParams(nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_widthfrac=0.25)
+
+    assert linked_chain_cover_mask(grid, geom, params) is None
+
+    rng = np.random.default_rng(20)
+    shape = (1, 2, 3, int(grid.ky.size), int(grid.kx.size), int(grid.z.size))
+    state = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(np.complex64)
+
+    # Identity, and the same object: a periodic deck adds no array op at all.
+    assert mask_off_chain_rows(state, grid, geom, params) is state

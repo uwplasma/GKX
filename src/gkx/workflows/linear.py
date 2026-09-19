@@ -17,6 +17,7 @@ from gkx.diagnostics.modes import (
     extract_mode_time_series,
 )
 from gkx.config import RuntimeConfig
+from gkx.operators.linear.cache_builder import mask_off_chain_rows
 from gkx.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
 from gkx.workflows.runtime.results import RuntimeLinearResult
 from gkx.workflows.runtime.solver_status import (
@@ -196,6 +197,10 @@ def _prepare_linear_runtime_context(
                 f"initial_state shape {tuple(state.shape)} does not match "
                 f"runtime shape {expected_shape}"
             )
+        # State this runtime did not build: on a linked deck it can carry rows
+        # the chains never reach, which no growth-rate fit would read but every
+        # free-energy and spectrum sum would. Zero them once, at intake.
+        state = mask_off_chain_rows(state, grid, geom, params)
 
     return _LinearRuntimeContext(
         cfg=cfg,

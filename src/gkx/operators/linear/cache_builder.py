@@ -21,6 +21,8 @@ from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.linked import (
     _build_linked_end_damping_profile,
     _build_linked_fft_maps,
+    linked_cover_mask,
+    project_to_linked_cover,
 )
 from gkx.operators.linear.params import LinearParams, _is_tracer, _x64_enabled
 
@@ -1090,3 +1092,70 @@ def build_linear_cache(
             linked_cache=linked_cache,
         )
     )
+
+
+def linked_chain_cover_mask(
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+) -> np.ndarray | None:
+    """Return the ``(ky, kx)`` modes the linked chains couple for this deck.
+
+    This is the chain topology of :func:`build_linear_cache` without its
+    velocity-space arrays: it resolves the twist-shift policy and the linked FFT
+    maps only, which cost ``O(Nz + Nky * Nkx)``. Callers that only need to know
+    which rows the linked operator can reach -- state intake, for instance --
+    use it instead of building a cache they would otherwise throw away.
+    ``None`` means every row is reachable (periodic boundaries, full-cover
+    linked grids), so the caller has nothing to do.
+    """
+
+    grid_arrays = _build_grid_cache_arrays(grid, params)
+    geom_arrays = _build_geometry_cache_arrays(
+        geom,
+        theta=grid_arrays.theta,
+        real_dtype=grid_arrays.real_dtype,
+    )
+    twist = _resolve_twist_shift_policy(
+        grid,
+        geom_arrays.geom_data,
+        gds21=geom_arrays.gds21,
+        gds22=geom_arrays.gds22,
+        kx_eff=grid_arrays.kx_eff,
+        kx_grid=grid_arrays.kx_grid,
+    )
+    if not twist.use_twist_shift:
+        return None
+    linked_cache = _build_linked_fft_cache(
+        grid,
+        use_twist_shift=True,
+        y0=twist.y0,
+        jtwist=twist.jtwist,
+        real_dtype=grid_arrays.real_dtype,
+    )
+    return linked_cover_mask(
+        gather_mask=linked_cache.linked_gather_mask,
+        use_gather=bool(linked_cache.linked_use_gather),
+        full_cover=bool(linked_cache.linked_full_cover),
+        ny=int(np.asarray(grid.ky).size),
+        nx=int(np.asarray(grid.kx).size),
+    )
+
+
+def mask_off_chain_rows(
+    state: Any,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+) -> Any:
+    """Zero the rows a linked deck's chains never reach; identity otherwise.
+
+    The linked operator maps off-chain rows to off-chain rows and never writes a
+    chain row from one, so content there is a neutral wave that no growth-rate
+    fit reads while free-energy and spectrum sums still include it. Runtime
+    initial conditions never put anything there, but a supplied state or a
+    restart written elsewhere can, so intake zeroes it once instead of the time
+    loop zeroing it every step.
+    """
+
+    return project_to_linked_cover(state, linked_chain_cover_mask(grid, geom, params))
