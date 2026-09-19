@@ -226,7 +226,22 @@ recursive = true
 # and separate from it because the contract is what plan 5.3 N3 moves the
 # evolved state against: that row rewrites this file and must not have to reach
 # into the grid's own tests to do it.
-baseline = 79
+# 79 -> 80: tests/unit/nonlinear/test_ky_half_spectrum_state.py. The target is
+# 30, so a new file needs a reason: test_core_ky_layout.py owns the *rule* --
+# what the two layouts are, how a row converts between them, what a reduction
+# weighs -- and this one owns the *evolved state* carried in the half layout,
+# which is a different object. Its cases are end-to-end: the linear RHS agrees
+# row by row between the layouts, the nonlinear one to the transform's own
+# round-off, the per-stage projector is the identity, and each of the seven
+# blockers plan 5.3 N3 listed is pinned at the place it would otherwise fail
+# silently (the linked chains' naky, the conjugate restore, the hyperdiffusion
+# cutoff, the restart block, the real-space writers, the supplied-state
+# intake). None of that can live in the contract file without pulling caches,
+# geometry and the bracket into a module-level unit test, and none of it can
+# live in test_nonlinear.py without that file acquiring the layout contract as
+# a second subject. It sits under tests/unit/nonlinear because the state it is
+# about is the nonlinear route's.
+baseline = 80
 target = 30
 
 [[topology_policy.counts]]
@@ -373,7 +388,7 @@ reason = "Fused stellarator_tables and stellarator_reduced; reduce by deduplicat
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
-baseline_lines = 1069
+baseline_lines = 1076
 target_lines = 1000
 reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, restart, and final-field variables consistent; reduce helper repetition without splitting the schema again."
 
@@ -988,8 +1003,19 @@ recursive = true
 # The rest is the contract in the docstrings users meet it in: that these entry
 # points project rather than reject, why a value check cannot be written at a
 # traced boundary, and what the projection does to a supplied state's cotangent.
-# Target unchanged.
-baseline = 91175
+# 91175 -> 91612 (plan 5.3 N3, the ky >= 0 state switch). Almost none of it is
+# new code: the layout is threaded, not implemented twice. `ny_full` rides
+# beside `linked_use_gather` through the linked apply chain because the
+# conjugate restore has to *know* which layout it is on -- `(-j) % Nyc` names
+# an unrelated positive row, so the two-sided rule is inapplicable on a half
+# axis rather than merely unnecessary -- and that thread is one keyword at
+# twenty-nine call sites. The rest is the explanation the diff cannot carry:
+# why `naky` counts the two-sided axis while the flat chain index counts the
+# stored rows, why `kperp2_max` halving its cutoff produces no shape error,
+# why the half dealias mask is built rather than sliced when the slice agrees,
+# and why an even grid's Nyquist row is now a flux representative in both
+# layouts. Target unchanged.
+baseline = 91612
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1233,7 +1259,16 @@ recursive = true
 # builds its own deck and its own supplied state, which is most of the lines:
 # the claim is about a state the caller built, so a shared fixture would be
 # asserting on a state the suite built instead.
-baseline = 90637
+# 90637 -> 91339 (plan 5.3 N3). One new file, 60 cases, and it is long because
+# each case is an end-to-end statement about the evolved state rather than a
+# property of a helper: two caches and two states per case, one per layout,
+# compared row by row. The seven blockers the switch had to clear are pinned
+# individually at the place each would otherwise fail *silently* -- a wrong
+# `naky` leaves a third of the band with no parallel derivative, a wrong
+# `kperp2_max` inflates every hyperdiffusion rate, a wrong restart length
+# writes a third of the modes -- and a table-driven form would lose which
+# statement failed, which is the only thing those cases are for.
+baseline = 91339
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1313,7 +1348,11 @@ recursive = true
 # --route eager-scan so the rejected option stays priceable, and made the
 # ledger report constant_bytes, the literal payload a captured array costs the
 # compiled module.
-baseline = 78187
+# 78187 -> 78194 (plan 5.3 N3): `nonlinear-step-hlo` takes `--ky-layout`, which
+# is what makes the switch's saving a measurement instead of an assertion. Both
+# arms are then the same binary lowering one deck onto `Ny` and onto `Nyc` ky
+# rows, so the ledger compares layouts rather than trees.
+baseline = 78194
 target = 0
 
 [[line_budget_policy.counts]]
