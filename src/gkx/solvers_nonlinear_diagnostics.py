@@ -120,6 +120,14 @@ class PreparedExplicitNonlinearDiagnostics:
     Calls to :meth:`run` may supply a new initial state with the same shape and
     dtype without rebuilding the scan closure. Fixed-step sensitivity studies
     may instead pass matched geometry, cache, and parameter PyTrees.
+
+    This object and :func:`integrate_nonlinear_explicit_diagnostics_state`
+    compile one graph and return bitwise identical arrays for the same inputs
+    (plan §5.3, queue row Q18). The one difference that remains is the state
+    dtype: this object freezes the dtype of the ``G0`` it was prepared with and
+    casts every later state to it, while the function entry point takes the
+    dtype of the ``G0`` it is called with. Feeding a promoted state to one and
+    not the other is a precision change, not a route difference.
     """
 
     initial_state: jnp.ndarray
@@ -135,6 +143,7 @@ class PreparedExplicitNonlinearDiagnostics:
     sampled_scan: bool
     resolved_diagnostics: bool
     fixed_dt: bool
+    cfl_scales: Any = None
 
     def run_arrays(
         self,
@@ -193,6 +202,7 @@ class PreparedExplicitNonlinearDiagnostics:
             stride=self.stride,
             sampled_scan=self.sampled_scan,
             resolved_diagnostics=self.resolved_diagnostics,
+            cfl_scales=self.cfl_scales,
         )
         return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
 
@@ -434,22 +444,40 @@ def _run_explicit_diagnostic_scan_and_finalize(
     resolved_diagnostics: bool,
     external_phi: jnp.ndarray | float | None,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Run the explicit scan and convert raw scan output into diagnostics."""
+    """Run the explicit scan and convert raw scan output into diagnostics.
 
-    G_final, scan_diag_out, fields_final = _run_explicit_diagnostic_scan_raw(
-        prepared,
-        policies,
-        step,
-        compute_diag_from_state,
-        params,
-        deps=deps,
-        initial_state=prepared.G0,
-        steps=steps,
-        sample_stride=sample_stride,
-        diagnostics_stride=diagnostics_stride,
-        checkpoint=checkpoint,
-        external_phi=external_phi,
-    )
+    The raw scan runs under ``jax.jit``, which is the reference-route contract
+    (plan §5.3, queue row Q18). ``prepare_explicit_nonlinear_diagnostics_impl``
+    jits the same function over the same components, so this entry point --
+    the one ``run_runtime_nonlinear`` reaches on its fixed-window, chunked and
+    sharded routes -- and ``gkx.prepare`` compile one graph and return bitwise
+    identical arrays.
+
+    Run outside jit, as this did before, XLA compiles the scan primitive alone
+    with the arrays its body closes over as operands, optimizes the field solve
+    and the first diagnostic as separate modules, and the two routes then agree
+    only to roundoff: on a 100-step Cyclone gate the state differed by up to
+    2.1e-7 relative in float32, and two near-cancelling turbulent-heating
+    diagnostics by O(1).
+    """
+
+    def run_raw(initial_state: jnp.ndarray) -> tuple[Any, tuple[Any, Any, Any], Any]:
+        return _run_explicit_diagnostic_scan_raw(
+            prepared,
+            policies,
+            step,
+            compute_diag_from_state,
+            params,
+            deps=deps,
+            initial_state=initial_state,
+            steps=steps,
+            sample_stride=sample_stride,
+            diagnostics_stride=diagnostics_stride,
+            checkpoint=checkpoint,
+            external_phi=external_phi,
+        )
+
+    G_final, scan_diag_out, fields_final = jax.jit(run_raw)(prepared.G0)
     diag, t, dt_series = scan_diag_out
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
@@ -814,6 +842,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         sampled_scan=sampled_scan,
         resolved_diagnostics=resolved_diagnostics,
         fixed_dt=options.fixed_dt,
+        cfl_scales=getattr(components.policies.time_step_policy, "cfl_scales", None),
     )
 
 

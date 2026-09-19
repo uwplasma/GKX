@@ -858,7 +858,26 @@ def test_nonlinear_adaptive_dt_includes_linear_frequency_cap():
 
 @pytest.mark.parametrize("method", ["rk3", "imex"])
 def test_nonlinear_gamma_omega_use_previous_step_not_previous_diagnostic(method: str):
-    """Nonlinear gamma/omega should be invariant to diagnostics_stride."""
+    """Nonlinear gamma/omega should be invariant to diagnostics_stride.
+
+    The invariance is exact in exact arithmetic and holds to 1.7e-15 in
+    float64. In float32 it is roundoff-limited, because gamma and omega are
+    per-step log-amplitude and phase ratios: a relative perturbation ``e`` of
+    the two amplitudes moves gamma by about ``2 e / dt``, so relative to
+    ``gamma`` itself by ``2 e / (dt |gamma|)``. Here ``dt = 0.02`` and
+    ``|gamma| ~ 0.099``, which turns a few float32 eps into a few 1e-4. The
+    first sample is the one that moves, because it is formed from the
+    pre-scan diagnostic, which the two strides compile into differently fused
+    graphs. This is the same amplification Q14 recorded for the window
+    gradients, and it was already true of ``gkx.prepare`` before queue row Q18
+    put both nonlinear routes on one graph.
+    """
+
+    eps32 = float(np.finfo(np.float32).eps)
+    if bool(jax.config.read("jax_enable_x64")):
+        ratio_rtol = 1.0e-12
+    else:
+        ratio_rtol = 4.0 * 2.0 * eps32 / (0.02 * 0.099)
 
     grid_cfg = GridConfig(Nx=2, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
     cfg = CycloneBaseCase(grid=grid_cfg)
@@ -912,8 +931,18 @@ def test_nonlinear_gamma_omega_use_previous_step_not_previous_diagnostic(method:
     compared_indices = stride_indices[: len(t_sparse_arr[compared_sparse])]
 
     assert np.allclose(t_dense_arr[compared_indices], t_sparse_arr[compared_sparse])
-    assert np.allclose(gamma_dense[compared_indices], gamma_sparse[compared_sparse])
-    assert np.allclose(omega_dense[compared_indices], omega_sparse[compared_sparse])
+    np.testing.assert_allclose(
+        gamma_sparse[compared_sparse],
+        gamma_dense[compared_indices],
+        rtol=ratio_rtol,
+        atol=1.0e-8,
+    )
+    np.testing.assert_allclose(
+        omega_sparse[compared_sparse],
+        omega_dense[compared_indices],
+        rtol=ratio_rtol,
+        atol=1.0e-8,
+    )
     if forced_final:
         assert gamma_sparse[-1] == pytest.approx(gamma_sparse[-2])
         assert omega_sparse[-1] == pytest.approx(omega_sparse[-2])
@@ -1672,3 +1701,162 @@ def test_compute_nonlinear_diagnostic_tuple_resolved_packs_marker_order() -> Non
     np.testing.assert_allclose(np.asarray(resolved[7]), [108.0])
     np.testing.assert_allclose(np.asarray(resolved[26]), [132.0])
     np.testing.assert_allclose(np.asarray(resolved[-1]), [170.0])
+
+
+def _route_output_leaves(obj, path="", out=None):
+    """Flatten a route result into ``(name, array)`` pairs, dataclasses included.
+
+    ``SimulationDiagnostics`` is a plain dataclass, not a PyTree, so
+    ``tree_flatten`` would hand back one opaque leaf and hide every diagnostic
+    the comparison is about.
+    """
+
+    import dataclasses
+
+    if out is None:
+        out = []
+    if isinstance(obj, (jax.Array, np.ndarray, np.number, int, float, complex, bool)):
+        array = np.asarray(obj)
+        if array.dtype.kind in "fciub":
+            out.append((path, array))
+        return out
+    if obj is None or isinstance(obj, str):
+        return out
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        for field in dataclasses.fields(obj):
+            _route_output_leaves(getattr(obj, field.name), f"{path}.{field.name}", out)
+        return out
+    if isinstance(obj, dict):
+        for key in sorted(obj):
+            _route_output_leaves(obj[key], f"{path}[{key}]", out)
+        return out
+    if isinstance(obj, (list, tuple)):
+        for index, value in enumerate(obj):
+            _route_output_leaves(value, f"{path}[{index}]", out)
+        return out
+    return out
+
+
+def _bitwise_equal(left: np.ndarray, right: np.ndarray) -> bool:
+    if left.shape != right.shape or left.dtype != right.dtype:
+        return False
+    return bool(
+        np.array_equal(
+            np.ascontiguousarray(left).view(np.uint8).ravel(),
+            np.ascontiguousarray(right).view(np.uint8).ravel(),
+        )
+    )
+
+
+def _prepared_and_runtime_nonlinear_route_outputs(*, method: str, fixed_dt: bool):
+    """Run the same nonlinear diagnostics case through both shipped routes."""
+
+    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams()
+    key = jax.random.PRNGKey(20260918)
+    state = 1.0e-3 * jax.random.normal(
+        key, (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    )
+    options = dict(
+        dt=0.01,
+        steps=3,
+        method=method,
+        terms=TermConfig(nonlinear=1.0),
+        fixed_dt=fixed_dt,
+        resolved_diagnostics=True,
+    )
+    prepared = prepare_nonlinear_explicit_diagnostics(
+        state, grid, geom, params, **options
+    )
+    reference = prepared.run()
+    runtime = integrate_nonlinear_explicit_diagnostics_state(
+        state, grid, geom, params, **options
+    )
+    return reference, runtime
+
+
+@pytest.mark.parametrize("x64", [False, True], ids=["float32", "x64"])
+@pytest.mark.parametrize("method", ["rk3", "rk4"])
+@pytest.mark.parametrize("fixed_dt", [True, False], ids=["fixed_dt", "adaptive_dt"])
+def test_prepared_and_runtime_nonlinear_routes_are_bitwise_identical(
+    x64: bool, method: str, fixed_dt: bool
+) -> None:
+    """``gkx.prepare`` and the runtime entry point are one reference route.
+
+    Queue row Q18 (plan §5.3). Both compile the same jitted diagnostics graph,
+    so every output array must match bit for bit, not to a tolerance. Running
+    the runtime entry point outside jit -- what it did before the contract --
+    fails this in both precisions: the state moved by up to 2.1e-7 relative in
+    float32 and two near-cancelling turbulent-heating diagnostics by O(1).
+    """
+
+    with jax.enable_x64(x64):
+        reference, runtime = _prepared_and_runtime_nonlinear_route_outputs(
+            method=method, fixed_dt=fixed_dt
+        )
+
+    left = dict(_route_output_leaves(reference))
+    right = dict(_route_output_leaves(runtime))
+    assert set(left) == set(right)
+    assert len(left) > 40
+
+    differing = sorted(
+        name for name in left if not _bitwise_equal(left[name], right[name])
+    )
+    assert differing == [], differing
+
+
+@pytest.mark.parametrize("x64", [False, True], ids=["float32", "x64"])
+def test_nonlinear_route_reference_holds_for_value_and_gradient(x64: bool) -> None:
+    """The reference-route contract covers the reverse-mode pass as well.
+
+    The scale is taken in the real dtype of the state on purpose. A wider scale
+    promotes ``G0``, and the two entry points then run at different precisions:
+    the prepared object casts to the dtype it was prepared with, the function
+    entry point adopts the dtype it is handed.
+    """
+
+    with jax.enable_x64(x64):
+        grid_cfg = GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
+        cfg = CycloneBaseCase(grid=grid_cfg)
+        grid = build_spectral_grid(cfg.grid)
+        geom = SAlphaGeometry.from_config(cfg.geometry)
+        params = LinearParams()
+        direction = 1.0e-3 * jax.random.normal(
+            jax.random.PRNGKey(6), (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+        )
+        options = dict(
+            dt=0.01,
+            steps=3,
+            method="rk3",
+            terms=TermConfig(nonlinear=1.0),
+            fixed_dt=True,
+            resolved_diagnostics=False,
+        )
+        prepared = prepare_nonlinear_explicit_diagnostics(
+            direction, grid, geom, params, **options
+        )
+        real_dtype = jnp.zeros((), dtype=direction.dtype).real.dtype
+
+        def prepared_energy(scale: jnp.ndarray) -> jnp.ndarray:
+            final_state, _diagnostics, _fields = prepared.run_arrays(scale * direction)
+            return jnp.real(jnp.vdot(final_state, final_state))
+
+        def runtime_energy(scale: jnp.ndarray) -> jnp.ndarray:
+            _t, _diag, final_state, _fields = (
+                integrate_nonlinear_explicit_diagnostics_state(
+                    scale * direction, grid, geom, params, **options
+                )
+            )
+            return jnp.real(jnp.vdot(final_state, final_state))
+
+        one = jnp.asarray(1.0, dtype=real_dtype)
+        prepared_value, prepared_grad = jax.value_and_grad(prepared_energy)(one)
+        runtime_value, runtime_grad = jax.value_and_grad(runtime_energy)(one)
+
+    assert float(prepared_grad) != 0.0
+    assert _bitwise_equal(np.asarray(prepared_value), np.asarray(runtime_value))
+    assert _bitwise_equal(np.asarray(prepared_grad), np.asarray(runtime_grad))

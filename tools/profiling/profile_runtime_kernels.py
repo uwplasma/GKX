@@ -167,6 +167,10 @@ HLO_OPS = (
     "reverse",
 )
 HLO_WRITE_OPS = ("concatenate", "copy")
+# Arrays a jit captures become literals of the compiled module, so the
+# executable holds its own copy of them. That is the memory the prepared
+# graph costs over one that takes the same arrays as operands.
+HLO_LITERAL_OPS = ("constant",)
 _HLO_INSTRUCTION = re.compile(
     r"^\s*(?:ROOT\s+)?%[\w.\-]+ = "
     r"(?:(?P<dtype>[a-z]+\d+)\[(?P<shape>[\d,]*)\](?:\{[\d,]*\})?|\(.*?\)) "
@@ -189,25 +193,37 @@ def _hlo_op_counts(
     hlo_text: str,
     ops: tuple[str, ...] = HLO_OPS,
     write_ops: tuple[str, ...] = HLO_WRITE_OPS,
+    literal_ops: tuple[str, ...] = HLO_LITERAL_OPS,
 ) -> dict[str, int]:
     """Count optimized-HLO instructions by op name and the bytes some write.
 
     ``_hlo_token_counts`` counts substrings, metadata included. This matches
     the op name of each instruction, so on a fixed jax/XLA version it is a
     load-independent ledger of one compiled graph.
+
+    ``constant_bytes`` is the literal payload the module carries. A jit that
+    captures cache, parameter and policy arrays embeds them there, so the
+    executable keeps a second copy of them beside the ones the caller holds.
     """
 
     counts = dict.fromkeys(ops, 0)
     written = 0
+    literals = 0
     for match in _HLO_INSTRUCTION.finditer(hlo_text):
         op = match.group("op")
         if op in counts:
             counts[op] += 1
-        if op in write_ops and match.group("dtype"):
-            bits = int(re.sub(r"\D", "", match.group("dtype")))
-            dims = [int(dim) for dim in match.group("shape").split(",") if dim]
-            written += int(np.prod(dims, dtype=np.int64)) * max(1, bits // 8)
+        if not match.group("dtype"):
+            continue
+        bits = int(re.sub(r"\D", "", match.group("dtype")))
+        dims = [int(dim) for dim in match.group("shape").split(",") if dim]
+        nbytes = int(np.prod(dims, dtype=np.int64)) * max(1, bits // 8)
+        if op in write_ops:
+            written += nbytes
+        if op in literal_ops:
+            literals += nbytes
     counts["bytes_written"] = written
+    counts["constant_bytes"] = literals
     return counts
 
 
@@ -1063,13 +1079,14 @@ def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hlo-dir", type=Path, default=None)
     parser.add_argument(
         "--route",
-        choices=("scan", "diagnostics", "runtime"),
+        choices=("scan", "diagnostics", "runtime", "eager-scan"),
         default="scan",
         help="scan: integrate_nonlinear with cache/params as graph arguments; "
-        "diagnostics: the prepared diagnostics scan (gkx.prepare), whose jit "
-        "captures cache/params as constants; runtime: the scan "
-        "run_runtime_nonlinear compiles, lowered outside jit with cache/params "
-        "as scan operands",
+        "diagnostics and runtime: the one diagnostics graph gkx.prepare and "
+        "run_runtime_nonlinear both compile, whose jit captures cache/params "
+        "as constants (they are the same graph and must give the same counts); "
+        "eager-scan: the bare scan module with cache/params as operands, the "
+        "placement the Q18 reference-route contract retired",
     )
     return parser
 
@@ -1128,10 +1145,13 @@ def _prepared_diagnostics_for_hlo(
 
 
 def _diagnostics_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
-    """Lower the prepared diagnostics scan as ``gkx.prepare`` jits it.
+    """Lower the one explicit nonlinear diagnostics graph both routes compile.
 
-    That jit closes over cache, params and policy arrays, so XLA sees them as
-    constants. ``run_runtime_nonlinear`` does not run this graph.
+    ``gkx.prepare`` jits this function, and since the reference-route contract
+    (plan §5.3, Q18) ``integrate_nonlinear_explicit_diagnostics_state`` -- the
+    function ``run_runtime_nonlinear`` calls on its fixed-window, chunked and
+    sharded routes -- jits the same one. The jit closes over cache, params and
+    policy arrays, so XLA sees them as constants on both routes.
     """
 
     return _compiled_hlo_text(prepared._run_raw, prepared.initial_state, dump=dump)
@@ -1142,10 +1162,11 @@ def _scan_equation_hlo(
 ) -> str:
     """Lower the one top-level ``lax.scan`` that ``fn`` stages, operands as arguments.
 
-    Outside jit, JAX compiles a scan primitive on its own and passes the arrays
-    its body closes over as arguments (``dispatch.apply_primitive``). Binding the
-    same primitive and parameters on arguments of the same avals reproduces
-    that module.
+    This is the graph the runtime compiled before the Q18 reference-route
+    contract: outside jit, JAX compiles a scan primitive on its own and passes
+    the arrays its body closes over as arguments (``dispatch.apply_primitive``).
+    It is kept so the ledger can still price constant placement against the
+    captured graph, and it is no longer a route any shipped caller runs.
     """
 
     closed = jax.make_jaxpr(fn)(*args)
@@ -1161,11 +1182,12 @@ def _scan_equation_hlo(
     return _compiled_hlo_text(bind_scan, *operands, dump=dump)
 
 
-def _runtime_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
-    """Lower the scan ``run_runtime_nonlinear`` compiles.
+def _eager_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
+    """Lower the bare scan module, the route retired by the Q18 contract.
 
-    The runtime calls the same raw scan function outside jit, so XLA compiles
-    its scan alone, with cache, params and policy arrays as operands.
+    No shipped caller compiles this any more. It stays in the ledger as the
+    rejected placement: the same scan with cache, params and policy arrays as
+    operands instead of captured constants.
     """
 
     return _scan_equation_hlo(
@@ -1262,7 +1284,7 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
                 kx_index=kx_index,
             )
             route_hlo = (
-                _runtime_scan_hlo if args.route == "runtime" else _diagnostics_scan_hlo
+                _eager_scan_hlo if args.route == "eager-scan" else _diagnostics_scan_hlo
             )
             text = route_hlo(prepared, dump=dump(f"{args.route}_{method}"))
         counts = _hlo_op_counts(text)

@@ -168,6 +168,62 @@ instructions.  On a 4x4x8, Nl=2, Nm=4 implicit linear scan the optimized HLO
 grows from 3834 to 4443 instructions (FFT 16 to 20); a fold of the iteration
 count alone adds 19.  No jit static argument or compile key is added.
 
+One nonlinear diagnostics graph
+-------------------------------
+
+There are two ways into an explicit nonlinear diagnostics run, and they are
+one reference route (queue row Q18, plan section 5.3).  ``gkx.prepare`` keeps
+a compiled scan and runs it through ``simulation.run``;
+``integrate_nonlinear_explicit_diagnostics_state`` is the function entry point,
+and the one ``run_runtime_nonlinear`` reaches on its fixed-window, chunked and
+sharded routes.  **Both compile the same jitted graph and return bitwise
+identical arrays for the same inputs**, in ``float32`` and under
+``JAX_ENABLE_X64``.  Compare them with an exact equality, not a tolerance;
+``tests/unit/nonlinear/test_nonlinear.py`` does, over every output array of
+both entry points, for RK3 and RK4 and for fixed and adaptive steps.  Value and
+reverse-mode gradient match bit for bit as well.
+
+The one remaining difference between them is the state dtype.  A prepared
+object freezes the dtype of the ``G0`` it was built with and casts every later
+state to it; the function entry point takes the dtype of the ``G0`` it is
+handed.  Feeding a promoted state to one and not the other -- for example by
+scaling ``G0`` with a ``float64`` scalar under ``JAX_ENABLE_X64`` -- runs the
+two at different precisions.  That is a precision change, not a route
+difference.
+
+**What this replaces.**  Until GKX 2.1.0 the function entry point ran its scan
+outside ``jit``.  XLA then compiled the scan primitive on its own, with the
+cache, parameter and policy arrays its body closes over as operands, and
+optimized the pre-scan field solve and the first diagnostic as separate
+modules.  The two routes agreed only to roundoff.  On a 100-step Cyclone gate
+at 16x16x24, Nl=2, Nm=4, over RK3 and RK4 crossed with adaptive steps, an
+implicit collision split and a fixed mode, none of the twelve cases was
+bitwise in either precision.  The final state differed by 8.0e-8 to 2.1e-7
+relative in ``float32`` and by 1.5e-21 to 1.6e-7 under x64; most diagnostics
+stayed near 1e-7, the zonal potential diagnostics reached 2.1e-6, and the
+growth-rate and frequency ratios 1.2e-3.  The turbulent-heating diagnostics,
+which are a near-cancelling difference of two larger terms, reached 0.93
+relative in ``float32`` and 1.41 under x64: for those the relative difference
+between two roundoff-equivalent routes is unbounded, and only the terms they
+are built from can be compared meaningfully.  Pinning that spread as a
+tolerance was the rejected option.
+
+**Cost.**  No user opts in and no step costs more.  On the shipped Cyclone deck
+at 32x32x24, Nl=2, Nm=4, the graph the function entry point compiles goes from
+the bare scan module to the prepared one: for RK3, ``copy`` 226 to 85,
+``concatenate`` 44 to 38, ``transpose`` 64 to 66, ``fft`` 43 to 44, and the
+bytes those copies and concatenates write 89,062,692 to 89,479,380 (+0.47%);
+for RK4, ``copy`` 246 to 105 and 116,996,388 to 117,413,076 bytes.  The
+captured graph does carry its cache, parameter and policy arrays as module
+literals, 6,553,260 bytes at that resolution against 7,140 for the bare scan,
+and that is the price of the contract.  It is repaid in process memory,
+because one jit replaces the roughly sixty extra small modules the eager route
+compiled around its scan: eight successive chunked calls at 16x16x24 peaked at
+826 MB of resident memory instead of 1,200 MB.  The number of compilations per
+call is unchanged at one.  ``profile_runtime_kernels.py nonlinear-step-hlo``
+reports ``--route diagnostics`` and ``--route runtime`` as that one graph and
+keeps the retired placement under ``--route eager-scan``.
+
 Differentiable eigenmodes
 -------------------------
 
