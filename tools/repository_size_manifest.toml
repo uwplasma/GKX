@@ -5,3 +5,17 @@
 # justifies the exception.
 max_tracked_total_bytes = 50000000
 max_unlisted_tracked_file_bytes = 1000000
+
+# plan/log.md is the append-only evidence ledger every queue row writes its
+# entry into, and plan.md links to it by that one path throughout. It stood at
+# 988912 bytes on `main` before the Q16 entry and crossed the 1 MB per-file
+# threshold with it, so the next entry from any row would have tripped the gate
+# regardless of which row got there first. The exception is bounded at 2 MB
+# rather than removed: at the observed ~20 KB per entry that is roughly fifty
+# more entries, by which point the ledger should be split by phase or year
+# rather than granted a larger allowance. The tracked total (22.5 MB of a
+# 50 MB budget) is not affected.
+[[allowed_large_files]]
+path = "plan/log.md"
+max_bytes = 2000000
+reason = "append-only evidence ledger; split by phase or year before raising this"

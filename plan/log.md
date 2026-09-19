@@ -15561,6 +15561,19 @@ was the abandoned Nl64 key; per key 9:16–10:13 at Nl24, 12:52–14:11 at Nl32,
 after cleanup; the staged source tree and the 59 MB of eigenvector `.npy` files
 were deleted.
 
+**One repository-hygiene change, not a physics change.** This entry pushed
+`plan/log.md` from 988912 to just over 1000000 bytes, tripping
+`check_repository_size_manifest.py`'s `max_unlisted_tracked_file_bytes`. The
+ledger was 11 KB below the cap on `main`, so the next entry from any row would
+have tripped it regardless of which row arrived first. `tools/repository_size_manifest.toml`
+gains the `allowed_large_files` entry its own policy comment anticipates,
+bounded at 2 MB with the reason "append-only evidence ledger; split by phase or
+year before raising this" — roughly fifty more entries at the observed ~20 KB
+each, after which splitting the ledger is the right move rather than a larger
+allowance. The tracked total is unaffected (22.5 MB of a 50 MB budget). Flagged
+here because it is a policy file, not evidence: a maintainer who would rather
+split `plan/log.md` now should drop this entry and do that instead.
+
 **Commands** (from the staged repository root, one per case; `run_eigen.sh`
 supplies the environment above and refuses a key if GPU 0 has any compute
 process):
