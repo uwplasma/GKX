@@ -989,7 +989,7 @@ recursive = true
 # points project rather than reject, why a value check cannot be written at a
 # traced boundary, and what the projection does to a supplied state's cotangent.
 # Target unchanged.
-baseline = 91077
+baseline = 91175
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1233,7 +1233,7 @@ recursive = true
 # builds its own deck and its own supplied state, which is most of the lines:
 # the claim is about a state the caller built, so a shared fixture would be
 # asserting on a state the suite built instead.
-baseline = 90471
+baseline = 90636
 target = 35000
 
 [[line_budget_policy.counts]]
