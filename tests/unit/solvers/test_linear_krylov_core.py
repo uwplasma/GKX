@@ -2326,9 +2326,10 @@ EXACT = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
 ALLOWED_UNPINNED_MATRIX_DOTS = {
     # Renamed by the flat-layout pass; the file, the line and the measurement
     # behind the exemption are unchanged, only the module path is. The line moved
-    # 675 -> 749 when the inner-solve statistics were added above it, then
-    # 749 -> 828 when the linked-chain mask helpers were (Q6); same code.
-    "solvers_linear_krylov_algorithms.py:828": "overlap ranking only; argmax provably unmoved",
+    # 675 -> 749 when the inner-solve statistics were added above it,
+    # 749 -> 828 when the linked-chain mask helpers were (Q6), and 828 -> 817
+    # when those helpers moved to operators/linear/linked.py (Q19); same code.
+    "solvers_linear_krylov_algorithms.py:817": "overlap ranking only; argmax provably unmoved",
 }
 
 
