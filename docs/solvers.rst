@@ -159,7 +159,7 @@ residual gate
 Why ``adaptive`` is the default, and not shift-invert
 -----------------------------------------------------
 
-Queue row Q25 (2026-09-19) re-examined this choice against the rewritten §5.1
+Queue row Q26 (2026-09-19) re-examined this choice against the rewritten §5.1
 adoption gate, which adopts a reproducible cost reduction that loses no
 accuracy even at 15--30%.  ``adaptive`` stays the default, and the reason is not
 that shift-invert is merely slower:

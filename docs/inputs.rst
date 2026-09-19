@@ -38,7 +38,7 @@ its answer, on this deck, is the same to seven figures.
 
 .. note::
 
-   Before queue row Q25 (2026-09-19) the runtime assembled its seed in
+   Before queue row Q26 (2026-09-19) the runtime assembled its seed in
    ``complex64`` and handed it to the solver without widening, and ``jnp.asarray``
    does not promote. A run launched with ``JAX_ENABLE_X64=true`` therefore stayed
    in float32 end to end and applied the **float32** gate: on the Cyclone deck at

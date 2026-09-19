@@ -148,7 +148,7 @@ share the cached operator data assembled by
 What a first run gets
 ---------------------
 
-Queue row Q25 (2026-09-19) audited the defaults that decide whether a run
+Queue row Q26 (2026-09-19) audited the defaults that decide whether a run
 started from a shipped deck, or from a deck that omits a section, is fast and
 accurate without expert flags. The results below are measurements, not
 intentions; the host was heavily contended throughout (1-minute load 48--173
