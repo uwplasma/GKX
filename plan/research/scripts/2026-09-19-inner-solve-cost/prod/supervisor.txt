@@ -1,0 +1,14 @@
+supervisor pid 94408 started 2026-09-19 02:18:43 cap 2700s
+2026-09-19 02:18:43 start p1_adaptive nice 10 load { 1.81 2.79 4.57 }
+2026-09-19 02:23:54 end p1_adaptive exit 0 load { 5.02 4.16 4.64 }
+2026-09-19 02:23:54 start p2_si_inexact_bt nice 10 load { 5.02 4.16 4.64 }
+2026-09-19 02:28:15 end p2_si_inexact_bt exit 0 load { 2.91 3.48 4.19 }
+2026-09-19 02:28:15 start p3_adaptive nice 10 load { 2.91 3.48 4.19 }
+2026-09-19 02:33:25 end p3_adaptive exit 0 load { 4.20 4.11 4.26 }
+2026-09-19 02:33:25 start p4_si_inexact_bt nice 10 load { 4.20 4.11 4.26 }
+2026-09-19 02:37:48 end p4_si_inexact_bt exit 0 load { 4.54 4.03 4.15 }
+2026-09-19 02:37:48 start p5_si_fixed nice 10 load { 4.54 4.03 4.15 }
+2026-09-19 02:50:17 end p5_si_fixed exit 0 load { 11.03 12.81 9.88 }
+2026-09-19 02:50:17 start p6_si_inexact nice 10 load { 11.03 12.81 9.88 }
+2026-09-19 02:56:47 end p6_si_inexact exit 0 load { 12.12 12.68 10.93 }
+supervisor pid 94408 finished 2026-09-19 02:56:47

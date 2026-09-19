@@ -15978,3 +15978,298 @@ commit. The `before` arm's detached worktree was removed.
 state-taking entry points. They are one call each away from the same contract;
 the question is whether a raw integrator should carry it at all, or whether the
 line is drawn at the entry points a user reaches by name.
+## 2026-09-19 — Q21 inner-solve cost of matrix-free shift-invert (plan §5.1 L5)
+
+**Question.** Q7 (#236) adopted `pr3-cm` as the §5.1 L4 structured preconditioner but
+measured that matrix-free shift-invert with it does not beat the runtime-default
+`adaptive` route at the production chain, because each outer Arnoldi step costs ≈950
+inner `gcrot` iterations at a fixed inner tolerance of 1e-9. Does any L5 lever — an inner
+tolerance schedule tied to the outer residual, a tuned preconditioner
+P_i = P + (A−P)X_iX_iᴴ (Freitag–Spence), harmonic Krylov–Schur without inner solves, or
+the block-Thomas D solve — reach the L4 adoption gate, **≥3× fewer matvec-equivalents to
+an original-operator-certified pair than `adaptive`, on the same host in the same
+session, setup included**, with certification unchanged? Measurement only: no source,
+test, default or reference change.
+
+**Registered predictions** (`PREDICTIONS.txt`, written and committed before any run).
+**P1** the schedule cuts inner iterations ≥2× against Q7's fixed 1e-9 run but does not
+reach 3× on its own; **P2** the tuned preconditioner adds <1.5× on top of the schedule;
+**P3** harmonic extraction without inner solves does not certify the production pair
+within the `adaptive` route's matvec budget, because the streaming spectrum reaches
+|λ| ≈ 140 while the wanted mode sits at |λ| ≈ 0.3; **P4** no arm reaches the 3× gate and
+`adaptive` stays the runtime default; **P5** the matvec-equivalent ratio and the
+wall-time ratio disagree, because the `adaptive` route's applies sit inside one jitted
+RK4 scan. Outcomes: **P1 confirmed only after its direction was reversed** (see below),
+**P2 confirmed** (1.04× at the r96 rung, and negative in combination), **P3 confirmed**,
+**P4 confirmed**, **P5 confirmed but small** — on the best arm the two ratios are 1.22×
+and 1.19×.
+
+**Accounting, fixed before measuring.** A *matvec-equivalent* is one application of the
+matrix-free linear operator at the arm's own size. For the shift-invert arms the
+preconditioner apply is converted by c_P = t_P/t_matvec, both medians measured in the
+same process, so one `gcrot` inner iteration costs 1 + c_P; warm-started recycling costs
+k matvecs per solve (`A U` is re-established), the per-step true-residual check and the
+certification cost one apply each, and setup seconds are converted by t_matvec. For
+`adaptive` the count is the route's own `operator_applications`
+(`AdaptivePropagatorSolution`: the RK4 filter's 4 applies per step times the restart
+dimensions, plus the timestep-estimate probes) plus one certification apply; at the
+production chain that is 195195 + 1, from 2033 filter steps at krylov_dim 24 in one
+restart. Certification is unchanged — `_eigenpair_relative_residual` of the pair against
+the original matrix-free operator, 1e-6 at the shift-invert outer gate and 1e-9 for the
+adaptive base gate.
+
+**Host, and why not office.** This row was scheduled for office cores. Office was not
+idle when the session started and did not become idle during it: a 3-second `/proc/stat`
+sample at 2026-09-19T00:47 gave **every one of the 36 logical cores 34–100% busy**
+(1-minute load 23.1; another user's four `python` jobs at 763/384/328/210% CPU). No core
+set could be verified idle, so `taskset` would have pinned this lane onto contended
+cores, and the repository's benchmarking rule forbids that. Every measurement below was
+therefore taken on the same M3 Max (14 cores, 36 GB) that Q7 used for its production
+comparison — the host its "same host, same session" clause refers back to. No GPU was
+used, and nothing was staged on office.
+
+**Source and process conditions.** `origin/main`
+`cf89dcc707ba20cbd6fe56b98e8455810976252c` in a fresh worktree; every run's `ENV` line
+asserts `gkx.__file__` inside it and records `dirty_src: false`. Python 3.11.14,
+JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0, complex128. One fresh cold
+process per arm under `/usr/bin/time -l nice -n 10 perl -e 'alarm shift; exec @ARGV' CAP`,
+launched serially by `run_arms.sh` with `PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu
+JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS="--xla_cpu_multi_thread_eigen=false
+intra_op_parallelism_threads=1" OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+VECLIB_MAXIMUM_THREADS=1` — Q7's conditions exactly. As in Q7 these flags do not make
+JAX single-core, so `supervisor.txt` records the load average at the start and end of
+every arm. Iteration counts, residuals and matvec-equivalents are load-independent and
+reproduced exactly across repeats. Deck `examples/linear/axisymmetric/cyclone.toml`,
+`damp_ends_rate=0.1`, `jtwist=1`, ky=+0.3, as Q7. **Control and arms share one
+operator**: the `adaptive` arm calls `run_runtime_linear(..., krylov_cfg=None)` on the
+same `cfg` `bakeoff.prepare` builds, with `adaptive_propagator_eigenpair` wrapped only to
+read its counter, and both routes return γ=.0930912, ω=.2820327 — #232's and Q7's value.
+Everything is rerun end to end against the committed scripts, so no number here comes
+from an earlier revision of the harness.
+
+**The schedule's direction is the opposite of the one Q7 proposed.** Q7's candidate was
+an inner tolerance *proportional to the outer residual* (the observation being that the
+first steps solved to 1e-9 while the Ritz residual was .97). That is the Freitag–Spence
+inexact **inverse-iteration** rule, and on a shift-invert **Arnoldi** it fails outright:
+at the r96 rung (`s03`, κ=1e-2) the inner counts do collapse (68, 19, 42, 72, 132, 176,
+…) but the outer residual **stalls at 1.5e-3 for fourteen further steps** and never
+certifies. Loose early solves perturb the Arnoldi basis irrecoverably. The inexact-Krylov
+rule (Simoncini–Szyld) says the allowance grows as the residual falls — the early matvecs
+are the ones that must be accurate and the late ones may be relaxed — so `--schedule
+inexact` sets `tol_j = clip(κ · target / max(res_{j-1}, target), 1e-10, 1e-1)`. At κ=1
+this **reproduces the fixed-tolerance outer residual sequence step for step**
+(9.7e-1, 3.0e-1, 6.8e-2, 1.2e-2, 2.7e-3, 5.0e-4, 9.9e-5, 1.8e-5, 3.7e-6, 6.7e-7, 1.2e-7,
+2.2e-8, 4.4e-9, 8.9e-10 at production, identical to the 1e-9 run's first thirteen and
+within 10% at the last) while the per-step inner counts fall 798, 905, 937, 818, 739,
+640, 555, 460, 376, 289, 220, 131, 60, 33 against a flat ≈930. κ=3 and κ=10 are too
+aggressive: both reach 1e-6 sooner but stall at 1.0e-9 and 4.3e-9 and never certify.
+
+**Screening, r96 rung (Nz=96 as production, Nl8/Nm24, n=18432, σ = #232's λ + .05).**
+matvec-equivalents to a certified pair; "—" means the gate was never reached.
+
+| arm | mvq to 1e-6 | mvq to 1e-9 | inner its | wall | residual |
+|---|---|---|---|---|---|
+| `adaptive` (control) | — | **96700** | — | 43.1 s | 6.5e-15 |
+| shift-invert, fixed 1e-9 (Q7's configuration) | 76548 | 104775 | 5463 | 58.0 s | 2.6e-10 |
+| + tolerance ∝ outer residual, κ=1e-2 | — | — | 4153 (25 steps) | 46.0 s | **1.5e-3, stalled** |
+| + inexact-Krylov, κ=1 | 53629 | **56667** | 2878 | 33.9 s | 4.3e-10 |
+| + inexact-Krylov, κ=3 | 49643 | — | 2873 (25 steps) | 34.1 s | 1.1e-9, stalled |
+| + inexact-Krylov, κ=10 | 45606 | — | 2590 (25 steps) | 31.5 s | 4.3e-9, stalled |
+| + tuned preconditioner (k=1), fixed 1e-9 | 73408 | 100833 | 5472 | 58.5 s | 2.6e-10 |
+| + inexact-Krylov κ=1 and tuned (k=2) | 59379 | 62551 | 2853 | 35.7 s | 4.8e-10 |
+| + fixed 1e-9, gcrot(60,20) | 65937 | 90500 | 4791 | 60.6 s | 2.5e-10 |
+| + inexact-Krylov κ=1, gcrot(60,20) | 50422 | 53305 | 2532 | 36.0 s | 4.2e-10 |
+| + inexact-Krylov κ=1 and block-Thomas D | 43736 | **46029** | 2878 | 29.3 s | 4.3e-10 |
+| harmonic Rayleigh–Ritz, no inner solves, dim 400 keep 40 | — | — | 2207 matvecs | 59.0 s | **0.396, stalled** |
+| harmonic Rayleigh–Ritz, no inner solves, dim 160 keep 16 | — | — | 2192 matvecs | 27.3 s | **0.536, stalled** |
+
+The `s14`–`s17` rows in `summary.txt` are the n=512 control for the harmonic arm and are
+not part of this ladder.
+
+Readings. The tuned preconditioner is worth 1.04× on its own (104775 → 100833) and is
+**negative** in combination, because its Woodbury correction raises c_P from 16.9 to 18.9
+while inner iterations move 2878 → 2853: the Arnoldi right-hand sides after the first
+step are orthogonal to the retained Ritz directions, which is exactly where the tuning
+acts. A larger restart is worth 1.16× at a fixed tolerance and nothing once the schedule
+is on (53305 against 56667, inside the c_P spread). Restart loss is therefore not the
+binding constraint either.
+
+**Harmonic Krylov–Schur without inner solves is rejected.** A thick-restart harmonic
+Rayleigh–Ritz on the original operator, extracting from
+`(((A−τ)V)ᴴ(A−τ)V, ((A−τ)V)ᴴV)` and restarting on the best harmonic Ritz vectors plus the
+Arnoldi residual direction, stalls at a relative residual of 0.40 (dim 400) and 0.54
+(dim 160) at r96 and does not improve with restarts. The implementation is not at fault:
+on the n=512 rung (`s14`–`s17`) a basis of dim 460, 90% of n, returns
+λ = .11562126055 − .24117881375j at residual **2.3e-14** — the same pair the shift-invert
+arm certifies there to the eleventh digit (`s17`: .11562126056 − .24117881375j) — while
+dim 240 (47% of n) reaches only 1.1e-4 in three restarts and dim 120 (23% of n) stalls at
+3.2e-2 in twelve. Convergence needs a basis that is a large fraction of n, which at
+n=73728 is not a method. A polynomial Krylov space of
+A cannot isolate a mode at |λ| ≈ 0.3 against a streaming spectrum reaching |λ| ≈ 140
+without a spectral transformation; GENE's ≥5× is reported against inexact shift-invert,
+not against a certified exponential-propagator filter, and the `adaptive` route already
+*is* such a filter. No production run was spent on this arm.
+
+**The block-Thomas D solve is exact, and its flop advantage does not survive.** Probing
+the z-local block with and without the field term shows, at every rung run, that the
+block is **exactly** tridiagonal in the Laguerre index with Nm×Nm blocks
+(largest off-tridiagonal entry 0.0e+00 against a block norm of 74.7 at production) and
+that the field part is **exactly** rank one per (kx, z) (s₁/s₀ ≤ 5.3e-14). So
+`Dc − s` is solved exactly by block-Thomas plus Sherman–Morrison, and the solve agrees
+with the dense inverse to **4.4e-16** — the preconditioner is unchanged and every
+iteration count is unchanged, which the arms confirm (2878 at r96 and 6961 at production,
+identical to the dense runs step for step). Only the cost moves, and by much less than
+the flop count says:
+
+| rung | factors | factor build | z-block apply, in matvecs | measured apply | Nl/3 by flops |
+|---|---|---|---|---|---|
+| r96 (Nl8/Nm24) | 21 MB vs 54 MB (2.59×) | 0.62× (slower) | 4.40 → 4.10 | **1.07×** | 2.67 |
+| production (Nl16/Nm48) | 164 MB vs 864 MB (**5.26×**) | 4.13× | 10.75 → 8.00 | **1.34×** | 5.33 |
+
+Both factor sets are passed as `jit` arguments, never captured as constants, because that
+is how the arms hand them to `gcrot`. Q7's arithmetic note ("≈4× cheaper apply, ≈5× less
+memory") holds for memory and fails for the apply: Nl sequential batched 48×48 solves do
+not reach the BLAS efficiency of one batched 768×768 GEMM on this CPU. Inside the
+composed three-sweep preconditioner the gain is larger than the isolated apply ratio —
+c_P falls 35.8 → 19.6 at production (1.83×) — because XLA fuses the ℓ-recursion across
+the sweeps. Peak RSS *rises* (3.39 → 4.16 GB) even though the retained factors are 5.26×
+smaller, because this prototype probes the block twice (864 MB each, with and without the
+field term) to split the tridiagonal part from the rank-one part; a structure-aware probe
+of the band and the field vector alone would remove both that and the larger setup term.
+
+**Production chain, same host, same session, alternated (Nx1/Ny24/Nz96, ntheta32,
+nperiod2, Nl16/Nm48, ky=+0.3, n=73728, 2026-09-19 02:18–02:57 CDT).** Every arm certifies
+against the original operator and returns γ=.0930912, ω=.2820327.
+
+| run | route | matvec-equivalents to 1e-9 | wall to 1e-9 | inner its | c_P | certified residual | peak RSS |
+|---|---|---|---|---|---|---|---|
+| p1 | `adaptive` (control) | **195196** | 310.0 s | — | — | 1.07e-14 | 1.08 GB |
+| p2 | shift-invert, inexact-Krylov κ=1 + block-Thomas | **160254** | 261.0 s | 6961 | 19.6 | 8.9e-10 | 4.16 GB |
+| p3 | `adaptive` (control, repeat) | **195196** | 309.6 s | — | — | 1.07e-14 | 1.05 GB |
+| p4 | shift-invert, inexact-Krylov κ=1 + block-Thomas (repeat) | **169875** | 262.6 s | 6961 | 21.0 | 8.9e-10 | 4.19 GB |
+| p5 | shift-invert, fixed 1e-9 (Q7's configuration) | 443930 | 748.2 s | 13055 | 32.3 | 8.1e-10 | 3.43 GB |
+| p6 | shift-invert, inexact-Krylov κ=1, dense D | 266159 | 390.6 s | 6961 | 35.8 | 8.9e-10 | 3.39 GB |
+
+p5 reproduces Q7's production run exactly — **13055 inner iterations over 14 outer steps**
+— so this session reproduces the measurement the row was opened against. The two
+`adaptive` controls agree to the application (195196 both) and to 0.4 s; the two best-arm
+repeats agree to the iteration (6961 both) and to 1.6 s in wall time, and differ 6% in
+matvec-equivalents only through the c_P probe (19.6 against 21.0), which is the
+measurement noise on this quantity.
+
+**Verdict against the L4 gate.**
+
+1. **The gate fails.** The best arm needs **160254–169875** matvec-equivalents against the
+   `adaptive` control's **195196** — **1.15–1.22× fewer**, where the gate is ≥3× fewer.
+   In wall time it is 261.0 s against 310.0 s, **1.19× faster**. `adaptive` stays the
+   runtime default, as after Q7, and no `src/` change is proposed.
+2. **The levers are nonetheless worth 2.8×** against the configuration Q7 measured:
+   443930 → 160254 matvec-equivalents (**2.77×**) and 748.2 → 261.0 s (**2.87×**), of
+   which the inexact-Krylov tolerance schedule is 1.67× (443930 → 266159, inner
+   iterations 13055 → 6961) and the block-Thomas D solve a further 1.66× (266159 →
+   160254). This is the first configuration in which matrix-free shift-invert is faster
+   than the runtime default at production size at all; it is still far from adoptable.
+3. **Rejected:** an inner tolerance proportional to the outer residual (does not
+   certify); the Freitag–Spence tuned preconditioner (1.04× alone, negative with the
+   schedule); harmonic Rayleigh–Ritz without inner solves (stalls at residual 0.4–0.5);
+   a larger `gcrot` restart (nothing once the schedule is on).
+4. **What the gate would still need**, from these numbers: ≤ 65065 matvec-equivalents.
+   With the best arm's 16709 of setup and 6961 inner iterations, that means
+   1 + c_P ≤ 6.92, i.e. an apply **3.3× cheaper than block-Thomas already is**; or, at
+   c_P = 19.6, ≤ 2340 inner iterations, i.e. **3.0× fewer** than the schedule achieves.
+   **The gate is now apply-bound, not iteration-bound**: with a free preconditioner the
+   same 6961 iterations would cost 7119 matvec-equivalents, 27× under the gate. The
+   remaining levers are therefore the apply (a device apply, or a cheaper z-local block
+   than an exact one) and the shift placement of L6, not the inner tolerance.
+
+**Limitations.**
+- Single cold processes on a shared host whose load ran 1.8–12.8 over the production
+  window; the arm-to-arm wall spread on repeats is ≤0.6%, and the matvec-equivalent
+  counts are load-independent, but absolute times are indicative.
+- The shift is a known eigenvalue + 0.05 in growth, for every shift-invert arm and for
+  the harmonic arm's target. The `adaptive` control needs no shift, so the comparison
+  already favours the arms.
+- c_P is a median over 9 repetitions of a probe on one vector; it is the only quantity
+  with visible run-to-run spread (6% between p2 and p4).
+- The block-Thomas prototype probes the z-local block twice and keeps both 864 MB copies
+  during setup, which sets its peak RSS and inflates its setup term; both are prototype
+  artefacts, not properties of the factorization.
+- The harmonic arm was run at dim ≤400 at r96 and not at production; the n=512
+  convergence study is what rules it out, and a production run at a basis dimension that
+  could converge is not affordable.
+- The structural checks (exact ℓ-tridiagonality, exact rank-one field part) were verified
+  at r16, r32, r96 and the production chain of this deck only, and on single-link chains.
+- Nothing here bears on the nonlinear or IMEX routes, and no `src/` file was changed.
+
+**Environment.** M3 Max, 14 cores, 36 GB, macOS 23.4.0; CPU only. Python 3.11.14,
+JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0, complex128, `GKX_X64=1`.
+Office was checked and rejected as contended (above).
+
+**Commands** (repository root, environment as above;
+`D=plan/research/scripts/2026-09-19-inner-solve-cost`):
+
+```
+CAP_S=1500 $D/run_arms.sh <out>/screen \
+  "s01_adaptive::--arm adaptive --case r96" \
+  "s02_si_fixed::--arm si --case r96 --alpha-best -10 --inner-rtol 1e-9 --max-steps 25 --target 1e-9" \
+  "s03_si_outer_k1e-2::--arm si --case r96 --alpha-best -10 --schedule outer --kappa 1e-2 --max-steps 25 --target 1e-9" \
+  "s04_si_inexact_k1::--arm si --case r96 --alpha-best -10 --schedule inexact --kappa 1 --max-steps 25 --target 1e-9" \
+  "s05_si_inexact_k3::... --kappa 3 ..." "s06_si_inexact_k10::... --kappa 10 ..." \
+  "s07_si_tuned1::--arm si --case r96 --alpha-best -10 --inner-rtol 1e-9 --tuned 1 --max-steps 25 --target 1e-9" \
+  "s08_si_inexact_tuned2::--arm si --case r96 --alpha-best -10 --schedule inexact --kappa 1 --tuned 2 --max-steps 25 --target 1e-9" \
+  "s09_si_fixed_bigm::... --gcrot-m 60 --gcrot-k 20 --max-restarts 30 ..." \
+  "s10_si_inexact_bigm::... --schedule inexact --kappa 1 --gcrot-m 60 --gcrot-k 20 --max-restarts 30 ..." \
+  "s11_si_inexact_bt::--arm si --case r96 --alpha-best -10 --schedule inexact --kappa 1 --dsolve block-thomas --max-steps 25 --target 1e-9" \
+  "s12_hks_d400::--arm hks --case r96 --dim 400 --keep 40 --restarts 6 --target 1e-9" \
+  "s13_hks_d160::--arm hks --case r96 --dim 160 --keep 16 --restarts 15 --target 1e-9"
+CAP_S=1800 SCRIPT=blockthomas.py $D/run_arms.sh <out>/bt \
+  "bt_r96::--case r96 --alpha-best -10 --inner-iterations 2878 --outer-steps 14" \
+  "bt_prod::--case prod --alpha-best -10 --inner-iterations 6961 --outer-steps 14"
+CAP_S=2700 $D/run_arms.sh <out>/prod \
+  "p1_adaptive::--arm adaptive --case prod" \
+  "p2_si_inexact_bt::--arm si --case prod --alpha-best -10 --schedule inexact --kappa 1 --dsolve block-thomas --max-steps 30 --target 1e-9" \
+  "p3_adaptive::--arm adaptive --case prod" \
+  "p4_si_inexact_bt::<as p2>" \
+  "p5_si_fixed::--arm si --case prod --alpha-best -10 --inner-rtol 1e-9 --max-steps 30 --target 1e-9" \
+  "p6_si_inexact::--arm si --case prod --alpha-best -10 --schedule inexact --kappa 1 --max-steps 30 --target 1e-9"
+python $D/summarize.py $D/screen $D/prod > $D/summary.txt
+```
+
+**Artifacts** in `plan/research/scripts/2026-09-19-inner-solve-cost/`, SHA-256 in
+`SHA256SUMS.txt`: `PREDICTIONS.txt`; the harness `q21.py` (arms), `dblock.py` (the shared
+Laguerre block structure), `blockthomas.py` (the apply probe), `summarize.py`,
+`run_arms.sh`; `screen/`, `prod/` and `bt/` with one `.txt` per arm carrying its `ENV`
+and `RESULT` JSON lines and a `supervisor.txt` with per-arm start/end times, nice level
+and load; and `summary.txt`. Each run's `ENV` line carries the SHA-256 of `q21.py`,
+`bakeoff.py` and `pr_kz.py` and the repository SHA; `dblock.py` and the other files are
+covered by `SHA256SUMS.txt` and by the commit.
+
+**Terminal process state.** Every process this row started is gone. Each of the fourteen
+supervisor PIDs was checked individually with `kill -0` after the last arm and every one
+is absent: 77942, 79430, 80401 (the three exploratory `r96` batches), 80945 and 89317
+(the first two production batches), 88079, 88460, 94280 and 1876 (the block-Thomas
+probes), 89148 and 2486 (the `r32` and `r16` verification batches), and 92515 with its
+`run_arms.sh` children 92519 and 94408 (the final set). Their `q21.py`, `blockthomas.py`,
+`perl`, `nice` and `/usr/bin/time` children are gone with them:
+`pgrep -f "q21.py|blockthomas.py|run_arms.sh|run_final.sh"` matches nothing (rc=1). No
+wall cap was reached and no arm exited non-zero. No GPU was used, and no process, staging
+directory or file was left on the office host, where nothing was ever staged.
+
+**Re-checked on the merged source, twice.** `origin/main` moved twice while this row was
+being written, each time into code the linear route touches: `ea487a637` (#254, one owner
+for the ky mode-weight rule, plus `ny_full` on `SpectralGrid` and `LinearCache`) and
+`135189fc5` (#253, supplied states below the runtime, which changes
+`operators/linear/linked.py`). Both are merged into this branch, and two arms were rerun
+after each merge (`postmerge/m*` after #254, `postmerge/n*` after #253). Both times the
+`adaptive` control returns **96699 operator applications and residual 6.48e-15** and the
+best schedule arm **2878 inner iterations over 14 outer steps at residual 4.29e-10 with
+the same per-step counts** (354, 374, 383, 351, 305, 262, 222, 191, 155, 114, 74, 52, 20,
+21) — identical to `s01` and `s04` in every load-independent quantity. Only c_P moves
+(16.9 → 16.0 → 15.7), which is the probe noise already declared. Neither merge moves this
+row's numbers, and the tables above stand for the merged tree as well as for
+`cf89dcc70`.
+
+**Next question.** L6 — report the separation ratio and place σ beyond the target — is
+the remaining lever on the iteration side, and a device apply of `pr3-cm` (now 164 MB of
+factors rather than 864 MB, which fits a GPU comfortably) is the remaining lever on the
+apply side. Both are measured against the same gate and the same `adaptive` control.

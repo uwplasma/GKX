@@ -1,0 +1,6 @@
+supervisor pid 3685 started 2026-09-19 03:06:07 cap 900s
+2026-09-19 03:06:07 start m01_adaptive nice 10 load { 1.80 3.79 6.71 }
+2026-09-19 03:06:51 end m01_adaptive exit 0 load { 2.81 3.76 6.55 }
+2026-09-19 03:06:51 start m04_si_inexact_k1 nice 10 load { 2.81 3.76 6.55 }
+2026-09-19 03:07:25 end m04_si_inexact_k1 exit 0 load { 2.50 3.56 6.37 }
+supervisor pid 3685 finished 2026-09-19 03:07:25
