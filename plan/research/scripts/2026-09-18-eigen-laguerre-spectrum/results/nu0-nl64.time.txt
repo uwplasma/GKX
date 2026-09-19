@@ -1,0 +1,24 @@
+Command exited with non-zero status 124
+	Command being timed: "timeout --signal=TERM --kill-after=10s 2700 /home/rjorge/venvs/gkx-nl/bin/python /home/rjorge/gkx-q16-eigen-spectrum-20260918.JlXxHY/src_stage/plan/research/scripts/2026-09-18-eigen-laguerre-spectrum/eigen_spectrum.py --key nu0-nl64 --nu 0.0 --nl 64 --nm 96 --repo /home/rjorge/gkx-q16-eigen-spectrum-20260918.JlXxHY/src_stage --deck-dir /home/rjorge/gkx-q16-eigen-spectrum-20260918.JlXxHY/src_stage/plan/research/scripts/2026-09-18-eigen-laguerre-spectrum --out /home/rjorge/gkx-q16-eigen-spectrum-20260918.JlXxHY/vectors --save-vector"
+	User time (seconds): 1438.79
+	System time (seconds): 1279.02
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 45:00.22
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1583612
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 1609462
+	Voluntary context switches: 113683
+	Involuntary context switches: 11306
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 14472
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 124
