@@ -16405,3 +16405,255 @@ rows that produced them wrote `summary.txt` and not `summary.json`. Either the e
 protocol should require a JSON companion beside every `summary.txt`, or the figure layer
 should keep owning the parsers — the first costs every future row a few lines, the second
 keeps the coupling where it is today and leaves a column rename undetectable.
+
+## 2026-09-19 — Q26: the §5.1 adoption gate, and the defaults a first run takes
+
+**The gate, and why it was rewritten.** §5.1 adopted an L4/L5 solver candidate only
+at **≥3× fewer matvec-equivalents** to a certified pair. The maintainer rejected that
+threshold on 2026-09-19 as arbitrary, and it is: it is a round number, not a measured
+one, and twice now it has recorded a cheaper, exact, certified candidate as a failure
+for missing a factor nobody derived. Q7 (#236) and Q21 (#255) both ended "the gate
+fails" while reporting real savings. §5.1 now reads:
+
+> **A reproducible cost reduction with no accuracy loss is worth adopting, even at
+> 15–30%.**
+
+with the conditions written out next to it: the certification is applied exactly as
+before and no shipped validation gate moves; the saving is measured on one host in one
+session, setup included, and repeats, or else it is carried by load-independent
+evidence rather than a wall time nobody can reproduce; a memory reduction or an
+exactness property at an unchanged iteration count counts as a cost reduction; and
+adopting a candidate is not the same as making it the default, because a route that
+wins only at sizes a first run never reaches is an improvement to that route, not the
+route a user gets unasked.
+
+**Then acting on it. Q21's two levers are not adoptable in `src/`, and the reason is
+not the threshold.** This was the first thing the row checked, and it is a negative
+result with a specific cause: **the shift-invert Q21 measured is not the shift-invert
+GKX ships.**
+
+| | Q21's harness | `src/gkx/solvers_linear_krylov_algorithms.py` |
+|---|---|---|
+| inner solver | SOLVAX `gcrot` with subspace recycling | SOLVAX FGMRES, restarted, no recycling |
+| preconditioner | `pr3-cm` (Peaceman–Rachford + dense z-local block) | `hermite-line` / `field-corrected` / `damping` |
+| outer loop | unrestarted Arnoldi, early exit | fixed `restarts × krylov_dim`, no early exit |
+| per-step residual | original-operator residual every step | none |
+
+* The **block-Thomas + Sherman–Morrison apply** is an exact solve of `pr3-cm`'s dense
+  z-local block. `src/` never builds that block — Q7 adopted `pr3-cm` as *the L4 design
+  to carry forward*, not as code, and `grep` for Peaceman–Rachford, Sherman–Morrison,
+  block-Thomas or a z-local dense inverse under `src/` returns nothing. There is no
+  apply to make cheaper and no 864 MB of factors to reduce, because the shipped
+  preconditioner is an FFT plus a tridiagonal-in-Hermite line solve and allocates no
+  dense factor at all. It has no landing site.
+* The **inexact-Krylov schedule** has no room. On the shipped Cyclone deck at
+  (Nz,Nl,Nm) = (96,4,8), `KrylovConfig(method="shift_invert")` leaves **48 of 48**
+  inner solves unconverged at maximum relative residual **34.7** against its 1e-4 inner
+  tolerance, with 2880 = 48 × 60 iterations, i.e. every solve pinned at the budget cap
+  that `shift_maxiter=50`/`shift_restart=20` implies; the outer pair is rejected at
+  residual 0.998683. This is not a budget shortfall: `shift_maxiter=400` gives 19200
+  iterations at residual 34.4 and outer 0.992446, and `shift_maxiter=2000` gives 96000
+  iterations at residual 35.4 and outer 0.997146 — 33× the work moves the inner
+  residual by 2%. It is not precision either: in float64 the same call gives 48/48
+  unconverged at 34 and outer residual 0.986671 against a 1e-6 gate. **A tolerance
+  schedule cannot reduce a cost that no tolerance is setting.**
+
+Both levers stay valid as Q21 measured them and both become landable together behind
+one prerequisite — `pr3-cm` in `src/`, which is its own adoption with its own
+certification evidence. That is the follow-up row this one proposes. The Q21 row and
+the §5.1 L5 paragraph now say this; Q21's own numbers are not retracted and nothing in
+its evidence directory changed.
+
+**The route stays `adaptive`, and the shift is not the reason.** §5.1 asked whether
+shift-invert should be preferred where the default path can choose a shift unaided. It
+can — `shift_source="propagator"` derives one from a short propagator run, with no user
+input — so the shift is not the obstacle; the inner solve above is. On the same deck
+and rung `adaptive` certifies at residual 1.821e-06 against its float32 gate and
+4.041e-15 against the float64 gate. `shift_invert` fails closed, as Q12 requires, so no
+user receives an uncertified pair from it.
+
+### The defaults audit
+
+| default | where | old | new | measurement | accuracy |
+|---|---|---|---|---|---|
+| eigen route | `KrylovConfig.method` | `adaptive` | **unchanged** | `shift_invert` rejected at outer residual 0.99 (f32 and f64), 48/48 inner solves unconverged at 34; unmoved at `shift_maxiter=2000` | `adaptive` certified: residual 1.07e-14 (f64) / 5.55e-6 (f32) on the deck |
+| working precision | `_finalize_initial_state` | `complex64` always, **even under `JAX_ENABLE_X64`** | **`complex64` default, `complex128` under x64** | same rung, same env, against pinned `254fcc7b7`: gate 1.19e-4 → 1e-9, residual 1.761e-06 → 4.041e-15 | γ moves 2.5e-7 relative; f32 default keeps γ=.09309106 against f64 .09309117 (1.2e-6) |
+| precision default | — | float32 | **unchanged** | float64 costs +17% peak RSS (0.90 → 1.05 GiB) on the deck | f32 γ, ω agree with the f64-certified pair to 1.2e-6 and 9.4e-8 |
+| fixed-step CFL hint | `workflows/linear.py` | skipped on `solver="explicit_time"` | **covers every linear path when the step is fixed** | `solver="time"` warned (dt=0.1 vs CFL-stable 0.01281, ω_max 70.25) then raised; `explicit_time` raised with no warning (verified on a pristine `254fcc7b7` worktree: the warn site is never reached) | warning only; no returned number moves |
+| `TimeConfig.fixed_dt` | `config.py` | `True` | **unchanged, flagged** | rk2 and rk4 both `FloatingPointError` at `dt=0.1` fixed; both converge with `fixed_dt=False` | adaptive-step γ: rk2 .10126899, rk4 .10125984 vs certified .10128645 (1.7e-4, 2.6e-4) |
+| `TimeConfig.method` | `config.py` | `rk2` | **unchanged** | not the discriminator — rk4 overflows at the same fixed `dt`; `cfl_fac` 2.82 (rk4) vs 1.0 (rk2) | rk4-adaptive is marginally *less* accurate here (2.6e-4 vs 1.7e-4) because its step is 2.82× longer |
+| `Nl`/`Nm` fallback | `startup.py` | 24 / 12 | **unchanged, documented** | deck's 16/48 gives γ=.09309106; the 24/12 fallback gives .08893196 | **4.47% low**, reproducing the deck's own recorded warning |
+| CPU FFT thread pool | not set in `src/` | multithreaded | **unchanged** | Q9's idle-host rerun: single-threaded pool 8–10% slower per step; `src/` sets no XLA flag, only `tests/conftest.py` pins it | not re-timed here (see limitations) |
+| dealiasing | `nonlinear_dealias` | `true` (2/3) | **unchanged** | inspection; `dealias_kz=false` | — |
+| collisions / hypercollisions | `config.py` | terms on, per-species `nu=0` | **unchanged** | inspection: a deck opts into collisionality rather than inheriting one | — |
+| diagnostics / restart cadence | `config.py` | stride 1, `nsave=10000` | **unchanged** | inspection | — |
+| nonlinear chunking | `workflows/nonlinear.py` | `min(steps, 128)` | **unchanged** | inspection | — |
+| compilation cache | `cli.py`, `compilation_cache.py` | on, `min_compile_time_secs=0` | **unchanged** | inspection: this is what makes a second run of a deck skip compilation | — |
+| `power_iters` | `KrylovConfig` 200 vs `dominant_eigenpair` 40 | inconsistent | **unchanged, recorded** | inspection only; no measurement taken | — |
+
+**The one default that changed, in full.** The runtime assembles its initial state in
+`complex64` — correct in itself, since the seed is an arbitrary 1e-10 perturbation whose
+own rounding is immaterial — and then handed it to the solver through `jnp.asarray`,
+which does not promote. A run launched with `JAX_ENABLE_X64=true` therefore stayed
+float32 end to end: the Krylov basis, the eigenvector, and so the certification gate,
+which `certifiable_residual_tolerance` floors at `1e3 · eps(dtype)`. The shipped Cyclone
+deck's own header instructs the reader to run it under `JAX_ENABLE_X64` for parity
+reproduction, and `docs/inputs.rst` documented passing an explicit `complex128`
+`initial_state` as the way to get float64 at all — a workaround that existed only
+because of this. The seed is now widened once, at `_finalize_initial_state`, to the
+working precision. The float32 default is untouched.
+
+Measured at (Nz,Nl,Nm) = (96,4,8) under `JAX_ENABLE_X64=true`, this branch against a
+pristine `origin/main` `254fcc7b7` worktree, same interpreter and same deck:
+
+| source | γ | ω | certified residual | gate applied |
+|---|---|---|---|---|
+| `254fcc7b7` | 0.10128652304410934 | 0.24549627304077148 | 1.7606e-06 | 1.1921e-04 (float32 floor) |
+| this branch | 0.10128649783814778 | 0.24549632032622980 | **4.0410e-15** | **1e-09** |
+
+and at the deck's own resolution (Nl=16, Nm=48, ky=0.3, `solver="krylov"`):
+
+| precision | γ | ω | certified residual | gate | peak RSS |
+|---|---|---|---|---|---|
+| float32 (default) | 0.09309106320142746 | 0.28203275799751280 | 5.5537e-06 | 1.1921e-04 | 0.901 GiB |
+| float64 (`JAX_ENABLE_X64=true`) | 0.09309117334775535 | 0.28203273152699443 | **1.0689e-14** | 1e-09 | 1.054 GiB |
+
+The float64 row reproduces Q21's published `adaptive` control for this deck — residual
+1.07e-14 at γ=.0930912, ω=.2820327 — from the runtime entry point, which it could not do
+before. **The float32 default is correct and stays**: it agrees with the float64 pair to
+1.2e-6 in γ and 9.4e-8 in ω. What float32 costs is the gate, not the answer.
+
+**The time-integration defaults are wrong, and are not changed here.** A deck that omits
+`[time]` takes `TimeConfig()`: `method="rk2"`, `dt=0.1`, `fixed_dt=True`. On the Cyclone
+geometry the CFL-stable step is 0.01281 (max linear frequency 70.25), and holding 0.1
+fixed produces a non-finite field history — `FloatingPointError` — for rk2 **and** rk4,
+so the integrator is not the discriminator. rk4 is not merely no better: its own stable
+step is 0.03613, exactly 2.82× rk2's, which is `cfl_fac` reproducing itself out of the
+measurement, and `dt=0.1` still exceeds it by 2.8×. With `fixed_dt=False` the identical deck and
+`dt` integrate cleanly, because `dt` is then only the controller's initial guess. They
+are left alone because four shipped decks run a time path without setting `fixed_dt`
+(`cyclone_coulomb_collisions.toml`, `etg.toml`, `runtime_etg.toml`,
+`reference_hsx_nonlinear_adiabatic_electrons.toml`) and `etg.toml` backs ledger row
+`L-lin-etg`; flipping a global default would move validated numbers, which this row's own
+gate forbids without re-validating them. That is a second follow-up row.
+
+What *is* fixed is the diagnosis. `_run_linear_runtime_branch` guarded the fixed-step CFL
+hint with `if ctx.solver_key != "explicit_time"`, excluding the one linear path that
+advances a fixed step explicitly, so it overflowed with nothing said while `solver="time"`
+warned first. The guard is now additive — every warning that fired before still fires, the
+hint also covers `explicit_time`, and it is suppressed only where the step is genuinely
+adaptive, so the controller's initial guess is not reported as an over-CFL step.
+
+### User-visible change: a float64 run now applies the float64 gate
+
+This follows from the widening and is the point of it, but it is a behaviour change
+and is recorded as one rather than re-baselined quietly.
+
+`certifiable_residual_tolerance` floors the certification gate at `1e3 · eps(dtype)`.
+Because a run launched with `JAX_ENABLE_X64=true` previously stayed in `complex64`, it
+applied the **float32** gate, 1.19e-4, instead of the 1e-9 it had asked for. Any float64
+run whose deck could not actually support a certifiable eigenpair therefore returned a
+number drawn from below that floor, and reported it as certified.
+
+The regression surfaced in CI on exactly one case, the `Nl=2, Nm=2` deck behind
+`tests/unit/quasilinear/test_quasilinear.py::test_runtime_linear_quasilinear_krylov_smoke`
+(and the scan test beside it), which appears in both the `model-artifacts` quick-test
+shard and wide-coverage shard 9. Measured on that deck at ky=0.2, this branch against a
+pristine `254fcc7b7` worktree:
+
+| source | lane | outcome | γ | residual | gate |
+|---|---|---|---|---|---|
+| `254fcc7b7` | float32 | returned | 4.3222968e-08 | 5.4038e-05 | 1.1921e-04 |
+| this branch | float32 | returned, **identical** | 4.3222968e-08 | 5.4038e-05 | 1.1921e-04 |
+| `254fcc7b7` | float64 | returned | 6.7084393e-08 | 5.3035e-05 | **1.1921e-04** |
+| this branch | float64 | **raises** | — | **1.06665** | **1e-09** |
+
+The float32 lane is bitwise unchanged. What changed is the float64 lane, and the new
+behaviour is the correct one: γ ≈ 4e-8 at residual 5.4e-5 is not a converged eigenpair,
+it is noise that a gate looser than the noise let through. With two Hermite moments this
+deck carries no resolvable mode at all, so in float64 the honest residual is 1.06665 and
+the solve fails closed exactly as Q12 intends. **No shipped validation number moved**: the
+Cyclone deck's γ is unchanged in float32 and is now properly certified in float64, and a
+resolution sweep shows every rung with `Nm ≥ 4` certifies in float64 at residuals
+2.3e-15–1.7e-10 — `Nm=2` is the only degenerate one.
+
+The two tests are therefore given `Nm=4` rather than a relaxed gate. That resolution
+carries a mode both precisions certify and agree on: γ = −1.676437e-03 at residual
+1.69e-06 against the float32 gate, and −1.676444e-03 at 3.58e-15 against the float64 one,
+agreeing to 4e-06 relative. They are plumbing smoke tests, so the resolution only has to
+be high enough that the eigenpair they exercise exists.
+
+**What a user should expect.** A float64 run of a deck too coarse to support a certifiable
+mode now raises instead of returning a small number. That is a real change in what such a
+run does, and it is the behaviour the certification contract always specified; float32
+runs are unaffected.
+
+### Limitations
+
+* **No clean timing was possible and none is claimed.** The Mac carried another user's
+  SFINCS Fortran job at 885–950% CPU for the whole session; the 1-minute load ran 48–181.
+  Office was sampled idle at 06:52 (3.5% busy across 36 logical cores, load 1.16) but has
+  no GKX checkout and no venv, and its load had risen to 7.58 minutes later, so no
+  environment was stood up there. Every adopted claim above therefore rests on
+  load-independent evidence — certified residuals, applied gates, inner/outer iteration
+  counts, growth rates, dtypes and peak RSS. Wall times appear in the artifacts with the
+  load average that produced them and are **not** used as evidence for anything.
+* The CPU FFT thread-pool default is confirmed by inspection (`src/` sets no XLA flag)
+  and rests on Q9's idle-host measurement for its speed claim. A thread-pool effect is
+  purely a timing measurement, so it could not be re-taken here.
+* The eigen-route and time-integrator arms run the shipped Cyclone deck at (96,4,8), not
+  at its own (96,16,48). The rung changes the eigenvalue (γ ≈ .1013 against .0931) but
+  not the qualitative findings under test, all of which are pass/fail or
+  orders-of-magnitude: inner-solve non-convergence, the gate a precision applies, and
+  whether a fixed step overflows. The precision result is additionally confirmed at the
+  deck's own resolution.
+* `power_iters` (200 on `KrylovConfig`, 40 on `dominant_eigenpair`) is recorded from
+  inspection only. No measurement was taken, so it is not changed.
+* `TimeConfig.fixed_dt` is measured wrong for a deck that omits `[time]` and is
+  deliberately left in place; the four decks above have to be re-validated first.
+
+### Environment
+
+`origin/main` `254fcc7b7c2dd8037cc6ba619a8ae9d8af88f367` in a fresh worktree; every arm's
+`ENV` line asserts `gkx.__file__` inside it and records `dirty_src`. Python 3.11.14,
+JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0. macOS 14.4.1, arm64, M3 Max,
+14 cores. `JAX_PLATFORMS=cpu`, no XLA flags set, `nice -n 10`. The pristine comparison ran
+from a detached `254fcc7b7` worktree with the same interpreter; note that
+`tests/conftest.py` inserts the repository's own `src` at `sys.path[0]`, so a pristine
+comparison has to be driven by a script rather than by `pytest` with `PYTHONPATH` set.
+
+### Commands
+
+```
+plan/research/scripts/2026-09-19-fast-accurate-defaults/run_arms.sh
+```
+
+reproduces every arm, one fresh process each, into `out/<label>.txt`. The pristine
+comparison is the same `defaults.py` run from a `git worktree add --detach origin/main`
+checkout at the same relative path.
+
+### Gates
+
+`ruff check .` and `ruff format --check .` repo-wide; mypy as CI runs it; `sphinx -W`;
+the Krylov, adaptive-eigenmode, time-integrator, runtime-runner, nonlinear and
+autodiff-objective selections; `tests/release/test_release_gates.py` and
+`tests/release/test_evidence_ledger.py`; both manifests; the repository-size check;
+`gitleaks` clean on `origin/main..HEAD`.
+
+### Artifacts
+
+`plan/research/scripts/2026-09-19-fast-accurate-defaults/` — `defaults.py` (the harness),
+`run_arms.sh` (every arm, one fresh process each), `out/<label>.txt` (each arm's `ENV` and
+`RESULT` lines, or the `RuntimeError`/`FloatingPointError` that *is* the result for the
+shift-invert and fixed-step arms), and `SHA256SUMS.txt` over all of them.
+
+Arms and what each one establishes: `a1`/`a2` the deck's own resolution in float32 and
+float64; `b1`/`c5` the float64 small rung, bitwise identical to each other, whose
+counterpart on a pristine `254fcc7b7` worktree is the precision A/B; `c1`–`c6` the eigen
+route, including the three `shift_maxiter` rungs that show the inner solve is not
+budget-limited; `d1`–`d6` the step-size policy, whose captured warnings are themselves
+evidence — `d2` and `d3` (`solver="explicit_time"`, fixed step) now carry the CFL hint
+that this branch adds and `254fcc7b7` does not emit, `d6` (`solver="time"`) carries the
+one that already fired, and `d4`/`d5` (adaptive step) correctly carry none; `e1` the
+`Nl`/`Nm` fallback. `d3`'s stable step 0.03613 is 2.82× `d2`'s 0.01281, so `cfl_fac`
+reproduces itself out of the measurement.

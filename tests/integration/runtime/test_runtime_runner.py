@@ -94,6 +94,8 @@ from support.paired_solvax import requires_paired_solvax
 from support.paths import REPO_ROOT
 from types import SimpleNamespace
 import gkx.workflows.runtime.startup as startup
+import warnings
+
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -5662,3 +5664,95 @@ def test_restart_round_trip_is_bitwise_on_a_periodic_deck(tmp_path) -> None:
     )
 
     np.testing.assert_array_equal(read_back, written)
+
+
+def test_runtime_state_dtype_follows_the_x64_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The seed's width is the working precision, in both directions."""
+
+    monkeypatch.setattr(startup, "_x64_enabled", lambda: False)
+    assert startup.runtime_state_dtype() == np.dtype(np.complex64)
+    monkeypatch.setattr(startup, "_x64_enabled", lambda: True)
+    assert startup.runtime_state_dtype() == np.dtype(np.complex128)
+
+
+def test_runtime_seed_is_built_in_the_working_precision() -> None:
+    """``JAX_ENABLE_X64`` must reach the state the runtime actually evolves.
+
+    The seed is assembled in ``complex64`` -- it is an arbitrary 1e-10
+    perturbation, so its own rounding is immaterial -- and ``jnp.asarray`` does
+    not promote, so before this widening a float64 run stayed in ``complex64``
+    end to end: the Krylov basis, the eigenvector, and therefore the
+    certification gate, which ``certifiable_residual_tolerance`` floors at
+    ``1e3 * eps(dtype)`` and so applied 1.19e-4 where the run had asked for
+    1e-9. The shipped Cyclone deck's own header tells the reader to run it under
+    ``JAX_ENABLE_X64`` for parity reproduction, and that instruction had no
+    effect on the returned pair's gate.
+
+    Measured on that deck at its own resolution (Nl=16, Nm=48, ky=0.3): the
+    eigenvalue does not move -- float32 returns gamma=0.09309106,
+    omega=0.28203276 against the float64-certified 0.0930912, 0.2820327, which
+    agree to seven significant figures -- but the residual the run may report as
+    certified does, from 5.55e-6 against a 1.19e-4 gate to 4.0e-15 against 1e-9.
+
+    The assertion is written against ``runtime_state_dtype`` rather than a
+    literal so that it holds in both CI precision lanes and still fails on the
+    unwidened source, where the seed is ``complex64`` in the float64 lane.
+    """
+
+    cfg = _base_runtime_cfg()
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    g0 = _build_initial_condition(
+        grid, geom, cfg, ky_index=0, kx_index=0, Nl=3, Nm=4, nspecies=1
+    )
+    assert np.asarray(g0).dtype == startup.runtime_state_dtype()
+
+
+@pytest.mark.parametrize(
+    ("solver", "fixed_dt", "expect_warning"),
+    [
+        ("time", True, True),
+        ("explicit_time", True, True),
+        ("explicit_time", False, False),
+    ],
+)
+def test_over_cfl_fixed_step_warns_on_every_linear_path(
+    solver: str, fixed_dt: bool, expect_warning: bool
+) -> None:
+    """The fixed-step CFL hint must not skip ``explicit_time``.
+
+    ``explicit_time`` is the one linear path that advances a fixed step
+    explicitly, and it was the only one excluded from the hint, so it overflowed
+    with nothing said. Measured on the shipped Cyclone deck at
+    ``(Nz,Nl,Nm)=(96,4,8)`` with the ``TimeConfig`` defaults (rk2, dt=0.1,
+    ``fixed_dt=True``): ``solver="time"`` warned that dt=0.1 exceeds the
+    CFL-stable 0.01281 and then raised ``FloatingPointError``;
+    ``solver="explicit_time"`` raised the same error with no warning.
+
+    The third case pins the other side: with ``fixed_dt=False`` the adaptive
+    controller chooses its own step, so ``dt`` is only an initial guess and
+    warning about it would be a false positive. On that deck and dt the
+    adaptive run converges (rk2 gamma 0.10126899, rk4 0.10125984, against the
+    certified 0.10128645).
+    """
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        time=TimeConfig(
+            t_max=0.02,
+            dt=5.0,
+            method="rk2",
+            sample_stride=1,
+            fixed_dt=fixed_dt,
+        ),
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            run_runtime_linear(cfg, Nl=2, Nm=4, solver=solver)
+        except Exception:  # noqa: BLE001 - an over-CFL step may also overflow
+            pass
+    hits = [w for w in caught if "exceeds the estimated" in str(w.message)]
+    assert bool(hits) is expect_warning

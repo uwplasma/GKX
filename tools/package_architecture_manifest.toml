@@ -997,7 +997,15 @@ recursive = true
 # points project rather than reject, why a value check cannot be written at a
 # traced boundary, and what the projection does to a supplied state's cotangent.
 # Target unchanged.
-baseline = 91175
+#
+# 91175 -> 91218 (Q26, 2026-09-19): the runtime seed is widened to the working
+# precision so JAX_ENABLE_X64 reaches the state the solver evolves, and the
+# fixed-step CFL hint stops skipping solver="explicit_time". Most of the 43
+# lines are the two docstrings that carry the measurements behind those
+# changes -- the certification gate a float32 run silently applies, and the
+# CFL-stable step the shipped Cyclone deck overflows past. Measured count from
+# check_package_architecture_manifest.py, not a sum of deltas. Target unchanged.
+baseline = 91218
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1241,7 +1249,18 @@ recursive = true
 # builds its own deck and its own supplied state, which is most of the lines:
 # the claim is about a state the caller built, so a shared fixture would be
 # asserting on a state the suite built instead.
-baseline = 90637
+# 90637 -> 90731 (Q26, 2026-09-19): three cases in the runtime-runner suite --
+# the seed dtype follows the x64 flag in both directions, the built seed is in
+# the working precision, and the fixed-step CFL hint fires on every linear path
+# where the step is fixed and stays quiet where it is adaptive. The last is
+# parametrized over the three (solver, fixed_dt) combinations that the
+# measurement separated. Measured count from
+# check_package_architecture_manifest.py, not a sum of deltas.
+# 90731 -> 90745: the comment on the two quasilinear runtime smoke tests, which
+# records why their deck needs Nm=4 rather than Nm=2 -- at two Hermite moments
+# it carries no resolvable mode and only passed because the float32 residual
+# gate was looser than the noise it let through. Measured count.
+baseline = 90745
 target = 35000
 
 [[line_budget_policy.counts]]

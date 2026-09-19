@@ -1,0 +1,42 @@
+ENV {"argv": ["linear", "examples/linear/axisymmetric/cyclone.toml", "--label", "c2-shift-invert-f32", "--method", "shift_invert", "--Nl", "4", "--Nm", "8"], "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/__init__.py", "head": "254fcc7b7c2dd8037cc6ba619a8ae9d8af88f367", "dirty_src": true, "python": "3.11.14", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "x64": false, "platform": "macOS-14.4.1-arm64-arm-64bit", "machine": "arm64", "cpu_count": 14, "xla_flags": "", "jax_platforms": "cpu", "loadavg_start": [144.58203125, 167.64697265625, 182.6083984375], "script_sha256": "72aa1cc95adf3593836d0d0bab5879f5275a5b4f0482734316f7b22faba65ad8"}
+Traceback (most recent call last):
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/plan/research/scripts/2026-09-19-fast-accurate-defaults/defaults.py", line 262, in <module>
+    main()
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/plan/research/scripts/2026-09-19-fast-accurate-defaults/defaults.py", line 252, in main
+    run_linear(args, rec)
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/plan/research/scripts/2026-09-19-fast-accurate-defaults/defaults.py", line 188, in run_linear
+    result = run_runtime_linear(cfg, **run_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/runtime.py", line 353, in run_runtime_linear
+    return run_runtime_linear_impl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/runtime.py", line 662, in run_runtime_linear_impl
+    return _dispatch_runtime_linear_request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/runtime.py", line 627, in _dispatch_runtime_linear_request
+    return _run_full_linear_request(request, Nl_use=Nl_use, Nm_use=Nm_use)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/runtime.py", line 599, in _run_full_linear_request
+    return request.deps.run_full_linear_runtime(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/workflows/linear.py", line 769, in run_full_linear_runtime
+    return _run_linear_runtime_branch(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/workflows/linear.py", line 639, in _run_linear_runtime_branch
+    return _run_krylov_linear_runtime(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/workflows/linear.py", line 602, in _run_krylov_linear_runtime
+    gamma, omega, vec, eigen_status = _run_krylov_linear(
+                                      ^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/workflows/linear.py", line 275, in _run_krylov_linear
+    eig, vec, eigen_status = deps.dominant_eigenpair(
+                             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/solvers_linear_krylov.py", line 964, in dominant_eigenpair
+    solved = _dispatch_dominant_eigenpair(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/solvers_linear_krylov.py", line 851, in _dispatch_dominant_eigenpair
+    return _shift_invert_branch(
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/fast-accurate-defaults/src/gkx/solvers_linear_krylov.py", line 624, in _shift_invert_branch
+    raise RuntimeError(
+RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.998683, tolerance=0.000119209; inner converged=False unconverged=48/48 max_relative_residual=34.7 tol=0.0001 iterations=2880
