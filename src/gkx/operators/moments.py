@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import jax.numpy as jnp
 
 from gkx.core_grid import SpectralGrid
+from gkx.core_ky_layout import hermitian_mode_weights, transport_mode_weights
 from gkx.core_velocity import gamma0
 from gkx.diagnostics_contract import ArrayLike
 from gkx.geometry import (
@@ -37,34 +40,32 @@ def fieldline_quadrature_weights(
     return vol_fac, flux_fac
 
 
+def _mode_weight_inputs(source: Any, *, use_dealias: bool) -> dict[str, Any]:
+    """Return the ``gkx.core_ky_layout`` weight arguments for a grid or cache.
+
+    ``ny_full`` is what lets the weight find an even grid's Nyquist row on a
+    half axis; a source that does not carry it (a hand-built stand-in, for
+    instance) simply gets the two-sided rule, which needs no such row.
+    """
+
+    return {
+        "ky": source.ky,
+        "nx": int(source.kx.size),
+        "ny_full": getattr(source, "ny_full", None),
+        "dealias_mask": source.dealias_mask if use_dealias else None,
+    }
+
+
 def _hermitian_mode_weight(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
     """Return Hermitian spectral weight for (ky, kx) weighting."""
 
-    ky = grid.ky
-    has_negative = jnp.any(ky < 0.0)
-    fac = jnp.where(has_negative, 1.0, jnp.where(ky == 0.0, 1.0, 2.0))
-    fac = fac[:, None] * jnp.ones((1, grid.kx.size), dtype=fac.dtype)
-    if use_dealias:
-        mask = grid.dealias_mask.astype(fac.dtype)
-    else:
-        mask = jnp.ones_like(fac)
-    return fac * mask
+    return hermitian_mode_weights(**_mode_weight_inputs(grid, use_dealias=use_dealias))
 
 
 def _transport_mode_weight(grid: SpectralGrid, *, use_dealias: bool) -> jnp.ndarray:
     """Return fac*mask that excludes ky=0 and uses positive-ky transport weighting."""
 
-    ky = grid.ky
-    # Positive-rFFT transport kernels include the Hermitian pair factor of 2 in
-    # the kernel expression itself. For the full-ky GKX layout we therefore
-    # keep unit weight on ky>0 here.
-    fac = jnp.where(ky > 0.0, 1.0, 0.0)
-    fac = fac[:, None] * jnp.ones((1, grid.kx.size), dtype=fac.dtype)
-    if use_dealias:
-        mask = grid.dealias_mask.astype(fac.dtype)
-    else:
-        mask = jnp.ones_like(fac)
-    return fac * mask
+    return transport_mode_weights(**_mode_weight_inputs(grid, use_dealias=use_dealias))
 
 
 def _cached_hermitian_mode_weight(
@@ -72,15 +73,7 @@ def _cached_hermitian_mode_weight(
 ) -> jnp.ndarray:
     """Return Hermitian spectral weight from a linear cache."""
 
-    ky = cache.ky
-    has_negative = jnp.any(ky < 0.0)
-    fac = jnp.where(has_negative, 1.0, jnp.where(ky == 0.0, 1.0, 2.0))
-    fac = fac[:, None] * jnp.ones((1, cache.kx.size), dtype=fac.dtype)
-    if use_dealias:
-        mask = cache.dealias_mask.astype(fac.dtype)
-    else:
-        mask = jnp.ones_like(fac)
-    return fac * mask
+    return hermitian_mode_weights(**_mode_weight_inputs(cache, use_dealias=use_dealias))
 
 
 def _species_array(val: float | jnp.ndarray, ns: int) -> jnp.ndarray:

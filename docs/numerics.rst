@@ -251,6 +251,19 @@ flux -- the sum over the full axis equals the
 the paired rows, 1 on the self-conjugate rows. A blanket factor of two
 over-counts an even grid's Nyquist row.
 
+That weight has one owner. :func:`gkx.core_ky_layout.hermitian_mode_weights`
+is the traced ``(k_y, k_x)`` form used by every quadrature, energy and spectral
+reduction, and :func:`gkx.core_ky_layout.transport_mode_weights` is the
+representative weight the flux kernels use, which carry the pair factor of two
+themselves and so take 1 on a folded pair and 0.5 on a self-conjugate row. The
+rule was written out three times before queue row Q24, and the copies gave an
+even grid's Nyquist row the paired weight 2 on a half axis. Finding that row
+needs :math:`N_y`, which a half axis cannot supply, so
+:class:`gkx.core_grid.SpectralGrid` and the linear cache carry ``ny_full``:
+the length of the two-sided axis their rows were taken from, or ``None`` when
+the rows are a selection of modes rather than a complete axis. The two-sided
+weights are unchanged on every row.
+
 Plan 5.3 N3 moves the evolved state to the ``half`` layout, which removes the
 per-stage completion that the repository XLA profile attributes 41.9 per cent
 of step time to. That switch is not in place: the state is still two-sided, and

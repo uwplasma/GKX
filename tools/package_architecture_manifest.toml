@@ -973,7 +973,14 @@ recursive = true
 # layout, and that a half-axis reduction weight is 2 only on the paired rows.
 # Merged with Q18 and Q19 above: 90380 -> 90511 -> 90417 -> 90907, the sum of
 # the three deltas.
-baseline = 90907
+# 90907 -> 91077: +170 for Q24, one owner for the ky weight rule. The rule was
+# written out three more times in the diagnostics -- the Hermitian weight, its
+# cached twin and the quasilinear copy -- plus the flux weight, and the copies
+# gave an even grid's Nyquist row the paired weight 2 on a half axis. Four call
+# sites collapse to thin forwarders, and the module grows by the two weight
+# kernels, the self-conjugate row mask and the ``ny_full`` a half axis needs to
+# find that row at all, carried on the grid and the linear cache.
+baseline = 91077
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1203,7 +1210,13 @@ recursive = true
 # half-spectrum grid, unreachable today because dealiasing zeroes that row.
 # Merged with Q18 and Q19 above: 89037 -> 89301 -> 89274 -> 90119, the sum of
 # the three deltas.
-baseline = 90119
+# 90119 -> 90284: +165 for Q24. The case above that recorded the violation is
+# replaced by cases that assert the contract, including the one the old rule
+# fails -- an undealiased half axis with power in the Nyquist row -- plus the
+# two-sided weights that must not move, the flux weight's folded form, the mode
+# selections that may not claim a Nyquist row, and the cached and quasilinear
+# copies now reading from the one owner.
+baseline = 90284
 target = 35000
 
 [[line_budget_policy.counts]]
