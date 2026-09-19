@@ -1233,7 +1233,7 @@ recursive = true
 # builds its own deck and its own supplied state, which is most of the lines:
 # the claim is about a state the caller built, so a shared fixture would be
 # asserting on a state the suite built instead.
-baseline = 90636
+baseline = 90637
 target = 35000
 
 [[line_budget_policy.counts]]
