@@ -263,7 +263,15 @@ recursive = true
 # release gate has to special-case. It replays the shipped stop policy over
 # tracked heat-flux traces and runs no solver, so it stays a figure builder
 # rather than a campaign.
-baseline = 95
+# 95 -> 96: tools/artifacts/build_methods_figures.py. The target is 0, so a new
+# tools file has to earn its place. This one does because it is one file for
+# four figures rather than four, and because its inputs are a class no existing
+# builder reads: the evidence directories under plan/research/scripts/, which
+# are the run records of the measurement rows, not docs/_static artifacts.
+# Folding it into an existing builder would give that builder a second input
+# root; splitting it per figure would cost three more files against the same
+# target. It renders committed evidence and runs no solver.
+baseline = 96
 target = 0
 
 [[topology_policy.counts]]
@@ -1003,6 +1011,15 @@ recursive = true
 # The rest is the contract in the docstrings users meet it in: that these entry
 # points project rather than reject, why a value check cannot be written at a
 # traced boundary, and what the projection does to a supplied state's cotangent.
+# Target unchanged.
+#
+# 91175 -> 91218 (Q26, 2026-09-19): the runtime seed is widened to the working
+# precision so JAX_ENABLE_X64 reaches the state the solver evolves, and the
+# fixed-step CFL hint stops skipping solver="explicit_time". Most of the 43
+# lines are the two docstrings that carry the measurements behind those
+# changes -- the certification gate a float32 run silently applies, and the
+# CFL-stable step the shipped Cyclone deck overflows past. Measured count from
+# check_package_architecture_manifest.py, not a sum of deltas. Target unchanged.
 # 91175 -> 91612 (plan 5.3 N3, the ky >= 0 state switch). Almost none of it is
 # new code: the layout is threaded, not implemented twice. `ny_full` rides
 # beside `linked_use_gather` through the linked apply chain because the
@@ -1015,7 +1032,7 @@ recursive = true
 # why the half dealias mask is built rather than sliced when the slice agrees,
 # and why an even grid's Nyquist row is now a flux representative in both
 # layouts. Target unchanged.
-baseline = 91612
+baseline = 91655
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1259,6 +1276,17 @@ recursive = true
 # builds its own deck and its own supplied state, which is most of the lines:
 # the claim is about a state the caller built, so a shared fixture would be
 # asserting on a state the suite built instead.
+# 90637 -> 90731 (Q26, 2026-09-19): three cases in the runtime-runner suite --
+# the seed dtype follows the x64 flag in both directions, the built seed is in
+# the working precision, and the fixed-step CFL hint fires on every linear path
+# where the step is fixed and stays quiet where it is adaptive. The last is
+# parametrized over the three (solver, fixed_dt) combinations that the
+# measurement separated. Measured count from
+# check_package_architecture_manifest.py, not a sum of deltas.
+# 90731 -> 90745: the comment on the two quasilinear runtime smoke tests, which
+# records why their deck needs Nm=4 rather than Nm=2 -- at two Hermite moments
+# it carries no resolvable mode and only passed because the float32 residual
+# gate was looser than the noise it let through. Measured count.
 # 90637 -> 91339 (plan 5.3 N3). One new file, 60 cases, and it is long because
 # each case is an end-to-end statement about the evolved state rather than a
 # property of a helper: two caches and two states per case, one per layout,
@@ -1268,7 +1296,7 @@ recursive = true
 # `kperp2_max` inflates every hyperdiffusion rate, a wrong restart length
 # writes a third of the modes -- and a table-driven form would lose which
 # statement failed, which is the only thing those cases are for.
-baseline = 91339
+baseline = 91473
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1348,11 +1376,16 @@ recursive = true
 # --route eager-scan so the rejected option stays priceable, and made the
 # ledger report constant_bytes, the literal payload a captured array costs the
 # compiled module.
+# +579: build_methods_figures.py, the four figures of docs/algorithms.rst. Half
+# of it is readers for the evidence directories under plan/research/scripts/,
+# which are text and JSON run records rather than the CSV/JSON companions the
+# other builders read; those readers are what keeps the figures free of
+# literals. Measured count, not a delta.
 # 78187 -> 78194 (plan 5.3 N3): `nonlinear-step-hlo` takes `--ky-layout`, which
 # is what makes the switch's saving a measurement instead of an assertion. Both
 # arms are then the same binary lowering one deck onto `Ny` and onto `Nyc` ky
 # rows, so the ledger compares layouts rather than trees.
-baseline = 78194
+baseline = 78778
 target = 0
 
 [[line_budget_policy.counts]]

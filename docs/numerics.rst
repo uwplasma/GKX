@@ -143,6 +143,88 @@ These are all implemented in :func:`gkx.solvers_linear_integrators.integrate_lin
 share the cached operator data assembled by
 :func:`gkx.operators.linear.cache_builder.build_linear_cache`.
 
+.. _first-run-defaults:
+
+What a first run gets
+---------------------
+
+Queue row Q26 (2026-09-19) audited the defaults that decide whether a run
+started from a shipped deck, or from a deck that omits a section, is fast and
+accurate without expert flags. The results below are measurements, not
+intentions; the host was heavily contended throughout (1-minute load 48--173
+under another user's job), so every statement rests on load-independent
+evidence -- residuals, certification gates, iteration counts, growth rates and
+dtypes -- and no wall time is quoted as a result.
+
+**Eigen route.** ``adaptive``, unchanged. See
+"Why ``adaptive`` is the default, and not shift-invert" in :doc:`solvers`:
+``shift_invert`` leaves 48 of 48 inner solves unconverged
+and is rejected at outer residual 0.99 on the shipped Cyclone deck, in float32
+and float64 alike.
+
+**Precision.** ``complex64``, unchanged, and correct: on
+``examples/linear/axisymmetric/cyclone.toml`` at its own resolution the float32
+run returns :math:`\gamma = 0.09309106`, :math:`\omega = 0.28203276` against the
+float64 :math:`0.09309117`, :math:`0.28203273` -- agreement to 1.2e-6 relative.
+What changed is that ``JAX_ENABLE_X64=true`` now reaches the run at all; see
+:doc:`inputs`. Float64 costs about 17% more resident memory on that deck
+(0.90 -> 1.05 GiB) and buys the float64 certification gate: residual 1.07e-14
+against 1e-9, where float32 reports 5.55e-6 against 1.19e-4.
+
+**Time integrator and step size.** A deck that omits ``[time]`` takes the
+``TimeConfig`` dataclass defaults, ``method="rk2"``, ``dt=0.1``,
+``fixed_dt=True``, and on the Cyclone geometry that **overflows**: both rk2 and
+rk4 raise ``FloatingPointError`` at ``dt=0.1`` held fixed, because the
+CFL-stable step there is 0.0128. With ``fixed_dt=False`` the same deck and the
+same ``dt`` integrate cleanly, because ``dt`` is then only the controller's
+initial guess: rk2 gives :math:`\gamma = 0.10126899` and rk4
+:math:`0.10125984` against the certified :math:`0.10128645`, so both land
+within 2.7e-4 of the eigensolve.
+
+These defaults are **not** changed here, because four shipped decks
+(``cyclone_coulomb_collisions.toml``, ``etg.toml``, ``runtime_etg.toml`` and
+``reference_hsx_nonlinear_adiabatic_electrons.toml``) run a time path and rely
+on the current ``fixed_dt`` default, and ``etg.toml`` backs ledger row
+``L-lin-etg``; flipping it would move validated numbers and has to be a row that
+re-validates them. What is changed is that the failure is now diagnosed on every
+linear path. The fixed-step CFL hint previously skipped ``solver="explicit_time"``
+-- the one linear path that advances a fixed step explicitly -- so that path
+overflowed with nothing said, while ``solver="time"`` warned first. The hint now
+covers it, and only where the step really is fixed, so an adaptive controller's
+initial guess is not reported as an over-CFL step.
+
+Set ``dt`` for your case, or set ``fixed_dt = false`` and let the CFL controller
+choose it. ``cfl_fac`` resolves to 1.73 for rk3/sspx3, 2.82 for rk4 and 1.0
+otherwise, so rk4 takes a 2.82x longer stable step for twice the work per step.
+
+**Resolution.** ``Nl`` and ``Nm`` omitted from ``[run]`` fall back to 24 and 12.
+The Cyclone deck's own comment records that pair as reporting :math:`\gamma`
+about 4.5% low for that case, which this row reproduced: 0.08893 at 24/12
+against 0.09309 at the deck's 16/48. Always set ``Nl`` and ``Nm``.
+
+**Unchanged, and measured or inspected to be right.** Two-thirds dealiasing on
+for nonlinear runs (``nonlinear_dealias = true``); ``dealias_kz = false``;
+``collisions`` and ``hypercollisions`` enabled as terms with per-species
+``nu = 0``, so a deck opts into collisionality rather than inheriting one;
+``diagnostics_stride = sample_stride = 1``; nonlinear chunking at
+``min(steps, 128)``; restart cadence from ``nsave = 10000``; the persistent
+compilation cache on with ``min_compile_time_secs = 0``, which is what makes a
+second run of the same deck skip compilation.
+
+**The CPU FFT thread pool stays on.** GKX does not set
+``--xla_cpu_multi_thread_eigen`` for user runs anywhere in ``src``; only
+``tests/conftest.py`` pins it false, for bitwise reproducibility across the test
+matrix. That is the right split: queue row Q9's idle-host rerun measured the
+single-threaded pool 8--10% slower per step, so pinning it for users would cost
+speed to buy a determinism users have not asked for. This row did not re-time it
+-- a thread-pool effect is purely a timing measurement and the host was
+contended -- so the default rests on Q9's idle-host numbers, not on a fresh one.
+
+**Recorded, not changed, for want of a measurement.**
+``KrylovConfig.power_iters`` is 200 while ``dominant_eigenpair(power_iters=...)``
+defaults to 40, so the same nominal route costs differently depending on which
+entry point is called.
+
 Distributed state sharding
 --------------------------
 

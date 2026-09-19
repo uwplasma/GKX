@@ -17,6 +17,7 @@ from gkx.geometry import FluxTubeGeometryLike, build_flux_tube_geometry
 from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
+    _x64_enabled,
     linear_terms_to_term_config,
 )
 from gkx.solvers_linear_krylov import KrylovConfig
@@ -64,6 +65,7 @@ __all__ = [
     "build_runtime_term_config",
     "load_netcdf_restart_state",
     "runtime_geometry_config_for_builder",
+    "runtime_state_dtype",
 ]
 
 
@@ -798,6 +800,31 @@ def _seed_random_multimode(
             builder.seed_field(init_field, ky_i, int(nx - kx_i), vals_neg)
 
 
+def runtime_state_dtype() -> np.dtype:
+    """Return the complex dtype the runtime's own initial state is handed in.
+
+    Every seed in this module is assembled in ``complex64``: the seed is an
+    arbitrary small perturbation, so its own rounding is immaterial, and holding
+    the assembly at one width keeps the ky-Hermitian and off-chain masking code
+    free of a dtype branch. What is *not* immaterial is the width the seed
+    imposes downstream. ``jnp.asarray`` does not promote, so a ``complex64``
+    seed pinned the whole run to ``complex64`` even under ``JAX_ENABLE_X64``:
+    the Krylov basis, the eigenvector and therefore the certification gate,
+    which ``certifiable_residual_tolerance`` floors at ``1e3 * eps(dtype)``
+    -- 1.19e-4 in float32 against the 1e-9 the float64 gate applies. Decks that
+    instruct the reader to run under ``JAX_ENABLE_X64`` (the shipped Cyclone
+    deck is one) silently got the float32 answer and a float32 gate.
+
+    The seed is therefore widened once, here, to the working precision. This
+    does not change the default: without ``JAX_ENABLE_X64`` the dtype is
+    ``complex64`` exactly as before. It matches what the ``initial_state`` API
+    already promises for a caller-supplied seed, which preserves an explicit
+    ``complex128`` array including any prior initialization rounding.
+    """
+
+    return np.dtype(np.complex128) if _x64_enabled() else np.dtype(np.complex64)
+
+
 def _finalize_initial_state(
     grid: SpectralGrid,
     state: np.ndarray,
@@ -807,11 +834,12 @@ def _finalize_initial_state(
 ) -> jnp.ndarray:
     if grid.ky.size > 1 and np.any(np.asarray(grid.ky) < 0.0):
         state = _enforce_full_ky_hermitian(state)
+    dtype = runtime_state_dtype()
     if loaded_state is None:
-        return jnp.asarray(state)
+        return jnp.asarray(state, dtype=dtype)
     if init_file_mode == "replace":
-        return jnp.asarray(loaded_state)
-    return jnp.asarray(cast(np.ndarray, loaded_state + state))
+        return jnp.asarray(loaded_state, dtype=dtype)
+    return jnp.asarray(cast(np.ndarray, loaded_state + state), dtype=dtype)
 
 
 def _build_initial_condition_impl(
