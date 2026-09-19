@@ -2,7 +2,7 @@
   "backend": "cpu",
   "claim_scope": "Op counts of one optimized XLA graph for one jax version and backend. They locate materialized work; they are not a runtime claim.",
   "compressed_real_fft": true,
-  "config": "/private/tmp/claude-501/-Users-rogeriojorge-local/68f297ad-3506-471d-beac-2bb6c2255ab3/scratchpad/periodic_deck.toml",
+  "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml [boundary=periodic]",
   "grid": {
     "Nl": 2,
     "Nm": 4,

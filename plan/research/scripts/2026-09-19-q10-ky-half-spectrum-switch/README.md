@@ -118,8 +118,11 @@ whose index pattern XLA was recognizing.  On the half layout the state's ky
 extent stops being the grid's power of two (32 -> 17, 64 -> 33) and that
 recognition is lost.
 
-**The control that proves it.**  The same deck with `boundary = "periodic"` has
-no linked chains at all.  There the half layout wins on both graphs:
+**The control that proves it.**  The same deck with `boundary = "periodic"`
+has no linked chains at all (the shipped
+`examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml` with that one
+key changed; the two ledger JSONs record it under that name, their `config`
+field having been rewritten from the scratch copy it was actually read from).  There the half layout wins on both graphs:
 
 | graph | concatenate | gather | reverse | bytes written |
 |---|---:|---:|---:|---:|
