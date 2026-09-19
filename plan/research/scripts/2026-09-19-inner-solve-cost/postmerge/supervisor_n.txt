@@ -1,0 +1,6 @@
+supervisor pid 11370 started 2026-09-19 03:44:57 cap 900s
+2026-09-19 03:44:57 start m01_adaptive nice 10 load { 1.61 1.49 1.87 }
+2026-09-19 03:45:41 end m01_adaptive exit 0 load { 2.88 1.84 1.98 }
+2026-09-19 03:45:41 start m04_si_inexact_k1 nice 10 load { 2.88 1.84 1.98 }
+2026-09-19 03:46:13 end m04_si_inexact_k1 exit 0 load { 2.66 1.89 1.99 }
+supervisor pid 11370 finished 2026-09-19 03:46:13

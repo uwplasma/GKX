@@ -16255,16 +16255,19 @@ probes), 89148 and 2486 (the `r32` and `r16` verification batches), and 92515 wi
 wall cap was reached and no arm exited non-zero. No GPU was used, and no process, staging
 directory or file was left on the office host, where nothing was ever staged.
 
-**Re-checked on the merged source.** `origin/main` moved to `ea487a637` (#254, one owner
-for the ky mode-weight rule, plus `ny_full` on `SpectralGrid` and `LinearCache`) while
-this row was being written, and that commit touches the linear cache. Two arms were rerun
-on the merged tree (`postmerge/`): the `adaptive` control returns **96699 operator
-applications and residual 6.48e-15**, and the best schedule arm **2878 inner iterations
-over 14 outer steps at residual 4.29e-10 with the same per-step counts**
-(354, 374, 383, 351, 305, 262, 222, 191, 155, 114, 74, 52, 20, 21) — identical to `s01`
-and `s04` in every load-independent quantity. Only c_P moves (16.9 → 16.0), which is the
-probe noise already declared. #254 therefore does not move this row's numbers, and the
-tables above stand for the merged tree as well as for `cf89dcc70`.
+**Re-checked on the merged source, twice.** `origin/main` moved twice while this row was
+being written, each time into code the linear route touches: `ea487a637` (#254, one owner
+for the ky mode-weight rule, plus `ny_full` on `SpectralGrid` and `LinearCache`) and
+`135189fc5` (#253, supplied states below the runtime, which changes
+`operators/linear/linked.py`). Both are merged into this branch, and two arms were rerun
+after each merge (`postmerge/m*` after #254, `postmerge/n*` after #253). Both times the
+`adaptive` control returns **96699 operator applications and residual 6.48e-15** and the
+best schedule arm **2878 inner iterations over 14 outer steps at residual 4.29e-10 with
+the same per-step counts** (354, 374, 383, 351, 305, 262, 222, 191, 155, 114, 74, 52, 20,
+21) — identical to `s01` and `s04` in every load-independent quantity. Only c_P moves
+(16.9 → 16.0 → 15.7), which is the probe noise already declared. Neither merge moves this
+row's numbers, and the tables above stand for the merged tree as well as for
+`cf89dcc70`.
 
 **Next question.** L6 — report the separation ratio and place σ beyond the target — is
 the remaining lever on the iteration side, and a device apply of `pr3-cm` (now 164 MB of
