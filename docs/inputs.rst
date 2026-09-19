@@ -16,15 +16,47 @@ changing solver internals.
 Runtime precision
 ^^^^^^^^^^^^^^^^^
 
-``JAX_ENABLE_X64=true GKX_X64=1`` permits double precision; it does not
-promote explicitly typed arrays. The default runtime initializer (including
-file restart) constructs ``complex64`` states. For a precision-qualified linear
-Python solve, enable x64 before importing JAX and pass
-``run_runtime_linear(cfg, initial_state=G128, ...)`` with a ``complex128`` array.
-This API preserves its dtype and requires shape
+The default is **float32** (``complex64`` states), and it is the right default:
+on the shipped Cyclone deck at its own resolution the float32 run returns
+:math:`\gamma = 0.09309106`, :math:`\omega = 0.28203276` against the
+float64-certified :math:`0.0930912`, :math:`0.2820327` -- agreement to seven
+significant figures.
+
+``JAX_ENABLE_X64=true``, set before JAX is imported, selects double precision.
+The runtime's own initial state is then built in ``complex128``, so the Krylov
+basis, the eigenvector and the certification gate are all float64. This is what
+the shipped decks mean when their header says to run them under
+``JAX_ENABLE_X64`` for parity reproduction.
+
+What x64 buys is the **gate**, not the eigenvalue.
+``certifiable_residual_tolerance`` floors the residual gate at
+``1e3 * eps(dtype)``, so a float32 run certifies against 1.19e-4 while a float64
+run certifies against 1e-9. On the Cyclone deck the same route reports residual
+5.55e-6 in float32 and 4.0e-15 in float64. Use float64 when the number you are
+quoting has to carry a float64-scale residual; the float32 default is faster and
+its answer, on this deck, is the same to seven figures.
+
+.. note::
+
+   Before queue row Q25 (2026-09-19) the runtime assembled its seed in
+   ``complex64`` and handed it to the solver without widening, and ``jnp.asarray``
+   does not promote. A run launched with ``JAX_ENABLE_X64=true`` therefore stayed
+   in float32 end to end and applied the **float32** gate: on the Cyclone deck at
+   ``Nl=4, Nm=8`` it reported residual 1.76e-6 against a 1.19e-4 tolerance where
+   the same run now reports 4.04e-15 against 1e-9. Passing a ``complex128``
+   ``initial_state`` explicitly was the documented way around this; it still
+   works and still preserves the caller's dtype, but it is no longer needed for
+   the runtime's own seed.
+
+``GKX_X64`` is a **test-harness** variable, not a runtime switch: it only selects
+the precision banner in ``tests/conftest.py``. Setting it without
+``JAX_ENABLE_X64`` does not change any run's precision.
+
+``run_runtime_linear(cfg, initial_state=G128, ...)`` still accepts an explicit
+seed and preserves its dtype. It requires shape
 ``(kinetic_species, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)`` on the
 selected-ky runtime grid. Record the seed dtype and hash; casting a rounded f32
-seed does not recover lost input precision. This is not a TOML dtype option;
+seed does not recover lost input precision. There is no TOML dtype option;
 prepared linear ``solve(initial_state=...)`` is not supported yet.
 
 Minimal runtime TOML example

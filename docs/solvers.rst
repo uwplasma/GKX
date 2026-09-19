@@ -156,6 +156,44 @@ residual gate
 * a zero or non-finite eigenvector has infinite residual, so a breakdown that
   returns ``(0, 0)`` cannot pass any gate.
 
+Why ``adaptive`` is the default, and not shift-invert
+-----------------------------------------------------
+
+Queue row Q25 (2026-09-19) re-examined this choice against the rewritten §5.1
+adoption gate, which adopts a reproducible cost reduction that loses no
+accuracy even at 15--30%.  ``adaptive`` stays the default, and the reason is not
+that shift-invert is merely slower:
+
+* the shift is **not** the obstacle.  ``shift_source="propagator"`` derives a
+  shift from a short propagator run, so the default path can choose one with no
+  user input;
+* the inner solve is.  On the shipped Cyclone deck
+  (``examples/linear/axisymmetric/cyclone.toml``) at ``Nl=4, Nm=8``,
+  ``KrylovConfig(method="shift_invert")`` leaves **48 of 48** inner FGMRES
+  solves unconverged at maximum relative residual 34 against a 1e-4 inner
+  tolerance, and the outer pair is rejected at residual 0.99 against its gate.
+  That is not a budget shortfall: raising ``shift_maxiter`` from the default 50
+  to 2000 -- 96,000 inner iterations instead of 2,880 -- leaves the residual at
+  35.  It is not a precision effect either; the float64 run gives 48/48
+  unconverged at residual 34 and an outer residual of 0.987;
+* the route **fails closed**, as Q12 requires, so no user receives an
+  uncertified pair from it.  On the same deck and rung ``adaptive`` certifies at
+  residual 4.0e-15 against the 1e-9 float64 gate.
+
+So shift-invert is not a candidate default until its inner solve converges on a
+production chain.  Q7 (#236) and Q21 (#255) both studied that inner solve, but
+on a research harness whose shift-invert is a different algorithm from this one:
+it uses SOLVAX ``gcrot`` with subspace recycling, the ``pr3-cm`` structured
+preconditioner, an unrestarted Arnoldi and a per-step original-operator residual
+with early exit.  This module uses restarted FGMRES with no recycling, the
+``hermite-line``/``field-corrected`` preconditioners, a fixed restart count and
+no per-step residual.  Neither of Q21's two levers transfers as a result: an
+inner-tolerance schedule cannot reduce a cost that no tolerance is setting when
+every solve is budget-capped and none converges, and the exact block-Thomas +
+Sherman--Morrison apply accelerates the dense z-local block of ``pr3-cm``, which
+this module does not build.  Landing either one means landing ``pr3-cm`` here
+first, which is a separate adoption.
+
 API change (queue row Q12, 2026-09-13): ``KrylovConfig.method`` previously
 defaulted to ``"propagator"`` and ``dominant_eigenpair(method=...)`` to
 ``"power"``.  Both raw routes returned unchecked pairs.  On the linked Cyclone
