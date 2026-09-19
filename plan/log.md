@@ -16412,6 +16412,50 @@ warned first. The guard is now additive — every warning that fired before stil
 hint also covers `explicit_time`, and it is suppressed only where the step is genuinely
 adaptive, so the controller's initial guess is not reported as an over-CFL step.
 
+### User-visible change: a float64 run now applies the float64 gate
+
+This follows from the widening and is the point of it, but it is a behaviour change
+and is recorded as one rather than re-baselined quietly.
+
+`certifiable_residual_tolerance` floors the certification gate at `1e3 · eps(dtype)`.
+Because a run launched with `JAX_ENABLE_X64=true` previously stayed in `complex64`, it
+applied the **float32** gate, 1.19e-4, instead of the 1e-9 it had asked for. Any float64
+run whose deck could not actually support a certifiable eigenpair therefore returned a
+number drawn from below that floor, and reported it as certified.
+
+The regression surfaced in CI on exactly one case, the `Nl=2, Nm=2` deck behind
+`tests/unit/quasilinear/test_quasilinear.py::test_runtime_linear_quasilinear_krylov_smoke`
+(and the scan test beside it), which appears in both the `model-artifacts` quick-test
+shard and wide-coverage shard 9. Measured on that deck at ky=0.2, this branch against a
+pristine `254fcc7b7` worktree:
+
+| source | lane | outcome | γ | residual | gate |
+|---|---|---|---|---|---|
+| `254fcc7b7` | float32 | returned | 4.3222968e-08 | 5.4038e-05 | 1.1921e-04 |
+| this branch | float32 | returned, **identical** | 4.3222968e-08 | 5.4038e-05 | 1.1921e-04 |
+| `254fcc7b7` | float64 | returned | 6.7084393e-08 | 5.3035e-05 | **1.1921e-04** |
+| this branch | float64 | **raises** | — | **1.06665** | **1e-09** |
+
+The float32 lane is bitwise unchanged. What changed is the float64 lane, and the new
+behaviour is the correct one: γ ≈ 4e-8 at residual 5.4e-5 is not a converged eigenpair,
+it is noise that a gate looser than the noise let through. With two Hermite moments this
+deck carries no resolvable mode at all, so in float64 the honest residual is 1.06665 and
+the solve fails closed exactly as Q12 intends. **No shipped validation number moved**: the
+Cyclone deck's γ is unchanged in float32 and is now properly certified in float64, and a
+resolution sweep shows every rung with `Nm ≥ 4` certifies in float64 at residuals
+2.3e-15–1.7e-10 — `Nm=2` is the only degenerate one.
+
+The two tests are therefore given `Nm=4` rather than a relaxed gate. That resolution
+carries a mode both precisions certify and agree on: γ = −1.676437e-03 at residual
+1.69e-06 against the float32 gate, and −1.676444e-03 at 3.58e-15 against the float64 one,
+agreeing to 4e-06 relative. They are plumbing smoke tests, so the resolution only has to
+be high enough that the eigenpair they exercise exists.
+
+**What a user should expect.** A float64 run of a deck too coarse to support a certifiable
+mode now raises instead of returning a small number. That is a real change in what such a
+run does, and it is the behaviour the certification contract always specified; float32
+runs are unaffected.
+
 ### Limitations
 
 * **No clean timing was possible and none is claimed.** The Mac carried another user's

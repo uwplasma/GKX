@@ -1248,7 +1248,11 @@ recursive = true
 # parametrized over the three (solver, fixed_dt) combinations that the
 # measurement separated. Measured count from
 # check_package_architecture_manifest.py, not a sum of deltas.
-baseline = 90731
+# 90731 -> 90745: the comment on the two quasilinear runtime smoke tests, which
+# records why their deck needs Nm=4 rather than Nm=2 -- at two Hermite moments
+# it carries no resolvable mode and only passed because the float32 residual
+# gate was looser than the noise it let through. Measured count.
+baseline = 90745
 target = 35000
 
 [[line_budget_policy.counts]]

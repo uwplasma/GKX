@@ -374,6 +374,20 @@ def test_quasilinear_weights_are_phase_and_amplitude_invariant() -> None:
         )
 
 
+# Nm=4, not Nm=2, in the two runtime smoke tests below. With two Hermite
+# moments this deck carries no resolvable mode at all: the adaptive eigensolve
+# returns gamma = 4.3e-08 with an original-operator residual of 5.4e-05, which
+# is not a converged eigenpair -- it only passed because
+# certifiable_residual_tolerance floors the float32 gate at 1e3 * eps, i.e.
+# 1.19e-04, looser than that noise. The float32 lane still runs the same
+# arithmetic, so this was invisible until the runtime seed started honouring
+# JAX_ENABLE_X64 and the float64 lane began applying the 1e-09 gate it had
+# asked for, at which point the honest residual is 1.06665 and the solve fails
+# closed, as Q12 intends. Nm=4 gives a mode both precisions certify and agree
+# on: gamma = -1.676437e-03 at residual 1.69e-06 against the 1.19e-04 float32
+# gate, and -1.676444e-03 at 3.58e-15 against the 1e-09 float64 one, agreeing
+# to 4e-06 relative. These are plumbing smoke tests, so the resolution only has
+# to be high enough that the eigenpair they exercise exists.
 def test_runtime_linear_quasilinear_krylov_smoke() -> None:
     cfg = replace(
         _tiny_runtime_config(),
@@ -384,7 +398,7 @@ def test_runtime_linear_quasilinear_krylov_smoke() -> None:
             csat=0.3,
         ),
     )
-    out = run_runtime_linear(cfg, ky_target=0.2, Nl=2, Nm=2, solver="krylov")
+    out = run_runtime_linear(cfg, ky_target=0.2, Nl=2, Nm=4, solver="krylov")
     assert out.quasilinear is not None
     assert out.state is None
     assert out.quasilinear["mode"] == "saturated"
@@ -397,7 +411,7 @@ def test_runtime_scan_collects_quasilinear_payloads_and_rejects_batch() -> None:
         _tiny_runtime_config(),
         quasilinear=RuntimeQuasilinearConfig(enabled=True),
     )
-    out = run_runtime_scan(cfg, ky_values=[0.2, 0.3], Nl=2, Nm=2, solver="krylov")
+    out = run_runtime_scan(cfg, ky_values=[0.2, 0.3], Nl=2, Nm=4, solver="krylov")
     assert out.quasilinear is not None
     assert len(out.quasilinear) == 2
     with pytest.raises(NotImplementedError):

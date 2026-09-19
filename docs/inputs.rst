@@ -48,6 +48,21 @@ its answer, on this deck, is the same to seven figures.
    works and still preserves the caller's dtype, but it is no longer needed for
    the runtime's own seed.
 
+.. warning::
+
+   A float64 run now applies the float64 gate, which is a behaviour change. Because
+   an ``JAX_ENABLE_X64=true`` run previously stayed in float32, it applied the
+   **float32** gate of 1.19e-4 rather than the 1e-9 it had asked for, so a deck too
+   coarse to support a certifiable eigenpair could return a small number and report
+   it as certified. Such a run now raises instead. Measured on a deliberately
+   degenerate ``Nl=2, Nm=2`` deck: float64 previously returned
+   :math:`\gamma = 6.7\times10^{-8}` at residual 5.3e-5 against the 1.19e-4 float32
+   gate, and now fails closed at residual 1.06665 against 1e-9 -- the earlier number
+   was noise below a gate looser than the noise, not a converged eigenpair. Float32
+   runs are unaffected and are bitwise unchanged. If a float64 run of your deck
+   starts raising, raise its velocity resolution: every rung with ``Nm >= 4``
+   certifies on that deck.
+
 ``GKX_X64`` is a **test-harness** variable, not a runtime switch: it only selects
 the precision banner in ``tests/conftest.py``. Setting it without
 ``JAX_ENABLE_X64`` does not change any run's precision.
