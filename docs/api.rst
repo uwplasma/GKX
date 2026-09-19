@@ -74,6 +74,19 @@ caveat, and what it costs. Prefer ``prepare`` when a case is run more than
 once, because it keeps the compiled graph while each call to the function entry
 point compiles its own.
 
+On a linked (twist-shift) deck, every state these entry points are given --
+the one ``prepare`` is built with, and any ``initial_state`` passed to
+``simulation.run``, ``simulation.run_arrays`` or
+``PreparedSimulation.solve`` -- is projected onto the linked chain cover
+before it is integrated, exactly as the runtime projects a supplied
+``initial_state`` at intake. The rows outside the chains are decoupled, and the
+ExB bracket would alias whatever sits there back onto the chain rows. The
+projection is a mask fixed by the deck's topology, not a check on the state, so
+it holds under ``jit`` and under reverse-mode AD: the cotangent of a supplied
+state is exactly zero on those rows and unchanged elsewhere. Periodic decks and
+full-cover linked grids are untouched. :doc:`solvers` states the rule, its
+alternative and what it was measured to cost.
+
 .. automodule:: gkx.api
    :members:
    :exclude-members: KrylovConfig

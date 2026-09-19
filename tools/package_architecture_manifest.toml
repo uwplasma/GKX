@@ -980,7 +980,16 @@ recursive = true
 # sites collapse to thin forwarders, and the module grows by the two weight
 # kernels, the self-conjugate row mask and the ``ny_full`` a half axis needs to
 # find that row at all, carried on the grid and the linear cache.
-baseline = 91077
+# 90907 -> 91005: the supplied-state contract below the runtime (Q23). Two
+# helpers on the linked-topology module read the chain cover off a cache a
+# caller already holds and project a supplied state with it, one call site each
+# in the shared explicit nonlinear component builder, the prepared object's
+# run_arrays and the differentiable heat-flux window, and one carried field.
+# The rest is the contract in the docstrings users meet it in: that these entry
+# points project rather than reject, why a value check cannot be written at a
+# traced boundary, and what the projection does to a supplied state's cotangent.
+# Target unchanged.
+baseline = 91175
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1216,7 +1225,15 @@ recursive = true
 # two-sided weights that must not move, the flux weight's folded form, the mode
 # selections that may not claim a Nyquist row, and the cached and quasilinear
 # copies now reading from the one owner.
-baseline = 90284
+# 90119 -> 90471: the supplied-state contract below the runtime (Q23), ten
+# cases across three suites -- the two cache-level helpers against the existing
+# grid-level mask and under jit and grad; gkx.prepare, the prepared run, the
+# function entry point that shares its graph, the state cotangent and the
+# objective adjoint on a linked deck; and the periodic no-op on each. Each one
+# builds its own deck and its own supplied state, which is most of the lines:
+# the claim is about a state the caller built, so a shared fixture would be
+# asserting on a state the suite built instead.
+baseline = 90637
 target = 35000
 
 [[line_budget_policy.counts]]

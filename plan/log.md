@@ -15782,3 +15782,199 @@ conjugate-partner map, give the compressed projector a layout argument, make
 the sharded `ky` divisibility check layout-aware, move the two `ifft2` output
 paths to `irfft2`, and decide whether the two-sided flux should represent an
 even grid's Nyquist row at all before it flips the state.
+
+## 2026-09-19 — supplied states below the runtime (Q23, Q19 follow-up)
+
+Branch `fix/supplied-states-below-runtime`, from `cf89dcc70` (`origin/main`).
+
+**Question.** #247 (Q19) zeroes the off-chain rows of the two states the
+*runtime* does not build -- a user `initial_state` passed to
+`run_runtime_linear`, and a restart or init file. The library entry points
+underneath took whatever state they were handed: `gkx.prepare` and the prepared
+object's `run` / `run_arrays` (which `PreparedSimulation.solve(initial_state=…)`
+reaches), the shared `integrate_nonlinear_explicit_diagnostics_state`, and the
+differentiable objective `nonlinear_heat_flux_window`. One contract for them,
+and is it a mask or an explicit error?
+
+**Decision: project, do not reject.** Every state these entry points are given
+is projected onto the linked chain cover -- the `G0` a prepared object is built
+with, any `initial_state` passed to `run`/`run_arrays`/`solve`, and the
+objective's `saturated_state`. Nothing raises. Two reasons, and the first is
+not a preference:
+
+- **A rejection cannot be written at a traced boundary.** `run_arrays` is the
+  documented differentiable Python boundary, and the objective's state is an
+  array a design loop hands in; under `jit` or `grad` that array is a tracer
+  with no values to test. On a concrete array the test would still cost a host
+  synchronization on every call, on exactly the route whose purpose is a reused
+  compiled graph. The brief's own condition -- "an error must not fire on a
+  state the caller cannot inspect cheaply" -- is decisive here, because *the
+  library itself* is the caller that cannot inspect it.
+- **The runtime above already projects.** Rejecting here would make two doors
+  into the same solver disagree about the same array, and would break a
+  supplied-state workflow that `run_runtime_linear` accepts today.
+
+The projection is a `where` against a mask fixed by the deck's topology, never
+a branch on the state's values, so it holds under `jit` and under reverse-mode
+AD. Periodic decks and full-cover linked grids get `None` and the **same state
+object** back.
+
+**Where it costs nothing.** The mask is applied to `G0` once inside
+`_build_explicit_scan_components`, which both `prepare_explicit_nonlinear_diagnostics_impl`
+and `integrate_explicit_nonlinear_diagnostics_impl` pass through -- so the two
+routes Q18 made one graph stay one graph -- and outside the jitted scan, so the
+compiled scan is unchanged. Measured, not assumed: on the linked deck the
+prepared object's optimized `_run_raw` is **10680 instructions, sha256
+`3b52df995014727e`** on both arms, and on the periodic deck **9976
+instructions, sha256 `ff768e7fe5cecfae`** on both arms. (The hash is over the
+instruction lines with their `metadata={…}` stripped; a module's text also
+carries string and `FileLocations` tables of file names, function names and
+*line numbers*, which move whenever a source file is edited.)
+
+**What the rows cost these entry points, measured.** Linked nonlinear Cyclone
+grid, Nx8/Ny8/Nz16, Nl4/Nm8, jtwist 1, `damp_ends_rate` .1; the chains cover kx
+rows `{0,1,2,6,7}`, rows `{3,4,5}` are 19968 unknowns = 60.94% of the state.
+The supplied state is broadband at saturated amplitude (`max|G|` = 1), which is
+the state these entry points are documented to take.
+
+| quantity | before | after |
+|---|---|---|
+| off-chain max \|G\| in `prepare`'s object | 9.999999e-01 | 0 |
+| `prepared.initial_state` equals the one prepared from the projected array | no | yes, bitwise |
+| 8-step `run(initial_state)` final state, relative to the projected arm | 1.060277e+00 | 0 |
+| its final-state off-chain max | 9.999598e-01 | 0 |
+| its heat flux, relative to the projected arm | 3.351342e+00 | 0 |
+| `nonlinear_heat_flux_window` value | −1.451206089603e-02 | −1.451533999198e-02 |
+| …relative to the projected arm | 2.259056e-04 | 0 |
+| its adjoint gradient w.r.t. a drift scale | −3.800593423815e-05 | −3.801481372590e-05 |
+| …relative to the projected arm | 2.335797e-04 | 0 |
+| off-chain cotangent of a supplied state through `run_arrays` | 3.896542e+00 | 0 |
+| its chain cotangent equals the projected arm's | no | yes, bitwise |
+
+**The reason here is the bracket, not the diagnostics.** This is where Q23
+differs from Q19. On a *full* nonlinear grid the chain cover equals the
+two-thirds dealias mask, so the free energy and its kx spectrum already exclude
+the off-chain rows: `Wg` = 3.878388895630e+01 with the off-chain content and
+3.878388895630e+01 without it, an inflation of **1.0000×**, against Q19's
+114.9× on the linear ky-selected pilot whose dealias mask is all-true. What
+does change is the physics. One nonlinear right-hand side's chain rows move
+**2.369696e-02 relative** when off-chain content is present, and the effect is
+quadratic in amplitude -- 2.372095e-04 at `max|G|` 1e-2, 2.372119e-06 at 1e-4,
+3.354691e-12 at the runtime seed's 1.414214e-10. So a linear-seed state shows
+almost nothing here and a saturated restart shows all of it, which is why the
+measurement is taken at saturated amplitude and why the amplitude scan is in
+the log rather than a single number.
+
+**The VJP.** The off-chain entries of a supplied state carry **exactly zero**
+cotangent, which is the same statement as their carrying no physics forward;
+the chain entries' cotangents are bitwise those of the already-projected state
+(chain max 3.243677e+00). `nonlinear_heat_flux_window` keeps its documented
+contract unchanged -- the state is detached, `max|dQ/dG|` = 0 on both arms --
+and the projection changes the trajectory the window starts on, not what is
+differentiated.
+
+**Nothing else moved.** Bitwise identical across the two arms: the linked
+deck's run from the runtime's own on-cover initial condition (final state
+`71221ef844311b4c`, heat flux `443c2a529520987c`), the periodic deck's prepared
+state (`2863809f395029eb`) and final state (`d628e0211509e7a8`) and objective
+value (4.223728116414e-01), both HLO fingerprints, and the linear pilot from a
+supplied state -- certified eigenpair γ=.1156212538480758667,
+ω=.2411787658929824829, residual 8.319672e-07, certified, and the explicit-time
+fit γ=.1156180399480198906, ω=.2411964219216982674, which are #247's values to
+every printed digit.
+
+**Contract.**
+- `linked_cover_mask_from_cache(cache)` and `mask_supplied_state(state, cache)`
+  (`operators/linear/linked.py`) are the cache-level form of #247's
+  `linked_chain_cover_mask` / `mask_off_chain_rows`. Every nonlinear entry point
+  already holds a built cache, so it reads the cover off that instead of
+  resolving the twist-shift policy a second time; a test asserts the two agree.
+  `_linked_covered_mode_mask` in `solvers_linear_krylov_algorithms.py` is now a
+  thin wrapper and the eigen routes are unchanged.
+- Applied at `_build_explicit_scan_components` (the `G0` both explicit
+  nonlinear routes are built from), at `PreparedExplicitNonlinearDiagnostics.run_arrays`
+  (a supplied `initial_state`; a dynamic `cache` supplies its own cover), and at
+  `nonlinear_heat_flux_window` (the `saturated_state`, before `stop_gradient`).
+- `PreparedExplicitNonlinearDiagnostics` carries the cover as `cover_mask`,
+  `None` on periodic and full-cover decks. Public signatures unchanged.
+- `docs/solvers.rst` gains "Supplied states below the runtime" with the rule,
+  the rejected alternative and these measurements; `docs/api.rst` states it
+  where `gkx.prepare` is introduced and `docs/nonlinear_autodiff.rst` where the
+  objective is.
+
+**Limitations.**
+- The IMEX nonlinear diagnostics route (`integrate_nonlinear_imex_diagnostics`)
+  and the raw integrators `integrate_nonlinear` / `integrate_nonlinear_cached`
+  still take the state they are given. They are not the entry points this row
+  names, and none of them is reached by `gkx.prepare` or by the objective, but
+  the contract is therefore not yet the whole library's.
+- `run_arrays` with a dynamic `cache` uses that cache's cover. A dynamic cache
+  whose twist-shift topology differs from the prepared one is a different deck
+  and is not otherwise checked; that predates this branch.
+- Measurements are CPU, x64, on one linked nonlinear grid, one periodic grid and
+  #247's linear pilot, at 3-8 step windows. No production-size run was made.
+- The free-energy and spectrum arm of #247's measurement set is reported here
+  and is *not* a discriminator on a full nonlinear grid, for the reason above.
+  It would be on a ky-selected grid, which these nonlinear entry points do not
+  take.
+
+**Tests** (one invocation per row; x64 as CI runs):
+
+| selection | result |
+|---|---|
+| `tests/unit/nonlinear` | 191 passed (185 + 6 new) |
+| `tests/unit/linear/test_linear_helpers_extra.py` | 67 passed (64 + 3 new) |
+| `tests/unit/api` | 60 passed (59 + 1 new) |
+| `tests/unit/objectives/test_autodiff_solver_objectives.py` | 97 passed |
+| `tests/integration/runtime/test_runtime_runner.py` | 175 passed |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+The ten new tests pin, per entry point: `gkx.prepare` holds the projected state
+and `PreparedSimulation.solve(initial_state=…)` returns the projected arm's
+result bitwise; `run_arrays` from a supplied state equals the projected arm;
+the function entry point that shares the graph agrees; a supplied state's
+off-chain cotangent is exactly zero and its chain cotangent unchanged; the
+objective's value *and* its adjoint gradient are unchanged by off-chain
+content; the periodic deck gets `None`, the same object and an unchanged
+result; and the cache-level helpers agree with #247's grid-level ones and
+survive `jit` and `grad`.
+
+No existing test's asserted numbers changed. `gkx.prepare`'s docstring is a
+single line because `runtime.py` sits under a complexity baseline that a longer
+one would regress; the contract is stated on the class it returns, and in the
+docs.
+
+Also passing: ruff 0.16.4 check and format (461 files), mypy 2.3.1 as CI (186
+source files), `sphinx -W` (sphinx-build 9.0.4), gitleaks 8.30.1 on the branch
+range, `check_package_architecture_manifest.py` (source 90907 -> 91005, tests
+90119 -> 90471, targets unchanged) and `check_repository_size_manifest.py`.
+
+**Environment.** Apple M3 Max (14 cores, 36 GiB), shared (1-min load 2-11),
+Python 3.11.14, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0;
+`PYTHONPATH=$PWD/src:$PWD JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg
+JAX_PLATFORMS=cpu nice -n 10`, one heavy process at a time, `gkx.__file__`
+verified in each worktree. Commands (repository root), run once per worktree
+with `before` = a detached checkout of `cf89dcc70` and `after` = this branch:
+```
+D=plan/research/scripts/2026-09-19-supplied-states-below-runtime
+python $D/supplied_state_below_runtime.py <before|after>
+```
+The `.txt` logs are those runs with local paths replaced by `<worktrees>`. The
+script was ruff-formatted before the recorded runs, so the committed file is
+the one that produced them.
+
+**Artifacts** (`plan/research/scripts/2026-09-19-supplied-states-below-runtime/`, SHA-256):
+```
+a92f90dab969b2380c84053d943880c3a0c1b347bca9916d19a4e87f95f095a8  supplied_state_below_runtime.py
+6a3f93dcd7c3b3d266404d5b7ba37c1470334db03f9be167eb31a74c5425e591  supplied_state_below_runtime_after.txt
+aa1168ea3ec37d127094efe08916719fe0aa8bee47756259bf0e4ffed9772880  supplied_state_below_runtime_before.txt
+```
+
+**Terminal state.** Every owned process ended; nothing was left running at the
+commit. The `before` arm's detached worktree was removed.
+
+**Next question.** The IMEX diagnostics route and the raw
+`integrate_nonlinear` / `integrate_nonlinear_cached` drivers are the remaining
+state-taking entry points. They are one call each away from the same contract;
+the question is whether a raw integrator should carry it at all, or whether the
+line is drawn at the entry points a user reaches by name.

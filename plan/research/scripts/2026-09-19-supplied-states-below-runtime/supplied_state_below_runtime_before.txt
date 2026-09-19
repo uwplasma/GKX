@@ -1,0 +1,34 @@
+arm=before gkx=<worktrees>/q23-before-main/src/gkx/__init__.py
+deck: ny=8 nx=8 nz=16; cover 25/64 (ky, kx) modes; chain kx rows=[0, 1, 2, 6, 7]; off-chain kx rows=[3, 4, 5]
+state (1, 4, 8, 8, 8, 16) n=32768 off-chain unknowns=19968 (0.6094 of the state)
+runtime initial condition: max|G|=1.414214e-10 off-chain max=0.000000e+00
+supplied state: max|G|=9.999999e-01 off-chain max=9.999999e-01; off-chain share of ||G||^2=0.609300
+--- the supplied array itself
+    off-chain max|G|=9.999999e-01 Wg=3.878388895630e+01 off-chain share of Wg=0.000000
+    Wg(kx) = [7.502799 7.837801 7.817694 0.       0.       0.       7.794593 7.831002]
+--- the same state projected onto the chain cover
+    off-chain max|G|=0.000000e+00 Wg=3.878388895630e+01 off-chain share of Wg=0.000000
+    Wg(kx) = [7.502799 7.837801 7.817694 0.       0.       0.       7.794593 7.831002]
+    inflation Wg(supplied)/Wg(on cover) = 1.0000x
+--- what gkx.prepare's object integrates (prepared.initial_state)
+    off-chain max|G|=9.999999e-01 Wg=3.851691732040e+01 off-chain share of Wg=0.000000
+    Wg(kx) = [7.804018 7.707147 7.667495 0.       0.       0.       7.64836  7.689898]
+    prepared.initial_state is bitwise equal to the one prepared from the already-on-cover array=False; the setup's own Hermitian projection is why neither equals the raw input
+one nonlinear RHS: chain rows change 2.369696e-02 relative when the off-chain rows are present (chain |dG| max 7.657306e+00); off-chain |dG| from an on-cover state=0.000000e+00
+    amplitude max|G|=1.000000e+00: chain-row relative change=2.369696e-02
+    amplitude max|G|=1.000000e-02: chain-row relative change=2.372095e-04
+    amplitude max|G|=1.000000e-04: chain-row relative change=2.372119e-06
+    amplitude max|G|=1.414214e-10: chain-row relative change=3.354691e-12
+prepared run(8 rk3 steps, dt=0.001) from the supplied state vs the on-cover state: final-state max relative difference=1.060277e+00; final-state off-chain max=9.999598e-01; heat-flux max relative difference=3.351342e+00
+integrate_nonlinear_explicit_diagnostics_state from the same supplied state is bitwise equal to the prepared route=True
+VJP through run_arrays with respect to the supplied state (scalar = sum |G_final|^2): off-chain cotangent max=3.896542e+00; chain cotangent max=3.244350e+00; chain cotangent bitwise equal to the on-cover arm=False
+nonlinear_heat_flux_window: supplied=-1.451206089603e-02 on cover=-1.451533999198e-02 relative difference=2.259056e-04
+    adjoint gradient with respect to the drift scale: supplied=-3.800593423815e-05 on cover=-3.801481372590e-05 relative difference=2.335797e-04
+    gradient with respect to the supplied state (documented as detached): max|dQ/dG|=0.000000e+00
+no-op arm, linked deck from the runtime's own on-cover initial condition: final-state checksum=71221ef844311b4c heat-flux checksum=443c2a529520987c
+    the compiled scan of that prepared object: optimized HLO = 10680 instructions, sha256 3b52df995014727e
+no-op arm, periodic deck: cover is every mode=True; prepared.initial_state checksum=2863809f395029eb
+    run(initial_state) final-state checksum=d628e0211509e7a8; optimized HLO = 9976 instructions, sha256 ff768e7fe5cecfae
+    periodic objective adjoint value=4.223728116414e-01
+linear pilot certified eigenpair (krylov) from a supplied state: gamma=1.156212538480758667e-01 omega=2.411787658929824829e-01 residual=8.319672e-07 certified=True route=adaptive
+linear pilot time fit (explicit_time) from a supplied state: gamma=1.156180399480198906e-01 omega=2.411964219216982674e-01

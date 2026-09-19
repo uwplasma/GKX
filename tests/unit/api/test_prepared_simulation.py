@@ -272,3 +272,56 @@ def test_a_linear_case_reports_that_it_was_not_warmed() -> None:
 
     assert prepared.warmup() is prepared
     assert prepared.summary()["warmed"] is False
+
+
+# ---- supplied states on the public entry point (queue row Q23) ------------
+#
+# The runtime zeroes the off-chain rows of a user ``initial_state`` on a linked
+# deck (#247). ``gkx.prepare``'s object is the same door one floor down, and
+# ``solve(initial_state=...)`` reaches it directly, so it applies the same rule
+# rather than integrating rows the chains never reach -- which the ExB bracket
+# would alias straight back onto the chain rows.
+
+
+def _linked_nonlinear_case() -> RuntimeConfig:
+    """A tiny nonlinear case whose linked chains leave kx rows uncovered."""
+
+    import dataclasses
+
+    base = RuntimeConfig()
+    return base.replace(
+        grid=dataclasses.replace(
+            base.grid, Nx=8, Ny=8, Nz=8, Lx=6.28, Ly=6.28, boundary="linked", jtwist=1
+        ),
+        physics=dataclasses.replace(base.physics, linear=False, nonlinear=True),
+        time=dataclasses.replace(base.time, run_to="t_max", t_max=0.01, dt=0.005),
+    )
+
+
+def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover() -> None:
+    import numpy as np
+
+    from gkx.operators.linear.linked import linked_cover_mask_from_cache
+
+    prepared = prepare_simulation(_linked_nonlinear_case(), Nl=2, Nm=4, steps=2)
+    backend = prepared._backend
+    cover = np.asarray(linked_cover_mask_from_cache(backend.cache))
+    assert not cover.all(), "this deck must leave rows outside the chains"
+
+    shape = np.asarray(backend.initial_state).shape
+    rng = np.random.default_rng(2302)
+    supplied = (rng.normal(size=shape) + 1j * rng.normal(size=shape)).astype(
+        np.asarray(backend.initial_state).dtype
+    )
+    supplied = supplied / np.max(np.abs(supplied))
+    off = np.broadcast_to(~cover[:, :, None], shape)
+    on_cover = np.where(off, 0.0, supplied).astype(supplied.dtype)
+    assert np.max(np.abs(supplied[off])) > 0.0
+
+    from_supplied = prepared.solve(initial_state=supplied)
+    from_on_cover = prepared.solve(initial_state=on_cover)
+
+    final_supplied = np.asarray(from_supplied[2])
+    final_on_cover = np.asarray(from_on_cover[2])
+    assert np.max(np.abs(final_supplied[off])) == 0.0
+    np.testing.assert_array_equal(final_supplied, final_on_cover)
