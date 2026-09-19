@@ -16276,7 +16276,7 @@ apply side. Both are measured against the same gate and the same `adaptive` cont
 
 ## 2026-09-19 — Q25: README feature summary and a methods-and-decisions page
 
-Branch `docs/methods-and-features`, off `origin/main` `254fcc7b7` (GKX 2.1.0, #255
+Branch `docs/methods-and-features`, merged as **#256**, off `origin/main` `254fcc7b7` (GKX 2.1.0, #255
 merged). Documentation only: no `src/` change, no test change, no default change, no new
 measurement. Every number published by this row is already in this log; what is new is
 where it is said and what is said beside it.
