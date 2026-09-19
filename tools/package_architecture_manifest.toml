@@ -248,7 +248,15 @@ recursive = true
 # release gate has to special-case. It replays the shipped stop policy over
 # tracked heat-flux traces and runs no solver, so it stays a figure builder
 # rather than a campaign.
-baseline = 95
+# 95 -> 96: tools/artifacts/build_methods_figures.py. The target is 0, so a new
+# tools file has to earn its place. This one does because it is one file for
+# four figures rather than four, and because its inputs are a class no existing
+# builder reads: the evidence directories under plan/research/scripts/, which
+# are the run records of the measurement rows, not docs/_static artifacts.
+# Folding it into an existing builder would give that builder a second input
+# root; splitting it per figure would cost three more files against the same
+# target. It renders committed evidence and runs no solver.
+baseline = 96
 target = 0
 
 [[topology_policy.counts]]
@@ -1313,7 +1321,12 @@ recursive = true
 # --route eager-scan so the rejected option stays priceable, and made the
 # ledger report constant_bytes, the literal payload a captured array costs the
 # compiled module.
-baseline = 78187
+# +579: build_methods_figures.py, the four figures of docs/algorithms.rst. Half
+# of it is readers for the evidence directories under plan/research/scripts/,
+# which are text and JSON run records rather than the CSV/JSON companions the
+# other builders read; those readers are what keeps the figures free of
+# literals. Measured count, not a delta.
+baseline = 78766
 target = 0
 
 [[line_budget_policy.counts]]

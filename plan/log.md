@@ -16273,3 +16273,135 @@ row's numbers, and the tables above stand for the merged tree as well as for
 the remaining lever on the iteration side, and a device apply of `pr3-cm` (now 164 MB of
 factors rather than 864 MB, which fits a GPU comfortably) is the remaining lever on the
 apply side. Both are measured against the same gate and the same `adaptive` control.
+
+## 2026-09-19 — Q25: README feature summary and a methods-and-decisions page
+
+Branch `docs/methods-and-features`, off `origin/main` `254fcc7b7` (GKX 2.1.0, #255
+merged). Documentation only: no `src/` change, no test change, no default change, no new
+measurement. Every number published by this row is already in this log; what is new is
+where it is said and what is said beside it.
+
+**The two asks.** (a) The README should let a reader choosing between gyrokinetic codes
+see what GKX offers, as bullets naming algorithms, methods and features. (b) The
+documentation should explain the methods and the decisions behind them, clearly, soberly
+and with plots, and not as long prose.
+
+**What was written.**
+
+*README.* A `## What GKX offers` section of eleven bullets, placed immediately after the
+hero image and before `## Install`, so a newcomer meets it before the install command.
+Each bullet names a method or feature, states one measured or contractual fact about it,
+and links to the page that carries the evidence. The existing figure-regeneration table
+gains a row for the four new figures. Nothing else in the README was rewritten; the
+pinned sentences are untouched (`tests/release/test_release_gates.py` passes, 152).
+
+*Docs.* `docs/algorithms.rst` is rewritten as **Methods and Decisions** and moved to the
+head of the "Physics and numerical contracts" toctree, with a pointer to it from the
+index lead. It was chosen over a new page because what it held — a five-step linear
+operator walk-through, an operator decomposition, a two-paragraph operator-splitting
+summary and a data-layout note — was a thinner and partly stale duplicate of
+`docs/operators.rst`, `docs/solvers.rst` and `docs/numerics.rst`: it still described `b`
+as coming from the s-alpha geometry and listed Euler/RK2/RK4 as the integrators. The
+five-step ordering is the one piece that existed nowhere else and is kept, next to the
+statement that steps 1–2 are built once into the `LinearCache`. Everything else now
+links out instead of restating.
+
+The page opens with a decision/why/what-it-is-not table and then takes one section each:
+the Hermite–Laguerre formulation and what it buys, velocity-space truncation and the
+ℓ-spectra, collisions, the linked chains and the state-intake contract, eigenpair
+certification and why the raw routes fail closed, the nonlinear bracket and dealiasing,
+where the step's time goes, the one-graph route contract, precision, differentiability,
+and what has actually been measured against other codes. Each section states the decision
+first and the boundary of its evidence in the same paragraph as the claim.
+
+**Figures.** Four, from one committed generator,
+`tools/artifacts/build_methods_figures.py` (subcommands `velocity-truncation`,
+`chain-ledger`, `eigen-cost`, `cross-code`, `all`). Every value is read from a tracked
+evidence file at render time — no literal numbers in the script — so a figure cannot
+drift from the run that produced it. House style (`gkx.artifacts.figure_style`,
+Okabe–Ito palette, dashed black references, 256-colour quantized PNG).
+
+| figure | source artifact | what it shows | what it is not |
+|---|---|---|---|
+| `methods_velocity_truncation.png` | `2026-09-13-collisional-convergence/summary.csv` (#238), `2026-09-18-eigen-laguerre-spectrum/results/*.txt` (#252) | γ against Nl at ν ∈ {0, 1e-3, 3e-3, 1e-2}, and the certified eigenvectors' normalized Laguerre free-energy spectra at Nl48 | one ky, one Nm, one Nz, one geometry; not a collisionless limit and not a general resolution rule |
+| `methods_chain_transform_ledger.png` | `2026-09-14-q9-batched-chain-fft/ledgers/{base,shared_t}_runtime_32.json` (#243), `2026-09-18-q9-idle-host-timing/ab_tables.txt` (#250) | per-RK3-step optimized-HLO counts before/after the shared chain transforms, beside the measured shared/base wall-time ratio per kernel and arm | op counts are one optimized graph for one jax version and backend, not a runtime claim; timings are XLA:CPU, complex64, one deck, one host |
+| `methods_eigen_route_cost.png` | `2026-09-19-inner-solve-cost/summary.txt` (#255) | wall time and peak RSS of six certified production-chain runs; wall time against residual reached, with the certification verdict, on the screening rung | route comparison on one deck; the wall times are indicative on a shared host, the application counts behind them are not |
+| `methods_cross_code_ky_scan.png` | `2026-09-14-cross-code-cyclone/results/final_tables.txt` (#245) | γ(ky) from four codes on two geometries against the GX goldens, with each code's own convergence verdict as filled/open markers and GKX's Laguerre rungs labelled | agreement and disagreement on one case; not a claim that any code is faster or more accurate than another |
+
+The pairing in the second and third rows is deliberate. A ledger panel alone would say
+the shared transform made the step cheaper; the clock panel says the RK3 scan is
+2.6–3.5% *slower* on an idle host, in 20 of the 24 blocks that timed it, and the page
+says so in the caption and in the text. A certified-eigenpair panel alone would suggest
+that a certified value is a converged one; the truncation figure and its section say the
+only Nl-converged growth rate on that deck is collision-modified (νb ≈ 0.13 at
+b_max = 12.7, far above γ) and is not a collisionless limit.
+
+**Claim by claim, and its backing.**
+
+| claim on the new page or in the README | artifact |
+| --- | --- |
+| Laguerre ladders: 13.2% / 6.5% / 0.02% at Nl32→48 for ν = 1e-3 / 3e-3 / 1e-2; collisionless still falling at Nl64 | `2026-09-13-collisional-convergence/summary.{csv,txt}` (#238) |
+| cutoff pile-up at 0.79–0.85 of Nl at every rung; ν=1e-2 the only monotone spectrum; φ(z) overlap ≥ 0.991 on 30 pairs; γ = .0171695, ω = .495685 at Nl48 | `2026-09-18-eigen-laguerre-spectrum/{summary.txt,overlaps.txt,results/}` (#252) |
+| an independent implementation reproduces the ν=1e-2 ladder to ≤5e-7 in γ, ≤3.3e-6 in ω at Nl 24/32, same −1.5602% step | `2026-09-14-gx-vnewk-control/summary.txt` (#244) |
+| raw eigen routes returned the wrong branch at relative residual 0.98–1.00 (linked Cyclone) and 0.982–0.990 (ETG); zero-vector "certification" defect | `2026-09-13-certify-eigenpair/` (#233) |
+| linked chains: 1536 of 4096 pilot unknowns off-chain; projected route agrees to 1.04e-16, adaptive bitwise | `2026-09-14-covered-subspace/` (#237) |
+| intake: Wg inflated 114.9× on the linear pilot; 2.37e-02 relative RHS change on the nonlinear grid, quadratic in amplitude; cotangent exactly zero off-chain | `2026-09-18-off-chain-supplied-states/` (#247), `2026-09-19-supplied-states-below-runtime/` (#253) |
+| ledger: FFT 73→43, transpose 115→64, bytes 156,134,052→89,062,692 per RK3 step; 43–48% on every ledgered graph | `2026-09-14-q9-batched-chain-fft/ledgers/` (#243) |
+| clock: RHS gradient 0.88 pooled at both grids, ≤0.92 in 24/24 blocks; window gradient 0.945 at 64; RK3 scan 1.026–1.035; RHS 1.223 at 32×32×24 | `2026-09-18-q9-idle-host-timing/ab_tables.txt` (#250) |
+| one graph: 0/12 bitwise before, 12/12 after; f32 8.0e-8–2.1e-7, heating 0.93 / 1.41; 141 copies removed for +0.47% bytes; RSS 1,200 → 826 MB | #249, quoted from `docs/solvers.rst` |
+| eigen cost: 195196 vs 160254–169875 matvec-equivalents, 310.0 s vs 261.0 s, 2.8× against the earlier configuration, 27× under the gate with a free apply | `2026-09-19-inner-solve-cost/summary.txt` (#255) |
+| f32 nonlinear RHS not bit-reproducible run to run (1.4e-10) without `--xla_cpu_multi_thread_eigen=false`; the pool costs 26–33% on the RHS and 8–10% per RK3 step to disable | `2026-09-18-q10-ky-layout-contract/` (#248), `2026-09-18-q9-idle-host-timing/threadpool.txt` (#250) |
+| cross-code: GKX within +0.65%/−1.4% of converged GS2 on Miller ky .55; −1.0%/+0.7% on s-alpha ky .30; stella 1.40–1.47× high, cause open; no s-alpha reference at ky .55 | `2026-09-14-cross-code-cyclone/results/final_tables.txt` (#245) |
+| step cost, collision verification, Landau roots, parity table, adjoint memory and the QA campaign | unchanged from the README and `docs/{performance,operators,numerics,benchmarks,nonlinear_autodiff,stellarator_optimization}.rst`; this row restates them with their existing boundaries and adds nothing |
+
+**What this row deliberately does not claim.**
+
+- **No speed-up from the shared chain transforms.** The ledger reduction is real and the
+  wall time is not: the forward path regresses. Both panels are on the page.
+- **No collisionless converged growth rate** at Cyclone ky .55, and no promotion of the
+  ν=1e-2 value to one. The working rule for that deck is labelled a rule for that deck.
+- **No cross-code superiority of any kind.** The figure and the text report agreement,
+  disagreement and the open stella cause, and say that the GX values are that code's
+  shipped goldens at its own resolution rather than converged values. No "faster than"
+  or "more accurate than" sentence appears anywhere on the new page or in the new README
+  section.
+- **No GPU claim from the new figures.** Every timing behind them is XLA:CPU except the
+  eigen and convergence runs, which are single runs on a shared host and are labelled
+  indicative.
+- **No new parallelization or absolute-flux claim.** The README's pinned sentences on
+  sensitivity sweeps, the absolute-flux predictor, the declared outliers, the deferred
+  W7-X lanes and the promotion requirements are reproduced byte for byte.
+- **Nothing was measured for this row.** Where a section needed a number that no tracked
+  artifact carries, the section does not make the claim.
+
+**Manifests.** Both baselines are the numbers the checkers reported, not deltas:
+`tool_python_files` 95 → **96** and `tool_python_lines` 78187 → **78766**, each with the
+reason written at the entry. The repository-size check passes at 23.2 MB of a 50 MB
+budget with no unlisted file above 1 MB; the four PNGs are 57–79 KB each.
+
+**Gates.** `ruff check .` and `ruff format --check .` clean on 467 files (ruff 0.16.4);
+`python -m sphinx -W -b html docs` build succeeded; `tests/release/test_release_gates.py
+tests/release/test_evidence_ledger.py` 152 passed; both manifest checkers pass; the CI
+"Repository size manifest" step's seven commands run clean and the tracked-artifact
+staleness gate reports no diff on the four regenerated JSONs; `gitleaks git .
+--log-opts="origin/main..HEAD" --no-banner` finds no leaks.
+
+**Environment.** Apple M3 Max, macOS 14.4.1, Python 3.11.14, venv
+`gkx-review-20260913`, jax/jaxlib 0.10.2, `PYTHONPATH=<tree>/src:<tree>`, `MPLBACKEND=Agg`,
+`gkx.__file__` verified inside the worktree. No solver was run: the figure generator reads
+committed text and JSON.
+
+**Limitations.** The page is an overview with links, so it inherits the boundaries of the
+pages it links to and adds none of its own. Four figures cover truncation, the transform
+ledger, eigen cost and the cross-code scan; geometry, collisions, precision and
+differentiability are carried by text and by figures that already exist on their own
+pages. The figure generator parses three fixed-width text tables (`ab_tables.txt`,
+`summary.txt`, `final_tables.txt`) rather than machine-readable companions, because those
+rows produced no JSON summary; it raises rather than plotting an empty panel if a table's
+shape changes, but a *silent* change of column meaning would not be caught.
+
+**Next question.** Three of the four figures read text tables because the measurement
+rows that produced them wrote `summary.txt` and not `summary.json`. Either the evidence
+protocol should require a JSON companion beside every `summary.txt`, or the figure layer
+should keep owning the parsers — the first costs every future row a few lines, the second
+keeps the coupling where it is today and leaves a column rename undetectable.

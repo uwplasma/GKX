@@ -17,6 +17,64 @@ same data as the field-aligned tube in real space. Amplitude is steady across
 the loop, not growing.
 [Full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4).
 
+## What GKX offers
+
+If you are choosing between gyrokinetic codes, these are the methods and
+features that distinguish this one. Each links to the evidence.
+
+- **Hermite-Laguerre velocity moments.** Velocity space is two spectral indices
+  rather than a grid, so the state is one array and the whole step is dense
+  linear algebra on it. Low moments are the fluid quantities, so a small
+  truncation is a closure rather than an unresolved grid.
+  [theory](docs/theory.rst), [methods](docs/algorithms.rst).
+- **Exact derivatives of the whole path, including the equilibrium.** JAX
+  autodiff end to end on CPUs and GPUs: implicit reverse rules for eigenvalues
+  and eigenvector observables, and a block-checkpointed discrete adjoint for a
+  post-saturation nonlinear heat-flux window.
+  [eigensolver](docs/differentiable_eigensolver.rst),
+  [nonlinear autodiff](docs/nonlinear_autodiff.rst).
+- **Every returned eigenpair is certified against the original operator.** The
+  routes with no convergence test of their own are checked against the same
+  residual gate and raise when they fail it; the opt-out is explicit and
+  reports the residual. Results carry the residual, the gate and the route.
+  [solvers](docs/solvers.rst).
+- **Matrix-free eigensolves at sizes a dense operator cannot represent.** The
+  full gyrokinetic RHS is applied inside a restarted eigensolver, `O(n m)`
+  instead of `O(n^2)`: at `n = 494,592` the dense complex128 operator alone
+  would be 3.6 TiB.
+  [eigensolver](docs/differentiable_eigensolver.rst).
+- **Twist-and-shift linked chains, solved on the modes the chains couple.**
+  Seeds and Krylov vectors are projected onto the chain cover, supplied states
+  and restarts are projected at intake, and certification still applies the
+  unprojected operator so an unexpected coupling fails closed.
+  [solvers](docs/solvers.rst).
+- **Five collision operators, through gyrokinetic Coulomb.** Each is checked
+  against its published closed form, and a multispecies Coulomb request is
+  refused rather than silently extrapolated.
+  [operators](docs/operators.rst).
+- **VMEC, Boozer, Miller and VMEX geometries, differentiable in-process.** The
+  metric coefficients stay differentiable, which is the path stellarator shape
+  optimization uses. [geometry](docs/geometry.rst).
+- **One TOML, one executable, resolved decks.** `--estimate` sizes the grid from
+  the geometry and explains every entry; a finished run writes the resolved deck
+  that reproduces it. [inputs](docs/inputs.rst).
+- **Under-resolved runs warn instead of reporting a number.** Saturation is a
+  stationarity test on the flux and on the field and free energies, not a
+  fixed horizon, and an unresolved `ky` cutoff is reported as unresolved.
+- **One compiled graph per nonlinear route.** The two entry points into an
+  explicit nonlinear diagnostics run return bitwise identical arrays, in
+  float32 and under x64, for value and for gradient.
+  [solvers](docs/solvers.rst).
+- **Every published number is indexed to the artifact it comes from.** An
+  evidence ledger names the artifact, the generator and the reference for each
+  one, CI recomputes the parity percentages below from their tracked scans, and
+  a claim-scope page bounds what the release asserts.
+  [release scope](docs/release_scope.rst),
+  [verification matrix](docs/verification_matrix.rst).
+
+Methods, the decisions behind them, and what each measurement does not show:
+[methods and decisions](docs/algorithms.rst).
+
 ## Install
 
 ```bash
@@ -485,6 +543,7 @@ machine-readable companion, that companion is the artifact of record.
 | `qa_transport_equilibria.png`, `qa_transport_reduction.svg` | `tools/artifacts/build_qa_transport_figures.py` |
 | `quasilinear_stellarator_usefulness.png` | generator retired — not regenerable; JSON companion is the record |
 | `saturation_examples.png` | `tools/artifacts/build_saturation_figure.py` |
+| `methods_velocity_truncation.png`, `methods_chain_transform_ledger.png`, `methods_eigen_route_cost.png`, `methods_cross_code_ky_scan.png` | `tools/artifacts/build_methods_figures.py all` (re-renders from the tracked evidence under `plan/research/scripts/`) |
 | `runtime_memory_benchmark.png` | `tools/artifacts/build_runtime_memory_figure.py` (re-renders from the tracked CSV); `benchmarks/performance/benchmark_runtime_memory.py` re-measures it |
 
 ## Documentation and development
