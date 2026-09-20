@@ -71,6 +71,10 @@ from gkx.solvers_linear_krylov_algorithms import (  # noqa: E402
     _projected_flat_operator,
     build_shift_invert_preconditioner,
 )
+from gkx.solvers_linear_precond_pr3 import (  # noqa: E402
+    PR3_PRECOND_NAMES,
+    build_pr3_factors,
+)
 
 # Diagnosis rungs. ``d96`` is the size Q26 recorded; ``prod`` is the shipped
 # deck's own (Nl, Nm) = (16, 48) at the same (Nz, ntheta, nperiod).
@@ -168,8 +172,18 @@ def run_inner(args, rec: dict) -> dict:
     shape, size = v_init.shape, v_init.size
     results: dict = {}
     for mode in args.preconditioner.split(","):
+        factors = None
+        if mode in PR3_PRECOND_NAMES:
+            t = time.perf_counter()
+            factors, precond_meta = build_pr3_factors(
+                v_init, case.cache, case.params, case.T0, sigma_val
+            )
+            rec.setdefault("pr3_setup", {})[mode] = dict(
+                precond_meta, seconds=time.perf_counter() - t
+            )
+            bk.log(f"pr3 setup {rec['pr3_setup'][mode]}")
         _p, precond_raw = build_shift_invert_preconditioner(
-            v_init, case.cache, case.params, case.T0, sigma_val, mode
+            v_init, case.cache, case.params, case.T0, sigma_val, mode, factors
         )
         precond_op = _projected_flat_operator(precond_raw, covered, shape)
 
@@ -244,6 +258,33 @@ def run_inner(args, rec: dict) -> dict:
             "unrestarted_iterations": int(np.asarray(solu.iterations)),
             "unrestarted_converged": bool(np.asarray(solu.converged)),
         }
+        # Restart loss against preconditioner strength: the shipped budget is
+        # restart 20 x 3, so a candidate that converges unrestarted and stalls
+        # here is limited by the restart, not by its own quality.
+        ladder = []
+        for cycle, cycles in [(20, 3), (20, 15), (60, 5), (300, 1), (600, 1)]:
+            if cycle > size:
+                continue
+            solc = gmres(
+                matvec,
+                b,
+                x0=None,
+                precond=precond_op,
+                rtol=cfg.shift_tol,
+                restart=cycle,
+                max_restarts=cycles,
+            )
+            ladder.append(
+                {
+                    "restart": cycle,
+                    "max_restarts": cycles,
+                    "iterations": int(np.asarray(solc.iterations)),
+                    "converged": bool(np.asarray(solc.converged)),
+                    "true_relative_residual": rel(solc.x),
+                }
+            )
+            bk.log(f"ladder[{mode}] {ladder[-1]}")
+        row["restart_ladder"] = ladder
         results[mode] = row
         bk.log(f"inner[{mode}] {row}")
     rec["inner"] = results

@@ -531,11 +531,23 @@ def _shift_invert_apply_factory(
         # expensive unpreconditioned retry for nearly every right-hand side.
         restart = min(max(gmres_restart, 1), gmres_maxiter, size)
         max_restarts = max(1, math.ceil(gmres_maxiter / restart))
-        initial_guess = precond_op(b) if precond_op is not None else b
+        # Start from zero, not from ``M^-1 b``. Under right preconditioning the
+        # first Krylov vector is already ``M^-1 b``, so the first cycle from zero
+        # minimizes over a space that contains the point ``x0 = M^-1 b`` is: it
+        # cannot be worse, and when ``M`` is a poor inverse it is very much
+        # better, because ``x0 = M^-1 b`` starts the solve *behind* the trivial
+        # guess and the restarted budget then reports that. Measured on the
+        # shipped Cyclone deck at (Nz, Nl, Nm) = (96, 4, 8), first right-hand
+        # side, relative residual of the initial guess against 1 for x = 0:
+        # hermite-line 25.4, field-corrected 20.7, damping 3.53 -- and of the
+        # finished restart-20 x 3 solve, 9.18 / 13.0 / 2.16 from ``M^-1 b``
+        # against 0.995 / 0.999 / 0.857 from zero. That factor is what Q26
+        # recorded as "48 of 48 inner solves unconverged at relative residual
+        # 34"; it is an artefact of this line, on top of the real cause, which
+        # is that hermite-line does not converge at this size at all.
         solution = gmres(
             matvec,
             b,
-            x0=initial_guess,
             precond=precond_op,
             rtol=gmres_tol,
             restart=restart,

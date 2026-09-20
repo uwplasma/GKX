@@ -758,10 +758,18 @@ def testbuild_shift_invert_preconditioneritioner_linked_branch() -> None:
 def test_shift_invert_uses_right_preconditioning_and_physical_fgmres_residual(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The shifted solve must minimize the original, not transformed, residual."""
+    """The shifted solve must minimize the original, not transformed, residual.
+
+    It must also start from zero. Under right preconditioning the first Krylov
+    vector is ``M^-1 b``, so a cycle from zero already minimizes over a space
+    containing the old ``x0 = M^-1 b``; handing that point in as the guess can
+    only start the solve further from the answer, and with a weak ``M`` it does
+    -- on the shipped Cyclone deck it started 25x behind ``x = 0`` and the
+    reported inner residual said so. ``x0`` is therefore asserted *absent*.
+    """
 
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
-    calls: list[tuple[bool, jnp.ndarray, int]] = []
+    calls: list[tuple[bool, object, int]] = []
     monkeypatch.setattr(
         ka,
         "build_shift_invert_preconditioner",
@@ -769,8 +777,8 @@ def test_shift_invert_uses_right_preconditioning_and_physical_fgmres_residual(
     )
     monkeypatch.setattr(ka, "_apply_operator", lambda value, *_args: value)
 
-    def fake_gmres(_matvec, b, *, precond, x0, max_restarts, **_kwargs):
-        calls.append((precond is not None, x0, max_restarts))
+    def fake_gmres(_matvec, b, *, precond, max_restarts, **kwargs):
+        calls.append((precond is not None, kwargs.get("x0", "absent"), max_restarts))
         return SimpleNamespace(
             x=b,
             residual_norm=jnp.asarray(0.5),
@@ -795,7 +803,10 @@ def test_shift_invert_uses_right_preconditioning_and_physical_fgmres_residual(
 
     assert len(calls) == 1
     assert calls[0][0]
-    assert jnp.allclose(calls[0][1], 0.1 * v0.reshape(-1))
+    assert calls[0][1] == "absent", (
+        "the shifted FGMRES must start from zero; passing M^-1 b as x0 begins "
+        "the solve outside the space the first cycle already searches"
+    )
     assert calls[0][2] == 1
     assert jnp.allclose(observed, v0)
     # SOLVAX's true residual is kept relative to ||b||, with the budget outcome.
@@ -2338,11 +2349,12 @@ ALLOWED_UNPINNED_MATRIX_DOTS = {
     # 675 -> 749 when the inner-solve statistics were added above it,
     # 749 -> 828 when the linked-chain mask helpers were (Q6), 828 -> 817
     # when those helpers moved to operators/linear/linked.py (Q19), and
-    # 817 -> 809 when Q23 and Q24 merged above it, and 809 -> 831 when Q28 added
-    # the pr3-cm import, its names and its factors argument above it; same code,
-    # still the `lifted = jnp.tensordot(eigvecs.T, V[:krylov_dim], axes=1)` of
-    # `_propagator_arnoldi_restart_step`, verified at the new line.
-    "solvers_linear_krylov_algorithms.py:831": "overlap ranking only; argmax provably unmoved",
+    # 817 -> 809 when Q23 and Q24 merged above it, and 809 -> 843 when Q28 added
+    # the pr3-cm import, its names and its factors argument, and the comment
+    # recording why the shifted FGMRES starts from zero, all above it; same
+    # code, still the `lifted = jnp.tensordot(eigvecs.T, V[:krylov_dim],
+    # axes=1)` of `_propagator_arnoldi_restart_step`, verified at the new line.
+    "solvers_linear_krylov_algorithms.py:843": "overlap ranking only; argmax provably unmoved",
 }
 
 
