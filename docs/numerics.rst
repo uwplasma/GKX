@@ -171,36 +171,25 @@ What changed is that ``JAX_ENABLE_X64=true`` now reaches the run at all; see
 (0.90 -> 1.05 GiB) and buys the float64 certification gate: residual 1.07e-14
 against 1e-9, where float32 reports 5.55e-6 against 1.19e-4.
 
-**Time integrator and step size.** A deck that omits ``[time]`` takes the
+**Time integrator and step size.** A deck that omits ``[time]`` took the
 ``TimeConfig`` dataclass defaults, ``method="rk2"``, ``dt=0.1``,
-``fixed_dt=True``, and on the Cyclone geometry that **overflows**: both rk2 and
-rk4 raise ``FloatingPointError`` at ``dt=0.1`` held fixed, because the
-CFL-stable step there is 0.0128. With ``fixed_dt=False`` the same deck and the
-same ``dt`` integrate cleanly, because ``dt`` is then only the controller's
-initial guess: rk2 gives :math:`\gamma = 0.10126899` and rk4
-:math:`0.10125984` against the certified :math:`0.10128645`, so both land
-within 2.7e-4 of the eigensolve.
-
-These defaults are **not** changed here, because four shipped decks
-(``cyclone_coulomb_collisions.toml``, ``etg.toml``, ``runtime_etg.toml`` and
-``reference_hsx_nonlinear_adiabatic_electrons.toml``) run a time path and rely
-on the current ``fixed_dt`` default, and ``etg.toml`` backs ledger row
-``L-lin-etg``; flipping it would move validated numbers and has to be a row that
-re-validates them. What is changed is that the failure is now diagnosed on every
-linear path. The fixed-step CFL hint previously skipped ``solver="explicit_time"``
--- the one linear path that advances a fixed step explicitly -- so that path
-overflowed with nothing said, while ``solver="time"`` warned first. The hint now
-covers it, and only where the step really is fixed, so an adaptive controller's
-initial guess is not reported as an over-CFL step.
+``fixed_dt=True``, and on the Cyclone geometry that **overflowed**: both rk2
+and rk4 raise ``FloatingPointError`` at ``dt=0.1`` held fixed, because the
+CFL-stable step there is 0.0128. Q26 diagnosed that failure on every linear
+path -- the fixed-step CFL hint previously skipped ``solver="explicit_time"``,
+the one linear path that advances a fixed step explicitly, so that path
+overflowed with nothing said -- but left the defaults alone. Queue row Q28
+changed them; see :ref:`q28-defaults` below.
 
 Set ``dt`` for your case, or set ``fixed_dt = false`` and let the CFL controller
 choose it. ``cfl_fac`` resolves to 1.73 for rk3/sspx3, 2.82 for rk4 and 1.0
 otherwise, so rk4 takes a 2.82x longer stable step for twice the work per step.
 
-**Resolution.** ``Nl`` and ``Nm`` omitted from ``[run]`` fall back to 24 and 12.
+**Resolution.** ``Nl`` and ``Nm`` omitted from ``[run]`` fell back to 24 and 12.
 The Cyclone deck's own comment records that pair as reporting :math:`\gamma`
-about 4.5% low for that case, which this row reproduced: 0.08893 at 24/12
-against 0.09309 at the deck's 16/48. Always set ``Nl`` and ``Nm``.
+about 4.5% low for that case, which Q26 reproduced: 0.08893 at 24/12
+against 0.09309 at the deck's 16/48. Q28 changed that fallback; see
+:ref:`q28-defaults`. Always set ``Nl`` and ``Nm`` regardless.
 
 **Unchanged, and measured or inspected to be right.** Two-thirds dealiasing on
 for nonlinear runs (``nonlinear_dealias = true``); ``dealias_kz = false``;
@@ -220,10 +209,134 @@ speed to buy a determinism users have not asked for. This row did not re-time it
 -- a thread-pool effect is purely a timing measurement and the host was
 contended -- so the default rests on Q9's idle-host numbers, not on a fresh one.
 
-**Recorded, not changed, for want of a measurement.**
-``KrylovConfig.power_iters`` is 200 while ``dominant_eigenpair(power_iters=...)``
-defaults to 40, so the same nominal route costs differently depending on which
-entry point is called.
+.. _q28-defaults:
+
+The three defaults Q26 could not set
+------------------------------------
+
+Queue row Q28 (2026-09-20) measured the three defaults Q26 recorded as
+suspicious but left alone for want of a measurement, and set each of them. The
+host carried four sibling lanes throughout at 1-minute load 28--141, so no
+wall time is quoted as a result: the cost numbers below are propagator
+applies, step counts, right-hand-side evaluations and velocity-space degrees
+of freedom, all of which are independent of load.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 14 14 46
+
+   * - default
+     - old
+     - new
+     - accuracy
+   * - ``KrylovConfig.power_iters``
+     - 200
+     - 40
+     - residual 9.50e-01 against 9.47e-01; neither certifies
+   * - ``TimeConfig`` pairing, deck chose no ``dt``
+     - rk2, fixed
+     - rk4, CFL
+     - -1.72e-04 against -2.63e-04 vs the eigensolve
+   * - ``Nl``/``Nm`` linear fallback
+     - (24, 12)
+     - (12, 24)
+     - -4.405% against +0.400% of the tracked GX golden
+
+**power_iters: 200 → 40, and the two entry points now agree.** ``KrylovConfig``
+said 200 and the ``dominant_eigenpair`` signature said 40 -- one route, two
+costs, and two compilations of an iteration-static scan. Measured on the
+shipped Cyclone deck at ``(Nl, Nm) = (4, 8)``, ``ky = 0.3``, float32, against
+that rung's certified adaptive eigenpair :math:`\gamma = 0.10128645`:
+
+=======  ==========  =========  =========
+applies  gamma       residual   certified
+=======  ==========  =========  =========
+40       0.18119842  9.501e-01  no
+80       0.22636196  9.255e-01  no
+200      0.12442227  9.467e-01  no
+400      0.09790193  9.214e-01  no
+1000     0.08590183  4.358e-01  no
+2000     0.09348834  1.105e-01  no
+5000     0.10113729  6.182e-03  no
+10000    0.10106588  5.959e-03  no
+=======  ==========  =========  =========
+
+Five times the applies moves the residual by 0.4% of an O(1) quantity, and the
+gate is 1.19e-4: the pair is rejected at both. The ladder stalls near 6e-3 and
+never certifies, so the value cannot be chosen for accuracy and is chosen for
+cost. Nothing shipped takes this route -- no deck or Krylov contract selects
+``method="power"``, ``shift_source="power"`` or ``fallback_method="power"``,
+and every shipped contract sets ``power_iters`` explicitly -- and with the
+default ``certify=True`` the route raises at 40 and at 200 alike, so the change
+makes a rejection cheaper rather than making an answer different.
+
+**Time: the pairing is defaulted, not either field.** ``ExplicitTimeConfig.dt``
+is a required field and ``TimeConfig.dt`` is a defaulted one. That is the whole
+of the real difference between the two surfaces: a caller of the library struct
+has always chosen a step, a deck may not have. Measured on the same deck and
+rung, with the ``TimeConfig`` dataclass defaults:
+
+===================  ==========  =====  =========  ==================
+method / policy      gamma       steps  RHS evals  rel. error
+===================  ==========  =====  =========  ==================
+rk2, fixed dt=0.1    fails       --     --         FloatingPointError
+rk4, fixed dt=0.1    fails       --     --         FloatingPointError
+rk2, CFL-controlled  0.10126899  7806   15612      -1.72e-04
+rk3, CFL-controlled  0.10126041  4512   13536      -2.57e-04
+rk4, CFL-controlled  0.10125984  2768   11072      -2.63e-04
+===================  ==========  =====  =========  ==================
+
+The defaulted ``dt = 0.1`` is about 7.8x the CFL-stable 0.01281 here, so both
+fixed-step arms overflow whatever the scheme: changing ``method`` alone would
+not have fixed it. With the controller on, all three schemes agree to better
+than 3e-4 and rk4 reaches the horizon in **29.1% fewer right-hand-side
+evaluations**, exactly :math:`4/(2.82 \times 2)`.
+
+So a deck that chooses no ``dt`` now gets the CFL controller and rk4 with it,
+and a deck that chooses ``dt`` keeps rk2 at that fixed step -- a fixed step
+gives rk4 no step-size compensation for its four stages and would simply cost
+twice as much. ``fixed_dt`` is **not** flipped globally: fourteen shipped decks
+and parity fixtures omit it and depend on ``True``, and several back
+evidence-ledger rows. Every shipped deck sets ``dt``, so none of them moves,
+and a test asserts that so a future deck cannot drift onto the controller by
+accident.
+
+**Resolution: (24, 12) → (12, 24), at the same cost.** Certified adaptive
+eigensolves on the shipped Cyclone deck at its own ``ky = 0.3``, float32,
+against the tracked GX golden :math:`\gamma = 0.09302951` in
+``src/gkx/data/cyclone_reference_adiabatic.csv``:
+
+====  ====  =====  ==========  ==============  ========
+Nl    Nm    Nl*Nm  gamma       rel. to golden  residual
+====  ====  =====  ==========  ==============  ========
+8     24    192    0.09877566  +6.177%         3.16e-06
+8     32    256    0.09801412  +5.358%         3.97e-06
+24    12    288    0.08893196  -4.405%         2.39e-06
+12    24    288    0.09340143  **+0.400%**     3.27e-06
+12    32    384    0.09263792  -0.421%         3.93e-06
+16    32    512    0.09284505  -0.198%         4.13e-06
+24    24    576    0.09368346  +0.703%         3.67e-06
+16    48    768    0.09309106  +0.066%         5.55e-06
+====  ====  =====  ==========  ==============  ========
+
+Every rung is certified against the original operator at a 1.19e-4 float32
+gate. ``(12, 24)`` carries the same :math:`N_l N_m` as ``(24, 12)`` -- the same
+cost per propagator apply -- for eleven times less error, so this is a strict
+improvement and not a trade. It is a balance, not "more Hermite wins":
+``Nl = 8`` is worse than both at either Hermite count, because the parallel
+phase mixing that sets an ITG rate needs Hermite resolution while the FLR
+response still needs enough Laguerre. Spending beyond 288 is not bought either
+-- ``(12, 32)`` at 1.33x the cost and ``(24, 24)`` at 2x both land further out
+than 288 does, and only ``(16, 48)`` at 2.67x clearly improves on it -- and a
+cost increase of that size is not a decision this fallback should make on a
+deck's behalf. A deck whose physics runs the other way, such as the shipped ETG
+decks at ``Nl = 24``/``Nm = 8``, must still say so, and all of them do.
+
+**Limits.** All three measurements are one deck, one ``ky`` and one geometry.
+The resolution ladder is certified but not a convergence proof: the sequence is
+non-monotone through 288--384, so ``+0.400%`` is where this case lands at that
+budget, not an error bound for another case. Nothing here replaces setting
+``Nl`` and ``Nm`` in ``[run]``.
 
 Distributed state sharding
 --------------------------

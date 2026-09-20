@@ -1,0 +1,41 @@
+ENV {"argv": ["time", "examples/linear/axisymmetric/cyclone.toml", "--label", "t-rk4-fixed", "--solver", "explicit_time", "--Nl", "4", "--Nm", "8", "--time-method", "rk4", "--fixed-dt", "true"], "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/__init__.py", "head": "38d7c4277db1bf9a4fee2292d3aea2f3c00ca31d", "dirty_src": false, "python": "3.11.14", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "x64": false, "platform": "macOS-14.4.1-arm64-arm-64bit", "machine": "arm64", "cpu_count": 14, "xla_flags": "", "jax_platforms": "cpu", "loadavg_start": [40.755859375, 35.48193359375, 22.46923828125], "script_sha256": "e18c0a20a91bde1f7d3b659b37fce82b98a674f49fc16e34838a318afb5cfa1f"}
+/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/workflows/linear.py:350: RuntimeWarning: requested dt=0.1 exceeds the estimated CFL-stable step 0.03613 (max linear frequency 70.25); the integration may overflow -- reduce dt
+  warn_if_fixed_dt_exceeds_cfl(
+RESULT {"label": "t-rk4-fixed", "arm": "time", "deck": "examples/linear/axisymmetric/cyclone.toml", "env": {"argv": ["time", "examples/linear/axisymmetric/cyclone.toml", "--label", "t-rk4-fixed", "--solver", "explicit_time", "--Nl", "4", "--Nm", "8", "--time-method", "rk4", "--fixed-dt", "true"], "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/__init__.py", "head": "38d7c4277db1bf9a4fee2292d3aea2f3c00ca31d", "dirty_src": false, "python": "3.11.14", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "x64": false, "platform": "macOS-14.4.1-arm64-arm-64bit", "machine": "arm64", "cpu_count": 14, "xla_flags": "", "jax_platforms": "cpu", "loadavg_start": [40.755859375, 35.48193359375, 22.46923828125], "script_sha256": "e18c0a20a91bde1f7d3b659b37fce82b98a674f49fc16e34838a318afb5cfa1f"}, "time": {"method": "rk4", "dt": 0.1, "t_max": 100.0, "fixed_dt": true, "cfl": 0.9, "cfl_fac": null, "cfl_fac_resolved": 2.82, "sample_stride": 1}, "run": {"ky_target": 0.3, "Nl": 4, "Nm": 8, "solver": "explicit_time"}, "error": "FloatingPointError: linear integration produced a non-finite field history; reduce the timestep or select a stable integration policy", "wall_s": 27.95578983303858, "loadavg_end": [43.1865234375, 36.5927734375, 23.32275390625]}
+Traceback (most recent call last):
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/plan/research/scripts/2026-09-20-default-resolution-and-integrator/measure.py", line 293, in <module>
+    main()
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/plan/research/scripts/2026-09-20-default-resolution-and-integrator/measure.py", line 275, in main
+    {"power": run_power, "time": run_time, "resolution": run_resolution}[args.arm](
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/plan/research/scripts/2026-09-20-default-resolution-and-integrator/measure.py", line 230, in run_time
+    result = run_runtime_linear(cfg, **run_kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/runtime.py", line 353, in run_runtime_linear
+    return run_runtime_linear_impl(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/runtime.py", line 662, in run_runtime_linear_impl
+    return _dispatch_runtime_linear_request(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/runtime.py", line 627, in _dispatch_runtime_linear_request
+    return _run_full_linear_request(request, Nl_use=Nl_use, Nm_use=Nm_use)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/runtime.py", line 599, in _run_full_linear_request
+    return request.deps.run_full_linear_runtime(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/workflows/linear.py", line 769, in run_full_linear_runtime
+    return _run_linear_runtime_branch(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/workflows/linear.py", line 681, in _run_linear_runtime_branch
+    result = _fit_linear_time_series(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/workflows/linear.py", line 523, in _fit_linear_time_series
+    fit_result = deps.fit_runtime_linear_diagnostics(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/workflows/runtime/diagnostics.py", line 586, in fit_runtime_linear_diagnostics
+    inputs = _prepare_runtime_linear_fit_inputs(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/workflows/runtime/diagnostics.py", line 255, in _prepare_runtime_linear_fit_inputs
+    ensure_finite_linear_history(name, values)
+  File "/Users/rogeriojorge/local/GKX-worktrees/default-resolution-and-integrator/src/gkx/workflows/runtime/diagnostics.py", line 47, in ensure_finite_linear_history
+    raise FloatingPointError(
+FloatingPointError: linear integration produced a non-finite field history; reduce the timestep or select a stable integration policy

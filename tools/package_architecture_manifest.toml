@@ -1056,6 +1056,16 @@ baseline = 92017
 # guard back into an assumption, which is exactly what Q26 recorded as the
 # reason pr3-cm had never landed. Target unchanged.
 baseline = 92452
+# 91655 -> 91784: Q28, the three defaults Q26 recorded but could not set.
+# The executable change is three literals and one dict-to-function swap;
+# the rest is the measurement each default now rests on, which the diff
+# cannot carry -- the power-iteration residual ladder that shows neither 40
+# nor 200 certifies, the four-way method/step-policy table that shows the
+# defaulted dt=0.1 overflowing whatever the scheme and rk4 costing 29.1%
+# fewer RHS evaluations only once the CFL controller is on, and the
+# velocity-resolution ladder that shows (12, 24) eleven times closer than
+# (24, 12) at the same Nl*Nm. Target unchanged.
+baseline = 91784
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1347,6 +1357,14 @@ baseline = 92089
 # is the assertions' reasons, which say what a future operator change would be
 # breaking rather than restating the number.
 baseline = 91853
+# 91565 -> 91721: Q28's tests for the three defaults it set. The Krylov one
+# asserts the whole KrylovConfig/dominant_eigenpair default intersection
+# rather than the one field, so the class of defect is guarded; the time
+# ones pin the chose-a-step / chose-no-step split in both directions and
+# assert that every shipped deck still chooses its own dt, which is what
+# keeps the pairing change inert for them; the resolution one pins the pair,
+# its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
+baseline = 91721
 target = 35000
 
 [[line_budget_policy.counts]]
