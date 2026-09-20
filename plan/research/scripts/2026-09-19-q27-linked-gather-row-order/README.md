@@ -79,6 +79,7 @@ where it reported one, and records XLA's own buffer assignment beside them.
 | `gather_probe.py`, `gather_probe.json`, `gather_probe.txt` | `grad_z_linked_fft` compiled alone, swept over `Ny`, both layouts. |
 | `ledger_table.py`, `ledger_table.txt` | the tables below, and the check of both arms against #258's committed ledger. |
 | `ledgers/` | the ledger JSONs. |
+| `identity/` | the four A/B comparisons against `origin/main`. |
 
 ## The corrected ledger
 
@@ -125,6 +126,21 @@ chains cost it something.
 | RHS | 10,272,768 -> 7,870,464 (-23.4%) | 4,448,256 -> 2,875,392 (-35.4%) | 8,483,184 -> 5,833,328 (-31.2%) |
 | rk3 | 46,818,516 -> 41,903,392 (-10.5%) | 21,628,084 -> 8,848,640 (-59.1%) | 40,861,696 -> 24,673,280 (-39.6%) |
 | rk4 | 59,204,820 -> 49,669,408 (-16.1%) | 26,076,340 -> 11,724,032 (-55.0%) | 61,767,680 -> 25,617,664 (-58.5%) |
+
+## Identity
+
+`src/` is untouched, so the shipped path cannot have moved.  The A/B is run
+anyway, because it is this queue's registered gate and because "no diff" is a
+claim about the tree rather than about the executable.  `origin/main`
+`195205961`'s tree against this branch, separate processes, the float32 FFT
+thread pool pinned off (`identity/cmp_*.json`).
+
+| gate | cases | float32 | x64 |
+|---|---:|---|---|
+| RHS terms, total, nonlinear RHS, VJPs wrt G / tprim / nu_hyper_m | 58 | 58/58 bitwise | 58/58 bitwise |
+| 100-step trajectories: 7 integrators, runtime rk3/rk4 x 3 modes, sharded, species-Hermite, checkpointed window value and d/dtprim | 65 | 65/65 bitwise | 65/65 bitwise |
+
+`max_rel` is exactly 0 in all four comparisons.
 
 ## What is not claimed
 
