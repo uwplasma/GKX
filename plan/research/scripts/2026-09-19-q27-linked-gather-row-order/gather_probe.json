@@ -1,0 +1,475 @@
+{
+  "backend": "cpu",
+  "claim_scope": "Op counts and buffer assignment of one compiled XLA module per row, for one jax version and backend. They locate materialized work; they are not a runtime claim.",
+  "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
+  "grid": {
+    "Nl": 2,
+    "Nm": 4,
+    "Nx": 32,
+    "Nz": 24
+  },
+  "jax": "0.10.2",
+  "kind": "q27_linked_gather_probe",
+  "rows": [
+    {
+      "Ny": 16,
+      "chain_classes": [
+        [
+          70,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 3532800,
+        "concatenate": 3,
+        "copy": 7,
+        "fused_interior_bytes": 1852416,
+        "gather": 6,
+        "materialized_bytes": 1680384,
+        "reverse": 2,
+        "transpose": 7
+      },
+      "flat_modes": 512,
+      "layout": "full",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 786432,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 786432,
+        "temp_size_in_bytes": 1572880
+      },
+      "nky": 16,
+      "state_bytes": 786432
+    },
+    {
+      "Ny": 16,
+      "chain_classes": [
+        [
+          70,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 829440,
+        "concatenate": 1,
+        "copy": 6,
+        "fused_interior_bytes": 721920,
+        "gather": 6,
+        "materialized_bytes": 107520,
+        "reverse": 0,
+        "transpose": 6
+      },
+      "flat_modes": 288,
+      "layout": "half",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 442368,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 442368,
+        "temp_size_in_bytes": 267264
+      },
+      "nky": 9,
+      "state_bytes": 442368
+    },
+    {
+      "Ny": 32,
+      "chain_classes": [
+        [
+          175,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 7001088,
+        "concatenate": 3,
+        "copy": 7,
+        "fused_interior_bytes": 3586560,
+        "gather": 6,
+        "materialized_bytes": 3414528,
+        "reverse": 2,
+        "transpose": 7
+      },
+      "flat_modes": 1024,
+      "layout": "full",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 1572864,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 1572864,
+        "temp_size_in_bytes": 3145760
+      },
+      "nky": 32,
+      "state_bytes": 1572864
+    },
+    {
+      "Ny": 32,
+      "chain_classes": [
+        [
+          175,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 1545216,
+        "concatenate": 1,
+        "copy": 6,
+        "fused_interior_bytes": 1276416,
+        "gather": 6,
+        "materialized_bytes": 268800,
+        "reverse": 0,
+        "transpose": 6
+      },
+      "flat_modes": 544,
+      "layout": "half",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 835584,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 835584,
+        "temp_size_in_bytes": 428544
+      },
+      "nky": 17,
+      "state_bytes": 835584
+    },
+    {
+      "Ny": 48,
+      "chain_classes": [
+        [
+          280,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 10469376,
+        "concatenate": 3,
+        "copy": 7,
+        "fused_interior_bytes": 5320704,
+        "gather": 6,
+        "materialized_bytes": 5148672,
+        "reverse": 2,
+        "transpose": 7
+      },
+      "flat_modes": 1536,
+      "layout": "full",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 2359296,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 2359296,
+        "temp_size_in_bytes": 4718832
+      },
+      "nky": 48,
+      "state_bytes": 2359296
+    },
+    {
+      "Ny": 48,
+      "chain_classes": [
+        [
+          280,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 2260992,
+        "concatenate": 1,
+        "copy": 6,
+        "fused_interior_bytes": 1830912,
+        "gather": 6,
+        "materialized_bytes": 430080,
+        "reverse": 0,
+        "transpose": 6
+      },
+      "flat_modes": 800,
+      "layout": "half",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 1228800,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 1228800,
+        "temp_size_in_bytes": 589824
+      },
+      "nky": 25,
+      "state_bytes": 1228800
+    },
+    {
+      "Ny": 62,
+      "chain_classes": [
+        [
+          385,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 13544448,
+        "concatenate": 3,
+        "copy": 7,
+        "fused_interior_bytes": 6858240,
+        "gather": 6,
+        "materialized_bytes": 6686208,
+        "reverse": 2,
+        "transpose": 7
+      },
+      "flat_modes": 1984,
+      "layout": "full",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 3047424,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 3047424,
+        "temp_size_in_bytes": 6095166
+      },
+      "nky": 62,
+      "state_bytes": 3047424
+    },
+    {
+      "Ny": 62,
+      "chain_classes": [
+        [
+          385,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 2927616,
+        "concatenate": 1,
+        "copy": 6,
+        "fused_interior_bytes": 2336256,
+        "gather": 6,
+        "materialized_bytes": 591360,
+        "reverse": 0,
+        "transpose": 6
+      },
+      "flat_modes": 1024,
+      "layout": "half",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 1572864,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 1572864,
+        "temp_size_in_bytes": 751104
+      },
+      "nky": 32,
+      "state_bytes": 1572864
+    },
+    {
+      "Ny": 64,
+      "chain_classes": [
+        [
+          406,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 14002176,
+        "concatenate": 3,
+        "copy": 7,
+        "fused_interior_bytes": 7087104,
+        "gather": 6,
+        "materialized_bytes": 6915072,
+        "reverse": 2,
+        "transpose": 7
+      },
+      "flat_modes": 2048,
+      "layout": "full",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 3145728,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 3145728,
+        "temp_size_in_bytes": 6291520
+      },
+      "nky": 64,
+      "state_bytes": 3145728
+    },
+    {
+      "Ny": 64,
+      "chain_classes": [
+        [
+          406,
+          1
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          1,
+          5
+        ]
+      ],
+      "counts": {
+        "bytes_written": 3041280,
+        "concatenate": 1,
+        "copy": 6,
+        "fused_interior_bytes": 2417664,
+        "gather": 6,
+        "materialized_bytes": 623616,
+        "reverse": 0,
+        "transpose": 6
+      },
+      "flat_modes": 1056,
+      "layout": "half",
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 1622016,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 1622016,
+        "temp_size_in_bytes": 783360
+      },
+      "nky": 33,
+      "state_bytes": 1622016
+    }
+  ]
+}

@@ -304,6 +304,98 @@ def test_hlo_op_counts_price_captured_arrays_as_module_literals() -> None:
     assert counts["copy"] == 1
 
 
+def test_hlo_op_counts_charge_only_buffers_that_are_written() -> None:
+    """A copy inside a fusion body is an index, not a buffer (queue row Q27).
+
+    XLA:CPU emits a fusion body as one loop nest, so a ``copy`` written inside
+    one -- typically re-laying-out a fusion *parameter* so the consumer can
+    read it in the order it wants -- allocates nothing; only the fusion's ROOT
+    owns an output buffer.  ``bytes_written`` charges every such instruction
+    the full size of its shape, which is why cloning one producer into more
+    consumer fusions moved it by tens of per cent with no traffic behind it.
+    ``materialized_bytes`` is the subset that owns a buffer, and the two
+    partition ``bytes_written`` exactly.
+    """
+
+    hlo = """
+%fused_computation.1 (param_0: f32[4]) -> f32[4] {
+  %param_0.1 = f32[4]{0} parameter(0)
+  %copy.1 = f32[4]{0} copy(%param_0.1)
+  ROOT %copy.2 = f32[4]{0} copy(%copy.1)
+}
+
+%body.7 (arg: f32[8]) -> f32[8] {
+  %arg.1 = f32[8]{0} parameter(0)
+  ROOT %copy.3 = f32[8]{0} copy(%arg.1)
+}
+
+ENTRY %main (x: f32[4]) -> f32[4] {
+  %x.1 = f32[4]{0} parameter(0)
+  %fusion.1 = f32[4]{0} fusion(%x.1), kind=kLoop, calls=%fused_computation.1
+  %while.1 = f32[8]{0} while(%w), condition=%cond.6, body=%body.7
+  ROOT %copy.4 = f32[4]{0} copy(%fusion.1)
+}
+"""
+
+    counts = runtime_kernels._hlo_op_counts(hlo)
+
+    assert counts["copy"] == 4
+    # every copy, fusion interiors included -- the historical total
+    assert counts["bytes_written"] == 4 * 4 + 4 * 4 + 8 * 4 + 4 * 4
+    # the fusion ROOT, the while body's copy and the entry copy own buffers
+    assert counts["materialized_bytes"] == 4 * 4 + 8 * 4 + 4 * 4
+    # only %copy.1, written inside the fusion body and not its root
+    assert counts["fused_interior_bytes"] == 4 * 4
+    assert (
+        counts["materialized_bytes"] + counts["fused_interior_bytes"]
+        == counts["bytes_written"]
+    )
+
+
+def test_hlo_op_counts_without_computation_headers_are_all_materialized() -> None:
+    """A bare instruction list has no fusion bodies, so nothing is interior.
+
+    The older ledger snippets in this file are written that way, and their
+    ``bytes_written`` must keep its value.
+    """
+
+    hlo = """
+  %copy.6 = c64[2,4]{1,0} copy(%t)
+  %concatenate.0 = c64[2,8]{1,0} concatenate(%copy.6, %c), dimensions={1}
+"""
+
+    counts = runtime_kernels._hlo_op_counts(hlo)
+
+    assert counts["fused_interior_bytes"] == 0
+    assert counts["materialized_bytes"] == counts["bytes_written"] == 8 * 8 + 16 * 8
+
+
+def test_compiled_memory_stats_report_the_compilers_buffer_assignment() -> None:
+    """``memory_analysis`` is the independent check on the text counts.
+
+    It comes from XLA's buffer assignment rather than from the printed module,
+    so an instruction a fusion emits as index arithmetic cannot inflate it. The
+    step ledger records it beside the op counts for that reason.
+    """
+
+    stats: dict[str, int] = {}
+    # An explicit dtype: the CI shards run with JAX_ENABLE_X64, under which an
+    # unannotated zeros() is float64 and the argument is twice this size.
+    runtime_kernels._compiled_hlo_text(
+        lambda x: jnp.sum(x * 2.0),
+        jnp.zeros((8, 8), dtype=jnp.float32),
+        stats=stats,
+    )
+
+    assert set(stats) >= {
+        "argument_size_in_bytes",
+        "output_size_in_bytes",
+        "temp_size_in_bytes",
+    }
+    assert stats["argument_size_in_bytes"] == 8 * 8 * 4
+    assert all(value >= 0 for value in stats.values())
+
+
 def test_nonlinear_step_hlo_routes_name_one_reference_graph() -> None:
     """``--route runtime`` and ``--route diagnostics`` are the same graph.
 

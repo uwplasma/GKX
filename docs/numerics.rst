@@ -365,10 +365,11 @@ per-stage completion that the repository XLA profile attributes 41.9 per cent
 of step time to. The layout now works end to end below the runtime ---
 :func:`gkx.core_grid.build_spectral_grid` takes a ``ky_layout``, the bracket
 computes on the stored rows and does not widen, and the per-stage projector
-becomes the identity rather than a cheaper copy. It is **not the default**: the
-full-versus-half HLO ledger measures the promised saving on the RHS graph and a
-byte regression on the RK step graph of a linked deck, traced to the
-linked-chain gather losing its fused lowering. See :doc:`performance`.
+becomes the identity rather than a cheaper copy. Measured on the bytes that own
+an output buffer, the full-versus-half HLO ledger gives the promised saving on
+the RHS graph and a larger one on the RK step graph of a linked deck. It is
+**not the default** all the same: what is left is the runtime grid flip and the
+diagnostics and NetCDF condensation chain. See :doc:`performance`.
 
 Equilibrium-flow shearing coordinates
 --------------------------------------

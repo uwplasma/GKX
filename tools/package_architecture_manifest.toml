@@ -1296,7 +1296,15 @@ recursive = true
 # `kperp2_max` inflates every hyperdiffusion rate, a wrong restart length
 # writes a third of the modes -- and a table-driven form would lose which
 # statement failed, which is the only thing those cases are for.
-baseline = 91473
+# 91473 -> 91561 (queue row Q27). Three profiling-contract cases: that a
+# copy inside a fusion body is charged to `fused_interior_bytes` while a
+# fusion ROOT, a while body and the entry computation are charged to
+# `materialized_bytes`; that a bare instruction list keeps its old
+# `bytes_written`; and that `memory_analysis` reports the compiler's own
+# buffer assignment. The first carries a small HLO module as a fixture,
+# because the distinction it pins is a property of where an instruction is
+# written and cannot be stated without a computation around it.
+baseline = 91565
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1385,7 +1393,14 @@ recursive = true
 # is what makes the switch's saving a measurement instead of an assertion. Both
 # arms are then the same binary lowering one deck onto `Ny` and onto `Nyc` ky
 # rows, so the ledger compares layouts rather than trees.
-baseline = 78778
+# 78778 -> 78901 (queue row Q27). The step ledger's `bytes_written` charged
+# every concatenate and copy in the module text, fusion interiors included,
+# and those allocate nothing -- so it moved +43 per cent on a graph whose
+# materialized traffic fell 73 per cent. Splitting it needs the module
+# parsed by computation rather than scanned as one string, and
+# `memory_analysis` is threaded beside it as the compiler's own check.
+# The evidence probe `gather_probe.py` is the rest of the count.
+baseline = 78901
 target = 0
 
 [[line_budget_policy.counts]]

@@ -1,0 +1,100 @@
+{
+  "backend": "cpu",
+  "claim_scope": "Op counts of one optimized XLA graph for one jax version and backend. They locate materialized work; they are not a runtime claim. bytes_written sums every concatenate and copy in the module text, fusion interiors included, where XLA:CPU emits them as index arithmetic and allocates nothing; materialized_bytes is the subset that owns an output buffer and memory_analysis is the compiler's own buffer assignment for the same executable.",
+  "compressed_real_fft": true,
+  "config": "plan/research/scripts/2026-09-19-q27-linked-gather-row-order/cyclone_nonlinear_periodic_control.toml",
+  "grid": {
+    "Nl": 2,
+    "Nm": 4,
+    "Nx": 32,
+    "Ny": 32,
+    "Nz": 24
+  },
+  "jax": "0.10.2",
+  "kind": "nonlinear_step_hlo_ledger",
+  "laguerre_mode": "grid",
+  "rhs": {
+    "bytes_written": 7870464,
+    "concatenate": 3,
+    "constant_bytes": 296,
+    "copy": 6,
+    "dynamic-update-slice": 1,
+    "fft": 7,
+    "fused_interior_bytes": 4995072,
+    "gather": 0,
+    "materialized_bytes": 2875392,
+    "reverse": 0,
+    "scatter": 0,
+    "transpose": 6
+  },
+  "rhs_memory_analysis": {
+    "alias_size_in_bytes": 0,
+    "argument_size_in_bytes": 1526508,
+    "generated_code_size_in_bytes": 0,
+    "output_size_in_bytes": 835584,
+    "temp_size_in_bytes": 5833328
+  },
+  "route": "diagnostics",
+  "state_bytes": 835584,
+  "state_dtype": "complex64",
+  "state_shape": [
+    1,
+    2,
+    4,
+    17,
+    32,
+    24
+  ],
+  "steps": {
+    "rk3": {
+      "beyond_rhs_evaluations": null,
+      "counts": {
+        "bytes_written": 41903392,
+        "concatenate": 6,
+        "constant_bytes": 2946920,
+        "copy": 61,
+        "dynamic-update-slice": 0,
+        "fft": 26,
+        "fused_interior_bytes": 33054752,
+        "gather": 0,
+        "materialized_bytes": 8848640,
+        "reverse": 0,
+        "scatter": 0,
+        "transpose": 43
+      },
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 835584,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 1182452,
+        "temp_size_in_bytes": 24673280
+      },
+      "rhs_evaluations": 3
+    },
+    "rk4": {
+      "beyond_rhs_evaluations": null,
+      "counts": {
+        "bytes_written": 49669408,
+        "concatenate": 8,
+        "constant_bytes": 2947400,
+        "copy": 67,
+        "dynamic-update-slice": 0,
+        "fft": 33,
+        "fused_interior_bytes": 37945376,
+        "gather": 0,
+        "materialized_bytes": 11724032,
+        "reverse": 0,
+        "scatter": 0,
+        "transpose": 49
+      },
+      "memory_analysis": {
+        "alias_size_in_bytes": 0,
+        "argument_size_in_bytes": 835584,
+        "generated_code_size_in_bytes": 0,
+        "output_size_in_bytes": 1182452,
+        "temp_size_in_bytes": 25617664
+      },
+      "rhs_evaluations": 4
+    }
+  }
+}

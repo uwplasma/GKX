@@ -16971,3 +16971,271 @@ The follow-up row is numbered **Q26, not Q25**: #257 already claims Q25
 (`perf/fast-accurate-defaults`, the §5.1 adoption-gate rewrite) and #256 is its
 docs companion, both open against the same queue table. Numbering this row Q25
 would have produced two different Q25s on `main` the moment either side merged.
+
+## 2026-09-19 — Q27: the linked-chain gather was never the problem; the byte metric was (plan §5.3 N3)
+
+**Outcome: the half `ky` layout wins all twelve graphs on materialized bytes
+and on XLA's own buffer assignment. Nothing in `src/` changes — this row
+changes the instrument, and the adoption gate Q10 held on is now open.**
+Branch `perf/linked-gather-row-order` off `origin/main` `195205961`.
+
+Row Q27 existed to repair something. #258 measured the half layout saving 53
+per cent of the RHS graph's bytes while *costing* 19 to 57 per cent on a full
+RK step of a linked deck, attributed the cost to the linked-chain gather losing
+a fused lowering once the state's `ky` extent stops being the grid's power of
+two (32 → 17, 64 → 33), pointed at the mechanism #248 recorded at
+`_reverse_from_one`, and held the default flip on it. The instruction was to
+make the gather lower as well on a half axis as on a full one.
+
+**It already does.** `git diff origin/main -- src/` is empty in this branch,
+and the compiled modules measured below are the ones #258 measured — the
+ledger table checks all 24 arm/graph pairs against #258's committed JSONs and
+every one is the same. What was wrong was the number the decision rested on.
+
+### The diagnosis, in the order it was found
+
+**1. The two sites that move are the same instruction pattern in both
+layouts.** Decoding the HLO stack-frame index and attributing every `copy` in
+the rk3 32×32×24 graph to its Python frame gives exactly two:
+`streaming.py:_linked_fft_gather_output` 7 → 40 and
+`brackets.py:_spectral_bracket_half_core` 3 → 40. In both layouts the pattern
+is identical — a layout-only `transpose` of a `multiply`, then a `copy` into
+the default layout. `jnp.take(..., axis=-2)` lowers to an XLA gather whose
+result places the index axis major, `c64[M,2,1,2,4,1,24]`, and JAX transposes
+it back; the transpose is free (a layout change) and the `copy` after it
+restores the default layout. `M = 1024` and `M = 544` produce the same three
+instructions. Nothing stopped fusing.
+
+**2. Every one of those copies is a fusion *interior*.** Splitting the module
+by computation, and separating the ROOT of each fusion body (which is the value
+that fusion writes out) from its interior:
+
+| rk3 32×32×24 | full n | full bytes | half n | half bytes |
+|---|---:|---:|---:|---:|
+| `concatenate`, fusion ROOT | 17 | 33,070,080 | 4 | 2,322,432 |
+| `concatenate`, fusion interior | 21 | 8,911,872 | 20 | 8,202,240 |
+| `copy`, entry computation | 19 | 210,100 | 18 | 111,872 |
+| `copy`, fusion ROOT | 11 | 8,835,072 | 11 | 8,736,768 |
+| `copy`, fusion interior | 55 | 38,452,256 | **117** | **108,297,248** |
+
+XLA:CPU emits a fusion body as one loop nest, so an instruction written inside
+one is index arithmetic on that loop and allocates nothing. Read in context,
+the operand of each half-layout copy is a fusion **parameter**: the chain
+gather's own result is materialized once and handed in as
+`c64[544,2,1,2,4,1,24] parameter(12)`, and what the consumer fusion redoes is
+the mask multiply and the re-layout. The gather is not duplicated — the rk3
+graph has three chain-output gathers on *both* layouts, and the module-wide
+`gather` count *falls*, 41 → 33. What XLA cloned into 27 consumer fusions is
+an elementwise producer it can recompute for free.
+
+**`bytes_written` charges each of those clones the full size of its shape.**
+That is the whole regression. `_hlo_op_counts` summed the output shape of every
+`concatenate` and `copy` anywhere in the module text, which is not "materialized
+work" and was documented as if it were.
+
+**3. The `Nyc` power-of-two reading is refuted directly, not argued away.**
+`gather_probe.py` compiles `grad_z_linked_fft` *alone* on a cache built for one
+`Ny` and sweeps `Ny`, so the Hermitian completion and the rest of the RHS are
+out of the picture and only the chain gather is left. The lowering is flat:
+
+| `Ny` | layout | `Nky` | flat modes | gather | copy | transpose | concatenate | reverse | materialized | temp arena |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 16 | full | 16 | 512 | 6 | 7 | 7 | 3 | 2 | 1,680,384 | 1,572,880 |
+| 16 | half | 9 | 288 | 6 | 6 | 6 | 1 | 0 | 107,520 | 267,264 |
+| 32 | full | 32 | 1024 | 6 | 7 | 7 | 3 | 2 | 3,414,528 | 3,145,760 |
+| 32 | half | 17 | 544 | 6 | 6 | 6 | 1 | 0 | 268,800 | 428,544 |
+| 48 | full | 48 | 1536 | 6 | 7 | 7 | 3 | 2 | 5,148,672 | 4,718,832 |
+| 48 | half | 25 | 800 | 6 | 6 | 6 | 1 | 0 | 430,080 | 589,824 |
+| 62 | full | 62 | 1984 | 6 | 7 | 7 | 3 | 2 | 6,686,208 | 6,095,166 |
+| 62 | half | **32** | 1024 | 6 | 6 | 6 | 1 | 0 | 591,360 | 751,104 |
+| 64 | full | 64 | 2048 | 6 | 7 | 7 | 3 | 2 | 6,915,072 | 6,291,520 |
+| 64 | half | 33 | 1056 | 6 | 6 | 6 | 1 | 0 | 623,616 | 783,360 |
+
+`Ny = 62` gives `Nyc = 32` — a power of two on the *half* axis and not on the
+full one — and it behaves exactly like `Nyc = 17` and `Nyc = 33`. The
+factorization of the `ky` extent does not enter the lowering at any `Ny`. On
+the same probe the half arm's scratch arena is 86 to 88 per cent smaller than
+the full arm's while the state is only 47 per cent smaller, so per stored byte
+the linked-chain gather is *better* on the half axis, not worse.
+
+### What was tried and rejected
+
+- **Building the chain maps in state row order on the host**, which is what the
+  Q27 row proposed. Rejected as a no-op before it was written:
+  `_linked_chain_indices_for_length` returns `ky + ny·kx` and
+  `_state_mode_rows` converts it to `ky·Nx + kx` at apply time, and on the two
+  ledgered routes the cache is a captured constant, so that arithmetic is
+  constant-folded and the gather sees the same integers either way. Building
+  them in row order changes no instruction in either graph. (It would remove a
+  handful of ops on the retired `eager-scan` route, which no shipped caller
+  compiles.)
+- **Padding `Nyc` to a "fusion-friendly" size.** Rejected by the `Ny` sweep
+  above: there is no size the lowering prefers, so padding would buy nothing
+  and cost the rows it pads.
+- **Restructuring the gather as a reshape plus a slice.** The chain maps are
+  not contiguous — the classes are `(175,1) (16,2) (1,3) (4,4) (1,5)` over a
+  twist-shifted `kx` neighbour map — so there is no slice that expresses them.
+  Not attempted.
+- **Removing the transpose-back after the gather** by keeping the chain output
+  index-major. This is a real remaining lowering detail, and it is present on
+  *both* layouts equally, so it is not Q27's question. It is only worth doing
+  against a wall-clock measurement, which this host cannot supply; recorded
+  below as the open follow-up.
+
+### The instrument
+
+`tools/profiling/profile_runtime_kernels.py` reports three byte totals where it
+reported one, and records XLA's buffer assignment beside them.
+
+| key | what it is |
+|---|---|
+| `bytes_written` | **unchanged.** Every `concatenate` and `copy` in the module text, fusion interiors included. Kept at its old value so the committed ledger archive stays comparable, and now documented as what it is rather than as materialized work. |
+| `materialized_bytes` | the subset that owns an output buffer: the entry computation, a while/call body, and the ROOT of each fusion body. |
+| `fused_interior_bytes` | the remainder. The two partition `bytes_written` exactly, which a test pins. |
+| `memory_analysis` | `temp_size_in_bytes` and its siblings from XLA's own buffer assignment for the same executable. It is not a text count, so an instruction a fusion emits as an index cannot inflate it, and it is a property of the compiled module rather than of the run. |
+
+`tools/artifacts/build_methods_figures.py` reads `bytes_written`, and its value
+does not move, so no shipped figure changes.
+
+### The corrected ledger
+
+Both routes give identical counts, as the Q18 reference-route contract
+requires, so one table covers them. Op counts are unchanged from #258 and are
+repeated only so the two tables can be read together.
+
+| graph | fft | concatenate | copy | transpose | gather | reverse |
+|---|---:|---:|---:|---:|---:|---:|
+| RHS 32 | 13→13 | 18→14 | 19→17 | 19→17 | 14→13 | 3→0 |
+| rk3 32 | 44→44 | 38→24 | 85→146 | 66→128 | 41→33 | 14→0 |
+| rk4 32 | 57→57 | 49→32 | 105→163 | 86→145 | 53→44 | 17→0 |
+| RHS 64 | 17→17 | 22→18 | 23→21 | 23→21 | 18→17 | 3→0 |
+| rk3 64 | 56→56 | 44→30 | 100→170 | 81→151 | 53→45 | 14→0 |
+| rk4 64 | 73→73 | 57→40 | 124→191 | 105→172 | 69→60 | 17→0 |
+
+| graph | `bytes_written` (#258's headline) | `materialized_bytes` | `temp_size_in_bytes` |
+|---|---|---|---|
+| RHS 32 | 24,991,260 → 11,676,288 (**−53.3%**) | 11,278,236 → 4,122,624 (**−63.4%**) | 14,369,264 → 5,320,816 (**−63.0%**) |
+| rk3 32 | 89,479,380 → 127,670,560 (+42.7%) | 42,115,252 → 11,171,072 (**−73.5%**) | 47,988,736 → 24,129,536 (**−49.7%**) |
+| rk4 32 | 117,413,076 → 139,236,640 (+18.6%) | 53,392,564 → 15,293,696 (**−71.4%**) | 73,564,160 → 25,073,920 (**−65.9%**) |
+| RHS 64 | 424,812,232 → 201,977,856 (**−52.5%**) | 192,827,080 → 72,327,168 (**−62.5%**) | 233,636,336 → 103,267,824 (**−55.8%**) |
+| rk3 64 | 1,509,607,604 → 2,369,675,584 (+57.0%) | 707,127,348 → 195,190,976 (**−72.4%**) | 770,768,896 → 430,118,400 (**−44.2%**) |
+| rk4 64 | 1,983,162,548 → 2,570,830,144 (+29.6%) | 899,950,644 → 267,518,144 (**−70.3%**) | 1,181,351,936 → 443,516,928 (**−62.5%**) |
+
+The state itself shrinks 46.9 per cent between the layouts, so a 70 to 74 per
+cent fall in materialized `copy`/`concatenate` bytes is not the state getting
+smaller. It is the Hermitian completion's work disappearing, and the split
+shows exactly where: `concatenate` at a fusion ROOT is 17 instructions and
+33.1 MB on the two-sided axis and 4 instructions and 2.3 MB on the half one.
+That is §5.3 N3's prize, on the step graph, measured.
+
+### The chain-free control
+
+The `boundary = "periodic"` deck — the shipped Cyclone deck with that one key
+changed, kept in the evidence directory as a file this time rather than a
+scratch copy whose `config` field was rewritten afterwards.
+
+| graph | `bytes_written` | `materialized_bytes` | `temp_size_in_bytes` |
+|---|---|---|---|
+| RHS | 10,272,768 → 7,870,464 (−23.4%) | 4,448,256 → 2,875,392 (−35.4%) | 8,483,184 → 5,833,328 (−31.2%) |
+| rk3 | 46,818,516 → 41,903,392 (−10.5%) | 21,628,084 → 8,848,640 (−59.1%) | 40,861,696 → 24,673,280 (−39.6%) |
+| rk4 | 59,204,820 → 49,669,408 (−16.1%) | 26,076,340 → 11,724,032 (−55.0%) | 61,767,680 → 25,617,664 (−58.5%) |
+
+It still wins on both graphs, which is what #258 read as proof that the chains
+carried the regression. On the corrected measure the reading inverts: the
+**linked** deck now wins by *more* on the step than the chain-free one does,
+−73.5 per cent against −59.1 per cent at rk3 32. A deck whose chains cost it
+something does not do that.
+
+### Identity
+
+`src/` is untouched, so the shipped path cannot have moved; the A/B is run
+anyway because it is this queue's registered gate and because "no diff" is a
+claim about the tree, not about the executable. `origin/main` `195205961`'s
+tree against this branch, separate processes, `--xla_cpu_multi_thread_eigen=false`
+pinned for float32.
+
+| gate | cases | float32 | x64 |
+|---|---:|---|---|
+| RHS terms, total, nonlinear RHS, VJPs wrt G / tprim / nu_hyper_m | 58 | 58/58 bitwise | 58/58 bitwise |
+| 100-step trajectories: 7 integrators, runtime rk3/rk4 × 3 modes, sharded, species×Hermite, checkpointed window value and d/dtprim | 65 | 65/65 bitwise | 65/65 bitwise |
+
+`max_rel` is exactly 0 in all four comparisons.
+
+### Limitations, and what is not claimed
+
+- **No timing, and none is claimed.** The host carried a one-minute load
+  average above 10 for the whole session, so wall-clock was treated as
+  unavailable. Every number in this entry is an op count, a byte total derived
+  from a compiled module, or XLA's own buffer assignment, and none of them
+  depends on machine load.
+- **`fused_interior_bytes` rises**, +146 per cent and +171 per cent on the two
+  rk3 graphs. Those instructions allocate nothing, but they are not free: a
+  fusion that reads its parameter through a non-default layout reads it
+  strided, and there are more such reads on the half graph. Whether that costs
+  wall-clock is exactly the timing question above. It is the one honest reason
+  left to want a measurement before the flip, and it is *not* a reason to keep
+  a layout whose materialized traffic is a third of the other's.
+- **`temp_size_in_bytes` is a peak arena, not a total.** It bounds what the
+  executable allocates; it does not price how often a buffer is re-read.
+- The numbers are for one jax/XLA version (0.10.2) and one backend (XLA:CPU).
+  A different fusion pass would move the split between the two byte totals
+  without moving `bytes_written`, which is the reason both are recorded.
+
+### What it would take to flip the default (Q10's remaining work)
+
+Not done here, deliberately. The gate this row was asked to open is open — the
+layout's cost is no longer the reason to wait. What is left is Q10's own list,
+unchanged by this row except that the ledger no longer argues against it:
+
+1. the runtime/workflow grid flip and `PreparedSimulation.state_shape` with it;
+2. the diagnostics and NetCDF condensation chain — `_condense_ky_for_output`,
+   `_condense_kykx_for_output`, the `y` dimension built from `grid.ky.size`,
+   and the `full_ny`/`active_ny` pair — which fails loudly on an `Nyc`-long
+   diagnostic and is the next coherent slice;
+3. the eigen branch-selection decision: a two-sided spectrum carries every
+   eigenvalue and its `λ*` copy and a half axis does not, which leaves growth
+   rates alone and frequency-sign branch selection not;
+4. one wall-clock A/B on an idle host, for the strided-read question above —
+   which is a confirmation, not a gate, since the layout is already ahead on
+   every load-independent measure.
+
+### Gates
+
+`ruff check .`, `ruff format --check .`, `mypy` as CI runs it, both release
+manifests, `tests/release/test_release_gates.py`,
+`tests/release/test_evidence_ledger.py`, and the nonlinear, streaming,
+hypercollision, time-integrator, Krylov-core, runtime-runner, parallel
+(`XLA_FLAGS=--xla_force_host_platform_device_count=4` in the environment, as
+`ci.yml` sets it), profiling-contract and autodiff-objective selections.
+
+Three tests are added to
+`tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py`: that a
+copy inside a fusion body is charged to `fused_interior_bytes` and a fusion
+ROOT, a while body and the entry computation to `materialized_bytes`; that a
+bare instruction list with no computation headers keeps its old
+`bytes_written`; and that `memory_analysis` reports the compiler's buffer
+assignment for a compiled module.
+
+### Environment
+
+macOS 14.4.1 arm64 (M3), python 3.11.14, jax/jaxlib 0.10.2, `JAX_PLATFORMS=cpu`,
+`GKX_JAX_CACHE=0` so each ledger arm compiles cold, ruff 0.16.4, `nice -n 10`.
+Evidence, commands, the tables above and `SHA256SUMS.txt` in
+`plan/research/scripts/2026-09-19-q27-linked-gather-row-order/`
+(`README.md`, `run_ledgers.sh`, `cyclone_nonlinear_periodic_control.toml`,
+`gather_probe.py`, `gather_probe.json`, `gather_probe.txt`, `ledger_table.py`,
+`ledger_table.txt`, `ledgers/`); Q10's `run_identity.sh` and Q9's
+`rhs_identity.py`, `gate_traj.py` and `compare_npz.py` are reused verbatim.
+
+### The correction to #258, stated plainly
+
+#258's entry says "the linked-chain gather loses its fused lowering when the
+state's `ky` extent stops being the grid's power of two". That sentence is
+wrong, and this row's `Ny` sweep is what shows it: the lowering is identical at
+`Nyc = 9, 17, 25, 32, 33`. #248's observation at `_reverse_from_one` is
+correct and still holds — a permutation written as `jnp.take` does lower to a
+materializing gather — but it is not what produced #258's step-graph numbers,
+and `_flatten_linked_fft_state` already avoids it on both layouts. The #258
+entry is left standing as written, because rewriting a recorded measurement
+after the fact is worse than correcting it forward; this entry is the
+correction, and Q10's queue row points at it.
