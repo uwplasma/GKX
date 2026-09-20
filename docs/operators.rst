@@ -1172,20 +1172,73 @@ optional :math:`|k_z|`-scaled branch:
    \propto
    -w_{hyper}\,\nu_{k_z}\,|k_z|\,m^{p_m}\,G.
 
-Controls:
+Controls, and the branch each one reaches:
 
-- ``RuntimePhysicsConfig.hypercollisions``
-- ``RuntimeTermsConfig.hypercollisions``
-- ``RuntimeCollisionConfig.nu_hyper``
-- ``RuntimeCollisionConfig.nu_hyper_l``
-- ``RuntimeCollisionConfig.nu_hyper_m``
-- ``RuntimeCollisionConfig.nu_hyper_lm``
-- ``RuntimeCollisionConfig.p_hyper``
-- ``RuntimeCollisionConfig.p_hyper_l``
-- ``RuntimeCollisionConfig.p_hyper_m``
-- ``RuntimeCollisionConfig.p_hyper_lm``
-- ``RuntimeCollisionConfig.hypercollisions_const``
-- ``RuntimeCollisionConfig.hypercollisions_kz``
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 50
+
+   * - ``RuntimeCollisionConfig`` knob
+     - Branch
+     - Notes
+   * - ``nu_hyper`` / ``p_hyper``
+     - isotropic
+     - always applied; no branch switch
+   * - ``nu_hyper_l`` / ``p_hyper_l``
+     - constant **only**
+     - the Laguerre channel. The :math:`|k_z|` kernel has no :math:`\ell`
+       index, so this knob does nothing while
+       ``hypercollisions_const = 0``
+   * - ``nu_hyper_lm`` / ``p_hyper_lm``
+     - constant **only**
+     - mixed channel, same restriction
+   * - ``nu_hyper_m`` / ``p_hyper_m``
+     - both
+     - the Hermite channel; the constant branch reuses it unless
+       ``nu_hyper_m_const`` is set
+   * - ``nu_hyper_m_const``
+     - constant only
+     - per-branch Hermite rate. ``None`` (default) reuses ``nu_hyper_m``;
+       ``0.0`` gives a **pure Laguerre sink** beside an unchanged
+       :math:`|k_z|` Hermite branch, so Hermite is not damped twice
+   * - ``hypercollisions_const`` / ``hypercollisions_kz``
+     - branch switches
+     - runtime defaults ``0.0`` / ``1.0``; the reference code's defaults are
+       the same way round
+
+- ``RuntimePhysicsConfig.hypercollisions`` and
+  ``RuntimeTermsConfig.hypercollisions`` gate the whole operator.
+
+.. _velocity-regularization:
+
+Declared velocity-space regularization
+--------------------------------------
+
+Because ``nu_hyper_l`` is branch-bound, a deck that set it under the shipped
+defaults used to run with **no** Laguerre sink and no diagnostic.  That is now
+an error: :class:`~gkx.config.RuntimeCollisionConfig` refuses a nonzero
+``nu_hyper_l`` or ``nu_hyper_lm`` while ``hypercollisions_const = 0.0``, and
+names the two ways to fix it.  A declared regularization either acts or the run
+stops; it is never silently discarded.
+
+This matters beyond configuration hygiene.  For the Cyclone s-:math:`\alpha`
+adiabatic-electron ITG mode at :math:`k_y \rho_i = 0.55`, certified eigenpairs
+show that the collisionless growth rate is **not** converged in Laguerre
+resolution: the eigenvector carries a cutoff pile-up that relocates to
+0.79--0.85 of every new ``Nl`` instead of resolving, and the only ladder that
+converges is the one with enough velocity-space dissipation to remove it.  A
+collisionless growth rate at such a point is therefore a truncation value, not
+a converged number.
+
+**Contract.** Every collisionless linear row published from GKX declares the
+velocity-space regularization it used, and reports the
+:math:`\nu \to 0` (or :math:`\nu_{hyper} \to 0`) extrapolation rather than a
+single regularized number.  ``none`` is a legal declaration and the common one
+for reference-code parity rows, whose decks must reproduce the reference
+exactly; it commits the row to being reported as resolution-limited, not as a
+converged growth rate.  The declaration is a required field of every linear row
+of ``tools/evidence_ledger.toml`` and is checked by
+``tests/release/test_evidence_ledger.py``.
 
 Hyperdiffusion And End Damping
 ------------------------------
