@@ -17239,3 +17239,313 @@ and `_flatten_linked_fft_state` already avoids it on both layouts. The #258
 entry is left standing as written, because rewriting a recorded measurement
 after the fact is worse than correcting it forward; this entry is the
 correction, and Q10's queue row points at it.
+
+## 2026-09-20 — Q28: the three defaults Q26 recorded but could not set
+
+**Outcome: all three measured and set. A first run now takes a balanced
+velocity resolution at the same cost, an integrator paired with the step
+policy that pays for it, and one power-iteration count instead of two.**
+Branch `perf/default-resolution-and-integrator` off `origin/main` `38d7c4277`.
+
+Q26 (#257) rewrote the §5.1 adoption rule, audited the defaults a first run
+takes, and fixed one real bug. It recorded three defaults as suspicious and
+left them, because it had no measurement. This row measured each and set each.
+
+### The table
+
+| default | old | measurement | new | accuracy |
+|---|---|---|---|---|
+| `KrylovConfig.power_iters` | 200 | residual 9.501e-01 at 40 applies, 9.467e-01 at 200, against a 1.192e-04 gate; ladder stalls at 5.96e-03 by 10000 applies and never certifies | **40** | no change: the pair is rejected at both, so 5× the applies buys nothing |
+| `TimeConfig` method/step pairing, deck chose no `dt` | `rk2`, `dt=0.1`, `fixed_dt=True` | both fixed-step arms raise `FloatingPointError` (dt=0.1 is 7.8× the CFL-stable 0.01281); CFL-controlled rk2/rk3/rk4 cost 15612/13536/**11072** RHS evaluations | **`rk4` + CFL controller** | γ −2.63e-04 against rk2's −1.72e-04, both against the certified 0.10128645 — same scale, 29.1% cheaper |
+| `Nl`/`Nm` linear fallback | `(24, 12)` | certified adaptive eigensolves at seven rungs on the shipped Cyclone deck | **`(12, 24)`** | −4.405% → **+0.400%** of the tracked golden, at identical `Nl*Nm` |
+
+Nothing above quotes a wall time as a result. The host carried four sibling
+lanes throughout at 1-minute load 24–141, and the same `(24, 12)` rung took
+121 s, 173 s and 308 s in three runs that returned bit-identical numbers. The
+cost figures are propagator applies, step and RHS-evaluation counts, and
+`Nl*Nm`, none of which depends on load.
+
+### 1. `power_iters`: the two entry points now agree, at 40
+
+`KrylovConfig.power_iters` was 200 while `dominant_eigenpair(power_iters=…)`
+defaulted to 40 — one route, two costs depending on which door it is entered
+by, and two compilations of a scan whose length is a static argument.
+
+The question the task set was "find out which value is right". The measured
+answer is **neither**. Ladder on the shipped Cyclone deck at `(Nl, Nm)=(4, 8)`,
+`ky=0.3`, float32, against that rung's certified adaptive eigenpair
+γ = 0.10128645. Cost is exact: the route is one `lax.scan` of length
+`power_iters` over a single `_advance_imex2` apply.
+
+| applies | γ | residual | gate | certified |
+|---:|---|---|---|---|
+| 40 | 0.18119842 | 9.501e-01 | 1.192e-04 | no |
+| 80 | 0.22636196 | 9.255e-01 | 1.192e-04 | no |
+| 200 | 0.12442227 | 9.467e-01 | 1.192e-04 | no |
+| 400 | 0.09790193 | 9.214e-01 | 1.192e-04 | no |
+| 1000 | 0.08590183 | 4.358e-01 | 1.192e-04 | no |
+| 2000 | 0.09348834 | 1.105e-01 | 1.192e-04 | no |
+| 5000 | 0.10113729 | 6.182e-03 | 1.192e-04 | no |
+| 10000 | 0.10106588 | 5.959e-03 | 1.192e-04 | no |
+
+Five times the applies moves the residual from 9.501e-01 to 9.467e-01 — 0.4%
+of an O(1) quantity — and the pair is rejected at both. γ is not even monotone
+through the range: it runs 0.181, 0.226, 0.124, 0.098, 0.086, 0.093, 0.101,
+because at `power_dt=0.01` the propagator's dominant eigenvalue is barely
+separated and the iterate cycles among subdominant branches before settling.
+The residual does fall past 400 applies, but it stalls near 6e-03 and never
+reaches the gate: 250× the default buys a pair that is still rejected.
+
+So the value cannot be chosen for accuracy, and is chosen for cost and for
+agreeing with the public signature. This is safe to do because the route is
+not on any shipped path: no deck and no Krylov contract sets `method="power"`,
+`shift_source="power"` or `fallback_method="power"`, every shipped contract
+sets `power_iters` explicitly (60, 60, 80, 60, 60), and with the default
+`certify=True` the route raises at 40 and at 200 alike. The change makes a
+rejection cheaper; it does not make an answer different.
+
+The test asserts the whole `KrylovConfig`/signature default **intersection**
+rather than this one field, so the class of defect is guarded and not the
+instance of it.
+
+### 2. `TimeConfig` vs `ExplicitTimeConfig`: the pairing is what is defaulted
+
+The two surfaces were recorded as disagreeing for no stated reason. They
+disagree for one real reason, and it is `dt`: a **required** field on
+`ExplicitTimeConfig` and a **defaulted** one on `TimeConfig`. A caller of the
+library struct has always chosen a step, so treating it as the CFL controller's
+initial guess cannot silently substitute a step nobody asked for. A deck may
+not have chosen one.
+
+Measured on the shipped Cyclone deck at `(Nl, Nm)=(4, 8)`, `ky=0.3`, with the
+`TimeConfig` dataclass defaults, against the same certified γ = 0.10128645:
+
+| method / policy | γ | ω | resolved dt | steps | RHS evals | rel. error |
+|---|---|---|---|---:|---:|---|
+| rk2, fixed dt=0.1 | — | — | 0.1 | — | — | `FloatingPointError` |
+| rk4, fixed dt=0.1 | — | — | 0.1 | — | — | `FloatingPointError` |
+| rk2, CFL-controlled | 0.10126899 | 0.24556943 | 0.0128109 | 7806 | 15612 | −1.72e-04 |
+| rk3, CFL-controlled | 0.10126041 | 0.24556234 | 0.0221629 | 4512 | 13536 | −2.57e-04 |
+| rk4, CFL-controlled | 0.10125984 | 0.24555422 | 0.0361268 | 2768 | 11072 | −2.63e-04 |
+
+Three things follow, and all three matter:
+
+**Changing `method` alone would not have fixed anything.** rk4 at the defaulted
+fixed `dt=0.1` overflows exactly as rk2 does. The defaulted step is 7.8× the
+CFL-stable 0.01281 for this deck, and no integrator order rescues that.
+
+**rk4 is not more accurate here; it is cheaper at the same accuracy.** rk2's
+error is −1.72e-04 and rk4's is −2.63e-04, so rk4 is nominally 1.5× further
+out. Both are two orders of magnitude below the discretization error of the
+rung itself — `(4, 8)` is 8.9% from the golden — and the difference is the
+growth-rate fit window, not the integration order, because the controller hands
+each scheme a different step. What is not in doubt is the cost: 11072 RHS
+evaluations against 15612, a **29.1% reduction**, which is exactly
+4/(2.82·2) — rk4's CFL prefactor buys a 2.82× longer step for twice the work
+per step. Under the §5.1 rule as Q26 rewrote it, a reproducible ~29% cost
+reduction at no accuracy loss is adoptable.
+
+**The pairing is the unit, so `fixed_dt` is not flipped globally.** rk4 only
+pays because the controller gives it the longer step; at a *fixed* step it has
+no step-size compensation and is simply twice the cost of rk2. And fourteen
+shipped decks and parity fixtures omit `fixed_dt` and depend on `True` —
+`cyclone.toml`, `etg.toml`, `runtime_etg.toml`,
+`cyclone_coulomb_collisions.toml`, `runtime_cyclone_quasilinear.toml`,
+`runtime_kbm.toml`, `runtime_circular_vmec_linear.toml`,
+`runtime_batch_ky_scan.toml` and the six `tools/comparison/fixtures/parity/`
+decks — and several back evidence-ledger rows. Flipping the field would move
+validated numbers.
+
+So the coupling is applied at the one place a deck becomes a `TimeConfig`,
+`workflows.runtime.toml._normalize_time_overrides`: a deck that supplies no
+`dt` gets `fixed_dt=False` and `method="rk4"`, and a deck that supplies `dt`
+is untouched. **Every shipped deck supplies `dt`**, so none of them moves, and
+`test_every_shipped_deck_chooses_its_own_step` asserts that so a future deck
+cannot drift onto the controller by accident. An explicit `method` or
+`fixed_dt` in the deck still wins over the pairing.
+
+The dataclass defaults themselves are left as they are, and both docstrings now
+carry the reason rather than leaving the divergence to look accidental.
+
+### 3. `Nl`/`Nm` fallback: `(24, 12)` → `(12, 24)`, at the same cost
+
+The task said to reuse #238 and #252 rather than re-run. **That was not
+possible, and the reason is worth recording**: #238 and #252 are Laguerre-only
+ladders (`Nl` 16/24/32/48/64 at `Nm` pinned to 96) on the *parity fixture*
+`cyclone_salpha_itg_*.toml` at `ky=0.55`, with collisionality as the second
+axis. They are not `(Nl, Nm)` ladders and they are not the shipped deck at
+`ky=0.3`. Before this row the shipped deck had exactly three certified Krylov
+points — `(4, 8)`, `(16, 48)` and `(24, 12)` — and one four-rung *time-path*
+GPU sweep in `docs/_static/cyclone_resolution_subset.csv`. The ladder below is
+new.
+
+Certified adaptive eigensolves on `examples/linear/axisymmetric/cyclone.toml`
+at its own `ky=0.3`, float32, against the tracked golden γ = 0.09302951 in
+`src/gkx/data/cyclone_reference_adiabatic.csv`. Every rung is certified against
+the original operator at the 1.192e-04 float32 gate.
+
+| Nl | Nm | `Nl*Nm` | γ | ω | rel. to golden | residual |
+|---:|---:|---:|---|---|---|---|
+| 8 | 24 | 192 | 0.09877566 | 0.27690458 | +6.177% | 3.16e-06 |
+| 8 | 32 | 256 | 0.09801412 | 0.27764836 | +5.358% | 3.97e-06 |
+| **24** | **12** | **288** | 0.08893196 | 0.28021976 | **−4.405%** | 2.39e-06 |
+| **12** | **24** | **288** | 0.09340143 | 0.28955653 | **+0.400%** | 3.27e-06 |
+| 12 | 32 | 384 | 0.09263792 | 0.28890607 | −0.421% | 3.93e-06 |
+| 16 | 32 | 512 | 0.09284505 | 0.28150889 | −0.198% | 4.13e-06 |
+| 24 | 24 | 576 | 0.09368346 | 0.28402495 | +0.703% | 3.67e-06 |
+| 16 | 48 | 768 | 0.09309106 | 0.28203276 | +0.066% | 5.55e-06 |
+
+`(12, 24)` carries the same `Nl*Nm` as `(24, 12)` — the same state size and so
+the same cost per propagator apply — for **eleven times less error**. That
+makes it a strict improvement rather than a trade, which is why it is adopted
+without needing the §5.1 cost rule at all.
+
+Three things the ladder says that a single comparison would not:
+
+- It is a **balance**, not "more Hermite wins". `Nl=8` is worse than both 288
+  rungs at either Hermite count (+6.18% and +5.36%). Parallel phase mixing sets
+  an ITG growth rate and needs Hermite resolution; the FLR response still needs
+  enough Laguerre. A deck whose physics runs the other way — the shipped ETG
+  decks at `Nl=24`/`Nm=8` — must still say so, and all of them do.
+- **Spending more is not bought.** 384 lands at −0.421% and 576 at +0.703%,
+  both further out than 288's +0.400%, at 1.33× and 2× the cost. The sequence
+  is non-monotone through this region; only 768 (2.67× the cost) clearly
+  improves on it, at +0.066%. A cost increase of that size is not a decision a
+  fallback should make on a deck's behalf.
+- The ladder **reproduces** what was already recorded. `(24, 12)` returns
+  0.08893196 and `(16, 48)` returns 0.09309106 at residual 5.55e-06, matching
+  Q26's independent runs at a different SHA in a different worktree digit for
+  digit, and `(12, 24)`'s 0.09340143 sits 0.05% from the office-GPU time-path
+  0.09345269 in `docs/_static/cyclone_resolution_subset.csv` — a certified
+  eigensolve and an initial-value fit agreeing on a rung neither had measured
+  before.
+
+Blast radius: no shipped deck moves, because every `[run]` table sets `Nl`
+explicitly. Two tests pinned `(24, 12)` and are updated. The pair now has one
+owner, `startup._RUNTIME_LINEAR_HL_FALLBACK`, which `api.prepared` reads
+instead of repeating, so a prepared summary cannot describe a resolution the
+runtime will not build.
+
+### Reproducibility of the headline pair
+
+The `(24, 12)` → `(12, 24)` claim was re-measured A/B/A/B on the committed tree
+at `5342917e0`, alternating arms in fresh processes:
+
+| arm | rep | γ | ω | residual | wall | 1-min load |
+|---|---|---|---|---|---:|---:|
+| `(24, 12)` | 1 | 0.08893196 | 0.28021976 | 2.39e-06 | 121 s | 29 |
+| `(12, 24)` | 1 | 0.09340143 | 0.28955653 | 3.27e-06 | 149 s | 40 |
+| `(24, 12)` | 2 | 0.08893196 | 0.28021976 | 2.39e-06 | 173 s | 48 |
+| `(12, 24)` | 2 | 0.09340143 | 0.28955653 | 3.27e-06 | 145 s | 39 |
+
+Bit-identical within each arm; the eigensolve is deterministic. The wall times
+of the *same* arm differ by 1.4× across repetitions, which is the clearest
+statement of why no wall time in this entry is a result. Rep 1 of `(24, 12)`
+ran with `dirty_src=False` and rep 2 with `dirty_src=True` — the difference
+being a comment reword in `startup.py` and a manifest baseline — and returned
+the same eight digits, which is the check that the working-tree state did not
+reach the numbers.
+
+### Limitations
+
+- **One deck, one `ky`, one geometry.** All three measurements are the shipped
+  Cyclone s-α case at `ky=0.3` (the power and time arms at its `(4, 8)` rung).
+  Nothing here is a claim about another geometry, another `ky` or a kinetic-
+  electron case.
+- **The resolution ladder is certified, not converged.** Every rung passes the
+  original-operator residual gate, but the sequence is non-monotone through
+  288–576, so `+0.400%` is where this case lands at that budget, not an error
+  bound for another case. `Nl` and `Nm` should still be set in `[run]`, and the
+  docs still say so.
+- **No wall-clock win is claimed anywhere.** The host was contended for the
+  whole session; see the A/B table above.
+- **`power_dt` was not swept.** The power ladder holds `power_dt=0.01`, the
+  shipped default. A different `power_dt` would change where the route stalls;
+  it would not make 200 certify, since 10000 applies at this `power_dt` do not.
+- **The float32 gate is the one in force.** Every rung is certified at
+  1.192e-04, the float32 floor, not the 1e-09 float64 gate. Q26's float64
+  control at `(16, 48)` gives 0.09309117 against float32's 0.09309106 — 1.2e-06
+  relative — so the ladder's ordering is far above precision noise, but the
+  ladder itself was not repeated in float64.
+- **`ExplicitTimeConfig`'s own defaults are unchanged**, as is
+  `TimeConfig.fixed_dt`. The coupling changes what a *deck* with no chosen step
+  resolves to, not what a Python caller constructing `TimeConfig()` directly
+  gets. That caller is an expert surface and is left alone deliberately.
+
+### Left alone, with the reason
+
+- **`TimeConfig.method` stays `rk2` for a deck that chose `dt`.** At a fixed
+  step rk4 costs twice as much per step with no step-size compensation, and the
+  measurement gives no reason to double a chosen-step deck's cost.
+- **`TimeConfig.fixed_dt` stays `True`.** Fourteen shipped decks and parity
+  fixtures depend on it, as listed above.
+- **A grid-aware `(Nl, Nm)` policy was considered and rejected.** It would need
+  a ladder across grids to calibrate, and this row measured one grid. Inventing
+  a scaling rule from a single `Nz` would be a policy without a measurement,
+  which is the thing this row exists to stop doing.
+- **`docs/_static/cyclone_scan_table_lowres.csv` and `…_highres.csv` are
+  byte-identical**, so the tracked artifact records a *zero* `(8, 24)` →
+  `(16, 48)` change, which contradicts this ladder. Noticed while gathering
+  evidence; not this row's to fix, and flagged for a follow-up rather than
+  quietly regenerated.
+
+### Gates
+
+`ruff check .`, `ruff format --check .`, `mypy` on the changed modules,
+`sphinx -W -b html docs`, both release manifests
+(`check_package_architecture_manifest.py`, `check_repository_size_manifest.py`),
+`tests/release/test_release_gates.py`, `tests/release/test_evidence_ledger.py`,
+and the Krylov-core, adaptive-eigenmode, time-integrator, runtime-config,
+runtime-runner, prepared-simulation, CLI, nonlinear and validation selections,
+plus both CI shards that set
+`XLA_FLAGS=--xla_force_host_platform_device_count=4` in the environment as
+`ci.yml` does.
+
+Both line-budget baselines in `tools/package_architecture_manifest.toml` are
+set to the numbers the checker reported — 91655 → 91784 for `src/gkx` and
+91565 → 91721 for the tests — not to a delta.
+
+### Environment
+
+macOS 14.4.1 arm64 (M3, 14 logical CPUs), python 3.11.14, jax/jaxlib 0.10.2,
+numpy 2.4.6, scipy 1.17.1, `JAX_PLATFORMS=cpu`, float32 working precision
+(`JAX_ENABLE_X64` unset for the measurement arms; the gates run with
+`JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg` as `ci.yml` sets them),
+`nice -n 10`, venv `gkx-review-20260913`. Four sibling agent lanes shared the
+host; 1-minute load 24–141 across the session, recorded per arm as
+`loadavg_start`/`loadavg_end` in every record.
+
+### Commands
+
+Harness and per-arm records in
+`plan/research/scripts/2026-09-20-default-resolution-and-integrator/`
+(`measure.py`, `run_arms.sh`, `out/`, `SHA256SUMS.txt`). Each arm is one fresh
+process printing one `ENV` line and one `RESULT` line, so every record carries
+its own interpreter, library versions, precision, worktree, HEAD, `dirty_src`
+flag and host load.
+
+```
+export PYTHONPATH="$REPO/src:$REPO" JAX_PLATFORMS=cpu
+S=plan/research/scripts/2026-09-20-default-resolution-and-integrator/measure.py
+DECK=examples/linear/axisymmetric/cyclone.toml
+
+# power-iteration ladder
+for N in 40 80 200 400 1000 2000 5000 10000; do
+  python "$S" power "$DECK" --label "p-iters$N" --Nl 4 --Nm 8 --power-iters "$N"
+done
+
+# time integrator and step policy
+python "$S" time "$DECK" --label t-rk2-fixed    --solver explicit_time \
+  --Nl 4 --Nm 8 --time-method rk2 --fixed-dt true
+python "$S" time "$DECK" --label t-rk4-adaptive --solver explicit_time \
+  --Nl 4 --Nm 8 --time-method rk4 --fixed-dt false      # and rk2/rk3, fixed/adaptive
+
+# velocity-space ladder
+for pair in "24 12" "12 24" "8 24" "8 32" "12 32" "16 32" "24 24" "16 48"; do
+  read -r nl nm <<< "$pair"
+  python "$S" resolution "$DECK" --label "r-nl${nl}-nm${nm}" --Nl "$nl" --Nm "$nm"
+done
+```
+
+`bash plan/research/scripts/2026-09-20-default-resolution-and-integrator/run_arms.sh`
+runs all of them in order.

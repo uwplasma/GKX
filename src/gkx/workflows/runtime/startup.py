@@ -165,7 +165,7 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
 # cost per propagator apply, with the budget spent on the axis that needs it.
 #
 # Certified adaptive eigensolves on the shipped Cyclone deck at its own ky=0.3,
-# float32, against the tracked GX golden gamma=0.09302951 in
+# float32, against the tracked reference golden gamma=0.09302951 in
 # src/gkx/data/cyclone_reference_adiabatic.csv:
 #
 #   Nl   Nm   Nl*Nm   gamma        rel. to golden   residual   certified

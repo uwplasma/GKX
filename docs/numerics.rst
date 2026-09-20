@@ -315,6 +315,8 @@ Nl    Nm    Nl*Nm  gamma       rel. to golden  residual
 12    24    288    0.09340143  **+0.400%**     3.27e-06
 12    32    384    0.09263792  -0.421%         3.93e-06
 16    32    512    0.09284505  -0.198%         4.13e-06
+24    24    576    0.09368346  +0.703%         3.67e-06
+16    48    768    0.09309106  +0.066%         5.55e-06
 ====  ====  =====  ==========  ==============  ========
 
 Every rung is certified against the original operator at a 1.19e-4 float32
@@ -323,11 +325,12 @@ cost per propagator apply -- for eleven times less error, so this is a strict
 improvement and not a trade. It is a balance, not "more Hermite wins":
 ``Nl = 8`` is worse than both at either Hermite count, because the parallel
 phase mixing that sets an ITG rate needs Hermite resolution while the FLR
-response still needs enough Laguerre. Spending beyond 288 is not obviously
-bought either -- ``(12, 32)`` costs 33% more and lands no closer -- and a cost
-increase is not a decision this fallback should make on a deck's behalf. A deck
-whose physics runs the other way, such as the shipped ETG decks at
-``Nl = 24``/``Nm = 8``, must still say so, and all of them do.
+response still needs enough Laguerre. Spending beyond 288 is not bought either
+-- ``(12, 32)`` at 1.33x the cost and ``(24, 24)`` at 2x both land further out
+than 288 does, and only ``(16, 48)`` at 2.67x clearly improves on it -- and a
+cost increase of that size is not a decision this fallback should make on a
+deck's behalf. A deck whose physics runs the other way, such as the shipped ETG
+decks at ``Nl = 24``/``Nm = 8``, must still say so, and all of them do.
 
 **Limits.** All three measurements are one deck, one ``ky`` and one geometry.
 The resolution ladder is certified but not a convergence proof: the sequence is
