@@ -1,0 +1,32 @@
+[     2.8s rss<=0.42G] t_matvec 0.231 ms
+[     2.8s rss<=0.42G] krylov method=shift_invert dim=24 restarts=2
+[     2.8s rss<=0.42G] preparing shift-invert solve with dim=24 restarts=2 gmres_maxiter=300 restart=300 tol=0.0001
+[     2.8s rss<=0.42G] estimating shift from propagator seed
+[     3.6s rss<=0.53G] shift-invert sigma=-0.0669807-0.229815j
+[     3.6s rss<=0.53G] building pr3-cm factors
+[     5.3s rss<=0.59G] pr3-cm factors: dense solve, alpha=-3.58242+0j (symbol-bounds), 1.6 MB; dense batched inverse requested
+[     5.3s rss<=0.59G] running shift-invert Arnoldi (pr3-cm)
+[    36.0s rss<=0.83G] shift-invert solve finished with eig=0.101286-0.245496j residual=8.18e-05; inner converged=False unconverged=46/48 max_relative_residual=0.0033 tol=0.0001 iterations=14290
+[    36.0s rss<=0.83G] shift-invert result rejected; falling back to propagator
+[    37.0s rss<=0.83G] propagator fallback residual=0.985
+[    43.7s rss<=0.83G] cost {'t_matvec_s': 0.00023108301684260368, 't_precond_s': 0.5827476669801399, 'c_precond': 2521.8108839952683}; setup 0.25s
+RESULT {"arm": "si", "case": "d96", "certified": false, "cost": {"c_precond": 2521.8108839952683, "t_matvec_s": 0.00023108301684260368, "t_precond_s": 0.5827476669801399}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "si", "--case", "d96", "--preconditioner", "pr3-cm", "--block-solve", "dense", "--restart", "300", "--maxiter", "300", "--label", "s2_pr3_dense"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "b902fda756d98cc4acdd304c08f891761b27b7eb"}, "gkx": "/Users/rogeriojorge/local/GKX-worktrees/pr3cm-preconditioner/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [11.111328125, 14.044921875, 13.21923828125], "x64": true}, "ky": 0.3, "label": "s2_pr3_dense", "n": 3072, "options": {"krylov_dim": 24, "method": "shift_invert", "restarts": 2, "shift_maxiter": 300, "shift_precond_block_solve": "dense", "shift_preconditioner": "pr3-cm", "shift_restart": 300, "shift_tol": 0.0001}, "peak_rss_gib": 0.8334503173828125, "precond_setup": {"alpha": [-3.5824158810519506, 0.0], "alpha_source": "symbol-bounds", "block_size": 32, "block_solve": "dense", "block_solve_reason": "dense batched inverse requested", "block_spectral_radius": 18.584626383789416, "blocks": 96, "factor_bytes": 1572896, "hermite_ladder_radius": 4.144547186125898, "locality_defect": 1.5712649273977868e-16, "s1": [3.548925517215419, -0.11490744307841366], "seconds": 0.24563233397202566, "structure": null, "sweeps": 3, "symbol_s1": 0.6905548317079713, "symbol_s_max": 33.14663192198262}, "process_seconds": 43.89745120896259, "raised": "RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=8.17943e-05, tolerance=1e-06; inner converged=False unconverged=46/48 max_relative_residual=0.0033 tol=0.0001 iterations=14290", "route_s": 34.15797112497967, "status": null}
+       44.51 real        99.59 user         6.34 sys
+           959791104  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              122260  page reclaims
+                 197  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 160  voluntary context switches
+              846137  involuntary context switches
+        739232383456  instructions retired
+        351390329899  cycles elapsed
+           772231808  peak memory footprint
+exit 0

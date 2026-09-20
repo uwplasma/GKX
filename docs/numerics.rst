@@ -612,13 +612,63 @@ end-to-end JAX differentiability:
   a certified electrostatic retry), ``"damping"`` (element-wise
   collisional/hyper damping),
   ``"hermite-line"`` (FFT in :math:`z` plus a tridiagonal Hermite solve for
-  the additive diagonal-and-streaming symbol), or ``"field-corrected"`` (the
+  the additive diagonal-and-streaming symbol), ``"field-corrected"`` (the
   Hermite line plus the exact linear field response in a Woodbury capacitance
-  solve). The complex shift scaling is shared with backward Euler, and
-  right-preconditioned FGMRES minimizes the original shifted-system residual.
+  solve), or ``"pr3-cm"`` (below). The complex shift scaling is shared with
+  backward Euler, and right-preconditioned FGMRES minimizes the original
+  shifted-system residual, starting from ``x = 0``: under right preconditioning
+  the first Krylov vector is already :math:`M^{-1}b`, so a guess of
+  :math:`M^{-1}b` searches a subset of what the first cycle searches anyway,
+  and with a weak :math:`M` it starts the solve behind the trivial guess.
   The line path costs :math:`O(n)` storage and work. The field correction maps
   response columns sequentially and stores one state-by-field factor, trading
   a larger setup for lower Krylov counts in field-dominated cases.
+- **The** ``pr3-cm`` **structured preconditioner** (queue row Q28) splits the
+  operator into two halves that are each invertible in closed form and sweeps
+  between them. The Hermite line solve above already inverts streaming,
+  hypercollisions and the *z*-mean of the drift diagonal exactly; everything
+  else -- the exact :math:`\omega_d(z)`, the mirror term, the drive, the end
+  damping, collisions and the local field response -- is *z*-local, so it is a
+  batch of dense :math:`(l, m)` blocks, one per ``(species, ky, kx, z)``. With
+  :math:`s_1 = \sigma/2 - \alpha` one Peaceman--Rachford double sweep of the
+  two shifted halves costs one solve of each and no operator application at
+  all, and ``pr3-cm`` is three such sweeps started from zero. The parameter
+  follows Q7's scalar symbol rule :math:`\alpha = -\sqrt{s_1 d}` unless
+  ``KrylovConfig.shift_precond_alpha`` names one.
+
+  The z-local block is solved exactly by block-Thomas in the Laguerre index
+  plus one Sherman--Morrison correction, which stores :math:`3 N_l N_m^2`
+  entries instead of the dense :math:`(N_l N_m)^2`. That is exact only while
+  the block is *l*-tridiagonal with a rank-one field part, so the build
+  measures both properties at every shift and
+  ``KrylovConfig.shift_precond_block_solve`` decides what happens when they do
+  not hold: ``"auto"`` falls back to the dense batched inverse -- the same
+  preconditioner, a different apply cost -- and records why in
+  ``EigenSolveStatus.inner["preconditioner_setup"]``, ``"block-thomas"``
+  refuses rather than falling back, and ``"dense"`` is the control the fallback
+  is measured against. A collision operator that couples the Laguerre index
+  beyond :math:`l \pm 1` is the common reason for the fallback; the shipped
+  Cyclone deck runs at :math:`\nu = 0` and measures the largest
+  off-tridiagonal entry at exactly zero.
+
+  The exact solve always stores less -- :math:`3 N_l N_m^2` against
+  :math:`(N_l N_m)^2`, measured at 2.60x fewer bytes for
+  :math:`N_l N_m = 192` -- but its *apply* cost changes sign with block size:
+  :math:`N_l` sequential batched :math:`N_m \times N_m` solves were slower than
+  one batched :math:`32 \times 32` product in seven of nine interleaved timing
+  rounds, and faster than a :math:`192 \times 192` one in nine of nine. Two
+  rungs do not calibrate a crossover, so ``"auto"`` takes the exact solve
+  whenever the structure allows and ``"dense"`` is the better choice on a small
+  velocity grid.
+
+  Setting it up costs :math:`N_l N_m` probes of the z-local operator and a host
+  factorization, done once per shift and handed to the compiled Arnoldi as an
+  operand. It also requires the non-streaming operator to *be* z-local, which
+  the build checks against the operator itself on a random vector and
+  **refuses** rather than approximates. A grid carrying zonal
+  :math:`(k_y = 0, k_x > 0)` rows under adiabatic electrons is the case that
+  fails: their :math:`\langle\phi\rangle` is a sum over *z*. The linear eigen
+  route escapes it because it reduces the grid to one non-zero :math:`k_y`.
   Every returned pair is checked with the matrix-free relative residual
   :math:`\lVert Av-\lambda v\rVert/
   \max(\lVert Av\rVert,|\lambda|\lVert v\rVert)`. Configure the acceptance

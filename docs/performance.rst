@@ -1825,6 +1825,11 @@ test suite rather than by an untracked ad-hoc profiling harness:
 - ``pas-coarse``: line + kx-coarse additive correction (Schur-style)
 - ``hermite-line``: Hermite streaming line solve (tridiagonal in ``m`` at fixed :math:`k_z`)
 - ``hermite-line-coarse``: Hermite line solve + kx-coarse correction
+- ``pr3-cm`` (shift-invert only): three Peaceman--Rachford double sweeps of the
+  Hermite line solve with the z-mean drift against an exact z-local
+  drift/mirror/field block, the latter solved by block-Thomas in the Laguerre
+  index plus Sherman--Morrison. See :doc:`numerics` for its structural
+  preconditions and :doc:`solvers` for what it does and does not change.
 
 Use ``tests/unit/linear/test_linear.py`` and
 ``tests/unit/linear/test_linear_helpers_extra.py`` as the maintained

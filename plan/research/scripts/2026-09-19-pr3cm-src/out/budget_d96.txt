@@ -1,0 +1,37 @@
+[     2.1s rss<=0.39G] krylov method=shift_invert dim=24 restarts=2
+[     2.1s rss<=0.39G] preparing shift-invert solve with dim=24 restarts=2 gmres_maxiter=50 restart=20 tol=0.0001
+[     2.1s rss<=0.39G] estimating shift from propagator seed
+[     2.8s rss<=0.52G] shift-invert sigma=-0.0669807-0.229815j
+[     2.8s rss<=0.52G] running shift-invert Arnoldi (hermite-line)
+[     6.5s rss<=0.68G] shift-invert solve finished with eig=-0.0414674-0.606364j residual=0.985; inner converged=False unconverged=48/48 max_relative_residual=25.4 tol=0.0001 iterations=2880
+[     6.5s rss<=0.68G] line solve rejected; retrying with exact low-moment field correction
+[     6.5s rss<=0.68G] running shift-invert Arnoldi (field-corrected)
+[    12.0s rss<=0.83G] shift-invert solve finished with eig=-0.0579314-0.669341j residual=0.987; inner converged=False unconverged=48/48 max_relative_residual=34 tol=0.0001 iterations=2880
+[    12.0s rss<=0.83G] shift-invert result rejected; falling back to propagator
+[    12.8s rss<=0.84G] propagator fallback residual=0.985
+[    12.8s rss<=0.84G] budget {'shift_maxiter': 50, 'raised': 'RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.986671, tolerance=1e-06; inner converged=False unconverged=48/48 max_relative_residual=34 tol=0.0001 iterations=2880', 'seconds': 10.696248708001804}
+[    12.8s rss<=0.84G] krylov method=shift_invert dim=24 restarts=2
+[    12.8s rss<=0.84G] preparing shift-invert solve with dim=24 restarts=2 gmres_maxiter=400 restart=20 tol=0.0001
+[    12.8s rss<=0.84G] estimating shift from propagator seed
+[    12.8s rss<=0.84G] shift-invert sigma=-0.0669807-0.229815j
+[    12.8s rss<=0.84G] running shift-invert Arnoldi (hermite-line)
+[    23.0s rss<=0.90G] shift-invert solve finished with eig=-0.0570293-1.15961j residual=0.955; inner converged=False unconverged=48/48 max_relative_residual=25 tol=0.0001 iterations=19200
+[    23.0s rss<=0.90G] line solve rejected; retrying with exact low-moment field correction
+[    23.0s rss<=0.90G] running shift-invert Arnoldi (field-corrected)
+[    41.8s rss<=0.99G] shift-invert solve finished with eig=-0.0441562-1.02436j residual=0.957; inner converged=False unconverged=48/48 max_relative_residual=32.5 tol=0.0001 iterations=19200
+[    41.8s rss<=0.99G] shift-invert result rejected; falling back to propagator
+[    41.8s rss<=0.99G] propagator fallback residual=0.985
+[    41.8s rss<=0.99G] budget {'shift_maxiter': 400, 'raised': 'RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.957258, tolerance=1e-06; inner converged=False unconverged=48/48 max_relative_residual=32.5 tol=0.0001 iterations=19200', 'seconds': 28.964530166995246}
+[    41.8s rss<=0.99G] krylov method=shift_invert dim=24 restarts=2
+[    41.8s rss<=0.99G] preparing shift-invert solve with dim=24 restarts=2 gmres_maxiter=2000 restart=20 tol=0.0001
+[    41.8s rss<=0.99G] estimating shift from propagator seed
+[    41.8s rss<=0.99G] shift-invert sigma=-0.0669807-0.229815j
+[    41.8s rss<=0.99G] running shift-invert Arnoldi (hermite-line)
+[    85.6s rss<=1.03G] shift-invert solve finished with eig=-0.0451991-0.797708j residual=0.974; inner converged=False unconverged=48/48 max_relative_residual=24.6 tol=0.0001 iterations=96000
+[    85.6s rss<=1.03G] line solve rejected; retrying with exact low-moment field correction
+[    85.6s rss<=1.03G] running shift-invert Arnoldi (field-corrected)
+[   200.0s rss<=1.09G] shift-invert solve finished with eig=-0.0639068-0.698151j residual=0.984; inner converged=False unconverged=48/48 max_relative_residual=35.5 tol=0.0001 iterations=96000
+[   200.0s rss<=1.09G] shift-invert result rejected; falling back to propagator
+[   200.0s rss<=1.09G] propagator fallback residual=0.985
+[   200.0s rss<=1.09G] budget {'shift_maxiter': 2000, 'raised': 'RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.984153, tolerance=1e-06; inner converged=False unconverged=48/48 max_relative_residual=35.5 tol=0.0001 iterations=96000', 'seconds': 158.21027595800115}
+RESULT {"budget": [{"raised": "RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.986671, tolerance=1e-06; inner converged=False unconverged=48/48 max_relative_residual=34 tol=0.0001 iterations=2880", "seconds": 10.696248708001804, "shift_maxiter": 50}, {"raised": "RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.957258, tolerance=1e-06; inner converged=False unconverged=48/48 max_relative_residual=32.5 tol=0.0001 iterations=19200", "seconds": 28.964530166995246, "shift_maxiter": 400}, {"raised": "RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.984153, tolerance=1e-06; inner converged=False unconverged=48/48 max_relative_residual=35.5 tol=0.0001 iterations=96000", "seconds": 158.21027595800115, "shift_maxiter": 2000}], "case": "d96", "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/diagnose.py", "--mode", "budget", "--case", "d96", "--maxiter", "50,400,2000", "--label", "budget_d96"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "195205961ca8e23f3990f81ab84f6cfc36a97fc1"}, "gkx": "/Users/rogeriojorge/local/GKX-worktrees/pr3cm-preconditioner/src/gkx/__init__.py", "jax": "0.10.2", "x64": true}, "ky": 0.3, "label": "budget_d96", "mode": "budget", "n": 3072, "peak_rss_gib": 1.0856475830078125, "process_seconds": 200.22683837497607, "shape": [1, 4, 8, 1, 1, 96]}

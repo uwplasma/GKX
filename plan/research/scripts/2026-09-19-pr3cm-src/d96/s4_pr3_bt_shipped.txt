@@ -1,0 +1,32 @@
+[     3.5s rss<=0.37G] t_matvec 0.163 ms
+[     3.5s rss<=0.37G] krylov method=shift_invert dim=24 restarts=2
+[     3.5s rss<=0.37G] preparing shift-invert solve with dim=24 restarts=2 gmres_maxiter=50 restart=20 tol=0.0001
+[     3.5s rss<=0.37G] estimating shift from propagator seed
+[     4.9s rss<=0.47G] shift-invert sigma=-0.0669807-0.229815j
+[     4.9s rss<=0.47G] building pr3-cm factors
+[     7.2s rss<=0.59G] pr3-cm factors: block-thomas solve, alpha=-3.58242+0j (symbol-bounds), 1.3 MB; block is l-tridiagonal plus rank one
+[     7.2s rss<=0.59G] running shift-invert Arnoldi (pr3-cm)
+[    17.1s rss<=0.77G] shift-invert solve finished with eig=0.104664-0.243546j residual=0.0855; inner converged=False unconverged=48/48 max_relative_residual=0.873 tol=0.0001 iterations=2880
+[    17.1s rss<=0.77G] shift-invert result rejected; falling back to propagator
+[    18.2s rss<=0.77G] propagator fallback residual=0.985
+[    19.7s rss<=0.77G] cost {'t_matvec_s': 0.00016333296662196517, 't_precond_s': 0.0008855000487528741, 'c_precond': 5.421441041981241}; setup 1.02s
+RESULT {"arm": "si", "case": "d96", "certified": false, "cost": {"c_precond": 5.421441041981241, "t_matvec_s": 0.00016333296662196517, "t_precond_s": 0.0008855000487528741}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "si", "--case", "d96", "--preconditioner", "pr3-cm", "--block-solve", "block-thomas", "--restart", "20", "--maxiter", "50", "--label", "s4_pr3_bt_shipped"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "b902fda756d98cc4acdd304c08f891761b27b7eb"}, "gkx": "/Users/rogeriojorge/local/GKX-worktrees/pr3cm-preconditioner/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [13.1708984375, 13.3779296875, 13.02294921875], "x64": true}, "ky": 0.3, "label": "s4_pr3_bt_shipped", "n": 3072, "options": {"krylov_dim": 24, "method": "shift_invert", "restarts": 2, "shift_maxiter": 50, "shift_precond_block_solve": "block-thomas", "shift_preconditioner": "pr3-cm", "shift_restart": 20, "shift_tol": 0.0001}, "peak_rss_gib": 0.7704620361328125, "precond_setup": {"alpha": [-3.5824158810519506, 0.0], "alpha_source": "symbol-bounds", "block_size": 32, "block_solve": "block-thomas", "block_solve_reason": "block is l-tridiagonal plus rank one", "block_spectral_radius": 18.584626383789416, "blocks": 96, "factor_bytes": 1279520, "hermite_ladder_radius": 4.144547186125898, "locality_defect": 1.5712649273977868e-16, "s1": [3.548925517215419, -0.11490744307841366], "seconds": 1.0213335829903372, "structure": {"block_norm_max": 13.034174089228848, "off_tridiagonal_max": 0.0, "rank_one_ratio_max": 5.9510990850192105e-15, "rank_one_s0_max": 0.5385830985775594, "rank_one_s1_max": 8.724324716771427e-16}, "sweeps": 3, "symbol_s1": 0.6905548317079713, "symbol_s_max": 33.14663192198262}, "process_seconds": 20.22287687502103, "raised": "RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.0855354, tolerance=1e-06; inner converged=False unconverged=48/48 max_relative_residual=0.873 tol=0.0001 iterations=2880", "route_s": 14.768127542047296, "status": null}
+       20.75 real        25.76 user         1.31 sys
+           827850752  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               96492  page reclaims
+                 330  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                1523  voluntary context switches
+              137479  involuntary context switches
+        242958498046  instructions retired
+         86298195312  cycles elapsed
+           674189632  peak memory footprint
+exit 0

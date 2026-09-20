@@ -1,0 +1,30 @@
+[     3.9s rss<=0.42G] t_matvec 1.517 ms
+[     3.9s rss<=0.42G] krylov method=shift_invert dim=48 restarts=2
+[     3.9s rss<=0.42G] preparing shift-invert solve with dim=48 restarts=2 gmres_maxiter=600 restart=600 tol=1e-06
+[     3.9s rss<=0.42G] using explicit shift with propagator seed vector
+[     5.2s rss<=0.53G] shift-invert sigma=0.148776-0.276905j
+[     5.2s rss<=0.53G] building pr3-cm factors
+[     9.4s rss<=0.68G] pr3-cm factors: dense solve, alpha=-8.82076+0j (symbol-bounds), 56.6 MB; dense batched inverse requested
+[     9.4s rss<=0.68G] running shift-invert Arnoldi (pr3-cm)
+[  1009.2s rss<=1.39G] shift-invert solve finished with eig=0.0987757-0.276905j residual=1.67e-07; inner converged=True unconverged=0/96 max_relative_residual=1e-06 tol=1e-06 iterations=24188
+[  1011.0s rss<=1.39G] cost {'t_matvec_s': 0.0015171249979175627, 't_precond_s': 0.009170333039946854, 'c_precond': 6.044546792475401}; setup 0.93s
+RESULT {"arm": "si", "case": "d96l8", "certified": true, "certified_residual": 1.6684603652516629e-07, "cost": {"c_precond": 6.044546792475401, "t_matvec_s": 0.0015171249979175627, "t_precond_s": 0.009170333039946854}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "si", "--case", "d96l8", "--krylov-dim", "48", "--restarts", "2", "--restart", "600", "--maxiter", "600", "--inner-rtol", "1e-6", "--shift", "0.1487757461278695-0.2769045684044536j", "--preconditioner", "pr3-cm", "--block-solve", "dense", "--label", "C1_pr3_dense"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "fd07d349541e380ac6e4d8a945de7138eea1ce66"}, "gkx": "/Users/rogeriojorge/local/GKX-worktrees/pr3cm-preconditioner/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [33.70361328125, 35.29931640625, 24.296875], "x64": true}, "gamma_omega": [0.09877574538367317, 0.2769045667141013], "ky": 0.3, "label": "C1_pr3_dense", "lambda": [0.09877574538367317, -0.2769045667141013], "matvec_equivalents": {"inner": 170393.497816395, "inner_iterations": 24188, "outer_applies": 3, "setup": 614.9606995224718, "total": 171011.45851591747}, "n": 18432, "options": {"krylov_dim": 48, "method": "shift_invert", "restarts": 2, "shift": "(0.1487757461278695-0.2769045684044536j)", "shift_maxiter": 600, "shift_precond_block_solve": "dense", "shift_preconditioner": "pr3-cm", "shift_restart": 600, "shift_tol": 1e-06}, "peak_rss_gib": 1.3909912109375, "precond_setup": {"alpha": [-8.82075568890909, 0.0], "alpha_source": "symbol-bounds", "block_size": 192, "block_solve": "dense", "block_solve_reason": "dense batched inverse requested", "block_spectral_radius": 62.591169622233906, "blocks": 96, "factor_bytes": 56623136, "hermite_ladder_radius": 8.507803519195269, "locality_defect": 1.6717017597498456e-16, "s1": [8.895143561973025, -0.1384522842022268], "seconds": 0.9329722499824129, "structure": null, "sweeps": 3, "symbol_s1": 1.2430783989660994, "symbol_s_max": 59.66776315037277}, "process_seconds": 1011.7274354999536, "raised": null, "residual_gate": 1e-06, "route": "shift_invert", "route_s": 1005.3072778749629, "status": {"certified": true, "inner": {"converged": true, "max_relative_residual": 9.999543968891022e-07, "preconditioner": "pr3-cm", "preconditioner_setup": {"alpha": [-8.82075568890909, 0.0], "alpha_source": "symbol-bounds", "block_size": 192, "block_solve": "dense", "block_solve_reason": "dense batched inverse requested", "block_spectral_radius": 62.591169622233906, "blocks": 96, "factor_bytes": 56623136, "hermite_ladder_radius": 8.507803519195269, "locality_defect": 1.6717017597498456e-16, "s1": [8.895143561973025, -0.1384522842022268], "structure": null, "sweeps": 3, "symbol_s1": 1.2430783989660994, "symbol_s_max": 59.66776315037277}, "solves": 96, "tolerance": 1e-06, "total_iterations": 24188, "unconverged_solves": 0}, "method": "shift_invert", "residual": 1.6684603652516629e-07, "route": "shift_invert", "tolerance": 1e-06}}
+     1012.50 real      1656.03 user        52.10 sys
+          1493565440  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             2973885  page reclaims
+                 380  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                2251  voluntary context switches
+             6553640  involuntary context switches
+       8761153484716  instructions retired
+       5504209919623  cycles elapsed
+          1308939968  peak memory footprint
+exit 0

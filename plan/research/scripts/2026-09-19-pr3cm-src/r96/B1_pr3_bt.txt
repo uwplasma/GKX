@@ -1,0 +1,32 @@
+[     2.3s rss<=0.43G] t_matvec 0.508 ms
+[     2.3s rss<=0.43G] krylov method=shift_invert dim=48 restarts=2
+[     2.3s rss<=0.43G] preparing shift-invert solve with dim=48 restarts=2 gmres_maxiter=600 restart=600 tol=1e-06
+[     2.3s rss<=0.43G] estimating shift from propagator seed
+[     3.1s rss<=0.58G] shift-invert sigma=-0.000309631+0.0465025j
+[     3.1s rss<=0.58G] building pr3-cm factors
+[     6.2s rss<=1.03G] pr3-cm factors: block-thomas solve, alpha=-8.82076+0j (symbol-bounds), 21.8 MB; block is l-tridiagonal plus rank one
+[     6.2s rss<=1.03G] running shift-invert Arnoldi (pr3-cm)
+[  1080.7s rss<=1.73G] shift-invert solve finished with eig=0.0987801-0.276743j residual=0.0565; inner converged=False unconverged=96/96 max_relative_residual=0.00127 tol=1e-06 iterations=57600
+[  1080.7s rss<=1.73G] shift-invert result rejected; falling back to propagator
+[  1081.7s rss<=1.73G] propagator fallback residual=0.997
+[  1084.0s rss<=1.73G] cost {'t_matvec_s': 0.0005082080024294555, 't_precond_s': 0.004487125028390437, 'c_precond': 8.829308092237875}; setup 1.58s
+RESULT {"arm": "si", "case": "d96l8", "certified": false, "cost": {"c_precond": 8.829308092237875, "t_matvec_s": 0.0005082080024294555, "t_precond_s": 0.004487125028390437}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "si", "--case", "d96l8", "--krylov-dim", "48", "--restarts", "2", "--restart", "600", "--maxiter", "600", "--inner-rtol", "1e-6", "--preconditioner", "pr3-cm", "--block-solve", "block-thomas", "--label", "B1_pr3_bt"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "66c32b0825ae8306d005fc93368786ea514bc367"}, "gkx": "/Users/rogeriojorge/local/GKX-worktrees/pr3cm-preconditioner/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [11.91845703125, 10.568359375, 11.037109375], "x64": true}, "ky": 0.3, "label": "B1_pr3_bt", "n": 18432, "options": {"krylov_dim": 48, "method": "shift_invert", "restarts": 2, "shift": null, "shift_maxiter": 600, "shift_precond_block_solve": "block-thomas", "shift_preconditioner": "pr3-cm", "shift_restart": 600, "shift_tol": 1e-06}, "peak_rss_gib": 1.7277069091796875, "precond_setup": {"alpha": [-8.82075568890909, 0.0], "alpha_source": "symbol-bounds", "block_size": 192, "block_solve": "block-thomas", "block_solve_reason": "block is l-tridiagonal plus rank one", "block_spectral_radius": 62.591169622233906, "blocks": 96, "factor_bytes": 21825056, "hermite_ladder_radius": 8.507803519195269, "locality_defect": 1.6717017597498456e-16, "s1": [8.820600873282622, 0.023251267842214603], "seconds": 1.5797899170429446, "structure": {"block_norm_max": 36.73260966383265, "off_tridiagonal_max": 0.0, "rank_one_ratio_max": 2.7763603712212246e-14, "rank_one_s0_max": 0.5385831034321569, "rank_one_s1_max": 3.856545321448788e-15}, "sweeps": 3, "symbol_s1": 1.2430783989660994, "symbol_s_max": 59.66776315037277}, "process_seconds": 1084.2137444579857, "raised": "RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.056482, tolerance=1e-06; inner converged=False unconverged=96/96 max_relative_residual=0.00127 tol=1e-06 iterations=57600", "route_s": 1079.4063182499958, "status": null}
+     1084.58 real      4166.12 user        63.20 sys
+          1855111168  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              172315  page reclaims
+                  94  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   2  voluntary context switches
+             9530767  involuntary context switches
+      20444717015933  instructions retired
+      14321719395793  cycles elapsed
+          1251465216  peak memory footprint
+exit 0

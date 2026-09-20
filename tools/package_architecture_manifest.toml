@@ -1044,6 +1044,18 @@ recursive = true
 # file cannot spell the same keys differently, and the docstrings that state
 # which route now reports what. Target unchanged.
 baseline = 92017
+# 91655 -> 92452: landing pr3-cm (Q28). Roughly half of the new module is the
+# host-side build -- the column probes, the block-Thomas factorization and the
+# Sherman-Morrison factors -- and the other half is the two structural
+# measurements that decide whether the exact solve may be used at all, plus the
+# explanations that make them readable: why the z-mean drift diagonal is read
+# off the line solve's own coefficients rather than off an assembled matrix,
+# why a broken l-tridiagonal structure is a fallback while a broken z-locality
+# is a refusal, and why a block with no field part is the ordinary case rather
+# than a degenerate one. Those cannot be shortened without turning a measured
+# guard back into an assumption, which is exactly what Q26 recorded as the
+# reason pr3-cm had never landed. Target unchanged.
+baseline = 92452
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1326,6 +1338,15 @@ recursive = true
 # the same array object. Each asserts on a real run rather than a fake, because
 # what is being pinned is which route has a channel at all.
 baseline = 92089
+# 91565 -> 91853: pr3-cm's structural contract (Q28), added to the Krylov-core
+# suite rather than to a new file. Two guards need a fixture each, and neither
+# is broken by monkeypatching the checker: one switches on the collision
+# operator, which really does couple the Laguerre index beyond l +- 1, and the
+# other widens the grid, which really does add zonal rows whose adiabatic
+# <phi> sums over z. Building the operator twice is most of the count; the rest
+# is the assertions' reasons, which say what a future operator change would be
+# breaking rather than restating the number.
+baseline = 91853
 target = 35000
 
 [[line_budget_policy.counts]]
