@@ -2033,3 +2033,167 @@ def test_integrate_cached_imex_scan_owns_cached_scan_policy(monkeypatch) -> None
     assert fields_t.phi.shape == (2, 1)
     assert nonlinear_calls == ["nonlinear"]
     assert linear_calls
+
+
+# --- Q29: the IMEX diagnostics route carries the same status ------------------
+
+
+def _imex_solve_common(diagonal):
+    """The solve keywords both IMEX step closures take, against a fixed operator."""
+
+    return dict(
+        linear_rhs_fn=lambda g, *_args, **_kwargs: (jnp.zeros_like(g), None),
+        cache=SimpleNamespace(),
+        params=SimpleNamespace(),
+        linear_cfg=SimpleNamespace(),
+        external_phi=None,
+        dt_val=jnp.asarray(0.1),
+        implicit_iters=0,
+        implicit_relax=1.0,
+        matvec=lambda flat: diagonal * flat,
+        shape=(9,),
+        implicit_restart=4,
+        precond_op=None,
+    )
+
+
+def test_advance_imex_with_stats_folds_every_sspx3_solve() -> None:
+    """SSPX3 takes three implicit solves a step, so three must be counted."""
+
+    diagonal = jnp.repeat(jnp.asarray([1.0, 2.0, 5.0]), 3)
+    common = _imex_solve_common(diagonal)
+    plain_step = imex_module.make_imex_solve_step(
+        implicit_tol=1.0e-6, implicit_maxiter=20, **common
+    )
+    stats_step = imex_module.make_imex_solve_step_with_stats(
+        implicit_tol=1.0e-6, implicit_maxiter=20, **common
+    )
+    empty = implicit_linear._empty_implicit_solve_stats(jnp.float32)
+    G = jnp.ones(9)
+    advance_kwargs = dict(
+        dt_val=jnp.asarray(0.1),
+        nonlinear_term=lambda state: jnp.zeros_like(state),
+        project_state=lambda state: state,
+    )
+
+    for method, expected_solves in (("euler", 1), ("sspx3", 3)):
+        plain = advance_imex_nonlinear_state(
+            G, method=method, solve_step=plain_step, **advance_kwargs
+        )
+        with_stats, stats = imex_module.advance_imex_nonlinear_state_with_stats(
+            G, empty, method=method, solve_step=stats_step, **advance_kwargs
+        )
+        np.testing.assert_array_equal(np.asarray(with_stats), np.asarray(plain))
+        assert int(stats.solves) == expected_solves
+        assert int(stats.unconverged_solves) == 0
+
+    _state, starved = imex_module.advance_imex_nonlinear_state_with_stats(
+        G,
+        empty,
+        method="sspx3",
+        solve_step=imex_module.make_imex_solve_step_with_stats(
+            implicit_tol=1.0e-14, implicit_maxiter=1, **common
+        ),
+        **advance_kwargs,
+    )
+    assert int(starved.solves) == 3 and int(starved.unconverged_solves) == 3
+    with pytest.raises(RuntimeError, match="3 of 3 implicit GMRES solves did not"):
+        implicit_linear.require_converged_implicit_solves(starved, label="sspx3 probe")
+
+
+def _imex_diagnostics_deck():
+    from gkx.config import CycloneBaseCase, GridConfig
+    from gkx.core_grid import build_spectral_grid
+    from gkx.geometry import SAlphaGeometry
+    from gkx.operators.linear.params import LinearParams
+    from gkx.terms.config import TermConfig
+
+    cfg = CycloneBaseCase(
+        grid=GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.28, Ly=6.28, boundary="periodic")
+    )
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams()
+    state = jnp.zeros((1, 2, 3, 4, 4, 4), dtype=jnp.complex64)
+    state = state.at[0, 0, 0, 1, 0, :].set(1.0e-2 + 0.5e-2j)
+    return grid, geom, params, state, TermConfig(nonlinear=1.0)
+
+
+_Q29_STARVED = dict(implicit_tol=1.0e-14, implicit_maxiter=1, implicit_restart=1)
+_Q29_GENEROUS = dict(implicit_tol=1.0e-8, implicit_maxiter=200, implicit_restart=20)
+
+
+def test_imex_diagnostics_route_carries_unconverged_solves_to_the_host_gate() -> None:
+    """A starved inner budget is visible on the diagnostics route and refused."""
+
+    from gkx.solvers_nonlinear_diagnostic_integration import (
+        integrate_nonlinear_imex_diagnostics,
+    )
+
+    grid, geom, params, state, terms = _imex_diagnostics_deck()
+
+    def run(budget):
+        _t, _diag, stats = integrate_nonlinear_imex_diagnostics(
+            state,
+            grid,
+            geom,
+            params,
+            dt=1.0e-3,
+            steps=3,
+            terms=terms,
+            return_solve_stats=True,
+            **budget,
+        )
+        return stats
+
+    starved = run(_Q29_STARVED)
+    assert int(starved.solves) == 3
+    assert int(starved.unconverged_solves) == 3
+    with pytest.raises(RuntimeError, match="3 of 3 implicit GMRES solves did not"):
+        implicit_linear.require_converged_implicit_solves(starved, label="probe")
+
+    summary = implicit_linear.require_converged_implicit_solves(
+        run(_Q29_GENEROUS), label="probe"
+    )
+    assert summary.converged and summary.solves == 3
+    assert summary.unconverged_solves == 0
+
+
+def test_imex_diagnostics_default_return_is_two_elements() -> None:
+    """A caller that does not ask gets what it got before, and reads no status."""
+
+    from gkx.solvers_nonlinear_diagnostic_integration import (
+        integrate_nonlinear_explicit_diagnostics,
+        integrate_nonlinear_imex_diagnostics,
+    )
+
+    grid, geom, params, state, terms = _imex_diagnostics_deck()
+    options = dict(dt=1.0e-3, steps=2, terms=terms, **_Q29_GENEROUS)
+
+    plain = integrate_nonlinear_imex_diagnostics(state, grid, geom, params, **options)
+    assert len(plain) == 2
+
+    # The explicit dispatcher reaches the same route by name, and reports None
+    # for a method that takes no implicit solve.
+    _t, _diag, stats = integrate_nonlinear_explicit_diagnostics(
+        state,
+        grid,
+        geom,
+        params,
+        method="rk3",
+        dt=1.0e-3,
+        steps=2,
+        terms=terms,
+        return_solve_stats=True,
+    )
+    assert stats is None
+    _t2, _diag2, imex_stats = integrate_nonlinear_explicit_diagnostics(
+        state,
+        grid,
+        geom,
+        params,
+        method="imex",
+        return_solve_stats=True,
+        **options,
+    )
+    assert imex_stats is not None and int(imex_stats.solves) == 2

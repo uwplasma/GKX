@@ -234,7 +234,14 @@ jobs:
     # bought only about 1.8 minutes. Eight per cent headroom flakes on a slow
     # runner, so nonlinear-core gets 30: the lane does roughly 18 minutes of
     # genuine work and the cap should sit above that, not just above it.
-    timeout-minutes: ${{ matrix.shard.name == 'nonlinear-core' && 30 || (matrix.shard.name == 'runtime-core' && 20 || 15) }}
+    # linear-core crossed the 15-minute cap on this chain and was one commit
+    # from crossing it on main: the same shard measured 11m40s on 254fcc7b7
+    # (19 Sep), 14m29s on 38d7c4277 (20 Sep) and timed out here, which
+    # GitHub reports as a cancelled job rather than a failure. The lane grew
+    # with the tests it carries, so the cap moves to 25 and the shard split
+    # is the follow-up; 25 sits above the 14-15 minutes of genuine work
+    # rather than just above it.
+    timeout-minutes: ${{ matrix.shard.name == 'nonlinear-core' && 30 || (matrix.shard.name == 'runtime-core' && 20 || 25) }}
     strategy:
       fail-fast: false
       max-parallel: 2

@@ -4242,3 +4242,115 @@ def test_restart_reader_rejects_unsupported_future_schema(tmp_path: Path) -> Non
         root.setncattr("schema_version", 2)
     with pytest.raises(ValueError, match="unsupported GKX NetCDF schema_version 2"):
         load_netcdf_restart_state(path, nspecies=1, Nl=1, Nm=1, ny=1, nx=1, nz=1)
+
+
+# --- Q29: the saved summary carries the solver status the result carries ------
+
+
+def test_saved_linear_summary_carries_the_result_solver_status(
+    tmp_path: Path,
+) -> None:
+    """A run read back from disk must have the same convergence channel."""
+
+    from gkx.solvers_linear_implicit import ImplicitSolveSummary
+    from gkx.solvers_linear_krylov import EigenSolveStatus
+
+    result = RuntimeLinearResult(
+        ky=0.2,
+        gamma=0.3,
+        omega=-0.4,
+        selection=ModeSelection(ky_index=1, kx_index=2, z_index=3),
+        t=np.asarray([0.1, 0.2]),
+        signal=np.asarray([1.0, 2.0]),
+        eigen_status=EigenSolveStatus(
+            method="adaptive",
+            route="shift_invert",
+            residual=4.5e-9,
+            tolerance=1.0e-7,
+            certified=True,
+            inner={"converged": True},
+        ),
+        implicit_solve=ImplicitSolveSummary(
+            max_relative_residual=2.5e-9,
+            max_iterations=4,
+            solves=40,
+            unconverged_solves=0,
+        ),
+    )
+
+    paths = write_runtime_linear_artifacts(tmp_path / "linear_run", result)
+    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+
+    assert summary["eigen_route"] == "shift_invert"
+    assert summary["eigen_residual"] == pytest.approx(4.5e-9)
+    assert summary["eigen_tolerance"] == pytest.approx(1.0e-7)
+    assert summary["eigen_certified"] is True
+    assert summary["eigen_inner_converged"] is True
+    assert summary["implicit_converged"] is True
+    assert summary["implicit_max_relative_residual"] == pytest.approx(2.5e-9)
+    assert summary["implicit_max_iterations"] == 4
+    assert summary["implicit_unconverged_solves"] == 0
+    # The saved keys are the result's own keys, not a second spelling of them.
+    reported = result.summary()
+    for key, value in summary.items():
+        if key in reported:
+            assert value == reported[key]
+
+
+def test_saved_linear_summary_reports_no_status_as_null(tmp_path: Path) -> None:
+    """An explicit-time run without an implicit solve saves ``None``, not a fake."""
+
+    result = RuntimeLinearResult(
+        ky=0.2,
+        gamma=0.3,
+        omega=-0.4,
+        selection=ModeSelection(ky_index=1, kx_index=2, z_index=3),
+        t=np.asarray([0.1, 0.2]),
+        signal=np.asarray([1.0, 2.0]),
+    )
+    paths = write_runtime_linear_artifacts(tmp_path / "linear_run", result)
+    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+
+    for key in (
+        "eigen_route",
+        "eigen_residual",
+        "eigen_certified",
+        "implicit_converged",
+        "implicit_unconverged_solves",
+    ):
+        assert key in summary and summary[key] is None
+
+
+def test_saved_nonlinear_summary_carries_the_imex_solve_status() -> None:
+    from gkx.solvers_linear_implicit import ImplicitSolveSummary
+
+    summary = _nonlinear_summary(
+        SimpleNamespace(
+            diagnostics=None,
+            state=None,
+            ky_selected=0.2,
+            kx_selected=0.0,
+            phi2=np.asarray(7.0),
+            implicit_solve=ImplicitSolveSummary(
+                max_relative_residual=9.5e-7,
+                max_iterations=11,
+                solves=8,
+                unconverged_solves=0,
+            ),
+        )
+    )
+    assert summary["implicit_converged"] is True
+    assert summary["implicit_max_relative_residual"] == pytest.approx(9.5e-7)
+    assert summary["implicit_max_iterations"] == 11
+    assert summary["implicit_unconverged_solves"] == 0
+
+    explicit = _nonlinear_summary(
+        SimpleNamespace(
+            diagnostics=None,
+            state=None,
+            ky_selected=0.2,
+            kx_selected=0.0,
+            phi2=np.asarray(7.0),
+        )
+    )
+    assert explicit["implicit_converged"] is None

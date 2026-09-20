@@ -78,7 +78,18 @@ __all__ = [
 
 @dataclass(frozen=True)
 class ExplicitTimeConfig:
-    """Explicit time integration configuration."""
+    """Explicit time integration configuration.
+
+    ``dt`` is required here and defaulted in :class:`gkx.config.TimeConfig`,
+    which is why this struct can default ``fixed_dt`` to ``False``: a caller
+    who had to supply ``dt`` has chosen it, so using it as the CFL controller's
+    initial guess cannot silently substitute a step nobody asked for. The
+    ``rk4``/``fixed_dt=False`` pairing is the cheap one -- rk4's CFL prefactor
+    of 2.82 against rk2's 1.0 more than pays for its four stages, measured at
+    29.1% fewer right-hand-side evaluations over the same horizon. See
+    :class:`gkx.config.TimeConfig` for the measurement and for why the deck
+    surface defaults differently.
+    """
 
     t_max: float
     dt: float
