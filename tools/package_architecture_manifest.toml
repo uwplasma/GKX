@@ -1315,7 +1315,7 @@ recursive = true
 # buffer assignment. The first carries a small HLO module as a fixture,
 # because the distinction it pins is a property of where an instruction is
 # written and cannot be stated without a computation around it.
-# 91565 -> 92089 (queue row Q29). Sixteen cases, one per route the two
+# 91565 -> 92089 (queue row Q29). Thirteen cases, one per route the two
 # recorded holes left open: a starved inner budget carried and refused on the
 # IMEX diagnostics route, on both sheared IMEX doors and through an `sspx3`
 # step's three solves; an explicit sheared method reporting a null status and a

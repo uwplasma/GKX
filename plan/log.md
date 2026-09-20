@@ -17239,3 +17239,265 @@ and `_flatten_linked_fft_state` already avoids it on both layouts. The #258
 entry is left standing as written, because rewriting a recorded measurement
 after the fact is worse than correcting it forward; this entry is the
 correction, and Q10's queue row points at it.
+
+## 2026-09-20 — status and projection reach every route (Q29, Q15 and Q23 follow-ups)
+
+Branch `fix/status-and-projection-coverage`, from `38d7c4277` (`origin/main`).
+
+**Question.** Two rows in this thread finished with a recorded hole in their own
+log entry. #242 (Q15) gave runtime results structured solver status and made the
+runtime fail closed on an unconverged scan, and recorded that it had not reached
+**the IMEX diagnostics route, the sheared IMEX route, or the saved summary
+files**. #253 (Q23) projected a supplied state onto the linked chain cover at
+`gkx.prepare`, the prepared object's `run`/`run_arrays`, the shared diagnostics
+integrator and the objective adjoint, and recorded that it had not reached **the
+raw `integrate_nonlinear` and `integrate_nonlinear_cached` drivers**. One PR,
+because the sheared scan and the raw drivers are the same file and each hole is
+the policy already chosen rather than a new one.
+
+**Decisions.** No third policy was invented; each half extends the contract it
+belongs to, and both refusals below are refusals to invent one.
+
+- **Status is carried, not raised, below the runtime.** The IMEX diagnostic
+  carry grows one `ImplicitSolveStats` leaf and both sheared scan forms grow the
+  same leaf, folded once per implicit solve -- three times per step under
+  `sspx3`, which is why the fold is threaded through the stage composition
+  rather than summarizing only the last stage. `integrate_nonlinear_imex_diagnostics`,
+  `integrate_nonlinear_explicit_diagnostics`, `integrate_nonlinear_sheared` and
+  `integrate_nonlinear_sheared_transport` take `return_solve_stats=True` and
+  append the stats, exactly as `integrate_linear` and `integrate_nonlinear`
+  already do. They do **not** raise. #242's fail-closed rule is a *host-boundary*
+  rule and these are library entry points: a refusal here would need a host
+  synchronization on a route whose purpose is a reused compiled graph, which is
+  #253's own argument against rejecting at a traced boundary.
+  `require_converged_implicit_solves` stays the one gate, and the tests call it
+  on the stats each route returns. **No runtime route reaches either of these
+  two routes today** (`workflows/` has no reference to either), so there is no
+  new host boundary to close; the one host boundary these rows do touch is the
+  artifact writer, and the runtime already fails closed before it.
+- **The sheared status leaf exists only on the route that solves.**
+  `carries_solve_stats` is `method_key == "imex"`, a static Python decision, so
+  the explicit sheared scans keep exactly the carry they had rather than
+  passing a dead status through. `ShearedTransportTrace` gains a trailing
+  `solve_stats` field (default `None`) rather than a second return value,
+  because that door already returns a named tuple.
+- **Saved summaries report what the result reports.** `*.summary.json` -- the
+  prefix form, the `--out` JSON form and the NetCDF bundle's sidecar -- now
+  carries the nine flat `eigen_*` and `implicit_*` keys, `None` where no such
+  solve ran, never a fabricated converged one. The two flatteners move out of
+  `workflows/runtime/results.py` into the modules that own each status type
+  (`solvers_linear_implicit.implicit_solve_payload`,
+  `solvers_linear_krylov.eigen_status_payload`) so that the in-memory result and
+  the file cannot spell the same status differently. That home is also what
+  keeps the layering baseline at 5: `artifacts` is layer 6 and `workflows` is
+  layer 7, so reading the flatteners out of `workflows` would have been a sixth
+  upward import, while `solvers` is layer 3 and is read downward.
+- **Projection at the raw drivers, applied once.** `integrate_nonlinear_cached`
+  calls `mask_supplied_state(G0, cache)` before it builds anything;
+  `integrate_nonlinear` builds the cache and delegates, so both raw doors take
+  the same view of the same array and a test pins that they agree bitwise.
+  Projection, not rejection, for #253's reasons unchanged.
+
+**What the rows cost the raw drivers, measured.** #253's linked nonlinear
+Cyclone grid, Nx8/Ny8/Nz16, Nl4/Nm8, jtwist 1, `damp_ends_rate` .1; the chains
+cover kx rows `{0,1,2,6,7}` and rows `{3,4,5}` are 19968 unknowns = 60.94% of
+the state. The supplied state is broadband at saturated amplitude
+(`max|G|` = 1), which is the state these drivers are documented to take. Eight
+rk3 steps at dt 1e-3.
+
+| quantity | before | after |
+|---|---|---|
+| one nonlinear RHS, chain rows, relative to the on-cover arm | 2.369696e-02 | 2.369696e-02 |
+| `integrate_nonlinear_cached` final state, relative to the projected arm | 1.060277e+00 | 0 |
+| its final-state off-chain max \|G\| | 9.999598e-01 | 0 |
+| its final heat flux | −1.427385146170e-02 | −1.427970945532e-02 |
+| …relative to the projected arm | 4.102320e-04 | 0 |
+| `integrate_nonlinear` equals `integrate_nonlinear_cached` bitwise | yes | yes |
+
+The RHS row is a property of the state, not of the branch, and is printed on
+both arms for exactly that reason: it is *why* the trajectory moves, and it
+reproduces #253's number to every digit. The effect is quadratic in amplitude --
+2.369696e-02 at `max|G|` 1, 2.372095e-04 at 1e-2, 2.372119e-06 at 1e-4 and
+3.354691e-12 at the runtime seed's 1.414214e-10 -- so a linear-seed state shows
+almost nothing here and a saturated restart shows all of it. The 1.060277e+00
+is #253's own figure for the same window through `gkx.prepare`: the raw driver
+was moving the trajectory by the same 106%, one floor down, with no contract
+saying so. The heat-flux row is *not* #253's 3.35e+00; that was a maximum over
+a diagnostics series, and a raw driver returns no series, so what is reported
+here is the single final-step flux.
+
+**HLO: what the opted-out paths compile.** Optimized HLO of `jax.jit` around
+each route, instruction lines only, `metadata={…}` stripped. A module-level
+count alone cannot say *where* work was added, because a per-step addition
+inside a `while` body and a one-off addition before the loop are both a fixed
+number of instructions in a module whose trip count is a constant. So the
+driver's module is also split by computation, and the per-computation hash is
+taken after rewriting every `%name` to its index of first appearance in that
+computation -- XLA numbers instructions module-wide, so adding anything to the
+entry renumbers `%fusion.37` into `%fusion.38` inside an untouched loop body,
+and that renumbering is the only thing the normalization removes.
+
+| graph | before | after, stats not requested | after, `return_solve_stats=True` |
+|---|---|---|---|
+| IMEX diagnostics scan | 9619, `d889cb6645f6e9f4` | 9619, `d889cb6645f6e9f4` | 10238, `73a7a07f2b12ad1f` |
+| sheared IMEX scan | 7624, `8ffe71d1738162c1` | 7624, `8ffe71d1738162c1` | 8817, `93db789f3b57abae` |
+| sheared rk2 scan (control) | 7215, `68217ba419168dee` | 7215, `68217ba419168dee` | — |
+
+Every graph that does not ask for the stats compiles the module it compiled
+before, **byte for byte**, as #242 measured for the scans it reached. Asking
+costs +619 and +1193 instructions, which is SOLVAX's true-residual
+recomputation -- one operator application per solve, which XLA removes when
+nothing reads it -- plus the scalar folds.
+
+| `jit(integrate_nonlinear_cached)` | before | after |
+|---|---|---|
+| linked, steps 8: module | 3910, `839ff1a5be6a8c3c` | 3988, `d9c30d987033bc1e` |
+| linked, steps 8: ENTRY | 46, `0b5eeb14685aa856` | 50, `5ee17a426a507a01` |
+| linked, steps 8: **scan body** | 264, `d243263d2c8c0131` | 264, **`d243263d2c8c0131`** |
+| linked, steps 16: **scan body** | 264, `4a2fb43348270f8a` | 264, **`4a2fb43348270f8a`** |
+| periodic, steps 8: module | 2793, `f316dcd70d119529` | 2793, `f316dcd70d119529` |
+| periodic, steps 16: module | 2793, `3958fc002ea0c2fb` | 2793, `3958fc002ea0c2fb` |
+| periodic: ENTRY / scan body | 39 / 188 | 39 / 188, same hashes |
+
+The linked deck's **compiled scan is the graph it was**: the same 264
+instructions with the same normalized hash at both step counts. The module's
++78 and the entry's +4 are the projection: `select` 131→140, `broadcast`
+735→745, `constant` 215→225, `gather` 36→39, `fusion` 119→122. The select is
+cheap enough that XLA clones it into the entry's consumer fusions rather than
+materializing it once, which is the same fusion-interior accounting Q27 had to
+separate from materialized bytes; none of those clones is inside the loop. The
+periodic deck is byte-identical end to end, including the raw module hash, so
+the no-op really is a no-op.
+
+**What a starved budget now reports.** Linked 4×4×8, Nl2/Nm8, four steps at
+dt 1e-3; starved is `implicit_tol` 1e-14 with `implicit_maxiter` 1 and
+`implicit_restart` 1, generous is 1e-8 / 200 / 20.
+
+| route | starved | generous |
+|---|---|---|
+| IMEX diagnostics | 4 of 4 unconverged, max rel. residual 4.472169e-07, 1 iteration; **host gate refuses** | 0 of 4, 2.292385e-09, 2 iterations; host gate accepts |
+| sheared IMEX (`integrate_nonlinear_sheared`) | 4 of 4, 5.977043e-07, 1 iteration; **refuses** | 0 of 4, 3.061006e-09, 2 iterations; accepts |
+| sheared IMEX transport | 4 of 4, 5.977043e-07, 1 iteration; **refuses** | 0 of 4, 3.061006e-09, 2 iterations; accepts |
+
+On the `before` arm every one of those six cells is *unavailable*: the routes
+have no `return_solve_stats` at all, which is the finding rather than a gap in
+the measurement.
+
+**What a saved summary now carries.** Same pilot as #247: Nx8/Ny16/Nz16,
+ky 0.3, Nl4/Nm8.
+
+| saved run | before | after |
+|---|---|---|
+| krylov | none of the nine keys present | `eigen_route=adaptive`, `eigen_residual=1.940442e-15`, `eigen_tolerance=1.000000e-09`, `eigen_certified=True`; `implicit_*` null |
+| implicit time run | none of the nine keys present | `implicit_converged=True`, `implicit_max_relative_residual=8.182994e-07`, `implicit_max_iterations=2`, `implicit_unconverged_solves=0`; `eigen_*` null |
+
+**Nothing else moved.** Bitwise identical across the two arms: the linked deck's
+run from the runtime's own on-cover initial condition (final-state checksum
+`a6a12d2c079b17d0`, final heat flux 7.783082805432e-25), the periodic deck's
+run (`5419144f226e2f25`, 4.277964576458e-01), all six unchanged HLO
+fingerprints above, and #247's linear pilot from a supplied state -- certified
+eigenpair γ=.1156212538480758667, ω=.2411787658929824829, residual 8.319672e-07,
+certified, route `adaptive`, and the explicit-time fit γ=.1156180399480198906,
+ω=.2411964219216982674, which are #247's and #253's values to every printed
+digit.
+
+**Contract.**
+- `advance_imex_nonlinear_state_with_stats` and `make_imex_solve_step_with_stats`
+  are the status-threading twins of the plain forms. The advance is *shared*,
+  not duplicated: one implementation threads whatever the solve step carries,
+  and the plain entry point passes a status of `None`, so its graph is the graph
+  it was. `make_imex_diagnostic_step(..., solve_step_with_stats=…)` grows the
+  carry only when given one, and `run_imex_diagnostic_scan(...,
+  return_solve_stats=True)` reads the trailing leaf back.
+- The production IMEX diagnostics route always carries the leaf and drops it
+  unless asked, which is what lets XLA remove the arithmetic behind it -- the
+  same shape `_scan_implicit_outputs` and `integrate_cached_imex_scan` already
+  had.
+- `mask_supplied_state` is applied at `integrate_nonlinear_cached`; public
+  signatures are otherwise unchanged apart from the new keyword.
+- `docs/solvers.rst` states both halves where the Q15 and Q23 contracts are
+  already stated, and `docs/api.rst` names the raw drivers beside `gkx.prepare`.
+
+**Limitations.**
+- `integrate_nonlinear_sharded` still takes the state it is given. It is not one
+  of the two drivers this row names and it has its own sharded intake, but the
+  contract is therefore still not the whole library's.
+- The **sheared** route's own supplied state is *not* projected, and this is a
+  decision rather than an omission: it rebuilds the cache per step in the
+  shearing basis, so a cover fixed by the deck's twist-shift topology is not the
+  right projector there. That question is open, not closed.
+- The linear **scan** summary (`kind="linear_scan"`) saves no solver status,
+  because a scan holds no per-point status to save.
+- No runtime route reaches the IMEX diagnostics or sheared routes, so the
+  fail-closed half of #242's policy is exercised in tests by calling the shared
+  gate, not by a runtime path.
+- Measurements are CPU, x64, on one linked nonlinear grid, one periodic grid,
+  one small linked IMEX grid and #247's linear pilot, at 4--8 step windows. No
+  production-size run, and no timing (shared machine, 1-min load 8--19).
+
+**Tests** (one invocation per row; x64 as CI runs).
+
+| selection | result |
+|---|---|
+| `tests/unit/nonlinear` + `tests/unit/solvers/test_time_integrators.py` | 358 passed (348 + 10 new) |
+| `tests/integration/runtime/test_runtime_runner.py` | 180 passed |
+| `tests/integration/runtime/test_runtime_artifacts.py` | 88 passed (85 + 3 new) |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 98 passed |
+| `tests/unit/linear/test_linear_helpers_extra.py` | 67 passed |
+| CI `parallel-autodiff` lane, exactly as `ci.yml` runs it (`XLA_FLAGS=--xla_force_host_platform_device_count=4` as an environment variable, `--maxfail=1 --disable-warnings`; this is where the autodiff-objective selection runs) | 284 passed, 1 skipped |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+The thirteen new cases are one per route the two holes left open: a starved inner
+budget carried and refused on the IMEX diagnostics route, on both sheared IMEX
+doors and through an `sspx3` step's three solves; the explicit sheared method
+reporting a null status and a bitwise unchanged state; a saved summary carrying
+the result's own status keys and reporting `None` rather than a fabricated
+converged one; and the two raw drivers projecting a supplied state, agreeing
+with each other bitwise, giving its off-chain rows exactly zero cotangent, and
+handing a periodic deck back the same array object. One existing sheared
+assertion was written as a bitwise equality between the `return_fields=True` and
+`return_fields=False` scan forms and had to be corrected to compare each form
+against itself: those are two graphs (one takes the fixed-step time, the other
+the accumulated one) and their difference is a pre-existing property of the
+route, not of this branch. No existing test's asserted number changed.
+
+Also passing: ruff 0.16.4 check and format, mypy 2.3.1 as CI (186 source files),
+`sphinx -W` (sphinx-build 9.0.4), gitleaks 8.30.1 on the branch range,
+`tools/release/check_package_architecture_manifest.py` and
+`check_repository_size_manifest.py`.
+
+**Manifest.** `installable_source_python_lines` 91655 → 92017 and
+`test_python_lines` 91565 → 92089, both the measured counts. Source file count
+unchanged at 186, under its 193 baseline; no new source module. `layer_policy`
+upward imports stay at 5, which is why the two flatteners landed in the solver
+modules rather than in `workflows/runtime/solver_status.py`.
+
+**Environment.** Apple M3 Max (14 cores, 36 GiB), shared with four sibling
+lanes (1-min load 8--19), Python 3.11.14, JAX/jaxlib 0.10.2, NumPy 2.4.6,
+SciPy 1.17.1, SOLVAX 0.20.0; `PYTHONPATH=$PWD/src:$PWD JAX_ENABLE_X64=true
+GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu nice -n 10`, one heavy process at a
+time, `gkx.__file__` verified in each worktree. Commands (repository root), run
+once per worktree with `before` = a detached checkout of `38d7c4277` and
+`after` = this branch:
+```
+D=plan/research/scripts/2026-09-20-status-and-projection-coverage
+python $D/status_and_projection_coverage.py <before|after>
+```
+The `.txt` logs are those runs with local paths replaced by `<worktrees>` and
+`<scratch>`. The script was ruff-formatted before the recorded runs, so the
+committed file is the one that produced them.
+
+**Artifacts** (`plan/research/scripts/2026-09-20-status-and-projection-coverage/`, SHA-256):
+```
+23ae9bcab1ec34d9a264a6a415c15728d8d2d436d7ed247441c9b8248544795c  status_and_projection_coverage.py
+f7c49bbb860ae8a16bddb86dba54c06045553dc1b27daf7bcdf4b82d08fb3b1f  status_and_projection_coverage_after.txt
+fb3d34eebd7e46e8a047a8dfe0f6ccb3c9441bb949b9a852798d7f06f500a726  status_and_projection_coverage_before.txt
+```
+
+**Terminal state.** Every owned process ended; nothing was left running at the
+commit. The `before` arm's detached worktree was removed.
+
+**Next question.** `integrate_nonlinear_sharded` and the sheared route's own
+supplied state are what is left of the projection contract, and the second is a
+real question rather than a missing call: what *is* the chain cover of a deck
+whose radial wavenumbers move every step?
