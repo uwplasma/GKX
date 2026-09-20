@@ -4,3 +4,9 @@ supervisor pid 4646 started 2026-09-20 08:12:46 cap 3600s
 2026-09-20 08:24:49 start C1_pr3_dense load { 33.70 35.30 24.30 }
 2026-09-20 08:41:42 end C1_pr3_dense exit 0 load { 39.34 65.84 58.72 }
 2026-09-20 08:41:42 start D1_hermite_line load { 39.34 65.84 58.72 }
+2026-09-20 09:04:55 end D1_hermite_line exit 0 load { 39.60 31.46 34.80 }
+2026-09-20 09:04:55 start B2_pr3_bt load { 39.60 31.46 34.80 }
+2026-09-20 09:15:03 end B2_pr3_bt exit 0 load { 61.54 48.02 40.55 }
+2026-09-20 09:15:03 start C2_pr3_dense load { 61.54 48.02 40.55 }
+2026-09-20 09:25:16 end C2_pr3_dense exit 0 load { 20.07 24.64 31.41 }
+supervisor pid 4646 finished 2026-09-20 09:25:16

@@ -17378,9 +17378,23 @@ counts, factor bytes, the certified residual and the returned pair.
 Matvec-equivalents follow Q21's registered accounting
 (`plan/research/scripts/2026-09-19-inner-solve-cost/PREDICTIONS.txt`) so the
 rows can be read against each other: one inner FGMRES iteration costs
-`1 + c_P`, with `c_P = t_P/t_mv` from two medians taken back to back in the same
-process, plus one operator application per outer restart and one for
+`1 + c_P`, plus one operator application per outer restart and one for
 certification, plus setup converted at `t_mv`.
+
+**`c_P` had to be re-measured, and the first attempt was wrong.** `measure.py`
+times the matvec at the start of an arm and the apply at the end, twenty
+minutes apart on this host, and under a load that moved between 7 and 70 that
+is not a ratio of two comparable numbers. It showed: four measurements of the
+same dense `pr3-cm` apply at the same rung returned `c_P` of **0.96, 6.04,
+18.08 and 19.30**, and a value below 1 is not physical for a batch of dense
+192 × 192 solves against one matrix-free operator application. Those arm-file
+values are not used. `costmodel.py` measures the ratio the only way that
+survives a moving load: one process, every candidate built up front, then nine
+rounds that time the matvec and each apply **back to back**, rotating the order
+so nothing is systematically first. Every `c_P` quoted below is the median over
+those nine rounds, with the observed range beside it, and every conclusion drawn
+from one is checked to hold at the cheapest `c_P` observed as well as at the
+median.
 
 #### The shipped Cyclone deck at `(Nz, Nl, Nm) = (96, 4, 8)`, n = 3072
 
@@ -17389,17 +17403,15 @@ arms use `krylov_dim=48, restarts=2, shift_maxiter=600, shift_restart=600,
 shift_tol=1e-6`; the last three rows are the shipped budget
 (`shift_maxiter=50, shift_restart=20, shift_tol=1e-4`) for reference.
 
-| arm | certified | residual | inner iterations | unconverged | `c_P` | matvec-equiv | factors |
+| arm | certified | residual | inner iterations | unconverged | `c_P` (median [range]) | matvec-equiv | factors |
 |---|---|---|---|---|---|---|---|
 | `adaptive` (control) | **yes** | 4.040979e-15 | — | — | — | **33916** | — |
 | `adaptive` (repeat) | **yes** | 4.040979e-15 | — | — | — | **33916** | — |
-| `pr3-cm`, block-Thomas | **yes** | 3.25e-07 | 13996 | **0/96** | 4.41 | 79023 | 1.28 MB |
-| `pr3-cm`, block-Thomas (repeat) | **yes** | 3.25e-07 | 13996 | **0/96** | 5.54 | 95604 | 1.28 MB |
-| `pr3-cm`, dense | **yes** | 3.25e-07 | 13996 | **0/96** | 3.05 | 58153 | 1.57 MB |
-| `pr3-cm`, dense (repeat) | **yes** | 3.25e-07 | 13996 | **0/96** | 2.70 | 53124 | 1.57 MB |
-| `hermite-line`, same budget | no | **0.9954** | — | 96/96 | 0.60 | — | — |
-| `pr3-cm`, shipped budget | no | 0.0855 | — | 48/48 | 5.27 | — | 1.28 MB |
-| `hermite-line`, shipped budget | no | non-finite pair | — | 48/48 | 1.59 | — | — |
+| `pr3-cm`, block-Thomas ×2 | **yes** | 3.25e-07 | 13996 | **0/96** | 4.35 [2.16, 5.19] | 74900 | 1.28 MB |
+| `pr3-cm`, dense ×2 | **yes** | 3.25e-07 | 13996 | **0/96** | 3.07 [1.79, 3.39] | **57000** | 1.57 MB |
+| `hermite-line`, same budget | no | **0.9954** | — | 96/96 | 0.80 [0.26, 0.95] | — | — |
+| `pr3-cm`, shipped budget | no | 0.0855 | — | 48/48 | — | — | 1.28 MB |
+| `hermite-line`, shipped budget | no | non-finite pair | — | 48/48 | — | — | — |
 
 Both `adaptive` runs return λ = 0.10128649783814778 − 0.2454963203262298j
 bitwise. Every `pr3-cm` arm returns 0.1012865000560938 − 0.2454962958399525j,
@@ -17412,21 +17424,28 @@ The `adaptive` control here reproduces Q21's published r96 numbers exactly —
 **96700 operator applications at residual 6.48e-15** — which is the check that
 this rung is Q21's rung.
 
-| arm | certified | residual | inner iterations | unconverged | `c_P` | matvec-equiv | factors |
+| arm | certified | residual | inner iterations | unconverged | `c_P` (median [range]) | matvec-equiv | factors |
 |---|---|---|---|---|---|---|---|
 | `adaptive` (control) | **yes** | 6.48e-15 | — | — | — | **96700** | — |
 | `adaptive` (repeat) | **yes** | 6.48e-15 | — | — | — | **96700** | — |
-| `pr3-cm`, block-Thomas | **yes** | 1.67e-07 | 24188 | **0/96** | 4.64 | **138200** | 21.8 MB |
-| `pr3-cm`, dense | **yes** | 1.67e-07 | 24188 | **0/96** | 6.04 | 171011 | 56.6 MB |
-| `pr3-cm`, block-Thomas, propagator shift | no | 0.0565 | — | 96/96 | 8.83, 11.71 | — | 21.8 MB |
-| `pr3-cm`, dense, propagator shift | no | 0.0565 | — | 96/96 | 18.08, 19.30 | — | 56.6 MB |
-| `hermite-line`, propagator shift | no | **0.9981** | — | 96/96 | 1.57 | — | — |
+| `pr3-cm`, block-Thomas ×2 | **yes** | 1.67e-07 | 24188 | **0/96** | 8.09 [3.68, 14.72] | **220000** | 21.8 MB |
+| `pr3-cm`, dense ×2 | **yes** | 1.67e-07 | 24188 | **0/96** | 13.76 [9.38, 20.53] | 357000 | 56.6 MB |
+| `hermite-line`, same shift and budget | no | **0.999919** | — | 96/96 | 1.04 [0.77, 1.26] | — | — |
+| `pr3-cm`, block-Thomas, propagator shift | no | 0.0565 | — | 96/96 | — | — | 21.8 MB |
+| `pr3-cm`, dense, propagator shift | no | 0.0565 | — | 96/96 | — | — | 56.6 MB |
+| `hermite-line`, propagator shift | no | **0.9981** | — | 96/96 | — | — | — |
 
 Both certified arms return λ = 0.0987757453836732 − 0.2769045667141013j (they
 differ in the 17th digit) against the control's 0.0987757461278695 −
 0.2769045684044536j: **eight significant figures** in γ. They also run the same
 **24188** inner iterations and certify at the same **1.67e-07**, which is the
 exactness claim again, this time on a certified pair.
+
+The `hermite-line` row is the control that isolates the preconditioner from
+everything else: it runs **the same shift and the same 600-iteration
+unrestarted budget** as the two certified arms above it and still leaves 96 of
+96 inner solves unconverged and the outer pair at 0.999919. Neither the shift
+nor the budget is what stops the shipped route on this deck.
 
 The rows marked *propagator shift* take the shift the shipped default derives
 with no user input, which at this rung lands at −3.1e-04 + 4.65e-02j — the wrong
@@ -17447,28 +17466,27 @@ the two alternated arms run identically and reach an outer residual of
 **0.056482** to six digits. A direct apply comparison on the same vector agrees
 to **7.4e-16** on the shipped deck's rung and 6.4e-16 on the test fixture.
 
-What it buys is memory and, above a block size, apply cost:
+What it buys is memory unconditionally, and apply cost above a block size:
 
-| rung | block size `Nl·Nm` | factors, block-Thomas | factors, dense | ratio | `c_P`, block-Thomas | `c_P`, dense |
-|---|---|---|---|---|---|---|
-| `(96, 4, 8)` | 32 | 1.28 MB | 1.57 MB | 1.23× | 4.41, 5.27, 5.54 | 2.70, 3.05 |
-| `(96, 8, 24)` | 192 | 21.8 MB | 56.6 MB | **2.60×** | 4.64; 8.83, 11.71 | 6.04; 18.08, 19.30 |
+| rung | block size `Nl·Nm` | factors, block-Thomas | factors, dense | ratio | `c_P`, block-Thomas | `c_P`, dense | cheaper in |
+|---|---|---|---|---|---|---|---|
+| `(96, 4, 8)` | 32 | 1.28 MB | 1.57 MB | 1.23× | 4.35 | 3.07 | **dense, 7/9 rounds** |
+| `(96, 8, 24)` | 192 | 21.8 MB | 56.6 MB | **2.60×** | 8.09 | 13.76 | **block-Thomas, 9/9 rounds** |
 
-At r96 the two certified arms ran back to back on the same shift: `c_P`
-4.64 against 6.04 and **138200 against 171011** matvec-equivalents, a 1.24×
-reduction at an identical iteration count and an identical certified residual.
-The three-fold `c_P` spread within each column is host load, which is why the
-claim is a direction and a ratio between neighbours rather than an absolute.
+The apply's absolute cost is not reproducible on this host, but its *sign* is,
+and the sign is what the claim needs. In the nine interleaved rounds at each
+rung the dense inverse is cheaper in seven of nine at `Nl·Nm = 32` (median
+ratio 0.71) and block-Thomas is cheaper in **nine of nine** at `Nl·Nm = 192`
+(median ratio 1.70). So `Nl` sequential batched `Nm × Nm` solves lose to one
+batched 32 × 32 GEMM and win against a 192 × 192 one, which is the same
+crossover Q21 saw between its r96 (1.07× isolated) and production (1.83×
+composed) rungs.
 
 The 2.60× at r96 is Q21's 2.59× at the same rung, reproduced through different
-code. The apply, however, **changes sign with block size**: at `Nl·Nm = 32` the
-exact solve's `Nl` sequential batched `Nm × Nm` solves lose to one batched
-32 × 32 GEMM and `c_P` rises by about 1.6×, while at `Nl·Nm = 192` they win by
-about 1.8× — which is the same 1.83× Q21 measured inside the composed sweeps at
-the production chain. Two points do not calibrate a crossover, so `"auto"`
-takes the exact solve whenever the structure allows it and the two other
-settings are left for a user who is measuring; the sign change is recorded here
-and in `docs/numerics.rst` rather than hidden behind an invented threshold.
+code. Two points do not calibrate a crossover, so `"auto"` takes the exact
+solve whenever the structure allows it and the two other settings are left for
+a user who is measuring; the sign change is recorded here and in
+`docs/numerics.rst` rather than hidden behind an invented threshold.
 
 **Verdict on lever 2: adopted.** Under the rewritten gate this is a memory
 reduction and an exactness property at an unchanged iteration count, with the
@@ -17511,17 +17529,30 @@ between a lever with no landing site and a lever with a named prerequisite.
 Against the same-session control, with every arm certified against the original
 operator:
 
-| rung | `adaptive` matvec-equiv | best certified `pr3-cm` | ratio |
-|---|---|---|---|
-| `(96, 4, 8)`, n = 3072 | **33916** | 53124 | 1.57× **more** |
-| `(96, 8, 24)`, n = 18432 | **96700** | 138200 | 1.43× **more** |
+| rung | `adaptive` matvec-equiv | best certified `pr3-cm` | ratio at the median `c_P` | ratio at the **cheapest** `c_P` observed |
+|---|---|---|---|---|
+| `(96, 4, 8)`, n = 3072 | **33916** | 57000 (dense) | 1.68× **more** | 1.15× more |
+| `(96, 8, 24)`, n = 18432 | **96700** | 220000 (block-Thomas) | 2.27× **more** | 1.17× more |
+
+The right-hand column is there because `c_P` is the one quantity this host
+would not hold still. It does not matter: **at every `c_P` observed in
+eighteen interleaved rounds, at either rung, shift-invert with `pr3-cm` costs
+more matvec-equivalents to a certified pair than `adaptive` does.** The
+conclusion does not depend on the timing noise at all.
 
 There is no reading of the rewritten gate on which that is an adoption: the
-gate adopts a *cost reduction*, and shift-invert with `pr3-cm` costs 1.4–1.6×
-more than the route a user already gets. `KrylovConfig.method` stays
-`"adaptive"`, `shift_preconditioner` stays `"auto"` and `"auto"` still resolves
-to `hermite-line`/`field-corrected`. **Nothing a user does not ask for
-changes.**
+gate adopts a *cost reduction*, and this is a cost increase.
+`KrylovConfig.method` stays `"adaptive"`, `shift_preconditioner` stays
+`"auto"` and `"auto"` still resolves to `hermite-line`/`field-corrected`.
+**Nothing a user does not ask for changes.**
+
+Where the cost sits is worth recording, because it is Q21's conclusion
+reproduced in `src/`. The iteration counts alone are **below** the control —
+13996 and 24188 against 33916 and 96700 — so with a free preconditioner apply
+`pr3-cm` would be 2.4× and 4.0× *cheaper* than `adaptive`. The entire gap is
+the apply. **The route is apply-bound, not iteration-bound**, exactly as Q21
+found on its own harness, and the levers that matter next are a cheaper apply
+or a device apply rather than fewer iterations.
 
 What *is* adopted is the improvement to the shift-invert route itself, which
 §5.1 explicitly distinguishes from making a candidate the default. On the
@@ -17564,10 +17595,14 @@ two points and not an extrapolation.
   600 columns at that n is about 1.4 GB before the operator, and at the host
   load this row ran under the arm would not have finished inside its cap. The
   two rungs measured are the one Q26 recorded and Q21's r96.
-* **No wall-clock result.** Load 7–62 from concurrent lanes throughout. Wall
-  times and `c_P` are recorded in the arm files for reproduction, and `c_P`
-  varies by 30% between repeats of the same arm, which is why the apply-cost
-  claim is stated as a direction with a sign change rather than as a factor.
+* **No wall-clock result.** Load 7–70 from concurrent lanes throughout. The
+  `c_P` values in the arm files are **wrong and are not used**: they time the
+  matvec and the apply twenty minutes apart, and four measurements of the same
+  dense apply returned 0.96, 6.04, 18.08 and 19.30. `costmodel.py` replaces
+  them with interleaved rounds, whose spread is still 1.5–4× within a rung,
+  which is why the apply-cost claim is a sign (consistent in 7/9 and 9/9
+  rounds) rather than a factor, and why the gate verdict is checked at the
+  cheapest `c_P` observed as well as at the median.
 * **The certified r96 arm uses Q7's protocol shift**, the target plus 0.05 in
   growth, not the shift `shift_source="propagator"` derives. At that rung the
   derived shift lands at −3.1e-04 + 4.65e-02j, on the wrong side of the
@@ -17622,11 +17657,20 @@ Base commit for the diagnosis `195205961`.
 
 Scripts, commands and every arm's raw output in
 `plan/research/scripts/2026-09-19-pr3cm-src/`: `diagnose.py` (the budget-cap
-separation), `measure.py` (the arms), `run_arms.sh` (one fresh single-threaded
-process per arm, load recorded at every boundary), and the `d96/`, `d96b/`,
-`ab/`, `r96/` and `r96s/` output directories with their `supervisor.txt`.
+separation), `measure.py` (the arms), `costmodel.py` (the interleaved `c_P`
+rounds), `run_arms.sh` (one fresh single-threaded process per arm, load
+recorded at every boundary), and the `out/`, `d96/`, `d96b/`, `ab/`, `r96/`,
+`r96s/` and `cost/` output directories with their `supervisor.txt`.
 Q7's `bakeoff.py` is imported unchanged for the case construction, so the
 operator, the deck and the seed are the ones Q7 and Q21 measured.
+
+**A measurement lesson worth keeping.** Two timings taken twenty minutes apart
+on a shared host are not a ratio, however many repetitions each one has. The
+arm files' `c_P` looked plausible in isolation and only failed the physics
+check — a dense 192 × 192 batched solve cannot cost less than one matrix-free
+operator application — when four of them were put side by side. Any quantity
+defined as a ratio of two timings has to be measured by interleaving them, not
+by measuring each well.
 
 **Next question.** Landing the inexact-Krylov schedule now needs one thing:
 a per-Arnoldi-step original-operator residual inside the shift-invert

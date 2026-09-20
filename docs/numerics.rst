@@ -643,13 +643,23 @@ end-to-end JAX differentiability:
   measures both properties at every shift and
   ``KrylovConfig.shift_precond_block_solve`` decides what happens when they do
   not hold: ``"auto"`` falls back to the dense batched inverse -- the same
-  preconditioner, a costlier apply -- and records why in
+  preconditioner, a different apply cost -- and records why in
   ``EigenSolveStatus.inner["preconditioner_setup"]``, ``"block-thomas"``
   refuses rather than falling back, and ``"dense"`` is the control the fallback
   is measured against. A collision operator that couples the Laguerre index
   beyond :math:`l \pm 1` is the common reason for the fallback; the shipped
   Cyclone deck runs at :math:`\nu = 0` and measures the largest
   off-tridiagonal entry at exactly zero.
+
+  The exact solve always stores less -- :math:`3 N_l N_m^2` against
+  :math:`(N_l N_m)^2`, measured at 2.60x fewer bytes for
+  :math:`N_l N_m = 192` -- but its *apply* cost changes sign with block size:
+  :math:`N_l` sequential batched :math:`N_m \times N_m` solves were slower than
+  one batched :math:`32 \times 32` product in seven of nine interleaved timing
+  rounds, and faster than a :math:`192 \times 192` one in nine of nine. Two
+  rungs do not calibrate a crossover, so ``"auto"`` takes the exact solve
+  whenever the structure allows and ``"dense"`` is the better choice on a small
+  velocity grid.
 
   Setting it up costs :math:`N_l N_m` probes of the z-local operator and a host
   factorization, done once per shift and handed to the compiled Arnoldi as an

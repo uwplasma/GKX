@@ -1,0 +1,6 @@
+supervisor pid 41446 started 2026-09-20 09:26:27 cap 3600s
+2026-09-20 09:26:27 start cost_d96 load { 15.39 22.18 29.94 }
+2026-09-20 09:26:40 end cost_d96 exit 0 load { 18.47 22.53 29.93 }
+2026-09-20 09:26:40 start cost_r96 load { 18.47 22.53 29.93 }
+2026-09-20 09:26:57 end cost_r96 exit 0 load { 18.73 22.36 29.73 }
+supervisor pid 41446 finished 2026-09-20 09:26:57

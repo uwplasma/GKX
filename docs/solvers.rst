@@ -196,16 +196,26 @@ into three causes and fixed two of them:
 So shift-invert now has a configuration that works, and it is still not the
 default, because it is not cheaper.  Measured against a same-session
 ``adaptive`` control with every arm certified against the original operator, in
-matvec-equivalents to a certified pair: 53,124 against 33,916 at ``Nl=4, Nm=8``
-and 138,200 against 96,700 at ``Nl=8, Nm=24`` -- 1.4 to 1.6 times **more**.  The
-gate adopts a cost reduction, and this is not one.  The route is improved; the
-default is unchanged.
+matvec-equivalents to a certified pair: about 57,000 against 33,916 at
+``Nl=4, Nm=8`` and about 220,000 against 96,700 at ``Nl=8, Nm=24`` -- 1.7 to 2.3
+times **more**, and more at every preconditioner apply cost observed over
+eighteen interleaved timing rounds.  The gate adopts a cost reduction, and this
+is a cost increase.  The route is improved; the default is unchanged.
+
+The gap is entirely the preconditioner apply.  The inner-iteration counts alone,
+13,996 and 24,188, are *below* the control's operator applications, so a free
+apply would make shift-invert 2.4 and 4.0 times cheaper instead.  The route is
+apply-bound, not iteration-bound.
 
 Of Q21's two inner-solve levers, one is now in ``src/`` and one is not.  The
 exact block-Thomas plus Sherman--Morrison solve of ``pr3-cm``'s z-local block is
 here, and is the same preconditioner: identical inner-iteration counts,
 identical certified residuals and applies agreeing to 7.4e-16 against the dense
-control, with factors 2.60 times smaller at ``Nl=8, Nm=24``.  The inexact-Krylov
+control, with factors 2.60 times smaller at ``Nl=8, Nm=24``.  Its *apply* cost
+changes sign with block size: the dense inverse was cheaper in seven of nine
+interleaved rounds at ``Nl*Nm = 32`` and block-Thomas in nine of nine at 192, so
+``shift_precond_block_solve="dense"`` stays reachable and is the better choice
+on a small velocity grid.  The inexact-Krylov
 tolerance schedule is not, but its blocker has changed.  Q26's reason was that
 no tolerance was setting the cost -- every solve was budget-capped.  With
 ``pr3-cm`` the inner solves converge (0 of 96 unconverged, against 96 of 96 for
