@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from gkx.core_ky_layout import is_half
 from gkx.core_velocity import hermite_ladder_coeffs
 
 # One positivity guard for the whole linear operator. The local copy asked
@@ -111,6 +112,7 @@ def _restore_linked_real_fft_conjugates(
     out: jnp.ndarray,
     *,
     covered_rows: jnp.ndarray,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
     """Restore the conjugate ``-ky`` rows on a full real-FFT spectral grid.
 
@@ -118,10 +120,17 @@ def _restore_linked_real_fft_conjugates(
     block. When the runtime carries the full real-FFT-expanded ``ky`` layout, the
     untouched negative rows must be reconstructed by real-FFT conjugate
     symmetry so the linked derivative acts on the physical Hermitian state.
+
+    On a half-spectrum state (plan 5.3 N3) there are no negative rows and this
+    is the identity, returning the *same object* so the graph is unchanged. The
+    fill must not merely be skipped but recognized as inapplicable: ``(-j) % Nyc``
+    is a different positive row, not a partner, so running the two-sided rule on
+    a half axis would conjugate-mirror one physical mode onto another. Telling
+    the two apart needs ``ny_full``; see :mod:`gkx.core_ky_layout`.
     """
 
     Ny = out.shape[-3]
-    if Ny <= 1:
+    if Ny <= 1 or is_half(Ny, ny_full):
         return out
     row_idx = jnp.arange(Ny, dtype=jnp.int32)
     src_rows = jnp.mod(-row_idx, Ny)
@@ -387,6 +396,7 @@ def _linked_fft_apply(
     linked_gather_map: jnp.ndarray | None = None,
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
     """Apply linked-chain spectral operators; a tuple ``f`` returns them stacked.
 
@@ -448,7 +458,9 @@ def _linked_fft_apply(
             Ny=Ny,
             Nz=Nz,
         )
-    return _restore_linked_real_fft_conjugates(out, covered_rows=covered_rows)
+    return _restore_linked_real_fft_conjugates(
+        out, covered_rows=covered_rows, ny_full=ny_full
+    )
 
 
 def abs_z_periodic(
@@ -484,6 +496,7 @@ def grad_z_linked_fft(
     linked_gather_map: jnp.ndarray | None = None,
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
     """Spectral z-derivative using linked-chain FFT modes."""
 
@@ -498,6 +511,7 @@ def grad_z_linked_fft(
         linked_gather_map=linked_gather_map,
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
+        ny_full=ny_full,
     )
 
 
@@ -510,6 +524,7 @@ def abs_z_linked_fft(
     linked_gather_map: jnp.ndarray | None = None,
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
     """Apply |kz| in linked-FFT space."""
 
@@ -523,6 +538,7 @@ def abs_z_linked_fft(
         linked_gather_map=linked_gather_map,
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
+        ny_full=ny_full,
     )
 
 
@@ -620,6 +636,7 @@ def streaming_ladder_term(
     linked_gather_map: jnp.ndarray | None = None,
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
+    ny_full: int | None = None,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     """Apply streaming with precomputed Hermite-ladder coefficients."""
@@ -639,6 +656,7 @@ def streaming_ladder_term(
                 linked_gather_map=linked_gather_map,
                 linked_gather_mask=linked_gather_mask,
                 linked_use_gather=linked_use_gather,
+                ny_full=ny_full,
             )
         else:
             if kx_link_plus is None or kx_link_minus is None:

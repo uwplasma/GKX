@@ -10,7 +10,14 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.config import GridConfig
-from gkx.core_ky_layout import half_ky_values, nyc_from_ny
+from gkx.core_ky_layout import (
+    FULL,
+    KyLayout,
+    half_ky_values,
+    half_twothirds_mask,
+    ky_layout_of,
+    nyc_from_ny,
+)
 
 
 @jax.tree_util.register_pytree_node_class
@@ -72,6 +79,17 @@ class SpectralGrid:
             ny_full=ny_full,
         )
 
+    @property
+    def ky_layout(self) -> KyLayout:
+        """Return whether this grid's ``ky`` rows are the full axis or its half.
+
+        Reads :attr:`ny_full`, which is the only thing that can tell them
+        apart; a grid that does not carry one is a selection of modes and is
+        reported as :data:`~gkx.core_ky_layout.FULL`.
+        """
+
+        return ky_layout_of(int(self.ky.shape[0]), self.ny_full)
+
 
 def _fftfreq_phys(n: int, L: float) -> jnp.ndarray:
     """Physical wave numbers for an FFT grid of length L."""
@@ -79,9 +97,16 @@ def _fftfreq_phys(n: int, L: float) -> jnp.ndarray:
     return 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=L / n)
 
 
-def twothirds_mask(Ny: int, Nx: int) -> jnp.ndarray:
-    """2/3 dealiasing mask for 2D Fourier grids."""
+def twothirds_mask(Ny: int, Nx: int, *, ky_layout: KyLayout = FULL) -> jnp.ndarray:
+    """2/3 dealiasing mask for 2D Fourier grids.
 
+    ``Ny`` is always the length of the two-sided axis.  ``ky_layout`` selects
+    how many rows are returned: the full axis, or the ``ky >= 0`` block that a
+    half-spectrum state carries.
+    """
+
+    if ky_layout != FULL:
+        return half_twothirds_mask(Ny, Nx)
     ky = jnp.fft.fftfreq(Ny)
     kx = jnp.fft.fftfreq(Nx)
     # The two-thirds dealiased convolution rule keeps only the strict interior.
@@ -139,7 +164,16 @@ def _gyrokinetic_moment_shape(
     )
 
 
-def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
+def build_spectral_grid(cfg: GridConfig, *, ky_layout: KyLayout = FULL) -> SpectralGrid:
+    """Return the spectral grid of ``cfg`` with its ``ky`` axis in ``ky_layout``.
+
+    ``FULL`` is the two-sided ``fftfreq`` axis of length ``Ny``.  ``HALF``
+    keeps the ``Nyc = 1 + Ny // 2`` non-negative rows, which is the layout a
+    half-spectrum evolved state uses (plan 5.3 N3); the grid still records the
+    full length in :attr:`SpectralGrid.ny_full`, because ``Nyc`` alone cannot
+    supply it.
+    """
+
     Lx = cfg.Lx
     Ly = 2.0 * jnp.pi * cfg.y0 if cfg.y0 is not None else cfg.Ly
     y0 = float(cfg.y0) if cfg.y0 is not None else float(Ly) / (2.0 * jnp.pi)
@@ -162,10 +196,11 @@ def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
         z_max = cfg.z_max
 
     kx = _fftfreq_phys(cfg.Nx, Lx)
-    ky = _fftfreq_phys(cfg.Ny, Ly)
+    ky_full = _fftfreq_phys(cfg.Ny, Ly)
+    ky = ky_full if ky_layout == FULL else half_ky_values(ky_full)
     z = jnp.linspace(z_min, z_max, Nz, endpoint=False)
     ky_grid, kx_grid = jnp.meshgrid(ky, kx, indexing="ij")
-    mask = twothirds_mask(cfg.Ny, cfg.Nx)
+    mask = twothirds_mask(cfg.Ny, cfg.Nx, ky_layout=ky_layout)
     return SpectralGrid(
         kx=kx,
         ky=ky,
@@ -180,7 +215,7 @@ def build_spectral_grid(cfg: GridConfig) -> SpectralGrid:
         non_twist=bool(cfg.non_twist),
         kxfac=float(cfg.kxfac),
         ky_mode=None,
-        ny_full=int(ky.shape[0]),
+        ny_full=int(ky_full.shape[0]),
     )
 
 

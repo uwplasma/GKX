@@ -346,10 +346,29 @@ the length of the two-sided axis their rows were taken from, or ``None`` when
 the rows are a selection of modes rather than a complete axis. The two-sided
 weights are unchanged on every row.
 
+One convention in that rule is the state switch's own, and is settled here:
+an even grid's Nyquist row is a flux **representative in both layouts**, at the
+self-conjugate weight. The two-sided rule used to select the ``ky > 0`` rows,
+which drops a row stored once as :math:`-N_y/2`, while the half axis stores the
+same row as :math:`+N_y/2` and counted it, so the flux named different sums in
+the two layouts. It may not: the flux kernel carries an explicit
+:math:`\mathrm{i}k_y`, so that row's contribution is *odd* under a sign choice
+that is pure convention. Counting it is safe because the contribution is
+identically zero on any state representing a real field --- on a self-conjugate
+row the reality condition reads :math:`F(k_x) = F^{*}(-k_x)`, under which the
+summand is odd in :math:`k_x` and cancels pairwise --- and no run reaches the
+row in any case, since two-thirds dealiasing zeroes everything at or above
+:math:`N_y/3`.
+
 Plan 5.3 N3 moves the evolved state to the ``half`` layout, which removes the
 per-stage completion that the repository XLA profile attributes 41.9 per cent
-of step time to. That switch is not in place: the state is still two-sided, and
-the contract above is what it will be moved against.
+of step time to. The layout now works end to end below the runtime ---
+:func:`gkx.core_grid.build_spectral_grid` takes a ``ky_layout``, the bracket
+computes on the stored rows and does not widen, and the per-stage projector
+becomes the identity rather than a cheaper copy. It is **not the default**: the
+full-versus-half HLO ledger measures the promised saving on the RHS graph and a
+byte regression on the RK step graph of a linked deck, traced to the
+linked-chain gather losing its fused lowering. See :doc:`performance`.
 
 Equilibrium-flow shearing coordinates
 --------------------------------------

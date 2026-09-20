@@ -13,6 +13,7 @@ from gkx.artifacts.io import (
     _resolve_restart_path,
     _resolved_species_time,
 )
+from gkx.core_ky_layout import source_ny_full
 from gkx.artifacts.spectral_layout import (
     _complex_to_ri,
     _condense_kx_for_output,
@@ -27,6 +28,7 @@ from gkx.artifacts.spectral_layout import (
     _species_matrix,
     _spectral_species_to_ri,
     _spectral_to_ri,
+    _spectral_species_to_xy,
     _spectral_to_xy,
     _state_basis_moments,
     _write_runtime_root_metadata,
@@ -306,7 +308,10 @@ def _write_final_field_diagnostics(
 
 
 def _write_moment_diagnostics(
-    diag_group: Any, moments: Mapping[str, np.ndarray]
+    diag_group: Any,
+    moments: Mapping[str, np.ndarray],
+    *,
+    ny_full: int | None = None,
 ) -> None:
     """Write spectral and real-space species moments to Diagnostics."""
 
@@ -317,7 +322,7 @@ def _write_moment_diagnostics(
         ] = _spectral_species_to_ri(active)
         diag_group.createVariable(f"{name}XY", "f4", ("time", "s", "y", "x", "theta"))[
             0, ...
-        ] = np.real(np.fft.ifft2(values, axes=(1, 2))).astype(np.float32, copy=False)
+        ] = _spectral_species_to_xy(values, ny_full=ny_full)
 
 
 def _write_big_netcdf(
@@ -831,12 +836,19 @@ def _write_restart_netcdf(
     restart_path: str | Path,
     state: Any,
     time_vals: np.ndarray,
+    *,
+    ny_full: int | None = None,
 ) -> str | None:
-    """Write the compact restart file and return its path when state exists."""
+    """Write the compact restart file and return its path when state exists.
+
+    ``ny_full`` is the two-sided ``ky`` length of the grid the state was
+    evolved on; the file's dealiased block is a property of it rather than of
+    the state's stored row count (:func:`_restart_to_netcdf_layout`).
+    """
 
     if state is None:
         return None
-    restart_state_layout = _restart_to_netcdf_layout(np.asarray(state))
+    restart_state_layout = _restart_to_netcdf_layout(np.asarray(state), ny_full=ny_full)
     path = Path(restart_path)
     _ensure_parent(path)
     with Dataset(path, "w") as root:
@@ -1000,6 +1012,7 @@ def _write_optional_nonlinear_netcdf_artifacts(
         paths.restart_path,
         result.state,
         layout.time_vals,
+        ny_full=source_ny_full(layout.grid),
     )
     if restart_written is not None:
         written["restart"] = restart_written

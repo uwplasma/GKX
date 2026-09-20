@@ -37,6 +37,7 @@ from gkx.core_ky_layout import (
     negative_ky_block,
     nyc_from_ny,
     paired_row_limit,
+    source_ny_full,
     to_full,
 )
 from gkx.operators.linear.cache_builder import build_linear_cache, mask_off_chain_rows
@@ -569,9 +570,15 @@ def _dealiased_initial_mode_pairs(grid: SpectralGrid) -> list[tuple[int, int]]:
 
     nx = int(np.asarray(grid.kx).size)
     ky_values = np.asarray(grid.ky)
-    ny = int(ky_values.size)
+    rows = int(ky_values.size)
+    # The seeded band is the dealiased non-negative rows of the *two-sided*
+    # axis: ``1 + (Ny - 1) // 3`` is where ``|ky| < Ny/3`` stops, in both
+    # layouts.  Reading it off the stored count would seed only
+    # ``1 + (Nyc - 1) // 3`` rows on a half-spectrum grid, a third of the band,
+    # with no error (gkx.core_ky_layout).
+    ny = source_ny_full(grid)
     kx_max = 1 + (nx - 1) // 3
-    ky_max = 1 + (ny - 1) // 3
+    ky_max = min(1 + (ny - 1) // 3, rows)
     ky_indices = [int(ky_i) for ky_i in range(ky_max) if float(ky_values[ky_i]) != 0.0]
     return [(int(kx_i), ky_i) for kx_i in range(kx_max) for ky_i in ky_indices]
 

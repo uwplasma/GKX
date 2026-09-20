@@ -818,6 +818,7 @@ def _build_linked_fft_cache(
         int(grid.z.size),
         real_dtype,
         None if ky_mode is None else np.asarray(ky_mode),
+        getattr(grid, "ny_full", None),
     )
     (
         linked_inverse_permutation,
@@ -854,6 +855,7 @@ def _build_linked_damp_profile(
         _build_linked_end_damping_profile(
             linked_indices=linked_indices,
             ny=int(grid.ky.size),
+            ny_full=getattr(grid, "ny_full", None),
             nx=int(grid.kx.size),
             nz=int(grid.z.size),
             widthfrac=float(params.damp_ends_widthfrac),
@@ -1140,6 +1142,7 @@ def linked_chain_cover_mask(
         full_cover=bool(linked_cache.linked_full_cover),
         ny=int(np.asarray(grid.ky).size),
         nx=int(np.asarray(grid.kx).size),
+        ny_full=getattr(grid, "ny_full", None),
     )
 
 

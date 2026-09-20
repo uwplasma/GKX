@@ -58,13 +58,19 @@ __all__ = [
     "describe",
     "half_dealias_mask",
     "half_ky_values",
+    "half_twothirds_mask",
     "hermitian_mode_weights",
+    "is_half",
+    "ky_layout_of",
     "ky_row_weights",
     "negative_ky_block",
     "ny_full_candidates",
     "nyc_from_ny",
     "nyquist_row",
     "reality_residual",
+    "rows_for_layout",
+    "source_ky_layout",
+    "source_ny_full",
     "self_conjugate_row_mask",
     "self_conjugate_rows",
     "symmetrize_self_conjugate_rows",
@@ -143,6 +149,73 @@ def paired_row_limit(ny_full: int) -> int:
 
     nyc = nyc_from_ny(ny_full)
     return nyc - 1 if int(ny_full) % 2 == 0 else nyc
+
+
+def rows_for_layout(ny_full: int, layout: KyLayout) -> int:
+    """Return the stored ``ky`` row count of ``layout`` on a grid of ``Ny``."""
+
+    if layout == HALF:
+        return nyc_from_ny(ny_full)
+    if layout == FULL:
+        return int(ny_full)
+    raise ValueError(f"unknown ky layout {layout!r}; expected {FULL!r} or {HALF!r}")
+
+
+def ky_layout_of(rows: int, ny_full: int | None) -> KyLayout:
+    """Return the layout of a ``ky`` axis of ``rows`` rows taken from ``Ny``.
+
+    ``ny_full`` is required because ``Nyc`` alone cannot say how long its own
+    full axis is (see the module docstring), and ``None`` -- a grid whose rows
+    are a selection of modes rather than a complete axis -- is reported as
+    :data:`FULL`, which is what every consumer assumed before the half state
+    existed and is correct for any selection that carries its own wavenumbers.
+
+    ``Ny = 1`` and ``Ny = 2`` are deliberately reported as :data:`FULL` even
+    though ``Nyc`` equals ``Ny`` there: the two layouts coincide, and the
+    widening and the conjugate restore are both the identity, so calling the
+    axis full keeps the untouched code path.
+    """
+
+    if ny_full is None:
+        return FULL
+    ny = int(ny_full)
+    count = int(rows)
+    if count == ny:
+        return FULL
+    if count == nyc_from_ny(ny):
+        return HALF
+    raise ValueError(
+        f"spectral axis has {count} ky rows, which is neither the full axis "
+        f"({ny}) nor its half-spectrum block ({nyc_from_ny(ny)})"
+    )
+
+
+def is_half(rows: int, ny_full: int | None) -> bool:
+    """Return whether an axis of ``rows`` rows is stored in :data:`HALF`."""
+
+    return ky_layout_of(rows, ny_full) == HALF
+
+
+def source_ny_full(source: Any) -> int:
+    """Return the two-sided ``ky`` length behind a grid's or cache's rows.
+
+    Reads ``source.ny_full`` and falls back to the stored row count, which is
+    the right answer for a source that predates the attribute and for any
+    selection of modes that carries its own wavenumbers.  The shape is taken
+    off ``source.ky`` rather than a host copy of it, because a cache built
+    inside a trace holds tracers whose values cannot be inspected at all.
+    """
+
+    ny_full = getattr(source, "ny_full", None)
+    if ny_full is None:
+        return int(source.ky.shape[0])
+    return int(ny_full)
+
+
+def source_ky_layout(source: Any) -> KyLayout:
+    """Return the layout of a grid's or cache's ``ky`` axis."""
+
+    return ky_layout_of(int(source.ky.shape[0]), getattr(source, "ny_full", None))
 
 
 def conjugate_kx_order(nx: int) -> np.ndarray:
@@ -409,19 +482,34 @@ def transport_mode_weights(
     so it takes half the weight and the kernel's factor of two restores it to
     one.
 
-    The two-sided convention is unchanged from the pre-contract rule on every
-    row, Nyquist included: an even grid's Nyquist row is stored at ``ky < 0``
-    there and is left out of the flux, which is a question about which modes
-    the flux sums rather than about how a folded axis is weighted.  Moving it
-    changes live two-sided flux spectra, so it belongs to the state switch
-    (plan 5.3 N3), not to this rule.
+    **The Nyquist row is a representative in both layouts** (plan 5.3 N3, which
+    Q24 left this decision to).  Before the state switch the two-sided rule
+    selected the ``ky > 0`` rows, which drops an even grid's Nyquist row --
+    stored once, as ``-Ny/2`` -- from the flux altogether, while the half axis
+    stores the same row as ``+Ny/2`` and counts it.  The two layouts therefore
+    named different sums.  They are reconciled here in favour of counting it,
+    with the self-conjugate weight, because the flux may not depend on which
+    sign of ``|ky| = Ny/2`` a layout happens to store: the flux kernel carries
+    an explicit factor ``i * ky``, so that row's contribution is *odd* under
+    the sign choice, and a physical quantity cannot be.
+
+    What makes that safe rather than a change of answer is that the row's
+    contribution is identically zero on any state that represents a real
+    field.  On a self-conjugate row the reality condition reads
+    ``F[kx] = conj(F[-kx])``, under which the summand
+    ``Im(conj(phi) * moment)`` is odd in ``kx`` and cancels pairwise across the
+    row.  Nothing in a run reaches it in any case: the two-thirds mask zeroes
+    every row at or above ``Ny/3``, and ``Ny/2`` is always above it, so the
+    weight moves only for an explicitly undealiased reduction.
     """
 
     arr = jnp.asarray(ky)
     two_sided = jnp.any(arr < 0.0)
     self_conj = self_conjugate_row_mask(arr, ny_full=ny_full)
     folded = jnp.where(arr == 0.0, 0.0, jnp.where(self_conj, 0.5, 1.0))
-    fac = jnp.where(two_sided, jnp.where(arr > 0.0, 1.0, 0.0), folded)
+    sided = jnp.where(self_conj, jnp.where(arr == 0.0, 0.0, 0.5), 0.0)
+    sided = jnp.where(arr > 0.0, 1.0, sided)
+    fac = jnp.where(two_sided, sided, folded)
     return _weight_grid(fac, nx, dealias_mask)
 
 
@@ -443,6 +531,22 @@ def half_dealias_mask(mask: Any, *, ny_full: int | None = None) -> Any:
     if rows != ny:
         raise ValueError(f"dealias mask has {rows} ky rows; expected {ny} or {nyc}")
     return mask[:nyc, :]
+
+
+def half_twothirds_mask(ny_full: int, nx: int) -> Any:
+    """Return the two-thirds dealias mask on the ``ky >= 0`` rows.
+
+    Built rather than sliced.  The two-sided mask's leading ``Nyc`` rows are
+    the same booleans, but only because ``fftfreq`` puts ``|ky|`` in the first
+    ``Nyc`` entries in increasing order; a half-spectrum grid states its own
+    rows instead of inheriting that coincidence, which is the difference
+    between a contract and a slice.
+    """
+
+    ny = int(ny_full)
+    ky = jnp.fft.fftfreq(ny)[: nyc_from_ny(ny)]
+    kx = jnp.fft.fftfreq(int(nx))
+    return (jnp.abs(ky) < (1.0 / 3.0))[:, None] & (jnp.abs(kx) < (1.0 / 3.0))[None, :]
 
 
 def describe(ny_full: int) -> dict[str, Any]:

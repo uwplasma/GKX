@@ -8,6 +8,8 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
+from gkx.core_ky_layout import is_half
+
 __all__ = [
     "_build_linked_end_damping_profile",
     "_build_linked_fft_maps",
@@ -26,6 +28,7 @@ def linked_cover_mask(
     full_cover: bool,
     ny: int,
     nx: int,
+    ny_full: int | None = None,
 ) -> Any | None:
     """Return the ``(ky, kx)`` modes a linked chain couples, or ``None`` for all.
 
@@ -35,10 +38,18 @@ def linked_cover_mask(
     ``(ky, kx)``. A mode outside that set -- a kx row outside the dealiased
     ``1 + 2 * ((Nx - 1) // 3)`` set -- has no coupling to the chains either way.
 
-    ``gather_mask`` is the cache's flat chain membership, indexed ``ky + ny * kx``;
-    the returned mask keeps its namespace, so a host array gives a host mask and a
-    traced one gives a traced mask. Periodic (``use_gather`` false) and full-cover
-    grids return ``None``, so every consumer keeps its present behaviour on them.
+    ``gather_mask`` is the cache's flat chain membership, indexed ``ky + ny * kx``
+    where ``ny`` is the number of rows the state *stores*; the returned mask keeps
+    its namespace, so a host array gives a host mask and a traced one gives a
+    traced mask. Periodic (``use_gather`` false) and full-cover grids return
+    ``None``, so every consumer keeps its present behaviour on them.
+
+    ``ny_full`` is the length of the two-sided axis those rows came from, which
+    is what distinguishes a half-spectrum grid from a full one (``Nyc`` alone
+    cannot, :mod:`gkx.core_ky_layout`). On a half grid the conjugate mirror below
+    is skipped: every stored row is its own representative, the chains visit the
+    dealiased ``ky >= 0`` rows directly, and ``(-j) % Nyc`` names an unrelated
+    positive row rather than a partner.
     """
 
     if not bool(use_gather) or bool(full_cover) or gather_mask is None:
@@ -50,7 +61,7 @@ def linked_cover_mask(
     if int(flat.size) != ny * nx:
         return None
     mask = xp.reshape(flat, (nx, ny)).T  # linked flat index is ky + ny * kx
-    if ny > 1:
+    if ny > 1 and not is_half(ny, ny_full):
         # Mirror of _restore_linked_real_fft_conjugates: a row no chain visits
         # whose -ky row is visited is filled from the (-ky, -kx) modes.
         rows = xp.any(mask, axis=1)
@@ -78,6 +89,7 @@ def linked_cover_mask_from_cache(cache: Any) -> Any | None:
         full_cover=bool(getattr(cache, "linked_full_cover", False)),
         ny=int(jnp.size(cache.ky)),
         nx=int(jnp.size(cache.kx)),
+        ny_full=getattr(cache, "ny_full", None),
     )
 
 
@@ -143,13 +155,30 @@ def _linked_active_modes(
     nx: int,
     ny: int,
     ky_mode: np.ndarray | None,
+    ny_full: int | None = None,
 ) -> _LinkedActiveModes:
+    """Return the chain-carrying ``(ky, kx)`` extent of a linked grid.
+
+    ``naky`` counts the dealiased non-negative ``ky`` rows, which is a property
+    of the *two-sided* axis (``1 + (Ny - 1) // 3`` is the index of the last row
+    with ``|ky| < Ny/3``), not of how many rows the state stores. Passing the
+    stored count on a half-spectrum grid would build chains for only
+    ``1 + (Nyc - 1) // 3`` rows and leave the rest with no parallel derivative
+    at all, silently. ``ny`` stays the stored count because it is what the flat
+    chain index ``ky + ny * kx`` is decoded with.
+    """
+
     if ky_mode is not None:
         ky_mode_arr = np.asarray(ky_mode, dtype=int).reshape(-1)
         naky = int(ky_mode_arr.size)
     else:
         ky_mode_arr = None
-        naky = 1 + (ny - 1) // 3
+        naky = 1 + ((ny if ny_full is None else int(ny_full)) - 1) // 3
+        if naky > int(ny):
+            raise ValueError(
+                f"linked chains need {naky} non-negative ky rows but the grid "
+                f"stores {ny}"
+            )
     if nx < 4:
         nakx = nx
     else:
@@ -274,6 +303,7 @@ def _build_linked_fft_maps(
     nz: int,
     real_dtype: jnp.dtype,
     ky_mode: np.ndarray | None = None,
+    ny_full: int | None = None,
 ) -> tuple[tuple[np.ndarray, ...], tuple[np.ndarray, ...]]:
     """Construct linked-chain FFT index maps for the parallel derivative.
 
@@ -286,7 +316,7 @@ def _build_linked_fft_maps(
 
     ny = ky.size
     nx = kx.size
-    active = _linked_active_modes(nx=nx, ny=ny, ky_mode=ky_mode)
+    active = _linked_active_modes(nx=nx, ny=ny, ky_mode=ky_mode, ny_full=ny_full)
     if active.nakx <= 0 or active.naky <= 0:
         return (), ()
 
@@ -327,12 +357,21 @@ def _build_linked_end_damping_profile(
     nz: int,
     widthfrac: float,
     ky_mode: np.ndarray | None = None,
+    ny_full: int | None = None,
 ) -> np.ndarray:
-    """Construct the linked-boundary damping profile on the full FFT grid."""
+    """Construct the linked-boundary damping profile on the state's FFT grid.
+
+    ``ny`` is the stored row count, which is both the profile's own ky extent
+    and the modulus the flat chain index is decoded with. On a two-sided grid
+    each visited mode's conjugate partner is written as well, so the profile is
+    symmetric under ``ky -> -ky``; on a half-spectrum grid there is no partner
+    row to write and the mirror is skipped.
+    """
 
     profile = np.zeros((ny, nx, nz), dtype=float)
     if not linked_indices or widthfrac <= 0.0 or ny <= 0 or nx <= 0 or nz <= 0:
         return profile
+    half_layout = is_half(ny, ny_full)
     ky_mode_arr: np.ndarray | None = None
     if ky_mode is not None:
         ky_mode_arr = np.asarray(ky_mode, dtype=np.int32).reshape(-1)
@@ -368,6 +407,8 @@ def _build_linked_end_damping_profile(
                     mirror_ky = (
                         int(mirror_matches[0]) if mirror_matches.size else ky_idx
                     )
+                elif half_layout:
+                    mirror_ky = ky_idx
                 else:
                     mirror_ky = (-ky_idx) % ny
                 mirror_kx = int(kx_neg[kx_idx])

@@ -1078,6 +1078,15 @@ def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--hlo-dir", type=Path, default=None)
     parser.add_argument(
+        "--ky-layout",
+        choices=("full", "half"),
+        default="full",
+        help="ky axis of the evolved state: 'full' is the two-sided fftfreq "
+        "axis of length Ny, 'half' the Nyc = 1 + Ny//2 non-negative rows on "
+        "which the reality condition holds by construction (plan 5.3 N3). The "
+        "ledger's point is the difference between them.",
+    )
+    parser.add_argument(
         "--route",
         choices=("scan", "diagnostics", "runtime", "eager-scan"),
         default="scan",
@@ -1202,7 +1211,10 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
     cfg, _ = load_runtime_from_toml(args.config)
     cfg = replace(cfg, grid=replace(cfg.grid, Nx=args.Nx, Ny=args.Ny, Nz=args.Nz))
     geom = build_runtime_geometry(cfg)
-    grid = build_spectral_grid(apply_imported_geometry_grid_defaults(geom, cfg.grid))
+    grid = build_spectral_grid(
+        apply_imported_geometry_grid_defaults(geom, cfg.grid),
+        ky_layout=args.ky_layout,
+    )
     params = build_runtime_linear_params(cfg, Nm=args.Nm, geom=geom)
     term_cfg = build_runtime_term_config(cfg)
     ky_index, kx_index = _select_nonlinear_mode_indices(

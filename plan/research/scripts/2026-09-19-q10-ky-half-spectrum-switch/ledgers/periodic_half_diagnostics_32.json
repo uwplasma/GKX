@@ -1,0 +1,57 @@
+{
+  "backend": "cpu",
+  "claim_scope": "Op counts of one optimized XLA graph for one jax version and backend. They locate materialized work; they are not a runtime claim.",
+  "compressed_real_fft": true,
+  "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml [boundary=periodic]",
+  "grid": {
+    "Nl": 2,
+    "Nm": 4,
+    "Nx": 32,
+    "Ny": 32,
+    "Nz": 24
+  },
+  "jax": "0.10.2",
+  "kind": "nonlinear_step_hlo_ledger",
+  "laguerre_mode": "grid",
+  "rhs": {
+    "bytes_written": 7870464,
+    "concatenate": 3,
+    "constant_bytes": 296,
+    "copy": 6,
+    "dynamic-update-slice": 1,
+    "fft": 7,
+    "gather": 0,
+    "reverse": 0,
+    "scatter": 0,
+    "transpose": 6
+  },
+  "route": "diagnostics",
+  "state_bytes": 835584,
+  "state_dtype": "complex64",
+  "state_shape": [
+    1,
+    2,
+    4,
+    17,
+    32,
+    24
+  ],
+  "steps": {
+    "rk3": {
+      "beyond_rhs_evaluations": null,
+      "counts": {
+        "bytes_written": 41903392,
+        "concatenate": 6,
+        "constant_bytes": 2946920,
+        "copy": 61,
+        "dynamic-update-slice": 0,
+        "fft": 26,
+        "gather": 0,
+        "reverse": 0,
+        "scatter": 0,
+        "transpose": 43
+      },
+      "rhs_evaluations": 3
+    }
+  }
+}

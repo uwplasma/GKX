@@ -206,21 +206,36 @@ def _make_hermitian_projector(
 
 
 def _make_compressed_real_fft_projector(
-    *, ny_full: int, nx: int
+    *, ny_full: int, nx: int, rows: int | None = None
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
     """Return the Hermitian projector for a compressed real-FFT ky axis.
 
-    A compressed run is on a full two-sided ky axis by construction: the
-    bracket transforms the first ``ny_full // 2 + 1`` rows and rebuilds the
-    rest with ``_complete_hermitian_ky``, which reads that layout off shapes
-    alone. Taking the same route here keeps the projector buildable inside a
-    trace. The cache's own ``ky`` is ``rho_star * grid.ky``, so it is a tracer
-    whenever the cache is built inside one, and asking it for its sign pattern
-    refused every compressed nonlinear gradient -- for a fact that is fixed by
-    the grid and carries no derivative either way.
+    ``ny_full`` is the length of the two-sided axis and ``rows`` how many of
+    them the state stores; ``rows is None`` means the full axis, which is what
+    every caller meant before the half layout existed.
+
+    On a two-sided state the projector is ``to_full(to_half(G))``: the bracket
+    transforms the first ``Nyc`` rows and rebuilds the rest, so the state has
+    to be put back on the reality-condition subspace after every stage. On a
+    half-spectrum state (plan 5.3 N3) the reality condition holds by
+    construction and the projector is the **identity** -- not an approximation
+    of the old one but exactly it, because ``to_full(to_half(.))`` restores the
+    unstored rows and imposes nothing on the stored ones. The self-conjugate
+    rows' internal constraint was never part of this projector in either
+    layout; ``symmetrize_self_conjugate_rows`` is what imposes that, and the
+    bracket's ``irfft2`` already discards the anti-symmetric part it would
+    remove.
+
+    The layout is read from the arguments rather than from the cache's ``ky``,
+    which is ``rho_star * grid.ky`` and therefore a tracer whenever the cache
+    is built inside a trace; asking it for its sign pattern refused every
+    compressed nonlinear gradient, for a fact that is fixed by the grid and
+    carries no derivative either way.
     """
 
-    return _cached_hermitian_projector(int(ny_full), True, int(nx))
+    ny = int(ny_full)
+    two_sided = rows is None or int(rows) == ny
+    return _cached_hermitian_projector(ny, two_sided, int(nx))
 
 
 def _make_nonlinear_state_projector(

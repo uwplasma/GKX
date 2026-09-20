@@ -286,13 +286,22 @@ def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
         )
 
     # ky is the third-from-last axis in both the (Nl, Nm, Nky, Nkx, Nz) and
-    # (Ns, Nl, Nm, Nky, Nkx, Nz) layouts.
+    # (Ns, Nl, Nm, Nky, Nkx, Nz) layouts.  The extent is what the state
+    # actually stores, which is ``Ny`` on a two-sided axis and
+    # ``Nyc = 1 + Ny // 2`` on a half-spectrum one (gkx.core_ky_layout): the
+    # divisibility rule is the same, but the number it is applied to is not,
+    # and ``Nyc`` is odd whenever ``Ny`` is a multiple of four.  The message
+    # says which layout produced the extent so that a device count chosen
+    # against ``Ny`` does not look like an unexplained refusal.
     extent = int(state.shape[-3])
     if extent % plan.device_count:
+        layout = "half-spectrum (Nyc = 1 + Ny//2)" if extent % 2 else "two-sided"
         raise NonlinearParallelRoutingError(
             f"[parallel] axis='{plan.axis}' has extent {extent}, which is not "
-            f"divisible by the requested {plan.device_count} devices. Choose a "
-            "device count that divides the grid, or set strategy='serial'."
+            f"divisible by the requested {plan.device_count} devices. The ky "
+            f"axis of this state is {layout}. Choose a device count that "
+            "divides that extent, shard axis='species_hermite' instead, or "
+            "set strategy='serial'."
         )
     sharding = resolve_state_sharding(
         state,

@@ -408,6 +408,7 @@ def _streaming_contribution(
         linked_gather_map=cache.linked_gather_map,
         linked_gather_mask=cache.linked_gather_mask,
         linked_use_gather=cache.linked_use_gather,
+        ny_full=getattr(cache, "ny_full", None),
         use_twist_shift=cache.use_twist_shift,
         hermite_window=hermite_window,
     )
@@ -573,6 +574,7 @@ def _shared_linked_streaming_hypercollisions(
         linked_gather_map=cache.linked_gather_map,
         linked_gather_mask=cache.linked_gather_mask,
         linked_use_gather=cache.linked_use_gather,
+        ny_full=getattr(cache, "ny_full", None),
     )
     local = _constant_hypercollision_contribution(
         G,
@@ -642,12 +644,14 @@ def _dissipation_contributions(
             linked_gather_map=cache.linked_gather_map,
             linked_gather_mask=cache.linked_gather_mask,
             linked_use_gather=cache.linked_use_gather,
+            ny_full=getattr(cache, "ny_full", None),
             hermite_window=hermite_window,
         )
     hyperdiffusion = hyperdiffusion_contribution(
         G,
         kx=cache.kx_grid,
         ky=cache.ky,
+        ny_full=getattr(cache, "ny_full", None),
         dealias_mask=cache.dealias_mask,
         D_hyper=scalars.D_hyper,
         p_hyper_kperp=scalars.p_hyper_kperp,

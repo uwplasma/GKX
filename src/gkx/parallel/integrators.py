@@ -23,6 +23,7 @@ from gkx.operators.linear.params import (
     _SPECIES_PARAM_NAMES,
 )
 from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+from gkx.core_ky_layout import source_ny_full
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
 
@@ -299,7 +300,9 @@ def integrate_nonlinear_sharded(
     G_init = jnp.asarray(G0, dtype=state_dtype)
     projector = (
         _make_compressed_real_fft_projector(
-            ny_full=int(cache.ky.size), nx=int(cache.kx.size)
+            ny_full=source_ny_full(cache),
+            nx=int(cache.kx.size),
+            rows=int(cache.ky.size),
         )
         if compressed_real_fft
         else None
@@ -600,6 +603,7 @@ def _species_hermite_local_rhs(
             sqrt_m_p1=cache.sqrt_m_p1[:, interior],
             kx_grid=cache.kx_grid,
             ky_grid=cache.ky_grid,
+            ny_full=getattr(cache, "ny_full", None),
             dealias_mask=cache.dealias_mask,
             kxfac=cache.kxfac,
             weight=jnp.asarray(term_cfg.nonlinear, dtype=real_dtype),
@@ -894,7 +898,9 @@ def integrate_nonlinear_species_hermite(
     )
     projector = (
         _make_compressed_real_fft_projector(
-            ny_full=int(cache.ky.size), nx=int(cache.kx.size)
+            ny_full=source_ny_full(cache),
+            nx=int(cache.kx.size),
+            rows=int(cache.ky.size),
         )
         if compressed_real_fft
         else None

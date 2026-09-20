@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from gkx.core_ky_layout import half_ky_values
+from gkx.core_ky_layout import half_ky_values, is_half
 
 NETCDF_SCHEMA_VERSION = 1
 
@@ -92,12 +92,63 @@ def _complex_to_ri(field: np.ndarray) -> np.ndarray:
     )
 
 
-def _spectral_to_xy(field: np.ndarray) -> np.ndarray:
-    xy = np.fft.ifft2(np.asarray(field), axes=(0, 1))
+def _spectral_species_to_xy(
+    values: np.ndarray, *, ny_full: int | None = None
+) -> np.ndarray:
+    """Real-space ``(s, y, x, z)`` field of a ``(s, ky, kx, z)`` spectrum.
+
+    The species-axis twin of :func:`_spectral_to_xy`; see its docstring for why
+    a half-spectrum input must not go through the complex ``ifft2``.
+    """
+
+    arr = np.asarray(values)
+    rows = int(arr.shape[1])
+    ny = rows if ny_full is None else int(ny_full)
+    if is_half(rows, ny_full):
+        nkx = int(arr.shape[2])
+        real = np.fft.irfft2(arr, s=(nkx, ny), axes=(2, 1))
+        return real.astype(np.float32, copy=False)
+    return np.real(np.fft.ifft2(arr, axes=(1, 2))).astype(np.float32, copy=False)
+
+
+def _spectral_to_xy(field: np.ndarray, *, ny_full: int | None = None) -> np.ndarray:
+    """Return the real-space ``(y, x, z)`` field of a ``(ky, kx, z)`` spectrum.
+
+    ``ny_full`` is the length of the two-sided ``ky`` axis.  A two-sided field
+    keeps the full complex ``ifft2``, whose imaginary part is discarded; a
+    half-spectrum field (:mod:`gkx.core_ky_layout`) has no negative rows to
+    transform and goes through ``irfft2``, which produces the same ``Ny``
+    real-space rows and the same values without materialising them.  Taking
+    ``np.real`` of a complex ``ifft2`` of ``Nyc`` rows instead would silently
+    return an ``Nyc``-row image against an ``Ny``-long ``y`` axis.
+    """
+
+    arr = np.asarray(field)
+    rows = int(arr.shape[0])
+    ny = rows if ny_full is None else int(ny_full)
+    if is_half(rows, ny_full):
+        nkx = int(arr.shape[1])
+        real = np.fft.irfft2(arr, s=(nkx, ny), axes=(1, 0))
+        return real.astype(np.float32, copy=False)
+    xy = np.fft.ifft2(arr, axes=(0, 1))
     return np.real(xy).astype(np.float32, copy=False)
 
 
-def _restart_to_netcdf_layout(state: np.ndarray) -> np.ndarray:
+def _restart_to_netcdf_layout(
+    state: np.ndarray, *, ny_full: int | None = None
+) -> np.ndarray:
+    """Pack an evolved state into the restart file's dealiased ky/kx block.
+
+    ``ny_full`` is the length of the two-sided ``ky`` axis.  The retained rows
+    are ``0 .. 1 + (Ny - 1) // 3``, which is the same index range in both
+    layouts -- the restart file has always stored the non-negative dealiased
+    block -- but the count is a property of ``Ny``, not of how many rows the
+    state carries.  Deriving it from ``state.shape[3]`` on a half-spectrum
+    state keeps only ``1 + (Nyc - 1) // 3`` rows, about a third of the band,
+    and writes that file without any error, so the length is taken from
+    ``ny_full`` when it is supplied.
+    """
+
     state_arr = np.asarray(state)
     if state_arr.ndim == 5:
         state_arr = state_arr[None, ...]
@@ -105,7 +156,13 @@ def _restart_to_netcdf_layout(state: np.ndarray) -> np.ndarray:
         raise ValueError(
             "nonlinear state must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
         )
-    ky_idx = _dealiased_ky_indices(state_arr.shape[3])
+    rows = int(state_arr.shape[3])
+    ky_idx = _dealiased_ky_indices(rows if ny_full is None else int(ny_full))
+    if ky_idx.size > rows:
+        raise ValueError(
+            f"state stores {rows} ky rows but the dealiased restart block of "
+            f"ny_full={ny_full} needs {int(ky_idx.size)}"
+        )
     kx_idx = _dealiased_kx_indices(state_arr.shape[4])
     state_arr = _take_axis(state_arr, ky_idx, axis=3)
     state_arr = _take_axis(state_arr, kx_idx, axis=4)
@@ -318,6 +375,7 @@ __all__ = [
     "_species_matrix",
     "_spectral_species_to_ri",
     "_spectral_to_ri",
+    "_spectral_species_to_xy",
     "_spectral_to_xy",
     "_state_basis_moments",
     "_take_axis",
