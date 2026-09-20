@@ -123,6 +123,25 @@ class EigenSolveStatus:
         }
 
 
+def eigen_status_payload(status: EigenSolveStatus | None) -> dict[str, Any]:
+    """Flatten an eigen solve status into scalar keys; ``None`` when none ran.
+
+    This is the one spelling of those keys. A runtime result's ``summary()``
+    and the saved ``*.summary.json`` both read it, so a run held in memory and
+    the same run read back from disk report the same status under the same
+    names.
+    """
+
+    inner = None if status is None else status.inner
+    return {
+        "eigen_route": None if status is None else status.route,
+        "eigen_residual": None if status is None else status.residual,
+        "eigen_tolerance": None if status is None else status.tolerance,
+        "eigen_certified": None if status is None else status.certified,
+        "eigen_inner_converged": None if inner is None else inner["converged"],
+    }
+
+
 _StatusCallback = Callable[[str], None] | None
 
 # Base residual gate for the certified adaptive branch. The effective gate is

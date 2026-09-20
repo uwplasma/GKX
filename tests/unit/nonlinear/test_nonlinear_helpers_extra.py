@@ -3518,3 +3518,168 @@ def test_shipped_optimization_example_stays_at_or_below_the_knee():
     match = re.search(r"WINDOW_STEPS\s*=\s*([\d_]+)", source)
     assert match is not None
     assert int(match.group(1).replace("_", "")) <= DIVERGENCE_KNEE_STEPS
+
+
+# --- Q29: the sheared IMEX route carries the same solve status ----------------
+
+
+def _sheared_imex_deck():
+    grid = build_spectral_grid(
+        GridConfig(
+            Nx=4,
+            Ny=4,
+            Nz=4,
+            Lx=2.0 * np.pi,
+            Ly=2.0 * np.pi,
+            boundary="periodic",
+        )
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
+    params = LinearParams(rho_star=1.0, nu_hyper=0.0, nu_hyper_m=0.0)
+    cache = build_linear_cache(grid, geom, params, Nl=1, Nm=2)
+    state = jnp.zeros((1, 1, 2, 4, 4, 4), dtype=jnp.complex64)
+    state = state.at[0, 0, 0, 1, 0, :].set(0.2 + 0.1j)
+    return grid, geom, params, cache, state
+
+
+_Q29_SHEARED = dict(dt=0.02, steps=3, shear_rate=0.5, terms=TermConfig(nonlinear=1.0))
+_Q29_STARVED_BUDGET = dict(implicit_tol=1.0e-14, implicit_maxiter=1, implicit_restart=1)
+_Q29_GENEROUS_BUDGET = dict(
+    implicit_tol=1.0e-8, implicit_maxiter=200, implicit_restart=20
+)
+
+
+def test_sheared_imex_carries_unconverged_solves_to_the_host_gate() -> None:
+    """A starved inner budget is visible on the sheared IMEX route and refused."""
+
+    from gkx.solvers_linear_implicit import require_converged_implicit_solves
+
+    grid, geom, params, cache, state = _sheared_imex_deck()
+
+    def run(budget):
+        _final, _fields, stats = integrate_nonlinear_sheared(
+            state,
+            grid,
+            geom,
+            params,
+            method="imex",
+            cache=cache,
+            return_solve_stats=True,
+            **_Q29_SHEARED,
+            **budget,
+        )
+        return stats
+
+    starved = run(_Q29_STARVED_BUDGET)
+    assert int(starved.solves) == 3
+    assert int(starved.unconverged_solves) == 3
+    assert float(starved.max_relative_residual) > 1.0e-14
+    with pytest.raises(RuntimeError, match="3 of 3 implicit GMRES solves did not"):
+        require_converged_implicit_solves(starved, label="sheared probe")
+
+    summary = require_converged_implicit_solves(
+        run(_Q29_GENEROUS_BUDGET), label="sheared probe"
+    )
+    assert summary.converged and summary.solves == 3
+    assert summary.unconverged_solves == 0
+
+
+def test_sheared_transport_trace_carries_the_same_status() -> None:
+    """The transport door reports through the trace it already returns."""
+
+    from gkx.solvers_linear_implicit import require_converged_implicit_solves
+
+    grid, geom, params, cache, state = _sheared_imex_deck()
+    trace = integrate_nonlinear_sheared_transport(
+        state,
+        grid,
+        geom,
+        params,
+        method="imex",
+        cache=cache,
+        return_solve_stats=True,
+        **_Q29_SHEARED,
+        **_Q29_STARVED_BUDGET,
+    )
+    assert trace.solve_stats is not None
+    with pytest.raises(RuntimeError, match="3 of 3 implicit GMRES solves did not"):
+        require_converged_implicit_solves(trace.solve_stats, label="sheared transport")
+
+    unasked = integrate_nonlinear_sheared_transport(
+        state,
+        grid,
+        geom,
+        params,
+        method="imex",
+        cache=cache,
+        **_Q29_SHEARED,
+        **_Q29_GENEROUS_BUDGET,
+    )
+    assert unasked.solve_stats is None
+    np.testing.assert_array_equal(
+        np.asarray(unasked.final_state),
+        np.asarray(
+            integrate_nonlinear_sheared_transport(
+                state,
+                grid,
+                geom,
+                params,
+                method="imex",
+                cache=cache,
+                return_solve_stats=True,
+                **_Q29_SHEARED,
+                **_Q29_GENEROUS_BUDGET,
+            ).final_state
+        ),
+    )
+
+
+def test_an_explicit_sheared_method_reports_no_implicit_status() -> None:
+    """No implicit solve, no carry leaf, and a null status rather than a fake one."""
+
+    grid, geom, params, cache, state = _sheared_imex_deck()
+    final, _fields, stats = integrate_nonlinear_sheared(
+        state,
+        grid,
+        geom,
+        params,
+        method="rk2",
+        cache=cache,
+        return_solve_stats=True,
+        **_Q29_SHEARED,
+    )
+    assert stats is None
+    reference, _reference_fields = integrate_nonlinear_sheared(
+        state, grid, geom, params, method="rk2", cache=cache, **_Q29_SHEARED
+    )
+    np.testing.assert_array_equal(np.asarray(final), np.asarray(reference))
+
+    state_only, only_stats = integrate_nonlinear_sheared(
+        state,
+        grid,
+        geom,
+        params,
+        method="rk2",
+        cache=cache,
+        return_fields=False,
+        return_solve_stats=True,
+        **_Q29_SHEARED,
+    )
+    assert only_stats is None
+    # The state-only scan form is its own graph -- it takes the fixed-step time
+    # rather than the accumulated one, which is a pre-existing difference of the
+    # two forms -- so it is compared against itself, not against the endpoint
+    # form, and must be bitwise unchanged by asking for a status it has none of.
+    state_only_reference = integrate_nonlinear_sheared(
+        state,
+        grid,
+        geom,
+        params,
+        method="rk2",
+        cache=cache,
+        return_fields=False,
+        **_Q29_SHEARED,
+    )
+    np.testing.assert_array_equal(
+        np.asarray(state_only), np.asarray(state_only_reference)
+    )

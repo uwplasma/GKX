@@ -96,8 +96,19 @@ state the caller built: ``gkx.prepare`` and the prepared object's ``run`` /
 ``run_arrays`` (including ``PreparedSimulation.solve(initial_state=...)``),
 ``integrate_nonlinear_explicit_diagnostics_state``, and the differentiable
 objective :func:`~gkx.solvers_nonlinear_state_integration.nonlinear_heat_flux_window`.
-Each **projects** the state it is given onto the linked chain cover; none of
-them rejects it.
+It also holds at the raw drivers under them,
+:func:`~gkx.solvers_nonlinear_state_integration.integrate_nonlinear` and
+:func:`~gkx.solvers_nonlinear_state_integration.integrate_nonlinear_cached`
+(queue row Q29), which is where the rule stops being a property of the doors a
+user happens to use and becomes a property of the library.  Each **projects**
+the state it is given onto the linked chain cover; none of them rejects it.
+
+At the raw drivers the projection is applied once, in
+``integrate_nonlinear_cached``, which ``integrate_nonlinear`` builds a cache for
+and then delegates to, so both doors take the same view of the same array.  It
+runs before the scan is built, so the compiled scan is the graph it was: the
+added work is a single ``where`` whose instruction count does not grow with
+``steps``.
 
 Projection rather than rejection, for two reasons.  These are differentiable
 entry points: the prepared object's ``run_arrays`` is the traced boundary, and
@@ -238,11 +249,37 @@ as the eigen gates refuse an uncertified pair.  Neither returns a trajectory
 with an unconverged implicit step.  The library integrators stay traceable and
 do not raise: ``integrate_linear``, ``integrate_linear_diagnostics``,
 ``integrate_linear_from_config``, ``integrate_nonlinear``,
-``integrate_nonlinear_from_config`` and ``integrate_nonlinear_imex_cached``
-accept ``return_solve_stats=True`` and append the stats (``None`` for methods
-without an implicit solve) for callers that decide for themselves; without it
-they return what they returned before.  The IMEX diagnostics scan and the
-sheared IMEX route do not carry the stats yet.
+``integrate_nonlinear_from_config``, ``integrate_nonlinear_imex_cached``,
+``integrate_nonlinear_imex_diagnostics``,
+``integrate_nonlinear_explicit_diagnostics``, ``integrate_nonlinear_sheared``
+and ``integrate_nonlinear_sheared_transport`` accept
+``return_solve_stats=True`` and append the stats (``None`` for methods without
+an implicit solve) for callers that decide for themselves; without it they
+return what they returned before.  For
+``integrate_nonlinear_sheared_transport`` the stats arrive as the returned
+trace's ``solve_stats`` field, which stays ``None`` when they were not asked
+for.  A caller that wants the runtime's refusal applies
+:func:`~gkx.solvers_linear_implicit.require_converged_implicit_solves` to the
+stats itself; that is the one gate, wherever it is called from.
+
+The IMEX diagnostics route and the sheared IMEX route carry the stats through
+their own scans (queue row Q29): the diagnostic carry grows one
+``ImplicitSolveStats`` leaf, folded once per implicit solve -- three times per
+step under ``sspx3`` -- and the sheared scans grow that leaf only on the
+``method="imex"`` route, so the explicit sheared methods keep exactly the carry
+they had.
+
+**Saved summaries carry the status too.**  ``*.summary.json`` -- written by a
+prefix run, by the ``--out`` JSON form and as the sidecar of a NetCDF bundle --
+now records the same flat ``eigen_*`` and ``implicit_*`` keys the in-memory
+result reports, with the same names and the same ``None`` where no such solve
+ran.  Before this, a run read back from disk had no convergence channel at all,
+so a reader could not tell a certified eigenpair or a converged implicit scan
+from an unchecked one.  Each status type spells its own keys --
+:func:`~gkx.solvers_linear_implicit.implicit_solve_payload` and
+``gkx.solvers_linear_krylov.eigen_status_payload`` -- and both the result's
+``summary()`` and the artifact writers read those, so the two cannot drift
+apart.
 
 **Cost.**  Callers that do not request the stats compile the graph they
 compiled before, because XLA removes the unused carry.  Requesting them reads

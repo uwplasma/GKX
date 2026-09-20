@@ -84,8 +84,11 @@ ExB bracket would alias whatever sits there back onto the chain rows. The
 projection is a mask fixed by the deck's topology, not a check on the state, so
 it holds under ``jit`` and under reverse-mode AD: the cotangent of a supplied
 state is exactly zero on those rows and unchanged elsewhere. Periodic decks and
-full-cover linked grids are untouched. :doc:`solvers` states the rule, its
-alternative and what it was measured to cost.
+full-cover linked grids are untouched. The raw drivers underneath,
+``integrate_nonlinear`` and ``integrate_nonlinear_cached``, project a supplied
+state the same way, so the rule does not depend on which door a caller uses.
+:doc:`solvers` states the rule, its alternative and what it was measured to
+cost.
 
 .. automodule:: gkx.api
    :members:

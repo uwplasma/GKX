@@ -1032,7 +1032,18 @@ recursive = true
 # why the half dealias mask is built rather than sliced when the slice agrees,
 # and why an even grid's Nyquist row is now a flux representative in both
 # layouts. Target unchanged.
-baseline = 91655
+# 91655 -> 92017 (queue row Q29). Closing the two coverage holes #242 and #253
+# recorded. The status half threads one `ImplicitSolveStats` leaf through the
+# IMEX diagnostic carry and through both sheared scan forms, which needs a
+# stats-threading twin of the IMEX solve-step closure and of the IMEX state
+# advance -- the advance is shared, not duplicated: the plain form is the same
+# code with a status that is `None` -- plus the `return_solve_stats` keyword on
+# the four library doors that reach those scans. The projection half is one
+# call. The rest is the two flatteners moved out of `results.py` into the
+# module that owns solver status, so the in-memory result and the saved summary
+# file cannot spell the same keys differently, and the docstrings that state
+# which route now reports what. Target unchanged.
+baseline = 92017
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1304,7 +1315,17 @@ recursive = true
 # buffer assignment. The first carries a small HLO module as a fixture,
 # because the distinction it pins is a property of where an instruction is
 # written and cannot be stated without a computation around it.
-baseline = 91565
+# 91565 -> 92089 (queue row Q29). Sixteen cases, one per route the two
+# recorded holes left open: a starved inner budget carried and refused on the
+# IMEX diagnostics route, on both sheared IMEX doors and through an `sspx3`
+# step's three solves; an explicit sheared method reporting a null status and a
+# bitwise unchanged state; the saved summary carrying the result's own status
+# keys and reporting `None` rather than a fabricated converged one; and the two
+# raw drivers projecting a supplied state, agreeing with each other bitwise,
+# giving its off-chain rows exactly zero cotangent, and leaving a periodic deck
+# the same array object. Each asserts on a real run rather than a fake, because
+# what is being pinned is which route has a channel at all.
+baseline = 92089
 target = 35000
 
 [[line_budget_policy.counts]]

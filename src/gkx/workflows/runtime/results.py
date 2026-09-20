@@ -12,25 +12,12 @@ import numpy as np
 from gkx.diagnostics.modes import ModeSelection
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.terms.config import FieldState
+from gkx.solvers_linear_implicit import implicit_solve_payload
+from gkx.solvers_linear_krylov import eigen_status_payload
 
 if TYPE_CHECKING:
     from gkx.solvers_linear_implicit import ImplicitSolveSummary
     from gkx.solvers_linear_krylov import EigenSolveStatus
-
-
-def _implicit_solve_summary(summary: ImplicitSolveSummary | None) -> dict[str, Any]:
-    """Flatten an implicit-solve summary into scalar keys; None when none ran."""
-
-    return {
-        "implicit_converged": None if summary is None else summary.converged,
-        "implicit_max_relative_residual": (
-            None if summary is None else summary.max_relative_residual
-        ),
-        "implicit_max_iterations": None if summary is None else summary.max_iterations,
-        "implicit_unconverged_solves": (
-            None if summary is None else summary.unconverged_solves
-        ),
-    }
 
 
 def _dataset_payload(
@@ -135,8 +122,6 @@ class RuntimeLinearResult(_ResultArtifacts):
     def summary(self) -> dict[str, Any]:
         """Return the typed scalar diagnostics, including fit and solver status."""
 
-        eigen = self.eigen_status
-        inner = None if eigen is None else eigen.inner
         return {
             "kind": "linear",
             "ky": float(self.ky),
@@ -149,12 +134,8 @@ class RuntimeLinearResult(_ResultArtifacts):
             "fit_signal_used": self.fit_signal_used,
             "fit_window_tmin": self.fit_window_tmin,
             "fit_window_tmax": self.fit_window_tmax,
-            "eigen_route": None if eigen is None else eigen.route,
-            "eigen_residual": None if eigen is None else eigen.residual,
-            "eigen_tolerance": None if eigen is None else eigen.tolerance,
-            "eigen_certified": None if eigen is None else eigen.certified,
-            "eigen_inner_converged": None if inner is None else inner["converged"],
-            **_implicit_solve_summary(self.implicit_solve),
+            **eigen_status_payload(self.eigen_status),
+            **implicit_solve_payload(self.implicit_solve),
         }
 
     def to_dataset(self) -> dict[str, Any]:
@@ -279,7 +260,7 @@ class RuntimeNonlinearResult(_ResultArtifacts):
             "heat_flux_sem": saturation.get("sem"),
             "window_tmin": saturation.get("window_tmin"),
             "window_tmax": saturation.get("window_tmax"),
-            **_implicit_solve_summary(self.implicit_solve),
+            **implicit_solve_payload(self.implicit_solve),
         }
 
     def to_dataset(self) -> dict[str, Any]:

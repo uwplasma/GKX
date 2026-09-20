@@ -2053,3 +2053,86 @@ def test_a_periodic_deck_is_untouched_by_the_supplied_state_contract() -> None:
         )
     )
     np.testing.assert_array_equal(np.asarray(final_state), np.asarray(runtime_final))
+
+
+# --- Q29: the raw drivers take the same view of a state they did not build ---
+
+_Q29_RAW_OPTIONS = dict(
+    dt=1.0e-3,
+    steps=3,
+    method="rk3",
+    terms=TermConfig(nonlinear=1.0),
+)
+
+
+def _raw_cached(state, cache, params):
+    G_final, _fields = integrate_nonlinear_cached(
+        jnp.asarray(state), cache, params, **_Q29_RAW_OPTIONS
+    )
+    return np.asarray(G_final)
+
+
+def test_integrate_nonlinear_cached_projects_a_supplied_state() -> None:
+    """The raw cached driver runs the projected state, not the one handed in."""
+
+    grid, _geom, params, cache = _linked_nonlinear_deck()
+    supplied, on_cover, _cover, off = _supplied_and_on_cover(grid, cache, seed=2901)
+    assert np.max(np.abs(supplied[off])) > 0.0
+
+    from_supplied = _raw_cached(supplied, cache, params)
+    from_on_cover = _raw_cached(on_cover, cache, params)
+
+    assert np.max(np.abs(from_supplied[off])) == 0.0
+    np.testing.assert_array_equal(from_supplied, from_on_cover)
+
+
+def test_integrate_nonlinear_projects_a_supplied_state_like_its_cached_driver() -> None:
+    """Both raw doors are one contract: the grid door delegates to the cached one."""
+
+    grid, geom, params, cache = _linked_nonlinear_deck()
+    supplied, on_cover, _cover, off = _supplied_and_on_cover(grid, cache, seed=2902)
+
+    G_grid_door, _fields = integrate_nonlinear(
+        jnp.asarray(supplied), grid, geom, params, cache=cache, **_Q29_RAW_OPTIONS
+    )
+    G_grid_door = np.asarray(G_grid_door)
+
+    assert np.max(np.abs(G_grid_door[off])) == 0.0
+    np.testing.assert_array_equal(G_grid_door, _raw_cached(on_cover, cache, params))
+
+
+def test_a_raw_driver_gives_a_supplied_states_off_chain_rows_no_gradient() -> None:
+    """Projection at a raw driver traces and differentiates, as it does above."""
+
+    grid, _geom, params, cache = _linked_nonlinear_deck()
+    supplied, on_cover, _cover, off = _supplied_and_on_cover(grid, cache, seed=2903)
+
+    def final_energy(state):
+        G_final, _fields = integrate_nonlinear_cached(
+            state, cache, params, **_Q29_RAW_OPTIONS
+        )
+        return jnp.sum(jnp.abs(G_final) ** 2)
+
+    cotangent = np.asarray(jax.grad(final_energy)(jnp.asarray(supplied)))
+    reference = np.asarray(jax.grad(final_energy)(jnp.asarray(on_cover)))
+
+    assert np.max(np.abs(cotangent[off])) == 0.0
+    assert np.max(np.abs(cotangent[~off])) > 0.0
+    np.testing.assert_array_equal(cotangent[~off], reference[~off])
+
+
+def test_a_periodic_deck_reaches_the_raw_drivers_unprojected() -> None:
+    """No cover means the same array object, so the driver's graph is unchanged."""
+
+    grid, geom, params, cache = _linked_nonlinear_deck("periodic")
+    supplied, _on_cover, cover, _off = _supplied_and_on_cover(grid, cache, seed=2904)
+    assert cover is None
+    assert linked_cover_mask_from_cache(cache) is None
+    state = jnp.asarray(supplied)
+    assert mask_supplied_state(state, cache) is state
+
+    from_cached = _raw_cached(supplied, cache, params)
+    G_grid_door, _fields = integrate_nonlinear(
+        jnp.asarray(supplied), grid, geom, params, cache=cache, **_Q29_RAW_OPTIONS
+    )
+    np.testing.assert_array_equal(from_cached, np.asarray(G_grid_door))

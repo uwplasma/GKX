@@ -22,7 +22,9 @@ from gkx.solvers_linear_implicit import (
     _gmres_iteration_budget,
 )
 from gkx.solvers_nonlinear_imex_diagnostics import (
+    StatsSolveStepFn,
     advance_imex_nonlinear_state,
+    advance_imex_nonlinear_state_with_stats,
     make_imex_diagnostic_step,
     run_imex_diagnostic_scan,
 )
@@ -267,6 +269,43 @@ def make_imex_nonlinear_term(
     return nonlinear_term
 
 
+def _imex_solve_policy(
+    *,
+    linear_rhs_fn: LinearRhsFn,
+    cache: object,
+    params: object,
+    linear_cfg: object,
+    external_phi: jnp.ndarray | float | None,
+    dt_val: jnp.ndarray,
+    implicit_iters: int,
+    implicit_relax: float,
+    matvec: MatvecFn,
+    shape: tuple[int, ...],
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_restart: int,
+    precond_op: PreconditionerFn | None,
+) -> dict[str, Any]:
+    """Collect the solve keywords both IMEX step closures forward verbatim."""
+
+    return {
+        "linear_rhs_fn": linear_rhs_fn,
+        "cache": cache,
+        "params": params,
+        "linear_cfg": linear_cfg,
+        "external_phi": external_phi,
+        "dt_val": dt_val,
+        "implicit_iters": implicit_iters,
+        "implicit_relax": implicit_relax,
+        "matvec": matvec,
+        "shape": shape,
+        "implicit_tol": implicit_tol,
+        "implicit_maxiter": implicit_maxiter,
+        "implicit_restart": implicit_restart,
+        "precond_op": precond_op,
+    }
+
+
 def make_imex_solve_step(
     *,
     linear_rhs_fn: LinearRhsFn,
@@ -287,25 +326,77 @@ def make_imex_solve_step(
 ) -> SolveStepFn:
     """Return the GMRES solve-step closure used by IMEX scan policies."""
 
+    policy = _imex_solve_policy(
+        linear_rhs_fn=linear_rhs_fn,
+        cache=cache,
+        params=params,
+        linear_cfg=linear_cfg,
+        external_phi=external_phi,
+        dt_val=dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        matvec=matvec,
+        shape=shape,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        precond_op=precond_op,
+    )
+
     def solve_step(G_in: jnp.ndarray, G_rhs: jnp.ndarray) -> jnp.ndarray:
-        return solve_step_fn(
-            G_in,
-            G_rhs,
-            linear_rhs_fn=linear_rhs_fn,
-            cache=cache,
-            params=params,
-            linear_cfg=linear_cfg,
-            external_phi=external_phi,
-            dt_val=dt_val,
-            implicit_iters=implicit_iters,
-            implicit_relax=implicit_relax,
-            matvec=matvec,
-            shape=shape,
-            implicit_tol=implicit_tol,
-            implicit_maxiter=implicit_maxiter,
-            implicit_restart=implicit_restart,
-            precond_op=precond_op,
-        )
+        return solve_step_fn(G_in, G_rhs, **policy)
+
+    return solve_step
+
+
+def make_imex_solve_step_with_stats(
+    *,
+    linear_rhs_fn: LinearRhsFn,
+    cache: object,
+    params: object,
+    linear_cfg: object,
+    external_phi: jnp.ndarray | float | None,
+    dt_val: jnp.ndarray,
+    implicit_iters: int,
+    implicit_relax: float,
+    matvec: MatvecFn,
+    shape: tuple[int, ...],
+    implicit_tol: float,
+    implicit_maxiter: int,
+    implicit_restart: int,
+    precond_op: PreconditionerFn | None,
+    solve_step_fn: Callable[..., tuple[jnp.ndarray, ImplicitSolveStats]] = (
+        solve_imex_step_with_stats
+    ),
+) -> StatsSolveStepFn:
+    """Return :func:`make_imex_solve_step`'s closure, threading solve status.
+
+    The closure maps ``(state, rhs, stats)`` to ``(next state, stats)``, the
+    same shape the implicit linear scan's step uses, so a diagnostic scan can
+    carry its convergence channel without a host callback inside the scan.
+    """
+
+    policy = _imex_solve_policy(
+        linear_rhs_fn=linear_rhs_fn,
+        cache=cache,
+        params=params,
+        linear_cfg=linear_cfg,
+        external_phi=external_phi,
+        dt_val=dt_val,
+        implicit_iters=implicit_iters,
+        implicit_relax=implicit_relax,
+        matvec=matvec,
+        shape=shape,
+        implicit_tol=implicit_tol,
+        implicit_maxiter=implicit_maxiter,
+        implicit_restart=implicit_restart,
+        precond_op=precond_op,
+    )
+
+    def solve_step(
+        G_in: jnp.ndarray, G_rhs: jnp.ndarray, stats: ImplicitSolveStats
+    ) -> tuple[jnp.ndarray, ImplicitSolveStats]:
+        return solve_step_fn(G_in, G_rhs, stats, **policy)
 
     return solve_step
 
@@ -566,11 +657,13 @@ def integrate_cached_imex_scan(
 
 __all__ = [
     "advance_imex_nonlinear_state",
+    "advance_imex_nonlinear_state_with_stats",
     "imex_fixed_point_guess",
     "integrate_cached_imex_scan",
     "make_imex_diagnostic_step",
     "make_imex_nonlinear_term",
     "make_imex_solve_step",
+    "make_imex_solve_step_with_stats",
     "run_imex_diagnostic_scan",
     "solve_imex_step",
     "solve_imex_step_with_stats",
