@@ -1,0 +1,48 @@
+Compiles per call and wall per call, main against branch (run_timing.sh).
+Cyclone 16x16x12 Nl2/Nm4, six-step RK3 window, checkpoint=True,
+jax.value_and_grad wrt tprim, float32, jax 0.10.2 XLA:CPU. call 0 is the
+warm-up; calls 1-3 are the timed ones.
+
+load before:  3.45 4.50 5.14
+--- rep1 main ky=full
+call 0: wall 11.031s compiles 405 compile 7.863s exec 3.168s
+call 1: wall 5.080s compiles 13 compile 3.049s exec 2.030s
+call 2: wall 5.292s compiles 13 compile 3.183s exec 2.109s
+call 3: wall 5.359s compiles 13 compile 3.310s exec 2.049s
+--- rep1 branch ky=full
+call 0: wall 7.335s compiles 123 compile 4.599s exec 2.736s
+call 1: wall 0.140s compiles 0 compile 0.000s exec 0.140s
+call 2: wall 0.139s compiles 0 compile 0.000s exec 0.139s
+call 3: wall 0.141s compiles 0 compile 0.000s exec 0.141s
+--- rep1 main ky=half
+call 0: wall 12.427s compiles 365 compile 9.498s exec 2.929s
+call 1: wall 7.044s compiles 13 compile 5.048s exec 1.996s
+call 2: wall 7.052s compiles 13 compile 5.186s exec 1.866s
+call 3: wall 7.357s compiles 13 compile 5.331s exec 2.026s
+--- rep1 branch ky=half
+call 0: wall 6.783s compiles 105 compile 4.144s exec 2.639s
+call 1: wall 0.115s compiles 0 compile 0.000s exec 0.115s
+call 2: wall 0.116s compiles 0 compile 0.000s exec 0.116s
+call 3: wall 0.115s compiles 0 compile 0.000s exec 0.115s
+--- rep2 main ky=full
+call 0: wall 11.134s compiles 405 compile 8.051s exec 3.083s
+call 1: wall 4.920s compiles 13 compile 2.949s exec 1.972s
+call 2: wall 5.309s compiles 13 compile 3.175s exec 2.135s
+call 3: wall 5.158s compiles 13 compile 3.232s exec 1.926s
+--- rep2 branch ky=full
+call 0: wall 7.307s compiles 123 compile 4.531s exec 2.776s
+call 1: wall 0.139s compiles 0 compile 0.000s exec 0.139s
+call 2: wall 0.141s compiles 0 compile 0.000s exec 0.141s
+call 3: wall 0.139s compiles 0 compile 0.000s exec 0.139s
+--- rep2 main ky=half
+call 0: wall 12.314s compiles 365 compile 9.370s exec 2.944s
+call 1: wall 7.122s compiles 13 compile 5.189s exec 1.932s
+call 2: wall 7.229s compiles 13 compile 5.364s exec 1.865s
+call 3: wall 7.274s compiles 13 compile 5.223s exec 2.051s
+--- rep2 branch ky=half
+call 0: wall 6.821s compiles 105 compile 4.168s exec 2.653s
+call 1: wall 0.116s compiles 0 compile 0.000s exec 0.116s
+call 2: wall 0.113s compiles 0 compile 0.000s exec 0.113s
+call 3: wall 0.112s compiles 0 compile 0.000s exec 0.112s
+load after:  4.41 4.84 5.20
+

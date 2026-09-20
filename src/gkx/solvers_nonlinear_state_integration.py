@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import replace
+from functools import partial
 from typing import Any, Callable, NamedTuple
 
 import jax
@@ -35,6 +36,8 @@ from gkx.operators.nonlinear.projection import (
     _make_compressed_real_fft_projector,
     _make_hermitian_projector,
     advance_shearing_coordinates,
+    hermitian_projector_for_signature,
+    hermitian_projector_signature,
 )
 from gkx.operators.nonlinear.rhs import (
     linear_rhs_jit_for_terms_impl,
@@ -288,6 +291,137 @@ def integrate_nonlinear(
     )
 
 
+def _identity_state(state: jnp.ndarray) -> jnp.ndarray:
+    """Return the state unchanged, from a module-level function object.
+
+    ``lambda state: state`` would be a fresh object on every call, and the
+    window's projector is closed over by the compiled window below, whose trace
+    cache is keyed on the function it is asked to compile.
+    """
+
+    return state
+
+
+@partial(
+    jax.jit,
+    static_argnames=(
+        "dt",
+        "count",
+        "tail",
+        "method",
+        "term_cfg",
+        "compressed_real_fft",
+        "laguerre_mode",
+        "collision_operator",
+        "checkpoint",
+        "projector_signature",
+    ),
+)
+def _nonlinear_heat_flux_window_total(
+    initial_state: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_factor: jnp.ndarray,
+    initial_heat: jnp.ndarray,
+    indices: jnp.ndarray,
+    *,
+    dt: float,
+    count: int,
+    tail: int,
+    method: str,
+    term_cfg: TermConfig,
+    compressed_real_fft: bool,
+    laguerre_mode: str,
+    collision_operator: CollisionOperator | None,
+    checkpoint: bool,
+    projector_signature: tuple[int, bool, int] | None,
+) -> jnp.ndarray:
+    """Return the windowed heat-flux sum as one compiled graph (queue row Q30).
+
+    :func:`nonlinear_heat_flux_window` used to run this scan eagerly, and an
+    eager ``lax.scan`` or ``lax.cond`` is dispatched on the jaxpr its body was
+    just traced into. A jaxpr compares by identity, so a jaxpr rebuilt on every
+    call misses every lowering cache below it, and the route recompiled its four
+    scans and nine conds on each objective evaluation -- the route an
+    optimization loop calls in a loop. Under one ``jax.jit`` the trace cache is
+    keyed on this module-level function, the argument avals and the static
+    arguments below, all of which repeat, so the graph is compiled once and
+    reused -- including through ``jax.value_and_grad``, whose derived jaxprs are
+    memoized on the traced jaxpr that cache hands back.
+
+    Every array the window reads is an **argument**, not a captured constant:
+    the state, the linear cache, the grid, the parameters, the quadrature
+    weights and the step indices arrive as operands, the placement the eager
+    scan already gave them. That is what makes the graph reusable -- a captured
+    array would pin this geometry into the executable and recompile on the next
+    one an optimizer proposes. Only what cannot be an operand is static: the
+    step, the window tail, the integrator, the term switches, the collision
+    model, and the projector's grid signature
+    (:func:`~gkx.operators.nonlinear.projection.hermitian_projector_signature`),
+    which is axis layout and has no derivative.
+
+    The window's mean -- ``total_heat / tail`` -- is deliberately **not** here.
+    Inside the graph XLA fuses that divide into the scan's accumulation and the
+    result moves by one float32 ulp against the eager route; outside it, the
+    value and the adjoint are bitwise what they were.
+    """
+
+    project_state: Callable[[jnp.ndarray], jnp.ndarray] = (
+        _identity_state
+        if projector_signature is None
+        else hermitian_projector_for_signature(projector_signature)
+    )
+
+    def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
+        return nonlinear_rhs_cached(
+            state,
+            cache,
+            params,
+            term_cfg,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+            collision_operator=collision_operator,
+            differentiable=True,
+        )
+
+    def advance(carry: tuple[jnp.ndarray, jnp.ndarray], index: jnp.ndarray):
+        state, total_heat = carry
+        state = project_state(state)
+        derivative, _ = rhs(state)
+        next_state = advance_explicit_nonlinear_state(
+            state,
+            derivative,
+            jnp.asarray(dt, dtype=jnp.real(state).dtype),
+            method=method,
+            rhs_fn=rhs,
+            project_state=project_state,
+            state_dtype=state.dtype,
+        )
+        _, fields = rhs(next_state)
+        zero = jnp.zeros_like(fields.phi)
+        heat = heat_flux_total(
+            next_state,
+            fields.phi,
+            zero if fields.apar is None else fields.apar,
+            zero if fields.bpar is None else fields.bpar,
+            cache,
+            grid,
+            params,
+            flux_factor,
+        )
+        include = jnp.asarray(index >= count - tail, dtype=heat.dtype)
+        return (next_state, total_heat + include * heat), None
+
+    (_, total_heat), _ = checkpointed_explicit_scan(
+        advance,
+        (jax.lax.stop_gradient(initial_state), initial_heat),
+        indices,
+        checkpoint=checkpoint,
+    )
+    return total_heat
+
+
 def nonlinear_heat_flux_window(
     saturated_state: jnp.ndarray,
     grid: SpectralGrid,
@@ -332,6 +466,16 @@ def nonlinear_heat_flux_window(
     useful design direction; pass ``None`` to silence the check when the knee
     has been remeasured for the case at hand with
     ``tools/campaigns/nonlinear_gradient_window.py``.
+
+    **The window compiles once** (queue row Q30). Everything that has to be read
+    on the host stays here -- the linked cache, the quadrature weights, the
+    projector's axis layout, the chain-cover projection of ``saturated_state``
+    -- and the differentiated scan runs as one graph in
+    :func:`_nonlinear_heat_flux_window_total`, whose compile is reused across
+    calls and across the geometries an optimizer proposes. Calls repeat at the
+    same resolution and the same options, so the only reasons to recompile are
+    real ones: a new state shape, a different integrator or term set, a window
+    of a different length.
     """
 
     count = int(steps)
@@ -351,64 +495,37 @@ def nonlinear_heat_flux_window(
     geometry = ensure_flux_tube_geometry_data(geom, grid.z)
     cache = build_linear_cache(grid, geometry, params, Nl=Nl, Nm=Nm)
     _volume_factor, flux_factor = fieldline_quadrature_weights(geometry, grid)
-    project_state: Callable[[jnp.ndarray], jnp.ndarray] = (
-        _make_hermitian_projector(np.asarray(grid.ky), int(np.asarray(grid.kx).size))
+    projector_signature = (
+        hermitian_projector_signature(
+            np.asarray(grid.ky), int(np.asarray(grid.kx).size)
+        )
         if compressed_real_fft
-        else lambda state: state
+        else None
     )
-
-    def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
-        return nonlinear_rhs_cached(
-            state,
-            cache,
-            params,
-            term_cfg,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-            collision_operator=collision_operator,
-            differentiable=True,
-        )
-
-    def advance(carry: tuple[jnp.ndarray, jnp.ndarray], index: jnp.ndarray):
-        state, total_heat = carry
-        state = project_state(state)
-        derivative, _ = rhs(state)
-        next_state = advance_explicit_nonlinear_state(
-            state,
-            derivative,
-            jnp.asarray(dt, dtype=jnp.real(state).dtype),
-            method=method,
-            rhs_fn=rhs,
-            project_state=project_state,
-            state_dtype=state.dtype,
-        )
-        _, fields = rhs(next_state)
-        zero = jnp.zeros_like(fields.phi)
-        heat = heat_flux_total(
-            next_state,
-            fields.phi,
-            zero if fields.apar is None else fields.apar,
-            zero if fields.bpar is None else fields.bpar,
-            cache,
-            grid,
-            params,
-            flux_factor,
-        )
-        include = jnp.asarray(index >= count - tail, dtype=heat.dtype)
-        return (next_state, total_heat + include * heat), None
-
     initial_state = jax.lax.stop_gradient(
         mask_supplied_state(jnp.asarray(saturated_state), cache)
     )
     heat_dtype = jnp.result_type(
         jnp.real(initial_state), flux_factor, *jax.tree_util.tree_leaves(params)
     )
-    initial_heat = jnp.zeros((), dtype=heat_dtype)
-    (_, total_heat), _ = checkpointed_explicit_scan(
-        advance,
-        (initial_state, initial_heat),
+    total_heat = _nonlinear_heat_flux_window_total(
+        initial_state,
+        cache,
+        grid,
+        params,
+        flux_factor,
+        jnp.zeros((), dtype=heat_dtype),
         jnp.arange(count),
+        dt=dt,
+        count=count,
+        tail=tail,
+        method=method,
+        term_cfg=term_cfg,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        collision_operator=collision_operator,
         checkpoint=checkpoint,
+        projector_signature=projector_signature,
     )
     return total_heat / tail
 

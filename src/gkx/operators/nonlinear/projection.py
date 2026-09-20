@@ -19,6 +19,8 @@ __all__ = [
     "_make_hermitian_projector",
     "_make_nonlinear_state_projector",
     "advance_shearing_coordinates",
+    "hermitian_projector_for_signature",
+    "hermitian_projector_signature",
 ]
 
 
@@ -196,13 +198,37 @@ def _hermitian_ky_axis_layout(ky_vals: Any) -> tuple[int, bool]:
     return int(host.size), bool(np.any(host < 0.0))
 
 
+def hermitian_projector_signature(
+    ky_vals: np.ndarray, nx: int
+) -> tuple[int, bool, int]:
+    """Return the hashable grid signature :func:`_make_hermitian_projector` keys on.
+
+    The projector depends on the ``ky`` axis *layout* and the ``kx`` count, not
+    on a wavenumber, so a caller that has to read the axis on the host anyway
+    can read it once and then carry this tuple. It is hashable, which a grid is
+    not, so it can be a ``jax.jit`` static argument and let a compiled window
+    rebuild the same projector without touching a traced grid.
+    """
+
+    ny_full, two_sided = _hermitian_ky_axis_layout(ky_vals)
+    return ny_full, two_sided, int(nx)
+
+
+def hermitian_projector_for_signature(
+    signature: tuple[int, bool, int],
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """Return the projector of a :func:`hermitian_projector_signature` tuple."""
+
+    ny_full, two_sided, nx = signature
+    return _cached_hermitian_projector(int(ny_full), bool(two_sided), int(nx))
+
+
 def _make_hermitian_projector(
     ky_vals: np.ndarray, nx: int
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
     """Return a stable projector for one full-ky grid signature."""
 
-    ny_full, two_sided = _hermitian_ky_axis_layout(ky_vals)
-    return _cached_hermitian_projector(ny_full, two_sided, int(nx))
+    return hermitian_projector_for_signature(hermitian_projector_signature(ky_vals, nx))
 
 
 def _make_compressed_real_fft_projector(
