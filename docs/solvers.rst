@@ -162,40 +162,56 @@ residual gate
 Why ``adaptive`` is the default, and not shift-invert
 -----------------------------------------------------
 
-Queue row Q26 (2026-09-19) re-examined this choice against the rewritten §5.1
-adoption gate, which adopts a reproducible cost reduction that loses no
-accuracy even at 15--30%.  ``adaptive`` stays the default, and the reason is not
-that shift-invert is merely slower:
+Queue rows Q26 (2026-09-19) and Q28 (2026-09-20) re-examined this choice against
+the rewritten §5.1 adoption gate, which adopts a reproducible cost reduction
+that loses no accuracy even at 15--30%.  ``adaptive`` stays the default.
 
-* the shift is **not** the obstacle.  ``shift_source="propagator"`` derives a
-  shift from a short propagator run, so the default path can choose one with no
-  user input;
-* the inner solve is.  On the shipped Cyclone deck
-  (``examples/linear/axisymmetric/cyclone.toml``) at ``Nl=4, Nm=8``,
-  ``KrylovConfig(method="shift_invert")`` leaves **48 of 48** inner FGMRES
-  solves unconverged at maximum relative residual 34 against a 1e-4 inner
-  tolerance, and the outer pair is rejected at residual 0.99 against its gate.
-  That is not a budget shortfall: raising ``shift_maxiter`` from the default 50
-  to 2000 -- 96,000 inner iterations instead of 2,880 -- leaves the residual at
-  35.  It is not a precision effect either; the float64 run gives 48/48
-  unconverged at residual 34 and an outer residual of 0.987;
-* the route **fails closed**, as Q12 requires, so no user receives an
-  uncertified pair from it.  On the same deck and rung ``adaptive`` certifies at
-  residual 4.0e-15 against the 1e-9 float64 gate.
+Q26 recorded the shipped shift-invert route failing closed on the shipped
+Cyclone deck (``examples/linear/axisymmetric/cyclone.toml``) at ``Nl=4, Nm=8``:
+48 of 48 inner FGMRES solves unconverged, the outer pair rejected at residual
+0.99, and neither the budget nor the precision responsible.  Q28 separated that
+into three causes and fixed two of them:
 
-So shift-invert is not a candidate default until its inner solve converges on a
-production chain.  Q7 (#236) and Q21 (#255) both studied that inner solve, but
-on a research harness whose shift-invert is a different algorithm from this one:
-it uses SOLVAX ``gcrot`` with subspace recycling, the ``pr3-cm`` structured
-preconditioner, an unrestarted Arnoldi and a per-step original-operator residual
-with early exit.  This module uses restarted FGMRES with no recycling, the
-``hermite-line``/``field-corrected`` preconditioners, a fixed restart count and
-no per-step residual.  Neither of Q21's two levers transfers as a result: an
-inner-tolerance schedule cannot reduce a cost that no tolerance is setting when
-every solve is budget-capped and none converges, and the exact block-Thomas +
-Sherman--Morrison apply accelerates the dense z-local block of ``pr3-cm``, which
-this module does not build.  Landing either one means landing ``pr3-cm`` here
-first, which is a separate adoption.
+* **the initial guess**, now removed.  The shifted FGMRES seeded itself with
+  ``x0 = M^-1 b``.  Under right preconditioning the first Krylov vector *is*
+  ``M^-1 b``, so a cycle from zero already minimizes over a space containing
+  that point; the guess cannot help, and with a weak ``M`` it starts the solve
+  behind ``x = 0``.  On the first right-hand side of that deck it started 25.4
+  times behind for ``hermite-line``, 20.7 for ``field-corrected`` and 3.53 for
+  ``damping``.  That factor is what the reported inner residual of 34 was.  The
+  honest figure from zero is about 1 -- still a failure, for the next reason;
+* **the preconditioner**, now optional.  ``hermite-line`` does not converge at
+  that size: 600 unrestarted iterations leave the inner residual at 0.549 and
+  it never reaches the 1e-4 tolerance, while ``pr3-cm`` reaches it in 252.  With
+  ``shift_preconditioner="pr3-cm"`` the route **certifies** on that deck --
+  residual 3.25e-07 at ``Nl=4, Nm=8`` and 1.67e-07 at ``Nl=8, Nm=24``, both
+  agreeing with the ``adaptive`` control to eight significant figures in the
+  growth rate -- where it previously failed closed;
+* **the restart length**, unchanged and still a trap.  At the default
+  ``shift_restart=20`` even ``pr3-cm`` stalls: 300 iterations as GMRES(20) x 15
+  leave 0.177, while the same 252 iterations in one cycle converge.  A user
+  selecting ``pr3-cm`` has to raise ``shift_restart`` and ``shift_maxiter`` with
+  it.
+
+So shift-invert now has a configuration that works, and it is still not the
+default, because it is not cheaper.  Measured against a same-session
+``adaptive`` control with every arm certified against the original operator, in
+matvec-equivalents to a certified pair: 53,124 against 33,916 at ``Nl=4, Nm=8``
+and 138,200 against 96,700 at ``Nl=8, Nm=24`` -- 1.4 to 1.6 times **more**.  The
+gate adopts a cost reduction, and this is not one.  The route is improved; the
+default is unchanged.
+
+Of Q21's two inner-solve levers, one is now in ``src/`` and one is not.  The
+exact block-Thomas plus Sherman--Morrison solve of ``pr3-cm``'s z-local block is
+here, and is the same preconditioner: identical inner-iteration counts,
+identical certified residuals and applies agreeing to 7.4e-16 against the dense
+control, with factors 2.60 times smaller at ``Nl=8, Nm=24``.  The inexact-Krylov
+tolerance schedule is not, but its blocker has changed.  Q26's reason was that
+no tolerance was setting the cost -- every solve was budget-capped.  With
+``pr3-cm`` the inner solves converge (0 of 96 unconverged, against 96 of 96 for
+``hermite-line``), so a tolerance does set it; what is missing is a per-Arnoldi-
+step original-operator residual to drive the schedule, which this module's
+restarted loop does not compute.
 
 API change (queue row Q12, 2026-09-13): ``KrylovConfig.method`` previously
 defaulted to ``"propagator"`` and ``dominant_eigenpair(method=...)`` to
