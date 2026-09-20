@@ -18252,3 +18252,18 @@ done
 
 `bash plan/research/scripts/2026-09-20-default-resolution-and-integrator/run_arms.sh`
 runs all of them in order.
+
+## 2026-09-20 — release 2.2.0
+
+**Version.** 2.2.0, chosen by the maintainer. Nothing is removed since 2.1.0; two shipped
+defaults change (the linear resolution fallback and the integrator/step pairing), several
+routes gain reporting, and `pr3-cm` and the opt-in ky >= 0 layout are added. SemVer minor.
+plan.md's research-grade milestone moves 2.2.0 -> 2.3.0, exit criteria unchanged.
+
+**This release chain contains** #261 (Q28, pr3-cm in src/ and the shifted-FGMRES initial-guess
+fix), #262 (Q29, the three defaults) and #263 (Q30, solver status and state projection
+coverage), merged as one chain so CI runs once on the head. Three lanes had independently
+taken Q28 while running in parallel; the rows are numbered here by merge order.
+
+**Repaired in passing.** The Q30 row wrote `max|G|` with unescaped pipes, which split the
+table row into seven cells; the pipes are escaped.
