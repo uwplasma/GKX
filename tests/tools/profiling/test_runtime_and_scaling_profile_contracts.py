@@ -379,8 +379,12 @@ def test_compiled_memory_stats_report_the_compilers_buffer_assignment() -> None:
     """
 
     stats: dict[str, int] = {}
+    # An explicit dtype: the CI shards run with JAX_ENABLE_X64, under which an
+    # unannotated zeros() is float64 and the argument is twice this size.
     runtime_kernels._compiled_hlo_text(
-        lambda x: jnp.sum(x * 2.0), jnp.zeros((8, 8)), stats=stats
+        lambda x: jnp.sum(x * 2.0),
+        jnp.zeros((8, 8), dtype=jnp.float32),
+        stats=stats,
     )
 
     assert set(stats) >= {
