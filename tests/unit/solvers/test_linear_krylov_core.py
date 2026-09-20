@@ -2349,12 +2349,12 @@ ALLOWED_UNPINNED_MATRIX_DOTS = {
     # 675 -> 749 when the inner-solve statistics were added above it,
     # 749 -> 828 when the linked-chain mask helpers were (Q6), 828 -> 817
     # when those helpers moved to operators/linear/linked.py (Q19), and
-    # 817 -> 809 when Q23 and Q24 merged above it, and 809 -> 843 when Q28 added
+    # 817 -> 809 when Q23 and Q24 merged above it, and 809 -> 834 when Q28 added
     # the pr3-cm import, its names and its factors argument, and the comment
     # recording why the shifted FGMRES starts from zero, all above it; same
     # code, still the `lifted = jnp.tensordot(eigvecs.T, V[:krylov_dim],
     # axes=1)` of `_propagator_arnoldi_restart_step`, verified at the new line.
-    "solvers_linear_krylov_algorithms.py:843": "overlap ranking only; argmax provably unmoved",
+    "solvers_linear_krylov_algorithms.py:834": "overlap ranking only; argmax provably unmoved",
 }
 
 

@@ -1,0 +1,6 @@
+[     3.6s rss<=0.40G] t_matvec 1.074 ms
+[     3.6s rss<=0.40G] krylov method=shift_invert dim=48 restarts=2
+[     3.6s rss<=0.40G] preparing shift-invert solve with dim=48 restarts=2 gmres_maxiter=600 restart=600 tol=1e-06
+[     3.6s rss<=0.40G] using explicit shift with propagator seed vector
+[     5.2s rss<=0.58G] shift-invert sigma=0.148776-0.276905j
+[     5.2s rss<=0.58G] running shift-invert Arnoldi (hermite-line)
