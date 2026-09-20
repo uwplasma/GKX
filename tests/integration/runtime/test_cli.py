@@ -4414,7 +4414,24 @@ def test_runtime_species_and_model_helpers() -> None:
     assert kbm_krylov.method == "shift_invert"
     assert kbm_krylov.mode_family == "kbm"
 
-    assert _resolve_runtime_hl_dims(cfg, Nl=None, Nm=None) == (24, 12)
+    # The linear velocity fallback. It was (24, 12), which the shipped Cyclone
+    # deck records as Hermite-starved and which measures 4.405% low in gamma
+    # against the tracked GX golden. (12, 24) is the same Nl*Nm -- the same cost
+    # per propagator apply -- and measures +0.400%. Both halves matter, so both
+    # are asserted: the pair itself, and that the budget is unchanged.
+    from gkx.workflows.runtime.startup import _RUNTIME_LINEAR_HL_FALLBACK
+
+    assert _resolve_runtime_hl_dims(cfg, Nl=None, Nm=None) == (12, 24)
+    assert _resolve_runtime_hl_dims(cfg, Nl=None, Nm=None) == (
+        _RUNTIME_LINEAR_HL_FALLBACK
+    )
+    fallback_l, fallback_m = _RUNTIME_LINEAR_HL_FALLBACK
+    assert fallback_l * fallback_m == 288, "the fallback may not cost more"
+    assert fallback_m > fallback_l, "parallel phase mixing sets the ITG rate"
+    # An explicit request still wins on either axis.
+    assert _resolve_runtime_hl_dims(cfg, Nl=16, Nm=None) == (16, 24)
+    assert _resolve_runtime_hl_dims(cfg, Nl=None, Nm=48) == (12, 48)
+
     unsupported_cfg = replace(
         cfg, physics=replace(cfg.physics, reduced_model="mystery")
     )

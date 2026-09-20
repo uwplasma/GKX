@@ -156,16 +156,20 @@ def test_an_explicit_argument_still_overrides_the_deck() -> None:
 def test_a_deck_without_a_run_table_falls_back_to_the_runtime_default() -> None:
     """The fallback is the runtime's own, and it differs by kind.
 
-    ``_CASE_LINEAR_SPECS`` defaults to (24, 12) and ``_CASE_NONLINEAR_SPECS``
-    to (4, 8). Preparing must not invent a third pair.
+    ``_CASE_LINEAR_SPECS`` defaults to (12, 24) and ``_CASE_NONLINEAR_SPECS``
+    to (4, 8). Preparing must not invent a third pair, so the linear pair is
+    read from the runtime's owner rather than repeated here.
     """
+
+    from gkx.workflows.runtime.startup import _RUNTIME_LINEAR_HL_FALLBACK
 
     case = _linear_case()
     assert case.run.is_empty(), "this fixture is meant to carry no [run] table"
 
     prepared = prepare_simulation(case)
 
-    assert (prepared.n_laguerre, prepared.n_hermite) == (24, 12)
+    assert (prepared.n_laguerre, prepared.n_hermite) == (12, 24)
+    assert (prepared.n_laguerre, prepared.n_hermite) == _RUNTIME_LINEAR_HL_FALLBACK
 
 
 def test_a_deck_with_a_run_table_round_trips_through_toml(tmp_path) -> None:
