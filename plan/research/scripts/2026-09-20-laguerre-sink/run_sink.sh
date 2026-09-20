@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Q28 supervisor: one fresh process per (nu_hyper_l, Nl) case, cheapest first.
+# Q31 supervisor: one fresh process per (nu_hyper_l, Nl) case, cheapest first.
 #
 # Usage: run_sink.sh <run_dir> <key> [<key> ...]
 #
@@ -24,6 +24,7 @@ hl_of() {
     hl0-*)    echo 0.0 ;;
     hl1e-3-*) echo 0.001 ;;
     hl1e-2-*) echo 0.01 ;;
+    hl3e-2-*) echo 0.03 ;;
     hl1e-1-*) echo 0.1 ;;
     hl5e-1-*) echo 0.5 ;;
     *) echo "unknown sink tag in key $1" >&2; exit 2 ;;

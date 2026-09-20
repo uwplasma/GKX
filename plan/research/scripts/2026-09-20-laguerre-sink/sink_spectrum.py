@@ -1,5 +1,5 @@
 # ruff: noqa: E402
-"""Q28: certified eigenpairs of the Cyclone ky=.55 mode under a declared Laguerre sink.
+"""Q31: certified eigenpairs of the Cyclone ky=.55 mode under a declared Laguerre sink.
 
 Derived from Q16's ``eigen_spectrum.py`` (plan/research/scripts/
 2026-09-18-eigen-laguerre-spectrum) with one addition: the deck's

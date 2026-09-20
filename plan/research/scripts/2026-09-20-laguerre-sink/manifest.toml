@@ -1,9 +1,18 @@
-# Q28 declared Laguerre sink / velocity-space regularization contract
+# Q31 declared Laguerre sink / velocity-space regularization contract
 # (plan §0.5 (iii)-(iv))
 #
 # Registered 2026-09-20 BEFORE any run, as Q3 (#234), Q8 (#238) and Q16 (#252)
-# did. Baselines below are placeholders until the measured numbers replace
-# them; no baseline in this file is a delta.
+# did. Registered under the row number Q28; four lanes picked that number
+# independently, so the maintainer's allocation moved this row to Q31 (Q28 went
+# to #261) and the number was renamed here after registration. No prediction,
+# deck, strength, rung, method or baseline changed with it. Baselines below are
+# placeholders until the measured numbers replace them; no baseline in this file
+# is a delta.
+#
+# One strength was ADDED after registration and is marked as such below:
+# nu_hyper_l = 0.03, queued once the Nl24 rungs showed the pile-up surviving at
+# 0.01 and gone at 0.1, to bracket the strength at which it is removed. It
+# tests no prediction that the registered three do not already test.
 #
 # Question. §0.5 steps (i) and (ii) are closed and both hand the same question
 # forward. (i) #234: removing the grad-B drift removes the ITG itself, so drift
@@ -86,7 +95,7 @@
 [environment]
 host = "office"
 gpu = "RTX A4000 (index 0), guarded: no compute process at launch"
-cores = "taskset 0-15"
+cores = "taskset 20-35 (cores 11 and 18 measured busy at launch; another lane)"
 venv = "/home/rjorge/venvs/gkx-nl"
 x64 = true
 branch = "evidence/laguerre-sink"
@@ -110,6 +119,7 @@ nu_hyper_m_const = 0.0
 hypercollisions_const = 1.0
 hypercollisions_kz = 1.0
 strengths = [0.01, 0.1, 0.5]
+strengths_added_after_registration = [0.03]
 laguerre_rungs = [24, 32, 48]
 
 # Measured results are written to results.json / summary.txt by summarize.py and

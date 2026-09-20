@@ -1,4 +1,4 @@
-# Q28 declared Laguerre sink (2026-09-20): byte copy of Q16's eigen deck
+# Q31 declared Laguerre sink (2026-09-20): byte copy of Q16's eigen deck
 # (plan/research/scripts/2026-09-18-eigen-laguerre-spectrum/cyclone_salpha_itg_eigen.toml)
 # apart from this header, so a sink rung and a Q16 rung differ only by the
 # [collisions] overrides sink_spectrum.py applies (hypercollisions_const = 1.0,

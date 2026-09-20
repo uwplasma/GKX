@@ -1,4 +1,4 @@
-"""Q28: tables and verdict for the declared Laguerre sink (plan §0.5 (iii)-(iv)).
+"""Q31: tables and verdict for the declared Laguerre sink (plan §0.5 (iii)-(iv)).
 
 Reads this row's sink records and, unchanged, #252's twelve certified
 collisionless / species-nu records, and answers the three questions §0.5 hands
@@ -98,7 +98,7 @@ def main() -> None:
         lines.append(text)
 
     # ---------------------------------------------------------------- sink table
-    emit("Q28 (iii) declared Laguerre sink: certified eigenpairs, Cyclone ky=.55")
+    emit("Q31 (iii) declared Laguerre sink: certified eigenpairs, Cyclone ky=.55")
     emit("  deck Nm96 Nz96 nkx1 f64, species nu = 0, |k_z| Hermite branch ON,")
     emit("  const branch = Laguerre only (nu_hyper_m_const = 0), p_hyper_l = 6")
     emit("")
@@ -155,7 +155,7 @@ def main() -> None:
 
     # ------------------------------------------------- reused #252 ladders (iv)
     emit("")
-    emit("Q28 (iv) reused from #252 (plan/research/scripts/2026-09-18-...): the same")
+    emit("Q31 (iv) reused from #252 (plan/research/scripts/2026-09-18-...): the same")
     emit("  deck and route with GKX's conserving collision term instead of a sink")
     emit("")
     emit(header)

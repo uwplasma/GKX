@@ -151,7 +151,7 @@ reference_index_count = 73728
 reference_clamp_binds = true
 velocity_regularization = ["hermite-kz-hypercollision"]
 velocity_limit = "truncation-limited"
-velocity_limit_evidence = "plan/log.md Q16 (#252) and Q28: at ky=.55, Nm96, certified eigenpairs give gamma .03301/.02485/.01835 at Nl 24/32/48 with a Laguerre cutoff pile-up that relocates to 0.79-0.85 of each new Nl; no declared sink strength makes the value Nl-independent, so this row's growth rate is a truncation value, not a converged one"
+velocity_limit_evidence = "plan/log.md Q16 (#252) and Q31: at ky=.55, Nm96, certified eigenpairs give gamma .03301/.02485/.01835 at Nl 24/32/48 with a Laguerre cutoff pile-up that relocates to 0.79-0.85 of each new Nl; no declared sink strength makes the value Nl-independent, so this row's growth rate is a truncation value, not a converged one"
 tier = 2
 status = "provisional"
 notes = "same clamp as L-lin-cyclone-miller; the published 6.83%/1.59% disagreement is not yet attributable"
