@@ -257,10 +257,9 @@ def build_shift_invert_preconditioner(
     asked for a physics-aware line solve.
 
     ``pr3-cm`` is the one mode with host-side setup: its z-local blocks cost
-    ``Nl * Nm`` operator probes and a factorization, which are built once per
-    shift by :func:`gkx.solvers_linear_precond_pr3.build_pr3_factors` and passed
-    in as ``factors`` rather than traced. Asking for it without them is a
-    programming error, not a user error, so it raises here.
+    ``Nl * Nm`` operator probes and a factorization, built once per shift by
+    :func:`gkx.solvers_linear_precond_pr3.build_pr3_factors` and passed in as
+    ``factors`` rather than traced. Asking for it without them raises.
     """
 
     mode_key = "none" if mode is None else mode.strip().lower()
@@ -531,20 +530,12 @@ def _shift_invert_apply_factory(
         # expensive unpreconditioned retry for nearly every right-hand side.
         restart = min(max(gmres_restart, 1), gmres_maxiter, size)
         max_restarts = max(1, math.ceil(gmres_maxiter / restart))
-        # Start from zero, not from ``M^-1 b``. Under right preconditioning the
-        # first Krylov vector is already ``M^-1 b``, so the first cycle from zero
-        # minimizes over a space that contains the point ``x0 = M^-1 b`` is: it
-        # cannot be worse, and when ``M`` is a poor inverse it is very much
-        # better, because ``x0 = M^-1 b`` starts the solve *behind* the trivial
-        # guess and the restarted budget then reports that. Measured on the
-        # shipped Cyclone deck at (Nz, Nl, Nm) = (96, 4, 8), first right-hand
-        # side, relative residual of the initial guess against 1 for x = 0:
-        # hermite-line 25.4, field-corrected 20.7, damping 3.53 -- and of the
-        # finished restart-20 x 3 solve, 9.18 / 13.0 / 2.16 from ``M^-1 b``
-        # against 0.995 / 0.999 / 0.857 from zero. That factor is what Q26
-        # recorded as "48 of 48 inner solves unconverged at relative residual
-        # 34"; it is an artefact of this line, on top of the real cause, which
-        # is that hermite-line does not converge at this size at all.
+        # Start from zero, not from ``M^-1 b``: under right preconditioning the
+        # first Krylov vector is already ``M^-1 b``, so the first cycle from
+        # zero minimizes over a space containing that point, and with a weak
+        # ``M`` the guess starts the solve behind ``x = 0`` and the restarted
+        # budget reports that. Q28 measured the difference on the shipped
+        # Cyclone deck (docs/numerics.rst, plan/log.md).
         solution = gmres(
             matvec,
             b,
@@ -996,8 +987,7 @@ def _shift_invert_eigenpair_with_inner_stats(
 
     ``precond_factors`` is a traced argument, not a captured constant: the
     ``pr3-cm`` factors are built on the host once per shift and handed in, so
-    the compiled graph carries them as operands and recompiling for a new shift
-    does not have to re-embed hundreds of megabytes of literals.
+    the compiled graph carries them as operands rather than as literals.
     """
 
     sigma_val = jnp.asarray(sigma, dtype=v0.dtype)
