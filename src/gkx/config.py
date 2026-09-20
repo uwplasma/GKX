@@ -73,6 +73,23 @@ class GridConfig:
     ntheta: int | None = None
     nperiod: int | None = None
     zp: int | None = None
+    #: Layout of the ``ky`` axis of every spectral array built from this grid
+    #: (:mod:`gkx.core_ky_layout`, plan 5.3 N3).  ``"half"`` stores the
+    #: ``Nyc = 1 + Ny // 2`` non-negative rows and lets the reality condition
+    #: hold by construction; ``"full"`` stores the two-sided ``fftfreq`` axis
+    #: of length ``Ny`` and rebuilds the negative rows in the bracket and after
+    #: every stage.  ``Ny`` means the same thing in both: the length of the
+    #: physical ``y`` axis, and therefore the resolution of the run.
+    ky_layout: str = "full"
+
+    def __post_init__(self) -> None:
+        layout = str(self.ky_layout).strip().lower()
+        if layout not in ("full", "half"):
+            raise ValueError(
+                f"unknown [grid] ky_layout '{self.ky_layout}'; expected 'full' or 'half'"
+            )
+        if layout != self.ky_layout:
+            object.__setattr__(self, "ky_layout", layout)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

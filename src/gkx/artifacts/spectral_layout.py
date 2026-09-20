@@ -6,9 +6,29 @@ from typing import Any
 
 import numpy as np
 
-from gkx.core_ky_layout import half_ky_values, is_half
+from gkx.core_ky_layout import half_ky_values, is_half, ky_row_weights, nyc_from_ny
 
 NETCDF_SCHEMA_VERSION = 1
+
+#: How a ``ky``-resolved diagnostic array counts a conjugate pair.
+#:
+#: ``"per_row"`` -- the value of that one stored row.  This is what the
+#: two-sided reductions produce, because their weight is 1 on every row
+#: (:func:`gkx.core_ky_layout.hermitian_mode_weights`): ``Phi2``, ``Wg``,
+#: ``Wphi``, ``Wapar`` and ``TurbulentHeating``.  On a half axis the same
+#: reduction carries the pair weight 2, so it has to be divided out before it
+#: is published or the file's numbers would double.
+#:
+#: ``"pair"`` -- the sum over the conjugate pair, which the transport weights
+#: (:func:`gkx.core_ky_layout.transport_mode_weights`) already produce on
+#: *both* axes: ``HeatFlux*`` and ``ParticleFlux*``.  Nothing to undo.
+#:
+#: The distinction is not cosmetic and cannot be inferred from the array: two
+#: arrays of the same shape holding the same modes differ by a factor of two,
+#: and only the reduction that built them knows which.
+KY_WEIGHTING_PER_ROW = "per_row"
+KY_WEIGHTING_PAIR = "pair"
+_KY_WEIGHTINGS = (KY_WEIGHTING_PER_ROW, KY_WEIGHTING_PAIR)
 
 
 def _validate_netcdf_schema_version(root: Any) -> None:
@@ -66,10 +86,22 @@ def _dealiased_kx_values(kx: np.ndarray) -> np.ndarray:
     return kx_arr[_dealiased_kx_indices(kx_arr.shape[0])]
 
 
-def _dealiased_ky_values(ky: np.ndarray) -> np.ndarray:
+def _dealiased_ky_values(ky: np.ndarray, *, ny_full: int | None = None) -> np.ndarray:
+    """Return the published ``ky`` axis: the dealiased ``ky >= 0`` magnitudes.
+
+    ``ny_full`` is the length of the two-sided axis.  It is what makes the
+    answer the same from either layout's ``grid.ky``: the number of dealiased
+    rows is a property of ``Ny``, and a half-spectrum axis already holds
+    ``Nyc`` rows, so taking the count from ``ky.shape[0]`` would publish
+    ``1 + (Nyc - 1) // 3`` of them -- about a third of the band -- with an
+    axis of the right dtype and the wrong length.
+    """
+
     ky_arr = np.asarray(ky, dtype=np.float32)
-    half = half_ky_values(ky_arr)
-    return half[: _dealiased_ky_count(int(ky_arr.shape[0]))]
+    rows = int(ky_arr.shape[0])
+    ny = rows if ny_full is None else int(ny_full)
+    half = ky_arr if is_half(rows, ny_full) else half_ky_values(ky_arr)
+    return np.abs(half[: _dealiased_ky_count(ny)])
 
 
 def _take_axis(arr: np.ndarray, indices: np.ndarray, axis: int) -> np.ndarray:
@@ -216,10 +248,28 @@ def _write_runtime_root_metadata(
 
 
 def _dealiased_spectral_field(
-    field: np.ndarray, *, ky_axis: int = 0, kx_axis: int = 1
+    field: np.ndarray,
+    *,
+    ky_axis: int = 0,
+    kx_axis: int = 1,
+    ny_full: int | None = None,
 ) -> np.ndarray:
+    """Return the dealiased ``ky >= 0`` / ``kx`` block of a spectral field.
+
+    A field is not a reduction, so no weight is involved: the retained rows
+    are the same indices holding the same coefficients in either layout.  What
+    still has to come from ``ny_full`` is *how many* of them there are, which
+    is a property of the two-sided axis.
+    """
+
     field_arr = np.asarray(field)
-    ky_idx = _dealiased_ky_indices(field_arr.shape[ky_axis])
+    rows = int(field_arr.shape[ky_axis])
+    ky_idx = _dealiased_ky_indices(rows if ny_full is None else int(ny_full))
+    if ky_idx.size > rows:
+        raise ValueError(
+            f"spectral field stores {rows} ky rows but the dealiased block of "
+            f"ny_full={ny_full} needs {int(ky_idx.size)}"
+        )
     kx_idx = _dealiased_kx_indices(field_arr.shape[kx_axis])
     return _take_axis(_take_axis(field_arr, ky_idx, axis=ky_axis), kx_idx, axis=kx_axis)
 
@@ -292,10 +342,62 @@ def _condense_kx_for_output(
     )
 
 
+def _half_ky_publish_factor(
+    full_ny: int, *, ky_weighting: str | None, what: str
+) -> np.ndarray | None:
+    """Return the per-row factor that republishes a half-spectrum reduction.
+
+    The published ``ky`` axis is the dealiased ``ky >= 0`` block, which is the
+    *same rows* in both layouts -- so condensing a half-spectrum diagnostic is
+    a row selection and nothing more, **as long as the two layouts agree on
+    what a row's number means**.  They do not, for the reductions weighted by
+    :func:`gkx.core_ky_layout.hermitian_mode_weights`: the two-sided axis
+    stores each row once at weight 1, and the half axis carries the conjugate
+    partner's share at weight 2.  Publishing the half value unchanged would
+    double every paired row of ``Phi2``, ``Wg``, ``Wphi``, ``Wapar`` and
+    ``TurbulentHeating`` -- and with them ``Phi2_t``, which the writer derives
+    from the condensed spectrum.
+
+    Returning the reciprocal weights restores the two-sided per-row value
+    exactly: the weight is 1 or 2, and division by two is exact in binary
+    floating point, so the published block is bitwise what the two-sided run
+    would have written from the same state.
+
+    ``None`` means "publish as it stands", which is what the transport
+    reductions need: their weight is already the pair weight on both axes.
+    """
+
+    if ky_weighting is None:
+        raise ValueError(
+            f"{what} is a half-spectrum (Nyc-row) array, so publishing it needs "
+            f"to know whether its rows count one row or a conjugate pair; pass "
+            f"ky_weighting={KY_WEIGHTING_PER_ROW!r} or {KY_WEIGHTING_PAIR!r}"
+        )
+    if ky_weighting not in _KY_WEIGHTINGS:
+        raise ValueError(
+            f"unknown ky_weighting {ky_weighting!r}; expected one of {_KY_WEIGHTINGS}"
+        )
+    if ky_weighting == KY_WEIGHTING_PAIR:
+        return None
+    rows = _dealiased_ky_indices(int(full_ny))
+    return 1.0 / ky_row_weights(int(full_ny))[rows]
+
+
 def _condense_ky_for_output(
-    arr: np.ndarray, *, full_ny: int, active_ny: int
+    arr: np.ndarray,
+    *,
+    full_ny: int,
+    active_ny: int,
+    ky_weighting: str | None = None,
 ) -> np.ndarray:
-    """Return ky-resolved data on the dealiased positive-ky output axis."""
+    """Return ky-resolved data on the dealiased positive-ky output axis.
+
+    The input may already be condensed (``active_ny`` rows, which is how
+    history reloaded from an existing bundle arrives), two-sided (``full_ny``
+    rows), or half-spectrum (``Nyc = 1 + Ny // 2`` rows).  All three publish
+    the same numbers; see :func:`_half_ky_publish_factor` for why the last one
+    needs ``ky_weighting``.
+    """
 
     arr_np = np.asarray(arr)
     ny = int(arr_np.shape[-1])
@@ -303,8 +405,15 @@ def _condense_ky_for_output(
         return arr_np
     if ny == int(full_ny):
         return _take_axis(arr_np, _dealiased_ky_indices(int(full_ny)), axis=-1)
+    if ny == nyc_from_ny(int(full_ny)):
+        factor = _half_ky_publish_factor(
+            int(full_ny), ky_weighting=ky_weighting, what="ky-resolved diagnostic"
+        )
+        out = _take_axis(arr_np, _dealiased_ky_indices(int(full_ny)), axis=-1)
+        return out if factor is None else out * factor.astype(out.dtype, copy=False)
     raise ValueError(
-        f"ky-resolved diagnostic has length {ny}; expected full Ny={full_ny} or active Nky={active_ny}"
+        f"ky-resolved diagnostic has length {ny}; expected full Ny={full_ny}, "
+        f"half Nyc={nyc_from_ny(int(full_ny))} or active Nky={active_ny}"
     )
 
 
@@ -315,8 +424,13 @@ def _condense_kykx_for_output(
     full_nx: int,
     active_ny: int,
     active_nx: int,
+    ky_weighting: str | None = None,
 ) -> np.ndarray:
-    """Return ky-kx-resolved data on dealiased output axes."""
+    """Return ky-kx-resolved data on dealiased output axes.
+
+    ``ky_weighting`` carries the same contract as in
+    :func:`_condense_ky_for_output` and is needed for the same reason.
+    """
 
     arr_np = np.asarray(arr)
     ny = int(arr_np.shape[-2])
@@ -325,9 +439,17 @@ def _condense_kykx_for_output(
         return arr_np
     if ny == int(full_ny):
         arr_np = _take_axis(arr_np, _dealiased_ky_indices(int(full_ny)), axis=-2)
+    elif ny == nyc_from_ny(int(full_ny)):
+        factor = _half_ky_publish_factor(
+            int(full_ny), ky_weighting=ky_weighting, what="ky-kx diagnostic"
+        )
+        arr_np = _take_axis(arr_np, _dealiased_ky_indices(int(full_ny)), axis=-2)
+        if factor is not None:
+            arr_np = arr_np * factor.astype(arr_np.dtype, copy=False)[:, None]
     elif ny != int(active_ny):
         raise ValueError(
-            f"ky-kx diagnostic ky length {ny}; expected full Ny={full_ny} or active Nky={active_ny}"
+            f"ky-kx diagnostic ky length {ny}; expected full Ny={full_ny}, "
+            f"half Nyc={nyc_from_ny(int(full_ny))} or active Nky={active_ny}"
         )
     if nx == int(full_nx):
         arr_np = _take_axis(arr_np, _dealiased_kx_indices(int(full_nx)), axis=-1)
@@ -353,7 +475,10 @@ def infer_triple_dealiased_ny(nky_positive: int) -> int:
 
 
 __all__ = [
+    "KY_WEIGHTING_PAIR",
+    "KY_WEIGHTING_PER_ROW",
     "infer_triple_dealiased_ny",
+    "_half_ky_publish_factor",
     "_complex_to_ri",
     "_condense_kx",
     "_condense_kx_for_output",
