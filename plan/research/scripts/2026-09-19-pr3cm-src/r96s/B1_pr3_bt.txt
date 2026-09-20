@@ -1,0 +1,6 @@
+[     3.8s rss<=0.44G] t_matvec 1.178 ms
+[     3.8s rss<=0.44G] krylov method=shift_invert dim=48 restarts=2
+[     3.8s rss<=0.44G] preparing shift-invert solve with dim=48 restarts=2 gmres_maxiter=600 restart=600 tol=1e-06
+[     3.8s rss<=0.44G] using explicit shift with propagator seed vector
+[     4.8s rss<=0.56G] shift-invert sigma=0.148776-0.276905j
+[     4.8s rss<=0.56G] building pr3-cm factors

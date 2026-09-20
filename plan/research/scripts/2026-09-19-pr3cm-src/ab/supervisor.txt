@@ -8,3 +8,13 @@ supervisor pid 38602 started 2026-09-19 21:16:28 cap 3600s
 2026-09-19 21:18:27 start A2_adaptive load { 8.19 9.59 11.33 }
 2026-09-19 21:18:37 end A2_adaptive exit 0 load { 7.55 9.40 11.25 }
 2026-09-19 21:18:37 start B2_pr3_bt load { 7.55 9.40 11.25 }
+2026-09-19 21:19:34 end B2_pr3_bt exit 0 load { 8.79 9.37 11.11 }
+2026-09-19 21:19:34 start C2_pr3_dense load { 8.79 9.37 11.11 }
+2026-09-19 21:20:27 end C2_pr3_dense exit 0 load { 9.56 9.54 11.07 }
+2026-09-19 21:20:27 start D1_hermite_line load { 9.56 9.54 11.07 }
+2026-09-19 21:24:08 end D1_hermite_line exit 0 load { 11.52 10.29 11.04 }
+2026-09-19 21:24:08 start E1_pr3_shipped_budget load { 11.52 10.29 11.04 }
+2026-09-19 21:24:20 end E1_pr3_shipped_budget exit 0 load { 10.14 10.04 10.94 }
+2026-09-19 21:24:20 start F1_hl_shipped_budget load { 10.14 10.04 10.94 }
+2026-09-19 21:24:29 end F1_hl_shipped_budget exit 0 load { 9.75 9.95 10.90 }
+supervisor pid 38602 finished 2026-09-19 21:24:29

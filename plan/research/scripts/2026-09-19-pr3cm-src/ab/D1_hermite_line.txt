@@ -1,0 +1,30 @@
+[     2.2s rss<=0.42G] t_matvec 0.160 ms
+[     2.2s rss<=0.42G] krylov method=shift_invert dim=48 restarts=2
+[     2.2s rss<=0.42G] preparing shift-invert solve with dim=48 restarts=2 gmres_maxiter=600 restart=600 tol=1e-06
+[     2.2s rss<=0.42G] estimating shift from propagator seed
+[     2.8s rss<=0.54G] shift-invert sigma=0.00912756-0.230611j
+[     2.8s rss<=0.54G] running shift-invert Arnoldi (hermite-line)
+[   217.8s rss<=0.81G] shift-invert solve finished with eig=-0.0654916-0.0514303j residual=0.995; inner converged=False unconverged=96/96 max_relative_residual=0.868 tol=1e-06 iterations=57600
+[   217.8s rss<=0.81G] shift-invert result rejected; falling back to propagator
+[   218.6s rss<=0.83G] propagator fallback residual=0.958
+[   220.0s rss<=0.86G] cost {'t_matvec_s': 0.00015974999405443668, 't_precond_s': 9.595899609848857e-05, 'c_precond': 0.6006823140524776}; setup 0.00s
+RESULT {"arm": "si", "case": "d96", "certified": false, "cost": {"c_precond": 0.6006823140524776, "t_matvec_s": 0.00015974999405443668, "t_precond_s": 9.595899609848857e-05}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "si", "--case", "d96", "--krylov-dim", "48", "--restarts", "2", "--restart", "600", "--maxiter", "600", "--inner-rtol", "1e-6", "--preconditioner", "hermite-line", "--label", "D1_hermite_line"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "66c32b0825ae8306d005fc93368786ea514bc367"}, "gkx": "/Users/rogeriojorge/local/GKX-worktrees/pr3cm-preconditioner/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [9.564453125, 9.5361328125, 11.06689453125], "x64": true}, "ky": 0.3, "label": "D1_hermite_line", "n": 3072, "options": {"krylov_dim": 48, "method": "shift_invert", "restarts": 2, "shift": null, "shift_maxiter": 600, "shift_precond_block_solve": "auto", "shift_preconditioner": "hermite-line", "shift_restart": 600, "shift_tol": 1e-06}, "peak_rss_gib": 0.85638427734375, "precond_setup": {"seconds": 0.00018437497783452272}, "process_seconds": 220.20579291705508, "raised": "RuntimeError: shift-invert eigenpair failed the outer residual gate: residual=0.995354, tolerance=1e-06; inner converged=False unconverged=96/96 max_relative_residual=0.868 tol=1e-06 iterations=57600", "route_s": 216.4701602080022, "status": null}
+      220.63 real       854.83 user        28.65 sys
+           919535616  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               76846  page reclaims
+                  94  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   2  voluntary context switches
+             3338836  involuntary context switches
+       3781489054338  instructions retired
+       2991772956429  cycles elapsed
+           586207488  peak memory footprint
+exit 0
