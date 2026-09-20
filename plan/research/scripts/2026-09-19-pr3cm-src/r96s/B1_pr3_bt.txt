@@ -4,3 +4,5 @@
 [     3.8s rss<=0.44G] using explicit shift with propagator seed vector
 [     4.8s rss<=0.56G] shift-invert sigma=0.148776-0.276905j
 [     4.8s rss<=0.56G] building pr3-cm factors
+[     9.2s rss<=1.10G] pr3-cm factors: block-thomas solve, alpha=-8.82076+0j (symbol-bounds), 21.8 MB; block is l-tridiagonal plus rank one
+[     9.2s rss<=1.10G] running shift-invert Arnoldi (pr3-cm)
