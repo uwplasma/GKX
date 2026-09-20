@@ -1024,6 +1024,42 @@ def test_default_krylov_config_and_wrapper_resolve_to_certified_adaptive() -> No
     assert parameters["certify"].default is True
 
 
+def test_krylov_config_and_wrapper_agree_on_every_shared_default() -> None:
+    """The two doors into one route must cost the same.
+
+    ``KrylovConfig`` is what the runtime builds from a deck and what
+    ``workflows.linear`` forwards field by field; the ``dominant_eigenpair``
+    signature is what a direct caller gets. They are two entry points to one
+    computation, so a field that means the same thing in both must default to
+    the same value. ``power_iters`` used to be 200 in the dataclass and 40 in
+    the signature -- the same nominal route at 5x the propagator applies
+    depending on which door it was entered by, with no accuracy to show for it.
+    Asserting the whole intersection guards the class of defect, not the one
+    instance of it.
+    """
+
+    import dataclasses
+
+    parameters = inspect.signature(lk.dominant_eigenpair).parameters
+    shared = {
+        field.name: field
+        for field in dataclasses.fields(lk.KrylovConfig)
+        if field.name in parameters
+    }
+    # The wrapper exposes every knob the dataclass carries except the two
+    # continuation controls, which only the runtime's scan driver sets.
+    assert set(shared) == {
+        field.name for field in dataclasses.fields(lk.KrylovConfig)
+    } - {"continuation", "continuation_selection"}
+    disagreements = {
+        name: (field.default, parameters[name].default)
+        for name, field in shared.items()
+        if field.default != parameters[name].default
+    }
+    assert disagreements == {}
+    assert lk.KrylovConfig().power_iters == 40
+
+
 def test_certify_opt_out_does_not_relax_the_shift_invert_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -63,7 +63,18 @@ class KrylovConfig:
     omega_cap_factor: float = 2.0
     omega_sign: int = 0
     method: str = "adaptive"
-    power_iters: int = 200
+    # Matches the ``dominant_eigenpair(power_iters=40)`` signature default: one
+    # route, one cost, whichever door it is entered by. The two used to disagree
+    # by 5x, and the larger value bought nothing. Measured on the shipped Cyclone
+    # deck at (Nl,Nm)=(4,8), ky=0.3, float32, against that rung's certified
+    # adaptive eigenpair gamma=0.10128645: the route's residual is 9.501e-01 at
+    # 40 applies and 9.467e-01 at 200, both against a 1.192e-04 gate, so 5x the
+    # propagator applies moves the residual by 0.4% of an O(1) quantity and the
+    # pair is rejected either way. The ladder only reaches 6.2e-03 at 5000
+    # applies and then stalls -- 5.96e-03 at 10000 -- so no affordable setting
+    # certifies and the value cannot be chosen for accuracy. It is therefore
+    # chosen for cost, and for agreeing with the public signature.
+    power_iters: int = 40
     power_dt: float = 0.01
     propagator_steps: int = 1
     shift: complex | None = None
