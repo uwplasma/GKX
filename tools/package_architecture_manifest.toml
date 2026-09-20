@@ -1043,7 +1043,6 @@ recursive = true
 # module that owns solver status, so the in-memory result and the saved summary
 # file cannot spell the same keys differently, and the docstrings that state
 # which route now reports what. Target unchanged.
-baseline = 92017
 # 91655 -> 92452: landing pr3-cm (Q28). Roughly half of the new module is the
 # host-side build -- the column probes, the block-Thomas factorization and the
 # Sherman-Morrison factors -- and the other half is the two structural
@@ -1055,7 +1054,6 @@ baseline = 92017
 # than a degenerate one. Those cannot be shortened without turning a measured
 # guard back into an assumption, which is exactly what Q26 recorded as the
 # reason pr3-cm had never landed. Target unchanged.
-baseline = 92452
 # 91655 -> 91784: Q28, the three defaults Q26 recorded but could not set.
 # The executable change is three literals and one dict-to-function swap;
 # the rest is the measurement each default now rests on, which the diff
@@ -1065,7 +1063,7 @@ baseline = 92452
 # fewer RHS evaluations only once the CFL controller is on, and the
 # velocity-resolution ladder that shows (12, 24) eleven times closer than
 # (24, 12) at the same Nl*Nm. Target unchanged.
-baseline = 91784
+baseline = 92943
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1347,7 +1345,6 @@ recursive = true
 # giving its off-chain rows exactly zero cotangent, and leaving a periodic deck
 # the same array object. Each asserts on a real run rather than a fake, because
 # what is being pinned is which route has a channel at all.
-baseline = 92089
 # 91565 -> 91853: pr3-cm's structural contract (Q28), added to the Krylov-core
 # suite rather than to a new file. Two guards need a fixture each, and neither
 # is broken by monkeypatching the checker: one switches on the collision
@@ -1356,7 +1353,6 @@ baseline = 92089
 # <phi> sums over z. Building the operator twice is most of the count; the rest
 # is the assertions' reasons, which say what a future operator change would be
 # breaking rather than restating the number.
-baseline = 91853
 # 91565 -> 91721: Q28's tests for the three defaults it set. The Krylov one
 # asserts the whole KrylovConfig/dominant_eigenpair default intersection
 # rather than the one field, so the class of defect is guarded; the time
@@ -1364,7 +1360,7 @@ baseline = 91853
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-baseline = 91721
+baseline = 92533
 target = 35000
 
 [[line_budget_policy.counts]]
