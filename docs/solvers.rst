@@ -20,7 +20,10 @@ The same line inverse is available to shift-invert Arnoldi.  The default
 ``shift_preconditioner="auto"`` uses it for electrostatic models, selects the
 Woodbury field correction directly for electromagnetic models, and retries a
 residual-rejected electrostatic pair with field correction.  Explicit
-``"hermite-line"`` and ``"field-corrected"`` choices remain available.
+``"hermite-line"``, ``"field-corrected"`` and ``"pr3-cm"`` choices remain
+available; ``"pr3-cm"`` is the structured splitting described in
+:doc:`numerics`, and is the one with host-side setup and structural
+preconditions.
 
 Complex FGMRES uses unitary Givens rotations and reports the physical residual
 ``||b - A x||``.  Users set its tolerance, restart length, iteration limit,

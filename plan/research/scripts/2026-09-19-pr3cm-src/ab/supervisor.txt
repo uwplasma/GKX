@@ -1,0 +1,4 @@
+supervisor pid 38602 started 2026-09-19 21:16:28 cap 3600s
+2026-09-19 21:16:28 start A1_adaptive load { 8.86 10.51 11.90 }
+2026-09-19 21:16:39 end A1_adaptive exit 0 load { 8.60 10.39 11.84 }
+2026-09-19 21:16:39 start B1_pr3_bt load { 8.60 10.39 11.84 }

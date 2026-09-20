@@ -301,14 +301,25 @@ def check_block_structure(
 
 
 def _rank_one_factors(field: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """``field[b] = u[b] w[b]^T`` taken from each block's largest-modulus pivot."""
+    """``field[b] = u[b] w[b]^T`` taken from each block's largest-modulus pivot.
+
+    A block whose field part is identically zero has no pivot; it is not a
+    degenerate case but the ordinary one for every row the field solve masks
+    out (the dealiased band, and the zonal rows of a grid that carries them).
+    Such a block gets ``u = w = 0``, which makes the Sherman-Morrison
+    denominator exactly 1 and the correction exactly nothing -- the right
+    answer, where dividing by the absent pivot would produce a NaN and send the
+    whole build to the dense fallback.
+    """
 
     nblocks = field.shape[0]
     pivot = np.abs(field).reshape(nblocks, -1).argmax(axis=1)
     rows, cols = np.unravel_index(pivot, field.shape[1:])
     index = np.arange(nblocks)
+    peak = field[index, rows, cols]
+    safe = np.where(peak == 0.0, 1.0, peak)
     u = field[index, :, cols]
-    w = field[index, rows, :] / field[index, rows, cols][:, None]
+    w = field[index, rows, :] / safe[:, None]
     return u, w
 
 

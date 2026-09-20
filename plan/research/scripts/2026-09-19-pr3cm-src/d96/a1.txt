@@ -1,0 +1,31 @@
+[     2.6s rss<=0.43G] t_matvec 0.143 ms
+[     2.7s rss<=0.43G] building runtime geometry
+[     2.7s rss<=0.43G] building spectral grid
+[     2.7s rss<=0.43G] building runtime linear parameters
+[     2.7s rss<=0.43G] selected ky index 6 at ky=0.3000
+[     2.7s rss<=0.43G] starting Krylov solve
+[     2.7s rss<=0.43G] building linear cache
+[     2.7s rss<=0.43G] krylov method=adaptive dim=24 restarts=2
+[     2.7s rss<=0.43G] running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09
+[    12.2s rss<=0.75G] adaptive solve finished with eig=0.101286-0.245496j residual=4.04e-15 converged=True stable=True
+[    12.2s rss<=0.76G] Krylov solve complete: gamma=0.101286 omega=0.245496
+RESULT {"adaptive": {"adaptive_residual": 4.040978671836468e-15, "operator_applications": 33915, "restarts": 1, "solver_s": 9.49415429198416}, "arm": "adaptive", "case": "d96", "certified": true, "certified_residual": 4.040978671836468e-15, "cost": {"t_matvec_s": 0.0001432499848306179}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "adaptive", "--case", "d96", "--label", "a1"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "b902fda756d98cc4acdd304c08f891761b27b7eb"}, "gkx": "/Users/rogeriojorge/local/GKX-worktrees/pr3cm-preconditioner/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [13.20263671875, 15.07421875, 13.49462890625], "x64": true}, "gamma_omega": [0.10128649783814778, 0.2454963203262298], "ky": 0.3, "label": "a1", "lambda": [0.10128649783814778, -0.2454963203262298], "matvec_equivalents": {"certification": 1, "route_operator_applications": 33915, "total": 33916}, "n": 3072, "peak_rss_gib": 0.75567626953125, "process_seconds": 12.58928262500558, "residual_gate": 1e-09, "route_s": 9.535108832991682}
+       13.20 real        18.43 user         1.06 sys
+           811499520  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               67025  page reclaims
+                 332  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                1800  voluntary context switches
+              112716  involuntary context switches
+        186546185650  instructions retired
+         66172426750  cycles elapsed
+           600936576  peak memory footprint
+exit 0

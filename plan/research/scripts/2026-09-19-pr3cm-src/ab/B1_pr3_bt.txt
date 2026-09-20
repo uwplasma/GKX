@@ -1,0 +1,4 @@
+[     2.3s rss<=0.43G] t_matvec 0.156 ms
+[     2.3s rss<=0.43G] krylov method=shift_invert dim=48 restarts=2
+[     2.3s rss<=0.43G] preparing shift-invert solve with dim=48 restarts=2 gmres_maxiter=600 restart=600 tol=1e-06
+[     2.3s rss<=0.43G] estimating shift from propagator seed

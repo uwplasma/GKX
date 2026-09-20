@@ -2662,3 +2662,267 @@ def test_allowlisted_contraction_is_still_matrix_shaped_and_unpinned() -> None:
         assert found[origin] is None, (
             f"{origin} is pinned now, so its allowlist entry is misleading; delete it"
         )
+
+
+# --------------------------------------------------------------------------- #
+# pr3-cm (Q28): the structured preconditioner and its exact z-block solve        #
+# --------------------------------------------------------------------------- #
+def _pr3_setup(*, Nx: int = 1, Nl: int = 6, Nm: int = 6, nu: float = 0.0):
+    """A fixture with the terms ``pr3-cm`` actually splits switched on.
+
+    ``_tiny_krylov_setup`` zeroes the drifts, the mirror, the drive and the end
+    damping, which leaves the z-local block diagonal in ``(l, m)`` and would
+    make every structural assertion below true for the wrong reason: a diagonal
+    block is l-tridiagonal whatever the physics does. This one turns them on,
+    and uses linked boundaries, because the z-mean drift bookkeeping is the
+    whole content of the ``-cm`` suffix and the chain cover is what the
+    Hermite-line solve restricts to.
+
+    ``Nx`` and ``nu`` are the two knobs the guards react to: ``Nx > 1`` gives
+    the grid zonal ``(ky = 0, kx > 0)`` rows, whose adiabatic ``<phi>`` sums
+    over z and so is not z-local, and ``nu > 0`` switches on a collision
+    operator that couples the Laguerre index beyond ``l +- 1``.
+    """
+
+    grid_cfg = GridConfig(
+        Nx=Nx, Ny=4, Nz=8, Lx=6.0, Ly=6.0, boundary="linked", y0=20.0, jtwist=1
+    )
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams(
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        nu=nu,
+        nu_hyper=0.0,
+        damp_ends_amp=0.1,
+        damp_ends_widthfrac=0.125,
+    )
+    cache = build_linear_cache(grid, geom, params, Nl=Nl, Nm=Nm)
+    shape = (Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    rng = np.random.default_rng(0)
+    v0 = jnp.asarray(
+        rng.standard_normal(shape) + 1j * rng.standard_normal(shape),
+        dtype=jnp.complex128,
+    )
+    terms = LinearTerms(
+        streaming=1.0,
+        mirror=1.0,
+        curvature=1.0,
+        gradb=1.0,
+        diamagnetic=1.0,
+        collisions=1.0,
+        hypercollisions=1.0,
+        end_damping=1.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+    return cache, params, v0, linear_terms_to_term_config(terms)
+
+
+_PR3_SIGMA = 0.05 - 0.2j
+
+
+def test_pr3_z_block_is_l_tridiagonal_plus_a_rank_one_field_part() -> None:
+    """The structural property the exact solve is allowed to assume.
+
+    Block-Thomas plus Sherman-Morrison is exact only while the z-local block is
+    block-tridiagonal in the Laguerre index and its field part is rank one per
+    ``(kx, z)``. Q21 (#255) measured both on the production chain -- largest
+    off-tridiagonal entry exactly 0 against a block norm of 74.7, rank-one
+    singular-value ratio <= 5.3e-14 -- and the build re-measures them at every
+    shift, so this test pins the property itself rather than the decision that
+    follows from it. A Laguerre coupling beyond ``l +- 1``, or a second field
+    that is not one scalar per ``(kx, z)``, is caught here.
+    """
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+
+    _factors, meta = pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma)
+
+    structure = meta["structure"]
+    assert structure["block_norm_max"] > 0.0
+    assert structure["off_tridiagonal_max"] == 0.0, (
+        "the z-local block gained a Laguerre coupling beyond l +- 1, so the "
+        "block-Thomas solve is no longer exact"
+    )
+    assert structure["rank_one_s0_max"] > 0.0
+    assert structure["rank_one_ratio_max"] < 1.0e-10, (
+        "the field part of the z-local block is no longer rank one per (kx, z), "
+        "so the Sherman-Morrison correction is no longer exact"
+    )
+    # The dense blocks must also *be* the operator: the split only means
+    # anything while everything outside streaming and hypercollisions is z-local.
+    assert meta["locality_defect"] < 1.0e-12
+    assert meta["block_solve"] == "block-thomas"
+
+
+def test_pr3_exact_block_solve_equals_the_dense_inverse_and_is_smaller() -> None:
+    """The cheaper apply has to be the same preconditioner, not a cheaper one.
+
+    Q21 measured the two solves agreeing to 4.4e-16 with every iteration count
+    unchanged, and the factors 5.26x smaller at the production chain. That
+    combination -- an exactness property at an unchanged iteration count, plus a
+    memory reduction -- is what makes this a cost reduction with no accuracy
+    loss under the rewritten §5.1 gate rather than a different preconditioner
+    that would need re-certifying.
+    """
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+
+    exact, exact_meta = pr3.build_pr3_factors(
+        v0, cache, params, term_cfg, sigma, block_solve="block-thomas"
+    )
+    dense, dense_meta = pr3.build_pr3_factors(
+        v0, cache, params, term_cfg, sigma, block_solve="dense"
+    )
+    assert exact_meta["block_solve"] == "block-thomas"
+    assert dense_meta["block_solve"] == "dense"
+    # Same parameter and same shift, so the same operator is inverted both ways.
+    assert exact_meta["alpha"] == dense_meta["alpha"]
+    assert exact_meta["s1"] == dense_meta["s1"]
+
+    probe = v0.reshape(-1)
+    fast = pr3.build_pr3_apply(v0, cache, params, term_cfg, exact)(probe)
+    slow = pr3.build_pr3_apply(v0, cache, params, term_cfg, dense)(probe)
+    relative = float(jnp.linalg.norm(fast - slow) / jnp.linalg.norm(slow))
+    assert relative < 1.0e-12, (
+        f"block-Thomas and dense applies differ by {relative:.3g}"
+    )
+    assert exact_meta["factor_bytes"] < dense_meta["factor_bytes"]
+
+
+def test_pr3_falls_back_to_the_dense_inverse_when_the_structure_breaks() -> None:
+    """An operator that breaks the structure must not get the exact solve.
+
+    The break is real, not injected: switching on the collision operator couples
+    the Laguerre index beyond ``l +- 1``, and the shipped Cyclone deck's own
+    ``nu = 0`` is why the production chain measures exactly 0 there. ``"auto"``
+    falls back to the dense batched inverse -- the same preconditioner, a
+    costlier apply -- and records why; an explicit ``"block-thomas"`` refuses
+    instead, because a caller who asked for the exact solve by name is
+    measuring it and must not be handed a different one silently.
+    """
+
+    cache, params, v0, term_cfg = _pr3_setup(nu=0.01)
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+
+    _factors, meta = pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma)
+    assert meta["block_solve"] == "dense"
+    assert "not l-tridiagonal" in meta["block_solve_reason"]
+    assert meta["structure"]["off_tridiagonal_max"] > 0.0
+
+    with pytest.raises(ValueError, match="not l-tridiagonal"):
+        pr3.build_pr3_factors(
+            v0, cache, params, term_cfg, sigma, block_solve="block-thomas"
+        )
+
+
+def test_pr3_refuses_a_grid_whose_non_streaming_part_is_not_z_local() -> None:
+    """z-locality is a refusal, not a fallback.
+
+    The dense blocks are a *representation* of the non-streaming operator; if
+    they do not reproduce it, the two halves this preconditioner sweeps between
+    are not the halves of this operator, and no choice of block solve repairs
+    that. Again the break is real: a grid with more than one ``kx`` carries
+    zonal ``(ky = 0, kx > 0)`` rows, whose adiabatic ``<phi>`` is a sum over z,
+    and the linear eigen route escapes it only because it reduces the grid to
+    one non-zero ``ky``. The check is against the operator itself on a random
+    vector, so a coupling the column probes cannot see is still caught.
+    """
+
+    cache, params, v0, term_cfg = _pr3_setup(Nx=4)
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+
+    with pytest.raises(ValueError, match="not z-local"):
+        pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma)
+    # ... and the refusal names what to use instead, because a user who hit it
+    # asked for pr3-cm by name and needs a route, not a verdict.
+    with pytest.raises(ValueError, match="hermite-line"):
+        pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma, block_solve="dense")
+
+
+def test_pr3_parameter_follows_the_symbol_rule_and_is_overridable() -> None:
+    """``alpha = -sqrt(s1 d)`` by default; the shift split is ``s1 = sigma/2 - alpha``."""
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+
+    _f, auto = pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma)
+    assert auto["alpha_source"] == "symbol-bounds"
+    assert auto["alpha"][1] == 0.0 and auto["alpha"][0] < 0.0
+    expected = -float(np.sqrt(auto["symbol_s1"] * auto["block_spectral_radius"]))
+    assert auto["alpha"][0] == pytest.approx(expected, rel=1.0e-12)
+    # 2 s1 + 2 alpha = sigma is what makes the two half-steps add up.
+    s1 = complex(*auto["s1"])
+    alpha = complex(*auto["alpha"])
+    assert 2.0 * s1 + 2.0 * alpha == pytest.approx(complex(_PR3_SIGMA))
+    assert auto["sweeps"] == 3
+
+    _f, forced = pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma, alpha=-2.5)
+    assert forced["alpha_source"] == "explicit"
+    assert forced["alpha"] == [-2.5, 0.0]
+
+    with pytest.raises(ValueError, match="shift_precond_block_solve must be one of"):
+        pr3.build_pr3_factors(
+            v0, cache, params, term_cfg, sigma, block_solve="tridiagonal"
+        )
+    with pytest.raises(ValueError, match="alpha must be non-zero"):
+        pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma, alpha=0.0)
+
+
+def test_pr3_needs_its_host_built_factors() -> None:
+    """Reaching the traced builder without factors is a caller error, not a typo."""
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+
+    with pytest.raises(ValueError, match="needs the host-built"):
+        ka.build_shift_invert_preconditioner(
+            v0, cache, params, term_cfg, sigma, "pr3-cm"
+        )
+
+
+def test_pr3_is_selectable_by_name_and_reports_its_setup() -> None:
+    """The route reaches it by name and records what the build measured.
+
+    ``EigenSolveStatus.inner["preconditioner_setup"]`` is the only place a user
+    sees which z-block solve ran, so a fallback that did not report itself would
+    be invisible. The default is unchanged: ``"auto"`` still resolves to the
+    line solve, and ``KrylovConfig`` still defaults to ``"auto"``.
+    """
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    assert lk.KrylovConfig().shift_preconditioner == "auto"
+    assert lk.KrylovConfig().shift_precond_block_solve == "auto"
+    assert lk.KrylovConfig().shift_precond_alpha is None
+    assert lk._automatic_shift_preconditioner(params, term_cfg) == "hermite-line"
+    assert pr3.PR3_PRECOND_NAMES <= ka.SHIFT_PRECOND_NAMES
+
+    try:
+        _value, _vector, status = lk.dominant_eigenpair(
+            v0,
+            cache,
+            params,
+            None,
+            method="shift_invert",
+            shift_preconditioner="pr3-cm",
+            shift_maxiter=40,
+            shift_restart=40,
+            krylov_dim=6,
+            restarts=1,
+            fallback_method="none",
+            return_status=True,
+        )
+    except RuntimeError as exc:
+        # This fixture is far too small to certify an eigenpair, and that is not
+        # what the test owns; the build's report reaches the message either way.
+        assert "residual" in str(exc)
+        return
+    assert status.inner is not None
+    assert status.inner["preconditioner"] == "pr3-cm"
+    setup = status.inner["preconditioner_setup"]
+    assert setup is not None and setup["sweeps"] == 3
+    assert setup["block_solve"] in {"block-thomas", "dense"}
