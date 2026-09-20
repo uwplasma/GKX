@@ -32,6 +32,7 @@ import gkx.solvers_linear_adaptive_propagator as ap
 import gkx.solvers_linear_krylov as lk
 import gkx.solvers_linear_krylov_algorithms as ka
 import gkx.solvers_linear_krylov_propagator as kp
+import gkx.solvers_linear_precond_pr3 as pr3
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -2192,13 +2193,21 @@ def testbuild_shift_invert_preconditioneritioner_documented_names_resolve(
     to hold for all of them is that an operator comes back and produces finite
     output -- a name that is accepted but resolves to nothing is the same defect
     as one that is silently dropped.
+
+    ``pr3-cm`` is the one name whose builder needs host-built factors, so this
+    test supplies them the way ``_shift_invert_branch`` does. It must not be
+    exempted instead: the point of the parametrization is that every advertised
+    spelling reaches a working operator.
     """
 
     _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
     sigma = jnp.asarray(0.1j, dtype=v0.dtype)
 
+    factors = None
+    if mode in pr3.PR3_PRECOND_NAMES:
+        factors, _meta = pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma)
     precond, operator = ka.build_shift_invert_preconditioner(
-        v0, cache, params, term_cfg, sigma, mode
+        v0, cache, params, term_cfg, sigma, mode, factors
     )
 
     assert callable(operator), f"{mode!r} is advertised but resolved to no operator"
@@ -2329,8 +2338,11 @@ ALLOWED_UNPINNED_MATRIX_DOTS = {
     # 675 -> 749 when the inner-solve statistics were added above it,
     # 749 -> 828 when the linked-chain mask helpers were (Q6), 828 -> 817
     # when those helpers moved to operators/linear/linked.py (Q19), and
-    # 817 -> 809 when Q23 and Q24 merged above it; same code.
-    "solvers_linear_krylov_algorithms.py:809": "overlap ranking only; argmax provably unmoved",
+    # 817 -> 809 when Q23 and Q24 merged above it, and 809 -> 831 when Q28 added
+    # the pr3-cm import, its names and its factors argument above it; same code,
+    # still the `lifted = jnp.tensordot(eigvecs.T, V[:krylov_dim], axes=1)` of
+    # `_propagator_arnoldi_restart_step`, verified at the new line.
+    "solvers_linear_krylov_algorithms.py:831": "overlap ranking only; argmax provably unmoved",
 }
 
 

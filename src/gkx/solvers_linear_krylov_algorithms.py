@@ -20,6 +20,7 @@ from gkx.operators.linear.linked import (
     project_to_linked_cover,
 )
 from gkx.operators.linear.params import LinearParams
+from gkx.solvers_linear_precond_pr3 import PR3_PRECOND_NAMES, Pr3Factors
 from gkx.solvers_time_explicit_steps import _linear_native_step
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import TermConfig
@@ -229,7 +230,10 @@ SHIFT_PRECOND_FIELD_NAMES: frozenset[str] = frozenset(
      "field-corrected-coarse", "field_corrected_coarse"}
 )  # fmt: skip
 SHIFT_PRECOND_NAMES: frozenset[str] = (
-    SHIFT_PRECOND_LINE_NAMES | SHIFT_PRECOND_FIELD_NAMES | {"damping", "none"}
+    SHIFT_PRECOND_LINE_NAMES
+    | SHIFT_PRECOND_FIELD_NAMES
+    | PR3_PRECOND_NAMES
+    | {"damping", "none"}
 )
 
 
@@ -240,6 +244,7 @@ def build_shift_invert_preconditioner(
     term_cfg: TermConfig,
     sigma: jnp.ndarray,
     mode: str | None,
+    factors: Pr3Factors | None = None,
 ) -> tuple[jnp.ndarray | None, Callable[[jnp.ndarray], jnp.ndarray] | None]:
     """Build the preconditioner used inside shift-invert Krylov GMRES solves.
 
@@ -250,11 +255,27 @@ def build_shift_invert_preconditioner(
     by :func:`gkx.solvers_linear_krylov._automatic_shift_preconditioner`, and
     mapping it to ``"damping"`` would hand a damping diagonal to a caller that
     asked for a physics-aware line solve.
+
+    ``pr3-cm`` is the one mode with host-side setup: its z-local blocks cost
+    ``Nl * Nm`` operator probes and a factorization, which are built once per
+    shift by :func:`gkx.solvers_linear_precond_pr3.build_pr3_factors` and passed
+    in as ``factors`` rather than traced. Asking for it without them is a
+    programming error, not a user error, so it raises here.
     """
 
     mode_key = "none" if mode is None else mode.strip().lower()
     if mode_key == "none":
         return None, None
+    if mode_key in PR3_PRECOND_NAMES:
+        if factors is None:
+            raise ValueError(
+                "the pr3-cm shift-invert preconditioner needs the host-built "
+                "factors from build_pr3_factors; reaching here without them "
+                "means the caller bypassed _shift_invert_branch"
+            )
+        from gkx.solvers_linear_precond_pr3 import build_pr3_apply
+
+        return None, build_pr3_apply(v, cache, params, term_cfg, factors)
     if mode_key not in SHIFT_PRECOND_NAMES:
         raise ValueError(
             f"unknown shift-invert preconditioner {mode!r}; accepted names are "
@@ -483,11 +504,12 @@ def _shift_invert_apply_factory(
     gmres_maxiter: int,
     gmres_restart: int,
     shift_preconditioner: str | None,
+    precond_factors: Pr3Factors | None = None,
 ) -> Callable[..., tuple[jnp.ndarray, InnerSolveStats]]:
     shape = v0.shape
     size = v0.size
     _precond, precond_raw = build_shift_invert_preconditioner(
-        v0, cache, params, term_cfg, sigma_val, shift_preconditioner
+        v0, cache, params, term_cfg, sigma_val, shift_preconditioner, precond_factors
     )
     covered = _linked_covered_mode_mask(cache)
     precond_op = _projected_flat_operator(precond_raw, covered, shape)
@@ -956,8 +978,15 @@ def _shift_invert_eigenpair_with_inner_stats(
     select_targeted: bool,
     select_growth: bool,
     select_overlap: bool,
+    precond_factors: Pr3Factors | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray, InnerSolveStats]:
-    """Restarted shift-invert Arnoldi; also folds every inner GMRES solve."""
+    """Restarted shift-invert Arnoldi; also folds every inner GMRES solve.
+
+    ``precond_factors`` is a traced argument, not a captured constant: the
+    ``pr3-cm`` factors are built on the host once per shift and handed in, so
+    the compiled graph carries them as operands and recompiling for a new shift
+    does not have to re-embed hundreds of megabytes of literals.
+    """
 
     sigma_val = jnp.asarray(sigma, dtype=v0.dtype)
     apply_shift_invert = _shift_invert_apply_factory(
@@ -970,6 +999,7 @@ def _shift_invert_eigenpair_with_inner_stats(
         gmres_maxiter=gmres_maxiter,
         gmres_restart=gmres_restart,
         shift_preconditioner=shift_preconditioner,
+        precond_factors=precond_factors,
     )
 
     def restart_body(i, state):
