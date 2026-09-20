@@ -18267,3 +18267,10 @@ taken Q28 while running in parallel; the rows are numbered here by merge order.
 
 **Repaired in passing.** The Q30 row wrote `max|G|` with unescaped pipes, which split the
 table row into seven cells; the pipes are escaped.
+
+**CI shard cap (2026-09-20, during the 2.2.0 chain).** `quick-tests (linear-core)` timed out
+at 15m15s against its 15-minute cap, which GitHub reports as a cancelled job, so the
+aggregator failed with no failing test. The shard had been growing with the tests it
+carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
+commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
+had 15; splitting the lane is the follow-up.
