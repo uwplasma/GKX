@@ -187,6 +187,30 @@ RK_RHS_EVALUATIONS = {
     "sspx3": 3,
     "k10": 10,
 }
+# A computation header: ``ENTRY %main (...) -> ... {`` or ``%fused_computation.3
+# (...) -> ... {``.  Instructions are attributed to the computation they are
+# written inside, which is what tells a materialized buffer from a fused index.
+_HLO_COMPUTATION = re.compile(r"^(?P<entry>ENTRY )?%(?P<name>[\w.\-]+) .*\{\s*$")
+# The callee of a fusion instruction. Only a *fusion* body is emitted as one
+# loop nest; a while body, a call body or a reduce body is an ordinary
+# computation whose instructions each own a buffer.
+_HLO_FUSION_CALL = re.compile(r"= \S+ fusion\([^()]*\)[^\n]*?calls=%([\w.\-]+)")
+
+
+def _hlo_fusion_bodies(hlo_text: str) -> set[str]:
+    """Names of the computations that appear as a fusion body."""
+
+    return set(_HLO_FUSION_CALL.findall(hlo_text))
+
+
+def _hlo_instruction_bytes(match: re.Match[str]) -> int:
+    """Byte size of one instruction's output shape, 0 for a tuple shape."""
+
+    if not match.group("dtype"):
+        return 0
+    bits = int(re.sub(r"\D", "", match.group("dtype")))
+    dims = [int(dim) for dim in match.group("shape").split(",") if dim]
+    return int(np.prod(dims, dtype=np.int64)) * max(1, bits // 8)
 
 
 def _hlo_op_counts(
@@ -204,25 +228,69 @@ def _hlo_op_counts(
     ``constant_bytes`` is the literal payload the module carries. A jit that
     captures cache, parameter and policy arrays embeds them there, so the
     executable keeps a second copy of them beside the ones the caller holds.
+
+    **Three byte totals, and only one of them is traffic.** ``bytes_written``
+    sums the output shape of every ``concatenate`` and ``copy`` *anywhere in
+    the module text*.  That is the historical number every committed ledger
+    records and it is kept unchanged so the archive stays comparable, but it is
+    not the cost it looks like: most such instructions sit **inside** a fusion
+    body, where XLA:CPU emits them as index arithmetic on the fused loop and no
+    buffer is allocated for them.  A copy that re-lays-out a fusion *parameter*
+    costs a strided read, not a write, and cloning that copy into a second
+    consumer fusion costs nothing at all -- yet ``bytes_written`` charges the
+    operand's full size each time.  Queue row Q27 found the linked-chain
+    gather's mask multiply cloned into 40 consumer fusions on one layout and 7
+    on another, which moved ``bytes_written`` by +43 per cent while the
+    materialized traffic *fell* by 73 per cent.
+
+    ``materialized_bytes`` is the total that means traffic: the same ops
+    restricted to instructions that own an output buffer -- everything in the
+    entry computation, in a while/call/reduce body, and the ROOT of each fusion
+    body, which is the value that fusion writes out.  ``fused_interior_bytes``
+    is the remainder, and is reported so the two are never silently summed.
+    Neither is a runtime claim; ``memory_analysis`` in the step ledger is the
+    compiler's own buffer assignment and is the independent check on both.
     """
 
     counts = dict.fromkeys(ops, 0)
     written = 0
     literals = 0
-    for match in _HLO_INSTRUCTION.finditer(hlo_text):
+    materialized = 0
+    interior = 0
+    fusion_bodies = _hlo_fusion_bodies(hlo_text)
+    computation: str | None = None
+    in_fusion_body = False
+    for line in hlo_text.splitlines():
+        header = _HLO_COMPUTATION.match(line)
+        if header is not None:
+            computation = header.group("name")
+            in_fusion_body = (
+                header.group("entry") is None and computation in fusion_bodies
+            )
+            continue
+        if line.startswith("}"):
+            computation = None
+            in_fusion_body = False
+            continue
+        match = _HLO_INSTRUCTION.match(line)
+        if match is None:
+            continue
         op = match.group("op")
         if op in counts:
             counts[op] += 1
-        if not match.group("dtype"):
-            continue
-        bits = int(re.sub(r"\D", "", match.group("dtype")))
-        dims = [int(dim) for dim in match.group("shape").split(",") if dim]
-        nbytes = int(np.prod(dims, dtype=np.int64)) * max(1, bits // 8)
+        nbytes = _hlo_instruction_bytes(match)
         if op in write_ops:
             written += nbytes
+            is_root = line.lstrip().startswith("ROOT")
+            if in_fusion_body and not is_root:
+                interior += nbytes
+            else:
+                materialized += nbytes
         if op in literal_ops:
             literals += nbytes
     counts["bytes_written"] = written
+    counts["materialized_bytes"] = materialized
+    counts["fused_interior_bytes"] = interior
     counts["constant_bytes"] = literals
     return counts
 
@@ -1100,10 +1168,45 @@ def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
     return parser
 
 
+_MEMORY_STAT_FIELDS = (
+    "argument_size_in_bytes",
+    "output_size_in_bytes",
+    "temp_size_in_bytes",
+    "alias_size_in_bytes",
+    "generated_code_size_in_bytes",
+)
+
+
+def _compiled_memory_stats(compiled: Any) -> dict[str, int]:
+    """The compiler's own buffer assignment for one executable.
+
+    ``temp_size_in_bytes`` is the scratch arena XLA reserves for everything
+    that is neither an argument nor an output -- the materialized intermediate
+    buffers of the graph.  Unlike the HLO text counts it cannot be inflated by
+    an instruction that a fusion emits as index arithmetic, so it is the
+    independent check on ``materialized_bytes``.  It is a property of the
+    compiled module, not of the run, so it does not depend on machine load.
+    """
+
+    try:
+        stats = compiled.memory_analysis()
+    except Exception:  # pragma: no cover - backend without the analysis
+        return {}
+    if stats is None:  # pragma: no cover - backend without the analysis
+        return {}
+    return {field: int(getattr(stats, field, 0) or 0) for field in _MEMORY_STAT_FIELDS}
+
+
 def _compiled_hlo_text(
-    fn: Callable[..., Any], *args: Any, dump: Path | None = None
+    fn: Callable[..., Any],
+    *args: Any,
+    dump: Path | None = None,
+    stats: dict[str, int] | None = None,
 ) -> str:
-    text = jax.jit(fn).lower(*args).compile().as_text()
+    compiled = jax.jit(fn).lower(*args).compile()
+    text = compiled.as_text()
+    if stats is not None:
+        stats.update(_compiled_memory_stats(compiled))
     if dump is not None:
         dump.parent.mkdir(parents=True, exist_ok=True)
         dump.write_text(text, encoding="utf-8")
@@ -1153,7 +1256,9 @@ def _prepared_diagnostics_for_hlo(
     )
 
 
-def _diagnostics_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
+def _diagnostics_scan_hlo(
+    prepared: Any, *, dump: Path | None, stats: dict[str, int] | None = None
+) -> str:
     """Lower the one explicit nonlinear diagnostics graph both routes compile.
 
     ``gkx.prepare`` jits this function, and since the reference-route contract
@@ -1163,11 +1268,16 @@ def _diagnostics_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
     policy arrays, so XLA sees them as constants on both routes.
     """
 
-    return _compiled_hlo_text(prepared._run_raw, prepared.initial_state, dump=dump)
+    return _compiled_hlo_text(
+        prepared._run_raw, prepared.initial_state, dump=dump, stats=stats
+    )
 
 
 def _scan_equation_hlo(
-    fn: Callable[..., Any], *args: Any, dump: Path | None = None
+    fn: Callable[..., Any],
+    *args: Any,
+    dump: Path | None = None,
+    stats: dict[str, int] | None = None,
 ) -> str:
     """Lower the one top-level ``lax.scan`` that ``fn`` stages, operands as arguments.
 
@@ -1188,10 +1298,12 @@ def _scan_equation_hlo(
     def bind_scan(*values: Any) -> Any:
         return eqn.primitive.bind(*values, **eqn.params)
 
-    return _compiled_hlo_text(bind_scan, *operands, dump=dump)
+    return _compiled_hlo_text(bind_scan, *operands, dump=dump, stats=stats)
 
 
-def _eager_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
+def _eager_scan_hlo(
+    prepared: Any, *, dump: Path | None, stats: dict[str, int] | None = None
+) -> str:
     """Lower the bare scan module, the route retired by the Q18 contract.
 
     No shipped caller compiles this any more. It stays in the ledger as the
@@ -1200,7 +1312,7 @@ def _eager_scan_hlo(prepared: Any, *, dump: Path | None) -> str:
     """
 
     return _scan_equation_hlo(
-        prepared._run_raw.__wrapped__, prepared.initial_state, dump=dump
+        prepared._run_raw.__wrapped__, prepared.initial_state, dump=dump, stats=stats
     )
 
 
@@ -1254,8 +1366,9 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
     def dump(name: str) -> Path | None:
         return None if args.hlo_dir is None else args.hlo_dir / f"{name}.hlo.txt"
 
+    rhs_memory: dict[str, int] = {}
     rhs_counts = _hlo_op_counts(
-        _compiled_hlo_text(rhs, g0, cache, params, dump=dump("rhs"))
+        _compiled_hlo_text(rhs, g0, cache, params, dump=dump("rhs"), stats=rhs_memory)
     )
     steps: dict[str, Any] = {}
     for method in (m.strip() for m in args.methods.split(",") if m.strip()):
@@ -1278,9 +1391,10 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
                 return_fields=False,
             )
 
+        step_memory: dict[str, int] = {}
         if args.route == "scan":
             text = _compiled_hlo_text(
-                step, g0, cache, params, dump=dump(f"step_{method}")
+                step, g0, cache, params, dump=dump(f"step_{method}"), stats=step_memory
             )
         else:
             prepared = _prepared_diagnostics_for_hlo(
@@ -1298,7 +1412,9 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
             route_hlo = (
                 _eager_scan_hlo if args.route == "eager-scan" else _diagnostics_scan_hlo
             )
-            text = route_hlo(prepared, dump=dump(f"{args.route}_{method}"))
+            text = route_hlo(
+                prepared, dump=dump(f"{args.route}_{method}"), stats=step_memory
+            )
         counts = _hlo_op_counts(text)
         evaluations = RK_RHS_EVALUATIONS[method]
         # The diagnostics graphs also hold the field solve and diagnostics.
@@ -1313,6 +1429,7 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
         steps[method] = {
             "rhs_evaluations": evaluations,
             "counts": counts,
+            "memory_analysis": step_memory,
             "beyond_rhs_evaluations": beyond,
         }
     summary = {
@@ -1328,10 +1445,16 @@ def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
         "jax": jax.__version__,
         "backend": jax.default_backend(),
         "rhs": rhs_counts,
+        "rhs_memory_analysis": rhs_memory,
         "steps": steps,
         "claim_scope": (
             "Op counts of one optimized XLA graph for one jax version and backend. "
-            "They locate materialized work; they are not a runtime claim."
+            "They locate materialized work; they are not a runtime claim. "
+            "bytes_written sums every concatenate and copy in the module text, "
+            "fusion interiors included, where XLA:CPU emits them as index "
+            "arithmetic and allocates nothing; materialized_bytes is the subset "
+            "that owns an output buffer and memory_analysis is the compiler's "
+            "own buffer assignment for the same executable."
         ),
     }
     if args.out is not None:
