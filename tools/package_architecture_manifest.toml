@@ -1368,7 +1368,9 @@ recursive = true
 # 92533 -> 92629: the float32 pr3-cm build test. The suite runs at float64, so
 # it builds in a fresh interpreter with x64 off and checks the z-local fixture
 # builds, the collisional one still falls back and the zonal one still refuses.
-baseline = 92629
+# 92629 -> 92669: one shared mutation adds a resolved second singular component
+# and checks dense fallback plus explicit refusal in float32 and float64.
+baseline = 92669
 target = 35000
 
 [[line_budget_policy.counts]]
