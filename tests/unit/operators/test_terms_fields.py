@@ -117,7 +117,8 @@ def test_three_field_dense_system_independent_moments(
     _assert_three_field_residual(out, G, jl, jb, B, k2, beta, z, n, T, mass, vth, tol)
 
 
-def test_geometry_flr_matches_independent_three_field_residual():
+@pytest.mark.parametrize("kperp2_bmag", [True, False])
+def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
     """Validate declared GKX FLR/B conventions, not physical B normalization."""
     dtype = np.float64 if jax.config.x64_enabled else np.float32
     tol = 3e-13 if jax.config.x64_enabled else 5e-6
@@ -126,7 +127,10 @@ def test_geometry_flr_matches_independent_three_field_residual():
     )
     geom = SAlphaGeometry.from_config(
         GeometryConfig(
-            R0=2.77778, epsilon=0.18, kperp2_bmag=False, bessel_bmag_power=1.0
+            R0=2.77778,
+            epsilon=0.18,
+            kperp2_bmag=kperp2_bmag,
+            bessel_bmag_power=1.0,
         )
     )
     charge = np.array([1.0, -1.0], dtype=dtype)
@@ -135,7 +139,9 @@ def test_geometry_flr_matches_independent_three_field_residual():
     mass = np.array([1.3, 0.04], dtype=dtype)
     vth, rho = np.sqrt(temp / mass), np.sqrt(temp * mass) / np.abs(charge)
     beta = 0.04
-    params = LinearParams(beta=beta, fapar=1.0, tau_e=0.0, rho=jnp.asarray(rho))
+    params = LinearParams(
+        beta=beta, fapar=1.0, tau_e=0.0, rho=jnp.asarray(rho), rho_star=0.8
+    )
     cache = build_linear_cache(grid, geom, params, Nl=3, Nm=2)
     iy, ix = 1, 0
     G = np.zeros((2, 3, 2, grid.ky.size, grid.kx.size, grid.z.size), complex)
@@ -156,10 +162,11 @@ def test_geometry_flr_matches_independent_three_field_residual():
     )
     theta = jnp.asarray(grid.z, dtype=dtype)
     gds2, gds21, gds22 = (np.asarray(x) for x in geom.metric_coeffs(theta))
-    ky, kx_hat = dtype(grid.ky[iy]), dtype(grid.kx[ix]) / dtype(geom.s_hat)
+    ky = dtype(params.rho_star * grid.ky[iy])
+    kx_hat = dtype(params.rho_star * grid.kx[ix]) / dtype(geom.s_hat)
     k2 = ky * (ky * gds2 + 2 * kx_hat * gds21) + kx_hat**2 * gds22
     B = np.asarray(geom.bmag(theta))
-    b = rho[:, None] ** 2 * k2[None, :] / B[None, :]
+    b = rho[:, None] ** 2 * k2[None, :] / B[None, :] ** (2 * kperp2_bmag + 1)
     jl = np.stack(
         [np.exp(-b / 2), -b / 2 * np.exp(-b / 2), b**2 / 8 * np.exp(-b / 2)], axis=1
     )

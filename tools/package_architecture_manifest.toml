@@ -1360,9 +1360,9 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-# 92533 -> 92593: independent geometry -> FLR -> three-field residual coverage;
-# the shared residual helper avoids duplicating the dense matrix oracle.
-baseline = 92593
+# 92533 -> 92600: independent geometry -> FLR -> three-field residual coverage
+# across both B-metric policies; the shared helper avoids duplicating the oracle.
+baseline = 92600
 target = 35000
 
 [[line_budget_policy.counts]]
