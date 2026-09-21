@@ -18420,6 +18420,97 @@ logical arm IDs, exact raw-result and resource-record hashes, wall time,
 backend compile count and time, whole-process RSS, value and gradient without
 publishing machine-local raw artifact names.
 
+**Checkpoint discriminator.** A second combined-head campaign changed exactly one
+line in the public driver above:
+
+```diff
+-        checkpoint=True,
++        checkpoint=False,
+```
+
+The resulting measurement script has SHA256
+`a4fc215608362098c14c3401601d45c98873ea073f4707f4da2201968d174578`.
+It used the same source, runtime, model, grid, six-step window, affinity and
+invocation, changing `--reps` to 2. Two blocks rotated full/half order; each
+arm was a fresh process, so the CSV adds exactly 12 calls (four cold and eight
+steady). Initial load averages were 1.83/3.77/4.31. Every steady call crossed
+the backend compiler funnel zero times.
+
+| layout | block 1 steady median | block 2 steady median | pooled steady median | process RSS median |
+|---|---:|---:|---:|---:|
+| full | 4.002 s | 4.196 s | 4.141 s | 4093 MiB |
+| half | 4.322 s | 4.176 s | 4.251 s | 2626 MiB |
+
+The half/full pooled ratio falls from 1.279 with checkpointing to **1.027**
+without it. The layouts remain bitwise equal to each other: value
+`2.2797168615764328e-05`, gradient `[1.4574502715873375e-05]`. Relative to
+the checkpointed campaign, the value is exact and the gradient differs by one
+float64 ULP (`1.6940658945086007e-21`). Disabling checkpointing is not a
+default-policy repair: whole-process peak RSS rises to about 1.95x for full
+and 1.47x for half, and a six-step window does not bound long-window memory.
+
+**Endpoint discriminator.** To remove the heat-flux diagnostic while keeping
+the same six-step differentiated trajectory, make the following edits to the
+original public driver, retaining its compiler counter and report loop. The
+abbreviated diff shows edit locations, not a patch for `git apply`:
+
+```diff
+-from gkx.solvers_nonlinear_state_integration import nonlinear_heat_flux_window
++from gkx.operators.linear.cache_builder import build_linear_cache
++from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
+@@
+ dt = float(cfg.time.dt)
++cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
++seed_mode = g0[..., ky_i, kx_i, :]
+@@
+ def objective(tprim):
+-    return nonlinear_heat_flux_window(
++    final_state = integrate_nonlinear(
+         g0,
+         grid,
+         geom,
+         replace(params, tprim=tprim),
+-        dt,
+-        args.window_steps,
++        dt=dt,
++        steps=args.window_steps,
+         terms=terms,
+         method="rk3",
+-        checkpoint=True,
++        cache=cache,
+         compressed_real_fft=True,
+         laguerre_mode="grid",
+-    )
++        return_fields=False,
++    )[0]
++    return jnp.real(jnp.vdot(seed_mode, final_state[..., ky_i, kx_i, :]))
+@@
+-fn = jax.value_and_grad(objective)
++fn = jax.jit(jax.value_and_grad(objective))
+```
+
+This measurement script has SHA256
+`1274beff88b5769d85f8b58203c67b40b95c5149797274074285e5bc2049ef14`.
+The same two-block, rotated, fresh-process cadence adds 12 more calls; all
+eight steady calls crossed the backend compiler funnel zero times. The
+campaign did not separately sample host load, so those CSV fields are empty.
+
+| layout | block 1 steady median | block 2 steady median | pooled steady median | process RSS median |
+|---|---:|---:|---:|---:|
+| full | 3.888 s | 3.906 s | 3.899 s | 2108 MiB |
+| half | 16.549 s | 17.999 s | 17.324 s | 1917 MiB |
+
+The endpoint half/full ratio is **4.444**. All 12 calls returned the same
+value `0.0002918839151225744` and `tprim` gradient
+`[1.3133016542317785e-08]` bitwise across layouts and blocks. This shows that
+the heat-flux reduction is not necessary for the observed half-layout reverse
+slowdown, but it does not localize the cause: selecting one endpoint mode can
+enable layout-specific XLA dead-code elimination and fusion, so this ratio is
+not transferable to the production heat-window objective. Both discriminator
+campaigns are short shared-host CPU measurements, make no GPU claim and do
+not justify flipping the default. Compiler profiling remains a separate
+follow-up.
+
 **What did not move.**
 
 * Cyclone parity generator (`run_runtime_scan` on the `cyclone_salpha_itg`
