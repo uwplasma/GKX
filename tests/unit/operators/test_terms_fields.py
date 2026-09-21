@@ -11,7 +11,12 @@ import pytest
 from scipy.special import eval_laguerre, j1
 
 from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig
-from gkx.core_ky_layout import transport_mode_weights
+from gkx.core_ky_layout import (
+    FULL,
+    HALF,
+    hermitian_mode_weights,
+    transport_mode_weights,
+)
 from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid
 from gkx.operators.fluxes import particle_flux_channel_species
@@ -137,6 +142,64 @@ def _three_field_physical_energy_channels(
         field_energy(fields.apar, apar_metric),
         field_energy(fields.bpar, 1.0),
     )
+
+
+def _three_field_multimode_energies(
+    G, fields, cache, params, zweight, mode_weight, jax_values
+):
+    """Return source and physical energies with an explicit Fourier measure."""
+
+    H = build_H(
+        G,
+        cache.Jl,
+        fields.phi,
+        jax_values["tz"],
+        fields.apar,
+        jax_values["vth"],
+        fields.bpar,
+        cache.JlB,
+    )
+    nt = jax_values["density"] * jax_values["temp"]
+    species_weight = nt[:, None, None, None, None, None]
+    spectral_weight = mode_weight[:, :, None] * zweight[None, None, :]
+    g0, g1 = G[:, :, 0], G[:, :, 1]
+    moments = jnp.stack(
+        [
+            jnp.sum(
+                (jax_values["density"] * jax_values["charge"])[
+                    :, None, None, None, None
+                ]
+                * cache.Jl
+                * g0,
+                axis=(0, 1),
+            ),
+            -jnp.sum(
+                (jax_values["density"] * jax_values["charge"] * jax_values["vth"])[
+                    :, None, None, None, None
+                ]
+                * cache.Jl
+                * g1,
+                axis=(0, 1),
+            ),
+            jnp.sum(nt[:, None, None, None, None] * cache.JlB * g0, axis=(0, 1)),
+        ]
+    )
+    field_values = jnp.stack([fields.phi, fields.apar, fields.bpar])
+    kinetic_density = jnp.sum(species_weight * jnp.abs(G) ** 2, axis=(0, 1, 2))
+    field_density = jnp.real(jnp.sum(jnp.conj(field_values) * moments, axis=0))
+    source = 0.5 * jnp.sum(spectral_weight * (kinetic_density + field_density))
+
+    entropy_density = jnp.sum(species_weight * jnp.abs(H) ** 2, axis=(0, 1, 2))
+    boltzmann_density = jnp.abs(fields.phi) ** 2 * jnp.sum(
+        jax_values["density"] * jax_values["charge"] ** 2 / jax_values["temp"]
+    )
+    particle = 0.5 * jnp.sum(spectral_weight * (entropy_density - boltzmann_density))
+    B2 = cache.bmag[None, None, :] ** 2
+    apar = jnp.sum(
+        spectral_weight * cache.kperp2 * B2 * jnp.abs(fields.apar) ** 2 / params.beta
+    )
+    bpar = jnp.sum(spectral_weight * B2 * jnp.abs(fields.bpar) ** 2 / params.beta)
+    return source, (particle, apar, bpar)
 
 
 def _assert_three_field_residual(
@@ -378,6 +441,161 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
     scale = jnp.sum(jnp.abs(exchange))
     assert scale > 0.0
     assert jnp.abs(jnp.real(jnp.sum(exchange))) < tol * scale
+
+
+def test_hermitian_multimode_physical_energy_matches_full_and_half_layouts():
+    """A nonzonal Hermitian state has one energy in both ky layouts."""
+
+    dtype = np.float64 if jax.config.x64_enabled else np.float32
+    ctype = jnp.complex128 if dtype == np.float64 else jnp.complex64
+    tol = 3e-12 if dtype == np.float64 else 3e-5
+    cfg = GridConfig(Nx=5, Ny=7, Nz=8, Lx=2.0, Ly=2.0, boundary="periodic")
+    grids = {
+        FULL: build_spectral_grid(cfg, ky_layout=FULL),
+        HALF: build_spectral_grid(cfg, ky_layout=HALF),
+    }
+    geom = SAlphaGeometry(
+        q=1.4,
+        s_hat=0.8,
+        epsilon=0.18,
+        R0=2.77778,
+        kperp2_bmag=True,
+        bessel_bmag_power=1.0,
+    )
+    _, jax_values, rho, _ = _electromagnetic_species(dtype)
+    params = LinearParams(
+        beta=0.04,
+        fapar=1.0,
+        tau_e=0.0,
+        rho=jnp.asarray(rho, dtype),
+        rho_star=0.8,
+    )
+    caches = {
+        layout: build_linear_cache(grid, geom, params, Nl=3, Nm=2)
+        for layout, grid in grids.items()
+    }
+
+    half_grid = grids[HALF]
+    z = np.asarray(half_grid.z, dtype=dtype)
+    G_half = np.zeros((2, 3, 2, half_grid.ky.size, cfg.Nx, cfg.Nz), complex)
+    s, ell, m = np.indices((2, 3, 2))
+    velocity_amp = 0.01 * (1 + s + 2 * ell + 3 * m) + 0.007j * (1 + s + m)
+    for iy, ix in ((1, 0), (1, 1), (2, 2), (3, 4)):
+        phase = np.exp(1j * (1 + (iy + ix) % 3) * z) + 0.2 * np.cos(2 * z)
+        G_half[:, :, :, iy, ix] = (velocity_amp * (iy + 0.3j * (ix + 1)))[
+            ..., None
+        ] * phase
+
+    # Build the negative rows independently from the reality condition.
+    G_full = np.zeros((2, 3, 2, cfg.Ny, cfg.Nx, cfg.Nz), complex)
+    G_full[:, :, :, : half_grid.ky.size] = G_half
+    conjugate_kx = np.concatenate(([0], np.arange(cfg.Nx - 1, 0, -1)))
+    for iy in range(1, half_grid.ky.size):
+        G_full[:, :, :, cfg.Ny - iy] = np.conj(
+            np.take(G_half[:, :, :, iy], conjugate_kx, axis=-2)
+        )
+
+    states = {FULL: jnp.asarray(G_full, ctype), HALF: jnp.asarray(G_half, ctype)}
+    fields = {
+        layout: solve_fields(
+            states[layout],
+            caches[layout],
+            params,
+            fapar=1.0,
+            w_bpar=1.0,
+            **jax_values,
+        )
+        for layout in (FULL, HALF)
+    }
+    for name in ("phi", "apar", "bpar"):
+        full_field, half_field = (
+            getattr(fields[FULL], name),
+            getattr(fields[HALF], name),
+        )
+        np.testing.assert_allclose(
+            np.asarray(full_field[: half_grid.ky.size]),
+            np.asarray(half_field),
+            rtol=tol,
+            atol=tol,
+        )
+        assert np.linalg.norm(np.asarray(half_field)) > 10 * tol
+
+    independent_weights = {
+        FULL: jnp.ones((cfg.Ny, cfg.Nx), dtype=dtype),
+        HALF: jnp.asarray(
+            np.where(np.asarray(half_grid.ky)[:, None] == 0.0, 1.0, 2.0)
+            * np.ones((1, cfg.Nx)),
+            dtype,
+        ),
+    }
+    for layout, grid in grids.items():
+        np.testing.assert_array_equal(
+            np.asarray(
+                hermitian_mode_weights(grid.ky, grid.kx.size, ny_full=grid.ny_full)
+            ),
+            np.asarray(independent_weights[layout]),
+        )
+
+    zweight = jnp.asarray(
+        1.0
+        / (
+            np.abs(float(geom.gradpar()))
+            * np.asarray(geom.bmag(jnp.asarray(z, dtype=dtype)))
+        ),
+        dtype,
+    )
+    zweight = zweight / jnp.sum(zweight)
+    for iy, ix in ((1, 0), (1, 1), (2, 2), (3, 4)):
+        probe_weight = jnp.zeros_like(independent_weights[HALF]).at[iy, ix].set(2.0)
+        probe_source, probe_channels = _three_field_multimode_energies(
+            states[HALF],
+            fields[HALF],
+            caches[HALF],
+            params,
+            zweight,
+            probe_weight,
+            jax_values,
+        )
+        print("probe", iy, ix, probe_source, sum(probe_channels), probe_channels)
+    energies = {}
+    for layout in (FULL, HALF):
+        source, channels = _three_field_multimode_energies(
+            states[layout],
+            fields[layout],
+            caches[layout],
+            params,
+            zweight,
+            independent_weights[layout],
+            jax_values,
+        )
+        physical = sum(channels)
+        print(layout, source, physical, channels)
+        np.testing.assert_allclose(source, physical, rtol=tol, atol=tol)
+        assert min(float(jnp.abs(channel)) for channel in channels) > 10 * tol
+        energies[layout] = source
+    np.testing.assert_allclose(energies[FULL], energies[HALF], rtol=tol, atol=tol)
+
+    wrong_half, _ = _three_field_multimode_energies(
+        states[HALF],
+        fields[HALF],
+        caches[HALF],
+        params,
+        zweight,
+        jnp.ones_like(independent_weights[HALF]),
+        jax_values,
+    )
+    wrong_full, _ = _three_field_multimode_energies(
+        states[FULL],
+        fields[FULL],
+        caches[FULL],
+        params,
+        zweight,
+        2.0 * independent_weights[FULL],
+        jax_values,
+    )
+    scale = jnp.abs(energies[FULL])
+    assert jnp.abs(wrong_half - energies[FULL]) > 0.1 * scale
+    assert jnp.abs(wrong_full - energies[FULL]) > 0.5 * scale
 
 
 def test_variable_b_conservative_linear_weighted_exchange_converges():
