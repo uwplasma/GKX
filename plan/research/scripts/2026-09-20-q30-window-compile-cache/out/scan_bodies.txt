@@ -1,0 +1,41 @@
+Scan bodies the adjoint window stages, under jax.value_and_grad, Cyclone
+16x16x12 Nl2/Nm4, six-step RK3 window, checkpoint=True (scan_body_probe.py).
+
+Equations per scan body (top level), by tree and differentiated parameter:
+
+  main,   wrt tprim     : 716 (forward), 783 (reverse)
+  main,   wrt beta      : 716, 783
+  main,   wrt tau_e     : 716, 783
+  main,   wrt rho_star  : 716, 783   <- cache arrays ARE tracers here
+  branch, wrt tprim     : 719, 786
+
+Primitives including nested sub-jaxprs, main -> branch, wrt tprim:
+
+  forward body  831 -> 954
+    add               94 -> 112
+    broadcast_in_dim  48 ->  69
+    cond               6 ->   9
+    mul              238 -> 286
+    neg                3 ->   6
+    reduce_sum        18 ->  30
+    slice            106 -> 115
+    squeeze           33 ->  42
+
+  reverse body  948 -> 1071
+    add              105 -> 123
+    broadcast_in_dim  50 ->  71
+    cond               9 ->  12
+    mul              277 -> 325
+    neg                3 ->   6
+    reduce_sum        31 ->  43
+    slice            112 -> 121
+    squeeze           40 ->  49
+
+The linear cache is not the cause: a probe confirms cache.kperp2, cache.Jl,
+cache.JlB and cache.ky are tracers on main when the gradient is taken wrt
+rho_star, and main's body is unchanged at 716/783. What changes on the branch
+is that grid.ky, grid.dealias_mask and the quadrature weights -- concrete on
+the eager route under every parameter -- become arguments, so the expressions
+built from them are staged into the body instead of folded on the host before
+it is traced. That is the same placement that makes the graph reusable across
+geometries.

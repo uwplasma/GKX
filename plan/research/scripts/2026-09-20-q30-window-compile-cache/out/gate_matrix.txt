@@ -1,0 +1,29 @@
+Bitwise identity matrix, main against branch (run_gate.sh). Columns after
+ULP are value / d(flux)/d(tprim) / d(flux)/d(fprim), in ulps.
+
+f32  cyc_rk2          BITWISE
+f32  cyc_rk3          BITWISE
+f32  cyc_rk4          BITWISE
+f32  cyc_rk3_half     BITWISE
+f32  cyc_tail         BITWISE
+f32  cyc_nofft        BITWISE
+f32  cyc_lagexact     BITWISE
+f32  kbm_rk3          BITWISE
+f32  kbm_rk3_half     BITWISE
+f32  cyc_rk2_nockpt   ULP 1/0/0
+f32  cyc_rk3_nockpt   ULP 0/0/1
+f32  cyc_rk4_nockpt   BITWISE
+f32  kbm_rk3_nockpt   ULP 11/0/0
+x64  cyc_rk2          ULP 2/0/0
+x64  cyc_rk3          BITWISE
+x64  cyc_rk4          BITWISE
+x64  cyc_rk3_half     BITWISE
+x64  cyc_tail         BITWISE
+x64  cyc_nofft        BITWISE
+x64  cyc_lagexact     BITWISE
+x64  kbm_rk3          BITWISE
+x64  kbm_rk3_half     BITWISE
+x64  cyc_rk2_nockpt   BITWISE
+x64  cyc_rk3_nockpt   BITWISE
+x64  cyc_rk4_nockpt   ULP 0/0/1
+x64  kbm_rk3_nockpt   ULP 3/0/0
