@@ -3,7 +3,7 @@
 ## Current status and priority queue (2026-09-21)
 
 This is the execution authority for the 2.3.0 research-grade milestone. The
-baseline is `origin/main` at `eeb3481c6` (2.2.0). Claim scope remains bounded by
+baseline is `origin/main` at `4605d0b49` (2.2.0 plus #260). Claim scope remains bounded by
 [release scope](docs/release_scope.rst) and the evidence ledger; an open PR,
 passing unit test or successful reduced model is not by itself a promoted
 physics claim.
@@ -12,15 +12,17 @@ Start work from the stable-ID queue in this section. The numbered phases below
 retain acceptance detail and historical decisions; they do not create a second
 active queue, and any conflicting adoption instruction there is superseded here.
 
-The implementation PRs below are open against `main` at this checkpoint:
+Integration and open implementation PRs at this checkpoint:
 
-- [#260](https://github.com/uwplasma/GKX/pull/260) implements the declared
+- [#260](https://github.com/uwplasma/GKX/pull/260) merged as `4605d0b49` after
+  every required check passed on exact reviewed head `cee4bf3f6`. It implements the declared
   velocity-regularization contract and Laguerre-sink experiment. Its historical
   PR title says Q31; this plan calls the lane **VEL-REG**. The registered sink
   campaign has no committed outcome yet, so no conclusion about its tested
   strengths is justified. Independent review removed the unsupported outcome,
   sanitized reproduction metadata, and closed higher-level sink-disable paths
-  in `cee4bf3f6`; 132 tests pass, one skips, and fresh CI remains required.
+  in `cee4bf3f6`; 132 focused tests pass, one skips. The source contract is
+  integrated; the registered physics experiment still has no committed outcome.
 - [#264](https://github.com/uwplasma/GKX/pull/264) makes the finite-window
   adjoint compile reusable across calls and geometries. Head `d92f3100c`
   removes 29 net lines of repeated source documentation without changing
@@ -78,7 +80,7 @@ The implementation PRs below are open against `main` at this checkpoint:
   cross-zero/topology derivatives and other host sampling seams remain outside
   this bounded GEO-TOPO repair.
 
-At this snapshot these PRs remain open. CI is running on refreshed heads;
+Except #260, these PRs remain open. CI is running on refreshed heads;
 #265/#266 remain drafts, and all await current CI. None is treated as
 merged evidence.
 
@@ -111,7 +113,7 @@ preserved; this single-mode pilot does not close #194 or velocity convergence.
 
 | Order | Stable ID | Next bounded result | Admission / exit gate |
 |---:|---|---|---|
-| 1 | **VEL-REG** | Finish #260, then refine the slowly converging Laguerre branch under explicitly declared regularization and velocity limits. | Residual-qualified eigenpairs, spectra that resolve the retained cutoff, and ledger declarations; no collisionless value is promoted from an unconverged truncation. |
+| 1 | **VEL-REG** | With #260 merged, refine the slowly converging Laguerre branch after the affected reference/integrator repairs, under explicitly declared regularization and velocity limits. | Residual-qualified eigenpairs, spectra that resolve the retained cutoff, and ledger declarations; no collisionless value is promoted from an unconverged truncation. |
 | 2 | **EM-FIELD** | Follow §3.3: EM0 independent three-field algebra and energy, EM1 waves and limits, EM2 matched ITG–KBM scans, then EM3 nonlinear transport. | Geometry/FLR normalization, field ratios, weighted free-energy exchange and independent reference comparisons; never equate a two-field result with full electromagnetic validation. |
 | 3 | **STOP-CAL** | Calibrate sequential nonlinear stopping on correlated and drifting traces. | Repeated-look false-stop and coverage tests pass on synthetic controls and held-out traces; fixed-window AR(1) coverage alone is insufficient. |
 | 4 | **GEO-TOPO** | State and test the derivative contract for linked geometry topology, including the finite-shear analytic metric path. | The topology map is fixed or changes fail explicitly; each smooth stratum is free of tracer-to-host concretization and has JAX AD/JIT versus finite-difference checks. In particular, finite nonzero `s_hat` must trace through the `SAlphaGeometry` and `SlabGeometry` metric paths; no derivative is claimed across zero-shear or link-map changes. |

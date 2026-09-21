@@ -18523,3 +18523,37 @@ supported CPU environment, with three existing CFL warnings. This is a
 documentation consistency result, not new physics certification. The next
 independent tasks are the reference fit/sampling audit, physical-cadence stopping
 calibration, and the compressional-field normalization oracle. No release.
+
+## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
+
+**Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
+`ci-required`. The aggregator failed in 3s because `repo-hygiene` had, so there was no
+failing test anywhere in the run. The one real failure was the package architecture
+manifest: `test_python_files: topology count regressed to 81, above baseline 80`.
+
+**Three baselines moved, not one.** The checker stops at the first regression, so fixing the
+topology count only exposed the next gate. Each number below is the value the checker
+reported, set verbatim and re-run until clean, rather than the old number plus a delta:
+
+- `test_python_files` 80 -> 81, for `tests/unit/operators/test_laguerre_sink_contract.py`.
+- `installable_source_python_lines` 92943 -> 93023, for `nu_hyper_m_const` carried end to
+  end plus the startup refusal.
+- `test_python_lines` 92533 -> 92814, for the nine contract cases and the ledger rows.
+
+Each carries its reason in the manifest, as the target-30 and target-45000 policies require.
+
+**Merge of main (2.2.0) was clean** — no conflicts. `plan.md`, `plan/log.md` and
+`tools/package_architecture_manifest.toml` came through identical to `main`, so no
+queue-table row was reverted and no table acquired a second `baseline` key. The dot-precision
+allowlist in `tests/unit/solvers/test_linear_krylov_core.py` is keyed by `file:line` and
+survived the merge unshifted; it was re-run to confirm rather than assumed.
+
+### 2026-09-21 — integrate the verified VEL-REG source contract
+
+#260 merged as `4605d0b49` only after all required checks completed green on
+reviewed head `cee4bf3f6`. The author is Rogerio Jorge; no scientific campaign
+outcome is implied. The plan branch preserves both log histories and now uses
+that main baseline. Combined release, ledger and sink-contract tests pass
+177/177 with three existing CFL warnings. Occupied worktree branches remain
+preserved; subsequent physics campaigns still require the integrator/reference
+and stopping-coverage gates recorded above.

@@ -232,3 +232,78 @@ def test_published_parity_recomputes_from_its_artifact(row: dict) -> None:
             "refreshed without updating the README, or the README was edited "
             "away from its artifact."
         )
+
+
+# ------------------------------------------------ declared velocity regularization
+
+VALID_REGULARIZATIONS = {
+    "none",
+    "hermite-kz-hypercollision",
+    "hermite-const-hypercollision",
+    "laguerre-hypercollision",
+    "isotropic-hypercollision",
+    "conserving-collisions",
+    "dougherty-lb-collisions",
+}
+ELL_SPACE_CHANNELS = {
+    "laguerre-hypercollision",
+    "isotropic-hypercollision",
+    "conserving-collisions",
+    "dougherty-lb-collisions",
+}
+VALID_VELOCITY_LIMITS = {"truncation-limited", "extrapolated", "unmeasured"}
+
+
+def _linear_rows() -> list[dict]:
+    return [row for row in _rows() if str(row["id"]).startswith("L-lin-")]
+
+
+@pytest.mark.parametrize("row", _linear_rows(), ids=lambda row: str(row["id"]))
+def test_every_linear_row_declares_its_velocity_regularization(row: dict) -> None:
+    """plan.md §0.5: a linear row states the velocity-space sink it ran with.
+
+    ``nu_hyper_l`` reaches the distribution only through the
+    constant-coefficient hypercollision branch, so under the shipped defaults a
+    deck could declare a Laguerre sink and run without one. The operator now
+    refuses that; this row-level field is the reporting half of the same
+    contract, so a published growth rate carries the regularization that
+    produced it instead of leaving a reader to infer it from a deck.
+    """
+
+    declared = row.get("velocity_regularization")
+    assert isinstance(declared, list) and declared, (
+        f"{row['id']} publishes a linear growth rate but declares no "
+        "velocity_regularization. 'none' is a legal declaration; silence is not."
+    )
+    unknown = sorted(set(declared) - VALID_REGULARIZATIONS)
+    assert not unknown, f"{row['id']}: unknown regularization {unknown}"
+    if "none" in declared:
+        assert declared == ["none"], (
+            f"{row['id']}: 'none' cannot be combined with a channel ({declared})"
+        )
+
+
+@pytest.mark.parametrize("row", _linear_rows(), ids=lambda row: str(row["id"]))
+def test_rows_without_an_ell_space_sink_report_their_limit(row: dict) -> None:
+    """A row with no ell-space sink says whether its value is converged.
+
+    #252 measured, on the Cyclone s-alpha ITG mode at ky = .55, that the
+    collisionless Laguerre spectrum carries a cutoff pile-up which relocates to
+    0.79-0.85 of every new ``Nl`` rather than resolving. A row whose only
+    velocity dissipation is the Hermite ``|k_z|`` branch therefore cannot claim
+    a converged growth rate without saying so.
+    """
+
+    declared = row.get("velocity_regularization", [])
+    if set(declared) & ELL_SPACE_CHANNELS:
+        return
+    limit = row.get("velocity_limit")
+    assert limit in VALID_VELOCITY_LIMITS, (
+        f"{row['id']} has no ell-space velocity sink, so it must declare a "
+        f"velocity_limit in {sorted(VALID_VELOCITY_LIMITS)}; got {limit!r}."
+    )
+    evidence = row.get("velocity_limit_evidence")
+    assert isinstance(evidence, str) and evidence.strip(), (
+        f"{row['id']}: velocity_limit = {limit!r} needs velocity_limit_evidence "
+        "naming where it was measured, or why it is unmeasured."
+    )

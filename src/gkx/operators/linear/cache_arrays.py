@@ -152,7 +152,6 @@ def hypercollision_damping(
 
     nu_hyper = jnp.asarray(params.nu_hyper, dtype=real_dtype)
     nu_hyper_l = jnp.asarray(params.nu_hyper_l, dtype=real_dtype)
-    nu_hyper_m = jnp.asarray(params.nu_hyper_m, dtype=real_dtype)
     nu_hyper_lm = jnp.asarray(params.nu_hyper_lm, dtype=real_dtype)
     w_const = jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
 
@@ -163,7 +162,7 @@ def hypercollision_damping(
     ratio_m = cache.ratio_m.astype(real_dtype)
     ratio_lm = cache.ratio_lm.astype(real_dtype)
     scaled_nu_l = Nl * nu_hyper_l
-    scaled_nu_m = Nm * nu_hyper_m
+    scaled_nu_m = Nm * jnp.asarray(params.const_branch_nu_hyper_m(), dtype=real_dtype)
     mask_const = cache.mask_const
     const_coeff = (
         vth_s * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m) + nu_hyper_lm * ratio_lm
