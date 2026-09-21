@@ -18670,3 +18670,99 @@ and [Flegal--Jones](https://arxiv.org/abs/0811.1729) for covariance-estimation
 assumptions, not a guarantee for deterministic turbulence. The next experiment
 must freeze its estimator, sampling protocol and nominal-coverage tolerance
 before new seeds; fixed-window qualification precedes runtime-policy changes.
+
+#### Preregistered fixed-window covariance experiment (not yet run)
+
+This paragraph freezes one experiment before any variate from seed `20261003`
+is generated.
+Passing it qualifies one covariance estimator on the stated controls; it does
+not qualify repeated-look stopping or promote a runtime default. Failure rejects
+the candidate without changing its batch sizes, lugsail coefficients, window,
+seed, strata or gates. A different choice requires a new preregistration.
+
+After the existing admission rule first accepts, discard `ceil(5*tau_admit)`
+complete unit-time bins and take the next **4,032 bins**, without inspecting or
+extending them. Both 128- and 512-bin admission cadences use this rule. All three
+estimators have the identical arithmetic mean and identical 4,032-bin window:
+
+- current first-negative-lag autocovariance SEM, unchanged;
+- nonoverlapping batch means with `b=63`, 64 complete batches; and
+- positive-lugsail batch means with `r=3`, `c=1/2`,
+  `Sigma_L = 2 Sigma_63 - Sigma_21`, where the second term has 192 complete
+  batches. For size `s`,
+  `Sigma_s = s sum_k (mean_k - mean)^2 / (a_s - 1)` and
+  `SEM=sqrt(Sigma/4032)`.
+
+Thus no estimator drops a tail or recentres on different samples. Intervals are
+`mean +/- 1.959963984540054 SEM`. A nonfinite or nonpositive `Sigma_L` is an
+estimator refusal and fails that cell; it is never clipped to zero. The fixed
+sizes also permit two streaming batch sums and moment triples, rather than the
+full trace, although this experiment retains the trace for cross-checking.
+
+Generate 4,096 independent paths per stratum in bounded chunks from the single
+declared seed, with each stream rooted at
+`SeedSequence([20261003, stratum_code, path_index])`. The five stationary
+strata are Gaussian AR(1) at rho
+0.60/0.90/0.975; the already specified rho-0.90 standardized 2% burst process;
+and the unit-variance two-timescale Gaussian process
+`sqrt(1/2) X_0.60 + sqrt(1/2) X_0.99` from independent stationary components.
+Pair each with the existing `t/64` drift control. Use the run-start bin origin,
+at most 16,384 bins per path, and report admissions, completions and total bins.
+As in the spent control, form each complete bin as `(x_i+x_(i+1))/2`.
+The covariance oracle is known for every synthetic stratum: rho-to-the-lag for
+each standardized AR(1), the same covariance for its non-Gaussian innovations,
+and `0.5*0.60^k + 0.5*0.99^k` for the mixture. Apply the exact finite-`n`
+covariance sum to the same binned 4,032-point mean; do not substitute an
+asymptotic IAT oracle.
+
+The primary nominal-95% family has ten cells: five strata times two admission
+cadences. For each cell, the lugsail interval must have a one-sided exact
+Clopper--Pearson lower confidence bound of at least **0.93**. Use
+`alpha=0.05/30` for every bound below: coverage, admission/completion and drift
+make 30 simultaneous binomial claims, so Bonferroni controls their joint
+familywise confidence at 95%. The 0.93 threshold states the allowed two-
+percentage-point undercoverage. With 4,096 paths, coverage 0.95 has binomial
+standard error about 0.0034 and its expected multiplicity-adjusted lower bound
+is about 0.940, so the gate has resolution to distinguish 0.93 from 0.95.
+Coverage is evaluated among completed fixed windows; completion has its own
+simultaneous gate below, so missing intervals cannot make a never-accepting rule
+look accurate.
+The current and plain-batch estimators are frozen comparators, not alternatives
+selected after looking. Also require, in every cell:
+
+- a one-sided Bonferroni lower bound of at least 0.90 on admission and fixed-
+  window completion by the 16,384-bin cap;
+- a one-sided Bonferroni upper bound of at most 0.05 on ever admitting the paired
+  drift control; and
+- zero lugsail refusals. Report exact-variance ratio, median and 90th-percentile
+  effort, but do not add an unregistered gate after seeing them.
+
+Before analysis, name and hash the existing physical traces and their independent
+reference ensembles; this experiment launches no new physical simulation. A
+physical case is eligible only with at least 16 independent replica means and a
+reference-mean 95% half-width no larger than half the median candidate half-width.
+The reference replicas are disjoint from the candidate window; their SEM is the
+sample standard deviation of fixed-window means divided by `sqrt(R)`, and their
+eligibility half-width uses `t_(0.975,R-1)`.
+For the `K` eligible cases frozen before inspection, require
+`abs(mean-reference_mean) / sqrt(SEM^2 + reference_SEM^2)` not to exceed the
+two-sided normal cutoff at `1-0.05/(2K)`. These are held-out agreement,
+stationarity and cost checks, **not coverage**, because the reference mean is
+noisy; an ineligible or failed case leaves physical qualification open rather
+than being replaced after inspection.
+
+Generate and analyze synthetic paths in chunks of at most 64, using CPU only;
+the admission budget is ten CPU-minutes and 128 MiB peak working memory. An
+over-budget run stops and reports the breach rather than changing the design.
+
+[Sokal's window analysis](https://doi.org/10.1007/978-1-4899-0319-8_6),
+[Flyvbjerg--Petersen blocking](https://doi.org/10.1063/1.457480), and
+[Geyer's initial sequences](https://projecteuclid.org/journals/statistical-science/volume-7/issue-4/Practical-Markov-Chain-Monte-Carlo/10.1214/ss/1177011137.full)
+motivate the comparators, but the latter relies on reversible-chain structure
+not established for turbulent traces. The chosen lugsail estimator targets the
+known finite-sample negative bias of ordinary batch means; its consistency still
+requires stationarity, moment and mixing/strong-invariance conditions, with both
+batch size and batch count growing
+([Vats--Flegal](https://arxiv.org/abs/1809.04541),
+[Flegal--Jones](https://doi.org/10.1214/09-AOS735)). Neither those asymptotics nor
+this experiment supplies time-uniform coverage.
