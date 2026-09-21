@@ -43,7 +43,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-import gkx
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.solvers_nonlinear_state_integration import (
     integrate_nonlinear,
@@ -174,9 +173,9 @@ def force(value):
 
 
 report = {
-    "gkx": gkx.__file__,
+    "gkx": "src/gkx/__init__.py",
     "jax": jax.__version__,
-    "host": platform.node(),
+    "platform": platform.system(),
     "ky_layout": args.ky_layout,
     "grid_ky_layout": grid.ky_layout,
     "xla_flags": os.environ.get("XLA_FLAGS", ""),

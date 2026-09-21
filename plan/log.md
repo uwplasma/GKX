@@ -18291,7 +18291,7 @@ the binary restart writer widens a half state before writing, because a
 `Nyc`-row file is already the packed interchange order and the reader tells
 the two apart by size alone.
 
-**Wall clock** (office, tree `38d7c4277`, CPUs 12-17 with idle HT siblings,
+**Wall clock** (benchmark host, tree `38d7c4277`, CPUs 12-17 with idle HT siblings,
 arm order rotated, 4 blocks x 7 reps; `timing_table.py` over `out/nopool_*`):
 
 | kernel | 32x32x24 half/full | 64x64x24 half/full |
@@ -18303,7 +18303,7 @@ arm order rotated, 4 blocks x 7 reps; `timing_table.py` over `out/nopool_*`):
 
 The eager window VJP recompiles 13 modules on every call (counted with
 `jax.monitoring` compile events), which is #264's defect. Its
-compile/execution split was started on the office host
+compile/execution split was started on the benchmark host
 (`run_window_split.sh`, gate relaxed to mean core busy 0.12 because no six
 cores met 0.05) and was not collected before hand-off; the first local attempt
 ran on a saturated laptop and was discarded.
@@ -18339,7 +18339,7 @@ x64); it must be bitwise. (2) Fix
 `test_imex_diagnostics_route_carries_unconverged_solves_to_the_host_gate`,
 `test_imex_diagnostics_default_return_is_two_elements` and one
 `test_examples.py` case, which build `Ny`-row states. (3) Finish the
-integration suites from `test_examples.py` on. (4) Collect the office
+integration suites from `test_examples.py` on. (4) Collect the benchmark-host
 window-split records.
 
 ```

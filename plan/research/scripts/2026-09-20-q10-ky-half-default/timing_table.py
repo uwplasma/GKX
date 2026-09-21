@@ -3,7 +3,7 @@
 Usage: python timing_table.py [OUT_DIR]
 
 Reads the ``nopool_g{32,64}_{full,half}_b{1..4}.json`` records that
-``run_timing_ab.sh`` wrote on the office host and prints the table
+``run_timing_ab.sh`` wrote on the benchmark host and prints the table
 ``docs/performance.rst`` quotes.  Each record is one fresh process on one arm;
 its ``median_s`` is the median of seven timed repetitions after a warm call.
 The table takes, per kernel and grid, the median over the four blocks of each

@@ -26,7 +26,6 @@ from pathlib import Path
 
 import numpy as np
 
-import gkx
 from gkx.artifacts.io import load_netcdf_restart_state
 from gkx.core_ky_layout import to_full, to_half
 from gkx.workflows.runtime.artifacts import run_runtime_nonlinear_with_artifacts
@@ -44,7 +43,10 @@ args = ap.parse_args()
 
 DECK = Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml")
 tmp = Path(tempfile.mkdtemp(prefix="gkx-ky-restart-"))
-report: dict[str, object] = {"gkx": gkx.__file__, "grid": [args.Nx, args.Ny, args.Nz]}
+report: dict[str, object] = {
+    "gkx": "src/gkx/__init__.py",
+    "grid": [args.Nx, args.Ny, args.Nz],
+}
 written: dict[str, Path] = {}
 states: dict[str, np.ndarray] = {}
 

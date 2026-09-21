@@ -52,7 +52,7 @@ def _digest(values: object) -> str:
 
 
 record: dict[str, object] = {
-    "gkx": gkx.__file__,
+    "gkx": "src/gkx/__init__.py",
     "ky": KY,
     "Nl": NL,
     "Nm": NM,

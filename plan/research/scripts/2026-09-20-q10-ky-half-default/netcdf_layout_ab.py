@@ -24,7 +24,6 @@ from pathlib import Path
 
 import numpy as np
 
-import gkx
 from gkx.workflows.runtime.artifacts import run_runtime_nonlinear_with_artifacts
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 
@@ -86,7 +85,7 @@ def dump(path: Path, tag: str, sink: dict[str, np.ndarray]) -> None:
 
 
 sink: dict[str, np.ndarray] = {}
-meta = {"gkx": gkx.__file__, "ky_layout": args.ky_layout, "paths": {}}
+meta = {"gkx": "src/gkx/__init__.py", "ky_layout": args.ky_layout, "paths": {}}
 for key, path in sorted(paths.items()):
     p = Path(str(path))
     meta["paths"][key] = p.name

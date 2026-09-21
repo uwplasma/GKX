@@ -2,7 +2,7 @@
 
 Usage: python window_compile_split.py OUT.json --ky-layout full|half [--reps 3]
 
-The office A/B (``timing_table.py``) found one kernel that moves the wrong way:
+The benchmark-host A/B (``timing_table.py``) found one kernel that moves the wrong way:
 the eager checkpointed heat-flux window gradient, ``window_vjp``, at 2.31x on
 the half axis at 32x32x24.  That kernel is not jitted as a whole, so every call
 re-enters JAX's dispatch and may compile.  This script asks XLA how long each
@@ -33,7 +33,6 @@ import jax.monitoring
 import jax.numpy as jnp
 import numpy as np
 
-import gkx
 from gkx.solvers_nonlinear_state_integration import nonlinear_heat_flux_window
 from tools.profiling.profile_runtime_kernels import (
     _build_initial_condition,
@@ -150,9 +149,9 @@ def _call() -> dict[str, float]:
 first = _call()
 reps = [_call() for _ in range(args.reps)]
 report = {
-    "gkx": gkx.__file__,
+    "gkx": "src/gkx/__init__.py",
     "jax": jax.__version__,
-    "host": platform.node(),
+    "host": platform.system(),
     "cpu_count": os.cpu_count(),
     "affinity": sorted(os.sched_getaffinity(0))
     if hasattr(os, "sched_getaffinity")

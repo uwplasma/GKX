@@ -1,5 +1,5 @@
 #!/bin/bash
-# Q10 timing campaign launcher, run on the office host.
+# Q10 timing campaign launcher, run on the benchmark host.
 #
 # Cores: the 2026-09-20 window had exactly two busy CPUs, 11 and 21, whose
 # physical cores are 11 (siblings 11,29) and 3 (siblings 3,21).  This pins to

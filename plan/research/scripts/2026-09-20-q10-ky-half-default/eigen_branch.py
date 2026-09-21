@@ -40,7 +40,6 @@ from pathlib import Path
 
 import numpy as np
 
-import gkx
 from gkx.config import GridConfig
 from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
@@ -53,7 +52,7 @@ ap.add_argument("out", type=Path)
 ap.add_argument("--deck", type=Path, default=None)
 args = ap.parse_args()
 
-report: dict[str, object] = {"gkx": gkx.__file__}
+report: dict[str, object] = {"gkx": "src/gkx/__init__.py"}
 
 # --- 1. Every dealiased target picks the same physical row on both axes. ---
 sweep = []

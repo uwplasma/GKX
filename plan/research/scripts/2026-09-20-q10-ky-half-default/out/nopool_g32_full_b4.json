@@ -1,7 +1,7 @@
 {
-  "gkx": "<office tree 38d7c4277>/src/gkx/__init__.py",
+  "gkx": "commit 38d7c4277",
   "jax": "0.10.2",
-  "host": "pop-os",
+  "host": "benchmark-worker",
   "ky_layout": "full",
   "grid_ky_layout": "full",
   "xla_flags": "--xla_cpu_multi_thread_eigen=false",

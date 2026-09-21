@@ -23,7 +23,7 @@ TREE=$1; OUT=$2; mkdir -p "$OUT"
 PY=${PY:-python}
 export PYTHONPATH=$TREE/src:$TREE JAX_PLATFORMS=cpu GKX_JAX_CACHE=0
 cd "$TREE"
-$PY -c "import gkx; print(gkx.__file__)" > "$OUT/gkx_file.txt"
+$PY -c 'import gkx; from pathlib import Path; p=Path(gkx.__file__).resolve(); r=Path.cwd().resolve(); assert p.is_relative_to(r); print(p.relative_to(r))' > "$OUT/gkx_file.txt"
 for layout in full half; do
   for route in diagnostics runtime; do
     for grid in 32 64; do
