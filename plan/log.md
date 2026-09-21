@@ -18279,9 +18279,9 @@ had 15; splitting the lane is the follow-up.
 
 **Outcome: the code flips the default; the recorded full-layout compatibility
 fixtures stay unchanged, and the opt-out identity, integration and stale-`Ny`
-test gates pass. Adoption is nevertheless blocked: the eager window-gradient
-benchmark has a measured half-layout regression that must be reconciled with
-#264 on a combined head before the default is ready.** Branch `perf/ky-half-default`,
+test gates pass. Adoption is nevertheless blocked: after #264 removes recurrent
+compilation on an exact combined head, the measured half-layout window gradient
+is still 27.9% slower in steady calls.** Branch `perf/ky-half-default`,
 rebased onto `origin/main` `eeb3481c6`. `perf/ky-half-spectrum-switch` was
 examined and rejected as a base: it is fully merged (#258) and carries no
 commit `main` lacks.
@@ -18345,8 +18345,80 @@ LOADMAX=10 BUSYMEAN=0.12 BUSYWORST=0.25 PY=python \
 
 The raw JSON files remain private because their provenance field contains a
 machine-local path; their exact SHA256 values are retained in the compact CSV.
-The next relevant performance gate is a compilation-free measurement on a
-combined #264 + #266 exact head, not a retiming of this stale 13-compile route.
+The 32 legacy rows have `compile_scope=monitoring_trace_lowering_backend`; the
+five added resource-and-answer columns are empty because that campaign did not
+measure them.  The combined-head rows below use `backend_funnel`, the compiler
+entry point through which every lowered module passes.
+
+**Combined reusable-adjoint result.** The follow-up used local integration
+commit `944faacb2ad919838b3236839ed4bbb98ad970b4`, whose exact public parents are
+this PR at `07fdc57924da93c56055afb5dfae23dec00c0b73` and #264 at
+`d92f3100c984bba10ac5ec7ef5daea4a5a6611ba`. The runtime sources merged
+without conflict. The only integration resolutions were the measured package
+manifest counts (`src=93544`, `tests=92960`, `tools=78904`) and #264's
+full-complex sheared-bracket test fixture: it names `ky_layout="full"` and
+sizes its state from the merged grid. Thus the measured source can be rebuilt
+from two public commits without depending on the local merge object.
+
+The public #264 driver is
+`plan/research/scripts/2026-09-20-q30-window-compile-cache/bench_q30.py` at
+`d92f3100c`; its SHA256 is
+`ab80a3c54cc5ae05a7a3040b7fa606ab532bc4fac2b161e9dd937e164f65164d`.
+For each arm, from the repository root, the measured invocation was:
+
+```
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=1 OMP_NUM_THREADS=6 \
+  taskset -c 6-11 nice -n 15 /usr/bin/time -v -o <resource.txt> \
+  timeout 900s python \
+  plan/research/scripts/2026-09-20-q30-window-compile-cache/bench_q30.py \
+  <result.json> --Nx 32 --Ny 32 --Nz 24 --Nl 4 --Nm 8 \
+  --window-steps 6 --reps 3 --ky-mode <full-or-half>
+```
+
+For these new rows `compile_total_s` is backend compile time and
+`execution_remainder_s` is wall minus that value. It is not a kernel timer;
+on the cold call it still includes tracing, lowering and other host work. On
+an admitted steady call the backend count and subtraction are both zero, so
+the recorded wall time is the quantity compared below.
+
+The model was the Cyclone nonlinear runtime deck, RK3, checkpointed,
+compressed-real FFT and grid Laguerre mode, on a 32x32x24 grid with Nl4/Nm8
+and a six-step window. JAX/JAXLIB 0.10.2 ran CPU-only and x64 on six logical
+CPUs of a 36-CPU host. Each arm was a fresh process with one cold call and
+three steady calls. Three blocks rotated full/half order as full-half,
+half-full, full-half. The initial load averages were 7.46/5.23/4.96 and
+unrelated work occupied about five CPU cores; this run was low priority and
+affinity-limited to six cores. It returned zero under a 2700 s campaign cap,
+took about five minutes, and every one of the 18 steady calls crossed the
+backend compiler funnel zero times.
+
+Median of each block's three steady calls, followed by the pooled median of all
+nine steady calls (seconds):
+
+| layout | block 1 | block 2 | block 3 | pooled |
+|---|---:|---:|---:|---:|
+| full | 6.869 | 7.796 | 7.460 | 7.460 |
+| half | 8.899 | 9.943 | 9.610 | 9.541 |
+
+The half/full pooled steady ratio is **1.279**: after #264 removes recurrent
+compilation, the half layout remains 27.9% slower on this objective. Cold wall
+medians were 22.833 s full and 21.742 s half; cold backend-compile medians were
+9.944 s and 8.212 s. Every call returned bitwise-identical value
+`2.2797168615764328e-05` and `tprim` gradient
+`[1.4574502715873373e-05]` across layouts and blocks.
+
+The process-level peak RSS median was 2102 MiB full (range 2050--2118) and
+1781 MiB half (1743--1787), a half/full ratio of 0.847. This is the maximum of
+the entire fresh process, including Python, cold compilation and all four
+calls; it is not steady-kernel memory. Shared-host load remains a timing
+limitation despite rotation and affinity, and this CPU result makes no GPU
+claim. The objective differentiates only the single `tprim` parameter through
+six steps from the driver's normalized seed; it is neither a saturated-state
+physics result nor a general performance result for other objectives. The 24
+new call rows in `out/window_compile_split_calls.csv` preserve
+logical arm IDs, exact raw-result and resource-record hashes, wall time,
+backend compile count and time, whole-process RSS, value and gradient without
+publishing machine-local raw artifact names.
 
 **What did not move.**
 
@@ -18412,9 +18484,12 @@ are gitignored and are not part of that manifest; every listed entry therefore
 verifies from a clean checkout rather than naming a file that was never
 committed.
 
-**Decision.** The identity and integration gates are complete, but the
-half-layout default is blocked by the window-gradient regression above until
-it is reconciled and retested with #264's reusable adjoint path.
+**Decision.** The identity and integration gates are complete, and the exact
+combined-head retest confirms that compilation was not the whole regression.
+Half layout saves whole-process peak RSS here but remains slower on the steady
+window gradient, so adopting it as the runtime default stays blocked. This
+evidence update neither flips nor reverts the runtime default in the draft;
+that source decision follows review of the measured tradeoff.
 
 ```
 export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
